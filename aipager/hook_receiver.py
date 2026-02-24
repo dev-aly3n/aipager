@@ -3,9 +3,8 @@
 Parses JSON datagrams, maps notification_type to state transitions,
 and triggers Telegram notifications when state actually changes.
 
-Idle notifications are NOT sent from here — the hook fires before the
-terminal finishes rendering, so the pane summary would be stale. The
-pane_monitor handles idle detection once the spinner disappears.
+Handles both INTERACTIVE (permission prompts) and IDLE (task complete)
+notifications. IDLE uses transcript-based rich summaries when available.
 """
 
 from __future__ import annotations
@@ -17,8 +16,10 @@ import os
 import socket
 from pathlib import Path
 
-from aipager.config import SOCKET_PATH
+from aipager.config import RICH_SUMMARIES, SOCKET_PATH
+from aipager.md_to_tg import markdown_to_telegram_html
 from aipager.state import SessionRegistry, Status
+from aipager.transcript import extract_last_response, find_transcript
 
 log = logging.getLogger(__name__)
 
@@ -67,9 +68,8 @@ def _summarize_tool(name: str, inp: dict) -> str:
 class HookReceiver:
     """Receives UDP datagrams from notify_hook.py and drives state transitions.
 
-    Only handles permission_prompt → INTERACTIVE (needs instant response).
-    Idle events just ensure the session is tracked; the pane_monitor handles
-    idle notifications since it waits for the spinner to disappear.
+    Handles permission_prompt → INTERACTIVE and idle events → IDLE with
+    transcript-based rich summaries.
     """
 
     def __init__(self, registry: SessionRegistry, notify_fn):
@@ -99,32 +99,68 @@ class HookReceiver:
             return
 
         event = msg.get("notification_type") or msg.get("hook_event_name") or msg.get("type", "")
-        tmux_session = msg.get("tmux_session", "")
+        session_name = msg.get("session") or msg.get("tmux_session", "")
         transcript_path = msg.get("transcript_path", "")
 
-        if not tmux_session or not event:
+        if not session_name or not event:
             return
 
-        # Store transcript_path on ALL events — pane_monitor uses it for
-        # rich markdown summaries when the session goes idle.
+        # Store transcript_path on ALL events for rich summaries
         if transcript_path:
-            self.registry.get_or_create(tmux_session).transcript_path = transcript_path
-            log.debug("[%s] Stored transcript_path: %s", tmux_session, transcript_path)
+            self.registry.get_or_create(session_name).transcript_path = transcript_path
+            log.debug("[%s] Stored transcript_path: %s", session_name, transcript_path)
 
-        log.debug("Hook event: %s from %s", event, tmux_session)
+        log.debug("Hook event: %s from %s", event, session_name)
 
         if event == "permission_prompt":
             tool_info = _extract_pending_tool(transcript_path) if transcript_path else None
             new_status = Status.INTERACTIVE
             context = {"tool_info": tool_info, "transcript_path": transcript_path}
 
-            sess = self.registry.transition(tmux_session, new_status)
+            sess = self.registry.transition(session_name, new_status)
             if sess:
                 await self.notify_fn(sess, event, context)
+
+        elif event.lower() in ("idle_prompt", "idle", "stop", "notification"):
+            sess = self.registry.transition(session_name, Status.IDLE)
+            if sess is None:
+                return  # already idle or debounced
+
+            notify_ctx: dict = {"summary": ""}
+
+            # Use last_assistant_message from hook JSON if available (fastest, most current)
+            last_msg = msg.get("last_assistant_message", "")
+
+            # Try transcript-based rich summary for code-heavy responses
+            tracked = self.registry.get(session_name)
+            tp = transcript_path or (tracked.transcript_path if tracked else "")
+            if not tp and RICH_SUMMARIES:
+                tp = find_transcript(session_name)
+            if tp and RICH_SUMMARIES:
+                try:
+                    md = extract_last_response(tp)
+                    if md and "```" in md:
+                        html_summary = markdown_to_telegram_html(md)
+                        notify_ctx = {
+                            "summary": html_summary,
+                            "html_summary": True,
+                            "raw_md": md,
+                        }
+                        log.info("[%s] Rich summary (%d chars HTML)", session_name, len(html_summary))
+                    elif md:
+                        notify_ctx = {"summary": md}
+                except Exception:
+                    log.info("[%s] Transcript summary failed", session_name)
+
+            # Fall back to last_assistant_message if no transcript summary
+            if not notify_ctx.get("summary") and last_msg:
+                notify_ctx = {"summary": last_msg}
+
+            await self.notify_fn(sess, "idle_prompt", notify_ctx)
+
         else:
-            # idle, auth_success, etc. — just ensure session is tracked.
-            # Pane monitor handles idle notifications (waits for spinner to clear).
-            self.registry.get_or_create(tmux_session)
+            # auth_success, etc. — just ensure session is tracked
+            self.registry.get_or_create(session_name)
 
     def stop(self) -> None:
         if hasattr(self, "_transport"):

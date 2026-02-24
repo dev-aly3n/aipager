@@ -1,8 +1,8 @@
 """Telegram bot — python-telegram-bot v22 async Application.
 
 Single owner of all Telegram communication. Handles:
-- CallbackQuery (button taps) → tmux_inject.send_keys()
-- Message replies → tmux_inject.send_text_and_enter()
+- CallbackQuery (button taps) → dtach_inject.send_keys()
+- Message replies → dtach_inject.send_text_and_enter()
 - /status command → show all sessions
 - /<label> <prompt> → direct send to session
 """
@@ -30,7 +30,7 @@ from telegram.ext import (
     filters,
 )
 
-from aipager import tmux_inject
+from aipager import dtach_inject as inject
 from aipager.config import BOT_TOKEN, CHAT_ID, PROXY
 from aipager.state import SessionRegistry, Status, TrackedSession
 
@@ -171,7 +171,7 @@ class TelegramBot:
         except Exception:
             pass  # reaction API may not be available in all contexts
 
-    # ── Notification methods (called by hook_receiver and pane_monitor) ──
+    # ── Notification methods (called by hook_receiver and session_monitor) ──
 
     async def notify(self, sess: TrackedSession, event: str, context: dict) -> None:
         """Send appropriate Telegram notification for a state change."""
@@ -365,8 +365,8 @@ class TelegramBot:
             await query.answer("Session not found")
             return
 
-        if not await tmux_inject.is_alive(session_name):
-            await query.answer(f"tmux '{session_name}' not found")
+        if not await inject.is_alive(session_name):
+            await query.answer(f"Session '{session_name}' not found")
             return
 
         # Inject keystrokes
@@ -375,24 +375,24 @@ class TelegramBot:
             option_index = int(action[3:])
             verb = f"Selected option {option_index + 1}"
             for _ in range(option_index):
-                if not await tmux_inject.send_keys(session_name, "Down"):
+                if not await inject.send_keys(session_name, "Down"):
                     ok = False
                     break
             if ok:
                 await asyncio.sleep(0.1)
-                ok = await tmux_inject.send_keys(session_name, "Enter")
+                ok = await inject.send_keys(session_name, "Enter")
         elif action == "allow":
             verb = ACTION_VERBS[action]
-            ok = await tmux_inject.send_keys(session_name, "Enter")
+            ok = await inject.send_keys(session_name, "Enter")
         elif action == "deny":
             verb = ACTION_VERBS[action]
-            ok = await tmux_inject.send_keys(session_name, "Down")
+            ok = await inject.send_keys(session_name, "Down")
             if ok:
                 await asyncio.sleep(0.1)
-                ok = await tmux_inject.send_keys(session_name, "Enter")
+                ok = await inject.send_keys(session_name, "Enter")
         elif action == "continue":
             verb = ACTION_VERBS[action]
-            ok = await tmux_inject.send_keys(session_name, "Enter")
+            ok = await inject.send_keys(session_name, "Enter")
         else:
             verb = action
 
@@ -413,18 +413,18 @@ class TelegramBot:
         """Handle /status command."""
         sessions = self.registry.all_sessions()
         if not sessions:
-            # Try discovering from tmux
-            tmux_sessions = await tmux_inject.list_sessions()
-            if not tmux_sessions:
+            # Try discovering sessions
+            discovered = await inject.list_sessions()
+            if not discovered:
                 await update.message.reply_text("No sessions found.")
                 return
-            for name in tmux_sessions:
+            for name in discovered:
                 self.registry.get_or_create(name)
             sessions = self.registry.all_sessions()
 
         lines = ["<b>Sessions</b>\n"]
         for name, sess in sessions.items():
-            alive = await tmux_inject.is_alive(name)
+            alive = await inject.is_alive(name)
             icon = "🟢" if alive else "🔴"
             status_str = sess.status.name.lower()
             lines.append(f"{icon} <b>{html_mod.escape(sess.label)}</b> · {status_str}")
@@ -455,11 +455,11 @@ class TelegramBot:
         if not sess:
             return
 
-        if not await tmux_inject.is_alive(sess.name):
-            await update.message.reply_text(f"⚠️ tmux '{sess.name}' not found")
+        if not await inject.is_alive(sess.name):
+            await update.message.reply_text(f"⚠️ Session '{sess.name}' not found")
             return
 
-        ok = await tmux_inject.send_text_and_enter(sess.name, text)
+        ok = await inject.send_text_and_enter(sess.name, text)
         if ok:
             await self._react(update, "👀")
             self.registry.transition(sess.name, Status.BUSY)
@@ -472,10 +472,10 @@ class TelegramBot:
         sessions = self.registry.all_sessions()
         for name, sess in sessions.items():
             if sess.label == target_label:
-                if not await tmux_inject.is_alive(name):
-                    await update.message.reply_text(f"⚠️ [{target_label}] tmux not alive")
+                if not await inject.is_alive(name):
+                    await update.message.reply_text(f"⚠️ [{target_label}] session not alive")
                     return
-                ok = await tmux_inject.send_text_and_enter(name, prompt_text)
+                ok = await inject.send_text_and_enter(name, prompt_text)
                 if ok:
                     await self._react(update, "👀")
                     self.registry.transition(name, Status.BUSY)
@@ -484,14 +484,14 @@ class TelegramBot:
                     await update.message.reply_text(f"❌ Failed to send to [{target_label}]")
                 return
 
-        # Not found in registry — try tmux discovery
-        tmux_name = f"claude-{target_label}"
-        if await tmux_inject.is_alive(tmux_name):
-            self.registry.get_or_create(tmux_name)
-            ok = await tmux_inject.send_text_and_enter(tmux_name, prompt_text)
+        # Not found in registry — try session discovery
+        session_name = f"claude-{target_label}"
+        if await inject.is_alive(session_name):
+            self.registry.get_or_create(session_name)
+            ok = await inject.send_text_and_enter(session_name, prompt_text)
             if ok:
                 await self._react(update, "👀")
-                self.registry.transition(tmux_name, Status.BUSY)
+                self.registry.transition(session_name, Status.BUSY)
             else:
                 await update.message.reply_text(f"❌ Failed to send to [{target_label}]")
         else:

@@ -5,7 +5,7 @@ State transitions:
                    → INTERACTIVE  (sends permission/question buttons)
     IDLE → BUSY                   (edits old msg: "→ Working...")
     INTERACTIVE → BUSY            (button tap already handled)
-    any → GONE                    (tmux session disappeared)
+    any → GONE                    (session disappeared)
 
 transition() is idempotent — same-state calls are no-ops, eliminating
 all duplicate notification bugs from the old system.
@@ -37,7 +37,7 @@ IDLE_DEBOUNCE: float = 10.0
 
 @dataclass
 class TrackedSession:
-    name: str           # tmux session name, e.g. "claude-dev"
+    name: str           # session name, e.g. "claude-dev"
     label: str          # short label, e.g. "dev"
     status: Status = Status.UNKNOWN
     last_msg_id: int | None = None   # most recent Telegram notification msg
@@ -50,7 +50,7 @@ class SessionRegistry:
     """Single source of truth for all tracked Claude sessions."""
 
     def __init__(self):
-        self._sessions: dict[str, TrackedSession] = {}  # keyed by tmux session name
+        self._sessions: dict[str, TrackedSession] = {}  # keyed by session name
         self._msg_map: dict[int, str] = {}  # message_id → session name
 
     def get(self, name: str) -> TrackedSession | None:

@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """Claude Code notification hook — fire-and-forget UDP datagram to daemon.
 
-Reads JSON from stdin, detects tmux session, sends datagram to
-/tmp/claude-remote.sock. No HTTP calls, no file writes, <5ms.
+Reads JSON from stdin, detects session name from CLAUDE_DTACH_SESSION env var,
+sends datagram to /tmp/claude-remote.sock. No HTTP calls, no file writes, <5ms.
 """
 
 import json
 import os
 import socket
-import subprocess
 import sys
 
 SOCKET_PATH = "/tmp/claude-remote.sock"
@@ -24,16 +23,10 @@ def main():
     except json.JSONDecodeError:
         sys.exit(0)
 
-    # Detect tmux session name
-    if os.environ.get("TMUX"):
-        try:
-            r = subprocess.run(
-                ["tmux", "display-message", "-p", "#{session_name}"],
-                capture_output=True, text=True, timeout=2,
-            )
-            data["tmux_session"] = r.stdout.strip() if r.returncode == 0 else ""
-        except Exception:
-            pass
+    # Detect session name from env var set by claude-dtach launcher
+    session = os.environ.get("CLAUDE_DTACH_SESSION", "")
+    if session:
+        data["session"] = session
 
     # Fire-and-forget UDP datagram
     try:
@@ -41,7 +34,7 @@ def main():
         sock.sendto(json.dumps(data).encode(), SOCKET_PATH)
         sock.close()
     except OSError:
-        pass  # daemon not running — pane_monitor catches it in ≤2s
+        pass  # daemon not running — session_monitor catches it
 
 
 if __name__ == "__main__":

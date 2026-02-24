@@ -5,7 +5,7 @@ Usage:
 
 All components run in one asyncio event loop:
 - HookReceiver: Unix datagram socket for instant hook notifications
-- PaneMonitor: fallback tmux pane scraping every 2s
+- SessionMonitor: dtach session discovery and liveness checks
 - TelegramBot: python-telegram-bot long-polling (30s timeout)
 """
 
@@ -16,7 +16,7 @@ import sys
 
 from aipager.config import BOT_TOKEN
 from aipager.hook_receiver import HookReceiver
-from aipager.pane_monitor import PaneMonitor
+from aipager.session_monitor import SessionMonitor
 from aipager.state import SessionRegistry
 from aipager.telegram_bot import TelegramBot
 
@@ -36,13 +36,13 @@ async def main() -> None:
     registry = SessionRegistry()
     bot = TelegramBot(registry)
     hook_receiver = HookReceiver(registry, bot.notify)
-    pane_monitor = PaneMonitor(registry, bot.notify)
+    session_monitor = SessionMonitor(registry, bot.notify)
 
     # Startup sequence: bot first (needs to be ready for notifications),
-    # then hook receiver and pane monitor
+    # then hook receiver and session monitor
     await bot.start()
     await hook_receiver.start()
-    await pane_monitor.start()
+    await session_monitor.start()
 
     log.info("Claude Remote v2 running — all components started")
 
@@ -55,7 +55,7 @@ async def main() -> None:
     await stop.wait()
 
     log.info("Shutting down...")
-    pane_monitor.stop()
+    session_monitor.stop()
     hook_receiver.stop()
     await bot.stop()
     log.info("Goodbye")

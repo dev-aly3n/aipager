@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 # Claude Code project transcript directory for this project
 _TRANSCRIPT_DIR = Path.home() / ".claude" / "projects" / "-home-god-creature"
 
-# Cache: tmux session name → (transcript_path, mtime)
+# Cache: session name → (transcript_path, mtime)
 # Avoids re-scanning the directory on every poll cycle
 _path_cache: dict[str, tuple[str, float]] = {}
 
