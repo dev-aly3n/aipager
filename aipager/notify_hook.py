@@ -151,6 +151,19 @@ def _label_from_tmux(tmux_session: str | None) -> str:
     return tmux_session
 
 
+LOG_FILE = "/tmp/claude-remote-hook.log"
+
+
+def _log(msg: str) -> None:
+    """Append to hook log for debugging."""
+    try:
+        with open(LOG_FILE, "a") as f:
+            from datetime import datetime
+            f.write(f"{datetime.now().isoformat()} {msg}\n")
+    except Exception:
+        pass
+
+
 def main():
     raw = sys.stdin.read()
     if not raw.strip():
@@ -163,6 +176,7 @@ def main():
 
     event = data.get("notification_type", data.get("type", "unknown"))
     session_id = data.get("session_id", "unknown")
+    _log(f"hook fired: event={event} session={session_id[:8]}")
     transcript_path = data.get("transcript_path", "")
 
     # Detect tmux session (if running inside one)
@@ -204,11 +218,10 @@ def main():
                 text += "\n\n⚠️ Not in tmux — use terminal to respond"
 
     elif event in ("idle_prompt", "idle"):
-        text = f"✅ [{label}] Finished — waiting for input"
+        text = f"✅ [{label}] Finished — waiting for input\n💬 Reply to this message to send a new prompt"
         if tmux_session:
             keyboard = {
                 "inline_keyboard": [[
-                    {"text": "▶️ Continue", "callback_data": f"{sid}:continue"},
                     {"text": "⏹ Stop", "callback_data": f"{sid}:stop"},
                 ]]
             }
@@ -224,7 +237,9 @@ def main():
         sys.exit(0)
 
     # Send message
+    _log(f"sending: event={event} label={label} tmux={tmux_session} text={text[:60]}")
     msg_id = tg.send_message(text, reply_markup=keyboard)
+    _log(f"sent: msg_id={msg_id}")
     if msg_id:
         sm.record_message(sid, msg_id, event)
 
