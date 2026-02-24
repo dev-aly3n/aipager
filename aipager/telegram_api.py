@@ -32,11 +32,11 @@ def _call(method: str, data: dict, timeout: int = 5) -> dict | None:
         log.warning("API error: %s", result.get("description", result))
         return None
     except requests.RequestException as e:
-        log.debug("Direct connection failed: %s", e)
+        log.warning("Direct connection failed: %s", e)
 
     # Fallback to proxy (only on network errors)
     try:
-        r = requests.post(url, json=data, timeout=timeout, proxies={
+        r = requests.post(url, json=data, timeout=min(timeout, 10), proxies={
             "https": PROXY,
             "http": PROXY,
         })
@@ -44,8 +44,9 @@ def _call(method: str, data: dict, timeout: int = 5) -> dict | None:
         if result.get("ok"):
             return result
         log.warning("API error (via proxy): %s", result.get("description", result))
-    except requests.RequestException as e:
-        log.warning("Proxy connection failed: %s", e)
+    except requests.RequestException:
+        # Don't log proxy failures — it's often just down
+        pass
 
     return None
 
@@ -110,8 +111,8 @@ def answer_callback_query(callback_query_id: str, text: str = "") -> bool:
     return result is not None
 
 
-def get_updates(offset: int | None = None, timeout: int = 30) -> list[dict]:
-    """Long-poll for updates. Returns list of Update objects."""
+def get_updates(offset: int | None = None, timeout: int = 30) -> list[dict] | None:
+    """Long-poll for updates. Returns list of Update objects, or None on connection failure."""
     data = {
         "timeout": timeout,
         "allowed_updates": ["callback_query", "message"],
@@ -120,6 +121,6 @@ def get_updates(offset: int | None = None, timeout: int = 30) -> list[dict]:
         data["offset"] = offset
 
     result = _call("getUpdates", data, timeout=timeout + 5)
-    if result:
-        return result.get("result", [])
-    return []
+    if result is None:
+        return None  # connection failure — caller should backoff
+    return result.get("result", [])

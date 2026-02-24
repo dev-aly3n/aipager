@@ -27,6 +27,64 @@ from aipager import telegram_api as tg
 from aipager import session_mgr as sm
 
 
+def _extract_last_summary(transcript_path: str) -> str:
+    """Extract a short summary of what Claude last said/did from the transcript.
+
+    Scans the last few assistant messages for text content and returns
+    a truncated version suitable for a Telegram notification.
+    """
+    try:
+        lines = Path(transcript_path).read_text().strip().splitlines()
+    except (FileNotFoundError, PermissionError):
+        return ""
+
+    # Scan from the end for the last assistant message with text
+    for line in reversed(lines[-15:]):
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if entry.get("type") != "assistant":
+            continue
+        content = entry.get("message", {}).get("content", [])
+
+        # Collect text blocks and tool_use names from this message
+        texts = []
+        tools = []
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "text":
+                t = block.get("text", "").strip()
+                if t:
+                    texts.append(t)
+            elif block.get("type") == "tool_use":
+                tools.append(block.get("name", ""))
+
+        if texts:
+            # Use the last text block (usually the final summary)
+            summary = texts[-1]
+            # Strip code blocks for brevity
+            clean_lines = []
+            in_code = False
+            for sl in summary.splitlines():
+                if sl.strip().startswith("```"):
+                    in_code = not in_code
+                    continue
+                if not in_code:
+                    clean_lines.append(sl)
+            summary = "\n".join(clean_lines).strip()
+            # Truncate: show start + end so you see how it concluded
+            if len(summary) > 700:
+                summary = summary[:300] + "\n…\n" + summary[-300:]
+            return summary
+
+        if tools:
+            return f"[used: {', '.join(tools)}]"
+
+    return ""
+
+
 def _extract_pending_tool(transcript_path: str) -> dict | None:
     """Read the last lines of the transcript to find the pending tool_use.
 
@@ -218,7 +276,11 @@ def main():
                 text += "\n\n⚠️ Not in tmux — use terminal to respond"
 
     elif event in ("idle_prompt", "idle"):
-        text = f"✅ [{label}] Finished — waiting for input\n💬 Reply to this message to send a new prompt"
+        last_summary = _extract_last_summary(transcript_path) if transcript_path else ""
+        text = f"✅ [{label}] Finished — waiting for input"
+        if last_summary:
+            text += f"\n\n{last_summary}"
+        text += "\n\n💬 Reply to send a new prompt"
         if tmux_session:
             keyboard = {
                 "inline_keyboard": [[
