@@ -214,7 +214,14 @@ class TelegramBot:
                         head_html = _safe_truncate(head_html, 1700, True)
                     if len(tail_html) > 1700:
                         tail_html = _safe_truncate(tail_html, 1700, True)
-                    escaped = head_html + "\n\n⋯\n\n" + tail_html
+                    sep = (
+                        "\n\n"
+                        "╔══════════════════════╗\n"
+                        "║   ✂️ TRUNCATED ✂️   ║\n"
+                        "╚══════════════════════╝"
+                        "\n\n"
+                    )
+                    escaped = head_html + sep + tail_html
                     send_file = True
                 if len(escaped) > 500:
                     text += f"\n\n<blockquote expandable>{escaped}</blockquote>"
