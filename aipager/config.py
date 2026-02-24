@@ -1,4 +1,4 @@
-"""Configuration constants and env vars for aipager."""
+"""Configuration for aipager — loads from .env at project root."""
 
 import os
 from pathlib import Path
@@ -22,15 +22,12 @@ def _load_env_file():
 
 _load_env_file()
 
-BOT_TOKEN = os.environ.get("CLAUDE_TG_BOT_TOKEN", "")
-CHAT_ID = os.environ.get("CLAUDE_TG_CHAT_ID", "")
-PROXY = ""
-TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
+BOT_TOKEN: str = os.environ.get("CLAUDE_TG_BOT_TOKEN", "")
+CHAT_ID: str = os.environ.get("CLAUDE_TG_CHAT_ID", "")
+PROXY: str = ""
 
-SESSION_REGISTRY = "/tmp/claude-remote-sessions.json"
-POLL_TIMEOUT = 1  # very short poll — watchdog runs between cycles
-POLL_INTERVAL = 1  # seconds between failed polls
+# Unix datagram socket for hook → daemon communication
+SOCKET_PATH: str = "/tmp/claude-remote.sock"
 
-# Callback data format: {session_short_id}:{action}
-# session_short_id = first 8 chars of session_id (or tmux session name)
-# action = "allow", "deny", "continue", "stop"
+# Pane monitor interval (seconds)
+PANE_POLL_INTERVAL: float = 2.0
