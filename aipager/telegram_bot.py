@@ -189,6 +189,8 @@ class TelegramBot:
             send_file = False
             if summary:
                 escaped = summary if is_html else html_mod.escape(summary)
+                log.info("[%s] IDLE summary: is_html=%s, raw_md=%d, escaped=%d",
+                         label, is_html, len(raw_md), len(escaped))
                 if len(escaped) > 3400 and is_html and raw_md:
                     # Split at safe markdown boundaries (outside fenced code
                     # blocks), convert each piece to HTML independently.
@@ -209,11 +211,12 @@ class TelegramBot:
                     tail_md = raw_md[tail_start:] if tail_start < len(raw_md) else raw_md[-md_limit:]
                     head_html = markdown_to_telegram_html(head_md)
                     tail_html = markdown_to_telegram_html(tail_md)
-                    # Safety: truncate each half if HTML blew up
-                    if len(head_html) > 1700:
-                        head_html = _safe_truncate(head_html, 1700, True)
-                    if len(tail_html) > 1700:
-                        tail_html = _safe_truncate(tail_html, 1700, True)
+                    # Safety: truncate each half if HTML blew up.
+                    # Budget: 1500+1500+sep(~100)+header(~60)+blockquote(~40) < 4096
+                    if len(head_html) > 1500:
+                        head_html = _safe_truncate(head_html, 1500, True)
+                    if len(tail_html) > 1500:
+                        tail_html = _safe_truncate(tail_html, 1500, True)
                     sep = (
                         "\n\n"
                         "╔══════════════════════╗\n"
@@ -223,24 +226,32 @@ class TelegramBot:
                     )
                     escaped = head_html + sep + tail_html
                     send_file = True
+                # Hard safety cap — never exceed Telegram's 4096 limit.
+                # Header + blockquote tags use ~80 chars, leave ~4000 for content.
+                if len(escaped) > 3800:
+                    escaped = _safe_truncate(escaped, 3800, is_html)
+                    send_file = True
                 if len(escaped) > 500:
                     text += f"\n\n<blockquote expandable>{escaped}</blockquote>"
                 else:
                     text += f"\n\n<blockquote>{escaped}</blockquote>"
+            log.debug("[%s] Sending IDLE notification (%d chars)", label, len(text))
             msg = await bot.send_message(CHAT_ID, text, parse_mode="HTML")
             self.registry.track_message(msg.message_id, sess.name)
             # Send full response as file for long messages
-            if send_file and raw_md:
+            file_content = raw_md or (summary if send_file else "")
+            if send_file and file_content:
                 try:
                     tmp = Path(tempfile.mktemp(suffix=".txt", prefix=f"{label}_"))
-                    tmp.write_text(raw_md, encoding="utf-8")
-                    await bot.send_document(
-                        CHAT_ID, document=tmp, filename=f"{label}_response.txt",
-                        reply_to_message_id=msg.message_id,
-                    )
+                    tmp.write_text(file_content, encoding="utf-8")
+                    with open(tmp, "rb") as f:
+                        await bot.send_document(
+                            CHAT_ID, document=f, filename=f"{label}_response.txt",
+                            reply_to_message_id=msg.message_id,
+                        )
                     tmp.unlink(missing_ok=True)
                 except Exception:
-                    log.debug("Failed to send full response file", exc_info=True)
+                    log.warning("Failed to send full response file", exc_info=True)
 
         elif sess.status == Status.INTERACTIVE:
             tool_info = context.get("tool_info")
