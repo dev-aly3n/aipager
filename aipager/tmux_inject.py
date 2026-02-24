@@ -58,8 +58,15 @@ async def list_sessions() -> list[str]:
 
 
 async def capture_pane(session: str) -> list[str]:
-    """Capture visible pane content, return non-empty lines."""
-    ok, out = await _run(["tmux", "capture-pane", "-t", session, "-p"], timeout=3)
+    """Capture pane content with scrollback, return non-empty lines.
+
+    Uses -S -100 to include scrollback history above the visible pane.
+    This ensures the ● response marker is captured even for long responses
+    that scroll it off the top of the visible terminal.
+    """
+    ok, out = await _run(
+        ["tmux", "capture-pane", "-t", session, "-p", "-S", "-100"], timeout=3,
+    )
     if not ok:
         return []
     return [l for l in out.rstrip().splitlines() if l.strip()]

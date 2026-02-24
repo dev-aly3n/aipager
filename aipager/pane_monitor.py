@@ -96,15 +96,18 @@ def _extract_pane_summary(pane_lines: list[str]) -> str:
     # Boundary: everything above the input box is conversation
     boundary = input_box_top if input_box_top > 0 else len(pane_lines)
 
-    # Find the last ● (assistant response marker) before the boundary
+    # Find the last ● (assistant response marker) before the boundary.
+    # Search ALL lines above the boundary (scrollback captured with -S -100).
     start_idx = -1
-    for i in range(boundary - 1, max(boundary - 40, -1), -1):
+    for i in range(boundary - 1, -1, -1):
         if pane_lines[i].strip().startswith("●"):
             start_idx = i
             break
 
     if start_idx < 0:
-        return ""
+        # Fallback: no ● found even in scrollback. Grab recent content lines
+        # above the input box (skip decoration, prompts, blanks).
+        return _fallback_summary(pane_lines, boundary)
 
     out = []
     for i in range(start_idx, boundary):
@@ -124,6 +127,24 @@ def _extract_pane_summary(pane_lines: list[str]) -> str:
     if len(summary) > 700:
         summary = summary[:300] + "\n…\n" + summary[-300:]
     return summary
+
+
+def _fallback_summary(pane_lines: list[str], boundary: int) -> str:
+    """Fallback when ● marker not found — grab last content lines above input box."""
+    skip_prefixes = ("───", "✻", "❯", "●")
+    out = []
+    for i in range(boundary - 1, max(boundary - 15, -1), -1):
+        stripped = pane_lines[i].strip()
+        if not stripped or any(stripped.startswith(p) for p in skip_prefixes):
+            continue
+        # Skip status bar lines
+        if "Context:" in stripped or "Opus" in stripped or "Sonnet" in stripped:
+            continue
+        out.append(stripped)
+        if len(out) >= 5:
+            break
+    out.reverse()
+    return "\n".join(out).strip()
 
 
 def _extract_selector(pane_lines: list[str]) -> tuple[str, list[tuple[int, str]]]:
