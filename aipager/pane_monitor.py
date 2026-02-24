@@ -124,8 +124,6 @@ def _extract_pane_summary(pane_lines: list[str]) -> str:
         out.append(stripped)
 
     summary = "\n".join(out).strip()
-    if len(summary) > 700:
-        summary = summary[:300] + "\n…\n" + summary[-300:]
     return summary
 
 

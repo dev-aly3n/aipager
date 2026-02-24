@@ -137,7 +137,16 @@ class TelegramBot:
             summary = context.get("summary", sess.summary)
             text = f"✅ <b>{html_mod.escape(label)}</b> · Finished"
             if summary:
-                text += f"\n\n<blockquote>{html_mod.escape(summary)}</blockquote>"
+                escaped = html_mod.escape(summary)
+                # Expandable blockquote for long summaries (Bot API 7.4+)
+                # Renders collapsed with "tap to expand" — keeps notification clean
+                if len(escaped) > 500:
+                    # Hard cap at 3500 to stay within 4096 message limit
+                    if len(escaped) > 3500:
+                        escaped = escaped[:3500] + "…"
+                    text += f"\n\n<blockquote expandable>{escaped}</blockquote>"
+                else:
+                    text += f"\n\n<blockquote>{escaped}</blockquote>"
             msg = await bot.send_message(CHAT_ID, text, parse_mode="HTML")
             self.registry.track_message(msg.message_id, sess.name)
 
