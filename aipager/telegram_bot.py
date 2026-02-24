@@ -42,7 +42,6 @@ ACTION_VERBS = {
     "allow": "Allowed",
     "deny": "Denied",
     "continue": "Continued",
-    "stop": "Stopped",
 }
 
 
@@ -114,6 +113,15 @@ class TelegramBot:
         except Exception:
             return False
 
+    async def _react(self, update: Update, emoji: str) -> None:
+        """React to the user's message with an emoji."""
+        try:
+            await self._app.bot.set_message_reaction(
+                update.effective_chat.id, update.message.message_id, emoji,
+            )
+        except Exception:
+            pass  # reaction API may not be available in all contexts
+
     # ── Notification methods (called by hook_receiver and pane_monitor) ──
 
     async def notify(self, sess: TrackedSession, event: str, context: dict) -> None:
@@ -130,10 +138,7 @@ class TelegramBot:
             if summary:
                 text += f"\n\n{summary}"
             text += "\n\n💬 Reply to send a new prompt"
-            keyboard = InlineKeyboardMarkup([[
-                InlineKeyboardButton("⏹ Stop", callback_data=f"{sess.name}:stop"),
-            ]])
-            msg = await bot.send_message(CHAT_ID, text, reply_markup=keyboard)
+            msg = await bot.send_message(CHAT_ID, text)
             self.registry.track_message(msg.message_id, sess.name)
 
         elif sess.status == Status.INTERACTIVE:
@@ -275,9 +280,6 @@ class TelegramBot:
         elif action == "continue":
             verb = ACTION_VERBS[action]
             ok = await tmux_inject.send_keys(session_name, "Enter")
-        elif action == "stop":
-            verb = ACTION_VERBS[action]
-            ok = await tmux_inject.send_keys(session_name, "Escape")
         else:
             verb = action
 
@@ -346,8 +348,7 @@ class TelegramBot:
 
         ok = await tmux_inject.send_text_and_enter(sess.name, text)
         if ok:
-            await update.message.reply_text(f"⌨️ [{sess.label}] Sent: {text[:50]}")
-            # Mark as busy since we just sent input
+            await self._react(update, "👀")
             self.registry.transition(sess.name, Status.BUSY)
             log.info("[%s] Sent text: %s", sess.label, text[:80])
         else:
@@ -363,7 +364,7 @@ class TelegramBot:
                     return
                 ok = await tmux_inject.send_text_and_enter(name, prompt_text)
                 if ok:
-                    await update.message.reply_text(f"⌨️ [{target_label}] Sent: {prompt_text[:50]}")
+                    await self._react(update, "👀")
                     self.registry.transition(name, Status.BUSY)
                     log.info("[%s] Direct send: %s", target_label, prompt_text[:80])
                 else:
@@ -376,7 +377,7 @@ class TelegramBot:
             self.registry.get_or_create(tmux_name)
             ok = await tmux_inject.send_text_and_enter(tmux_name, prompt_text)
             if ok:
-                await update.message.reply_text(f"⌨️ [{target_label}] Sent: {prompt_text[:50]}")
+                await self._react(update, "👀")
                 self.registry.transition(tmux_name, Status.BUSY)
             else:
                 await update.message.reply_text(f"❌ Failed to send to [{target_label}]")
