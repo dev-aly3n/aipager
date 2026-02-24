@@ -34,9 +34,9 @@ def _call(method: str, data: dict, timeout: int = 5) -> dict | None:
     except requests.RequestException as e:
         log.warning("Direct connection failed: %s", e)
 
-    # Fallback to proxy (only on network errors)
+    # Fallback to proxy (only on network errors, short timeout to avoid blocking)
     try:
-        r = requests.post(url, json=data, timeout=min(timeout, 10), proxies={
+        r = requests.post(url, json=data, timeout=(2, timeout), proxies={
             "https": PROXY,
             "http": PROXY,
         })
@@ -45,7 +45,6 @@ def _call(method: str, data: dict, timeout: int = 5) -> dict | None:
             return result
         log.warning("API error (via proxy): %s", result.get("description", result))
     except requests.RequestException:
-        # Don't log proxy failures — it's often just down
         pass
 
     return None

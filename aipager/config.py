@@ -28,7 +28,7 @@ PROXY = ""
 TELEGRAM_API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 SESSION_REGISTRY = "/tmp/claude-remote-sessions.json"
-POLL_TIMEOUT = 30  # long-polling seconds
+POLL_TIMEOUT = 1  # very short poll — watchdog runs between cycles
 POLL_INTERVAL = 1  # seconds between failed polls
 
 # Callback data format: {session_short_id}:{action}

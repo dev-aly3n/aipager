@@ -19,7 +19,7 @@ from pathlib import Path
 from aipager import telegram_api as tg
 from aipager import session_mgr as sm
 from aipager import injector
-from aipager.config import BOT_TOKEN
+from aipager.config import BOT_TOKEN, POLL_TIMEOUT
 
 logging.basicConfig(
     level=logging.INFO,
@@ -194,9 +194,12 @@ def _check_tmux_idle() -> None:
         if not pane_lines:
             continue
 
-        # Check if the last non-empty line is the idle prompt
-        last_line = pane_lines[-1].strip()
-        is_idle = last_line == "❯" or last_line.startswith("❯")
+        # Check if any of the last few lines contain the idle prompt ❯
+        # (status bar like "Opus 4.6 | Context: 83%" appears below the prompt)
+        is_idle = any(
+            l.strip() == "❯" or l.strip().startswith("❯ ")
+            for l in pane_lines[-5:]
+        )
 
         if not is_idle:
             # Clear idle flag if session is no longer idle
@@ -278,11 +281,11 @@ def run() -> None:
         try:
             # Watchdog: check for idle sessions every 30s
             now = time.time()
-            if now - last_watchdog > 30:
+            if now - last_watchdog > 5:
                 _check_tmux_idle()
                 last_watchdog = now
 
-            updates = tg.get_updates(offset=offset, timeout=30)
+            updates = tg.get_updates(offset=offset, timeout=POLL_TIMEOUT)
 
             if updates is None:
                 # Total connection failure — backoff
