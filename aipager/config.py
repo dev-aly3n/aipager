@@ -31,3 +31,7 @@ SOCKET_PATH: str = "/tmp/claude-remote.sock"
 
 # Pane monitor interval (seconds)
 PANE_POLL_INTERVAL: float = 2.0
+
+# Use transcript JSONL for rich markdown→HTML summaries in Telegram notifications.
+# When False, uses pane-scraped plain text in expandable blockquotes (old behavior).
+RICH_SUMMARIES: bool = os.environ.get("CLAUDE_RICH_SUMMARIES", "1") not in ("0", "false", "no")

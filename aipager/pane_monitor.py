@@ -13,7 +13,7 @@ import re
 from pathlib import Path
 
 from aipager import tmux_inject
-from aipager.config import PANE_POLL_INTERVAL
+from aipager.config import PANE_POLL_INTERVAL, RICH_SUMMARIES
 from aipager.md_to_tg import markdown_to_telegram_html
 from aipager.state import SessionRegistry, Status
 from aipager.transcript import extract_last_response, find_transcript
@@ -234,14 +234,22 @@ class PaneMonitor:
                 # Try transcript-based markdown summary only on BUSY→IDLE
                 # (not UNKNOWN→IDLE on startup, which would misattribute transcripts)
                 tracked = self.registry.get(name)
-                tp = (tracked.transcript_path if tracked else "") or (
-                    find_transcript(name) if prev_status == Status.BUSY else None)
+                tp = None
+                if RICH_SUMMARIES:
+                    tp = (tracked.transcript_path if tracked else "") or (
+                        find_transcript(name) if prev_status == Status.BUSY else None)
                 if tp:
                     try:
                         md = extract_last_response(tp)
-                        if md:
+                        if md and "```" in md:
+                            # Only use rich HTML when response has code blocks;
+                            # plain text responses look better in blockquotes.
                             html_summary = markdown_to_telegram_html(md)
-                            notify_ctx = {"summary": html_summary, "html_summary": True}
+                            notify_ctx = {
+                                "summary": html_summary,
+                                "html_summary": True,
+                                "raw_md": md,
+                            }
                             log.info("[%s] Using transcript (%d chars HTML)", name, len(html_summary))
                     except Exception:
                         log.info("[%s] Transcript failed, pane fallback", name)

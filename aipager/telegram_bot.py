@@ -12,7 +12,10 @@ from __future__ import annotations
 import asyncio
 import html as html_mod
 import logging
+import re
+import tempfile
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import httpx
@@ -38,6 +41,51 @@ log = logging.getLogger(__name__)
 
 # Module-level reference set by TelegramBot.start()
 _bot_instance: TelegramBot | None = None
+
+def _md_safe_boundaries(md: str) -> list[int]:
+    """Find character positions in markdown that are safe to cut at.
+
+    Returns positions of paragraph breaks (\\n\\n) that are NOT inside
+    fenced code blocks. Cutting at these positions guarantees both halves
+    are valid markdown that can be independently converted to HTML.
+    """
+    boundaries = []
+    in_fence = False
+    pos = 0
+    for line in md.split("\n"):
+        if line.strip().startswith("```"):
+            in_fence = not in_fence
+        pos += len(line) + 1  # +1 for the \n
+        # Check if next char starts a paragraph break and we're outside a fence
+        if not in_fence and pos < len(md) and md[pos - 1:pos + 1] == "\n\n":
+            boundaries.append(pos)
+    return boundaries
+
+
+def _safe_truncate(text: str, limit: int, is_html: bool) -> str:
+    """Truncate text to limit, ensuring HTML tags aren't split mid-tag."""
+    if not is_html or len(text) <= limit:
+        return text[:limit] + "…"
+    # Cut at limit, then back up to avoid splitting an HTML tag
+    cut = text[:limit]
+    last_lt = cut.rfind("<")
+    last_gt = cut.rfind(">")
+    if last_lt > last_gt:
+        cut = cut[:last_lt]
+    # Use a stack to track nesting order, then close in reverse
+    stack: list[str] = []
+    for m in re.finditer(r"<(/?)(b|i|code|pre|a)\b[^>]*>", cut):
+        is_close, tag = m.group(1), m.group(2)
+        if is_close:
+            if stack and stack[-1] == tag:
+                stack.pop()
+        else:
+            stack.append(tag)
+    # Close remaining open tags in reverse (innermost first)
+    for tag in reversed(stack):
+        cut += f"</{tag}>"
+    return cut + "…"
+
 
 ACTION_VERBS = {
     "allow": "Allowed",
@@ -136,22 +184,56 @@ class TelegramBot:
         if sess.status == Status.IDLE:
             summary = context.get("summary", sess.summary)
             is_html = context.get("html_summary", False)
+            raw_md = context.get("raw_md", "")
             text = f"✅ <b>{html_mod.escape(label)}</b> · Finished"
+            send_file = False
             if summary:
-                # If html_summary, the summary is already Telegram HTML (from transcript).
-                # Otherwise, escape plain text from pane scraping.
                 escaped = summary if is_html else html_mod.escape(summary)
-                # Expandable blockquote for long summaries (Bot API 7.4+)
-                # Renders collapsed with "tap to expand" — keeps notification clean
+                if len(escaped) > 3400 and is_html and raw_md:
+                    # Split at safe markdown boundaries (outside fenced code
+                    # blocks), convert each piece to HTML independently.
+                    from aipager.md_to_tg import markdown_to_telegram_html
+                    bounds = _md_safe_boundaries(raw_md)
+                    md_limit = len(raw_md) // 3
+                    # Head: largest safe boundary within first ~1/3
+                    head_cut = 0
+                    for b in bounds:
+                        if b <= md_limit:
+                            head_cut = b
+                    head_md = raw_md[:head_cut] if head_cut else raw_md[:md_limit]
+                    # Tail: smallest safe boundary within last ~1/3
+                    tail_start = len(raw_md)
+                    for b in reversed(bounds):
+                        if b >= len(raw_md) - md_limit:
+                            tail_start = b
+                    tail_md = raw_md[tail_start:] if tail_start < len(raw_md) else raw_md[-md_limit:]
+                    head_html = markdown_to_telegram_html(head_md)
+                    tail_html = markdown_to_telegram_html(tail_md)
+                    # Safety: truncate each half if HTML blew up
+                    if len(head_html) > 1700:
+                        head_html = _safe_truncate(head_html, 1700, True)
+                    if len(tail_html) > 1700:
+                        tail_html = _safe_truncate(tail_html, 1700, True)
+                    escaped = head_html + "\n\n⋯\n\n" + tail_html
+                    send_file = True
                 if len(escaped) > 500:
-                    # Hard cap at 3500 to stay within 4096 message limit
-                    if len(escaped) > 3500:
-                        escaped = escaped[:3500] + "…"
                     text += f"\n\n<blockquote expandable>{escaped}</blockquote>"
                 else:
                     text += f"\n\n<blockquote>{escaped}</blockquote>"
             msg = await bot.send_message(CHAT_ID, text, parse_mode="HTML")
             self.registry.track_message(msg.message_id, sess.name)
+            # Send full response as file for long messages
+            if send_file and raw_md:
+                try:
+                    tmp = Path(tempfile.mktemp(suffix=".txt", prefix=f"{label}_"))
+                    tmp.write_text(raw_md, encoding="utf-8")
+                    await bot.send_document(
+                        CHAT_ID, document=tmp, filename=f"{label}_response.txt",
+                        reply_to_message_id=msg.message_id,
+                    )
+                    tmp.unlink(missing_ok=True)
+                except Exception:
+                    log.debug("Failed to send full response file", exc_info=True)
 
         elif sess.status == Status.INTERACTIVE:
             tool_info = context.get("tool_info")
