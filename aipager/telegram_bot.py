@@ -10,6 +10,7 @@ Single owner of all Telegram communication. Handles:
 from __future__ import annotations
 
 import asyncio
+import html as html_mod
 import logging
 import time
 from typing import TYPE_CHECKING
@@ -134,11 +135,10 @@ class TelegramBot:
 
         if sess.status == Status.IDLE:
             summary = context.get("summary", sess.summary)
-            text = f"✅ [{label}] Finished — waiting for input"
+            text = f"✅ <b>{html_mod.escape(label)}</b> · Finished"
             if summary:
-                text += f"\n\n{summary}"
-            text += "\n\n💬 Reply to send a new prompt"
-            msg = await bot.send_message(CHAT_ID, text)
+                text += f"\n\n<blockquote>{html_mod.escape(summary)}</blockquote>"
+            msg = await bot.send_message(CHAT_ID, text, parse_mode="HTML")
             self.registry.track_message(msg.message_id, sess.name)
 
         elif sess.status == Status.INTERACTIVE:
@@ -153,15 +153,15 @@ class TelegramBot:
                                                                 selector_text, selector_options)
             else:
                 tool_summary = tool_info["summary"] if tool_info else ""
-                text = f"🔐 [{label}] Permission needed"
+                text = f"🔐 <b>{html_mod.escape(label)}</b> · Permission needed"
                 if tool_summary:
-                    text += f"\n{tool_summary}"
+                    text += f"\n<code>{html_mod.escape(tool_summary)}</code>"
                 keyboard = InlineKeyboardMarkup([[
                     InlineKeyboardButton("✅ Allow", callback_data=f"{sess.name}:allow"),
                     InlineKeyboardButton("❌ Deny", callback_data=f"{sess.name}:deny"),
                 ]])
 
-            msg = await bot.send_message(CHAT_ID, text, reply_markup=keyboard)
+            msg = await bot.send_message(CHAT_ID, text, reply_markup=keyboard, parse_mode="HTML")
             self.registry.track_message(msg.message_id, sess.name)
 
         elif sess.status == Status.BUSY:
@@ -169,9 +169,10 @@ class TelegramBot:
             if sess.last_msg_id:
                 try:
                     await bot.edit_message_text(
-                        f"→ Working...",
+                        f"⚙️ <b>{html_mod.escape(label)}</b> · Working…",
                         chat_id=CHAT_ID,
                         message_id=sess.last_msg_id,
+                        parse_mode="HTML",
                     )
                 except Exception:
                     pass  # message may be too old or already edited
@@ -181,22 +182,22 @@ class TelegramBot:
         """Build message and buttons for AskUserQuestion."""
         questions = tool_input.get("questions", [])
         if not questions:
-            return f"[{label}] AskUserQuestion (no questions)", None
+            return f"❓ <b>{html_mod.escape(label)}</b> · No questions", None
 
         q = questions[0]
         question = q.get("question", "?")
         options = q.get("options", [])
 
-        text = f"[{label}] ❓ {question}"
+        text = f"❓ <b>{html_mod.escape(label)}</b> · {html_mod.escape(question)}"
         if not options:
             return text, None
 
         for i, opt in enumerate(options):
             opt_label = opt.get("label", f"Option {i+1}")
             desc = opt.get("description", "")
-            text += f"\n  {i+1}. {opt_label}"
+            text += f"\n  {i+1}. {html_mod.escape(opt_label)}"
             if desc:
-                text += f" — {desc[:60]}"
+                text += f" — {html_mod.escape(desc[:60])}"
 
         buttons = []
         for i, opt in enumerate(options[:4]):
@@ -212,12 +213,12 @@ class TelegramBot:
                                   options: list[tuple[int, str]]) -> tuple[str, InlineKeyboardMarkup | None]:
         """Build message and buttons from pane-scraped selector."""
         if question:
-            text = f"[{label}] ❓ {question}"
+            text = f"❓ <b>{html_mod.escape(label)}</b> · {html_mod.escape(question)}"
         else:
-            text = f"[{label}] 🔐 Needs input"
+            text = f"🔐 <b>{html_mod.escape(label)}</b> · Needs input"
 
         for num, opt_label in options:
-            text += f"\n  {num}. {opt_label}"
+            text += f"\n  {num}. {html_mod.escape(opt_label)}"
 
         buttons = []
         for num, opt_label in options[:4]:
@@ -309,14 +310,14 @@ class TelegramBot:
                 self.registry.get_or_create(name)
             sessions = self.registry.all_sessions()
 
-        lines = ["📊 Claude Sessions:\n"]
+        lines = ["<b>Sessions</b>\n"]
         for name, sess in sessions.items():
             alive = await tmux_inject.is_alive(name)
             icon = "🟢" if alive else "🔴"
             status_str = sess.status.name.lower()
-            lines.append(f"{icon} [{sess.label}] {status_str}")
+            lines.append(f"{icon} <b>{html_mod.escape(sess.label)}</b> · {status_str}")
 
-        await update.message.reply_text("\n".join(lines))
+        await update.message.reply_text("\n".join(lines), parse_mode="HTML")
 
     async def _handle_message(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle text messages — replies to notifications or /<label> commands."""
