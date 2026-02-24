@@ -98,12 +98,20 @@ class HookReceiver:
         except (json.JSONDecodeError, UnicodeDecodeError):
             return
 
-        event = msg.get("notification_type", msg.get("type", ""))
+        event = msg.get("notification_type") or msg.get("hook_event_name") or msg.get("type", "")
         tmux_session = msg.get("tmux_session", "")
         transcript_path = msg.get("transcript_path", "")
 
         if not tmux_session or not event:
             return
+
+        # Store transcript_path on ALL events — pane_monitor uses it for
+        # rich markdown summaries when the session goes idle.
+        if transcript_path:
+            self.registry.get_or_create(tmux_session).transcript_path = transcript_path
+            log.debug("[%s] Stored transcript_path: %s", tmux_session, transcript_path)
+
+        log.debug("Hook event: %s from %s", event, tmux_session)
 
         if event == "permission_prompt":
             tool_info = _extract_pending_tool(transcript_path) if transcript_path else None

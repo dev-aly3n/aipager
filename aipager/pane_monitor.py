@@ -10,10 +10,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from pathlib import Path
 
 from aipager import tmux_inject
 from aipager.config import PANE_POLL_INTERVAL
+from aipager.md_to_tg import markdown_to_telegram_html
 from aipager.state import SessionRegistry, Status
+from aipager.transcript import extract_last_response, find_transcript
 
 log = logging.getLogger(__name__)
 
@@ -218,12 +221,31 @@ class PaneMonitor:
             lines = await tmux_inject.capture_pane(name)
             status, summary, context = classify_pane(lines)
 
+            # Track previous status before transition (needed for transcript logic)
+            prev = self.registry.get(name)
+            prev_status = prev.status if prev else Status.UNKNOWN
+
             sess = self.registry.transition(name, status, summary=summary)
             if sess is None:
                 continue  # no state change — hook already handled it
 
             if status == Status.IDLE:
-                await self.notify_fn(sess, "idle_prompt", {"summary": summary})
+                notify_ctx = {"summary": summary}
+                # Try transcript-based markdown summary only on BUSY→IDLE
+                # (not UNKNOWN→IDLE on startup, which would misattribute transcripts)
+                tracked = self.registry.get(name)
+                tp = (tracked.transcript_path if tracked else "") or (
+                    find_transcript(name) if prev_status == Status.BUSY else None)
+                if tp:
+                    try:
+                        md = extract_last_response(tp)
+                        if md:
+                            html_summary = markdown_to_telegram_html(md)
+                            notify_ctx = {"summary": html_summary, "html_summary": True}
+                            log.info("[%s] Using transcript (%d chars HTML)", name, len(html_summary))
+                    except Exception:
+                        log.info("[%s] Transcript failed, pane fallback", name)
+                await self.notify_fn(sess, "idle_prompt", notify_ctx)
             elif status == Status.INTERACTIVE:
                 ctx = context or {}
                 await self.notify_fn(sess, "permission_prompt", ctx)

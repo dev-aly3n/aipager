@@ -135,9 +135,12 @@ class TelegramBot:
 
         if sess.status == Status.IDLE:
             summary = context.get("summary", sess.summary)
+            is_html = context.get("html_summary", False)
             text = f"✅ <b>{html_mod.escape(label)}</b> · Finished"
             if summary:
-                escaped = html_mod.escape(summary)
+                # If html_summary, the summary is already Telegram HTML (from transcript).
+                # Otherwise, escape plain text from pane scraping.
+                escaped = summary if is_html else html_mod.escape(summary)
                 # Expandable blockquote for long summaries (Bot API 7.4+)
                 # Renders collapsed with "tap to expand" — keeps notification clean
                 if len(escaped) > 500:

@@ -43,6 +43,7 @@ class TrackedSession:
     last_msg_id: int | None = None   # most recent Telegram notification msg
     summary: str = ""                # last pane summary (for idle notifications)
     last_idle_at: float = 0.0        # monotonic timestamp of last IDLE transition
+    transcript_path: str = ""        # path to Claude Code JSONL transcript
 
 
 class SessionRegistry:
