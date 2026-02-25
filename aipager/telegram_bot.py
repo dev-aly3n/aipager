@@ -132,6 +132,7 @@ class TelegramBot:
         # Register handlers
         self._app.add_handler(CallbackQueryHandler(self._handle_callback))
         self._app.add_handler(CommandHandler("status", self._handle_status))
+        self._app.add_handler(CommandHandler("stop", self._handle_stop_cmd))
         # Catch-all for text messages (replies and /<label> commands)
         self._app.add_handler(MessageHandler(
             filters.TEXT & filters.Chat(int(CHAT_ID)),
@@ -184,6 +185,7 @@ class TelegramBot:
             msg = await self._app.bot.send_message(
                 CHAT_ID, text, parse_mode="HTML",
                 reply_to_message_id=sess.trigger_msg_id,
+                reply_markup=self._build_stop_keyboard(sess.name),
             )
             return msg.message_id
         except Exception:
@@ -199,7 +201,8 @@ class TelegramBot:
             text += f"\n<code>{html_mod.escape(sess.last_tool_summary)}</code>"
         return text
 
-    async def _edit_busy_raw(self, msg_id: int, text: str) -> bool | None:
+    async def _edit_busy_raw(self, msg_id: int, text: str,
+                             reply_markup=None) -> bool | None:
         """Edit busy message with pre-built text.
 
         Returns True on success, False on transient error,
@@ -210,6 +213,7 @@ class TelegramBot:
         try:
             await self._app.bot.edit_message_text(
                 text, chat_id=CHAT_ID, message_id=msg_id, parse_mode="HTML",
+                reply_markup=reply_markup,
             )
             return True
         except Exception as e:
@@ -226,6 +230,7 @@ class TelegramBot:
         verbs = list(SPINNER_VERBS)
         random.shuffle(verbs)
         idx = 0
+        keyboard = self._build_stop_keyboard(sess.name)
         try:
             while sess.busy_msg_id and sess.status == Status.BUSY:
                 await asyncio.sleep(BUSY_EDIT_INTERVAL)
@@ -237,7 +242,7 @@ class TelegramBot:
                 verb = verbs[idx % len(verbs)]
                 idx += 1
                 text = self._build_busy_text(sess.label, verb, sess)
-                result = await self._edit_busy_raw(sess.busy_msg_id, text)
+                result = await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
                 if result is None:
                     sess.busy_msg_id = None  # message gone
                     break
@@ -309,8 +314,9 @@ class TelegramBot:
             # Edit if tool changed OR interval elapsed since last edit
             if (tool_name != sess.last_tool_name or
                     now - sess.last_tool_edit_at >= BUSY_EDIT_INTERVAL):
+                keyboard = self._build_stop_keyboard(sess.name)
                 text = self._build_busy_text(label, "Working", sess)
-                result = await self._edit_busy_raw(sess.busy_msg_id, text)
+                result = await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
                 if result is True:
                     sess.last_tool_edit_at = now
                     sess.last_tool_name = tool_name
@@ -509,7 +515,59 @@ class TelegramBot:
         keyboard = InlineKeyboardMarkup([buttons]) if buttons else None
         return text, keyboard
 
+    def _build_stop_keyboard(self, session_name: str) -> InlineKeyboardMarkup:
+        return InlineKeyboardMarkup([[
+            InlineKeyboardButton("Stop", callback_data=f"{session_name}:stop"),
+        ]])
+
     # ── Telegram handlers ──
+
+    async def _stop_session(self, sess: TrackedSession,
+                            update: Update | None = None,
+                            query=None) -> None:
+        """Interrupt a busy session: send Escape, clean up state."""
+        # 1. Send Escape twice to Claude Code
+        await inject.send_keys(sess.name, "Escape")
+        await asyncio.sleep(0.15)
+        await inject.send_keys(sess.name, "Escape")
+
+        # 2. Cancel animation
+        self._stop_animation(sess)
+
+        # 3. Edit busy message to show "Stopped" (no keyboard)
+        if sess.busy_msg_id and sess.busy_msg_id > 0:
+            await self._edit_busy_raw(
+                sess.busy_msg_id,
+                f"⚠️ <b>{html_mod.escape(sess.label)}</b> · Stopped",
+            )
+        sess.busy_msg_id = None
+
+        # 4. Transition to IDLE directly (skip notify — we handle UI here)
+        dropped = len(sess.pending_queue)
+        sess.pending_queue.clear()
+        sess.status = Status.IDLE
+        sess.trigger_msg_id = None
+        sess.last_idle_at = time.monotonic()  # prevent debounce of next real IDLE
+
+        # 5. Acknowledge
+        ack = f"Stopped [{sess.label}]"
+        if dropped:
+            ack += f" ({dropped} queued message{'s' if dropped > 1 else ''} discarded)"
+
+        if query:
+            await query.answer(ack)
+            # Also edit the callback query's message if it's the busy message
+            try:
+                await query.edit_message_text(
+                    f"⚠️ <b>{html_mod.escape(sess.label)}</b> · Stopped",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+        elif update:
+            await self._react(update, "✅")
+
+        log.info("[%s] Stopped by user (dropped %d queued)", sess.label, dropped)
 
     async def _handle_callback(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle inline keyboard button tap."""
@@ -522,6 +580,15 @@ class TelegramBot:
             return
 
         session_name, action = cb_data.split(":", 1)
+
+        if action == "stop":
+            sess = self.registry.get(session_name)
+            if not sess:
+                await query.answer("Session not found")
+                return
+            await self._stop_session(sess, query=query)
+            return
+
         is_option = action.startswith("opt") and action[3:].isdigit()
 
         if action not in ACTION_VERBS and not is_option:
@@ -599,6 +666,31 @@ class TelegramBot:
 
         await update.message.reply_text("\n".join(lines), parse_mode="HTML")
 
+    async def _handle_stop_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /stop command — stop the last active session."""
+        name = self.registry.last_active_session
+        if not name:
+            await update.message.reply_text("No active session to stop.")
+            return
+        sess = self.registry.get(name)
+        if not sess or sess.status not in (Status.BUSY, Status.INTERACTIVE):
+            label = sess.label if sess else "?"
+            await update.message.reply_text(f"[{label}] is not busy.")
+            return
+        await self._stop_session(sess, update=update)
+
+    async def _stop_by_label(self, update: Update, target_label: str) -> None:
+        """Stop a session by its label."""
+        sessions = self.registry.all_sessions()
+        for name, sess in sessions.items():
+            if sess.label == target_label:
+                if sess.status not in (Status.BUSY, Status.INTERACTIVE):
+                    await update.message.reply_text(f"[{target_label}] is not busy.")
+                    return
+                await self._stop_session(sess, update=update)
+                return
+        await update.message.reply_text(f"⚠️ Unknown session: {target_label}")
+
     async def _handle_message(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle text messages — replies to notifications or /<label> commands."""
         text = update.message.text.strip()
@@ -611,6 +703,9 @@ class TelegramBot:
             target_label = parts[0][1:]
             prompt_text = parts[1].strip()
             if target_label and prompt_text:
+                if prompt_text.lower() == "stop":
+                    await self._stop_by_label(update, target_label)
+                    return
                 await self._direct_send(update, target_label, prompt_text)
                 return
 
