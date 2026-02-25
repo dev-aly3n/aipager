@@ -27,8 +27,47 @@ log = logging.getLogger(__name__)
 _CTX_WINDOW_SIZE = 200_000  # all current Claude models use 200k context
 
 
+def _read_statusline(session_name: str) -> dict | None:
+    """Read real-time token data from the statusLine JSON file.
+
+    Claude Code's statusLine hook pipes JSON to its command on every update.
+    We modified the command to also write this JSON to a per-session file.
+    This gives us accurate cumulative token counts — same source the terminal uses.
+    """
+    status_file = Path(f"/tmp/claude-status-{session_name}.json")
+    try:
+        data = json.loads(status_file.read_text())
+    except (FileNotFoundError, PermissionError, json.JSONDecodeError):
+        return None
+
+    ctx = data.get("context_window", {})
+    total_in = ctx.get("total_input_tokens", 0)
+    total_out = ctx.get("total_output_tokens", 0)
+    pct = ctx.get("used_percentage")
+    remaining = ctx.get("remaining_percentage")
+
+    # Compute context_pct from whatever's available
+    if pct is not None:
+        context_pct = round(pct)
+    elif remaining is not None:
+        context_pct = round(100 - remaining)
+    else:
+        context_pct = 0
+
+    return {
+        "context_pct": context_pct,
+        "total_input": total_in,
+        "total_output": total_out,
+        "total_tokens": total_in + total_out,
+    }
+
+
 def _extract_token_usage(transcript_path: str) -> dict | None:
-    """Read the last assistant entry to get token usage for this turn."""
+    """Fallback: read context usage from transcript JSONL.
+
+    Only used when statusLine file isn't available. Output tokens from
+    the transcript are unreliable (placeholder values in many versions).
+    """
     try:
         lines = Path(transcript_path).read_text().strip().splitlines()
     except (FileNotFoundError, PermissionError):
@@ -46,11 +85,10 @@ def _extract_token_usage(transcript_path: str) -> dict | None:
             inp = usage.get("input_tokens", 0)
             cache_read = usage.get("cache_read_input_tokens", 0)
             cache_create = usage.get("cache_creation_input_tokens", 0)
-            out = usage.get("output_tokens", 0)
             total_ctx = inp + cache_read + cache_create
             pct = round(total_ctx / _CTX_WINDOW_SIZE * 100) if total_ctx else 0
-            return {"context_tokens": total_ctx, "output_tokens": out,
-                    "context_pct": pct}
+            return {"context_pct": pct, "total_input": total_ctx,
+                    "total_output": 0, "total_tokens": total_ctx}
     return None
 
 
@@ -165,13 +203,54 @@ class HookReceiver:
                 # Ensure we're in BUSY state
                 if sess.status != Status.BUSY:
                     self.registry.transition(session_name, Status.BUSY)
-                # Extract token usage from transcript (lightweight — reads last 20 lines)
-                usage = _extract_token_usage(transcript_path) if transcript_path else None
+                # Token data piggybacked from statusLine file (read by notify_hook.py)
+                sl_tokens = msg.get("sl_tokens")
+                if sl_tokens:
+                    sess.last_token_pct = sl_tokens.get("context_pct", 0)
+                    total_out = sl_tokens.get("total_output", 0)
+                    if sess.output_baseline is None:
+                        sess.output_baseline = total_out
+                    elif total_out < sess.output_baseline:
+                        sess.output_baseline = total_out
+                    sess.last_output_tokens = max(0, total_out - sess.output_baseline)
+                    log.debug("[%s] PreToolUse tokens: %d%% ctx, ↓%d",
+                              sess.label, sess.last_token_pct, sess.last_output_tokens)
                 await self.notify_fn(sess, "tool_use", {
                     "tool_name": tool_name,
                     "tool_summary": summary,
-                    "token_usage": usage,
                 })
+
+        elif event == "PreCompact":
+            # Compaction is about to start — notify user
+            sess = self.registry.get_or_create(session_name)
+            trigger = msg.get("trigger", "auto")
+            log.info("[%s] PreCompact (trigger=%s)", sess.label, trigger)
+            await self.notify_fn(sess, "compacting", {"trigger": trigger})
+            return
+
+        elif event == "statusline":
+            # Real-time token data from statusLine hook (fires after each response)
+            sess = self.registry.get_or_create(session_name)
+            ctx_pct = msg.get("context_pct", 0)
+            total_out = msg.get("total_output", 0)
+            sess.last_token_pct = ctx_pct
+            # Lazy baseline: set on first statusline event this BUSY cycle
+            if sess.output_baseline is None:
+                sess.output_baseline = total_out
+            elif total_out < sess.output_baseline:
+                sess.output_baseline = total_out  # session restarted
+            sess.last_output_tokens = max(0, total_out - sess.output_baseline)
+            # Context warning: alert user once when approaching auto-compact
+            if ctx_pct >= 75 and not sess.compact_warned:
+                sess.compact_warned = True
+                await self.notify_fn(sess, "context_warning", {"context_pct": ctx_pct})
+            elif ctx_pct < 30:
+                # Reset after compaction (context drops to ~2-5%)
+                sess.compact_warned = False
+            log.debug("[%s] statusline: %d%% ctx, ↓%d out (base=%d, total=%d)",
+                      sess.label, ctx_pct, sess.last_output_tokens,
+                      sess.output_baseline or 0, total_out)
+            return  # no further notification — animation reads cached values
 
         elif event.lower() in ("idle_prompt", "idle", "stop", "notification"):
             sess = self.registry.transition(session_name, Status.IDLE)

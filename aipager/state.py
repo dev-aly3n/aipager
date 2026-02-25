@@ -54,10 +54,17 @@ class TrackedSession:
     animate_task: Any = field(default=None, repr=False)  # asyncio.Task for spinner
     last_tool_summary: str = ""      # cached tool summary text for display
     last_token_pct: int = 0          # cached context % for display
+    last_output_tokens: int = 0      # output tokens THIS TURN (delta from baseline)
+    output_baseline: int | None = None  # total_output_tokens at first statusLine read this cycle
+    busy_started_at: float = 0.0     # monotonic timestamp when BUSY started (for "thought Xs")
     # Queued messages (sent one-at-a-time when session becomes IDLE)
     pending_queue: list = field(default_factory=list)  # list of (text, trigger_msg_id)
     # Reply threading — Telegram message_id of the user's prompt that started this work
     trigger_msg_id: int | None = None
+    # Compact warning — prevents spamming "context high" alerts
+    compact_warned: bool = False
+    # Last injected prompt text — enables retry on API errors
+    last_prompt: str = ""
 
 
 class SessionRegistry:

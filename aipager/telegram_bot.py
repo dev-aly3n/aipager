@@ -95,6 +95,31 @@ ACTION_VERBS = {
     "continue": "Continued",
 }
 
+# ── API error detection ──
+
+_ERROR_PATTERNS: list[tuple[re.Pattern, str]] = [
+    (re.compile(r"API Error:\s*500|api_error|internal server error", re.I),
+     "Anthropic's servers hit an internal error. Usually resolves in seconds."),
+    (re.compile(r"API Error:\s*529|overloaded_error|overloaded", re.I),
+     "Anthropic's servers are overloaded. Try again in a moment."),
+    (re.compile(r"API Error:\s*429|rate_limit_error|rate.?limit", re.I),
+     "Rate limit hit. Wait a moment before retrying."),
+    (re.compile(r"connection.?(error|reset|refused|timeout)|ECONNR|network.?error", re.I),
+     "Lost connection to Anthropic. Check network and retry."),
+    (re.compile(r"API Error:\s*\d{3}", re.I),
+     "API error occurred."),
+]
+
+
+def _detect_api_error(text: str) -> str | None:
+    """Check if text contains an API error. Returns friendly message or None."""
+    if not text:
+        return None
+    for pattern, friendly_msg in _ERROR_PATTERNS:
+        if pattern.search(text):
+            return friendly_msg
+    return None
+
 
 class TelegramBot:
     """Wraps python-telegram-bot Application with session-aware handlers."""
@@ -192,11 +217,24 @@ class TelegramBot:
             log.warning("Failed to send busy message", exc_info=True)
             return None
 
+    @staticmethod
+    def _fmt_tokens(n: int) -> str:
+        """Format token count: 1.2k, 15k, 150k, etc."""
+        if n >= 100_000:
+            return f"{n // 1000}k"
+        if n >= 1_000:
+            return f"{n / 1000:.1f}k"
+        return str(n)
+
     def _build_busy_text(self, label: str, verb: str, sess: TrackedSession) -> str:
-        """Build the animated busy message text."""
-        text = f"⚙️ <b>{html_mod.escape(label)}</b> · {html_mod.escape(verb)}…"
-        if sess.last_token_pct:
-            text += f"  <i>({sess.last_token_pct}% ctx)</i>"
+        """Build the animated busy message text — mirrors Claude Code terminal."""
+        # Thinking time (like Claude's "thought 4s")
+        elapsed = ""
+        if sess.busy_started_at:
+            secs = int(time.monotonic() - sess.busy_started_at)
+            if secs >= 2:
+                elapsed = f" {secs}s"
+        text = f"⚙️ <b>{html_mod.escape(label)}</b> · {html_mod.escape(verb)}…{elapsed}"
         if sess.last_tool_summary:
             text += f"\n<code>{html_mod.escape(sess.last_tool_summary)}</code>"
         return text
@@ -231,12 +269,15 @@ class TelegramBot:
         random.shuffle(verbs)
         idx = 0
         keyboard = self._build_stop_keyboard(sess.name)
+        first_tick = True
         try:
             while sess.busy_msg_id and sess.status == Status.BUSY:
-                await asyncio.sleep(BUSY_EDIT_INTERVAL)
+                # First tick at 1.5s for quick stats display, then normal interval
+                await asyncio.sleep(1.5 if first_tick else BUSY_EDIT_INTERVAL)
+                first_tick = False
                 if not sess.busy_msg_id or sess.status != Status.BUSY:
                     break
-                # Skip if a tool edit happened recently (let tool info stay visible)
+                # Skip message edit if a tool edit happened recently (let tool info stay)
                 if time.monotonic() - sess.last_tool_edit_at < BUSY_EDIT_INTERVAL - 0.5:
                     continue
                 verb = verbs[idx % len(verbs)]
@@ -254,6 +295,25 @@ class TelegramBot:
         self._stop_animation(sess)
         sess.animate_task = asyncio.create_task(self._animate_busy(sess))
 
+    async def _animate_compact(self, sess: TrackedSession) -> None:
+        """Dot animation while compacting: . → .. → ... → loop."""
+        dots = [".", "..", "..."]
+        idx = 0
+        try:
+            while sess.busy_msg_id and sess.busy_msg_id > 0:
+                await asyncio.sleep(1.0)
+                if not sess.busy_msg_id or sess.busy_msg_id < 0:
+                    break
+                dot = dots[idx % len(dots)]
+                idx += 1
+                text = f"🔄 <b>{html_mod.escape(sess.label)}</b> · Compacting{dot}"
+                result = await self._edit_busy_raw(sess.busy_msg_id, text)
+                if result is None:
+                    sess.busy_msg_id = None
+                    break
+        except asyncio.CancelledError:
+            pass
+
     def _stop_animation(self, sess: TrackedSession) -> None:
         """Cancel the animation task if running."""
         if sess.animate_task and not sess.animate_task.done():
@@ -267,12 +327,23 @@ class TelegramBot:
         to prevent double-send when _handle_message and UserPromptSubmit
         hook coroutines race through the same await point.
         """
+        # Clear stale busy state from previous lifecycle (e.g. GONE → BUSY).
+        # If busy_msg_id is set but the animation task is dead, the previous
+        # cycle ended abnormally — reset so we can send a fresh busy message.
+        if (sess.busy_msg_id and sess.busy_msg_id > 0
+                and (not sess.animate_task or sess.animate_task.done())):
+            log.debug("[%s] Clearing stale busy_msg_id=%s (animation dead)",
+                      sess.label, sess.busy_msg_id)
+            sess.busy_msg_id = None
         if sess.busy_msg_id:
             return  # already showing busy (or sentinel claimed by other coroutine)
         sess.busy_msg_id = -1  # sentinel: claim slot before async yield
         self._stop_animation(sess)
         sess.last_tool_summary = ""
         sess.last_token_pct = 0
+        sess.last_output_tokens = 0
+        sess.output_baseline = None  # lazy: set on first statusLine read this cycle
+        sess.busy_started_at = time.monotonic()
         msg_id = await self.send_busy(sess)
         if msg_id:
             sess.busy_msg_id = msg_id
@@ -303,13 +374,12 @@ class TelegramBot:
         if event == "tool_use":
             tool_summary = context.get("tool_summary", "")
             tool_name = context.get("tool_name", "")
-            token_usage = context.get("token_usage")
+            # Cache tool summary (token stats updated by statusline datagrams)
+            if tool_summary:
+                sess.last_tool_summary = tool_summary
+            # Skip edit if busy msg not ready yet (animation will pick up cached stats)
             if not sess.busy_msg_id or sess.busy_msg_id < 0 or not tool_summary:
                 return
-            # Cache for animation display
-            sess.last_tool_summary = tool_summary
-            if token_usage:
-                sess.last_token_pct = token_usage.get("context_pct", 0)
             now = time.monotonic()
             # Edit if tool changed OR interval elapsed since last edit
             if (tool_name != sess.last_tool_name or
@@ -323,6 +393,41 @@ class TelegramBot:
                 elif result is None:
                     sess.busy_msg_id = None  # message gone, stop editing
                     self._stop_animation(sess)
+            return
+
+        if event == "compacting":
+            # Context compaction started — show dot animation
+            self._stop_animation(sess)
+            if sess.busy_msg_id and sess.busy_msg_id > 0:
+                text = f"🔄 <b>{html_mod.escape(label)}</b> · Compacting"
+                await self._edit_busy_raw(sess.busy_msg_id, text)
+            else:
+                # No busy message — send a new one
+                try:
+                    text = f"🔄 <b>{html_mod.escape(label)}</b> · Compacting"
+                    msg = await bot.send_message(
+                        CHAT_ID, text, parse_mode="HTML",
+                        reply_to_message_id=sess.trigger_msg_id,
+                    )
+                    sess.busy_msg_id = msg.message_id
+                except Exception:
+                    log.warning("Failed to send compact message", exc_info=True)
+            # Start dot animation
+            sess.animate_task = asyncio.create_task(
+                self._animate_compact(sess))
+            return
+
+        if event == "context_warning":
+            ctx_pct = context.get("context_pct", 0)
+            try:
+                await bot.send_message(
+                    CHAT_ID,
+                    f"⚠️ <b>{html_mod.escape(label)}</b> · Context at "
+                    f"{ctx_pct}% — auto-compact soon",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
             return
 
         if sess.status == Status.IDLE:
@@ -341,6 +446,27 @@ class TelegramBot:
             summary = context.get("summary", sess.summary)
             is_html = context.get("html_summary", False)
             raw_md = context.get("raw_md", "")
+
+            # ── API error detection → friendly message + retry button ──
+            error_source = raw_md or summary or ""
+            friendly_error = _detect_api_error(error_source)
+            if friendly_error:
+                text = (f"⚠️ <b>{html_mod.escape(label)}</b> · {friendly_error}")
+                keyboard = (self._build_retry_keyboard(sess.name)
+                            if sess.last_prompt else None)
+                try:
+                    msg = await bot.send_message(
+                        CHAT_ID, text, parse_mode="HTML",
+                        reply_to_message_id=sess.trigger_msg_id,
+                        reply_markup=keyboard,
+                    )
+                    self.registry.track_message(msg.message_id, sess.name)
+                except Exception:
+                    log.warning("Failed to send error notification", exc_info=True)
+                # Don't clear trigger_msg_id — retry needs it
+                # Don't flush pending queue — nothing was processed
+                return
+
             text = f"✅ <b>{html_mod.escape(label)}</b> · Finished"
             send_file = False
             if summary:
@@ -417,6 +543,7 @@ class TelegramBot:
             if sess.pending_queue:
                 queued_text, queued_trigger = sess.pending_queue.pop(0)
                 sess.trigger_msg_id = queued_trigger
+                sess.last_prompt = queued_text
                 ok = await inject.send_text_and_enter(sess.name, queued_text)
                 if ok:
                     self.registry.transition(sess.name, Status.BUSY)
@@ -520,6 +647,11 @@ class TelegramBot:
             InlineKeyboardButton("Stop", callback_data=f"{session_name}:stop"),
         ]])
 
+    def _build_retry_keyboard(self, session_name: str) -> InlineKeyboardMarkup:
+        return InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔄 Retry", callback_data=f"{session_name}:retry"),
+        ]])
+
     # ── Telegram handlers ──
 
     async def _stop_session(self, sess: TrackedSession,
@@ -587,6 +719,37 @@ class TelegramBot:
                 await query.answer("Session not found")
                 return
             await self._stop_session(sess, query=query)
+            return
+
+        if action == "retry":
+            sess = self.registry.get(session_name)
+            if not sess:
+                await query.answer("Session not found")
+                return
+            if not sess.last_prompt:
+                await query.answer("Nothing to retry")
+                return
+            if not await inject.is_alive(session_name):
+                await query.answer(f"Session '{session_name}' not alive")
+                return
+            # Re-inject the last prompt (last_prompt stays set for retry-of-retry)
+            prompt = sess.last_prompt
+            ok = await inject.send_text_and_enter(session_name, prompt)
+            if ok:
+                await query.answer(f"Retrying [{sess.label}]")
+                # Delete the error message — busy animation replaces it
+                try:
+                    await self._app.bot.delete_message(
+                        chat_id=CHAT_ID,
+                        message_id=query.message.message_id,
+                    )
+                except Exception:
+                    pass
+                self.registry.transition(session_name, Status.BUSY)
+                await self._send_busy_and_animate(sess)
+                log.info("[%s] Retry: %s", sess.label, prompt[:80])
+            else:
+                await query.answer("Failed to retry")
             return
 
         is_option = action.startswith("opt") and action[3:].isdigit()
@@ -735,6 +898,7 @@ class TelegramBot:
             return
 
         sess.trigger_msg_id = update.message.message_id
+        sess.last_prompt = text
         ok = await inject.send_text_and_enter(sess.name, text)
         if ok:
             await self._react(update, "👀")
@@ -753,6 +917,7 @@ class TelegramBot:
                     await update.message.reply_text(f"⚠️ [{target_label}] session not alive")
                     return
                 sess.trigger_msg_id = update.message.message_id
+                sess.last_prompt = prompt_text
                 self.registry.last_active_session = name  # user explicitly targeted this session
                 ok = await inject.send_text_and_enter(name, prompt_text)
                 if ok:
@@ -769,6 +934,7 @@ class TelegramBot:
         if await inject.is_alive(session_name):
             new_sess = self.registry.get_or_create(session_name)
             new_sess.trigger_msg_id = update.message.message_id
+            new_sess.last_prompt = prompt_text
             self.registry.last_active_session = session_name
             ok = await inject.send_text_and_enter(session_name, prompt_text)
             if ok:
