@@ -251,7 +251,7 @@ class HookReceiver:
                 sess.output_baseline = total_out  # session restarted
             sess.last_output_tokens = max(0, total_out - sess.output_baseline)
             # Context warning: alert user once when approaching auto-compact
-            if ctx_pct >= 75 and not sess.compact_warned:
+            if ctx_pct >= 80 and not sess.compact_warned:
                 sess.compact_warned = True
                 await self.notify_fn(sess, "context_warning", {"context_pct": ctx_pct})
             elif ctx_pct < 30:
