@@ -62,6 +62,7 @@ class SessionRegistry:
     def __init__(self):
         self._sessions: dict[str, TrackedSession] = {}  # keyed by session name
         self._msg_map: dict[int, str] = {}  # message_id → session name
+        self.last_active_session: str = ""  # last session that sent a notification
 
     def get(self, name: str) -> TrackedSession | None:
         return self._sessions.get(name)
@@ -109,6 +110,7 @@ class SessionRegistry:
     def track_message(self, msg_id: int, session_name: str) -> None:
         """Associate a Telegram message_id with a session (for reply lookups)."""
         self._msg_map[msg_id] = session_name
+        self.last_active_session = session_name
         sess = self._sessions.get(session_name)
         if sess:
             sess.last_msg_id = msg_id

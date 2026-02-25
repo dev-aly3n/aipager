@@ -576,12 +576,15 @@ class TelegramBot:
                 await self._direct_send(update, target_label, prompt_text)
                 return
 
-        # Reply to a notification
+        # Reply to a notification — or bare message goes to last active session
         reply_to = update.message.reply_to_message
-        if not reply_to:
-            return
+        if reply_to:
+            sess = self.registry.get_session_by_msg(reply_to.message_id)
+        else:
+            # Bare message → send to last session that notified us
+            name = self.registry.last_active_session
+            sess = self.registry.get(name) if name else None
 
-        sess = self.registry.get_session_by_msg(reply_to.message_id)
         if not sess:
             return
 
