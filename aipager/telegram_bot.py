@@ -635,7 +635,7 @@ class TelegramBot:
         # Queue if session is busy — inject when it goes IDLE
         if sess.status == Status.BUSY:
             sess.pending_queue.append((text, update.message.message_id))
-            await self._react(update, "🕐")
+            await self._react(update, "👀")
             log.info("[%s] Queued (busy): %s", sess.label, text[:80])
             return
 
