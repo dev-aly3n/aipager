@@ -128,33 +128,43 @@ class HookReceiver:
 
             notify_ctx: dict = {"summary": ""}
 
-            # Use last_assistant_message from hook JSON if available (fastest, most current)
+            # Primary: last_assistant_message from hook JSON (always current)
             last_msg = msg.get("last_assistant_message", "")
 
-            # Try transcript-based rich summary for code-heavy responses
-            tracked = self.registry.get(session_name)
-            tp = transcript_path or (tracked.transcript_path if tracked else "")
-            if not tp and RICH_SUMMARIES:
-                tp = find_transcript(session_name)
-            if tp and RICH_SUMMARIES:
+            if last_msg and RICH_SUMMARIES and "```" in last_msg:
+                # Rich HTML formatting for code-heavy responses
                 try:
-                    md = extract_last_response(tp)
-                    if md and "```" in md:
-                        html_summary = markdown_to_telegram_html(md)
-                        notify_ctx = {
-                            "summary": html_summary,
-                            "html_summary": True,
-                            "raw_md": md,
-                        }
-                        log.info("[%s] Rich summary (%d chars HTML)", session_name, len(html_summary))
-                    elif md:
-                        notify_ctx = {"summary": md}
+                    html_summary = markdown_to_telegram_html(last_msg)
+                    notify_ctx = {
+                        "summary": html_summary,
+                        "html_summary": True,
+                        "raw_md": last_msg,
+                    }
+                    log.info("[%s] Rich summary from hook (%d chars)", session_name, len(html_summary))
                 except Exception:
-                    log.info("[%s] Transcript summary failed", session_name)
-
-            # Fall back to last_assistant_message if no transcript summary
-            if not notify_ctx.get("summary") and last_msg:
+                    notify_ctx = {"summary": last_msg}
+            elif last_msg:
                 notify_ctx = {"summary": last_msg}
+            else:
+                # Fallback: transcript (for hooks that don't include last_assistant_message)
+                tracked = self.registry.get(session_name)
+                tp = transcript_path or (tracked.transcript_path if tracked else "")
+                if not tp and RICH_SUMMARIES:
+                    tp = find_transcript(session_name)
+                if tp:
+                    try:
+                        md = extract_last_response(tp)
+                        if md and RICH_SUMMARIES and "```" in md:
+                            html_summary = markdown_to_telegram_html(md)
+                            notify_ctx = {
+                                "summary": html_summary,
+                                "html_summary": True,
+                                "raw_md": md,
+                            }
+                        elif md:
+                            notify_ctx = {"summary": md}
+                    except Exception:
+                        log.info("[%s] Transcript summary failed", session_name)
 
             await self.notify_fn(sess, "idle_prompt", notify_ctx)
 
