@@ -79,7 +79,11 @@ async def send_text_and_enter(session: str, text: str) -> bool:
     ok, _ = await _run(["dtach", "-p", sock], stdin=text.encode())
     if not ok:
         return False
-    await asyncio.sleep(0.05)
+    # Claude Code's Ink TUI needs time to process text input before
+    # Enter is recognized as "submit". Too short → \r is swallowed.
+    # Scale with text length: longer text = more rendering time needed.
+    delay = max(0.15, min(0.5, len(text) * 0.003))
+    await asyncio.sleep(delay)
     ok, _ = await _run(["dtach", "-p", sock], stdin=b"\r")
     if ok:
         log.info("Sent text %r + Enter → %s", text[:50], session)

@@ -227,16 +227,20 @@ class TelegramBot:
         return str(n)
 
     def _build_busy_text(self, label: str, verb: str, sess: TrackedSession) -> str:
-        """Build the animated busy message text — mirrors Claude Code terminal."""
-        # Thinking time (like Claude's "thought 4s")
+        """Build the animated busy message text with tool history."""
         elapsed = ""
         if sess.busy_started_at:
             secs = int(time.monotonic() - sess.busy_started_at)
             if secs >= 2:
                 elapsed = f" {secs}s"
         text = f"⚙️ <b>{html_mod.escape(label)}</b> · {html_mod.escape(verb)}…{elapsed}"
-        if sess.last_tool_summary:
-            text += f"\n<code>{html_mod.escape(sess.last_tool_summary)}</code>"
+        # Show last 5 tools from history
+        visible = sess.tool_history[-5:]
+        for summary, done in visible:
+            if done:
+                text += f"\n✅ <code>{html_mod.escape(summary)}</code>"
+            else:
+                text += f"\n⏳ <code>{html_mod.escape(summary)}</code>"
         return text
 
     async def _edit_busy_raw(self, msg_id: int, text: str,
@@ -340,6 +344,7 @@ class TelegramBot:
         sess.busy_msg_id = -1  # sentinel: claim slot before async yield
         self._stop_animation(sess)
         sess.last_tool_summary = ""
+        sess.tool_history.clear()
         sess.last_token_pct = 0
         sess.last_output_tokens = 0
         sess.output_baseline = None  # lazy: set on first statusLine read this cycle
@@ -374,8 +379,10 @@ class TelegramBot:
         if event == "tool_use":
             tool_summary = context.get("tool_summary", "")
             tool_name = context.get("tool_name", "")
-            # Cache tool summary (token stats updated by statusline datagrams)
+            # Update tool history — mark previous as done, append new
             if tool_summary:
+                # Append new tool as in-progress (PostToolUse marks it done)
+                sess.tool_history.append((tool_summary, False))
                 sess.last_tool_summary = tool_summary
             # Skip edit if busy msg not ready yet (animation will pick up cached stats)
             if not sess.busy_msg_id or sess.busy_msg_id < 0 or not tool_summary:
@@ -393,6 +400,27 @@ class TelegramBot:
                 elif result is None:
                     sess.busy_msg_id = None  # message gone, stop editing
                     self._stop_animation(sess)
+            return
+
+        if event == "tool_done":
+            # PostToolUse — mark the matching tool as done in history
+            tool_summary = context.get("tool_summary", "")
+            if tool_summary:
+                for i, (s, done) in enumerate(sess.tool_history):
+                    if s == tool_summary and not done:
+                        sess.tool_history[i] = (s, True)
+                        break
+                else:
+                    # No exact match — mark the last undone tool
+                    for i in range(len(sess.tool_history) - 1, -1, -1):
+                        if not sess.tool_history[i][1]:
+                            sess.tool_history[i] = (sess.tool_history[i][0], True)
+                            break
+            # Update display
+            if sess.busy_msg_id and sess.busy_msg_id > 0:
+                keyboard = self._build_stop_keyboard(sess.name)
+                text = self._build_busy_text(label, "Working", sess)
+                await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
             return
 
         if event == "compacting":
@@ -431,6 +459,8 @@ class TelegramBot:
             return
 
         if sess.status == Status.IDLE:
+            # Mark all tools as done
+            sess.tool_history = [(s, True) for s, _ in sess.tool_history]
             # Stop animation and clean up busy message
             self._stop_animation(sess)
             if sess.busy_msg_id and sess.busy_msg_id > 0:
