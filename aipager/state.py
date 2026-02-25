@@ -54,11 +54,10 @@ class TrackedSession:
     animate_task: Any = field(default=None, repr=False)  # asyncio.Task for spinner
     last_tool_summary: str = ""      # cached tool summary text for display
     last_token_pct: int = 0          # cached context % for display
-    # Queued message (sent when session becomes IDLE)
-    pending_text: str = ""           # text to inject when session goes IDLE
+    # Queued messages (sent one-at-a-time when session becomes IDLE)
+    pending_queue: list = field(default_factory=list)  # list of (text, trigger_msg_id)
     # Reply threading — Telegram message_id of the user's prompt that started this work
     trigger_msg_id: int | None = None
-    queued_trigger_msg_id: int | None = None  # trigger for queued (pending) prompt
 
 
 class SessionRegistry:

@@ -407,17 +407,15 @@ class TelegramBot:
                 except Exception:
                     log.warning("Failed to send full response file", exc_info=True)
 
-            # Flush queued text (user sent message while session was BUSY)
-            if sess.pending_text:
-                queued = sess.pending_text
-                sess.pending_text = ""
-                sess.trigger_msg_id = sess.queued_trigger_msg_id  # promote
-                sess.queued_trigger_msg_id = None
-                ok = await inject.send_text_and_enter(sess.name, queued)
+            # Flush next queued message (one at a time, rest flush on next IDLE)
+            if sess.pending_queue:
+                queued_text, queued_trigger = sess.pending_queue.pop(0)
+                sess.trigger_msg_id = queued_trigger
+                ok = await inject.send_text_and_enter(sess.name, queued_text)
                 if ok:
                     self.registry.transition(sess.name, Status.BUSY)
                     await self._send_busy_and_animate(sess)
-                    log.info("[%s] Flushed queued: %s", sess.label, queued[:80])
+                    log.info("[%s] Flushed queued: %s", sess.label, queued_text[:80])
 
         elif sess.status == Status.INTERACTIVE:
             self._stop_animation(sess)
@@ -634,8 +632,7 @@ class TelegramBot:
 
         # Queue if session is busy — inject when it goes IDLE
         if sess.status == Status.BUSY:
-            sess.pending_text = text
-            sess.queued_trigger_msg_id = update.message.message_id
+            sess.pending_queue.append((text, update.message.message_id))
             await self._react(update, "🕐")
             log.info("[%s] Queued (busy): %s", sess.label, text[:80])
             return
