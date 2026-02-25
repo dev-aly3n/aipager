@@ -24,6 +24,36 @@ from aipager.transcript import extract_last_response, find_transcript
 log = logging.getLogger(__name__)
 
 
+_CTX_WINDOW_SIZE = 200_000  # all current Claude models use 200k context
+
+
+def _extract_token_usage(transcript_path: str) -> dict | None:
+    """Read the last assistant entry to get token usage for this turn."""
+    try:
+        lines = Path(transcript_path).read_text().strip().splitlines()
+    except (FileNotFoundError, PermissionError):
+        return None
+
+    for line in reversed(lines[-20:]):
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if entry.get("type") != "assistant":
+            continue
+        usage = entry.get("message", {}).get("usage")
+        if usage:
+            inp = usage.get("input_tokens", 0)
+            cache_read = usage.get("cache_read_input_tokens", 0)
+            cache_create = usage.get("cache_creation_input_tokens", 0)
+            out = usage.get("output_tokens", 0)
+            total_ctx = inp + cache_read + cache_create
+            pct = round(total_ctx / _CTX_WINDOW_SIZE * 100) if total_ctx else 0
+            return {"context_tokens": total_ctx, "output_tokens": out,
+                    "context_pct": pct}
+    return None
+
+
 def _extract_pending_tool(transcript_path: str) -> dict | None:
     """Read the last lines of the transcript to find the pending tool_use."""
     try:
@@ -120,6 +150,28 @@ class HookReceiver:
             sess = self.registry.transition(session_name, new_status)
             if sess:
                 await self.notify_fn(sess, event, context)
+
+        elif event == "UserPromptSubmit":
+            sess = self.registry.transition(session_name, Status.BUSY)
+            if sess:
+                await self.notify_fn(sess, "user_prompt_submit", {})
+
+        elif event == "PreToolUse":
+            tool_name = msg.get("tool_name", "")
+            tool_input = msg.get("tool_input", {})
+            if tool_name:
+                summary = _summarize_tool(tool_name, tool_input)
+                sess = self.registry.get_or_create(session_name)
+                # Ensure we're in BUSY state
+                if sess.status != Status.BUSY:
+                    self.registry.transition(session_name, Status.BUSY)
+                # Extract token usage from transcript (lightweight — reads last 20 lines)
+                usage = _extract_token_usage(transcript_path) if transcript_path else None
+                await self.notify_fn(sess, "tool_use", {
+                    "tool_name": tool_name,
+                    "tool_summary": summary,
+                    "token_usage": usage,
+                })
 
         elif event.lower() in ("idle_prompt", "idle", "stop", "notification"):
             sess = self.registry.transition(session_name, Status.IDLE)

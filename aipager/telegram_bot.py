@@ -31,7 +31,9 @@ from telegram.ext import (
 )
 
 from aipager import dtach_inject as inject
-from aipager.config import BOT_TOKEN, CHAT_ID, PROXY
+import random
+
+from aipager.config import BOT_TOKEN, BUSY_EDIT_INTERVAL, CHAT_ID, PROXY, SPINNER_VERBS
 from aipager.state import SessionRegistry, Status, TrackedSession
 
 if TYPE_CHECKING:
@@ -173,6 +175,83 @@ class TelegramBot:
 
     # ── Notification methods (called by hook_receiver and session_monitor) ──
 
+    async def send_busy(self, sess: TrackedSession) -> int | None:
+        """Send initial 'Working...' message and start animation. Returns message_id."""
+        if not self._app:
+            return None
+        text = f"⚙️ <b>{html_mod.escape(sess.label)}</b> · Thinking…"
+        try:
+            msg = await self._app.bot.send_message(CHAT_ID, text, parse_mode="HTML")
+            return msg.message_id
+        except Exception:
+            log.warning("Failed to send busy message", exc_info=True)
+            return None
+
+    def _build_busy_text(self, label: str, verb: str, sess: TrackedSession) -> str:
+        """Build the animated busy message text."""
+        text = f"⚙️ <b>{html_mod.escape(label)}</b> · {html_mod.escape(verb)}…"
+        if sess.last_token_pct:
+            text += f"  <i>({sess.last_token_pct}% ctx)</i>"
+        if sess.last_tool_summary:
+            text += f"\n<code>{html_mod.escape(sess.last_tool_summary)}</code>"
+        return text
+
+    async def _edit_busy_raw(self, msg_id: int, text: str) -> bool | None:
+        """Edit busy message with pre-built text.
+
+        Returns True on success, False on transient error,
+        None on permanent failure (message gone).
+        """
+        if not self._app:
+            return False
+        try:
+            await self._app.bot.edit_message_text(
+                text, chat_id=CHAT_ID, message_id=msg_id, parse_mode="HTML",
+            )
+            return True
+        except Exception as e:
+            err = str(e).lower()
+            if "message is not modified" in err:
+                return True
+            if "message to edit not found" in err:
+                return None  # permanent: message deleted
+            log.debug("Edit busy failed: %s", e)
+            return False  # transient: rate-limit, network, etc.
+
+    async def _animate_busy(self, sess: TrackedSession) -> None:
+        """Background task: rotate spinner verbs while session is BUSY."""
+        verbs = list(SPINNER_VERBS)
+        random.shuffle(verbs)
+        idx = 0
+        try:
+            while sess.busy_msg_id and sess.status == Status.BUSY:
+                await asyncio.sleep(BUSY_EDIT_INTERVAL)
+                if not sess.busy_msg_id or sess.status != Status.BUSY:
+                    break
+                # Skip if a tool edit happened recently (let tool info stay visible)
+                if time.monotonic() - sess.last_tool_edit_at < BUSY_EDIT_INTERVAL - 0.5:
+                    continue
+                verb = verbs[idx % len(verbs)]
+                idx += 1
+                text = self._build_busy_text(sess.label, verb, sess)
+                result = await self._edit_busy_raw(sess.busy_msg_id, text)
+                if result is None:
+                    sess.busy_msg_id = None  # message gone
+                    break
+        except asyncio.CancelledError:
+            pass
+
+    def _start_animation(self, sess: TrackedSession) -> None:
+        """Start the spinner animation task, cancelling any existing one."""
+        self._stop_animation(sess)
+        sess.animate_task = asyncio.create_task(self._animate_busy(sess))
+
+    def _stop_animation(self, sess: TrackedSession) -> None:
+        """Cancel the animation task if running."""
+        if sess.animate_task and not sess.animate_task.done():
+            sess.animate_task.cancel()
+        sess.animate_task = None
+
     async def notify(self, sess: TrackedSession, event: str, context: dict) -> None:
         """Send appropriate Telegram notification for a state change."""
         if not self._app:
@@ -181,7 +260,59 @@ class TelegramBot:
         bot = self._app.bot
         label = sess.label
 
+        # ── Live busy-status events ──
+        if event == "user_prompt_submit":
+            # Cancel any previous animation
+            self._stop_animation(sess)
+            sess.last_tool_summary = ""
+            sess.last_token_pct = 0
+            msg_id = await self.send_busy(sess)
+            if msg_id:
+                sess.busy_msg_id = msg_id
+                sess.last_tool_edit_at = 0.0
+                sess.last_tool_name = ""
+                self._start_animation(sess)
+            return
+
+        if event == "tool_use":
+            tool_summary = context.get("tool_summary", "")
+            tool_name = context.get("tool_name", "")
+            token_usage = context.get("token_usage")
+            if not sess.busy_msg_id or not tool_summary:
+                return
+            # Cache for animation display
+            sess.last_tool_summary = tool_summary
+            if token_usage:
+                sess.last_token_pct = token_usage.get("context_pct", 0)
+            now = time.monotonic()
+            # Edit if tool changed OR interval elapsed since last edit
+            if (tool_name != sess.last_tool_name or
+                    now - sess.last_tool_edit_at >= BUSY_EDIT_INTERVAL):
+                text = self._build_busy_text(label, "Working", sess)
+                result = await self._edit_busy_raw(sess.busy_msg_id, text)
+                if result is True:
+                    sess.last_tool_edit_at = now
+                    sess.last_tool_name = tool_name
+                elif result is None:
+                    sess.busy_msg_id = None  # message gone, stop editing
+                    self._stop_animation(sess)
+            return
+
         if sess.status == Status.IDLE:
+            # Stop animation and clean up busy message
+            self._stop_animation(sess)
+            if sess.busy_msg_id:
+                try:
+                    await bot.edit_message_text(
+                        f"✅ <b>{html_mod.escape(label)}</b> · Finished",
+                        chat_id=CHAT_ID,
+                        message_id=sess.busy_msg_id,
+                        parse_mode="HTML",
+                    )
+                except Exception:
+                    pass
+                sess.busy_msg_id = None
+
             summary = context.get("summary", sess.summary)
             is_html = context.get("html_summary", False)
             raw_md = context.get("raw_md", "")
@@ -254,6 +385,7 @@ class TelegramBot:
                     log.warning("Failed to send full response file", exc_info=True)
 
         elif sess.status == Status.INTERACTIVE:
+            self._stop_animation(sess)
             tool_info = context.get("tool_info")
             selector_text = context.get("selector_text", "")
             selector_options = context.get("selector_options")

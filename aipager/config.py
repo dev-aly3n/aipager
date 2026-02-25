@@ -35,3 +35,16 @@ PANE_POLL_INTERVAL: float = 2.0
 # Use transcript JSONL for rich markdown→HTML summaries in Telegram notifications.
 # When False, uses pane-scraped plain text in expandable blockquotes (old behavior).
 RICH_SUMMARIES: bool = os.environ.get("CLAUDE_RICH_SUMMARIES", "1") not in ("0", "false", "no")
+
+# Minimum seconds between busy-message edits (rate-limit for Telegram API)
+BUSY_EDIT_INTERVAL: float = 3.0
+
+# Spinner verbs for animated busy messages (curated from Claude Code's terminal spinner)
+SPINNER_VERBS: list[str] = [
+    "Thinking", "Reasoning", "Pondering", "Considering", "Analyzing",
+    "Processing", "Synthesizing", "Deliberating", "Evaluating", "Mulling",
+    "Contemplating", "Inferring", "Cogitating", "Puzzling", "Calculating",
+    "Deciphering", "Formulating", "Examining", "Investigating", "Brewing",
+    "Cooking", "Crafting", "Forging", "Conjuring", "Noodling",
+    "Percolating", "Simmering", "Ruminating", "Musing", "Tinkering",
+]

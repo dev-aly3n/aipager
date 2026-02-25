@@ -13,10 +13,12 @@ all duplicate notification bugs from the old system.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from typing import Any
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +46,14 @@ class TrackedSession:
     summary: str = ""                # last pane summary (for idle notifications)
     last_idle_at: float = 0.0        # monotonic timestamp of last IDLE transition
     transcript_path: str = ""        # path to Claude Code JSONL transcript
+    # Live busy-status tracking
+    busy_msg_id: int | None = None   # Telegram message_id of the "Working…" msg
+    last_tool_edit_at: float = 0.0   # monotonic timestamp of last busy-msg edit
+    last_tool_name: str = ""         # last tool name displayed in busy message
+    # Animation state
+    animate_task: Any = field(default=None, repr=False)  # asyncio.Task for spinner
+    last_tool_summary: str = ""      # cached tool summary text for display
+    last_token_pct: int = 0          # cached context % for display
 
 
 class SessionRegistry:
