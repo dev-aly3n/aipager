@@ -303,11 +303,9 @@ class TelegramBot:
             self._stop_animation(sess)
             if sess.busy_msg_id:
                 try:
-                    await bot.edit_message_text(
-                        f"✅ <b>{html_mod.escape(label)}</b> · Finished",
+                    await bot.delete_message(
                         chat_id=CHAT_ID,
                         message_id=sess.busy_msg_id,
-                        parse_mode="HTML",
                     )
                 except Exception:
                     pass
