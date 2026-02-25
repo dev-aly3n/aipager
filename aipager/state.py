@@ -54,6 +54,11 @@ class TrackedSession:
     animate_task: Any = field(default=None, repr=False)  # asyncio.Task for spinner
     last_tool_summary: str = ""      # cached tool summary text for display
     last_token_pct: int = 0          # cached context % for display
+    # Queued message (sent when session becomes IDLE)
+    pending_text: str = ""           # text to inject when session goes IDLE
+    # Reply threading — Telegram message_id of the user's prompt that started this work
+    trigger_msg_id: int | None = None
+    queued_trigger_msg_id: int | None = None  # trigger for queued (pending) prompt
 
 
 class SessionRegistry:
@@ -98,6 +103,10 @@ class SessionRegistry:
                     sess.summary = summary
                 return None  # don't notify
             sess.last_idle_at = now
+
+        # Reset idle timer when entering BUSY so next IDLE always notifies
+        if new_status == Status.BUSY:
+            sess.last_idle_at = 0.0
 
         old = sess.status
         sess.status = new_status

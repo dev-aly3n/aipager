@@ -181,7 +181,10 @@ class TelegramBot:
             return None
         text = f"⚙️ <b>{html_mod.escape(sess.label)}</b> · Thinking…"
         try:
-            msg = await self._app.bot.send_message(CHAT_ID, text, parse_mode="HTML")
+            msg = await self._app.bot.send_message(
+                CHAT_ID, text, parse_mode="HTML",
+                reply_to_message_id=sess.trigger_msg_id,
+            )
             return msg.message_id
         except Exception:
             log.warning("Failed to send busy message", exc_info=True)
@@ -252,6 +255,30 @@ class TelegramBot:
             sess.animate_task.cancel()
         sess.animate_task = None
 
+    async def _send_busy_and_animate(self, sess: TrackedSession) -> None:
+        """Send 'Working...' message and start spinner animation.
+
+        Idempotent: uses a synchronous sentinel (-1) before the async send
+        to prevent double-send when _handle_message and UserPromptSubmit
+        hook coroutines race through the same await point.
+        """
+        if sess.busy_msg_id:
+            return  # already showing busy (or sentinel claimed by other coroutine)
+        sess.busy_msg_id = -1  # sentinel: claim slot before async yield
+        self._stop_animation(sess)
+        sess.last_tool_summary = ""
+        sess.last_token_pct = 0
+        msg_id = await self.send_busy(sess)
+        if msg_id:
+            sess.busy_msg_id = msg_id
+            sess.last_tool_edit_at = 0.0
+            sess.last_tool_name = ""
+            self._start_animation(sess)
+            log.info("[%s] Busy message sent (msg_id=%d, trigger=%s)",
+                     sess.label, msg_id, sess.trigger_msg_id)
+        else:
+            sess.busy_msg_id = None  # release slot on failure
+
     async def notify(self, sess: TrackedSession, event: str, context: dict) -> None:
         """Send appropriate Telegram notification for a state change."""
         if not self._app:
@@ -262,23 +289,17 @@ class TelegramBot:
 
         # ── Live busy-status events ──
         if event == "user_prompt_submit":
-            # Cancel any previous animation
-            self._stop_animation(sess)
-            sess.last_tool_summary = ""
-            sess.last_token_pct = 0
-            msg_id = await self.send_busy(sess)
-            if msg_id:
-                sess.busy_msg_id = msg_id
-                sess.last_tool_edit_at = 0.0
-                sess.last_tool_name = ""
-                self._start_animation(sess)
+            # Fallback for terminal-initiated prompts only.
+            # If busy_msg_id is already set, _handle_message already sent it.
+            if not sess.busy_msg_id:
+                await self._send_busy_and_animate(sess)
             return
 
         if event == "tool_use":
             tool_summary = context.get("tool_summary", "")
             tool_name = context.get("tool_name", "")
             token_usage = context.get("token_usage")
-            if not sess.busy_msg_id or not tool_summary:
+            if not sess.busy_msg_id or sess.busy_msg_id < 0 or not tool_summary:
                 return
             # Cache for animation display
             sess.last_tool_summary = tool_summary
@@ -301,7 +322,7 @@ class TelegramBot:
         if sess.status == Status.IDLE:
             # Stop animation and clean up busy message
             self._stop_animation(sess)
-            if sess.busy_msg_id:
+            if sess.busy_msg_id and sess.busy_msg_id > 0:
                 try:
                     await bot.delete_message(
                         chat_id=CHAT_ID,
@@ -365,7 +386,11 @@ class TelegramBot:
                 else:
                     text += f"\n\n<blockquote>{escaped}</blockquote>"
             log.debug("[%s] Sending IDLE notification (%d chars)", label, len(text))
-            msg = await bot.send_message(CHAT_ID, text, parse_mode="HTML")
+            msg = await bot.send_message(
+                CHAT_ID, text, parse_mode="HTML",
+                reply_to_message_id=sess.trigger_msg_id,
+            )
+            sess.trigger_msg_id = None  # reply cycle complete
             self.registry.track_message(msg.message_id, sess.name)
             # Send full response as file for long messages
             file_content = raw_md or (summary if send_file else "")
@@ -381,6 +406,18 @@ class TelegramBot:
                     tmp.unlink(missing_ok=True)
                 except Exception:
                     log.warning("Failed to send full response file", exc_info=True)
+
+            # Flush queued text (user sent message while session was BUSY)
+            if sess.pending_text:
+                queued = sess.pending_text
+                sess.pending_text = ""
+                sess.trigger_msg_id = sess.queued_trigger_msg_id  # promote
+                sess.queued_trigger_msg_id = None
+                ok = await inject.send_text_and_enter(sess.name, queued)
+                if ok:
+                    self.registry.transition(sess.name, Status.BUSY)
+                    await self._send_busy_and_animate(sess)
+                    log.info("[%s] Flushed queued: %s", sess.label, queued[:80])
 
         elif sess.status == Status.INTERACTIVE:
             self._stop_animation(sess)
@@ -403,7 +440,10 @@ class TelegramBot:
                     InlineKeyboardButton("❌ Deny", callback_data=f"{sess.name}:deny"),
                 ]])
 
-            msg = await bot.send_message(CHAT_ID, text, reply_markup=keyboard, parse_mode="HTML")
+            msg = await bot.send_message(
+                CHAT_ID, text, reply_markup=keyboard, parse_mode="HTML",
+                reply_to_message_id=sess.trigger_msg_id,
+            )
             self.registry.track_message(msg.message_id, sess.name)
 
         elif sess.status == Status.BUSY:
@@ -592,10 +632,20 @@ class TelegramBot:
             await update.message.reply_text(f"⚠️ Session '{sess.name}' not found")
             return
 
+        # Queue if session is busy — inject when it goes IDLE
+        if sess.status == Status.BUSY:
+            sess.pending_text = text
+            sess.queued_trigger_msg_id = update.message.message_id
+            await self._react(update, "🕐")
+            log.info("[%s] Queued (busy): %s", sess.label, text[:80])
+            return
+
+        sess.trigger_msg_id = update.message.message_id
         ok = await inject.send_text_and_enter(sess.name, text)
         if ok:
             await self._react(update, "👀")
             self.registry.transition(sess.name, Status.BUSY)
+            await self._send_busy_and_animate(sess)
             log.info("[%s] Sent text: %s", sess.label, text[:80])
         else:
             await update.message.reply_text(f"❌ Failed to send to [{sess.label}]")
@@ -608,10 +658,12 @@ class TelegramBot:
                 if not await inject.is_alive(name):
                     await update.message.reply_text(f"⚠️ [{target_label}] session not alive")
                     return
+                sess.trigger_msg_id = update.message.message_id
                 ok = await inject.send_text_and_enter(name, prompt_text)
                 if ok:
                     await self._react(update, "👀")
                     self.registry.transition(name, Status.BUSY)
+                    await self._send_busy_and_animate(sess)
                     log.info("[%s] Direct send: %s", target_label, prompt_text[:80])
                 else:
                     await update.message.reply_text(f"❌ Failed to send to [{target_label}]")
@@ -620,11 +672,13 @@ class TelegramBot:
         # Not found in registry — try session discovery
         session_name = f"claude-{target_label}"
         if await inject.is_alive(session_name):
-            self.registry.get_or_create(session_name)
+            new_sess = self.registry.get_or_create(session_name)
+            new_sess.trigger_msg_id = update.message.message_id
             ok = await inject.send_text_and_enter(session_name, prompt_text)
             if ok:
                 await self._react(update, "👀")
                 self.registry.transition(session_name, Status.BUSY)
+                await self._send_busy_and_animate(new_sess)
             else:
                 await update.message.reply_text(f"❌ Failed to send to [{target_label}]")
         else:

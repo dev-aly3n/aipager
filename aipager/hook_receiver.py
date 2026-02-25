@@ -176,7 +176,14 @@ class HookReceiver:
         elif event.lower() in ("idle_prompt", "idle", "stop", "notification"):
             sess = self.registry.transition(session_name, Status.IDLE)
             if sess is None:
-                return  # already idle or debounced
+                # Force notification if there's an undelivered response
+                # (user sent a prompt via Telegram but debounce suppressed IDLE)
+                tracked = self.registry.get(session_name)
+                if (tracked and tracked.trigger_msg_id
+                        and msg.get("last_assistant_message")):
+                    sess = tracked  # bypass debounce — user is waiting
+                else:
+                    return
 
             notify_ctx: dict = {"summary": ""}
 
