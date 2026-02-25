@@ -626,6 +626,8 @@ class TelegramBot:
         if not sess:
             return
 
+        self.registry.last_active_session = sess.name  # user is talking to this session now
+
         if not await inject.is_alive(sess.name):
             await update.message.reply_text(f"⚠️ Session '{sess.name}' not found")
             return
@@ -656,6 +658,7 @@ class TelegramBot:
                     await update.message.reply_text(f"⚠️ [{target_label}] session not alive")
                     return
                 sess.trigger_msg_id = update.message.message_id
+                self.registry.last_active_session = name  # user explicitly targeted this session
                 ok = await inject.send_text_and_enter(name, prompt_text)
                 if ok:
                     await self._react(update, "👀")
@@ -671,6 +674,7 @@ class TelegramBot:
         if await inject.is_alive(session_name):
             new_sess = self.registry.get_or_create(session_name)
             new_sess.trigger_msg_id = update.message.message_id
+            self.registry.last_active_session = session_name
             ok = await inject.send_text_and_enter(session_name, prompt_text)
             if ok:
                 await self._react(update, "👀")
