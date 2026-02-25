@@ -241,6 +241,21 @@ class TelegramBot:
                 text += f"\n✅ <code>{html_mod.escape(summary)}</code>"
             else:
                 text += f"\n⏳ <code>{html_mod.escape(summary)}</code>"
+        # Append inline permission display if active
+        if sess.pending_permission:
+            perm = sess.pending_permission
+            if perm.get("ask_question"):
+                q = perm["question"]
+                text += f"\n\n❓ {html_mod.escape(q[:120])}"
+                for i, opt in enumerate(perm.get("options", [])):
+                    opt_label = opt.get("label", f"Option {i+1}")
+                    desc = opt.get("description", "")
+                    text += f"\n  {i+1}. {html_mod.escape(opt_label)}"
+                    if desc:
+                        text += f" — {html_mod.escape(desc[:60])}"
+            else:
+                tool_summary = perm.get("tool_summary", "Permission needed")
+                text += f"\n\n🔐 <code>{html_mod.escape(tool_summary)}</code>"
         return text
 
     async def _edit_busy_raw(self, msg_id: int, text: str,
@@ -345,6 +360,7 @@ class TelegramBot:
         self._stop_animation(sess)
         sess.last_tool_summary = ""
         sess.tool_history.clear()
+        sess.pending_permission = None
         sess.last_token_pct = 0
         sess.last_output_tokens = 0
         sess.output_baseline = None  # lazy: set on first statusLine read this cycle
@@ -463,6 +479,7 @@ class TelegramBot:
             sess.tool_history = [(s, True) for s, _ in sess.tool_history]
             # Stop animation and clean up busy message
             self._stop_animation(sess)
+            sess.pending_permission = None  # clear stale inline permission if any
             if sess.busy_msg_id and sess.busy_msg_id > 0:
                 try:
                     await bot.delete_message(
@@ -586,26 +603,63 @@ class TelegramBot:
             selector_text = context.get("selector_text", "")
             selector_options = context.get("selector_options")
 
-            if tool_info and tool_info["name"] == "AskUserQuestion":
-                text, keyboard = self._build_ask_keyboard(sess.name, label, tool_info["input"])
-            elif selector_options:
-                text, keyboard = self._build_selector_keyboard(sess.name, label,
-                                                                selector_text, selector_options)
-            else:
-                tool_summary = tool_info["summary"] if tool_info else ""
-                text = f"🔐 <b>{html_mod.escape(label)}</b> · Permission needed"
-                if tool_summary:
-                    text += f"\n<code>{html_mod.escape(tool_summary)}</code>"
-                keyboard = InlineKeyboardMarkup([[
-                    InlineKeyboardButton("✅ Allow", callback_data=f"{sess.name}:allow"),
-                    InlineKeyboardButton("❌ Deny", callback_data=f"{sess.name}:deny"),
-                ]])
+            # Can we inline into the existing busy message?
+            can_inline = sess.busy_msg_id and sess.busy_msg_id > 0
 
-            msg = await bot.send_message(
-                CHAT_ID, text, reply_markup=keyboard, parse_mode="HTML",
-                reply_to_message_id=sess.trigger_msg_id,
-            )
-            self.registry.track_message(msg.message_id, sess.name)
+            if can_inline:
+                # Set pending_permission SYNCHRONOUSLY before any await
+                # (lesson: claim state before async yield to prevent races)
+                if tool_info and tool_info["name"] == "AskUserQuestion":
+                    questions = tool_info["input"].get("questions", [])
+                    q = questions[0] if questions else {}
+                    options = q.get("options", [])
+                    sess.pending_permission = {
+                        "ask_question": True,
+                        "question": q.get("question", "?"),
+                        "options": options,
+                        "tool_info": tool_info,
+                    }
+                    keyboard = self._build_inline_ask_keyboard(sess.name, options)
+                else:
+                    tool_summary = tool_info["summary"] if tool_info else "Permission needed"
+                    sess.pending_permission = {
+                        "tool_summary": tool_summary,
+                        "tool_info": tool_info,
+                    }
+                    keyboard = self._build_permission_keyboard(sess.name)
+
+                text = self._build_busy_text(label, "Waiting", sess)
+                result = await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
+                if result is None:
+                    # Busy message was deleted — fall back to separate message
+                    sess.pending_permission = None
+                    sess.busy_msg_id = None
+                    can_inline = False
+
+            if not can_inline:
+                # Fallback: send separate message (original behavior)
+                sess.pending_permission = None  # ensure clean state
+
+                if tool_info and tool_info["name"] == "AskUserQuestion":
+                    text, keyboard = self._build_ask_keyboard(sess.name, label, tool_info["input"])
+                elif selector_options:
+                    text, keyboard = self._build_selector_keyboard(sess.name, label,
+                                                                    selector_text, selector_options)
+                else:
+                    tool_summary = tool_info["summary"] if tool_info else ""
+                    text = f"🔐 <b>{html_mod.escape(label)}</b> · Permission needed"
+                    if tool_summary:
+                        text += f"\n<code>{html_mod.escape(tool_summary)}</code>"
+                    keyboard = InlineKeyboardMarkup([[
+                        InlineKeyboardButton("✅ Allow", callback_data=f"{sess.name}:allow"),
+                        InlineKeyboardButton("❌ Deny", callback_data=f"{sess.name}:deny"),
+                    ]])
+
+                msg = await bot.send_message(
+                    CHAT_ID, text, reply_markup=keyboard, parse_mode="HTML",
+                    reply_to_message_id=sess.trigger_msg_id,
+                )
+                self.registry.track_message(msg.message_id, sess.name)
 
         elif sess.status == Status.BUSY:
             # Session went back to working — edit the last idle/interactive message
@@ -682,6 +736,28 @@ class TelegramBot:
             InlineKeyboardButton("🔄 Retry", callback_data=f"{session_name}:retry"),
         ]])
 
+    def _build_permission_keyboard(self, session_name: str) -> InlineKeyboardMarkup:
+        """Permission buttons + Stop for inline permission."""
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ Allow", callback_data=f"{session_name}:allow"),
+             InlineKeyboardButton("❌ Deny", callback_data=f"{session_name}:deny")],
+            [InlineKeyboardButton("⏹ Stop", callback_data=f"{session_name}:stop")],
+        ])
+
+    def _build_inline_ask_keyboard(self, session_name: str, options: list) -> InlineKeyboardMarkup:
+        """AskUserQuestion option buttons + Stop for inline display."""
+        buttons = []
+        for i, opt in enumerate(options[:4]):
+            opt_label = opt.get("label", f"Option {i+1}")
+            buttons.append(InlineKeyboardButton(
+                opt_label, callback_data=f"{session_name}:opt{i}",
+            ))
+        rows = []
+        if buttons:
+            rows.append(buttons)
+        rows.append([InlineKeyboardButton("⏹ Stop", callback_data=f"{session_name}:stop")])
+        return InlineKeyboardMarkup(rows)
+
     # ── Telegram handlers ──
 
     async def _stop_session(self, sess: TrackedSession,
@@ -707,6 +783,7 @@ class TelegramBot:
         # 4. Transition to IDLE directly (skip notify — we handle UI here)
         dropped = len(sess.pending_queue)
         sess.pending_queue.clear()
+        sess.pending_permission = None
         sess.status = Status.IDLE
         sess.trigger_msg_id = None
         sess.last_idle_at = time.monotonic()  # prevent debounce of next real IDLE
@@ -826,14 +903,35 @@ class TelegramBot:
 
         if ok:
             await query.answer(f"{verb} [{sess.label}]")
-            try:
-                await query.edit_message_text(f"{original_text}\n\n→ {verb}")
-            except Exception:
-                pass
-            self.registry.remove_message(query.message.message_id)
-            # Mark session as busy after user interaction
-            self.registry.transition(session_name, Status.BUSY)
-            log.info("[%s] %s", sess.label, verb)
+
+            if sess.pending_permission:
+                # Collapse inline permission into tool_history
+                perm = sess.pending_permission
+                if perm.get("ask_question"):
+                    collapsed = f"❓ {perm['question'][:40]} → {verb}"
+                else:
+                    tool_summary = perm.get("tool_summary", "Permission")[:60]
+                    collapsed = f"🔑 {tool_summary} → {verb}"
+                sess.tool_history.append((collapsed, True))
+                sess.pending_permission = None
+
+                # Transition back to BUSY and restart animation
+                self.registry.transition(session_name, Status.BUSY)
+                keyboard = self._build_stop_keyboard(session_name)
+                text = self._build_busy_text(sess.label, "Working", sess)
+                await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
+                self._start_animation(sess)
+                log.info("[%s] Inline permission: %s", sess.label, verb)
+            else:
+                # Original behavior: edit the separate permission message
+                try:
+                    await query.edit_message_text(f"{original_text}\n\n→ {verb}")
+                except Exception:
+                    pass
+                self.registry.remove_message(query.message.message_id)
+                # Mark session as busy after user interaction
+                self.registry.transition(session_name, Status.BUSY)
+                log.info("[%s] %s", sess.label, verb)
         else:
             await query.answer(f"Failed to send to {session_name}")
 

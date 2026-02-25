@@ -67,6 +67,9 @@ class TrackedSession:
     compact_warned: bool = False
     # Last injected prompt text — enables retry on API errors
     last_prompt: str = ""
+    # Inline permission context (tool_info, question, etc.) — set when permission
+    # is displayed inside the busy message instead of as a separate message
+    pending_permission: dict | None = None
 
 
 class SessionRegistry:
