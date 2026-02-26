@@ -90,6 +90,39 @@ async def send_text_and_enter(session: str, text: str) -> bool:
     return ok
 
 
+async def kill_session(session: str) -> bool:
+    """Kill a dtach session by finding its host PID and terminating it."""
+    sock = _sock_path(session)
+    sock_path = Path(sock)
+    if not sock_path.is_socket():
+        return False
+
+    # Find the dtach host process (dtach -n <sock> ...)
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "fuser", sock,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+        pids = stdout.decode().split()
+        for pid_str in pids:
+            pid_str = pid_str.strip()
+            if pid_str.isdigit():
+                import os, signal
+                os.kill(int(pid_str), signal.SIGTERM)
+                log.info("Killed dtach PID %s for %s", pid_str, session)
+    except Exception:
+        log.warning("Failed to find/kill dtach PID for %s", session, exc_info=True)
+
+    # Remove socket as fallback (dtach should clean up, but ensure it)
+    try:
+        sock_path.unlink(missing_ok=True)
+    except OSError:
+        pass
+    return True
+
+
 async def is_alive(session: str) -> bool:
     """Check if a dtach session socket exists and is connectable."""
     sock = _sock_path(session)

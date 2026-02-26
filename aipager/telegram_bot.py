@@ -169,6 +169,7 @@ class TelegramBot:
         self._app.add_handler(CallbackQueryHandler(self._handle_callback))
         self._app.add_handler(CommandHandler("status", self._handle_status))
         self._app.add_handler(CommandHandler("stop", self._handle_stop_cmd))
+        self._app.add_handler(CommandHandler("kill", self._handle_kill_cmd))
         # Catch-all for text messages (replies and /<label> commands)
         self._app.add_handler(MessageHandler(
             filters.TEXT & filters.Chat(int(CHAT_ID)),
@@ -213,6 +214,7 @@ class TelegramBot:
         commands = [
             BotCommand("status", "Show all sessions"),
             BotCommand("stop", "Stop active session"),
+            BotCommand("kill", "Kill a session (destroy)"),
         ]
         for label in sorted(labels):
             commands.append(BotCommand(label, f"Send to [{label}]"))
@@ -238,19 +240,18 @@ class TelegramBot:
             if sess.status != Status.GONE and sess.label
         )
 
-        # Build keyboard rows: session labels on top, status/stop on bottom
+        # Build keyboard rows: session labels on top, commands on bottom
         rows = []
         if labels:
             # Pack session labels into rows of 3
             for i in range(0, len(labels), 3):
                 chunk = labels[i:i + 3]
-                rows.append([KeyboardButton(f"/{lbl}") for lbl in chunk])
-        rows.append([KeyboardButton("/status"), KeyboardButton("/stop")])
+                rows.append([KeyboardButton(lbl) for lbl in chunk])
+        rows.append([KeyboardButton("status"), KeyboardButton("stop"), KeyboardButton("kill")])
 
         keyboard = ReplyKeyboardMarkup(
             rows,
             resize_keyboard=True,
-            is_persistent=True,
         )
 
         try:
@@ -999,6 +1000,13 @@ class TelegramBot:
             await self._stop_session(sess, query=query)
             return
 
+        if action == "kill":
+            sess = self.registry.get(session_name)
+            label = sess.label if sess else session_name
+            await query.answer(f"Killing {label}...")
+            await self._kill_session_by_label(query, label)
+            return
+
         if action == "retry":
             sess = self.registry.get(session_name)
             if not sess:
@@ -1175,6 +1183,67 @@ class TelegramBot:
             return
         await self._stop_session(sess, update=update)
 
+    async def _handle_kill_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /kill <label> — destroy a session entirely."""
+        text = update.message.text.strip()
+        parts = text.split(maxsplit=1)
+        if len(parts) < 2:
+            # No label given — show inline keyboard with session choices
+            sessions = self.registry.all_sessions()
+            alive = [
+                sess for sess in sessions.values()
+                if sess.status != Status.GONE and sess.label
+            ]
+            if not alive:
+                await update.message.reply_text("No sessions to kill.")
+                return
+            buttons = [
+                [InlineKeyboardButton(f"💀 {sess.label}", callback_data=f"{sess.name}:kill")]
+                for sess in alive
+            ]
+            await update.message.reply_text(
+                "Which session to kill?",
+                reply_markup=InlineKeyboardMarkup(buttons),
+            )
+            return
+
+        target_label = parts[1].strip()
+        await self._kill_session_by_label(update, target_label)
+
+    async def _kill_session_by_label(self, source, target_label: str) -> None:
+        """Kill a session by label. source is Update or CallbackQuery."""
+        async def _reply(text: str) -> None:
+            if hasattr(source, 'message') and source.message:
+                await source.message.reply_text(text)
+            else:
+                await source.edit_message_text(text)
+
+        # Find session
+        sessions = self.registry.all_sessions()
+        session_name = None
+        for name, sess in sessions.items():
+            if sess.label == target_label:
+                session_name = name
+                break
+
+        if not session_name:
+            session_name = f"claude-{target_label}"
+
+        # Stop animation if running
+        sess = self.registry.get(session_name)
+        if sess:
+            self._stop_animation(sess)
+
+        # Kill the dtach process
+        killed = await inject.kill_session(session_name)
+        if killed:
+            self.registry.remove(session_name)
+            self.registry.mark_dirty()
+            await _reply(f"💀 Killed [{target_label}]")
+            asyncio.create_task(self._update_bot_commands())
+        else:
+            await _reply(f"⚠️ Session [{target_label}] not found")
+
     async def _stop_by_label(self, update: Update, target_label: str) -> None:
         """Stop a session by its label."""
         sessions = self.registry.all_sessions()
@@ -1239,9 +1308,27 @@ class TelegramBot:
         # Bare /<label> — switch active session (e.g. keyboard tap)
         if text.startswith("/") and " " not in text:
             target_label = text[1:]
-            if target_label and target_label not in ("status", "stop"):
+            if target_label and target_label not in ("status", "stop", "kill"):
                 await self._switch_session(update, target_label)
                 return
+
+        # Bare text matching keyboard buttons (no slash)
+        text_lower = text.lower()
+        if " " not in text and not text.startswith("/"):
+            if text_lower == "status":
+                await self._handle_status(update, ctx)
+                return
+            if text_lower == "stop":
+                await self._handle_stop_cmd(update, ctx)
+                return
+            if text_lower == "kill":
+                await self._handle_kill_cmd(update, ctx)
+                return
+            # Check if it matches a known session label
+            for sess in self.registry.all_sessions().values():
+                if sess.label == text and sess.status != Status.GONE:
+                    await self._switch_session(update, text)
+                    return
 
         # Reply to a notification — or bare message goes to last active session
         reply_to = update.message.reply_to_message

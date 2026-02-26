@@ -50,9 +50,11 @@ class SessionMonitor:
             if name not in sessions and sess.status != Status.GONE:
                 self.registry.transition(name, Status.GONE)
 
-        # Discover new sessions
+        # Discover new sessions (start as IDLE — they're alive but not working)
         for name in sessions:
-            self.registry.get_or_create(name)
+            sess = self.registry.get_or_create(name)
+            if sess.status == Status.UNKNOWN:
+                self.registry.transition(name, Status.IDLE)
 
         # Notify if session list changed (for bot command/keyboard updates)
         new_names = set(self.registry.all_sessions().keys())
