@@ -234,8 +234,19 @@ class TelegramBot:
             if secs >= 2:
                 elapsed = f" {secs}s"
         text = f"⚙️ <b>{html_mod.escape(label)}</b> · {html_mod.escape(verb)}…{elapsed}"
-        # Show last 5 tools from history
-        visible = sess.tool_history[-5:]
+        # Show tool history — collapse old done tools if too many
+        history = sess.tool_history
+        max_visible = 15
+        if len(history) <= max_visible:
+            visible = history
+            hidden_done = 0
+        else:
+            # Count done tools that will be hidden
+            hidden = history[:-max_visible]
+            hidden_done = sum(1 for _, d in hidden if d)
+            visible = history[-max_visible:]
+        if hidden_done:
+            text += f"\n✅ <i>{hidden_done} earlier tool{'s' if hidden_done != 1 else ''}</i>"
         for summary, done in visible:
             if done:
                 text += f"\n✅ <code>{html_mod.escape(summary)}</code>"
