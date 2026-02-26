@@ -129,6 +129,7 @@ class TelegramBot:
         self._app: Application | None = None
         self.observers = None  # ObserverBroadcaster | None, injected by __main__
         self.use_proxy: bool = False
+        self._current_bot_name: str | None = None  # cached to skip redundant setMyName calls
 
     async def start(self) -> None:
         global _bot_instance
@@ -200,6 +201,27 @@ class TelegramBot:
             )
         except Exception:
             pass  # reaction API may not be available in all contexts
+
+    async def _maybe_update_bot_name(self, session_name: str) -> None:
+        """Update bot display name to reflect the active session label.
+
+        Fire-and-forget: failures are logged but never block notifications.
+        Cached: skips the API call if the name hasn't changed.
+        """
+        if not self._app:
+            return
+        sess = self.registry.get(session_name)
+        if not sess:
+            return
+        new_name = sess.label
+        if not new_name or new_name == self._current_bot_name:
+            return
+        try:
+            await self._app.bot.set_my_name(new_name)
+            self._current_bot_name = new_name
+            log.info("Bot name → '%s'", new_name)
+        except Exception:
+            log.warning("Failed to set bot name to '%s'", new_name, exc_info=True)
 
     # ── Notification methods (called by hook_receiver and session_monitor) ──
 
@@ -551,6 +573,7 @@ class TelegramBot:
                         reply_markup=keyboard,
                     )
                     self.registry.track_message(msg.message_id, sess.name)
+                    await self._maybe_update_bot_name(sess.name)
                 except Exception:
                     log.warning("Failed to send error notification", exc_info=True)
                 if self.observers:
@@ -616,6 +639,7 @@ class TelegramBot:
             )
             sess.trigger_msg_id = None  # reply cycle complete
             self.registry.track_message(msg.message_id, sess.name)
+            await self._maybe_update_bot_name(sess.name)
             # Send full response as file for long messages
             file_content = raw_md or (summary if send_file else "")
             if send_file and file_content:
@@ -725,6 +749,7 @@ class TelegramBot:
                     reply_to_message_id=sess.trigger_msg_id,
                 )
                 self.registry.track_message(msg.message_id, sess.name)
+                await self._maybe_update_bot_name(sess.name)
 
         elif sess.status == Status.BUSY:
             # Session went back to working — edit the last idle/interactive message
@@ -1110,6 +1135,7 @@ class TelegramBot:
             return
 
         self.registry.last_active_session = sess.name  # user is talking to this session now
+        asyncio.create_task(self._maybe_update_bot_name(sess.name))
 
         if not await inject.is_alive(sess.name):
             await update.message.reply_text(f"⚠️ Session '{sess.name}' not found")
@@ -1144,6 +1170,7 @@ class TelegramBot:
                 sess.trigger_msg_id = update.message.message_id
                 sess.last_prompt = prompt_text
                 self.registry.last_active_session = name  # user explicitly targeted this session
+                asyncio.create_task(self._maybe_update_bot_name(name))
                 ok = await inject.send_text_and_enter(name, prompt_text)
                 if ok:
                     await self._react(update, "👀")
@@ -1161,6 +1188,7 @@ class TelegramBot:
             new_sess.trigger_msg_id = update.message.message_id
             new_sess.last_prompt = prompt_text
             self.registry.last_active_session = session_name
+            asyncio.create_task(self._maybe_update_bot_name(session_name))
             ok = await inject.send_text_and_enter(session_name, prompt_text)
             if ok:
                 await self._react(update, "👀")
