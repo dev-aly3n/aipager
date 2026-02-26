@@ -304,17 +304,63 @@ class HookReceiver:
                 })
 
         elif event == "PreCompact":
-            # Compaction is about to start — notify user
+            # Compaction is about to start — save context % for delta display
             sess = self.registry.get_or_create(session_name)
             trigger = msg.get("trigger", "auto")
-            log.info("[%s] PreCompact (trigger=%s)", sess.label, trigger)
+            # Save pre-compact context % (try cached, then sl_tokens, then file)
+            pre_pct = sess.last_token_pct
+            if not pre_pct:
+                sl_tokens = msg.get("sl_tokens")
+                if sl_tokens:
+                    pre_pct = sl_tokens.get("context_pct", 0)
+            if not pre_pct:
+                sl = _read_statusline(session_name)
+                if sl:
+                    pre_pct = sl.get("context_pct", 0)
+            sess.pre_compact_pct = pre_pct
+            log.info("[%s] PreCompact (trigger=%s, pre_pct=%d%%)",
+                     sess.label, trigger, pre_pct)
             await self.notify_fn(sess, "compacting", {"trigger": trigger})
+            return
+
+        elif event == "SessionStart":
+            # SessionStart with source=compact fires after compaction completes
+            source = msg.get("source", "")
+            if source != "compact":
+                self.registry.get_or_create(session_name)
+                return
+            sess = self.registry.get_or_create(session_name)
+            # Read post-compact context % from piggybacked sl_tokens or file
+            sl_tokens = msg.get("sl_tokens")
+            post_pct = 0
+            if sl_tokens:
+                post_pct = sl_tokens.get("context_pct", 0)
+            if not post_pct:
+                sl = _read_statusline(session_name)
+                if sl:
+                    post_pct = sl.get("context_pct", 0)
+            # Reset pre_compact_pct SYNCHRONOUSLY before await (race prevention)
+            before_pct = sess.pre_compact_pct
+            sess.pre_compact_pct = 0
+            if before_pct > 0:
+                # If post_pct is still high (stale file), defer to statusLine fallback
+                if post_pct >= before_pct:
+                    sess.pre_compact_pct = before_pct
+                    log.info("[%s] SessionStart compact: post_pct=%d%% >= before=%d%%, deferring",
+                             sess.label, post_pct, before_pct)
+                else:
+                    sess.compact_warned = False
+                    log.info("[%s] Compacted: %d%% → %d%%", sess.label, before_pct, post_pct)
+                    await self.notify_fn(sess, "compact_done", {
+                        "before_pct": before_pct,
+                        "after_pct": post_pct,
+                    })
             return
 
         elif event == "statusline":
             # Real-time token data from statusLine hook (fires after each response)
             sess = self.registry.get_or_create(session_name)
-            ctx_pct = msg.get("context_pct", 0)
+            ctx_pct = int(round(msg.get("context_pct", 0)))
             total_out = msg.get("total_output", 0)
             sess.last_token_pct = ctx_pct
             # Lazy baseline: set on first statusline event this BUSY cycle
@@ -323,8 +369,20 @@ class HookReceiver:
             elif total_out < sess.output_baseline:
                 sess.output_baseline = total_out  # session restarted
             sess.last_output_tokens = max(0, total_out - sess.output_baseline)
+            # Compact-done fallback: if SessionStart hook didn't fire (or had stale data),
+            # detect compaction completion from the first low statusLine reading
+            if ctx_pct < 30 and sess.pre_compact_pct > 0:
+                before_pct = sess.pre_compact_pct
+                sess.pre_compact_pct = 0  # reset SYNCHRONOUSLY before await
+                sess.compact_warned = False
+                log.info("[%s] Compacted (statusLine fallback): %d%% → %d%%",
+                         sess.label, before_pct, ctx_pct)
+                await self.notify_fn(sess, "compact_done", {
+                    "before_pct": before_pct,
+                    "after_pct": ctx_pct,
+                })
             # Context warning: alert user once when approaching auto-compact
-            if ctx_pct >= 80 and not sess.compact_warned:
+            elif ctx_pct >= 80 and not sess.compact_warned:
                 sess.compact_warned = True
                 await self.notify_fn(sess, "context_warning", {"context_pct": ctx_pct})
             elif ctx_pct < 30:

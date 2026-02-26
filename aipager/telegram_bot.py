@@ -485,6 +485,32 @@ class TelegramBot:
                 pass
             return
 
+        if event == "compact_done":
+            # Compaction finished — show delta, then resume busy animation
+            before_pct = context.get("before_pct", 0)
+            after_pct = context.get("after_pct", 0)
+            self._stop_animation(sess)
+            text = (f"📦 <b>{html_mod.escape(label)}</b> · "
+                    f"Compacted: {before_pct}% → {after_pct}%")
+            if sess.busy_msg_id and sess.busy_msg_id > 0:
+                result = await self._edit_busy_raw(sess.busy_msg_id, text)
+                if result is None:
+                    sess.busy_msg_id = None
+            else:
+                try:
+                    msg = await bot.send_message(
+                        CHAT_ID, text, parse_mode="HTML",
+                        reply_to_message_id=sess.trigger_msg_id,
+                    )
+                    sess.busy_msg_id = msg.message_id
+                except Exception:
+                    log.warning("Failed to send compact_done message", exc_info=True)
+            # Brief pause so user can read the delta, then resume busy animation
+            await asyncio.sleep(2.0)
+            sess.last_token_pct = after_pct
+            self._start_animation(sess)
+            return
+
         if sess.status == Status.IDLE:
             # Mark all tools as done
             sess.tool_history = [(s, True) for s, _ in sess.tool_history]

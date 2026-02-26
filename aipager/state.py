@@ -65,6 +65,8 @@ class TrackedSession:
     trigger_msg_id: int | None = None
     # Compact warning — prevents spamming "context high" alerts
     compact_warned: bool = False
+    # Context % before compaction (for delta display in compact_done notification)
+    pre_compact_pct: int = 0
     # Last injected prompt text — enables retry on API errors
     last_prompt: str = ""
     # Inline permission context (tool_info, question, etc.) — set when permission
