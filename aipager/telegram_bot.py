@@ -638,6 +638,7 @@ class TelegramBot:
                 reply_to_message_id=sess.trigger_msg_id,
             )
             sess.trigger_msg_id = None  # reply cycle complete
+            self.registry.mark_dirty()
             self.registry.track_message(msg.message_id, sess.name)
             await self._maybe_update_bot_name(sess.name)
             # Send full response as file for long messages
@@ -669,6 +670,7 @@ class TelegramBot:
                 queued_text, queued_trigger = sess.pending_queue.pop(0)
                 sess.trigger_msg_id = queued_trigger
                 sess.last_prompt = queued_text
+                self.registry.mark_dirty()
                 ok = await inject.send_text_and_enter(sess.name, queued_text)
                 if ok:
                     self.registry.transition(sess.name, Status.BUSY)
@@ -877,6 +879,7 @@ class TelegramBot:
         sess.status = Status.IDLE
         sess.trigger_msg_id = None
         sess.last_idle_at = time.monotonic()  # prevent debounce of next real IDLE
+        self.registry.mark_dirty()
 
         # 5. Acknowledge
         ack = f"Stopped [{sess.label}]"
@@ -1144,12 +1147,14 @@ class TelegramBot:
         # Queue if session is busy — inject when it goes IDLE
         if sess.status == Status.BUSY:
             sess.pending_queue.append((text, update.message.message_id))
+            self.registry.mark_dirty()
             await self._react(update, "👀")
             log.info("[%s] Queued (busy): %s", sess.label, text[:80])
             return
 
         sess.trigger_msg_id = update.message.message_id
         sess.last_prompt = text
+        self.registry.mark_dirty()
         ok = await inject.send_text_and_enter(sess.name, text)
         if ok:
             await self._react(update, "👀")
@@ -1169,6 +1174,7 @@ class TelegramBot:
                     return
                 sess.trigger_msg_id = update.message.message_id
                 sess.last_prompt = prompt_text
+                self.registry.mark_dirty()
                 self.registry.last_active_session = name  # user explicitly targeted this session
                 asyncio.create_task(self._maybe_update_bot_name(name))
                 ok = await inject.send_text_and_enter(name, prompt_text)
@@ -1187,6 +1193,7 @@ class TelegramBot:
             new_sess = self.registry.get_or_create(session_name)
             new_sess.trigger_msg_id = update.message.message_id
             new_sess.last_prompt = prompt_text
+            self.registry.mark_dirty()
             self.registry.last_active_session = session_name
             asyncio.create_task(self._maybe_update_bot_name(session_name))
             ok = await inject.send_text_and_enter(session_name, prompt_text)

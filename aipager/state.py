@@ -14,11 +14,16 @@ all duplicate notification bugs from the old system.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from pathlib import Path
 from typing import Any
+
+from aipager.config import SESSION_STATE_FILE
 
 log = logging.getLogger(__name__)
 
@@ -81,6 +86,7 @@ class SessionRegistry:
         self._sessions: dict[str, TrackedSession] = {}  # keyed by session name
         self._msg_map: dict[int, str] = {}  # message_id → session name
         self.last_active_session: str = ""  # last session that sent a notification
+        self._dirty: bool = False
 
     def get(self, name: str) -> TrackedSession | None:
         return self._sessions.get(name)
@@ -127,6 +133,7 @@ class SessionRegistry:
             sess.summary = summary
 
         log.info("[%s] %s → %s", sess.label, old.name, new_status.name)
+        self._dirty = True
         return sess
 
     def track_message(self, msg_id: int, session_name: str) -> None:
@@ -136,6 +143,7 @@ class SessionRegistry:
         sess = self._sessions.get(session_name)
         if sess:
             sess.last_msg_id = msg_id
+        self._dirty = True
 
     def get_session_by_msg(self, msg_id: int) -> TrackedSession | None:
         """Find session that owns a Telegram message."""
@@ -157,3 +165,112 @@ class SessionRegistry:
             to_remove = [mid for mid, sn in self._msg_map.items() if sn == name]
             for mid in to_remove:
                 del self._msg_map[mid]
+
+    def mark_dirty(self) -> None:
+        """Flag that state has changed and needs saving."""
+        self._dirty = True
+
+    # -- Persistence ---------------------------------------------------------
+
+    _PERSIST_FIELDS = (
+        "name", "label", "last_msg_id", "transcript_path",
+        "trigger_msg_id", "pending_queue", "last_prompt",
+    )
+    _MAX_MSG_MAP = 100  # cap _msg_map entries to avoid unbounded growth
+
+    def save(self) -> None:
+        """Serialize persistable state to JSON (atomic write)."""
+        sessions = {}
+        for name, sess in self._sessions.items():
+            d: dict = {}
+            for f in self._PERSIST_FIELDS:
+                val = getattr(sess, f)
+                if f == "pending_queue":
+                    # tuples → lists for JSON
+                    val = [list(item) for item in val]
+                d[f] = val
+            sessions[name] = d
+
+        # Cap _msg_map: keep only the most recent entries (by insertion order)
+        msg_map = self._msg_map
+        if len(msg_map) > self._MAX_MSG_MAP:
+            keys = list(msg_map.keys())
+            msg_map = {k: msg_map[k] for k in keys[-self._MAX_MSG_MAP:]}
+
+        data = {
+            "version": 1,
+            "last_active_session": self.last_active_session,
+            "msg_map": {str(k): v for k, v in msg_map.items()},
+            "sessions": sessions,
+        }
+
+        state_file = Path(SESSION_STATE_FILE)
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        tmp = state_file.with_suffix(".tmp")
+        try:
+            tmp.write_text(json.dumps(data, indent=2))
+            os.rename(tmp, state_file)  # atomic on Linux
+        except OSError:
+            log.exception("Failed to save session state")
+            tmp.unlink(missing_ok=True)
+
+    def load(self) -> None:
+        """Load persisted state from JSON. Missing or corrupt file → start fresh."""
+        state_file = Path(SESSION_STATE_FILE)
+        try:
+            raw = state_file.read_text()
+        except FileNotFoundError:
+            log.info("No saved session state — starting fresh")
+            return
+        except OSError:
+            log.warning("Cannot read session state file — starting fresh")
+            return
+
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            log.warning("Corrupt session state JSON — starting fresh")
+            return
+
+        self.last_active_session = data.get("last_active_session", "")
+
+        # Rebuild _msg_map (JSON keys are strings → convert to int)
+        saved_map = data.get("msg_map", {})
+        for k, v in saved_map.items():
+            try:
+                self._msg_map[int(k)] = v
+            except (ValueError, TypeError):
+                continue
+
+        # Reconstruct sessions with only persistable fields; transient fields
+        # stay at dataclass defaults. Status → IDLE, last_idle_at → 0.0 so
+        # the first real IDLE notification is not debounced.
+        for name, sd in data.get("sessions", {}).items():
+            sess = TrackedSession(
+                name=sd.get("name", name),
+                label=sd.get("label", name),
+                status=Status.UNKNOWN,
+                last_msg_id=sd.get("last_msg_id"),
+                transcript_path=sd.get("transcript_path", ""),
+                trigger_msg_id=sd.get("trigger_msg_id"),
+                last_prompt=sd.get("last_prompt", ""),
+                last_idle_at=0.0,
+            )
+            # pending_queue: list of [text, trigger_msg_id] → list of tuples
+            for item in sd.get("pending_queue", []):
+                if isinstance(item, list) and len(item) == 2:
+                    sess.pending_queue.append(tuple(item))
+            self._sessions[name] = sess
+            log.info("Restored session: %s [%s] (msg_id=%s, trigger=%s, queue=%d)",
+                     name, sess.label, sess.last_msg_id, sess.trigger_msg_id,
+                     len(sess.pending_queue))
+
+        log.info("Loaded %d sessions, %d message mappings",
+                 len(self._sessions), len(self._msg_map))
+        self._dirty = False
+
+    def save_if_dirty(self) -> None:
+        """Save state if it has been modified since last save."""
+        if self._dirty:
+            self.save()
+            self._dirty = False

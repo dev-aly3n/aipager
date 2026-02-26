@@ -35,6 +35,7 @@ async def main() -> None:
         sys.exit(1)
 
     registry = SessionRegistry()
+    registry.load()
     bot = TelegramBot(registry)
     hook_receiver = HookReceiver(registry, bot.notify)
     session_monitor = SessionMonitor(registry, bot.notify)
@@ -61,6 +62,7 @@ async def main() -> None:
     await stop.wait()
 
     log.info("Shutting down...")
+    registry.save()
     session_monitor.stop()
     hook_receiver.stop()
     if observers:

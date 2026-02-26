@@ -211,6 +211,7 @@ class HookReceiver:
         # Store transcript_path on ALL events for rich summaries
         if transcript_path:
             self.registry.get_or_create(session_name).transcript_path = transcript_path
+            self.registry.mark_dirty()
             log.debug("[%s] Stored transcript_path: %s", session_name, transcript_path)
 
         log.debug("Hook event: %s from %s", event, session_name)

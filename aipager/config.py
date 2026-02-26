@@ -63,6 +63,9 @@ PANE_POLL_INTERVAL: float = 2.0
 # When False, uses pane-scraped plain text in expandable blockquotes (old behavior).
 RICH_SUMMARIES: bool = os.environ.get("CLAUDE_RICH_SUMMARIES", "1") not in ("0", "false", "no")
 
+# Session state persistence (survives daemon restarts)
+SESSION_STATE_FILE = Path.home() / ".claude" / "claude-remote-sessions.json"
+
 # Minimum seconds between busy-message edits (rate-limit for Telegram API)
 BUSY_EDIT_INTERVAL: float = 3.0
 

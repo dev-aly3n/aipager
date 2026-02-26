@@ -35,6 +35,7 @@ class SessionMonitor:
         while True:
             try:
                 await self._scan()
+                self.registry.save_if_dirty()
             except Exception:
                 log.exception("Session monitor error")
             await asyncio.sleep(PANE_POLL_INTERVAL)
