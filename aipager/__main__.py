@@ -14,8 +14,9 @@ import logging
 import signal
 import sys
 
-from aipager.config import BOT_TOKEN
+from aipager.config import BOT_TOKEN, OBSERVER_BOTS
 from aipager.hook_receiver import HookReceiver
+from aipager.observer import ObserverBroadcaster
 from aipager.session_monitor import SessionMonitor
 from aipager.state import SessionRegistry
 from aipager.telegram_bot import TelegramBot
@@ -39,8 +40,13 @@ async def main() -> None:
     session_monitor = SessionMonitor(registry, bot.notify)
 
     # Startup sequence: bot first (needs to be ready for notifications),
-    # then hook receiver and session monitor
+    # then observers (reuse proxy detection), then hook receiver and session monitor
     await bot.start()
+    observers = None
+    if OBSERVER_BOTS:
+        observers = ObserverBroadcaster(OBSERVER_BOTS, bot.use_proxy)
+        await observers.start()
+        bot.observers = observers
     await hook_receiver.start()
     await session_monitor.start()
 
@@ -57,6 +63,8 @@ async def main() -> None:
     log.info("Shutting down...")
     session_monitor.stop()
     hook_receiver.stop()
+    if observers:
+        await observers.stop()
     await bot.stop()
     log.info("Goodbye")
 

@@ -26,6 +26,33 @@ BOT_TOKEN: str = os.environ.get("CLAUDE_TG_BOT_TOKEN", "")
 CHAT_ID: str = os.environ.get("CLAUDE_TG_CHAT_ID", "")
 PROXY: str = ""
 
+
+def _parse_observer_bots(raw: str) -> list[tuple[str, str]]:
+    """Parse 'token1:chatid1,token2:chatid2' into [(token, chatid), ...].
+
+    Uses rsplit(":", 1) to split at the LAST colon, since bot tokens
+    contain an internal colon (format NNNNN:XXXXXX).
+    """
+    if not raw.strip():
+        return []
+    result = []
+    for entry in raw.split(","):
+        entry = entry.strip()
+        if ":" not in entry:
+            continue
+        parts = entry.rsplit(":", 1)
+        if len(parts) != 2:
+            continue
+        token, chat_id = parts[0].strip(), parts[1].strip()
+        if token and chat_id:
+            result.append((token, chat_id))
+    return result
+
+
+OBSERVER_BOTS: list[tuple[str, str]] = _parse_observer_bots(
+    os.environ.get("OBSERVER_BOTS", "")
+)
+
 # Unix datagram socket for hook → daemon communication
 SOCKET_PATH: str = "/tmp/claude-remote.sock"
 

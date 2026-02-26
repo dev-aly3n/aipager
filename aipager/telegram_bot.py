@@ -127,14 +127,16 @@ class TelegramBot:
     def __init__(self, registry: SessionRegistry):
         self.registry = registry
         self._app: Application | None = None
+        self.observers = None  # ObserverBroadcaster | None, injected by __main__
+        self.use_proxy: bool = False
 
     async def start(self) -> None:
         global _bot_instance
         _bot_instance = self
 
-        use_proxy = not await self._test_direct()
+        self.use_proxy = not await self._test_direct()
         builder = ApplicationBuilder().token(BOT_TOKEN)
-        if use_proxy:
+        if self.use_proxy:
             log.info("Using proxy: %s", PROXY)
             builder = builder.proxy(PROXY).get_updates_proxy(PROXY)
         else:
@@ -470,19 +472,21 @@ class TelegramBot:
             # Start dot animation
             sess.animate_task = asyncio.create_task(
                 self._animate_compact(sess))
+            if self.observers:
+                obs_text = f"🔄 <b>{html_mod.escape(label)}</b> · Compacting"
+                asyncio.create_task(self.observers.broadcast(obs_text))
             return
 
         if event == "context_warning":
             ctx_pct = context.get("context_pct", 0)
+            warn_text = (f"⚠️ <b>{html_mod.escape(label)}</b> · Context at "
+                         f"{ctx_pct}% — auto-compact soon")
             try:
-                await bot.send_message(
-                    CHAT_ID,
-                    f"⚠️ <b>{html_mod.escape(label)}</b> · Context at "
-                    f"{ctx_pct}% — auto-compact soon",
-                    parse_mode="HTML",
-                )
+                await bot.send_message(CHAT_ID, warn_text, parse_mode="HTML")
             except Exception:
                 pass
+            if self.observers:
+                asyncio.create_task(self.observers.broadcast(warn_text))
             return
 
         if event == "compact_done":
@@ -505,6 +509,8 @@ class TelegramBot:
                     sess.busy_msg_id = msg.message_id
                 except Exception:
                     log.warning("Failed to send compact_done message", exc_info=True)
+            if self.observers:
+                asyncio.create_task(self.observers.broadcast(text))
             # Brief pause so user can read the delta, then resume busy animation
             await asyncio.sleep(2.0)
             sess.last_token_pct = after_pct
@@ -547,6 +553,8 @@ class TelegramBot:
                     self.registry.track_message(msg.message_id, sess.name)
                 except Exception:
                     log.warning("Failed to send error notification", exc_info=True)
+                if self.observers:
+                    asyncio.create_task(self.observers.broadcast(text))
                 # Don't clear trigger_msg_id — retry needs it
                 # Don't flush pending queue — nothing was processed
                 return
@@ -622,6 +630,15 @@ class TelegramBot:
                     tmp.unlink(missing_ok=True)
                 except Exception:
                     log.warning("Failed to send full response file", exc_info=True)
+
+            # Broadcast to observer bots (text only, or text + document)
+            if self.observers:
+                if send_file and file_content:
+                    doc_bytes = file_content.encode("utf-8")
+                    asyncio.create_task(self.observers.broadcast_document(
+                        text, doc_bytes, f"{label}_response.txt"))
+                else:
+                    asyncio.create_task(self.observers.broadcast(text))
 
             # Flush next queued message (one at a time, rest flush on next IDLE)
             if sess.pending_queue:
