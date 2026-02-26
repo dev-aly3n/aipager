@@ -19,7 +19,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import httpx
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import (
+    BotCommand,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+    Update,
+)
 from telegram.ext import (
     Application,
     ApplicationBuilder,
@@ -130,6 +137,7 @@ class TelegramBot:
         self.observers = None  # ObserverBroadcaster | None, injected by __main__
         self.use_proxy: bool = False
         self._current_bot_name: str | None = None  # cached to skip redundant setMyName calls
+        self._registered_labels: set[str] = set()  # cached to skip redundant setMyCommands
 
     async def start(self) -> None:
         global _bot_instance
@@ -176,12 +184,82 @@ class TelegramBot:
             drop_pending_updates=True, # ignore old updates on restart
         )
         log.info("Telegram bot polling started")
+        await self._update_bot_commands()
 
     async def stop(self) -> None:
         if self._app:
             await self._app.updater.stop()
             await self._app.stop()
             await self._app.shutdown()
+
+    async def _update_bot_commands(self) -> None:
+        """Register bot commands (/ menu) and update persistent keyboard.
+
+        Skips API call if session labels haven't changed since last update.
+        """
+        if not self._app:
+            return
+
+        # Collect live session labels
+        labels = set()
+        for name, sess in self.registry.all_sessions().items():
+            if sess.status != Status.GONE and sess.label:
+                labels.add(sess.label)
+
+        if labels == self._registered_labels:
+            return  # no change
+
+        # Build command list: static + dynamic session labels
+        commands = [
+            BotCommand("status", "Show all sessions"),
+            BotCommand("stop", "Stop active session"),
+        ]
+        for label in sorted(labels):
+            commands.append(BotCommand(label, f"Send to [{label}]"))
+
+        try:
+            await self._app.bot.set_my_commands(commands)
+            self._registered_labels = labels
+            log.info("Bot commands updated: status, stop + %s",
+                     ", ".join(sorted(labels)) or "(none)")
+        except Exception:
+            log.warning("Failed to set bot commands", exc_info=True)
+
+        # Send/update persistent keyboard
+        await self._send_keyboard()
+
+    async def _send_keyboard(self) -> None:
+        """Send a message with the persistent keyboard showing session buttons."""
+        if not self._app:
+            return
+
+        labels = sorted(
+            sess.label for sess in self.registry.all_sessions().values()
+            if sess.status != Status.GONE and sess.label
+        )
+
+        # Build keyboard rows: session labels on top, status/stop on bottom
+        rows = []
+        if labels:
+            # Pack session labels into rows of 3
+            for i in range(0, len(labels), 3):
+                chunk = labels[i:i + 3]
+                rows.append([KeyboardButton(f"/{lbl}") for lbl in chunk])
+        rows.append([KeyboardButton("/status"), KeyboardButton("/stop")])
+
+        keyboard = ReplyKeyboardMarkup(
+            rows,
+            resize_keyboard=True,
+            is_persistent=True,
+        )
+
+        try:
+            await self._app.bot.send_message(
+                CHAT_ID, "⌨️ Keyboard updated",
+                reply_markup=keyboard,
+            )
+        except Exception:
+            log.warning("Failed to send keyboard", exc_info=True)
 
     @staticmethod
     async def _test_direct() -> bool:
@@ -1081,6 +1159,8 @@ class TelegramBot:
             lines.append(f"{icon} <b>{html_mod.escape(sess.label)}</b> · {status_str}")
 
         await update.message.reply_text("\n".join(lines), parse_mode="HTML")
+        # Update commands/keyboard if session list changed
+        asyncio.create_task(self._update_bot_commands())
 
     async def _handle_stop_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /stop command — stop the last active session."""
@@ -1107,6 +1187,37 @@ class TelegramBot:
                 return
         await update.message.reply_text(f"⚠️ Unknown session: {target_label}")
 
+    async def _switch_session(self, update: Update, target_label: str) -> None:
+        """Switch active session when bare /<label> is tapped (no prompt)."""
+        # Find in registry
+        for name, sess in self.registry.all_sessions().items():
+            if sess.label == target_label:
+                self.registry.last_active_session = name
+                self.registry.mark_dirty()
+                asyncio.create_task(self._maybe_update_bot_name(name))
+                status_str = sess.status.name.lower()
+                await update.message.reply_text(
+                    f"Switched to <b>[{html_mod.escape(sess.label)}]</b> · {status_str}",
+                    parse_mode="HTML",
+                )
+                return
+
+        # Try auto-discover
+        session_name = f"claude-{target_label}"
+        if await inject.is_alive(session_name):
+            sess = self.registry.get_or_create(session_name)
+            self.registry.last_active_session = session_name
+            self.registry.mark_dirty()
+            asyncio.create_task(self._maybe_update_bot_name(session_name))
+            asyncio.create_task(self._update_bot_commands())
+            await update.message.reply_text(
+                f"Switched to <b>[{html_mod.escape(sess.label)}]</b> · new",
+                parse_mode="HTML",
+            )
+            return
+
+        await update.message.reply_text(f"⚠️ Unknown session: {target_label}")
+
     async def _handle_message(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle text messages — replies to notifications or /<label> commands."""
         text = update.message.text.strip()
@@ -1123,6 +1234,13 @@ class TelegramBot:
                     await self._stop_by_label(update, target_label)
                     return
                 await self._direct_send(update, target_label, prompt_text)
+                return
+
+        # Bare /<label> — switch active session (e.g. keyboard tap)
+        if text.startswith("/") and " " not in text:
+            target_label = text[1:]
+            if target_label and target_label not in ("status", "stop"):
+                await self._switch_session(update, target_label)
                 return
 
         # Reply to a notification — or bare message goes to last active session

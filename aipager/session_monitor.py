@@ -26,6 +26,7 @@ class SessionMonitor:
         self.registry = registry
         self.notify_fn = notify_fn
         self._task: asyncio.Task | None = None
+        self.on_sessions_changed = None  # optional async callback
 
     async def start(self) -> None:
         self._task = asyncio.create_task(self._loop())
@@ -42,6 +43,7 @@ class SessionMonitor:
 
     async def _scan(self) -> None:
         sessions = await dtach_inject.list_sessions()
+        old_names = set(self.registry.all_sessions().keys())
 
         # Mark disappeared sessions as GONE
         for name, sess in list(self.registry.all_sessions().items()):
@@ -51,6 +53,14 @@ class SessionMonitor:
         # Discover new sessions
         for name in sessions:
             self.registry.get_or_create(name)
+
+        # Notify if session list changed (for bot command/keyboard updates)
+        new_names = set(self.registry.all_sessions().keys())
+        if new_names != old_names and self.on_sessions_changed:
+            try:
+                await self.on_sessions_changed()
+            except Exception:
+                log.warning("on_sessions_changed callback failed", exc_info=True)
 
     def stop(self) -> None:
         if self._task:

@@ -49,6 +49,7 @@ async def main() -> None:
         await observers.start()
         bot.observers = observers
     await hook_receiver.start()
+    session_monitor.on_sessions_changed = bot._update_bot_commands
     await session_monitor.start()
 
     log.info("Claude Remote v2 running — all components started")
