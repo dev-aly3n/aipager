@@ -116,6 +116,31 @@ def _extract_pending_tool(transcript_path: str) -> dict | None:
     return None
 
 
+def _extract_specific_tool(transcript_path: str, target_name: str) -> dict | None:
+    """Search transcript for a specific tool_use by name (handles parallel tools)."""
+    try:
+        lines = Path(transcript_path).read_text().strip().splitlines()
+    except (FileNotFoundError, PermissionError):
+        return None
+
+    for line in reversed(lines[-20:]):
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if entry.get("type") != "assistant":
+            continue
+        content = entry.get("message", {}).get("content", [])
+        for block in reversed(content):
+            if not isinstance(block, dict) or block.get("type") != "tool_use":
+                continue
+            if block.get("name") == target_name:
+                inp = block.get("input", {})
+                return {"name": target_name, "input": inp,
+                        "summary": _summarize_tool(target_name, inp)}
+    return None
+
+
 def _summarize_tool(name: str, inp: dict) -> str:
     if name == "Bash":
         return f"Bash: {inp.get('description') or inp.get('command', '')[:80]}"
@@ -126,10 +151,20 @@ def _summarize_tool(name: str, inp: dict) -> str:
         return f"{name}: {inp.get('file_path', '')}"
     if name == "Task":
         return f"Task: {inp.get('description', inp.get('prompt', '')[:80])}"
+    if name == "Glob":
+        pattern = inp.get("pattern", "")
+        path = inp.get("path", "")
+        return f"Glob: {pattern}" if not path else f"Glob: {pattern} in {path}"
+    if name == "Grep":
+        pattern = inp.get("pattern", "")
+        path = inp.get("path", "")
+        return f"Grep: {pattern}" if not path else f"Grep: {pattern} in {path}"
     if name == "WebFetch":
         return f"WebFetch: {inp.get('url', '')[:80]}"
     if name == "WebSearch":
         return f"WebSearch: {inp.get('query', '')[:80]}"
+    if name == "NotebookEdit":
+        return f"NotebookEdit: {inp.get('notebook_path', '')}"
     return name
 
 
@@ -182,6 +217,29 @@ class HookReceiver:
 
         if event == "permission_prompt":
             tool_info = _extract_pending_tool(transcript_path) if transcript_path else None
+            hook_message = msg.get("message", "")
+
+            # Parse tool name from hook message as reliable source of truth
+            # Format: "Claude needs your permission to use {ToolName}"
+            hook_tool_name = ""
+            _prefix = "permission to use "
+            if _prefix in hook_message:
+                hook_tool_name = hook_message.split(_prefix, 1)[1].strip()
+
+            # If transcript returned wrong tool or None, try targeted extraction
+            if hook_tool_name and (not tool_info or tool_info["name"] != hook_tool_name):
+                log.info("[%s] Tool mismatch: transcript=%s, hook=%s",
+                         session_name, tool_info["name"] if tool_info else "None",
+                         hook_tool_name)
+                targeted = (_extract_specific_tool(transcript_path, hook_tool_name)
+                            if transcript_path else None)
+                if targeted:
+                    tool_info = targeted
+                else:
+                    # Transcript not flushed yet — use name-only fallback
+                    tool_info = {"name": hook_tool_name, "input": {},
+                                 "summary": hook_tool_name}
+
             new_status = Status.INTERACTIVE
             context = {"tool_info": tool_info, "transcript_path": transcript_path}
 
@@ -197,6 +255,21 @@ class HookReceiver:
         elif event == "PreToolUse":
             tool_name = msg.get("tool_name", "")
             tool_input = msg.get("tool_input", {})
+
+            # AskUserQuestion blocks execution — handle as INTERACTIVE
+            # (detected here because PreToolUse provides full tool_input
+            #  with questions/options, unlike the Notification hook)
+            if tool_name == "AskUserQuestion":
+                tool_info = {"name": "AskUserQuestion", "input": tool_input,
+                             "summary": _summarize_tool("AskUserQuestion", tool_input)}
+                sess_aq = self.registry.transition(session_name, Status.INTERACTIVE)
+                if sess_aq:
+                    await self.notify_fn(sess_aq, "permission_prompt", {
+                        "tool_info": tool_info,
+                        "transcript_path": transcript_path,
+                    })
+                return
+
             if tool_name:
                 summary = _summarize_tool(tool_name, tool_input)
                 sess = self.registry.get_or_create(session_name)

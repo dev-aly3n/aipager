@@ -622,15 +622,26 @@ class TelegramBot:
                 # (lesson: claim state before async yield to prevent races)
                 if tool_info and tool_info["name"] == "AskUserQuestion":
                     questions = tool_info["input"].get("questions", [])
-                    q = questions[0] if questions else {}
-                    options = q.get("options", [])
-                    sess.pending_permission = {
-                        "ask_question": True,
-                        "question": q.get("question", "?"),
-                        "options": options,
-                        "tool_info": tool_info,
-                    }
-                    keyboard = self._build_inline_ask_keyboard(sess.name, options)
+                    if questions:
+                        q = questions[0]
+                        options = q.get("options", [])
+                        sess.pending_permission = {
+                            "ask_question": True,
+                            "question": q.get("question", "?"),
+                            "options": options,
+                            "questions": questions,
+                            "current_idx": 0,
+                            "tool_info": tool_info,
+                        }
+                        keyboard = self._build_inline_ask_keyboard(sess.name, options)
+                    else:
+                        # AskUserQuestion detected but no questions data (transcript
+                        # not flushed). Degrade to Allow/Deny — Allow sends Enter.
+                        sess.pending_permission = {
+                            "tool_summary": "AskUserQuestion (loading…)",
+                            "tool_info": tool_info,
+                        }
+                        keyboard = self._build_permission_keyboard(sess.name)
                 else:
                     tool_summary = tool_info["summary"] if tool_info else "Permission needed"
                     sess.pending_permission = {
@@ -916,7 +927,7 @@ class TelegramBot:
             await query.answer(f"{verb} [{sess.label}]")
 
             if sess.pending_permission:
-                # Collapse inline permission into tool_history
+                # Collapse current question into tool_history
                 perm = sess.pending_permission
                 if perm.get("ask_question"):
                     collapsed = f"❓ {perm['question'][:40]} → {verb}"
@@ -924,15 +935,47 @@ class TelegramBot:
                     tool_summary = perm.get("tool_summary", "Permission")[:60]
                     collapsed = f"🔑 {tool_summary} → {verb}"
                 sess.tool_history.append((collapsed, True))
-                sess.pending_permission = None
 
-                # Transition back to BUSY and restart animation
-                self.registry.transition(session_name, Status.BUSY)
-                keyboard = self._build_stop_keyboard(session_name)
-                text = self._build_busy_text(sess.label, "Working", sess)
-                await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
-                self._start_animation(sess)
-                log.info("[%s] Inline permission: %s", sess.label, verb)
+                # Multi-question AskUserQuestion: advance to next question
+                questions = perm.get("questions", [])
+                current_idx = perm.get("current_idx", 0)
+                next_idx = current_idx + 1
+
+                if perm.get("ask_question") and next_idx < len(questions):
+                    # More questions — show the next one inline
+                    # NOTE: No Tab needed — Claude Code TUI auto-advances
+                    # to the next unanswered question tab after Enter.
+                    next_q = questions[next_idx]
+                    next_options = next_q.get("options", [])
+                    sess.pending_permission = {
+                        "ask_question": True,
+                        "question": next_q.get("question", "?"),
+                        "options": next_options,
+                        "questions": questions,
+                        "current_idx": next_idx,
+                        "tool_info": perm.get("tool_info"),
+                    }
+                    await asyncio.sleep(0.3)  # let TUI process and auto-advance
+                    keyboard = self._build_inline_ask_keyboard(session_name, next_options)
+                    text = self._build_busy_text(sess.label, "Waiting", sess)
+                    await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
+                    log.info("[%s] Multi-question: advanced to Q%d/%d",
+                             sess.label, next_idx + 1, len(questions))
+                else:
+                    # Last question (or non-AskUserQuestion) — done
+                    if perm.get("ask_question") and len(questions) > 1:
+                        # Multi-question form: TUI auto-advances to Submit tab
+                        # after last option selection. Send Enter to submit.
+                        await asyncio.sleep(0.3)
+                        await inject.send_keys(session_name, "Enter")
+                    sess.pending_permission = None
+                    # Transition back to BUSY and restart animation
+                    self.registry.transition(session_name, Status.BUSY)
+                    keyboard = self._build_stop_keyboard(session_name)
+                    text = self._build_busy_text(sess.label, "Working", sess)
+                    await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
+                    self._start_animation(sess)
+                    log.info("[%s] Inline permission: %s", sess.label, verb)
             else:
                 # Original behavior: edit the separate permission message
                 try:
