@@ -83,6 +83,9 @@ class TrackedSession:
     # Inline permission context (tool_info, question, etc.) — set when permission
     # is displayed inside the busy message instead of as a separate message
     pending_permission: dict | None = None
+    # Active subagents — keyed by agent_id
+    # Format: {agent_id: {"type": str, "started_at": float, "history_idx": int}}
+    active_subagents: dict = field(default_factory=dict)
     # Stale session detection
     last_hook_at: float = 0.0        # monotonic timestamp of last hook event received
     stale_warned: bool = False       # prevents re-alerting every scan cycle

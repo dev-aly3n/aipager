@@ -321,6 +321,40 @@ class HookReceiver:
                     "tool_summary": summary,
                 })
 
+        elif event == "SubagentStart":
+            agent_id = msg.get("agent_id", "")
+            agent_type = msg.get("agent_type", "unknown")
+            if agent_id:
+                sess = self.registry.get_or_create(session_name)
+                sess.active_subagents[agent_id] = {
+                    "type": agent_type,
+                    "started_at": time.monotonic(),
+                    "history_idx": None,  # set by telegram_bot notify
+                }
+                log.info("[%s] SubagentStart: %s (%s)", sess.label, agent_type, agent_id)
+                await self.notify_fn(sess, "subagent_start", {
+                    "agent_id": agent_id,
+                    "agent_type": agent_type,
+                })
+
+        elif event == "SubagentStop":
+            agent_id = msg.get("agent_id", "")
+            agent_type = msg.get("agent_type", "unknown")
+            if agent_id:
+                sess = self.registry.get_or_create(session_name)
+                # Compute elapsed time if we have a matching start
+                elapsed = 0.0
+                info = sess.active_subagents.pop(agent_id, None)
+                if info:
+                    elapsed = time.monotonic() - info["started_at"]
+                log.info("[%s] SubagentStop: %s (%s, %.1fs)", sess.label, agent_type, agent_id, elapsed)
+                await self.notify_fn(sess, "subagent_stop", {
+                    "agent_id": agent_id,
+                    "agent_type": agent_type,
+                    "elapsed": elapsed,
+                    "history_idx": info["history_idx"] if info else None,
+                })
+
         elif event == "SessionEnd":
             sess = self.registry.get_or_create(session_name)
             source = msg.get("source", "unknown")

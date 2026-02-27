@@ -403,13 +403,30 @@ class TelegramBot:
             visible = history[-max_visible:]
         if hidden_done:
             text += f"\n✅ <i>{hidden_done} earlier tool{'s' if hidden_done != 1 else ''}</i>"
-        for summary, done in visible:
+        # Build a map of history_idx → started_at for live subagent elapsed time
+        _subagent_started: dict[int, float] = {}
+        for info in sess.active_subagents.values():
+            idx = info.get("history_idx")
+            if idx is not None:
+                _subagent_started[idx] = info["started_at"]
+        # Compute offset into tool_history for visible slice indices
+        _vis_offset = len(history) - len(visible)
+        for i, (summary, done) in enumerate(visible):
             if done == "failed":
                 text += f"\n❌ <code>{html_mod.escape(summary)}</code>"
             elif done:
                 text += f"\n✅ <code>{html_mod.escape(summary)}</code>"
             else:
-                text += f"\n⏳ <code>{html_mod.escape(summary)}</code>"
+                display = summary
+                # Append live elapsed time for active subagent entries
+                started_at = _subagent_started.get(_vis_offset + i)
+                if started_at:
+                    sa_secs = int(time.monotonic() - started_at)
+                    if sa_secs >= 60:
+                        display = f"{summary} ({sa_secs // 60}m {sa_secs % 60}s)"
+                    elif sa_secs >= 2:
+                        display = f"{summary} ({sa_secs}s)"
+                text += f"\n⏳ <code>{html_mod.escape(display)}</code>"
         # Append inline permission display if active
         if sess.pending_permission:
             perm = sess.pending_permission
@@ -539,6 +556,7 @@ class TelegramBot:
         self._stop_animation(sess)
         sess.last_tool_summary = ""
         sess.tool_history.clear()
+        sess.active_subagents.clear()
         sess.pending_permission = None
         sess.last_token_pct = 0
         sess.last_output_tokens = 0
@@ -629,6 +647,49 @@ class TelegramBot:
                             sess.tool_history[i] = (sess.tool_history[i][0], mark)
                             break
             # Update display
+            if sess.busy_msg_id and sess.busy_msg_id > 0:
+                keyboard = self._build_stop_keyboard(sess.name)
+                text = self._build_busy_text(label, "Working", sess)
+                await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
+            return
+
+        if event == "subagent_start":
+            agent_type = context.get("agent_type", "agent")
+            agent_id = context.get("agent_id", "")
+            # Append to tool_history SYNCHRONOUSLY before any await
+            summary = f"\U0001f916 {agent_type}"
+            sess.tool_history.append((summary, False))
+            history_idx = len(sess.tool_history) - 1
+            # Store index in active_subagents so SubagentStop can find it
+            if agent_id and agent_id in sess.active_subagents:
+                sess.active_subagents[agent_id]["history_idx"] = history_idx
+            # Edit busy message if ready
+            if sess.busy_msg_id and sess.busy_msg_id > 0:
+                keyboard = self._build_stop_keyboard(sess.name)
+                text = self._build_busy_text(label, "Working", sess)
+                await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
+            return
+
+        if event == "subagent_stop":
+            agent_type = context.get("agent_type", "agent")
+            elapsed = context.get("elapsed", 0.0)
+            history_idx = context.get("history_idx")
+            # Format elapsed time
+            if elapsed >= 60:
+                elapsed_str = f"{int(elapsed) // 60}m {int(elapsed) % 60}s"
+            elif elapsed >= 1:
+                elapsed_str = f"{int(elapsed)}s"
+            else:
+                elapsed_str = ""
+            suffix = f" ({elapsed_str})" if elapsed_str else ""
+            done_summary = f"\U0001f916 {agent_type}{suffix}"
+            # Mark the matching tool_history entry as done SYNCHRONOUSLY
+            if history_idx is not None and 0 <= history_idx < len(sess.tool_history):
+                sess.tool_history[history_idx] = (done_summary, True)
+            else:
+                # No matching start (daemon restart?) — append as done entry
+                sess.tool_history.append((done_summary, True))
+            # Edit busy message if ready
             if sess.busy_msg_id and sess.busy_msg_id > 0:
                 keyboard = self._build_stop_keyboard(sess.name)
                 text = self._build_busy_text(label, "Working", sess)
@@ -748,6 +809,7 @@ class TelegramBot:
         if sess.status == Status.IDLE:
             # Mark all tools as done
             sess.tool_history = [(s, True) for s, _ in sess.tool_history]
+            sess.active_subagents.clear()
             # Stop animation and clean up busy message
             self._stop_animation(sess)
             sess.pending_permission = None  # clear stale inline permission if any
