@@ -116,3 +116,6 @@ KEYBOARD_PARENTS: dict[str, str] = {
     "commands": "main",
     "models": "commands",
 }
+
+# Directory for files downloaded from Telegram (photos, documents)
+FILE_DOWNLOAD_DIR = Path("/tmp/claude-remote-files")

@@ -42,8 +42,8 @@ import random
 
 from aipager.config import (
     BACK_BUTTON, BOT_TOKEN, BUSY_EDIT_INTERVAL, CHAT_ID, COMMANDS_BUTTON,
-    KEYBOARD_PARENTS, MODEL_CHOICES, MODELS_BUTTON, PROXY, QUICK_COMMANDS,
-    QUICK_TEMPLATES, SPINNER_VERBS, TEMPLATES_BUTTON,
+    FILE_DOWNLOAD_DIR, KEYBOARD_PARENTS, MODEL_CHOICES, MODELS_BUTTON,
+    PROXY, QUICK_COMMANDS, QUICK_TEMPLATES, SPINNER_VERBS, TEMPLATES_BUTTON,
 )
 from aipager.state import SessionRegistry, Status, TrackedSession
 
@@ -178,6 +178,11 @@ class TelegramBot:
         self._app.add_handler(CommandHandler("status", self._handle_status))
         self._app.add_handler(CommandHandler("stop", self._handle_stop_cmd))
         self._app.add_handler(CommandHandler("kill", self._handle_kill_cmd))
+        # Media handler: photos and documents → save file, inject prompt
+        self._app.add_handler(MessageHandler(
+            (filters.PHOTO | filters.Document.ALL) & filters.Chat(int(CHAT_ID)),
+            self._handle_file,
+        ))
         # Catch-all for text messages (replies and /<label> commands)
         self._app.add_handler(MessageHandler(
             filters.TEXT & filters.Chat(int(CHAT_ID)),
@@ -1437,6 +1442,86 @@ class TelegramBot:
             log.info("[%s] Sent text: %s", sess.label, text[:80])
         else:
             await update.message.reply_text(f"❌ Failed to send to [{sess.label}]")
+
+    async def _handle_file(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle photo/document messages — download file and inject prompt."""
+        msg = update.message
+
+        # Download the file
+        try:
+            FILE_DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+            ts = int(time.time())
+
+            if msg.photo:
+                # Use largest photo size
+                tg_file = await msg.photo[-1].get_file()
+                filename = f"{ts}_photo.jpg"
+            elif msg.document:
+                tg_file = await msg.document.get_file()
+                raw_name = msg.document.file_name or "document"
+                orig = Path(raw_name).name or "document"
+                filename = f"{ts}_{orig}"
+            else:
+                return
+
+            save_path = FILE_DOWNLOAD_DIR / filename
+            await tg_file.download_to_drive(custom_path=str(save_path))
+        except Exception:
+            log.warning("File download failed", exc_info=True)
+            await msg.reply_text("❌ Failed to download file")
+            return
+
+        # Construct prompt
+        caption = msg.caption or ""
+        if msg.photo:
+            if caption:
+                prompt = f'[User sent an image: "{caption}"] Please read this image: {save_path}'
+            else:
+                prompt = f"[User sent an image] Please read this image and describe what you see: {save_path}"
+        else:
+            if caption:
+                prompt = f'[User sent a file: {filename}, message: "{caption}"] Please read and analyze this file: {save_path}'
+            else:
+                prompt = f"[User sent a file: {filename}] Please read and analyze this file: {save_path}"
+
+        # Resolve target session (same pattern as _handle_message)
+        reply_to = msg.reply_to_message
+        if reply_to:
+            sess = self.registry.get_session_by_msg(reply_to.message_id)
+        else:
+            name = self.registry.last_active_session
+            sess = self.registry.get(name) if name else None
+
+        if not sess:
+            await msg.reply_text("⚠️ No active session")
+            return
+
+        self.registry.last_active_session = sess.name
+        asyncio.create_task(self._maybe_update_bot_name(sess.name))
+
+        if not await inject.is_alive(sess.name):
+            await msg.reply_text(f"⚠️ Session '{sess.name}' not found")
+            return
+
+        # Queue if busy
+        if sess.status == Status.BUSY:
+            sess.pending_queue.append((prompt, msg.message_id))
+            self.registry.mark_dirty()
+            await self._react(update, "👀")
+            log.info("[%s] File queued (busy): %s", sess.label, filename)
+            return
+
+        sess.trigger_msg_id = msg.message_id
+        sess.last_prompt = prompt
+        self.registry.mark_dirty()
+        ok = await inject.send_text_and_enter(sess.name, prompt)
+        if ok:
+            await self._react(update, "👀")
+            self.registry.transition(sess.name, Status.BUSY)
+            await self._send_busy_and_animate(sess)
+            log.info("[%s] File sent: %s", sess.label, filename)
+        else:
+            await msg.reply_text(f"❌ Failed to send to [{sess.label}]")
 
     async def _send_template(self, update: Update, prompt_text: str) -> None:
         """Inject a quick-template prompt into the last active session."""
