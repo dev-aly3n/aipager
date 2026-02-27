@@ -41,8 +41,8 @@ from aipager import dtach_inject as inject
 import random
 
 from aipager.config import (
-    BACK_BUTTON, BOT_TOKEN, BUSY_EDIT_INTERVAL, CHAT_ID, PROXY,
-    QUICK_TEMPLATES, SPINNER_VERBS, TEMPLATES_BUTTON,
+    BACK_BUTTON, BOT_TOKEN, BUSY_EDIT_INTERVAL, CHAT_ID, COMMANDS_BUTTON,
+    PROXY, QUICK_COMMANDS, QUICK_TEMPLATES, SPINNER_VERBS, TEMPLATES_BUTTON,
 )
 from aipager.state import SessionRegistry, Status, TrackedSession
 
@@ -141,8 +141,9 @@ class TelegramBot:
         self.use_proxy: bool = False
         self._current_bot_name: str | None = None  # cached to skip redundant setMyName calls
         self._registered_labels: set[str] = set()  # cached to skip redundant setMyCommands
-        self._keyboard_level: str = "main"  # current persistent keyboard: "main" or "templates"
+        self._keyboard_level: str = "main"  # "main", "templates", or "commands"
         self._template_map: dict[str, str] = {label: prompt for label, prompt in QUICK_TEMPLATES}
+        self._command_map: dict[str, str] = {label: cmd for label, cmd in QUICK_COMMANDS}
 
     async def start(self) -> None:
         global _bot_instance
@@ -239,7 +240,7 @@ class TelegramBot:
         """Send a message with the persistent keyboard showing session buttons.
 
         Args:
-            level: Which keyboard to show — "main" or "templates".
+            level: Which keyboard to show — "main", "templates", or "commands".
                    Defaults to current ``_keyboard_level``.
         """
         if not self._app:
@@ -257,8 +258,17 @@ class TelegramBot:
                 rows.append([KeyboardButton(lbl) for lbl in chunk])
             rows.append([KeyboardButton(BACK_BUTTON)])
             msg_text = "\U0001f4cb Templates"
+        elif level == "commands":
+            # Build commands keyboard: buttons in rows of 3 + back row
+            rows = []
+            labels = [lbl for lbl, _ in QUICK_COMMANDS]
+            for i in range(0, len(labels), 3):
+                chunk = labels[i:i + 3]
+                rows.append([KeyboardButton(lbl) for lbl in chunk])
+            rows.append([KeyboardButton(BACK_BUTTON)])
+            msg_text = "\U0001f39b Commands"
         else:
-            # Main keyboard: session labels + command row with Templates button
+            # Main keyboard: session labels + command/nav rows
             labels = sorted(
                 sess.label for sess in self.registry.all_sessions().values()
                 if sess.status != Status.GONE and sess.label
@@ -268,10 +278,8 @@ class TelegramBot:
                 for i in range(0, len(labels), 3):
                     chunk = labels[i:i + 3]
                     rows.append([KeyboardButton(lbl) for lbl in chunk])
-            rows.append([
-                KeyboardButton("status"), KeyboardButton("stop"),
-                KeyboardButton("kill"), KeyboardButton(TEMPLATES_BUTTON),
-            ])
+            rows.append([KeyboardButton("status"), KeyboardButton("stop"), KeyboardButton("kill")])
+            rows.append([KeyboardButton(TEMPLATES_BUTTON), KeyboardButton(COMMANDS_BUTTON)])
             msg_text = "\u2328\ufe0f"
 
         self._keyboard_level = level
@@ -1320,10 +1328,13 @@ class TelegramBot:
         if not text:
             return
 
-        # Template/navigation buttons — MUST stay above /<label> handlers
-        # because some templates (e.g. "/compact") start with slash.
+        # Keyboard navigation + button matching — MUST stay above /<label> handlers
+        # because some buttons (e.g. "/compact") start with slash.
         if text == TEMPLATES_BUTTON:
             await self._send_keyboard(level="templates")
+            return
+        if text == COMMANDS_BUTTON:
+            await self._send_keyboard(level="commands")
             return
         if text == BACK_BUTTON:
             await self._send_keyboard(level="main")
@@ -1332,6 +1343,11 @@ class TelegramBot:
         # Quick template buttons — inject predefined prompt into active session
         if text in self._template_map:
             await self._send_template(update, self._template_map[text])
+            return
+
+        # Claude Code slash commands — inject instantly, no BUSY transition
+        if text in self._command_map:
+            await self._send_command(update, self._command_map[text])
             return
 
         # /<label> <prompt> — direct send
@@ -1440,6 +1456,36 @@ class TelegramBot:
             self.registry.transition(sess.name, Status.BUSY)
             await self._send_busy_and_animate(sess)
             log.info("[%s] Template sent: %s", sess.label, prompt_text[:80])
+        else:
+            await update.message.reply_text(f"❌ Failed to send to [{sess.label}]")
+
+    async def _send_command(self, update: Update, command_text: str) -> None:
+        """Inject an instant Claude Code slash command (no BUSY transition).
+
+        Unlike _send_template(), this does NOT transition to BUSY or start
+        animation. Slash commands like /model, /cost, /context complete
+        instantly and produce no Claude response.
+        """
+        name = self.registry.last_active_session
+        sess = self.registry.get(name) if name else None
+
+        if not sess or sess.status == Status.GONE:
+            await update.message.reply_text("⚠️ No active session")
+            return
+
+        if not await inject.is_alive(sess.name):
+            await update.message.reply_text(f"⚠️ Session '{sess.name}' not found")
+            return
+
+        # /clear is destructive — refuse while session is actively working
+        if command_text == "/clear" and sess.status == Status.BUSY:
+            await update.message.reply_text("⚠️ Can't clear while session is busy")
+            return
+
+        ok = await inject.send_text_and_enter(sess.name, command_text)
+        if ok:
+            await self._react(update, "✅")
+            log.info("[%s] Command sent: %s", sess.label, command_text)
         else:
             await update.message.reply_text(f"❌ Failed to send to [{sess.label}]")
 

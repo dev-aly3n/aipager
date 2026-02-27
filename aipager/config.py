@@ -90,3 +90,17 @@ QUICK_TEMPLATES: list[tuple[str, str]] = [
     ("LGTM ship it", "LGTM, ship it"),
     ("Show diff", "Show me the git diff of all changes"),
 ]
+
+# Claude Code slash commands — instant commands (no BUSY transition)
+COMMANDS_BUTTON = "Commands"
+QUICK_COMMANDS: list[tuple[str, str]] = [
+    ("Sonnet", "/model sonnet"),
+    ("Opus", "/model opus"),
+    ("Haiku", "/model haiku"),
+    ("Cost", "/cost"),
+    ("Context", "/context"),
+    ("Clear", "/clear"),
+    ("Plan mode", "/plan"),
+    ("Doctor", "/doctor"),
+    ("Stats", "/stats"),
+]
