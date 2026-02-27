@@ -364,6 +364,9 @@ class HookReceiver:
             ctx_pct = int(round(msg.get("context_pct", 0)))
             total_out = msg.get("total_output", 0)
             sess.last_token_pct = ctx_pct
+            model = msg.get("model_name", "")
+            if model:
+                sess.model_name = model
             # Lazy baseline: set on first statusline event this BUSY cycle
             if sess.output_baseline is None:
                 sess.output_baseline = total_out

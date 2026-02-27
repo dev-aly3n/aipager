@@ -38,6 +38,7 @@ def main():
         "total_input": ctx.get("total_input_tokens", 0),
         "current_output": cur.get("output_tokens", 0),  # per-response output
         "cost_usd": data.get("cost", {}).get("total_cost_usd", 0),
+        "model_name": data.get("model", {}).get("display_name", ""),
     }
 
     try:

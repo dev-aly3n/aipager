@@ -60,6 +60,7 @@ class TrackedSession:
     last_tool_summary: str = ""      # cached tool summary text (current tool)
     # Tool history for busy message — list of (summary, done_bool)
     tool_history: list = field(default_factory=list)
+    model_name: str = ""              # e.g. "Opus 4.6" from statusLine
     last_token_pct: int = 0          # cached context % for display
     last_output_tokens: int = 0      # output tokens THIS TURN (delta from baseline)
     output_baseline: int | None = None  # total_output_tokens at first statusLine read this cycle

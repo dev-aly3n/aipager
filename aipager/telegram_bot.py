@@ -329,7 +329,8 @@ class TelegramBot:
         sess = self.registry.get(session_name)
         if not sess:
             return
-        text = f"📌 <b>{sess.label}</b>"
+        model = f" · {sess.model_name}" if sess.model_name else ""
+        text = f"📌 <b>{sess.label}</b>{model}"
         chat = int(CHAT_ID)
         try:
             if self.registry.pinned_msg_id:
