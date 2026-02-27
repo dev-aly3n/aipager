@@ -219,20 +219,33 @@ class HookReceiver:
 
         log.debug("Hook event: %s from %s", event, session_name)
 
-        if event == "permission_prompt":
+        if event == "PermissionRequest":
+            # Primary path: structured tool data directly from hook payload
+            tool_name = msg.get("tool_name", "")
+            tool_input = msg.get("tool_input", {})
+            if tool_name:
+                tool_info = {"name": tool_name, "input": tool_input,
+                             "summary": _summarize_tool(tool_name, tool_input)}
+                context = {"tool_info": tool_info, "transcript_path": transcript_path}
+                sess = self.registry.transition(session_name, Status.INTERACTIVE)
+                if sess:
+                    log.info("[%s] PermissionRequest: %s", sess.label, tool_info["summary"])
+                    await self.notify_fn(sess, "permission_prompt", context)
+            return
+
+        elif event == "permission_prompt":
+            # Fallback: Notification hook — only fires if PermissionRequest
+            # didn't already transition to INTERACTIVE (state machine dedup)
             tool_info = _extract_pending_tool(transcript_path) if transcript_path else None
             hook_message = msg.get("message", "")
 
-            # Parse tool name from hook message as reliable source of truth
-            # Format: "Claude needs your permission to use {ToolName}"
             hook_tool_name = ""
             _prefix = "permission to use "
             if _prefix in hook_message:
                 hook_tool_name = hook_message.split(_prefix, 1)[1].strip()
 
-            # If transcript returned wrong tool or None, try targeted extraction
             if hook_tool_name and (not tool_info or tool_info["name"] != hook_tool_name):
-                log.info("[%s] Tool mismatch: transcript=%s, hook=%s",
+                log.info("[%s] Fallback tool mismatch: transcript=%s, hook=%s",
                          session_name, tool_info["name"] if tool_info else "None",
                          hook_tool_name)
                 targeted = (_extract_specific_tool(transcript_path, hook_tool_name)
@@ -240,7 +253,6 @@ class HookReceiver:
                 if targeted:
                     tool_info = targeted
                 else:
-                    # Transcript not flushed yet — use name-only fallback
                     tool_info = {"name": hook_tool_name, "input": {},
                                  "summary": hook_tool_name}
 
