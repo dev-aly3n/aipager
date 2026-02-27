@@ -179,6 +179,7 @@ class TelegramBot:
         self._app.add_handler(CommandHandler("status", self._handle_status))
         self._app.add_handler(CommandHandler("stop", self._handle_stop_cmd))
         self._app.add_handler(CommandHandler("kill", self._handle_kill_cmd))
+        self._app.add_handler(CommandHandler("new", self._handle_new_cmd))
         # Media handler: photos and documents → save file, inject prompt
         self._app.add_handler(MessageHandler(
             (filters.PHOTO | filters.Document.ALL) & filters.Chat(int(CHAT_ID)),
@@ -229,6 +230,7 @@ class TelegramBot:
             BotCommand("status", "Show all sessions"),
             BotCommand("stop", "Stop active session"),
             BotCommand("kill", "Kill a session (destroy)"),
+            BotCommand("new", "Launch new session"),
         ]
         for label in sorted(labels):
             commands.append(BotCommand(label, f"Send to [{label}]"))
@@ -1458,6 +1460,54 @@ class TelegramBot:
         else:
             await _reply(f"⚠️ Session [{target_label}] not found")
 
+    async def _handle_new_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /new <name> [prompt] — launch a new Claude Code session."""
+        text = update.message.text.strip()
+        parts = text.split(maxsplit=2)  # /new <name> [prompt...]
+        if len(parts) < 2:
+            await update.message.reply_text(
+                "Usage: /new &lt;name&gt; [initial prompt]\n"
+                "Example: /new dev fix the auth bug",
+                parse_mode="HTML",
+            )
+            return
+
+        name = parts[1].strip()
+        prompt = parts[2].strip() if len(parts) > 2 else ""
+
+        status_msg = await update.message.reply_text(
+            f"🚀 Launching <b>{html_mod.escape(name)}</b>...",
+            parse_mode="HTML",
+        )
+
+        ok, err = await inject.launch_session(name)
+        if not ok:
+            await status_msg.edit_text(f"❌ {html_mod.escape(err)}")
+            return
+
+        session_name = f"claude-{name}"
+
+        # Switch active session to the new one
+        self.registry.get_or_create(session_name)
+        self.registry.last_active_session = session_name
+        self.registry.mark_dirty()
+        asyncio.create_task(self._maybe_update_bot_name(session_name))
+
+        # Queue the initial prompt if given — it'll drain on first IDLE
+        if prompt:
+            sess = self.registry.get_or_create(session_name)
+            # Flatten newlines (lesson: newlines cause premature Enter)
+            prompt = prompt.replace("\n", " — ")
+            sess.pending_queue.append((prompt, update.message.message_id))
+            self.registry.mark_dirty()
+
+        await status_msg.edit_text(
+            f"✅ <b>{html_mod.escape(name)}</b> launched"
+            + (f"\n📝 Prompt queued" if prompt else ""),
+            parse_mode="HTML",
+        )
+        log.info("Launched session %s (prompt=%s)", name, bool(prompt))
+
     async def _stop_by_label(self, update: Update, target_label: str) -> None:
         """Stop a session by its label."""
         sessions = self.registry.all_sessions()
@@ -1569,6 +1619,9 @@ class TelegramBot:
                 return
             if text_lower == "kill":
                 await self._handle_kill_cmd(update, ctx)
+                return
+            if text_lower == "new":
+                await self._handle_new_cmd(update, ctx)
                 return
             # Check if it matches a known session label
             for sess in self.registry.all_sessions().values():

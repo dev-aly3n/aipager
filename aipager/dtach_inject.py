@@ -8,6 +8,7 @@ Socket naming: session "claude-dev" → /tmp/claude-dtach-dev.sock
 
 import asyncio
 import logging
+import re
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -127,6 +128,65 @@ async def is_alive(session: str) -> bool:
     """Check if a dtach session socket exists and is connectable."""
     sock = _sock_path(session)
     return Path(sock).is_socket()
+
+
+_VALID_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
+_RESERVED = {"status", "stop", "kill", "new", "help", "start", "settings"}
+_PROJECT_DIR = "/path/to/project"
+_CLAUDE_BIN = "claude"
+
+
+async def launch_session(name: str, skip_perms: bool = True) -> tuple[bool, str]:
+    """Launch a new Claude Code session inside dtach.
+
+    Returns (success, error_message). The session_monitor will auto-discover
+    the new session within 2 seconds.
+    """
+    if not name or not _VALID_NAME.match(name):
+        return False, "Invalid name (use letters, numbers, hyphens)"
+    if name.lower() in _RESERVED:
+        return False, f"'{name}' is a reserved command name"
+    if len(name) > 30:
+        return False, "Name too long (max 30 chars)"
+
+    sock = f"{SOCK_PREFIX}{name}.sock"
+    if Path(sock).is_socket():
+        return False, f"Session '{name}' already exists"
+
+    # Build the bash -c command matching scripts/claude-dtach.sh line 84
+    perms = "--dangerously-skip-permissions" if skip_perms else ""
+    sys_prompt = (f'Your session name is "{name}". '
+                  f'When users address you by this name, respond naturally '
+                  f'-- it is your name in this session.')
+    bash_cmd = (
+        f"unset CLAUDECODE; "
+        f"export CLAUDE_DTACH_SESSION=claude-{name}; "
+        f"{_CLAUDE_BIN} {perms} "
+        f"--append-system-prompt '{sys_prompt}'"
+    )
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "dtach", "-n", sock, "-Ez", "bash", "-c", bash_cmd,
+            cwd=_PROJECT_DIR,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=5)
+        if proc.returncode != 0:
+            return False, f"dtach failed: {stderr.decode().strip()}"
+    except FileNotFoundError:
+        return False, "dtach not installed"
+    except asyncio.TimeoutError:
+        return False, "dtach launch timed out"
+
+    # Wait for socket to appear (dtach creates it asynchronously)
+    for _ in range(10):
+        await asyncio.sleep(0.3)
+        if Path(sock).is_socket():
+            log.info("Launched session claude-%s (socket: %s)", name, sock)
+            return True, ""
+    return False, "Socket never appeared after launch"
 
 
 async def list_sessions() -> list[str]:
