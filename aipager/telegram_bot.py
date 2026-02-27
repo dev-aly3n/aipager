@@ -208,6 +208,39 @@ class TelegramBot:
             await self._app.stop()
             await self._app.shutdown()
 
+    async def recover_sessions(self) -> None:
+        """Clean up orphaned busy messages from a previous daemon lifecycle."""
+        if not self._app:
+            return
+        bot = self._app.bot
+        live_sessions = set(await inject.list_sessions())
+
+        for name, sess in self.registry.all_sessions().items():
+            if not sess.busy_msg_id or sess.busy_msg_id <= 0:
+                continue
+
+            orphaned_id = sess.busy_msg_id
+            sess.busy_msg_id = None  # clear synchronously before any await
+            is_alive = name in live_sessions
+            label = html_mod.escape(sess.label)
+
+            if is_alive:
+                text = f"🔄 <b>{label}</b> · Daemon restarted"
+            else:
+                text = f"🔴 <b>{label}</b> · Session ended"
+
+            try:
+                await bot.edit_message_text(
+                    text, chat_id=CHAT_ID, message_id=orphaned_id,
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass  # message too old or already deleted
+            log.info("Recovered orphaned busy msg %d for [%s] (alive=%s)",
+                     orphaned_id, sess.label, is_alive)
+
+        self.registry.mark_dirty()
+
     async def _update_bot_commands(self) -> None:
         """Register bot commands (/ menu) and update persistent keyboard.
 

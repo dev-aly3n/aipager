@@ -189,7 +189,7 @@ class SessionRegistry:
     _PERSIST_FIELDS = (
         "name", "label", "last_msg_id", "transcript_path",
         "trigger_msg_id", "pending_queue", "last_prompt",
-        "model_name",
+        "model_name", "busy_msg_id",
     )
     _MAX_MSG_MAP = 100  # cap _msg_map entries to avoid unbounded growth
 
@@ -203,6 +203,9 @@ class SessionRegistry:
                 if f == "pending_queue":
                     # tuples → lists for JSON
                     val = [list(item) for item in val]
+                elif f == "busy_msg_id":
+                    # Never persist sentinel (-1) or None
+                    val = val if val and val > 0 else None
                 d[f] = val
             sessions[name] = d
 
@@ -272,6 +275,7 @@ class SessionRegistry:
                 trigger_msg_id=sd.get("trigger_msg_id"),
                 last_prompt=sd.get("last_prompt", ""),
                 last_idle_at=0.0,
+                busy_msg_id=sd.get("busy_msg_id"),
             )
             # pending_queue: list of [text, trigger_msg_id] → list of tuples
             for item in sd.get("pending_queue", []):
