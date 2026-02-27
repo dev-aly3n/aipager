@@ -45,10 +45,14 @@ class SessionMonitor:
         sessions = await dtach_inject.list_sessions()
         old_names = set(self.registry.all_sessions().keys())
 
-        # Mark disappeared sessions as GONE
+        # Mark disappeared sessions as GONE and notify
         for name, sess in list(self.registry.all_sessions().items()):
             if name not in sessions and sess.status != Status.GONE:
                 self.registry.transition(name, Status.GONE)
+                try:
+                    await self.notify_fn(sess, "session_end", {"source": "disappeared"})
+                except Exception:
+                    log.warning("Failed to notify session_end for %s", name)
 
         # Discover new sessions (start as IDLE — they're alive but not working)
         for name in sessions:

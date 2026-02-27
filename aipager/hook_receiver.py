@@ -314,6 +314,12 @@ class HookReceiver:
                     "tool_summary": summary,
                 })
 
+        elif event == "SessionEnd":
+            sess = self.registry.get_or_create(session_name)
+            source = msg.get("source", "unknown")
+            self.registry.transition(session_name, Status.GONE)
+            await self.notify_fn(sess, "session_end", {"source": source})
+
         elif event == "PreCompact":
             # Compaction is about to start — save context % for delta display
             sess = self.registry.get_or_create(session_name)

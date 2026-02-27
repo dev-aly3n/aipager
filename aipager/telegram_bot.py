@@ -693,6 +693,33 @@ class TelegramBot:
             self._start_animation(sess)
             return
 
+        if event == "session_end":
+            # Session exited — clean up busy state and alert user
+            self._stop_animation(sess)
+            if sess.busy_msg_id and sess.busy_msg_id > 0:
+                try:
+                    await bot.delete_message(chat_id=CHAT_ID, message_id=sess.busy_msg_id)
+                except Exception:
+                    pass
+                sess.busy_msg_id = None
+            source = context.get("source", "unknown")
+            source_labels = {
+                "clear": "cleared",
+                "logout": "logged out",
+                "prompt_input_exit": "exited",
+                "bypass_permissions_disabled": "permissions error",
+                "disappeared": "crashed or killed",
+            }
+            reason = source_labels.get(source, f"exited ({source})")
+            text = f"🔴 <b>{html_mod.escape(label)}</b> · Session {reason}"
+            try:
+                await bot.send_message(CHAT_ID, text, parse_mode="HTML")
+            except Exception:
+                log.warning("Failed to send session_end notification", exc_info=True)
+            if self.observers:
+                asyncio.create_task(self.observers.broadcast(text))
+            return
+
         if sess.status == Status.IDLE:
             # Mark all tools as done
             sess.tool_history = [(s, True) for s, _ in sess.tool_history]
