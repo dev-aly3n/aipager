@@ -482,8 +482,8 @@ class TelegramBot:
                 first_tick = False
                 if not sess.busy_msg_id or sess.status != Status.BUSY:
                     break
-                # Skip message edit if a tool edit happened recently (let tool info stay)
-                if time.monotonic() - sess.last_tool_edit_at < BUSY_EDIT_INTERVAL - 0.5:
+                # Debounce: skip if any handler edited the busy msg recently
+                if time.monotonic() - sess.last_tool_edit_at < BUSY_EDIT_INTERVAL:
                     # Still send typing (no edit to cancel it)
                     try:
                         await self._app.bot.send_chat_action(int(CHAT_ID), "typing")
@@ -494,7 +494,9 @@ class TelegramBot:
                 idx += 1
                 text = self._build_busy_text(sess.label, verb, sess)
                 result = await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
-                if result is None:
+                if result is True:
+                    sess.last_tool_edit_at = time.monotonic()
+                elif result is None:
                     sess.busy_msg_id = None  # message gone
                     break
                 # Send typing AFTER edit (edit cancels typing indicator)
@@ -617,15 +619,13 @@ class TelegramBot:
             if not sess.busy_msg_id or sess.busy_msg_id < 0 or not tool_summary:
                 return
             now = time.monotonic()
-            # Edit if tool changed OR interval elapsed since last edit
-            if (tool_name != sess.last_tool_name or
-                    now - sess.last_tool_edit_at >= BUSY_EDIT_INTERVAL):
+            # Debounce: only edit if enough time since ANY busy msg edit
+            if now - sess.last_tool_edit_at >= BUSY_EDIT_INTERVAL:
                 keyboard = self._build_stop_keyboard(sess.name)
                 text = self._build_busy_text(label, "Working", sess)
                 result = await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
                 if result is True:
                     sess.last_tool_edit_at = now
-                    sess.last_tool_name = tool_name
                 elif result is None:
                     sess.busy_msg_id = None  # message gone, stop editing
                     self._stop_animation(sess)
@@ -646,11 +646,14 @@ class TelegramBot:
                         if not sess.tool_history[i][1]:
                             sess.tool_history[i] = (sess.tool_history[i][0], mark)
                             break
-            # Update display
-            if sess.busy_msg_id and sess.busy_msg_id > 0:
+            # Update display (debounced — animation picks up state if skipped)
+            now = time.monotonic()
+            if (sess.busy_msg_id and sess.busy_msg_id > 0
+                    and now - sess.last_tool_edit_at >= BUSY_EDIT_INTERVAL):
                 keyboard = self._build_stop_keyboard(sess.name)
                 text = self._build_busy_text(label, "Working", sess)
-                await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
+                if await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard):
+                    sess.last_tool_edit_at = now
             return
 
         if event == "subagent_start":
@@ -663,11 +666,14 @@ class TelegramBot:
             # Store index in active_subagents so SubagentStop can find it
             if agent_id and agent_id in sess.active_subagents:
                 sess.active_subagents[agent_id]["history_idx"] = history_idx
-            # Edit busy message if ready
-            if sess.busy_msg_id and sess.busy_msg_id > 0:
+            # Edit busy message if ready (debounced)
+            now = time.monotonic()
+            if (sess.busy_msg_id and sess.busy_msg_id > 0
+                    and now - sess.last_tool_edit_at >= BUSY_EDIT_INTERVAL):
                 keyboard = self._build_stop_keyboard(sess.name)
                 text = self._build_busy_text(label, "Working", sess)
-                await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
+                if await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard):
+                    sess.last_tool_edit_at = now
             return
 
         if event == "subagent_stop":
@@ -689,11 +695,14 @@ class TelegramBot:
             else:
                 # No matching start (daemon restart?) — append as done entry
                 sess.tool_history.append((done_summary, True))
-            # Edit busy message if ready
-            if sess.busy_msg_id and sess.busy_msg_id > 0:
+            # Edit busy message if ready (debounced)
+            now = time.monotonic()
+            if (sess.busy_msg_id and sess.busy_msg_id > 0
+                    and now - sess.last_tool_edit_at >= BUSY_EDIT_INTERVAL):
                 keyboard = self._build_stop_keyboard(sess.name)
                 text = self._build_busy_text(label, "Working", sess)
-                await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
+                if await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard):
+                    sess.last_tool_edit_at = now
             return
 
         if event == "compacting":
@@ -916,10 +925,23 @@ class TelegramBot:
                 else:
                     text += f"\n\n<blockquote>{escaped}</blockquote>"
             log.debug("[%s] Sending IDLE notification (%d chars)", label, len(text))
-            msg = await bot.send_message(
-                CHAT_ID, text, parse_mode="HTML",
-                reply_to_message_id=sess.trigger_msg_id,
-            )
+            try:
+                msg = await bot.send_message(
+                    CHAT_ID, text, parse_mode="HTML",
+                    reply_to_message_id=sess.trigger_msg_id,
+                )
+            except Exception as e:
+                # Retry once on flood control — this is the response, can't lose it
+                retry_after = getattr(e, "retry_after", None)
+                if retry_after:
+                    log.warning("[%s] Flood control on Finished, retrying in %ds", label, retry_after)
+                    await asyncio.sleep(retry_after)
+                    msg = await bot.send_message(
+                        CHAT_ID, text, parse_mode="HTML",
+                        reply_to_message_id=sess.trigger_msg_id,
+                    )
+                else:
+                    raise
             sess.trigger_msg_id = None  # reply cycle complete
             self.registry.mark_dirty()
             self.registry.track_message(msg.message_id, sess.name)
