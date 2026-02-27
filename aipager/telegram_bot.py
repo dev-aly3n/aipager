@@ -658,7 +658,9 @@ class TelegramBot:
             warn_text = (f"⚠️ <b>{html_mod.escape(label)}</b> · Context at "
                          f"{ctx_pct}% — auto-compact soon")
             try:
-                await bot.send_message(CHAT_ID, warn_text, parse_mode="HTML")
+                keyboard = self._build_compact_keyboard(sess.name)
+                await bot.send_message(CHAT_ID, warn_text, parse_mode="HTML",
+                                       reply_markup=keyboard)
             except Exception:
                 pass
             if self.observers:
@@ -1011,6 +1013,11 @@ class TelegramBot:
             InlineKeyboardButton("🔄 Retry", callback_data=f"{session_name}:retry"),
         ]])
 
+    def _build_compact_keyboard(self, session_name: str) -> InlineKeyboardMarkup:
+        return InlineKeyboardMarkup([[
+            InlineKeyboardButton("📦 Compact Now", callback_data=f"{session_name}:compact"),
+        ]])
+
     def _build_permission_keyboard(self, session_name: str) -> InlineKeyboardMarkup:
         """Permission buttons + Stop for inline permission."""
         return InlineKeyboardMarkup([
@@ -1140,6 +1147,29 @@ class TelegramBot:
                 log.info("[%s] Retry: %s", sess.label, prompt[:80])
             else:
                 await query.answer("Failed to retry")
+            return
+
+        if action == "compact":
+            sess = self.registry.get(session_name)
+            if not sess:
+                await query.answer("Session not found")
+                return
+            if not await inject.is_alive(session_name):
+                await query.answer(f"Session '{session_name}' not found")
+                return
+            ok = await inject.send_text_and_enter(session_name, "/compact")
+            if ok:
+                await query.answer(f"Compacting [{sess.label}]")
+                try:
+                    await self._app.bot.delete_message(
+                        chat_id=CHAT_ID,
+                        message_id=query.message.message_id,
+                    )
+                except Exception:
+                    pass
+                log.info("[%s] Compact triggered by user", sess.label)
+            else:
+                await query.answer("Failed to send /compact")
             return
 
         is_option = action.startswith("opt") and action[3:].isdigit()
