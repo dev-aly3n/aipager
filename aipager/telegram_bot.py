@@ -42,7 +42,8 @@ import random
 
 from aipager.config import (
     BACK_BUTTON, BOT_TOKEN, BUSY_EDIT_INTERVAL, CHAT_ID, COMMANDS_BUTTON,
-    PROXY, QUICK_COMMANDS, QUICK_TEMPLATES, SPINNER_VERBS, TEMPLATES_BUTTON,
+    KEYBOARD_PARENTS, MODEL_CHOICES, MODELS_BUTTON, PROXY, QUICK_COMMANDS,
+    QUICK_TEMPLATES, SPINNER_VERBS, TEMPLATES_BUTTON,
 )
 from aipager.state import SessionRegistry, Status, TrackedSession
 
@@ -141,9 +142,10 @@ class TelegramBot:
         self.use_proxy: bool = False
         self._current_bot_name: str | None = None  # cached to skip redundant setMyName calls
         self._registered_labels: set[str] = set()  # cached to skip redundant setMyCommands
-        self._keyboard_level: str = "main"  # "main", "templates", or "commands"
+        self._keyboard_level: str = "main"  # "main", "templates", "commands", "models"
         self._template_map: dict[str, str] = {label: prompt for label, prompt in QUICK_TEMPLATES}
         self._command_map: dict[str, str] = {label: cmd for label, cmd in QUICK_COMMANDS}
+        self._model_map: dict[str, str] = {label: cmd for label, cmd in MODEL_CHOICES}
 
     async def start(self) -> None:
         global _bot_instance
@@ -236,12 +238,20 @@ class TelegramBot:
         # Send/update persistent keyboard (always main — session labels changed)
         await self._send_keyboard(level="main")
 
+    @staticmethod
+    def _build_button_rows(labels: list[str], per_row: int = 3) -> list[list[KeyboardButton]]:
+        """Pack labels into rows of KeyboardButtons."""
+        rows = []
+        for i in range(0, len(labels), per_row):
+            rows.append([KeyboardButton(lbl) for lbl in labels[i:i + per_row]])
+        return rows
+
     async def _send_keyboard(self, level: str | None = None) -> None:
-        """Send a message with the persistent keyboard showing session buttons.
+        """Send a message with the persistent keyboard.
 
         Args:
-            level: Which keyboard to show — "main", "templates", or "commands".
-                   Defaults to current ``_keyboard_level``.
+            level: Which keyboard to show — "main", "templates", "commands",
+                   or "models".  Defaults to current ``_keyboard_level``.
         """
         if not self._app:
             return
@@ -250,23 +260,17 @@ class TelegramBot:
             level = self._keyboard_level
 
         if level == "templates":
-            # Build template keyboard: buttons in rows of 3 + back row
-            rows = []
-            labels = [lbl for lbl, _ in QUICK_TEMPLATES]
-            for i in range(0, len(labels), 3):
-                chunk = labels[i:i + 3]
-                rows.append([KeyboardButton(lbl) for lbl in chunk])
+            rows = self._build_button_rows([lbl for lbl, _ in QUICK_TEMPLATES])
             rows.append([KeyboardButton(BACK_BUTTON)])
             msg_text = "\U0001f4cb Templates"
         elif level == "commands":
-            # Build commands keyboard: buttons in rows of 3 + back row
-            rows = []
-            labels = [lbl for lbl, _ in QUICK_COMMANDS]
-            for i in range(0, len(labels), 3):
-                chunk = labels[i:i + 3]
-                rows.append([KeyboardButton(lbl) for lbl in chunk])
-            rows.append([KeyboardButton(BACK_BUTTON)])
+            rows = self._build_button_rows([lbl for lbl, _ in QUICK_COMMANDS])
+            rows.append([KeyboardButton(MODELS_BUTTON), KeyboardButton(BACK_BUTTON)])
             msg_text = "\U0001f39b Commands"
+        elif level == "models":
+            rows = self._build_button_rows([lbl for lbl, _ in MODEL_CHOICES])
+            rows.append([KeyboardButton(BACK_BUTTON)])
+            msg_text = "\U0001f916 Model"
         else:
             # Main keyboard: session labels + command/nav rows
             labels = sorted(
@@ -275,9 +279,7 @@ class TelegramBot:
             )
             rows = []
             if labels:
-                for i in range(0, len(labels), 3):
-                    chunk = labels[i:i + 3]
-                    rows.append([KeyboardButton(lbl) for lbl in chunk])
+                rows = self._build_button_rows(labels)
             rows.append([KeyboardButton("status"), KeyboardButton("stop"), KeyboardButton("kill")])
             rows.append([KeyboardButton(TEMPLATES_BUTTON), KeyboardButton(COMMANDS_BUTTON)])
             msg_text = "\u2328\ufe0f"
@@ -1336,8 +1338,13 @@ class TelegramBot:
         if text == COMMANDS_BUTTON:
             await self._send_keyboard(level="commands")
             return
+        if text == MODELS_BUTTON:
+            await self._send_keyboard(level="models")
+            return
         if text == BACK_BUTTON:
-            await self._send_keyboard(level="main")
+            # Context-aware: go to parent of current level (models→commands, etc.)
+            parent = KEYBOARD_PARENTS.get(self._keyboard_level, "main")
+            await self._send_keyboard(level=parent)
             return
 
         # Quick template buttons — inject predefined prompt into active session
@@ -1348,6 +1355,11 @@ class TelegramBot:
         # Claude Code slash commands — inject instantly, no BUSY transition
         if text in self._command_map:
             await self._send_command(update, self._command_map[text])
+            return
+
+        # Model choices — instant commands
+        if text in self._model_map:
+            await self._send_command(update, self._model_map[text])
             return
 
         # /<label> <prompt> — direct send

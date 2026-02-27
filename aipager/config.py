@@ -92,15 +92,28 @@ QUICK_TEMPLATES: list[tuple[str, str]] = [
 ]
 
 # Claude Code slash commands — instant commands (no BUSY transition)
+# Only commands that CHANGE BEHAVIOR belong here. Commands that just
+# display info in the terminal (cost, context, stats, doctor) are useless
+# remotely since the user can't see the terminal output in Telegram.
 COMMANDS_BUTTON = "Commands"
 QUICK_COMMANDS: list[tuple[str, str]] = [
+    ("Compact", "/compact"),
+    ("Clear", "/clear"),
+    ("Plan mode", "/plan"),
+]
+
+# Model submenu — accessible from Commands → Model
+MODELS_BUTTON = "Model \u203a"
+MODEL_CHOICES: list[tuple[str, str]] = [
     ("Sonnet", "/model sonnet"),
     ("Opus", "/model opus"),
     ("Haiku", "/model haiku"),
-    ("Cost", "/cost"),
-    ("Context", "/context"),
-    ("Clear", "/clear"),
-    ("Plan mode", "/plan"),
-    ("Doctor", "/doctor"),
-    ("Stats", "/stats"),
+    ("OpusPlan", "/model opusplan"),
 ]
+
+# Parent level for each keyboard level (for context-aware Back button)
+KEYBOARD_PARENTS: dict[str, str] = {
+    "templates": "main",
+    "commands": "main",
+    "models": "commands",
+}
