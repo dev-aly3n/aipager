@@ -540,6 +540,10 @@ class TelegramBot:
         sess.last_token_pct = 0
         sess.last_output_tokens = 0
         sess.output_baseline = None  # lazy: set on first statusLine read this cycle
+        sess.lines_added_baseline = None
+        sess.lines_removed_baseline = None
+        sess.last_lines_added = 0
+        sess.last_lines_removed = 0
         sess.busy_started_at = time.monotonic()
         msg_id = await self.send_busy(sess)
         if msg_id:
@@ -786,10 +790,17 @@ class TelegramBot:
             if sess.busy_started_at:
                 elapsed_s = int(time.monotonic() - sess.busy_started_at)
                 if elapsed_s >= 60:
-                    elapsed_str = f" ({elapsed_s // 60}m {elapsed_s % 60}s)"
+                    elapsed_str = f"{elapsed_s // 60}m {elapsed_s % 60}s"
                 elif elapsed_s > 0:
-                    elapsed_str = f" ({elapsed_s}s)"
-            text = f"✅ <b>{html_mod.escape(label)}</b> · Finished{elapsed_str}"
+                    elapsed_str = f"{elapsed_s}s"
+            # Lines changed this turn
+            lines_str = ""
+            if sess.last_lines_added or sess.last_lines_removed:
+                lines_str = f"+{sess.last_lines_added} -{sess.last_lines_removed}"
+            # Build suffix: combine non-empty parts with comma
+            parts = [p for p in (elapsed_str, lines_str) if p]
+            suffix = f" ({', '.join(parts)})" if parts else ""
+            text = f"✅ <b>{html_mod.escape(label)}</b> · Finished{suffix}"
             send_file = False
             if summary:
                 escaped = summary if is_html else html_mod.escape(summary)

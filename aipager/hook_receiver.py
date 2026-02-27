@@ -393,6 +393,14 @@ class HookReceiver:
             elif total_out < sess.output_baseline:
                 sess.output_baseline = total_out  # session restarted
             sess.last_output_tokens = max(0, total_out - sess.output_baseline)
+            # Lines changed (lazy baseline, same pattern)
+            lines_add = msg.get("lines_added", 0)
+            lines_rm = msg.get("lines_removed", 0)
+            if sess.lines_added_baseline is None:
+                sess.lines_added_baseline = lines_add
+                sess.lines_removed_baseline = lines_rm
+            sess.last_lines_added = max(0, lines_add - (sess.lines_added_baseline or 0))
+            sess.last_lines_removed = max(0, lines_rm - (sess.lines_removed_baseline or 0))
             # Compact-done fallback: if SessionStart hook didn't fire (or had stale data),
             # detect compaction completion from the first low statusLine reading
             if ctx_pct < 30 and sess.pre_compact_pct > 0:

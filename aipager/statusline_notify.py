@@ -39,6 +39,8 @@ def main():
         "current_output": cur.get("output_tokens", 0),  # per-response output
         "cost_usd": data.get("cost", {}).get("total_cost_usd", 0),
         "model_name": data.get("model", {}).get("display_name", ""),
+        "lines_added": data.get("cost", {}).get("total_lines_added", 0),
+        "lines_removed": data.get("cost", {}).get("total_lines_removed", 0),
     }
 
     try:

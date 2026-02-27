@@ -64,6 +64,11 @@ class TrackedSession:
     last_token_pct: int = 0          # cached context % for display
     last_output_tokens: int = 0      # output tokens THIS TURN (delta from baseline)
     output_baseline: int | None = None  # total_output_tokens at first statusLine read this cycle
+    # Lines changed tracking (lazy baseline, same pattern as output tokens)
+    lines_added_baseline: int | None = None
+    lines_removed_baseline: int | None = None
+    last_lines_added: int = 0       # lines added THIS TURN (delta)
+    last_lines_removed: int = 0     # lines removed THIS TURN (delta)
     busy_started_at: float = 0.0     # monotonic timestamp when BUSY started (for "thought Xs")
     # Queued messages (sent one-at-a-time when session becomes IDLE)
     pending_queue: list = field(default_factory=list)  # list of (text, trigger_msg_id)
