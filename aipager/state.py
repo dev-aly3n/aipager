@@ -177,6 +177,7 @@ class SessionRegistry:
     _PERSIST_FIELDS = (
         "name", "label", "last_msg_id", "transcript_path",
         "trigger_msg_id", "pending_queue", "last_prompt",
+        "model_name",
     )
     _MAX_MSG_MAP = 100  # cap _msg_map entries to avoid unbounded growth
 
