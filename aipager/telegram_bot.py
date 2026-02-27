@@ -455,13 +455,13 @@ class TelegramBot:
                 first_tick = False
                 if not sess.busy_msg_id or sess.status != Status.BUSY:
                     break
-                # Keep "typing..." indicator alive (expires after 5s)
-                try:
-                    await self._app.bot.send_chat_action(int(CHAT_ID), "typing")
-                except Exception:
-                    pass
                 # Skip message edit if a tool edit happened recently (let tool info stay)
                 if time.monotonic() - sess.last_tool_edit_at < BUSY_EDIT_INTERVAL - 0.5:
+                    # Still send typing (no edit to cancel it)
+                    try:
+                        await self._app.bot.send_chat_action(int(CHAT_ID), "typing")
+                    except Exception:
+                        pass
                     continue
                 verb = verbs[idx % len(verbs)]
                 idx += 1
@@ -470,6 +470,11 @@ class TelegramBot:
                 if result is None:
                     sess.busy_msg_id = None  # message gone
                     break
+                # Send typing AFTER edit (edit cancels typing indicator)
+                try:
+                    await self._app.bot.send_chat_action(int(CHAT_ID), "typing")
+                except Exception:
+                    pass
         except asyncio.CancelledError:
             pass
 
@@ -521,10 +526,6 @@ class TelegramBot:
         if sess.busy_msg_id:
             return  # already showing busy (or sentinel claimed by other coroutine)
         sess.busy_msg_id = -1  # sentinel: claim slot before async yield
-        try:
-            await self._app.bot.send_chat_action(int(CHAT_ID), "typing")
-        except Exception:
-            pass
         self._stop_animation(sess)
         sess.last_tool_summary = ""
         sess.tool_history.clear()
@@ -535,6 +536,11 @@ class TelegramBot:
         sess.busy_started_at = time.monotonic()
         msg_id = await self.send_busy(sess)
         if msg_id:
+            # Send typing AFTER the busy message (sending a message cancels typing)
+            try:
+                await self._app.bot.send_chat_action(int(CHAT_ID), "typing")
+            except Exception:
+                pass
             sess.busy_msg_id = msg_id
             sess.last_tool_edit_at = 0.0
             sess.last_tool_name = ""
