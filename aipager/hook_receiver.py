@@ -304,6 +304,16 @@ class HookReceiver:
                     "tool_summary": summary,
                 })
 
+        elif event == "PostToolUseFailure":
+            tool_name = msg.get("tool_name", "")
+            if tool_name:
+                summary = _summarize_tool(tool_name, msg.get("tool_input", {}))
+                sess = self.registry.get_or_create(session_name)
+                await self.notify_fn(sess, "tool_failed", {
+                    "tool_name": tool_name,
+                    "tool_summary": summary,
+                })
+
         elif event == "PreCompact":
             # Compaction is about to start — save context % for delta display
             sess = self.registry.get_or_create(session_name)

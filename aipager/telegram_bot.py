@@ -401,7 +401,9 @@ class TelegramBot:
         if hidden_done:
             text += f"\n✅ <i>{hidden_done} earlier tool{'s' if hidden_done != 1 else ''}</i>"
         for summary, done in visible:
-            if done:
+            if done == "failed":
+                text += f"\n❌ <code>{html_mod.escape(summary)}</code>"
+            elif done:
                 text += f"\n✅ <code>{html_mod.escape(summary)}</code>"
             else:
                 text += f"\n⏳ <code>{html_mod.escape(summary)}</code>"
@@ -604,19 +606,20 @@ class TelegramBot:
                     self._stop_animation(sess)
             return
 
-        if event == "tool_done":
-            # PostToolUse — mark the matching tool as done in history
+        if event in ("tool_done", "tool_failed"):
+            # PostToolUse / PostToolUseFailure — mark tool as done or failed
             tool_summary = context.get("tool_summary", "")
+            mark = "failed" if event == "tool_failed" else True
             if tool_summary:
                 for i, (s, done) in enumerate(sess.tool_history):
                     if s == tool_summary and not done:
-                        sess.tool_history[i] = (s, True)
+                        sess.tool_history[i] = (s, mark)
                         break
                 else:
                     # No exact match — mark the last undone tool
                     for i in range(len(sess.tool_history) - 1, -1, -1):
                         if not sess.tool_history[i][1]:
-                            sess.tool_history[i] = (sess.tool_history[i][0], True)
+                            sess.tool_history[i] = (sess.tool_history[i][0], mark)
                             break
             # Update display
             if sess.busy_msg_id and sess.busy_msg_id > 0:
