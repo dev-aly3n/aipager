@@ -781,7 +781,15 @@ class TelegramBot:
                 # Don't flush pending queue — nothing was processed
                 return
 
-            text = f"✅ <b>{html_mod.escape(label)}</b> · Finished"
+            # Compute elapsed time since BUSY started
+            elapsed_str = ""
+            if sess.busy_started_at:
+                elapsed_s = int(time.monotonic() - sess.busy_started_at)
+                if elapsed_s >= 60:
+                    elapsed_str = f" ({elapsed_s // 60}m {elapsed_s % 60}s)"
+                elif elapsed_s > 0:
+                    elapsed_str = f" ({elapsed_s}s)"
+            text = f"✅ <b>{html_mod.escape(label)}</b> · Finished{elapsed_str}"
             send_file = False
             if summary:
                 escaped = summary if is_html else html_mod.escape(summary)
