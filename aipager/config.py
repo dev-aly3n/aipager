@@ -86,7 +86,6 @@ QUICK_TEMPLATES: list[tuple[str, str]] = [
     ("Continue", "Continue"),
     ("Run tests", "Run the tests"),
     ("Commit", "Commit the changes with a descriptive message"),
-    ("/compact", "/compact"),
     ("LGTM ship it", "LGTM, ship it"),
     ("Show diff", "Show me the git diff of all changes"),
 ]
