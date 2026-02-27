@@ -40,7 +40,10 @@ from telegram.ext import (
 from aipager import dtach_inject as inject
 import random
 
-from aipager.config import BOT_TOKEN, BUSY_EDIT_INTERVAL, CHAT_ID, PROXY, SPINNER_VERBS
+from aipager.config import (
+    BACK_BUTTON, BOT_TOKEN, BUSY_EDIT_INTERVAL, CHAT_ID, PROXY,
+    QUICK_TEMPLATES, SPINNER_VERBS, TEMPLATES_BUTTON,
+)
 from aipager.state import SessionRegistry, Status, TrackedSession
 
 if TYPE_CHECKING:
@@ -138,6 +141,8 @@ class TelegramBot:
         self.use_proxy: bool = False
         self._current_bot_name: str | None = None  # cached to skip redundant setMyName calls
         self._registered_labels: set[str] = set()  # cached to skip redundant setMyCommands
+        self._keyboard_level: str = "main"  # current persistent keyboard: "main" or "templates"
+        self._template_map: dict[str, str] = {label: prompt for label, prompt in QUICK_TEMPLATES}
 
     async def start(self) -> None:
         global _bot_instance
@@ -227,27 +232,49 @@ class TelegramBot:
         except Exception:
             log.warning("Failed to set bot commands", exc_info=True)
 
-        # Send/update persistent keyboard
-        await self._send_keyboard()
+        # Send/update persistent keyboard (always main — session labels changed)
+        await self._send_keyboard(level="main")
 
-    async def _send_keyboard(self) -> None:
-        """Send a message with the persistent keyboard showing session buttons."""
+    async def _send_keyboard(self, level: str | None = None) -> None:
+        """Send a message with the persistent keyboard showing session buttons.
+
+        Args:
+            level: Which keyboard to show — "main" or "templates".
+                   Defaults to current ``_keyboard_level``.
+        """
         if not self._app:
             return
 
-        labels = sorted(
-            sess.label for sess in self.registry.all_sessions().values()
-            if sess.status != Status.GONE and sess.label
-        )
+        if level is None:
+            level = self._keyboard_level
 
-        # Build keyboard rows: session labels on top, commands on bottom
-        rows = []
-        if labels:
-            # Pack session labels into rows of 3
+        if level == "templates":
+            # Build template keyboard: buttons in rows of 3 + back row
+            rows = []
+            labels = [lbl for lbl, _ in QUICK_TEMPLATES]
             for i in range(0, len(labels), 3):
                 chunk = labels[i:i + 3]
                 rows.append([KeyboardButton(lbl) for lbl in chunk])
-        rows.append([KeyboardButton("status"), KeyboardButton("stop"), KeyboardButton("kill")])
+            rows.append([KeyboardButton(BACK_BUTTON)])
+            msg_text = "\U0001f4cb Templates"
+        else:
+            # Main keyboard: session labels + command row with Templates button
+            labels = sorted(
+                sess.label for sess in self.registry.all_sessions().values()
+                if sess.status != Status.GONE and sess.label
+            )
+            rows = []
+            if labels:
+                for i in range(0, len(labels), 3):
+                    chunk = labels[i:i + 3]
+                    rows.append([KeyboardButton(lbl) for lbl in chunk])
+            rows.append([
+                KeyboardButton("status"), KeyboardButton("stop"),
+                KeyboardButton("kill"), KeyboardButton(TEMPLATES_BUTTON),
+            ])
+            msg_text = "\u2328\ufe0f"
+
+        self._keyboard_level = level
 
         keyboard = ReplyKeyboardMarkup(
             rows,
@@ -256,7 +283,7 @@ class TelegramBot:
 
         try:
             await self._app.bot.send_message(
-                CHAT_ID, "⌨️ Keyboard updated",
+                CHAT_ID, msg_text,
                 reply_markup=keyboard,
             )
         except Exception:
@@ -1293,6 +1320,20 @@ class TelegramBot:
         if not text:
             return
 
+        # Template/navigation buttons — MUST stay above /<label> handlers
+        # because some templates (e.g. "/compact") start with slash.
+        if text == TEMPLATES_BUTTON:
+            await self._send_keyboard(level="templates")
+            return
+        if text == BACK_BUTTON:
+            await self._send_keyboard(level="main")
+            return
+
+        # Quick template buttons — inject predefined prompt into active session
+        if text in self._template_map:
+            await self._send_template(update, self._template_map[text])
+            return
+
         # /<label> <prompt> — direct send
         if text.startswith("/") and " " in text:
             parts = text.split(" ", 1)
@@ -1366,6 +1407,39 @@ class TelegramBot:
             self.registry.transition(sess.name, Status.BUSY)
             await self._send_busy_and_animate(sess)
             log.info("[%s] Sent text: %s", sess.label, text[:80])
+        else:
+            await update.message.reply_text(f"❌ Failed to send to [{sess.label}]")
+
+    async def _send_template(self, update: Update, prompt_text: str) -> None:
+        """Inject a quick-template prompt into the last active session."""
+        name = self.registry.last_active_session
+        sess = self.registry.get(name) if name else None
+
+        if not sess or sess.status == Status.GONE:
+            await update.message.reply_text("⚠️ No active session")
+            return
+
+        if not await inject.is_alive(sess.name):
+            await update.message.reply_text(f"⚠️ Session '{sess.name}' not found")
+            return
+
+        # Queue if session is busy
+        if sess.status == Status.BUSY:
+            sess.pending_queue.append((prompt_text, update.message.message_id))
+            self.registry.mark_dirty()
+            await self._react(update, "👀")
+            log.info("[%s] Template queued (busy): %s", sess.label, prompt_text[:80])
+            return
+
+        sess.trigger_msg_id = update.message.message_id
+        sess.last_prompt = prompt_text
+        self.registry.mark_dirty()
+        ok = await inject.send_text_and_enter(sess.name, prompt_text)
+        if ok:
+            await self._react(update, "👀")
+            self.registry.transition(sess.name, Status.BUSY)
+            await self._send_busy_and_animate(sess)
+            log.info("[%s] Template sent: %s", sess.label, prompt_text[:80])
         else:
             await update.message.reply_text(f"❌ Failed to send to [{sess.label}]")
 

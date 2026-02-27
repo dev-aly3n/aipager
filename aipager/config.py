@@ -78,3 +78,15 @@ SPINNER_VERBS: list[str] = [
     "Cooking", "Crafting", "Forging", "Conjuring", "Noodling",
     "Percolating", "Simmering", "Ruminating", "Musing", "Tinkering",
 ]
+
+# Quick template buttons for Telegram persistent keyboard
+TEMPLATES_BUTTON = "Templates"
+BACK_BUTTON = "\u00ab Back"
+QUICK_TEMPLATES: list[tuple[str, str]] = [
+    ("Continue", "Continue"),
+    ("Run tests", "Run the tests"),
+    ("Commit", "Commit the changes with a descriptive message"),
+    ("/compact", "/compact"),
+    ("LGTM ship it", "LGTM, ship it"),
+    ("Show diff", "Show me the git diff of all changes"),
+]
