@@ -1471,18 +1471,14 @@ class TelegramBot:
             await msg.reply_text("❌ Failed to download file")
             return
 
-        # Construct prompt
+        # Construct prompt — keep it clean, let the file path do the work
         caption = msg.caption or ""
-        if msg.photo:
-            if caption:
-                prompt = f'[User sent an image: "{caption}"] Please read this image: {save_path}'
-            else:
-                prompt = f"[User sent an image] Please read this image and describe what you see: {save_path}"
+        if caption:
+            prompt = f"{caption} {save_path}"
+        elif msg.photo:
+            prompt = f"Describe this image: {save_path}"
         else:
-            if caption:
-                prompt = f'[User sent a file: {filename}, message: "{caption}"] Please read and analyze this file: {save_path}'
-            else:
-                prompt = f"[User sent a file: {filename}] Please read and analyze this file: {save_path}"
+            prompt = f"Read and analyze this file: {save_path}"
 
         # Resolve target session (same pattern as _handle_message)
         reply_to = msg.reply_to_message
