@@ -55,10 +55,10 @@ class SessionMonitor:
                 except Exception:
                     log.warning("Failed to notify session_end for %s", name)
 
-        # Discover new sessions (start as IDLE — they're alive but not working)
+        # Discover new sessions and recover GONE sessions whose socket reappeared
         for name in sessions:
             sess = self.registry.get_or_create(name)
-            if sess.status == Status.UNKNOWN:
+            if sess.status in (Status.UNKNOWN, Status.GONE):
                 self.registry.transition(name, Status.IDLE)
 
         # Notify if session list changed (for bot command/keyboard updates)

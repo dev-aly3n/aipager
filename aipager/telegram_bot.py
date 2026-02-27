@@ -1724,6 +1724,9 @@ class TelegramBot:
         has_gone = False
         for name, sess in sessions.items():
             alive = await inject.is_alive(name)
+            # Reconcile: socket alive but status GONE → recover to IDLE
+            if alive and sess.status == Status.GONE:
+                self.registry.transition(name, Status.IDLE)
             icon = "🟢" if alive else "🔴"
             if not alive:
                 has_gone = True
@@ -1891,14 +1894,17 @@ class TelegramBot:
         session_name = f"claude-{name}"
 
         # Switch active session to the new one
-        self.registry.get_or_create(session_name)
+        sess = self.registry.get_or_create(session_name)
+        # Recover from GONE/UNKNOWN — we just verified the socket is alive
+        if sess.status in (Status.GONE, Status.UNKNOWN):
+            self.registry.transition(session_name, Status.IDLE)
         self.registry.last_active_session = session_name
         self.registry.mark_dirty()
         asyncio.create_task(self._maybe_update_bot_name(session_name))
+        asyncio.create_task(self._update_bot_commands())
 
         # Queue the initial prompt if given — it'll drain on first IDLE
         if prompt:
-            sess = self.registry.get_or_create(session_name)
             # Flatten newlines (lesson: newlines cause premature Enter)
             prompt = prompt.replace("\n", " — ")
             sess.pending_queue.append((prompt, update.message.message_id))
