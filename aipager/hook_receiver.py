@@ -365,8 +365,9 @@ class HookReceiver:
             total_out = msg.get("total_output", 0)
             sess.last_token_pct = ctx_pct
             model = msg.get("model_name", "")
-            if model:
+            if model and model != sess.model_name:
                 sess.model_name = model
+                await self.notify_fn(sess, "pinned_update", {})
             # Lazy baseline: set on first statusline event this BUSY cycle
             if sess.output_baseline is None:
                 sess.output_baseline = total_out

@@ -145,6 +145,7 @@ class TelegramBot:
         self._template_map: dict[str, str] = {label: prompt for label, prompt in QUICK_TEMPLATES}
         self._command_map: dict[str, str] = {label: cmd for label, cmd in QUICK_COMMANDS}
         self._model_map: dict[str, str] = {label: cmd for label, cmd in MODEL_CHOICES}
+        self._last_pinned_text: str = ""  # dedup pinned message edits
 
     async def start(self) -> None:
         global _bot_instance
@@ -331,6 +332,8 @@ class TelegramBot:
             return
         model = f" · {sess.model_name}" if sess.model_name else ""
         text = f"📌 <b>{sess.label}</b>{model}"
+        if text == self._last_pinned_text:
+            return  # skip redundant edit
         chat = int(CHAT_ID)
         try:
             if self.registry.pinned_msg_id:
@@ -345,6 +348,7 @@ class TelegramBot:
                 await self._app.bot.pin_chat_message(chat, msg.message_id, disable_notification=True)
                 self.registry.pinned_msg_id = msg.message_id
                 self.registry.mark_dirty()
+            self._last_pinned_text = text
         except Exception:
             log.debug("Pinned message update failed", exc_info=True)
 
@@ -556,8 +560,15 @@ class TelegramBot:
         if not self._app:
             return
 
+        # Keep pinned message current on every notification
+        asyncio.create_task(self._maybe_update_bot_name(sess.name))
+
         bot = self._app.bot
         label = sess.label
+
+        # ── Pinned message refresh (e.g. model changed) ──
+        if event == "pinned_update":
+            return  # _maybe_update_bot_name already fired at top
 
         # ── Live busy-status events ──
         if event == "user_prompt_submit":
