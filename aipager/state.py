@@ -86,6 +86,7 @@ class SessionRegistry:
         self._sessions: dict[str, TrackedSession] = {}  # keyed by session name
         self._msg_map: dict[int, str] = {}  # message_id → session name
         self.last_active_session: str = ""  # last session that sent a notification
+        self.pinned_msg_id: int = 0  # pinned status message in Telegram
         self._dirty: bool = False
 
     def get(self, name: str) -> TrackedSession | None:
@@ -200,6 +201,7 @@ class SessionRegistry:
         data = {
             "version": 1,
             "last_active_session": self.last_active_session,
+            "pinned_msg_id": self.pinned_msg_id,
             "msg_map": {str(k): v for k, v in msg_map.items()},
             "sessions": sessions,
         }
@@ -233,6 +235,7 @@ class SessionRegistry:
             return
 
         self.last_active_session = data.get("last_active_session", "")
+        self.pinned_msg_id = data.get("pinned_msg_id", 0)
 
         # Rebuild _msg_map (JSON keys are strings → convert to int)
         saved_map = data.get("msg_map", {})

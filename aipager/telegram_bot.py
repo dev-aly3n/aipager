@@ -140,7 +140,6 @@ class TelegramBot:
         self._app: Application | None = None
         self.observers = None  # ObserverBroadcaster | None, injected by __main__
         self.use_proxy: bool = False
-        self._current_bot_name: str | None = None  # cached to skip redundant setMyName calls
         self._registered_labels: set[str] = set()  # cached to skip redundant setMyCommands
         self._keyboard_level: str = "main"  # "main", "templates", "commands", "models"
         self._template_map: dict[str, str] = {label: prompt for label, prompt in QUICK_TEMPLATES}
@@ -324,25 +323,29 @@ class TelegramBot:
             pass  # reaction API may not be available in all contexts
 
     async def _maybe_update_bot_name(self, session_name: str) -> None:
-        """Update bot display name to reflect the active session label.
-
-        Fire-and-forget: failures are logged but never block notifications.
-        Cached: skips the API call if the name hasn't changed.
-        """
+        """Update pinned status message to reflect the active session."""
         if not self._app:
             return
         sess = self.registry.get(session_name)
         if not sess:
             return
-        new_name = sess.label
-        if not new_name or new_name == self._current_bot_name:
-            return
+        text = f"📌 <b>{sess.label}</b>"
+        chat = int(CHAT_ID)
         try:
-            await self._app.bot.set_my_name(new_name)
-            self._current_bot_name = new_name
-            log.info("Bot name → '%s'", new_name)
+            if self.registry.pinned_msg_id:
+                await self._app.bot.edit_message_text(
+                    text, chat, self.registry.pinned_msg_id,
+                    parse_mode="HTML",
+                )
+            else:
+                msg = await self._app.bot.send_message(
+                    chat, text, parse_mode="HTML",
+                )
+                await self._app.bot.pin_chat_message(chat, msg.message_id, disable_notification=True)
+                self.registry.pinned_msg_id = msg.message_id
+                self.registry.mark_dirty()
         except Exception:
-            log.warning("Failed to set bot name to '%s'", new_name, exc_info=True)
+            log.debug("Pinned message update failed", exc_info=True)
 
     # ── Notification methods (called by hook_receiver and session_monitor) ──
 
@@ -452,6 +455,11 @@ class TelegramBot:
                 first_tick = False
                 if not sess.busy_msg_id or sess.status != Status.BUSY:
                     break
+                # Keep "typing..." indicator alive (expires after 5s)
+                try:
+                    await self._app.bot.send_chat_action(int(CHAT_ID), "typing")
+                except Exception:
+                    pass
                 # Skip message edit if a tool edit happened recently (let tool info stay)
                 if time.monotonic() - sess.last_tool_edit_at < BUSY_EDIT_INTERVAL - 0.5:
                     continue
@@ -513,6 +521,10 @@ class TelegramBot:
         if sess.busy_msg_id:
             return  # already showing busy (or sentinel claimed by other coroutine)
         sess.busy_msg_id = -1  # sentinel: claim slot before async yield
+        try:
+            await self._app.bot.send_chat_action(int(CHAT_ID), "typing")
+        except Exception:
+            pass
         self._stop_animation(sess)
         sess.last_tool_summary = ""
         sess.tool_history.clear()
