@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import html as html_mod
+import json
 import logging
 import re
 import tempfile
@@ -1314,10 +1315,9 @@ class TelegramBot:
             await query.answer(f"Failed to send to {session_name}")
 
     async def _handle_status(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle /status command."""
+        """Handle /status command — rich per-session dashboard."""
         sessions = self.registry.all_sessions()
         if not sessions:
-            # Try discovering sessions
             discovered = await inject.list_sessions()
             if not discovered:
                 await update.message.reply_text("No sessions found.")
@@ -1326,16 +1326,63 @@ class TelegramBot:
                 self.registry.get_or_create(name)
             sessions = self.registry.all_sessions()
 
-        lines = ["<b>Sessions</b>\n"]
+        blocks = []
         for name, sess in sessions.items():
             alive = await inject.is_alive(name)
             icon = "🟢" if alive else "🔴"
             status_str = sess.status.name.lower()
-            lines.append(f"{icon} <b>{html_mod.escape(sess.label)}</b> · {status_str}")
+            if sess.status == Status.BUSY and sess.busy_started_at:
+                elapsed_s = int(time.monotonic() - sess.busy_started_at)
+                if elapsed_s >= 60:
+                    status_str += f" {elapsed_s // 60}m{elapsed_s % 60}s"
+                else:
+                    status_str += f" {elapsed_s}s"
+            # Read live data from statusLine file
+            sl = self._read_status_file(name)
+            # Build table rows
+            rows = []
+            model = (sl.get("model") if sl else None) or sess.model_name or "—"
+            ctx_pct = sl["ctx_pct"] if sl else (sess.last_token_pct or 0)
+            cost = f"${sl['cost']:.2f}" if sl and sl["cost"] >= 0.01 else "—"
+            queue = str(len(sess.pending_queue)) if sess.pending_queue else "0"
+            rows.append(f"  Model  {html_mod.escape(model)}")
+            rows.append(f"  Ctx    {ctx_pct}%")
+            rows.append(f"  Cost   {cost}")
+            if sess.pending_queue:
+                rows.append(f"  Queue  {queue}")
+            # Last tool for BUSY sessions
+            if sess.status == Status.BUSY and sess.tool_history:
+                last_summary, last_done = sess.tool_history[-1]
+                t_icon = "✅" if last_done and last_done != "failed" else ("❌" if last_done == "failed" else "⏳")
+                rows.append(f"  Tool   {t_icon} {html_mod.escape(last_summary[:50])}")
+            header = f"{icon} <b>{html_mod.escape(sess.label)}</b> · {status_str}"
+            table = "\n".join(rows)
+            blocks.append(f"{header}\n<code>{table}</code>")
 
-        await update.message.reply_text("\n".join(lines), parse_mode="HTML")
-        # Update commands/keyboard if session list changed
+        await update.message.reply_text("\n\n".join(blocks), parse_mode="HTML")
         asyncio.create_task(self._update_bot_commands())
+
+    @staticmethod
+    def _read_status_file(session_name: str) -> dict | None:
+        """Read cost and context from the statusLine JSON file."""
+        try:
+            data = json.loads(Path(f"/tmp/claude-status-{session_name}.json").read_text())
+        except (FileNotFoundError, PermissionError, json.JSONDecodeError):
+            return None
+        ctx = data.get("context_window", {})
+        pct = ctx.get("used_percentage")
+        remaining = ctx.get("remaining_percentage")
+        if pct is not None:
+            ctx_pct = round(pct)
+        elif remaining is not None:
+            ctx_pct = round(100 - remaining)
+        else:
+            ctx_pct = 0
+        return {
+            "ctx_pct": ctx_pct,
+            "cost": data.get("cost", {}).get("total_cost_usd", 0),
+            "model": data.get("model", {}).get("display_name", ""),
+        }
 
     async def _handle_stop_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /stop command — stop the last active session."""
