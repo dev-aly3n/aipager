@@ -1750,6 +1750,13 @@ class TelegramBot:
         ok = await inject.send_text_and_enter(sess.name, command_text)
         if ok:
             await self._react(update, "✅")
+            # Explicit feedback for model changes
+            if command_text.startswith("/model "):
+                model_arg = command_text.split(" ", 1)[1]
+                await update.message.reply_text(
+                    f"🔄 <b>{html_mod.escape(sess.label)}</b> → {html_mod.escape(model_arg)}",
+                    parse_mode="HTML",
+                )
             log.info("[%s] Command sent: %s", sess.label, command_text)
         else:
             await update.message.reply_text(f"❌ Failed to send to [{sess.label}]")
