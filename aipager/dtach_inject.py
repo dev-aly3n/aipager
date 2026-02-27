@@ -20,6 +20,8 @@ KEYS = {
     "Enter": "\r",
     "Down": "\x1b[B",
     "Up": "\x1b[A",
+    "Right": "\x1b[C",
+    "Left": "\x1b[D",
     "Tab": "\t",
     "Escape": "\x1b",
 }

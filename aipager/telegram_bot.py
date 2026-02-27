@@ -1032,21 +1032,31 @@ class TelegramBot:
                     if questions:
                         q = questions[0]
                         options = q.get("options", [])
+                        is_multi = q.get("multiSelect", False)
+                        log.info("[%s] AskUserQuestion: multi_select=%s, %d options, q_keys=%s",
+                                 sess.label, is_multi, len(options), list(q.keys()))
                         sess.pending_permission = {
                             "ask_question": True,
                             "question": q.get("question", "?"),
                             "options": options,
                             "questions": questions,
                             "current_idx": 0,
+                            "multi_select": is_multi,
+                            "cursor_pos": 0,
+                            "selected": set(),
                             "tool_info": tool_info,
+                            "wait_started_at": time.monotonic(),
                         }
-                        keyboard = self._build_inline_ask_keyboard(sess.name, options)
+                        keyboard = self._build_inline_ask_keyboard(
+                            sess.name, options,
+                            multi_select=is_multi)
                     else:
                         # AskUserQuestion detected but no questions data (transcript
                         # not flushed). Degrade to Allow/Deny — Allow sends Enter.
                         sess.pending_permission = {
                             "tool_summary": "AskUserQuestion (loading…)",
                             "tool_info": tool_info,
+                            "wait_started_at": time.monotonic(),
                         }
                         keyboard = self._build_permission_keyboard(sess.name)
                 else:
@@ -1054,6 +1064,7 @@ class TelegramBot:
                     sess.pending_permission = {
                         "tool_summary": tool_summary,
                         "tool_info": tool_info,
+                        "wait_started_at": time.monotonic(),
                     }
                     keyboard = self._build_permission_keyboard(sess.name)
 
@@ -1179,17 +1190,34 @@ class TelegramBot:
             [InlineKeyboardButton("⏹ Stop", callback_data=f"{session_name}:stop")],
         ])
 
-    def _build_inline_ask_keyboard(self, session_name: str, options: list) -> InlineKeyboardMarkup:
-        """AskUserQuestion option buttons + Stop for inline display."""
-        buttons = []
-        for i, opt in enumerate(options[:4]):
-            opt_label = opt.get("label", f"Option {i+1}")
-            buttons.append(InlineKeyboardButton(
-                opt_label, callback_data=f"{session_name}:opt{i}",
-            ))
+    def _build_inline_ask_keyboard(self, session_name: str, options: list,
+                                    multi_select: bool = False,
+                                    selected: set | None = None) -> InlineKeyboardMarkup:
+        """AskUserQuestion option buttons + Stop for inline display.
+
+        For multi_select: each option on its own row with ☑/⬜ prefix,
+        plus a "✅ Submit" button row at the bottom.
+        """
+        sel = selected or set()
         rows = []
-        if buttons:
-            rows.append(buttons)
+        if multi_select:
+            for i, opt in enumerate(options[:4]):
+                label = opt.get("label", f"Option {i+1}")
+                prefix = "☑" if i in sel else "⬜"
+                rows.append([InlineKeyboardButton(
+                    f"{prefix} {label}",
+                    callback_data=f"{session_name}:opt{i}")])
+            rows.append([InlineKeyboardButton(
+                "✅ Submit", callback_data=f"{session_name}:submit")])
+        else:
+            buttons = []
+            for i, opt in enumerate(options[:4]):
+                opt_label = opt.get("label", f"Option {i+1}")
+                buttons.append(InlineKeyboardButton(
+                    opt_label, callback_data=f"{session_name}:opt{i}",
+                ))
+            if buttons:
+                rows.append(buttons)
         rows.append([InlineKeyboardButton("⏹ Stop", callback_data=f"{session_name}:stop")])
         return InlineKeyboardMarkup(rows)
 
@@ -1347,7 +1375,7 @@ class TelegramBot:
 
         is_option = action.startswith("opt") and action[3:].isdigit()
 
-        if action not in ACTION_VERBS and not is_option:
+        if action not in ACTION_VERBS and not is_option and action != "submit":
             await query.answer(f"Unknown: {action}")
             return
 
@@ -1362,7 +1390,125 @@ class TelegramBot:
 
         # Inject keystrokes
         ok = True
-        if is_option:
+        perm = sess.pending_permission or {}
+        if is_option or action == "submit":
+            log.info("[%s] Callback: action=%s, multi_select=%s, has_perm=%s",
+                     sess.label, action, perm.get("multi_select"), bool(perm))
+
+        if is_option and perm.get("multi_select"):
+            # ── Multi-select: toggle checkbox, update keyboard, return early ──
+            option_index = int(action[3:])
+            cursor_pos = perm.get("cursor_pos", 0)
+            selected = perm.get("selected", set())
+
+            # Navigate from cursor_pos to option_index
+            delta = option_index - cursor_pos
+            key = "Down" if delta > 0 else "Up"
+            for _ in range(abs(delta)):
+                if not await inject.send_keys(session_name, key):
+                    ok = False
+                    break
+            if ok:
+                await asyncio.sleep(0.1)
+                ok = await inject.send_keys(session_name, "Enter")  # toggle checkbox
+
+            if ok:
+                # Update selected set
+                if option_index in selected:
+                    selected.discard(option_index)
+                else:
+                    selected.add(option_index)
+                perm["selected"] = selected
+                perm["cursor_pos"] = option_index
+
+                opt_label = perm["options"][option_index].get("label", f"Option {option_index+1}")
+                toggled = "☑" if option_index in selected else "⬜"
+                await query.answer(f"{toggled} {opt_label}")
+
+                # Rebuild keyboard with updated checkmarks
+                keyboard = self._build_inline_ask_keyboard(
+                    session_name, perm["options"],
+                    multi_select=True, selected=selected)
+                text = self._build_busy_text(sess.label, "Waiting", sess)
+                await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
+                log.info("[%s] Multi-select toggle: opt%d (%s), selected=%s",
+                         sess.label, option_index, toggled, selected)
+            else:
+                await query.answer("Failed to send keys")
+            return
+
+        elif action == "submit" and perm.get("multi_select"):
+            # ── Multi-select: advance to next tab via Right arrow ──
+            # TUI tabs: ← ☒ Q1  ☐ Q2  ...  ✔ Submit →
+            # Right arrow moves one tab forward.
+            selected = perm.get("selected", set())
+            options = perm.get("options", [])
+            questions = perm.get("questions", [])
+            current_idx = perm.get("current_idx", 0)
+            next_idx = current_idx + 1
+            is_last = next_idx >= len(questions)
+
+            # Build verb from selected options
+            sel_labels = [options[i].get("label", f"#{i+1}")
+                          for i in sorted(selected)]
+            verb = "Selected: " + ", ".join(sel_labels) if sel_labels else "Submitted (none)"
+
+            # Right to advance one tab (to next question, or to Submit)
+            ok = await inject.send_keys(session_name, "Right")
+            if ok and is_last:
+                # Last question — landed on Submit tab, press Enter to submit
+                await asyncio.sleep(0.15)
+                ok = await inject.send_keys(session_name, "Enter")
+
+            if ok:
+                await query.answer(f"✅ {verb[:180]}")
+
+                # Collapse into tool_history
+                collapsed = f"❓ {perm.get('question', '?')[:40]} → {verb}"
+                sess.tool_history.append((collapsed, True))
+
+                if not is_last:
+                    # More questions — Right moved to next question tab
+                    next_q = questions[next_idx]
+                    next_options = next_q.get("options", [])
+                    next_multi = next_q.get("multiSelect", False)
+                    sess.pending_permission = {
+                        "ask_question": True,
+                        "question": next_q.get("question", "?"),
+                        "options": next_options,
+                        "questions": questions,
+                        "current_idx": next_idx,
+                        "multi_select": next_multi,
+                        "cursor_pos": 0,
+                        "selected": set(),
+                        "tool_info": perm.get("tool_info"),
+                        "wait_started_at": perm.get("wait_started_at"),
+                    }
+                    await asyncio.sleep(0.3)
+                    keyboard = self._build_inline_ask_keyboard(
+                        session_name, next_options,
+                        multi_select=next_multi)
+                    text = self._build_busy_text(sess.label, "Waiting", sess)
+                    await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
+                    log.info("[%s] Multi-select submit, advanced to Q%d/%d",
+                             sess.label, next_idx + 1, len(questions))
+                else:
+                    # Last question — done; discount wait time from elapsed timer
+                    wait_start = perm.get("wait_started_at", 0)
+                    if wait_start and sess.busy_started_at:
+                        sess.busy_started_at += time.monotonic() - wait_start
+                    sess.pending_permission = None
+                    self.registry.transition(session_name, Status.BUSY)
+                    keyboard = self._build_stop_keyboard(session_name)
+                    text = self._build_busy_text(sess.label, "Working", sess)
+                    await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
+                    self._start_animation(sess)
+                    log.info("[%s] Multi-select submit complete", sess.label)
+            else:
+                await query.answer("Failed to send keys")
+            return
+
+        elif is_option:
             option_index = int(action[3:])
             verb = f"Selected option {option_index + 1}"
             for _ in range(option_index):
@@ -1411,16 +1557,23 @@ class TelegramBot:
                     # to the next unanswered question tab after Enter.
                     next_q = questions[next_idx]
                     next_options = next_q.get("options", [])
+                    next_multi = next_q.get("multiSelect", False)
                     sess.pending_permission = {
                         "ask_question": True,
                         "question": next_q.get("question", "?"),
                         "options": next_options,
                         "questions": questions,
                         "current_idx": next_idx,
+                        "multi_select": next_multi,
+                        "cursor_pos": 0,
+                        "selected": set(),
                         "tool_info": perm.get("tool_info"),
+                        "wait_started_at": perm.get("wait_started_at"),
                     }
                     await asyncio.sleep(0.3)  # let TUI process and auto-advance
-                    keyboard = self._build_inline_ask_keyboard(session_name, next_options)
+                    keyboard = self._build_inline_ask_keyboard(
+                        session_name, next_options,
+                        multi_select=next_multi)
                     text = self._build_busy_text(sess.label, "Waiting", sess)
                     await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
                     log.info("[%s] Multi-question: advanced to Q%d/%d",
@@ -1432,6 +1585,10 @@ class TelegramBot:
                         # after last option selection. Send Enter to submit.
                         await asyncio.sleep(0.3)
                         await inject.send_keys(session_name, "Enter")
+                    # Discount wait time from elapsed timer
+                    wait_start = perm.get("wait_started_at", 0)
+                    if wait_start and sess.busy_started_at:
+                        sess.busy_started_at += time.monotonic() - wait_start
                     sess.pending_permission = None
                     # Transition back to BUSY and restart animation
                     self.registry.transition(session_name, Status.BUSY)
