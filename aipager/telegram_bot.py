@@ -1208,6 +1208,26 @@ class TelegramBot:
                 await query.answer("Failed to send /compact")
             return
 
+        if action == "clear_gone":
+            # Remove all dead sessions from registry
+            removed = []
+            for name, sess in list(self.registry.all_sessions().items()):
+                if not await inject.is_alive(name):
+                    removed.append(sess.label)
+                    self.registry.remove(name)
+            if removed:
+                await query.answer(f"Cleared {len(removed)} session(s)")
+                try:
+                    await query.edit_message_text(
+                        f"Cleared: {', '.join(removed)}", parse_mode="HTML",
+                    )
+                except Exception:
+                    pass
+                log.info("Cleared gone sessions: %s", removed)
+            else:
+                await query.answer("No gone sessions to clear")
+            return
+
         is_option = action.startswith("opt") and action[3:].isdigit()
 
         if action not in ACTION_VERBS and not is_option:
@@ -1329,9 +1349,12 @@ class TelegramBot:
             sessions = self.registry.all_sessions()
 
         blocks = []
+        has_gone = False
         for name, sess in sessions.items():
             alive = await inject.is_alive(name)
             icon = "🟢" if alive else "🔴"
+            if not alive:
+                has_gone = True
             status_str = sess.status.name.lower()
             if sess.status == Status.BUSY and sess.busy_started_at:
                 elapsed_s = int(time.monotonic() - sess.busy_started_at)
@@ -1361,7 +1384,14 @@ class TelegramBot:
             table = "\n".join(rows)
             blocks.append(f"{header}\n<code>{table}</code>")
 
-        await update.message.reply_text("\n\n".join(blocks), parse_mode="HTML")
+        keyboard = None
+        if has_gone:
+            keyboard = InlineKeyboardMarkup([[
+                InlineKeyboardButton("Clear gone sessions", callback_data="_:clear_gone"),
+            ]])
+        await update.message.reply_text(
+            "\n\n".join(blocks), parse_mode="HTML", reply_markup=keyboard,
+        )
         asyncio.create_task(self._update_bot_commands())
 
     @staticmethod
