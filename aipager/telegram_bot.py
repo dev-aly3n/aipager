@@ -709,8 +709,10 @@ class TelegramBot:
                 "prompt_input_exit": "exited",
                 "bypass_permissions_disabled": "permissions error",
                 "disappeared": "crashed or killed",
+                "other": "exited unexpectedly",
+                "unknown": "exited",
             }
-            reason = source_labels.get(source, f"exited ({source})")
+            reason = source_labels.get(source, "exited")
             text = f"🔴 <b>{html_mod.escape(label)}</b> · Session {reason}"
             try:
                 await bot.send_message(CHAT_ID, text, parse_mode="HTML")
