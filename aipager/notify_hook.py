@@ -27,11 +27,14 @@ def _read_statusline_tokens(session: str) -> dict | None:
         return None
     ctx = sl.get("context_window", {})
     cur = ctx.get("current_usage") or {}
+    cost = sl.get("cost", {})
     return {
         "context_pct": ctx.get("used_percentage", 0),
         "total_output": ctx.get("total_output_tokens", 0),
         "total_input": ctx.get("total_input_tokens", 0),
         "current_output": cur.get("output_tokens", 0),
+        "lines_added": cost.get("total_lines_added", 0),
+        "lines_removed": cost.get("total_lines_removed", 0),
     }
 
 

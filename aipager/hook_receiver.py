@@ -290,6 +290,10 @@ class HookReceiver:
                     elif total_out < sess.output_baseline:
                         sess.output_baseline = total_out
                     sess.last_output_tokens = max(0, total_out - sess.output_baseline)
+                    # Lines baselines from PreToolUse (before edits happen)
+                    if sess.lines_added_baseline is None:
+                        sess.lines_added_baseline = sl_tokens.get("lines_added", 0)
+                        sess.lines_removed_baseline = sl_tokens.get("lines_removed", 0)
                     log.debug("[%s] PreToolUse tokens: %d%% ctx, ↓%d",
                               sess.label, sess.last_token_pct, sess.last_output_tokens)
                 await self.notify_fn(sess, "tool_use", {
