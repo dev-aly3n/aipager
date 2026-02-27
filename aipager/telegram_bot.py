@@ -477,6 +477,104 @@ class TelegramBot:
                 text += f"\n\n🔐 <code>{html_mod.escape(tool_summary)}</code>"
         return text
 
+    def _build_session_dashboard(self, sess: TrackedSession) -> str:
+        """Build a rich HTML dashboard for a session (used on switch)."""
+        # Status icon
+        status_icons = {
+            Status.IDLE: "\U0001f7e2",       # green circle
+            Status.BUSY: "\u2699\ufe0f",     # gear
+            Status.INTERACTIVE: "\u2753",     # question mark
+            Status.GONE: "\U0001f534",        # red circle
+            Status.UNKNOWN: "\U0001f534",     # red circle
+        }
+        icon = status_icons.get(sess.status, "\U0001f534")
+        status_str = sess.status.name.lower()
+
+        # Elapsed time for BUSY sessions
+        elapsed = ""
+        if sess.status == Status.BUSY and sess.busy_started_at:
+            secs = int(time.monotonic() - sess.busy_started_at)
+            if secs >= 60:
+                elapsed = f" {secs // 60}m{secs % 60}s"
+            elif secs >= 2:
+                elapsed = f" {secs}s"
+
+        header = f"{icon} <b>[{html_mod.escape(sess.label)}]</b> \u00b7 {status_str}{elapsed}"
+
+        # Read fresh data from statusLine file
+        sl = self._read_status_file(sess.name)
+
+        # Build table rows — omit rows with no meaningful data
+        rows: list[str] = []
+
+        model = (sl.get("model") if sl else None) or sess.model_name
+        if model:
+            rows.append(f"  Model   {html_mod.escape(model)}")
+
+        ctx_pct = sl["ctx_pct"] if sl else (sess.last_token_pct or 0)
+        if ctx_pct:
+            filled = round(ctx_pct / 10)
+            bar = "\u2588" * filled + "\u2591" * (10 - filled)
+            rows.append(f"  Ctx     {ctx_pct}% {bar}")
+
+        cost = sl["cost"] if sl else 0
+        if cost and cost >= 0.01:
+            rows.append(f"  Cost    ${cost:.2f}")
+
+        # Output tokens — prefer fresh total from statusLine, fall back to cached delta
+        output_tokens = (sl.get("total_output") if sl else 0) or sess.last_output_tokens
+        if output_tokens:
+            rows.append(f"  Output  {self._fmt_tokens(output_tokens)} tokens")
+
+        # Lines changed — only show if non-zero
+        if sess.last_lines_added or sess.last_lines_removed:
+            parts = []
+            if sess.last_lines_added:
+                parts.append(f"+{sess.last_lines_added}")
+            if sess.last_lines_removed:
+                parts.append(f"-{sess.last_lines_removed}")
+            rows.append(f"  Lines   {' '.join(parts)}")
+
+        # Queue depth — only if non-empty
+        if sess.pending_queue:
+            rows.append(f"  Queue   {len(sess.pending_queue)} pending")
+
+        # Last activity — from last_hook_at (monotonic)
+        if sess.last_hook_at > 0:
+            ago_s = int(time.monotonic() - sess.last_hook_at)
+            if ago_s < 5:
+                ago_str = "just now"
+            elif ago_s < 60:
+                ago_str = f"{ago_s}s ago"
+            elif ago_s < 3600:
+                ago_str = f"{ago_s // 60}m ago"
+            else:
+                ago_str = f"{ago_s // 3600}h{(ago_s % 3600) // 60}m ago"
+            rows.append(f"  Active  {ago_str}")
+        elif sess.status != Status.UNKNOWN:
+            rows.append("  Active  unknown")
+
+        # Assemble header + table
+        parts_out = [header]
+        if rows:
+            parts_out.append("<code>" + "\n".join(rows) + "</code>")
+
+        # Recent tool history — last 5 items
+        tool_hist = sess.tool_history[-5:] if sess.tool_history else []
+        if tool_hist:
+            tool_lines = []
+            for summary, done in tool_hist:
+                if done == "failed":
+                    t_icon = "\u274c"
+                elif done:
+                    t_icon = "\u2705"
+                else:
+                    t_icon = "\u23f3"
+                tool_lines.append(f"  {t_icon} {html_mod.escape(summary[:60])}")
+            parts_out.append("Recent:\n<code>" + "\n".join(tool_lines) + "</code>")
+
+        return "\n\n".join(parts_out)
+
     async def _edit_busy_raw(self, msg_id: int, text: str,
                              reply_markup=None) -> bool | None:
         """Edit busy message with pre-built text.
@@ -1688,6 +1786,7 @@ class TelegramBot:
             "ctx_pct": ctx_pct,
             "cost": data.get("cost", {}).get("total_cost_usd", 0),
             "model": data.get("model", {}).get("display_name", ""),
+            "total_output": ctx.get("total_output_tokens", 0),
         }
 
     async def _handle_stop_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1832,11 +1931,8 @@ class TelegramBot:
                 self.registry.last_active_session = name
                 self.registry.mark_dirty()
                 asyncio.create_task(self._maybe_update_bot_name(name))
-                status_str = sess.status.name.lower()
-                await update.message.reply_text(
-                    f"Switched to <b>[{html_mod.escape(sess.label)}]</b> · {status_str}",
-                    parse_mode="HTML",
-                )
+                dashboard = self._build_session_dashboard(sess)
+                await update.message.reply_text(dashboard, parse_mode="HTML")
                 return
 
         # Try auto-discover
@@ -1847,10 +1943,8 @@ class TelegramBot:
             self.registry.mark_dirty()
             asyncio.create_task(self._maybe_update_bot_name(session_name))
             asyncio.create_task(self._update_bot_commands())
-            await update.message.reply_text(
-                f"Switched to <b>[{html_mod.escape(sess.label)}]</b> · new",
-                parse_mode="HTML",
-            )
+            dashboard = self._build_session_dashboard(sess)
+            await update.message.reply_text(dashboard, parse_mode="HTML")
             return
 
         await update.message.reply_text(f"⚠️ Unknown session: {target_label}")
