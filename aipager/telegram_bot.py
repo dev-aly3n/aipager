@@ -667,6 +667,20 @@ class TelegramBot:
                 asyncio.create_task(self.observers.broadcast(warn_text))
             return
 
+        if event == "stale_busy":
+            minutes = context.get("minutes", 10)
+            stale_text = (f"⚠️ <b>{html_mod.escape(label)}</b> · Busy for "
+                          f"{minutes}+ min with no activity — may be stalled")
+            try:
+                keyboard = self._build_stop_keyboard(sess.name)
+                await bot.send_message(CHAT_ID, stale_text, parse_mode="HTML",
+                                       reply_markup=keyboard)
+            except Exception:
+                pass
+            if self.observers:
+                asyncio.create_task(self.observers.broadcast(stale_text))
+            return
+
         if event == "compact_done":
             # Compaction finished — show delta, then resume busy animation
             before_pct = context.get("before_pct", 0)

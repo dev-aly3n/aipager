@@ -69,6 +69,9 @@ SESSION_STATE_FILE = Path.home() / ".claude" / "claude-remote-sessions.json"
 # Minimum seconds between busy-message edits (rate-limit for Telegram API)
 BUSY_EDIT_INTERVAL: float = 3.0
 
+# Stale busy session threshold (seconds) — alert if BUSY with no hooks for this long
+STALE_BUSY_TIMEOUT: float = float(os.environ.get("STALE_BUSY_TIMEOUT", "600"))
+
 # Spinner verbs for animated busy messages (curated from Claude Code's terminal spinner)
 SPINNER_VERBS: list[str] = [
     "Thinking", "Reasoning", "Pondering", "Considering", "Analyzing",

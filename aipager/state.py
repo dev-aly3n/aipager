@@ -78,6 +78,9 @@ class TrackedSession:
     # Inline permission context (tool_info, question, etc.) — set when permission
     # is displayed inside the busy message instead of as a separate message
     pending_permission: dict | None = None
+    # Stale session detection
+    last_hook_at: float = 0.0        # monotonic timestamp of last hook event received
+    stale_warned: bool = False       # prevents re-alerting every scan cycle
 
 
 class SessionRegistry:
@@ -128,6 +131,7 @@ class SessionRegistry:
         # Reset idle timer when entering BUSY so next IDLE always notifies
         if new_status == Status.BUSY:
             sess.last_idle_at = 0.0
+            sess.stale_warned = False
 
         old = sess.status
         sess.status = new_status

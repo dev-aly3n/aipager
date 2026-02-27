@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import socket
+import time
 from pathlib import Path
 
 from aipager.config import RICH_SUMMARIES, SOCKET_PATH
@@ -208,9 +209,11 @@ class HookReceiver:
         if not session_name or not event:
             return
 
-        # Store transcript_path on ALL events for rich summaries
+        # Update last activity timestamp (stale detection) + store transcript path
+        sess_ref = self.registry.get_or_create(session_name)
+        sess_ref.last_hook_at = time.monotonic()
         if transcript_path:
-            self.registry.get_or_create(session_name).transcript_path = transcript_path
+            sess_ref.transcript_path = transcript_path
             self.registry.mark_dirty()
             log.debug("[%s] Stored transcript_path: %s", session_name, transcript_path)
 

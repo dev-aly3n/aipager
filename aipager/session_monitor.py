@@ -11,9 +11,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 
 from aipager import dtach_inject
-from aipager.config import PANE_POLL_INTERVAL
+from aipager.config import PANE_POLL_INTERVAL, STALE_BUSY_TIMEOUT
 from aipager.state import SessionRegistry, Status
 
 log = logging.getLogger(__name__)
@@ -67,6 +68,20 @@ class SessionMonitor:
                 await self.on_sessions_changed()
             except Exception:
                 log.warning("on_sessions_changed callback failed", exc_info=True)
+
+        # Check for stale BUSY sessions (no hook activity for too long)
+        now = time.monotonic()
+        for name, sess in self.registry.all_sessions().items():
+            if sess.status != Status.BUSY or sess.stale_warned:
+                continue
+            baseline = sess.last_hook_at or sess.busy_started_at
+            if baseline and (now - baseline) > STALE_BUSY_TIMEOUT:
+                sess.stale_warned = True
+                stale_mins = int((now - baseline) / 60)
+                try:
+                    await self.notify_fn(sess, "stale_busy", {"minutes": stale_mins})
+                except Exception:
+                    log.warning("Failed to notify stale_busy for %s", name)
 
     def stop(self) -> None:
         if self._task:
