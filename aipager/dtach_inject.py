@@ -8,7 +8,9 @@ Socket naming: session "claude-dev" → /tmp/claude-dtach-dev.sock
 
 import asyncio
 import logging
+import os
 import re
+import shutil
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -134,8 +136,8 @@ async def is_alive(session: str) -> bool:
 
 _VALID_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
 _RESERVED = {"status", "stop", "kill", "new", "help", "start", "settings"}
-_PROJECT_DIR = "/path/to/project"
-_CLAUDE_BIN = "claude"
+_PROJECT_DIR = os.environ.get("AIPAGER_WORK_DIR", os.getcwd())
+_CLAUDE_BIN = shutil.which("claude") or "claude"
 
 
 async def launch_session(name: str, skip_perms: bool = True) -> tuple[bool, str]:

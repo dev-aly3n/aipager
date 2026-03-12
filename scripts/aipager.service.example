@@ -1,0 +1,22 @@
+[Unit]
+Description=AIPager Telegram Bot Daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+KillMode=process
+WorkingDirectory=/path/to/your/project
+ExecStart=/usr/bin/python3 -m aipager
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+EnvironmentFile=/path/to/your/project/.env
+StartLimitIntervalSec=60
+StartLimitBurst=5
+StandardOutput=journal
+StandardError=journal
+ExecStartPre=-/bin/rm -f /tmp/aipager.sock
+
+[Install]
+WantedBy=default.target

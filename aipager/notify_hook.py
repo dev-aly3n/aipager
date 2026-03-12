@@ -2,7 +2,7 @@
 """Claude Code notification hook — fire-and-forget UDP datagram to daemon.
 
 Reads JSON from stdin, detects session name from CLAUDE_DTACH_SESSION env var,
-sends datagram to /tmp/claude-remote.sock. No HTTP calls, <5ms.
+sends datagram to /tmp/aipager.sock. No HTTP calls, <5ms.
 
 Also reads the statusLine JSON file (written by the statusLine hook) to
 piggyback accurate token data on every PreToolUse event. The statusLine
@@ -15,7 +15,7 @@ import socket
 import sys
 from pathlib import Path
 
-SOCKET_PATH = "/tmp/claude-remote.sock"
+SOCKET_PATH = "/tmp/aipager.sock"
 
 
 def _read_statusline_tokens(session: str) -> dict | None:

@@ -1,4 +1,4 @@
-"""Claude Remote v2 — single-process async daemon.
+"""AIPager v2 — single-process async daemon.
 
 Usage:
     screen -S tgremote python3 -m aipager
@@ -53,7 +53,7 @@ async def main() -> None:
     session_monitor.on_sessions_changed = bot._update_bot_commands
     await session_monitor.start()
 
-    log.info("Claude Remote v2 running — all components started")
+    log.info("AIPager v2 running — all components started")
 
     # Run until interrupted
     stop = asyncio.Event()

@@ -24,7 +24,7 @@ _load_env_file()
 
 BOT_TOKEN: str = os.environ.get("CLAUDE_TG_BOT_TOKEN", "")
 CHAT_ID: str = os.environ.get("CLAUDE_TG_CHAT_ID", "")
-PROXY: str = ""
+PROXY: str = os.environ.get("AIPAGER_PROXY", "")
 
 
 def _parse_observer_bots(raw: str) -> list[tuple[str, str]]:
@@ -54,7 +54,7 @@ OBSERVER_BOTS: list[tuple[str, str]] = _parse_observer_bots(
 )
 
 # Unix datagram socket for hook → daemon communication
-SOCKET_PATH: str = "/tmp/claude-remote.sock"
+SOCKET_PATH: str = "/tmp/aipager.sock"
 
 # Pane monitor interval (seconds)
 PANE_POLL_INTERVAL: float = 2.0
@@ -64,7 +64,7 @@ PANE_POLL_INTERVAL: float = 2.0
 RICH_SUMMARIES: bool = os.environ.get("CLAUDE_RICH_SUMMARIES", "1") not in ("0", "false", "no")
 
 # Session state persistence (survives daemon restarts)
-SESSION_STATE_FILE = Path.home() / ".claude" / "claude-remote-sessions.json"
+SESSION_STATE_FILE = Path.home() / ".claude" / "aipager-sessions.json"
 
 # Minimum seconds between busy-message edits (rate-limit for Telegram API)
 BUSY_EDIT_INTERVAL: float = 3.0
@@ -121,4 +121,4 @@ KEYBOARD_PARENTS: dict[str, str] = {
 }
 
 # Directory for files downloaded from Telegram (photos, documents)
-FILE_DOWNLOAD_DIR = Path("/tmp/claude-remote-files")
+FILE_DOWNLOAD_DIR = Path("/tmp/aipager-files")

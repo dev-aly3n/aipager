@@ -2,7 +2,7 @@
 """StatusLine hook notifier — sends token data to daemon via UDP datagram.
 
 Reads Claude Code's statusLine JSON from stdin, adds session info,
-sends to /tmp/claude-remote.sock. Runs in <5ms.
+sends to /tmp/aipager.sock. Runs in <5ms.
 """
 
 import json
@@ -10,7 +10,7 @@ import os
 import socket
 import sys
 
-SOCKET_PATH = "/tmp/claude-remote.sock"
+SOCKET_PATH = "/tmp/aipager.sock"
 
 
 def main():
