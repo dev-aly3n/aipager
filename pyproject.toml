@@ -22,6 +22,7 @@ classifiers = [
 ]
 dependencies = [
     "python-telegram-bot>=20",
+    "dtach-bin>=0.9",
 ]
 
 [project.optional-dependencies]
