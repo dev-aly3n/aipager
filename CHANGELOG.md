@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-16
+
+### Added
+- Depend on [`dtach-bin`](https://pypi.org/project/dtach-bin/) so
+  `pipx install aipager` pulls in a precompiled `dtach` binary for
+  Linux x86_64/aarch64 and macOS x86_64/arm64. No manual system
+  package install needed.
+- GitHub Actions workflows: `test.yml` (ruff + pytest on Python
+  3.10–3.13) and `publish.yml` (build + Trusted Publisher OIDC upload
+  on tag push).
+- `CONTRIBUTING.md` documenting the local dev setup and release flow.
+
+### Changed
+- README leads with `pipx install aipager` as the primary install
+  path; `pip install -e .` demoted to a "Developing locally" section.
+
 ## [0.1.0] - 2026-05-16
 
 ### Added
