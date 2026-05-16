@@ -10,9 +10,6 @@ import io
 import logging
 
 from telegram import Bot
-from telegram.request import HTTPXRequest
-
-from aipager.config import PROXY
 
 log = logging.getLogger(__name__)
 
@@ -25,20 +22,15 @@ class ObserverBroadcaster:
     never crashes others or blocks the primary bot.
     """
 
-    def __init__(self, bots_config: list[tuple[str, str]], use_proxy: bool):
+    def __init__(self, bots_config: list[tuple[str, str]]):
         self._config = bots_config
-        self._use_proxy = use_proxy
         self._bots: list[tuple[Bot, str]] = []  # (bot_instance, chat_id)
 
     async def start(self) -> None:
         """Initialize all telegram.Bot instances."""
         for token, chat_id in self._config:
             try:
-                if self._use_proxy:
-                    request = HTTPXRequest(proxy=PROXY)
-                    bot = Bot(token=token, request=request)
-                else:
-                    bot = Bot(token=token)
+                bot = Bot(token=token)
                 await bot.initialize()
                 self._bots.append((bot, chat_id))
                 log.info("Observer bot initialized for chat_id=%s", chat_id)

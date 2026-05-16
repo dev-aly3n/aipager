@@ -19,7 +19,6 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import httpx
 from telegram import (
     BotCommand,
     InlineKeyboardButton,
@@ -44,7 +43,7 @@ import random
 from aipager.config import (
     BACK_BUTTON, BOT_TOKEN, BUSY_EDIT_INTERVAL, CHAT_ID, COMMANDS_BUTTON,
     FILE_DOWNLOAD_DIR, KEYBOARD_PARENTS, MODEL_CHOICES, MODELS_BUTTON,
-    PROXY, QUICK_COMMANDS, QUICK_TEMPLATES, SPINNER_VERBS, TEMPLATES_BUTTON,
+    QUICK_COMMANDS, QUICK_TEMPLATES, SPINNER_VERBS, TEMPLATES_BUTTON,
 )
 from aipager.state import SessionRegistry, Status, TrackedSession
 
@@ -140,7 +139,6 @@ class TelegramBot:
         self.registry = registry
         self._app: Application | None = None
         self.observers = None  # ObserverBroadcaster | None, injected by __main__
-        self.use_proxy: bool = False
         self._registered_labels: set[str] = set()  # cached to skip redundant setMyCommands
         self._keyboard_level: str = "main"  # "main", "templates", "commands", "models"
         self._template_map: dict[str, str] = {label: prompt for label, prompt in QUICK_TEMPLATES}
@@ -152,13 +150,7 @@ class TelegramBot:
         global _bot_instance
         _bot_instance = self
 
-        self.use_proxy = not await self._test_direct()
         builder = ApplicationBuilder().token(BOT_TOKEN)
-        if self.use_proxy:
-            log.info("Using proxy: %s", PROXY)
-            builder = builder.proxy(PROXY).get_updates_proxy(PROXY)
-        else:
-            log.info("Direct connection to Telegram OK")
 
         # Long-poll config: timeout=30 means Telegram holds the connection
         # for up to 30s waiting for updates → instant response to taps
@@ -339,16 +331,6 @@ class TelegramBot:
             )
         except Exception:
             log.warning("Failed to send keyboard", exc_info=True)
-
-    @staticmethod
-    async def _test_direct() -> bool:
-        """Test if Telegram API is directly reachable."""
-        try:
-            async with httpx.AsyncClient(timeout=5) as c:
-                r = await c.get("https://api.telegram.org/")
-                return r.status_code in (200, 302)
-        except Exception:
-            return False
 
     async def _react(self, update: Update, emoji: str) -> None:
         """React to the user's message with an emoji."""

@@ -41,7 +41,7 @@ async def _run_daemon() -> None:
     await bot.start()
     observers = None
     if OBSERVER_BOTS:
-        observers = ObserverBroadcaster(OBSERVER_BOTS, bot.use_proxy)
+        observers = ObserverBroadcaster(OBSERVER_BOTS)
         await observers.start()
         bot.observers = observers
     await hook_receiver.start()

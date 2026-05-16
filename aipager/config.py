@@ -32,7 +32,6 @@ _load_env_file()
 
 BOT_TOKEN: str = os.environ.get("CLAUDE_TG_BOT_TOKEN", "")
 CHAT_ID: str = os.environ.get("CLAUDE_TG_CHAT_ID", "")
-PROXY: str = os.environ.get("AIPAGER_PROXY", "")
 
 
 def _parse_observer_bots(raw: str) -> list[tuple[str, str]]:

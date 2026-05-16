@@ -26,7 +26,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-proxy = ["httpx[socks]>=0.27"]
 dev = ["pytest>=7", "ruff>=0.5", "build", "twine"]
 
 [project.scripts]
