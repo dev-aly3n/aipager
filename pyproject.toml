@@ -35,6 +35,11 @@ aipager-hook       = "aipager.notify_hook:main"
 aipager-statusline = "aipager.statusline_notify:main"
 claude-dtach       = "aipager.dtach_launcher:main"
 
+[project.urls]
+Source    = "https://github.com/dev-aly3n/aipager"
+Issues    = "https://github.com/dev-aly3n/aipager/issues"
+Changelog = "https://github.com/dev-aly3n/aipager/blob/main/CHANGELOG.md"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
