@@ -117,17 +117,31 @@ def _step_deps() -> None:
             print(f"  ✗ {tool} not on PATH — install: {hint}")
 
 
-def _has_hook_cmd(entries: list, cmd: str) -> bool:
+def _resolve(cmd: str) -> str:
+    """Resolve a console-script name to an absolute path if found on PATH.
+
+    Editable installs and pipx installs put scripts in different locations,
+    and Claude Code subprocesses don't always inherit a useful PATH. Using
+    an absolute path in settings.json avoids the whole class of problems.
+    """
+    return shutil.which(cmd) or cmd
+
+
+def _has_hook_cmd(entries: list, bare_name: str) -> bool:
+    """Match a hook entry by bare name or by any absolute path ending in it."""
     for block in entries:
         for hook in block.get("hooks", []):
-            if hook.get("command") == cmd:
+            cmd = hook.get("command", "")
+            if cmd == bare_name or cmd.endswith(f"/{bare_name}"):
                 return True
     return False
 
 
 def _merge_hooks(settings: dict) -> None:
+    hook_path = _resolve(HOOK_CMD)
+    statusline_path = _resolve(STATUSLINE_CMD)
     hooks = settings.setdefault("hooks", {})
-    entry = {"type": "command", "command": HOOK_CMD}
+    entry = {"type": "command", "command": hook_path}
     for event in HOOK_EVENTS:
         entries = hooks.setdefault(event, [])
         if _has_hook_cmd(entries, HOOK_CMD):
@@ -136,7 +150,7 @@ def _merge_hooks(settings: dict) -> None:
             entries.append({"matcher": "*", "hooks": [entry]})
         else:
             entries.append({"hooks": [entry]})
-    settings["statusLine"] = {"type": "command", "command": STATUSLINE_CMD}
+    settings["statusLine"] = {"type": "command", "command": statusline_path}
 
 
 def _step_settings() -> None:
