@@ -79,9 +79,8 @@ def _cmd_start(args: argparse.Namespace) -> int:
 
 
 def _cmd_config(args: argparse.Namespace) -> int:
-    print("aipager config: setup wizard not implemented yet (see next commit)",
-          file=sys.stderr)
-    return 1
+    from aipager.setup_wizard import run
+    return run()
 
 
 def _cmd_version(args: argparse.Namespace) -> int:

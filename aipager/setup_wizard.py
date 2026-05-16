@@ -1,0 +1,198 @@
+"""Interactive setup wizard for `aipager config`.
+
+Walks the user through:
+  1. Bot token + verify via getMe
+  2. Chat ID via getUpdates auto-detect (or manual paste)
+  3. Dep check (dtach, claude)
+  4. Patch ~/.claude/settings.json with hooks + statusLine (back up first)
+  5. Write ~/.config/aipager/config.env (0600)
+
+Idempotent — safe to re-run; existing aipager-hook entries are not duplicated.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import sys
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+CONFIG_DIR = Path.home() / ".config" / "aipager"
+CONFIG_ENV = CONFIG_DIR / "config.env"
+CLAUDE_SETTINGS = Path.home() / ".claude" / "settings.json"
+
+HOOK_CMD = "aipager-hook"
+STATUSLINE_CMD = "aipager-statusline"
+HOOK_EVENTS = (
+    "SessionStart", "SessionEnd", "UserPromptSubmit",
+    "PreToolUse", "PostToolUse", "PermissionRequest",
+    "Notification", "Stop", "SubagentStop", "PreCompact",
+)
+TOOL_MATCHER_EVENTS = {"PreToolUse", "PostToolUse", "PermissionRequest"}
+
+
+def _http_json(url: str) -> dict:
+    with urllib.request.urlopen(url, timeout=10) as r:
+        return json.load(r)
+
+
+def _verify_token(token: str) -> dict | None:
+    try:
+        result = _http_json(f"https://api.telegram.org/bot{token}/getMe")
+    except (urllib.error.URLError, OSError, json.JSONDecodeError):
+        return None
+    return result.get("result") if result.get("ok") else None
+
+
+def _fetch_chat_id(token: str) -> tuple[int, str] | None:
+    try:
+        result = _http_json(f"https://api.telegram.org/bot{token}/getUpdates")
+    except (urllib.error.URLError, OSError, json.JSONDecodeError):
+        return None
+    if not result.get("ok"):
+        return None
+    for u in result.get("result", []):
+        msg = u.get("message") or u.get("edited_message") or {}
+        chat = msg.get("chat") or {}
+        cid = chat.get("id")
+        if cid is not None and chat.get("type") == "private":
+            who = chat.get("username") or chat.get("first_name", "")
+            return int(cid), who
+    return None
+
+
+def _step_token() -> str:
+    while True:
+        print("\n[1/5] Telegram bot")
+        print("  → Get a bot token from @BotFather (https://t.me/BotFather)")
+        token = input("  Bot token: ").strip().rstrip(":")
+        if not token:
+            print("  (empty — try again)")
+            continue
+        info = _verify_token(token)
+        if info is None:
+            print("  ✗ Token invalid or Telegram unreachable. Try again or Ctrl-C to exit.")
+            continue
+        print(f"  ✓ Verified — @{info.get('username')}")
+        return token
+
+
+def _step_chat_id(token: str) -> int:
+    print("\n[2/5] Your chat ID")
+    print("  → DM your bot, then press Enter to auto-detect; or paste your chat ID.")
+    while True:
+        raw = input("  Press Enter to auto-detect, or paste chat ID: ").strip()
+        if raw:
+            try:
+                cid = int(raw)
+            except ValueError:
+                print("  ✗ Not a number. Try again.")
+                continue
+            print(f"  ✓ Using chat_id={cid}")
+            return cid
+        found = _fetch_chat_id(token)
+        if found is None:
+            print("  ✗ No DM detected. Send a message to your bot then press Enter again.")
+            continue
+        cid, who = found
+        print(f"  ✓ Detected chat_id={cid} (@{who})")
+        return cid
+
+
+def _step_deps() -> None:
+    print("\n[3/5] System dependencies")
+    checks = [
+        ("dtach", "Debian/Ubuntu: sudo apt install dtach   |   macOS: brew install dtach"),
+        ("claude", "https://docs.anthropic.com/claude/docs/claude-code"),
+    ]
+    for tool, hint in checks:
+        path = shutil.which(tool)
+        if path:
+            print(f"  ✓ {tool} found at {path}")
+        else:
+            print(f"  ✗ {tool} not on PATH — install: {hint}")
+
+
+def _has_hook_cmd(entries: list, cmd: str) -> bool:
+    for block in entries:
+        for hook in block.get("hooks", []):
+            if hook.get("command") == cmd:
+                return True
+    return False
+
+
+def _merge_hooks(settings: dict) -> None:
+    hooks = settings.setdefault("hooks", {})
+    entry = {"type": "command", "command": HOOK_CMD}
+    for event in HOOK_EVENTS:
+        entries = hooks.setdefault(event, [])
+        if _has_hook_cmd(entries, HOOK_CMD):
+            continue
+        if event in TOOL_MATCHER_EVENTS:
+            entries.append({"matcher": "*", "hooks": [entry]})
+        else:
+            entries.append({"hooks": [entry]})
+    settings["statusLine"] = {"type": "command", "command": STATUSLINE_CMD}
+
+
+def _step_settings() -> None:
+    print("\n[4/5] Claude Code integration")
+    settings: dict = {}
+    if CLAUDE_SETTINGS.exists():
+        try:
+            settings = json.loads(CLAUDE_SETTINGS.read_text())
+        except json.JSONDecodeError:
+            print(f"  ✗ {CLAUDE_SETTINGS} is not valid JSON — aborting.")
+            raise
+        backup = CLAUDE_SETTINGS.with_name(
+            f"{CLAUDE_SETTINGS.name}.bak.{int(time.time())}"
+        )
+        backup.write_text(CLAUDE_SETTINGS.read_text())
+        print(f"  • backed up existing settings → {backup.name}")
+    else:
+        CLAUDE_SETTINGS.parent.mkdir(parents=True, exist_ok=True)
+    _merge_hooks(settings)
+    CLAUDE_SETTINGS.write_text(json.dumps(settings, indent=2) + "\n")
+    print(f"  ✓ Patched {CLAUDE_SETTINGS} ({len(HOOK_EVENTS)} hooks + statusLine)")
+
+
+def _step_write_env(token: str, chat_id: int) -> None:
+    print("\n[5/5] Write config")
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_ENV.write_text(
+        f"CLAUDE_TG_BOT_TOKEN={token}\nCLAUDE_TG_CHAT_ID={chat_id}\n"
+    )
+    os.chmod(CONFIG_ENV, 0o600)
+    print(f"  ✓ Wrote {CONFIG_ENV} (0600)")
+
+
+def run() -> int:
+    print("Welcome to aipager setup.")
+    try:
+        token = _step_token()
+        chat_id = _step_chat_id(token)
+        _step_deps()
+        _step_settings()
+        _step_write_env(token, chat_id)
+    except KeyboardInterrupt:
+        print("\nCancelled.")
+        return 130
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"\n✗ Setup failed: {e}", file=sys.stderr)
+        return 1
+    print("\nSetup complete.\n")
+    print("  Start the daemon:    aipager start")
+    print("  Launch a session:    claude-dtach dev")
+    return 0
+
+
+def main() -> None:
+    sys.exit(run())
+
+
+if __name__ == "__main__":
+    main()
