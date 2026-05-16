@@ -1,23 +1,31 @@
-"""Configuration for aipager — loads from .env at project root."""
+"""Configuration for aipager — loads env from XDG path or project root."""
 
 import os
 from pathlib import Path
 
+_XDG_CONFIG = Path.home() / ".config" / "aipager" / "config.env"
+_PROJECT_DOTENV = Path(__file__).parent.parent / ".env"
 
-def _load_env_file():
-    """Load .env file from project root if it exists."""
-    env_file = Path(__file__).parent.parent / ".env"
-    if not env_file.exists():
-        return
-    for line in env_file.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        key = key.strip()
-        value = value.strip().strip("\"'")
-        if key and key not in os.environ:
-            os.environ[key] = value
+
+def _load_env_file() -> None:
+    """Load environment variables.
+
+    Source priority (first existing file wins):
+      1. ~/.config/aipager/config.env (XDG, written by `aipager config`)
+      2. <project-root>/.env (legacy / development checkouts)
+    """
+    for candidate in (_XDG_CONFIG, _PROJECT_DOTENV):
+        if candidate.exists():
+            for line in candidate.read_text().splitlines():
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                key = key.strip()
+                value = value.strip().strip("\"'")
+                if key and key not in os.environ:
+                    os.environ[key] = value
+            return
 
 
 _load_env_file()
