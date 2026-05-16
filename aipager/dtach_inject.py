@@ -1,7 +1,6 @@
 """Async dtach wrappers — inject keystrokes and check session liveness.
 
-Drop-in replacement for tmux_inject.py. Uses dtach -p for input injection
-(sends raw bytes to the session's PTY via stdin pipe).
+Uses `dtach -p <socket>` to send raw bytes to the session's PTY via stdin.
 
 Socket naming: session "claude-dev" → /tmp/claude-dtach-dev.sock
 """
@@ -163,6 +162,10 @@ async def launch_session(name: str, skip_perms: bool = True) -> tuple[bool, str]
     sys_prompt = (f'Your session name is "{name}". '
                   f'When users address you by this name, respond naturally '
                   f'-- it is your name in this session.')
+    # `unset CLAUDECODE`: Claude Code sets this env var when running, and
+    # the binary refuses to launch a second time if it sees it ("already
+    # inside a Claude Code session"). Strip it so /new sessions can launch
+    # cleanly from inside a parent Claude.
     bash_cmd = (
         f"unset CLAUDECODE; "
         f"export CLAUDE_DTACH_SESSION=claude-{name}; "

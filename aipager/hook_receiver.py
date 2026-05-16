@@ -203,7 +203,7 @@ class HookReceiver:
             return
 
         event = msg.get("notification_type") or msg.get("hook_event_name") or msg.get("type", "")
-        session_name = msg.get("session") or msg.get("tmux_session", "")
+        session_name = msg.get("session", "")
         transcript_path = msg.get("transcript_path", "")
 
         if not session_name or not event:

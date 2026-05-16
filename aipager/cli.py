@@ -49,7 +49,7 @@ async def _run_daemon() -> None:
     session_monitor.on_sessions_changed = bot._update_bot_commands
     await session_monitor.start()
 
-    log.info("AIPager v2 running — all components started")
+    log.info("AIPager running — all components started")
 
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
