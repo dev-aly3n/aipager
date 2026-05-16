@@ -740,7 +740,6 @@ class TelegramBot:
 
         if event == "tool_use":
             tool_summary = context.get("tool_summary", "")
-            tool_name = context.get("tool_name", "")
             # Update tool history — mark previous as done, append new
             if tool_summary:
                 # Append new tool as in-progress (PostToolUse marks it done)
@@ -1912,7 +1911,7 @@ class TelegramBot:
 
         await status_msg.edit_text(
             f"✅ <b>{html_mod.escape(name)}</b> launched"
-            + (f"\n📝 Prompt queued" if prompt else ""),
+            + ("\n📝 Prompt queued" if prompt else ""),
             parse_mode="HTML",
         )
         log.info("Launched session %s (prompt=%s)", name, bool(prompt))

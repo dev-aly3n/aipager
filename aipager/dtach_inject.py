@@ -114,7 +114,8 @@ async def kill_session(session: str) -> bool:
         for pid_str in pids:
             pid_str = pid_str.strip()
             if pid_str.isdigit():
-                import os, signal
+                import os
+                import signal
                 os.kill(int(pid_str), signal.SIGTERM)
                 log.info("Killed dtach PID %s for %s", pid_str, session)
     except Exception:
