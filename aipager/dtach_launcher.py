@@ -1,8 +1,7 @@
 """Launch Claude Code inside a named dtach session.
 
-Python port of scripts/claude-dtach.sh — exposed as the `claude-dtach`
-console script. Sets CLAUDE_DTACH_SESSION inside the new session so the
-aipager hook scripts can identify it.
+Exposed as the `claude-dtach` console script. Sets CLAUDE_DTACH_SESSION
+inside the new session so the aipager hook scripts can identify it.
 
 Usage:
     claude-dtach [-y] <name> [claude args...]

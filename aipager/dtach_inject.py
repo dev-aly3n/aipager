@@ -157,7 +157,7 @@ async def launch_session(name: str, skip_perms: bool = True) -> tuple[bool, str]
     if Path(sock).is_socket():
         return False, f"Session '{name}' already exists"
 
-    # Build the bash -c command matching scripts/claude-dtach.sh line 84
+    # Build the bash -c command — wraps claude with env vars and prompt
     perms = "--dangerously-skip-permissions" if skip_perms else ""
     sys_prompt = (f'Your session name is "{name}". '
                   f'When users address you by this name, respond naturally '
