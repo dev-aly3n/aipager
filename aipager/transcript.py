@@ -5,8 +5,13 @@ Assistant messages have type="assistant" with message.content containing
 text blocks. We read only the tail of the file for efficiency.
 
 Transcript discovery: each Claude Code session writes its transcript to
-~/.claude/projects/<project-hash>/<session-id>.jsonl. We find the right
-one by checking which file was most recently modified.
+~/.claude/projects/<cwd-slug>/<session-id>.jsonl, where <cwd-slug> is the
+session's cwd with "/" replaced by "-". We scan every project subdir
+and pick the JSONL with the most recent mtime; the existing 5-second
+freshness check disambiguates between concurrent sessions.
+
+This fallback only fires when the hook payload didn't carry
+transcript_path and the registry hasn't seen one yet for this session.
 """
 
 from __future__ import annotations
@@ -19,8 +24,8 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-# Claude Code project transcript directory for this project
-_TRANSCRIPT_DIR = Path.home() / ".claude" / "projects" / "-home-god-creature"
+# Root of all Claude Code project transcripts on this machine.
+_PROJECTS_DIR = Path.home() / ".claude" / "projects"
 
 # Cache: session name → (transcript_path, mtime)
 # Avoids re-scanning the directory on every poll cycle
@@ -45,7 +50,7 @@ def find_transcript(session_name: str) -> str | None:
 
     try:
         jsonl_files = sorted(
-            _TRANSCRIPT_DIR.glob("*.jsonl"),
+            _PROJECTS_DIR.glob("*/*.jsonl"),
             key=lambda p: p.stat().st_mtime,
             reverse=True,
         )
