@@ -309,38 +309,84 @@ def run_all() -> list[CheckResult]:
     return [fn() for fn in CHECKS]
 
 
+_STATUS_STYLE = {OK: "ok", WARN: "warn", FAIL: "err"}
+
+
 def _print_results(results: list[CheckResult]) -> None:
-    width = max(len(r.title) for r in results) + 2
+    from rich.table import Table
+    from aipager.ui import console, is_tty
+
+    if not is_tty():
+        # Off-TTY (CI, pipes): emit plain padded text so log scrapers
+        # can grep `^  ✗  hook scripts on PATH`-style lines.
+        width = max(len(r.title) for r in results) + 2
+        for r in results:
+            line = f"  {r.marker}  {r.title.ljust(width)}"
+            if r.detail:
+                line += "  " + " · ".join(r.detail)
+            console.print(line)
+        return
+
+    t = Table(show_header=False, box=None, pad_edge=False, padding=(0, 2))
+    t.add_column(justify="center", width=3)
+    t.add_column(no_wrap=True)
+    t.add_column(style="hint")
     for r in results:
-        line = f"  {r.marker}  {r.title.ljust(width)}"
-        if r.detail:
-            line += "  " + " · ".join(r.detail)
-        print(line)
+        style = _STATUS_STYLE[r.status]
+        t.add_row(
+            f"[{style}]{r.marker}[/{style}]",
+            r.title,
+            " · ".join(r.detail),
+        )
+    console.print(t)
 
 
 def _print_fixes(results: list[CheckResult]) -> None:
+    from aipager.ui import console
+
     fixes = [r for r in results if r.status != OK and r.fix]
     if not fixes:
         return
-    print()
-    print("Suggested next steps:")
+    console.print()
+    console.print("[title]Suggested next steps[/title]")
     for r in fixes:
-        print(f"  • {r.title}: {r.fix}")
+        console.print(f"  [muted]•[/muted] {r.title}: [hint]{r.fix}[/hint]")
+
+
+def _print_summary(results: list[CheckResult]) -> None:
+    from aipager.ui import console
+
+    counts = {OK: 0, WARN: 0, FAIL: 0}
+    for r in results:
+        counts[r.status] += 1
+    parts = [
+        f"[ok]{counts[OK]} ok[/ok]",
+        f"[warn]{counts[WARN]} warn[/warn]",
+        f"[err]{counts[FAIL]} fail[/err]",
+    ]
+    console.print(f"\n[muted]{' · '.join(parts)}[/muted]")
 
 
 def cmd_doctor(_args: argparse.Namespace | None = None) -> int:
     from aipager import __version__
-    print(f"aipager {__version__} on {platform.system().lower()} "
-          f"(python {sys.version_info.major}.{sys.version_info.minor})")
-    print()
+    from aipager.ui import console, rule
+
+    if console.is_terminal:
+        rule(f"aipager {__version__} · {platform.system().lower()} · "
+             f"python {sys.version_info.major}.{sys.version_info.minor}")
+    else:
+        console.print(
+            f"aipager {__version__} on {platform.system().lower()} "
+            f"(python {sys.version_info.major}.{sys.version_info.minor})"
+        )
+    console.print()
     results = run_all()
     _print_results(results)
     _print_fixes(results)
-    print()
+    _print_summary(results)
+    console.print()
     if any(r.status == FAIL for r in results):
         return 1
-    if any(r.status == WARN for r in results):
-        return 0
     return 0
 
 
