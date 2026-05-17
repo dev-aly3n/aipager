@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-05-17
+
+### Changed
+- README now documents the live Homebrew tap install path
+  (`brew install dev-aly3n/tap/aipager`). Replaces the
+  earlier "coming in v0.3" placeholder.
+
 ## [0.2.0] - 2026-05-16
 
 ### Added

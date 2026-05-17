@@ -7,22 +7,29 @@ requests, switch sessions — without an SSH session staying open.
 
 ## Install
 
-Requires Python 3.10+. **`dtach` is installed automatically** via the
-[`dtach-bin`](https://pypi.org/project/dtach-bin/) dependency — no
-separate system package needed.
+Requires Python 3.10+ (Linux / macOS).
+
+### pipx (recommended)
 
 ```sh
 pipx install aipager
 ```
 
-(or `uv tool install aipager`, or `pip install aipager` into a venv —
-all work the same.)
+— or `uv tool install aipager`, or `pip install aipager` into a venv.
+All variants work the same. `dtach` is installed automatically via the
+[`dtach-bin`](https://pypi.org/project/dtach-bin/) dependency — no
+separate system package needed. Linux ARM and macOS Apple Silicon are
+supported via pre-built wheels.
 
-Linux ARM and macOS users on Apple Silicon get the same one-command
-install; the dtach binary ships as pre-built wheels for each platform.
+### Homebrew (macOS, Linuxbrew)
 
-> **Homebrew support is coming in v0.3** as `brew install <user>/tap/aipager`,
-> which uses the system `dtach` instead of the bundled one.
+```sh
+brew install dev-aly3n/tap/aipager
+```
+
+This pulls `dtach` from Homebrew's standard formula (works on both Intel
+and Apple Silicon Macs) and installs aipager into a Homebrew-managed
+Python venv.
 
 ## Configure
 
