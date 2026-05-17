@@ -7,11 +7,104 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- New `aipager doctor` subcommand prints a ✓ / ⚠ / ✗ health-check
+  table covering: Telegram config, bot-token validity, chat
+  reachability, `claude` and `dtach` binaries, hook scripts on PATH,
+  `~/.claude/settings.json` schema, daemon liveness via a socket probe,
+  and whether the systemd/launchd service unit is installed. Each
+  failing row prints a one-line suggested fix. Idempotent — never
+  sends Telegram messages or mutates configuration.
+- New module `aipager.errors` centralizes user-facing error formatting:
+  `friendly_error()` for ✗ blocks, `friendly_warn()` for ⚠ blocks,
+  `install_excepthook()` to catch uncaught exceptions with a
+  bug-report URL, and `with_friendly_errors` decorator translating
+  common `PermissionError` / `OSError` flavors into actionable messages
+  with the affected file path. Every unexpected error now points to
+  https://github.com/dev-aly3n/aipager/issues for follow-up.
+- `aipager-hook` and `aipager-statusline` honor `AIPAGER_DEBUG=1` —
+  set it to log otherwise-silent socket/JSON errors to stderr for
+  troubleshooting. Default behavior (silent) is unchanged.
+
 ### Changed
-- `aipager config` final-step hint no longer mentions
-  `aipager service install` as a secondary option — only
-  `aipager start` is shown to keep the new-user path simple. The
-  service flow is still documented in the README.
+- `aipager start` now pre-flights Telegram connectivity (calls
+  `getMe` and `getChat` over plain HTTPS with a 15 s timeout) before
+  spawning the async daemon. Failures exit with code 2 and an
+  actionable message: HTTP 401 → "re-run `aipager config`", "chat not
+  found" → "tap Start in https://t.me/<bot>", network errors → "check
+  your connection". Previously these surfaced as raw async tracebacks.
+- `aipager start` detects an existing daemon on `/tmp/aipager.sock`
+  (via UDP probe) and aborts with a clear message if one is already
+  listening, instead of silently racing with it. Stale socket files
+  with no live owner are unlinked transparently.
+- `aipager start` now logs a one-line startup banner
+  ("connected as @yourbot, will message chat <id>") so it's obvious
+  which bot the daemon is bound to.
+- `aipager session <name>` validates the session name
+  (`[A-Za-z0-9_-]{1,50}`) before doing anything, so spaces, slashes,
+  and 200-character names fail fast with a clear message instead of
+  cryptic ENOENT from a too-long socket path. The launcher also
+  probes the dtach binary (`dtach -V` style health check) and the
+  socket (`AF_UNIX` connect probe) before reattaching, so stale
+  sockets left by a crashed daemon are cleaned up instead of causing
+  `dtach -a` to hang.
+- `aipager session` captures and surfaces dtach's stderr / stdout
+  on launch failure (instead of "dtach failed to start session" with
+  no detail) and runs `claude --version` to diagnose the case where
+  the socket never appears.
+- `aipager service install` aborts cleanly when systemd-user isn't
+  available (container, WSL1, minimal distro) and on macOS when
+  `launchctl` isn't on PATH, suggesting `aipager start` under tmux/
+  screen instead. The Linux installer also warns when
+  `loginctl enable-linger` hasn't been run (service would die at
+  logout), backs up existing unit/plist files before overwriting, and
+  probes the daemon socket two seconds after enable to detect a
+  daemon that came up but crashed.
+- `aipager service start/stop/status/logs` precheck that the unit
+  file exists and tell the user to run `aipager service install` if
+  not, instead of relaying systemctl's "unit not found" error.
+- `aipager service` now captures stderr from every `systemctl` /
+  `launchctl` invocation and relays it on failure so users see *why*
+  a command failed.
+- `aipager config` token paste handles surrounding quotes, leading
+  "Use this token: …" prefixes, trailing colons, and embedded
+  whitespace via a canonical-token regex. HTTP errors from Telegram
+  are categorized: 401 → "rejected the token", 404 → "URL is
+  malformed", 429 → "rate-limiting", 5xx → "API error, retry";
+  pre-HTTP errors (DNS, connect) read "can't reach
+  api.telegram.org". `getUpdates` auto-detect distinguishes
+  group-chat-only activity from no-activity and prompts the user to
+  DM the bot directly. The "chat not found" retry trigger now uses a
+  regex tolerant of casing and punctuation variants.
+- `aipager config` validates `~/.claude/settings.json` schema before
+  mutating it (rejects `hooks` of the wrong type instead of crashing
+  with `AttributeError`), explains how to fix JSONC-style comments,
+  resolves `aipager-hook` / `aipager-statusline` paths and aborts if
+  they aren't on PATH (avoids silently writing broken absolute paths),
+  prompts for confirmation before overwriting an existing config with
+  a different token, and asks for a `[y/N]` to continue when `dtach`
+  or `claude` is missing instead of silently completing a broken
+  setup. The wizard also confirms the test-send arrived in Telegram
+  before moving on, skips the settings.json backup when the merge
+  would be a no-op, and tolerates filesystems that don't support
+  `chmod 0600` (warns instead of crashing).
+- Daemon's Telegram send paths now treat "Forbidden / bot was
+  blocked" as a known failure: a friendly multi-line log explaining
+  how to unblock, throttled to one entry per minute so the daemon
+  log doesn't flood. The IDLE-response path uses a new
+  `_send_with_retry` helper that handles `RetryAfter` and falls back
+  to a 4 KB truncation when Telegram says "message is too long".
+  Outgoing documents larger than 40 MB are skipped with a one-line
+  warning instead of failing the send.
+- `cli.py main()` installs a global `excepthook` so any uncaught
+  exception is rendered as a friendly block with a link to the issue
+  tracker, instead of a raw Python traceback.
+- `aipager.preflight` reuses the shared `errors` module's
+  formatter — same output, single source of truth.
+
+### Note
+- `aipager config` final-step hint mentions only `aipager start`
+  (the service flow is still documented in the README).
 
 ## [0.3.7] - 2026-05-17
 
