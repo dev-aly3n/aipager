@@ -1,13 +1,23 @@
 """Interactive setup wizard for `aipager config`.
 
+UX goals:
+- Each question is asked once with arrow-key / Y-n prompts via
+  :mod:`questionary`. Long-running Telegram API calls are wrapped in
+  ``rich.status`` spinners so the terminal never appears frozen.
+- Successful steps print a ``✓`` line; failures use the shared
+  ``ui.err_block`` rendering.
+- Off-TTY (pytest, scripts), questionary falls back gracefully and the
+  spinner is suppressed by rich.
+
 Walks the user through:
   1. Bot token + verify via getMe
   2. Chat ID via getUpdates auto-detect (or manual paste) + test send
-  3. Dep check (dtach, claude)
+  3. Dep check (dtach, claude, hook scripts)
   4. Patch ~/.claude/settings.json with hooks + statusLine (back up first)
   5. Write ~/.config/aipager/config.env (0600)
 
-Idempotent — safe to re-run; existing aipager-hook entries are not duplicated.
+Idempotent — safe to re-run; existing aipager-hook entries are not
+duplicated.
 """
 
 from __future__ import annotations
@@ -23,7 +33,11 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+import questionary
+from questionary import Style
+
 from aipager.errors import friendly_error, friendly_warn
+from aipager.ui import GLYPH_OK, console, err_console, hint, ok, rule, step
 
 CONFIG_DIR = Path.home() / ".config" / "aipager"
 CONFIG_ENV = CONFIG_DIR / "config.env"
@@ -38,39 +52,48 @@ HOOK_EVENTS = (
 )
 TOOL_MATCHER_EVENTS = {"PreToolUse", "PostToolUse", "PermissionRequest"}
 
-# Bot tokens are <int>:<35-50 alnum>, but we accept anything matching that
-# pattern shape since BotFather has changed token lengths over time.
 _TOKEN_RE = re.compile(r"\d{6,12}:[A-Za-z0-9_-]{20,80}")
 _CHAT_NOT_FOUND_RE = re.compile(r"chat\s*[\s_-]*not\s*[\s_-]*found", re.I)
 
+# Restrained Inquirer-style: cyan question mark, green checkmark after
+# commit, dim instruction/default text. Matches the rest of aipager.
+_PROMPT_STYLE = Style([
+    ("qmark", "fg:cyan bold"),
+    ("question", "bold"),
+    ("answer", "fg:cyan bold"),
+    ("pointer", "fg:cyan bold"),
+    ("highlighted", "fg:cyan bold"),
+    ("selected", "fg:cyan"),
+    ("instruction", "fg:#888888"),
+    ("text", ""),
+    ("disabled", "fg:#888888 italic"),
+])
+
+
+# ----- helpers -----
+
+def _ask(prompt) -> object:
+    """Run a questionary prompt; raise KeyboardInterrupt on Ctrl-C."""
+    answer = prompt.ask()
+    if answer is None:
+        raise KeyboardInterrupt
+    return answer
+
 
 def _normalize_token(raw: str) -> str:
-    """Pull a clean bot token out of common paste shapes.
-
-    Handles surrounding quotes, "Use this token: …" lead-ins from BotFather,
-    embedded newlines, and trailing colons.
-    """
+    """Pull a clean bot token out of common paste shapes."""
     if not raw:
         return ""
     raw = raw.strip().strip('"').strip("'")
-    # Find the first canonical token in the string.
     m = _TOKEN_RE.search(raw)
     if m:
         return m.group(0)
-    # Fallback: if no canonical match, return a conservatively trimmed value.
     return raw.rstrip(":").strip()
 
 
 def _http_json(url: str) -> tuple[dict | None, int | None, str]:
-    """Return ``(body, http_status, error_description)``.
-
-    Exactly one of (body, error_description) is meaningful. ``http_status``
-    is set whenever the server returned a response (success OR HTTPError),
-    and ``None`` for pre-HTTP errors (DNS, connect, etc).
-    """
+    """Returns ``(body, http_status, error_description)``."""
     try:
-        # 30s tolerates slow VPN/proxy TLS handshakes; under direct connections
-        # the call completes in well under a second.
         with urllib.request.urlopen(url, timeout=30) as r:
             return json.load(r), r.status, ""
     except urllib.error.HTTPError as e:
@@ -86,7 +109,6 @@ def _http_json(url: str) -> tuple[dict | None, int | None, str]:
 
 
 def _explain_http_error(code: int | None, err: str) -> str:
-    """Render a one-line explanation for a Telegram HTTP failure."""
     if code == 401:
         return ("HTTP 401 — Telegram rejected the token. Generate a fresh one "
                 "from @BotFather.")
@@ -109,15 +131,12 @@ def _verify_token(token: str) -> dict | None:
     )
     if body and body.get("ok"):
         return body["result"]
-    print(f"  ✗ {_explain_http_error(code, err)}")
+    err_console.print(f"  [err]{_explain_http_error(code, err)}[/err]")
     return None
 
 
 def _test_send(token: str, chat_id: int) -> tuple[bool, str]:
-    """Send a "hello" probe to verify the bot can reach the chat.
-
-    Returns ``(True, "")`` on success or ``(False, error_description)``.
-    """
+    """Probe sendMessage — returns (True, "") or (False, error_desc)."""
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     data = urllib.parse.urlencode({
         "chat_id": str(chat_id),
@@ -141,12 +160,6 @@ def _test_send(token: str, chat_id: int) -> tuple[bool, str]:
 
 
 def _fetch_chat_id(token: str) -> tuple[int | None, str | None, str | None]:
-    """Returns ``(chat_id, who, advisory)``.
-
-    ``advisory`` is set when we saw activity but couldn't pick a private
-    chat (e.g., user spoke to the bot in a group). The caller surfaces it
-    so the user knows what's wrong.
-    """
     body, _code, _err = _http_json(
         f"https://api.telegram.org/bot{token}/getUpdates"
     )
@@ -171,80 +184,127 @@ def _fetch_chat_id(token: str) -> tuple[int | None, str | None, str | None]:
     return None, None, None
 
 
+def _spin(message: str):
+    """Context manager: spinner if a TTY, plain print otherwise."""
+    if console.is_terminal:
+        return console.status(f"[muted]{message}[/muted]", spinner="dots")
+    # Off-TTY: print a single line and return a no-op context manager.
+    console.print(f"  {message}")
+    return _NullCtx()
+
+
+class _NullCtx:
+    def __enter__(self):
+        return self
+    def __exit__(self, *exc):
+        return False
+
+
+# ----- steps -----
+
 def _step_token() -> tuple[str, str]:
-    """Returns (token, bot_username)."""
+    step("[1/5]  Telegram bot")
+    hint("Get a token from @BotFather (https://t.me/BotFather)")
     while True:
-        print("\n[1/5] Telegram bot")
-        print("  → Get a bot token from @BotFather (https://t.me/BotFather)")
-        raw = input("  Bot token: ")
+        raw = _ask(questionary.text(
+            "Paste your bot token:",
+            qmark="?",
+            style=_PROMPT_STYLE,
+        ))
         token = _normalize_token(raw)
         if not token:
-            print("  (empty — try again)")
+            err_console.print("  [err]empty — try again[/err]")
             continue
-        info = _verify_token(token)
+        with _spin("Verifying with Telegram…"):
+            info = _verify_token(token)
         if info is None:
-            print("  Try again or Ctrl-C to exit.")
+            err_console.print("  [hint]Try again or Ctrl-C to exit.[/hint]")
             continue
         username = info.get("username") or "your_bot"
-        print(f"  ✓ Verified — @{username}")
+        ok(f"Verified — @{username}")
         return token, username
 
 
 def _step_chat_id(token: str, bot_username: str) -> int:
-    print("\n[2/5] Your chat ID")
-    print("  → DM your bot, then press Enter to auto-detect; or paste your chat ID.")
+    step("[2/5]  Your chat ID")
     while True:
-        raw = input("  Press Enter to auto-detect, or paste chat ID: ").strip()
-        if raw:
+        mode = _ask(questionary.select(
+            "How should we find your chat id?",
+            choices=[
+                questionary.Choice("Auto-detect (I'll DM the bot first)",
+                                   value="auto"),
+                questionary.Choice("Paste manually", value="manual"),
+            ],
+            qmark="?",
+            style=_PROMPT_STYLE,
+        ))
+        if mode == "manual":
+            raw = _ask(questionary.text(
+                "Chat id (integer):", qmark="?", style=_PROMPT_STYLE,
+            )).strip()
             try:
                 cid = int(raw)
             except ValueError:
-                print("  ✗ Not a number. Try again.")
+                err_console.print("  [err]not a number[/err]")
                 continue
         else:
-            found_id, who, advisory = _fetch_chat_id(token)
+            hint(f"DM the bot here, then continue: https://t.me/{bot_username}")
+            _ask(questionary.confirm(
+                "I've sent the bot a message in Telegram — continue?",
+                default=True, qmark="?", style=_PROMPT_STYLE,
+            ))
+            with _spin("Checking for your DM…"):
+                found_id, who, advisory = _fetch_chat_id(token)
             if found_id is None:
                 if advisory:
-                    print(f"  ✗ {advisory}")
+                    err_console.print(f"  [err]{advisory}[/err]")
                 else:
-                    print("  ✗ No DM detected. Send a message to your bot then press Enter.")
+                    err_console.print(
+                        "  [err]No DM detected — send any message to the bot in "
+                        "Telegram, then retry.[/err]"
+                    )
                 continue
             cid = found_id
-            print(f"  ✓ Detected chat_id={cid} (@{who})")
+            ok(f"Detected chat_id={cid} (@{who})")
 
-        # Always verify the bot can actually send to this chat. Telegram
-        # silently refuses bot→user sends until the user has tapped Start.
-        ok, err = _test_send(token, cid)
-        if ok:
-            print(f"  ✓ chat_id={cid} — test message delivered.")
-            confirm = input("    Did the test message arrive in Telegram? [Y/n]: ").strip().lower()
-            if confirm in ("", "y", "yes"):
+        with _spin("Sending a test message…"):
+            sent, err = _test_send(token, cid)
+
+        if sent:
+            ok(f"chat_id={cid} — test message delivered.")
+            confirmed = _ask(questionary.confirm(
+                "Did the test message arrive in your Telegram?",
+                default=True, qmark="?", style=_PROMPT_STYLE,
+            ))
+            if confirmed:
                 return cid
-            print("  ↻ Let's try again — the message went somewhere unexpected.")
+            hint("Let's try again — the message went somewhere unexpected.")
             continue
 
         if _CHAT_NOT_FOUND_RE.search(err):
-            print(f"  ✗ Telegram says: {err}")
-            print(f"     This means you haven't started a conversation with @{bot_username} yet.")
-            print(f"     1. Open https://t.me/{bot_username}")
-            print("     2. Tap Start (or send any message)")
-            print("     3. Then press Enter here to retry.")
-            input("    Press Enter once you've sent a message to the bot: ")
-            ok2, err2 = _test_send(token, cid)
-            if ok2:
-                print(f"  ✓ chat_id={cid} — test message delivered.")
+            err_console.print(f"  [err]Telegram says: {err}[/err]")
+            hint(f"You haven't started @{bot_username} yet — open it:")
+            hint(f"  https://t.me/{bot_username}")
+            _ask(questionary.confirm(
+                "I've tapped Start in Telegram — retry?",
+                default=True, qmark="?", style=_PROMPT_STYLE,
+            ))
+            with _spin("Retrying test send…"):
+                sent2, err2 = _test_send(token, cid)
+            if sent2:
+                ok(f"chat_id={cid} — test message delivered.")
                 return cid
-            print(f"  ✗ Still failing: {err2}")
-            print("     Restarting the chat-id prompt.")
+            err_console.print(f"  [err]Still failing: {err2}[/err]")
             continue
 
-        print(f"  ✗ Test send failed: {err}")
-        print("     Try again, or paste a different chat ID.")
+        err_console.print(f"  [err]Test send failed: {err}[/err]")
 
 
 def _step_deps() -> bool:
-    """Returns True if all required deps are present, False otherwise."""
-    print("\n[3/5] System dependencies")
+    """Returns True if all required deps are present."""
+    from rich.table import Table
+
+    step("[3/5]  System dependencies")
 
     dtach_p: str | None = None
     try:
@@ -252,41 +312,47 @@ def _step_deps() -> bool:
         dtach_p = _dtach_path()
     except (ImportError, FileNotFoundError):
         dtach_p = shutil.which("dtach")
-    if dtach_p:
-        print(f"  ✓ dtach found at {dtach_p}")
-    else:
-        print("  ✗ dtach not found.")
-        print("    Normally aipager bundles dtach via dtach-bin. Try:")
-        print("        uv tool install --reinstall aipager")
-        print("    Or install system-wide: `brew install dtach` / `sudo apt install dtach`.")
 
     claude_p = shutil.which("claude")
-    if claude_p:
-        print(f"  ✓ claude found at {claude_p}")
-    else:
-        print("  ✗ claude not on PATH —")
-        print("    install Claude Code: https://docs.anthropic.com/claude/docs/claude-code")
-
     hook_p = shutil.which(HOOK_CMD)
     statusline_p = shutil.which(STATUSLINE_CMD)
-    if not hook_p or not statusline_p:
-        print(f"  ✗ {HOOK_CMD} or {STATUSLINE_CMD} not on PATH —")
-        print("    your aipager install is incomplete. Try:")
-        print("        uv tool install --reinstall aipager")
-        return False
 
-    return bool(dtach_p and claude_p)
+    rows = [
+        ("dtach", dtach_p,
+         "uv tool install --reinstall aipager  # or `brew install dtach`"),
+        ("claude", claude_p,
+         "Install Claude Code: https://docs.anthropic.com/claude/docs/claude-code"),
+        ("aipager-hook", hook_p,
+         "uv tool install --reinstall aipager"),
+        ("aipager-statusline", statusline_p,
+         "uv tool install --reinstall aipager"),
+    ]
+
+    if console.is_terminal:
+        t = Table(show_header=False, box=None, pad_edge=False, padding=(0, 2))
+        t.add_column(width=3, justify="center")
+        t.add_column(no_wrap=True)
+        t.add_column(style="hint")
+        for name, path, fix in rows:
+            mark = ("[ok]✓[/ok]" if path else "[err]✗[/err]")
+            detail = path if path else fix
+            t.add_row(mark, name, detail)
+        console.print(t)
+    else:
+        for name, path, fix in rows:
+            mark = "✓" if path else "✗"
+            console.print(f"  {mark} {name}  {path or fix}")
+
+    # Required for the daemon: dtach + claude + both hook scripts.
+    return bool(dtach_p and claude_p and hook_p and statusline_p)
 
 
 def _resolve(cmd: str) -> str:
-    """Resolve a console-script name to an absolute path. Caller must have
-    pre-checked that ``shutil.which(cmd)`` is not None.
-    """
+    """Resolve a console-script to an absolute path; caller pre-checks."""
     return shutil.which(cmd) or cmd
 
 
 def _has_hook_cmd(entries: list, bare_name: str) -> bool:
-    """Match a hook entry by bare name or by any absolute path ending in it."""
     for block in entries:
         for hook in block.get("hooks", []):
             cmd = hook.get("command", "")
@@ -296,7 +362,6 @@ def _has_hook_cmd(entries: list, bare_name: str) -> bool:
 
 
 def _validate_settings_schema(settings: dict) -> None:
-    """Raise ValueError with a user-readable message if hooks schema is bad."""
     hooks = settings.get("hooks")
     if hooks is None:
         return
@@ -330,7 +395,7 @@ def _merge_hooks(settings: dict) -> None:
 
 
 def _step_settings() -> None:
-    print("\n[4/5] Claude Code integration")
+    step("[4/5]  Claude Code integration")
     settings: dict = {}
     existing_text = ""
     if CLAUDE_SETTINGS.exists():
@@ -341,29 +406,28 @@ def _step_settings() -> None:
         try:
             settings = json.loads(existing_text)
         except json.JSONDecodeError as e:
-            hint = ""
+            extra = ""
             if re.search(r"^\s*//|/\*", existing_text):
-                hint = ("\n     Looks like the file has // or /* */ comments. "
-                        "Claude Code uses strict JSON — strip the comments.")
+                extra = ("\n     Looks like the file has // or /* */ comments. "
+                         "Claude Code uses strict JSON — strip them.")
             raise ValueError(
-                f"{CLAUDE_SETTINGS} is not valid JSON ({e}).{hint}"
+                f"{CLAUDE_SETTINGS} is not valid JSON ({e}).{extra}"
             ) from e
         try:
             _validate_settings_schema(settings)
         except ValueError as e:
             raise ValueError(f"{CLAUDE_SETTINGS} schema problem: {e}") from e
-        # Skip backup if our merge wouldn't change anything.
         new_settings = json.loads(existing_text)
         _merge_hooks(new_settings)
         new_text = json.dumps(new_settings, indent=2) + "\n"
         if new_text == existing_text:
-            print(f"  ✓ {CLAUDE_SETTINGS} already up to date")
+            ok(f"{CLAUDE_SETTINGS} already up to date")
             return
         backup = CLAUDE_SETTINGS.with_name(
             f"{CLAUDE_SETTINGS.name}.bak.{int(time.time())}"
         )
         backup.write_text(existing_text)
-        print(f"  • backed up existing settings → {backup.name}")
+        console.print(f"  [muted]• backed up existing settings → {backup.name}[/muted]")
     else:
         CLAUDE_SETTINGS.parent.mkdir(parents=True, exist_ok=True)
     _merge_hooks(settings)
@@ -371,11 +435,11 @@ def _step_settings() -> None:
         CLAUDE_SETTINGS.write_text(json.dumps(settings, indent=2) + "\n")
     except OSError as e:
         raise OSError(f"cannot write {CLAUDE_SETTINGS}: {e}") from e
-    print(f"  ✓ Patched {CLAUDE_SETTINGS} ({len(HOOK_EVENTS)} hooks + statusLine)")
+    ok(f"Patched {CLAUDE_SETTINGS} ({len(HOOK_EVENTS)} hooks + statusLine)")
 
 
 def _step_write_env(token: str, chat_id: int) -> None:
-    print("\n[5/5] Write config")
+    step("[5/5]  Write config")
     try:
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     except OSError as e:
@@ -388,11 +452,12 @@ def _step_write_env(token: str, chat_id: int) -> None:
             existing = ""
         if f"CLAUDE_TG_BOT_TOKEN={token}" not in existing or \
            f"CLAUDE_TG_CHAT_ID={chat_id}" not in existing:
-            answer = input(
-                f"  ⚠ {CONFIG_ENV} already has different settings. Overwrite? [y/N]: "
-            ).strip().lower()
-            if answer not in ("y", "yes"):
-                print("  ↷ keeping existing config; new token not written.")
+            answer = _ask(questionary.confirm(
+                f"{CONFIG_ENV} already has different settings. Overwrite?",
+                default=False, qmark="?", style=_PROMPT_STYLE,
+            ))
+            if not answer:
+                friendly_warn("Keeping existing config; new token not written.")
                 return
 
     try:
@@ -408,24 +473,59 @@ def _step_write_env(token: str, chat_id: int) -> None:
             f"Could not chmod 0600 on {CONFIG_ENV} — non-POSIX filesystem?",
             "  Your token file is readable by other users on this machine.",
         )
-    print(f"  ✓ Wrote {CONFIG_ENV}")
+    ok(f"Wrote {CONFIG_ENV}")
+
+
+def _completion_screen() -> None:
+    """Show the post-setup summary in a panel (or plain text off-TTY)."""
+    from rich.panel import Panel
+
+    lines = [
+        f"[ok]{GLYPH_OK}[/ok]  Setup complete.",
+        "",
+        "  Start the daemon:    [path]aipager start[/path]",
+        "  Launch a session:    [path]aipager session dev[/path]",
+        "  Health check:        [path]aipager doctor[/path]",
+    ]
+    body = "\n".join(lines)
+    if console.is_terminal:
+        console.print()
+        console.print(Panel(body, border_style="ok", expand=False,
+                            padding=(0, 1)))
+    else:
+        console.print()
+        console.print(f"{GLYPH_OK} Setup complete.")
+        console.print()
+        console.print("  Start the daemon:    aipager start")
+        console.print("  Launch a session:    aipager session dev")
+        console.print("  Health check:        aipager doctor")
 
 
 def run() -> int:
-    print("Welcome to aipager setup.")
+    if console.is_terminal:
+        rule("aipager setup")
+    else:
+        console.print("Welcome to aipager setup.")
     try:
         token, bot_username = _step_token()
         chat_id = _step_chat_id(token, bot_username)
         deps_ok = _step_deps()
         if not deps_ok:
-            answer = input("\n  Continue anyway (the daemon will likely fail)? [y/N]: ").strip().lower()
-            if answer not in ("y", "yes"):
-                friendly_warn("Setup aborted — install the missing dependencies and re-run `aipager config`.")
+            cont = _ask(questionary.confirm(
+                "Continue anyway? (the daemon will likely fail until you "
+                "install the missing dependencies)",
+                default=False, qmark="?", style=_PROMPT_STYLE,
+            ))
+            if not cont:
+                friendly_warn(
+                    "Setup aborted — install the missing dependencies and "
+                    "re-run `aipager config`.",
+                )
                 return 2
         _step_settings()
         _step_write_env(token, chat_id)
     except KeyboardInterrupt:
-        print("\nCancelled.")
+        friendly_warn("Cancelled.")
         return 130
     except ValueError as e:
         friendly_error(str(e))
@@ -433,9 +533,7 @@ def run() -> int:
     except OSError as e:
         friendly_error(f"Setup failed: {e}")
         return 1
-    print("\nSetup complete.\n")
-    print("  Start the daemon:    aipager start")
-    print("  Launch a session:    aipager session dev")
+    _completion_screen()
     return 0
 
 
