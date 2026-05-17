@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `stop`, `status`, `logs`, `uninstall`. Unit/plist always references
   the absolute path of `aipager` resolved via `shutil.which`, so it
   works whether aipager came from pipx, brew, or an editable install.
+- `install.sh` one-line installer script. Detects the available installer
+  (Homebrew on macOS → pipx → uv tool) and uses whichever is present.
+  Available via:
+  `curl -fsSL https://raw.githubusercontent.com/dev-aly3n/aipager/main/install.sh | sh`.
 
 ### Removed
 - `scripts/aipager.service.example` (replaced by the template inside

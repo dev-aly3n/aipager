@@ -9,7 +9,13 @@ requests, switch sessions — without an SSH session staying open.
 
 Requires Python 3.10+ (Linux / macOS).
 
-### pipx (recommended)
+### One-line install (auto-detects pipx / uv / brew)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/dev-aly3n/aipager/main/install.sh | sh
+```
+
+### pipx
 
 ```sh
 pipx install aipager
@@ -56,9 +62,19 @@ claude-dtach dev
 ```
 
 The daemon discovers the session within seconds and Telegram starts
-mirroring it. To survive logout, use `screen`, `tmux`, or a systemd-user
-unit (template at `scripts/aipager.service.example` — full `aipager
-service install` automation lands in v0.4).
+mirroring it.
+
+### Run as a service (survives logout)
+
+```sh
+aipager service install
+```
+
+On Linux this writes a systemd-user unit at
+`~/.config/systemd/user/aipager.service` and starts it. On macOS it
+writes a launchd plist at `~/Library/LaunchAgents/com.aipager.daemon.plist`
+and bootstraps it. Subcommands: `start`, `stop`, `status`, `logs`,
+`uninstall`.
 
 ## What it does
 
