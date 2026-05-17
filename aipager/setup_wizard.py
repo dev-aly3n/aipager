@@ -105,16 +105,30 @@ def _step_chat_id(token: str) -> int:
 
 def _step_deps() -> None:
     print("\n[3/5] System dependencies")
-    checks = [
-        ("dtach", "Debian/Ubuntu: sudo apt install dtach   |   macOS: brew install dtach"),
-        ("claude", "https://docs.anthropic.com/claude/docs/claude-code"),
-    ]
-    for tool, hint in checks:
-        path = shutil.which(tool)
-        if path:
-            print(f"  ✓ {tool} found at {path}")
-        else:
-            print(f"  ✗ {tool} not on PATH — install: {hint}")
+
+    # dtach: aipager bundles it via dtach-bin so it normally won't be on the
+    # shell's PATH, but it's reachable via dtach_bin.path(). Only complain
+    # if neither the bundled binary nor PATH has it.
+    dtach_p: str | None = None
+    try:
+        from dtach_bin import path as _dtach_path
+        dtach_p = _dtach_path()
+    except (ImportError, FileNotFoundError):
+        dtach_p = shutil.which("dtach")
+    if dtach_p:
+        print(f"  ✓ dtach found at {dtach_p}")
+    else:
+        print("  ✗ dtach not found.")
+        print("    Normally aipager bundles dtach via dtach-bin. Try:")
+        print("        uv tool install --reinstall aipager")
+        print("    Or install system-wide: `brew install dtach` / `sudo apt install dtach`.")
+
+    claude_p = shutil.which("claude")
+    if claude_p:
+        print(f"  ✓ claude found at {claude_p}")
+    else:
+        print("  ✗ claude not on PATH —")
+        print("    install Claude Code: https://docs.anthropic.com/claude/docs/claude-code")
 
 
 def _resolve(cmd: str) -> str:
@@ -199,8 +213,9 @@ def run() -> int:
         print(f"\n✗ Setup failed: {e}", file=sys.stderr)
         return 1
     print("\nSetup complete.\n")
-    print("  Start the daemon:    aipager start")
-    print("  Launch a session:    claude-dtach dev")
+    print("  Start the daemon:    aipager start          # foreground (Ctrl-C to stop)")
+    print("  Or as a service:     aipager service install   # persists across logout")
+    print("  Launch a session:    aipager session dev")
     return 0
 
 

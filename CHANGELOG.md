@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-05-17
+
+### Fixed
+- `aipager config` no longer falsely reports `✗ dtach not on PATH` in
+  pipx / uv-tool / brew-venv layouts where the bundled binary lives
+  inside the venv but isn't on the shell's PATH. The check now uses
+  `dtach_bin.path()` (which knows about the venv layout) before
+  falling back to PATH.
+- `aipager config` final-step hint corrected: was `claude-dtach dev`,
+  now says `aipager session dev`. The `claude-dtach` console script was
+  removed in 0.3.2 and the stale hint slipped through.
+
 ## [0.3.4] - 2026-05-17
 
 ### Added
