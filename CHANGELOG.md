@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.9] - 2026-05-17
+
 ### Added
 - New `aipager.ui` module — single source of truth for console output,
   theme, and TTY/color detection. Backed by `rich`. Honors `NO_COLOR`,
