@@ -36,6 +36,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+from telegram.error import BadRequest
 
 from aipager import dtach_inject as inject
 import random
@@ -171,6 +172,8 @@ class TelegramBot:
 
         # Register handlers
         self._app.add_handler(CallbackQueryHandler(self._handle_callback))
+        self._app.add_handler(CommandHandler("start", self._handle_start_cmd))
+        self._app.add_handler(CommandHandler("help", self._handle_start_cmd))
         self._app.add_handler(CommandHandler("status", self._handle_status))
         self._app.add_handler(CommandHandler("stop", self._handle_stop_cmd))
         self._app.add_handler(CommandHandler("kill", self._handle_kill_cmd))
@@ -332,6 +335,18 @@ class TelegramBot:
                 CHAT_ID, msg_text,
                 reply_markup=keyboard,
             )
+        except BadRequest as e:
+            if "chat not found" in str(e).lower():
+                bot_user = (await self._app.bot.get_me()).username
+                log.error(
+                    "Cannot send to Telegram chat %s: %s\n"
+                    "  → The bot @%s has never received a message from this chat.\n"
+                    "  → Open https://t.me/%s in Telegram and tap Start, then\n"
+                    "    the next message you send will let the daemon proceed.",
+                    CHAT_ID, e, bot_user, bot_user,
+                )
+            else:
+                log.warning("Failed to send keyboard: %s", e)
         except Exception:
             log.warning("Failed to send keyboard", exc_info=True)
 
@@ -1691,6 +1706,46 @@ class TelegramBot:
                 log.info("[%s] %s", sess.label, verb)
         else:
             await query.answer(f"Failed to send to {session_name}")
+
+    async def _handle_start_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /start and /help — friendly welcome with current state."""
+        sessions = sorted(
+            (sess.label, sess.status.name.lower())
+            for sess in self.registry.all_sessions().values()
+            if sess.status != Status.GONE and sess.label
+        )
+        if sessions:
+            session_block = "\n".join(f"  • <b>{lbl}</b> · {status}"
+                                     for lbl, status in sessions)
+        else:
+            session_block = "  <i>(no sessions yet)</i>"
+
+        text = (
+            "\U0001f44b <b>aipager</b> — Telegram remote for Claude Code\n\n"
+            "Talk to your local Claude sessions from this chat. The daemon "
+            "is running and mirroring sessions to you live.\n\n"
+            "<b>Tracked sessions</b>\n"
+            f"{session_block}\n\n"
+            "<b>How to use</b>\n"
+            "  • Tap a session name on the keyboard below to switch to it.\n"
+            "  • Send a plain message — it goes to the active session.\n"
+            "  • Reply to a session's message to pin your prompt to that session.\n\n"
+            "<b>Open a new session on your computer</b>\n"
+            "  <code>aipager session &lt;name&gt;</code>\n\n"
+            "<b>Commands</b>\n"
+            "  /status — per-session dashboard\n"
+            "  /stop — interrupt the active session\n"
+            "  /kill — terminate a session\n"
+            "  /new — launch a new session (alias for `aipager session`)\n"
+        )
+        try:
+            await self._app.bot.send_message(
+                update.effective_chat.id, text, parse_mode="HTML",
+            )
+        except Exception:
+            log.warning("Failed to send /start welcome", exc_info=True)
+        # Make sure the persistent keyboard is showing.
+        await self._send_keyboard(level="main")
 
     async def _handle_status(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /status command — rich per-session dashboard."""

@@ -18,6 +18,7 @@ import shutil
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -50,6 +51,37 @@ def _verify_token(token: str) -> dict | None:
     return result.get("result") if result.get("ok") else None
 
 
+def _test_send(token: str, chat_id: int) -> tuple[bool, str]:
+    """Send a "hello" probe to verify the bot can reach the chat.
+
+    Returns ``(True, "")`` on success or ``(False, error_description)``
+    on any failure. The common failure is Telegram's
+    ``Bad Request: chat not found`` which means the user hasn't opened
+    the bot in their Telegram client yet (Telegram refuses bot-→-user
+    messages until the user initiates).
+    """
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    data = urllib.parse.urlencode({
+        "chat_id": str(chat_id),
+        "text": "✓ aipager linked to this chat.",
+    }).encode()
+    req = urllib.request.Request(url, data=data, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            result = json.load(r)
+    except urllib.error.HTTPError as e:
+        try:
+            body = json.loads(e.read())
+            return False, body.get("description", str(e))
+        except Exception:
+            return False, str(e)
+    except (urllib.error.URLError, OSError, json.JSONDecodeError) as e:
+        return False, str(e)
+    if not result.get("ok"):
+        return False, result.get("description", "unknown error")
+    return True, ""
+
+
 def _fetch_chat_id(token: str) -> tuple[int, str] | None:
     try:
         result = _http_json(f"https://api.telegram.org/bot{token}/getUpdates")
@@ -67,7 +99,8 @@ def _fetch_chat_id(token: str) -> tuple[int, str] | None:
     return None
 
 
-def _step_token() -> str:
+def _step_token() -> tuple[str, str]:
+    """Returns (token, bot_username)."""
     while True:
         print("\n[1/5] Telegram bot")
         print("  → Get a bot token from @BotFather (https://t.me/BotFather)")
@@ -79,11 +112,12 @@ def _step_token() -> str:
         if info is None:
             print("  ✗ Token invalid or Telegram unreachable. Try again or Ctrl-C to exit.")
             continue
-        print(f"  ✓ Verified — @{info.get('username')}")
-        return token
+        username = info.get("username") or "your_bot"
+        print(f"  ✓ Verified — @{username}")
+        return token, username
 
 
-def _step_chat_id(token: str) -> int:
+def _step_chat_id(token: str, bot_username: str) -> int:
     print("\n[2/5] Your chat ID")
     print("  → DM your bot, then press Enter to auto-detect; or paste your chat ID.")
     while True:
@@ -94,15 +128,41 @@ def _step_chat_id(token: str) -> int:
             except ValueError:
                 print("  ✗ Not a number. Try again.")
                 continue
-            print(f"  ✓ Using chat_id={cid}")
+        else:
+            found = _fetch_chat_id(token)
+            if found is None:
+                print("  ✗ No DM detected. Send a message to your bot then press Enter again.")
+                continue
+            cid, who = found
+            print(f"  ✓ Detected chat_id={cid} (@{who})")
+            cid = int(cid)
+
+        # Always verify the bot can actually send to this chat. Telegram
+        # silently refuses bot-→-user sends until the user has tapped Start.
+        ok, err = _test_send(token, cid)
+        if ok:
+            if raw:
+                print(f"  ✓ Using chat_id={cid} — test message delivered.")
             return cid
-        found = _fetch_chat_id(token)
-        if found is None:
-            print("  ✗ No DM detected. Send a message to your bot then press Enter again.")
+
+        if "chat not found" in err.lower():
+            print(f"  ✗ Telegram says: {err}")
+            print(f"     This means you haven't started a conversation with @{bot_username} yet.")
+            print(f"     1. Open https://t.me/{bot_username}")
+            print("     2. Tap Start (or send any message)")
+            print("     3. Then press Enter here to retry.")
+            input("    Press Enter once you've sent a message to the bot: ")
+            # Retry the same chat_id once.
+            ok2, err2 = _test_send(token, cid)
+            if ok2:
+                print(f"  ✓ chat_id={cid} — test message delivered.")
+                return cid
+            print(f"  ✗ Still failing: {err2}")
+            print("     Restarting the chat-id prompt.")
             continue
-        cid, who = found
-        print(f"  ✓ Detected chat_id={cid} (@{who})")
-        return cid
+
+        print(f"  ✗ Test send failed: {err}")
+        print("     Try again, or paste a different chat ID.")
 
 
 def _step_deps() -> None:
@@ -203,8 +263,8 @@ def _step_write_env(token: str, chat_id: int) -> None:
 def run() -> int:
     print("Welcome to aipager setup.")
     try:
-        token = _step_token()
-        chat_id = _step_chat_id(token)
+        token, bot_username = _step_token()
+        chat_id = _step_chat_id(token, bot_username)
         _step_deps()
         _step_settings()
         _step_write_env(token, chat_id)

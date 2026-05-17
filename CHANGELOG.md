@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-05-17
+
+### Added
+- `/start` and `/help` commands in the Telegram bot now return a
+  friendly welcome message with the list of tracked sessions and
+  usage hints, instead of the previous `⚠️ Unknown session: start`.
+- `aipager config` now verifies the bot can actually reach your chat
+  by sending a test message. If Telegram replies with "chat not
+  found" (the user hasn't tapped Start on the bot yet), the wizard
+  prints a precise instruction and waits while the user opens the
+  bot in Telegram, then retries automatically.
+
+### Changed
+- When the daemon fails to send to the configured chat with "chat
+  not found", the log now points at the fix
+  (`open https://t.me/<bot>`) instead of dumping a 30-line traceback.
+
 ## [0.3.6] - 2026-05-17
 
 ### Fixed
