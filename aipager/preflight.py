@@ -14,19 +14,7 @@ import shutil
 import sys
 from pathlib import Path
 
-
-def _err(*lines: str) -> None:
-    """Print a multi-line error block to stderr with a leading ✗ marker."""
-    print(f"✗ {lines[0]}" if lines else "", file=sys.stderr)
-    for line in lines[1:]:
-        print(line, file=sys.stderr)
-
-
-def _warn(*lines: str) -> None:
-    """Print a multi-line warning block to stderr with a leading ⚠ marker."""
-    print(f"⚠ {lines[0]}" if lines else "", file=sys.stderr)
-    for line in lines[1:]:
-        print(line, file=sys.stderr)
+from aipager.errors import friendly_error, friendly_warn
 
 
 def require_config() -> None:
@@ -41,7 +29,7 @@ def require_config() -> None:
     if not missing:
         return
 
-    _err(
+    friendly_error(
         "aipager isn't configured yet.",
         "",
         f"  Missing: {', '.join(missing)}",
@@ -60,7 +48,7 @@ def require_claude() -> str:
     p = shutil.which("claude")
     if p:
         return p
-    _err(
+    friendly_error(
         "Claude Code CLI not found on PATH.",
         "",
         "  aipager wraps the `claude` command — install it from:",
@@ -78,7 +66,7 @@ def require_daemon() -> None:
 
     if Path(SOCKET_PATH).exists():
         return
-    _err(
+    friendly_error(
         "aipager daemon isn't running.",
         "",
         f"  Expected the socket at {SOCKET_PATH} but it's not there.",
@@ -107,7 +95,7 @@ def warn_if_daemon_down() -> None:
 
     if Path(SOCKET_PATH).exists():
         return
-    _warn(
+    friendly_warn(
         "aipager daemon isn't running.",
         f"  ({SOCKET_PATH} is missing)",
         "  Start it with `aipager start` or `aipager service start`.",
