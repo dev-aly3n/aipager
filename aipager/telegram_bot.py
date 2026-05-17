@@ -153,15 +153,18 @@ class TelegramBot:
         builder = ApplicationBuilder().token(BOT_TOKEN)
 
         # Long-poll config: timeout=30 means Telegram holds the connection
-        # for up to 30s waiting for updates → instant response to taps
+        # for up to 30s waiting for updates → instant response to taps.
+        # Connect timeouts are 30s rather than 10s to tolerate slow proxy
+        # / VPN TLS handshakes (the daemon's first getMe call goes through
+        # whatever HTTPS_PROXY the shell exports).
         builder = (
             builder
             .get_updates_read_timeout(30)
-            .get_updates_write_timeout(10)
-            .get_updates_connect_timeout(10)
-            .read_timeout(10)
-            .write_timeout(10)
-            .connect_timeout(10)
+            .get_updates_write_timeout(15)
+            .get_updates_connect_timeout(30)
+            .read_timeout(20)
+            .write_timeout(15)
+            .connect_timeout(30)
         )
 
         self._app = builder.build()

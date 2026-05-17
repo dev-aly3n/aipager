@@ -36,7 +36,9 @@ TOOL_MATCHER_EVENTS = {"PreToolUse", "PostToolUse", "PermissionRequest"}
 
 
 def _http_json(url: str) -> dict:
-    with urllib.request.urlopen(url, timeout=10) as r:
+    # 30s tolerates slow VPN/proxy TLS handshakes; under direct connections
+    # the call completes in well under a second.
+    with urllib.request.urlopen(url, timeout=30) as r:
         return json.load(r)
 
 

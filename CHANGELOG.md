@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-05-17
+
+### Fixed
+- Bumped HTTP connect timeouts (10 s → 30 s) so the daemon's initial
+  `getMe` call survives slow TLS handshakes through HTTPS proxies or
+  VPN tunnels. Affected users got an unhelpful `httpx.ConnectTimeout`
+  during `aipager start` on networks where curl with 30 s succeeded.
+- `aipager config`'s urllib timeout also bumped 10 s → 30 s for the
+  same reason — the wizard's `getMe` could spuriously fail on first
+  attempt and report "Token invalid or Telegram unreachable" when the
+  real issue was proxy latency.
+
 ## [0.3.5] - 2026-05-17
 
 ### Fixed
