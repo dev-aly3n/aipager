@@ -4,24 +4,147 @@ Subcommands:
   start    run the daemon in the foreground
   config   interactive setup wizard (configures Telegram + Claude Code)
   version  print version
+  doctor   run health checks
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import logging
 import signal
+import socket
 import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
 
 from aipager import __version__
 
 log = logging.getLogger("aipager")
 
 
-async def _run_daemon() -> None:
+def _check_existing_daemon() -> None:
+    """If /tmp/aipager.sock exists, decide whether to abort or clean up.
+
+    - Live daemon (sendto succeeds) → exit 1 with friendly "already running".
+    - Stale socket (ConnectionRefusedError) → leave for HookReceiver to unlink.
+    - Permission / other OSError → warn but don't abort.
+    """
+    from aipager.config import SOCKET_PATH
+    from aipager.errors import friendly_error, friendly_warn
+    p = Path(SOCKET_PATH)
+    if not p.exists():
+        return
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    try:
+        s.settimeout(0.5)
+        s.sendto(b'{"event":"_startup_probe"}', SOCKET_PATH)
+    except ConnectionRefusedError:
+        # Old socket file with no live daemon — HookReceiver.start() unlinks.
+        return
+    except OSError as e:
+        friendly_warn(
+            f"Could not probe existing socket at {SOCKET_PATH}: {e}",
+            "  Continuing — if the daemon fails to bind, kill the stale process.",
+        )
+        return
+    finally:
+        s.close()
+    friendly_error(
+        "Another aipager daemon already owns the socket.",
+        "",
+        f"  Found a responsive listener at {SOCKET_PATH}.",
+        "  Stop it before starting a new one:",
+        "",
+        "      aipager service stop       # if installed as a service",
+        "      pkill -f 'aipager start'   # otherwise",
+        "",
+    )
+    sys.exit(1)
+
+
+def _telegram_preflight() -> str:
+    """Verify the bot token and chat id reach Telegram. Returns the bot's
+    username. Exits with code 2 (misconfiguration) on user-fixable failures
+    so wrappers can distinguish setup problems from crashes.
+    """
+    from aipager.config import BOT_TOKEN, CHAT_ID
+    from aipager.errors import friendly_error
+
+    def _call(url: str) -> tuple[dict | None, int | None, str]:
+        try:
+            with urllib.request.urlopen(url, timeout=15) as r:
+                return json.load(r), r.status, ""
+        except urllib.error.HTTPError as e:
+            try:
+                body = json.loads(e.read())
+            except Exception:
+                body = {"description": str(e)}
+            return body, e.code, body.get("description", "")
+        except urllib.error.URLError as e:
+            return None, None, f"network: {e.reason}"
+        except (OSError, json.JSONDecodeError) as e:
+            return None, None, str(e)
+
+    body, code, err = _call(f"https://api.telegram.org/bot{BOT_TOKEN}/getMe")
+    if code == 401:
+        friendly_error(
+            "Telegram rejected the bot token (HTTP 401).",
+            "",
+            "  The token in ~/.config/aipager/config.env is no longer valid.",
+            "  Generate a fresh one in @BotFather and re-run:",
+            "",
+            "      aipager config",
+            "",
+        )
+        sys.exit(2)
+    if code and code >= 500:
+        friendly_error(
+            f"Telegram API error (HTTP {code}).",
+            "  Probably transient — wait a moment and retry `aipager start`.",
+        )
+        sys.exit(1)
+    if not body or not body.get("ok"):
+        friendly_error(
+            "Could not reach api.telegram.org.",
+            "",
+            f"  Detail: {err or 'unknown'}",
+            "",
+            "  Check your network, then retry `aipager start`.",
+        )
+        sys.exit(1)
+    username = body["result"].get("username", "")
+
+    body, code, err = _call(
+        f"https://api.telegram.org/bot{BOT_TOKEN}/getChat?chat_id={CHAT_ID}"
+    )
+    if err and "chat not found" in err.lower():
+        friendly_error(
+            "Telegram knows the bot but cannot reach your chat.",
+            "",
+            f"  Chat id: {CHAT_ID}",
+            f"  Bot:     @{username}",
+            "",
+            "  Telegram refuses bot→user messages until you DM the bot once.",
+            "",
+            f"  1. Open https://t.me/{username}",
+            "  2. Tap Start (or send any message)",
+            "  3. Re-run `aipager start`",
+            "",
+        )
+        sys.exit(2)
+    if not body or not body.get("ok"):
+        # Non-fatal — getChat fail can be transient and the daemon will retry.
+        log.warning("getChat returned %s — daemon may have trouble sending: %s",
+                    code, err)
+    return username
+
+
+async def _run_daemon(bot_username: str) -> None:
     """Boot the daemon and run until SIGINT/SIGTERM."""
-    from aipager.config import BOT_TOKEN, OBSERVER_BOTS
+    from aipager.config import BOT_TOKEN, CHAT_ID, OBSERVER_BOTS
     from aipager.hook_receiver import HookReceiver
     from aipager.observer import ObserverBroadcaster
     from aipager.session_monitor import SessionMonitor
@@ -31,6 +154,8 @@ async def _run_daemon() -> None:
     if not BOT_TOKEN:
         log.error("CLAUDE_TG_BOT_TOKEN not set — run `aipager config` first")
         sys.exit(1)
+
+    log.info("connected as @%s, will message chat %s", bot_username, CHAT_ID)
 
     registry = SessionRegistry()
     registry.load()
@@ -76,7 +201,9 @@ def _cmd_start(args: argparse.Namespace) -> int:
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
         datefmt="%H:%M:%S",
     )
-    asyncio.run(_run_daemon())
+    _check_existing_daemon()
+    bot_username = _telegram_preflight()
+    asyncio.run(_run_daemon(bot_username))
     return 0
 
 
@@ -88,6 +215,11 @@ def _cmd_config(args: argparse.Namespace) -> int:
 def _cmd_version(args: argparse.Namespace) -> int:
     print(__version__)
     return 0
+
+
+def _cmd_doctor(args: argparse.Namespace) -> int:
+    from aipager.doctor import cmd_doctor
+    return cmd_doctor(args)
 
 
 def _cmd_service(args: argparse.Namespace) -> int:
@@ -110,6 +242,8 @@ def _cmd_session(args: argparse.Namespace) -> int:
 
 
 def main() -> None:
+    from aipager.errors import install_excepthook
+    install_excepthook()
     parser = argparse.ArgumentParser(
         prog="aipager",
         description="Telegram remote-control daemon for Claude Code sessions",
@@ -123,6 +257,8 @@ def main() -> None:
                    ).set_defaults(fn=_cmd_config)
     sub.add_parser("version", help="print version"
                    ).set_defaults(fn=_cmd_version)
+    sub.add_parser("doctor", help="run health checks and print a report"
+                   ).set_defaults(fn=_cmd_doctor)
 
     session_p = sub.add_parser(
         "session",
