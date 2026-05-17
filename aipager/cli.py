@@ -260,6 +260,11 @@ def main() -> None:
     sub.add_parser("doctor", help="run health checks and print a report"
                    ).set_defaults(fn=_cmd_doctor)
 
+    help_p = sub.add_parser("help",
+                            help="show help for aipager or a subcommand")
+    help_p.add_argument("topic", nargs="?",
+                        help="subcommand name (e.g. `aipager help session`)")
+
     session_p = sub.add_parser(
         "session",
         help="open a Claude Code session under dtach (creates if it doesn't "
@@ -303,6 +308,27 @@ def main() -> None:
     if not args.cmd:
         parser.print_help()
         sys.exit(0)
+    if args.cmd == "help":
+        topic = getattr(args, "topic", None)
+        if not topic:
+            parser.print_help()
+            sys.exit(0)
+        # Look up the topic in the subparsers and print its help.
+        subparsers_action = next(
+            (a for a in parser._actions
+             if isinstance(a, argparse._SubParsersAction)),
+            None,
+        )
+        choices = subparsers_action.choices if subparsers_action else {}
+        if topic in choices:
+            choices[topic].print_help()
+            sys.exit(0)
+        from aipager.errors import friendly_error
+        friendly_error(
+            f"Unknown subcommand: {topic}",
+            f"  Available: {', '.join(sorted(choices))}",
+        )
+        sys.exit(2)
     if args.cmd == "service" and not getattr(args, "service_cmd", None):
         service_p.print_help()
         sys.exit(0)

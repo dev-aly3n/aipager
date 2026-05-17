@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `aipager help` subcommand. Bare `aipager help` prints the same
+  top-level usage as `-h`, and `aipager help <subcommand>` (e.g.
+  `aipager help session`) prints that subcommand's specific help.
+  Unknown topics fail with a friendly listing of available
+  subcommands. Closes a small DX gap where users typed `aipager help`
+  out of habit and got an argparse parse error.
+
 ## [0.3.9] - 2026-05-17
 
 ### Added
