@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.10] - 2026-05-17
+
 ### Changed
 - **Breaking:** `aipager session` no longer accepts the aipager-specific
   shortcuts `-y` and `--resume`. Pass claude's own flags through the
