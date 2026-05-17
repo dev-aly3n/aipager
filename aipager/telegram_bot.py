@@ -208,7 +208,7 @@ class TelegramBot:
         self.registry = registry
         self._app: Application | None = None
         self.observers = None  # ObserverBroadcaster | None, injected by __main__
-        self._registered_labels: set[str] = set()  # cached to skip redundant setMyCommands
+        self._registered_labels: set[str] | None = None  # None = never synced this run
         self._keyboard_level: str = "main"  # "main", "templates", "commands", "models"
         self._template_map: dict[str, str] = {label: prompt for label, prompt in QUICK_TEMPLATES}
         self._command_map: dict[str, str] = {label: cmd for label, cmd in QUICK_COMMANDS}
@@ -310,18 +310,23 @@ class TelegramBot:
     async def _update_bot_commands(self) -> None:
         """Register bot commands (/ menu) and update persistent keyboard.
 
-        Skips API call if session labels haven't changed since last update.
+        Always runs on the first call after daemon startup, even when
+        there are no sessions, so Telegram's server-side command cache
+        from a previous run (stale ``/jim`` / ``/john`` entries) is
+        cleared and the persistent keyboard appears immediately. On
+        subsequent calls it short-circuits when nothing changed.
         """
         if not self._app:
             return
 
         # Collect live session labels
-        labels = set()
+        labels: set[str] = set()
         for name, sess in self.registry.all_sessions().items():
             if sess.status != Status.GONE and sess.label:
                 labels.add(sess.label)
 
-        if labels == self._registered_labels:
+        first_run = self._registered_labels is None
+        if not first_run and labels == self._registered_labels:
             return  # no change
 
         # Build command list: static + dynamic session labels
@@ -341,8 +346,12 @@ class TelegramBot:
                      ", ".join(sorted(labels)) or "(none)")
         except Exception:
             log.warning("Failed to set bot commands", exc_info=True)
+            # Still mark as synced so we don't retry every poll cycle.
+            if first_run:
+                self._registered_labels = labels
 
-        # Send/update persistent keyboard (always main — session labels changed)
+        # Send/update persistent keyboard (always main — first run or
+        # session list changed).
         await self._send_keyboard(level="main")
 
     @staticmethod

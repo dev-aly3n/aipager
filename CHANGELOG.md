@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Fresh-install bots no longer show stale `/jim` / `/john` (etc.) in
+  Telegram's slash-command menu. Telegram caches `setMyCommands`
+  server-side per bot token, so a daemon that ran against this bot
+  earlier could leave session-named slash commands behind even after
+  full reinstall. The daemon now force-syncs commands on its first
+  startup of each run, clearing any stale entries.
+- The persistent keyboard (Templates / Commands / status / stop /
+  kill) now appears immediately when the daemon starts with no
+  sessions yet, instead of only after the first session is created.
+  Caused by the same short-circuit — both symptoms had one fix.
+
 ## [0.3.10] - 2026-05-17
 
 ### Changed
