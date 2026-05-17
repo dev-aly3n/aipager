@@ -21,6 +21,7 @@ import time
 from pathlib import Path
 
 from aipager.errors import friendly_error, friendly_warn
+from aipager.ui import console, ok, step
 
 LINUX_UNIT_PATH = Path.home() / ".config" / "systemd" / "user" / "aipager.service"
 MACOS_PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / "com.aipager.daemon.plist"
@@ -150,14 +151,16 @@ def _backup_existing(path: Path) -> None:
     backup = path.with_name(f"{path.name}.bak.{int(time.time())}")
     try:
         backup.write_text(path.read_text())
-        print(f"  • backed up existing {path.name} → {backup.name}")
+        console.print(
+            f"  [muted]• backed up existing {path.name} → {backup.name}[/muted]"
+        )
     except OSError as e:
         friendly_warn(f"could not back up {path}: {e}")
 
 
 def _install_linux() -> int:
-    ok, reason = _systemd_user_available()
-    if not ok:
+    available, reason = _systemd_user_available()
+    if not available:
         friendly_error(
             "systemd-user is not available on this machine.",
             f"  Detail: {reason}",
@@ -169,27 +172,36 @@ def _install_linux() -> int:
         )
         return 2
 
+    step("Installing aipager.service (systemd-user)")
+
     LINUX_UNIT_PATH.parent.mkdir(parents=True, exist_ok=True)
     _backup_existing(LINUX_UNIT_PATH)
     LINUX_UNIT_PATH.write_text(_render_linux_unit())
-    print(f"  ✓ wrote {LINUX_UNIT_PATH}")
+    ok(f"wrote [path]{LINUX_UNIT_PATH}[/path]")
+
     rc, _out, err = _run(["systemctl", "--user", "daemon-reload"])
     if rc != 0:
-        friendly_warn(f"systemctl daemon-reload returned {rc}", f"  {err.strip()}")
-    rc, _out, err = _run(["systemctl", "--user", "enable", "--now", "aipager.service"])
+        friendly_warn(f"systemctl daemon-reload returned {rc}",
+                      f"  {err.strip()}")
+    else:
+        ok("systemctl daemon-reload")
+
+    rc, _out, err = _run(["systemctl", "--user", "enable", "--now",
+                          "aipager.service"])
     if rc != 0:
         friendly_error(
-            f"systemctl --user enable --now aipager.service failed (exit {rc}).",
+            f"systemctl --user enable --now aipager.service failed "
+            f"(exit {rc}).",
             f"  {err.strip()}" if err.strip() else "  (no stderr captured)",
         )
         return rc
-    print("  ✓ enabled and started")
+    ok("enabled and started")
     _check_linger()
     _post_install_probe()
-    print()
-    print("  status:  systemctl --user status aipager")
-    print("  logs:    journalctl --user -u aipager -f")
-    print("  stop:    aipager service stop")
+    console.print()
+    console.print("  [muted]status:[/muted]  systemctl --user status aipager")
+    console.print("  [muted]logs:[/muted]    journalctl --user -u aipager -f")
+    console.print("  [muted]stop:[/muted]    aipager service stop")
     return 0
 
 
@@ -231,15 +243,17 @@ def _install_macos() -> int:
         )
         return 2
 
+    step("Installing aipager (launchd)")
     MACOS_PLIST_PATH.parent.mkdir(parents=True, exist_ok=True)
     MACOS_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     _backup_existing(MACOS_PLIST_PATH)
     MACOS_PLIST_PATH.write_text(_render_macos_plist())
-    print(f"  ✓ wrote {MACOS_PLIST_PATH}")
+    ok(f"wrote [path]{MACOS_PLIST_PATH}[/path]")
     domain = f"gui/{os.getuid()}"
     # bootstrap is idempotent if we bootout first
     _run(["launchctl", "bootout", f"{domain}/{MACOS_LABEL}"])
-    rc, _out, err = _run(["launchctl", "bootstrap", domain, str(MACOS_PLIST_PATH)])
+    rc, _out, err = _run(["launchctl", "bootstrap", domain,
+                          str(MACOS_PLIST_PATH)])
     if rc != 0:
         friendly_error(
             f"launchctl bootstrap failed (exit {rc}).",
@@ -250,12 +264,14 @@ def _install_macos() -> int:
         )
         return rc
     _run(["launchctl", "kickstart", f"{domain}/{MACOS_LABEL}"])
-    print("  ✓ loaded and started")
+    ok("loaded and started")
     _post_install_probe()
-    print()
-    print(f"  status:  launchctl print {domain}/{MACOS_LABEL}")
-    print(f"  logs:    tail -f {MACOS_LOG_PATH}")
-    print("  stop:    aipager service stop")
+    console.print()
+    console.print(
+        f"  [muted]status:[/muted]  launchctl print {domain}/{MACOS_LABEL}"
+    )
+    console.print(f"  [muted]logs:[/muted]    tail -f {MACOS_LOG_PATH}")
+    console.print("  [muted]stop:[/muted]    aipager service stop")
     return 0
 
 
@@ -354,14 +370,14 @@ def _uninstall_linux() -> int:
     _run(["systemctl", "--user", "disable", "--now", "aipager.service"])
     LINUX_UNIT_PATH.unlink(missing_ok=True)
     _run(["systemctl", "--user", "daemon-reload"])
-    print(f"  ✓ removed {LINUX_UNIT_PATH}")
+    ok(f"removed [path]{LINUX_UNIT_PATH}[/path]")
     return 0
 
 
 def _uninstall_macos() -> int:
     _run(["launchctl", "bootout", f"gui/{os.getuid()}/{MACOS_LABEL}"])
     MACOS_PLIST_PATH.unlink(missing_ok=True)
-    print(f"  ✓ removed {MACOS_PLIST_PATH}")
+    ok(f"removed [path]{MACOS_PLIST_PATH}[/path]")
     return 0
 
 
