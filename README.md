@@ -7,13 +7,35 @@ requests, switch sessions — without an SSH session staying open.
 
 ## Install
 
-Requires Python 3.10+ (Linux / macOS).
+Linux or macOS, any architecture. `dtach` is installed automatically
+via the [`dtach-bin`](https://pypi.org/project/dtach-bin/) dependency —
+no separate system package needed.
 
-### One-line install (auto-detects pipx / uv / brew)
+### One-line install (recommended)
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/dev-aly3n/aipager/main/install.sh | sh
 ```
+
+This auto-detects `uv` / `pipx` / `brew` and uses whichever is already on
+your system. If none is present, it bootstraps `uv` (Astral's Python tool
+manager) and installs through it.
+
+### uv
+
+```sh
+uv tool install aipager     # if uv is already installed
+```
+
+— or to install uv first:
+
+```sh
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv tool install aipager
+```
+
+uv bundles its own Python interpreter, so this works on any macOS /
+Linux version regardless of what system Python is doing.
 
 ### pipx
 
@@ -21,21 +43,21 @@ curl -fsSL https://raw.githubusercontent.com/dev-aly3n/aipager/main/install.sh |
 pipx install aipager
 ```
 
-— or `uv tool install aipager`, or `pip install aipager` into a venv.
-All variants work the same. `dtach` is installed automatically via the
-[`dtach-bin`](https://pypi.org/project/dtach-bin/) dependency — no
-separate system package needed. Linux ARM and macOS Apple Silicon are
-supported via pre-built wheels.
-
-### Homebrew (macOS, Linuxbrew)
+### Homebrew tap (macOS, Linuxbrew)
 
 ```sh
 brew install dev-aly3n/tap/aipager
 ```
 
-This pulls `dtach` from Homebrew's standard formula (works on both Intel
-and Apple Silicon Macs) and installs aipager into a Homebrew-managed
-Python venv.
+Pulls `dtach` from Homebrew's standard formula and installs aipager into
+a Homebrew-managed Python venv.
+
+> **Heads-up:** if you're on **macOS Tahoe (26.x)**, the brew path may
+> fail at `pip install` time with a `pyexpat _XML_SetAllocTrackerActivationThreshold`
+> symbol error — that's a [known Homebrew Python bottle
+> issue](https://github.com/Homebrew/homebrew-core/issues?q=_XML_SetAllocTrackerActivationThreshold)
+> unrelated to aipager. Use the uv path instead (it's not affected) until
+> Homebrew rebuilds the bottles for Tahoe.
 
 ## Configure
 

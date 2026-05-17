@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-05-17
+
+### Changed
+- `install.sh` now prefers `uv tool install` over Homebrew, and
+  bootstraps `uv` via Astral's installer if no Python tool manager is
+  found locally. uv bundles its own Python (python-build-standalone) so
+  the install path is immune to Homebrew Python bottle bugs (notably the
+  `libexpat _XML_SetAllocTrackerActivationThreshold` symbol mismatch on
+  macOS Tahoe).
+- README now leads with the `curl … | sh` one-liner and the `uv`
+  path; the Homebrew tap is documented as a secondary option with a
+  call-out about the Tahoe issue.
+
 ## [0.3.0] - 2026-05-17
 
 ### Added

@@ -5,12 +5,16 @@
 #   curl -fsSL https://raw.githubusercontent.com/dev-aly3n/aipager/main/install.sh | sh
 #
 # This script:
-#   1. Detects your OS and shell environment.
-#   2. Picks the most appropriate installer that's already present
-#      (Homebrew on macOS → pipx → uv tool).
+#   1. Detects which Python installer you already have (uv → pipx → brew).
+#   2. If none is present, bootstraps uv via Astral's official installer.
 #   3. Installs aipager (which transitively pulls dtach-bin so the dtach
 #      binary lands on PATH automatically).
 #   4. Prints the next-step commands.
+#
+# uv is preferred because it bundles its own Python interpreter
+# (python-build-standalone) and is therefore immune to system-Python
+# bugs (e.g. the libexpat symbol mismatch on Homebrew Python on macOS
+# Tahoe 26.x).
 #
 # After install, run `aipager config` to set up the Telegram bot, then
 # `aipager start` to run the daemon. See:
@@ -28,65 +32,74 @@ fatal() { printf "✗ %s\n" "$*" >&2; exit 1; }
 
 info "→ Detecting environment ($OS $ARCH)..."
 
-# Prefer Homebrew on macOS — pulls dtach via the system formula, no need
-# for dtach-bin's Python wheel, and works on both Intel and Apple Silicon.
-if [ "$OS" = "Darwin" ] && cmd_exists brew; then
+case "$OS" in
+    Linux|Darwin) ;;
+    *) fatal "Unsupported OS: $OS (aipager supports Linux and macOS only)" ;;
+esac
+
+# ── Priority 1: uv ────────────────────────────────────────────────
+# uv bundles its own Python — no host Python or Homebrew Python
+# needed, no brittle system-library dependencies. This is the most
+# reliable path on any OS / version.
+if cmd_exists uv; then
+    info "→ Installing via uv tool..."
+    uv tool install aipager
+    INSTALLED=1
+fi
+
+# ── Priority 2: pipx (already-installed) ──────────────────────────
+if [ -z "${INSTALLED:-}" ] && cmd_exists pipx; then
+    info "→ Installing via pipx..."
+    pipx install aipager
+    INSTALLED=1
+fi
+
+# ── Priority 3: Homebrew tap ──────────────────────────────────────
+# Last resort because Homebrew Python on some macOS versions has
+# libexpat symbol issues unrelated to aipager.
+if [ -z "${INSTALLED:-}" ] && [ "$OS" = "Darwin" ] && cmd_exists brew; then
     info "→ Installing via Homebrew (dev-aly3n/tap/aipager)..."
+    info "  Note: if this fails with a libexpat / pyexpat error on macOS Tahoe,"
+    info "  re-run this script after installing uv — it bypasses Homebrew Python."
     brew install dev-aly3n/tap/aipager
     INSTALLED=1
 fi
 
-# Otherwise: pipx, then uv tool.
+# ── Bootstrap uv if nothing else is available ─────────────────────
 if [ -z "${INSTALLED:-}" ]; then
-    if cmd_exists pipx; then
-        info "→ Installing via pipx..."
-        pipx install aipager
-        INSTALLED=1
-    elif cmd_exists uv; then
-        info "→ Installing via uv tool..."
-        uv tool install aipager
-        INSTALLED=1
-    fi
-fi
-
-if [ -z "${INSTALLED:-}" ]; then
-    cat >&2 <<'EOF'
-✗ Neither brew, pipx, nor uv is available on PATH.
-
-Install one of them, then re-run this script:
-
-  pipx (recommended)
-    Debian / Ubuntu:  sudo apt install pipx
-    Fedora:           sudo dnf install pipx
-    macOS:            brew install pipx
-
-  uv (alternative)
+    info "→ Bootstrapping uv (Astral's Python tool manager)..."
     curl -LsSf https://astral.sh/uv/install.sh | sh
 
-  Homebrew (macOS)
-    https://brew.sh
+    # uv's installer puts the binary in ~/.local/bin or ~/.cargo/bin
+    # depending on version, and adds it to PATH for *new* shells. For
+    # this script, add it now so we can run it.
+    if ! cmd_exists uv; then
+        for d in "$HOME/.local/bin" "$HOME/.cargo/bin"; do
+            [ -x "$d/uv" ] && PATH="$d:$PATH" && export PATH
+        done
+    fi
 
-Or do a manual venv install:
-    python3 -m venv ~/.aipager-venv
-    ~/.aipager-venv/bin/pip install aipager
-    ~/.aipager-venv/bin/aipager config
-    ~/.aipager-venv/bin/aipager start
-EOF
-    exit 1
+    if ! cmd_exists uv; then
+        fatal "uv bootstrap failed — see https://docs.astral.sh/uv/getting-started/installation/"
+    fi
+
+    info "→ Installing aipager via uv tool..."
+    uv tool install aipager
+    INSTALLED=1
 fi
 
-# Sanity: confirm the binary is on PATH now (pipx ensurepath / hash bash).
+# Ensure new console scripts are on PATH for this shell session
 hash -r 2>/dev/null || true
+
 if ! cmd_exists aipager; then
     cat <<'EOF'
 
 ! aipager was installed but is not on your current shell's PATH.
-  This usually means a new shell session is needed, OR `pipx ensurepath`
-  hasn't been run. Try:
+  A new shell session will pick it up. To make it available now:
 
-      pipx ensurepath        # then open a new shell
-      # or, for this shell only:
-      export PATH="$HOME/.local/bin:$PATH"
+      # For uv:    export PATH="$HOME/.local/bin:$PATH"
+      # For pipx:  pipx ensurepath        (then open a new shell)
+      # For brew:  already on PATH; check `which aipager`
 
 EOF
     exit 0
