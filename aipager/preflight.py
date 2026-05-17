@@ -1,0 +1,115 @@
+"""Pre-flight checks for aipager subcommands.
+
+Each ``require_*`` function either returns silently (when the check
+passes) or prints a multi-line user-friendly error to stderr and exits
+with code 2 (conventionally used for misconfiguration).
+
+The exit code matters: a wrapper script can check ``$? == 2`` and know
+"this is a setup problem, not a crash."
+"""
+
+from __future__ import annotations
+
+import shutil
+import sys
+from pathlib import Path
+
+
+def _err(*lines: str) -> None:
+    """Print a multi-line error block to stderr with a leading ✗ marker."""
+    print(f"✗ {lines[0]}" if lines else "", file=sys.stderr)
+    for line in lines[1:]:
+        print(line, file=sys.stderr)
+
+
+def _warn(*lines: str) -> None:
+    """Print a multi-line warning block to stderr with a leading ⚠ marker."""
+    print(f"⚠ {lines[0]}" if lines else "", file=sys.stderr)
+    for line in lines[1:]:
+        print(line, file=sys.stderr)
+
+
+def require_config() -> None:
+    """Exit with code 2 if the Telegram bot token or chat ID isn't set."""
+    from aipager.config import BOT_TOKEN, CHAT_ID
+
+    missing: list[str] = []
+    if not BOT_TOKEN:
+        missing.append("CLAUDE_TG_BOT_TOKEN")
+    if not CHAT_ID:
+        missing.append("CLAUDE_TG_CHAT_ID")
+    if not missing:
+        return
+
+    _err(
+        "aipager isn't configured yet.",
+        "",
+        f"  Missing: {', '.join(missing)}",
+        "",
+        "  Run this once to set up your Telegram bot and patch",
+        "  ~/.claude/settings.json:",
+        "",
+        "      aipager config",
+        "",
+    )
+    sys.exit(2)
+
+
+def require_claude() -> str:
+    """Exit with code 2 if the `claude` binary isn't on PATH. Returns the path."""
+    p = shutil.which("claude")
+    if p:
+        return p
+    _err(
+        "Claude Code CLI not found on PATH.",
+        "",
+        "  aipager wraps the `claude` command — install it from:",
+        "      https://docs.anthropic.com/claude/docs/claude-code",
+        "",
+        "  After install, verify with: `claude --version`",
+        "",
+    )
+    sys.exit(2)
+
+
+def require_daemon() -> None:
+    """Exit with code 2 if the aipager daemon isn't listening on /tmp/aipager.sock."""
+    from aipager.config import SOCKET_PATH
+
+    if Path(SOCKET_PATH).exists():
+        return
+    _err(
+        "aipager daemon isn't running.",
+        "",
+        f"  Expected the socket at {SOCKET_PATH} but it's not there.",
+        "  Without the daemon, your session won't be mirrored to Telegram.",
+        "",
+        "  Start the daemon, then re-run this command:",
+        "",
+        "      aipager start              # foreground (Ctrl-C to stop)",
+        "      aipager service start      # via systemd-user / launchd",
+        "",
+        "  Or, if you haven't yet installed the service, do that once:",
+        "",
+        "      aipager service install",
+        "",
+    )
+    sys.exit(2)
+
+
+def warn_if_daemon_down() -> None:
+    """Print a warning if the daemon socket isn't there, but don't exit.
+
+    Use for non-critical commands where the user might intentionally be
+    in a partial state (e.g. configuring while the daemon is stopped).
+    """
+    from aipager.config import SOCKET_PATH
+
+    if Path(SOCKET_PATH).exists():
+        return
+    _warn(
+        "aipager daemon isn't running.",
+        f"  ({SOCKET_PATH} is missing)",
+        "  Start it with `aipager start` or `aipager service start`.",
+        "",
+    )

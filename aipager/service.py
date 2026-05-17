@@ -220,4 +220,10 @@ def cmd_service(args: argparse.Namespace) -> int:
     if not handler:
         print(f"Unknown service subcommand: {sub}", file=sys.stderr)
         return 1
+    # install needs config because the unit will fail to boot without it.
+    # start/stop/status/logs/uninstall are pure service-manager wrappers
+    # and don't care.
+    if sub == "install":
+        from aipager.preflight import require_config
+        require_config()
     return handler()

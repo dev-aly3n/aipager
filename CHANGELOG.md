@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-05-17
+
+### Added
+- Pre-flight checks for `aipager start`, `aipager session`, and
+  `aipager service install`. Subcommands now fail fast with friendly
+  multi-line error messages (exit code 2) when:
+  - Telegram bot token or chat ID is missing
+    → `aipager config`
+  - The `claude` binary isn't on PATH
+    → install Claude Code
+  - The aipager daemon isn't running (for `session` only)
+    → `aipager start` or `aipager service start`
+- New module `aipager.preflight` (with tests in `tests/test_preflight.py`)
+  hosts the checks so adding new ones in the future is a one-liner.
+
 ## [0.3.3] - 2026-05-17
 
 ### Changed

@@ -69,6 +69,8 @@ async def _run_daemon() -> None:
 
 
 def _cmd_start(args: argparse.Namespace) -> int:
+    from aipager.preflight import require_config
+    require_config()
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
@@ -94,6 +96,10 @@ def _cmd_service(args: argparse.Namespace) -> int:
 
 
 def _cmd_session(args: argparse.Namespace) -> int:
+    from aipager.preflight import require_claude, require_config, require_daemon
+    require_config()
+    require_claude()
+    require_daemon()
     from aipager.dtach_launcher import launch
     return launch(
         name=args.name,
