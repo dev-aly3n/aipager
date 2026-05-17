@@ -159,7 +159,7 @@ _PROJECT_DIR = os.environ.get("AIPAGER_WORK_DIR", os.getcwd())
 _CLAUDE_BIN = shutil.which("claude") or "claude"
 
 
-async def launch_session(name: str, skip_perms: bool = True) -> tuple[bool, str]:
+async def launch_session(name: str, skip_perms: bool = False) -> tuple[bool, str]:
     """Launch a new Claude Code session inside dtach.
 
     Returns (success, error_message). The session_monitor will auto-discover

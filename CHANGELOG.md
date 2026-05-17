@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Breaking:** `aipager session` no longer accepts the aipager-specific
+  shortcuts `-y` and `--resume`. Pass claude's own flags through the
+  REMAINDER instead — they were always supported there, the shortcuts
+  were just a confusing parallel vocabulary:
+  - `aipager session jim -y` → `aipager session jim --dangerously-skip-permissions`
+  - `aipager session jim --resume` → `aipager session jim --continue`
+  - Native claude flags like `--resume <session-id>` now work without
+    colliding with aipager's own `--resume`.
+- Telegram `/new` no longer defaults to `--dangerously-skip-permissions`.
+  By default the new session runs with claude's normal safety checks.
+  Prefix the name with `!` to opt in (e.g. `/new !dev fix the bug`).
+  Matches claude's native behavior; the launch status message shows
+  `(unsafe)` when the flag was used so you can tell at a glance.
+
 ### Fixed
 - Replies to a session's bot message could be silently dropped or routed
   to the wrong session. Three causes, all fixed:

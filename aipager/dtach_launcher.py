@@ -104,18 +104,19 @@ def _validate_name(name: str) -> str | None:
     return None
 
 
-def launch(name: str, skip_perms: bool = False,
-           resume: bool = False,
-           claude_args: list[str] | None = None) -> int:
-    """Create or reattach a Claude Code session inside dtach."""
+def launch(name: str, claude_args: list[str] | None = None) -> int:
+    """Create or reattach a Claude Code session inside dtach.
+
+    All extra args in ``claude_args`` are passed through to claude
+    verbatim. To start with permission checks bypassed, pass
+    ``--dangerously-skip-permissions`` like you would to claude itself.
+    """
     err = _validate_name(name)
     if err:
         friendly_error(err)
         return 2
 
     claude_args = list(claude_args) if claude_args else []
-    if resume:
-        claude_args.insert(0, "--continue")
     session = f"claude-{name}"
     sock = f"/tmp/claude-dtach-{name}.sock"
 
@@ -182,7 +183,6 @@ def launch(name: str, skip_perms: bool = False,
             friendly_warn(f"stale socket {sock} could not be removed: {e}")
 
     console.print(f"[step]→[/step] starting [path]{session}[/path]")
-    skip_arg = ["--dangerously-skip-permissions"] if skip_perms else []
     if console.is_terminal:
         spawn_status = console.status(
             "[muted]spawning dtach + claude…[/muted]", spinner="dots"
@@ -195,7 +195,7 @@ def launch(name: str, skip_perms: bool = False,
         spawn = subprocess.run(
             [dtach, "-n", sock, "-Ez",
              "env", f"CLAUDE_DTACH_SESSION={session}",
-             "claude", *skip_arg,
+             "claude",
              "--append-system-prompt", sys_prompt,
              *claude_args],
             capture_output=True, text=True, check=False,

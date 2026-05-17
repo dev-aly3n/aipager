@@ -233,12 +233,7 @@ def _cmd_session(args: argparse.Namespace) -> int:
     require_claude()
     require_daemon()
     from aipager.dtach_launcher import launch
-    return launch(
-        name=args.name,
-        skip_perms=args.skip_perms,
-        resume=args.resume,
-        claude_args=args.claude_args or [],
-    )
+    return launch(name=args.name, claude_args=args.claude_args or [])
 
 
 def main() -> None:
@@ -270,21 +265,12 @@ def main() -> None:
         help="open a Claude Code session under dtach (creates if it doesn't "
              "exist, reattaches if it does)",
     )
-    session_p.add_argument(
-        "-y", dest="skip_perms", action="store_true",
-        help="pass --dangerously-skip-permissions to claude",
-    )
-    session_p.add_argument(
-        "--resume", dest="resume", action="store_true",
-        help="when creating a fresh dtach session, also pass --continue to "
-             "claude so it resumes the most recent saved conversation in "
-             "this cwd. No-op when reattaching to an existing dtach session "
-             "(claude is already running its conversation).",
-    )
     session_p.add_argument("name", help="session label (becomes claude-<name>)")
     session_p.add_argument(
         "claude_args", nargs=argparse.REMAINDER,
-        help="extra args passed through to claude (e.g. --resume <session-id>)",
+        help="extra args passed through to claude verbatim "
+             "(e.g. --dangerously-skip-permissions, --continue, "
+             "--resume <session-id>)",
     )
     session_p.set_defaults(fn=_cmd_session)
 

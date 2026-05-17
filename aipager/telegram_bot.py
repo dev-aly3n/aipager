@@ -1980,26 +1980,44 @@ class TelegramBot:
             await _reply(f"⚠️ Session [{target_label}] not found")
 
     async def _handle_new_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle /new <name> [prompt] — launch a new Claude Code session."""
+        """Handle /new <name> [prompt] — launch a new Claude Code session.
+
+        Prefix the name with ``!`` to launch with
+        ``--dangerously-skip-permissions`` (e.g. ``/new !dev fix the bug``).
+        Without the prefix, claude runs with its default safety checks.
+        """
         text = update.message.text.strip()
         parts = text.split(maxsplit=2)  # /new <name> [prompt...]
         if len(parts) < 2:
             await update.message.reply_text(
                 "Usage: /new &lt;name&gt; [initial prompt]\n"
-                "Example: /new dev fix the auth bug",
+                "Prefix the name with <code>!</code> to skip permission checks "
+                "(<code>--dangerously-skip-permissions</code>).\n"
+                "Example: /new dev fix the auth bug\n"
+                "Example: /new !dev fix the auth bug",
                 parse_mode="HTML",
             )
             return
 
-        name = parts[1].strip()
+        raw_name = parts[1].strip()
+        skip_perms = raw_name.startswith("!")
+        name = raw_name.lstrip("!").strip()
         prompt = parts[2].strip() if len(parts) > 2 else ""
 
+        if not name:
+            await update.message.reply_text(
+                "⚠️ Session name is empty after stripping <code>!</code>.",
+                parse_mode="HTML",
+            )
+            return
+
         status_msg = await update.message.reply_text(
-            f"🚀 Launching <b>{html_mod.escape(name)}</b>...",
+            f"🚀 Launching <b>{html_mod.escape(name)}</b>"
+            + (" <code>(unsafe)</code>" if skip_perms else "") + "...",
             parse_mode="HTML",
         )
 
-        ok, err = await inject.launch_session(name)
+        ok, err = await inject.launch_session(name, skip_perms=skip_perms)
         if not ok:
             await status_msg.edit_text(f"❌ {html_mod.escape(err)}")
             return
