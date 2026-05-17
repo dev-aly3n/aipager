@@ -95,9 +95,12 @@ BACK_BUTTON = "\u00ab Back"
 QUICK_TEMPLATES: list[tuple[str, str]] = [
     ("Continue", "Continue"),
     ("Run tests", "Run the tests"),
+    ("Write tests", "Write tests for the changes"),
     ("Commit", "Commit the changes with a descriptive message"),
     ("LGTM ship it", "LGTM, ship it"),
     ("Show diff", "Show me the git diff of all changes"),
+    ("Explain plan", "Explain your plan before making changes"),
+    ("Update memory", "Update CLAUDE.md with what you learned"),
 ]
 
 # Claude Code slash commands — instant commands (no BUSY transition)
@@ -109,6 +112,8 @@ QUICK_COMMANDS: list[tuple[str, str]] = [
     ("Compact", "/compact"),
     ("Clear", "/clear"),
     ("Plan mode", "/plan"),
+    ("Init", "/init"),
+    ("Security review", "/security-review"),
 ]
 
 # Model submenu — accessible from Commands → Model

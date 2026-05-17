@@ -7,7 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Two new Commands-submenu buttons:
+  - **Init** (`/init`) — generates `CLAUDE.md` for a fresh repo.
+  - **Security review** (`/security-review`) — scans the pending diff
+    for vulnerabilities. Designed for remote one-tap review.
+- Three new Templates-submenu buttons:
+  - **Write tests** ("Write tests for the changes")
+  - **Explain plan** ("Explain your plan before making changes")
+  - **Update memory** ("Update CLAUDE.md with what you learned")
+- README footnote explaining that the Model submenu's `sonnet` /
+  `opus` / `haiku` / `opusplan` aliases resolve to different versions
+  on Bedrock and Vertex than on the Anthropic API.
+
 ### Fixed
+- `TypeError: type NoneType doesn't define __round__ method` from the
+  statusLine hook when Claude Code's payload contains explicit
+  `"context_pct": null` (early ticks before tokens have been counted).
+  `dict.get(key, 0)` only substitutes the default when the key is
+  missing — an explicit null falls through. Now guarded with
+  ``msg.get("context_pct") or 0`` (same fix for `total_output`,
+  `lines_added`, `lines_removed`).
 - Fresh-install bots no longer show stale `/jim` / `/john` (etc.) in
   Telegram's slash-command menu. Telegram caches `setMyCommands`
   server-side per bot token, so a daemon that ran against this bot

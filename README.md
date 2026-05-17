@@ -125,6 +125,17 @@ and bootstraps it. Subcommands: `start`, `stop`, `status`, `logs`,
 - Supports multiple concurrent sessions with one bot
 - Optional read-only observer bots
 
+### Note on model buttons (Bedrock / Vertex users)
+
+The persistent keyboard's **Model** submenu sends `/model sonnet`,
+`/model opus`, `/model haiku`, and `/model opusplan` — Claude Code's
+aliases. On the Anthropic API these resolve to the latest in each
+family (currently Opus 4.7, Sonnet 4.6, Haiku 4.5). On **Bedrock** and
+**Vertex** the same aliases may resolve to older snapshots depending on
+your provider's available versions. If you target those backends and
+want a specific model, tap the alias as a starting point, then `/model
+<full-id>` from chat.
+
 ## Developing locally
 
 ```sh

@@ -430,8 +430,13 @@ class HookReceiver:
         elif event == "statusline":
             # Real-time token data from statusLine hook (fires after each response)
             sess = self.registry.get_or_create(session_name)
-            ctx_pct = int(round(msg.get("context_pct", 0)))
-            total_out = msg.get("total_output", 0)
+            # The statusLine JSON occasionally has explicit null values for
+            # context_pct / total_output during early ticks (before claude
+            # has rendered tokens). ``dict.get(key, 0)`` only uses the default
+            # when the key is missing, so an explicit ``null`` falls through
+            # and crashes ``round(None)`` / arithmetic. Coerce here.
+            ctx_pct = int(round(msg.get("context_pct") or 0))
+            total_out = msg.get("total_output") or 0
             sess.last_token_pct = ctx_pct
             model = msg.get("model_name", "")
             if model and model != sess.model_name:
@@ -443,9 +448,10 @@ class HookReceiver:
             elif total_out < sess.output_baseline:
                 sess.output_baseline = total_out  # session restarted
             sess.last_output_tokens = max(0, total_out - sess.output_baseline)
-            # Lines changed (lazy baseline, same pattern)
-            lines_add = msg.get("lines_added", 0)
-            lines_rm = msg.get("lines_removed", 0)
+            # Lines changed (lazy baseline, same pattern). Same null-coalesce
+            # guard as ctx_pct above.
+            lines_add = msg.get("lines_added") or 0
+            lines_rm = msg.get("lines_removed") or 0
             if sess.lines_added_baseline is None:
                 sess.lines_added_baseline = lines_add
                 sess.lines_removed_baseline = lines_rm
