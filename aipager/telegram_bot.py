@@ -782,6 +782,9 @@ class TelegramBot:
             sess.busy_msg_id = msg_id
             sess.last_tool_edit_at = 0.0
             sess.last_tool_name = ""
+            # Track the busy message so replies to it route back to this session,
+            # even hours later or after a daemon restart.
+            self.registry.track_message(msg_id, sess.name)
             self._start_animation(sess)
             log.info("[%s] Busy message sent (msg_id=%d, trigger=%s)",
                      sess.label, msg_id, sess.trigger_msg_id)
@@ -2039,6 +2042,37 @@ class TelegramBot:
                 return
         await update.message.reply_text(f"⚠️ Unknown session: {target_label}")
 
+    def _guess_session_from_text(self, text: str) -> TrackedSession | None:
+        """Try to recover a session by scanning bot-message text for its label.
+
+        Used to route replies to OLD bot messages whose IDs aren't in the
+        msg_map (e.g., busy / dashboard messages sent before track_message
+        covered them, or after a long enough session that the map evicted
+        them). Every session-specific bot message prefixes the label as
+        visible text ("⚙️ jim · Thinking…", "[jim] · INTERACTIVE", etc.),
+        so a simple substring search with word-boundary checks works.
+
+        Falls back to None when no label is found or multiple labels match
+        ambiguously — better to defer to last_active_session than to
+        guess wrong.
+        """
+        if not text:
+            return None
+        matches: list[TrackedSession] = []
+        for cand in self.registry.all_sessions().values():
+            if not cand.label or cand.status == Status.GONE:
+                continue
+            # Word-bounded match: label preceded by start / space / bracket /
+            # non-alnum, and followed by space / · / ] / dot / non-alnum.
+            pattern = (
+                rf"(?:^|[\s\W])\[?{re.escape(cand.label)}\]?(?:[\s·•\].:]|$)"
+            )
+            if re.search(pattern, text):
+                matches.append(cand)
+        if len(matches) == 1:
+            return matches[0]
+        return None
+
     async def _switch_session(self, update: Update, target_label: str) -> None:
         """Switch active session when bare /<label> is tapped (no prompt)."""
         # Find in registry
@@ -2143,17 +2177,53 @@ class TelegramBot:
                     await self._switch_session(update, text)
                     return
 
-        # Reply to a notification — or bare message goes to last active session
+        # Routing precedence:
+        #   1. reply_to.message_id → exact match in the msg_map
+        #   2. reply_to.message_id → any session whose last_msg_id matches
+        #      (catches replies to messages too old for the capped map)
+        #   3. parse the reply_to text for a known session label
+        #      (catches replies to OLD messages from before this daemon run,
+        #       e.g. busy messages sent before track_message covered them)
+        #   4. last_active_session (the session the user most recently addressed)
+        #   5. Error: nothing to route to → tell the user instead of silently dropping
         reply_to = update.message.reply_to_message
+        sess = None
+        fallback_reason = ""
         if reply_to:
             sess = self.registry.get_session_by_msg(reply_to.message_id)
-        else:
-            # Bare message → send to last session that notified us
+            if not sess:
+                for cand in self.registry.all_sessions().values():
+                    if cand.last_msg_id == reply_to.message_id:
+                        sess = cand
+                        break
+            if not sess:
+                sess = self._guess_session_from_text(
+                    reply_to.text or reply_to.caption or ""
+                )
+                if sess:
+                    fallback_reason = (
+                        f"reply target msg {reply_to.message_id} not tracked — "
+                        f"recovered session [{sess.label}] from message text"
+                    )
+            if not sess:
+                fallback_reason = (
+                    f"reply target msg {reply_to.message_id} unknown — "
+                    "routed by last_active fallback"
+                )
+        if not sess:
             name = self.registry.last_active_session
             sess = self.registry.get(name) if name else None
 
         if not sess:
+            log.warning("Dropped text %r — no session to route to", text[:80])
+            await update.message.reply_text(
+                "⚠️ I don't know which session this is for. Pick one with "
+                "/<label> or the keyboard."
+            )
             return
+
+        if fallback_reason:
+            log.info("[%s] %s", sess.label, fallback_reason)
 
         self.registry.last_active_session = sess.name  # user is talking to this session now
         asyncio.create_task(self._maybe_update_bot_name(sess.name))
@@ -2219,16 +2289,29 @@ class TelegramBot:
         else:
             prompt = f"Read and analyze this file: {save_path}"
 
-        # Resolve target session (same pattern as _handle_message)
+        # Resolve target session (same routing precedence as _handle_message)
         reply_to = msg.reply_to_message
+        sess = None
         if reply_to:
             sess = self.registry.get_session_by_msg(reply_to.message_id)
-        else:
+            if not sess:
+                for cand in self.registry.all_sessions().values():
+                    if cand.last_msg_id == reply_to.message_id:
+                        sess = cand
+                        break
+            if not sess:
+                sess = self._guess_session_from_text(
+                    reply_to.text or reply_to.caption or ""
+                )
+        if not sess:
             name = self.registry.last_active_session
             sess = self.registry.get(name) if name else None
 
         if not sess:
-            await msg.reply_text("⚠️ No active session")
+            await msg.reply_text(
+                "⚠️ I don't know which session this file is for. Pick one with "
+                "/<label> or the keyboard."
+            )
             return
 
         self.registry.last_active_session = sess.name

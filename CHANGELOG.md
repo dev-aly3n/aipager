@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Replies to a session's bot message could be silently dropped or routed
+  to the wrong session. Three causes, all fixed:
+  - **Untracked busy/Thinking messages.** Only IDLE response messages
+    were registered in the routing map; busy and dashboard messages
+    weren't, so replying to them didn't find the source session.
+    `_send_busy_and_animate` now calls `track_message` after sending.
+  - **Text-recovery fallback for old messages.** Replies to bot
+    messages that are no longer in the in-memory map (after a restart
+    or after the cap evicts them) are now matched by scanning the
+    message text for a known session label
+    (`"⚙️ jim · Thinking…"`, `"📌 jim · …"`, `"[jim] · …"`, etc.).
+    Only an unambiguous single match counts; otherwise we fall back to
+    the last-active session.
+  - **Silent drop.** When no session could be resolved at all, the
+    daemon used to `return` without any feedback. It now sends
+    `⚠️ I don't know which session this is for. Pick one with /<label>
+    or the keyboard.` so the user knows the message wasn't lost in
+    space.
+- Bumped the persistent message-id cap (`_MAX_MSG_MAP`) from 100 to
+  1000 so the lookup map survives longer conversations.
+
 ### Added
 - `aipager help` subcommand. Bare `aipager help` prints the same
   top-level usage as `-h`, and `aipager help <subcommand>` (e.g.

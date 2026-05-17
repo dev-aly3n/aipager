@@ -190,7 +190,7 @@ class SessionRegistry:
         "trigger_msg_id", "pending_queue", "last_prompt",
         "model_name", "busy_msg_id",
     )
-    _MAX_MSG_MAP = 100  # cap _msg_map entries to avoid unbounded growth
+    _MAX_MSG_MAP = 1000  # cap _msg_map entries to avoid unbounded growth
 
     def save(self) -> None:
         """Serialize persistable state to JSON (atomic write)."""
