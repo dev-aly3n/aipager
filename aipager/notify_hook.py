@@ -17,13 +17,25 @@ from pathlib import Path
 
 SOCKET_PATH = "/tmp/aipager.sock"
 
+_DEBUG = os.environ.get("AIPAGER_DEBUG") == "1"
+
+
+def _debug(msg: str) -> None:
+    """Print a diagnostic line to stderr when AIPAGER_DEBUG=1.
+
+    Silent by default so we never inject noise into Claude Code's UI.
+    """
+    if _DEBUG:
+        print(f"[aipager-hook] {msg}", file=sys.stderr)
+
 
 def _read_statusline_tokens(session: str) -> dict | None:
     """Read token data from the statusLine JSON file for this session."""
     status_file = Path(f"/tmp/claude-status-{session}.json")
     try:
         sl = json.loads(status_file.read_text())
-    except (FileNotFoundError, PermissionError, json.JSONDecodeError):
+    except (FileNotFoundError, PermissionError, json.JSONDecodeError) as e:
+        _debug(f"statusline read failed: {type(e).__name__}: {e}")
         return None
     ctx = sl.get("context_window", {})
     cur = ctx.get("current_usage") or {}
@@ -64,8 +76,9 @@ def main():
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
         sock.sendto(json.dumps(data).encode(), SOCKET_PATH)
         sock.close()
-    except OSError:
-        pass  # daemon not running — session_monitor catches it
+    except OSError as e:
+        _debug(f"daemon socket {SOCKET_PATH} unreachable: {e}")
+        # daemon not running — session_monitor catches it
 
 
 if __name__ == "__main__":

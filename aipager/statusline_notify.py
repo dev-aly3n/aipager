@@ -21,6 +21,13 @@ from pathlib import Path
 
 SOCKET_PATH = "/tmp/aipager.sock"
 
+_DEBUG = os.environ.get("AIPAGER_DEBUG") == "1"
+
+
+def _debug(msg: str) -> None:
+    if _DEBUG:
+        print(f"[aipager-statusline] {msg}", file=sys.stderr)
+
 
 def main() -> None:
     raw = sys.stdin.read()
@@ -29,8 +36,8 @@ def main() -> None:
     if raw.strip() and session:
         try:
             Path(f"/tmp/claude-status-{session}.json").write_text(raw)
-        except OSError:
-            pass
+        except OSError as e:
+            _debug(f"could not write /tmp/claude-status-{session}.json: {e}")
 
         try:
             data = json.loads(raw)
@@ -52,8 +59,8 @@ def main() -> None:
             sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
             sock.sendto(json.dumps(msg).encode(), SOCKET_PATH)
             sock.close()
-        except (json.JSONDecodeError, OSError, KeyError, TypeError):
-            pass
+        except (json.JSONDecodeError, OSError, KeyError, TypeError) as e:
+            _debug(f"statusline forward failed: {type(e).__name__}: {e}")
 
     try:
         data = json.loads(raw)
