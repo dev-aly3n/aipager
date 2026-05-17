@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-05-17
+
+### Added
+- `aipager service` subcommand for cross-platform service management.
+  Installs aipager as a systemd-user unit on Linux or a launchd plist on
+  macOS, so the daemon survives logout. Subcommands: `install`, `start`,
+  `stop`, `status`, `logs`, `uninstall`. Unit/plist always references
+  the absolute path of `aipager` resolved via `shutil.which`, so it
+  works whether aipager came from pipx, brew, or an editable install.
+
+### Removed
+- `scripts/aipager.service.example` (replaced by the template inside
+  `aipager.service`, written by `aipager service install`).
+
 ## [0.2.1] - 2026-05-17
 
 ### Changed

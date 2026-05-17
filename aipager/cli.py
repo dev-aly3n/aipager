@@ -88,6 +88,11 @@ def _cmd_version(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_service(args: argparse.Namespace) -> int:
+    from aipager.service import cmd_service
+    return cmd_service(args)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="aipager",
@@ -103,9 +108,28 @@ def main() -> None:
     sub.add_parser("version", help="print version"
                    ).set_defaults(fn=_cmd_version)
 
+    service_p = sub.add_parser(
+        "service",
+        help="install/manage the daemon as a systemd-user or launchd service",
+    )
+    service_p.set_defaults(fn=_cmd_service)
+    service_sub = service_p.add_subparsers(dest="service_cmd")
+    for name, summary in [
+        ("install",   "write the service unit and enable+start it"),
+        ("start",     "start the running service"),
+        ("stop",      "stop the running service"),
+        ("status",    "show service status"),
+        ("logs",      "tail service logs (Ctrl-C to exit)"),
+        ("uninstall", "stop the service and remove the unit"),
+    ]:
+        service_sub.add_parser(name, help=summary)
+
     args = parser.parse_args()
     if not args.cmd:
         parser.print_help()
+        sys.exit(0)
+    if args.cmd == "service" and not getattr(args, "service_cmd", None):
+        service_p.print_help()
         sys.exit(0)
     sys.exit(args.fn(args))
 
