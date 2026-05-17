@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `aipager config` final-step hint no longer mentions
+  `aipager service install` as a secondary option — only
+  `aipager start` is shown to keep the new-user path simple. The
+  service flow is still documented in the README.
+
 ## [0.3.7] - 2026-05-17
 
 ### Added

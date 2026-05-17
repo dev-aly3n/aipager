@@ -275,8 +275,7 @@ def run() -> int:
         print(f"\n✗ Setup failed: {e}", file=sys.stderr)
         return 1
     print("\nSetup complete.\n")
-    print("  Start the daemon:    aipager start          # foreground (Ctrl-C to stop)")
-    print("  Or as a service:     aipager service install   # persists across logout")
+    print("  Start the daemon:    aipager start")
     print("  Launch a session:    aipager session dev")
     return 0
 
