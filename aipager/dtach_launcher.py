@@ -1,17 +1,12 @@
 """Launch Claude Code inside a named dtach session.
 
-Exposed as the `claude-dtach` console script. Sets CLAUDE_DTACH_SESSION
-inside the new session so the aipager hook scripts can identify it.
+The user-facing entry point is ``aipager new <name>`` (wired through
+``aipager.cli``), which calls :func:`launch`. If the dtach socket
+already exists this reattaches; otherwise it spawns a new session and
+attaches.
 
-Usage:
-    claude-dtach [-y] <name> [claude args...]
-
-  -y           pass --dangerously-skip-permissions to claude
-  <name>       dtach session label (becomes claude-<name>)
-  claude args  forwarded to the underlying `claude` command
-
-If the dtach socket already exists, reattaches. Otherwise creates a new
-dtach session and attaches.
+Sets ``CLAUDE_DTACH_SESSION`` inside the spawned session so the aipager
+hook scripts can identify which session sent which event.
 """
 
 from __future__ import annotations
@@ -26,17 +21,14 @@ from pathlib import Path
 from aipager import _dtach_redraw
 
 
-_USAGE = """\
-Usage: claude-dtach [-y] <name> [claude args...]
-
-Options:
-  -y  Pass --dangerously-skip-permissions to claude
-
-Examples:
-  claude-dtach dev              # start claude in dtach session 'claude-dev'
-  claude-dtach -y dev           # start with skip-permissions
-  claude-dtach auth --resume    # resume session in 'claude-auth'
-"""
+def _resolve_dtach() -> str | None:
+    """Return absolute path to the dtach binary, or None if unavailable."""
+    try:
+        from dtach_bin import path
+        return path()
+    except (ImportError, FileNotFoundError):
+        pass
+    return shutil.which("dtach")
 
 
 def _set_title(name: str) -> None:
@@ -58,26 +50,23 @@ def _force_redraw(name: str) -> None:
     _dtach_redraw.redraw(name)
 
 
-def main() -> int:
-    argv = sys.argv[1:]
-    skip_perms = False
-    if argv and argv[0] == "-y":
-        skip_perms = True
-        argv = argv[1:]
+def launch(name: str, skip_perms: bool = False,
+           claude_args: list[str] | None = None) -> int:
+    """Create or reattach a Claude Code session inside dtach.
 
-    if not argv:
-        sys.stderr.write(_USAGE)
-        return 1
-
-    name = argv[0]
-    claude_extra = argv[1:]
+    Returns a shell-style exit code (0 on success).
+    """
+    claude_args = claude_args or []
     session = f"claude-{name}"
     sock = f"/tmp/claude-dtach-{name}.sock"
 
-    if not shutil.which("dtach"):
+    dtach = _resolve_dtach()
+    if not dtach:
         print("Error: dtach not installed.", file=sys.stderr)
         print("  Debian/Ubuntu: sudo apt install dtach", file=sys.stderr)
         print("  macOS:         brew install dtach", file=sys.stderr)
+        print("  Or reinstall aipager so dtach-bin is bundled:", file=sys.stderr)
+        print("    uv tool install --reinstall aipager", file=sys.stderr)
         return 1
 
     sys_prompt = (
@@ -94,7 +83,7 @@ def main() -> int:
         threading.Thread(target=_keep_title, args=(name, stop), daemon=True).start()
         threading.Thread(target=_force_redraw, args=(name,), daemon=True).start()
         try:
-            subprocess.run(["dtach", "-a", sock, "-r", "winch", "-E"], check=False)
+            subprocess.run([dtach, "-a", sock, "-r", "winch", "-E"], check=False)
         finally:
             stop.set()
         return 0
@@ -102,11 +91,11 @@ def main() -> int:
     print(f"Starting Claude in dtach session '{session}'...")
     skip_arg = ["--dangerously-skip-permissions"] if skip_perms else []
     spawn = subprocess.run(
-        ["dtach", "-n", sock, "-Ez",
+        [dtach, "-n", sock, "-Ez",
          "env", f"CLAUDE_DTACH_SESSION={session}",
          "claude", *skip_arg,
          "--append-system-prompt", sys_prompt,
-         *claude_extra],
+         *claude_args],
         check=False,
     )
     if spawn.returncode != 0:
@@ -124,11 +113,7 @@ def main() -> int:
     _set_title(name)
     threading.Thread(target=_keep_title, args=(name, stop), daemon=True).start()
     try:
-        subprocess.run(["dtach", "-a", sock, "-r", "winch", "-E"], check=False)
+        subprocess.run([dtach, "-a", sock, "-r", "winch", "-E"], check=False)
     finally:
         stop.set()
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

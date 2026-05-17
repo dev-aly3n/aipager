@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-05-17
+
+### Added
+- `aipager new <name>` subcommand that creates or reattaches a Claude
+  Code session under dtach. Replaces the `claude-dtach` console script.
+
+### Changed
+- `claude-dtach` console script removed from `[project.scripts]` —
+  the same functionality is now `aipager new` so the user-facing CLI is
+  unified under a single `aipager` entry point.
+- `dtach` binary discovery now goes through `dtach_bin.path()` first,
+  which checks `<sys.prefix>/bin/dtach` before falling back to a PATH
+  lookup. This makes `uv tool install aipager` / `pipx install aipager`
+  installs work out of the box even though those layouts don't put the
+  tool's private `bin/` on the shell's PATH.
+
+### Dependencies
+- Bumped `dtach-bin` floor to `>=0.9.1` for the new `path()` semantics.
+
 ## [0.3.1] - 2026-05-17
 
 ### Changed

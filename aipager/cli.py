@@ -93,6 +93,15 @@ def _cmd_service(args: argparse.Namespace) -> int:
     return cmd_service(args)
 
 
+def _cmd_new(args: argparse.Namespace) -> int:
+    from aipager.dtach_launcher import launch
+    return launch(
+        name=args.name,
+        skip_perms=args.skip_perms,
+        claude_args=args.claude_args or [],
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="aipager",
@@ -107,6 +116,21 @@ def main() -> None:
                    ).set_defaults(fn=_cmd_config)
     sub.add_parser("version", help="print version"
                    ).set_defaults(fn=_cmd_version)
+
+    new_p = sub.add_parser(
+        "new",
+        help="create or reattach a Claude Code session under dtach",
+    )
+    new_p.add_argument(
+        "-y", dest="skip_perms", action="store_true",
+        help="pass --dangerously-skip-permissions to claude",
+    )
+    new_p.add_argument("name", help="session label (becomes claude-<name>)")
+    new_p.add_argument(
+        "claude_args", nargs=argparse.REMAINDER,
+        help="extra args passed through to the claude command",
+    )
+    new_p.set_defaults(fn=_cmd_new)
 
     service_p = sub.add_parser(
         "service",

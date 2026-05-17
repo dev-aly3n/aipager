@@ -16,6 +16,25 @@ log = logging.getLogger(__name__)
 
 SOCK_PREFIX = "/tmp/claude-dtach-"
 
+
+def _resolve_dtach() -> str:
+    """Return an absolute path to the `dtach` binary.
+
+    Prefer the bundled binary shipped by `dtach-bin` (correct in pipx /
+    uv-tool / brew-venv layouts where the venv's bin/ isn't on PATH),
+    fall back to a PATH lookup for users who installed dtach via brew
+    or apt.
+    """
+    try:
+        from dtach_bin import path
+        return path()
+    except (ImportError, FileNotFoundError):
+        pass
+    return shutil.which("dtach") or "dtach"
+
+
+_DTACH = _resolve_dtach()
+
 # Logical key names → ANSI escape sequences
 KEYS = {
     "Enter": "\r",
@@ -66,7 +85,7 @@ async def send_keys(session: str, keys: str) -> bool:
     """
     seq = KEYS.get(keys, keys)
     sock = _sock_path(session)
-    ok, _ = await _run(["dtach", "-p", sock], stdin=seq.encode())
+    ok, _ = await _run([_DTACH, "-p", sock], stdin=seq.encode())
     if ok:
         log.info("Sent keys %r → %s", keys, session)
     return ok
@@ -80,7 +99,7 @@ async def send_text_and_enter(session: str, text: str) -> bool:
     write is needed to trigger the submit keypress event.
     """
     sock = _sock_path(session)
-    ok, _ = await _run(["dtach", "-p", sock], stdin=text.encode())
+    ok, _ = await _run([_DTACH, "-p", sock], stdin=text.encode())
     if not ok:
         return False
     # Claude Code's Ink TUI needs time to process text input before
@@ -88,7 +107,7 @@ async def send_text_and_enter(session: str, text: str) -> bool:
     # Scale with text length: longer text = more rendering time needed.
     delay = max(0.15, min(0.5, len(text) * 0.003))
     await asyncio.sleep(delay)
-    ok, _ = await _run(["dtach", "-p", sock], stdin=b"\r")
+    ok, _ = await _run([_DTACH, "-p", sock], stdin=b"\r")
     if ok:
         log.info("Sent text %r + Enter → %s", text[:50], session)
     return ok
@@ -175,7 +194,7 @@ async def launch_session(name: str, skip_perms: bool = True) -> tuple[bool, str]
 
     try:
         proc = await asyncio.create_subprocess_exec(
-            "dtach", "-n", sock, "-Ez", "bash", "-c", bash_cmd,
+            _DTACH, "-n", sock, "-Ez", "bash", "-c", bash_cmd,
             cwd=_PROJECT_DIR,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,

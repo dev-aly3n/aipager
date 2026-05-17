@@ -1,6 +1,6 @@
 [project]
 name = "aipager"
-version = "0.3.1"
+version = "0.3.2"
 description = "Telegram remote-control daemon for Claude Code CLI sessions running in dtach"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -22,7 +22,7 @@ classifiers = [
 ]
 dependencies = [
     "python-telegram-bot>=20",
-    "dtach-bin>=0.9",
+    "dtach-bin>=0.9.1",
 ]
 
 [project.optional-dependencies]
@@ -30,9 +30,10 @@ dev = ["pytest>=7", "ruff>=0.5", "build", "twine"]
 
 [project.scripts]
 aipager            = "aipager.cli:main"
+# Internal hooks invoked by Claude Code (not by users). They stay on
+# PATH because ~/.claude/settings.json references them by name.
 aipager-hook       = "aipager.notify_hook:main"
 aipager-statusline = "aipager.statusline_notify:main"
-claude-dtach       = "aipager.dtach_launcher:main"
 
 [project.urls]
 Source    = "https://github.com/dev-aly3n/aipager"

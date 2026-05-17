@@ -80,11 +80,13 @@ The daemon stays in the foreground. Launch a Claude session in another
 terminal:
 
 ```sh
-claude-dtach dev
+aipager new dev
 ```
 
-The daemon discovers the session within seconds and Telegram starts
-mirroring it.
+This creates (or reattaches to) a dtach session named `claude-dev`
+running Claude Code. The aipager daemon discovers it within seconds
+and Telegram starts mirroring it. Re-run the same command to reattach
+later; detach with `Ctrl-\`.
 
 ### Run as a service (survives logout)
 
