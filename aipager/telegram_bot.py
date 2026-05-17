@@ -36,7 +36,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-from telegram.error import BadRequest
+from telegram.error import BadRequest, Forbidden, RetryAfter
 
 from aipager import dtach_inject as inject
 import random
@@ -47,6 +47,74 @@ from aipager.config import (
     QUICK_COMMANDS, QUICK_TEMPLATES, SPINNER_VERBS, TEMPLATES_BUTTON,
 )
 from aipager.state import SessionRegistry, Status, TrackedSession
+
+# Telegram's documented document upload ceiling is 50 MB; stay below it.
+TELEGRAM_MAX_DOC_BYTES = 40 * 1024 * 1024
+# Single-message text limit Telegram enforces.
+TELEGRAM_MAX_TEXT_LEN = 4000
+_TRUNC_SUFFIX = "\n\n…[truncated]"
+
+# Throttle for "bot was blocked" log spam — daemon would otherwise emit
+# one line per send attempt while the user has the bot blocked.
+_LAST_BLOCKED_LOG_TS: float = 0.0
+_BLOCKED_LOG_INTERVAL = 60.0
+
+
+def _log_blocked_once(e: Exception) -> None:
+    """Log a friendly explanation when the user has blocked the bot.
+    Suppresses subsequent identical events for one minute."""
+    global _LAST_BLOCKED_LOG_TS
+    now = time.monotonic()
+    if now - _LAST_BLOCKED_LOG_TS < _BLOCKED_LOG_INTERVAL:
+        return
+    _LAST_BLOCKED_LOG_TS = now
+    log.error(
+        "Telegram refuses to deliver: %s\n"
+        "  → The Telegram user has blocked or deleted the bot.\n"
+        "  → Open the bot in Telegram and tap Start to unblock, then\n"
+        "    new notifications will resume.",
+        e,
+    )
+
+
+def _is_bot_blocked(e: Exception) -> bool:
+    """Best-effort detection of 'user blocked the bot' across PTB versions."""
+    if isinstance(e, Forbidden):
+        return True
+    msg = str(e).lower()
+    return "bot was blocked" in msg or "blocked by the user" in msg
+
+
+async def _send_with_retry(bot, *, chat_id, text: str, parse_mode: str | None = None,
+                           reply_to_message_id: int | None = None,
+                           reply_markup=None, max_retries: int = 2):
+    """Send a Telegram message with backoff for RetryAfter and graceful
+    handling of "message is too long"."""
+    last_err: Exception | None = None
+    for _attempt in range(max_retries + 1):
+        try:
+            return await bot.send_message(
+                chat_id, text, parse_mode=parse_mode,
+                reply_to_message_id=reply_to_message_id,
+                reply_markup=reply_markup,
+            )
+        except RetryAfter as e:
+            wait = getattr(e, "retry_after", None) or 1
+            log.warning("Telegram flood control — retrying in %ss", wait)
+            await asyncio.sleep(wait)
+            last_err = e
+            continue
+        except BadRequest as e:
+            if "too long" in str(e).lower() and len(text) > TELEGRAM_MAX_TEXT_LEN:
+                text = text[: TELEGRAM_MAX_TEXT_LEN - len(_TRUNC_SUFFIX)] + _TRUNC_SUFFIX
+                last_err = e
+                continue
+            raise
+        except Forbidden as e:
+            _log_blocked_once(e)
+            raise
+    if last_err:
+        raise last_err
 
 if TYPE_CHECKING:
     pass
@@ -335,6 +403,8 @@ class TelegramBot:
                 CHAT_ID, msg_text,
                 reply_markup=keyboard,
             )
+        except Forbidden as e:
+            _log_blocked_once(e)
         except BadRequest as e:
             if "chat not found" in str(e).lower():
                 bot_user = (await self._app.bot.get_me()).username
@@ -347,8 +417,11 @@ class TelegramBot:
                 )
             else:
                 log.warning("Failed to send keyboard: %s", e)
-        except Exception:
-            log.warning("Failed to send keyboard", exc_info=True)
+        except Exception as e:
+            if _is_bot_blocked(e):
+                _log_blocked_once(e)
+            else:
+                log.warning("Failed to send keyboard", exc_info=True)
 
     async def _react(self, update: Update, emoji: str) -> None:
         """React to the user's message with an emoji."""
@@ -1055,23 +1128,10 @@ class TelegramBot:
                 else:
                     text += f"\n\n<blockquote>{escaped}</blockquote>"
             log.debug("[%s] Sending IDLE notification (%d chars)", label, len(text))
-            try:
-                msg = await bot.send_message(
-                    CHAT_ID, text, parse_mode="HTML",
-                    reply_to_message_id=sess.trigger_msg_id,
-                )
-            except Exception as e:
-                # Retry once on flood control — this is the response, can't lose it
-                retry_after = getattr(e, "retry_after", None)
-                if retry_after:
-                    log.warning("[%s] Flood control on Finished, retrying in %ds", label, retry_after)
-                    await asyncio.sleep(retry_after)
-                    msg = await bot.send_message(
-                        CHAT_ID, text, parse_mode="HTML",
-                        reply_to_message_id=sess.trigger_msg_id,
-                    )
-                else:
-                    raise
+            msg = await _send_with_retry(
+                bot, chat_id=CHAT_ID, text=text, parse_mode="HTML",
+                reply_to_message_id=sess.trigger_msg_id,
+            )
             sess.trigger_msg_id = None  # reply cycle complete
             self.registry.mark_dirty()
             self.registry.track_message(msg.message_id, sess.name)
@@ -1079,17 +1139,28 @@ class TelegramBot:
             # Send full response as file for long messages
             file_content = raw_md or (summary if send_file else "")
             if send_file and file_content:
-                try:
-                    tmp = Path(tempfile.mktemp(suffix=".txt", prefix=f"{label}_"))
-                    tmp.write_text(file_content, encoding="utf-8")
-                    with open(tmp, "rb") as f:
-                        await bot.send_document(
-                            CHAT_ID, document=f, filename=f"{label}_response.txt",
-                            reply_to_message_id=msg.message_id,
-                        )
-                    tmp.unlink(missing_ok=True)
-                except Exception:
-                    log.warning("Failed to send full response file", exc_info=True)
+                content_bytes = file_content.encode("utf-8")
+                if len(content_bytes) > TELEGRAM_MAX_DOC_BYTES:
+                    mb = len(content_bytes) / (1024 * 1024)
+                    log.warning(
+                        "[%s] Response too large for Telegram (%.1f MB) — sent summary only",
+                        label, mb,
+                    )
+                    file_content = ""  # also skip the observer-broadcast path below
+                else:
+                    try:
+                        tmp = Path(tempfile.mktemp(suffix=".txt", prefix=f"{label}_"))
+                        tmp.write_text(file_content, encoding="utf-8")
+                        with open(tmp, "rb") as f:
+                            await bot.send_document(
+                                CHAT_ID, document=f, filename=f"{label}_response.txt",
+                                reply_to_message_id=msg.message_id,
+                            )
+                        tmp.unlink(missing_ok=True)
+                    except Forbidden as e:
+                        _log_blocked_once(e)
+                    except Exception:
+                        log.warning("Failed to send full response file", exc_info=True)
 
             # Broadcast to observer bots (text only, or text + document)
             if self.observers:
