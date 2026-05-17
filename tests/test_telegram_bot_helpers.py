@@ -113,7 +113,9 @@ def test_send_with_retry_propagates_other_badrequest():
 
 def test_send_with_retry_propagates_forbidden(monkeypatch, caplog):
     bot = _FakeBot([Forbidden("Forbidden: bot was blocked")])
-    monkeypatch.setattr(tb, "_LAST_BLOCKED_LOG_TS", 0.0)
+    # Force the throttle gate open regardless of how small time.monotonic()
+    # is on a fresh CI runner (uptime < 60s).
+    monkeypatch.setattr(tb, "_LAST_BLOCKED_LOG_TS", -1e9)
     caplog.set_level("ERROR", logger="aipager.telegram_bot")
     with pytest.raises(Forbidden):
         _run(tb._send_with_retry(bot, chat_id=1, text="hi"))
