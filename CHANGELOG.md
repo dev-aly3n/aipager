@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.11] - 2026-05-17
+
 ### Added
 - Two new Commands-submenu buttons:
   - **Init** (`/init`) — generates `CLAUDE.md` for a fresh repo.
