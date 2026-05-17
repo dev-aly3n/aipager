@@ -22,6 +22,7 @@ from pathlib import Path
 
 from aipager import _dtach_redraw
 from aipager.errors import friendly_error, friendly_warn
+from aipager.ui import console, ok
 
 _NAME_RE = re.compile(r"[A-Za-z0-9_-]{1,50}")
 
@@ -132,8 +133,8 @@ def launch(name: str, skip_perms: bool = False,
         )
         return 1
 
-    ok, why = _dtach_works(dtach)
-    if not ok:
+    dtach_ok, why = _dtach_works(dtach)
+    if not dtach_ok:
         friendly_error(
             f"dtach binary at {dtach} fails to run.",
             f"  Detail: {why}",
@@ -154,7 +155,7 @@ def launch(name: str, skip_perms: bool = False,
 
     # Reattach branch — only if the socket is *alive*.
     if sock_path.exists() and _socket_alive(sock):
-        print(f"dtach session '{session}' exists — attaching...")
+        console.print(f"[step]→[/step] reattaching to [path]{session}[/path]")
         _set_title(name)
         threading.Thread(target=_keep_title, args=(name, stop), daemon=True).start()
         threading.Thread(target=_force_redraw, args=(name,), daemon=True).start()
@@ -176,20 +177,32 @@ def launch(name: str, skip_perms: bool = False,
     if sock_path.exists():
         try:
             sock_path.unlink()
-            print(f"  (cleaned up stale socket {sock})")
+            console.print(f"  [muted](cleaned up stale socket {sock})[/muted]")
         except OSError as e:
             friendly_warn(f"stale socket {sock} could not be removed: {e}")
 
-    print(f"Starting Claude in dtach session '{session}'...")
+    console.print(f"[step]→[/step] starting [path]{session}[/path]")
     skip_arg = ["--dangerously-skip-permissions"] if skip_perms else []
-    spawn = subprocess.run(
-        [dtach, "-n", sock, "-Ez",
-         "env", f"CLAUDE_DTACH_SESSION={session}",
-         "claude", *skip_arg,
-         "--append-system-prompt", sys_prompt,
-         *claude_args],
-        capture_output=True, text=True, check=False,
-    )
+    if console.is_terminal:
+        spawn_status = console.status(
+            "[muted]spawning dtach + claude…[/muted]", spinner="dots"
+        )
+    else:
+        spawn_status = None
+    if spawn_status:
+        spawn_status.__enter__()
+    try:
+        spawn = subprocess.run(
+            [dtach, "-n", sock, "-Ez",
+             "env", f"CLAUDE_DTACH_SESSION={session}",
+             "claude", *skip_arg,
+             "--append-system-prompt", sys_prompt,
+             *claude_args],
+            capture_output=True, text=True, check=False,
+        )
+    finally:
+        if spawn_status:
+            spawn_status.__exit__(None, None, None)
     if spawn.returncode != 0:
         friendly_error(
             f"dtach failed to start session (exit {spawn.returncode}).",
@@ -201,10 +214,21 @@ def launch(name: str, skip_perms: bool = False,
         )
         return 1
 
-    for _ in range(10):
-        time.sleep(0.3)
-        if sock_path.is_socket():
-            break
+    if console.is_terminal:
+        wait_status = console.status(
+            "[muted]waiting for socket to appear…[/muted]", spinner="dots"
+        )
+        wait_status.__enter__()
+    else:
+        wait_status = None
+    try:
+        for _ in range(10):
+            time.sleep(0.3)
+            if sock_path.is_socket():
+                break
+    finally:
+        if wait_status:
+            wait_status.__exit__(None, None, None)
     if not sock_path.is_socket():
         diag = _claude_version_diag()
         friendly_error(
@@ -216,6 +240,7 @@ def launch(name: str, skip_perms: bool = False,
         )
         return 1
 
+    ok(f"session [path]{session}[/path] ready")
     _set_title(name)
     threading.Thread(target=_keep_title, args=(name, stop), daemon=True).start()
     attach_started = time.monotonic()
