@@ -7,7 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.3.8] - 2026-05-17
+### Added
+- New `aipager.ui` module — single source of truth for console output,
+  theme, and TTY/color detection. Backed by `rich`. Honors `NO_COLOR`,
+  `FORCE_COLOR`, `CLICOLOR=0`, `CLICOLOR_FORCE`, and `TERM=dumb`.
+  Daemon and hook scripts keep their plain logging untouched so
+  journald and Claude-Code stdout stay scrapeable.
+- New dependencies: `rich >= 14, < 16` and `questionary >= 2, < 3`.
+  Combined disk footprint ~2.5 MB; both pure Python.
+
+### Changed
+- All user-facing errors and warnings now render as **bordered panels**
+  in red/yellow when stdout is a TTY, with the issue-tracker link
+  highlighted as a clickable path. Off-TTY (CI, logs, pipes) they
+  degrade to the same plain-text block as before, so the existing
+  test assertions and log-scraping patterns keep working.
+- `aipager doctor` renders the check list as a **rich table** with
+  coloured ✓/⚠/✗ markers, a "Suggested next steps" list of fixes, and
+  a footer summary (`7 ok · 1 warn · 1 fail`). Falls back to padded
+  plain text off-TTY.
+- `aipager config` is **redesigned around `questionary`**: each prompt
+  shows a cyan `?` glyph and is rewritten in place to a green `✓
+  Question … Answer` line after commit, matching the
+  `create-next-app` / `pnpm init` aesthetic. The chat-id step is now
+  an arrow-key choice ("Auto-detect" vs "Paste manually") instead of
+  the press-Enter-or-paste convention. Long-running Telegram API
+  calls (`getMe`, `getUpdates`, `sendMessage`) are wrapped in dotted
+  spinners so the terminal never appears frozen. Setup completes with
+  a green-bordered panel showing the three next commands
+  (`aipager start`, `aipager session dev`, `aipager doctor`).
+- `aipager session <name>` now shows a `→ starting <session>` step
+  line, a "spawning dtach + claude…" spinner during launch, a
+  "waiting for socket to appear…" spinner during the post-spawn
+  poll, and a green `✓ session ready` line before attach. Reattach
+  prints a single dim `→ reattaching to <session>` instead of the
+  prior plain text.
+- `aipager service install` now prints a `Installing aipager.service
+  (systemd-user)` step header, then a green ✓ line for each
+  checkpoint (wrote unit, daemon-reload, enable+start). The
+  post-install summary lines are dim-prefixed (`status:`, `logs:`,
+  `stop:`) so the actionable command is the focal point.
 
 ### Added
 - New `aipager doctor` subcommand prints a ✓ / ⚠ / ✗ health-check
