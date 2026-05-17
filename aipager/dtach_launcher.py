@@ -51,12 +51,22 @@ def _force_redraw(name: str) -> None:
 
 
 def launch(name: str, skip_perms: bool = False,
+           resume: bool = False,
            claude_args: list[str] | None = None) -> int:
     """Create or reattach a Claude Code session inside dtach.
 
+    If ``resume`` is True and a *new* dtach session is created, ``--continue``
+    is prepended to claude's args so it loads the most recent saved
+    conversation in the current cwd. When reattaching to an existing dtach
+    session, ``resume`` is a no-op (claude is already running its
+    conversation in that session).
+
     Returns a shell-style exit code (0 on success).
     """
-    claude_args = claude_args or []
+    claude_args = list(claude_args) if claude_args else []
+    if resume:
+        # Prepend so it sits before any user-supplied claude args.
+        claude_args.insert(0, "--continue")
     session = f"claude-{name}"
     sock = f"/tmp/claude-dtach-{name}.sock"
 

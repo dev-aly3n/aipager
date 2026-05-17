@@ -93,11 +93,12 @@ def _cmd_service(args: argparse.Namespace) -> int:
     return cmd_service(args)
 
 
-def _cmd_new(args: argparse.Namespace) -> int:
+def _cmd_session(args: argparse.Namespace) -> int:
     from aipager.dtach_launcher import launch
     return launch(
         name=args.name,
         skip_perms=args.skip_perms,
+        resume=args.resume,
         claude_args=args.claude_args or [],
     )
 
@@ -117,20 +118,28 @@ def main() -> None:
     sub.add_parser("version", help="print version"
                    ).set_defaults(fn=_cmd_version)
 
-    new_p = sub.add_parser(
-        "new",
-        help="create or reattach a Claude Code session under dtach",
+    session_p = sub.add_parser(
+        "session",
+        help="open a Claude Code session under dtach (creates if it doesn't "
+             "exist, reattaches if it does)",
     )
-    new_p.add_argument(
+    session_p.add_argument(
         "-y", dest="skip_perms", action="store_true",
         help="pass --dangerously-skip-permissions to claude",
     )
-    new_p.add_argument("name", help="session label (becomes claude-<name>)")
-    new_p.add_argument(
-        "claude_args", nargs=argparse.REMAINDER,
-        help="extra args passed through to the claude command",
+    session_p.add_argument(
+        "--resume", dest="resume", action="store_true",
+        help="when creating a fresh dtach session, also pass --continue to "
+             "claude so it resumes the most recent saved conversation in "
+             "this cwd. No-op when reattaching to an existing dtach session "
+             "(claude is already running its conversation).",
     )
-    new_p.set_defaults(fn=_cmd_new)
+    session_p.add_argument("name", help="session label (becomes claude-<name>)")
+    session_p.add_argument(
+        "claude_args", nargs=argparse.REMAINDER,
+        help="extra args passed through to claude (e.g. --resume <session-id>)",
+    )
+    session_p.set_defaults(fn=_cmd_session)
 
     service_p = sub.add_parser(
         "service",

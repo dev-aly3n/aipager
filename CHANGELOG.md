@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-05-17
+
+### Changed
+- Renamed `aipager new <name>` to `aipager session <name>`. The behavior
+  is the same (open the session, creating if it doesn't exist), but the
+  verb no longer falsely implies "always create new" — the command
+  reattaches transparently when the dtach session is alive.
+
+### Added
+- `aipager session <name> --resume` — when creating a fresh dtach
+  session, also pass `--continue` to claude so it loads the most recent
+  saved conversation in the current cwd. A no-op when reattaching to an
+  existing dtach session (claude is already running there).
+
 ## [0.3.2] - 2026-05-17
 
 ### Added
