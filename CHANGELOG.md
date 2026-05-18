@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.19] - 2026-05-18
+
+### Fixed
+- **Multi-line `friendly_warn` panels no longer collapse off-screen.**
+  Long warnings (e.g. the "couldn't resolve @handle" hint) are now
+  passed to `warn_block` as separate lines so Rich renders them as a
+  proper multi-row body instead of a single-line panel title that
+  overflows the terminal width.
+- **Manual add-user has Retry / Switch-to-auto / Cancel choices on
+  failure** (mirroring the auto-detect path). Admins can bail out of
+  a stuck `@handle` resolution loop without abandoning the whole
+  wizard.
+
+### Changed
+- **First-run flow saves `config.env` right after the chat-id step**
+  (was: at the very end). A Ctrl+C anywhere afterwards keeps token
+  + chat-id intact; re-running `aipager config` falls into the edit
+  flow instead of restarting from scratch.
+- **`team.yaml` is now written incrementally** — after every
+  successful user-add and after the deny-rules picker. Partial
+  team-mode setup survives Ctrl+C; re-entry's current-config panel
+  shows what's already been saved.
+- **`aipager config` edit menu gains "Re-install Claude Code
+  hooks"** — exposes the existing `settings.json` patch step so
+  admins who bailed out before that ran can complete the wiring
+  without re-doing the whole setup.
+
 ## [0.3.18] - 2026-05-18
 
 ### Changed
