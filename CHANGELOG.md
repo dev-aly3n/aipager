@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`aipager config` edit menu.** Re-running `aipager config` on
+  an existing install no longer overwrites everything. The wizard
+  detects existing config and opens an edit menu: add / remove a
+  user, change a user's role, edit `deny_tools` rules, switch
+  between Personal and Team modes (with an archived backup of the
+  old `team.yaml`), refresh the bot token, or run the full setup
+  again. First-run flow is mode-first now — Personal vs Team is
+  picked right after token verification so the chat-id prompt asks
+  for the right kind of id (group vs DM), no more double-prompting.
+- **`aipager doctor` team check.** New `check_team` validates
+  `team.yaml` against `CLAUDE_TG_CHAT_ID`, warns when no admin is
+  present or `rules.deny_tools` is empty, and FAILs when the
+  configured chat id doesn't match the team's group id (the
+  daemon would otherwise filter every message away as off-chat).
 - **Team / group mode.** Configure
   `~/.config/aipager/team.yaml` (via `aipager config` → Team) to
   run the bot in a Telegram group with multiple developers.

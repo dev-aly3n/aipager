@@ -27,23 +27,58 @@ who did what so you can review later, but it's after-the-fact.
 
 ## Setup
 
-Run `aipager config` and pick **Team** at the mode prompt. The
-wizard:
+Run `aipager config`. The wizard adapts:
 
-1. Shows the warning panel above.
-2. Asks for the Telegram **group chat ID** (negative integer; find
-   it by adding the bot to the group, sending `/start`, then hitting
-   `https://api.telegram.org/bot<TOKEN>/getUpdates` and reading
-   `chat.id`).
-3. Walks you through adding **users** — label, Telegram user ID,
-   role.
-4. Optionally enables a default **deny rule** (`Write` + `Edit`),
+- **No config yet** → first-run wizard. Picks mode upfront, then
+  walks token → mode → chat (group or DM) → team users + rules (if
+  team) → deps → settings → write.
+- **Config exists** → edit menu. Opens a current-state panel and
+  offers focused actions: add a user, remove a user, change a
+  user's role, edit deny rules, switch mode, refresh the bot token,
+  or run the full setup again.
+
+The first-run team flow:
+
+1. After token verification, pick **Team** at the mode prompt.
+2. Wizard shows a hard-stop warning panel about the trust expansion
+   (allow-listed users can run shell commands on the host) and
+   asks you to confirm.
+3. **Group chat ID** — paste it manually, or pick "Auto-detect"
+   and let the wizard watch `getUpdates` for a `/start` in the
+   group. Add the bot first.
+4. Walks you through adding **users** — label, Telegram user ID
+   (with manual-paste or auto-detect-via-mention), role.
+5. Optionally enables a default **deny rule** (`Write` + `Edit`),
    which the next section explains.
-5. Writes `~/.config/aipager/team.yaml` (mode 0600).
+6. Writes `~/.config/aipager/team.yaml` (mode 0600).
 
-You can hand-edit the file later to add / remove users — restart
-the daemon after changes (`aipager service restart` or kill the
-foreground daemon and re-run `aipager start`).
+Edit operations (when a config already exists):
+
+- **Add a user** — same prompts as first-run, validates against the
+  current list so you can't dup a label or user id.
+- **Remove a user** — picker over the current list. Refuses to
+  remove the last admin (promote someone first).
+- **Change a user's role** — picker → new role. Same single-admin
+  guard applies.
+- **Edit deny_tools rules** — checkbox over the common Claude
+  tools (`Bash`, `Write`, `Edit`, `WebFetch`, `Read`, `Glob`,
+  `Grep`, `Task`) with current selections pre-checked, plus a
+  free-form "other tools" line for custom names.
+- **Switch to Personal mode** — archives `team.yaml` to
+  `team.yaml.bak.<unix-ts>` and offers to re-collect a DM chat id
+  for `config.env`.
+- **Switch to Team mode** (when currently personal) — reuses the
+  token, walks the team setup, and updates `config.env`'s
+  `CHAT_ID` to the group id.
+- **Refresh bot token** — re-prompt for a new token after
+  `/revoke` in `@BotFather`.
+
+Every edit that writes a file ends with a one-line reminder to
+restart the daemon (`aipager service restart`) since the team
+allow-list is loaded at startup.
+
+You can still hand-edit `team.yaml` directly — the wizard just
+gives you a cleaner UX.
 
 Also, on `@BotFather`, leave **privacy mode ON** (the default).
 That way the bot only sees messages that mention it or reply to
