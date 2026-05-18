@@ -292,10 +292,117 @@ def check_service_installed() -> CheckResult:
                        detail=[f"unsupported platform: {sys_name}"])
 
 
+def check_team() -> CheckResult:
+    """Validate team.yaml against the configured CHAT_ID and roster.
+
+    Skipped (OK / personal mode) when team.yaml is absent or doesn't
+    declare team mode. Reports common misconfigurations:
+
+    - team.yaml malformed → FAIL
+    - group_id doesn't match CLAUDE_TG_CHAT_ID → FAIL (daemon would
+      otherwise filter every message away as off-chat)
+    - no admin user → WARN (admin is the only role that bypasses
+      rules.deny_tools, so an admin-less team can't escape its own
+      rules)
+    - rules.deny_tools empty → WARN with a suggestion
+    """
+    from aipager.config import CHAT_ID
+    from aipager.team import Role, TEAM_CONFIG_PATH, TeamConfigError, load_team
+
+    if not TEAM_CONFIG_PATH.exists():
+        return CheckResult(OK, "team config", detail=["personal mode (no team.yaml)"])
+
+    try:
+        team = load_team(TEAM_CONFIG_PATH)
+    except TeamConfigError as e:
+        return CheckResult(
+            FAIL, "team config",
+            detail=[f"team.yaml malformed: {e}"],
+            fix="edit ~/.config/aipager/team.yaml or re-run `aipager config`",
+        )
+
+    if team is None:
+        # Present but `mode != team` — treat as personal.
+        return CheckResult(
+            OK, "team config",
+            detail=["team.yaml present but mode != team (personal mode)"],
+        )
+
+    issues: list[str] = []
+    fixes: list[str] = []
+
+    # 1) Chat id must match group_id, otherwise the daemon's chat filter
+    # silently rejects every message — the most confusing failure mode.
+    try:
+        env_chat = int(CHAT_ID) if CHAT_ID else None
+    except ValueError:
+        env_chat = None
+    if env_chat is None:
+        issues.append("CLAUDE_TG_CHAT_ID is unset or non-numeric")
+        fixes.append("aipager config  # to set the group chat id")
+    elif env_chat != team.group_id:
+        issues.append(
+            f"CHAT_ID ({env_chat}) != team.yaml group_id ({team.group_id})"
+        )
+        fixes.append(
+            "edit ~/.config/aipager/config.env to set "
+            f"CLAUDE_TG_CHAT_ID={team.group_id}"
+        )
+
+    # 2) At least one admin.
+    if not any(u.role == Role.ADMIN for u in team.users.values()):
+        issues.append("no admin user — no one can bypass rules.deny_tools")
+        fixes.append(
+            "promote a user to admin via `aipager config` → "
+            "Change a user's role"
+        )
+
+    # 3) Suggest deny_tools if empty.
+    suggestions: list[str] = []
+    if not team.rules.deny_tools:
+        suggestions.append(
+            "rules.deny_tools is empty — consider enabling at least "
+            "[Write, Edit] to block accidental file changes"
+        )
+
+    if issues:
+        status = FAIL if any("CHAT_ID" in i for i in issues) else WARN
+        return CheckResult(
+            status, "team config",
+            detail=[
+                f"team mode · {len(team.users)} user(s) · "
+                f"{team.admin_count()} admin(s)",
+                *issues,
+                *suggestions,
+            ],
+            fix="; ".join(fixes) if fixes else None,
+        )
+
+    if suggestions:
+        return CheckResult(
+            WARN, "team config",
+            detail=[
+                f"team mode · {len(team.users)} user(s) · "
+                f"{team.admin_count()} admin(s)",
+                *suggestions,
+            ],
+        )
+
+    return CheckResult(
+        OK, "team config",
+        detail=[
+            f"team mode · {len(team.users)} user(s) · "
+            f"{team.admin_count()} admin(s) · "
+            f"{len(team.rules.deny_tools)} deny rule(s)",
+        ],
+    )
+
+
 CHECKS: list[Callable[[], CheckResult]] = [
     check_config,
     check_token_valid,
     check_chat_reachable,
+    check_team,
     check_claude,
     check_dtach,
     check_hook_scripts,
@@ -393,6 +500,7 @@ def cmd_doctor(_args: argparse.Namespace | None = None) -> int:
 __all__ = [
     "OK", "WARN", "FAIL", "CheckResult", "run_all", "cmd_doctor",
     "check_config", "check_token_valid", "check_chat_reachable",
+    "check_team",
     "check_dtach", "check_claude", "check_settings_json",
     "check_hook_scripts", "check_daemon", "check_service_installed",
     "CHECKS",

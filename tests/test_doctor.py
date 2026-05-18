@@ -225,3 +225,84 @@ def test_cmd_doctor_exits_0_on_all_ok(monkeypatch, capsys):
         lambda: doctor.CheckResult(doctor.OK, "beta"),
     ])
     assert doctor.cmd_doctor() == 0
+
+
+# ----- check_team -----
+
+def test_check_team_personal_mode_ok(monkeypatch, tmp_path):
+    """No team.yaml → personal mode → OK."""
+    monkeypatch.setattr("aipager.team.TEAM_CONFIG_PATH",
+                        tmp_path / "missing.yaml")
+    r = doctor.check_team()
+    assert r.status == doctor.OK
+    assert "personal" in " ".join(r.detail).lower()
+
+
+def test_check_team_malformed_yaml_fails(monkeypatch, tmp_path):
+    p = tmp_path / "team.yaml"
+    p.write_text("mode: team\nusers: [\n")  # unclosed
+    monkeypatch.setattr("aipager.team.TEAM_CONFIG_PATH", p)
+    r = doctor.check_team()
+    assert r.status == doctor.FAIL
+    assert "malformed" in " ".join(r.detail).lower()
+
+
+def test_check_team_chat_id_mismatch_fails(monkeypatch, tmp_path):
+    p = tmp_path / "team.yaml"
+    p.write_text(
+        "mode: team\n"
+        "group_id: -100123\n"
+        "users:\n"
+        "  - {id: 1, label: a, role: admin}\n"
+    )
+    monkeypatch.setattr("aipager.team.TEAM_CONFIG_PATH", p)
+    monkeypatch.setattr("aipager.config.CHAT_ID", "-999")  # mismatch
+    r = doctor.check_team()
+    assert r.status == doctor.FAIL
+    assert "CHAT_ID" in " ".join(r.detail)
+
+
+def test_check_team_no_admin_warns(monkeypatch, tmp_path):
+    p = tmp_path / "team.yaml"
+    p.write_text(
+        "mode: team\n"
+        "group_id: -100123\n"
+        "users:\n"
+        "  - {id: 1, label: a, role: developer}\n"
+    )
+    monkeypatch.setattr("aipager.team.TEAM_CONFIG_PATH", p)
+    monkeypatch.setattr("aipager.config.CHAT_ID", "-100123")
+    r = doctor.check_team()
+    assert r.status == doctor.WARN
+    assert "admin" in " ".join(r.detail).lower()
+
+
+def test_check_team_empty_deny_tools_warns(monkeypatch, tmp_path):
+    p = tmp_path / "team.yaml"
+    p.write_text(
+        "mode: team\n"
+        "group_id: -100123\n"
+        "users:\n"
+        "  - {id: 1, label: a, role: admin}\n"
+    )
+    monkeypatch.setattr("aipager.team.TEAM_CONFIG_PATH", p)
+    monkeypatch.setattr("aipager.config.CHAT_ID", "-100123")
+    r = doctor.check_team()
+    assert r.status == doctor.WARN
+    assert "deny_tools" in " ".join(r.detail)
+
+
+def test_check_team_healthy_returns_ok(monkeypatch, tmp_path):
+    p = tmp_path / "team.yaml"
+    p.write_text(
+        "mode: team\n"
+        "group_id: -100123\n"
+        "users:\n"
+        "  - {id: 1, label: a, role: admin}\n"
+        "rules:\n"
+        "  deny_tools: [Write]\n"
+    )
+    monkeypatch.setattr("aipager.team.TEAM_CONFIG_PATH", p)
+    monkeypatch.setattr("aipager.config.CHAT_ID", "-100123")
+    r = doctor.check_team()
+    assert r.status == doctor.OK
