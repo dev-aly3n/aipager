@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.15] - 2026-05-18
+
+### Fixed
+- `aipager config` step `[2/?]` (Personal vs Team picker) crashed
+  with `Invalid 'default' value passed` because the wizard passed
+  the choice **title** as the `questionary.select` default instead
+  of the matching `value`. The picker now correctly defaults to
+  Personal. First-run installs on 0.3.14 hit this every time —
+  upgrade to 0.3.15 to get past step 2.
+
+### Changed
+- `docs/architecture.md` mermaid diagram syntax fixed. The
+  bidirectional-with-label edge (`Sock <-- datagram -- Hooks`) was
+  malformed and mermaid v11 surfaced it as a "Syntax error in
+  text" banner on the docs site. Cleaned up `<br/>` → `<br>` and
+  removed HTML entities that don't survive react-markdown's
+  passthrough.
+
 ## [0.3.14] - 2026-05-18
 
 ### Added
