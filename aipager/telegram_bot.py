@@ -274,37 +274,99 @@ class TelegramBot:
             await self._app.stop()
             await self._app.shutdown()
 
+    async def _recover_busy_message(
+        self, bot, name: str, sess: TrackedSession, live_names: set[str]
+    ) -> str:
+        """Edit one session's orphaned busy message to a final state.
+
+        Returns one of: ``"edited"`` / ``"vanished"`` (user deleted the
+        message) / ``"too_old"`` (>48 h, Telegram refuses edits) /
+        ``"blocked"`` (bot blocked by user) / ``"flooded"`` (RetryAfter)
+        / ``"error:<short>"`` (unexpected). Always clears
+        ``sess.busy_msg_id`` synchronously before any await so a hook
+        firing mid-recovery can't race on it.
+        """
+        orphaned_id = sess.busy_msg_id
+        sess.busy_msg_id = None  # clear before any await
+        is_alive = name in live_names
+        label = html_mod.escape(sess.label)
+        text = (f"🔄 <b>{label}</b> · Daemon restarted" if is_alive
+                else f"🔴 <b>{label}</b> · Session ended")
+        try:
+            await bot.edit_message_text(
+                text, chat_id=CHAT_ID, message_id=orphaned_id,
+                parse_mode="HTML",
+            )
+        except BadRequest as e:
+            msg = str(e).lower()
+            if "message to edit not found" in msg or "message not found" in msg:
+                log.info("[%s] orphan msg %d already gone (user deleted)",
+                         sess.label, orphaned_id)
+                return "vanished"
+            if "can't be edited" in msg or "message can't be edited" in msg:
+                log.warning(
+                    "[%s] orphan msg %d is too old to edit (>48h); user will "
+                    "still see the stuck 'Working…' until they delete it",
+                    sess.label, orphaned_id,
+                )
+                return "too_old"
+            log.warning("[%s] orphan msg %d edit failed: %s",
+                        sess.label, orphaned_id, e)
+            return f"error:{str(e)[:80]}"
+        except Forbidden as e:
+            _log_blocked_once(e)
+            return "blocked"
+        except RetryAfter as e:
+            wait = getattr(e, "retry_after", None) or "?"
+            log.info("[%s] orphan msg %d skipped — Telegram flood control "
+                     "(retry_after=%s)", sess.label, orphaned_id, wait)
+            return "flooded"
+        except Exception as e:  # noqa: BLE001 - true last-resort log
+            log.warning("[%s] orphan msg %d recovery failed: %r",
+                        sess.label, orphaned_id, e, exc_info=True)
+            return f"error:{type(e).__name__}"
+        return "edited"
+
     async def recover_sessions(self) -> None:
-        """Clean up orphaned busy messages from a previous daemon lifecycle."""
+        """Clean up orphaned busy messages from a previous daemon lifecycle.
+
+        For every session with a persisted ``busy_msg_id`` left over from
+        the previous daemon run, try to edit the message to a terminal
+        state ("Daemon restarted" if the dtach session is still alive,
+        "Session ended" otherwise). Returns a summary log line so the
+        outcome of each daemon startup is visible in `aipager logs`.
+        """
         if not self._app:
             return
         bot = self._app.bot
-        live_sessions = set(await inject.list_sessions())
+        live_names = set(await inject.list_sessions())
 
-        for name, sess in self.registry.all_sessions().items():
-            if not sess.busy_msg_id or sess.busy_msg_id <= 0:
+        targets = [(name, sess) for name, sess in self.registry.all_sessions().items()
+                   if sess.busy_msg_id and sess.busy_msg_id > 0]
+        if not targets:
+            return
+
+        outcomes: dict[str, int] = {}
+        stop_early = False
+        for name, sess in targets:
+            if stop_early:
+                # Bot is blocked — clear remaining busy_msg_ids without trying
+                # to edit (which would just generate more Forbidden noise).
+                sess.busy_msg_id = None
+                outcomes["skipped_blocked"] = outcomes.get("skipped_blocked", 0) + 1
                 continue
+            outcome = await self._recover_busy_message(bot, name, sess, live_names)
+            key = outcome.split(":", 1)[0]  # "error:foo" → "error"
+            outcomes[key] = outcomes.get(key, 0) + 1
+            if outcome == "blocked":
+                stop_early = True
 
-            orphaned_id = sess.busy_msg_id
-            sess.busy_msg_id = None  # clear synchronously before any await
-            is_alive = name in live_sessions
-            label = html_mod.escape(sess.label)
-
-            if is_alive:
-                text = f"🔄 <b>{label}</b> · Daemon restarted"
-            else:
-                text = f"🔴 <b>{label}</b> · Session ended"
-
-            try:
-                await bot.edit_message_text(
-                    text, chat_id=CHAT_ID, message_id=orphaned_id,
-                    parse_mode="HTML",
-                )
-            except Exception:
-                pass  # message too old or already deleted
-            log.info("Recovered orphaned busy msg %d for [%s] (alive=%s)",
-                     orphaned_id, sess.label, is_alive)
-
+        # One summary line, easy to grep in `aipager logs`.
+        summary = ", ".join(f"{n} {k}" for k, n in sorted(outcomes.items()))
+        suffix = ""
+        if stop_early:
+            suffix = "  (bot blocked — stopping retries)"
+        log.info("recovered %d sessions: %s%s", len(targets), summary, suffix)
         self.registry.mark_dirty()
 
     async def _update_bot_commands(self) -> None:

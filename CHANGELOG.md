@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `recover_sessions` (which cleans up orphaned BUSY messages after a
+  daemon restart) now distinguishes failure modes instead of
+  swallowing every exception with `except Exception: pass`. Outcomes
+  per session: `edited` (success), `vanished` (user deleted the
+  message — Telegram says "message to edit not found"), `too_old`
+  (>48 h since the message was sent — Telegram refuses edits with
+  "message can't be edited"), `blocked` (bot was blocked by the
+  user — stops retrying remaining sessions), `flooded` (transient
+  Telegram rate-limit — skipped, next hook will refresh the BUSY
+  message anyway), or `error:<short>`. A single summary line lands
+  in the daemon log per startup, e.g.
+  `recovered 3 sessions: 2 edited, 1 vanished`, so `aipager logs`
+  shows the outcome of the most recent restart at a glance.
+
 ### Added
 - New `aipager update` subcommand. Auto-detects whether aipager was
   installed via uv tool, pipx, or Homebrew (in that order) and runs
