@@ -25,6 +25,7 @@ dependencies = [
     "dtach-bin>=0.9.1",
     "rich>=14.0,<16",
     "questionary>=2.0,<3",
+    "PyYAML>=6.0,<7",
 ]
 
 [project.optional-dependencies]
