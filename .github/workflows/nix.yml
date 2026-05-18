@@ -1,0 +1,37 @@
+name: nix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'pyproject.toml'
+      - 'aipager/**'
+      - '.github/workflows/nix.yml'
+  pull_request:
+    paths:
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'pyproject.toml'
+      - 'aipager/**'
+  workflow_dispatch:
+
+jobs:
+  flake-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v27
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - run: nix flake check --show-trace
+
+      - run: nix build .#default --print-build-logs
+
+      # End-to-end sanity: the wrapped binary runs and reports the
+      # version we just built.
+      - run: ./result/bin/aipager --version

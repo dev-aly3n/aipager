@@ -95,6 +95,39 @@ container.
 
 Tags: `latest`, `0.3`, `0.3.12` (semver track + minor track).
 
+### Nix flake
+
+```sh
+nix run github:dev-aly3n/aipager -- --version
+nix profile install github:dev-aly3n/aipager
+```
+
+Builds aipager from source against pinned nixpkgs deps. `dtach` is
+provided by Nix; `claude` is **not** — install it separately
+(`nix profile install nixpkgs#nodejs && npm install -g
+@anthropic-ai/claude-code`, or follow Anthropic's docs).
+
+For declarative NixOS / Home Manager configs, add aipager as a flake
+input and pick its package up from `environment.systemPackages`:
+
+```nix
+{
+  inputs.aipager.url = "github:dev-aly3n/aipager";
+
+  outputs = { self, nixpkgs, aipager, ... }: {
+    nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
+      modules = [{
+        environment.systemPackages = [
+          aipager.packages.${pkgs.system}.default
+        ];
+      }];
+    };
+  };
+}
+```
+
+`aipager service install` will then wire up a systemd-user unit.
+
 ## Configure
 
 ```sh

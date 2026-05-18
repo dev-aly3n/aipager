@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Mermaid component diagram), hook event reference, bot command
   reference, troubleshooting runbook, security model. The upcoming
   `aipager.run/docs` site renders directly from these files.
+- **Nix flake** at the repo root. `nix run github:dev-aly3n/aipager`
+  builds aipager from source against pinned nixpkgs (Python 3.12 +
+  python-telegram-bot + rich + questionary + system dtach). Suitable
+  for NixOS / nix-darwin / nix-on-Ubuntu setups. `claude` and
+  optional voice extras stay out-of-tree.
 
 ## [0.3.12] - 2026-05-18
 
