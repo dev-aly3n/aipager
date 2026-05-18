@@ -226,3 +226,74 @@ def test_cmd_service_unknown_subcommand(monkeypatch, capsys):
     assert rc == 1
     err = capsys.readouterr().err
     assert "Unknown service subcommand" in err
+
+
+# ----- cmd_logs -----
+
+def test_cmd_logs_linux_no_unit_returns_friendly_error(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(service, "_platform", lambda: "linux")
+    monkeypatch.setattr(service, "LINUX_UNIT_PATH", tmp_path / "missing.service")
+    rc = service.cmd_logs()
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "No daemon log source" in err
+    assert "aipager service install" in err
+
+
+def test_cmd_logs_linux_passes_follow_and_lines(monkeypatch, tmp_path):
+    unit = tmp_path / "aipager.service"
+    unit.touch()
+    monkeypatch.setattr(service, "_platform", lambda: "linux")
+    monkeypatch.setattr(service, "LINUX_UNIT_PATH", unit)
+    calls: list[list[str]] = []
+
+    def _fake_run(cmd, **_kw):
+        calls.append(cmd)
+        return 0, "", ""
+
+    monkeypatch.setattr(service, "_run", _fake_run)
+
+    # default — follow=True, lines=10
+    service.cmd_logs()
+    assert calls[0] == [
+        "journalctl", "--user", "-u", "aipager.service", "-n", "10", "--follow",
+    ]
+
+    # explicit non-follow with custom line count
+    service.cmd_logs(follow=False, lines=50)
+    assert calls[1] == [
+        "journalctl", "--user", "-u", "aipager.service", "-n", "50",
+    ]
+
+
+def test_cmd_logs_macos_no_plist_returns_friendly_error(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(service, "_platform", lambda: "macos")
+    monkeypatch.setattr(service, "MACOS_PLIST_PATH", tmp_path / "missing.plist")
+    monkeypatch.setattr(service, "MACOS_LOG_PATH", tmp_path / "missing.log")
+    rc = service.cmd_logs()
+    assert rc == 2
+    assert "No daemon log source" in capsys.readouterr().err
+
+
+def test_cmd_logs_macos_passes_follow_and_lines(monkeypatch, tmp_path):
+    plist = tmp_path / "com.aipager.daemon.plist"
+    plist.touch()
+    log = tmp_path / "aipager.log"
+    monkeypatch.setattr(service, "_platform", lambda: "macos")
+    monkeypatch.setattr(service, "MACOS_PLIST_PATH", plist)
+    monkeypatch.setattr(service, "MACOS_LOG_PATH", log)
+    calls: list[list[str]] = []
+    monkeypatch.setattr(service, "_run", lambda cmd, **_kw: calls.append(cmd) or (0, "", ""))
+
+    service.cmd_logs(follow=False, lines=25)
+    assert calls[0] == ["tail", "-n", "25", str(log)]
+
+    service.cmd_logs(follow=True, lines=100)
+    assert calls[1] == ["tail", "-n", "100", "-f", str(log)]
+
+
+def test_cmd_logs_unsupported_platform(monkeypatch, capsys):
+    monkeypatch.setattr(service, "_platform", lambda: "windows")
+    rc = service.cmd_logs()
+    assert rc == 1
+    assert "not supported on windows" in capsys.readouterr().err

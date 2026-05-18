@@ -222,6 +222,11 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     return cmd_doctor(args)
 
 
+def _cmd_logs(args: argparse.Namespace) -> int:
+    from aipager.service import cmd_logs
+    return cmd_logs(follow=args.follow, lines=args.lines)
+
+
 def _cmd_service(args: argparse.Namespace) -> int:
     from aipager.service import cmd_service
     return cmd_service(args)
@@ -254,6 +259,13 @@ def main() -> None:
                    ).set_defaults(fn=_cmd_version)
     sub.add_parser("doctor", help="run health checks and print a report"
                    ).set_defaults(fn=_cmd_doctor)
+
+    logs_p = sub.add_parser("logs", help="tail the daemon log")
+    logs_p.add_argument("-f", "--follow", action="store_true",
+                        help="follow new log lines as they appear")
+    logs_p.add_argument("-n", "--lines", type=int, default=100,
+                        help="number of trailing lines to show (default: 100)")
+    logs_p.set_defaults(fn=_cmd_logs)
 
     help_p = sub.add_parser("help",
                             help="show help for aipager or a subcommand")

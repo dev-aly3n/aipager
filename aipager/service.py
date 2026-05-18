@@ -353,17 +353,66 @@ def _status_macos() -> int:
                 capture=False)[0]
 
 
-def _logs_linux() -> int:
-    if not _require_installed_linux():
-        return 2
-    return _run(["journalctl", "--user", "-u", "aipager.service", "-f"],
-                capture=False)[0]
+def _no_log_source() -> int:
+    """Friendly error when no daemon log source is reachable.
+
+    Surfaced when the user runs `aipager logs` (or `aipager service
+    logs`) but no service unit / plist is installed — meaning the
+    daemon is either not running or running in foreground without an
+    output redirect.
+    """
+    friendly_error(
+        "No daemon log source found.",
+        "  aipager writes logs to journald (Linux) or",
+        "  ~/Library/Logs/aipager.log (macOS) only when installed as a service.",
+        "",
+        "  Either:",
+        "      aipager service install            # logs flow to journald / launchd",
+        "      aipager start > ~/aipager.log 2>&1 &   # redirect manually",
+        "",
+        "  Then:  tail -f ~/aipager.log",
+    )
+    return 2
 
 
-def _logs_macos() -> int:
-    if not _require_installed_macos():
-        return 2
-    return _run(["tail", "-f", str(MACOS_LOG_PATH)], capture=False)[0]
+def _logs_linux(*, follow: bool = True, lines: int = 10) -> int:
+    if not LINUX_UNIT_PATH.exists():
+        return _no_log_source()
+    cmd = ["journalctl", "--user", "-u", "aipager.service", "-n", str(lines)]
+    if follow:
+        cmd.append("--follow")
+    return _run(cmd, capture=False)[0]
+
+
+def _logs_macos(*, follow: bool = True, lines: int = 10) -> int:
+    if not MACOS_PLIST_PATH.exists() and not MACOS_LOG_PATH.exists():
+        return _no_log_source()
+    cmd = ["tail", "-n", str(lines)]
+    if follow:
+        cmd.append("-f")
+    cmd.append(str(MACOS_LOG_PATH))
+    return _run(cmd, capture=False)[0]
+
+
+def cmd_logs(*, follow: bool = True, lines: int = 10) -> int:
+    """Tail daemon logs from journald (Linux) or launchd log (macOS).
+
+    Shared implementation behind both `aipager logs` and
+    `aipager service logs`. Defaults mirror what users muscle-memorize
+    from journalctl / tail (-n 10, --follow). The top-level
+    `aipager logs` subcommand exposes `-n N` and `-f` for explicit
+    control.
+    """
+    plat = _platform()
+    if plat == "linux":
+        return _logs_linux(follow=follow, lines=lines)
+    if plat == "macos":
+        return _logs_macos(follow=follow, lines=lines)
+    friendly_error(
+        f"`aipager logs` is not supported on {plat}.",
+        "  Run `aipager start` and redirect output yourself instead.",
+    )
+    return 1
 
 
 def _uninstall_linux() -> int:

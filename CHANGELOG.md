@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- New top-level `aipager logs [-f|--follow] [-n N|--lines N]`
+  subcommand. Tails the daemon's journald entry on Linux or
+  `~/Library/Logs/aipager.log` on macOS, with `tail`-style flags.
+  Default shows the last 100 lines and exits; `-f` follows after the
+  initial dump.
+- When no log source is reachable (service not installed, daemon
+  running in a foreground terminal), `aipager logs` and
+  `aipager service logs` now print a friendly hint pointing at
+  either `aipager service install` or a manual redirect
+  (`aipager start > ~/aipager.log 2>&1 &`).
+
 ## [0.3.11] - 2026-05-17
 
 ### Added
