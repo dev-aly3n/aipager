@@ -107,6 +107,13 @@ class TrackedSession:
     # Stale session detection
     last_hook_at: float = 0.0        # monotonic timestamp of last hook event received
     stale_warned: bool = False       # prevents re-alerting every scan cycle
+    # Team-mode attribution (None in personal mode). `created_by` is the
+    # user who first created/owns the session; `last_driver` is whoever
+    # most recently injected a prompt into it — used to attribute
+    # auto-deny rule triggers and to display "🚗 @driver" in the pinned
+    # dashboard.
+    created_by_user_id: int | None = None
+    last_driver_user_id: int | None = None
     # Concurrency guard for `_send_busy_and_animate` — closes the race where
     # two coroutines could both observe `busy_msg_id is None` and both send.
     # Transient; never persisted.
@@ -254,6 +261,9 @@ class SessionRegistry:
         "name", "label", "last_msg_id", "transcript_path",
         "trigger_msg_id", "pending_queue", "last_prompt",
         "model_name", "busy_msg_id",
+        # Team-mode attribution — preserved across restarts so the
+        # pinned dashboard remembers who's driving each session.
+        "created_by_user_id", "last_driver_user_id",
     )
     _MAX_MSG_MAP = 1000  # cap _msg_map entries to avoid unbounded growth
 
@@ -348,6 +358,8 @@ class SessionRegistry:
                 last_prompt=sd.get("last_prompt", ""),
                 last_idle_at=0.0,
                 busy_msg_id=sd.get("busy_msg_id"),
+                created_by_user_id=sd.get("created_by_user_id"),
+                last_driver_user_id=sd.get("last_driver_user_id"),
             )
             # pending_queue: accept old 2-tuples and new 3-tuples
             # (text, msg_id, queued_at). Drop entries older than the

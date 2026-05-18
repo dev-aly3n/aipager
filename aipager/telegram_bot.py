@@ -464,6 +464,114 @@ class TelegramBot:
 
         return True
 
+    async def _auto_deny(
+        self,
+        sess: TrackedSession,
+        tool_info: dict,
+        triggerer: TeamUser | None,
+    ) -> None:
+        """Auto-deny a tool prompt via the same key-injection path the
+        ``[❌ Deny]`` button uses. Called when a team rule matches.
+
+        Posts a one-line notice in the chat naming the rule and the
+        triggering user. Writes a structured audit record. Returns the
+        session to BUSY so the next claude tick proceeds normally.
+        """
+        tool_name = tool_info.get("name", "?")
+        summary = tool_info.get("summary", "")[:120]
+
+        # Inject Down + Enter — same sequence the Deny button uses to
+        # walk claude's "Allow / Deny" picker.
+        ok = await inject.send_keys(sess.name, "Down")
+        if ok:
+            await asyncio.sleep(0.1)
+            ok = await inject.send_keys(sess.name, "Enter")
+        if not ok:
+            log.warning(
+                "[%s] auto-deny key injection failed for %s",
+                sess.label, tool_name,
+            )
+
+        # Restore BUSY (claude is proceeding past the denied prompt).
+        self.registry.transition(sess.name, Status.BUSY)
+        sess.pending_permission = None
+
+        by_attr = (
+            f" (triggered by {attribution_label(triggerer)})"
+            if triggerer is not None
+            else ""
+        )
+        try:
+            await self._app.bot.send_message(
+                CHAT_ID,
+                f"⛔ <b>{html_mod.escape(sess.label)}</b> · "
+                f"Auto-denied · {html_mod.escape(tool_name)} · "
+                f"per rules.deny_tools{html_mod.escape(by_attr)}\n"
+                f"<i>{html_mod.escape(summary)}</i>",
+                parse_mode="HTML",
+                reply_to_message_id=(sess.busy_msg_id
+                                     if sess.busy_msg_id and sess.busy_msg_id > 0
+                                     else None),
+            )
+        except Exception:
+            log.debug(
+                "[%s] auto-deny chat message failed", sess.label,
+                exc_info=True,
+            )
+
+        try:
+            from aipager import audit as audit_mod
+            audit_mod.append(
+                session=sess.name, label=sess.label,
+                action="Auto-denied",
+                tool=tool_name,
+                summary=summary,
+                user_id=triggerer.id if triggerer else None,
+                username=triggerer.label if triggerer else "",
+            )
+        except Exception:
+            log.debug("[%s] auto-deny audit failed", sess.label, exc_info=True)
+
+        log.info(
+            "[%s] auto-denied %s per rules.deny_tools (triggerer=%s)",
+            sess.label, tool_name,
+            triggerer.label if triggerer else "unknown",
+        )
+
+    def _mark_driver(
+        self, sess: TrackedSession, update: Update,
+    ) -> TeamUser | None:
+        """Record the message sender as the session's last driver.
+
+        Personal-mode no-op (returns ``None``). In team mode, sets
+        ``sess.last_driver_user_id`` and (if first-touch) also
+        ``sess.created_by_user_id``. The returned :class:`team.User`
+        is used by callers to attribute prompts and audit records.
+        """
+        if self.team is None:
+            return None
+        tg_user = update.effective_user
+        if tg_user is None:
+            return None
+        member = self.team.get(tg_user.id)
+        if member is None:
+            return None
+        sess.last_driver_user_id = member.id
+        if sess.created_by_user_id is None:
+            sess.created_by_user_id = member.id
+        return member
+
+    def _driver_user(self, sess: TrackedSession) -> TeamUser | None:
+        """Resolve a session's ``last_driver_user_id`` to a ``TeamUser``.
+
+        Returns ``None`` if no driver is recorded, the team isn't
+        loaded, or the driver was removed from the allow-list since
+        their last interaction.
+        """
+        if self.team is None or sess.last_driver_user_id is None:
+            return None
+        return self.team.get(sess.last_driver_user_id)
+
     async def _authorize_callback(self, query) -> TeamUser | None:
         """Allow-list check for inline-keyboard taps.
 
@@ -1904,6 +2012,22 @@ class TelegramBot:
             selector_text = context.get("selector_text", "")
             selector_options = context.get("selector_options")
 
+            # Team-mode rule check: auto-deny tools listed in
+            # ``team.yaml`` ``rules.deny_tools`` (unless the session's
+            # last driver is an admin, who bypass rules). Side-steps the
+            # permission prompt entirely — claude sees a Deny via the
+            # same key-injection path the buttons use, the chat sees
+            # a one-line "⛔ Auto-denied" notice, and an audit record
+            # is written.
+            if (tool_info and self.team is not None
+                    and self.team.rules.deny_tools):
+                triggerer = self._driver_user(sess)
+                if self.team.rules.tool_is_denied(
+                    tool_info.get("name", ""), triggerer,
+                ):
+                    await self._auto_deny(sess, tool_info, triggerer)
+                    return
+
             # Can we inline into the existing busy message?
             can_inline = sess.busy_msg_id and sess.busy_msg_id > 0
 
@@ -2422,16 +2546,23 @@ class TelegramBot:
 
                 # Audit reply (multi-select submit path)
                 from aipager import audit as audit_mod
+                # `member` was resolved by _authorize_callback at the top
+                # of _handle_callback; in personal mode it's a sentinel
+                # (id=0) — only record real allow-listed users.
+                actor = member if self.team is not None and member.id != 0 else None
                 audit_mod.append(
                     session=sess.name, label=sess.label, action="Answered",
                     tool="AskUserQuestion",
                     summary=f"{question_text[:120]} → {verb[:80]}",
+                    user_id=actor.id if actor else None,
+                    username=actor.label if actor else "",
                 )
+                by_attr = f" by {attribution_label(actor)}" if actor else ""
                 try:
                     await self._app.bot.send_message(
                         CHAT_ID,
                         f"✓ <b>{html_mod.escape(sess.label)}</b> · "
-                        f"Answered · "
+                        f"Answered{html_mod.escape(by_attr)} · "
                         f"{html_mod.escape(question_text[:80])} → "
                         f"{html_mod.escape(verb[:80])}",
                         parse_mode="HTML",
@@ -2527,9 +2658,14 @@ class TelegramBot:
 
                 # Persistent audit trail to disk (jsonl).
                 from aipager import audit as audit_mod
+                actor = (
+                    member if self.team is not None and member.id != 0 else None
+                )
                 audit_mod.append(
                     session=sess.name, label=sess.label, action=verb,
                     tool=audit_tool_name, summary=audit_detail,
+                    user_id=actor.id if actor else None,
+                    username=actor.label if actor else "",
                 )
 
                 # Audit reply in chat — persistent record of the decision
@@ -2540,11 +2676,13 @@ class TelegramBot:
                     "Denied": "🚫",
                     "Continue": "▶️",
                 }.get(verb, "·")
+                by_attr = f" by {attribution_label(actor)}" if actor else ""
                 try:
                     await self._app.bot.send_message(
                         CHAT_ID,
                         f"{audit_icon} <b>{html_mod.escape(sess.label)}</b> · "
-                        f"{verb} · {html_mod.escape(audit_detail)}",
+                        f"{verb}{html_mod.escape(by_attr)} · "
+                        f"{html_mod.escape(audit_detail)}",
                         parse_mode="HTML",
                         reply_to_message_id=(sess.busy_msg_id
                                              if sess.busy_msg_id and sess.busy_msg_id > 0
@@ -2941,6 +3079,8 @@ class TelegramBot:
         # Recover from GONE/UNKNOWN — we just verified the socket is alive
         if sess.status in (Status.GONE, Status.UNKNOWN):
             self.registry.transition(session_name, Status.IDLE)
+        # Team-mode attribution: record the creator (and current driver).
+        self._mark_driver(sess, update)
         self.registry.last_active_session = session_name
         self.registry.mark_dirty()
         asyncio.create_task(self._maybe_update_bot_name(session_name))
@@ -3181,6 +3321,7 @@ class TelegramBot:
 
         sess.trigger_msg_id = update.message.message_id
         sess.last_prompt = text
+        self._mark_driver(sess, update)
         self.registry.mark_dirty()
         ok = await inject.send_text_and_enter(sess.name, text)
         if ok:
@@ -3335,6 +3476,7 @@ class TelegramBot:
 
         sess.trigger_msg_id = update.message.message_id
         sess.last_prompt = transcript
+        self._mark_driver(sess, update)
         self.registry.mark_dirty()
         ok = await inject.send_text_and_enter(sess.name, transcript)
         if ok:
@@ -3453,6 +3595,7 @@ class TelegramBot:
 
         sess.trigger_msg_id = msg.message_id
         sess.last_prompt = prompt
+        self._mark_driver(sess, update)
         self.registry.mark_dirty()
         ok = await inject.send_text_and_enter(sess.name, prompt)
         if ok:
