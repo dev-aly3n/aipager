@@ -601,7 +601,8 @@ def _step_pick_mode(step_label: str = "[2/N]") -> str:
             questionary.Choice("Team (group chat with multiple devs)",
                                value="team"),
         ],
-        default="Personal (1:1 DM with the bot — recommended)",
+        # `default` must match a Choice ``value``, not its title.
+        default="personal",
         qmark="?", style=_PROMPT_STYLE,
     ))
 
