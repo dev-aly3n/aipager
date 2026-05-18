@@ -232,6 +232,16 @@ def _cmd_logs(args: argparse.Namespace) -> int:
     return cmd_logs(follow=args.follow, lines=args.lines)
 
 
+def _cmd_update(args: argparse.Namespace) -> int:
+    from aipager.updater import cmd_update
+    return cmd_update(args)
+
+
+def _cmd_uninstall(args: argparse.Namespace) -> int:
+    from aipager.updater import cmd_uninstall
+    return cmd_uninstall(args)
+
+
 def _cmd_service(args: argparse.Namespace) -> int:
     from aipager.service import cmd_service
     return cmd_service(args)
@@ -363,6 +373,19 @@ def main() -> None:
     logs_p.add_argument("-n", "--lines", type=int, default=100,
                         help="number of trailing lines to show (default: 100)")
     logs_p.set_defaults(fn=_cmd_logs)
+
+    sub.add_parser(
+        "update",
+        help="upgrade aipager via uv / pipx / Homebrew (auto-detect)",
+    ).set_defaults(fn=_cmd_update)
+
+    uninstall_p = sub.add_parser(
+        "uninstall",
+        help="stop the daemon, remove config + state, uninstall the binary",
+    )
+    uninstall_p.add_argument("-y", "--yes", dest="force", action="store_true",
+                             help="skip the confirmation prompt")
+    uninstall_p.set_defaults(fn=_cmd_uninstall)
 
     help_p = sub.add_parser("help",
                             help="show help for aipager or a subcommand")

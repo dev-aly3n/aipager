@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- New `aipager update` subcommand. Auto-detects whether aipager was
+  installed via uv tool, pipx, or Homebrew (in that order) and runs
+  the matching upgrade command. uv path passes `--refresh` to force
+  the PyPI index cache to refresh (which has bitten users minutes
+  after a new release). Friendly error when no known installer is
+  in charge (e.g., `pip install --user` setups).
+- New `aipager uninstall [-y|--yes]` subcommand. Stops the daemon
+  (service or foreground), removes `~/.config/aipager`,
+  `~/.claude/aipager-sessions.json`, `/tmp/aipager.sock`, all
+  `/tmp/claude-dtach-*.sock` and `/tmp/claude-status-*.json`, then
+  uninstalls the binary via the installer that owns it. Macros only:
+  also removes `~/Library/LaunchAgents/com.aipager.daemon.plist`
+  and `~/Library/Logs/aipager.log`. Does **not** touch Claude Code's
+  `settings.json` or any `.bak.*` backups. Confirms by default; `-y`
+  skips the prompt.
 - New `aipager session ls` (alias `session list`) subcommand. Lists
   live dtach sessions with their status, model, context %, cost, and
   queue depth. Default hides GONE sessions; `-a` / `--all` includes
