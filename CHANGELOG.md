@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.12] - 2026-05-18
+
 ### Added
 - **Voice messages → transcript → injected prompt.** Send a voice
   message in Telegram, the daemon downloads the .ogg, runs
