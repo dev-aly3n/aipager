@@ -236,17 +236,25 @@ def _resolve_user(
 ) -> tuple[int, str] | None:
     """Resolve a numeric id OR ``@handle`` to ``(user_id, suggested_label)``.
 
-    Uses Telegram's ``getChat`` endpoint. Returns ``None`` on:
+    The Telegram bot API has a real constraint here: ``getChat`` with
+    ``@username`` only resolves **channels and supergroups** — not
+    individual users. So @handle lookup goes through two paths:
 
-    - non-private chat type (channel / supergroup / bot) — we
-      refuse to allow-list these
-    - chat-not-found / network error
-    - malformed input
+    1. **`getChat?chat_id=@handle`** — works for users only when the
+       bot has been talking with them before (and Telegram's
+       implementation extends private-chat lookup to known contacts).
+       This is the fast path.
+    2. **`getUpdates` scan** — fall back to scanning the bot's recent
+       update queue for a message whose ``from.username`` matches.
+       Works for any group member who's sent at least one message
+       recently.
 
-    Numeric input that the bot has never seen will return ``None``
-    too (Telegram refuses ``getChat`` for unknown numeric chats).
-    Callers fall back to treating the id as-is with a default
-    label of ``user<id>``.
+    Numeric input goes only through path 1 (no scan needed — we
+    already have the id; getChat is just label enrichment).
+
+    Returns ``None`` when neither path identifies a *private*
+    Telegram user — channels / bots are rejected explicitly so
+    admins can't accidentally allow-list them.
     """
     if not token:
         return None
@@ -254,41 +262,71 @@ def _resolve_user(
     if not raw:
         return None
 
-    # Forgiving input: bare handle (no @) gets one prefixed.
-    if not raw.startswith("@"):
+    # Forgiving input: bare handle (no @) gets one prefixed; numeric
+    # input goes through unchanged.
+    numeric_input = False
+    if raw.startswith("@"):
+        chat_id = raw
+        handle_lc = raw[1:].lower()
+    else:
         try:
             int(raw)
-            chat_id = raw  # numeric — use as-is
+            chat_id = raw
+            handle_lc = ""
+            numeric_input = True
         except ValueError:
             chat_id = f"@{raw}"
-    else:
-        chat_id = raw
+            handle_lc = raw.lower()
 
+    # Path 1: getChat. Works for numeric ids the bot has seen, and
+    # for @handles tied to private users when Telegram permits.
     body, _code, _err = _http_json(
         f"https://api.telegram.org/bot{token}/getChat?chat_id={chat_id}"
     )
+    if body and body.get("ok"):
+        result = body.get("result") or {}
+        chat_type = result.get("type")
+        if chat_type == "private":
+            try:
+                uid = int(result["id"])
+                suggested = (
+                    result.get("username")
+                    or result.get("first_name")
+                    or f"user{uid}"
+                ).strip() or f"user{uid}"
+                return uid, suggested.lower()
+            except (KeyError, TypeError, ValueError):
+                pass
+        elif chat_type in ("channel", "group", "supergroup", "bot"):
+            # Hard reject — admin tried to allow-list a non-user.
+            return None
+
+    # Numeric ids end here; no scan to do.
+    if numeric_input or not handle_lc:
+        return None
+
+    # Path 2: scan getUpdates for a from.username match (lowercased).
+    body, _code, _err = _http_json(
+        f"https://api.telegram.org/bot{token}/getUpdates"
+    )
     if not body or not body.get("ok"):
         return None
-
-    result = body.get("result") or {}
-    if result.get("type") != "private":
-        # channel / group / bot — not eligible for the team allow-list
-        return None
-
-    try:
-        uid = int(result["id"])
-    except (KeyError, TypeError, ValueError):
-        return None
-
-    suggested = (
-        result.get("username")
-        or result.get("first_name")
-        or f"user{uid}"
-    ).strip() or f"user{uid}"
-    # Labels are case-sensitive in team.yaml but Telegram handles are
-    # canonical lowercase. Keep the suggestion lowercase to match
-    # `@alice` mention conventions.
-    return uid, suggested.lower()
+    for u in body.get("result", []):
+        msg = u.get("message") or u.get("edited_message") or {}
+        sender = msg.get("from") or {}
+        their_handle = (sender.get("username") or "").lower()
+        if their_handle and their_handle == handle_lc:
+            try:
+                uid = int(sender["id"])
+                suggested = (
+                    sender.get("username")
+                    or sender.get("first_name")
+                    or f"user{uid}"
+                ).strip() or f"user{uid}"
+                return uid, suggested.lower()
+            except (KeyError, TypeError, ValueError):
+                continue
+    return None
 
 
 def _spin(message: str):
@@ -874,9 +912,11 @@ def _capture_user_identity(
                 resolved = _resolve_user(token, raw)
             if resolved is None:
                 friendly_warn(
-                    f"Couldn't resolve {raw!r} via Telegram — make sure "
-                    "the handle is correct and the user has a public "
-                    "username. Try again or paste the numeric id.",
+                    f"Couldn't resolve {raw!r}. Telegram only lets bots\n"
+                    "  look up users they've already seen — ask the user to\n"
+                    "  send any message in the group, then retry. Or pick\n"
+                    "  Auto-detect (which polls for new messages), or paste\n"
+                    "  the numeric id."
                 )
                 continue
             uid, suggested_label = resolved

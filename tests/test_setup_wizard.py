@@ -320,3 +320,89 @@ def test_finalize_user_uses_typed_label(monkeypatch):
     monkeypatch.setattr(sw, "_ask", lambda q: "custom")
     out = sw._finalize_user(42, "alice", existing_labels=set())
     assert out == {"id": 42, "label": "custom"}
+
+
+def test_resolve_user_falls_back_to_getUpdates_when_getChat_fails(monkeypatch):
+    """Telegram's bot API blocks @handle → user_id lookup via getChat for
+    most users. _resolve_user should fall back to scanning getUpdates for
+    a message whose from.username matches."""
+    from aipager import setup_wizard as sw
+
+    def fake_http(url, timeout=10.0):
+        if "getChat" in url:
+            # Telegram says "chat not found" for the @handle
+            return ({"ok": False, "description": "chat not found"}, 400, "")
+        # getUpdates returns a recent message from the user
+        return ({
+            "ok": True,
+            "result": [{
+                "message": {
+                    "from": {
+                        "id": 256113222,
+                        "username": "Arian_Hamdi",
+                        "first_name": "Arian",
+                    },
+                    "chat": {"id": -100, "type": "supergroup"},
+                },
+            }],
+        }, 200, "")
+
+    monkeypatch.setattr(sw, "_http_json", fake_http)
+    out = sw._resolve_user("token", "@arian_hamdi")
+    assert out == (256113222, "arian_hamdi")
+
+
+def test_resolve_user_case_insensitive_username_match(monkeypatch):
+    """Telegram canonical-lowercases @handles, but admins paste mixed case.
+    The fallback scan should match regardless of input case."""
+    from aipager import setup_wizard as sw
+
+    def fake_http(url, timeout=10.0):
+        if "getChat" in url:
+            return ({"ok": False, "description": "chat not found"}, 400, "")
+        return ({
+            "ok": True,
+            "result": [{
+                "message": {
+                    "from": {"id": 99, "username": "alice"},
+                    "chat": {"id": -1, "type": "group"},
+                },
+            }],
+        }, 200, "")
+
+    monkeypatch.setattr(sw, "_http_json", fake_http)
+    assert sw._resolve_user("t", "@ALICE")[0] == 99
+    assert sw._resolve_user("t", "@Alice")[0] == 99
+    assert sw._resolve_user("t", "alice")[0] == 99
+
+
+def test_resolve_user_handle_with_no_updates_returns_none(monkeypatch):
+    """If the user has never messaged any chat the bot is in, neither
+    getChat nor getUpdates can resolve them."""
+    from aipager import setup_wizard as sw
+
+    def fake_http(url, timeout=10.0):
+        if "getChat" in url:
+            return ({"ok": False, "description": "chat not found"}, 400, "")
+        return ({"ok": True, "result": []}, 200, "")  # no recent updates
+
+    monkeypatch.setattr(sw, "_http_json", fake_http)
+    assert sw._resolve_user("t", "@phantom") is None
+
+
+def test_resolve_user_numeric_skips_updates_scan(monkeypatch):
+    """Numeric input must NOT trigger the getUpdates fallback."""
+    from aipager import setup_wizard as sw
+    seen_urls = []
+
+    def fake_http(url, timeout=10.0):
+        seen_urls.append(url)
+        if "getChat" in url:
+            return ({"ok": False, "description": "chat not found"}, 400, "")
+        return ({"ok": True, "result": []}, 200, "")
+
+    monkeypatch.setattr(sw, "_http_json", fake_http)
+    out = sw._resolve_user("t", "12345")
+    assert out is None
+    # Only one call (the getChat); no fallback scan for numeric input.
+    assert len(seen_urls) == 1 and "getChat" in seen_urls[0]

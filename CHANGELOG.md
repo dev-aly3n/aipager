@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.17] - 2026-05-18
+
+### Fixed
+- **`@handle` add-user actually works.** 0.3.16's `@handle`
+  resolution relied on Telegram's `getChat?chat_id=@username`,
+  which only resolves channels / supergroups — not individual
+  users. The wizard now falls back to scanning recent
+  `getUpdates` for a message whose `from.username` matches.
+  Works for any group member who's sent at least one message
+  the bot has seen (which in a group with privacy-on, includes
+  any mention of the bot or reply to one of its messages).
+  Failure message now points at the real fix ("ask the user to
+  send any message in the group, then retry").
+
 ## [0.3.16] - 2026-05-18
 
 ### Changed
