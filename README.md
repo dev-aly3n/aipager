@@ -128,6 +128,28 @@ input and pick its package up from `environment.systemPackages`:
 
 `aipager service install` will then wire up a systemd-user unit.
 
+### AUR (Arch Linux)
+
+```sh
+yay -S aipager           # or paru, pikaur — any AUR helper
+```
+
+System `dtach` and `python-telegram-bot` come from pacman; install
+the Anthropic `claude` CLI separately
+(`sudo pacman -S npm && sudo npm install -g @anthropic-ai/claude-code`).
+PKGBUILD lives at [`packaging/aur/`](packaging/aur/) for review.
+
+### Snap
+
+```sh
+snap install aipager
+```
+
+Strict-confinement snap that bundles python + node + `claude` +
+`dtach` + aipager. Because of snap's sandbox model, workspaces must
+live under `~/` (e.g. `~/projects/foo`). Manifest at
+[`packaging/snap/`](packaging/snap/).
+
 ## Configure
 
 ```sh

@@ -1,0 +1,41 @@
+# Maintainer: dev-aly3n <dev.aly3n@gmail.com>
+pkgname=aipager
+pkgver=0.3.12
+pkgrel=1
+pkgdesc="Telegram remote-control daemon for Claude Code CLI sessions"
+arch=('any')
+url="https://aipager.run"
+license=('MIT')
+depends=(
+  'python>=3.10'
+  'python-telegram-bot>=20'
+  'python-rich'
+  'python-questionary'
+  'dtach'
+)
+makedepends=(
+  'python-build'
+  'python-installer'
+  'python-hatchling'
+  'python-wheel'
+)
+optdepends=(
+  'claude-code: required at runtime; install separately via npm'
+  'faster-whisper: optional voice input transcription'
+)
+source=("https://files.pythonhosted.org/packages/source/${pkgname:0:1}/${pkgname}/${pkgname}-${pkgver}.tar.gz")
+sha256sums=('d7a6e3acd81b6f41ad0af6304f234dfc97ca1d6ce8b710e8fac42129619b508d')
+
+build() {
+  cd "${pkgname}-${pkgver}"
+  # System dtach replaces the bundled dtach-bin wheel — strip it
+  # from the dependency list before building, same as the brew
+  # formula and Nix flake do.
+  sed -i '/dtach-bin/d' pyproject.toml
+  python -m build --wheel --no-isolation
+}
+
+package() {
+  cd "${pkgname}-${pkgver}"
+  python -m installer --destdir="${pkgdir}" dist/*.whl
+}

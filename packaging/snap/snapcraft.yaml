@@ -1,0 +1,54 @@
+name: aipager
+base: core24
+version: "0.3.12"
+summary: Telegram remote-control daemon for Claude Code CLI sessions
+description: |
+  Run Claude Code in a detached terminal session, drive it from
+  Telegram — read responses, send prompts, approve permission
+  requests, switch sessions — without an SSH session staying open.
+
+  See https://aipager.run for the full UX.
+
+grade: stable
+confinement: strict
+
+apps:
+  aipager:
+    command: bin/aipager
+    plugs:
+      - home          # access ~/.claude and ~/.config/aipager
+      - network       # outbound HTTPS to Telegram + PyPI
+      - network-bind  # /tmp/aipager.sock (snap-internal /tmp)
+    environment:
+      PATH: $SNAP/bin:$SNAP/usr/bin:$PATH
+
+parts:
+  # aipager itself, installed via the python plugin from local source.
+  # We drop dtach-bin in override-pull so we use the system dtach
+  # staged below, matching the brew formula and Nix flake.
+  aipager:
+    plugin: python
+    source: .
+    python-packages:
+      - "python-telegram-bot>=20"
+      - "rich>=14,<16"
+      - "questionary>=2,<3"
+    override-pull: |
+      craftctl default
+      sed -i '/dtach-bin/d' pyproject.toml
+    stage-packages:
+      - dtach
+
+  # Bundle node + the Anthropic CLI so the snap doesn't depend on a
+  # host-installed claude. The home plug lets claude pick up
+  # ~/.claude/.credentials.json from the user's home dir.
+  claude-code:
+    plugin: nil
+    stage-packages:
+      - nodejs
+      - npm
+    override-prime: |
+      craftctl default
+      "${CRAFT_PRIME}/usr/bin/npm" install -g \
+        --prefix="${CRAFT_PRIME}/usr" \
+        @anthropic-ai/claude-code

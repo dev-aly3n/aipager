@@ -22,6 +22,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   python-telegram-bot + rich + questionary + system dtach). Suitable
   for NixOS / nix-darwin / nix-on-Ubuntu setups. `claude` and
   optional voice extras stay out-of-tree.
+- **Arch User Repository** — `yay -S aipager`. PKGBUILD lives at
+  [`packaging/aur/`](packaging/aur/); same file mirrors to
+  `aur.archlinux.org/aipager.git` per release. System `dtach` and
+  `python-telegram-bot` come from pacman; `claude` installs via npm
+  separately.
+- **Snap** — `snap install aipager`. Strict-confinement snap that
+  bundles python + node + `claude` + `dtach` + aipager into one
+  package, so the daemon and claude code share the same sandbox.
+  Workspace must live under `~/`. Manifest at
+  [`packaging/snap/`](packaging/snap/).
 
 ## [0.3.12] - 2026-05-18
 
