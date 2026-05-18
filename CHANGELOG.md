@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.14] - 2026-05-18
+
 ### Added
 - **Live reload of `team.yaml` via SIGUSR1.** Add-user / remove-user
   / change-role / edit-rules / switch-to-personal all signal the
