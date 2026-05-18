@@ -46,7 +46,7 @@ from aipager.config import (
     FILE_DOWNLOAD_DIR, KEYBOARD_PARENTS, MODEL_CHOICES, MODELS_BUTTON,
     QUICK_COMMANDS, QUICK_TEMPLATES, SPINNER_VERBS, TEMPLATES_BUTTON,
 )
-from aipager.state import SessionRegistry, Status, TrackedSession
+from aipager.state import QUEUE_CAP, SessionRegistry, Status, TrackedSession
 
 # Telegram's documented document upload ceiling is 50 MB; stay below it.
 TELEGRAM_MAX_DOC_BYTES = 40 * 1024 * 1024
@@ -85,12 +85,26 @@ def _is_bot_blocked(e: Exception) -> bool:
     return "bot was blocked" in msg or "blocked by the user" in msg
 
 
+class TruncationFailed(Exception):
+    """Raised by ``_send_with_retry`` when text remains "too long" after the
+    truncation cap. Caller in the IDLE path can catch this and fall back
+    to sending the response as a document attachment.
+    """
+
+
+# Maximum number of times ``_send_with_retry`` will truncate-and-resend
+# before giving up. HTML escaping can occasionally expand text on
+# truncation, so without a cap a pathological input could loop forever.
+_MAX_TRUNCATIONS = 2
+
+
 async def _send_with_retry(bot, *, chat_id, text: str, parse_mode: str | None = None,
                            reply_to_message_id: int | None = None,
                            reply_markup=None, max_retries: int = 2):
     """Send a Telegram message with backoff for RetryAfter and graceful
     handling of "message is too long"."""
     last_err: Exception | None = None
+    truncations = 0
     for _attempt in range(max_retries + 1):
         try:
             return await bot.send_message(
@@ -105,8 +119,21 @@ async def _send_with_retry(bot, *, chat_id, text: str, parse_mode: str | None = 
             last_err = e
             continue
         except BadRequest as e:
-            if "too long" in str(e).lower() and len(text) > TELEGRAM_MAX_TEXT_LEN:
-                text = text[: TELEGRAM_MAX_TEXT_LEN - len(_TRUNC_SUFFIX)] + _TRUNC_SUFFIX
+            if "too long" in str(e).lower():
+                truncations += 1
+                if truncations > _MAX_TRUNCATIONS:
+                    log.warning(
+                        "Telegram still rejects message as too long after %d "
+                        "truncation attempts; caller should fall back to a "
+                        "document send", _MAX_TRUNCATIONS,
+                    )
+                    raise TruncationFailed() from e
+                # On each retry truncate more aggressively in case Telegram's
+                # "too long" was about something other than raw char count
+                # (e.g. HTML entity expansion). Halve the budget each time
+                # but never below a sensible floor.
+                new_limit = max(TELEGRAM_MAX_TEXT_LEN // (2 ** (truncations - 1)), 500)
+                text = text[: new_limit - len(_TRUNC_SUFFIX)] + _TRUNC_SUFFIX
                 last_err = e
                 continue
             raise
@@ -269,6 +296,19 @@ class TelegramBot:
         await self._update_bot_commands()
 
     async def stop(self) -> None:
+        # Cancel every running per-session animation task FIRST and wait
+        # for them to settle. Otherwise asyncio.run() at the outer layer
+        # force-kills them mid-edit, which can leave orphan tasks logging
+        # spurious "task was destroyed but is pending" warnings.
+        to_cancel = [s.animate_task for s in self.registry.all_sessions().values()
+                     if s.animate_task and not s.animate_task.done()]
+        for t in to_cancel:
+            t.cancel()
+        for t in to_cancel:
+            try:
+                await t
+            except (asyncio.CancelledError, Exception):
+                pass
         if self._app:
             await self._app.updater.stop()
             await self._app.stop()
@@ -815,52 +855,56 @@ class TelegramBot:
     async def _send_busy_and_animate(self, sess: TrackedSession) -> None:
         """Send 'Working...' message and start spinner animation.
 
-        Idempotent: uses a synchronous sentinel (-1) before the async send
-        to prevent double-send when _handle_message and UserPromptSubmit
-        hook coroutines race through the same await point.
+        Serializes concurrent callers via ``sess.animate_lock`` so two
+        coroutines (e.g. ``_handle_message`` and a ``UserPromptSubmit``
+        hook arriving micro-seconds apart) cannot both observe
+        ``busy_msg_id is None`` and both send. The synchronous-sentinel
+        pattern below ``-1 claim then None on failure`` is kept as a
+        secondary defence inside the lock.
         """
-        # Clear stale busy state from previous lifecycle (e.g. GONE → BUSY).
-        # If busy_msg_id is set but the animation task is dead, the previous
-        # cycle ended abnormally — reset so we can send a fresh busy message.
-        if (sess.busy_msg_id and sess.busy_msg_id > 0
-                and (not sess.animate_task or sess.animate_task.done())):
-            log.debug("[%s] Clearing stale busy_msg_id=%s (animation dead)",
-                      sess.label, sess.busy_msg_id)
-            sess.busy_msg_id = None
-        if sess.busy_msg_id:
-            return  # already showing busy (or sentinel claimed by other coroutine)
-        sess.busy_msg_id = -1  # sentinel: claim slot before async yield
-        self._stop_animation(sess)
-        sess.last_tool_summary = ""
-        sess.tool_history.clear()
-        sess.active_subagents.clear()
-        sess.pending_permission = None
-        sess.last_token_pct = 0
-        sess.last_output_tokens = 0
-        sess.output_baseline = None  # lazy: set on first statusLine read this cycle
-        sess.lines_added_baseline = None
-        sess.lines_removed_baseline = None
-        sess.last_lines_added = 0
-        sess.last_lines_removed = 0
-        sess.busy_started_at = time.monotonic()
-        msg_id = await self.send_busy(sess)
-        if msg_id:
-            # Send typing AFTER the busy message (sending a message cancels typing)
-            try:
-                await self._app.bot.send_chat_action(int(CHAT_ID), "typing")
-            except Exception:
-                pass
-            sess.busy_msg_id = msg_id
-            sess.last_tool_edit_at = 0.0
-            sess.last_tool_name = ""
-            # Track the busy message so replies to it route back to this session,
-            # even hours later or after a daemon restart.
-            self.registry.track_message(msg_id, sess.name)
-            self._start_animation(sess)
-            log.info("[%s] Busy message sent (msg_id=%d, trigger=%s)",
-                     sess.label, msg_id, sess.trigger_msg_id)
-        else:
-            sess.busy_msg_id = None  # release slot on failure
+        async with sess.animate_lock:
+            # Clear stale busy state from previous lifecycle (e.g. GONE → BUSY).
+            # If busy_msg_id is set but the animation task is dead, the previous
+            # cycle ended abnormally — reset so we can send a fresh busy message.
+            if (sess.busy_msg_id and sess.busy_msg_id > 0
+                    and (not sess.animate_task or sess.animate_task.done())):
+                log.debug("[%s] Clearing stale busy_msg_id=%s (animation dead)",
+                          sess.label, sess.busy_msg_id)
+                sess.busy_msg_id = None
+            if sess.busy_msg_id:
+                return  # already showing busy (or sentinel claimed by other coroutine)
+            sess.busy_msg_id = -1  # sentinel: claim slot before async yield
+            self._stop_animation(sess)
+            sess.last_tool_summary = ""
+            sess.tool_history.clear()
+            sess.active_subagents.clear()
+            sess.pending_permission = None
+            sess.last_token_pct = 0
+            sess.last_output_tokens = 0
+            sess.output_baseline = None  # lazy: set on first statusLine read this cycle
+            sess.lines_added_baseline = None
+            sess.lines_removed_baseline = None
+            sess.last_lines_added = 0
+            sess.last_lines_removed = 0
+            sess.busy_started_at = time.monotonic()
+            msg_id = await self.send_busy(sess)
+            if msg_id:
+                # Send typing AFTER the busy message (sending a message cancels typing)
+                try:
+                    await self._app.bot.send_chat_action(int(CHAT_ID), "typing")
+                except Exception:
+                    pass
+                sess.busy_msg_id = msg_id
+                sess.last_tool_edit_at = 0.0
+                sess.last_tool_name = ""
+                # Track the busy message so replies to it route back to this session,
+                # even hours later or after a daemon restart.
+                self.registry.track_message(msg_id, sess.name)
+                self._start_animation(sess)
+                log.info("[%s] Busy message sent (msg_id=%d, trigger=%s)",
+                         sess.label, msg_id, sess.trigger_msg_id)
+            else:
+                sess.busy_msg_id = None  # release slot on failure
 
     async def notify(self, sess: TrackedSession, event: str, context: dict) -> None:
         """Send appropriate Telegram notification for a state change."""
@@ -890,7 +934,7 @@ class TelegramBot:
             # Update tool history — mark previous as done, append new
             if tool_summary:
                 # Append new tool as in-progress (PostToolUse marks it done)
-                sess.tool_history.append((tool_summary, False))
+                sess.record_tool(tool_summary, False)
                 sess.last_tool_summary = tool_summary
             # Skip edit if busy msg not ready yet (animation will pick up cached stats)
             if not sess.busy_msg_id or sess.busy_msg_id < 0 or not tool_summary:
@@ -936,10 +980,12 @@ class TelegramBot:
         if event == "subagent_start":
             agent_type = context.get("agent_type", "agent")
             agent_id = context.get("agent_id", "")
-            # Append to tool_history SYNCHRONOUSLY before any await
+            # Append to tool_history SYNCHRONOUSLY before any await.
+            # record_tool returns the (post-trim) index so the subagent
+            # bookkeeping below references the correct entry even after
+            # the history is trimmed.
             summary = f"\U0001f916 {agent_type}"
-            sess.tool_history.append((summary, False))
-            history_idx = len(sess.tool_history) - 1
+            history_idx = sess.record_tool(summary, False)
             # Store index in active_subagents so SubagentStop can find it
             if agent_id and agent_id in sess.active_subagents:
                 sess.active_subagents[agent_id]["history_idx"] = history_idx
@@ -971,7 +1017,7 @@ class TelegramBot:
                 sess.tool_history[history_idx] = (done_summary, True)
             else:
                 # No matching start (daemon restart?) — append as done entry
-                sess.tool_history.append((done_summary, True))
+                sess.record_tool(done_summary, True)
             # Edit busy message if ready (debounced)
             now = time.monotonic()
             if (sess.busy_msg_id and sess.busy_msg_id > 0
@@ -1202,10 +1248,25 @@ class TelegramBot:
                 else:
                     text += f"\n\n<blockquote>{escaped}</blockquote>"
             log.debug("[%s] Sending IDLE notification (%d chars)", label, len(text))
-            msg = await _send_with_retry(
-                bot, chat_id=CHAT_ID, text=text, parse_mode="HTML",
-                reply_to_message_id=sess.trigger_msg_id,
-            )
+            try:
+                msg = await _send_with_retry(
+                    bot, chat_id=CHAT_ID, text=text, parse_mode="HTML",
+                    reply_to_message_id=sess.trigger_msg_id,
+                )
+            except TruncationFailed:
+                # Truncation attempts exhausted — fall back to sending the
+                # response as a plain-text document attachment.
+                log.warning(
+                    "[%s] IDLE summary too long after %d truncations — "
+                    "falling back to document send",
+                    label, _MAX_TRUNCATIONS,
+                )
+                fallback_text = f"📨 <b>{html_mod.escape(label)}</b> · Finished (response sent as attachment)"
+                msg = await bot.send_message(
+                    CHAT_ID, fallback_text, parse_mode="HTML",
+                    reply_to_message_id=sess.trigger_msg_id,
+                )
+                send_file = True  # ensure the document send below fires
             sess.trigger_msg_id = None  # reply cycle complete
             self.registry.mark_dirty()
             self.registry.track_message(msg.message_id, sess.name)
@@ -1247,7 +1308,7 @@ class TelegramBot:
 
             # Flush next queued message (one at a time, rest flush on next IDLE)
             if sess.pending_queue:
-                queued_text, queued_trigger = sess.pending_queue.pop(0)
+                queued_text, queued_trigger, _queued_at = sess.pending_queue.pop(0)
                 sess.trigger_msg_id = queued_trigger
                 sess.last_prompt = queued_text
                 self.registry.mark_dirty()
@@ -1500,7 +1561,7 @@ class TelegramBot:
             ack += f" ({dropped} queued message{'s' if dropped > 1 else ''} discarded)"
 
         if query:
-            await query.answer(ack)
+            await self._safe_answer(query, ack)
             # Also edit the callback query's message if it's the busy message
             try:
                 await query.edit_message_text(
@@ -1514,14 +1575,41 @@ class TelegramBot:
 
         log.info("[%s] Stopped by user (dropped %d queued)", sess.label, dropped)
 
+    @staticmethod
+    async def _safe_answer(query, text: str | None = None) -> None:
+        """Call ``query.answer(text)`` swallowing any "query is too old"
+        or "already answered" errors.
+
+        Used everywhere we want to set a toast text after the eager
+        ack at the top of ``_handle_callback`` — Telegram refuses a
+        second answer for the same query, so without this wrapper the
+        whole handler would crash on the second ``answer`` call.
+        """
+        try:
+            await query.answer(text)
+        except Exception:
+            pass
+
     async def _handle_callback(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle inline keyboard button tap."""
+        """Handle inline keyboard button tap.
+
+        Acknowledges the callback query immediately (with no toast text)
+        so Telegram clears the button-spinner within a few hundred
+        milliseconds even when the handler does long work. Subsequent
+        toast calls go through :py:meth:`_safe_answer` which swallows
+        the resulting error — toasts are a nice-to-have here; the
+        actual outcome (message edits, status updates) is what the
+        user really sees.
+        """
         query = update.callback_query
         cb_data = query.data or ""
         original_text = query.message.text or "" if query.message else ""
 
+        # Eager ack — clear the spinner before any slow work.
+        await self._safe_answer(query)
+
         if ":" not in cb_data:
-            await query.answer("Invalid callback")
+            await self._safe_answer(query, "Invalid callback")
             return
 
         session_name, action = cb_data.split(":", 1)
@@ -1529,7 +1617,7 @@ class TelegramBot:
         if action == "stop":
             sess = self.registry.get(session_name)
             if not sess:
-                await query.answer("Session not found")
+                await self._safe_answer(query, "Session not found")
                 return
             await self._stop_session(sess, query=query)
             return
@@ -1537,26 +1625,26 @@ class TelegramBot:
         if action == "kill":
             sess = self.registry.get(session_name)
             label = sess.label if sess else session_name
-            await query.answer(f"Killing {label}...")
+            await self._safe_answer(query, f"Killing {label}...")
             await self._kill_session_by_label(query, label)
             return
 
         if action == "retry":
             sess = self.registry.get(session_name)
             if not sess:
-                await query.answer("Session not found")
+                await self._safe_answer(query, "Session not found")
                 return
             if not sess.last_prompt:
-                await query.answer("Nothing to retry")
+                await self._safe_answer(query, "Nothing to retry")
                 return
             if not await inject.is_alive(session_name):
-                await query.answer(f"Session '{session_name}' not alive")
+                await self._safe_answer(query, f"Session '{session_name}' not alive")
                 return
             # Re-inject the last prompt (last_prompt stays set for retry-of-retry)
             prompt = sess.last_prompt
             ok = await inject.send_text_and_enter(session_name, prompt)
             if ok:
-                await query.answer(f"Retrying [{sess.label}]")
+                await self._safe_answer(query, f"Retrying [{sess.label}]")
                 # Delete the error message — busy animation replaces it
                 try:
                     await self._app.bot.delete_message(
@@ -1569,20 +1657,20 @@ class TelegramBot:
                 await self._send_busy_and_animate(sess)
                 log.info("[%s] Retry: %s", sess.label, prompt[:80])
             else:
-                await query.answer("Failed to retry")
+                await self._safe_answer(query, "Failed to retry")
             return
 
         if action == "compact":
             sess = self.registry.get(session_name)
             if not sess:
-                await query.answer("Session not found")
+                await self._safe_answer(query, "Session not found")
                 return
             if not await inject.is_alive(session_name):
-                await query.answer(f"Session '{session_name}' not found")
+                await self._safe_answer(query, f"Session '{session_name}' not found")
                 return
             ok = await inject.send_text_and_enter(session_name, "/compact")
             if ok:
-                await query.answer(f"Compacting [{sess.label}]")
+                await self._safe_answer(query, f"Compacting [{sess.label}]")
                 try:
                     await self._app.bot.delete_message(
                         chat_id=CHAT_ID,
@@ -1592,7 +1680,7 @@ class TelegramBot:
                     pass
                 log.info("[%s] Compact triggered by user", sess.label)
             else:
-                await query.answer("Failed to send /compact")
+                await self._safe_answer(query, "Failed to send /compact")
             return
 
         if action == "clear_gone":
@@ -1603,7 +1691,7 @@ class TelegramBot:
                     removed.append(sess.label)
                     self.registry.remove(name)
             if removed:
-                await query.answer(f"Cleared {len(removed)} session(s)")
+                await self._safe_answer(query, f"Cleared {len(removed)} session(s)")
                 try:
                     await query.edit_message_text(
                         f"Cleared: {', '.join(removed)}", parse_mode="HTML",
@@ -1612,22 +1700,22 @@ class TelegramBot:
                     pass
                 log.info("Cleared gone sessions: %s", removed)
             else:
-                await query.answer("No gone sessions to clear")
+                await self._safe_answer(query, "No gone sessions to clear")
             return
 
         is_option = action.startswith("opt") and action[3:].isdigit()
 
         if action not in ACTION_VERBS and not is_option and action != "submit":
-            await query.answer(f"Unknown: {action}")
+            await self._safe_answer(query, f"Unknown: {action}")
             return
 
         sess = self.registry.get(session_name)
         if not sess:
-            await query.answer("Session not found")
+            await self._safe_answer(query, "Session not found")
             return
 
         if not await inject.is_alive(session_name):
-            await query.answer(f"Session '{session_name}' not found")
+            await self._safe_answer(query, f"Session '{session_name}' not found")
             return
 
         # Inject keystrokes
@@ -1665,7 +1753,7 @@ class TelegramBot:
 
                 opt_label = perm["options"][option_index].get("label", f"Option {option_index+1}")
                 toggled = "☑" if option_index in selected else "⬜"
-                await query.answer(f"{toggled} {opt_label}")
+                await self._safe_answer(query, f"{toggled} {opt_label}")
 
                 # Rebuild keyboard with updated checkmarks
                 keyboard = self._build_inline_ask_keyboard(
@@ -1676,7 +1764,7 @@ class TelegramBot:
                 log.info("[%s] Multi-select toggle: opt%d (%s), selected=%s",
                          sess.label, option_index, toggled, selected)
             else:
-                await query.answer("Failed to send keys")
+                await self._safe_answer(query, "Failed to send keys")
             return
 
         elif action == "submit" and perm.get("multi_select"):
@@ -1703,11 +1791,11 @@ class TelegramBot:
                 ok = await inject.send_keys(session_name, "Enter")
 
             if ok:
-                await query.answer(f"✅ {verb[:180]}")
+                await self._safe_answer(query, f"✅ {verb[:180]}")
 
                 # Collapse into tool_history
                 collapsed = f"❓ {perm.get('question', '?')[:40]} → {verb}"
-                sess.tool_history.append((collapsed, True))
+                sess.record_tool(collapsed, True)
 
                 if not is_last:
                     # More questions — Right moved to next question tab
@@ -1747,7 +1835,7 @@ class TelegramBot:
                     self._start_animation(sess)
                     log.info("[%s] Multi-select submit complete", sess.label)
             else:
-                await query.answer("Failed to send keys")
+                await self._safe_answer(query, "Failed to send keys")
             return
 
         elif is_option:
@@ -1776,7 +1864,7 @@ class TelegramBot:
             verb = action
 
         if ok:
-            await query.answer(f"{verb} [{sess.label}]")
+            await self._safe_answer(query, f"{verb} [{sess.label}]")
 
             if sess.pending_permission:
                 # Collapse current question into tool_history
@@ -1786,7 +1874,7 @@ class TelegramBot:
                 else:
                     tool_summary = perm.get("tool_summary", "Permission")[:60]
                     collapsed = f"🔑 {tool_summary} → {verb}"
-                sess.tool_history.append((collapsed, True))
+                sess.record_tool(collapsed, True)
 
                 # Multi-question AskUserQuestion: advance to next question
                 questions = perm.get("questions", [])
@@ -1850,7 +1938,7 @@ class TelegramBot:
                 self.registry.transition(session_name, Status.BUSY)
                 log.info("[%s] %s", sess.label, verb)
         else:
-            await query.answer(f"Failed to send to {session_name}")
+            await self._safe_answer(query, f"Failed to send to {session_name}")
 
     async def _handle_start_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /start and /help — friendly welcome with current state."""
@@ -2109,8 +2197,8 @@ class TelegramBot:
         if prompt:
             # Flatten newlines (lesson: newlines cause premature Enter)
             prompt = prompt.replace("\n", " — ")
-            sess.pending_queue.append((prompt, update.message.message_id))
-            self.registry.mark_dirty()
+            if sess.queue_prompt(prompt, update.message.message_id):
+                self.registry.mark_dirty()
 
         await status_msg.edit_text(
             f"✅ <b>{html_mod.escape(name)}</b> launched"
@@ -2323,7 +2411,14 @@ class TelegramBot:
 
         # Queue if session is busy — inject when it goes IDLE
         if sess.status == Status.BUSY:
-            sess.pending_queue.append((text, update.message.message_id))
+            if not sess.queue_prompt(text, update.message.message_id):
+                await update.message.reply_text(
+                    f"⚠️ Queue is full ({QUEUE_CAP} pending) for "
+                    f"[{html_mod.escape(sess.label)}]. Tap stop or wait "
+                    "for the current task to finish.",
+                    parse_mode="HTML",
+                )
+                return
             self.registry.mark_dirty()
             await self._react(update, "👀")
             log.info("[%s] Queued (busy): %s", sess.label, text[:80])
@@ -2412,7 +2507,13 @@ class TelegramBot:
 
         # Queue if busy
         if sess.status == Status.BUSY:
-            sess.pending_queue.append((prompt, msg.message_id))
+            if not sess.queue_prompt(prompt, msg.message_id):
+                await msg.reply_text(
+                    f"⚠️ Queue is full ({QUEUE_CAP} pending) for "
+                    f"[{html_mod.escape(sess.label)}]. File not queued.",
+                    parse_mode="HTML",
+                )
+                return
             self.registry.mark_dirty()
             await self._react(update, "👀")
             log.info("[%s] File queued (busy): %s", sess.label, filename)
@@ -2445,7 +2546,14 @@ class TelegramBot:
 
         # Queue if session is busy
         if sess.status == Status.BUSY:
-            sess.pending_queue.append((prompt_text, update.message.message_id))
+            if not sess.queue_prompt(prompt_text, update.message.message_id):
+                await update.message.reply_text(
+                    f"⚠️ Queue is full ({QUEUE_CAP} pending) for "
+                    f"[{html_mod.escape(sess.label)}]. Tap stop or wait "
+                    "for the current task to finish.",
+                    parse_mode="HTML",
+                )
+                return
             self.registry.mark_dirty()
             await self._react(update, "👀")
             log.info("[%s] Template queued (busy): %s", sess.label, prompt_text[:80])

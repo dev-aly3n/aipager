@@ -7,7 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `pending_queue` for each session is now capped at 50 entries. When a
+  session is BUSY and the user sends a 51st message, they get back
+  `⚠️ Queue is full (50 pending) for [jim]. Tap stop or wait for the
+  current task to finish.` instead of the daemon silently growing the
+  in-memory queue forever. Applies to text replies, file uploads,
+  template injections, and `/new <name> <initial prompt>`.
+- Queue entries now carry a wall-clock timestamp; entries older than
+  24 h are dropped at daemon-load time (so a daemon down for days
+  doesn't suddenly flush stale prompts when a session goes IDLE).
+- INTERACTIVE-state watchdog: if a session sits in INTERACTIVE with no
+  hook activity for >5 min (tunable via `AIPAGER_INTERACTIVE_TIMEOUT`
+  env var, in seconds), the session_monitor auto-demotes it to BUSY
+  and clears `pending_permission`. Catches the case where Claude Code
+  crashed mid-permission-prompt and the user can never respond.
+- Subagent garbage collection: entries in `active_subagents` whose
+  Stop hook never arrived are dropped after 1 h
+  (`AIPAGER_SUBAGENT_TTL`).
+- `TruncationFailed` sentinel exception raised by `_send_with_retry`
+  after 2 unsuccessful truncations on a "message too long" response;
+  the IDLE-notification path catches it and falls back to a document
+  send. Closes a theoretical infinite-loop where HTML entity
+  expansion could make truncated text exceed the limit again.
+
 ### Changed
+- `tool_history` now caps at 200 entries per session. Older entries
+  are dropped from the front on each append, and any `history_idx`
+  reference stored in `active_subagents` is shifted accordingly so
+  subagent bookkeeping stays correct after trimming.
+- `_send_busy_and_animate` is now serialized per session via an
+  `asyncio.Lock`. Closes the race window where two concurrent callers
+  (e.g. a Telegram message handler and a `UserPromptSubmit` hook
+  arriving within microseconds) could both pass the `busy_msg_id is
+  None` check and both send. The synchronous-sentinel pattern is kept
+  as a fast-path defence inside the lock.
+- `_handle_callback` now eagerly acknowledges Telegram callback
+  queries with an empty `query.answer()` before any async work. Long
+  handlers no longer cause the inline-keyboard spinner to hang for
+  seconds; all subsequent `query.answer(text)` toast calls go through
+  a `_safe_answer` helper that swallows
+  `BadRequest("query is too old")` if Telegram already considered the
+  query answered.
+- `TelegramBot.stop()` now cancels and awaits every running
+  per-session animation task before tearing down the python-telegram-bot
+  Application, eliminating "Task was destroyed but it is pending"
+  warnings on shutdown.
 - `recover_sessions` (which cleans up orphaned BUSY messages after a
   daemon restart) now distinguishes failure modes instead of
   swallowing every exception with `except Exception: pass`. Outcomes

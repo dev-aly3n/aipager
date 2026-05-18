@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 
 from aipager import dtach_inject
@@ -18,6 +19,26 @@ from aipager.config import PANE_POLL_INTERVAL, STALE_BUSY_TIMEOUT
 from aipager.state import SessionRegistry, Status
 
 log = logging.getLogger(__name__)
+
+# Item 2.2 — auto-demote INTERACTIVE sessions back to BUSY if they've sat
+# in INTERACTIVE state with no hook activity for this long. The assumption:
+# claude crashed mid-permission-prompt, the user can never see / answer
+# it, so the session shouldn't sit forever. Demoting to BUSY lets the
+# session_monitor's existing stale-busy logic surface it after another
+# STALE_BUSY_TIMEOUT, instead of silently rotting.
+#
+# Tunable via `AIPAGER_INTERACTIVE_TIMEOUT` (seconds) for ops testing.
+INTERACTIVE_TIMEOUT_SECONDS: float = float(
+    os.environ.get("AIPAGER_INTERACTIVE_TIMEOUT", "300")
+)
+
+# Item 2.4 — drop subagent entries that have been "live" for more than
+# this without a corresponding SubagentStop. Real subagents finish in
+# seconds; entries older than this almost certainly mean a missed stop
+# event (daemon restart, crash, dropped hook).
+SUBAGENT_TTL_SECONDS: float = float(
+    os.environ.get("AIPAGER_SUBAGENT_TTL", "3600")
+)
 
 
 class SessionMonitor:
@@ -69,9 +90,40 @@ class SessionMonitor:
             except Exception:
                 log.warning("on_sessions_changed callback failed", exc_info=True)
 
-        # Check for stale BUSY sessions (no hook activity for too long)
+        # Check for stale BUSY sessions (no hook activity for too long).
+        # Also: auto-demote INTERACTIVE sessions whose permission prompt
+        # has been hanging for too long (claude crashed mid-prompt), and
+        # garbage-collect subagent entries whose Stop hook never arrived.
         now = time.monotonic()
         for name, sess in self.registry.all_sessions().items():
+            # INTERACTIVE watchdog (item 2.2)
+            if sess.status == Status.INTERACTIVE:
+                baseline = sess.last_hook_at or sess.busy_started_at
+                if baseline and (now - baseline) > INTERACTIVE_TIMEOUT_SECONDS:
+                    log.warning(
+                        "[%s] INTERACTIVE > %d min with no hooks — "
+                        "demoting to BUSY (likely a crashed permission prompt)",
+                        sess.label, int(INTERACTIVE_TIMEOUT_SECONDS / 60),
+                    )
+                    sess.pending_permission = None
+                    self.registry.transition(name, Status.BUSY)
+                    self.registry.mark_dirty()
+                    # Fall through so stale-busy logic still applies.
+
+            # Subagent TTL (item 2.4)
+            if sess.active_subagents:
+                stale_ids = [
+                    aid for aid, info in sess.active_subagents.items()
+                    if info.get("started_at")
+                    and (now - info["started_at"]) > SUBAGENT_TTL_SECONDS
+                ]
+                for aid in stale_ids:
+                    log.info("[%s] dropping stale subagent %s (no Stop hook in "
+                             "%d min)", sess.label, aid,
+                             int(SUBAGENT_TTL_SECONDS / 60))
+                    sess.active_subagents.pop(aid, None)
+
+            # Stale BUSY warning (existing)
             if sess.status != Status.BUSY or sess.stale_warned:
                 continue
             baseline = sess.last_hook_at or sess.busy_started_at

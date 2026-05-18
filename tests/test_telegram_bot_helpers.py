@@ -124,3 +124,35 @@ def test_send_with_retry_propagates_forbidden(monkeypatch, caplog):
 
 def test_max_doc_bytes_is_below_telegram_50mb():
     assert tb.TELEGRAM_MAX_DOC_BYTES < 50 * 1024 * 1024
+
+
+# ----- 2.8 — TruncationFailed after N attempts -----
+
+def test_send_with_retry_caps_truncation_attempts():
+    """A pathological payload that stays "too long" after every truncation
+    attempt should raise TruncationFailed instead of looping forever."""
+    long_text = "x" * (tb.TELEGRAM_MAX_TEXT_LEN * 4)
+    # Server keeps rejecting as too long, no matter what we send.
+    side_effects = [
+        BadRequest("Bad Request: message is too long"),
+    ] * (tb._MAX_TRUNCATIONS + 5)
+    bot = _FakeBot(side_effects)
+
+    with pytest.raises(tb.TruncationFailed):
+        _run(tb._send_with_retry(bot, chat_id=1, text=long_text))
+
+    # Sent _MAX_TRUNCATIONS + 1 times (initial + N truncation retries
+    # before raising on the (N+1)-th attempt).
+    assert len(bot.calls) == tb._MAX_TRUNCATIONS + 1
+
+
+def test_send_with_retry_succeeds_within_truncation_budget():
+    """Single truncation that succeeds on the second call works (no
+    TruncationFailed raised)."""
+    long_text = "x" * (tb.TELEGRAM_MAX_TEXT_LEN * 2)
+    bot = _FakeBot([
+        BadRequest("Bad Request: message is too long"),
+        "MSG",  # second call succeeds
+    ])
+    out = _run(tb._send_with_retry(bot, chat_id=1, text=long_text))
+    assert out == "MSG"

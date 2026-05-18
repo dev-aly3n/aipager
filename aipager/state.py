@@ -13,6 +13,7 @@ all duplicate notification bugs from the old system.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -25,6 +26,16 @@ from typing import Any
 from aipager.config import SESSION_STATE_FILE
 
 log = logging.getLogger(__name__)
+
+# --- Bounded-growth constants (item 2.3, 2.4 of group B hardening) -----
+#
+# `pending_queue` is capped at this many entries; the 51st `queue_prompt`
+# call returns False and the caller surfaces "queue full" feedback.
+QUEUE_CAP: int = 50
+# Persisted queue entries older than this are dropped at load time.
+QUEUE_MAX_AGE_SECONDS: float = 86400.0  # 24h
+# `tool_history` is trimmed to the most recent N entries on each append.
+TOOL_HISTORY_CAP: int = 200
 
 
 class Status(Enum):
@@ -88,6 +99,52 @@ class TrackedSession:
     # Stale session detection
     last_hook_at: float = 0.0        # monotonic timestamp of last hook event received
     stale_warned: bool = False       # prevents re-alerting every scan cycle
+    # Concurrency guard for `_send_busy_and_animate` — closes the race where
+    # two coroutines could both observe `busy_msg_id is None` and both send.
+    # Transient; never persisted.
+    animate_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
+
+    def queue_prompt(self, text: str, msg_id: int,
+                     cap: int = QUEUE_CAP) -> bool:
+        """Append a queued prompt with a current wall-clock timestamp.
+
+        Returns False (without modifying the queue) if the queue is
+        already at ``cap`` entries — the caller is expected to surface
+        the rejection to the user. New entries are stored as
+        ``(text, msg_id, queued_at)`` 3-tuples; existing 2-tuples loaded
+        from older state files retain their shape (see ``load`` for the
+        compatibility shim).
+        """
+        if len(self.pending_queue) >= cap:
+            log.warning("[%s] queue full (cap=%d); rejecting prompt: %r",
+                        self.label, cap, text[:60])
+            return False
+        self.pending_queue.append((text, msg_id, time.time()))
+        return True
+
+    def record_tool(self, summary: str, done: bool | str = False) -> int:
+        """Append to ``tool_history``, trim to cap, return the new index.
+
+        Multi-day sessions can accumulate thousands of tool invocations;
+        we only display the last few anyway, so keeping unbounded history
+        is wasted memory. When the cap is exceeded, oldest entries are
+        dropped from the front. The returned index is the **absolute**
+        position of the just-appended entry **after** trimming — callers
+        that store it (e.g. for subagent bookkeeping) should subtract by
+        the amount dropped, which this method does automatically by
+        shifting any persisted ``history_idx`` references in
+        ``active_subagents``.
+        """
+        self.tool_history.append((summary, done))
+        new_idx = len(self.tool_history) - 1
+        if len(self.tool_history) > TOOL_HISTORY_CAP:
+            drop = len(self.tool_history) - TOOL_HISTORY_CAP
+            del self.tool_history[:drop]
+            new_idx -= drop
+            for info in self.active_subagents.values():
+                if "history_idx" in info and info["history_idx"] is not None:
+                    info["history_idx"] -= drop
+        return new_idx
 
 
 class SessionRegistry:
@@ -200,8 +257,16 @@ class SessionRegistry:
             for f in self._PERSIST_FIELDS:
                 val = getattr(sess, f)
                 if f == "pending_queue":
-                    # tuples → lists for JSON
-                    val = [list(item) for item in val]
+                    # tuples → lists for JSON. Always persist as 3-tuples
+                    # so future loads can apply the TTL even if the queue
+                    # contained legacy 2-tuples (now upgraded in load()).
+                    normalized = []
+                    for item in val:
+                        if len(item) == 3:
+                            normalized.append(list(item))
+                        elif len(item) == 2:
+                            normalized.append([item[0], item[1], time.time()])
+                    val = normalized
                 elif f == "busy_msg_id":
                     # Never persist sentinel (-1) or None
                     val = val if val and val > 0 else None
@@ -276,10 +341,36 @@ class SessionRegistry:
                 last_idle_at=0.0,
                 busy_msg_id=sd.get("busy_msg_id"),
             )
-            # pending_queue: list of [text, trigger_msg_id] → list of tuples
+            # pending_queue: accept old 2-tuples and new 3-tuples
+            # (text, msg_id, queued_at). Drop entries older than the
+            # TTL so a daemon that was down for days doesn't flush
+            # stale prompts the moment a session goes IDLE.
+            now = time.time()
+            ttl_cutoff = now - QUEUE_MAX_AGE_SECONDS
+            dropped = 0
             for item in sd.get("pending_queue", []):
-                if isinstance(item, list) and len(item) == 2:
-                    sess.pending_queue.append(tuple(item))
+                if not isinstance(item, list):
+                    continue
+                if len(item) == 2:
+                    # Legacy: no timestamp — treat as fresh.
+                    sess.pending_queue.append(
+                        (item[0], item[1], now)
+                    )
+                elif len(item) == 3:
+                    text, msg_id, queued_at = item
+                    try:
+                        queued_at_f = float(queued_at)
+                    except (TypeError, ValueError):
+                        queued_at_f = now
+                    if queued_at_f < ttl_cutoff:
+                        dropped += 1
+                        continue
+                    sess.pending_queue.append((text, msg_id, queued_at_f))
+            if dropped:
+                log.warning(
+                    "[%s] dropped %d queue entries older than %d h",
+                    sess.label, dropped, int(QUEUE_MAX_AGE_SECONDS / 3600),
+                )
             self._sessions[name] = sess
             log.info("Restored session: %s [%s] (msg_id=%s, trigger=%s, queue=%d)",
                      name, sess.label, sess.last_msg_id, sess.trigger_msg_id,
