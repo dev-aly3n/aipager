@@ -5,12 +5,19 @@ gets one JSONL line here. Useful for post-mortems ("which tool did I
 allow at 03:14?") and for any security-conscious user who wants a
 local paper trail without trusting Telegram's chat history.
 
+In team mode (see :mod:`aipager.team`) every record also carries the
+Telegram identity of the user who took the action — ``user_id``,
+``username`` (Telegram @handle, may be empty), and ``display_name``
+(first+last name from Telegram). Personal-mode records leave those
+fields as ``None`` / empty strings, since there's only one user.
+
 Best-effort: write failures (full disk, perms) log at WARNING and
 return silently — never block the UI thread.
 
 Format: one JSON object per line.
 ``{"ts": "ISO8601", "session": "claude-jim", "label": "jim",
-   "action": "Allowed", "tool": "Bash", "summary": "ls /tmp"}``
+   "action": "Allowed", "tool": "Bash", "summary": "ls /tmp",
+   "user_id": 12345, "username": "alice", "display_name": "Alice Smith"}``
 """
 
 from __future__ import annotations
@@ -27,8 +34,15 @@ AUDIT_LOG_PATH = Path.home() / ".claude" / "aipager-audit.jsonl"
 
 def append(*, session: str, label: str, action: str,
            tool: str = "", summary: str = "",
+           user_id: int | None = None,
+           username: str = "",
+           display_name: str = "",
            path: Path | None = None) -> bool:
     """Append a single record. Returns True on success, False on failure.
+
+    ``user_id`` / ``username`` / ``display_name`` identify the Telegram
+    user who took the action — populated in team mode, left empty in
+    personal mode.
 
     ``path`` is overrideable for tests; production callers leave it as
     None so it picks up ``AUDIT_LOG_PATH``.
@@ -40,6 +54,9 @@ def append(*, session: str, label: str, action: str,
         "action": action,
         "tool": tool,
         "summary": summary[:500],  # cap to keep the log readable
+        "user_id": user_id,
+        "username": username,
+        "display_name": display_name,
     }
     target = path or AUDIT_LOG_PATH
     try:

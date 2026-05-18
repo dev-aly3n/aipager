@@ -82,3 +82,32 @@ def test_append_returns_false_on_unwritable_path(tmp_path, monkeypatch, capsys):
 def test_default_audit_path_is_under_home():
     assert audit.AUDIT_LOG_PATH.name == "aipager-audit.jsonl"
     assert ".claude" in str(audit.AUDIT_LOG_PATH)
+
+
+def test_append_includes_user_attribution_fields(tmp_path):
+    """Team-mode records carry the Telegram user identity."""
+    log = tmp_path / "audit.jsonl"
+    audit.append(
+        session="claude-jim", label="jim", action="Allowed",
+        tool="Bash", summary="ls",
+        user_id=12345, username="alice", display_name="Alice Smith",
+        path=log,
+    )
+    record = json.loads(log.read_text().splitlines()[0])
+    assert record["user_id"] == 12345
+    assert record["username"] == "alice"
+    assert record["display_name"] == "Alice Smith"
+
+
+def test_append_omits_user_attribution_for_personal_mode(tmp_path):
+    """When user info isn't passed, the fields are present but null/empty
+    — so the log schema stays stable for downstream consumers."""
+    log = tmp_path / "audit.jsonl"
+    audit.append(
+        session="claude-jim", label="jim", action="Allowed",
+        path=log,
+    )
+    record = json.loads(log.read_text().splitlines()[0])
+    assert record["user_id"] is None
+    assert record["username"] == ""
+    assert record["display_name"] == ""
