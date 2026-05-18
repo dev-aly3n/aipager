@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Team / group mode.** Configure
+  `~/.config/aipager/team.yaml` (via `aipager config` → Team) to
+  run the bot in a Telegram group with multiple developers.
+  Allow-list of Telegram user IDs gates every action; roles
+  (`admin`, `developer`, `read_only`) define what each user can do;
+  optional `rules.deny_tools` auto-rejects denied tools without
+  prompting (unless the session's last driver is an admin). All
+  permission decisions land in the audit log with the deciding
+  user's identity (`user_id`, `username`, `display_name`). Setup
+  wizard surfaces a hard-stop warning before team mode is enabled —
+  adding a user grants them code-execution rights on the host.
+  Personal-mode installs (no team.yaml) are unaffected. See
+  [docs/groups.md](docs/groups.md).
+
 ## [0.3.13] - 2026-05-18
 
 ### Added

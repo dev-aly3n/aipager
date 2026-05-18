@@ -10,6 +10,7 @@ them.
 | [Architecture](architecture.md) | Process model, component diagram, file & socket layout |
 | [Hook events](hooks.md) | Every event the daemon ingests from Claude Code, with payload fields |
 | [Bot commands](commands.md) | Slash commands, inline buttons, voice / file routing |
+| [Team / group mode](groups.md) | Multi-user setup, roles, rules, audit attribution |
 | [Troubleshooting](troubleshooting.md) | Common failures and the `aipager doctor` fix table |
 | [Security model](security.md) | Trust boundary, secrets, audit log, network surface |
 

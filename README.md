@@ -128,6 +128,18 @@ input and pick its package up from `environment.systemPackages`:
 
 `aipager service install` will then wire up a systemd-user unit.
 
+### Group mode (multi-user)
+
+aipager runs by default as a 1:1 DM bot. To run it in a Telegram
+group with multiple devs (mention `@aipagerbot deploy`,
+`@aipagerbot /jim run the tests`), re-run `aipager config` and
+pick **Team** at the mode prompt. You'll set up an allow-list of
+Telegram user IDs and roles (`admin` / `developer` / `read_only`)
+plus optional `deny_tools` rules that auto-block dangerous tool
+calls. **Adding a user grants them code-execution rights on the
+host** — see [docs/groups.md](docs/groups.md) for the full trust
+model.
+
 ### AUR (Arch Linux)
 
 ```sh
