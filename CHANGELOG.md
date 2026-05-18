@@ -23,12 +23,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   voice message and the extra isn't installed, the bot replies with
   inline `[📦 Install voice] [Cancel]` buttons. Tapping Install runs
   `uv tool install --reinstall 'aipager[voice]'` (or the pipx
-  equivalent), streams progress back as message edits, and offers a
-  `[🔄 Restart daemon now]` button on success when a systemd-user /
-  launchd service unit is installed. Editable / Homebrew installs
-  surface a friendly manual-install fallback. Lets the user enable
-  voice from their phone without SSH access. Same Telegram chat-id
-  filter — only the configured user can trigger.
+  equivalent), streams progress back as message edits, and follows
+  up with a `[🔄 Restart daemon now]` button. For Homebrew,
+  editable and unknown installs the button falls back to
+  `python -m pip install --upgrade faster-whisper` into the daemon's
+  Python interpreter. The restart button always works — service
+  units use systemctl / launchctl; everyone else spawns a detached
+  replacement and SIGTERMs the current daemon so it picks up the
+  new module without terminal access. Lets the user enable voice
+  from their phone without SSH access. Same Telegram chat-id filter
+  — only the configured user can trigger.
 - **Write / Edit diff preview in Telegram.** When claude calls
   `Write` or `Edit`, the daemon sends a separate message threaded
   under the busy message with a unified diff of the change

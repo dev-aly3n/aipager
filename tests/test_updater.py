@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import subprocess
+import sys
 from pathlib import Path
 
 from aipager import updater
@@ -197,15 +198,33 @@ def test_install_extra_cmd_pipx():
     ]
 
 
-def test_install_extra_cmd_brew_returns_none():
-    """Homebrew formulas don't expose pip extras; caller should fall
-    back to a manual-install message."""
-    assert updater.install_extra_cmd("brew", "voice") is None
+def test_install_extra_cmd_brew_uses_pip_fallback():
+    """Homebrew formulas don't expose pip extras, so we install
+    faster-whisper directly into the daemon's Python interpreter
+    instead of returning None."""
+    assert updater.install_extra_cmd("brew", "voice") == [
+        sys.executable, "-m", "pip", "install", "--upgrade",
+        "faster-whisper>=1.0",
+    ]
 
 
-def test_install_extra_cmd_unknown_installer_returns_none():
-    assert updater.install_extra_cmd(None, "voice") is None
-    assert updater.install_extra_cmd("editable", "voice") is None
+def test_install_extra_cmd_unknown_installer_uses_pip_fallback():
+    """Editable / pip-user / unknown installs have no installer to go
+    through — pip into the running interpreter is the universal fallback."""
+    expected = [
+        sys.executable, "-m", "pip", "install", "--upgrade",
+        "faster-whisper>=1.0",
+    ]
+    assert updater.install_extra_cmd(None, "voice") == expected
+    assert updater.install_extra_cmd("editable", "voice") == expected
+
+
+def test_install_extra_cmd_unknown_extra_returns_none():
+    """Genuinely unsupported extras (no entry in _EXTRA_PACKAGES, and
+    not handled by uv/pipx's generic extra syntax) return None so the
+    caller can surface a clear error."""
+    assert updater.install_extra_cmd(None, "telepathy") is None
+    assert updater.install_extra_cmd("brew", "telepathy") is None
 
 
 # ----- _remove_tmp_sockets -----

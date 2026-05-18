@@ -264,23 +264,37 @@ def cmd_uninstall(args=None) -> int:
 # Install / reinstall with an optional extra (driven from Telegram for 5.3)
 # ---------------------------------------------------------------------------
 
+# Map each optional extra to the concrete packages we need pip to install
+# when the installer-aware path isn't available (brew formulas don't
+# expose pip extras, editable / unknown installs have no installer to
+# go through). Keep in sync with the [project.optional-dependencies]
+# table in pyproject.toml.
+_EXTRA_PACKAGES: dict[str, list[str]] = {
+    "voice": ["faster-whisper>=1.0"],
+}
+
+
 def install_extra_cmd(installer: str | None, extra: str) -> list[str] | None:
     """Build the command to (re)install aipager with an optional extra.
 
-    Returns ``None`` if the installer doesn't expose pip extras directly
-    (Homebrew formulas don't), in which case the caller surfaces a
-    manual-install fallback to the user.
+    For uv / pipx we go through the installer so the extra is recorded
+    and survives a later ``aipager update``. For brew / editable /
+    unknown installs we fall back to installing the extra's packages
+    directly into the daemon's Python interpreter — works uniformly
+    across brew formulas, project venvs, ``pip --user`` and editable
+    installs, at the cost that a future ``brew upgrade aipager`` may
+    rebuild the formula's venv and require a re-install.
+
+    Returns ``None`` only for genuinely unsupported extras.
     """
     if installer == "uv":
         return ["uv", "tool", "install", "--reinstall", f"aipager[{extra}]"]
     if installer == "pipx":
         return ["pipx", "install", "--force", f"aipager[{extra}]"]
-    if installer == "brew":
-        # Homebrew formulas don't expose pip extras; the user has to
-        # switch to uv/pipx for voice or install faster-whisper directly
-        # into the brew-managed venv.
+    packages = _EXTRA_PACKAGES.get(extra)
+    if packages is None:
         return None
-    return None
+    return [sys.executable, "-m", "pip", "install", "--upgrade", *packages]
 
 
 __all__ = ["cmd_update", "cmd_uninstall", "install_extra_cmd"]

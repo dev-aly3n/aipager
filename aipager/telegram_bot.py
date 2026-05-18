@@ -16,6 +16,10 @@ import json
 import logging
 import os
 import re
+import shlex
+import signal
+import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -691,23 +695,18 @@ class TelegramBot:
         installer = updater._detect_installer()
         cmd = updater.install_extra_cmd(installer, "voice")
         if cmd is None:
-            # Either no known installer, or brew (which doesn't expose
-            # pip extras). Surface a clear manual-install fallback.
+            # Should be unreachable for "voice" today — install_extra_cmd
+            # only returns None for an extra it doesn't know about. Keep
+            # a defensive fallback so a future extra can't strand the user.
             await self._safe_edit_callback(
                 query,
-                "⚠️ Couldn't auto-install — your aipager isn't installed via\n"
-                "uv tool or pipx (likely brew or editable install).\n\n"
-                "Install manually on the machine running this daemon:\n"
-                "<code>pip install --upgrade 'aipager[voice]'</code>\n"
-                "or:\n"
-                "<code>uv tool install --reinstall 'aipager[voice]'</code>",
-                parse_mode="HTML",
+                "⚠️ This aipager build has no installer recipe for the\n"
+                "voice extra. Update aipager and try again.",
             )
             return
 
         await self._safe_edit_callback(
-            query,
-            "📦 Installing voice extra — this can take a couple minutes…",
+            query, "📦 Installing voice extra…",
         )
 
         # Launch the install. Capture stdout/stderr so a failure message
@@ -745,34 +744,35 @@ class TelegramBot:
 
         stdout = (await proc.stdout.read()).decode("utf-8", errors="replace")
         if proc.returncode == 0:
-            # Detect whether a service unit exists so we can offer a
-            # one-tap restart. Otherwise tell user to restart manually.
-            from aipager.service import (
-                LINUX_UNIT_PATH, MACOS_PLIST_PATH,
-            )
-            has_service = (
-                LINUX_UNIT_PATH.exists() or MACOS_PLIST_PATH.exists()
-            )
-            if has_service:
-                kb = InlineKeyboardMarkup([[
-                    InlineKeyboardButton(
-                        "🔄 Restart daemon now",
-                        callback_data="__voice__:restart",
-                    ),
-                ]])
-                await self._safe_edit_callback(
-                    query,
-                    "✅ Installed. Voice features need a daemon restart "
-                    "to load the new module.",
-                    reply_markup=kb,
+            # Only brew genuinely wipes the extra on upgrade (its
+            # formula venv is rebuilt from scratch). Editable /
+            # pip-user / venv installs keep faster-whisper indefinitely
+            # — the warning would just be noise there.
+            footer = ""
+            if installer == "brew":
+                footer = (
+                    "\n\n<i>Note: a future `brew upgrade aipager` may "
+                    "rebuild the formula venv and drop faster-whisper. "
+                    "If voice stops working, tap Install again.</i>"
                 )
-            else:
-                await self._safe_edit_callback(
-                    query,
-                    "✅ Installed. Restart the daemon (Ctrl-C then "
-                    "<code>aipager start</code>) to load the new module.",
-                    parse_mode="HTML",
-                )
+
+            # Always offer the restart button — service units use
+            # systemctl / launchctl; other installs spawn a detached
+            # replacement and SIGTERM ourselves. Either way the user
+            # doesn't need terminal access.
+            kb = InlineKeyboardMarkup([[
+                InlineKeyboardButton(
+                    "🔄 Restart daemon now",
+                    callback_data="__voice__:restart",
+                ),
+            ]])
+            await self._safe_edit_callback(
+                query,
+                "✅ Installed. Voice features need a daemon restart "
+                "to load the new module." + footer,
+                parse_mode="HTML",
+                reply_markup=kb,
+            )
         else:
             tail = stdout.strip()[-500:]
             await self._safe_edit_callback(
@@ -782,8 +782,15 @@ class TelegramBot:
                 parse_mode="HTML",
             )
 
-    async def _restart_daemon_via_service(self, query) -> None:
-        """Trigger a clean restart via systemd / launchctl, if installed."""
+    async def _restart_daemon(self, query) -> None:
+        """Trigger a clean restart.
+
+        Service-managed daemons (systemd-user / launchd) go through
+        their respective managers. Foreground / editable daemons spawn
+        a detached replacement that waits for us to die, then we
+        SIGTERM ourselves — so users on their phone don't need
+        terminal access to pick up a code change.
+        """
         import platform
         from aipager.service import (
             LINUX_UNIT_PATH, MACOS_LABEL, MACOS_PLIST_PATH, _run,
@@ -799,19 +806,70 @@ class TelegramBot:
             _run(["systemctl", "--user", "restart", "aipager.service"])
             return
         if sysname == "darwin" and MACOS_PLIST_PATH.exists():
-            import os as _os
             await self._safe_edit_callback(
                 query, "🔄 Restarting via launchctl kickstart…",
             )
             _run(["launchctl", "kickstart", "-k",
-                  f"gui/{_os.getuid()}/{MACOS_LABEL}"])
+                  f"gui/{os.getuid()}/{MACOS_LABEL}"])
             return
+
+        # No service unit — spawn a detached replacement and self-kill.
+        # The shell wrapper polls our PID via `kill -0`; once we die
+        # (HookReceiver.stop unlinks /tmp/aipager.sock as part of
+        # cli.py's SIGTERM handler) the wrapper execs aipager start.
+        parent_pid = os.getpid()
+        log_path = "/tmp/aipager.log"
+        try:
+            log_fd = os.open(
+                log_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644,
+            )
+        except OSError as e:
+            await self._safe_edit_callback(
+                query,
+                f"⚠️ Couldn't open {log_path}: {html_mod.escape(str(e))}\n"
+                "Please restart manually.",
+            )
+            return
+
+        shell_cmd = (
+            f"while kill -0 {parent_pid} 2>/dev/null; do sleep 0.2; done; "
+            f"exec {shlex.quote(sys.executable)} -m aipager.cli start"
+        )
+        try:
+            proc = subprocess.Popen(
+                ["sh", "-c", shell_cmd],
+                stdout=log_fd, stderr=log_fd, stdin=subprocess.DEVNULL,
+                start_new_session=True, close_fds=True,
+            )
+        except OSError as e:
+            os.close(log_fd)
+            await self._safe_edit_callback(
+                query,
+                f"⚠️ Couldn't spawn replacement: {html_mod.escape(str(e))}\n"
+                "Please restart manually.",
+            )
+            return
+        os.close(log_fd)
+
+        # If the shell wrapper died inside 300 ms, the spawn failed —
+        # don't kill ourselves and surface the failure.
+        await asyncio.sleep(0.3)
+        if proc.poll() is not None:
+            await self._safe_edit_callback(
+                query,
+                "⚠️ Replacement daemon failed to start. "
+                "Please restart manually.",
+            )
+            return
+
+        # Tell the user before we die. The HTTP edit needs a beat to
+        # flush before SIGTERM tears the event loop down.
         await self._safe_edit_callback(
             query,
-            "⚠️ No service unit found. Stop this daemon and re-run "
-            "<code>aipager start</code> manually.",
-            parse_mode="HTML",
+            "🔄 Restarting — send your voice message again in a few seconds.",
         )
+        await asyncio.sleep(0.5)
+        os.kill(os.getpid(), signal.SIGTERM)
 
     async def _safe_edit_callback(
         self, query, text: str, *,
@@ -2066,7 +2124,7 @@ class TelegramBot:
                 asyncio.create_task(self._install_voice_extra(query))
                 return
             if action == "restart":
-                asyncio.create_task(self._restart_daemon_via_service(query))
+                asyncio.create_task(self._restart_daemon(query))
                 return
             return  # unknown __voice__ sub-action
 
