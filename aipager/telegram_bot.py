@@ -405,6 +405,13 @@ class TelegramBot:
             (filters.PHOTO | filters.Document.ALL) & filters.Chat(int(CHAT_ID)),
             self._handle_file,
         ))
+        # Voice messages → faster-whisper transcribe → inject as prompt.
+        # Item 5.3. Only fires when the `voice` extra is installed; the
+        # handler itself surfaces a friendly error otherwise.
+        self._app.add_handler(MessageHandler(
+            filters.VOICE & filters.Chat(int(CHAT_ID)),
+            self._handle_voice,
+        ))
         # Catch-all for text messages (replies and /<label> commands)
         self._app.add_handler(MessageHandler(
             filters.TEXT & filters.Chat(int(CHAT_ID)),
@@ -670,6 +677,155 @@ class TelegramBot:
             )
         except Exception:
             pass  # reaction API may not be available in all contexts
+
+    async def _install_voice_extra(self, query) -> None:
+        """Run the install subprocess and edit the prompt message with
+        progress, ending in success or failure.
+
+        Triggered by the `__voice__:install` inline-keyboard tap when
+        the user sends a voice message without the voice extra. Lets
+        users on the road install the extra without SSH access.
+        """
+        from aipager import updater
+
+        installer = updater._detect_installer()
+        cmd = updater.install_extra_cmd(installer, "voice")
+        if cmd is None:
+            # Either no known installer, or brew (which doesn't expose
+            # pip extras). Surface a clear manual-install fallback.
+            await self._safe_edit_callback(
+                query,
+                "⚠️ Couldn't auto-install — your aipager isn't installed via\n"
+                "uv tool or pipx (likely brew or editable install).\n\n"
+                "Install manually on the machine running this daemon:\n"
+                "<code>pip install --upgrade 'aipager[voice]'</code>\n"
+                "or:\n"
+                "<code>uv tool install --reinstall 'aipager[voice]'</code>",
+                parse_mode="HTML",
+            )
+            return
+
+        await self._safe_edit_callback(
+            query,
+            "📦 Installing voice extra — this can take a couple minutes…",
+        )
+
+        # Launch the install. Capture stdout/stderr so a failure message
+        # can show the user what went wrong.
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+        except (OSError, asyncio.SubprocessError) as e:
+            await self._safe_edit_callback(
+                query, f"❌ Couldn't start installer: {html_mod.escape(str(e))}",
+            )
+            return
+
+        # Edit the message every few seconds so the user has a
+        # heartbeat that the install is alive.
+        started = time.monotonic()
+        last_edit_at = started
+        while True:
+            try:
+                # Wait briefly for the proc to finish; if it doesn't,
+                # edit the message and loop.
+                await asyncio.wait_for(proc.wait(), timeout=5.0)
+                break
+            except asyncio.TimeoutError:
+                elapsed = int(time.monotonic() - started)
+                if time.monotonic() - last_edit_at >= 5.0:
+                    await self._safe_edit_callback(
+                        query,
+                        f"📦 Installing voice extra — still working… ({elapsed}s)",
+                    )
+                    last_edit_at = time.monotonic()
+
+        stdout = (await proc.stdout.read()).decode("utf-8", errors="replace")
+        if proc.returncode == 0:
+            # Detect whether a service unit exists so we can offer a
+            # one-tap restart. Otherwise tell user to restart manually.
+            from aipager.service import (
+                LINUX_UNIT_PATH, MACOS_PLIST_PATH,
+            )
+            has_service = (
+                LINUX_UNIT_PATH.exists() or MACOS_PLIST_PATH.exists()
+            )
+            if has_service:
+                kb = InlineKeyboardMarkup([[
+                    InlineKeyboardButton(
+                        "🔄 Restart daemon now",
+                        callback_data="__voice__:restart",
+                    ),
+                ]])
+                await self._safe_edit_callback(
+                    query,
+                    "✅ Installed. Voice features need a daemon restart "
+                    "to load the new module.",
+                    reply_markup=kb,
+                )
+            else:
+                await self._safe_edit_callback(
+                    query,
+                    "✅ Installed. Restart the daemon (Ctrl-C then "
+                    "<code>aipager start</code>) to load the new module.",
+                    parse_mode="HTML",
+                )
+        else:
+            tail = stdout.strip()[-500:]
+            await self._safe_edit_callback(
+                query,
+                f"❌ Install failed (exit {proc.returncode}):\n"
+                f"<pre>{html_mod.escape(tail)}</pre>",
+                parse_mode="HTML",
+            )
+
+    async def _restart_daemon_via_service(self, query) -> None:
+        """Trigger a clean restart via systemd / launchctl, if installed."""
+        import platform
+        from aipager.service import (
+            LINUX_UNIT_PATH, MACOS_LABEL, MACOS_PLIST_PATH, _run,
+        )
+
+        sysname = platform.system().lower()
+        if sysname == "linux" and LINUX_UNIT_PATH.exists():
+            await self._safe_edit_callback(
+                query, "🔄 Restarting via systemctl --user…",
+            )
+            # systemctl will kill us; the unit's Restart=on-failure /
+            # the service definition handles relaunch.
+            _run(["systemctl", "--user", "restart", "aipager.service"])
+            return
+        if sysname == "darwin" and MACOS_PLIST_PATH.exists():
+            import os as _os
+            await self._safe_edit_callback(
+                query, "🔄 Restarting via launchctl kickstart…",
+            )
+            _run(["launchctl", "kickstart", "-k",
+                  f"gui/{_os.getuid()}/{MACOS_LABEL}"])
+            return
+        await self._safe_edit_callback(
+            query,
+            "⚠️ No service unit found. Stop this daemon and re-run "
+            "<code>aipager start</code> manually.",
+            parse_mode="HTML",
+        )
+
+    async def _safe_edit_callback(
+        self, query, text: str, *,
+        parse_mode: str | None = None,
+        reply_markup=None,
+    ) -> None:
+        """Edit the message tied to a callback query, swallowing
+        edit-failed errors (message gone, identical content, etc.)."""
+        try:
+            await query.edit_message_text(
+                text, parse_mode=parse_mode, reply_markup=reply_markup,
+            )
+        except Exception:
+            log.debug("callback edit failed (probably no-op)", exc_info=True)
 
     async def _send_diff_preview(
         self, sess: TrackedSession, tool_name: str, tool_input: dict,
@@ -1893,6 +2049,27 @@ class TelegramBot:
                 pass
             return
 
+        # ---- Voice-extra remote-install flow (item 5.3 follow-up) ----
+        if session_name == "__voice__":
+            if action == "cancel":
+                try:
+                    await query.edit_message_text(
+                        "↩️ OK, voice not installed."
+                    )
+                except Exception:
+                    pass
+                return
+            if action == "install":
+                # Fire-and-forget — the install can take a couple
+                # minutes and we want the callback handler to return
+                # quickly so Telegram doesn't time out.
+                asyncio.create_task(self._install_voice_extra(query))
+                return
+            if action == "restart":
+                asyncio.create_task(self._restart_daemon_via_service(query))
+                return
+            return  # unknown __voice__ sub-action
+
         if action == "retry":
             sess = self.registry.get(session_name)
             if not sess:
@@ -2818,6 +2995,160 @@ class TelegramBot:
             log.info("[%s] Sent text: %s", sess.label, text[:80])
         else:
             await update.message.reply_text(f"❌ Failed to send to [{sess.label}]")
+
+    async def _handle_voice(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle voice messages — transcribe via local Whisper, inject as prompt.
+
+        Requires the optional ``aipager[voice]`` extra. When unavailable
+        we tell the user once and bail out. On success we send back the
+        transcript (so the user can verify what we heard) and inject it
+        into the active session like any other text prompt.
+        """
+        msg = update.message
+        if not msg.voice:
+            return
+
+        # Voice extra installed?
+        from aipager import voice
+        if not voice.is_available():
+            # Offer to install it remotely — user might be away from
+            # their terminal. The callback handler does the actual work.
+            keyboard = InlineKeyboardMarkup([[
+                InlineKeyboardButton(
+                    "📦 Install voice", callback_data="__voice__:install"),
+                InlineKeyboardButton(
+                    "Cancel", callback_data="__voice__:cancel"),
+            ]])
+            await msg.reply_text(
+                "⚠️ Voice messages need the optional voice extra "
+                "(~200 MB install · ~74 MB model on first use).",
+                reply_markup=keyboard,
+            )
+            return
+
+        # Pre-size check (Telegram bot file-download limit, ~20 MB).
+        size = msg.voice.file_size or 0
+        if size > TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES:
+            mb = size / (1024 * 1024)
+            limit_mb = TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES // (1024 * 1024)
+            await msg.reply_text(
+                f"⚠️ Voice message is {mb:.1f} MB; Telegram bots are capped at {limit_mb} MB.",
+            )
+            return
+
+        # Download the .ogg file
+        try:
+            FILE_DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+            ts = int(time.time())
+            save_path = FILE_DOWNLOAD_DIR / f"{ts}_voice.ogg"
+            tg_file = await msg.voice.get_file()
+            await tg_file.download_to_drive(custom_path=str(save_path))
+        except Exception:
+            log.warning("Voice download failed", exc_info=True)
+            await msg.reply_text("❌ Failed to download voice message.")
+            return
+
+        # Acknowledge so the user knows we're working
+        ack_msg = await msg.reply_text(
+            "🎙️ <i>Transcribing…</i>", parse_mode="HTML",
+        )
+
+        try:
+            text = await voice.transcribe(str(save_path))
+        except voice.VoiceUnavailable as e:
+            await ack_msg.edit_text(f"⚠️ {e}")
+            return
+        except Exception as e:
+            log.warning("transcription failed", exc_info=True)
+            await ack_msg.edit_text(f"❌ Transcription failed: {e}")
+            return
+        finally:
+            # Clean up the audio file once we've transcribed it
+            save_path.unlink(missing_ok=True)
+
+        if not text:
+            await ack_msg.edit_text("⚠️ Couldn't make out any speech in that.")
+            return
+
+        # Show the transcript to the user
+        await ack_msg.edit_text(
+            f"🎙️ <i>Heard:</i> {html_mod.escape(text)}",
+            parse_mode="HTML",
+        )
+
+        # Inject the transcript as if it were a regular text reply.
+        # Route to the same session that bare text would (last_active or
+        # reply target), reusing _handle_message's logic. Build a
+        # lightweight shim Update so we don't duplicate routing code.
+        # Simpler: write the text into the existing message and dispatch.
+        # Cleanest: invoke the same logic inline.
+        await self._dispatch_voice_transcript(update, text)
+
+    async def _dispatch_voice_transcript(
+        self, update: Update, transcript: str,
+    ) -> None:
+        """Inject a voice-transcript into the active session as a prompt.
+
+        Mirrors the routing precedence of ``_handle_message`` (reply
+        target → last_active_session) so the user's voice behaves like
+        their typed text would.
+        """
+        reply_to = update.message.reply_to_message
+        sess = None
+        if reply_to:
+            sess = self.registry.get_session_by_msg(reply_to.message_id)
+            if not sess:
+                for cand in self.registry.all_sessions().values():
+                    if cand.last_msg_id == reply_to.message_id:
+                        sess = cand
+                        break
+            if not sess:
+                sess = self._guess_session_from_text(
+                    reply_to.text or reply_to.caption or ""
+                )
+        if not sess:
+            name = self.registry.last_active_session
+            sess = self.registry.get(name) if name else None
+        if not sess:
+            await update.message.reply_text(
+                "⚠️ Voice transcribed but no active session to send it to. "
+                "Pick one with /<label> first."
+            )
+            return
+
+        self.registry.last_active_session = sess.name
+        asyncio.create_task(self._maybe_update_bot_name(sess.name))
+
+        if not await inject.is_alive(sess.name):
+            await update.message.reply_text(f"⚠️ Session '{sess.name}' not found")
+            return
+
+        # Queue if busy
+        if sess.status == Status.BUSY:
+            if not sess.queue_prompt(transcript, update.message.message_id):
+                await update.message.reply_text(
+                    f"⚠️ Queue full for [{html_mod.escape(sess.label)}].",
+                    parse_mode="HTML",
+                )
+                return
+            self.registry.mark_dirty()
+            await self._react(update, "👀")
+            log.info("[%s] Voice queued (busy): %r", sess.label, transcript[:80])
+            return
+
+        sess.trigger_msg_id = update.message.message_id
+        sess.last_prompt = transcript
+        self.registry.mark_dirty()
+        ok = await inject.send_text_and_enter(sess.name, transcript)
+        if ok:
+            await self._react(update, "🎙️")
+            self.registry.transition(sess.name, Status.BUSY)
+            await self._send_busy_and_animate(sess)
+            log.info("[%s] Voice injected: %r", sess.label, transcript[:80])
+        else:
+            await update.message.reply_text(
+                f"❌ Failed to inject transcript into [{sess.label}]",
+            )
 
     async def _handle_file(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle photo/document messages — download file and inject prompt."""

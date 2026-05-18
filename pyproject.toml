@@ -29,6 +29,13 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "ruff>=0.5", "build", "twine"]
+# Voice input support — install with `pip install 'aipager[voice]'` /
+# `uv tool install 'aipager[voice]'`. faster-whisper transitively pulls
+# ctranslate2 (~60 MB), onnxruntime (~55 MB), av, numpy and tokenizers,
+# so the on-disk install bumps by ~200 MB. Plus a ~74 MB model download
+# on first voice message (cached under ~/.cache/huggingface/hub).
+# Default install stays at its current ~3 MB.
+voice = ["faster-whisper>=1.0"]
 
 [project.scripts]
 aipager            = "aipager.cli:main"

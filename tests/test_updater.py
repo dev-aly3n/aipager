@@ -183,6 +183,31 @@ def test_remove_path_missing_returns_false(tmp_path):
     assert updater._remove_path(tmp_path / "nope") is False
 
 
+# ----- install_extra_cmd (5.3 follow-up) -----
+
+def test_install_extra_cmd_uv():
+    assert updater.install_extra_cmd("uv", "voice") == [
+        "uv", "tool", "install", "--reinstall", "aipager[voice]",
+    ]
+
+
+def test_install_extra_cmd_pipx():
+    assert updater.install_extra_cmd("pipx", "voice") == [
+        "pipx", "install", "--force", "aipager[voice]",
+    ]
+
+
+def test_install_extra_cmd_brew_returns_none():
+    """Homebrew formulas don't expose pip extras; caller should fall
+    back to a manual-install message."""
+    assert updater.install_extra_cmd("brew", "voice") is None
+
+
+def test_install_extra_cmd_unknown_installer_returns_none():
+    assert updater.install_extra_cmd(None, "voice") is None
+    assert updater.install_extra_cmd("editable", "voice") is None
+
+
 # ----- _remove_tmp_sockets -----
 
 def test_remove_tmp_sockets_handles_missing(monkeypatch):

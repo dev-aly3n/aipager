@@ -8,6 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Voice messages → transcript → injected prompt.** Send a voice
+  message in Telegram, the daemon downloads the .ogg, runs
+  `faster-whisper` locally (no cloud, no API key) and injects the
+  transcript into the active session as if you'd typed it. Shipped
+  behind an optional `aipager[voice]` install extra — default install
+  is unchanged (~3 MB on disk). Adding the extra pulls
+  `faster-whisper`, `ctranslate2`, `onnxruntime`, `numpy`, `av`,
+  `tokenizers` and `huggingface-hub` (~200 MB total on disk) plus a
+  one-time ~74 MB model download on first use (cached under
+  `~/.cache/huggingface/hub/`). Tunable via `AIPAGER_WHISPER_MODEL`
+  (default `base`).
+- **Install the voice extra from Telegram.** When a user sends a
+  voice message and the extra isn't installed, the bot replies with
+  inline `[📦 Install voice] [Cancel]` buttons. Tapping Install runs
+  `uv tool install --reinstall 'aipager[voice]'` (or the pipx
+  equivalent), streams progress back as message edits, and offers a
+  `[🔄 Restart daemon now]` button on success when a systemd-user /
+  launchd service unit is installed. Editable / Homebrew installs
+  surface a friendly manual-install fallback. Lets the user enable
+  voice from their phone without SSH access. Same Telegram chat-id
+  filter — only the configured user can trigger.
 - **Write / Edit diff preview in Telegram.** When claude calls
   `Write` or `Edit`, the daemon sends a separate message threaded
   under the busy message with a unified diff of the change

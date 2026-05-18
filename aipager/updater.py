@@ -260,7 +260,30 @@ def cmd_uninstall(args=None) -> int:
     return 0
 
 
-__all__ = ["cmd_update", "cmd_uninstall"]
+# ---------------------------------------------------------------------------
+# Install / reinstall with an optional extra (driven from Telegram for 5.3)
+# ---------------------------------------------------------------------------
+
+def install_extra_cmd(installer: str | None, extra: str) -> list[str] | None:
+    """Build the command to (re)install aipager with an optional extra.
+
+    Returns ``None`` if the installer doesn't expose pip extras directly
+    (Homebrew formulas don't), in which case the caller surfaces a
+    manual-install fallback to the user.
+    """
+    if installer == "uv":
+        return ["uv", "tool", "install", "--reinstall", f"aipager[{extra}]"]
+    if installer == "pipx":
+        return ["pipx", "install", "--force", f"aipager[{extra}]"]
+    if installer == "brew":
+        # Homebrew formulas don't expose pip extras; the user has to
+        # switch to uv/pipx for voice or install faster-whisper directly
+        # into the brew-managed venv.
+        return None
+    return None
+
+
+__all__ = ["cmd_update", "cmd_uninstall", "install_extra_cmd"]
 
 # Keep the `os` import referenced; some platforms may need it for future
 # Windows additions, but right now it's only used transitively. Silence
