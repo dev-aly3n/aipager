@@ -181,6 +181,19 @@ async def _run_daemon(bot_username: str) -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, stop.set)
 
+    # SIGUSR1 → live-reload of team.yaml. Sent by `aipager config` on
+    # success so admins don't have to restart the daemon for every
+    # add-user / role-change / deny-rule tweak.
+    def _on_sigusr1() -> None:
+        log.info("SIGUSR1 received — reloading team config")
+        asyncio.create_task(bot.reload_team())
+    try:
+        loop.add_signal_handler(signal.SIGUSR1, _on_sigusr1)
+    except (NotImplementedError, AttributeError):
+        # Windows / unusual asyncio loop — skip; admins still have
+        # the restart fallback.
+        log.debug("SIGUSR1 handler not supported on this platform")
+
     await stop.wait()
 
     log.info("Shutting down...")

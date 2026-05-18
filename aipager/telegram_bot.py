@@ -572,6 +572,53 @@ class TelegramBot:
             return None
         return self.team.get(sess.last_driver_user_id)
 
+    async def reload_team(self) -> None:
+        """Re-read ``team.yaml`` and swap ``self.team`` live.
+
+        Triggered by the daemon's SIGUSR1 handler when the wizard
+        finishes a team-config edit. On parse error, log a WARN and
+        keep the previous team in memory — the admin can't lock
+        themselves out by hand-editing a typo. Returning to personal
+        mode (``team.yaml`` absent / archived) is a valid result:
+        ``self.team`` becomes ``None`` and all handlers fall back to
+        the personal-mode path.
+        """
+        from aipager.team import (
+            TEAM_CONFIG_PATH, TeamConfigError, load_team,
+        )
+        try:
+            new_team = load_team(TEAM_CONFIG_PATH)
+        except TeamConfigError as e:
+            log.warning(
+                "Team config reload failed — keeping previous in-memory "
+                "team. Fix and re-signal: %s", e,
+            )
+            return
+
+        old = self.team
+        self.team = new_team
+
+        if old is None and new_team is None:
+            log.info("Team reload: no change (still personal mode)")
+        elif old is None and new_team is not None:
+            log.info(
+                "Team reload: personal → team (%d users, %d admin, "
+                "deny=%s)",
+                len(new_team.users), new_team.admin_count(),
+                list(new_team.rules.deny_tools),
+            )
+        elif new_team is None:
+            log.info("Team reload: team → personal (allow-list disabled)")
+        else:
+            log.info(
+                "Team reload: %d → %d users · %d → %d admin · "
+                "deny %s → %s",
+                len(old.users), len(new_team.users),
+                old.admin_count(), new_team.admin_count(),
+                list(old.rules.deny_tools),
+                list(new_team.rules.deny_tools),
+            )
+
     async def _authorize_callback(self, query) -> TeamUser | None:
         """Allow-list check for inline-keyboard taps.
 

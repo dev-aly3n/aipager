@@ -949,6 +949,43 @@ def _restart_hint() -> None:
     )
 
 
+def _signal_reload() -> bool:
+    """Send SIGUSR1 to the running daemon to live-reload team.yaml.
+
+    Returns ``True`` iff a signal was delivered. ``False`` when the
+    daemon isn't running, the PID is unknown, or the platform
+    doesn't support signals (Windows). Caller handles fallback.
+    """
+    import signal as _signal
+
+    pid = _detect_daemon_running()
+    if pid is None or pid < 0:
+        return False
+    try:
+        os.kill(pid, _signal.SIGUSR1)
+        return True
+    except (OSError, AttributeError):
+        return False
+
+
+def _apply_team_change_hint() -> None:
+    """Post-edit feedback for changes that ONLY touched team.yaml.
+
+    Prefers a live SIGUSR1 reload when the daemon is reachable; falls
+    back to the legacy restart hint otherwise. Use the bare
+    :func:`_restart_hint` for edits that also touched ``config.env``
+    or the bot token (those still require a full restart).
+    """
+    if _signal_reload():
+        console.print()
+        console.print(
+            "[ok]✓[/ok]  Team config reloaded live "
+            "[muted](no daemon restart needed)[/muted]"
+        )
+        return
+    _restart_hint()
+
+
 def _show_current_config() -> None:
     """Print a panel summarizing config.env + team.yaml + daemon state."""
     from rich.panel import Panel
@@ -1287,25 +1324,41 @@ def _edit_flow() -> int:
             return 130
 
         try:
-            changed = False
             if choice == "exit":
                 return 0
+            # Track what kind of change happened so we can choose the
+            # right post-edit hint:
+            #   "team"    — only team.yaml touched → hot-reload via SIGUSR1
+            #   "restart" — config.env or token changed → full restart
+            #   None      — no change / cancelled
+            change_kind: str | None = None
             if choice == "full":
                 return _first_run_flow()
             if choice == "refresh_token":
-                changed = _edit_refresh_token()
+                if _edit_refresh_token():
+                    change_kind = "restart"
             elif choice == "to_personal" and team is not None:
-                changed = _edit_switch_to_personal(team)
+                if _edit_switch_to_personal(team):
+                    # Archives team.yaml AND may update config.env
+                    # (chat-id swap). Conservatively assume restart.
+                    change_kind = "restart"
             elif choice == "to_team":
-                changed = _edit_switch_to_team()
+                if _edit_switch_to_team():
+                    # Writes team.yaml AND updates CHAT_ID in
+                    # config.env — restart required.
+                    change_kind = "restart"
             elif team is not None and choice == "add":
-                changed = _edit_add_user(team) is not None
+                if _edit_add_user(team) is not None:
+                    change_kind = "team"
             elif team is not None and choice == "remove":
-                changed = _edit_remove_user(team) is not None
+                if _edit_remove_user(team) is not None:
+                    change_kind = "team"
             elif team is not None and choice == "role":
-                changed = _edit_change_role(team) is not None
+                if _edit_change_role(team) is not None:
+                    change_kind = "team"
             elif team is not None and choice == "rules":
-                changed = _edit_deny_tools(team) is not None
+                if _edit_deny_tools(team) is not None:
+                    change_kind = "team"
         except KeyboardInterrupt:
             friendly_warn("Cancelled this action.")
             continue
@@ -1316,7 +1369,9 @@ def _edit_flow() -> int:
             friendly_error(f"Write failed: {e}")
             continue
 
-        if changed:
+        if change_kind == "team":
+            _apply_team_change_hint()
+        elif change_kind == "restart":
             _restart_hint()
 
 
