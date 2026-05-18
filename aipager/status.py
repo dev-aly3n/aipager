@@ -138,9 +138,57 @@ _STATUS_STYLE = {
 }
 
 
-def _render_rich(daemon_up: bool, sessions: list[dict], total_cost: float) -> None:
+def render_sessions_rich(sessions: list[dict]) -> None:
+    """Render the session list as a rich Table to console (TTY path)."""
     from rich.table import Table
 
+    if not sessions:
+        console.print("  [muted](no sessions)[/muted]")
+        return
+    t = Table(show_header=False, box=None, pad_edge=False, padding=(0, 2))
+    t.add_column(width=3, justify="center")
+    t.add_column(no_wrap=True)
+    t.add_column(no_wrap=True)
+    t.add_column(style="hint")
+    for s in sessions:
+        style, glyph = _STATUS_STYLE.get(s["status"], ("muted", "·"))
+        metrics_parts: list[str] = []
+        if s["model"]:
+            metrics_parts.append(s["model"])
+        if s["context_pct"] is not None:
+            metrics_parts.append(f"{int(s['context_pct'])}% ctx")
+        if s["cost_usd"] is not None:
+            metrics_parts.append(f"${s['cost_usd']:.2f}")
+        if s["queue_depth"]:
+            metrics_parts.append(f"queue {s['queue_depth']}")
+        t.add_row(
+            f"[{style}]{glyph}[/{style}]",
+            s["label"],
+            s["status"],
+            "  ·  ".join(metrics_parts),
+        )
+    console.print(t)
+
+
+def render_sessions_plain(sessions: list[dict]) -> None:
+    """Render the session list as padded plain text (off-TTY path)."""
+    if not sessions:
+        console.print("  (no sessions)")
+        return
+    for s in sessions:
+        parts = [s["label"], s["status"]]
+        if s["model"]:
+            parts.append(s["model"])
+        if s["context_pct"] is not None:
+            parts.append(f"{int(s['context_pct'])}% ctx")
+        if s["cost_usd"] is not None:
+            parts.append(f"${s['cost_usd']:.2f}")
+        if s["queue_depth"]:
+            parts.append(f"queue:{s['queue_depth']}")
+        console.print("  " + "  ".join(parts))
+
+
+def _render_rich(daemon_up: bool, sessions: list[dict], total_cost: float) -> None:
     console.print()
     if daemon_up:
         console.print(
@@ -155,29 +203,7 @@ def _render_rich(daemon_up: bool, sessions: list[dict], total_cost: float) -> No
 
     if sessions:
         console.print()
-        t = Table(show_header=False, box=None, pad_edge=False, padding=(0, 2))
-        t.add_column(width=3, justify="center")
-        t.add_column(no_wrap=True)
-        t.add_column(no_wrap=True)
-        t.add_column(style="hint")
-        for s in sessions:
-            style, glyph = _STATUS_STYLE.get(s["status"], ("muted", "·"))
-            metrics_parts: list[str] = []
-            if s["model"]:
-                metrics_parts.append(s["model"])
-            if s["context_pct"] is not None:
-                metrics_parts.append(f"{int(s['context_pct'])}% ctx")
-            if s["cost_usd"] is not None:
-                metrics_parts.append(f"${s['cost_usd']:.2f}")
-            if s["queue_depth"]:
-                metrics_parts.append(f"queue {s['queue_depth']}")
-            t.add_row(
-                f"[{style}]{glyph}[/{style}]",
-                s["label"],
-                s["status"],
-                "  ·  ".join(metrics_parts),
-            )
-        console.print(t)
+        render_sessions_rich(sessions)
 
     if total_cost > 0:
         console.print()
@@ -190,17 +216,7 @@ def _render_plain(daemon_up: bool, sessions: list[dict], total_cost: float) -> N
     if daemon_up:
         line += f" (chat {CHAT_ID})"
     console.print(line)
-    for s in sessions:
-        parts = [s["label"], s["status"]]
-        if s["model"]:
-            parts.append(s["model"])
-        if s["context_pct"] is not None:
-            parts.append(f"{int(s['context_pct'])}% ctx")
-        if s["cost_usd"] is not None:
-            parts.append(f"${s['cost_usd']:.2f}")
-        if s["queue_depth"]:
-            parts.append(f"queue:{s['queue_depth']}")
-        console.print("  " + "  ".join(parts))
+    render_sessions_plain(sessions)
     if total_cost > 0:
         console.print(f"  total cost: ${total_cost:.2f}")
 
@@ -246,4 +262,9 @@ def cmd_status(args: argparse.Namespace | None = None) -> int:
     return 0 if daemon_up else 1
 
 
-__all__ = ["cmd_status"]
+__all__ = [
+    "cmd_status",
+    "render_sessions_rich",
+    "render_sessions_plain",
+    "_gather_sessions",
+]

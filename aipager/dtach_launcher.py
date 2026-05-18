@@ -25,6 +25,8 @@ from aipager.errors import friendly_error, friendly_warn
 from aipager.ui import console, ok
 
 _NAME_RE = re.compile(r"[A-Za-z0-9_-]{1,50}")
+# Reserved because they are subcommand verbs under `aipager session`.
+_RESERVED_NAMES = frozenset({"ls", "list", "kill"})
 
 
 def _resolve_dtach() -> str | None:
@@ -101,6 +103,9 @@ def _validate_name(name: str) -> str | None:
     if not _NAME_RE.fullmatch(name):
         return ("session name must be 1-50 chars of [A-Za-z0-9_-]; "
                 f"got {name!r}")
+    if name in _RESERVED_NAMES:
+        return (f"{name!r} is reserved as an `aipager session` subcommand "
+                "(ls / list / kill); pick a different name")
     return None
 
 

@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- New `aipager session ls` (alias `session list`) subcommand. Lists
+  live dtach sessions with their status, model, context %, cost, and
+  queue depth. Default hides GONE sessions; `-a` / `--all` includes
+  them. `--json` for scripts. Shares its renderer with `aipager
+  status`.
+- New `aipager session kill <name>` subcommand. Terminates the
+  matching dtach session. Confirms by default; `-y` / `--yes` skips
+  the prompt. Friendly error when the named session doesn't exist.
+- `aipager session` now reserves `ls`, `list`, `kill` as subcommand
+  verbs — `_validate_name` rejects them with a clear message so
+  collisions can't happen.
 - New top-level `aipager status` subcommand. Prints a fast (<100 ms)
   snapshot of the daemon (up/down + bound chat), every known session
   (label, status, model, context %, cost, queue depth), and the

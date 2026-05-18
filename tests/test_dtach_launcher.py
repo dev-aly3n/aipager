@@ -34,6 +34,13 @@ def test_validate_name_rejects(name, reason_substr):
     assert reason_substr in err
 
 
+@pytest.mark.parametrize("name", ["ls", "list", "kill"])
+def test_validate_name_rejects_reserved_verbs(name):
+    err = dtach_launcher._validate_name(name)
+    assert err is not None
+    assert "reserved" in err
+
+
 # ----- _socket_alive -----
 
 def test_socket_alive_no_file(tmp_path):
