@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.13] - 2026-05-18
+
 ### Added
 - **Docker image** at `ghcr.io/dev-aly3n/aipager` — self-contained
   workstation (python + node + `claude` + `dtach` + aipager) for
