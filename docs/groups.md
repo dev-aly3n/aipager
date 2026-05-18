@@ -73,9 +73,43 @@ Edit operations (when a config already exists):
 - **Refresh bot token** — re-prompt for a new token after
   `/revoke` in `@BotFather`.
 
-Every edit that writes a file ends with a one-line reminder to
-restart the daemon (`aipager service restart`) since the team
-allow-list is loaded at startup.
+### Live reload
+
+The wizard signals the running daemon via **SIGUSR1** after every
+team.yaml change, so add-user / remove-user / change-role / edit-
+rules / switch-to-personal apply **without** a daemon restart.
+You'll see:
+
+```
+✓ Team config reloaded live (no daemon restart needed)
+```
+
+Restart is still required when changes affect:
+
+- **Bot token** (Refresh bot token)
+- **`CLAUDE_TG_CHAT_ID`** (Switch to Team writes a new group id)
+
+The wizard distinguishes between hot-reloadable and restart-needed
+changes and prints the appropriate hint.
+
+To trigger a reload manually (e.g. after a hand-edit):
+
+```sh
+kill -USR1 $(pgrep -f 'aipager start')
+```
+
+If `team.yaml` is malformed at reload time, the daemon logs a
+WARN and keeps the previous in-memory team — so you can't lock
+yourself out by typo'ing a hand-edit.
+
+### Auto-detect Telegram user IDs
+
+When adding a user via the wizard you can pick **Auto-detect**
+instead of pasting a numeric id. The wizard polls
+`getUpdates` for the next message and captures the sender's id +
+Telegram username, then suggests the username as the default
+label. Removes the "ask your teammate to dig out their user id"
+step.
 
 You can still hand-edit `team.yaml` directly — the wizard just
 gives you a cleaner UX.

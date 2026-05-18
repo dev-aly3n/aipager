@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Live reload of `team.yaml` via SIGUSR1.** Add-user / remove-user
+  / change-role / edit-rules / switch-to-personal all signal the
+  running daemon to re-read `team.yaml` without restarting — no
+  more disrupting active sessions to tweak the allow-list. Manual
+  `kill -USR1 $(pgrep -f 'aipager start')` works too. Malformed
+  reloads log a WARN and keep the previous in-memory team, so a
+  typo can't lock you out.
+- **Auto-detect Telegram user IDs** in the add-user flow. Pick
+  Auto-detect → ask the new member to mention `@bot` → wizard
+  captures their id + Telegram handle and suggests the handle as
+  the default label. Skips the "ask your teammate to look up their
+  user id" round-trip.
 - **`aipager config` edit menu.** Re-running `aipager config` on
   an existing install no longer overwrites everything. The wizard
   detects existing config and opens an edit menu: add / remove a
