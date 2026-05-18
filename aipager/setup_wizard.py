@@ -41,6 +41,7 @@ from aipager.ui import GLYPH_OK, console, err_console, hint, ok, rule, step
 
 CONFIG_DIR = Path.home() / ".config" / "aipager"
 CONFIG_ENV = CONFIG_DIR / "config.env"
+TEAM_YAML = CONFIG_DIR / "team.yaml"
 CLAUDE_SETTINGS = Path.home() / ".claude" / "settings.json"
 
 HOOK_CMD = "aipager-hook"
@@ -501,6 +502,185 @@ def _completion_screen() -> None:
         console.print("  Health check:        aipager doctor")
 
 
+def _step_team_config() -> bool:
+    """Ask whether the user wants team mode and, if so, write team.yaml.
+
+    Returns True iff team mode was configured. Skipped silently
+    (returns False) when the user picks Personal.
+
+    Team mode in this wizard step:
+    - shows a hard-stop warning panel naming the trust expansion
+    - takes the group chat ID
+    - takes one or more users (Telegram user ID + label + role)
+    - optionally enables a default ``deny_tools: [Write, Edit]`` rule
+    - writes ``~/.config/aipager/team.yaml`` with mode 0600
+    """
+    step("[6/6]  Personal or Team mode")
+
+    mode = _ask(questionary.select(
+        "How will you use aipager?",
+        choices=[
+            questionary.Choice("Personal (1:1 DM with the bot — recommended)",
+                               value="personal"),
+            questionary.Choice("Team (group chat with multiple devs)",
+                               value="team"),
+        ],
+        default="Personal (1:1 DM with the bot — recommended)",
+        qmark="?", style=_PROMPT_STYLE,
+    ))
+
+    if mode == "personal":
+        ok("Personal mode — no team.yaml needed.")
+        return False
+
+    # ----- Team mode: hard-stop warning panel ----------------------------
+    from rich.panel import Panel
+    warning_body = (
+        "[warn]⚠️  Team mode grants every allow-listed user the ability to:[/warn]\n\n"
+        "   • Inject prompts into Claude Code sessions on this machine\n"
+        "   • Approve / deny tool calls (run shell commands, edit files)\n"
+        "   • Create new sessions, kill sessions, switch active session\n\n"
+        "   This is a code-execution boundary. Only allow-list users you\n"
+        "   trust the same way you trust local shell access on this\n"
+        "   machine. You can clamp dangerous tools (Write, Edit, Bash)\n"
+        "   via [path]~/.config/aipager/team.yaml[/path] [path]rules.deny_tools[/path]."
+    )
+    if console.is_terminal:
+        console.print()
+        console.print(Panel(warning_body, border_style="warn", expand=False,
+                            padding=(0, 1)))
+    else:
+        console.print()
+        console.print(warning_body)
+    console.print()
+
+    proceed = _ask(questionary.confirm(
+        "Continue with team-mode setup?",
+        default=False, qmark="?", style=_PROMPT_STYLE,
+    ))
+    if not proceed:
+        friendly_warn("Team setup cancelled. Personal mode is active.")
+        return False
+
+    # ----- Group ID ------------------------------------------------------
+    hint(
+        "Find your group ID by adding the bot to the group, sending /start "
+        "there, then hitting "
+        "https://api.telegram.org/bot<TOKEN>/getUpdates (the chat.id field).",
+    )
+    while True:
+        raw = _ask(questionary.text(
+            "Group chat ID (negative integer, e.g. -100123456789):",
+            qmark="?", style=_PROMPT_STYLE,
+        ))
+        try:
+            group_id = int(raw.strip())
+            if group_id >= 0:
+                friendly_warn("Group IDs are negative. Try again.")
+                continue
+            break
+        except ValueError:
+            friendly_warn("Not a valid integer. Try again.")
+
+    # ----- Users ---------------------------------------------------------
+    console.print()
+    console.print("Add allowed users (Telegram user IDs).")
+    console.print(
+        "[muted]  Each user gets a label (shown in chat as @label) and a role:[/muted]"
+    )
+    console.print(
+        "[muted]    admin       full control; bypasses deny_tools rules[/muted]"
+    )
+    console.print(
+        "[muted]    developer   prompt + approve, subject to deny_tools[/muted]"
+    )
+    console.print(
+        "[muted]    read_only   /status only; messages otherwise ignored[/muted]"
+    )
+
+    users: list[dict] = []
+    while True:
+        idx = len(users) + 1
+        label = _ask(questionary.text(
+            f"User #{idx} label (e.g. alice):",
+            qmark="?", style=_PROMPT_STYLE,
+        )).strip()
+        if not label:
+            friendly_warn("Label must be non-empty.")
+            continue
+        uid_raw = _ask(questionary.text(
+            f"User #{idx} Telegram user ID:",
+            qmark="?", style=_PROMPT_STYLE,
+        )).strip()
+        try:
+            uid = int(uid_raw)
+        except ValueError:
+            friendly_warn("Not a valid integer.")
+            continue
+        if any(u["id"] == uid for u in users):
+            friendly_warn(f"User ID {uid} already added.")
+            continue
+        role = _ask(questionary.select(
+            f"User #{idx} role:",
+            choices=["admin", "developer", "read_only"],
+            qmark="?", style=_PROMPT_STYLE,
+        ))
+        users.append({"id": uid, "label": label, "role": role})
+
+        more = _ask(questionary.confirm(
+            "Add another user?",
+            default=False, qmark="?", style=_PROMPT_STYLE,
+        ))
+        if not more:
+            break
+
+    if not any(u["role"] == "admin" for u in users):
+        friendly_warn(
+            "No admin user added. You'll need to hand-edit team.yaml to "
+            "promote one — admin is the only role that can bypass "
+            "deny_tools rules.",
+        )
+
+    # ----- Deny rules ----------------------------------------------------
+    console.print()
+    console.print("[title]Optional safety rule[/title]")
+    console.print(
+        "[muted]  Auto-deny Write and Edit tools so file changes always "
+        "need an admin override.[/muted]"
+    )
+    enable_default_deny = _ask(questionary.confirm(
+        "Enable default deny_tools = [Write, Edit]?",
+        default=True, qmark="?", style=_PROMPT_STYLE,
+    ))
+    deny_tools = ["Write", "Edit"] if enable_default_deny else []
+
+    # ----- Write file ----------------------------------------------------
+    import yaml as _yaml  # local import — pyyaml is a project dep
+
+    data: dict = {
+        "mode": "team",
+        "group_id": group_id,
+        "users": users,
+    }
+    if deny_tools:
+        data["rules"] = {"deny_tools": deny_tools}
+
+    try:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        TEAM_YAML.write_text(
+            "# aipager team mode — managed by `aipager config`.\n"
+            "# Edit by hand to add / remove users. Restart the daemon\n"
+            "# after changes (`aipager service restart` or kill + start).\n"
+            + _yaml.safe_dump(data, sort_keys=False, default_flow_style=False)
+        )
+        os.chmod(TEAM_YAML, 0o600)
+    except OSError as e:
+        raise OSError(f"cannot write {TEAM_YAML}: {e}") from e
+
+    ok(f"Wrote {TEAM_YAML}")
+    return True
+
+
 def run() -> int:
     if console.is_terminal:
         rule("aipager setup")
@@ -524,6 +704,7 @@ def run() -> int:
                 return 2
         _step_settings()
         _step_write_env(token, chat_id)
+        _step_team_config()
     except KeyboardInterrupt:
         friendly_warn("Cancelled.")
         return 130
