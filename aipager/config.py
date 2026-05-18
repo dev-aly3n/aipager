@@ -34,6 +34,17 @@ _load_env_file()
 BOT_TOKEN: str = os.environ.get("CLAUDE_TG_BOT_TOKEN", "")
 CHAT_ID: str = os.environ.get("CLAUDE_TG_CHAT_ID", "")
 
+# Optional group / team mode (see ``aipager.team``).
+# ``TEAM`` is ``None`` for personal-mode installs (no team.yaml on disk),
+# which preserves the existing one-user-one-DM behaviour.
+# If team.yaml exists but is malformed, ``load_team`` raises
+# ``TeamConfigError`` so the daemon fails loudly on startup rather
+# than silently degrading to a less-safe mode.
+from aipager.team import load_team as _load_team  # noqa: E402
+
+TEAM = _load_team()
+del _load_team
+
 
 def _parse_observer_bots(raw: str) -> list[tuple[str, str]]:
     """Parse 'token1:chatid1,token2:chatid2' into [(token, chatid), ...].

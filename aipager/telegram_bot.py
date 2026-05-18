@@ -53,6 +53,18 @@ from aipager.config import (
     QUICK_COMMANDS, QUICK_TEMPLATES, SPINNER_VERBS, TEMPLATES_BUTTON,
 )
 from aipager.state import QUEUE_CAP, SessionRegistry, Status, TrackedSession
+from aipager.team import (
+    Role,
+    Team,
+    User as TeamUser,
+    attribution_label,
+    remember_unauthorized,
+)
+
+# Sentinel returned by ``_authorize_callback`` in personal mode so
+# callers can distinguish "auth passed in personal mode" from "auth
+# passed in team mode and here is the TeamUser." Not exported.
+_PERSONAL_MODE_SENTINEL = TeamUser(id=0, label="me", role=Role.ADMIN)
 
 # Telegram's documented document upload ceiling is 50 MB; stay below it.
 TELEGRAM_MAX_DOC_BYTES = 40 * 1024 * 1024
@@ -371,6 +383,113 @@ class TelegramBot:
         self._command_map: dict[str, str] = {label: cmd for label, cmd in QUICK_COMMANDS}
         self._model_map: dict[str, str] = {label: cmd for label, cmd in MODEL_CHOICES}
         self._last_pinned_text: str = ""  # dedup pinned message edits
+        # Team / allow-list — None for personal-mode installs (no team.yaml),
+        # which preserves the existing one-user-one-DM behaviour.
+        from aipager.config import TEAM
+        self.team: Team | None = TEAM
+
+    # ------------------------------------------------------------------
+    # Authorization helpers (team mode)
+    #
+    # In personal mode (``self.team is None``) every chat-id-passing
+    # message is implicitly authorized. In team mode we re-check the
+    # sender's user_id against ``self.team`` allow-list at the top of
+    # every handler — never trust the chat-level filter alone for
+    # actions that mutate state.
+    # ------------------------------------------------------------------
+
+    def _team_user(self, update: Update) -> TeamUser | None:
+        """Resolve the Telegram sender to a ``team.User``.
+
+        Returns ``None`` in personal mode OR when the sender isn't on
+        the allow-list. Callers distinguish the two via
+        ``self.team is None``.
+        """
+        if self.team is None:
+            return None
+        tg_user = update.effective_user
+        if tg_user is None:
+            return None
+        return self.team.get(tg_user.id)
+
+    async def _authorize(
+        self, update: Update, *, allow_read_only: bool = False,
+    ) -> bool:
+        """Return True iff the message's sender is allowed to act.
+
+        Personal mode: always True (chat filter already gated it).
+        Team mode: True iff the sender is on the allow-list AND
+        either ``allow_read_only`` or their role is not READ_ONLY.
+
+        On rejection, sends a one-shot polite reply explaining why,
+        then silently ignores subsequent messages from that user
+        until daemon restart.
+        """
+        if self.team is None:
+            return True
+
+        tg_user = update.effective_user
+        if tg_user is None:
+            return False  # malformed update, ignore
+
+        member = self.team.get(tg_user.id)
+        if member is None:
+            # Not on the allow-list. One-shot reply, then silence.
+            if not remember_unauthorized(tg_user.id):
+                msg = update.effective_message
+                if msg is not None:
+                    try:
+                        await msg.reply_text(
+                            "🚫 You're not on this bot's allow-list. "
+                            "Ask an admin to add your Telegram user ID "
+                            f"({tg_user.id}) to ~/.config/aipager/team.yaml.",
+                        )
+                    except Exception:
+                        log.debug("reply to unauthorized user failed", exc_info=True)
+            return False
+
+        if member.role == Role.READ_ONLY and not allow_read_only:
+            msg = update.effective_message
+            if msg is not None:
+                try:
+                    await msg.reply_text(
+                        f"👀 {attribution_label(member)} — your role is "
+                        "<i>read_only</i>; you can use <code>/status</code> "
+                        "but can't drive sessions.",
+                        parse_mode="HTML",
+                    )
+                except Exception:
+                    log.debug("reply to read-only user failed", exc_info=True)
+            return False
+
+        return True
+
+    async def _authorize_callback(self, query) -> TeamUser | None:
+        """Allow-list check for inline-keyboard taps.
+
+        Returns the matching ``team.User`` on success, or ``None`` on
+        rejection (in which case a Telegram toast is shown to the
+        user via ``answer``). Personal mode returns a synthetic
+        sentinel — never ``None`` — so callers can keep their
+        existing flow.
+        """
+        if self.team is None:
+            return _PERSONAL_MODE_SENTINEL
+
+        tg_user = query.from_user
+        if tg_user is None:
+            return None
+
+        member = self.team.get(tg_user.id)
+        if member is None:
+            try:
+                await query.answer(
+                    "Not on the allow-list", show_alert=True,
+                )
+            except Exception:
+                log.debug("toast to unauthorized callback failed", exc_info=True)
+            return None
+        return member
 
     async def start(self) -> None:
         global _bot_instance
@@ -380,9 +499,8 @@ class TelegramBot:
 
         # Long-poll config: timeout=30 means Telegram holds the connection
         # for up to 30s waiting for updates → instant response to taps.
-        # Connect timeouts are 30s rather than 10s to tolerate slow proxy
-        # / VPN TLS handshakes (the daemon's first getMe call goes through
-        # whatever HTTPS_PROXY the shell exports).
+        # Connect timeouts are 30s rather than 10s so the daemon stays
+        # robust on networks where the initial TLS handshake is slow.
         builder = (
             builder
             .get_updates_read_timeout(30)
@@ -2064,6 +2182,11 @@ class TelegramBot:
         user really sees.
         """
         query = update.callback_query
+        # Team mode: reject taps from users not on the allow-list with a
+        # toast. Personal mode passes through unchanged (sentinel value).
+        member = await self._authorize_callback(query)
+        if member is None:
+            return
         cb_data = query.data or ""
         original_text = query.message.text or "" if query.message else ""
 
@@ -2497,6 +2620,8 @@ class TelegramBot:
 
     async def _handle_start_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /start and /help — friendly welcome with current state."""
+        if not await self._authorize(update, allow_read_only=True):
+            return
         sessions = sorted(
             (sess.label, sess.status.name.lower())
             for sess in self.registry.all_sessions().values()
@@ -2537,6 +2662,8 @@ class TelegramBot:
 
     async def _handle_status(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /status command — rich per-session dashboard."""
+        if not await self._authorize(update, allow_read_only=True):
+            return
         sessions = self.registry.all_sessions()
         if not sessions:
             discovered = await inject.list_sessions()
@@ -2621,6 +2748,8 @@ class TelegramBot:
 
     async def _handle_stop_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /stop command — stop the last active session."""
+        if not await self._authorize(update):
+            return
         name = self.registry.last_active_session
         if not name:
             await update.message.reply_text("No active session to stop.")
@@ -2643,6 +2772,8 @@ class TelegramBot:
         the next thing" surgical tool: the current prompt keeps running,
         the queue empties.
         """
+        if not await self._authorize(update):
+            return
         name = self.registry.last_active_session
         if not name:
             await update.message.reply_text(
@@ -2672,6 +2803,8 @@ class TelegramBot:
 
     async def _handle_kill_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /kill <label> — destroy a session entirely."""
+        if not await self._authorize(update):
+            return
         text = update.message.text.strip()
         parts = text.split(maxsplit=1)
         if len(parts) < 2:
@@ -2763,6 +2896,8 @@ class TelegramBot:
         ``--dangerously-skip-permissions`` (e.g. ``/new !dev fix the bug``).
         Without the prefix, claude runs with its default safety checks.
         """
+        if not await self._authorize(update):
+            return
         text = update.message.text.strip()
         parts = text.split(maxsplit=2)  # /new <name> [prompt...]
         if len(parts) < 2:
@@ -2896,6 +3031,8 @@ class TelegramBot:
 
     async def _handle_message(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle text messages — replies to notifications or /<label> commands."""
+        if not await self._authorize(update):
+            return
         text = update.message.text.strip()
         if not text:
             return
@@ -3062,6 +3199,8 @@ class TelegramBot:
         transcript (so the user can verify what we heard) and inject it
         into the active session like any other text prompt.
         """
+        if not await self._authorize(update):
+            return
         msg = update.message
         if not msg.voice:
             return
@@ -3210,6 +3349,8 @@ class TelegramBot:
 
     async def _handle_file(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle photo/document messages — download file and inject prompt."""
+        if not await self._authorize(update):
+            return
         msg = update.message
 
         # Up-front size check — Telegram's bot API tops out at 20 MB on
