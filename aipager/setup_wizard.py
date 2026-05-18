@@ -160,29 +160,75 @@ def _test_send(token: str, chat_id: int) -> tuple[bool, str]:
     return True, ""
 
 
-def _fetch_chat_id(token: str) -> tuple[int | None, str | None, str | None]:
+def _fetch_id_from_updates(
+    token: str, *, want: str,
+) -> tuple[int | None, str | None, str | None]:
+    """Poll ``getUpdates`` for the most recent matching id.
+
+    ``want`` selects what we're looking for:
+      - ``"dm"``    — most recent private (DM) chat id.
+      - ``"group"`` — most recent group / supergroup chat id.
+      - ``"user"``  — most recent ``from.user.id`` (any chat); useful
+                       for capturing a new team member's Telegram id.
+
+    Returns ``(id, friendly_name, advisory)`` where ``advisory`` is a
+    user-facing hint when the wrong kind of update was seen (so the
+    wizard can nudge them in the right direction).
+    """
     body, _code, _err = _http_json(
         f"https://api.telegram.org/bot{token}/getUpdates"
     )
     if not body or not body.get("ok"):
         return None, None, None
-    saw_non_private: list[str] = []
+
+    saw_other: list[str] = []
     for u in body.get("result", []):
         msg = u.get("message") or u.get("edited_message") or {}
         chat = msg.get("chat") or {}
+        sender = msg.get("from") or {}
         cid = chat.get("id")
         ctype = chat.get("type")
         if cid is None:
             continue
-        if ctype == "private":
-            who = chat.get("username") or chat.get("first_name", "")
-            return int(cid), who, None
-        saw_non_private.append(ctype or "?")
-    if saw_non_private:
-        return (None, None,
-                f"Saw activity in non-private chat(s): {', '.join(sorted(set(saw_non_private)))}. "
-                "Please DM the bot directly (1-on-1), not in a group.")
+
+        if want == "dm":
+            if ctype == "private":
+                who = chat.get("username") or chat.get("first_name", "")
+                return int(cid), who, None
+            saw_other.append(ctype or "?")
+        elif want == "group":
+            if ctype in ("group", "supergroup"):
+                who = chat.get("title", "")
+                return int(cid), who, None
+            saw_other.append(ctype or "?")
+        elif want == "user":
+            uid = sender.get("id")
+            if uid is not None:
+                who = sender.get("username") or sender.get("first_name", "")
+                return int(uid), who, None
+
+    if saw_other:
+        if want == "dm":
+            advisory = (
+                f"Saw activity in non-private chat(s): "
+                f"{', '.join(sorted(set(saw_other)))}. "
+                "Please DM the bot directly (1-on-1), not in a group."
+            )
+        elif want == "group":
+            advisory = (
+                f"Saw activity in {', '.join(sorted(set(saw_other)))}, "
+                "but no group. Add the bot to the group and send /start "
+                "there."
+            )
+        else:
+            advisory = None
+        return None, None, advisory
     return None, None, None
+
+
+def _fetch_chat_id(token: str) -> tuple[int | None, str | None, str | None]:
+    """Backwards-compatible wrapper — DM (private chat) lookup."""
+    return _fetch_id_from_updates(token, want="dm")
 
 
 def _spin(message: str):
@@ -203,8 +249,8 @@ class _NullCtx:
 
 # ----- steps -----
 
-def _step_token() -> tuple[str, str]:
-    step("[1/5]  Telegram bot")
+def _step_token(step_label: str = "[1/5]") -> tuple[str, str]:
+    step(f"{step_label}  Telegram bot")
     hint("Get a token from @BotFather (https://t.me/BotFather)")
     while True:
         raw = _ask(questionary.text(
@@ -226,20 +272,49 @@ def _step_token() -> tuple[str, str]:
         return token, username
 
 
-def _step_chat_id(token: str, bot_username: str) -> int:
-    step("[2/5]  Your chat ID")
+def _step_chat_id(
+    token: str, bot_username: str,
+    *, mode: str = "personal", step_label: str = "[2/5]",
+) -> int:
+    """Capture the chat ID (DM for personal mode, group for team mode).
+
+    ``mode`` decides the auto-detect target and the prompt copy:
+      - ``"personal"`` — looks for a private chat; nudges the user
+        to DM the bot.
+      - ``"team"`` — looks for a group / supergroup; nudges the user
+        to add the bot to a group and send /start there.
+
+    ``step_label`` is the wizard's progress prefix (e.g. ``[3/7]``)
+    so the caller can keep step numbers consistent regardless of mode.
+    """
+    if mode == "team":
+        step(f"{step_label}  Group chat ID")
+        auto_label = "Auto-detect (I'll add bot to the group + /start)"
+        manual_label = "Paste group chat id (negative integer)"
+        spinner_msg = "Checking for the group's /start…"
+        detect_hint = (
+            f"Add @{bot_username} to your group, then send /start there."
+        )
+    else:
+        step(f"{step_label}  Your chat ID")
+        auto_label = "Auto-detect (I'll DM the bot first)"
+        manual_label = "Paste manually"
+        spinner_msg = "Checking for your DM…"
+        detect_hint = (
+            f"DM the bot here, then continue: https://t.me/{bot_username}"
+        )
+
     while True:
-        mode = _ask(questionary.select(
-            "How should we find your chat id?",
+        method = _ask(questionary.select(
+            "How should we find the chat id?",
             choices=[
-                questionary.Choice("Auto-detect (I'll DM the bot first)",
-                                   value="auto"),
-                questionary.Choice("Paste manually", value="manual"),
+                questionary.Choice(auto_label, value="auto"),
+                questionary.Choice(manual_label, value="manual"),
             ],
             qmark="?",
             style=_PROMPT_STYLE,
         ))
-        if mode == "manual":
+        if method == "manual":
             raw = _ask(questionary.text(
                 "Chat id (integer):", qmark="?", style=_PROMPT_STYLE,
             )).strip()
@@ -248,25 +323,33 @@ def _step_chat_id(token: str, bot_username: str) -> int:
             except ValueError:
                 err_console.print("  [err]not a number[/err]")
                 continue
+            if mode == "team" and cid >= 0:
+                err_console.print(
+                    "  [err]Group IDs are negative integers. Try again.[/err]",
+                )
+                continue
         else:
-            hint(f"DM the bot here, then continue: https://t.me/{bot_username}")
+            hint(detect_hint)
             _ask(questionary.confirm(
-                "I've sent the bot a message in Telegram — continue?",
+                "Sent — continue?",
                 default=True, qmark="?", style=_PROMPT_STYLE,
             ))
-            with _spin("Checking for your DM…"):
-                found_id, who, advisory = _fetch_chat_id(token)
+            with _spin(spinner_msg):
+                found_id, who, advisory = _fetch_id_from_updates(
+                    token, want=("group" if mode == "team" else "dm"),
+                )
             if found_id is None:
                 if advisory:
                     err_console.print(f"  [err]{advisory}[/err]")
                 else:
+                    target = "group /start" if mode == "team" else "DM"
                     err_console.print(
-                        "  [err]No DM detected — send any message to the bot in "
-                        "Telegram, then retry.[/err]"
+                        f"  [err]No {target} detected — try again.[/err]"
                     )
                 continue
             cid = found_id
-            ok(f"Detected chat_id={cid} (@{who})")
+            who_label = f"@{who}" if who else "(no title/handle)"
+            ok(f"Detected chat_id={cid} {who_label}")
 
         with _spin("Sending a test message…"):
             sent, err = _test_send(token, cid)
@@ -301,11 +384,11 @@ def _step_chat_id(token: str, bot_username: str) -> int:
         err_console.print(f"  [err]Test send failed: {err}[/err]")
 
 
-def _step_deps() -> bool:
+def _step_deps(step_label: str = "[3/5]") -> bool:
     """Returns True if all required deps are present."""
     from rich.table import Table
 
-    step("[3/5]  System dependencies")
+    step(f"{step_label}  System dependencies")
 
     dtach_p: str | None = None
     try:
@@ -395,8 +478,8 @@ def _merge_hooks(settings: dict) -> None:
     settings["statusLine"] = {"type": "command", "command": statusline_path}
 
 
-def _step_settings() -> None:
-    step("[4/5]  Claude Code integration")
+def _step_settings(step_label: str = "[4/5]") -> None:
+    step(f"{step_label}  Claude Code integration")
     settings: dict = {}
     existing_text = ""
     if CLAUDE_SETTINGS.exists():
@@ -439,8 +522,8 @@ def _step_settings() -> None:
     ok(f"Patched {CLAUDE_SETTINGS} ({len(HOOK_EVENTS)} hooks + statusLine)")
 
 
-def _step_write_env(token: str, chat_id: int) -> None:
-    step("[5/5]  Write config")
+def _step_write_env(token: str, chat_id: int, step_label: str = "[5/5]") -> None:
+    step(f"{step_label}  Write config")
     try:
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     except OSError as e:
@@ -502,22 +585,15 @@ def _completion_screen() -> None:
         console.print("  Health check:        aipager doctor")
 
 
-def _step_team_config() -> bool:
-    """Ask whether the user wants team mode and, if so, write team.yaml.
+def _step_pick_mode(step_label: str = "[2/N]") -> str:
+    """Ask Personal vs Team. Returns ``"personal"`` or ``"team"``.
 
-    Returns True iff team mode was configured. Skipped silently
-    (returns False) when the user picks Personal.
-
-    Team mode in this wizard step:
-    - shows a hard-stop warning panel naming the trust expansion
-    - takes the group chat ID
-    - takes one or more users (Telegram user ID + label + role)
-    - optionally enables a default ``deny_tools: [Write, Edit]`` rule
-    - writes ``~/.config/aipager/team.yaml`` with mode 0600
+    Picking Team triggers the trust-warning panel and a hard-stop
+    confirm; declining the confirm collapses back to Personal.
     """
-    step("[6/6]  Personal or Team mode")
+    step(f"{step_label}  Personal or Team")
 
-    mode = _ask(questionary.select(
+    pick = _ask(questionary.select(
         "How will you use aipager?",
         choices=[
             questionary.Choice("Personal (1:1 DM with the bot — recommended)",
@@ -529,11 +605,24 @@ def _step_team_config() -> bool:
         qmark="?", style=_PROMPT_STYLE,
     ))
 
-    if mode == "personal":
+    if pick == "personal":
         ok("Personal mode — no team.yaml needed.")
-        return False
+        return "personal"
 
-    # ----- Team mode: hard-stop warning panel ----------------------------
+    _show_team_warning_panel()
+    proceed = _ask(questionary.confirm(
+        "Continue with team-mode setup?",
+        default=False, qmark="?", style=_PROMPT_STYLE,
+    ))
+    if not proceed:
+        friendly_warn("Team setup cancelled. Falling back to personal mode.")
+        return "personal"
+    return "team"
+
+
+def _show_team_warning_panel() -> None:
+    """The "you're handing out shell access" panel. Shown before
+    every Team mode commit (first-run AND Switch-to-Team edit)."""
     from rich.panel import Panel
     warning_body = (
         "[warn]⚠️  Team mode grants every allow-listed user the ability to:[/warn]\n\n"
@@ -554,35 +643,21 @@ def _step_team_config() -> bool:
         console.print(warning_body)
     console.print()
 
-    proceed = _ask(questionary.confirm(
-        "Continue with team-mode setup?",
-        default=False, qmark="?", style=_PROMPT_STYLE,
-    ))
-    if not proceed:
-        friendly_warn("Team setup cancelled. Personal mode is active.")
-        return False
 
-    # ----- Group ID ------------------------------------------------------
-    hint(
-        "Find your group ID by adding the bot to the group, sending /start "
-        "there, then hitting "
-        "https://api.telegram.org/bot<TOKEN>/getUpdates (the chat.id field).",
-    )
-    while True:
-        raw = _ask(questionary.text(
-            "Group chat ID (negative integer, e.g. -100123456789):",
-            qmark="?", style=_PROMPT_STYLE,
-        ))
-        try:
-            group_id = int(raw.strip())
-            if group_id >= 0:
-                friendly_warn("Group IDs are negative. Try again.")
-                continue
-            break
-        except ValueError:
-            friendly_warn("Not a valid integer. Try again.")
+def _collect_users(existing_ids: set[int] | None = None,
+                   existing_labels: set[str] | None = None) -> list[dict]:
+    """Interactive loop: prompt for label / Telegram id / role, repeat
+    until the user says stop. Returns a list of ``{id, label, role}``
+    dicts ready to feed into a :class:`team.Team`.
 
-    # ----- Users ---------------------------------------------------------
+    ``existing_ids`` / ``existing_labels`` are for the edit flow when
+    we're appending to an existing team — duplicate-detection then
+    spans both the new entries and the prior ones.
+    """
+    existing_ids = set(existing_ids or ())
+    existing_labels = set(existing_labels or ())
+    users: list[dict] = []
+
     console.print()
     console.print("Add allowed users (Telegram user IDs).")
     console.print(
@@ -598,7 +673,6 @@ def _step_team_config() -> bool:
         "[muted]    read_only   /status only; messages otherwise ignored[/muted]"
     )
 
-    users: list[dict] = []
     while True:
         idx = len(users) + 1
         label = _ask(questionary.text(
@@ -608,6 +682,10 @@ def _step_team_config() -> bool:
         if not label:
             friendly_warn("Label must be non-empty.")
             continue
+        if label in existing_labels or any(u["label"] == label for u in users):
+            friendly_warn(f"Label {label!r} already in use.")
+            continue
+
         uid_raw = _ask(questionary.text(
             f"User #{idx} Telegram user ID:",
             qmark="?", style=_PROMPT_STYLE,
@@ -617,9 +695,10 @@ def _step_team_config() -> bool:
         except ValueError:
             friendly_warn("Not a valid integer.")
             continue
-        if any(u["id"] == uid for u in users):
+        if uid in existing_ids or any(u["id"] == uid for u in users):
             friendly_warn(f"User ID {uid} already added.")
             continue
+
         role = _ask(questionary.select(
             f"User #{idx} role:",
             choices=["admin", "developer", "read_only"],
@@ -634,14 +713,12 @@ def _step_team_config() -> bool:
         if not more:
             break
 
-    if not any(u["role"] == "admin" for u in users):
-        friendly_warn(
-            "No admin user added. You'll need to hand-edit team.yaml to "
-            "promote one — admin is the only role that can bypass "
-            "deny_tools rules.",
-        )
+    return users
 
-    # ----- Deny rules ----------------------------------------------------
+
+def _collect_deny_tools() -> list[str]:
+    """Ask whether to enable the default deny rule. Returns the list
+    of tool names to put in ``rules.deny_tools`` (possibly empty)."""
     console.print()
     console.print("[title]Optional safety rule[/title]")
     console.print(
@@ -652,44 +729,115 @@ def _step_team_config() -> bool:
         "Enable default deny_tools = [Write, Edit]?",
         default=True, qmark="?", style=_PROMPT_STYLE,
     ))
-    deny_tools = ["Write", "Edit"] if enable_default_deny else []
+    return ["Write", "Edit"] if enable_default_deny else []
 
-    # ----- Write file ----------------------------------------------------
-    import yaml as _yaml  # local import — pyyaml is a project dep
 
-    data: dict = {
-        "mode": "team",
-        "group_id": group_id,
-        "users": users,
+def _step_team_setup(group_id: int, step_label: str = "[4/N]") -> None:
+    """Collect users + rules, write team.yaml.
+
+    Assumes mode was already picked (via :func:`_step_pick_mode`) and
+    the group ID is in hand (via :func:`_step_chat_id` with
+    ``mode="team"``). Writes ``~/.config/aipager/team.yaml`` via
+    :func:`team.dump_team`.
+    """
+    from aipager.team import Role, Team, User as TeamUser, dump_team
+
+    step(f"{step_label}  Team allow-list")
+
+    users_data = _collect_users()
+    if not any(u["role"] == "admin" for u in users_data):
+        friendly_warn(
+            "No admin user added. You'll need to promote one (re-run "
+            "`aipager config` → Change a user's role) before "
+            "deny_tools rules can be bypassed.",
+        )
+
+    deny_tools = _collect_deny_tools()
+
+    users = {
+        u["id"]: TeamUser(id=u["id"], label=u["label"], role=Role(u["role"]))
+        for u in users_data
     }
-    if deny_tools:
-        data["rules"] = {"deny_tools": deny_tools}
+    from aipager.team import Rules as TeamRules
+    new_team = Team(
+        group_id=group_id,
+        users=users,
+        rules=TeamRules(deny_tools=tuple(deny_tools)),
+    )
 
     try:
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        TEAM_YAML.write_text(
-            "# aipager team mode — managed by `aipager config`.\n"
-            "# Edit by hand to add / remove users. Restart the daemon\n"
-            "# after changes (`aipager service restart` or kill + start).\n"
-            + _yaml.safe_dump(data, sort_keys=False, default_flow_style=False)
-        )
-        os.chmod(TEAM_YAML, 0o600)
+        dump_team(new_team, TEAM_YAML)
     except OSError as e:
         raise OSError(f"cannot write {TEAM_YAML}: {e}") from e
-
     ok(f"Wrote {TEAM_YAML}")
+
+
+def _step_team_config() -> bool:
+    """Backwards-compatible wrapper. Returns True iff team mode was
+    written. Used by the legacy linear flow when team mode was tacked
+    onto the end; new flows call :func:`_step_pick_mode` + (later)
+    :func:`_step_team_setup` directly.
+    """
+    if _step_pick_mode("[6/6]") == "personal":
+        return False
+    # The group_id was never captured in the legacy flow — fall back
+    # to a manual prompt for backwards compatibility.
+    while True:
+        raw = _ask(questionary.text(
+            "Group chat ID (negative integer, e.g. -100123456789):",
+            qmark="?", style=_PROMPT_STYLE,
+        ))
+        try:
+            group_id = int(raw.strip())
+            if group_id >= 0:
+                friendly_warn("Group IDs are negative. Try again.")
+                continue
+            break
+        except ValueError:
+            friendly_warn("Not a valid integer. Try again.")
+    _step_team_setup(group_id, step_label="[6/6]")
     return True
 
 
-def run() -> int:
+def _first_run_flow() -> int:
+    """Walk a brand-new install through token → mode → chat → (team
+    users + rules if team) → deps → settings → write.
+
+    Mode is picked BEFORE chat-id so the chat-id prompt asks for a
+    group id (team) or a DM id (personal) accordingly — no double
+    prompting like the legacy [6/6]-tacked-on flow had.
+    """
     if console.is_terminal:
         rule("aipager setup")
     else:
         console.print("Welcome to aipager setup.")
+
     try:
-        token, bot_username = _step_token()
-        chat_id = _step_chat_id(token, bot_username)
-        deps_ok = _step_deps()
+        # Mode determines total step count and the chat-id step's
+        # prompt copy. Token always comes first because we need it to
+        # auto-detect chat ids.
+        token, bot_username = _step_token(step_label="[1/?]")
+        wizard_mode = _step_pick_mode(step_label="[2/?]")
+
+        total = 7 if wizard_mode == "team" else 6
+        # Re-label step 1 retroactively isn't possible in a streaming
+        # CLI; we just use the right total from step 3 onwards.
+        chat_id = _step_chat_id(
+            token, bot_username,
+            mode=wizard_mode, step_label=f"[3/{total}]",
+        )
+
+        if wizard_mode == "team":
+            _step_team_setup(chat_id, step_label=f"[4/{total}]")
+            deps_step = f"[5/{total}]"
+            settings_step = f"[6/{total}]"
+            write_step = f"[7/{total}]"
+        else:
+            deps_step = f"[4/{total}]"
+            settings_step = f"[5/{total}]"
+            write_step = f"[6/{total}]"
+
+        deps_ok = _step_deps(step_label=deps_step)
         if not deps_ok:
             cont = _ask(questionary.confirm(
                 "Continue anyway? (the daemon will likely fail until you "
@@ -702,9 +850,8 @@ def run() -> int:
                     "re-run `aipager config`.",
                 )
                 return 2
-        _step_settings()
-        _step_write_env(token, chat_id)
-        _step_team_config()
+        _step_settings(step_label=settings_step)
+        _step_write_env(token, chat_id, step_label=write_step)
     except KeyboardInterrupt:
         friendly_warn("Cancelled.")
         return 130
@@ -716,6 +863,17 @@ def run() -> int:
         return 1
     _completion_screen()
     return 0
+
+
+def run() -> int:
+    """Entry point for ``aipager config``.
+
+    For now this just dispatches to the first-run flow. The
+    existing-config edit menu is added in a follow-up commit; until
+    then re-running `aipager config` walks the full first-run wizard
+    again (which preserves the prior behaviour of overwriting).
+    """
+    return _first_run_flow()
 
 
 def main() -> None:
