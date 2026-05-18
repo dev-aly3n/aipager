@@ -865,15 +865,471 @@ def _first_run_flow() -> int:
     return 0
 
 
+def _read_env_file() -> tuple[str, str]:
+    """Return ``(token, chat_id)`` from CONFIG_ENV, or ``("", "")``
+    if the file is missing or malformed."""
+    if not CONFIG_ENV.exists():
+        return "", ""
+    token = ""
+    chat_id = ""
+    try:
+        for line in CONFIG_ENV.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            k = k.strip()
+            v = v.strip().strip("\"'")
+            if k == "CLAUDE_TG_BOT_TOKEN":
+                token = v
+            elif k == "CLAUDE_TG_CHAT_ID":
+                chat_id = v
+    except OSError:
+        return "", ""
+    return token, chat_id
+
+
+def _write_env_file(token: str, chat_id: int | str) -> None:
+    """Overwrite CONFIG_ENV (mode 0600)."""
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    CONFIG_ENV.write_text(
+        f"CLAUDE_TG_BOT_TOKEN={token}\nCLAUDE_TG_CHAT_ID={chat_id}\n"
+    )
+    try:
+        os.chmod(CONFIG_ENV, 0o600)
+    except OSError:
+        pass
+
+
+def _detect_daemon_running() -> int | None:
+    """Probe ``/tmp/aipager.sock`` and return the daemon's PID if
+    we can find one, ``None`` otherwise. Used for the post-edit hint
+    ("daemon needs a restart")."""
+    import socket as _socket
+    p = "/tmp/aipager.sock"
+    try:
+        s = _socket.socket(_socket.AF_UNIX, _socket.SOCK_DGRAM)
+        s.settimeout(0.3)
+        s.sendto(b'{"event":"_wizard_probe"}', p)
+        s.close()
+    except (FileNotFoundError, ConnectionRefusedError, OSError):
+        return None
+    # Best-effort PID lookup via pgrep
+    import shutil as _shutil
+    import subprocess as _subprocess
+    if _shutil.which("pgrep"):
+        try:
+            r = _subprocess.run(
+                ["pgrep", "-f", "aipager start"],
+                capture_output=True, text=True, timeout=2,
+            )
+            if r.returncode == 0:
+                first = r.stdout.strip().split("\n", 1)[0]
+                if first.isdigit():
+                    return int(first)
+        except (OSError, _subprocess.TimeoutExpired):
+            pass
+    return -1  # daemon up, PID unknown
+
+
+def _restart_hint() -> None:
+    """Print a one-line reminder that the daemon must be restarted
+    for config changes to take effect."""
+    pid = _detect_daemon_running()
+    if pid is None:
+        # Daemon not running — nothing to restart.
+        return
+    console.print()
+    console.print(
+        "[warn]⚠[/warn]  [warn]Restart the daemon to apply this change:[/warn]"
+    )
+    console.print(
+        "    [path]aipager service restart[/path]"
+        "  [muted](or kill the foreground daemon and re-run `aipager start`)[/muted]"
+    )
+
+
+def _show_current_config() -> None:
+    """Print a panel summarizing config.env + team.yaml + daemon state."""
+    from rich.panel import Panel
+    from aipager.team import TEAM_CONFIG_PATH, TeamConfigError, load_team
+
+    token, chat_id = _read_env_file()
+    try:
+        team = load_team(TEAM_CONFIG_PATH)
+        team_err: str | None = None
+    except TeamConfigError as e:
+        team = None
+        team_err = str(e)
+
+    lines: list[str] = []
+    if team is not None:
+        lines.append("[title]Mode:[/title]   Team")
+        lines.append(f"[title]Chat:[/title]   {chat_id}  ([path]group[/path])")
+        lines.append(
+            f"[title]Users:[/title]  {len(team.users)} "
+            f"({team.admin_count()} admin)"
+        )
+        for u in team.users.values():
+            lines.append(f"          • [path]{u.label}[/path] — {u.role.value}")
+        deny = list(team.rules.deny_tools)
+        rules_repr = f"deny_tools = {deny}" if deny else "(none)"
+        lines.append(f"[title]Rules:[/title]  {rules_repr}")
+    elif team_err:
+        lines.append("[title]Mode:[/title]   [err]team.yaml malformed[/err]")
+        lines.append(f"          [err]{team_err}[/err]")
+        lines.append(f"[title]Chat:[/title]   {chat_id}")
+    else:
+        lines.append("[title]Mode:[/title]   Personal")
+        lines.append(f"[title]Chat:[/title]   {chat_id}")
+
+    if token:
+        lines.append(f"[title]Token:[/title]  {token[:10]}…")
+    else:
+        lines.append("[title]Token:[/title]  [err]missing[/err]")
+
+    daemon_pid = _detect_daemon_running()
+    if daemon_pid is None:
+        lines.append("[title]Daemon:[/title] [muted]not running[/muted]")
+    elif daemon_pid > 0:
+        lines.append(f"[title]Daemon:[/title] up (PID {daemon_pid})")
+    else:
+        lines.append("[title]Daemon:[/title] up")
+
+    body = "\n".join(lines)
+    if console.is_terminal:
+        console.print()
+        console.print(Panel(body, title="Current config", border_style="step",
+                            expand=False, padding=(0, 1)))
+    else:
+        console.print("\nCurrent config:")
+        console.print(body)
+
+
+def _edit_add_user(team) -> "object | None":
+    """Returns the new Team after add, or None if the user cancelled."""
+    from aipager.team import Role, User as TeamUser, dump_team
+
+    existing_ids = set(team.users.keys())
+    existing_labels = {u.label for u in team.users.values()}
+    new_entries = _collect_users(
+        existing_ids=existing_ids, existing_labels=existing_labels,
+    )
+    if not new_entries:
+        return None
+    new_team = team
+    for u in new_entries:
+        new_team = new_team.with_user(
+            TeamUser(id=u["id"], label=u["label"], role=Role(u["role"])),
+        )
+    confirm = _ask(questionary.confirm(
+        f"Add {len(new_entries)} user(s) to team.yaml?",
+        default=True, qmark="?", style=_PROMPT_STYLE,
+    ))
+    if not confirm:
+        friendly_warn("Cancelled.")
+        return None
+    dump_team(new_team)
+    ok(f"Added {len(new_entries)} user(s).")
+    return new_team
+
+
+def _edit_remove_user(team) -> "object | None":
+    from aipager.team import dump_team
+    from aipager.team import Role
+
+    if not team.users:
+        friendly_warn("No users to remove.")
+        return None
+    choices = [
+        questionary.Choice(f"{u.label} — {u.role.value}", value=u.id)
+        for u in team.users.values()
+    ]
+    choices.append(questionary.Choice("Cancel", value=None))
+    pick = _ask(questionary.select(
+        "Remove which user?",
+        choices=choices, qmark="?", style=_PROMPT_STYLE,
+    ))
+    if pick is None:
+        return None
+    target = team.users[pick]
+    # Refuse to leave the team without an admin.
+    if (target.role == Role.ADMIN and team.admin_count() == 1):
+        friendly_warn(
+            f"{target.label} is the only admin — promote another member "
+            "first, then come back to remove them.",
+        )
+        return None
+    confirm = _ask(questionary.confirm(
+        f"Remove {target.label} ({target.role.value})?",
+        default=False, qmark="?", style=_PROMPT_STYLE,
+    ))
+    if not confirm:
+        return None
+    new_team = team.without_user(pick)
+    dump_team(new_team)
+    ok(f"Removed {target.label}.")
+    return new_team
+
+
+def _edit_change_role(team) -> "object | None":
+    from aipager.team import Role, dump_team
+
+    if not team.users:
+        friendly_warn("No users to update.")
+        return None
+    choices = [
+        questionary.Choice(f"{u.label} — currently {u.role.value}", value=u.id)
+        for u in team.users.values()
+    ]
+    choices.append(questionary.Choice("Cancel", value=None))
+    pick = _ask(questionary.select(
+        "Change which user's role?",
+        choices=choices, qmark="?", style=_PROMPT_STYLE,
+    ))
+    if pick is None:
+        return None
+    current = team.users[pick]
+    new_role_str = _ask(questionary.select(
+        f"New role for {current.label} (was {current.role.value}):",
+        choices=["admin", "developer", "read_only"],
+        qmark="?", style=_PROMPT_STYLE,
+    ))
+    new_role = Role(new_role_str)
+    if new_role == current.role:
+        friendly_warn("No change.")
+        return None
+    # Refuse to demote the only admin.
+    if (current.role == Role.ADMIN and new_role != Role.ADMIN
+            and team.admin_count() == 1):
+        friendly_warn(
+            f"{current.label} is the only admin — promote another member "
+            "first.",
+        )
+        return None
+    new_team = team.with_role(pick, new_role)
+    dump_team(new_team)
+    ok(f"{current.label}: {current.role.value} → {new_role.value}")
+    return new_team
+
+
+_COMMON_TOOLS = (
+    "Bash", "Write", "Edit", "WebFetch", "Read", "Glob", "Grep", "Task",
+)
+
+
+def _edit_deny_tools(team) -> "object | None":
+    from aipager.team import dump_team
+
+    current = set(team.rules.deny_tools)
+    choices = [
+        questionary.Choice(
+            t, value=t, checked=(t in current),
+        ) for t in _COMMON_TOOLS
+    ]
+    picked = _ask(questionary.checkbox(
+        "Toggle deny_tools (space to select, Enter to confirm):",
+        choices=choices, qmark="?", style=_PROMPT_STYLE,
+    ))
+    extras_raw = _ask(questionary.text(
+        "Other tools to deny (comma-separated, leave blank for none):",
+        default=", ".join(sorted(current - set(_COMMON_TOOLS))),
+        qmark="?", style=_PROMPT_STYLE,
+    )).strip()
+    extras = [t.strip() for t in extras_raw.split(",") if t.strip()]
+    new_tools = sorted(set(picked) | set(extras))
+
+    if tuple(new_tools) == team.rules.deny_tools:
+        friendly_warn("No change.")
+        return None
+    new_team = team.with_deny_tools(new_tools)
+    dump_team(new_team)
+    ok(f"deny_tools = {new_tools or '(none)'}")
+    return new_team
+
+
+def _edit_refresh_token() -> bool:
+    """Re-prompt for token, verify, rewrite config.env. Returns True
+    iff the token was updated."""
+    step("[~]  Refresh bot token")
+    _, chat_id = _read_env_file()
+    while True:
+        raw = _ask(questionary.text(
+            "Paste your bot token:",
+            qmark="?", style=_PROMPT_STYLE,
+        ))
+        token = _normalize_token(raw)
+        if not token:
+            friendly_warn("Empty — try again or Ctrl-C to cancel.")
+            continue
+        info = _verify_token(token)
+        if info is None:
+            friendly_warn("Telegram rejected the token. Try again or Ctrl-C.")
+            continue
+        _write_env_file(token, chat_id)
+        ok(f"Wrote new token for @{info.get('username', '?')}.")
+        return True
+
+
+def _edit_switch_to_personal(team) -> bool:
+    """Archive team.yaml. Returns True iff the switch happened."""
+    from aipager.team import TEAM_CONFIG_PATH, archive_team
+
+    console.print()
+    console.print(
+        "[warn]⚠[/warn]  Switching to personal mode will archive "
+        "[path]team.yaml[/path] as a timestamped backup.",
+    )
+    confirm = _ask(questionary.confirm(
+        f"Archive {team.users and f'{len(team.users)} users + ' or ''}rules "
+        "and run as a 1:1 DM bot?",
+        default=False, qmark="?", style=_PROMPT_STYLE,
+    ))
+    if not confirm:
+        return False
+    backup = archive_team(TEAM_CONFIG_PATH)
+    if backup is None:
+        friendly_warn("No team.yaml found — nothing to archive.")
+        return False
+    ok(f"Archived team.yaml → {backup.name}")
+
+    # Offer to update CHAT_ID — it's almost certainly still the group id.
+    _token, current_chat_id = _read_env_file()
+    update_chat = _ask(questionary.confirm(
+        f"Current CHAT_ID is {current_chat_id} (the group id). "
+        "Update it to a DM chat id now?",
+        default=True, qmark="?", style=_PROMPT_STYLE,
+    ))
+    if update_chat:
+        token = _token
+        info = _verify_token(token) if token else None
+        bot_username = (info or {}).get("username", "your_bot")
+        new_chat = _step_chat_id(
+            token, bot_username, mode="personal", step_label="[~]",
+        )
+        _write_env_file(token, new_chat)
+        ok(f"Wrote CHAT_ID={new_chat} (DM).")
+    return True
+
+
+def _edit_switch_to_team() -> bool:
+    """Run the team setup against the existing token. Returns True
+    iff team.yaml was written."""
+    token, _ = _read_env_file()
+    if not token:
+        friendly_warn("No token in config.env — run full setup first.")
+        return False
+    info = _verify_token(token)
+    bot_username = (info or {}).get("username", "your_bot")
+
+    _show_team_warning_panel()
+    proceed = _ask(questionary.confirm(
+        "Continue with team-mode setup?",
+        default=False, qmark="?", style=_PROMPT_STYLE,
+    ))
+    if not proceed:
+        return False
+
+    group_id = _step_chat_id(token, bot_username, mode="team",
+                             step_label="[~]")
+    _step_team_setup(group_id, step_label="[~]")
+    # CHAT_ID in config.env should now be the group id for the daemon
+    # to filter correctly.
+    _write_env_file(token, group_id)
+    ok(f"Wrote CHAT_ID={group_id} (group).")
+    return True
+
+
+def _edit_flow() -> int:
+    """Show the current-config panel and offer a menu of edits.
+
+    Loops until the user picks Exit (or selects "Run full setup",
+    which delegates back to :func:`_first_run_flow`).
+    """
+    from aipager.team import TEAM_CONFIG_PATH, TeamConfigError, load_team
+
+    rule("aipager config")
+    while True:
+        _show_current_config()
+
+        try:
+            team = load_team(TEAM_CONFIG_PATH)
+        except TeamConfigError:
+            team = None  # malformed; only show "run full setup" action
+
+        if team is not None:
+            choices = [
+                questionary.Choice("Add a user", value="add"),
+                questionary.Choice("Remove a user", value="remove"),
+                questionary.Choice("Change a user's role", value="role"),
+                questionary.Choice("Edit deny_tools rules", value="rules"),
+                questionary.Choice("Switch to Personal mode", value="to_personal"),
+                questionary.Choice("Refresh bot token", value="refresh_token"),
+                questionary.Choice("Run full setup (overwrites everything)",
+                                   value="full"),
+                questionary.Choice("Exit", value="exit"),
+            ]
+        else:
+            choices = [
+                questionary.Choice("Switch to Team mode", value="to_team"),
+                questionary.Choice("Refresh bot token", value="refresh_token"),
+                questionary.Choice("Run full setup (overwrites everything)",
+                                   value="full"),
+                questionary.Choice("Exit", value="exit"),
+            ]
+
+        try:
+            choice = _ask(questionary.select(
+                "What would you like to do?",
+                choices=choices, qmark="?", style=_PROMPT_STYLE,
+            ))
+        except KeyboardInterrupt:
+            return 130
+
+        try:
+            changed = False
+            if choice == "exit":
+                return 0
+            if choice == "full":
+                return _first_run_flow()
+            if choice == "refresh_token":
+                changed = _edit_refresh_token()
+            elif choice == "to_personal" and team is not None:
+                changed = _edit_switch_to_personal(team)
+            elif choice == "to_team":
+                changed = _edit_switch_to_team()
+            elif team is not None and choice == "add":
+                changed = _edit_add_user(team) is not None
+            elif team is not None and choice == "remove":
+                changed = _edit_remove_user(team) is not None
+            elif team is not None and choice == "role":
+                changed = _edit_change_role(team) is not None
+            elif team is not None and choice == "rules":
+                changed = _edit_deny_tools(team) is not None
+        except KeyboardInterrupt:
+            friendly_warn("Cancelled this action.")
+            continue
+        except ValueError as e:
+            friendly_error(str(e))
+            continue
+        except OSError as e:
+            friendly_error(f"Write failed: {e}")
+            continue
+
+        if changed:
+            _restart_hint()
+
+
 def run() -> int:
     """Entry point for ``aipager config``.
 
-    For now this just dispatches to the first-run flow. The
-    existing-config edit menu is added in a follow-up commit; until
-    then re-running `aipager config` walks the full first-run wizard
-    again (which preserves the prior behaviour of overwriting).
+    - No config.env on disk → first-run wizard (full token + mode + chat
+      + team-or-not + deps + settings + write).
+    - config.env present → edit menu showing current state.
     """
-    return _first_run_flow()
+    if not CONFIG_ENV.exists():
+        return _first_run_flow()
+    return _edit_flow()
 
 
 def main() -> None:
