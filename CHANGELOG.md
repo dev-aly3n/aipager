@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Audit log on disk** at `~/.claude/aipager-audit.jsonl`. Every
+  Allow / Deny / Continue tap and every `AskUserQuestion` submit
+  appends one JSON record with ISO timestamp, session, action, tool,
+  and summary. Best-effort write — if the disk is full or the path
+  is unwritable the daemon logs at WARNING and keeps running. Pair
+  with the in-chat audit reply added in 0.3.x for a complete trail:
+  one record on disk, one message in chat per decision.
 - **Audit reply in chat after Allow / Deny.** When you tap Allow,
   Deny, Continue, or answer an `AskUserQuestion`, the bot now leaves
   a small reply threaded under the busy message:

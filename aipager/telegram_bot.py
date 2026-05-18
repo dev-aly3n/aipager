@@ -1874,6 +1874,12 @@ class TelegramBot:
                 sess.record_tool(collapsed, True)
 
                 # Audit reply (multi-select submit path)
+                from aipager import audit as audit_mod
+                audit_mod.append(
+                    session=sess.name, label=sess.label, action="Answered",
+                    tool="AskUserQuestion",
+                    summary=f"{question_text[:120]} → {verb[:80]}",
+                )
                 try:
                     await self._app.bot.send_message(
                         CHAT_ID,
@@ -1965,10 +1971,19 @@ class TelegramBot:
                 if perm.get("ask_question"):
                     audit_detail = perm["question"][:80]
                     collapsed = f"❓ {audit_detail[:40]} → {verb}"
+                    audit_tool_name = "AskUserQuestion"
                 else:
                     audit_detail = perm.get("tool_summary", "Permission")[:80]
                     collapsed = f"🔑 {audit_detail[:60]} → {verb}"
+                    audit_tool_name = (perm.get("tool_info") or {}).get("name", "")
                 sess.record_tool(collapsed, True)
+
+                # Persistent audit trail to disk (jsonl).
+                from aipager import audit as audit_mod
+                audit_mod.append(
+                    session=sess.name, label=sess.label, action=verb,
+                    tool=audit_tool_name, summary=audit_detail,
+                )
 
                 # Audit reply in chat — persistent record of the decision
                 # the user just made. Threaded under the busy message so
