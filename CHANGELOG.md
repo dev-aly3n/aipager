@@ -8,6 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Live cost delta in the busy message.** The "Working…" header
+  now appends `· 💰 $0.04` (and `(N agents)` if subagents fired this
+  turn) so you can see the cost of the *current* claude turn at a
+  glance, refreshed via the existing busy-message edit loop. Reset
+  on every BUSY transition so the number is "this turn", not
+  lifetime.
+- **Multi-session pinned status.** The pinned message at the top of
+  the Telegram chat now shows every live session, not just the most
+  recently active one. Top line = currently active (model · context%
+  · cost), additional lines list the others with their status
+  (idle/busy/waiting) so a power user with 3-5 sessions has a
+  proper dashboard pinned at all times.
+- **Subagent count rollup.** When a session spawned subagents this
+  turn, `(N agent)` / `(N agents)` is appended to the cost display
+  (busy message and IDLE summary). Helpful to spot expensive
+  delegation patterns. Claude doesn't expose per-subagent cost
+  breakdowns in the statusline payload, so we count subagents
+  instead — the cost itself already includes everything they did.
 - **Audit log on disk** at `~/.claude/aipager-audit.jsonl`. Every
   Allow / Deny / Continue tap and every `AskUserQuestion` submit
   appends one JSON record with ISO timestamp, session, action, tool,

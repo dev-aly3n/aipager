@@ -74,6 +74,14 @@ class TrackedSession:
     last_token_pct: int = 0          # cached context % for display
     last_output_tokens: int = 0      # output tokens THIS TURN (delta from baseline)
     output_baseline: int | None = None  # total_output_tokens at first statusLine read this cycle
+    # Cost tracking (item 4.6) — cumulative session cost from statusLine,
+    # plus a baseline captured at BUSY-start so the busy message can show
+    # "$ this turn" instead of lifetime cost.
+    last_cost_usd: float = 0.0
+    cost_baseline: float | None = None
+    # Subagent count THIS TURN (item 4.5) — increment per subagent_start,
+    # reset on BUSY transition.
+    subagent_count_this_turn: int = 0
     # Lines changed tracking (lazy baseline, same pattern as output tokens)
     lines_added_baseline: int | None = None
     lines_removed_baseline: int | None = None

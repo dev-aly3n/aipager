@@ -448,6 +448,14 @@ class HookReceiver:
             elif total_out < sess.output_baseline:
                 sess.output_baseline = total_out  # session restarted
             sess.last_output_tokens = max(0, total_out - sess.output_baseline)
+            # Cost (item 4.6): cumulative session-level cost from claude's
+            # statusLine. Same null-coalesce guard as ctx_pct.
+            cost_usd = float(msg.get("cost_usd") or 0)
+            sess.last_cost_usd = cost_usd
+            if sess.cost_baseline is None:
+                sess.cost_baseline = cost_usd
+            elif cost_usd < sess.cost_baseline:
+                sess.cost_baseline = cost_usd  # session restarted
             # Lines changed (lazy baseline, same pattern). Same null-coalesce
             # guard as ctx_pct above.
             lines_add = msg.get("lines_added") or 0

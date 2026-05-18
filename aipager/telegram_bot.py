@@ -596,16 +596,63 @@ class TelegramBot:
         except Exception:
             pass  # reaction API may not be available in all contexts
 
+    def _build_pinned_text(self, active_name: str) -> str:
+        """Compose the pinned-message text (item 4.3).
+
+        Top line is the currently-active session with full context;
+        remaining lines are other live sessions (status, model, cost)
+        so the user has an at-a-glance dashboard right at the top of
+        the chat. Limits to the active session if there are no other
+        live ones.
+        """
+        active = self.registry.get(active_name)
+        if not active:
+            return ""
+
+        def _state_word(sess: TrackedSession) -> str:
+            if sess.status == Status.BUSY:
+                return "busy"
+            if sess.status == Status.INTERACTIVE:
+                return "waiting"
+            if sess.status == Status.IDLE:
+                return "idle"
+            return ""
+
+        def _session_line(sess: TrackedSession, prefix: str) -> str:
+            parts = [f"<b>{html_mod.escape(sess.label)}</b>"]
+            if sess.model_name:
+                parts.append(html_mod.escape(sess.model_name))
+            state = _state_word(sess)
+            if state and sess.name != active_name:
+                parts.append(state)
+            if sess.last_token_pct:
+                parts.append(f"{int(sess.last_token_pct)}% ctx")
+            if sess.last_cost_usd > 0:
+                parts.append(f"${sess.last_cost_usd:.2f}")
+            return f"{prefix} {' · '.join(parts)}"
+
+        lines = [_session_line(active, "📌")]
+        # Other live sessions, alphabetical
+        others = sorted(
+            (s for s in self.registry.all_sessions().values()
+             if s.name != active_name and s.status != Status.GONE and s.label),
+            key=lambda s: s.label,
+        )
+        for s in others:
+            lines.append(_session_line(s, "  •"))
+        return "\n".join(lines)
+
     async def _maybe_update_bot_name(self, session_name: str) -> None:
-        """Update pinned status message to reflect the active session."""
+        """Update the pinned status message (compatibility alias).
+
+        Name kept for back-compat with the many call sites scattered
+        through the file. Behaviour now: builds a multi-line summary
+        of all live sessions with the named one as the header.
+        """
         if not self._app:
             return
-        sess = self.registry.get(session_name)
-        if not sess:
-            return
-        model = f" · {sess.model_name}" if sess.model_name else ""
-        text = f"📌 <b>{sess.label}</b>{model}"
-        if text == self._last_pinned_text:
+        text = self._build_pinned_text(session_name)
+        if not text or text == self._last_pinned_text:
             return  # skip redundant edit
         chat = int(CHAT_ID)
         try:
@@ -660,6 +707,16 @@ class TelegramBot:
             if secs >= 2:
                 elapsed = f" {secs}s"
         text = f"⚙️ <b>{html_mod.escape(label)}</b> · {html_mod.escape(verb)}…{elapsed}"
+        # Live cost delta this turn (item 4.6) + subagent count (item 4.5).
+        # Only shown when there's a positive delta — sessions that haven't
+        # cost anything yet don't get a misleading "$0.00".
+        if sess.cost_baseline is not None and sess.last_cost_usd > 0:
+            cost_delta = sess.last_cost_usd - sess.cost_baseline
+            if cost_delta > 0.001:
+                n_agents = sess.subagent_count_this_turn
+                plural = "" if n_agents == 1 else "s"
+                agent_note = (f" ({n_agents} agent{plural})" if n_agents > 0 else "")
+                text += f" · 💰 ${cost_delta:.2f}{agent_note}"
         # Show tool history — collapse old done tools if too many
         history = sess.tool_history
         max_visible = 15
@@ -939,6 +996,10 @@ class TelegramBot:
             sess.lines_removed_baseline = None
             sess.last_lines_added = 0
             sess.last_lines_removed = 0
+            # Cost + subagent count baselines (items 4.5, 4.6) — reset so
+            # busy-message numbers reflect THIS turn, not lifetime.
+            sess.cost_baseline = None
+            sess.subagent_count_this_turn = 0
             sess.busy_started_at = time.monotonic()
             msg_id = await self.send_busy(sess)
             if msg_id:
@@ -1033,6 +1094,8 @@ class TelegramBot:
         if event == "subagent_start":
             agent_type = context.get("agent_type", "agent")
             agent_id = context.get("agent_id", "")
+            # Count this subagent for the "(N agents)" rollup (item 4.5).
+            sess.subagent_count_this_turn += 1
             # Append to tool_history SYNCHRONOUSLY before any await.
             # record_tool returns the (post-trim) index so the subagent
             # bookkeeping below references the correct entry even after
