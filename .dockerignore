@@ -1,0 +1,30 @@
+# Keep the build context lean — tests, caches, and runtime state
+# don't belong in the image. The builder stage only needs
+# pyproject.toml + README.md + LICENSE + aipager/.
+
+.git
+.github
+.gitignore
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.ruff_cache
+.mypy_cache
+tests/
+.claude/
+.config/
+node_modules/
+dist/
+build/
+*.egg-info
+.DS_Store
+.idea
+.vscode
+CHANGELOG.md
+CONTRIBUTING.md
+install.sh
+Dockerfile
+.dockerignore

@@ -64,6 +64,35 @@ brew install dev-aly3n/tap/aipager
 Pulls `dtach` from Homebrew's standard formula and installs aipager into
 a Homebrew-managed Python venv.
 
+### Docker
+
+Self-contained image with python, node, `claude` and `dtach` baked in
+— good for VPS / NAS / Pi deployments where you don't want a Python
+or Node toolchain on the host. Multi-arch (amd64, arm64).
+
+```sh
+# 1. Run the setup wizard once (interactive)
+docker run --rm -it \
+  -v "$HOME/.claude:/home/aipager/.claude" \
+  -v aipager-config:/home/aipager/.config/aipager \
+  ghcr.io/dev-aly3n/aipager:latest config
+
+# 2. Start the daemon (background, auto-restart)
+docker run -d --restart=unless-stopped --name aipager \
+  -v "$HOME/.claude:/home/aipager/.claude" \
+  -v aipager-config:/home/aipager/.config/aipager \
+  -v "$PWD:/workspace" \
+  ghcr.io/dev-aly3n/aipager:latest
+```
+
+Mount the directories you want claude to edit under `/workspace`. The
+`~/.claude` mount carries over your claude credentials and
+conversation history — run `claude` on the host once to authenticate,
+or `docker exec -it aipager claude` for an interactive login in the
+container.
+
+Tags: `latest`, `0.3`, `0.3.12` (semver track + minor track).
+
 ## Configure
 
 ```sh

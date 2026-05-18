@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Docker image** at `ghcr.io/dev-aly3n/aipager` — self-contained
+  workstation (python + node + `claude` + `dtach` + aipager) for
+  cloud / NAS / Pi deployments. Multi-arch (amd64, arm64). Built and
+  pushed on every release tag. Mount `~/.claude` + a config volume
+  + your workspace; see README.
+
 ## [0.3.12] - 2026-05-18
 
 ### Added
