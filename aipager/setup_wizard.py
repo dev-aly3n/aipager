@@ -794,11 +794,7 @@ def _collect_users(
             # Cancelled this user — break out of the add-more loop.
             break
 
-        role = _ask(questionary.select(
-            f"User #{idx} role:",
-            choices=["admin", "developer", "read_only"],
-            qmark="?", style=_PROMPT_STYLE,
-        ))
+        role = _pick_role(idx)
         users.append({**captured, "role": role})
 
         more = _ask(questionary.confirm(
@@ -912,19 +908,47 @@ def _capture_user_identity(
             with _spin(f"Resolving {raw}…"):
                 resolved = _resolve_user(token, raw)
             if resolved is None:
+                # Split message into separate lines so warn_block
+                # renders them on multiple rows (single multi-line
+                # string gets jammed into the panel title).
                 friendly_warn(
-                    f"Couldn't resolve {raw!r}. Telegram's bot API doesn't\n"
-                    "  expose username → user_id lookups, so the bot has to\n"
-                    "  have already seen them.\n"
-                    "\n"
-                    "  Ask the user to do ONE of these, then retry:\n"
-                    f"    • DM the bot directly (open it and tap /start), OR\n"
-                    "    • Send any message in the group (a mention of the\n"
-                    "      bot works best — privacy-on bots only see those).\n"
-                    "\n"
-                    "  Or pick Auto-detect instead, or paste their numeric id."
+                    f"Couldn't resolve {raw!r}.",
+                    "",
+                    "Telegram's bot API doesn't expose username → user_id",
+                    "lookups, so the bot has to have already seen them.",
+                    "",
+                    "Ask the user to do ONE of these, then retry:",
+                    "  • DM the bot directly (open it and tap /start), OR",
+                    "  • Send any message in the group (a mention of",
+                    "    the bot works best — privacy-on bots only see",
+                    "    those).",
                 )
-                continue
+                next_step = _ask(questionary.select(
+                    "What now?",
+                    choices=[
+                        questionary.Choice("Retry (paste id or @handle again)",
+                                           value="retry"),
+                        questionary.Choice("Switch to auto-detect",
+                                           value="auto"),
+                        questionary.Choice("Cancel this user "
+                                           "(continue with the ones already added)",
+                                           value="cancel"),
+                    ],
+                    qmark="?", style=_PROMPT_STYLE,
+                ))
+                if next_step == "retry":
+                    continue
+                if next_step == "auto":
+                    method = "auto"
+                    # Re-enter the function so the auto-detect branch
+                    # runs. Simpler than refactoring the if/else.
+                    return _capture_user_identity(
+                        idx,
+                        existing_ids=existing_ids,
+                        existing_labels=existing_labels,
+                        token=token,
+                    )
+                return None  # cancel
             uid, suggested_label = resolved
             ok(f"Resolved {raw} → id={uid} (@{suggested_label})")
         else:
@@ -933,8 +957,20 @@ def _capture_user_identity(
                 uid = int(raw)
             except ValueError:
                 friendly_warn(
-                    "Not a valid integer or @handle. Try again.",
+                    f"{raw!r} isn't a valid integer or @handle.",
                 )
+                next_step = _ask(questionary.select(
+                    "What now?",
+                    choices=[
+                        questionary.Choice("Retry", value="retry"),
+                        questionary.Choice("Cancel this user "
+                                           "(continue with the ones already added)",
+                                           value="cancel"),
+                    ],
+                    qmark="?", style=_PROMPT_STYLE,
+                ))
+                if next_step == "cancel":
+                    return None
                 continue
             # Best-effort enrichment — getChat by id only works if the
             # bot has seen this chat before; otherwise we just keep
@@ -1001,49 +1037,126 @@ def _collect_deny_tools() -> list[str]:
     return ["Write", "Edit"] if enable_default_deny else []
 
 
+def _pick_role(idx: int) -> str:
+    """Single-question helper: prompts for a role with the canonical
+    three choices. Used by both the first-run team setup and the
+    edit-flow add-user path so the prompt copy stays consistent."""
+    return _ask(questionary.select(
+        f"User #{idx} role:",
+        choices=["admin", "developer", "read_only"],
+        qmark="?", style=_PROMPT_STYLE,
+    ))
+
+
 def _step_team_setup(
     group_id: int, step_label: str = "[4/N]", *, token: str = "",
 ) -> None:
-    """Collect users + rules, write team.yaml.
+    """Collect users + rules, persist ``team.yaml`` **incrementally**.
 
-    Assumes mode was already picked (via :func:`_step_pick_mode`) and
-    the group ID is in hand (via :func:`_step_chat_id` with
-    ``mode="team"``). Writes ``~/.config/aipager/team.yaml`` via
-    :func:`team.dump_team`.
+    Drives the add-user loop here so every successful add is written
+    to disk immediately. If the admin Ctrl+Cs mid-loop, all prior
+    users survive — re-running ``aipager config`` falls into the
+    edit flow and shows them in the current-config panel.
 
-    When ``token`` is set, the user-id prompts offer Telegram-side
-    auto-detect via :func:`_fetch_id_from_updates`.
+    Writes ``~/.config/aipager/team.yaml`` via :func:`team.dump_team`
+    after every user + after the deny-rules selection.
     """
-    from aipager.team import Role, Team, User as TeamUser, dump_team
+    from aipager.team import (
+        Role, Rules as TeamRules, Team, User as TeamUser, dump_team,
+    )
 
     step(f"{step_label}  Team allow-list")
 
-    users_data = _collect_users(token=token)
-    if not any(u["role"] == "admin" for u in users_data):
+    console.print()
+    console.print("Add allowed users (Telegram user IDs).")
+    console.print(
+        "[muted]  Each user gets a label (shown in chat as @label) and a role:[/muted]"
+    )
+    console.print(
+        "[muted]    admin       full control; bypasses deny_tools rules[/muted]"
+    )
+    console.print(
+        "[muted]    developer   prompt + approve, subject to deny_tools[/muted]"
+    )
+    console.print(
+        "[muted]    read_only   /status only; messages otherwise ignored[/muted]"
+    )
+
+    team: Team | None = None
+
+    def _save() -> None:
+        try:
+            dump_team(team, TEAM_YAML)
+        except OSError as e:
+            raise OSError(f"cannot write {TEAM_YAML}: {e}") from e
+
+    while True:
+        idx = (len(team.users) if team is not None else 0) + 1
+        existing_ids = set(team.users) if team is not None else set()
+        existing_labels = (
+            {u.label for u in team.users.values()} if team is not None else set()
+        )
+
+        captured = _capture_user_identity(
+            idx,
+            existing_ids=existing_ids,
+            existing_labels=existing_labels,
+            token=token,
+        )
+        if captured is None:
+            # Admin cancelled this user — stop adding, keep whoever's
+            # already on disk.
+            break
+
+        role = _pick_role(idx)
+        new_user = TeamUser(
+            id=captured["id"], label=captured["label"], role=Role(role),
+        )
+
+        if team is None:
+            team = Team(
+                group_id=group_id,
+                users={new_user.id: new_user},
+                rules=TeamRules(),
+            )
+        else:
+            team = team.with_user(new_user)
+
+        _save()
+        ok(
+            f"Saved → {len(team.users)} user"
+            f"{'s' if len(team.users) != 1 else ''} "
+            f"in team.yaml"
+        )
+
+        more = _ask(questionary.confirm(
+            "Add another user?",
+            default=False, qmark="?", style=_PROMPT_STYLE,
+        ))
+        if not more:
+            break
+
+    if team is None:
         friendly_warn(
-            "No admin user added. You'll need to promote one (re-run "
-            "`aipager config` → Change a user's role) before "
-            "deny_tools rules can be bypassed.",
+            "No users added — team.yaml not written.",
+            "The daemon will stay in personal mode until you add at",
+            "least one allowed user (re-run `aipager config` → Add a user).",
+        )
+        return
+
+    if not any(u.role == Role.ADMIN for u in team.users.values()):
+        friendly_warn(
+            "No admin user added.",
+            "You'll need to promote one via `aipager config` → "
+            "Change a user's role before deny_tools rules can be",
+            "bypassed.",
         )
 
     deny_tools = _collect_deny_tools()
-
-    users = {
-        u["id"]: TeamUser(id=u["id"], label=u["label"], role=Role(u["role"]))
-        for u in users_data
-    }
-    from aipager.team import Rules as TeamRules
-    new_team = Team(
-        group_id=group_id,
-        users=users,
-        rules=TeamRules(deny_tools=tuple(deny_tools)),
-    )
-
-    try:
-        dump_team(new_team, TEAM_YAML)
-    except OSError as e:
-        raise OSError(f"cannot write {TEAM_YAML}: {e}") from e
-    ok(f"Wrote {TEAM_YAML}")
+    if tuple(deny_tools) != team.rules.deny_tools:
+        team = team.with_deny_tools(deny_tools)
+        _save()
+        ok(f"Saved → deny_tools = {deny_tools or '(none)'}")
 
 
 def _step_team_config() -> bool:
@@ -1074,12 +1187,13 @@ def _step_team_config() -> bool:
 
 
 def _first_run_flow() -> int:
-    """Walk a brand-new install through token → mode → chat → (team
-    users + rules if team) → deps → settings → write.
+    """Walk a brand-new install through token → mode → chat → save
+    config.env → (team users + rules if team) → deps → settings.
 
-    Mode is picked BEFORE chat-id so the chat-id prompt asks for a
-    group id (team) or a DM id (personal) accordingly — no double
-    prompting like the legacy [6/6]-tacked-on flow had.
+    config.env is committed RIGHT AFTER chat-id is captured (not at
+    the very end), so a Ctrl+C anywhere later doesn't throw the
+    admin back to step 1 on re-run — re-entry falls into the edit
+    flow with the partial team.yaml + config.env intact.
     """
     if console.is_terminal:
         rule("aipager setup")
@@ -1094,22 +1208,28 @@ def _first_run_flow() -> int:
         wizard_mode = _step_pick_mode(step_label="[2/?]")
 
         total = 7 if wizard_mode == "team" else 6
-        # Re-label step 1 retroactively isn't possible in a streaming
-        # CLI; we just use the right total from step 3 onwards.
         chat_id = _step_chat_id(
             token, bot_username,
             mode=wizard_mode, step_label=f"[3/{total}]",
         )
 
+        # Commit token + chat_id to disk EARLY. Subsequent steps
+        # only patch settings.json / write team.yaml — none of them
+        # change these two values, and writing now means an admin
+        # Ctrl+C during a later step doesn't lose their progress
+        # (re-running falls into the edit flow).
+        _step_write_env(
+            token, chat_id,
+            step_label=f"[4/{total}]",
+        )
+
         if wizard_mode == "team":
-            _step_team_setup(chat_id, step_label=f"[4/{total}]", token=token)
+            _step_team_setup(chat_id, step_label=f"[5/{total}]", token=token)
+            deps_step = f"[6/{total}]"
+            settings_step = f"[7/{total}]"
+        else:
             deps_step = f"[5/{total}]"
             settings_step = f"[6/{total}]"
-            write_step = f"[7/{total}]"
-        else:
-            deps_step = f"[4/{total}]"
-            settings_step = f"[5/{total}]"
-            write_step = f"[6/{total}]"
 
         deps_ok = _step_deps(step_label=deps_step)
         if not deps_ok:
@@ -1125,7 +1245,6 @@ def _first_run_flow() -> int:
                 )
                 return 2
         _step_settings(step_label=settings_step)
-        _step_write_env(token, chat_id, step_label=write_step)
     except KeyboardInterrupt:
         friendly_warn("Cancelled.")
         return 130
@@ -1579,6 +1698,8 @@ def _edit_flow() -> int:
                 questionary.Choice("Edit deny_tools rules", value="rules"),
                 questionary.Choice("Switch to Personal mode", value="to_personal"),
                 questionary.Choice("Refresh bot token", value="refresh_token"),
+                questionary.Choice("Re-install Claude Code hooks",
+                                   value="reinstall_hooks"),
                 questionary.Choice("Run full setup (overwrites everything)",
                                    value="full"),
                 questionary.Choice("Exit", value="exit"),
@@ -1587,6 +1708,8 @@ def _edit_flow() -> int:
             choices = [
                 questionary.Choice("Switch to Team mode", value="to_team"),
                 questionary.Choice("Refresh bot token", value="refresh_token"),
+                questionary.Choice("Re-install Claude Code hooks",
+                                   value="reinstall_hooks"),
                 questionary.Choice("Run full setup (overwrites everything)",
                                    value="full"),
                 questionary.Choice("Exit", value="exit"),
@@ -1614,6 +1737,11 @@ def _edit_flow() -> int:
             if choice == "refresh_token":
                 if _edit_refresh_token():
                     change_kind = "restart"
+            elif choice == "reinstall_hooks":
+                _step_settings(step_label="[~]")
+                # Hooks live in ~/.claude/settings.json; they're read
+                # by Claude Code itself (not aipager). No daemon
+                # restart needed.
             elif choice == "to_personal" and team is not None:
                 if _edit_switch_to_personal(team):
                     # Archives team.yaml AND may update config.env
