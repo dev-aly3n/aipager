@@ -5,6 +5,8 @@ CLI sessions. Run Claude inside a detached terminal (`dtach`), drive it
 from your phone — read responses, send prompts, approve permission
 requests, switch sessions — without an SSH session staying open.
 
+[Docs](docs/) · [Changelog](CHANGELOG.md) · [Issues](https://github.com/dev-aly3n/aipager/issues)
+
 ## Install
 
 Linux or macOS, any architecture. `dtach` is installed automatically

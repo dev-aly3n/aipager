@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cloud / NAS / Pi deployments. Multi-arch (amd64, arm64). Built and
   pushed on every release tag. Mount `~/.claude` + a config volume
   + your workspace; see README.
+- **Reference docs** under [docs/](docs/) — architecture (with a
+  Mermaid component diagram), hook event reference, bot command
+  reference, troubleshooting runbook, security model. The upcoming
+  `aipager.run/docs` site renders directly from these files.
 
 ## [0.3.12] - 2026-05-18
 
