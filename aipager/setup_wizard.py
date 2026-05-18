@@ -847,8 +847,9 @@ def _capture_user_identity(
 
     if method == "auto":
         hint(
-            "Ask the new user to mention the bot in the group "
-            "(or send a DM) in the next moment."
+            "Ask the new user to either DM the bot (tap /start) or "
+            "mention the bot in the group — any message the bot can see "
+            "will reveal their numeric id."
         )
         while True:
             _ask(questionary.confirm(
@@ -912,11 +913,16 @@ def _capture_user_identity(
                 resolved = _resolve_user(token, raw)
             if resolved is None:
                 friendly_warn(
-                    f"Couldn't resolve {raw!r}. Telegram only lets bots\n"
-                    "  look up users they've already seen — ask the user to\n"
-                    "  send any message in the group, then retry. Or pick\n"
-                    "  Auto-detect (which polls for new messages), or paste\n"
-                    "  the numeric id."
+                    f"Couldn't resolve {raw!r}. Telegram's bot API doesn't\n"
+                    "  expose username → user_id lookups, so the bot has to\n"
+                    "  have already seen them.\n"
+                    "\n"
+                    "  Ask the user to do ONE of these, then retry:\n"
+                    f"    • DM the bot directly (open it and tap /start), OR\n"
+                    "    • Send any message in the group (a mention of the\n"
+                    "      bot works best — privacy-on bots only see those).\n"
+                    "\n"
+                    "  Or pick Auto-detect instead, or paste their numeric id."
                 )
                 continue
             uid, suggested_label = resolved
