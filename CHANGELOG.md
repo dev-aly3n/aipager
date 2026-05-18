@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.16] - 2026-05-18
+
+### Changed
+- **`aipager config` add-user accepts `@handle` or numeric id.**
+  Paste either `12345` or `@arian_hamdi` (or bare `arian_hamdi`)
+  in the manual flow — the wizard resolves via Telegram's
+  `getChat` and shows `✓ Resolved @arian_hamdi → id=12345`.
+  Non-private chats (channels, bots) are rejected with a clear
+  message.
+- **Label is now optional in the add-user flow.** The prompt
+  defaults to the resolved Telegram username (lowercased). Hit
+  Enter to accept, or type a custom label. Same default behaviour
+  applies in both the manual and auto-detect paths.
+
 ## [0.3.15] - 2026-05-18
 
 ### Fixed
