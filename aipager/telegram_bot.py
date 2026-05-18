@@ -10,9 +10,11 @@ Single owner of all Telegram communication. Handles:
 from __future__ import annotations
 
 import asyncio
+import difflib
 import html as html_mod
 import json
 import logging
+import os
 import re
 import tempfile
 import time
@@ -88,6 +90,79 @@ def _is_bot_blocked(e: Exception) -> bool:
         return True
     msg = str(e).lower()
     return "bot was blocked" in msg or "blocked by the user" in msg
+
+
+# Item 4.4 — Write/Edit diff preview.
+#
+# When claude calls a Write or Edit tool, we render the change as a
+# unified diff and send it as a Telegram reply threaded under the busy
+# message. This gives users on-the-go review without needing to ssh in.
+#
+# Trade-off: every Write/Edit is one message. The body is capped to
+# `_DIFF_MAX_LINES` / `_DIFF_MAX_CHARS` to keep the chat readable. Users
+# who find it too noisy can set ``AIPAGER_DIFF_VIEW=0`` to disable.
+
+_DIFF_MAX_LINES = 30
+_DIFF_MAX_CHARS = 2000
+
+
+def _diff_view_enabled() -> bool:
+    return os.environ.get("AIPAGER_DIFF_VIEW", "1") not in ("0", "false", "no", "")
+
+
+def _truncate_diff(lines: list[str]) -> tuple[str, int]:
+    """Truncate a list of diff lines to the per-message limits.
+
+    Returns (body_text, dropped_line_count). The body never exceeds
+    `_DIFF_MAX_CHARS` and includes a `…[N more lines]` marker when
+    truncation happens.
+    """
+    total = len(lines)
+    if total <= _DIFF_MAX_LINES:
+        body = "\n".join(lines)
+        if len(body) <= _DIFF_MAX_CHARS:
+            return body, 0
+    keep = lines[:_DIFF_MAX_LINES]
+    body = "\n".join(keep)
+    if len(body) > _DIFF_MAX_CHARS:
+        body = body[:_DIFF_MAX_CHARS]
+    dropped = max(0, total - len(keep))
+    return body, dropped
+
+
+def _build_diff_block(
+    tool_name: str, tool_input: dict,
+) -> tuple[str, str] | None:
+    """Return (header, diff_body) for Write or Edit; None if input is malformed.
+
+    For Write: treat as a brand-new file (empty original → all new lines).
+    For Edit: unified diff between ``old_string`` and ``new_string``.
+    """
+    file_path = (tool_input.get("file_path") or "").strip()
+    if not file_path:
+        return None
+    if tool_name == "Write":
+        new = tool_input.get("content") or ""
+        if not new:
+            return None
+        diff_lines = list(difflib.unified_diff(
+            [], new.splitlines(),
+            fromfile="/dev/null", tofile=file_path, lineterm="",
+        ))
+        header = f"📝 <b>Write</b> · <code>{html_mod.escape(file_path)}</code>"
+        return header, "\n".join(diff_lines)
+    if tool_name == "Edit":
+        old = tool_input.get("old_string") or ""
+        new = tool_input.get("new_string") or ""
+        if not old and not new:
+            return None
+        diff_lines = list(difflib.unified_diff(
+            old.splitlines(), new.splitlines(),
+            fromfile=file_path, tofile=file_path, lineterm="",
+        ))
+        header = f"📝 <b>Edit</b> · <code>{html_mod.escape(file_path)}</code>"
+        return header, "\n".join(diff_lines)
+    return None
 
 
 class TruncationFailed(Exception):
@@ -596,6 +671,47 @@ class TelegramBot:
         except Exception:
             pass  # reaction API may not be available in all contexts
 
+    async def _send_diff_preview(
+        self, sess: TrackedSession, tool_name: str, tool_input: dict,
+    ) -> None:
+        """Render a Write/Edit diff and post it as a chat reply.
+
+        Best-effort: any failure (Telegram error, malformed input, etc.)
+        is swallowed. The user always still has the busy-message
+        tool_history entry as a fallback summary.
+        """
+        try:
+            built = _build_diff_block(tool_name, tool_input)
+            if not built:
+                return
+            header, diff = built
+            if not diff.strip():
+                # No textual change (e.g., Edit where old == new). Skip the
+                # send to avoid an empty preview message.
+                return
+            body, dropped = _truncate_diff(diff.splitlines())
+            footer = (f"\n<i>…and {dropped} more line{'s' if dropped != 1 else ''}</i>"
+                      if dropped else "")
+            # ``<code class="language-diff">`` triggers Telegram's
+            # syntax highlighting: `+` lines render green, `-` lines red,
+            # `@@` hunks in cyan. Supported on desktop and recent mobile
+            # clients; older clients fall back to plain monospace.
+            text = (
+                f"{header}\n"
+                f"<pre><code class=\"language-diff\">"
+                f"{html_mod.escape(body)}"
+                f"</code></pre>"
+                f"{footer}"
+            )
+            await self._app.bot.send_message(
+                CHAT_ID, text, parse_mode="HTML",
+                reply_to_message_id=(sess.busy_msg_id
+                                     if sess.busy_msg_id and sess.busy_msg_id > 0
+                                     else None),
+            )
+        except Exception:
+            log.debug("[%s] diff preview send failed", sess.label, exc_info=True)
+
     def _build_pinned_text(self, active_name: str) -> str:
         """Compose the pinned-message text (item 4.3).
 
@@ -1045,11 +1161,21 @@ class TelegramBot:
 
         if event == "tool_use":
             tool_summary = context.get("tool_summary", "")
+            tool_name = context.get("tool_name", "")
+            tool_input_full = context.get("tool_input_full")
             # Update tool history — mark previous as done, append new
             if tool_summary:
                 # Append new tool as in-progress (PostToolUse marks it done)
                 sess.record_tool(tool_summary, False)
                 sess.last_tool_summary = tool_summary
+            # Item 4.4: send a separate diff-preview message for Write/Edit.
+            # Best-effort and opt-out via AIPAGER_DIFF_VIEW=0. Fire-and-forget
+            # so it doesn't slow the busy-message edit cadence.
+            if (tool_name in ("Write", "Edit") and tool_input_full
+                    and _diff_view_enabled()):
+                asyncio.create_task(
+                    self._send_diff_preview(sess, tool_name, tool_input_full)
+                )
             # Skip edit if busy msg not ready yet (animation will pick up cached stats)
             if not sess.busy_msg_id or sess.busy_msg_id < 0 or not tool_summary:
                 return

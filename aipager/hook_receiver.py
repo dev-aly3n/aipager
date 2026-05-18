@@ -292,6 +292,13 @@ class HookReceiver:
                 # Ensure we're in BUSY state
                 if sess.status != Status.BUSY:
                     self.registry.transition(session_name, Status.BUSY)
+                # Item 4.4: forward the raw tool_input for Write/Edit so
+                # the bot can render a diff. We don't forward EVERY
+                # tool_input because they can be huge (Read content,
+                # WebFetch results, etc.).
+                forward_input = (
+                    tool_input if tool_name in ("Write", "Edit") else None
+                )
                 # Token data piggybacked from statusLine file (read by notify_hook.py)
                 sl_tokens = msg.get("sl_tokens")
                 if sl_tokens:
@@ -311,6 +318,7 @@ class HookReceiver:
                 await self.notify_fn(sess, "tool_use", {
                     "tool_name": tool_name,
                     "tool_summary": summary,
+                    "tool_input_full": forward_input,
                 })
 
         elif event == "PostToolUse":

@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Write / Edit diff preview in Telegram.** When claude calls
+  `Write` or `Edit`, the daemon sends a separate message threaded
+  under the busy message with a unified diff of the change
+  (rendered inside `<pre><code class="language-diff">` so Telegram
+  colors `+` lines green and `-` lines red on supported clients).
+  Output capped at 30 lines / 2000 chars with a "…and N more lines"
+  footer. Fire-and-forget — failures fall back to the existing
+  tool-history summary. Disable with `AIPAGER_DIFF_VIEW=0`.
 - **Customizable keyboard layout** via
   `~/.config/aipager/keyboard.json` (optional file). Each section
   (`templates`, `commands`, `models`) overrides the corresponding
