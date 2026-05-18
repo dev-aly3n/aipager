@@ -1,5 +1,6 @@
 """Configuration for aipager — loads env from XDG path or project root."""
 
+import json
 import os
 from pathlib import Path
 
@@ -92,7 +93,7 @@ SPINNER_VERBS: list[str] = [
 # Quick template buttons for Telegram persistent keyboard
 TEMPLATES_BUTTON = "Templates"
 BACK_BUTTON = "\u00ab Back"
-QUICK_TEMPLATES: list[tuple[str, str]] = [
+_DEFAULT_TEMPLATES: list[tuple[str, str]] = [
     ("Continue", "Continue"),
     ("Run tests", "Run the tests"),
     ("Write tests", "Write tests for the changes"),
@@ -108,7 +109,7 @@ QUICK_TEMPLATES: list[tuple[str, str]] = [
 # display info in the terminal (cost, context, stats, doctor) are useless
 # remotely since the user can't see the terminal output in Telegram.
 COMMANDS_BUTTON = "Commands"
-QUICK_COMMANDS: list[tuple[str, str]] = [
+_DEFAULT_COMMANDS: list[tuple[str, str]] = [
     ("Compact", "/compact"),
     ("Clear", "/clear"),
     ("Plan mode", "/plan"),
@@ -118,12 +119,73 @@ QUICK_COMMANDS: list[tuple[str, str]] = [
 
 # Model submenu — accessible from Commands → Model
 MODELS_BUTTON = "Model \u203a"
-MODEL_CHOICES: list[tuple[str, str]] = [
+_DEFAULT_MODELS: list[tuple[str, str]] = [
     ("Sonnet", "/model sonnet"),
     ("Opus", "/model opus"),
     ("Haiku", "/model haiku"),
     ("OpusPlan", "/model opusplan"),
 ]
+
+# ---- Customizable keyboard layout (item 4.1) -------------------------
+#
+# Optional override at ``~/.config/aipager/keyboard.json``. Any missing
+# section falls back to the hardcoded defaults above; an unparseable
+# file logs a warning and uses defaults. Changes require a daemon
+# restart (the bot rebuilds the keyboard on every render but the
+# constants are imported once at startup).
+#
+# Schema:
+#   {
+#     "templates": [{"label": "Continue", "prompt": "Continue"}, ...],
+#     "commands":  [{"label": "Compact",  "send":   "/compact"},  ...],
+#     "models":    [{"label": "Sonnet",   "send":   "/model sonnet"}, ...]
+#   }
+
+_KEYBOARD_CONFIG_PATH = Path.home() / ".config" / "aipager" / "keyboard.json"
+
+
+def _coerce_pair_list(items, *, payload_key, fallback):
+    """Turn a list-of-dicts spec into ``[(label, payload), ...]`` tuples."""
+    out: list[tuple[str, str]] = []
+    if isinstance(items, list):
+        for entry in items:
+            if not isinstance(entry, dict):
+                continue
+            label = entry.get("label")
+            payload = entry.get(payload_key)
+            if isinstance(label, str) and isinstance(payload, str):
+                out.append((label.strip(), payload))
+    return out or fallback
+
+
+def _load_keyboard_overrides():
+    """Return (templates, commands, models) honoring keyboard.json."""
+    import logging
+    _log = logging.getLogger(__name__)
+    if not _KEYBOARD_CONFIG_PATH.exists():
+        return _DEFAULT_TEMPLATES, _DEFAULT_COMMANDS, _DEFAULT_MODELS
+    try:
+        data = json.loads(_KEYBOARD_CONFIG_PATH.read_text())
+    except (OSError, json.JSONDecodeError) as e:
+        _log.warning("keyboard.json could not be loaded (%s); using defaults", e)
+        return _DEFAULT_TEMPLATES, _DEFAULT_COMMANDS, _DEFAULT_MODELS
+    if not isinstance(data, dict):
+        _log.warning("keyboard.json root must be an object; using defaults")
+        return _DEFAULT_TEMPLATES, _DEFAULT_COMMANDS, _DEFAULT_MODELS
+    return (
+        _coerce_pair_list(data.get("templates", []),
+                          payload_key="prompt",
+                          fallback=_DEFAULT_TEMPLATES),
+        _coerce_pair_list(data.get("commands", []),
+                          payload_key="send",
+                          fallback=_DEFAULT_COMMANDS),
+        _coerce_pair_list(data.get("models", []),
+                          payload_key="send",
+                          fallback=_DEFAULT_MODELS),
+    )
+
+
+QUICK_TEMPLATES, QUICK_COMMANDS, MODEL_CHOICES = _load_keyboard_overrides()
 
 # Parent level for each keyboard level (for context-aware Back button)
 KEYBOARD_PARENTS: dict[str, str] = {

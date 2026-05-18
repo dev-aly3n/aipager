@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Customizable keyboard layout** via
+  `~/.config/aipager/keyboard.json` (optional file). Each section
+  (`templates`, `commands`, `models`) overrides the corresponding
+  default; missing sections fall through to the built-ins so
+  partial overrides work. Malformed JSON or wrong-shape entries
+  fail open — daemon logs a warning and keeps using defaults so the
+  keyboard never goes blank. Changes require a daemon restart.
+  Schema in the README:
+  ```json
+  {
+    "templates": [{"label": "Deploy", "prompt": "Deploy to staging"}],
+    "commands":  [{"label": "Compact", "send": "/compact"}],
+    "models":    [{"label": "Sonnet",  "send": "/model sonnet"}]
+  }
+  ```
 - **Live cost delta in the busy message.** The "Working…" header
   now appends `· 💰 $0.04` (and `(N agents)` if subagents fired this
   turn) so you can see the cost of the *current* claude turn at a
