@@ -22,7 +22,10 @@ per daemon run telling them they're not on the list, then silence.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+import os
+import time
+from collections.abc import Sequence
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from pathlib import Path
 
@@ -108,9 +111,58 @@ class Team:
     def get(self, user_id: int) -> User | None:
         return self.users.get(user_id)
 
+    def find_by_label(self, label: str) -> User | None:
+        for u in self.users.values():
+            if u.label == label:
+                return u
+        return None
+
+    def admin_count(self) -> int:
+        return sum(1 for u in self.users.values() if u.role == Role.ADMIN)
+
     def is_authorized(self, user_id: int | None) -> bool:
         """True iff ``user_id`` is on the allow-list."""
         return user_id is not None and user_id in self.users
+
+    # --- Immutable-style mutations -----------------------------------
+    #
+    # Each returns a NEW :class:`Team`. The wizard sub-flows validate
+    # invariants (no duplicate label, at least one admin) at the call
+    # site and only persist if the new team is acceptable.
+
+    def with_user(self, user: User) -> Team:
+        """Return a copy with ``user`` added. Raises on duplicate id.
+
+        Duplicate-label is also a hard error — labels are how users
+        are addressed in chat (``@alice``) so they must stay unique.
+        """
+        if user.id in self.users:
+            raise ValueError(f"user id {user.id} already in team")
+        if self.find_by_label(user.label) is not None:
+            raise ValueError(f"label {user.label!r} already taken")
+        new_users = dict(self.users)
+        new_users[user.id] = user
+        return replace(self, users=new_users)
+
+    def without_user(self, user_id: int) -> Team:
+        """Return a copy with ``user_id`` removed. Raises if absent."""
+        if user_id not in self.users:
+            raise ValueError(f"user id {user_id} not in team")
+        new_users = {k: v for k, v in self.users.items() if k != user_id}
+        return replace(self, users=new_users)
+
+    def with_role(self, user_id: int, role: Role) -> Team:
+        """Return a copy with ``user_id`` set to ``role``."""
+        if user_id not in self.users:
+            raise ValueError(f"user id {user_id} not in team")
+        old = self.users[user_id]
+        new_users = dict(self.users)
+        new_users[user_id] = User(id=old.id, label=old.label, role=role)
+        return replace(self, users=new_users)
+
+    def with_deny_tools(self, tools: Sequence[str]) -> Team:
+        """Return a copy whose ``rules.deny_tools`` is ``tools``."""
+        return replace(self, rules=Rules(deny_tools=tuple(tools)))
 
 
 def load_team(path: Path = TEAM_CONFIG_PATH) -> Team | None:
@@ -188,6 +240,62 @@ class TeamConfigError(Exception):
     """
 
 
+# Canonical header for team.yaml — explains the file at a glance and
+# tells the user how to apply changes. Re-emitted on every write.
+_TEAM_YAML_HEADER = """\
+# aipager team mode — managed by `aipager config`.
+# Edit by hand to add / remove users. Restart the daemon after
+# changes (`aipager service restart`, or kill the foreground daemon
+# and re-run `aipager start`).
+"""
+
+
+def dump_team(team: Team, path: Path = TEAM_CONFIG_PATH) -> None:
+    """Serialize ``team`` to ``path`` (atomic write, mode 0600).
+
+    Writes via a ``.tmp`` sibling then ``os.rename`` so a crash
+    mid-write can't corrupt the existing file.
+    """
+    data: dict = {
+        "mode": "team",
+        "group_id": team.group_id,
+        "users": [
+            {"id": u.id, "label": u.label, "role": u.role.value}
+            for u in team.users.values()
+        ],
+    }
+    if team.rules.deny_tools:
+        data["rules"] = {"deny_tools": list(team.rules.deny_tools)}
+
+    body = (
+        _TEAM_YAML_HEADER
+        + yaml.safe_dump(data, sort_keys=False, default_flow_style=False)
+    )
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(body, encoding="utf-8")
+    try:
+        os.chmod(tmp, 0o600)
+    except OSError:
+        log.debug("could not chmod %s", tmp, exc_info=True)
+    os.replace(tmp, path)
+
+
+def archive_team(path: Path = TEAM_CONFIG_PATH) -> Path | None:
+    """Rename ``path`` → ``path.bak.<unix-ts>``.
+
+    Used by the wizard's Switch-to-Personal flow. Returns the
+    backup path on success, ``None`` if there was nothing to
+    archive.
+    """
+    if not path.exists():
+        return None
+    backup = path.with_suffix(path.suffix + f".bak.{int(time.time())}")
+    os.replace(path, backup)
+    return backup
+
+
 # ---------------------------------------------------------------------------
 # One-shot "you're not on the allow-list" tracker
 # ---------------------------------------------------------------------------
@@ -240,7 +348,9 @@ __all__ = [
     "TeamConfigError",
     "User",
     "TEAM_CONFIG_PATH",
+    "archive_team",
     "attribution_label",
+    "dump_team",
     "load_team",
     "remember_unauthorized",
     "reset_unauthorized_seen",

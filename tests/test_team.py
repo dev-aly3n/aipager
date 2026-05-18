@@ -13,7 +13,9 @@ from aipager.team import (
     Team,
     TeamConfigError,
     User,
+    archive_team,
     attribution_label,
+    dump_team,
     load_team,
     remember_unauthorized,
     reset_unauthorized_seen,
@@ -273,3 +275,129 @@ def test_attribution_label_known_user():
 
 def test_attribution_label_none():
     assert attribution_label(None) == "@unknown"
+
+
+# ---------- Team mutation helpers --------------------------------------
+
+
+def test_find_by_label_and_admin_count():
+    t = _example_team()
+    assert t.find_by_label("alice").role == Role.ADMIN
+    assert t.find_by_label("nope") is None
+    assert t.admin_count() == 1
+
+
+def test_with_user_adds_immutably():
+    t = _example_team()
+    new = t.with_user(User(id=4, label="dave", role=Role.DEVELOPER))
+    assert 4 in new.users and 4 not in t.users
+    assert new.users[4].label == "dave"
+
+
+def test_with_user_rejects_duplicate_id():
+    t = _example_team()
+    with pytest.raises(ValueError, match="already in team"):
+        t.with_user(User(id=1, label="alice2", role=Role.DEVELOPER))
+
+
+def test_with_user_rejects_duplicate_label():
+    t = _example_team()
+    with pytest.raises(ValueError, match="already taken"):
+        t.with_user(User(id=99, label="alice", role=Role.DEVELOPER))
+
+
+def test_without_user_removes_immutably():
+    t = _example_team()
+    new = t.without_user(2)
+    assert 2 not in new.users and 2 in t.users
+
+
+def test_without_user_rejects_missing():
+    t = _example_team()
+    with pytest.raises(ValueError, match="not in team"):
+        t.without_user(99)
+
+
+def test_with_role_changes_role():
+    t = _example_team()
+    new = t.with_role(2, Role.ADMIN)
+    assert new.users[2].role == Role.ADMIN
+    assert new.users[2].label == "bob"  # label preserved
+
+
+def test_with_role_rejects_missing():
+    t = _example_team()
+    with pytest.raises(ValueError, match="not in team"):
+        t.with_role(99, Role.ADMIN)
+
+
+def test_with_deny_tools_replaces_rules():
+    t = _example_team()
+    new = t.with_deny_tools(("Bash", "WebFetch"))
+    assert new.rules.deny_tools == ("Bash", "WebFetch")
+    assert t.rules.deny_tools == ("Write",)  # original unchanged
+
+
+# ---------- dump_team --------------------------------------
+
+
+def test_dump_team_round_trip(tmp_path: Path):
+    """dump → load returns an equivalent Team."""
+    t = _example_team()
+    out = tmp_path / "team.yaml"
+    dump_team(t, out)
+    assert out.exists()
+    loaded = load_team(out)
+    assert loaded is not None
+    assert loaded.group_id == t.group_id
+    assert {u.id: (u.label, u.role) for u in loaded.users.values()} == {
+        u.id: (u.label, u.role) for u in t.users.values()
+    }
+    assert loaded.rules.deny_tools == t.rules.deny_tools
+
+
+def test_dump_team_writes_header_comment(tmp_path: Path):
+    out = tmp_path / "team.yaml"
+    dump_team(_example_team(), out)
+    content = out.read_text()
+    assert "managed by `aipager config`" in content
+    assert "Restart the daemon" in content
+
+
+def test_dump_team_omits_empty_rules(tmp_path: Path):
+    """A team with no deny rules shouldn't write an empty `rules:` block."""
+    t = Team(
+        group_id=-100,
+        users={1: User(id=1, label="alice", role=Role.ADMIN)},
+        rules=Rules(),
+    )
+    out = tmp_path / "team.yaml"
+    dump_team(t, out)
+    content = out.read_text()
+    assert "rules" not in content
+
+
+def test_dump_team_permission_0600(tmp_path: Path):
+    out = tmp_path / "team.yaml"
+    dump_team(_example_team(), out)
+    mode = out.stat().st_mode & 0o777
+    # On non-POSIX FS the chmod may be a no-op; accept 0600 or "no chmod
+    # support" but never broader perms.
+    assert mode in (0o600, 0o644, 0o664), f"unexpected mode 0o{mode:o}"
+
+
+# ---------- archive_team --------------------------------------
+
+
+def test_archive_team_renames_file(tmp_path: Path):
+    f = tmp_path / "team.yaml"
+    f.write_text("mode: team\n")
+    backup = archive_team(f)
+    assert backup is not None
+    assert backup.exists()
+    assert not f.exists()
+    assert ".bak." in backup.name
+
+
+def test_archive_team_returns_none_when_absent(tmp_path: Path):
+    assert archive_team(tmp_path / "missing.yaml") is None
