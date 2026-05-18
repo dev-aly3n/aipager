@@ -210,3 +210,113 @@ def test_step_write_env_chmod_failure_warns(monkeypatch, tmp_path, capsys):
     assert "99" in contents
     err = capsys.readouterr().err
     assert "chmod" in err.lower() or "non-POSIX" in err
+
+
+# ----- _resolve_user --------------------------------------------------
+
+
+def test_resolve_user_at_handle_returns_id_and_username(monkeypatch):
+    from aipager import setup_wizard as sw
+
+    def fake_http(url, timeout=10.0):
+        assert "getChat" in url and "chat_id=%40arian_hamdi" in url \
+            or "chat_id=@arian_hamdi" in url
+        return ({
+            "ok": True,
+            "result": {
+                "id": 256113222,
+                "first_name": "Arian",
+                "username": "Arian_Hamdi",
+                "type": "private",
+            },
+        }, 200, "")
+
+    monkeypatch.setattr(sw, "_http_json", fake_http)
+    out = sw._resolve_user("token", "@arian_hamdi")
+    assert out == (256113222, "arian_hamdi")  # lowercased
+
+
+def test_resolve_user_bare_handle_gets_at_prefixed(monkeypatch):
+    from aipager import setup_wizard as sw
+    seen = []
+
+    def fake_http(url, timeout=10.0):
+        seen.append(url)
+        return ({
+            "ok": True,
+            "result": {"id": 1, "username": "alice", "type": "private"},
+        }, 200, "")
+
+    monkeypatch.setattr(sw, "_http_json", fake_http)
+    out = sw._resolve_user("t", "alice")  # no @
+    assert out == (1, "alice")
+    assert "@alice" in seen[0]
+
+
+def test_resolve_user_numeric_input_kept_as_is(monkeypatch):
+    from aipager import setup_wizard as sw
+    seen = []
+
+    def fake_http(url, timeout=10.0):
+        seen.append(url)
+        return ({
+            "ok": True,
+            "result": {"id": 12345, "first_name": "Bob", "type": "private"},
+        }, 200, "")
+
+    monkeypatch.setattr(sw, "_http_json", fake_http)
+    out = sw._resolve_user("t", "12345")
+    # falls back to first_name (lowercased) when no username
+    assert out == (12345, "bob")
+    assert "chat_id=12345" in seen[0]
+
+
+def test_resolve_user_unknown_handle_returns_none(monkeypatch):
+    from aipager import setup_wizard as sw
+    monkeypatch.setattr(sw, "_http_json",
+                        lambda u, timeout=10.0: ({"ok": False,
+                                                   "description": "chat not found"}, 400, ""))
+    assert sw._resolve_user("t", "@unknown") is None
+
+
+def test_resolve_user_rejects_non_private_chat(monkeypatch):
+    from aipager import setup_wizard as sw
+    monkeypatch.setattr(sw, "_http_json",
+                        lambda u, timeout=10.0: ({
+                            "ok": True,
+                            "result": {"id": -100, "type": "channel",
+                                       "title": "AipagerDev"},
+                        }, 200, ""))
+    assert sw._resolve_user("t", "@aipagerdev") is None
+
+
+def test_resolve_user_empty_inputs_return_none():
+    from aipager import setup_wizard as sw
+    assert sw._resolve_user("", "@alice") is None
+    assert sw._resolve_user("token", "") is None
+    assert sw._resolve_user("token", "   ") is None
+
+
+def test_resolve_user_network_error_returns_none(monkeypatch):
+    from aipager import setup_wizard as sw
+    monkeypatch.setattr(sw, "_http_json",
+                        lambda u, timeout=10.0: (None, None, "network: unreachable"))
+    assert sw._resolve_user("t", "@alice") is None
+
+
+# ----- _finalize_user --------------------------------------------------
+
+
+def test_finalize_user_accepts_default_on_empty_input(monkeypatch):
+    """Empty label input falls back to suggested_label."""
+    from aipager import setup_wizard as sw
+    monkeypatch.setattr(sw, "_ask", lambda q: "")  # admin hits enter
+    out = sw._finalize_user(42, "alice", existing_labels=set())
+    assert out == {"id": 42, "label": "alice"}
+
+
+def test_finalize_user_uses_typed_label(monkeypatch):
+    from aipager import setup_wizard as sw
+    monkeypatch.setattr(sw, "_ask", lambda q: "custom")
+    out = sw._finalize_user(42, "alice", existing_labels=set())
+    assert out == {"id": 42, "label": "custom"}

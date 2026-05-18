@@ -231,6 +231,66 @@ def _fetch_chat_id(token: str) -> tuple[int | None, str | None, str | None]:
     return _fetch_id_from_updates(token, want="dm")
 
 
+def _resolve_user(
+    token: str, query: str,
+) -> tuple[int, str] | None:
+    """Resolve a numeric id OR ``@handle`` to ``(user_id, suggested_label)``.
+
+    Uses Telegram's ``getChat`` endpoint. Returns ``None`` on:
+
+    - non-private chat type (channel / supergroup / bot) — we
+      refuse to allow-list these
+    - chat-not-found / network error
+    - malformed input
+
+    Numeric input that the bot has never seen will return ``None``
+    too (Telegram refuses ``getChat`` for unknown numeric chats).
+    Callers fall back to treating the id as-is with a default
+    label of ``user<id>``.
+    """
+    if not token:
+        return None
+    raw = query.strip()
+    if not raw:
+        return None
+
+    # Forgiving input: bare handle (no @) gets one prefixed.
+    if not raw.startswith("@"):
+        try:
+            int(raw)
+            chat_id = raw  # numeric — use as-is
+        except ValueError:
+            chat_id = f"@{raw}"
+    else:
+        chat_id = raw
+
+    body, _code, _err = _http_json(
+        f"https://api.telegram.org/bot{token}/getChat?chat_id={chat_id}"
+    )
+    if not body or not body.get("ok"):
+        return None
+
+    result = body.get("result") or {}
+    if result.get("type") != "private":
+        # channel / group / bot — not eligible for the team allow-list
+        return None
+
+    try:
+        uid = int(result["id"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+    suggested = (
+        result.get("username")
+        or result.get("first_name")
+        or f"user{uid}"
+    ).strip() or f"user{uid}"
+    # Labels are case-sensitive in team.yaml but Telegram handles are
+    # canonical lowercase. Keep the suggestion lowercase to match
+    # `@alice` mention conventions.
+    return uid, suggested.lower()
+
+
 def _spin(message: str):
     """Context manager: spinner if a TTY, plain print otherwise."""
     if console.is_terminal:
@@ -787,48 +847,96 @@ def _capture_user_identity(
                 continue
             ok(f"Captured user_id={uid} (@{who or 'no handle'})")
             suggested_label = (who or f"user{uid}").lower()
-            label = _ask(questionary.text(
-                "Label (shown in chat as @label):",
-                default=suggested_label, qmark="?", style=_PROMPT_STYLE,
-            )).strip()
-            if not label or label in existing_labels:
-                friendly_warn(
-                    f"Label {label!r} is invalid or already in use — "
-                    "try a different one."
-                )
+            finalized = _finalize_user(uid, suggested_label, existing_labels)
+            if finalized is None:
                 continue
-            return {"id": uid, "label": label}
+            return finalized
 
-    # Manual path (either chosen, fallback from auto, or no-token).
+    # Manual path: single combined prompt — accept integer OR @handle.
     while True:
-        label = _ask(questionary.text(
-            f"User #{idx} label (e.g. alice):",
+        raw = _ask(questionary.text(
+            f"User #{idx} id (integer) or @handle (e.g. 12345 or @alice):",
             qmark="?", style=_PROMPT_STYLE,
         )).strip()
+        if not raw:
+            friendly_warn("Empty — paste an id or @handle.")
+            continue
+
+        uid: int | None = None
+        suggested_label = ""
+
+        # Try resolving as @handle first (or bare handle).
+        looks_like_handle = raw.startswith("@") or (
+            not raw.lstrip("-").isdigit()
+        )
+        if looks_like_handle and token:
+            with _spin(f"Resolving {raw}…"):
+                resolved = _resolve_user(token, raw)
+            if resolved is None:
+                friendly_warn(
+                    f"Couldn't resolve {raw!r} via Telegram — make sure "
+                    "the handle is correct and the user has a public "
+                    "username. Try again or paste the numeric id.",
+                )
+                continue
+            uid, suggested_label = resolved
+            ok(f"Resolved {raw} → id={uid} (@{suggested_label})")
+        else:
+            # Numeric input.
+            try:
+                uid = int(raw)
+            except ValueError:
+                friendly_warn(
+                    "Not a valid integer or @handle. Try again.",
+                )
+                continue
+            # Best-effort enrichment — getChat by id only works if the
+            # bot has seen this chat before; otherwise we just keep
+            # the numeric id and fall back to a generated label.
+            if token:
+                with _spin(f"Looking up id {uid}…"):
+                    resolved = _resolve_user(token, str(uid))
+                if resolved is not None:
+                    _, suggested_label = resolved
+            if not suggested_label:
+                suggested_label = f"user{uid}"
+
+        if uid in existing_ids:
+            friendly_warn(f"User id {uid} is already on the allow-list.")
+            continue
+
+        finalized = _finalize_user(uid, suggested_label, existing_labels)
+        if finalized is None:
+            continue
+        return finalized
+
+
+def _finalize_user(
+    uid: int, suggested_label: str, existing_labels: set[str],
+) -> dict | None:
+    """Ask for the (optional) label given a resolved user id + suggestion.
+
+    Empty admin input → use ``suggested_label``. Duplicate label
+    rejected with a re-prompt. Used by both the auto-detect and
+    manual paths so they share one source of truth for the label
+    dialog.
+    """
+    while True:
+        raw = _ask(questionary.text(
+            "Label (shown in chat as @label):",
+            default=suggested_label,
+            qmark="?", style=_PROMPT_STYLE,
+        )).strip()
+        label = raw or suggested_label
         if not label:
             friendly_warn("Label must be non-empty.")
             continue
         if label in existing_labels:
-            friendly_warn(f"Label {label!r} already in use.")
+            friendly_warn(
+                f"Label {label!r} is already in use — try a different one.",
+            )
             continue
-        break
-
-    while True:
-        uid_raw = _ask(questionary.text(
-            f"User #{idx} Telegram user ID:",
-            qmark="?", style=_PROMPT_STYLE,
-        )).strip()
-        try:
-            uid = int(uid_raw)
-        except ValueError:
-            friendly_warn("Not a valid integer.")
-            continue
-        if uid in existing_ids:
-            friendly_warn(f"User ID {uid} already added.")
-            continue
-        break
-
-    return {"id": uid, "label": label}
+        return {"id": uid, "label": label}
 
 
 def _collect_deny_tools() -> list[str]:
