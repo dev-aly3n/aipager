@@ -126,6 +126,60 @@ def test_max_doc_bytes_is_below_telegram_50mb():
     assert tb.TELEGRAM_MAX_DOC_BYTES < 50 * 1024 * 1024
 
 
+# ----- 3.6 — retry-after extraction -----
+
+def test_detect_api_error_returns_tuple():
+    result = tb._detect_api_error("API Error: 500 internal server error")
+    assert result is not None
+    msg, retry = result
+    assert "internal error" in msg.lower()
+    assert retry is None
+
+
+def test_detect_api_error_none_when_no_match():
+    assert tb._detect_api_error("normal response text") is None
+    assert tb._detect_api_error("") is None
+
+
+def test_detect_api_error_rate_limit_extracts_retry_after():
+    """The common Anthropic format: 'Please retry after 60 seconds'."""
+    text = "API Error: 429 rate_limit_error. Please retry after 60 seconds."
+    msg, retry = tb._detect_api_error(text)
+    assert retry == 60
+    assert "60s" in msg
+    assert "Wait 60s" in msg
+
+
+def test_detect_api_error_rate_limit_extracts_alt_format():
+    text = "rate_limit_error: wait 30 seconds"
+    msg, retry = tb._detect_api_error(text)
+    assert retry == 30
+
+
+def test_detect_api_error_rate_limit_extracts_cooldown():
+    text = "rate_limit hit; 45 second cooldown"
+    msg, retry = tb._detect_api_error(text)
+    assert retry == 45
+
+
+def test_detect_api_error_rate_limit_without_seconds_keeps_generic():
+    """When the error matches rate-limit pattern but has no parseable
+    retry-after, the generic message stays."""
+    text = "API Error: 429 rate_limit_error"
+    msg, retry = tb._detect_api_error(text)
+    assert retry is None
+    assert "Wait a moment" in msg
+
+
+def test_detect_api_error_non_rate_limit_doesnt_extract_retry():
+    """Even if the error text happens to contain 'retry after X', a
+    non-rate-limit error doesn't pull it in."""
+    text = "API Error: 500 internal server error. retry after 30 seconds"
+    msg, retry = tb._detect_api_error(text)
+    # retry-after extraction is gated on the rate_limit kind
+    assert retry is None
+
+
 # ----- 2.8 — TruncationFailed after N attempts -----
 
 def test_send_with_retry_caps_truncation_attempts():

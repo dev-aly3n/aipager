@@ -50,6 +50,11 @@ from aipager.state import QUEUE_CAP, SessionRegistry, Status, TrackedSession
 
 # Telegram's documented document upload ceiling is 50 MB; stay below it.
 TELEGRAM_MAX_DOC_BYTES = 40 * 1024 * 1024
+# Telegram bot API can DOWNLOAD files up to 20 MB via `getFile`. Anything
+# above that fails before the file reaches us — better to check `file_size`
+# from the update payload and warn the user up front than to attempt and
+# fail with a vague "Failed to download file".
+TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES = 20 * 1024 * 1024
 # Single-message text limit Telegram enforces.
 TELEGRAM_MAX_TEXT_LEN = 4000
 _TRUNC_SUFFIX = "\n\n…[truncated]"
@@ -204,27 +209,73 @@ ACTION_VERBS = {
 
 # ── API error detection ──
 
-_ERROR_PATTERNS: list[tuple[re.Pattern, str]] = [
+# Each entry: (matcher regex, friendly message, kind).
+# ``kind`` is used by ``_detect_api_error`` to know whether to also try
+# extracting a retry-after hint — currently only rate-limit errors carry
+# one in practice.
+_ERROR_PATTERNS: list[tuple[re.Pattern, str, str]] = [
     (re.compile(r"API Error:\s*500|api_error|internal server error", re.I),
-     "Anthropic's servers hit an internal error. Usually resolves in seconds."),
+     "Anthropic's servers hit an internal error. Usually resolves in seconds.",
+     "server"),
     (re.compile(r"API Error:\s*529|overloaded_error|overloaded", re.I),
-     "Anthropic's servers are overloaded. Try again in a moment."),
+     "Anthropic's servers are overloaded. Try again in a moment.",
+     "overload"),
     (re.compile(r"API Error:\s*429|rate_limit_error|rate.?limit", re.I),
-     "Rate limit hit. Wait a moment before retrying."),
+     "Rate limit hit. Wait a moment before retrying.",
+     "rate_limit"),
     (re.compile(r"connection.?(error|reset|refused|timeout)|ECONNR|network.?error", re.I),
-     "Lost connection to Anthropic. Check network and retry."),
+     "Lost connection to Anthropic. Check network and retry.",
+     "network"),
     (re.compile(r"API Error:\s*\d{3}", re.I),
-     "API error occurred."),
+     "API error occurred.",
+     "api"),
 ]
 
+# Capture an explicit retry-after hint from the error body in any of the
+# common shapes Anthropic / proxies use. Returns the integer seconds in
+# group(1) regardless of which alternation matched.
+_RETRY_AFTER_RE = re.compile(
+    r"retry[\s-]*after[^\d]{0,20}(\d{1,5})"
+    r"|wait[^\d]{0,20}(\d{1,5})\s*sec"
+    r"|(\d{1,5})\s*second\s+(?:cool|wait)",
+    re.I,
+)
 
-def _detect_api_error(text: str) -> str | None:
-    """Check if text contains an API error. Returns friendly message or None."""
+
+def _extract_retry_after(text: str) -> int | None:
+    m = _RETRY_AFTER_RE.search(text or "")
+    if not m:
+        return None
+    for grp in m.groups():
+        if grp is not None:
+            try:
+                return int(grp)
+            except ValueError:
+                continue
+    return None
+
+
+def _detect_api_error(text: str) -> tuple[str, int | None] | None:
+    """Check if text contains a known API error pattern.
+
+    Returns ``(friendly_message, retry_after_seconds_or_None)`` if a
+    pattern matches; for rate-limit errors we additionally try to pull
+    a "retry-after" hint out of the error body and substitute it into
+    the message ("Wait 60s before retrying" instead of "Wait a
+    moment"). Otherwise returns ``None``.
+    """
     if not text:
         return None
-    for pattern, friendly_msg in _ERROR_PATTERNS:
+    for pattern, friendly_msg, kind in _ERROR_PATTERNS:
         if pattern.search(text):
-            return friendly_msg
+            retry_after = (
+                _extract_retry_after(text) if kind == "rate_limit" else None
+            )
+            if retry_after is not None:
+                friendly_msg = (
+                    f"Rate limit hit. Wait {retry_after}s before retrying."
+                )
+            return friendly_msg, retry_after
     return None
 
 
@@ -273,6 +324,7 @@ class TelegramBot:
         self._app.add_handler(CommandHandler("stop", self._handle_stop_cmd))
         self._app.add_handler(CommandHandler("kill", self._handle_kill_cmd))
         self._app.add_handler(CommandHandler("new", self._handle_new_cmd))
+        self._app.add_handler(CommandHandler("clearqueue", self._handle_clearqueue_cmd))
         # Media handler: photos and documents → save file, inject prompt
         self._app.add_handler(MessageHandler(
             (filters.PHOTO | filters.Document.ALL) & filters.Chat(int(CHAT_ID)),
@@ -437,6 +489,7 @@ class TelegramBot:
             BotCommand("stop", "Stop active session"),
             BotCommand("kill", "Kill a session (destroy)"),
             BotCommand("new", "Launch new session"),
+            BotCommand("clearqueue", "Drop pending queued prompts"),
         ]
         for label in sorted(labels):
             commands.append(BotCommand(label, f"Send to [{label}]"))
@@ -1161,8 +1214,9 @@ class TelegramBot:
 
             # ── API error detection → friendly message + retry button ──
             error_source = raw_md or summary or ""
-            friendly_error = _detect_api_error(error_source)
-            if friendly_error:
+            error_detection = _detect_api_error(error_source)
+            if error_detection:
+                friendly_error, _retry_after = error_detection
                 text = (f"⚠️ <b>{html_mod.escape(label)}</b> · {friendly_error}")
                 keyboard = (self._build_retry_keyboard(sess.name)
                             if sess.last_prompt else None)
@@ -1247,6 +1301,11 @@ class TelegramBot:
                     text += f"\n\n<blockquote expandable>{escaped}</blockquote>"
                 else:
                     text += f"\n\n<blockquote>{escaped}</blockquote>"
+            # When the response was big enough to spill into a file
+            # attachment, tell the reader explicitly so they don't miss
+            # the .txt that lands below the inline preview.
+            if send_file:
+                text += "\n\n📎 <i>Full response attached below ↓</i>"
             log.debug("[%s] Sending IDLE notification (%d chars)", label, len(text))
             try:
                 msg = await _send_with_retry(
@@ -1629,6 +1688,22 @@ class TelegramBot:
             await self._kill_session_by_label(query, label)
             return
 
+        if action == "kill-confirm":
+            sess = self.registry.get(session_name)
+            label = sess.label if sess else session_name.removeprefix("claude-")
+            await self._safe_answer(query, f"Killing {label}...")
+            await self._kill_session_by_label(query, label)
+            return
+
+        if action == "kill-cancel":
+            try:
+                await query.edit_message_text(
+                    "↩️ Cancelled (no session killed).",
+                )
+            except Exception:
+                pass
+            return
+
         if action == "retry":
             sess = self.registry.get(session_name)
             if not sess:
@@ -1794,8 +1869,26 @@ class TelegramBot:
                 await self._safe_answer(query, f"✅ {verb[:180]}")
 
                 # Collapse into tool_history
-                collapsed = f"❓ {perm.get('question', '?')[:40]} → {verb}"
+                question_text = perm.get("question", "?")
+                collapsed = f"❓ {question_text[:40]} → {verb}"
                 sess.record_tool(collapsed, True)
+
+                # Audit reply (multi-select submit path)
+                try:
+                    await self._app.bot.send_message(
+                        CHAT_ID,
+                        f"✓ <b>{html_mod.escape(sess.label)}</b> · "
+                        f"Answered · "
+                        f"{html_mod.escape(question_text[:80])} → "
+                        f"{html_mod.escape(verb[:80])}",
+                        parse_mode="HTML",
+                        reply_to_message_id=(sess.busy_msg_id
+                                             if sess.busy_msg_id and sess.busy_msg_id > 0
+                                             else None),
+                    )
+                except Exception:
+                    log.debug("[%s] audit message send failed", sess.label,
+                              exc_info=True)
 
                 if not is_last:
                     # More questions — Right moved to next question tab
@@ -1870,11 +1963,34 @@ class TelegramBot:
                 # Collapse current question into tool_history
                 perm = sess.pending_permission
                 if perm.get("ask_question"):
-                    collapsed = f"❓ {perm['question'][:40]} → {verb}"
+                    audit_detail = perm["question"][:80]
+                    collapsed = f"❓ {audit_detail[:40]} → {verb}"
                 else:
-                    tool_summary = perm.get("tool_summary", "Permission")[:60]
-                    collapsed = f"🔑 {tool_summary} → {verb}"
+                    audit_detail = perm.get("tool_summary", "Permission")[:80]
+                    collapsed = f"🔑 {audit_detail[:60]} → {verb}"
                 sess.record_tool(collapsed, True)
+
+                # Audit reply in chat — persistent record of the decision
+                # the user just made. Threaded under the busy message so
+                # the scrollback reads as a conversation.
+                audit_icon = {
+                    "Allowed": "✅",
+                    "Denied": "🚫",
+                    "Continue": "▶️",
+                }.get(verb, "·")
+                try:
+                    await self._app.bot.send_message(
+                        CHAT_ID,
+                        f"{audit_icon} <b>{html_mod.escape(sess.label)}</b> · "
+                        f"{verb} · {html_mod.escape(audit_detail)}",
+                        parse_mode="HTML",
+                        reply_to_message_id=(sess.busy_msg_id
+                                             if sess.busy_msg_id and sess.busy_msg_id > 0
+                                             else None),
+                    )
+                except Exception:
+                    log.debug("[%s] audit message send failed", sess.label,
+                              exc_info=True)
 
                 # Multi-question AskUserQuestion: advance to next question
                 questions = perm.get("questions", [])
@@ -2077,6 +2193,44 @@ class TelegramBot:
             return
         await self._stop_session(sess, update=update)
 
+    async def _handle_clearqueue_cmd(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
+    ) -> None:
+        """Handle /clearqueue — drop pending queued prompts for the last
+        active session without interrupting the running task.
+
+        `/stop` already drains the queue, but at the cost of interrupting
+        the current work. `/clearqueue` is the "just stop QUEUING for
+        the next thing" surgical tool: the current prompt keeps running,
+        the queue empties.
+        """
+        name = self.registry.last_active_session
+        if not name:
+            await update.message.reply_text(
+                "No active session — switch to one with /<label> first.",
+            )
+            return
+        sess = self.registry.get(name)
+        if not sess:
+            await update.message.reply_text(f"Session '{name}' not found.")
+            return
+        dropped = len(sess.pending_queue)
+        if dropped == 0:
+            await update.message.reply_text(
+                f"Nothing to clear in [{html_mod.escape(sess.label)}].",
+                parse_mode="HTML",
+            )
+            return
+        sess.pending_queue.clear()
+        self.registry.mark_dirty()
+        plural = "s" if dropped > 1 else ""
+        await update.message.reply_text(
+            f"🗑️ Cleared {dropped} queued message{plural} for "
+            f"[<b>{html_mod.escape(sess.label)}</b>].",
+            parse_mode="HTML",
+        )
+        log.info("[%s] /clearqueue cleared %d entries", sess.label, dropped)
+
     async def _handle_kill_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /kill <label> — destroy a session entirely."""
         text = update.message.text.strip()
@@ -2102,7 +2256,32 @@ class TelegramBot:
             return
 
         target_label = parts[1].strip()
-        await self._kill_session_by_label(update, target_label)
+        # Two-tap confirmation: show inline [💀 Kill] [Cancel] instead of
+        # destroying immediately. One mistype on a phone shouldn't wipe a
+        # session; the user explicitly confirms here.
+        sessions = self.registry.all_sessions()
+        target_name = None
+        for name, sess in sessions.items():
+            if sess.label == target_label and sess.status != Status.GONE:
+                target_name = name
+                break
+        if target_name is None:
+            await update.message.reply_text(
+                f"⚠️ Unknown or already-gone session: {target_label}",
+            )
+            return
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton(
+                "💀 Kill", callback_data=f"{target_name}:kill-confirm"),
+            InlineKeyboardButton(
+                "Cancel", callback_data=f"{target_name}:kill-cancel"),
+        ]])
+        await update.message.reply_text(
+            f"⚠️ Kill session [<b>{html_mod.escape(target_label)}</b>]? "
+            "This will terminate the running claude process.",
+            reply_markup=keyboard,
+            parse_mode="HTML",
+        )
 
     async def _kill_session_by_label(self, source, target_label: str) -> None:
         """Kill a session by label. source is Update or CallbackQuery."""
@@ -2439,6 +2618,25 @@ class TelegramBot:
     async def _handle_file(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle photo/document messages — download file and inject prompt."""
         msg = update.message
+
+        # Up-front size check — Telegram's bot API tops out at 20 MB on
+        # download, so we'd rather reject with a clear message than try
+        # and fail with a vague "Failed to download" later.
+        file_size = None
+        if msg.document:
+            file_size = msg.document.file_size
+        elif msg.photo:
+            # Largest size is last; treat its file_size as the cap
+            file_size = msg.photo[-1].file_size if msg.photo[-1] else None
+        if file_size and file_size > TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES:
+            mb = file_size / (1024 * 1024)
+            limit_mb = TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES // (1024 * 1024)
+            await msg.reply_text(
+                f"⚠️ File is {mb:.1f} MB. The Telegram bot API caps file "
+                f"downloads at {limit_mb} MB. Try splitting it, or paste the "
+                "content as text.",
+            )
+            return
 
         # Download the file
         try:

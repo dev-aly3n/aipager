@@ -8,6 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Audit reply in chat after Allow / Deny.** When you tap Allow,
+  Deny, Continue, or answer an `AskUserQuestion`, the bot now leaves
+  a small reply threaded under the busy message:
+  `✅ [jim] · Allowed · Bash: ls -la /tmp`. Scrolling back tells you
+  exactly which permission decisions you made on which session.
+- **`/clearqueue` Telegram command.** Drops every queued prompt for
+  the currently active session without interrupting the running task
+  (which `/stop` would). Replies with the count cleared, or
+  "Nothing to clear" when the queue is already empty.
+- **Truncation hint footer.** When the IDLE response is long enough
+  to spill into a `.txt` attachment, the inline summary now ends with
+  `📎 Full response attached below ↓` so the user doesn't miss the
+  attachment.
+- **Real retry-after seconds.** `_detect_api_error` now extracts
+  `retry-after`/`wait X seconds`/`X second cooldown` hints from
+  Anthropic rate-limit errors. The friendly message reads
+  "Rate limit hit. Wait 60s before retrying." instead of the generic
+  "Wait a moment".
 - `pending_queue` for each session is now capped at 50 entries. When a
   session is BUSY and the user sends a 51st message, they get back
   `⚠️ Queue is full (50 pending) for [jim]. Tap stop or wait for the
@@ -32,6 +50,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   expansion could make truncated text exceed the limit again.
 
 ### Changed
+- **`/kill <label>` now requires a two-tap confirmation.** Sends
+  `⚠️ Kill session [jim]? This will terminate the running claude
+  process.` with inline `[💀 Kill]` / `[Cancel]` buttons instead of
+  destroying the session immediately. One mistype on a phone no
+  longer wipes a session. The implicit-confirmation flow when
+  `/kill` is sent with no label (which shows a picker) is unchanged.
+- **File-too-big upfront warning.** Files larger than the Telegram
+  bot API's 20 MB download cap are now rejected with a friendly
+  `⚠️ File is X MB. The Telegram bot API caps file downloads at
+  20 MB.` message before the daemon attempts the download, instead
+  of failing with a vague "Failed to download file".
 - `tool_history` now caps at 200 entries per session. Older entries
   are dropped from the front on each append, and any `history_idx`
   reference stored in `active_subagents` is shifted accordingly so
