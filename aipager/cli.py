@@ -222,6 +222,11 @@ def _cmd_doctor(args: argparse.Namespace) -> int:
     return cmd_doctor(args)
 
 
+def _cmd_status(args: argparse.Namespace) -> int:
+    from aipager.status import cmd_status
+    return cmd_status(args)
+
+
 def _cmd_logs(args: argparse.Namespace) -> int:
     from aipager.service import cmd_logs
     return cmd_logs(follow=args.follow, lines=args.lines)
@@ -259,6 +264,13 @@ def main() -> None:
                    ).set_defaults(fn=_cmd_version)
     sub.add_parser("doctor", help="run health checks and print a report"
                    ).set_defaults(fn=_cmd_doctor)
+
+    status_p = sub.add_parser(
+        "status", help="show daemon and session snapshot",
+    )
+    status_p.add_argument("--json", dest="as_json", action="store_true",
+                          help="emit machine-readable JSON instead of a table")
+    status_p.set_defaults(fn=_cmd_status)
 
     logs_p = sub.add_parser("logs", help="tail the daemon log")
     logs_p.add_argument("-f", "--follow", action="store_true",

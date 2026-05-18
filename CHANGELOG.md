@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- New top-level `aipager status` subcommand. Prints a fast (<100 ms)
+  snapshot of the daemon (up/down + bound chat), every known session
+  (label, status, model, context %, cost, queue depth), and the
+  aggregate cost. Rich table when stdout is a TTY, padded plain text
+  otherwise, and `--json` for scripts. All data comes from local
+  files (`/tmp/aipager.sock` probe, `/tmp/claude-dtach-*.sock`,
+  `~/.claude/aipager-sessions.json`, `/tmp/claude-status-*.json`) —
+  no Telegram API calls. Exit codes: 0 daemon up, 1 daemon down,
+  2 config missing.
 - New top-level `aipager logs [-f|--follow] [-n N|--lines N]`
   subcommand. Tails the daemon's journald entry on Linux or
   `~/Library/Logs/aipager.log` on macOS, with `tail`-style flags.
