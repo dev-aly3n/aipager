@@ -36,6 +36,7 @@
             python-telegram-bot
             rich
             questionary
+            pyyaml
           ];
 
           # Put dtach on PATH at runtime so dtach_inject's
@@ -80,6 +81,7 @@
             python-telegram-bot
             rich
             questionary
+            pyyaml
             hatchling
             build
           ]);
