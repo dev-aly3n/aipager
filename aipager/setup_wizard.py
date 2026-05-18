@@ -644,8 +644,12 @@ def _show_team_warning_panel() -> None:
     console.print()
 
 
-def _collect_users(existing_ids: set[int] | None = None,
-                   existing_labels: set[str] | None = None) -> list[dict]:
+def _collect_users(
+    existing_ids: set[int] | None = None,
+    existing_labels: set[str] | None = None,
+    *,
+    token: str = "",
+) -> list[dict]:
     """Interactive loop: prompt for label / Telegram id / role, repeat
     until the user says stop. Returns a list of ``{id, label, role}``
     dicts ready to feed into a :class:`team.Team`.
@@ -653,6 +657,12 @@ def _collect_users(existing_ids: set[int] | None = None,
     ``existing_ids`` / ``existing_labels`` are for the edit flow when
     we're appending to an existing team — duplicate-detection then
     spans both the new entries and the prior ones.
+
+    When ``token`` is provided, each user-id prompt offers an
+    auto-detect mode: the wizard polls ``getUpdates`` for a recent
+    message and captures the sender's id + Telegram username, then
+    pre-fills the label from the username. Saves admins from
+    making members hand-look-up their numeric ids.
     """
     existing_ids = set(existing_ids or ())
     existing_labels = set(existing_labels or ())
@@ -675,36 +685,22 @@ def _collect_users(existing_ids: set[int] | None = None,
 
     while True:
         idx = len(users) + 1
-        label = _ask(questionary.text(
-            f"User #{idx} label (e.g. alice):",
-            qmark="?", style=_PROMPT_STYLE,
-        )).strip()
-        if not label:
-            friendly_warn("Label must be non-empty.")
-            continue
-        if label in existing_labels or any(u["label"] == label for u in users):
-            friendly_warn(f"Label {label!r} already in use.")
-            continue
-
-        uid_raw = _ask(questionary.text(
-            f"User #{idx} Telegram user ID:",
-            qmark="?", style=_PROMPT_STYLE,
-        )).strip()
-        try:
-            uid = int(uid_raw)
-        except ValueError:
-            friendly_warn("Not a valid integer.")
-            continue
-        if uid in existing_ids or any(u["id"] == uid for u in users):
-            friendly_warn(f"User ID {uid} already added.")
-            continue
+        captured = _capture_user_identity(
+            idx,
+            existing_ids=existing_ids | {u["id"] for u in users},
+            existing_labels=existing_labels | {u["label"] for u in users},
+            token=token,
+        )
+        if captured is None:
+            # Cancelled this user — break out of the add-more loop.
+            break
 
         role = _ask(questionary.select(
             f"User #{idx} role:",
             choices=["admin", "developer", "read_only"],
             qmark="?", style=_PROMPT_STYLE,
         ))
-        users.append({"id": uid, "label": label, "role": role})
+        users.append({**captured, "role": role})
 
         more = _ask(questionary.confirm(
             "Add another user?",
@@ -714,6 +710,124 @@ def _collect_users(existing_ids: set[int] | None = None,
             break
 
     return users
+
+
+def _capture_user_identity(
+    idx: int,
+    *,
+    existing_ids: set[int],
+    existing_labels: set[str],
+    token: str = "",
+) -> dict | None:
+    """Capture one ``{"id": int, "label": str}`` pair.
+
+    Offers auto-detect when ``token`` is set (the wizard polls
+    Telegram for a recent message from a new user). Otherwise just
+    asks for label + numeric id by paste.
+
+    Returns ``None`` if the admin cancels mid-flow.
+    """
+    if token:
+        method = _ask(questionary.select(
+            f"User #{idx} — how should we capture their identity?",
+            choices=[
+                questionary.Choice(
+                    "Auto-detect (I'll watch for them to mention the bot)",
+                    value="auto",
+                ),
+                questionary.Choice("Paste user id manually", value="manual"),
+                questionary.Choice("Cancel", value="cancel"),
+            ],
+            qmark="?", style=_PROMPT_STYLE,
+        ))
+    else:
+        method = "manual"
+
+    if method == "cancel":
+        return None
+
+    if method == "auto":
+        hint(
+            "Ask the new user to mention the bot in the group "
+            "(or send a DM) in the next moment."
+        )
+        while True:
+            _ask(questionary.confirm(
+                "They've sent something — continue?",
+                default=True, qmark="?", style=_PROMPT_STYLE,
+            ))
+            with _spin("Watching for a new user…"):
+                uid, who, _adv = _fetch_id_from_updates(token, want="user")
+            if uid is None:
+                err_console.print(
+                    "  [err]No recent message detected — try again or "
+                    "switch to manual.[/err]"
+                )
+                retry = _ask(questionary.select(
+                    "What now?",
+                    choices=[
+                        questionary.Choice("Retry auto-detect", value="retry"),
+                        questionary.Choice("Switch to manual", value="manual"),
+                        questionary.Choice("Cancel this user", value="cancel"),
+                    ],
+                    qmark="?", style=_PROMPT_STYLE,
+                ))
+                if retry == "retry":
+                    continue
+                if retry == "manual":
+                    method = "manual"
+                    break
+                return None
+            if uid in existing_ids:
+                err_console.print(
+                    f"  [err]User {uid} ({who or 'no handle'}) is already "
+                    "on the allow-list. Ask someone else to mention.[/err]"
+                )
+                continue
+            ok(f"Captured user_id={uid} (@{who or 'no handle'})")
+            suggested_label = (who or f"user{uid}").lower()
+            label = _ask(questionary.text(
+                "Label (shown in chat as @label):",
+                default=suggested_label, qmark="?", style=_PROMPT_STYLE,
+            )).strip()
+            if not label or label in existing_labels:
+                friendly_warn(
+                    f"Label {label!r} is invalid or already in use — "
+                    "try a different one."
+                )
+                continue
+            return {"id": uid, "label": label}
+
+    # Manual path (either chosen, fallback from auto, or no-token).
+    while True:
+        label = _ask(questionary.text(
+            f"User #{idx} label (e.g. alice):",
+            qmark="?", style=_PROMPT_STYLE,
+        )).strip()
+        if not label:
+            friendly_warn("Label must be non-empty.")
+            continue
+        if label in existing_labels:
+            friendly_warn(f"Label {label!r} already in use.")
+            continue
+        break
+
+    while True:
+        uid_raw = _ask(questionary.text(
+            f"User #{idx} Telegram user ID:",
+            qmark="?", style=_PROMPT_STYLE,
+        )).strip()
+        try:
+            uid = int(uid_raw)
+        except ValueError:
+            friendly_warn("Not a valid integer.")
+            continue
+        if uid in existing_ids:
+            friendly_warn(f"User ID {uid} already added.")
+            continue
+        break
+
+    return {"id": uid, "label": label}
 
 
 def _collect_deny_tools() -> list[str]:
@@ -732,19 +846,24 @@ def _collect_deny_tools() -> list[str]:
     return ["Write", "Edit"] if enable_default_deny else []
 
 
-def _step_team_setup(group_id: int, step_label: str = "[4/N]") -> None:
+def _step_team_setup(
+    group_id: int, step_label: str = "[4/N]", *, token: str = "",
+) -> None:
     """Collect users + rules, write team.yaml.
 
     Assumes mode was already picked (via :func:`_step_pick_mode`) and
     the group ID is in hand (via :func:`_step_chat_id` with
     ``mode="team"``). Writes ``~/.config/aipager/team.yaml`` via
     :func:`team.dump_team`.
+
+    When ``token`` is set, the user-id prompts offer Telegram-side
+    auto-detect via :func:`_fetch_id_from_updates`.
     """
     from aipager.team import Role, Team, User as TeamUser, dump_team
 
     step(f"{step_label}  Team allow-list")
 
-    users_data = _collect_users()
+    users_data = _collect_users(token=token)
     if not any(u["role"] == "admin" for u in users_data):
         friendly_warn(
             "No admin user added. You'll need to promote one (re-run "
@@ -828,7 +947,7 @@ def _first_run_flow() -> int:
         )
 
         if wizard_mode == "team":
-            _step_team_setup(chat_id, step_label=f"[4/{total}]")
+            _step_team_setup(chat_id, step_label=f"[4/{total}]", token=token)
             deps_step = f"[5/{total}]"
             settings_step = f"[6/{total}]"
             write_step = f"[7/{total}]"
@@ -1049,8 +1168,11 @@ def _edit_add_user(team) -> "object | None":
 
     existing_ids = set(team.users.keys())
     existing_labels = {u.label for u in team.users.values()}
+    # Read token so the add flow can offer Telegram auto-detect.
+    token, _ = _read_env_file()
     new_entries = _collect_users(
         existing_ids=existing_ids, existing_labels=existing_labels,
+        token=token,
     )
     if not new_entries:
         return None
@@ -1269,7 +1391,7 @@ def _edit_switch_to_team() -> bool:
 
     group_id = _step_chat_id(token, bot_username, mode="team",
                              step_label="[~]")
-    _step_team_setup(group_id, step_label="[~]")
+    _step_team_setup(group_id, step_label="[~]", token=token)
     # CHAT_ID in config.env should now be the group id for the daemon
     # to filter correctly.
     _write_env_file(token, group_id)
