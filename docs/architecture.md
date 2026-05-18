@@ -11,35 +11,35 @@ inter-process queues.
 ```mermaid
 flowchart LR
   subgraph User
-    TG[Telegram client<br/>phone or desktop]
+    TG["Telegram client<br>phone or desktop"]
   end
 
-  subgraph Daemon["aipager daemon (one asyncio process)"]
+  subgraph Daemon["aipager daemon — one asyncio process"]
     direction TB
-    Bot[TelegramBot<br/>polling loop]
-    HookRx[HookReceiver<br/>UDP listener]
-    Mon[SessionMonitor<br/>2s tick]
-    Reg[(SessionRegistry<br/>in-memory state)]
+    Bot["TelegramBot<br>polling loop"]
+    HookRx["HookReceiver<br>UDP listener"]
+    Mon["SessionMonitor<br>2s tick"]
+    Reg[("SessionRegistry<br>in-memory state")]
   end
 
   subgraph Host["Local host"]
     direction TB
-    Sock["/tmp/aipager.sock<br/>(unix datagram)"]
-    Dtach[dtach session<br/>claude-&lt;name&gt;]
-    Claude[claude code CLI]
-    Hooks["~/.claude/<br/>settings.json"]
-    State["~/.claude/<br/>aipager-sessions.json"]
-    Audit["~/.claude/<br/>aipager-audit.jsonl"]
+    Sock["/tmp/aipager.sock<br>(unix datagram)"]
+    Dtach["dtach session<br>claude-NAME"]
+    Claude["claude code CLI"]
+    Hooks["~/.claude/<br>settings.json"]
+    State["~/.claude/<br>aipager-sessions.json"]
+    Audit["~/.claude/<br>aipager-audit.jsonl"]
   end
 
   TG <-->|HTTPS poll| Bot
   Bot --> Reg
   Mon --> Reg
-  Reg -.persist.-> State
-  Reg -.append.-> Audit
+  Reg -. persist .-> State
+  Reg -. append .-> Audit
 
   HookRx -. binds .-> Sock
-  Sock <-- datagram -- Hooks
+  Hooks -- datagram --> Sock
   Hooks -- exec --> Claude
   Bot -- spawn --> Dtach
   Dtach -- pty --> Claude
