@@ -21,7 +21,7 @@ This auto-detects `uv` / `pipx` / `brew` and uses whichever is already on
 your system. If none is present, it bootstraps `uv` (Astral's Python tool
 manager) and installs through it.
 
-### uv
+### uv (recommended on macOS)
 
 ```sh
 uv tool install aipager     # if uv is already installed
@@ -35,7 +35,9 @@ uv tool install aipager
 ```
 
 uv bundles its own Python interpreter, so this works on any macOS /
-Linux version regardless of what system Python is doing.
+Linux version regardless of what system Python is doing — it
+sidesteps the Homebrew-Python-vs-Xcode breakage described under the
+Homebrew section below.
 
 ### pipx
 
@@ -45,19 +47,22 @@ pipx install aipager
 
 ### Homebrew tap (macOS, Linuxbrew)
 
+> **Note:** `uv tool install aipager` is the recommended path on
+> macOS. The brew formula works when Homebrew's `python@3.12` bottle
+> and your Xcode / Command Line Tools are in sync, but they
+> periodically drift apart — most recently on **macOS Tahoe
+> (26.x)**, where install fails with a
+> `pyexpat _XML_SetAllocTrackerActivationThreshold` symbol error
+> ([upstream issue](https://github.com/Homebrew/homebrew-core/issues?q=_XML_SetAllocTrackerActivationThreshold)).
+> Updating Xcode + Command Line Tools usually fixes it, but it's
+> easier to just use uv.
+
 ```sh
 brew install dev-aly3n/tap/aipager
 ```
 
 Pulls `dtach` from Homebrew's standard formula and installs aipager into
 a Homebrew-managed Python venv.
-
-> **Heads-up:** if you're on **macOS Tahoe (26.x)**, the brew path may
-> fail at `pip install` time with a `pyexpat _XML_SetAllocTrackerActivationThreshold`
-> symbol error — that's a [known Homebrew Python bottle
-> issue](https://github.com/Homebrew/homebrew-core/issues?q=_XML_SetAllocTrackerActivationThreshold)
-> unrelated to aipager. Use the uv path instead (it's not affected) until
-> Homebrew rebuilds the bottles for Tahoe.
 
 ## Configure
 
