@@ -1,6 +1,6 @@
 pkgbase = aipager
 	pkgdesc = Telegram remote-control daemon for Claude Code CLI sessions
-	pkgver = 0.3.16
+	pkgver = 0.3.17
 	pkgrel = 1
 	url = https://aipager.run
 	arch = any
@@ -16,7 +16,7 @@ pkgbase = aipager
 	depends = dtach
 	optdepends = claude-code: required at runtime; install separately via npm
 	optdepends = faster-whisper: optional voice input transcription
-	source = https://files.pythonhosted.org/packages/source/a/aipager/aipager-0.3.16.tar.gz
-	sha256sums = 6bb984882ea171e2cb008d38506f66ecdd47cdd121b385173f64fa7e3be3a7d5
+	source = https://files.pythonhosted.org/packages/source/a/aipager/aipager-0.3.17.tar.gz
+	sha256sums = 6341c4a9464dff20d28ee2da99e04fb884488543ee1d6d195f55874c86cb0353
 
 pkgname = aipager
