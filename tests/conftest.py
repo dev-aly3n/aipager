@@ -65,6 +65,11 @@ def mk_update():
         update.message.text = text
         update.message.message_id = message_id
         update.message.reply_text = AsyncMock()
+        # Default to no reply target; tests that want one can set this
+        # explicitly. Without this default, the auto-generated MagicMock
+        # has non-string `.text` / `.caption` attributes that break any
+        # handler that runs regex against them.
+        update.message.reply_to_message = None
         update.effective_user = MagicMock()
         update.effective_user.id = user_id
         update.effective_chat = MagicMock()
