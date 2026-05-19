@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import sys
 
-import pytest
 
 from aipager import cli
 

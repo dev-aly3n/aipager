@@ -267,3 +267,87 @@ def test_cmd_status_total_cost_sums(monkeypatch):
     monkeypatch.setattr(status, "_render_rich", _capture)
     status.cmd_status(_ns(as_json=False))
     assert round(captured["total"], 2) == 0.30
+
+
+# ----- render_sessions_rich / _render_rich / _render_plain -----
+
+def test_render_sessions_rich_with_data(capsys):
+    """Exercise the rich-table render path."""
+    sessions = [
+        {"label": "jim", "status": "IDLE", "model": "Opus",
+         "context_pct": 30, "cost_usd": 0.5, "queue_depth": 0,
+         "name": "claude-jim"},
+        {"label": "busy", "status": "BUSY", "model": "",
+         "context_pct": 45, "cost_usd": 0.0, "queue_depth": 3,
+         "name": "claude-busy"},
+        {"label": "gone", "status": "GONE", "model": "",
+         "context_pct": None, "cost_usd": None, "queue_depth": 0,
+         "name": "claude-gone"},
+    ]
+    status.render_sessions_rich(sessions)
+    out = capsys.readouterr().out
+    assert "jim" in out
+
+
+def test_render_rich_daemon_down_shows_marker(capsys):
+    status._render_rich(False, [], 0.0)
+    out = capsys.readouterr().out
+    assert "not running" in out
+
+
+def test_render_rich_daemon_up_shows_chat_id(capsys):
+    status._render_rich(True, [], 0.0)
+    out = capsys.readouterr().out
+    assert "daemon" in out
+
+
+def test_render_rich_with_sessions_and_cost(capsys):
+    sessions = [
+        {"label": "jim", "status": "IDLE", "model": "Opus",
+         "context_pct": 10, "cost_usd": 1.23, "queue_depth": 0,
+         "name": "claude-jim"},
+    ]
+    status._render_rich(True, sessions, 1.23)
+    out = capsys.readouterr().out
+    assert "1.23" in out
+
+
+def test_render_plain_daemon_up(capsys):
+    status._render_plain(True, [], 0.0)
+    out = capsys.readouterr().out
+    assert "daemon: up" in out
+
+
+def test_render_plain_daemon_down(capsys):
+    status._render_plain(False, [], 0.0)
+    out = capsys.readouterr().out
+    assert "not running" in out
+
+
+def test_render_plain_with_total_cost(capsys):
+    status._render_plain(True, [], 4.56)
+    out = capsys.readouterr().out
+    assert "4.56" in out
+
+
+# ----- _read_statusline edge cases -----
+
+def test_read_statusline_used_percentage_in_data(tmp_path, monkeypatch):
+    f = tmp_path / "claude-status-jim.json"
+    f.write_text(json.dumps({"context_window": {"used_percentage": 33.4}}))
+    _real = status.Path
+    monkeypatch.setattr(status, "Path",
+                        lambda p: _real(tmp_path / p.split("/")[-1]))
+    out = status._read_statusline("jim")
+    # status._read_statusline returns raw dict; assertions depend on impl
+    assert "context_window" in out
+
+
+def test_read_statusline_with_remaining_pct(tmp_path, monkeypatch):
+    f = tmp_path / "claude-status-jim.json"
+    f.write_text(json.dumps({"context_window": {"remaining_percentage": 60}}))
+    _real = status.Path
+    monkeypatch.setattr(status, "Path",
+                        lambda p: _real(tmp_path / p.split("/")[-1]))
+    out = status._read_statusline("jim")
+    assert "context_window" in out

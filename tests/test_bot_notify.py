@@ -10,10 +10,9 @@ from __future__ import annotations
 import time
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 from telegram.error import BadRequest, Forbidden
 
-from aipager.state import SessionRegistry, Status, TrackedSession
+from aipager.state import Status, TrackedSession
 
 
 def _sess(label="jim", *, status=Status.BUSY, busy_msg_id=100):

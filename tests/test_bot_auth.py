@@ -8,9 +8,8 @@ off the allow-list.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
-import pytest
 
 from aipager.state import Status, TrackedSession
 from aipager.team import Role, Rules, Team, User as TeamUser

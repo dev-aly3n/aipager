@@ -7,9 +7,8 @@ InlineKeyboardMarkup. Easy to exercise without network I/O.
 from __future__ import annotations
 
 import time
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
-import pytest
 from telegram import InlineKeyboardMarkup
 
 from aipager.state import Status, TrackedSession

@@ -10,14 +10,12 @@ sound regardless of how they drive the prompts.
 from __future__ import annotations
 
 import json
-import os
 import urllib.error
 from io import BytesIO
-from unittest.mock import MagicMock, patch
 
 import pytest
 
-from aipager.wizard import _constants, daemon_io, settings_patch, telegram_api
+from aipager.wizard import daemon_io, settings_patch, telegram_api
 
 
 # ===== telegram_api =====================================================

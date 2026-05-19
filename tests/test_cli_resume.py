@@ -7,12 +7,9 @@ loader, and the `_fmt_ago_cli` helper.
 from __future__ import annotations
 
 import argparse
-import io
-import json
 import time
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
-import pytest
 
 from aipager.cli import resume as cli_resume
 
@@ -183,7 +180,7 @@ def test_cmd_resume_with_name_calls_resume_one(monkeypatch):
     monkeypatch.setattr(cli_resume, "_resume_one",
                         lambda label: (called.setdefault("label", label), 0)[1])
     args = argparse.Namespace(name="jim")
-    rc = cli_resume._cmd_resume(args)
+    cli_resume._cmd_resume(args)
     assert called["label"] == "jim"
 
 

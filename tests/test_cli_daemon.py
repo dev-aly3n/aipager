@@ -9,10 +9,9 @@ loop and is tested via the end-to-end smoke check.
 from __future__ import annotations
 
 import json
-import socket as _socket
 import urllib.error
 from io import BytesIO
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
