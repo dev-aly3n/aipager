@@ -150,7 +150,7 @@ async def _run_daemon(bot_username: str) -> None:
     """Boot the daemon and run until SIGINT/SIGTERM."""
     from aipager.config import BOT_TOKEN, CHAT_ID, OBSERVER_BOTS
     from aipager.dtach.hook_receiver import HookReceiver
-    from aipager.observer import ObserverBroadcaster
+    from aipager.bot.observer import ObserverBroadcaster
     from aipager.session_monitor import SessionMonitor
     from aipager.state import SessionRegistry
     from aipager.bot import TelegramBot

@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from telegram.error import BadRequest
 
-from aipager import telegram_bot as tb
+from aipager.bot import TelegramBot
 from aipager.state import SessionRegistry, TrackedSession
 
 
@@ -21,7 +21,7 @@ def test_safe_answer_swallows_query_too_old(run_async):
         side_effect=BadRequest("Bad Request: query is too old"),
     )
     # Should not raise
-    run_async(tb.TelegramBot._safe_answer(query, "irrelevant"))
+    run_async(TelegramBot._safe_answer(query, "irrelevant"))
 
 
 def test_safe_answer_swallows_already_answered(run_async):
@@ -29,13 +29,13 @@ def test_safe_answer_swallows_already_answered(run_async):
     query.answer = AsyncMock(
         side_effect=BadRequest("Bad Request: query_id_invalid"),
     )
-    run_async(tb.TelegramBot._safe_answer(query))
+    run_async(TelegramBot._safe_answer(query))
 
 
 def test_safe_answer_passes_text_through_when_ok(run_async):
     query = MagicMock()
     query.answer = AsyncMock()
-    run_async(tb.TelegramBot._safe_answer(query, "Killing jim..."))
+    run_async(TelegramBot._safe_answer(query, "Killing jim..."))
     query.answer.assert_awaited_once_with("Killing jim...")
 
 
@@ -56,7 +56,7 @@ def test_bot_stop_cancels_animate_tasks(run_async):
         registry._sessions[sess1.name] = sess1
         registry._sessions[sess2.name] = sess2
 
-        bot = tb.TelegramBot(registry)
+        bot = TelegramBot(registry)
         # Mock _app and its updater/stop methods.
         bot._app = MagicMock()
         bot._app.updater.stop = AsyncMock()
@@ -79,7 +79,7 @@ def test_bot_stop_safe_when_no_animate_tasks(run_async):
     registry._sessions[sess.name] = sess
 
     async def _outer():
-        bot = tb.TelegramBot(registry)
+        bot = TelegramBot(registry)
         bot._app = MagicMock()
         bot._app.updater.stop = AsyncMock()
         bot._app.stop = AsyncMock()

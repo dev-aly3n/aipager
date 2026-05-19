@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from unittest.mock import MagicMock
 
-from aipager import telegram_bot as tb
+from aipager.dtach import inject
 from aipager.state import SessionRegistry, Status, TrackedSession
 
 
@@ -19,7 +19,7 @@ def test_new_fresh_name_takes_happy_path(monkeypatch, mk_bot, mk_update, run_asy
     async def _ok_launch(*a, **kw):
         return True, ""
 
-    monkeypatch.setattr(tb.inject, "launch_session", _ok_launch)
+    monkeypatch.setattr(inject, "launch_session", _ok_launch)
     update = mk_update("/new dev")
     run_async(bot._handle_new_cmd(update, MagicMock()))
 
@@ -83,7 +83,7 @@ def test_new_gone_without_resumable_id_falls_through(monkeypatch, mk_bot, mk_upd
     async def _ok_launch(*a, **kw):
         return True, ""
 
-    monkeypatch.setattr(tb.inject, "launch_session", _ok_launch)
+    monkeypatch.setattr(inject, "launch_session", _ok_launch)
     update = mk_update("/new jim")
     run_async(bot._handle_new_cmd(update, MagicMock()))
 

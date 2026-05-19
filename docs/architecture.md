@@ -70,7 +70,7 @@ show. Inside that:
   `TrackedSession` objects keyed by name. Serializes to
   `~/.claude/aipager-sessions.json` on shutdown and on every state
   transition that matters.
-- **`ObserverBroadcaster`** (optional, `aipager/observer.py`) — if
+- **`ObserverBroadcaster`** (optional, `aipager/bot/observer.py`) — if
   `AIPAGER_OBSERVERS` is set, also forwards messages to read-only
   observer bots.
 

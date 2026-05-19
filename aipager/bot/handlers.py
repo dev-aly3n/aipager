@@ -868,7 +868,7 @@ class CommandHandlersMixin:
             return
 
         # Voice extra installed?
-        from aipager import voice
+        from aipager.bot import voice
         if not voice.is_available():
             # Offer to install it remotely — user might be away from
             # their terminal. The callback handler does the actual work.

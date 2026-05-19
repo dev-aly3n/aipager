@@ -13,14 +13,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 from telegram.error import BadRequest, Forbidden, RetryAfter
 
-from aipager import telegram_bot as tb
+from aipager.bot import TelegramBot
+from aipager.dtach import inject
 from aipager.bot import transport as tbt
 from aipager.state import SessionRegistry, Status, TrackedSession
 
 
-def _make_bot(registry: SessionRegistry, edit_side_effect=None) -> tb.TelegramBot:
+def _make_bot(registry: SessionRegistry, edit_side_effect=None) -> TelegramBot:
     """Construct a TelegramBot with a mocked `_app.bot`."""
-    bot = tb.TelegramBot(registry)
+    bot = TelegramBot(registry)
     fake_bot = MagicMock()
     fake_bot.edit_message_text = AsyncMock(side_effect=edit_side_effect)
     app = MagicMock()
@@ -162,7 +163,7 @@ def test_recover_sessions_skips_when_no_orphans(monkeypatch, run_async):
     registry._sessions["claude-jim"] = s1
     bot = _make_bot(registry)
     # Patch inject.list_sessions to async-return empty set
-    monkeypatch.setattr(tb.inject, "list_sessions",
+    monkeypatch.setattr(inject, "list_sessions",
                         AsyncMock(return_value=[]))
     run_async(bot.recover_sessions())
     bot._app.bot.edit_message_text.assert_not_awaited()
@@ -176,7 +177,7 @@ def test_recover_sessions_processes_only_targets_with_busy_msg_id(monkeypatch, r
     s3 = _make_sess("claude-tim", "tim", 102)
     registry._sessions.update({s1.name: s1, s2.name: s2, s3.name: s3})
     bot = _make_bot(registry)
-    monkeypatch.setattr(tb.inject, "list_sessions",
+    monkeypatch.setattr(inject, "list_sessions",
                         AsyncMock(return_value=["claude-jim", "claude-john", "claude-tim"]))
     run_async(bot.recover_sessions())
     # 2 sessions had busy_msg_id, both got edited
@@ -194,7 +195,7 @@ def test_recover_sessions_stops_early_on_forbidden(monkeypatch, caplog, run_asyn
     bot = _make_bot(registry,
                     edit_side_effect=Forbidden("Forbidden: bot was blocked"))
     monkeypatch.setattr(tbt, "_LAST_BLOCKED_LOG_TS", -1e9)
-    monkeypatch.setattr(tb.inject, "list_sessions",
+    monkeypatch.setattr(inject, "list_sessions",
                         AsyncMock(return_value=[]))
     caplog.set_level("INFO", logger="aipager.bot")
     run_async(bot.recover_sessions())
@@ -226,7 +227,7 @@ def test_recover_sessions_logs_summary(monkeypatch, caplog, run_async):
 
     bot = _make_bot(registry)
     bot._app.bot.edit_message_text = AsyncMock(side_effect=_edit)
-    monkeypatch.setattr(tb.inject, "list_sessions",
+    monkeypatch.setattr(inject, "list_sessions",
                         AsyncMock(return_value=["claude-a", "claude-b"]))
 
     caplog.set_level("INFO", logger="aipager.bot")
@@ -242,7 +243,7 @@ def test_recover_sessions_logs_summary(monkeypatch, caplog, run_async):
 
 def test_recover_sessions_skips_when_no_app(run_async):
     registry = SessionRegistry()
-    bot = tb.TelegramBot(registry)
+    bot = TelegramBot(registry)
     bot._app = None
     # Must not raise
     run_async(bot.recover_sessions())

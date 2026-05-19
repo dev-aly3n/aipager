@@ -11,7 +11,7 @@ import builtins
 
 import pytest
 
-from aipager import voice
+from aipager.bot import voice
 
 
 def test_module_import_does_not_require_faster_whisper(run_async):
@@ -19,7 +19,7 @@ def test_module_import_does_not_require_faster_whisper(run_async):
     is missing — that's the whole point of making it an optional extra.
     The import is `TYPE_CHECKING` only at module scope."""
     # `voice` is already imported at the top; assert it's a module
-    import aipager.voice as mod
+    import aipager.bot.voice as mod
     assert hasattr(mod, "transcribe")
     assert hasattr(mod, "is_available")
 
@@ -91,7 +91,7 @@ def test_default_model_respects_env(monkeypatch, run_async):
     monkeypatch.setenv("AIPAGER_WHISPER_MODEL", "tiny")
     # Re-import to pick up the env change
     import importlib
-    import aipager.voice as v
+    import aipager.bot.voice as v
     importlib.reload(v)
     assert v.DEFAULT_MODEL == "tiny"
     # Restore (other tests may rely on the default)

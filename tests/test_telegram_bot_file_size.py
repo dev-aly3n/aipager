@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
-from aipager import telegram_bot as tb
+from aipager.bot.transport import TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES
 
 
 def _mk_doc_update(file_size: int):
@@ -32,7 +32,7 @@ def _mk_photo_update(file_size: int):
 
 def test_document_over_limit_rejected_with_friendly_message(mk_bot, run_async):
     bot = mk_bot()
-    over = tb.TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES + 1024 * 1024  # 1 MB over
+    over = TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES + 1024 * 1024  # 1 MB over
     update = _mk_doc_update(file_size=over)
     run_async(bot._handle_file(update, MagicMock()))
     update.message.reply_text.assert_awaited_once()
@@ -45,7 +45,7 @@ def test_document_over_limit_rejected_with_friendly_message(mk_bot, run_async):
 
 def test_photo_over_limit_rejected(mk_bot, run_async):
     bot = mk_bot()
-    over = tb.TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES + 1
+    over = TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES + 1
     update = _mk_photo_update(file_size=over)
     run_async(bot._handle_file(update, MagicMock()))
     update.message.reply_text.assert_awaited_once()

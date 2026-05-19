@@ -5,7 +5,8 @@ from __future__ import annotations
 import time
 from unittest.mock import MagicMock
 
-from aipager import telegram_bot as tb
+from aipager.bot import TelegramBot
+from aipager.dtach import inject
 from aipager.state import SessionRegistry, Status, TrackedSession
 
 
@@ -81,7 +82,7 @@ def test_resume_happy_path_calls_launch_with_resume_id(monkeypatch, mk_bot, mk_u
         captured["cwd"] = cwd
         return True, ""
 
-    monkeypatch.setattr(tb.inject, "launch_session", _fake_launch)
+    monkeypatch.setattr(inject, "launch_session", _fake_launch)
     # Stub _build_session_dashboard so we don't touch unrelated rendering.
     monkeypatch.setattr(bot, "_build_session_dashboard",
                         lambda s: "<dashboard>")
@@ -113,7 +114,7 @@ def test_resume_launch_failure_restores_session_id(monkeypatch, mk_bot, mk_updat
     async def _fake_launch(*a, **kw):
         return False, "dtach is sad"
 
-    monkeypatch.setattr(tb.inject, "launch_session", _fake_launch)
+    monkeypatch.setattr(inject, "launch_session", _fake_launch)
 
     update = mk_update("/resume jim")
     run_async(bot._handle_resume_cmd(update, MagicMock()))
@@ -189,12 +190,12 @@ def test_picker_sorts_newest_first(mk_bot, mk_update, run_async):
 # ---- fmt_gone_ago -------------------------------------------------------
 
 def test_fmt_gone_ago_handles_none(mk_bot, mk_update, run_async):
-    assert tb.TelegramBot._fmt_gone_ago(None) == "?"
+    assert TelegramBot._fmt_gone_ago(None) == "?"
 
 
 def test_fmt_gone_ago_seconds(mk_bot, mk_update, run_async):
-    assert "s ago" in tb.TelegramBot._fmt_gone_ago(time.time() - 30)
+    assert "s ago" in TelegramBot._fmt_gone_ago(time.time() - 30)
 
 
 def test_fmt_gone_ago_hours(mk_bot, mk_update, run_async):
-    assert "h ago" in tb.TelegramBot._fmt_gone_ago(time.time() - 7200)
+    assert "h ago" in TelegramBot._fmt_gone_ago(time.time() - 7200)

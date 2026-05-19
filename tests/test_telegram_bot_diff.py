@@ -2,35 +2,41 @@
 
 from __future__ import annotations
 
-from aipager import telegram_bot as tb
+from aipager.bot.transport import (
+    _DIFF_MAX_CHARS,
+    _DIFF_MAX_LINES,
+    _build_diff_block,
+    _diff_view_enabled,
+    _truncate_diff,
+)
 
 
 # ----- _diff_view_enabled -----
 
 def test_diff_view_default_on(monkeypatch):
     monkeypatch.delenv("AIPAGER_DIFF_VIEW", raising=False)
-    assert tb._diff_view_enabled() is True
+    assert _diff_view_enabled() is True
 
 
 def test_diff_view_off_by_zero(monkeypatch):
     monkeypatch.setenv("AIPAGER_DIFF_VIEW", "0")
-    assert tb._diff_view_enabled() is False
+    assert _diff_view_enabled() is False
 
 
 def test_diff_view_off_by_no(monkeypatch):
     monkeypatch.setenv("AIPAGER_DIFF_VIEW", "no")
-    assert tb._diff_view_enabled() is False
+    assert _diff_view_enabled() is False
 
 
 def test_diff_view_on_by_explicit_1(monkeypatch):
     monkeypatch.setenv("AIPAGER_DIFF_VIEW", "1")
-    assert tb._diff_view_enabled() is True
+    assert _diff_view_enabled() is True
 
 
 # ----- _build_diff_block -----
 
 def test_build_diff_block_write_creates_unified_diff():
-    out = tb._build_diff_block("Write", {
+    out = _build_diff_block("Write", {
         "file_path": "/tmp/new.txt",
         "content": "hello\nworld\n",
     })
@@ -45,7 +51,7 @@ def test_build_diff_block_write_creates_unified_diff():
 
 
 def test_build_diff_block_edit_shows_change():
-    out = tb._build_diff_block("Edit", {
+    out = _build_diff_block("Edit", {
         "file_path": "/tmp/x.py",
         "old_string": "alpha\nbeta\n",
         "new_string": "alpha\nGAMMA\n",
@@ -58,7 +64,7 @@ def test_build_diff_block_edit_shows_change():
 
 def test_build_diff_block_empty_when_no_change():
     """Edit with old == new produces no diff body."""
-    out = tb._build_diff_block("Edit", {
+    out = _build_diff_block("Edit", {
         "file_path": "/tmp/same.py",
         "old_string": "no change here",
         "new_string": "no change here",
@@ -72,39 +78,39 @@ def test_build_diff_block_empty_when_no_change():
 
 
 def test_build_diff_block_missing_file_path_returns_none():
-    assert tb._build_diff_block("Edit", {
+    assert _build_diff_block("Edit", {
         "old_string": "x", "new_string": "y",
     }) is None
-    assert tb._build_diff_block("Write", {"content": "x"}) is None
+    assert _build_diff_block("Write", {"content": "x"}) is None
 
 
 def test_build_diff_block_empty_write_returns_none():
-    assert tb._build_diff_block("Write", {
+    assert _build_diff_block("Write", {
         "file_path": "/tmp/x",
         "content": "",
     }) is None
 
 
 def test_build_diff_block_other_tools_return_none():
-    assert tb._build_diff_block("Read", {"file_path": "/tmp/x"}) is None
-    assert tb._build_diff_block("Bash", {"command": "ls"}) is None
+    assert _build_diff_block("Read", {"file_path": "/tmp/x"}) is None
+    assert _build_diff_block("Bash", {"command": "ls"}) is None
 
 
 # ----- _truncate_diff -----
 
 def test_truncate_diff_short_input_unchanged():
     lines = ["@@@ header", "+one", "+two"]
-    body, dropped = tb._truncate_diff(lines)
+    body, dropped = _truncate_diff(lines)
     assert body == "@@@ header\n+one\n+two"
     assert dropped == 0
 
 
 def test_truncate_diff_caps_line_count():
     lines = [f"+line{i}" for i in range(100)]
-    body, dropped = tb._truncate_diff(lines)
+    body, dropped = _truncate_diff(lines)
     # Keeps the first _DIFF_MAX_LINES
-    assert body.count("\n") == tb._DIFF_MAX_LINES - 1
-    assert dropped == 100 - tb._DIFF_MAX_LINES
+    assert body.count("\n") == _DIFF_MAX_LINES - 1
+    assert dropped == 100 - _DIFF_MAX_LINES
 
 
 def test_truncate_diff_caps_char_count():
@@ -112,5 +118,5 @@ def test_truncate_diff_caps_char_count():
     # huge so the char cap does
     big = "x" * 1000
     lines = [big, big, big, big, big]
-    body, dropped = tb._truncate_diff(lines)
-    assert len(body) <= tb._DIFF_MAX_CHARS
+    body, dropped = _truncate_diff(lines)
+    assert len(body) <= _DIFF_MAX_CHARS

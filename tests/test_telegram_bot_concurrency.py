@@ -8,12 +8,12 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-from aipager import telegram_bot as tb
+from aipager.bot import TelegramBot
 from aipager.state import SessionRegistry, Status, TrackedSession
 
 
 def _make_bot(registry):
-    bot = tb.TelegramBot(registry)
+    bot = TelegramBot(registry)
     fake_bot = MagicMock()
     fake_bot.send_chat_action = AsyncMock()
     bot._app = MagicMock()
