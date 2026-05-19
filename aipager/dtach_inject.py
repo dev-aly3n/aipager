@@ -9,6 +9,7 @@ import asyncio
 import logging
 import os
 import re
+import shlex
 import shutil
 from pathlib import Path
 
@@ -159,11 +160,25 @@ _PROJECT_DIR = os.environ.get("AIPAGER_WORK_DIR", os.getcwd())
 _CLAUDE_BIN = shutil.which("claude") or "claude"
 
 
-async def launch_session(name: str, skip_perms: bool = False) -> tuple[bool, str]:
+async def launch_session(
+    name: str,
+    skip_perms: bool = False,
+    *,
+    resume_id: str | None = None,
+    cwd: str | None = None,
+) -> tuple[bool, str]:
     """Launch a new Claude Code session inside dtach.
 
     Returns (success, error_message). The session_monitor will auto-discover
     the new session within 2 seconds.
+
+    Pass ``resume_id`` to invoke ``claude --resume <id>`` so the new
+    session inherits the conversation history of a previous one. The
+    resume id is what Claude Code stores as the JSONL filename
+    (``Path(transcript_path).stem``). Pass ``cwd`` to launch from a
+    specific directory — required for resume because Claude organizes
+    transcripts by encoded cwd. Both default to None (fresh session,
+    daemon's working dir).
     """
     if not name or not _VALID_NAME.match(name):
         return False, "Invalid name (use letters, numbers, hyphens)"
@@ -176,8 +191,13 @@ async def launch_session(name: str, skip_perms: bool = False) -> tuple[bool, str
     if Path(sock).is_socket():
         return False, f"Session '{name}' already exists"
 
+    launch_cwd = cwd or _PROJECT_DIR
+    if cwd and not Path(cwd).is_dir():
+        return False, f"original project dir is gone: {cwd}"
+
     # Build the bash -c command — wraps claude with env vars and prompt
     perms = "--dangerously-skip-permissions" if skip_perms else ""
+    resume = f"--resume {shlex.quote(resume_id)}" if resume_id else ""
     sys_prompt = (f'Your session name is "{name}". '
                   f'When users address you by this name, respond naturally '
                   f'-- it is your name in this session.')
@@ -188,14 +208,14 @@ async def launch_session(name: str, skip_perms: bool = False) -> tuple[bool, str
     bash_cmd = (
         f"unset CLAUDECODE; "
         f"export CLAUDE_DTACH_SESSION=claude-{name}; "
-        f"{_CLAUDE_BIN} {perms} "
-        f"--append-system-prompt '{sys_prompt}'"
+        f"{_CLAUDE_BIN} {perms} {resume} "
+        f"--append-system-prompt {shlex.quote(sys_prompt)}"
     )
 
     try:
         proc = await asyncio.create_subprocess_exec(
             _DTACH, "-n", sock, "-Ez", "bash", "-c", bash_cmd,
-            cwd=_PROJECT_DIR,
+            cwd=launch_cwd,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
         )
