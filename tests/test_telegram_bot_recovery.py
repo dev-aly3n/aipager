@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 from telegram.error import BadRequest, Forbidden, RetryAfter
 
 from aipager import telegram_bot as tb
+from aipager.bot import transport as tbt
 from aipager.state import SessionRegistry, Status, TrackedSession
 
 
@@ -97,7 +98,7 @@ def test_recover_blocked(monkeypatch, run_async):
     bot = _make_bot(registry,
                     edit_side_effect=Forbidden("Forbidden: bot was blocked by the user"))
     # Force the throttle gate open
-    monkeypatch.setattr(tb, "_LAST_BLOCKED_LOG_TS", -1e9)
+    monkeypatch.setattr(tbt, "_LAST_BLOCKED_LOG_TS", -1e9)
     outcome = run_async(bot._recover_busy_message(
         bot._app.bot, "claude-jim", sess, live_names=set()
     ))
@@ -192,7 +193,7 @@ def test_recover_sessions_stops_early_on_forbidden(monkeypatch, caplog, run_asyn
     # First edit raises Forbidden; further edits must NOT be called
     bot = _make_bot(registry,
                     edit_side_effect=Forbidden("Forbidden: bot was blocked"))
-    monkeypatch.setattr(tb, "_LAST_BLOCKED_LOG_TS", -1e9)
+    monkeypatch.setattr(tbt, "_LAST_BLOCKED_LOG_TS", -1e9)
     monkeypatch.setattr(tb.inject, "list_sessions",
                         AsyncMock(return_value=[]))
     caplog.set_level("INFO", logger="aipager.telegram_bot")

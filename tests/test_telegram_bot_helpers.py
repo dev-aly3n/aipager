@@ -11,13 +11,14 @@ import pytest
 from telegram.error import BadRequest, Forbidden, RetryAfter
 
 from aipager import telegram_bot as tb
+from aipager.bot import transport as tbt
 
 
 # ----- _log_blocked_once -----
 
 def test_log_blocked_once_throttles(monkeypatch, caplog, run_async):
-    monkeypatch.setattr(tb, "_LAST_BLOCKED_LOG_TS", 0.0)
-    monkeypatch.setattr(tb.time, "monotonic", lambda: 100.0)
+    monkeypatch.setattr(tbt, "_LAST_BLOCKED_LOG_TS", 0.0)
+    monkeypatch.setattr(tbt.time, "monotonic", lambda: 100.0)
     caplog.set_level("ERROR", logger="aipager.telegram_bot")
     tb._log_blocked_once(Exception("bot was blocked"))
     n1 = sum("blocked or deleted" in r.message for r in caplog.records)
@@ -28,11 +29,11 @@ def test_log_blocked_once_throttles(monkeypatch, caplog, run_async):
 
 
 def test_log_blocked_after_interval_logs_again(monkeypatch, caplog, run_async):
-    monkeypatch.setattr(tb, "_LAST_BLOCKED_LOG_TS", 0.0)
-    monkeypatch.setattr(tb.time, "monotonic", lambda: 100.0)
+    monkeypatch.setattr(tbt, "_LAST_BLOCKED_LOG_TS", 0.0)
+    monkeypatch.setattr(tbt.time, "monotonic", lambda: 100.0)
     caplog.set_level("ERROR", logger="aipager.telegram_bot")
     tb._log_blocked_once(Exception("bot was blocked"))
-    monkeypatch.setattr(tb.time, "monotonic", lambda: 200.0)  # +100s later
+    monkeypatch.setattr(tbt.time, "monotonic", lambda: 200.0)  # +100s later
     tb._log_blocked_once(Exception("bot was blocked"))
     assert sum("blocked or deleted" in r.message for r in caplog.records) == 2
 
@@ -83,7 +84,7 @@ def test_send_with_retry_retries_on_flood(monkeypatch, run_async):
     async def _no_sleep(_):
         return None
 
-    monkeypatch.setattr(tb.asyncio, "sleep", _no_sleep)
+    monkeypatch.setattr(tbt.asyncio, "sleep", _no_sleep)
     out = run_async(tb._send_with_retry(bot, chat_id=1, text="hi"))
     assert out == "MSG"
     assert len(bot.calls) == 2
@@ -109,7 +110,7 @@ def test_send_with_retry_propagates_forbidden(monkeypatch, caplog, run_async):
     bot = _FakeBot([Forbidden("Forbidden: bot was blocked")])
     # Force the throttle gate open regardless of how small time.monotonic()
     # is on a fresh CI runner (uptime < 60s).
-    monkeypatch.setattr(tb, "_LAST_BLOCKED_LOG_TS", -1e9)
+    monkeypatch.setattr(tbt, "_LAST_BLOCKED_LOG_TS", -1e9)
     caplog.set_level("ERROR", logger="aipager.telegram_bot")
     with pytest.raises(Forbidden):
         run_async(tb._send_with_retry(bot, chat_id=1, text="hi"))
