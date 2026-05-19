@@ -717,6 +717,7 @@ class TelegramBot:
         self._app.add_handler(CommandHandler("stop", self._handle_stop_cmd))
         self._app.add_handler(CommandHandler("kill", self._handle_kill_cmd))
         self._app.add_handler(CommandHandler("new", self._handle_new_cmd))
+        self._app.add_handler(CommandHandler("resume", self._handle_resume_cmd))
         self._app.add_handler(CommandHandler("clearqueue", self._handle_clearqueue_cmd))
         # Media handler: photos and documents → save file, inject prompt
         self._app.add_handler(MessageHandler(
@@ -2576,6 +2577,55 @@ class TelegramBot:
                 await self._safe_answer(query, "No gone sessions to clear")
             return
 
+        # ---- /resume picker callbacks ---------------------------------
+        if action == "resume" and session_name and session_name != "_":
+            label = session_name.removeprefix("claude-")
+            # Edit the picker message into a "Resuming…" stub so the user
+            # sees feedback even before launch_session returns.
+            try:
+                await query.edit_message_text(
+                    f"♻️ Resuming <b>{html_mod.escape(label)}</b>…",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+
+            async def _reply(text, **kw):
+                # The picker message is editable but only once — subsequent
+                # edits on the same message work fine. Fall back to a fresh
+                # message if Telegram rejects the edit (e.g. picker was
+                # deleted).
+                try:
+                    await query.edit_message_text(text, **kw)
+                except Exception:
+                    await self._app.bot.send_message(
+                        chat_id=CHAT_ID, text=text, **kw,
+                    )
+
+            # Reuse the same code path as /resume <name>. No update object
+            # here, so driver attribution falls back to leaving the
+            # last_driver field unchanged (still set from prior session).
+            await self._do_resume(label=label, reply_fn=_reply)
+            return
+
+        if action.startswith("resume_page:"):
+            try:
+                page = int(action.split(":", 1)[1])
+            except (IndexError, ValueError):
+                page = 0
+            text, kb = self._render_resume_picker(page=page)
+            try:
+                await query.edit_message_text(
+                    text, parse_mode="HTML", reply_markup=kb,
+                )
+            except Exception:
+                pass
+            return
+
+        if action == "resume_noop":
+            # The page indicator is a no-op tap; just clear the spinner.
+            return
+
         is_option = action.startswith("opt") and action[3:].isdigit()
 
         if action not in ACTION_VERBS and not is_option and action != "submit":
@@ -3226,6 +3276,186 @@ class TelegramBot:
             parse_mode="HTML",
         )
         log.info("Launched session %s (prompt=%s)", name, bool(prompt))
+
+    # ---- /resume — bring back a previously-gone session by name ----------
+
+    _RESUME_PAGE_SIZE = 10
+
+    def _gone_sessions_sorted(self) -> list[TrackedSession]:
+        """Return GONE sessions, newest-first by gone_at, for /resume listings."""
+        gone = [
+            s for s in self.registry.all_sessions().values()
+            if s.status == Status.GONE
+        ]
+        gone.sort(key=lambda s: s.gone_at or 0.0, reverse=True)
+        return gone
+
+    @staticmethod
+    def _fmt_gone_ago(gone_at: float | None) -> str:
+        """Short relative timestamp for picker rows ('2h ago', 'just now')."""
+        if not gone_at:
+            return "?"
+        delta = max(0, int(time.time() - gone_at))
+        if delta < 60:
+            return f"{delta}s ago"
+        if delta < 3600:
+            return f"{delta // 60}m ago"
+        if delta < 86400:
+            return f"{delta // 3600}h ago"
+        return f"{delta // 86400}d ago"
+
+    def _render_resume_picker(self, page: int = 0) -> tuple[str, InlineKeyboardMarkup | None]:
+        """Render the paginated /resume picker. Returns (text, keyboard or None)."""
+        gone = self._gone_sessions_sorted()
+        if not gone:
+            return "📭 No previous sessions to resume.", None
+
+        page_size = self._RESUME_PAGE_SIZE
+        total_pages = (len(gone) + page_size - 1) // page_size
+        page = max(0, min(page, total_pages - 1))
+        start = page * page_size
+        chunk = gone[start:start + page_size]
+
+        rows: list[list[InlineKeyboardButton]] = []
+        for s in chunk:
+            label = f"{s.label} — {self._fmt_gone_ago(s.gone_at)}"
+            rows.append([InlineKeyboardButton(
+                label, callback_data=f"{s.name}:resume",
+            )])
+
+        # Pagination row only when there's more than one page
+        if total_pages > 1:
+            nav: list[InlineKeyboardButton] = []
+            if page > 0:
+                nav.append(InlineKeyboardButton(
+                    "« Prev", callback_data=f"_:resume_page:{page - 1}",
+                ))
+            nav.append(InlineKeyboardButton(
+                f"Page {page + 1}/{total_pages}",
+                callback_data="_:resume_noop",
+            ))
+            if page < total_pages - 1:
+                nav.append(InlineKeyboardButton(
+                    "Next »", callback_data=f"_:resume_page:{page + 1}",
+                ))
+            rows.append(nav)
+
+        text = (
+            f"📚 <b>Previous sessions</b> ({len(gone)} total)\n"
+            f"Tap a name to resume:"
+        )
+        return text, InlineKeyboardMarkup(rows)
+
+    async def _handle_resume_cmd(self, update: Update,
+                                  ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /resume [<name>] — resume a previous session, or open picker."""
+        if not await self._authorize(update):
+            return
+        parts = (update.message.text or "").split(maxsplit=1)
+        if len(parts) < 2:
+            text, kb = self._render_resume_picker(page=0)
+            await update.message.reply_text(
+                text, parse_mode="HTML", reply_markup=kb,
+            )
+            return
+        name = parts[1].strip().lstrip("@/").lower()
+        # Reuse direct-resume helper so the /resume command and the picker
+        # button take exactly the same code path (and produce the same
+        # errors / dashboard reply).
+        await self._do_resume(
+            label=name,
+            reply_fn=update.message.reply_text,
+            update=update,
+        )
+
+    async def _do_resume(self, *, label: str, reply_fn,
+                          update: Update | None = None,
+                          query=None) -> None:
+        """Shared resume logic for /resume <name> and picker callbacks.
+
+        ``reply_fn`` is the async-callable used to send the result back
+        (``update.message.reply_text`` for command, ``query.edit_message_text``
+        for callbacks). ``update`` is used to attribute the driver in team
+        mode when available.
+        """
+        session_name = f"claude-{label}"
+        sess = self.registry.get(session_name)
+
+        if sess is None:
+            await reply_fn(
+                f"⚠️ No session named <b>{html_mod.escape(label)}</b> in history.\n"
+                f"Send <code>/resume</code> with no name to see what's available.",
+                parse_mode="HTML",
+            )
+            return
+
+        if sess.status != Status.GONE:
+            await reply_fn(
+                f"⚠️ <b>{html_mod.escape(label)}</b> is already running.\n"
+                f"Tap <code>/{html_mod.escape(label)}</code> in the keyboard "
+                f"to switch to it.",
+                parse_mode="HTML",
+            )
+            return
+
+        if not sess.claude_session_id:
+            await reply_fn(
+                f"⚠️ Session <b>{html_mod.escape(label)}</b> has no resumable "
+                f"transcript on disk.\n"
+                f"Start a fresh one with <code>/new {html_mod.escape(label)}</code>.",
+                parse_mode="HTML",
+            )
+            return
+
+        resume_id = sess.claude_session_id
+        cwd = sess.cwd or None
+        # Defensive: clear the id BEFORE launch so a repeat-failure doesn't
+        # rope us into an infinite resume loop (claude --resume against a
+        # deleted transcript dies → socket disappears → /resume retries).
+        sess.claude_session_id = ""
+        self.registry.mark_dirty()
+
+        ok, err = await inject.launch_session(
+            label, resume_id=resume_id, cwd=cwd,
+        )
+        if not ok:
+            # Restore the id so the user can try again after fixing whatever
+            # broke (e.g. removing a stale socket).
+            sess.claude_session_id = resume_id
+            self.registry.mark_dirty()
+            await reply_fn(
+                f"❌ Couldn't resume <b>{html_mod.escape(label)}</b>: "
+                f"{html_mod.escape(err)}",
+                parse_mode="HTML",
+            )
+            return
+
+        # Resume succeeded — recover state, dashboard out the result.
+        sess.gone_at = None
+        self.registry.transition(session_name, Status.IDLE)
+        if update is not None:
+            self._mark_driver(sess, update)
+        self.registry.last_active_session = session_name
+        self.registry.mark_dirty()
+        asyncio.create_task(self._maybe_update_bot_name(session_name))
+        asyncio.create_task(self._update_bot_commands())
+
+        dashboard = self._build_session_dashboard(sess)
+        preview = sess.last_assistant_preview or ""
+        body = dashboard
+        if preview:
+            body = (
+                f"♻️ Resumed <b>{html_mod.escape(label)}</b>\n\n"
+                f"{dashboard}\n\n"
+                f"<i>Last response:</i>\n"
+                f"<blockquote>{html_mod.escape(preview)}</blockquote>"
+            )
+        else:
+            body = f"♻️ Resumed <b>{html_mod.escape(label)}</b>\n\n{dashboard}"
+
+        await reply_fn(body, parse_mode="HTML")
+        log.info("[%s] Resumed (claude_session_id=%s, cwd=%s)",
+                 label, resume_id, cwd or "<daemon>")
 
     async def _stop_by_label(self, update: Update, target_label: str) -> None:
         """Stop a session by its label."""
