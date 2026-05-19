@@ -393,6 +393,12 @@ class TelegramBot:
         self._command_map: dict[str, str] = {label: cmd for label, cmd in QUICK_COMMANDS}
         self._model_map: dict[str, str] = {label: cmd for label, cmd in MODEL_CHOICES}
         self._last_pinned_text: str = ""  # dedup pinned message edits
+        # `/new <name>` collision state. Keyed by session_name; value is
+        # {"prompt": str, "skip_perms": bool, "user_id": int, "msg_id": int}.
+        # Populated when /new hits an existing name, drained when the user
+        # taps Resume / Replace / Cancel. Multiple users colliding on the
+        # same name race-overwrite — acceptable for a v1 single-admin tool.
+        self._new_conflict_pending: dict[str, dict] = {}
         # Team / allow-list — None for personal-mode installs (no team.yaml),
         # which preserves the existing one-user-one-DM behaviour.
         from aipager.config import TEAM
@@ -2626,6 +2632,132 @@ class TelegramBot:
             # The page indicator is a no-op tap; just clear the spinner.
             return
 
+        # ---- /new name-conflict callbacks -----------------------------
+        if action in ("new_resume", "new_replace", "new_cancel"):
+            pending = self._new_conflict_pending.pop(session_name, None)
+            sess = self.registry.get(session_name)
+            label = sess.label if sess else session_name.removeprefix("claude-")
+
+            if action == "new_cancel":
+                try:
+                    await query.edit_message_text(
+                        "↩️ Cancelled — no session changed.",
+                    )
+                except Exception:
+                    pass
+                return
+
+            prompt = (pending or {}).get("prompt", "")
+            skip_perms = (pending or {}).get("skip_perms", False)
+
+            if action == "new_resume":
+                # Live session → switch to it; GONE session → /resume flow.
+                if sess and sess.status != Status.GONE:
+                    self.registry.last_active_session = session_name
+                    self.registry.mark_dirty()
+                    asyncio.create_task(
+                        self._maybe_update_bot_name(session_name)
+                    )
+                    if prompt and sess.queue_prompt(prompt,
+                                                    pending.get("msg_id", 0)):
+                        self.registry.mark_dirty()
+                    try:
+                        await query.edit_message_text(
+                            f"↩️ Switched to <b>{html_mod.escape(label)}</b>"
+                            + ("\n📝 Prompt queued" if prompt else ""),
+                            parse_mode="HTML",
+                        )
+                    except Exception:
+                        pass
+                    return
+
+                # GONE: route through the shared _do_resume helper.
+                async def _reply(text, **kw):
+                    try:
+                        await query.edit_message_text(text, **kw)
+                    except Exception:
+                        await self._app.bot.send_message(
+                            chat_id=CHAT_ID, text=text, **kw,
+                        )
+
+                await self._do_resume(label=label, reply_fn=_reply)
+                # Queue the prompt into the freshly-resumed session.
+                if prompt:
+                    resumed = self.registry.get(session_name)
+                    if resumed and resumed.queue_prompt(
+                        prompt, pending.get("msg_id", 0),
+                    ):
+                        self.registry.mark_dirty()
+                return
+
+            if action == "new_replace":
+                # Kill alive socket first, then launch fresh (no resume_id).
+                if sess and sess.status != Status.GONE:
+                    await inject.kill_session(session_name)
+                    # Wait briefly for socket to disappear so the next
+                    # launch_session's "already exists" check passes.
+                    sock = f"{inject.SOCK_PREFIX}{label}.sock"
+                    from pathlib import Path as _Path
+                    for _ in range(10):
+                        await asyncio.sleep(0.2)
+                        if not _Path(sock).is_socket():
+                            break
+                # Drop the resume metadata so the new session is truly fresh.
+                if sess:
+                    sess.claude_session_id = ""
+                    sess.transcript_path = ""
+                    sess.cwd = ""
+                    sess.gone_at = None
+                    self.registry.mark_dirty()
+
+                try:
+                    await query.edit_message_text(
+                        f"🚀 Launching <b>{html_mod.escape(label)}</b> "
+                        f"(fresh)…",
+                        parse_mode="HTML",
+                    )
+                except Exception:
+                    pass
+
+                ok, err = await inject.launch_session(label, skip_perms=skip_perms)
+                if not ok:
+                    try:
+                        await self._app.bot.send_message(
+                            chat_id=CHAT_ID,
+                            text=f"❌ {html_mod.escape(err)}",
+                            parse_mode="HTML",
+                        )
+                    except Exception:
+                        pass
+                    return
+
+                new_sess = self.registry.get_or_create(session_name)
+                if new_sess.status in (Status.GONE, Status.UNKNOWN):
+                    self.registry.transition(session_name, Status.IDLE)
+                self.registry.last_active_session = session_name
+                self.registry.mark_dirty()
+                asyncio.create_task(self._maybe_update_bot_name(session_name))
+                asyncio.create_task(self._update_bot_commands())
+                if prompt and new_sess.queue_prompt(
+                    prompt, pending.get("msg_id", 0),
+                ):
+                    self.registry.mark_dirty()
+
+                try:
+                    await self._app.bot.send_message(
+                        chat_id=CHAT_ID,
+                        text=(
+                            f"✅ <b>{html_mod.escape(label)}</b> launched"
+                            + ("\n📝 Prompt queued" if prompt else "")
+                        ),
+                        parse_mode="HTML",
+                    )
+                except Exception:
+                    pass
+                log.info("[%s] /new conflict resolved via Replace (prompt=%s)",
+                         label, bool(prompt))
+                return
+
         is_option = action.startswith("opt") and action[3:].isdigit()
 
         if action not in ACTION_VERBS and not is_option and action != "submit":
@@ -3238,6 +3370,26 @@ class TelegramBot:
             )
             return
 
+        # Name-conflict check — both alive sessions and entries in the
+        # GONE history get the same Resume / Replace / Cancel prompt so
+        # the user doesn't accidentally throw away a conversation by
+        # typing /new with a familiar name. The button callbacks land
+        # in _handle_callback under the new_resume / new_replace /
+        # new_cancel actions defined below.
+        session_name_for_check = f"claude-{name}"
+        existing = self.registry.get(session_name_for_check)
+        if existing is not None and (
+            existing.status != Status.GONE
+            or existing.claude_session_id
+        ):
+            await self._send_new_conflict_prompt(
+                update=update,
+                existing=existing,
+                prompt=prompt,
+                skip_perms=skip_perms,
+            )
+            return
+
         status_msg = await update.message.reply_text(
             f"🚀 Launching <b>{html_mod.escape(name)}</b>"
             + (" <code>(unsafe)</code>" if skip_perms else "") + "...",
@@ -3276,6 +3428,65 @@ class TelegramBot:
             parse_mode="HTML",
         )
         log.info("Launched session %s (prompt=%s)", name, bool(prompt))
+
+    # ---- /new name-conflict prompt --------------------------------------
+
+    async def _send_new_conflict_prompt(self, *, update: Update,
+                                          existing: TrackedSession,
+                                          prompt: str,
+                                          skip_perms: bool) -> None:
+        """Render the Resume / Replace / Cancel buttons when /new hits a known name.
+
+        ``existing.status`` tells us whether the conflict is with a live
+        session (`!= GONE`) or a history entry (`GONE` with a stashed
+        claude_session_id). Both flows share the same buttons; the
+        callback distinguishes via the session's current status.
+        """
+        label = existing.label
+        alive = existing.status != Status.GONE
+
+        self._new_conflict_pending[existing.name] = {
+            "prompt": prompt,
+            "skip_perms": skip_perms,
+            "user_id": (update.effective_user.id
+                        if update.effective_user else 0),
+            "msg_id": update.message.message_id,
+        }
+
+        if alive:
+            header = (
+                f"⚠️ <b>{html_mod.escape(label)}</b> is already running.\n"
+                f"What would you like to do?"
+            )
+            resume_label = "↩️ Switch to it"
+        else:
+            preview = existing.last_assistant_preview or ""
+            header = (
+                f"♻️ <b>{html_mod.escape(label)}</b> was previously used.\n"
+            )
+            if preview:
+                header += (
+                    f"<i>Last response:</i>\n"
+                    f"<blockquote>{html_mod.escape(preview)}</blockquote>\n"
+                )
+            header += "What would you like to do?"
+            resume_label = "♻️ Resume"
+
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(resume_label,
+                                     callback_data=f"{existing.name}:new_resume"),
+                InlineKeyboardButton("🆕 Replace (fresh)",
+                                     callback_data=f"{existing.name}:new_replace"),
+            ],
+            [
+                InlineKeyboardButton("↩️ Cancel",
+                                     callback_data=f"{existing.name}:new_cancel"),
+            ],
+        ])
+        await update.message.reply_text(
+            header, parse_mode="HTML", reply_markup=keyboard,
+        )
 
     # ---- /resume — bring back a previously-gone session by name ----------
 
