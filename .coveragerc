@@ -1,0 +1,17 @@
+[run]
+branch = True
+source = aipager
+omit =
+    aipager/__main__.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    \.\.\.
+
+skip_covered = False
+show_missing = True
+precision = 1

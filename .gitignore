@@ -13,3 +13,5 @@ tasks/
 PLAN.md
 .pytest_cache/
 .ruff_cache/
+.coverage
+htmlcov/
