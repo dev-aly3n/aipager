@@ -44,7 +44,7 @@ from telegram.ext import (
 )
 from telegram.error import BadRequest, Forbidden, RetryAfter
 
-from aipager import dtach_inject as inject
+from aipager.dtach import inject
 import random
 
 from aipager.config import (

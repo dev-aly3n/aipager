@@ -1,4 +1,4 @@
-"""Tests for aipager.dtach_launcher — name validation, stale socket probe."""
+"""Tests for aipager.dtach.launcher — name validation, stale socket probe."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import subprocess
 
 import pytest
 
-from aipager import dtach_launcher
+from aipager.dtach import launcher as dtach_launcher
 
 
 # ----- _validate_name -----

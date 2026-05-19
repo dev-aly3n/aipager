@@ -145,7 +145,7 @@ def _telegram_preflight() -> str:
 async def _run_daemon(bot_username: str) -> None:
     """Boot the daemon and run until SIGINT/SIGTERM."""
     from aipager.config import BOT_TOKEN, CHAT_ID, OBSERVER_BOTS
-    from aipager.hook_receiver import HookReceiver
+    from aipager.dtach.hook_receiver import HookReceiver
     from aipager.observer import ObserverBroadcaster
     from aipager.session_monitor import SessionMonitor
     from aipager.state import SessionRegistry
@@ -275,7 +275,7 @@ def _cmd_session(args: argparse.Namespace) -> int:
     require_config()
     require_claude()
     require_daemon()
-    from aipager.dtach_launcher import launch
+    from aipager.dtach.launcher import launch
     return launch(name=args.name, claude_args=args.claude_args or [])
 
 
@@ -352,7 +352,7 @@ def _resume_one(label: str) -> int:
     import asyncio as _asyncio
     from pathlib import Path
 
-    from aipager import dtach_inject
+    from aipager.dtach import inject as dtach_inject
     from aipager.errors import friendly_error
     from aipager.ui import ok as ui_ok
 
@@ -514,7 +514,7 @@ def _session_kill(args: argparse.Namespace) -> int:
         if answer not in ("y", "yes"):
             return 0
 
-    from aipager.dtach_inject import kill_session
+    from aipager.dtach.inject import kill_session
     from aipager.ui import ok as ui_ok
     killed = asyncio.run(kill_session(session))
     if killed:

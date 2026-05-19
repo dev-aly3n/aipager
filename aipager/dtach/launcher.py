@@ -20,7 +20,7 @@ import threading
 import time
 from pathlib import Path
 
-from aipager import _dtach_redraw
+from aipager.dtach import redraw as _dtach_redraw
 from aipager.errors import friendly_error, friendly_warn
 from aipager.ui import console, ok
 

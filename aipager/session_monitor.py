@@ -14,7 +14,7 @@ import logging
 import os
 import time
 
-from aipager import dtach_inject
+from aipager.dtach import inject as dtach_inject
 from aipager.config import PANE_POLL_INTERVAL, STALE_BUSY_TIMEOUT
 from aipager.state import SessionRegistry, Status
 from aipager.transcript import last_assistant_preview

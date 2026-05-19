@@ -42,8 +42,8 @@ voice = ["faster-whisper>=1.0"]
 aipager            = "aipager.cli:main"
 # Internal hooks invoked by Claude Code (not by users). They stay on
 # PATH because ~/.claude/settings.json references them by name.
-aipager-hook       = "aipager.notify_hook:main"
-aipager-statusline = "aipager.statusline_notify:main"
+aipager-hook       = "aipager.dtach.notify_hook:main"
+aipager-statusline = "aipager.dtach.statusline_notify:main"
 
 [project.urls]
 Source    = "https://github.com/dev-aly3n/aipager"

@@ -31,7 +31,7 @@ def test_interactive_session_demoted_after_timeout(monkeypatch, run_async):
     registry._sessions["claude-jim"] = sess
     monitor = _mk_monitor(registry)
     monkeypatch.setattr(
-        "aipager.dtach_inject.list_sessions",
+        "aipager.dtach.inject.list_sessions",
         lambda: _coroutine_returning(["claude-jim"]),
     )
     run_async(monitor._scan())
@@ -49,7 +49,7 @@ def test_interactive_within_timeout_not_demoted(monkeypatch, run_async):
     registry._sessions["claude-jim"] = sess
     monitor = _mk_monitor(registry)
     monkeypatch.setattr(
-        "aipager.dtach_inject.list_sessions",
+        "aipager.dtach.inject.list_sessions",
         lambda: _coroutine_returning(["claude-jim"]),
     )
     run_async(monitor._scan())
@@ -69,7 +69,7 @@ def test_interactive_without_baseline_not_demoted(monkeypatch, run_async):
     registry._sessions["claude-jim"] = sess
     monitor = _mk_monitor(registry)
     monkeypatch.setattr(
-        "aipager.dtach_inject.list_sessions",
+        "aipager.dtach.inject.list_sessions",
         lambda: _coroutine_returning(["claude-jim"]),
     )
     run_async(monitor._scan())
@@ -97,7 +97,7 @@ def test_subagent_dropped_after_ttl(monkeypatch, run_async):
     registry._sessions["claude-jim"] = sess
     monitor = _mk_monitor(registry)
     monkeypatch.setattr(
-        "aipager.dtach_inject.list_sessions",
+        "aipager.dtach.inject.list_sessions",
         lambda: _coroutine_returning(["claude-jim"]),
     )
     run_async(monitor._scan())
@@ -113,7 +113,7 @@ def test_subagent_without_started_at_kept(run_async):
     registry._sessions["claude-jim"] = sess
     monitor = _mk_monitor(registry)
     # Should not crash and should not drop the entry.
-    import aipager.dtach_inject as di
+    import aipager.dtach.inject as di
     pytest_monkeypatch = pytest.MonkeyPatch()
     try:
         pytest_monkeypatch.setattr(

@@ -104,7 +104,7 @@ def test_session_kill_with_force_skips_confirm(monkeypatch, tmp_path, capsys):
         called.append(session)
         return True
 
-    monkeypatch.setattr("aipager.dtach_inject.kill_session", _fake_kill)
+    monkeypatch.setattr("aipager.dtach.inject.kill_session", _fake_kill)
     # No input() should be called when -y is present — sentinel
     monkeypatch.setattr("builtins.input",
                         lambda *_: pytest_fail_called_input())
@@ -123,7 +123,7 @@ def test_session_kill_accepts_claude_prefix(monkeypatch):
         seen.append(session)
         return True
 
-    monkeypatch.setattr("aipager.dtach_inject.kill_session", _fake_kill)
+    monkeypatch.setattr("aipager.dtach.inject.kill_session", _fake_kill)
     rc = cli._cmd_session(_ns("kill", ["claude-jim", "-y"]))
     assert rc == 0
     assert seen == ["claude-jim"]

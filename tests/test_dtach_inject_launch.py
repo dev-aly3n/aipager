@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
-from aipager import dtach_inject
+from aipager.dtach import inject as dtach_inject
 
 
 def _make_proc(returncode: int = 0, stderr: bytes = b""):
