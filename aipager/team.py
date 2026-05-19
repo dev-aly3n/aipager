@@ -21,10 +21,12 @@ per daemon run telling them they're not on the list, then silence.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
 from collections.abc import Sequence
+from datetime import datetime, timezone
 from dataclasses import dataclass, field, replace
 from enum import Enum
 from pathlib import Path
@@ -327,6 +329,88 @@ def reset_unauthorized_seen() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Pending-user registry (persisted)
+# ---------------------------------------------------------------------------
+#
+# Every time an unauthorized user mentions the bot, we record their
+# identity to disk so the admin doesn't have to scroll the chat or grep
+# logs to add them later. Deduplicated by user_id; the latest record
+# wins (handle / display name may have changed).
+
+PENDING_USERS_PATH: Path = Path.home() / ".claude" / "aipager-pending-users.json"
+
+
+def record_pending_user(
+    user_id: int,
+    username: str = "",
+    display_name: str = "",
+    chat_id: int | None = None,
+) -> None:
+    """Persist (or refresh) a record of an unauthorized user who
+    mentioned the bot. Idempotent — latest record overwrites prior
+    entries for the same ``user_id``.
+
+    Best-effort: write failures are logged and swallowed so a full
+    disk can't break the daemon's auth path.
+    """
+    try:
+        records = list_pending_users()
+    except Exception:
+        records = []
+    records = [r for r in records if r.get("user_id") != user_id]
+    records.append({
+        "user_id": user_id,
+        "username": username,
+        "display_name": display_name,
+        "chat_id": chat_id,
+        "first_seen": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    })
+    try:
+        PENDING_USERS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        PENDING_USERS_PATH.write_text(
+            json.dumps(records, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except OSError as e:
+        log.warning("pending-users persist failed: %s", e)
+
+
+def list_pending_users() -> list[dict]:
+    """Return the current pending-users registry. Empty list if the
+    file is absent or malformed."""
+    if not PENDING_USERS_PATH.exists():
+        return []
+    try:
+        data = json.loads(PENDING_USERS_PATH.read_text(encoding="utf-8"))
+        return data if isinstance(data, list) else []
+    except (OSError, json.JSONDecodeError) as e:
+        log.warning("pending-users read failed: %s", e)
+        return []
+
+
+def clear_pending_user(user_id: int) -> bool:
+    """Drop ``user_id`` from the pending registry. Returns True iff
+    a record was removed. Used by the wizard after the admin
+    approves a pending user into ``team.yaml``."""
+    records = list_pending_users()
+    new = [r for r in records if r.get("user_id") != user_id]
+    if len(new) == len(records):
+        return False
+    try:
+        if new:
+            PENDING_USERS_PATH.write_text(
+                json.dumps(new, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        else:
+            PENDING_USERS_PATH.unlink(missing_ok=True)
+    except OSError as e:
+        log.warning("pending-users update failed: %s", e)
+        return False
+    return True
+
+
+# ---------------------------------------------------------------------------
 # Telegram-friendly attribution helpers
 # ---------------------------------------------------------------------------
 
@@ -348,10 +432,14 @@ __all__ = [
     "TeamConfigError",
     "User",
     "TEAM_CONFIG_PATH",
+    "PENDING_USERS_PATH",
     "archive_team",
     "attribution_label",
+    "clear_pending_user",
     "dump_team",
+    "list_pending_users",
     "load_team",
+    "record_pending_user",
     "remember_unauthorized",
     "reset_unauthorized_seen",
 ]

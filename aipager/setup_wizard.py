@@ -262,6 +262,32 @@ def _resolve_user(
     if not raw:
         return None
 
+    # Path 0: pending-users registry. When an unauthorized user
+    # mentioned the bot earlier, we persisted their numeric id +
+    # handle + name. If the admin types the same handle now, we
+    # already have everything — no Telegram round-trip needed.
+    from aipager.team import list_pending_users
+    handle_only = raw.lstrip("@").lower()
+    if handle_only and not handle_only.lstrip("-").isdigit():
+        for r in list_pending_users():
+            if (r.get("username") or "").lower() == handle_only:
+                try:
+                    return int(r["user_id"]), handle_only
+                except (KeyError, TypeError, ValueError):
+                    pass
+    elif handle_only.lstrip("-").isdigit():
+        # numeric lookup — pending file might still enrich the label
+        try:
+            qid = int(handle_only)
+            for r in list_pending_users():
+                if r.get("user_id") == qid:
+                    suggested = (r.get("username")
+                                 or r.get("display_name")
+                                 or f"user{qid}").lower()
+                    return qid, suggested
+        except ValueError:
+            pass
+
     # Forgiving input: bare handle (no @) gets one prefixed; numeric
     # input goes through unchanged.
     numeric_input = False
@@ -1467,6 +1493,105 @@ def _edit_add_user(team) -> "object | None":
     return new_team
 
 
+def _edit_review_pending(team) -> "object | None":
+    """List pending-users (recorded when unauthorized users tried to
+    use the bot) and let the admin add or dismiss them one by one.
+
+    Returns the updated Team if anyone was added (so the caller can
+    decide to hot-reload), otherwise ``None``.
+    """
+    from aipager.team import (
+        Role, User as TeamUser, clear_pending_user, dump_team,
+        list_pending_users,
+    )
+
+    pending = list_pending_users()
+    if not pending:
+        console.print()
+        console.print(
+            "[muted]No pending users — nobody has tried the bot from "
+            "outside the allow-list since the last reset.[/muted]"
+        )
+        return None
+
+    existing_ids = set(team.users.keys())
+    existing_labels = {u.label for u in team.users.values()}
+    changed = False
+    new_team = team
+
+    for record in pending:
+        uid = int(record.get("user_id", 0))
+        handle = record.get("username") or ""
+        display = record.get("display_name") or ""
+        first_seen = record.get("first_seen") or "?"
+
+        if uid in existing_ids:
+            # Stale entry — already on the allow-list.
+            clear_pending_user(uid)
+            continue
+
+        console.print()
+        console.print(
+            f"[title]Pending:[/title]  "
+            f"@{handle or '(no handle)'} · id={uid} · "
+            f"{display or '(no name)'} · first seen {first_seen}"
+        )
+        action = _ask(questionary.select(
+            "What do you want to do with this user?",
+            choices=[
+                questionary.Choice("Add as developer", value="developer"),
+                questionary.Choice("Add as admin",     value="admin"),
+                questionary.Choice("Add as read_only", value="read_only"),
+                questionary.Choice("Dismiss (remove from pending list)",
+                                   value="dismiss"),
+                questionary.Choice("Skip (keep in pending, decide later)",
+                                   value="skip"),
+            ],
+            qmark="?", style=_PROMPT_STYLE,
+        ))
+
+        if action == "skip":
+            continue
+        if action == "dismiss":
+            clear_pending_user(uid)
+            ok(f"Dismissed @{handle or uid}")
+            continue
+
+        # Add as the chosen role.
+        suggested_label = (handle or display or f"user{uid}").lower()
+        if suggested_label in existing_labels:
+            friendly_warn(
+                f"Label {suggested_label!r} clashes with existing user."
+            )
+            new_label = _ask(questionary.text(
+                "Use which label instead?",
+                default=f"{suggested_label}_{uid}",
+                qmark="?", style=_PROMPT_STYLE,
+            )).strip()
+            if not new_label or new_label in existing_labels:
+                friendly_warn("Cancelled.")
+                continue
+            suggested_label = new_label
+        try:
+            new_team = new_team.with_user(TeamUser(
+                id=uid, label=suggested_label, role=Role(action),
+            ))
+        except ValueError as e:
+            friendly_warn(f"Couldn't add: {e}")
+            continue
+        clear_pending_user(uid)
+        existing_ids.add(uid)
+        existing_labels.add(suggested_label)
+        changed = True
+        ok(f"Added @{suggested_label} ({uid}) as {action}")
+
+    if not changed:
+        return None
+    dump_team(new_team)
+    ok(f"Saved → team.yaml now has {len(new_team.users)} users")
+    return new_team
+
+
 def _edit_remove_user(team) -> "object | None":
     from aipager.team import dump_team
     from aipager.team import Role
@@ -1691,8 +1816,16 @@ def _edit_flow() -> int:
             team = None  # malformed; only show "run full setup" action
 
         if team is not None:
+            # Surface pending-user count in the menu label so the
+            # admin sees at a glance there are people waiting.
+            from aipager.team import list_pending_users
+            pending = list_pending_users()
+            review_label = "Review pending users"
+            if pending:
+                review_label = f"Review pending users ({len(pending)} waiting)"
             choices = [
                 questionary.Choice("Add a user", value="add"),
+                questionary.Choice(review_label, value="review_pending"),
                 questionary.Choice("Remove a user", value="remove"),
                 questionary.Choice("Change a user's role", value="role"),
                 questionary.Choice("Edit deny_tools rules", value="rules"),
@@ -1754,6 +1887,9 @@ def _edit_flow() -> int:
                     change_kind = "restart"
             elif team is not None and choice == "add":
                 if _edit_add_user(team) is not None:
+                    change_kind = "team"
+            elif team is not None and choice == "review_pending":
+                if _edit_review_pending(team) is not None:
                     change_kind = "team"
             elif team is not None and choice == "remove":
                 if _edit_remove_user(team) is not None:

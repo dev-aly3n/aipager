@@ -58,6 +58,7 @@ from aipager.team import (
     Team,
     User as TeamUser,
     attribution_label,
+    record_pending_user,
     remember_unauthorized,
 )
 
@@ -443,15 +444,46 @@ class TelegramBot:
 
         member = self.team.get(tg_user.id)
         if member is None:
-            # Not on the allow-list. One-shot reply, then silence.
-            if not remember_unauthorized(tg_user.id):
+            # Not on the allow-list. Two things happen:
+            #   1. Persist the identity to ~/.claude/aipager-pending-users.json
+            #      so the admin can review + approve later via the wizard
+            #      (no scrolling chat / grep'ing logs).
+            #   2. Log at INFO level + send one-shot in-chat reply.
+            handle = tg_user.username or ""
+            display = (tg_user.first_name or "") + (
+                f" {tg_user.last_name}" if tg_user.last_name else ""
+            )
+            chat = update.effective_chat
+            chat_id = chat.id if chat is not None else None
+            try:
+                record_pending_user(
+                    tg_user.id,
+                    username=handle,
+                    display_name=display.strip(),
+                    chat_id=chat_id,
+                )
+            except Exception:
+                log.debug("record_pending_user failed", exc_info=True)
+
+            already_seen = remember_unauthorized(tg_user.id)
+            log.info(
+                "unauthorized user %s mentioned the bot (id=%d, name=%r) "
+                "— %s",
+                f"@{handle}" if handle else "(no handle)",
+                tg_user.id,
+                display.strip(),
+                "already replied earlier" if already_seen
+                else "sending one-shot reply",
+            )
+            if not already_seen:
                 msg = update.effective_message
                 if msg is not None:
                     try:
                         await msg.reply_text(
                             "🚫 You're not on this bot's allow-list. "
                             "Ask an admin to add your Telegram user ID "
-                            f"({tg_user.id}) to ~/.config/aipager/team.yaml.",
+                            f"({tg_user.id}) to ~/.config/aipager/team.yaml — "
+                            "or `aipager config` → Review pending users.",
                         )
                     except Exception:
                         log.debug("reply to unauthorized user failed", exc_info=True)
