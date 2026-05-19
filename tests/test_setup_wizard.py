@@ -1,10 +1,10 @@
-"""Tests for aipager.setup_wizard helpers."""
+"""Tests for aipager.wizard helpers."""
 
 from __future__ import annotations
 
 import pytest
 
-from aipager import setup_wizard
+from aipager.wizard import _constants, first_run, settings_patch, team_setup, telegram_api
 
 
 # ----- _normalize_token -----
@@ -20,19 +20,19 @@ from aipager import setup_wizard
     ("1234567:ABCdef-_ghijklmnopqrstuvwxyz0123:", "1234567:ABCdef-_ghijklmnopqrstuvwxyz0123"),
 ])
 def test_normalize_token_extracts_canonical(raw, expected):
-    assert setup_wizard._normalize_token(raw) == expected
+    assert telegram_api._normalize_token(raw) == expected
 
 
 def test_normalize_token_empty():
-    assert setup_wizard._normalize_token("") == ""
-    assert setup_wizard._normalize_token("   ") == ""
+    assert telegram_api._normalize_token("") == ""
+    assert telegram_api._normalize_token("   ") == ""
 
 
 def test_normalize_token_passthrough_for_non_canonical():
     # If the user pastes something that doesn't match the canonical regex,
     # we trim and return as-is rather than rejecting (the API call below
     # will fail with HTTP 401 / 404 and surface the right message).
-    assert setup_wizard._normalize_token("notatoken") == "notatoken"
+    assert telegram_api._normalize_token("notatoken") == "notatoken"
 
 
 # ----- _explain_http_error -----
@@ -46,7 +46,7 @@ def test_normalize_token_passthrough_for_non_canonical():
     (None, "network: timed out", "can't reach api.telegram.org"),
 ])
 def test_explain_http_error(code, err, expected_substr):
-    msg = setup_wizard._explain_http_error(code, err)
+    msg = telegram_api._explain_http_error(code, err)
     assert expected_substr in msg
 
 
@@ -59,7 +59,7 @@ def test_explain_http_error(code, err, expected_substr):
     "chat-not-found",
 ])
 def test_chat_not_found_regex_matches(text):
-    assert setup_wizard._CHAT_NOT_FOUND_RE.search(text) is not None
+    assert _constants._CHAT_NOT_FOUND_RE.search(text) is not None
 
 
 @pytest.mark.parametrize("text", [
@@ -68,19 +68,19 @@ def test_chat_not_found_regex_matches(text):
     "",
 ])
 def test_chat_not_found_regex_no_match(text):
-    assert setup_wizard._CHAT_NOT_FOUND_RE.search(text) is None
+    assert _constants._CHAT_NOT_FOUND_RE.search(text) is None
 
 
 # ----- _fetch_chat_id group-chat detection -----
 
 def test_fetch_chat_id_returns_advisory_for_group_only(monkeypatch):
-    monkeypatch.setattr(setup_wizard, "_http_json", lambda url: (
+    monkeypatch.setattr(telegram_api, "_http_json", lambda url: (
         {"ok": True, "result": [
             {"message": {"chat": {"id": -100, "type": "group", "title": "g"}}},
             {"message": {"chat": {"id": -101, "type": "supergroup", "title": "g2"}}},
         ]}, 200, ""
     ))
-    cid, who, advisory = setup_wizard._fetch_chat_id("tok")
+    cid, who, advisory = team_setup._fetch_chat_id("tok")
     assert cid is None
     assert who is None
     assert advisory is not None
@@ -88,22 +88,22 @@ def test_fetch_chat_id_returns_advisory_for_group_only(monkeypatch):
 
 
 def test_fetch_chat_id_picks_private(monkeypatch):
-    monkeypatch.setattr(setup_wizard, "_http_json", lambda url: (
+    monkeypatch.setattr(telegram_api, "_http_json", lambda url: (
         {"ok": True, "result": [
             {"message": {"chat": {"id": -100, "type": "group"}}},
             {"message": {"chat": {"id": 42, "type": "private", "username": "alice"}}},
         ]}, 200, ""
     ))
-    cid, who, advisory = setup_wizard._fetch_chat_id("tok")
+    cid, who, advisory = team_setup._fetch_chat_id("tok")
     assert cid == 42
     assert who == "alice"
     assert advisory is None
 
 
 def test_fetch_chat_id_empty(monkeypatch):
-    monkeypatch.setattr(setup_wizard, "_http_json",
+    monkeypatch.setattr(telegram_api, "_http_json",
                         lambda url: ({"ok": True, "result": []}, 200, ""))
-    cid, who, advisory = setup_wizard._fetch_chat_id("tok")
+    cid, who, advisory = team_setup._fetch_chat_id("tok")
     assert cid is None
     assert advisory is None
 
@@ -111,23 +111,23 @@ def test_fetch_chat_id_empty(monkeypatch):
 # ----- _validate_settings_schema -----
 
 def test_validate_schema_accepts_dict():
-    setup_wizard._validate_settings_schema(
+    settings_patch._validate_settings_schema(
         {"hooks": {"SessionStart": [{"hooks": []}]}}
     )
 
 
 def test_validate_schema_accepts_missing_hooks():
-    setup_wizard._validate_settings_schema({})
+    settings_patch._validate_settings_schema({})
 
 
 def test_validate_schema_rejects_str_hooks():
     with pytest.raises(ValueError, match="dict"):
-        setup_wizard._validate_settings_schema({"hooks": "oops"})
+        settings_patch._validate_settings_schema({"hooks": "oops"})
 
 
 def test_validate_schema_rejects_str_event_value():
     with pytest.raises(ValueError, match="list"):
-        setup_wizard._validate_settings_schema(
+        settings_patch._validate_settings_schema(
             {"hooks": {"SessionStart": "nope"}}
         )
 
@@ -137,26 +137,26 @@ def test_validate_schema_rejects_str_event_value():
 def test_step_settings_jsonc_comment_hint(monkeypatch, tmp_path, capsys):
     settings_file = tmp_path / "settings.json"
     settings_file.write_text("// a comment\n{}\n")
-    monkeypatch.setattr(setup_wizard, "CLAUDE_SETTINGS", settings_file)
+    monkeypatch.setattr(settings_patch, "CLAUDE_SETTINGS", settings_file)
 
     with pytest.raises(ValueError) as exc:
-        setup_wizard._step_settings()
+        settings_patch._step_settings()
     assert "comments" in str(exc.value).lower() or "//" in str(exc.value)
 
 
 def test_step_settings_skips_backup_if_unchanged(monkeypatch, tmp_path, capsys):
     settings_file = tmp_path / "settings.json"
-    monkeypatch.setattr(setup_wizard, "CLAUDE_SETTINGS", settings_file)
-    monkeypatch.setattr(setup_wizard.shutil, "which",
+    monkeypatch.setattr(settings_patch, "CLAUDE_SETTINGS", settings_file)
+    monkeypatch.setattr(settings_patch.shutil, "which",
                         lambda name: f"/usr/bin/{name}")
 
     # First call: writes initial.
-    setup_wizard._step_settings()
+    settings_patch._step_settings()
     assert settings_file.exists()
     before_files = sorted(tmp_path.iterdir())
 
     # Second call: should be a no-op since content is identical.
-    setup_wizard._step_settings()
+    settings_patch._step_settings()
     after_files = sorted(tmp_path.iterdir())
     assert before_files == after_files, "no backup should have been created"
     out = capsys.readouterr().out
@@ -166,7 +166,7 @@ def test_step_settings_skips_backup_if_unchanged(monkeypatch, tmp_path, capsys):
 # ----- _step_deps blocking behaviour -----
 
 def test_step_deps_returns_true_when_all_present(monkeypatch, capsys):
-    monkeypatch.setattr(setup_wizard.shutil, "which",
+    monkeypatch.setattr(settings_patch.shutil, "which",
                         lambda name: f"/usr/bin/{name}")
     # dtach_bin import path
     import sys as _sys
@@ -176,11 +176,11 @@ def test_step_deps_returns_true_when_all_present(monkeypatch, capsys):
         def path():
             return "/usr/bin/dtach"
     monkeypatch.setitem(_sys.modules, "dtach_bin", _FakeDtachBin)
-    assert setup_wizard._step_deps() is True
+    assert settings_patch._step_deps() is True
 
 
 def test_step_deps_returns_false_when_hook_missing(monkeypatch):
-    monkeypatch.setattr(setup_wizard.shutil, "which",
+    monkeypatch.setattr(settings_patch.shutil, "which",
                         lambda name: None if "hook" in name or "status" in name else "/usr/bin/x")
     import sys as _sys
 
@@ -189,21 +189,21 @@ def test_step_deps_returns_false_when_hook_missing(monkeypatch):
         def path():
             return "/usr/bin/dtach"
     monkeypatch.setitem(_sys.modules, "dtach_bin", _FakeDtachBin)
-    assert setup_wizard._step_deps() is False
+    assert settings_patch._step_deps() is False
 
 
 # ----- _step_write_env permissions tolerance -----
 
 def test_step_write_env_chmod_failure_warns(monkeypatch, tmp_path, capsys):
     target = tmp_path / "config.env"
-    monkeypatch.setattr(setup_wizard, "CONFIG_DIR", tmp_path)
-    monkeypatch.setattr(setup_wizard, "CONFIG_ENV", target)
+    monkeypatch.setattr(first_run, "CONFIG_DIR", tmp_path)
+    monkeypatch.setattr(first_run, "CONFIG_ENV", target)
 
     def _boom(*a, **k):
         raise OSError("Operation not permitted")
-    monkeypatch.setattr(setup_wizard.os, "chmod", _boom)
+    monkeypatch.setattr(first_run.os, "chmod", _boom)
 
-    setup_wizard._step_write_env("toktok", 99)
+    first_run._step_write_env("toktok", 99)
     assert target.exists()
     contents = target.read_text()
     assert "toktok" in contents
@@ -216,7 +216,6 @@ def test_step_write_env_chmod_failure_warns(monkeypatch, tmp_path, capsys):
 
 
 def test_resolve_user_at_handle_returns_id_and_username(monkeypatch):
-    from aipager import setup_wizard as sw
 
     def fake_http(url, timeout=10.0):
         assert "getChat" in url and "chat_id=%40arian_hamdi" in url \
@@ -231,13 +230,12 @@ def test_resolve_user_at_handle_returns_id_and_username(monkeypatch):
             },
         }, 200, "")
 
-    monkeypatch.setattr(sw, "_http_json", fake_http)
-    out = sw._resolve_user("token", "@arian_hamdi")
+    monkeypatch.setattr(team_setup, "_http_json", fake_http)
+    out = team_setup._resolve_user("token", "@arian_hamdi")
     assert out == (256113222, "arian_hamdi")  # lowercased
 
 
 def test_resolve_user_bare_handle_gets_at_prefixed(monkeypatch):
-    from aipager import setup_wizard as sw
     seen = []
 
     def fake_http(url, timeout=10.0):
@@ -247,14 +245,13 @@ def test_resolve_user_bare_handle_gets_at_prefixed(monkeypatch):
             "result": {"id": 1, "username": "alice", "type": "private"},
         }, 200, "")
 
-    monkeypatch.setattr(sw, "_http_json", fake_http)
-    out = sw._resolve_user("t", "alice")  # no @
+    monkeypatch.setattr(team_setup, "_http_json", fake_http)
+    out = team_setup._resolve_user("t", "alice")  # no @
     assert out == (1, "alice")
     assert "@alice" in seen[0]
 
 
 def test_resolve_user_numeric_input_kept_as_is(monkeypatch):
-    from aipager import setup_wizard as sw
     seen = []
 
     def fake_http(url, timeout=10.0):
@@ -264,44 +261,40 @@ def test_resolve_user_numeric_input_kept_as_is(monkeypatch):
             "result": {"id": 12345, "first_name": "Bob", "type": "private"},
         }, 200, "")
 
-    monkeypatch.setattr(sw, "_http_json", fake_http)
-    out = sw._resolve_user("t", "12345")
+    monkeypatch.setattr(team_setup, "_http_json", fake_http)
+    out = team_setup._resolve_user("t", "12345")
     # falls back to first_name (lowercased) when no username
     assert out == (12345, "bob")
     assert "chat_id=12345" in seen[0]
 
 
 def test_resolve_user_unknown_handle_returns_none(monkeypatch):
-    from aipager import setup_wizard as sw
-    monkeypatch.setattr(sw, "_http_json",
+    monkeypatch.setattr(team_setup, "_http_json",
                         lambda u, timeout=10.0: ({"ok": False,
                                                    "description": "chat not found"}, 400, ""))
-    assert sw._resolve_user("t", "@unknown") is None
+    assert team_setup._resolve_user("t", "@unknown") is None
 
 
 def test_resolve_user_rejects_non_private_chat(monkeypatch):
-    from aipager import setup_wizard as sw
-    monkeypatch.setattr(sw, "_http_json",
+    monkeypatch.setattr(team_setup, "_http_json",
                         lambda u, timeout=10.0: ({
                             "ok": True,
                             "result": {"id": -100, "type": "channel",
                                        "title": "AipagerDev"},
                         }, 200, ""))
-    assert sw._resolve_user("t", "@aipagerdev") is None
+    assert team_setup._resolve_user("t", "@aipagerdev") is None
 
 
 def test_resolve_user_empty_inputs_return_none():
-    from aipager import setup_wizard as sw
-    assert sw._resolve_user("", "@alice") is None
-    assert sw._resolve_user("token", "") is None
-    assert sw._resolve_user("token", "   ") is None
+    assert team_setup._resolve_user("", "@alice") is None
+    assert team_setup._resolve_user("token", "") is None
+    assert team_setup._resolve_user("token", "   ") is None
 
 
 def test_resolve_user_network_error_returns_none(monkeypatch):
-    from aipager import setup_wizard as sw
-    monkeypatch.setattr(sw, "_http_json",
+    monkeypatch.setattr(team_setup, "_http_json",
                         lambda u, timeout=10.0: (None, None, "network: unreachable"))
-    assert sw._resolve_user("t", "@alice") is None
+    assert team_setup._resolve_user("t", "@alice") is None
 
 
 # ----- _finalize_user --------------------------------------------------
@@ -309,16 +302,14 @@ def test_resolve_user_network_error_returns_none(monkeypatch):
 
 def test_finalize_user_accepts_default_on_empty_input(monkeypatch):
     """Empty label input falls back to suggested_label."""
-    from aipager import setup_wizard as sw
-    monkeypatch.setattr(sw, "_ask", lambda q: "")  # admin hits enter
-    out = sw._finalize_user(42, "alice", existing_labels=set())
+    monkeypatch.setattr(team_setup, "_ask", lambda q: "")  # admin hits enter
+    out = team_setup._finalize_user(42, "alice", existing_labels=set())
     assert out == {"id": 42, "label": "alice"}
 
 
 def test_finalize_user_uses_typed_label(monkeypatch):
-    from aipager import setup_wizard as sw
-    monkeypatch.setattr(sw, "_ask", lambda q: "custom")
-    out = sw._finalize_user(42, "alice", existing_labels=set())
+    monkeypatch.setattr(team_setup, "_ask", lambda q: "custom")
+    out = team_setup._finalize_user(42, "alice", existing_labels=set())
     assert out == {"id": 42, "label": "custom"}
 
 
@@ -326,7 +317,6 @@ def test_resolve_user_falls_back_to_getUpdates_when_getChat_fails(monkeypatch):
     """Telegram's bot API blocks @handle → user_id lookup via getChat for
     most users. _resolve_user should fall back to scanning getUpdates for
     a message whose from.username matches."""
-    from aipager import setup_wizard as sw
 
     def fake_http(url, timeout=10.0):
         if "getChat" in url:
@@ -347,15 +337,14 @@ def test_resolve_user_falls_back_to_getUpdates_when_getChat_fails(monkeypatch):
             }],
         }, 200, "")
 
-    monkeypatch.setattr(sw, "_http_json", fake_http)
-    out = sw._resolve_user("token", "@arian_hamdi")
+    monkeypatch.setattr(team_setup, "_http_json", fake_http)
+    out = team_setup._resolve_user("token", "@arian_hamdi")
     assert out == (256113222, "arian_hamdi")
 
 
 def test_resolve_user_case_insensitive_username_match(monkeypatch):
     """Telegram canonical-lowercases @handles, but admins paste mixed case.
     The fallback scan should match regardless of input case."""
-    from aipager import setup_wizard as sw
 
     def fake_http(url, timeout=10.0):
         if "getChat" in url:
@@ -370,29 +359,27 @@ def test_resolve_user_case_insensitive_username_match(monkeypatch):
             }],
         }, 200, "")
 
-    monkeypatch.setattr(sw, "_http_json", fake_http)
-    assert sw._resolve_user("t", "@ALICE")[0] == 99
-    assert sw._resolve_user("t", "@Alice")[0] == 99
-    assert sw._resolve_user("t", "alice")[0] == 99
+    monkeypatch.setattr(team_setup, "_http_json", fake_http)
+    assert team_setup._resolve_user("t", "@ALICE")[0] == 99
+    assert team_setup._resolve_user("t", "@Alice")[0] == 99
+    assert team_setup._resolve_user("t", "alice")[0] == 99
 
 
 def test_resolve_user_handle_with_no_updates_returns_none(monkeypatch):
     """If the user has never messaged any chat the bot is in, neither
     getChat nor getUpdates can resolve them."""
-    from aipager import setup_wizard as sw
 
     def fake_http(url, timeout=10.0):
         if "getChat" in url:
             return ({"ok": False, "description": "chat not found"}, 400, "")
         return ({"ok": True, "result": []}, 200, "")  # no recent updates
 
-    monkeypatch.setattr(sw, "_http_json", fake_http)
-    assert sw._resolve_user("t", "@phantom") is None
+    monkeypatch.setattr(team_setup, "_http_json", fake_http)
+    assert team_setup._resolve_user("t", "@phantom") is None
 
 
 def test_resolve_user_numeric_skips_updates_scan(monkeypatch):
     """Numeric input must NOT trigger the getUpdates fallback."""
-    from aipager import setup_wizard as sw
     seen_urls = []
 
     def fake_http(url, timeout=10.0):
@@ -401,8 +388,8 @@ def test_resolve_user_numeric_skips_updates_scan(monkeypatch):
             return ({"ok": False, "description": "chat not found"}, 400, "")
         return ({"ok": True, "result": []}, 200, "")
 
-    monkeypatch.setattr(sw, "_http_json", fake_http)
-    out = sw._resolve_user("t", "12345")
+    monkeypatch.setattr(team_setup, "_http_json", fake_http)
+    out = team_setup._resolve_user("t", "12345")
     assert out is None
     # Only one call (the getChat); no fallback scan for numeric input.
     assert len(seen_urls) == 1 and "getChat" in seen_urls[0]

@@ -35,7 +35,7 @@ from aipager.cli.session import (
 
 
 def _cmd_config(args: argparse.Namespace) -> int:
-    from aipager.setup_wizard import run
+    from aipager.wizard import run
     return run()
 
 
