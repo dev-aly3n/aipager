@@ -305,6 +305,15 @@ ACTION_VERBS = {
 # extracting a retry-after hint — currently only rate-limit errors carry
 # one in practice.
 _ERROR_PATTERNS: list[tuple[re.Pattern, str, str]] = [
+    (re.compile(
+        r"API Error:\s*402|payment.?required|credit.?balance.?too.?low"
+        r"|insufficient.?credit|monthly.?limit|usage.?limit.?reached"
+        r"|subscription.?(expired|inactive|required)",
+        re.I,
+     ),
+     "Anthropic subscription / credit balance issue. "
+     "Check your dashboard at https://console.anthropic.com",
+     "subscription"),
     (re.compile(r"API Error:\s*500|api_error|internal server error", re.I),
      "Anthropic's servers hit an internal error. Usually resolves in seconds.",
      "server"),
@@ -1251,9 +1260,15 @@ class TelegramBot:
         Name kept for back-compat with the many call sites scattered
         through the file. Behaviour now: builds a multi-line summary
         of all live sessions with the named one as the header.
+
+        Skipped entirely in team mode — group chats don't want a
+        status dashboard cluttering scroll-back (and the bot usually
+        can't pin in groups anyway without admin perms).
         """
         if not self._app:
             return
+        if self.team is not None:
+            return  # team mode: no pinned dashboard
         text = self._build_pinned_text(session_name)
         if not text or text == self._last_pinned_text:
             return  # skip redundant edit
@@ -1268,9 +1283,25 @@ class TelegramBot:
                 msg = await self._app.bot.send_message(
                     chat, text, parse_mode="HTML",
                 )
-                await self._app.bot.pin_chat_message(chat, msg.message_id, disable_notification=True)
+                # Store the message id IMMEDIATELY — before attempting
+                # to pin. In groups where the bot isn't an admin (no
+                # pin permission), the pin call fails but we still
+                # want to edit this message in place on every refresh
+                # rather than send a fresh status line each time
+                # (which spammed the chat with repeated "📌 …" notices).
                 self.registry.pinned_msg_id = msg.message_id
                 self.registry.mark_dirty()
+                try:
+                    await self._app.bot.pin_chat_message(
+                        chat, msg.message_id,
+                        disable_notification=True,
+                    )
+                except Exception as e:
+                    log.info(
+                        "Couldn't pin the status dashboard (bot likely "
+                        "isn't a group admin): %s — will edit in place "
+                        "instead.", e,
+                    )
             self._last_pinned_text = text
         except Exception:
             log.debug("Pinned message update failed", exc_info=True)
@@ -1797,9 +1828,26 @@ class TelegramBot:
             return
 
         if event == "stale_busy":
-            minutes = context.get("minutes", 10)
-            stale_text = (f"⚠️ <b>{html_mod.escape(label)}</b> · Busy for "
-                          f"{minutes}+ min with no activity — may be stalled")
+            # No hook has fired for STALE_BUSY_TIMEOUT seconds — claude
+            # is either silently retrying an API call (exhausted
+            # subscription, network), in a long-running extended-think
+            # /tool call (legitimate), or wedged. Surface the most
+            # likely causes so the user can decide whether to wait or
+            # tap Stop.
+            minutes = context.get("minutes", 2)
+            stale_text = (
+                f"⚠️ <b>{html_mod.escape(label)}</b> · Stuck on "
+                f"<i>Working</i> for {minutes}+ min with no claude activity.\n"
+                "\n"
+                "<b>Most likely causes</b> (in order):\n"
+                "  • Anthropic subscription / credit balance ran out\n"
+                "    — check your dashboard at https://console.anthropic.com\n"
+                "  • Rate limit hit (transient — claude is retrying)\n"
+                "  • Long-running tool call (WebSearch, large fetch)\n"
+                "  • Claude crashed or network is wedged\n"
+                "\n"
+                "<i>Tap Stop to interrupt, or wait it out.</i>"
+            )
             try:
                 keyboard = self._build_stop_keyboard(sess.name)
                 await bot.send_message(CHAT_ID, stale_text, parse_mode="HTML",

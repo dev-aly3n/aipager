@@ -89,7 +89,14 @@ SESSION_STATE_FILE = Path.home() / ".claude" / "aipager-sessions.json"
 BUSY_EDIT_INTERVAL: float = 3.0
 
 # Stale busy session threshold (seconds) — alert if BUSY with no hooks for this long
-STALE_BUSY_TIMEOUT: float = float(os.environ.get("STALE_BUSY_TIMEOUT", "1200"))
+# Seconds a session can stay BUSY with no hook activity before the
+# bot surfaces a "stuck" alert in chat. The common stuck causes — an
+# exhausted Anthropic subscription, a wedged tool call, or a hung
+# network request — are otherwise invisible to the user because no
+# Stop / PostToolUse hook ever fires. 120s (2 min) catches these
+# quickly without false-positiving on legitimate long operations
+# (extended thinking, big WebSearch). Override via the env var.
+STALE_BUSY_TIMEOUT: float = float(os.environ.get("STALE_BUSY_TIMEOUT", "120"))
 
 # Spinner verbs for animated busy messages (curated from Claude Code's terminal spinner)
 SPINNER_VERBS: list[str] = [
