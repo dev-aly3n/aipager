@@ -153,7 +153,7 @@ async def _run_daemon(bot_username: str) -> None:
     from aipager.observer import ObserverBroadcaster
     from aipager.session_monitor import SessionMonitor
     from aipager.state import SessionRegistry
-    from aipager.telegram_bot import TelegramBot
+    from aipager.bot import TelegramBot
 
     if not BOT_TOKEN:
         log.error("CLAUDE_TG_BOT_TOKEN not set — run `aipager config` first")

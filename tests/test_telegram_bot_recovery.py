@@ -196,7 +196,7 @@ def test_recover_sessions_stops_early_on_forbidden(monkeypatch, caplog, run_asyn
     monkeypatch.setattr(tbt, "_LAST_BLOCKED_LOG_TS", -1e9)
     monkeypatch.setattr(tb.inject, "list_sessions",
                         AsyncMock(return_value=[]))
-    caplog.set_level("INFO", logger="aipager.telegram_bot")
+    caplog.set_level("INFO", logger="aipager.bot")
     run_async(bot.recover_sessions())
 
     # Only the first session was attempted; the other two skipped
@@ -229,7 +229,7 @@ def test_recover_sessions_logs_summary(monkeypatch, caplog, run_async):
     monkeypatch.setattr(tb.inject, "list_sessions",
                         AsyncMock(return_value=["claude-a", "claude-b"]))
 
-    caplog.set_level("INFO", logger="aipager.telegram_bot")
+    caplog.set_level("INFO", logger="aipager.bot")
     run_async(bot.recover_sessions())
 
     summary_lines = [r.message for r in caplog.records

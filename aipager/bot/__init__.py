@@ -1,18 +1,27 @@
 """Telegram bot package.
 
-Composed of mixin classes layered onto a façade. See ``core.TelegramBot``
-for the assembly (currently still in ``aipager.telegram_bot``; moved
-here in commit 6 of the restructure).
+Composed of mixin classes layered onto a façade in ``core.TelegramBot``.
+
+    from aipager.bot import TelegramBot
 
 Submodules:
 
-- ``transport`` — pure-function helpers: send-with-retry, truncation,
-  diff rendering, API-error matching, "bot blocked" detection.
-- (future) ``core``, ``handlers``, ``callbacks``, ``animation``,
-  ``auth``, ``session_ops``, ``notify``, ``lifecycle``, ``keyboards``,
-  ``dashboard``.
-
-The re-export of ``TelegramBot`` happens in commit 6; doing it now
-would create an import cycle (``telegram_bot`` imports from
-``bot.transport``, which triggers ``bot/__init__`` evaluation).
+- ``core`` — façade class; owns ``__init__`` and the mixin composition.
+- ``handlers`` — ``CommandHandlersMixin`` (every ``/foo`` command +
+  ``_handle_message`` + ``_handle_voice`` + ``_handle_file``).
+- ``callbacks`` — ``CallbackDispatchMixin`` (the inline-button switchboard).
+- ``animation`` — ``AnimationMixin`` (busy-message edit loop, spinner).
+- ``auth`` — ``AuthMixin`` (team-mode allow-list, role checks, driver attribution).
+- ``session_ops`` — ``SessionOpsMixin`` (stop / kill / switch / resume).
+- ``notify`` — ``NotifyMixin`` (hook-receiver event dispatcher).
+- ``lifecycle`` — ``LifecycleMixin`` (start / stop / recover_sessions / reload_team).
+- ``keyboards`` — ``KeyboardMixin`` (inline + reply keyboard builders).
+- ``dashboard`` — ``DashboardMixin`` (pinned text, session dashboard, resume picker).
+- ``transport`` — pure-function helpers (send-with-retry, truncation,
+  diff rendering, API-error matching, "bot blocked" detection). No mixin
+  here — these are stateless and called by methods on the façade.
 """
+
+from aipager.bot.core import TelegramBot
+
+__all__ = ["TelegramBot"]

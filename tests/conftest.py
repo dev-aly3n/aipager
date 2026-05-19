@@ -35,8 +35,8 @@ def mk_bot():
     exercised directly without seeding an allow-list. Pass
     ``team=<Team>`` to test the team-mode path.
     """
+    from aipager.bot import TelegramBot
     from aipager.state import SessionRegistry
-    from aipager.telegram_bot import TelegramBot
 
     def _mk(registry=None, *, team=None):
         if registry is None:
