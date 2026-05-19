@@ -36,6 +36,11 @@ QUEUE_CAP: int = 50
 QUEUE_MAX_AGE_SECONDS: float = 86400.0  # 24h
 # `tool_history` is trimmed to the most recent N entries on each append.
 TOOL_HISTORY_CAP: int = 200
+# Max GONE entries retained for `/resume` history. When a new session is
+# created and the GONE count exceeds this, the oldest-by-`gone_at` entry
+# is evicted. Lives on disk in aipager-sessions.json — kept here so
+# /clear_gone still gives users a manual "forget everything" lever.
+MAX_GONE_HISTORY: int = 50
 
 
 class Status(Enum):
@@ -114,6 +119,19 @@ class TrackedSession:
     # dashboard.
     created_by_user_id: int | None = None
     last_driver_user_id: int | None = None
+    # Resume support. `claude_session_id` is the UUID of the Claude Code
+    # transcript (derived from `Path(transcript_path).stem`) and is what
+    # `claude --resume <id>` consumes. `cwd` is the working dir the
+    # session was launched from — Claude organizes transcripts by encoded
+    # cwd, so resume must launch from the same dir. `gone_at` stamps the
+    # GONE transition (wall-clock) and drives the MAX_GONE_HISTORY LRU.
+    # `last_assistant_preview` is a short (~200 chars) extract of the
+    # session's final assistant message, shown next to the entry in the
+    # /resume picker and after a successful resume.
+    claude_session_id: str = ""
+    cwd: str = ""
+    gone_at: float | None = None
+    last_assistant_preview: str = ""
     # Concurrency guard for `_send_busy_and_animate` — closes the race where
     # two coroutines could both observe `busy_msg_id is None` and both send.
     # Transient; never persisted.
@@ -180,7 +198,28 @@ class SessionRegistry:
             label = name.removeprefix("claude-") if name.startswith("claude-") else name
             self._sessions[name] = TrackedSession(name=name, label=label)
             log.info("Tracking new session: %s [%s]", name, label)
+            self._evict_gone_overflow()
         return self._sessions[name]
+
+    def _evict_gone_overflow(self) -> None:
+        """Keep at most ``MAX_GONE_HISTORY`` GONE entries in the registry.
+
+        Sorted by ``gone_at`` ascending so the oldest die first. A GONE
+        entry without a ``gone_at`` stamp (legacy / pre-feature) sorts as
+        oldest and is evicted preferentially.
+        """
+        gone = [
+            (s.gone_at if s.gone_at is not None else 0.0, n)
+            for n, s in self._sessions.items()
+            if s.status == Status.GONE
+        ]
+        if len(gone) <= MAX_GONE_HISTORY:
+            return
+        gone.sort()
+        for _, name in gone[: len(gone) - MAX_GONE_HISTORY]:
+            log.info("Evicting GONE session from history (LRU): %s", name)
+            self._sessions.pop(name, None)
+            self._dirty = True
 
     def transition(self, name: str, new_status: Status,
                    summary: str = "") -> TrackedSession | None:
@@ -264,6 +303,8 @@ class SessionRegistry:
         # Team-mode attribution — preserved across restarts so the
         # pinned dashboard remembers who's driving each session.
         "created_by_user_id", "last_driver_user_id",
+        # Resume support — see TrackedSession docstring.
+        "claude_session_id", "cwd", "gone_at", "last_assistant_preview",
     )
     _MAX_MSG_MAP = 1000  # cap _msg_map entries to avoid unbounded growth
 
@@ -348,10 +389,20 @@ class SessionRegistry:
         # stay at dataclass defaults. Status → IDLE, last_idle_at → 0.0 so
         # the first real IDLE notification is not debounced.
         for name, sd in data.get("sessions", {}).items():
+            gone_at_raw = sd.get("gone_at")
+            try:
+                gone_at = float(gone_at_raw) if gone_at_raw is not None else None
+            except (TypeError, ValueError):
+                gone_at = None
+            # Sessions that were GONE at save time stay GONE on load —
+            # the dtach socket is gone too, so session_monitor would
+            # mark them GONE again on its first scan anyway. Preserving
+            # the state up-front keeps `gone_at` meaningful for /resume.
+            initial_status = Status.GONE if gone_at is not None else Status.UNKNOWN
             sess = TrackedSession(
                 name=sd.get("name", name),
                 label=sd.get("label", name),
-                status=Status.UNKNOWN,
+                status=initial_status,
                 last_msg_id=sd.get("last_msg_id"),
                 transcript_path=sd.get("transcript_path", ""),
                 trigger_msg_id=sd.get("trigger_msg_id"),
@@ -360,6 +411,10 @@ class SessionRegistry:
                 busy_msg_id=sd.get("busy_msg_id"),
                 created_by_user_id=sd.get("created_by_user_id"),
                 last_driver_user_id=sd.get("last_driver_user_id"),
+                claude_session_id=sd.get("claude_session_id", ""),
+                cwd=sd.get("cwd", ""),
+                gone_at=gone_at,
+                last_assistant_preview=sd.get("last_assistant_preview", ""),
             )
             # pending_queue: accept old 2-tuples and new 3-tuples
             # (text, msg_id, queued_at). Drop entries older than the

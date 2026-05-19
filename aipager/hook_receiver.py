@@ -214,8 +214,22 @@ class HookReceiver:
         sess_ref.last_hook_at = time.monotonic()
         if transcript_path:
             sess_ref.transcript_path = transcript_path
+            # The transcript filename IS Claude Code's session id —
+            # exactly what `claude --resume <id>` consumes. Cheap to
+            # derive, costs ~80 bytes on disk, makes /resume robust
+            # against later transcript-path moves.
+            stem = Path(transcript_path).stem
+            if stem and stem != sess_ref.claude_session_id:
+                sess_ref.claude_session_id = stem
             self.registry.mark_dirty()
             log.debug("[%s] Stored transcript_path: %s", session_name, transcript_path)
+        # SessionStart payload also carries the session's cwd. Claude
+        # organizes transcripts by encoded-cwd, so we need it later to
+        # launch `claude --resume` from the right place.
+        cwd = msg.get("cwd", "")
+        if cwd and cwd != sess_ref.cwd:
+            sess_ref.cwd = cwd
+            self.registry.mark_dirty()
 
         log.debug("Hook event: %s from %s", event, session_name)
 

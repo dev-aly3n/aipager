@@ -241,3 +241,85 @@ def test_status_not_persisted_across_save_load(tmp_state_file):
     assert sess.status == Status.UNKNOWN
     # pending_permission MUST come back as None — never persisted.
     assert sess.pending_permission is None
+
+
+# ----- Resume support: claude_session_id, cwd, gone_at, preview -----
+
+def test_resume_fields_round_trip(tmp_state_file):
+    r1 = SessionRegistry()
+    r1.transition("claude-jim", Status.IDLE)
+    sess = r1.get("claude-jim")
+    sess.claude_session_id = "e4f739a9-e19a-4d17-a8c2-12ba1b288907"
+    sess.cwd = "/home/aly/project"
+    sess.last_assistant_preview = "I have refactored the module."
+    sess.gone_at = 1716230400.0
+    r1.save()
+
+    r2 = SessionRegistry()
+    r2.load()
+    s2 = r2.get("claude-jim")
+    assert s2.claude_session_id == "e4f739a9-e19a-4d17-a8c2-12ba1b288907"
+    assert s2.cwd == "/home/aly/project"
+    assert s2.last_assistant_preview == "I have refactored the module."
+    assert s2.gone_at == 1716230400.0
+
+
+def test_gone_at_present_loads_as_gone_status(tmp_state_file):
+    """A session with a saved gone_at comes back GONE — not UNKNOWN.
+
+    This prevents the session_monitor from re-firing "session_end" on
+    every daemon restart for sessions that were already dead.
+    """
+    r1 = SessionRegistry()
+    r1.transition("claude-jim", Status.IDLE)
+    sess = r1.get("claude-jim")
+    sess.gone_at = time.time()
+    sess.claude_session_id = "abc-123"
+    r1.save()
+
+    r2 = SessionRegistry()
+    r2.load()
+    s2 = r2.get("claude-jim")
+    assert s2.status == Status.GONE
+
+
+def test_alive_session_loads_as_unknown(tmp_state_file):
+    """Sessions with no gone_at stamp keep the old UNKNOWN-on-load behavior."""
+    r1 = SessionRegistry()
+    r1.transition("claude-jim", Status.IDLE)
+    r1.save()
+
+    r2 = SessionRegistry()
+    r2.load()
+    assert r2.get("claude-jim").status == Status.UNKNOWN
+
+
+def test_max_gone_history_evicts_oldest(tmp_state_file):
+    """Adding a new session past MAX_GONE_HISTORY drops the oldest GONE."""
+    from aipager.state import MAX_GONE_HISTORY
+    r = SessionRegistry()
+    # Fill exactly to the cap with GONE entries, each older than the next.
+    for i in range(MAX_GONE_HISTORY):
+        name = f"claude-old{i}"
+        r.transition(name, Status.GONE)
+        r.get(name).gone_at = 1000.0 + i
+    # Add an alive session — should not evict (only GONE counts).
+    r.transition("claude-alive", Status.IDLE)
+    assert len(r.all_sessions()) == MAX_GONE_HISTORY + 1
+
+    # Now add one more GONE — oldest GONE (old0) must be evicted.
+    r.transition("claude-fresh", Status.GONE)
+    r.get("claude-fresh").gone_at = 2000.0
+    # Trigger an explicit eviction (transition doesn't run it; only
+    # get_or_create does — that's fine, the next get_or_create call
+    # is the normal trigger path).
+    r.get_or_create("claude-trigger")
+    r.get("claude-trigger").gone_at = None  # not GONE; force-tagged below
+
+    # After get_or_create, gone count > cap → eviction should have fired
+    assert r.get("claude-old0") is None
+    # Newer entries survive
+    assert r.get("claude-fresh") is not None
+    assert r.get("claude-alive") is not None
+    # The non-GONE trigger session is never touched
+    assert r.get("claude-trigger") is not None

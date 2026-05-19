@@ -120,3 +120,23 @@ def extract_last_response(transcript_path: str) -> str | None:
             return "\n\n".join(texts)
 
     return None
+
+
+def last_assistant_preview(transcript_path: str, max_chars: int = 200) -> str:
+    """Return a single-line, length-capped preview of the last assistant text.
+
+    Used by the /resume picker and the post-resume confirmation to remind
+    the user where they left off. Whitespace is collapsed to single spaces;
+    if the text exceeds ``max_chars`` an ellipsis is appended. Returns
+    "" on any error (missing transcript, no assistant entries, etc.) so
+    callers can render "no preview" unconditionally.
+    """
+    if not transcript_path:
+        return ""
+    raw = extract_last_response(transcript_path)
+    if not raw:
+        return ""
+    collapsed = " ".join(raw.split())
+    if len(collapsed) <= max_chars:
+        return collapsed
+    return collapsed[: max_chars - 1].rstrip() + "…"

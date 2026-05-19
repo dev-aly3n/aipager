@@ -17,6 +17,7 @@ import time
 from aipager import dtach_inject
 from aipager.config import PANE_POLL_INTERVAL, STALE_BUSY_TIMEOUT
 from aipager.state import SessionRegistry, Status
+from aipager.transcript import last_assistant_preview
 
 log = logging.getLogger(__name__)
 
@@ -71,6 +72,18 @@ class SessionMonitor:
         for name, sess in list(self.registry.all_sessions().items()):
             if name not in sessions and sess.status != Status.GONE:
                 self.registry.transition(name, Status.GONE)
+                # Stamp the GONE moment + capture a last-message preview
+                # so /resume can show "where you left off" without
+                # re-reading the transcript at picker time.
+                sess.gone_at = time.time()
+                try:
+                    sess.last_assistant_preview = last_assistant_preview(
+                        sess.transcript_path
+                    )
+                except Exception:
+                    log.debug("preview extraction failed for %s", name,
+                              exc_info=True)
+                self.registry.mark_dirty()
                 try:
                     await self.notify_fn(sess, "session_end", {"source": "disappeared"})
                 except Exception:
@@ -80,6 +93,11 @@ class SessionMonitor:
         for name in sessions:
             sess = self.registry.get_or_create(name)
             if sess.status in (Status.UNKNOWN, Status.GONE):
+                # Coming back from GONE means a resume worked (or the
+                # user rebooted dtach manually). Clear the GONE-only
+                # fields so this entry no longer surfaces in the picker.
+                if sess.status == Status.GONE:
+                    sess.gone_at = None
                 self.registry.transition(name, Status.IDLE)
 
         # Notify if session list changed (for bot command/keyboard updates)
