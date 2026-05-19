@@ -13,39 +13,35 @@ from aipager import telegram_bot as tb
 from aipager.state import SessionRegistry, TrackedSession
 
 
-def _run(coro):
-    return asyncio.new_event_loop().run_until_complete(coro)
-
-
 # ----- 2.7 — _safe_answer swallows BadRequest -----
 
-def test_safe_answer_swallows_query_too_old():
+def test_safe_answer_swallows_query_too_old(run_async):
     query = MagicMock()
     query.answer = AsyncMock(
         side_effect=BadRequest("Bad Request: query is too old"),
     )
     # Should not raise
-    _run(tb.TelegramBot._safe_answer(query, "irrelevant"))
+    run_async(tb.TelegramBot._safe_answer(query, "irrelevant"))
 
 
-def test_safe_answer_swallows_already_answered():
+def test_safe_answer_swallows_already_answered(run_async):
     query = MagicMock()
     query.answer = AsyncMock(
         side_effect=BadRequest("Bad Request: query_id_invalid"),
     )
-    _run(tb.TelegramBot._safe_answer(query))
+    run_async(tb.TelegramBot._safe_answer(query))
 
 
-def test_safe_answer_passes_text_through_when_ok():
+def test_safe_answer_passes_text_through_when_ok(run_async):
     query = MagicMock()
     query.answer = AsyncMock()
-    _run(tb.TelegramBot._safe_answer(query, "Killing jim..."))
+    run_async(tb.TelegramBot._safe_answer(query, "Killing jim..."))
     query.answer.assert_awaited_once_with("Killing jim...")
 
 
 # ----- 2.6 — bot.stop() cancels animation tasks -----
 
-def test_bot_stop_cancels_animate_tasks():
+def test_bot_stop_cancels_animate_tasks(run_async):
     registry = SessionRegistry()
 
     async def _outer():
@@ -72,10 +68,10 @@ def test_bot_stop_cancels_animate_tasks():
         assert sess1.animate_task.cancelled() or sess1.animate_task.done()
         assert sess2.animate_task.cancelled() or sess2.animate_task.done()
 
-    _run(_outer())
+    run_async(_outer())
 
 
-def test_bot_stop_safe_when_no_animate_tasks():
+def test_bot_stop_safe_when_no_animate_tasks(run_async):
     """No sessions have active animate_task — stop should still work."""
     registry = SessionRegistry()
     sess = TrackedSession(name="claude-jim", label="jim")
@@ -91,4 +87,4 @@ def test_bot_stop_safe_when_no_animate_tasks():
         await bot.stop()
         bot._app.shutdown.assert_awaited_once()
 
-    _run(_outer())
+    run_async(_outer())

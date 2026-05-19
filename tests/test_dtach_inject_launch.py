@@ -2,14 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock
 
 from aipager import dtach_inject
-
-
-def _run(coro):
-    return asyncio.new_event_loop().run_until_complete(coro)
 
 
 def _make_proc(returncode: int = 0, stderr: bytes = b""):
@@ -20,7 +15,7 @@ def _make_proc(returncode: int = 0, stderr: bytes = b""):
     return proc
 
 
-def test_launch_session_includes_resume_flag(tmp_path, monkeypatch):
+def test_launch_session_includes_resume_flag(tmp_path, monkeypatch, run_async):
     """resume_id is passed through to claude --resume."""
     # Stub the subprocess call and the socket-existence check
     captured = {}
@@ -42,7 +37,7 @@ def test_launch_session_includes_resume_flag(tmp_path, monkeypatch):
 
     monkeypatch.setattr(dtach_inject.Path, "is_socket", _is_socket)
 
-    ok, err = _run(dtach_inject.launch_session(
+    ok, err = run_async(dtach_inject.launch_session(
         "jim",
         resume_id="e4f739a9-e19a-4d17-a8c2-12ba1b288907",
         cwd=str(tmp_path),  # real existing dir
@@ -56,7 +51,7 @@ def test_launch_session_includes_resume_flag(tmp_path, monkeypatch):
     assert captured["cwd"] == str(tmp_path)
 
 
-def test_launch_session_no_resume_flag_when_id_missing(tmp_path, monkeypatch):
+def test_launch_session_no_resume_flag_when_id_missing(tmp_path, monkeypatch, run_async):
     """Without resume_id, claude --resume is NOT injected."""
     captured = {}
 
@@ -73,17 +68,17 @@ def test_launch_session_no_resume_flag_when_id_missing(tmp_path, monkeypatch):
 
     monkeypatch.setattr(dtach_inject.Path, "is_socket", _is_socket)
 
-    ok, _ = _run(dtach_inject.launch_session("jim"))
+    ok, _ = run_async(dtach_inject.launch_session("jim"))
     assert ok
     bash_cmd = captured["args"][-1]
     assert "--resume" not in bash_cmd
 
 
-def test_launch_session_rejects_when_cwd_missing(tmp_path, monkeypatch):
+def test_launch_session_rejects_when_cwd_missing(tmp_path, monkeypatch, run_async):
     """If the persisted cwd has been deleted, fail loudly before exec."""
     monkeypatch.setattr(dtach_inject.Path, "is_socket", lambda self: False)
     bogus = tmp_path / "nope"  # doesn't exist
-    ok, err = _run(dtach_inject.launch_session(
+    ok, err = run_async(dtach_inject.launch_session(
         "jim",
         resume_id="abc",
         cwd=str(bogus),

@@ -9,17 +9,12 @@ error.
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 from telegram.error import BadRequest, Forbidden, RetryAfter
 
 from aipager import telegram_bot as tb
 from aipager.state import SessionRegistry, Status, TrackedSession
-
-
-def _run(coro):
-    return asyncio.new_event_loop().run_until_complete(coro)
 
 
 def _make_bot(registry: SessionRegistry, edit_side_effect=None) -> tb.TelegramBot:
@@ -49,11 +44,11 @@ def _edit_text(call) -> str:
     return call.args[0]
 
 
-def test_recover_edited_when_dead_session(monkeypatch):
+def test_recover_edited_when_dead_session(monkeypatch, run_async):
     registry = SessionRegistry()
     sess = _make_sess("claude-jim", "jim", 100)
     bot = _make_bot(registry)
-    outcome = _run(bot._recover_busy_message(
+    outcome = run_async(bot._recover_busy_message(
         bot._app.bot, "claude-jim", sess, live_names=set()
     ))
     assert outcome == "edited"
@@ -62,95 +57,95 @@ def test_recover_edited_when_dead_session(monkeypatch):
     assert "Session ended" in _edit_text(bot._app.bot.edit_message_text.await_args)
 
 
-def test_recover_edited_when_alive_session():
+def test_recover_edited_when_alive_session(run_async):
     registry = SessionRegistry()
     sess = _make_sess("claude-jim", "jim", 100)
     bot = _make_bot(registry)
-    outcome = _run(bot._recover_busy_message(
+    outcome = run_async(bot._recover_busy_message(
         bot._app.bot, "claude-jim", sess, live_names={"claude-jim"}
     ))
     assert outcome == "edited"
     assert "Daemon restarted" in _edit_text(bot._app.bot.edit_message_text.await_args)
 
 
-def test_recover_vanished_when_message_deleted():
+def test_recover_vanished_when_message_deleted(run_async):
     registry = SessionRegistry()
     sess = _make_sess("claude-jim", "jim", 100)
     bot = _make_bot(registry,
                     edit_side_effect=BadRequest("Bad Request: message to edit not found"))
-    outcome = _run(bot._recover_busy_message(
+    outcome = run_async(bot._recover_busy_message(
         bot._app.bot, "claude-jim", sess, live_names=set()
     ))
     assert outcome == "vanished"
     assert sess.busy_msg_id is None
 
 
-def test_recover_too_old_when_telegram_refuses_edit():
+def test_recover_too_old_when_telegram_refuses_edit(run_async):
     registry = SessionRegistry()
     sess = _make_sess("claude-jim", "jim", 100)
     bot = _make_bot(registry,
                     edit_side_effect=BadRequest("Bad Request: message can't be edited"))
-    outcome = _run(bot._recover_busy_message(
+    outcome = run_async(bot._recover_busy_message(
         bot._app.bot, "claude-jim", sess, live_names=set()
     ))
     assert outcome == "too_old"
 
 
-def test_recover_blocked(monkeypatch):
+def test_recover_blocked(monkeypatch, run_async):
     registry = SessionRegistry()
     sess = _make_sess("claude-jim", "jim", 100)
     bot = _make_bot(registry,
                     edit_side_effect=Forbidden("Forbidden: bot was blocked by the user"))
     # Force the throttle gate open
     monkeypatch.setattr(tb, "_LAST_BLOCKED_LOG_TS", -1e9)
-    outcome = _run(bot._recover_busy_message(
+    outcome = run_async(bot._recover_busy_message(
         bot._app.bot, "claude-jim", sess, live_names=set()
     ))
     assert outcome == "blocked"
 
 
-def test_recover_flooded():
+def test_recover_flooded(run_async):
     registry = SessionRegistry()
     sess = _make_sess("claude-jim", "jim", 100)
     bot = _make_bot(registry,
                     edit_side_effect=RetryAfter(5))
-    outcome = _run(bot._recover_busy_message(
+    outcome = run_async(bot._recover_busy_message(
         bot._app.bot, "claude-jim", sess, live_names=set()
     ))
     assert outcome == "flooded"
 
 
-def test_recover_unexpected_badrequest_returns_error():
+def test_recover_unexpected_badrequest_returns_error(run_async):
     registry = SessionRegistry()
     sess = _make_sess("claude-jim", "jim", 100)
     bot = _make_bot(registry,
                     edit_side_effect=BadRequest("Bad Request: something weird happened"))
-    outcome = _run(bot._recover_busy_message(
+    outcome = run_async(bot._recover_busy_message(
         bot._app.bot, "claude-jim", sess, live_names=set()
     ))
     assert outcome.startswith("error:")
     assert "weird" in outcome
 
 
-def test_recover_generic_exception_returns_error():
+def test_recover_generic_exception_returns_error(run_async):
     registry = SessionRegistry()
     sess = _make_sess("claude-jim", "jim", 100)
     bot = _make_bot(registry,
                     edit_side_effect=RuntimeError("network blip"))
-    outcome = _run(bot._recover_busy_message(
+    outcome = run_async(bot._recover_busy_message(
         bot._app.bot, "claude-jim", sess, live_names=set()
     ))
     assert outcome == "error:RuntimeError"
 
 
-def test_recover_clears_busy_msg_id_even_on_failure():
+def test_recover_clears_busy_msg_id_even_on_failure(run_async):
     """The critical invariant: busy_msg_id is None after recovery,
     regardless of whether the Telegram edit succeeded."""
     registry = SessionRegistry()
     sess = _make_sess("claude-jim", "jim", 100)
     bot = _make_bot(registry,
                     edit_side_effect=BadRequest("Bad Request: some other error"))
-    _run(bot._recover_busy_message(
+    run_async(bot._recover_busy_message(
         bot._app.bot, "claude-jim", sess, live_names=set()
     ))
     assert sess.busy_msg_id is None
@@ -158,7 +153,7 @@ def test_recover_clears_busy_msg_id_even_on_failure():
 
 # ----- recover_sessions: aggregate behavior -----
 
-def test_recover_sessions_skips_when_no_orphans(monkeypatch):
+def test_recover_sessions_skips_when_no_orphans(monkeypatch, run_async):
     registry = SessionRegistry()
     # Sessions without busy_msg_id should be skipped entirely
     s1 = TrackedSession(name="claude-jim", label="jim")
@@ -168,11 +163,11 @@ def test_recover_sessions_skips_when_no_orphans(monkeypatch):
     # Patch inject.list_sessions to async-return empty set
     monkeypatch.setattr(tb.inject, "list_sessions",
                         AsyncMock(return_value=[]))
-    _run(bot.recover_sessions())
+    run_async(bot.recover_sessions())
     bot._app.bot.edit_message_text.assert_not_awaited()
 
 
-def test_recover_sessions_processes_only_targets_with_busy_msg_id(monkeypatch):
+def test_recover_sessions_processes_only_targets_with_busy_msg_id(monkeypatch, run_async):
     registry = SessionRegistry()
     s1 = _make_sess("claude-jim", "jim", 100)
     s2 = TrackedSession(name="claude-john", label="john")
@@ -182,12 +177,12 @@ def test_recover_sessions_processes_only_targets_with_busy_msg_id(monkeypatch):
     bot = _make_bot(registry)
     monkeypatch.setattr(tb.inject, "list_sessions",
                         AsyncMock(return_value=["claude-jim", "claude-john", "claude-tim"]))
-    _run(bot.recover_sessions())
+    run_async(bot.recover_sessions())
     # 2 sessions had busy_msg_id, both got edited
     assert bot._app.bot.edit_message_text.await_count == 2
 
 
-def test_recover_sessions_stops_early_on_forbidden(monkeypatch, caplog):
+def test_recover_sessions_stops_early_on_forbidden(monkeypatch, caplog, run_async):
     registry = SessionRegistry()
     s1 = _make_sess("claude-a", "a", 1)
     s2 = _make_sess("claude-b", "b", 2)
@@ -201,7 +196,7 @@ def test_recover_sessions_stops_early_on_forbidden(monkeypatch, caplog):
     monkeypatch.setattr(tb.inject, "list_sessions",
                         AsyncMock(return_value=[]))
     caplog.set_level("INFO", logger="aipager.telegram_bot")
-    _run(bot.recover_sessions())
+    run_async(bot.recover_sessions())
 
     # Only the first session was attempted; the other two skipped
     assert bot._app.bot.edit_message_text.await_count == 1
@@ -213,7 +208,7 @@ def test_recover_sessions_stops_early_on_forbidden(monkeypatch, caplog):
     assert any("bot blocked" in r.message for r in caplog.records)
 
 
-def test_recover_sessions_logs_summary(monkeypatch, caplog):
+def test_recover_sessions_logs_summary(monkeypatch, caplog, run_async):
     registry = SessionRegistry()
     s1 = _make_sess("claude-a", "a", 1)
     s2 = _make_sess("claude-b", "b", 2)
@@ -234,7 +229,7 @@ def test_recover_sessions_logs_summary(monkeypatch, caplog):
                         AsyncMock(return_value=["claude-a", "claude-b"]))
 
     caplog.set_level("INFO", logger="aipager.telegram_bot")
-    _run(bot.recover_sessions())
+    run_async(bot.recover_sessions())
 
     summary_lines = [r.message for r in caplog.records
                      if "recovered" in r.message and "sessions" in r.message]
@@ -244,9 +239,9 @@ def test_recover_sessions_logs_summary(monkeypatch, caplog):
     assert "vanished" in summary_lines[0]
 
 
-def test_recover_sessions_skips_when_no_app():
+def test_recover_sessions_skips_when_no_app(run_async):
     registry = SessionRegistry()
     bot = tb.TelegramBot(registry)
     bot._app = None
     # Must not raise
-    _run(bot.recover_sessions())
+    run_async(bot.recover_sessions())

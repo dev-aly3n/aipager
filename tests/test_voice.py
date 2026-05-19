@@ -7,7 +7,6 @@ contract, error surface, and the wrapper plumbing.
 
 from __future__ import annotations
 
-import asyncio
 import builtins
 
 import pytest
@@ -15,11 +14,7 @@ import pytest
 from aipager import voice
 
 
-def _run(coro):
-    return asyncio.new_event_loop().run_until_complete(coro)
-
-
-def test_module_import_does_not_require_faster_whisper():
+def test_module_import_does_not_require_faster_whisper(run_async):
     """Importing `aipager.voice` must succeed even when faster-whisper
     is missing — that's the whole point of making it an optional extra.
     The import is `TYPE_CHECKING` only at module scope."""
@@ -29,11 +24,11 @@ def test_module_import_does_not_require_faster_whisper():
     assert hasattr(mod, "is_available")
 
 
-def test_is_available_returns_bool():
+def test_is_available_returns_bool(run_async):
     assert isinstance(voice.is_available(), bool)
 
 
-def test_is_available_false_when_import_fails(monkeypatch):
+def test_is_available_false_when_import_fails(monkeypatch, run_async):
     """Simulate faster-whisper not installed."""
     real_import = builtins.__import__
 
@@ -46,7 +41,7 @@ def test_is_available_false_when_import_fails(monkeypatch):
     assert voice.is_available() is False
 
 
-def test_get_model_raises_voice_unavailable_when_not_installed(monkeypatch):
+def test_get_model_raises_voice_unavailable_when_not_installed(monkeypatch, run_async):
     """If faster-whisper isn't installed, _get_model raises
     VoiceUnavailable with an actionable message."""
     monkeypatch.setattr(voice, "_model", None)
@@ -64,13 +59,13 @@ def test_get_model_raises_voice_unavailable_when_not_installed(monkeypatch):
     assert "aipager[voice]" in str(exc.value)
 
 
-def test_transcribe_missing_file_raises(tmp_path):
+def test_transcribe_missing_file_raises(tmp_path, run_async):
     missing = tmp_path / "nope.ogg"
     with pytest.raises(FileNotFoundError):
-        _run(voice.transcribe(str(missing)))
+        run_async(voice.transcribe(str(missing)))
 
 
-def test_transcribe_calls_executor_for_blocking_work(monkeypatch, tmp_path):
+def test_transcribe_calls_executor_for_blocking_work(monkeypatch, tmp_path, run_async):
     """transcribe() should NOT block the event loop — it runs the
     blocking faster-whisper call in an executor."""
     audio = tmp_path / "fake.ogg"
@@ -85,12 +80,12 @@ def test_transcribe_calls_executor_for_blocking_work(monkeypatch, tmp_path):
         return "hello from fake transcribe"
 
     monkeypatch.setattr(voice, "_sync_transcribe", _fake_sync)
-    out = _run(voice.transcribe(str(audio)))
+    out = run_async(voice.transcribe(str(audio)))
     assert out == "hello from fake transcribe"
     assert called_in_executor["flag"] is True
 
 
-def test_default_model_respects_env(monkeypatch):
+def test_default_model_respects_env(monkeypatch, run_async):
     """The DEFAULT_MODEL constant snapshot is set at import time; the
     env override is documented for users to set before importing."""
     monkeypatch.setenv("AIPAGER_WHISPER_MODEL", "tiny")

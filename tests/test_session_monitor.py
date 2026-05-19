@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
 
 import pytest
@@ -15,10 +14,6 @@ from aipager.session_monitor import (
 from aipager.state import SessionRegistry, Status, TrackedSession
 
 
-def _run(coro):
-    return asyncio.new_event_loop().run_until_complete(coro)
-
-
 def _mk_monitor(registry: SessionRegistry, notify=None) -> SessionMonitor:
     async def _noop(*a, **kw):
         return None
@@ -27,7 +22,7 @@ def _mk_monitor(registry: SessionRegistry, notify=None) -> SessionMonitor:
 
 # ----- 2.2 INTERACTIVE watchdog -----
 
-def test_interactive_session_demoted_after_timeout(monkeypatch):
+def test_interactive_session_demoted_after_timeout(monkeypatch, run_async):
     registry = SessionRegistry()
     sess = TrackedSession(name="claude-jim", label="jim",
                           status=Status.INTERACTIVE)
@@ -39,13 +34,13 @@ def test_interactive_session_demoted_after_timeout(monkeypatch):
         "aipager.dtach_inject.list_sessions",
         lambda: _coroutine_returning(["claude-jim"]),
     )
-    _run(monitor._scan())
+    run_async(monitor._scan())
     # Auto-demoted to BUSY, permission cleared
     assert sess.status == Status.BUSY
     assert sess.pending_permission is None
 
 
-def test_interactive_within_timeout_not_demoted(monkeypatch):
+def test_interactive_within_timeout_not_demoted(monkeypatch, run_async):
     registry = SessionRegistry()
     sess = TrackedSession(name="claude-jim", label="jim",
                           status=Status.INTERACTIVE)
@@ -57,12 +52,12 @@ def test_interactive_within_timeout_not_demoted(monkeypatch):
         "aipager.dtach_inject.list_sessions",
         lambda: _coroutine_returning(["claude-jim"]),
     )
-    _run(monitor._scan())
+    run_async(monitor._scan())
     assert sess.status == Status.INTERACTIVE
     assert sess.pending_permission == {"tool": "Bash"}
 
 
-def test_interactive_without_baseline_not_demoted(monkeypatch):
+def test_interactive_without_baseline_not_demoted(monkeypatch, run_async):
     """If last_hook_at and busy_started_at are both 0, there's no baseline
     to compare against, so we must not demote (avoids false positives on
     sessions freshly loaded after daemon restart)."""
@@ -77,13 +72,13 @@ def test_interactive_without_baseline_not_demoted(monkeypatch):
         "aipager.dtach_inject.list_sessions",
         lambda: _coroutine_returning(["claude-jim"]),
     )
-    _run(monitor._scan())
+    run_async(monitor._scan())
     assert sess.status == Status.INTERACTIVE
 
 
 # ----- 2.4 Subagent TTL sweep -----
 
-def test_subagent_dropped_after_ttl(monkeypatch):
+def test_subagent_dropped_after_ttl(monkeypatch, run_async):
     registry = SessionRegistry()
     sess = TrackedSession(name="claude-jim", label="jim",
                           status=Status.BUSY)
@@ -105,12 +100,12 @@ def test_subagent_dropped_after_ttl(monkeypatch):
         "aipager.dtach_inject.list_sessions",
         lambda: _coroutine_returning(["claude-jim"]),
     )
-    _run(monitor._scan())
+    run_async(monitor._scan())
     assert "agent-stale" not in sess.active_subagents
     assert "agent-fresh" in sess.active_subagents
 
 
-def test_subagent_without_started_at_kept():
+def test_subagent_without_started_at_kept(run_async):
     registry = SessionRegistry()
     sess = TrackedSession(name="claude-jim", label="jim",
                           status=Status.BUSY)
@@ -125,7 +120,7 @@ def test_subagent_without_started_at_kept():
             di, "list_sessions",
             lambda: _coroutine_returning(["claude-jim"]),
         )
-        _run(monitor._scan())
+        run_async(monitor._scan())
         assert "agent-x" in sess.active_subagents
     finally:
         pytest_monkeypatch.undo()

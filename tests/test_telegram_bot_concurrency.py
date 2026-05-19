@@ -12,10 +12,6 @@ from aipager import telegram_bot as tb
 from aipager.state import SessionRegistry, Status, TrackedSession
 
 
-def _run(coro):
-    return asyncio.new_event_loop().run_until_complete(coro)
-
-
 def _make_bot(registry):
     bot = tb.TelegramBot(registry)
     fake_bot = MagicMock()
@@ -25,7 +21,7 @@ def _make_bot(registry):
     return bot
 
 
-def test_animate_lock_serializes_concurrent_callers(monkeypatch):
+def test_animate_lock_serializes_concurrent_callers(monkeypatch, run_async):
     registry = SessionRegistry()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
     registry._sessions["claude-jim"] = sess
@@ -67,7 +63,7 @@ def test_animate_lock_serializes_concurrent_callers(monkeypatch):
             except asyncio.CancelledError:
                 pass
 
-    _run(_both())
+    run_async(_both())
     # Only ONE send_busy call survived the race
     assert send_count["n"] == 1
     assert sess.busy_msg_id == 1001
