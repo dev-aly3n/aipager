@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import asyncio
 import json
 
 from aipager import cli
@@ -86,7 +85,6 @@ def test_session_kill_requires_target(monkeypatch, capsys):
 
 def test_session_kill_unknown_session(monkeypatch, tmp_path, capsys):
     # No socket file → friendly error
-    monkeypatch.setattr(cli, "asyncio", asyncio)
     # Force the socket-check path to "not found"
     monkeypatch.setattr("pathlib.Path.exists", lambda self: False)
     rc = cli._cmd_session(_ns("kill", ["nonexistent-xyz"]))
