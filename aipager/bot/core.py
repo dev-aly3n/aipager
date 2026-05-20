@@ -48,6 +48,9 @@ class TelegramBot(
         self._app: Application | None = None
         self.observers = None  # ObserverBroadcaster | None, injected by __main__
         self._registered_labels: set[str] | None = None  # None = never synced this run
+        # Multi-scope: per-chat command-list state (chat_id → last labels set)
+        # so we only re-register a scope's `/menu` when its labels change.
+        self._registered_scope_labels: dict[int, set[str]] = {}
         self._keyboard_level: str = "main"  # "main", "templates", "commands", "models"
         self._template_map: dict[str, str] = {label: prompt for label, prompt in QUICK_TEMPLATES}
         self._command_map: dict[str, str] = {label: cmd for label, cmd in QUICK_COMMANDS}

@@ -320,7 +320,7 @@ class CommandHandlersMixin:
         except Exception:
             log.warning("Failed to send /start welcome", exc_info=True)
         # Make sure the persistent keyboard is showing.
-        await self._send_keyboard(level="main")
+        await self._send_keyboard(level="main", chat_id=calling_chat_id(update))
 
     async def _handle_status(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /status command — rich per-session dashboard."""
@@ -730,19 +730,20 @@ class CommandHandlersMixin:
 
         # Keyboard navigation + button matching — MUST stay above /<label> handlers
         # because some buttons (e.g. "/compact") start with slash.
+        kb_chat = calling_chat_id(update)
         if text == TEMPLATES_BUTTON:
-            await self._send_keyboard(level="templates")
+            await self._send_keyboard(level="templates", chat_id=kb_chat)
             return
         if text == COMMANDS_BUTTON:
-            await self._send_keyboard(level="commands")
+            await self._send_keyboard(level="commands", chat_id=kb_chat)
             return
         if text == MODELS_BUTTON:
-            await self._send_keyboard(level="models")
+            await self._send_keyboard(level="models", chat_id=kb_chat)
             return
         if text == BACK_BUTTON:
             # Context-aware: go to parent of current level (models→commands, etc.)
             parent = KEYBOARD_PARENTS.get(self._keyboard_level, "main")
-            await self._send_keyboard(level=parent)
+            await self._send_keyboard(level=parent, chat_id=kb_chat)
             return
 
         # Quick template buttons — inject predefined prompt into active session

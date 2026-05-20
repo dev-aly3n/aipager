@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 from telegram import (
     BotCommand,
+    BotCommandScopeChat,
 )
 from telegram.ext import (
     ApplicationBuilder,
@@ -31,7 +32,7 @@ from aipager.dtach import inject
 from aipager.config import (
     BOT_TOKEN, CHAT_ID,
 )
-from aipager.state import Status, TrackedSession
+from aipager.state import TrackedSession
 
 # Pure-function helpers and constants live in aipager.bot.transport
 # now. Re-export the names this module uses internally so the
@@ -326,17 +327,21 @@ class LifecycleMixin:
         if not self._app:
             return
 
-        # Collect live session labels
-        labels: set[str] = set()
-        for name, sess in self.registry.all_sessions().items():
-            if sess.status != Status.GONE and sess.label:
-                labels.add(sess.label)
+        if self.scopes is None:
+            await self._update_bot_commands_global()
+        else:
+            await self._update_bot_commands_per_scope()
 
-        first_run = self._registered_labels is None
-        if not first_run and labels == self._registered_labels:
-            return  # no change
+        # Send/update persistent keyboard (always main — first run or
+        # session list changed). In multi-scope there's no single chat to
+        # target here, so the keyboard renders per-chat on interaction
+        # (handlers pass chat_id); a global broadcast would leak labels.
+        if self.scopes is None:
+            await self._send_keyboard(level="main")
 
-        # Build command list: static + dynamic session labels
+    @staticmethod
+    def _command_list(labels: set[str]) -> list[BotCommand]:
+        """Static commands + one `/label` per live session label."""
         commands = [
             BotCommand("status", "Show all sessions"),
             BotCommand("stop", "Stop active session"),
@@ -347,18 +352,43 @@ class LifecycleMixin:
         ]
         for label in sorted(labels):
             commands.append(BotCommand(label, f"Send to [{label}]"))
+        return commands
 
+    async def _update_bot_commands_global(self) -> None:
+        """Single global `/menu` (legacy / single-scope mode)."""
+        labels = self.registry.live_labels()
+        first_run = self._registered_labels is None
+        if not first_run and labels == self._registered_labels:
+            return  # no change
         try:
-            await self._app.bot.set_my_commands(commands)
+            await self._app.bot.set_my_commands(self._command_list(labels))
             self._registered_labels = labels
             log.info("Bot commands updated: status, stop + %s",
                      ", ".join(sorted(labels)) or "(none)")
         except Exception:
             log.warning("Failed to set bot commands", exc_info=True)
-            # Still mark as synced so we don't retry every poll cycle.
             if first_run:
                 self._registered_labels = labels
 
-        # Send/update persistent keyboard (always main — first run or
-        # session list changed).
-        await self._send_keyboard(level="main")
+    async def _update_bot_commands_per_scope(self) -> None:
+        """Per-chat `/menu` via ``BotCommandScopeChat`` so each scope's
+        autocomplete lists only its own session labels (Phase G)."""
+        for scope in self.scopes:
+            labels = self.registry.live_labels(scope.chat_id)
+            prev = self._registered_scope_labels.get(scope.chat_id)
+            if prev is not None and labels == prev:
+                continue
+            try:
+                await self._app.bot.set_my_commands(
+                    self._command_list(labels),
+                    scope=BotCommandScopeChat(chat_id=scope.chat_id),
+                )
+                self._registered_scope_labels[scope.chat_id] = labels
+                log.info("Bot commands for %s: status, stop + %s",
+                         scope.chat_id, ", ".join(sorted(labels)) or "(none)")
+            except Exception:
+                # E.g. a group the bot isn't a member of — log + skip.
+                log.warning("Failed to set bot commands for scope %s",
+                            scope.chat_id, exc_info=True)
+                if prev is None:
+                    self._registered_scope_labels[scope.chat_id] = labels

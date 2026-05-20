@@ -27,7 +27,6 @@ from aipager.config import (
     MODEL_CHOICES, MODELS_BUTTON,
     QUICK_COMMANDS, QUICK_TEMPLATES, TEMPLATES_BUTTON,
 )
-from aipager.state import Status
 
 # Pure-function helpers and constants live in aipager.bot.transport
 # now. Re-export the names this module uses internally so the
@@ -78,12 +77,18 @@ class KeyboardMixin:
             rows.append([KeyboardButton(lbl) for lbl in labels[i:i + per_row]])
         return rows
 
-    async def _send_keyboard(self, level: str | None = None) -> None:
+    async def _send_keyboard(
+        self, level: str | None = None, chat_id: int | None = None,
+    ) -> None:
         """Send a message with the persistent keyboard.
 
         Args:
             level: Which keyboard to show — "main", "templates", "commands",
                    or "models".  Defaults to current ``_keyboard_level``.
+            chat_id: Target chat (defaults to the global ``CHAT_ID``). In
+                   multi-scope mode the main keyboard's session buttons are
+                   filtered to this chat's scope, so it never shows another
+                   scope's labels.
         """
         if not self._app:
             return
@@ -104,11 +109,15 @@ class KeyboardMixin:
             rows.append([KeyboardButton(BACK_BUTTON)])
             msg_text = "\U0001f916 Model"
         else:
-            # Main keyboard: session labels + command/nav rows
-            labels = sorted(
-                sess.label for sess in self.registry.all_sessions().values()
-                if sess.status != Status.GONE and sess.label
-            )
+            # Main keyboard: session labels + command/nav rows.
+            # Multi-scope: only this chat's labels (and never leak others'
+            # when no chat is known, e.g. a startup broadcast).
+            if self.scopes is not None:
+                label_src = (self.registry.live_labels(chat_id)
+                             if chat_id is not None else set())
+            else:
+                label_src = self.registry.live_labels()
+            labels = sorted(label_src)
             rows = []
             if labels:
                 rows = self._build_button_rows(labels)
@@ -123,9 +132,10 @@ class KeyboardMixin:
             resize_keyboard=True,
         )
 
+        target = chat_id if chat_id is not None else CHAT_ID
         try:
             await self._app.bot.send_message(
-                CHAT_ID, msg_text,
+                target, msg_text,
                 reply_markup=keyboard,
             )
         except Forbidden as e:
@@ -138,7 +148,7 @@ class KeyboardMixin:
                     "  → The bot @%s has never received a message from this chat.\n"
                     "  → Open https://t.me/%s in Telegram and tap Start, then\n"
                     "    the next message you send will let the daemon proceed.",
-                    CHAT_ID, e, bot_user, bot_user,
+                    target, e, bot_user, bot_user,
                 )
             else:
                 log.warning("Failed to send keyboard: %s", e)

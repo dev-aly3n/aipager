@@ -147,3 +147,78 @@ def test_update_bot_commands_excludes_gone_sessions(mk_bot, run_async):
     cmds = bot._app.bot.set_my_commands.await_args.args[0]
     cmd_names = {c.command for c in cmds}
     assert "gone" not in cmd_names
+
+
+# ===== _update_bot_commands — per-scope (Phase G) ======================
+
+def _scope(chat_id, label):
+    from aipager.scope import Member, Scope
+    return Scope(chat_id=chat_id, kind="dm" if chat_id > 0 else "group",
+                 label=label,
+                 members=(Member(id=abs(chat_id), label="u", role="user"),))
+
+
+def _stamped(name, label, scope_chat_id):
+    s = TrackedSession(name=name, label=label, status=Status.IDLE)
+    s.scope_chat_id = scope_chat_id
+    return s
+
+
+def test_update_bot_commands_per_scope_registers_each_chat(mk_bot, run_async):
+    from telegram import BotCommandScopeChat
+    bot = mk_bot(scopes=[_scope(100, "ana"), _scope(-200, "grp")])
+    bot.registry._sessions["claude-jim__d100"] = _stamped(
+        "claude-jim__d100", "jim", 100)
+    bot.registry._sessions["claude-bob__g200"] = _stamped(
+        "claude-bob__g200", "bob", -200)
+    bot._app.bot.set_my_commands = AsyncMock()
+    run_async(bot._update_bot_commands())
+
+    per_chat = {}
+    for call in bot._app.bot.set_my_commands.await_args_list:
+        scope_obj = call.kwargs["scope"]
+        assert isinstance(scope_obj, BotCommandScopeChat)
+        names = {c.command for c in call.args[0]}
+        per_chat[scope_obj.chat_id] = names
+    assert per_chat.keys() == {100, -200}
+    assert "jim" in per_chat[100] and "bob" not in per_chat[100]
+    assert "bob" in per_chat[-200] and "jim" not in per_chat[-200]
+
+
+def test_update_bot_commands_per_scope_skips_unchanged(mk_bot, run_async):
+    bot = mk_bot(scopes=[_scope(100, "ana")])
+    bot.registry._sessions["claude-jim__d100"] = _stamped(
+        "claude-jim__d100", "jim", 100)
+    bot._app.bot.set_my_commands = AsyncMock()
+    run_async(bot._update_bot_commands())
+    n = bot._app.bot.set_my_commands.await_count
+    run_async(bot._update_bot_commands())  # no change → no new calls
+    assert bot._app.bot.set_my_commands.await_count == n
+
+
+# ===== _send_keyboard — scope-filtered labels (Phase G) ================
+
+def test_send_keyboard_scopes_labels_to_chat(mk_bot, run_async):
+    bot = mk_bot(scopes=[_scope(100, "ana"), _scope(200, "ben")])
+    bot.registry._sessions["claude-jim__d100"] = _stamped(
+        "claude-jim__d100", "jim", 100)
+    bot.registry._sessions["claude-bob__d200"] = _stamped(
+        "claude-bob__d200", "bob", 200)
+    run_async(bot._send_keyboard(level="main", chat_id=100))
+    call = bot._app.bot.send_message.await_args
+    assert call.args[0] == 100  # routed to the calling chat
+    kb = call.kwargs["reply_markup"]
+    btns = {b.text for row in kb.keyboard for b in row}
+    assert "jim" in btns
+    assert "bob" not in btns
+
+
+def test_send_keyboard_multiscope_no_chat_hides_session_labels(mk_bot, run_async):
+    bot = mk_bot(scopes=[_scope(100, "ana")])
+    bot.registry._sessions["claude-jim__d100"] = _stamped(
+        "claude-jim__d100", "jim", 100)
+    run_async(bot._send_keyboard(level="main", chat_id=None))
+    kb = bot._app.bot.send_message.await_args.kwargs["reply_markup"]
+    btns = {b.text for row in kb.keyboard for b in row}
+    assert "jim" not in btns  # no leak on an unaddressed broadcast
+    assert "status" in btns   # static rows still present
