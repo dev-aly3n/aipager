@@ -533,6 +533,8 @@ class CallbackDispatchMixin:
                     summary=f"{question_text[:120]} → {verb[:80]}",
                     user_id=actor.id if actor else None,
                     username=actor.label if actor else "",
+                    scope_label=self._scope_label(sess.scope_chat_id),
+                    scope_chat_id=sess.scope_chat_id or None,
                 )
                 by_attr = f" by {attribution_label(actor)}" if actor else ""
                 try:
@@ -643,6 +645,9 @@ class CallbackDispatchMixin:
                     tool=audit_tool_name, summary=audit_detail,
                     user_id=actor.id if actor else None,
                     username=actor.label if actor else "",
+                    scope_label=self._scope_label(sess.scope_chat_id),
+                    scope_chat_id=sess.scope_chat_id or None,
+                    denied=(verb == "Deny"),
                 )
 
                 # Audit reply in chat — persistent record of the decision

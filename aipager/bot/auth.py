@@ -116,6 +116,62 @@ class AuthMixin:
         role = self.policy.get_role(member.role)
         return bool(role and role.can_prompt)
 
+    # ---- observability (Phase H) ----------------------------------------
+
+    def _scope_label(self, chat_id) -> str:
+        """Human label for a chat, for audit + scope-prefixed logs."""
+        if self.scopes is None:
+            return "legacy"
+        scope = self._scope_for(chat_id)
+        if scope is not None:
+            return scope.label
+        if chat_id is None:
+            return "unknown"
+        return f"{'group' if chat_id < 0 else 'dm'}:{chat_id}"
+
+    @staticmethod
+    def _inbound_action(update) -> str:
+        """Derive a short 'what' from an inbound message: the leading
+        ``/command`` (stripped of any ``@botname``) or ``"prompt"``."""
+        msg = getattr(update, "message", None)
+        text = (getattr(msg, "text", None) or "").strip()
+        if text.startswith("/"):
+            return text.split()[0].split("@")[0]
+        return "prompt" if text else "action"
+
+    def _audit_event(self, update, action: str | None = None,
+                     *, denied: bool = False, reason: str = "") -> None:
+        """Audit one inbound message with scope attribution + emit a
+        scope-labeled INFO log. **Multi-scope only** — a no-op when
+        ``self.scopes is None`` (single-user installs don't need a
+        per-message trail; legacy tests stay side-effect free)."""
+        if self.scopes is None:
+            return
+        member = self._team_user(update)
+        chat = getattr(update, "effective_chat", None)
+        chat_id = getattr(chat, "id", None)
+        scope_label = self._scope_label(chat_id)
+        if action is None:
+            action = self._inbound_action(update)
+        bypass = False
+        if member is not None:
+            role = self.policy.get_role(member.role)
+            bypass = bool(role and role.bypass_safety)
+        log.info("[scope:%s] %s by %s%s", scope_label, action,
+                 attribution_label(member),
+                 f" DENIED: {reason}" if denied else "")
+        try:
+            from aipager import audit as audit_mod
+            audit_mod.append(
+                session="-", label="-", action=action,
+                user_id=getattr(member, "id", None),
+                username=getattr(member, "label", ""),
+                scope_label=scope_label, scope_chat_id=chat_id,
+                denied=denied, reason=reason, bypass_safety=bypass,
+            )
+        except Exception:
+            log.debug("audit_event append failed", exc_info=True)
+
     def _tool_auto_denied(self, sess: TrackedSession, tool_name: str) -> bool:
         """Scope/policy version of the team-mode ``deny_tools`` auto-deny.
 
@@ -277,6 +333,7 @@ class AuthMixin:
                         )
                     except Exception:
                         log.debug("reply to unknown-DM user failed", exc_info=True)
+            self._audit_event(update, denied=True, reason="unknown-chat")
             return False
 
         member = self._member_in_scope(scope, tg_user.id)
@@ -303,6 +360,7 @@ class AuthMixin:
                         )
                     except Exception:
                         log.debug("reply to non-member failed", exc_info=True)
+            self._audit_event(update, denied=True, reason="not-a-member")
             return False
 
         if not self._role_can_prompt(member) and not allow_read_only:
@@ -317,8 +375,10 @@ class AuthMixin:
                     )
                 except Exception:
                     log.debug("reply to read-only member failed", exc_info=True)
+            self._audit_event(update, denied=True, reason="read-only")
             return False
 
+        self._audit_event(update, denied=False)
         return True
 
     async def _auto_deny(
@@ -385,6 +445,9 @@ class AuthMixin:
                 summary=summary,
                 user_id=triggerer.id if triggerer else None,
                 username=triggerer.label if triggerer else "",
+                scope_label=self._scope_label(sess.scope_chat_id),
+                scope_chat_id=sess.scope_chat_id or None,
+                denied=True, reason="deny_tools",
             )
         except Exception:
             log.debug("[%s] auto-deny audit failed", sess.label, exc_info=True)

@@ -6,6 +6,16 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _isolate_audit_log(tmp_path, monkeypatch):
+    """Redirect the audit log to tmp for every test, so exercising the
+    bot's audit path never appends to the operator's real
+    ``~/.claude/aipager-audit.jsonl``. Tests that pass ``path=``
+    explicitly are unaffected."""
+    monkeypatch.setattr("aipager.audit.AUDIT_LOG_PATH",
+                        tmp_path / "audit.jsonl")
+
+
 @pytest.fixture
 def tmp_state_file(tmp_path, monkeypatch):
     """Redirect SESSION_STATE_FILE so tests never touch the real one."""

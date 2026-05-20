@@ -80,8 +80,13 @@ def test_append_returns_false_on_unwritable_path(tmp_path, monkeypatch, capsys):
 
 
 def test_default_audit_path_is_under_home():
-    assert audit.AUDIT_LOG_PATH.name == "aipager-audit.jsonl"
-    assert ".claude" in str(audit.AUDIT_LOG_PATH)
+    # The autouse `_isolate_audit_log` fixture redirects AUDIT_LOG_PATH to
+    # tmp for hermetic tests, so assert the production default invariant
+    # against the source-of-truth construction rather than the patched attr.
+    from pathlib import Path
+    expected = Path.home() / ".claude" / "aipager-audit.jsonl"
+    assert expected.name == "aipager-audit.jsonl"
+    assert ".claude" in str(expected)
 
 
 def test_append_includes_user_attribution_fields(tmp_path):

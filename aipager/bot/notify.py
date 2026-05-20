@@ -104,6 +104,9 @@ class NotifyMixin:
                     tool=tool, summary=reason,
                     user_id=driver.id if driver else None,
                     username=driver.label if driver else "",
+                    scope_label=self._scope_label(sess.scope_chat_id),
+                    scope_chat_id=sess.scope_chat_id or None,
+                    denied=True, reason=reason,
                 )
             except Exception:
                 log.debug("safety_blocked audit failed", exc_info=True)
