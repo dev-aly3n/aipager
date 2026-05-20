@@ -78,16 +78,14 @@ def test_summarize_tool_ask_user_question_no_questions():
 
 
 def test_read_statusline_missing_file_returns_none(tmp_path, monkeypatch):
-    # Default lookup goes to /tmp; redirect via Path
-    real_path = hr.Path
-
-    class _RedirPath(real_path):
-        def __new__(cls, p):
-            if "claude-status-" in p:
-                p = str(tmp_path / p.split("/")[-1])
-            return real_path.__new__(cls, p)
-
-    monkeypatch.setattr(hr, "Path", _RedirPath)
+    # Redirect the /tmp status-file lookup into tmp_path via a Path
+    # *factory* (matching the sibling tests). NB: do not subclass
+    # pathlib.Path here — subclassing is unsupported on Python 3.10/3.11
+    # (`AttributeError: ... has no attribute '_flavour'`); a factory that
+    # returns a real Path works on every version.
+    _real = hr.Path
+    monkeypatch.setattr(hr, "Path",
+                        lambda p: _real(tmp_path / p.split("/")[-1]))
     assert hr._read_statusline("missing") is None
 
 
