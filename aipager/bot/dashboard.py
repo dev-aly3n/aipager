@@ -24,6 +24,7 @@ from aipager.config import (
     CHAT_ID,
 )
 from aipager.state import Status, TrackedSession
+from aipager.transcript import last_assistant_preview as _read_preview
 
 # Pure-function helpers and constants live in aipager.bot.transport
 # now. Re-export the names this module uses internally so the
@@ -366,8 +367,30 @@ class DashboardMixin:
                 ))
             rows.append(nav)
 
-        text = (
-            f"📚 <b>Previous sessions</b> ({len(gone)} total)\n"
-            f"Tap a name to resume:"
-        )
+        # Build the message body with per-row previews so the user
+        # can pick by content (not just name/timestamp). Cached
+        # preview wins when present; fall back to re-reading the
+        # transcript on disk for sessions whose SessionEnd hook
+        # was dropped. Per-row snippet capped at ~140 chars so the
+        # 10-entry page stays well under Telegram's 4096-char limit.
+        lines = [f"📚 <b>Previous sessions</b> ({len(gone)} total)"]
+        for s in chunk:
+            when = self._fmt_gone_ago(s.gone_at)
+            snippet = (s.last_assistant_preview or _read_preview(
+                s.transcript_path, max_chars=140,
+            )).strip()
+            if snippet:
+                lines.append(
+                    f"🔘 <b>{html_mod.escape(s.label)}</b> — "
+                    f"<i>{html_mod.escape(when)}</i>\n"
+                    f"<blockquote>{html_mod.escape(snippet)}</blockquote>"
+                )
+            else:
+                lines.append(
+                    f"🔘 <b>{html_mod.escape(s.label)}</b> — "
+                    f"<i>{html_mod.escape(when)}</i>\n"
+                    f"<i>(no preview)</i>"
+                )
+        lines.append("Tap a button below to resume.")
+        text = "\n\n".join(lines)
         return text, InlineKeyboardMarkup(rows)

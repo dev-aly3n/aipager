@@ -221,3 +221,151 @@ def test_hidden_session_still_in_resume_picker(mk_bot, mk_update, run_async):
     cb = [row[0].callback_data for row in kb.inline_keyboard]
     assert "claude-visible:resume" in cb
     assert "claude-hidden:resume" in cb
+
+
+# ---- /resume preview: post-resume confirmation + picker snippets -------
+
+def test_do_resume_uses_cached_preview_when_present(monkeypatch, mk_bot, mk_update, run_async):
+    """A non-empty cached preview is used as-is without re-reading transcript."""
+    registry = SessionRegistry()
+    sess = _gone_session(label="jim", claude_session_id="UUID",
+                         preview="cached recap line.")
+    registry._sessions["claude-jim"] = sess
+    bot = mk_bot(registry)
+
+    spy = MagicMock()
+    monkeypatch.setattr("aipager.bot.session_ops._read_preview", spy)
+    monkeypatch.setattr(inject, "launch_session",
+                        _async_return((True, "")))
+    monkeypatch.setattr(bot, "_build_session_dashboard", lambda s: "<dash>")
+
+    update = mk_update("/resume jim")
+    run_async(bot._handle_resume_cmd(update, MagicMock()))
+
+    spy.assert_not_called()  # cached preview short-circuits the read
+    body = update.message.reply_text.await_args.args[0]
+    assert "cached recap line." in body
+    assert "Last response from this session" in body
+
+
+def test_do_resume_derives_preview_when_cached_empty(monkeypatch, mk_bot, mk_update, run_async):
+    """Cached preview empty → read from transcript on disk."""
+    registry = SessionRegistry()
+    sess = _gone_session(label="jim", claude_session_id="UUID",
+                         preview="")
+    sess.transcript_path = "/fake/transcript.jsonl"
+    registry._sessions["claude-jim"] = sess
+    bot = mk_bot(registry)
+
+    monkeypatch.setattr("aipager.bot.session_ops._read_preview",
+                        lambda path, max_chars=200: "derived from disk")
+    monkeypatch.setattr(inject, "launch_session", _async_return((True, "")))
+    monkeypatch.setattr(bot, "_build_session_dashboard", lambda s: "<dash>")
+
+    update = mk_update("/resume jim")
+    run_async(bot._handle_resume_cmd(update, MagicMock()))
+
+    body = update.message.reply_text.await_args.args[0]
+    assert "derived from disk" in body
+    assert "Last response from this session" in body
+
+
+def test_do_resume_no_section_when_no_preview(monkeypatch, mk_bot, mk_update, run_async):
+    """Empty cache + transcript missing → no Last-response section."""
+    registry = SessionRegistry()
+    sess = _gone_session(label="jim", claude_session_id="UUID", preview="")
+    registry._sessions["claude-jim"] = sess
+    bot = mk_bot(registry)
+
+    monkeypatch.setattr("aipager.bot.session_ops._read_preview",
+                        lambda path, max_chars=200: "")
+    monkeypatch.setattr(inject, "launch_session", _async_return((True, "")))
+    monkeypatch.setattr(bot, "_build_session_dashboard", lambda s: "<dash>")
+
+    update = mk_update("/resume jim")
+    run_async(bot._handle_resume_cmd(update, MagicMock()))
+
+    body = update.message.reply_text.await_args.args[0]
+    assert "Last response" not in body
+    assert "Resumed" in body and "jim" in body
+
+
+def test_do_resume_uses_500_char_cap_on_derivation(monkeypatch, mk_bot, mk_update, run_async):
+    """When cache is empty, _read_preview is invoked with max_chars=500."""
+    registry = SessionRegistry()
+    sess = _gone_session(label="jim", claude_session_id="UUID", preview="")
+    sess.transcript_path = "/x.jsonl"
+    registry._sessions["claude-jim"] = sess
+    bot = mk_bot(registry)
+
+    seen_kwargs = {}
+    def _spy(path, max_chars=200):
+        seen_kwargs["max_chars"] = max_chars
+        return "derived"
+    monkeypatch.setattr("aipager.bot.session_ops._read_preview", _spy)
+    monkeypatch.setattr(inject, "launch_session", _async_return((True, "")))
+    monkeypatch.setattr(bot, "_build_session_dashboard", lambda s: "<dash>")
+
+    update = mk_update("/resume jim")
+    run_async(bot._handle_resume_cmd(update, MagicMock()))
+    assert seen_kwargs["max_chars"] == 500
+
+
+def test_picker_body_includes_snippets(mk_bot, mk_update, run_async):
+    """Picker text body includes the preview blockquote for each row."""
+    registry = SessionRegistry()
+    a = _gone_session(label="alpha", gone_at=2000.0, preview="alpha snippet here")
+    b = _gone_session(label="beta", gone_at=1000.0, preview="beta snippet here")
+    registry._sessions[a.name] = a
+    registry._sessions[b.name] = b
+    bot = mk_bot(registry)
+    text, _kb = bot._render_resume_picker(page=0)
+    assert "alpha snippet here" in text
+    assert "beta snippet here" in text
+    assert "<blockquote>" in text
+
+
+def test_picker_body_handles_missing_preview(monkeypatch, mk_bot, mk_update, run_async):
+    """A row with no cached and no derivable preview falls back to '(no preview)'."""
+    registry = SessionRegistry()
+    s = _gone_session(label="orphan", gone_at=1000.0, preview="")
+    registry._sessions[s.name] = s
+    bot = mk_bot(registry)
+    # Force the derivation path to also return empty
+    monkeypatch.setattr("aipager.bot.dashboard._read_preview",
+                        lambda path, max_chars=140: "")
+    text, _kb = bot._render_resume_picker(page=0)
+    assert "(no preview)" in text
+    assert "orphan" in text
+
+
+def test_picker_body_uses_transcript_fallback_for_missing_cache(monkeypatch, mk_bot, mk_update, run_async):
+    """Cached preview empty but transcript readable → derive snippet."""
+    registry = SessionRegistry()
+    s = _gone_session(label="recovered", gone_at=1000.0, preview="")
+    s.transcript_path = "/some/path.jsonl"
+    registry._sessions[s.name] = s
+    bot = mk_bot(registry)
+    monkeypatch.setattr("aipager.bot.dashboard._read_preview",
+                        lambda path, max_chars=140: "FROM-DISK-SNIPPET")
+    text, _kb = bot._render_resume_picker(page=0)
+    assert "FROM-DISK-SNIPPET" in text
+
+
+def test_picker_body_within_telegram_message_limit(mk_bot, mk_update, run_async):
+    """Full page of 10 sessions × 140-char snippets fits under Telegram's 4096 limit."""
+    registry = SessionRegistry()
+    for i in range(10):
+        s = _gone_session(label=f"sess{i:02d}", gone_at=time.time() - i,
+                          preview="x" * 140)
+        registry._sessions[s.name] = s
+    bot = mk_bot(registry)
+    text, _kb = bot._render_resume_picker(page=0)
+    assert len(text) < 4096
+
+
+def _async_return(value):
+    """Build an async function that returns ``value`` regardless of args."""
+    async def _f(*a, **kw):
+        return value
+    return _f

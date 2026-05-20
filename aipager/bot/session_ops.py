@@ -23,6 +23,7 @@ from telegram import (
 from aipager.dtach import inject
 
 from aipager.state import Status, TrackedSession
+from aipager.transcript import last_assistant_preview as _read_preview
 
 # Pure-function helpers and constants live in aipager.bot.transport
 # now. Re-export the names this module uses internally so the
@@ -223,17 +224,24 @@ class SessionOpsMixin:
         asyncio.create_task(self._update_bot_commands())
 
         dashboard = self._build_session_dashboard(sess)
-        preview = sess.last_assistant_preview or ""
-        body = dashboard
+        # Always try to surface where the user left off. If the cached
+        # preview is empty (e.g. SessionEnd hook was dropped at GONE
+        # time) re-derive from the transcript file on disk. A longer
+        # cap here gives enough context to remember the conversation.
+        preview = sess.last_assistant_preview or _read_preview(
+            sess.transcript_path, max_chars=500,
+        )
+        header = f"♻️ Resumed <b>{html_mod.escape(label)}</b>"
         if preview:
             body = (
-                f"♻️ Resumed <b>{html_mod.escape(label)}</b>\n\n"
+                f"{header}\n\n"
                 f"{dashboard}\n\n"
-                f"<i>Last response:</i>\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"<i>📜 Last response from this session</i>\n"
                 f"<blockquote>{html_mod.escape(preview)}</blockquote>"
             )
         else:
-            body = f"♻️ Resumed <b>{html_mod.escape(label)}</b>\n\n{dashboard}"
+            body = f"{header}\n\n{dashboard}"
 
         await reply_fn(body, parse_mode="HTML")
         log.info("[%s] Resumed (claude_session_id=%s, cwd=%s)",
