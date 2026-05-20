@@ -342,8 +342,16 @@ class CommandHandlersMixin:
             # Reconcile: socket alive but status GONE → recover to IDLE
             if alive and sess.status == Status.GONE:
                 self.registry.transition(name, Status.IDLE)
+            # Hidden flag is set by "Clear gone sessions". If a hidden
+            # session comes back alive (e.g. via /resume), unhide so it
+            # reappears in /status. /resume always shows it regardless.
+            if alive and sess.hidden_from_status:
+                sess.hidden_from_status = False
+                self.registry.mark_dirty()
+            if sess.status == Status.GONE and sess.hidden_from_status:
+                continue
             icon = "🟢" if alive else "🔴"
-            if not alive:
+            if not alive and not sess.hidden_from_status:
                 has_gone = True
             status_str = sess.status.name.lower()
             if sess.status == Status.BUSY and sess.busy_started_at:

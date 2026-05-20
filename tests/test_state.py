@@ -1,5 +1,6 @@
 """Tests for aipager.state — SessionRegistry transition logic and persistence."""
 
+import os
 import time
 
 from aipager.state import SessionRegistry, Status
@@ -292,6 +293,156 @@ def test_alive_session_loads_as_unknown(tmp_state_file):
     r2 = SessionRegistry()
     r2.load()
     assert r2.get("claude-jim").status == Status.UNKNOWN
+
+
+def test_hidden_from_status_round_trips(tmp_state_file):
+    """`hidden_from_status` survives daemon restart via the state file."""
+    r1 = SessionRegistry()
+    r1.transition("claude-jim", Status.IDLE)
+    sess = r1.get("claude-jim")
+    sess.hidden_from_status = True
+    sess.claude_session_id = "uuid-1"
+    sess.gone_at = 1716230400.0
+    r1.save()
+
+    r2 = SessionRegistry()
+    r2.load()
+    s2 = r2.get("claude-jim")
+    assert s2.hidden_from_status is True
+    # Resume metadata also preserved
+    assert s2.claude_session_id == "uuid-1"
+
+
+def test_transition_to_gone_stamps_gone_at(tmp_state_file):
+    """Any path to GONE must stamp gone_at — not just session_monitor."""
+    r = SessionRegistry()
+    r.transition("claude-jim", Status.IDLE)
+    sess = r.get("claude-jim")
+    assert sess.gone_at is None
+    before = time.time()
+    r.transition("claude-jim", Status.GONE)
+    after = time.time()
+    assert sess.gone_at is not None
+    assert before <= sess.gone_at <= after
+
+
+def test_transition_to_gone_preserves_existing_stamp(tmp_state_file):
+    """If a caller already stamped gone_at, transition() respects it."""
+    r = SessionRegistry()
+    r.transition("claude-jim", Status.IDLE)
+    sess = r.get("claude-jim")
+    sess.gone_at = 1234567890.0  # explicit prior stamp
+    r.transition("claude-jim", Status.GONE)
+    assert sess.gone_at == 1234567890.0
+
+
+def test_transition_idempotent_does_not_re_stamp(tmp_state_file):
+    """transition() returns early for same-state — gone_at not re-stamped."""
+    r = SessionRegistry()
+    r.transition("claude-jim", Status.GONE)
+    sess = r.get("claude-jim")
+    original = sess.gone_at
+    assert original is not None
+    time.sleep(0.01)
+    r.transition("claude-jim", Status.GONE)
+    assert sess.gone_at == original  # untouched
+
+
+def test_load_backfills_gone_at_from_transcript_mtime(tmp_state_file, tmp_path):
+    """Sessions saved with claude_session_id but no gone_at (orphans from
+    the pre-fix SessionEnd path) get gone_at backfilled from the
+    transcript file's mtime."""
+    import json
+    transcript = tmp_path / "uuid.jsonl"
+    transcript.write_text("{}\n")
+    os.utime(transcript, (1700000000.0, 1700000000.0))
+
+    state = {
+        "sessions": {
+            "claude-old": {
+                "name": "claude-old",
+                "label": "old",
+                "claude_session_id": "uuid",
+                "transcript_path": str(transcript),
+                # NB: no gone_at
+            },
+        },
+        "msg_map": {},
+    }
+    tmp_state_file.write_text(json.dumps(state))
+    r = SessionRegistry()
+    r.load()
+    s = r.get("claude-old")
+    assert s.gone_at == 1700000000.0
+    assert s.status == Status.GONE  # status follows gone_at presence
+
+
+def test_load_marks_dirty_when_backfill_occurs(tmp_state_file, tmp_path):
+    """Backfill in load() flips _dirty so the derived gone_at gets saved."""
+    import json
+    transcript = tmp_path / "uuid.jsonl"
+    transcript.write_text("{}\n")
+
+    state = {
+        "sessions": {
+            "claude-old": {
+                "name": "claude-old",
+                "label": "old",
+                "claude_session_id": "uuid",
+                "transcript_path": str(transcript),
+            },
+        },
+        "msg_map": {},
+    }
+    tmp_state_file.write_text(json.dumps(state))
+    r = SessionRegistry()
+    r.load()
+    assert r._dirty is True  # ready to persist the backfilled gone_at
+
+
+def test_load_no_backfill_when_transcript_missing(tmp_state_file):
+    """If the transcript file isn't on disk, load() doesn't fabricate a
+    gone_at — the session loads as UNKNOWN and session_monitor will
+    stamp it later when it observes the missing socket."""
+    import json
+    state = {
+        "sessions": {
+            "claude-orphan": {
+                "name": "claude-orphan",
+                "label": "orphan",
+                "claude_session_id": "uuid-x",
+                "transcript_path": "/nope/missing.jsonl",
+            },
+        },
+        "msg_map": {},
+    }
+    tmp_state_file.write_text(json.dumps(state))
+    r = SessionRegistry()
+    r.load()
+    s = r.get("claude-orphan")
+    assert s.gone_at is None
+    assert s.status == Status.UNKNOWN
+
+
+def test_hidden_from_status_defaults_false_on_legacy_state(tmp_state_file):
+    """State files saved before this field existed load with the flag False."""
+    import json
+    legacy = {
+        "sessions": {
+            "claude-old": {
+                "name": "claude-old",
+                "label": "old",
+                "claude_session_id": "uuid-x",
+                "gone_at": 1716230400.0,
+                # NB: no `hidden_from_status` key
+            },
+        },
+        "msg_map": {},
+    }
+    tmp_state_file.write_text(json.dumps(legacy))
+    r = SessionRegistry()
+    r.load()
+    assert r.get("claude-old").hidden_from_status is False
 
 
 def test_max_gone_history_evicts_oldest(tmp_state_file):

@@ -132,6 +132,12 @@ class TrackedSession:
     cwd: str = ""
     gone_at: float | None = None
     last_assistant_preview: str = ""
+    # /status-only visibility flag. Set to True by the "Clear gone
+    # sessions" button so users can declutter the live dashboard
+    # without losing resume metadata. Only consulted when
+    # status == GONE; ignored otherwise. /resume picker ignores this
+    # flag entirely so previously-hidden sessions remain resumable.
+    hidden_from_status: bool = False
     # Concurrency guard for `_send_busy_and_animate` — closes the race where
     # two coroutines could both observe `busy_msg_id is None` and both send.
     # Transient; never persisted.
@@ -256,6 +262,16 @@ class SessionRegistry:
         if summary:
             sess.summary = summary
 
+        # Always stamp gone_at on the canonical GONE transition. Two
+        # paths reach GONE — session_monitor (socket disappeared) and
+        # hook_receiver (Claude's SessionEnd hook) — but only the
+        # former used to stamp the timestamp. Centralizing here means
+        # /resume always has a "X ago" to display, regardless of which
+        # path fired. If a caller has already stamped gone_at (legacy
+        # behaviour) we preserve it.
+        if new_status == Status.GONE and sess.gone_at is None:
+            sess.gone_at = time.time()
+
         log.info("[%s] %s → %s", sess.label, old.name, new_status.name)
         self._dirty = True
         return sess
@@ -305,6 +321,7 @@ class SessionRegistry:
         "created_by_user_id", "last_driver_user_id",
         # Resume support — see TrackedSession docstring.
         "claude_session_id", "cwd", "gone_at", "last_assistant_preview",
+        "hidden_from_status",
     )
     _MAX_MSG_MAP = 1000  # cap _msg_map entries to avoid unbounded growth
 
@@ -394,6 +411,22 @@ class SessionRegistry:
                 gone_at = float(gone_at_raw) if gone_at_raw is not None else None
             except (TypeError, ValueError):
                 gone_at = None
+            # Backfill: sessions saved with claude_session_id but no
+            # gone_at (orphans from the SessionEnd hook path that
+            # forgot to stamp pre-v0.4) get their "last activity"
+            # timestamp derived from the transcript file's mtime —
+            # the most accurate fallback available. Without this they
+            # would render as "long ago" in /resume; with it they
+            # show a real relative timestamp.
+            backfilled = False
+            if gone_at is None and sd.get("claude_session_id"):
+                tp = sd.get("transcript_path", "")
+                if tp:
+                    try:
+                        gone_at = Path(tp).stat().st_mtime
+                        backfilled = True
+                    except OSError:
+                        pass
             # Sessions that were GONE at save time stay GONE on load —
             # the dtach socket is gone too, so session_monitor would
             # mark them GONE again on its first scan anyway. Preserving
@@ -415,6 +448,7 @@ class SessionRegistry:
                 cwd=sd.get("cwd", ""),
                 gone_at=gone_at,
                 last_assistant_preview=sd.get("last_assistant_preview", ""),
+                hidden_from_status=sd.get("hidden_from_status", False),
             )
             # pending_queue: accept old 2-tuples and new 3-tuples
             # (text, msg_id, queued_at). Drop entries older than the
@@ -450,10 +484,17 @@ class SessionRegistry:
             log.info("Restored session: %s [%s] (msg_id=%s, trigger=%s, queue=%d)",
                      name, sess.label, sess.last_msg_id, sess.trigger_msg_id,
                      len(sess.pending_queue))
+            if backfilled:
+                log.info("[%s] backfilled gone_at from transcript mtime "
+                         "(orphan session — was missing the stamp)",
+                         sess.label)
+                self._dirty = True  # persist on next save_if_dirty
 
         log.info("Loaded %d sessions, %d message mappings",
                  len(self._sessions), len(self._msg_map))
-        self._dirty = False
+        # `_dirty` may have been set True by the backfill loop above so
+        # the next save_if_dirty cycle persists the derived gone_at.
+        # Otherwise it stays False (load alone doesn't dirty the state).
 
     def save_if_dirty(self) -> None:
         """Save state if it has been modified since last save."""

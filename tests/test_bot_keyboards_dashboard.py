@@ -228,7 +228,7 @@ def test_gone_sessions_sorted_empty(mk_bot):
 
 def test_fmt_gone_ago_handles_none(mk_bot):
     bot = mk_bot()
-    assert bot._fmt_gone_ago(None) == "?"
+    assert bot._fmt_gone_ago(None) == "earlier"
 
 
 def test_fmt_gone_ago_seconds(mk_bot):

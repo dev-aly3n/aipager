@@ -190,7 +190,13 @@ def test_picker_sorts_newest_first(mk_bot, mk_update, run_async):
 # ---- fmt_gone_ago -------------------------------------------------------
 
 def test_fmt_gone_ago_handles_none(mk_bot, mk_update, run_async):
-    assert TelegramBot._fmt_gone_ago(None) == "?"
+    # Orphan sessions with no gone_at and no recoverable transcript
+    # render as "earlier" rather than the cryptic "?".
+    assert TelegramBot._fmt_gone_ago(None) == "earlier"
+
+
+def test_fmt_gone_ago_handles_zero(mk_bot, mk_update, run_async):
+    assert TelegramBot._fmt_gone_ago(0) == "earlier"
 
 
 def test_fmt_gone_ago_seconds(mk_bot, mk_update, run_async):
@@ -199,3 +205,19 @@ def test_fmt_gone_ago_seconds(mk_bot, mk_update, run_async):
 
 def test_fmt_gone_ago_hours(mk_bot, mk_update, run_async):
     assert "h ago" in TelegramBot._fmt_gone_ago(time.time() - 7200)
+
+
+def test_hidden_session_still_in_resume_picker(mk_bot, mk_update, run_async):
+    """hidden_from_status only affects /status — /resume must still surface it."""
+    registry = SessionRegistry()
+    visible = _gone_session(label="visible", gone_at=2000.0)
+    hidden = _gone_session(label="hidden", gone_at=1000.0)
+    hidden.hidden_from_status = True
+    registry._sessions[visible.name] = visible
+    registry._sessions[hidden.name] = hidden
+    bot = mk_bot(registry)
+    text, kb = bot._render_resume_picker(page=0)
+    assert "2 total" in text
+    cb = [row[0].callback_data for row in kb.inline_keyboard]
+    assert "claude-visible:resume" in cb
+    assert "claude-hidden:resume" in cb

@@ -285,19 +285,54 @@ def test_clear_gone_with_no_gone_sessions(mk_bot, mk_query, run_async, monkeypat
     assert bot.registry.get("claude-jim") is not None
 
 
-def test_clear_gone_removes_dead_sessions(mk_bot, mk_query, run_async, monkeypatch):
+def test_clear_gone_hides_session_preserves_resume_id(mk_bot, mk_query, run_async):
     bot = mk_bot()
-    s1 = TrackedSession(name="claude-old", label="old", status=Status.GONE)
-    s2 = TrackedSession(name="claude-keep", label="keep", status=Status.IDLE)
-    bot.registry._sessions["claude-old"] = s1
-    bot.registry._sessions["claude-keep"] = s2
-    monkeypatch.setattr("aipager.dtach.inject.is_alive",
-                        AsyncMock(side_effect=lambda n: n == "claude-keep"))
+    s = TrackedSession(name="claude-old", label="old", status=Status.GONE)
+    s.claude_session_id = "abc-uuid"
+    s.cwd = "/home/u/proj"
+    bot.registry._sessions["claude-old"] = s
     update, query = mk_query("anything:clear_gone")
     run_async(bot._handle_callback(update, MagicMock()))
-    assert bot.registry.get("claude-old") is None
-    assert bot.registry.get("claude-keep") is not None
+    # Session NOT removed
+    assert bot.registry.get("claude-old") is s
+    # Hidden flag flipped
+    assert s.hidden_from_status is True
+    # Resume metadata preserved
+    assert s.claude_session_id == "abc-uuid"
+    assert s.cwd == "/home/u/proj"
+    # Message edited with the new "Still available in /resume" copy
     query.edit_message_text.assert_awaited_once()
+    body = query.edit_message_text.await_args.args[0]
+    assert "Hidden from /status" in body
+    assert "Still available in /resume" in body
+
+
+def test_clear_gone_skips_already_hidden(mk_bot, mk_query, run_async):
+    bot = mk_bot()
+    s1 = TrackedSession(name="claude-a", label="a", status=Status.GONE)
+    s2 = TrackedSession(name="claude-b", label="b", status=Status.GONE)
+    s2.hidden_from_status = True  # already hidden
+    bot.registry._sessions["claude-a"] = s1
+    bot.registry._sessions["claude-b"] = s2
+    update, query = mk_query("anything:clear_gone")
+    run_async(bot._handle_callback(update, MagicMock()))
+    assert s1.hidden_from_status is True
+    assert s2.hidden_from_status is True
+    # Toast says "Hidden 1 session(s)" — only the newly flipped one
+    answers = [c.args[0] for c in query.answer.await_args_list if c.args]
+    assert any("Hidden 1 session" in (a or "") for a in answers)
+
+
+def test_clear_gone_only_targets_gone_sessions(mk_bot, mk_query, run_async):
+    bot = mk_bot()
+    busy = TrackedSession(name="claude-busy", label="busy", status=Status.BUSY)
+    gone = TrackedSession(name="claude-gone", label="gone", status=Status.GONE)
+    bot.registry._sessions["claude-busy"] = busy
+    bot.registry._sessions["claude-gone"] = gone
+    update, query = mk_query("anything:clear_gone")
+    run_async(bot._handle_callback(update, MagicMock()))
+    assert gone.hidden_from_status is True
+    assert busy.hidden_from_status is False
 
 
 # ---- action: resume ----------------------------------------------------

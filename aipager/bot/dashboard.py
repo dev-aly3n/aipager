@@ -320,7 +320,7 @@ class DashboardMixin:
     def _fmt_gone_ago(gone_at: float | None) -> str:
         """Short relative timestamp for picker rows ('2h ago', 'just now')."""
         if not gone_at:
-            return "?"
+            return "earlier"
         delta = max(0, int(time.time() - gone_at))
         if delta < 60:
             return f"{delta}s ago"

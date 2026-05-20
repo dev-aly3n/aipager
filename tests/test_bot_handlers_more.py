@@ -121,6 +121,59 @@ def test_status_recovers_gone_session_when_socket_alive(mk_bot, mk_update, run_a
     assert bot.registry.get("claude-jim").status != Status.GONE
 
 
+def test_status_filters_hidden_gone_sessions(mk_bot, mk_update, run_async, monkeypatch):
+    """Hidden GONE sessions are skipped in /status (rendered text + button)."""
+    bot = mk_bot()
+    visible = TrackedSession(name="claude-show", label="show", status=Status.GONE)
+    hidden = TrackedSession(name="claude-hide", label="hide", status=Status.GONE)
+    hidden.hidden_from_status = True
+    bot.registry._sessions["claude-show"] = visible
+    bot.registry._sessions["claude-hide"] = hidden
+    monkeypatch.setattr("aipager.dtach.inject.is_alive",
+                        AsyncMock(return_value=False))
+    bot._read_status_file = MagicMock(return_value=None)
+    update = mk_update("/status")
+    run_async(bot._handle_status(update, MagicMock()))
+    body = update.message.reply_text.await_args.args[0]
+    assert "show" in body
+    assert "hide" not in body
+    # Button still appears because there's a visible-GONE session
+    kb = update.message.reply_text.await_args.kwargs["reply_markup"]
+    cb = [b.callback_data for row in kb.inline_keyboard for b in row]
+    assert "_:clear_gone" in cb
+
+
+def test_status_button_absent_when_only_hidden_gone(mk_bot, mk_update, run_async, monkeypatch):
+    """If every GONE session is hidden, the Clear button shouldn't appear."""
+    bot = mk_bot()
+    hidden = TrackedSession(name="claude-hide", label="hide", status=Status.GONE)
+    hidden.hidden_from_status = True
+    bot.registry._sessions["claude-hide"] = hidden
+    monkeypatch.setattr("aipager.dtach.inject.is_alive",
+                        AsyncMock(return_value=False))
+    bot._read_status_file = MagicMock(return_value=None)
+    update = mk_update("/status")
+    run_async(bot._handle_status(update, MagicMock()))
+    kb = update.message.reply_text.await_args.kwargs["reply_markup"]
+    assert kb is None
+
+
+def test_status_unhides_on_revival(mk_bot, mk_update, run_async, monkeypatch):
+    """When a hidden session's socket comes back alive, the flag clears."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
+    sess.hidden_from_status = True
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr("aipager.dtach.inject.is_alive",
+                        AsyncMock(return_value=True))
+    bot._read_status_file = MagicMock(return_value=None)
+    update = mk_update("/status")
+    run_async(bot._handle_status(update, MagicMock()))
+    assert sess.hidden_from_status is False
+    body = update.message.reply_text.await_args.args[0]
+    assert "jim" in body
+
+
 # ---- _read_status_file -------------------------------------------------
 
 def test_read_status_file_missing_returns_none(mk_bot, tmp_path, monkeypatch):

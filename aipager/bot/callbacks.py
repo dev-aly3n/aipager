@@ -224,23 +224,28 @@ class CallbackDispatchMixin:
             return
 
         if action == "clear_gone":
-            # Remove all dead sessions from registry
-            removed = []
+            # Hide GONE sessions from /status. Preserves resume
+            # metadata (claude_session_id, cwd) so /resume keeps
+            # working — see TrackedSession.hidden_from_status.
+            hidden = []
             for name, sess in list(self.registry.all_sessions().items()):
-                if not await inject.is_alive(name):
-                    removed.append(sess.label)
-                    self.registry.remove(name)
-            if removed:
-                await self._safe_answer(query, f"Cleared {len(removed)} session(s)")
+                if sess.status == Status.GONE and not sess.hidden_from_status:
+                    sess.hidden_from_status = True
+                    hidden.append(sess.label)
+            if hidden:
+                self.registry.mark_dirty()
+                await self._safe_answer(query, f"Hidden {len(hidden)} session(s)")
                 try:
                     await query.edit_message_text(
-                        f"Cleared: {', '.join(removed)}", parse_mode="HTML",
+                        f"Hidden from /status: {', '.join(hidden)}\n"
+                        f"<i>Still available in /resume.</i>",
+                        parse_mode="HTML",
                     )
                 except Exception:
                     pass
-                log.info("Cleared gone sessions: %s", removed)
+                log.info("Hid gone sessions from /status: %s", hidden)
             else:
-                await self._safe_answer(query, "No gone sessions to clear")
+                await self._safe_answer(query, "No gone sessions to hide")
             return
 
         # ---- /resume picker callbacks ---------------------------------
