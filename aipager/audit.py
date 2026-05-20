@@ -37,12 +37,23 @@ def append(*, session: str, label: str, action: str,
            user_id: int | None = None,
            username: str = "",
            display_name: str = "",
+           scope_label: str = "",
+           scope_chat_id: int | None = None,
+           denied: bool = False,
+           reason: str = "",
+           bypass_safety: bool = False,
            path: Path | None = None) -> bool:
     """Append a single record. Returns True on success, False on failure.
 
     ``user_id`` / ``username`` / ``display_name`` identify the Telegram
     user who took the action — populated in team mode, left empty in
     personal mode.
+
+    Multi-scope (Phase H) attribution: ``scope_label`` / ``scope_chat_id``
+    say *in which scope* the action happened; ``denied`` (+ ``reason``)
+    records authorization/safety rejections; ``bypass_safety`` flags an
+    owner acting with the safety boundary bypassed. All default-empty, so
+    legacy/personal records keep their original shape.
 
     ``path`` is overrideable for tests; production callers leave it as
     None so it picks up ``AUDIT_LOG_PATH``.
@@ -57,6 +68,11 @@ def append(*, session: str, label: str, action: str,
         "user_id": user_id,
         "username": username,
         "display_name": display_name,
+        "scope_label": scope_label,
+        "scope_chat_id": scope_chat_id,
+        "denied": denied,
+        "reason": reason[:200],
+        "bypass_safety": bypass_safety,
     }
     target = path or AUDIT_LOG_PATH
     try:

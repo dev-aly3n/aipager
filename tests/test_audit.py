@@ -111,3 +111,46 @@ def test_append_omits_user_attribution_for_personal_mode(tmp_path):
     assert record["user_id"] is None
     assert record["username"] == ""
     assert record["display_name"] == ""
+
+
+# ---- scope attribution + denial (Phase H) -------------------------------
+
+def test_append_records_scope_attribution(tmp_path):
+    log = tmp_path / "audit.jsonl"
+    audit.append(
+        session="claude-jim__d100", label="jim", action="prompt",
+        user_id=100, username="ana",
+        scope_label="ana DM", scope_chat_id=100,
+        denied=False, bypass_safety=True,
+        path=log,
+    )
+    record = json.loads(log.read_text().splitlines()[0])
+    assert record["scope_label"] == "ana DM"
+    assert record["scope_chat_id"] == 100
+    assert record["denied"] is False
+    assert record["bypass_safety"] is True
+    assert record["reason"] == ""
+
+
+def test_append_records_denial_with_reason(tmp_path):
+    log = tmp_path / "audit.jsonl"
+    audit.append(
+        session="-", label="-", action="/new",
+        scope_label="team", scope_chat_id=-300,
+        denied=True, reason="not-a-member",
+        path=log,
+    )
+    record = json.loads(log.read_text().splitlines()[0])
+    assert record["denied"] is True
+    assert record["reason"] == "not-a-member"
+
+
+def test_append_legacy_shape_has_empty_scope_fields(tmp_path):
+    log = tmp_path / "audit.jsonl"
+    audit.append(session="claude-jim", label="jim", action="Allowed",
+                 path=log)
+    record = json.loads(log.read_text().splitlines()[0])
+    assert record["scope_label"] == ""
+    assert record["scope_chat_id"] is None
+    assert record["denied"] is False
+    assert record["bypass_safety"] is False
