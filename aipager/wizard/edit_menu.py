@@ -1,295 +1,244 @@
-"""See :mod:`aipager.wizard` for the package overview."""
+"""See :mod:`aipager.wizard` for the package overview.
+
+The edit menu is the re-run face of ``aipager config``: a list-and-edit
+interface over the scopes in ``aipager.yaml`` (flows §6). It reads the
+policy to enumerate role choices and to *show* the active policy, but
+it **never writes** the user-owned policy files (security §3.7d / R15).
+"""
 
 from __future__ import annotations
 
+from dataclasses import replace
 
 import questionary
 
 from aipager.errors import friendly_error, friendly_warn
+from aipager.scope import ScopeConfigError
 from aipager.ui import console, ok, rule, step
-from aipager.wizard._constants import (
-    _PROMPT_STYLE,
-)
-
-from aipager.wizard.daemon_io import (
-    _apply_team_change_hint,
-    _read_env_file,
-    _restart_hint,
-    _write_env_file,
-)
-from aipager.wizard.display import (
-    _ask,
-    _show_current_config,
-)
-from aipager.wizard.first_run import (
-    _first_run_flow,
-    _step_chat_id,
-)
+from aipager.wizard._constants import _PROMPT_STYLE
+from aipager.wizard.daemon_io import _restart_hint
+from aipager.wizard.display import _ask, _show_current_config
+from aipager.wizard.scope_flows import _pick_role, add_dm_scope, add_group_scope
+from aipager.wizard.scope_io import commit_scope, read_config, remove_scope, replace_scopes
 from aipager.wizard.settings_patch import _step_settings
-from aipager.wizard.team_setup import (
-    _collect_users,
-    _show_team_warning_panel,
-    _step_team_setup,
-)
-from aipager.wizard.telegram_api import (
-    _normalize_token,
-    _verify_token,
-)
-
-
-def _edit_add_user(team) -> "object | None":
-    """Returns the new Team after add, or None if the user cancelled."""
-    from aipager.team import Role, User as TeamUser, dump_team
-
-    existing_ids = set(team.users.keys())
-    existing_labels = {u.label for u in team.users.values()}
-    # Read token so the add flow can offer Telegram auto-detect.
-    token, _ = _read_env_file()
-    new_entries = _collect_users(
-        existing_ids=existing_ids, existing_labels=existing_labels,
-        token=token,
-    )
-    if not new_entries:
-        return None
-    new_team = team
-    for u in new_entries:
-        new_team = new_team.with_user(
-            TeamUser(id=u["id"], label=u["label"], role=Role(u["role"])),
-        )
-    confirm = _ask(questionary.confirm(
-        f"Add {len(new_entries)} user(s) to team.yaml?",
-        default=True, qmark="?", style=_PROMPT_STYLE,
-    ))
-    if not confirm:
-        friendly_warn("Cancelled.")
-        return None
-    dump_team(new_team)
-    ok(f"Added {len(new_entries)} user(s).")
-    return new_team
-
-
-def _edit_review_pending(team) -> "object | None":
-    """List pending-users (recorded when unauthorized users tried to
-    use the bot) and let the admin add or dismiss them one by one.
-
-    Returns the updated Team if anyone was added (so the caller can
-    decide to hot-reload), otherwise ``None``.
-    """
-    from aipager.team import (
-        Role, User as TeamUser, clear_pending_user, dump_team,
-        list_pending_users,
-    )
-
-    pending = list_pending_users()
-    if not pending:
-        console.print()
-        console.print(
-            "[muted]No pending users — nobody has tried the bot from "
-            "outside the allow-list since the last reset.[/muted]"
-        )
-        return None
-
-    existing_ids = set(team.users.keys())
-    existing_labels = {u.label for u in team.users.values()}
-    changed = False
-    new_team = team
-
-    for record in pending:
-        uid = int(record.get("user_id", 0))
-        handle = record.get("username") or ""
-        display = record.get("display_name") or ""
-        first_seen = record.get("first_seen") or "?"
-
-        if uid in existing_ids:
-            # Stale entry — already on the allow-list.
-            clear_pending_user(uid)
-            continue
-
-        console.print()
-        console.print(
-            f"[title]Pending:[/title]  "
-            f"@{handle or '(no handle)'} · id={uid} · "
-            f"{display or '(no name)'} · first seen {first_seen}"
-        )
-        action = _ask(questionary.select(
-            "What do you want to do with this user?",
-            choices=[
-                questionary.Choice("Add as developer", value="developer"),
-                questionary.Choice("Add as admin",     value="admin"),
-                questionary.Choice("Add as read_only", value="read_only"),
-                questionary.Choice("Dismiss (remove from pending list)",
-                                   value="dismiss"),
-                questionary.Choice("Skip (keep in pending, decide later)",
-                                   value="skip"),
-            ],
-            qmark="?", style=_PROMPT_STYLE,
-        ))
-
-        if action == "skip":
-            continue
-        if action == "dismiss":
-            clear_pending_user(uid)
-            ok(f"Dismissed @{handle or uid}")
-            continue
-
-        # Add as the chosen role.
-        suggested_label = (handle or display or f"user{uid}").lower()
-        if suggested_label in existing_labels:
-            friendly_warn(
-                f"Label {suggested_label!r} clashes with existing user."
-            )
-            new_label = _ask(questionary.text(
-                "Use which label instead?",
-                default=f"{suggested_label}_{uid}",
-                qmark="?", style=_PROMPT_STYLE,
-            )).strip()
-            if not new_label or new_label in existing_labels:
-                friendly_warn("Cancelled.")
-                continue
-            suggested_label = new_label
-        try:
-            new_team = new_team.with_user(TeamUser(
-                id=uid, label=suggested_label, role=Role(action),
-            ))
-        except ValueError as e:
-            friendly_warn(f"Couldn't add: {e}")
-            continue
-        clear_pending_user(uid)
-        existing_ids.add(uid)
-        existing_labels.add(suggested_label)
-        changed = True
-        ok(f"Added @{suggested_label} ({uid}) as {action}")
-
-    if not changed:
-        return None
-    dump_team(new_team)
-    ok(f"Saved → team.yaml now has {len(new_team.users)} users")
-    return new_team
-
-
-def _edit_remove_user(team) -> "object | None":
-    from aipager.team import dump_team
-    from aipager.team import Role
-
-    if not team.users:
-        friendly_warn("No users to remove.")
-        return None
-    choices = [
-        questionary.Choice(f"{u.label} — {u.role.value}", value=u.id)
-        for u in team.users.values()
-    ]
-    choices.append(questionary.Choice("Cancel", value=None))
-    pick = _ask(questionary.select(
-        "Remove which user?",
-        choices=choices, qmark="?", style=_PROMPT_STYLE,
-    ))
-    if pick is None:
-        return None
-    target = team.users[pick]
-    # Refuse to leave the team without an admin.
-    if (target.role == Role.ADMIN and team.admin_count() == 1):
-        friendly_warn(
-            f"{target.label} is the only admin — promote another member "
-            "first, then come back to remove them.",
-        )
-        return None
-    confirm = _ask(questionary.confirm(
-        f"Remove {target.label} ({target.role.value})?",
-        default=False, qmark="?", style=_PROMPT_STYLE,
-    ))
-    if not confirm:
-        return None
-    new_team = team.without_user(pick)
-    dump_team(new_team)
-    ok(f"Removed {target.label}.")
-    return new_team
-
-
-def _edit_change_role(team) -> "object | None":
-    from aipager.team import Role, dump_team
-
-    if not team.users:
-        friendly_warn("No users to update.")
-        return None
-    choices = [
-        questionary.Choice(f"{u.label} — currently {u.role.value}", value=u.id)
-        for u in team.users.values()
-    ]
-    choices.append(questionary.Choice("Cancel", value=None))
-    pick = _ask(questionary.select(
-        "Change which user's role?",
-        choices=choices, qmark="?", style=_PROMPT_STYLE,
-    ))
-    if pick is None:
-        return None
-    current = team.users[pick]
-    new_role_str = _ask(questionary.select(
-        f"New role for {current.label} (was {current.role.value}):",
-        choices=["admin", "developer", "read_only"],
-        qmark="?", style=_PROMPT_STYLE,
-    ))
-    new_role = Role(new_role_str)
-    if new_role == current.role:
-        friendly_warn("No change.")
-        return None
-    # Refuse to demote the only admin.
-    if (current.role == Role.ADMIN and new_role != Role.ADMIN
-            and team.admin_count() == 1):
-        friendly_warn(
-            f"{current.label} is the only admin — promote another member "
-            "first.",
-        )
-        return None
-    new_team = team.with_role(pick, new_role)
-    dump_team(new_team)
-    ok(f"{current.label}: {current.role.value} → {new_role.value}")
-    return new_team
-
+from aipager.wizard.telegram_api import _normalize_token, _test_send, _verify_token
 
 _COMMON_TOOLS = (
     "Bash", "Write", "Edit", "WebFetch", "Read", "Glob", "Grep", "Task",
 )
 
 
-def _edit_deny_tools(team) -> "object | None":
-    from aipager.team import dump_team
+def _bot_username(token: str) -> str:
+    if not token:
+        return "your_bot"
+    info = _verify_token(token)
+    return (info or {}).get("username", "your_bot")
 
-    current = set(team.rules.deny_tools)
+
+def _pick_scope(scopes, prompt: str = "Which scope?"):
     choices = [
         questionary.Choice(
-            t, value=t, checked=(t in current),
-        ) for t in _COMMON_TOOLS
+            f'{s.kind} "{s.label}" ({len(s.members)} member'
+            f'{"s" if len(s.members) != 1 else ""})',
+            value=s.chat_id,
+        )
+        for s in scopes
+    ]
+    choices.append(questionary.Choice("Cancel", value=None))
+    cid = _ask(questionary.select(
+        prompt, choices=choices, qmark="?", style=_PROMPT_STYLE,
+    ))
+    if cid is None:
+        return None
+    return next(s for s in scopes if s.chat_id == cid)
+
+
+def _toggle_tools(current: tuple[str, ...]) -> tuple[str, ...]:
+    """Checkbox + free-text editor for a deny_tools list."""
+    cur = set(current)
+    choices = [
+        questionary.Choice(t, value=t, checked=(t in cur))
+        for t in _COMMON_TOOLS
     ]
     picked = _ask(questionary.checkbox(
         "Toggle deny_tools (space to select, Enter to confirm):",
         choices=choices, qmark="?", style=_PROMPT_STYLE,
     ))
     extras_raw = _ask(questionary.text(
-        "Other tools to deny (comma-separated, leave blank for none):",
-        default=", ".join(sorted(current - set(_COMMON_TOOLS))),
+        "Other tools to deny (comma-separated, blank for none):",
+        default=", ".join(sorted(cur - set(_COMMON_TOOLS))),
         qmark="?", style=_PROMPT_STYLE,
     )).strip()
     extras = [t.strip() for t in extras_raw.split(",") if t.strip()]
-    new_tools = sorted(set(picked) | set(extras))
-
-    if tuple(new_tools) == team.rules.deny_tools:
-        friendly_warn("No change.")
-        return None
-    new_team = team.with_deny_tools(new_tools)
-    dump_team(new_team)
-    ok(f"deny_tools = {new_tools or '(none)'}")
-    return new_team
+    return tuple(sorted(set(picked) | set(extras)))
 
 
-def _edit_refresh_token() -> bool:
-    """Re-prompt for token, verify, rewrite config.env. Returns True
-    iff the token was updated."""
+def _edit_scope(scope, token: str) -> bool:
+    """Rename / edit deny_tools / remove a scope. Returns True if changed."""
+    action = _ask(questionary.select(
+        f'Edit {scope.kind} "{scope.label}":',
+        choices=[
+            questionary.Choice("Rename", value="rename"),
+            questionary.Choice("Edit scope deny_tools", value="deny"),
+            questionary.Choice("Remove this scope", value="remove"),
+            questionary.Choice("Cancel", value="cancel"),
+        ],
+        qmark="?", style=_PROMPT_STYLE,
+    ))
+    if action == "cancel":
+        return False
+    if action == "rename":
+        new = _ask(questionary.text(
+            "New label:", default=scope.label,
+            qmark="?", style=_PROMPT_STYLE,
+        )).strip()
+        if not new or new == scope.label:
+            friendly_warn("No change.")
+            return False
+        commit_scope(replace(scope, label=new), token)
+        ok(f"Renamed → {new}")
+        return True
+    if action == "deny":
+        new_tools = _toggle_tools(scope.deny_tools)
+        if new_tools == scope.deny_tools:
+            friendly_warn("No change.")
+            return False
+        commit_scope(replace(scope, deny_tools=new_tools), token)
+        ok(f"scope deny_tools = {list(new_tools) or '(none)'}")
+        return True
+    # remove
+    confirm = _ask(questionary.confirm(
+        f'Remove {scope.kind} "{scope.label}"?',
+        default=False, qmark="?", style=_PROMPT_STYLE,
+    ))
+    if not confirm:
+        return False
+    if not remove_scope(scope.chat_id):
+        friendly_warn(
+            "Can't remove the only scope — at least one must remain. "
+            "Add another scope first, or re-run setup.",
+        )
+        return False
+    ok(f"Removed {scope.label}.")
+    return True
+
+
+def _edit_member(scope, token: str) -> bool:
+    """Set role / edit per-user deny_tools / remove a member."""
+    choices = [
+        questionary.Choice(f"{m.label} — {m.role}", value=m.id)
+        for m in scope.members
+    ]
+    choices.append(questionary.Choice("Cancel", value=None))
+    mid = _ask(questionary.select(
+        "Which member?", choices=choices, qmark="?", style=_PROMPT_STYLE,
+    ))
+    if mid is None:
+        return False
+    member = next(m for m in scope.members if m.id == mid)
+
+    action = _ask(questionary.select(
+        f"Edit @{member.label} ({member.role}):",
+        choices=[
+            questionary.Choice("Set role", value="role"),
+            questionary.Choice("Edit member deny_tools", value="deny"),
+            questionary.Choice("Remove member", value="remove"),
+            questionary.Choice("Cancel", value="cancel"),
+        ],
+        qmark="?", style=_PROMPT_STYLE,
+    ))
+    if action == "cancel":
+        return False
+
+    def _replace_member(new_member) -> None:
+        members = tuple(new_member if m.id == mid else m for m in scope.members)
+        commit_scope(replace(scope, members=members), token)
+
+    if action == "role":
+        role = _pick_role(f"New role for @{member.label}:",
+                          default=member.role)
+        if role == member.role:
+            friendly_warn("No change.")
+            return False
+        _replace_member(replace(member, role=role))
+        ok(f"@{member.label}: → {role}")
+        return True
+    if action == "deny":
+        new_tools = _toggle_tools(member.deny_tools)
+        if new_tools == member.deny_tools:
+            friendly_warn("No change.")
+            return False
+        _replace_member(replace(member, deny_tools=new_tools))
+        ok(f"@{member.label} deny_tools = {list(new_tools) or '(none)'}")
+        return True
+    # remove
+    if scope.kind == "dm":
+        friendly_warn(
+            "A DM scope is one person — remove the whole scope instead "
+            "(Edit a scope → Remove this scope).",
+        )
+        return False
+    if len(scope.members) == 1:
+        friendly_warn(
+            "That's the last member — remove the whole scope instead.",
+        )
+        return False
+    confirm = _ask(questionary.confirm(
+        f"Remove @{member.label} from {scope.label}?",
+        default=False, qmark="?", style=_PROMPT_STYLE,
+    ))
+    if not confirm:
+        return False
+    members = tuple(m for m in scope.members if m.id != mid)
+    commit_scope(replace(scope, members=members), token)
+    ok(f"Removed @{member.label}.")
+    return True
+
+
+def _test_reachability(scope, token: str) -> None:
+    step(f'[~]  Testing "{scope.label}"')
+    sent, err = _test_send(token, scope.chat_id)
+    if sent:
+        ok(f"Test message delivered to {scope.label}.")
+    else:
+        friendly_warn(f"Could not reach {scope.label}: {err}")
+
+
+def _view_policy() -> None:
+    """Read-only policy view. NEVER opens the policy files for writing."""
+    from aipager.policy import POLICY_D_DIR, POLICY_PATH, load_policy
+
+    console.print()
+    console.print(
+        "[title]Policy (user-owned — this wizard never writes it):[/title]"
+    )
+    state = "exists" if POLICY_PATH.exists() else \
+        "absent — built-in defaults in effect"
+    console.print(f"  [path]{POLICY_PATH}[/path]  [muted]({state})[/muted]")
+    console.print(f"  [path]{POLICY_D_DIR}/[/path]")
+    try:
+        # Pass the (call-time) paths so a monkeypatched POLICY_PATH is
+        # honored — load_policy's defaults bind at import time.
+        pol = load_policy(POLICY_PATH, POLICY_D_DIR)
+    except Exception as e:  # noqa: BLE001 — surface any policy error
+        console.print(f"  [err]policy error: {e}[/err]")
+        return
+    console.print(f"[title]Roles:[/title] {', '.join(sorted(pol.roles))}")
+    console.print(
+        "[muted]  Edit the file directly to add custom roles / tune "
+        "safety — nothing here overwrites it.[/muted]"
+    )
+    console.print("[muted]  Lint:   aipager policy validate[/muted]")
+    console.print("[muted]  Render: aipager doctor --safety-check[/muted]")
+
+
+def _refresh_token(scopes) -> str | None:
+    """Re-prompt for a token, verify, rewrite aipager.yaml. Returns the
+    new token iff it changed."""
     step("[~]  Refresh bot token")
-    _, chat_id = _read_env_file()
     while True:
         raw = _ask(questionary.text(
-            "Paste your bot token:",
-            qmark="?", style=_PROMPT_STYLE,
+            "Paste your bot token:", qmark="?", style=_PROMPT_STYLE,
         ))
         token = _normalize_token(raw)
         if not token:
@@ -299,129 +248,46 @@ def _edit_refresh_token() -> bool:
         if info is None:
             friendly_warn("Telegram rejected the token. Try again or Ctrl-C.")
             continue
-        _write_env_file(token, chat_id)
+        replace_scopes(scopes, token)
         ok(f"Wrote new token for @{info.get('username', '?')}.")
-        return True
+        return token
 
 
-def _edit_switch_to_personal(team) -> bool:
-    """Archive team.yaml. Returns True iff the switch happened."""
-    from aipager.team import TEAM_CONFIG_PATH, archive_team
-
-    console.print()
-    console.print(
-        "[warn]⚠[/warn]  Switching to personal mode will archive "
-        "[path]team.yaml[/path] as a timestamped backup.",
-    )
-    confirm = _ask(questionary.confirm(
-        f"Archive {team.users and f'{len(team.users)} users + ' or ''}rules "
-        "and run as a 1:1 DM bot?",
-        default=False, qmark="?", style=_PROMPT_STYLE,
-    ))
-    if not confirm:
-        return False
-    backup = archive_team(TEAM_CONFIG_PATH)
-    if backup is None:
-        friendly_warn("No team.yaml found — nothing to archive.")
-        return False
-    ok(f"Archived team.yaml → {backup.name}")
-
-    # Offer to update CHAT_ID — it's almost certainly still the group id.
-    _token, current_chat_id = _read_env_file()
-    update_chat = _ask(questionary.confirm(
-        f"Current CHAT_ID is {current_chat_id} (the group id). "
-        "Update it to a DM chat id now?",
-        default=True, qmark="?", style=_PROMPT_STYLE,
-    ))
-    if update_chat:
-        token = _token
-        info = _verify_token(token) if token else None
-        bot_username = (info or {}).get("username", "your_bot")
-        new_chat = _step_chat_id(
-            token, bot_username, mode="personal", step_label="[~]",
-        )
-        _write_env_file(token, new_chat)
-        ok(f"Wrote CHAT_ID={new_chat} (DM).")
-    return True
-
-
-def _edit_switch_to_team() -> bool:
-    """Run the team setup against the existing token. Returns True
-    iff team.yaml was written."""
-    token, _ = _read_env_file()
-    if not token:
-        friendly_warn("No token in config.env — run full setup first.")
-        return False
-    info = _verify_token(token)
-    bot_username = (info or {}).get("username", "your_bot")
-
-    _show_team_warning_panel()
-    proceed = _ask(questionary.confirm(
-        "Continue with team-mode setup?",
-        default=False, qmark="?", style=_PROMPT_STYLE,
-    ))
-    if not proceed:
-        return False
-
-    group_id = _step_chat_id(token, bot_username, mode="team",
-                             step_label="[~]")
-    _step_team_setup(group_id, step_label="[~]", token=token)
-    # CHAT_ID in config.env should now be the group id for the daemon
-    # to filter correctly.
-    _write_env_file(token, group_id)
-    ok(f"Wrote CHAT_ID={group_id} (group).")
-    return True
+def _menu_choices(has_error: bool) -> list[questionary.Choice]:
+    """The edit-menu actions. A malformed ``aipager.yaml`` collapses to
+    just token-refresh + exit (nothing scope-based is safe to offer)."""
+    if has_error:
+        return [
+            questionary.Choice("Refresh bot token", value="refresh_token"),
+            questionary.Choice("Exit", value="exit"),
+        ]
+    return [
+        questionary.Choice("Add a group scope", value="add_group"),
+        questionary.Choice("Add a DM scope", value="add_dm"),
+        questionary.Choice("Edit a scope", value="edit_scope"),
+        questionary.Choice("Edit a member", value="edit_member"),
+        questionary.Choice("Test bot reachability", value="test"),
+        questionary.Choice("View policy", value="view_policy"),
+        questionary.Choice("Re-install Claude Code hooks",
+                           value="reinstall_hooks"),
+        questionary.Choice("Refresh bot token", value="refresh_token"),
+        questionary.Choice("Exit", value="exit"),
+    ]
 
 
 def _edit_flow() -> int:
-    """Show the current-config panel and offer a menu of edits.
-
-    Loops until the user picks Exit (or selects "Run full setup",
-    which delegates back to :func:`_first_run_flow`).
-    """
-    from aipager.team import TEAM_CONFIG_PATH, TeamConfigError, load_team
-
+    """Show the scope list and offer a menu of edits (loops until Exit)."""
     rule("aipager config")
     while True:
         _show_current_config()
 
         try:
-            team = load_team(TEAM_CONFIG_PATH)
-        except TeamConfigError:
-            team = None  # malformed; only show "run full setup" action
+            scopes, token = read_config()
+            cfg_err: str | None = None
+        except ScopeConfigError as e:
+            scopes, token, cfg_err = [], "", str(e)
 
-        if team is not None:
-            # Surface pending-user count in the menu label so the
-            # admin sees at a glance there are people waiting.
-            from aipager.team import list_pending_users
-            pending = list_pending_users()
-            review_label = "Review pending users"
-            if pending:
-                review_label = f"Review pending users ({len(pending)} waiting)"
-            choices = [
-                questionary.Choice("Add a user", value="add"),
-                questionary.Choice(review_label, value="review_pending"),
-                questionary.Choice("Remove a user", value="remove"),
-                questionary.Choice("Change a user's role", value="role"),
-                questionary.Choice("Edit deny_tools rules", value="rules"),
-                questionary.Choice("Switch to Personal mode", value="to_personal"),
-                questionary.Choice("Refresh bot token", value="refresh_token"),
-                questionary.Choice("Re-install Claude Code hooks",
-                                   value="reinstall_hooks"),
-                questionary.Choice("Run full setup (overwrites everything)",
-                                   value="full"),
-                questionary.Choice("Exit", value="exit"),
-            ]
-        else:
-            choices = [
-                questionary.Choice("Switch to Team mode", value="to_team"),
-                questionary.Choice("Refresh bot token", value="refresh_token"),
-                questionary.Choice("Re-install Claude Code hooks",
-                                   value="reinstall_hooks"),
-                questionary.Choice("Run full setup (overwrites everything)",
-                                   value="full"),
-                questionary.Choice("Exit", value="exit"),
-            ]
+        choices = _menu_choices(cfg_err is not None)
 
         try:
             choice = _ask(questionary.select(
@@ -431,50 +297,37 @@ def _edit_flow() -> int:
         except KeyboardInterrupt:
             return 130
 
+        changed = False
         try:
             if choice == "exit":
                 return 0
-            # Track what kind of change happened so we can choose the
-            # right post-edit hint:
-            #   "team"    — only team.yaml touched → hot-reload via SIGUSR1
-            #   "restart" — config.env or token changed → full restart
-            #   None      — no change / cancelled
-            change_kind: str | None = None
-            if choice == "full":
-                return _first_run_flow()
             if choice == "refresh_token":
-                if _edit_refresh_token():
-                    change_kind = "restart"
+                if _refresh_token(scopes):
+                    changed = True
             elif choice == "reinstall_hooks":
                 _step_settings(step_label="[~]")
-                # Hooks live in ~/.claude/settings.json; they're read
-                # by Claude Code itself (not aipager). No daemon
-                # restart needed.
-            elif choice == "to_personal" and team is not None:
-                if _edit_switch_to_personal(team):
-                    # Archives team.yaml AND may update config.env
-                    # (chat-id swap). Conservatively assume restart.
-                    change_kind = "restart"
-            elif choice == "to_team":
-                if _edit_switch_to_team():
-                    # Writes team.yaml AND updates CHAT_ID in
-                    # config.env — restart required.
-                    change_kind = "restart"
-            elif team is not None and choice == "add":
-                if _edit_add_user(team) is not None:
-                    change_kind = "team"
-            elif team is not None and choice == "review_pending":
-                if _edit_review_pending(team) is not None:
-                    change_kind = "team"
-            elif team is not None and choice == "remove":
-                if _edit_remove_user(team) is not None:
-                    change_kind = "team"
-            elif team is not None and choice == "role":
-                if _edit_change_role(team) is not None:
-                    change_kind = "team"
-            elif team is not None and choice == "rules":
-                if _edit_deny_tools(team) is not None:
-                    change_kind = "team"
+                # Hooks live in ~/.claude/settings.json (read by Claude
+                # Code itself) — no daemon restart needed.
+            elif choice == "view_policy":
+                _view_policy()
+            elif choice == "add_group":
+                if add_group_scope(token, _bot_username(token)):
+                    changed = True
+            elif choice == "add_dm":
+                if add_dm_scope(token, _bot_username(token)):
+                    changed = True
+            elif choice == "test":
+                sc = _pick_scope(scopes, "Test which scope?")
+                if sc is not None:
+                    _test_reachability(sc, token)
+            elif choice == "edit_scope":
+                sc = _pick_scope(scopes, "Edit which scope?")
+                if sc is not None and _edit_scope(sc, token):
+                    changed = True
+            elif choice == "edit_member":
+                sc = _pick_scope(scopes, "Member of which scope?")
+                if sc is not None and _edit_member(sc, token):
+                    changed = True
         except KeyboardInterrupt:
             friendly_warn("Cancelled this action.")
             continue
@@ -485,7 +338,5 @@ def _edit_flow() -> int:
             friendly_error(f"Write failed: {e}")
             continue
 
-        if change_kind == "team":
-            _apply_team_change_hint()
-        elif change_kind == "restart":
+        if changed:
             _restart_hint()

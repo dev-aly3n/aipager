@@ -8,7 +8,6 @@ from aipager.ui import console
 
 from aipager.wizard.daemon_io import (
     _detect_daemon_running,
-    _read_env_file,
 )
 
 
@@ -37,38 +36,36 @@ class _NullCtx:
 
 
 def _show_current_config() -> None:
-    """Print a panel summarizing config.env + team.yaml + daemon state."""
+    """Print a panel summarizing the scopes in aipager.yaml + daemon state."""
     from rich.panel import Panel
-    from aipager.team import TEAM_CONFIG_PATH, TeamConfigError, load_team
 
-    token, chat_id = _read_env_file()
+    from aipager.scope import ScopeConfigError
+    from aipager.wizard.scope_io import read_config
+
     try:
-        team = load_team(TEAM_CONFIG_PATH)
-        team_err: str | None = None
-    except TeamConfigError as e:
-        team = None
-        team_err = str(e)
+        scopes, token = read_config()
+        cfg_err: str | None = None
+    except ScopeConfigError as e:
+        scopes, token, cfg_err = [], "", str(e)
 
     lines: list[str] = []
-    if team is not None:
-        lines.append("[title]Mode:[/title]   Team")
-        lines.append(f"[title]Chat:[/title]   {chat_id}  ([path]group[/path])")
-        lines.append(
-            f"[title]Users:[/title]  {len(team.users)} "
-            f"({team.admin_count()} admin)"
-        )
-        for u in team.users.values():
-            lines.append(f"          • [path]{u.label}[/path] — {u.role.value}")
-        deny = list(team.rules.deny_tools)
-        rules_repr = f"deny_tools = {deny}" if deny else "(none)"
-        lines.append(f"[title]Rules:[/title]  {rules_repr}")
-    elif team_err:
-        lines.append("[title]Mode:[/title]   [err]team.yaml malformed[/err]")
-        lines.append(f"          [err]{team_err}[/err]")
-        lines.append(f"[title]Chat:[/title]   {chat_id}")
+    if cfg_err:
+        lines.append("[err]aipager.yaml malformed:[/err]")
+        lines.append(f"   [err]{cfg_err}[/err]")
+    elif not scopes:
+        lines.append("[muted]No scopes configured yet.[/muted]")
     else:
-        lines.append("[title]Mode:[/title]   Personal")
-        lines.append(f"[title]Chat:[/title]   {chat_id}")
+        for s in scopes:
+            n = len(s.members)
+            deny = len(s.deny_tools)
+            deny_txt = (f" · {deny} deny rule{'s' if deny != 1 else ''}"
+                        if deny else "")
+            lines.append(
+                f'[title]{s.kind}[/title] [path]"{s.label}"[/path] · '
+                f"{n} member{'s' if n != 1 else ''}{deny_txt}"
+            )
+            for m in s.members:
+                lines.append(f"   • [path]{m.label}[/path] — {m.role}")
 
     if token:
         lines.append(f"[title]Token:[/title]  {token[:10]}…")

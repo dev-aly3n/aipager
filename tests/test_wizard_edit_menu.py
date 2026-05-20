@@ -1,21 +1,22 @@
-"""Tests for wizard.edit_menu — admin re-configuration flow.
+"""F4: edit menu over the scope list (v2).
 
-Each ``_edit_*`` function reads questionary prompts then mutates
-team.yaml / config.env. We stub the prompts and the persistence
-helpers so the logic can be exercised without writing real config.
+We stub questionary prompts (``_ask``) and redirect ``aipager.yaml`` /
+``policy.yaml`` into tmp_path so the scope mutations exercise the real
+``scope_io`` round-trip without touching the user's config.
 """
 
 from __future__ import annotations
 
-
 import pytest
 
-from aipager.team import Role, Rules, Team, User as TeamUser
+from aipager import scope as _scope
+from aipager.scope import Member, Scope
 from aipager.wizard import edit_menu
 
 
 def _stub_ask(monkeypatch, answers):
     queue = iter(answers)
+
     def _ask(prompt):
         try:
             return next(queue)
@@ -24,410 +25,196 @@ def _stub_ask(monkeypatch, answers):
     monkeypatch.setattr(edit_menu, "_ask", _ask)
 
 
-def _team(*users, deny_tools=()):
-    admin = users or (TeamUser(id=1, label="admin", role=Role.ADMIN),)
-    return Team(
-        group_id=-100,
-        users={u.id: u for u in admin},
-        rules=Rules(deny_tools=tuple(deny_tools)),
-    )
-
-
 @pytest.fixture
-def stub_dump_team(monkeypatch):
-    """Capture dump_team calls without writing to disk."""
-    calls = []
-    monkeypatch.setattr("aipager.team.dump_team",
-                        lambda t: calls.append(t))
-    return calls
+def cfg(tmp_path, monkeypatch):
+    """A committed two-scope config redirected into tmp_path."""
+    import aipager.policy as _policy
+    p = tmp_path / "aipager.yaml"
+    monkeypatch.setattr(_scope, "CONFIG_PATH", p)
+    monkeypatch.setattr(_policy, "POLICY_PATH", tmp_path / "policy.yaml")
+    monkeypatch.setattr(_policy, "POLICY_D_DIR", tmp_path / "policy.d")
+    scopes = [
+        Scope(chat_id=1, kind="dm", label="owner DM",
+              members=(Member(id=1, label="owner", role="owner"),)),
+        Scope(chat_id=-100, kind="group", label="dev-team",
+              members=(Member(id=11, label="ann", role="user"),
+                       Member(id=22, label="ben", role="user"))),
+    ]
+    _scope.dump_scopes(scopes, "TOK", p)
+    return p
 
 
-# ---- _edit_add_user -----------------------------------------------------
-
-def test_edit_add_user_cancelled_when_no_entries(monkeypatch):
-    team = _team()
-    monkeypatch.setattr(edit_menu, "_collect_users", lambda **k: [])
-    monkeypatch.setattr(edit_menu, "_read_env_file", lambda: ("tok", "5"))
-    assert edit_menu._edit_add_user(team) is None
+def _scopes():
+    return _scope.load_scopes(_scope.CONFIG_PATH)[0]
 
 
-def test_edit_add_user_declined_at_confirm(monkeypatch):
-    team = _team()
-    monkeypatch.setattr(edit_menu, "_collect_users",
-                        lambda **k: [{"id": 2, "label": "bob",
-                                       "role": "developer"}])
-    monkeypatch.setattr(edit_menu, "_read_env_file", lambda: ("tok", "5"))
-    _stub_ask(monkeypatch, [False])  # decline confirm
-    assert edit_menu._edit_add_user(team) is None
+# ---- _edit_scope ---------------------------------------------------------
+
+def test_edit_scope_rename(cfg, monkeypatch):
+    grp = next(s for s in _scopes() if s.chat_id == -100)
+    _stub_ask(monkeypatch, ["rename", "platform"])
+    assert edit_menu._edit_scope(grp, "TOK") is True
+    grp2 = next(s for s in _scopes() if s.chat_id == -100)
+    assert grp2.label == "platform"
 
 
-def test_edit_add_user_adds_developer(monkeypatch, stub_dump_team):
-    team = _team()
-    monkeypatch.setattr(edit_menu, "_collect_users",
-                        lambda **k: [{"id": 2, "label": "bob",
-                                       "role": "developer"}])
-    monkeypatch.setattr(edit_menu, "_read_env_file", lambda: ("tok", "5"))
-    _stub_ask(monkeypatch, [True])  # confirm
-    new_team = edit_menu._edit_add_user(team)
-    assert new_team is not None
-    assert 2 in new_team.users
-    assert len(stub_dump_team) == 1
+def test_edit_scope_remove(cfg, monkeypatch):
+    grp = next(s for s in _scopes() if s.chat_id == -100)
+    _stub_ask(monkeypatch, ["remove", True])
+    assert edit_menu._edit_scope(grp, "TOK") is True
+    assert [s.chat_id for s in _scopes()] == [1]
 
 
-# ---- _edit_review_pending ------------------------------------------------
-
-def test_edit_review_pending_empty_returns_none(monkeypatch):
-    team = _team()
-    monkeypatch.setattr("aipager.team.list_pending_users", lambda: [])
-    assert edit_menu._edit_review_pending(team) is None
-
-
-def test_edit_review_pending_skip(monkeypatch):
-    team = _team()
-    monkeypatch.setattr("aipager.team.list_pending_users", lambda: [
-        {"user_id": 99, "username": "alice", "display_name": "Alice",
-         "first_seen": "2026-05-19"},
-    ])
-    monkeypatch.setattr("aipager.team.clear_pending_user",
-                        lambda uid: None)
-    _stub_ask(monkeypatch, ["skip"])
-    assert edit_menu._edit_review_pending(team) is None
+def test_edit_scope_remove_last_refused(cfg, monkeypatch):
+    # Drop the group first so only the DM remains.
+    from aipager.wizard.scope_io import remove_scope
+    remove_scope(-100)
+    dm = next(s for s in _scopes() if s.chat_id == 1)
+    _stub_ask(monkeypatch, ["remove", True])
+    assert edit_menu._edit_scope(dm, "TOK") is False
+    assert [s.chat_id for s in _scopes()] == [1]
 
 
-def test_edit_review_pending_dismiss_clears(monkeypatch):
-    team = _team()
-    cleared = []
-    monkeypatch.setattr("aipager.team.list_pending_users", lambda: [
-        {"user_id": 99, "username": "alice", "display_name": "Alice",
-         "first_seen": "2026-05-19"},
-    ])
-    monkeypatch.setattr("aipager.team.clear_pending_user",
-                        lambda uid: cleared.append(uid))
-    _stub_ask(monkeypatch, ["dismiss"])
-    edit_menu._edit_review_pending(team)
-    assert cleared == [99]
+def test_edit_scope_deny_tools(cfg, monkeypatch):
+    grp = next(s for s in _scopes() if s.chat_id == -100)
+    _stub_ask(monkeypatch, ["deny", ["Bash"], ""])
+    assert edit_menu._edit_scope(grp, "TOK") is True
+    grp2 = next(s for s in _scopes() if s.chat_id == -100)
+    assert grp2.deny_tools == ("Bash",)
 
 
-def test_edit_review_pending_add_as_developer(monkeypatch, stub_dump_team):
-    team = _team()
-    monkeypatch.setattr("aipager.team.list_pending_users", lambda: [
-        {"user_id": 99, "username": "alice", "display_name": "Alice",
-         "first_seen": "2026-05-19"},
-    ])
-    monkeypatch.setattr("aipager.team.clear_pending_user", lambda uid: None)
-    _stub_ask(monkeypatch, ["developer"])
-    new_team = edit_menu._edit_review_pending(team)
-    assert new_team is not None
-    assert 99 in new_team.users
-    assert new_team.users[99].role == Role.DEVELOPER
+# ---- _edit_member --------------------------------------------------------
+
+def test_edit_member_set_role_offers_custom(cfg, monkeypatch):
+    grp = next(s for s in _scopes() if s.chat_id == -100)
+    seen = {}
+
+    def _fake_pick(prompt, **k):
+        seen["default"] = k.get("default")
+        return "reviewer"
+    monkeypatch.setattr(edit_menu, "_pick_role", _fake_pick)
+    _stub_ask(monkeypatch, [11, "role"])  # pick ann, then "set role"
+    assert edit_menu._edit_member(grp, "TOK") is True
+    members = next(s for s in _scopes() if s.chat_id == -100).members
+    ann = next(m for m in members if m.id == 11)
+    assert ann.role == "reviewer"
+    assert seen["default"] == "user"
 
 
-def test_edit_review_pending_skips_existing_users(monkeypatch):
-    """If a pending entry's id is already on the allow-list, it's silently
-    cleared without prompting."""
-    team = _team()
-    cleared = []
-    monkeypatch.setattr("aipager.team.list_pending_users", lambda: [
-        # id=1 is the admin already in the team
-        {"user_id": 1, "username": "admin", "display_name": "Admin",
-         "first_seen": "2026-05-19"},
-    ])
-    monkeypatch.setattr("aipager.team.clear_pending_user",
-                        lambda uid: cleared.append(uid))
-    # No _ask should fire (since the only entry is auto-cleared)
-    monkeypatch.setattr(edit_menu, "_ask",
-                        lambda p: (_ for _ in ()).throw(AssertionError(
-                            "_ask should not be called")))
-    assert edit_menu._edit_review_pending(team) is None
-    assert cleared == [1]
+def test_edit_member_remove(cfg, monkeypatch):
+    grp = next(s for s in _scopes() if s.chat_id == -100)
+    _stub_ask(monkeypatch, [11, "remove", True])
+    assert edit_menu._edit_member(grp, "TOK") is True
+    grp2 = next(s for s in _scopes() if s.chat_id == -100)
+    assert {m.id for m in grp2.members} == {22}
 
 
-def test_edit_review_pending_label_clash_prompts_new_label(monkeypatch, stub_dump_team):
-    team = _team(TeamUser(id=1, label="alice", role=Role.ADMIN))
-    monkeypatch.setattr("aipager.team.list_pending_users", lambda: [
-        {"user_id": 99, "username": "alice", "display_name": "",
-         "first_seen": "?"},  # handle clashes with existing label
-    ])
-    monkeypatch.setattr("aipager.team.clear_pending_user", lambda uid: None)
-    _stub_ask(monkeypatch, [
-        "developer",        # role
-        "alice2",           # new label
-    ])
-    new_team = edit_menu._edit_review_pending(team)
-    assert 99 in new_team.users
-    assert new_team.users[99].label == "alice2"
+def test_edit_member_remove_from_dm_refused(cfg, monkeypatch):
+    dm = next(s for s in _scopes() if s.chat_id == 1)
+    _stub_ask(monkeypatch, [1, "remove"])
+    assert edit_menu._edit_member(dm, "TOK") is False
+    assert len(next(s for s in _scopes() if s.chat_id == 1).members) == 1
 
 
-# ---- _edit_remove_user --------------------------------------------------
-
-def test_edit_remove_user_empty_team(monkeypatch):
-    """Empty team is unreachable through Team's API (at least one admin
-    required by __post_init__). Skip but keep the placeholder so the
-    test file enumerates all the documented states."""
-    pytest.skip("Empty Team is rejected by Team.__post_init__")
-
-
-def test_edit_remove_user_cancels(monkeypatch):
-    team = _team(
-        TeamUser(id=1, label="admin", role=Role.ADMIN),
-        TeamUser(id=2, label="dev", role=Role.DEVELOPER),
+def test_edit_member_remove_last_group_member_refused(cfg, monkeypatch):
+    # Single-member group.
+    from aipager.wizard.scope_io import commit_scope
+    commit_scope(
+        Scope(chat_id=-200, kind="group", label="solo",
+              members=(Member(id=99, label="zoe", role="user"),)),
+        "TOK",
     )
-    _stub_ask(monkeypatch, [None])  # picked "Cancel"
-    assert edit_menu._edit_remove_user(team) is None
+    solo = next(s for s in _scopes() if s.chat_id == -200)
+    _stub_ask(monkeypatch, [99, "remove"])
+    assert edit_menu._edit_member(solo, "TOK") is False
 
 
-def test_edit_remove_user_removes_dev(monkeypatch, stub_dump_team):
-    team = _team(
-        TeamUser(id=1, label="admin", role=Role.ADMIN),
-        TeamUser(id=2, label="dev", role=Role.DEVELOPER),
+# ---- _view_policy (read-only — R15) --------------------------------------
+
+def test_view_policy_never_writes(cfg, capsys):
+    import hashlib
+
+    import aipager.policy as _policy
+    # Hand-write a policy.yaml with a custom role.
+    _policy.POLICY_PATH.write_text(
+        "roles:\n  reviewer:\n    allow_tools: [Read, Grep]\n",
+        encoding="utf-8",
     )
-    _stub_ask(monkeypatch, [2, True])  # pick dev's id, confirm
-    new_team = edit_menu._edit_remove_user(team)
-    assert 2 not in new_team.users
-    assert len(stub_dump_team) == 1
+    before = hashlib.sha256(_policy.POLICY_PATH.read_bytes()).hexdigest()
+    edit_menu._view_policy()
+    after = hashlib.sha256(_policy.POLICY_PATH.read_bytes()).hexdigest()
+    assert before == after  # byte-identical — never written
+    out = capsys.readouterr().out
+    assert "reviewer" in out
+    assert "never writes" in out
 
 
-def test_edit_remove_user_confirms_no_keeps(monkeypatch):
-    team = _team(
-        TeamUser(id=1, label="admin", role=Role.ADMIN),
-        TeamUser(id=2, label="dev", role=Role.DEVELOPER),
-    )
-    _stub_ask(monkeypatch, [2, False])
-    assert edit_menu._edit_remove_user(team) is None
+def test_view_policy_absent_shows_defaults(cfg, capsys):
+    edit_menu._view_policy()
+    out = capsys.readouterr().out
+    assert "built-in defaults" in out
+    assert "owner" in out and "read_only" in out
 
 
-def test_edit_remove_user_refuses_to_remove_only_admin(monkeypatch):
-    team = _team(TeamUser(id=1, label="admin", role=Role.ADMIN))
-    _stub_ask(monkeypatch, [1])
-    assert edit_menu._edit_remove_user(team) is None
+# ---- _refresh_token ------------------------------------------------------
 
-
-# ---- _edit_change_role --------------------------------------------------
-
-def test_edit_change_role_cancels(monkeypatch):
-    team = _team(TeamUser(id=1, label="admin", role=Role.ADMIN))
-    _stub_ask(monkeypatch, [None])
-    assert edit_menu._edit_change_role(team) is None
-
-
-def test_edit_change_role_same_role_warns_no_change(monkeypatch):
-    team = _team(TeamUser(id=1, label="admin", role=Role.ADMIN))
-    _stub_ask(monkeypatch, [1, "admin"])
-    assert edit_menu._edit_change_role(team) is None
-
-
-def test_edit_change_role_demote_only_admin_refused(monkeypatch):
-    team = _team(TeamUser(id=1, label="admin", role=Role.ADMIN))
-    _stub_ask(monkeypatch, [1, "developer"])
-    assert edit_menu._edit_change_role(team) is None
-
-
-def test_edit_change_role_promotes_developer(monkeypatch, stub_dump_team):
-    team = _team(
-        TeamUser(id=1, label="admin", role=Role.ADMIN),
-        TeamUser(id=2, label="dev", role=Role.DEVELOPER),
-    )
-    _stub_ask(monkeypatch, [2, "admin"])
-    new_team = edit_menu._edit_change_role(team)
-    assert new_team.users[2].role == Role.ADMIN
-    assert len(stub_dump_team) == 1
-
-
-# ---- _edit_deny_tools ---------------------------------------------------
-
-def test_edit_deny_tools_no_change_returns_none(monkeypatch):
-    team = _team(deny_tools=("Bash",))
-    _stub_ask(monkeypatch, [["Bash"], ""])  # same picks, no extras
-    assert edit_menu._edit_deny_tools(team) is None
-
-
-def test_edit_deny_tools_picks_two(monkeypatch, stub_dump_team):
-    team = _team()
-    _stub_ask(monkeypatch, [["Bash", "Edit"], ""])
-    new_team = edit_menu._edit_deny_tools(team)
-    assert "Bash" in new_team.rules.deny_tools
-    assert "Edit" in new_team.rules.deny_tools
-    assert len(stub_dump_team) == 1
-
-
-def test_edit_deny_tools_includes_extras(monkeypatch, stub_dump_team):
-    team = _team()
-    _stub_ask(monkeypatch, [["Bash"], "CustomTool, OtherTool"])
-    new_team = edit_menu._edit_deny_tools(team)
-    assert "CustomTool" in new_team.rules.deny_tools
-    assert "OtherTool" in new_team.rules.deny_tools
-
-
-# ---- _edit_refresh_token ------------------------------------------------
-
-def test_edit_refresh_token_happy(monkeypatch):
-    monkeypatch.setattr(edit_menu, "_read_env_file", lambda: ("", "12345"))
+def test_refresh_token_rewrites_token_keeps_scopes(cfg, monkeypatch):
     monkeypatch.setattr(edit_menu, "_verify_token",
-                        lambda t: {"username": "bot"})
-    monkeypatch.setattr(edit_menu, "_write_env_file",
-                        lambda t, c: None)
-    _stub_ask(monkeypatch, ["123456:abc-_def-_ghijklmnopqrstuvwxyz"])
-    assert edit_menu._edit_refresh_token() is True
+                        lambda t: {"username": "newbot"})
+    _stub_ask(monkeypatch, ["999999:newtokenABCDEFGHIJKLMNOPQRS"])
+    scopes = _scopes()
+    new = edit_menu._refresh_token(scopes)
+    assert new == "999999:newtokenABCDEFGHIJKLMNOPQRS"
+    again, token = _scope.load_scopes(_scope.CONFIG_PATH)
+    assert token == new
+    assert {s.chat_id for s in again} == {1, -100}
 
 
-def test_edit_refresh_token_retries_empty(monkeypatch):
-    monkeypatch.setattr(edit_menu, "_read_env_file", lambda: ("", "12345"))
-    monkeypatch.setattr(edit_menu, "_verify_token",
-                        lambda t: {"username": "bot"})
-    monkeypatch.setattr(edit_menu, "_write_env_file",
-                        lambda t, c: None)
-    _stub_ask(monkeypatch, ["", "123456:abc-_def-_ghijklmnopqrstuvwxyz"])
-    assert edit_menu._edit_refresh_token() is True
+# ---- _edit_flow routing --------------------------------------------------
 
-
-def test_edit_refresh_token_retries_invalid(monkeypatch):
-    monkeypatch.setattr(edit_menu, "_read_env_file", lambda: ("", "12345"))
-    calls = []
-    def _verify(t):
-        calls.append(t)
-        return None if len(calls) == 1 else {"username": "bot"}
-    monkeypatch.setattr(edit_menu, "_verify_token", _verify)
-    monkeypatch.setattr(edit_menu, "_write_env_file",
-                        lambda t, c: None)
-    _stub_ask(monkeypatch, [
-        "1:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-        "2:yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
-    ])
-    assert edit_menu._edit_refresh_token() is True
-    assert len(calls) == 2
-
-
-# ---- _edit_switch_to_personal -------------------------------------------
-
-def test_edit_switch_to_personal_declined(monkeypatch):
-    team = _team()
-    _stub_ask(monkeypatch, [False])  # decline archive
-    assert edit_menu._edit_switch_to_personal(team) is False
-
-
-def test_edit_switch_to_personal_no_yaml_warns(monkeypatch):
-    team = _team()
-    _stub_ask(monkeypatch, [True])
-    monkeypatch.setattr("aipager.team.archive_team", lambda p: None)
-    assert edit_menu._edit_switch_to_personal(team) is False
-
-
-def test_edit_switch_to_personal_archives_and_skips_chat_update(monkeypatch, tmp_path):
-    team = _team()
-    backup_path = tmp_path / "team.yaml.bak"
-    backup_path.touch()
-    monkeypatch.setattr("aipager.team.archive_team", lambda p: backup_path)
-    _stub_ask(monkeypatch, [
-        True,   # archive
-        False,  # don't update chat id
-    ])
-    monkeypatch.setattr(edit_menu, "_read_env_file", lambda: ("tok", "12345"))
-    assert edit_menu._edit_switch_to_personal(team) is True
-
-
-def test_edit_switch_to_personal_archives_and_updates_chat(monkeypatch, tmp_path):
-    team = _team()
-    backup_path = tmp_path / "team.yaml.bak"
-    backup_path.touch()
-    monkeypatch.setattr("aipager.team.archive_team", lambda p: backup_path)
-    monkeypatch.setattr(edit_menu, "_read_env_file", lambda: ("tok", "12345"))
-    monkeypatch.setattr(edit_menu, "_verify_token",
-                        lambda t: {"username": "bot"})
-    monkeypatch.setattr(edit_menu, "_step_chat_id",
-                        lambda *a, **k: 42)
-    monkeypatch.setattr(edit_menu, "_write_env_file",
-                        lambda t, c: None)
-    _stub_ask(monkeypatch, [True, True])
-    assert edit_menu._edit_switch_to_personal(team) is True
-
-
-# ---- _edit_switch_to_team -----------------------------------------------
-
-def test_edit_switch_to_team_no_token(monkeypatch):
-    monkeypatch.setattr(edit_menu, "_read_env_file", lambda: ("", ""))
-    assert edit_menu._edit_switch_to_team() is False
-
-
-def test_edit_switch_to_team_declined(monkeypatch):
-    monkeypatch.setattr(edit_menu, "_read_env_file", lambda: ("tok", "12345"))
-    monkeypatch.setattr(edit_menu, "_verify_token", lambda t: {"username": "bot"})
-    monkeypatch.setattr(edit_menu, "_show_team_warning_panel", lambda: None)
-    _stub_ask(monkeypatch, [False])
-    assert edit_menu._edit_switch_to_team() is False
-
-
-def test_edit_switch_to_team_happy(monkeypatch):
-    monkeypatch.setattr(edit_menu, "_read_env_file", lambda: ("tok", "12345"))
-    monkeypatch.setattr(edit_menu, "_verify_token", lambda t: {"username": "bot"})
-    monkeypatch.setattr(edit_menu, "_show_team_warning_panel", lambda: None)
-    monkeypatch.setattr(edit_menu, "_step_chat_id", lambda *a, **k: -100)
-    monkeypatch.setattr(edit_menu, "_step_team_setup", lambda *a, **k: None)
-    monkeypatch.setattr(edit_menu, "_write_env_file", lambda t, c: None)
-    _stub_ask(monkeypatch, [True])
-    assert edit_menu._edit_switch_to_team() is True
-
-
-# ---- _edit_flow ---------------------------------------------------------
-
-def test_edit_flow_exit_returns_zero(monkeypatch):
-    monkeypatch.setattr("aipager.team.load_team", lambda p=None: _team())
-    monkeypatch.setattr("aipager.team.list_pending_users", lambda: [])
+def test_edit_flow_exit(cfg, monkeypatch):
     monkeypatch.setattr(edit_menu, "_show_current_config", lambda: None)
     _stub_ask(monkeypatch, ["exit"])
     assert edit_menu._edit_flow() == 0
 
 
-def test_edit_flow_full_delegates_to_first_run(monkeypatch):
-    monkeypatch.setattr("aipager.team.load_team", lambda p=None: _team())
-    monkeypatch.setattr("aipager.team.list_pending_users", lambda: [])
+def test_edit_flow_view_policy_then_exit(cfg, monkeypatch):
     monkeypatch.setattr(edit_menu, "_show_current_config", lambda: None)
-    monkeypatch.setattr(edit_menu, "_first_run_flow", lambda: 7)
-    _stub_ask(monkeypatch, ["full"])
-    assert edit_menu._edit_flow() == 7
-
-
-def test_edit_flow_keyboard_interrupt_returns_130(monkeypatch):
-    monkeypatch.setattr("aipager.team.load_team", lambda p=None: _team())
-    monkeypatch.setattr("aipager.team.list_pending_users", lambda: [])
-    monkeypatch.setattr(edit_menu, "_show_current_config", lambda: None)
-    def _boom(prompt):
-        raise KeyboardInterrupt
-    monkeypatch.setattr(edit_menu, "_ask", _boom)
-    assert edit_menu._edit_flow() == 130
-
-
-def test_edit_flow_no_team_offers_to_team(monkeypatch):
-    """Personal-mode (no team.yaml) menu has limited choices."""
-    from aipager.team import TeamConfigError
-    def _raise(p=None):
-        raise TeamConfigError("none")
-    monkeypatch.setattr("aipager.team.load_team", _raise)
-    monkeypatch.setattr(edit_menu, "_show_current_config", lambda: None)
-    _stub_ask(monkeypatch, ["exit"])
+    calls = []
+    monkeypatch.setattr(edit_menu, "_view_policy",
+                        lambda: calls.append("viewed"))
+    _stub_ask(monkeypatch, ["view_policy", "exit"])
     assert edit_menu._edit_flow() == 0
+    assert calls == ["viewed"]
 
 
-def test_edit_flow_value_error_continues(monkeypatch):
-    monkeypatch.setattr("aipager.team.load_team", lambda p=None: _team())
-    monkeypatch.setattr("aipager.team.list_pending_users", lambda: [])
+def test_edit_flow_add_dm_triggers_restart_hint(cfg, monkeypatch):
     monkeypatch.setattr(edit_menu, "_show_current_config", lambda: None)
-    def _boom(t):
-        raise ValueError("bad")
-    monkeypatch.setattr(edit_menu, "_edit_add_user", _boom)
-    _stub_ask(monkeypatch, ["add", "exit"])
-    assert edit_menu._edit_flow() == 0
-
-
-def test_edit_flow_team_modify_calls_apply_hint(monkeypatch):
-    team = _team()
-    monkeypatch.setattr("aipager.team.load_team", lambda p=None: team)
-    monkeypatch.setattr("aipager.team.list_pending_users", lambda: [])
-    monkeypatch.setattr(edit_menu, "_show_current_config", lambda: None)
-    monkeypatch.setattr(edit_menu, "_edit_add_user",
-                        lambda t: team)  # any non-None = "added"
-    hint_called = []
-    monkeypatch.setattr(edit_menu, "_apply_team_change_hint",
-                        lambda: hint_called.append(1))
-    _stub_ask(monkeypatch, ["add", "exit"])
+    monkeypatch.setattr(edit_menu, "_bot_username", lambda t: "bot")
+    monkeypatch.setattr(edit_menu, "add_dm_scope", lambda t, b: True)
+    hints = []
+    monkeypatch.setattr(edit_menu, "_restart_hint",
+                        lambda: hints.append("restart"))
+    _stub_ask(monkeypatch, ["add_dm", "exit"])
     edit_menu._edit_flow()
-    assert hint_called == [1]
+    assert hints == ["restart"]
+
+
+def test_menu_choices_malformed_is_limited():
+    assert [c.value for c in edit_menu._menu_choices(True)] == [
+        "refresh_token", "exit",
+    ]
+
+
+def test_menu_choices_normal_full_menu():
+    values = [c.value for c in edit_menu._menu_choices(False)]
+    assert "add_group" in values and "view_policy" in values
+
+
+def test_edit_flow_malformed_config_exits_cleanly(tmp_path, monkeypatch):
+    p = tmp_path / "aipager.yaml"
+    p.write_text("schema_version: 99\n", encoding="utf-8")  # malformed
+    monkeypatch.setattr(_scope, "CONFIG_PATH", p)
+    monkeypatch.setattr(edit_menu, "_show_current_config", lambda: None)
+    _stub_ask(monkeypatch, ["exit"])
+    assert edit_menu._edit_flow() == 0

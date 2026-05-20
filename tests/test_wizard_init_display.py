@@ -6,7 +6,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from aipager.team import Role, Rules, Team, TeamConfigError, User as TeamUser
 from aipager.wizard import display
 
 
@@ -86,40 +85,48 @@ def test_null_ctx_is_a_proper_context_manager():
 
 # ===== display._show_current_config =====
 
-def test_show_current_config_team_mode(monkeypatch, capsys):
-    monkeypatch.setattr(display, "_read_env_file",
-                        lambda: ("token-123:abc", "12345"))
-    team = Team(
-        group_id=-100,
-        users={1: TeamUser(id=1, label="admin", role=Role.ADMIN)},
-        rules=Rules(deny_tools=("Bash",)),
-    )
-    monkeypatch.setattr("aipager.team.load_team", lambda p=None: team)
+from aipager.scope import Member, Scope, ScopeConfigError  # noqa: E402
+
+
+def _stub_read_config(monkeypatch, scopes, token):
+    monkeypatch.setattr("aipager.wizard.scope_io.read_config",
+                        lambda: (scopes, token))
+
+
+def _dm():
+    return Scope(chat_id=1, kind="dm", label="owner DM",
+                 members=(Member(id=1, label="owner", role="owner"),))
+
+
+def _group():
+    return Scope(chat_id=-100, kind="group", label="dev-team",
+                 members=(Member(id=11, label="ann", role="user"),),
+                 deny_tools=("Bash",))
+
+
+def test_show_current_config_renders_scopes(monkeypatch, capsys):
+    _stub_read_config(monkeypatch, [_dm(), _group()], "token-123:abc")
     monkeypatch.setattr(display, "_detect_daemon_running", lambda: None)
     display._show_current_config()
     out = capsys.readouterr().out
-    assert "Team" in out
-    assert "admin" in out
-    assert "Bash" in out
+    assert "owner DM" in out
+    assert "dev-team" in out
+    assert "ann" in out and "user" in out
+    assert "deny rule" in out  # the group's Bash deny
 
 
-def test_show_current_config_personal_mode(monkeypatch, capsys):
-    """No team.yaml → personal mode rendering."""
-    monkeypatch.setattr(display, "_read_env_file",
-                        lambda: ("tok", "12345"))
-    monkeypatch.setattr("aipager.team.load_team", lambda p=None: None)
+def test_show_current_config_no_scopes(monkeypatch, capsys):
+    _stub_read_config(monkeypatch, [], "tok")
     monkeypatch.setattr(display, "_detect_daemon_running", lambda: None)
     display._show_current_config()
     out = capsys.readouterr().out
-    assert "Personal" in out
+    assert "No scopes" in out
 
 
-def test_show_current_config_malformed_team_yaml(monkeypatch, capsys):
-    monkeypatch.setattr(display, "_read_env_file",
-                        lambda: ("tok", "12345"))
-    def _raise(p=None):
-        raise TeamConfigError("malformed")
-    monkeypatch.setattr("aipager.team.load_team", _raise)
+def test_show_current_config_malformed(monkeypatch, capsys):
+    def _raise():
+        raise ScopeConfigError("bad schema")
+    monkeypatch.setattr("aipager.wizard.scope_io.read_config", _raise)
     monkeypatch.setattr(display, "_detect_daemon_running", lambda: None)
     display._show_current_config()
     out = capsys.readouterr().out
@@ -127,10 +134,7 @@ def test_show_current_config_malformed_team_yaml(monkeypatch, capsys):
 
 
 def test_show_current_config_no_token(monkeypatch, capsys):
-    """When config.env has no token, show missing marker."""
-    monkeypatch.setattr(display, "_read_env_file",
-                        lambda: ("", "12345"))
-    monkeypatch.setattr("aipager.team.load_team", lambda p=None: None)
+    _stub_read_config(monkeypatch, [], "")
     monkeypatch.setattr(display, "_detect_daemon_running", lambda: None)
     display._show_current_config()
     out = capsys.readouterr().out
@@ -138,8 +142,7 @@ def test_show_current_config_no_token(monkeypatch, capsys):
 
 
 def test_show_current_config_daemon_running(monkeypatch, capsys):
-    monkeypatch.setattr(display, "_read_env_file", lambda: ("tok", "12345"))
-    monkeypatch.setattr("aipager.team.load_team", lambda p=None: None)
+    _stub_read_config(monkeypatch, [_dm()], "tok")
     monkeypatch.setattr(display, "_detect_daemon_running", lambda: 54321)
     display._show_current_config()
     out = capsys.readouterr().out
@@ -147,8 +150,7 @@ def test_show_current_config_daemon_running(monkeypatch, capsys):
 
 
 def test_show_current_config_daemon_running_pid_unknown(monkeypatch, capsys):
-    monkeypatch.setattr(display, "_read_env_file", lambda: ("tok", "12345"))
-    monkeypatch.setattr("aipager.team.load_team", lambda p=None: None)
+    _stub_read_config(monkeypatch, [_dm()], "tok")
     monkeypatch.setattr(display, "_detect_daemon_running", lambda: -1)
     display._show_current_config()
     out = capsys.readouterr().out
@@ -156,13 +158,11 @@ def test_show_current_config_daemon_running_pid_unknown(monkeypatch, capsys):
 
 
 def test_show_current_config_off_tty(monkeypatch):
-    monkeypatch.setattr(display, "_read_env_file", lambda: ("tok", "12345"))
-    monkeypatch.setattr("aipager.team.load_team", lambda p=None: None)
+    _stub_read_config(monkeypatch, [_dm()], "tok")
     monkeypatch.setattr(display, "_detect_daemon_running", lambda: None)
     fake_console = MagicMock()
     fake_console.is_terminal = False
     monkeypatch.setattr(display, "console", fake_console)
     display._show_current_config()
-    # In off-TTY mode, it calls console.print with "Current config" + body
     calls = [str(c) for c in fake_console.print.call_args_list]
     assert any("Current config" in c for c in calls)
