@@ -532,14 +532,20 @@ class NotifyMixin:
             # same key-injection path the buttons use, the chat sees
             # a one-line "⛔ Auto-denied" notice, and an audit record
             # is written.
-            if (tool_info and self.team is not None
-                    and self.team.rules.deny_tools):
-                triggerer = self._driver_user(sess)
-                if self.team.rules.tool_is_denied(
-                    tool_info.get("name", ""), triggerer,
-                ):
-                    await self._auto_deny(sess, tool_info, triggerer)
-                    return
+            if tool_info:
+                tool_name = tool_info.get("name", "")
+                if self.scopes is not None:
+                    # v2: deny set from scope + role + per-user (owner/
+                    # admin bypass). See AuthMixin._tool_auto_denied.
+                    if self._tool_auto_denied(sess, tool_name):
+                        triggerer = self._driver_user(sess)
+                        await self._auto_deny(sess, tool_info, triggerer)
+                        return
+                elif self.team is not None and self.team.rules.deny_tools:
+                    triggerer = self._driver_user(sess)
+                    if self.team.rules.tool_is_denied(tool_name, triggerer):
+                        await self._auto_deny(sess, tool_info, triggerer)
+                        return
 
             # Can we inline into the existing busy message?
             can_inline = sess.busy_msg_id and sess.busy_msg_id > 0

@@ -116,6 +116,33 @@ class AuthMixin:
         role = self.policy.get_role(member.role)
         return bool(role and role.can_prompt)
 
+    def _tool_auto_denied(self, sess: TrackedSession, tool_name: str) -> bool:
+        """Scope/policy version of the team-mode ``deny_tools`` auto-deny.
+
+        True iff the session's last driver's effective deny set
+        (scope-level ∪ role ∪ per-user) blocks ``tool_name``. Owner/
+        admin roles (``bypass_role_denies``) are exempt. This is only
+        the tool-name auto-deny that team mode already had — the full
+        path/bash/origin safety enforcement is Phase E.
+        """
+        if self.scopes is None or not tool_name:
+            return False
+        scope = self._scope_for(sess.scope_chat_id)
+        member = self._driver_user(sess)
+        if member is None:
+            # Unknown driver → apply only the scope-wide deny list.
+            return bool(scope and tool_name in scope.deny_tools)
+        role = self.policy.get_role(member.role)
+        if role and role.bypass_role_denies:
+            return False
+        denies: set[str] = set()
+        if scope:
+            denies |= set(scope.deny_tools)
+        if role:
+            denies |= set(role.deny_tools)
+        denies |= set(getattr(member, "deny_tools", ()))
+        return tool_name in denies
+
     def _team_user(self, update: Update):
         """Resolve the Telegram sender to a member/user, or None.
 
