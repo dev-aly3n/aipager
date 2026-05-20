@@ -592,7 +592,9 @@ class CommandHandlersMixin:
             session_name = f"claude-{name}"
         short_name = session_name.removeprefix("claude-")
 
-        ok, err = await inject.launch_session(short_name, skip_perms=skip_perms)
+        sys_extra = self._session_system_prompt(chat_id, name)
+        ok, err = await inject.launch_session(
+            short_name, skip_perms=skip_perms, system_prompt_extra=sys_extra)
         if not ok:
             await status_msg.edit_text(f"❌ {html_mod.escape(err)}")
             return

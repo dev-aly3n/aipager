@@ -166,6 +166,7 @@ async def launch_session(
     *,
     resume_id: str | None = None,
     cwd: str | None = None,
+    system_prompt_extra: str | None = None,
 ) -> tuple[bool, str]:
     """Launch a new Claude Code session inside dtach.
 
@@ -204,6 +205,10 @@ async def launch_session(
     sys_prompt = (f'Your session name is "{name}". '
                   f'When users address you by this name, respond naturally '
                   f'-- it is your name in this session.')
+    if system_prompt_extra:
+        # SESSION.md roster + rules (Phase D) appended so claude knows
+        # who can address it and what's blocked from Telegram.
+        sys_prompt = f"{sys_prompt}\n\n{system_prompt_extra}"
     # `unset CLAUDECODE`: Claude Code sets this env var when running, and
     # the binary refuses to launch a second time if it sees it ("already
     # inside a Claude Code session"). Strip it so /new sessions can launch

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
+from aipager import session_store as ss
 from aipager.dtach import inject
+from aipager.policy import load_policy
+from aipager.scope import Member, Scope
 
 
 def test_new_builds_suffixed_name_in_group(mk_bot, mk_update, run_async, monkeypatch):
@@ -61,3 +64,42 @@ def test_new_same_label_two_scopes_coexist(mk_bot, mk_update, run_async, monkeyp
     # Scoped lookup resolves each independently
     assert bot.registry.find_by_label("jim", 111).scope_chat_id == 111
     assert bot.registry.find_by_label("jim", -222).scope_chat_id == -222
+
+
+def test_session_system_prompt_none_when_legacy(mk_bot):
+    bot = mk_bot()  # scopes=None
+    assert bot._session_system_prompt(256113222, "x") is None
+
+
+def test_session_system_prompt_returns_roster(mk_bot, tmp_path, monkeypatch):
+    monkeypatch.setattr(ss, "SESSIONS_ROOT", tmp_path)
+    scope = Scope(chat_id=-100, kind="group", label="dev",
+                  members=(Member(id=1, label="aly", role="owner"),))
+    bot = mk_bot(scopes=[scope])
+    bot.policy = load_policy()
+    body = bot._session_system_prompt(-100, "jim")
+    assert body is not None
+    assert "# Session: jim" in body and "**aly** (owner" in body
+    # files written under tmp
+    assert (tmp_path / "group-100" / "jim" / "SESSION.md").exists()
+
+
+def test_new_passes_system_prompt_extra(mk_bot, mk_update, run_async, monkeypatch, tmp_path):
+    monkeypatch.setattr(ss, "SESSIONS_ROOT", tmp_path)
+    scope = Scope(chat_id=-4152307515, kind="group", label="dev",
+                  members=(Member(id=1, label="aly", role="owner"),))
+    bot = mk_bot(scopes=[scope])
+    bot.policy = load_policy()
+    captured = {}
+
+    async def _fake_launch(name, **kw):
+        captured.update(kw)
+        return True, ""
+
+    monkeypatch.setattr(inject, "launch_session", _fake_launch)
+    bot._mark_driver = MagicMock()
+    bot._maybe_update_bot_name = AsyncMock()
+    bot._update_bot_commands = AsyncMock()
+    upd = mk_update("/new jim", chat_id=-4152307515, user_id=1)  # member
+    run_async(bot._handle_new_cmd(upd, MagicMock()))
+    assert "# Session: jim" in (captured.get("system_prompt_extra") or "")

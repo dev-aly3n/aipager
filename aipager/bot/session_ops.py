@@ -67,6 +67,22 @@ log = logging.getLogger(__name__)
 class SessionOpsMixin:
     """Mixin for TelegramBot — see :mod:`aipager.bot` overview."""
 
+    def _session_system_prompt(self, scope_chat_id, label: str) -> str | None:
+        """Write the session folder + SESSION.md and return its body for
+        ``--append-system-prompt``. None for legacy/grandfathered sessions
+        (no scope) or on any failure (best-effort)."""
+        if not scope_chat_id or self.scopes is None:
+            return None
+        scope = self._scope_for(scope_chat_id)
+        if scope is None:
+            return None
+        try:
+            from aipager.session_store import write_session_files
+            return write_session_files(scope, self.policy, label)
+        except Exception:
+            log.debug("SESSION.md generation failed", exc_info=True)
+            return None
+
     # ── Telegram handlers ──
 
     async def _stop_session(self, sess: TrackedSession,
@@ -194,8 +210,13 @@ class SessionOpsMixin:
         sess.claude_session_id = ""
         self.registry.mark_dirty()
 
+        # Use the session's actual (possibly scope-disambiguated) name so
+        # resume reattaches the right socket, not a flat claude-<label>.
+        short_name = session_name.removeprefix("claude-")
+        sys_extra = self._session_system_prompt(sess.scope_chat_id, label)
         ok, err = await inject.launch_session(
-            label, resume_id=resume_id, cwd=cwd,
+            short_name, resume_id=resume_id, cwd=cwd,
+            system_prompt_extra=sys_extra,
         )
         if not ok:
             # Restore the id so the user can try again after fixing whatever
