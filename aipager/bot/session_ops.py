@@ -176,6 +176,49 @@ class SessionOpsMixin:
 
         log.info("[%s] Stopped by user (dropped %d queued)", sess.label, dropped)
 
+    async def _halt_for_safety(self, sess: TrackedSession, reason: str) -> None:
+        """Cleanly halt a session after a safety block.
+
+        Same teardown as :meth:`_stop_session` — interrupt Claude
+        (Escape×2), **cancel the busy animation** (else the spinner shows
+        "thinking" forever), surface the block in place of the busy
+        message, and return to IDLE so the session stays responsive.
+        Best-effort throughout; never raises into the notify path.
+        """
+        from aipager.bot.transport import resolve_chat_id
+        # 1. Interrupt Claude's turn.
+        try:
+            await inject.send_keys(sess.name, "Escape")
+            await asyncio.sleep(0.15)
+            await inject.send_keys(sess.name, "Escape")
+        except Exception:
+            log.debug("[%s] safety halt interrupt failed", sess.label,
+                      exc_info=True)
+        # 2. Cancel the spinner (the piece whose absence wedged "thinking").
+        self._stop_animation(sess)
+        # 3. Replace the busy message with the block notice (or send fresh).
+        notice = (f"🛑 <b>{html_mod.escape(sess.label)}</b> · Blocked by "
+                  f"safety policy: {html_mod.escape(reason)} — stopped")
+        try:
+            if sess.busy_msg_id and sess.busy_msg_id > 0:
+                await self._edit_busy_raw(
+                    sess.busy_msg_id, notice, chat_id=resolve_chat_id(sess))
+            elif self._app:
+                await self._app.bot.send_message(
+                    resolve_chat_id(sess), notice, parse_mode="HTML")
+        except Exception:
+            log.debug("[%s] safety halt notice failed", sess.label,
+                      exc_info=True)
+        # 4. Return to IDLE.
+        sess.busy_msg_id = None
+        sess.pending_queue.clear()
+        sess.pending_permission = None
+        sess.status = Status.IDLE
+        sess.trigger_msg_id = None
+        sess.last_idle_at = time.monotonic()
+        self.registry.mark_dirty()
+        log.info("[%s] halted by safety policy", sess.label)
+
     async def _kill_session_by_label(self, source, target_label: str) -> None:
         """Kill a session by label. source is Update or CallbackQuery."""
         async def _reply(text: str) -> None:

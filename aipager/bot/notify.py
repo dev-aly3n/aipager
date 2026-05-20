@@ -89,24 +89,14 @@ class NotifyMixin:
         if event == "safety_blocked":
             tool = context.get("tool", "?")
             reason = context.get("reason", "")
-            # Interrupt the turn (Escape×2, like /stop) so Claude can't
-            # keep retrying the goal with reworded/dodged commands. The
-            # hook's sticky turn-block already denies every later tool
-            # call; this just halts the loop promptly.
-            try:
-                from aipager.dtach import inject
-                await inject.send_keys(sess.name, "Escape")
-                await asyncio.sleep(0.15)
-                await inject.send_keys(sess.name, "Escape")
-            except Exception:
-                log.debug("safety_blocked interrupt failed", exc_info=True)
-            text = (f"🛑 <b>{html_mod.escape(label)}</b> · Blocked by safety "
-                    f"policy: {html_mod.escape(reason)} — session interrupted.")
-            try:
-                await bot.send_message(resolve_chat_id(sess), text,
-                                       parse_mode="HTML")
-            except Exception:
-                log.debug("safety_blocked notify failed", exc_info=True)
+            # On the FIRST block of a turn, cleanly halt the session
+            # (interrupt Claude + cancel the spinner + back to IDLE) so
+            # "thinking" stops automatically and doesn't hang. Sticky
+            # repeats ("session halted …" — the hook denying every later
+            # tool this turn) are audited only: no extra halt, no 🛑 spam.
+            sticky = reason.startswith("session halted")
+            if not sticky:
+                await self._halt_for_safety(sess, reason)
             try:
                 from aipager import audit as audit_mod
                 driver = self._driver_user(sess)
