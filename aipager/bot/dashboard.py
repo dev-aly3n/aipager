@@ -169,6 +169,11 @@ class DashboardMixin:
             return
         if self.team is not None:
             return  # team mode: no pinned dashboard
+        # The pinned dashboard targets a single chat (CHAT_ID). It makes
+        # no sense — and CHAT_ID is empty — under multi-scope (v2 retires
+        # config.env) or any install without a configured single chat.
+        if self.scopes is not None or not CHAT_ID:
+            return
         text = self._build_pinned_text(session_name)
         if not text or text == self._last_pinned_text:
             return  # skip redundant edit

@@ -387,7 +387,13 @@ def test_build_pinned_text_marks_active_session(mk_bot):
 
 # ---- _maybe_update_bot_name --------------------------------------------
 
-def test_maybe_update_bot_name_swallows_set_my_name_failure(mk_bot, run_async):
+def test_maybe_update_bot_name_swallows_set_my_name_failure(
+    mk_bot, run_async, monkeypatch,
+):
+    # Force a valid single chat so the pinned-dashboard path is exercised
+    # regardless of the ambient CHAT_ID (empty in CI / multi-scope) — the
+    # point of this test is that an API failure is swallowed, not raised.
+    monkeypatch.setattr("aipager.bot.dashboard.CHAT_ID", "12345")
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
     bot.registry._sessions["claude-jim"] = sess
