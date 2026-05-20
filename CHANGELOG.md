@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-05-20
+
+### Fixed
+- **Pinned status dashboard no longer crashes without a single
+  configured chat.** `_maybe_update_bot_name` did `int(CHAT_ID)`
+  unconditionally; under multi-scope (v2 retires `config.env`, so
+  `CHAT_ID` is empty) that raised `ValueError`. The single-chat pinned
+  dashboard is now skipped whenever there's no single chat (multi-scope
+  or empty `CHAT_ID`), mirroring the existing team-mode skip.
+
 ## [0.4.0] - 2026-05-20
 
 ### Multi-scope mode

@@ -1,6 +1,6 @@
 [project]
 name = "aipager"
-version = "0.4.0"
+version = "0.4.1"
 description = "Telegram remote-control daemon for Claude Code CLI sessions running in dtach"
 readme = "README.md"
 requires-python = ">=3.10"
