@@ -72,13 +72,35 @@ def main():
             data["sl_tokens"] = tokens
 
     # Fire-and-forget UDP datagram
-    try:
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-        sock.sendto(json.dumps(data).encode(), SOCKET_PATH)
-        sock.close()
-    except OSError as e:
-        _debug(f"daemon socket {SOCKET_PATH} unreachable: {e}")
-        # daemon not running — session_monitor catches it
+    def _udp(payload: dict) -> None:
+        try:
+            s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+            s.sendto(json.dumps(payload).encode(), SOCKET_PATH)
+            s.close()
+        except OSError as e:
+            _debug(f"daemon socket {SOCKET_PATH} unreachable: {e}")
+            # daemon not running — session_monitor catches it
+
+    _udp(data)
+
+    # Phase E: PreToolUse safety enforcement. The daemon notify above is
+    # fire-and-forget; here we may additionally BLOCK the tool by emitting
+    # a Claude Code deny decision on stdout. Best-effort — any error falls
+    # through to "allow" so the hook never wedges a session.
+    if data.get("hook_event_name") == "PreToolUse":
+        try:
+            from aipager.dtach.enforce import decide, deny_decision_json
+            block = decide(data)
+            if block:
+                _udp({
+                    "hook_event_name": "safety_blocked",
+                    "session": data.get("session", ""),
+                    "tool": block["tool"],
+                    "reason": block["reason"],
+                })
+                print(deny_decision_json(block["reason"]))
+        except Exception as e:  # never wedge claude on enforcement bugs
+            _debug(f"enforcement error (allowing): {e}")
 
 
 if __name__ == "__main__":

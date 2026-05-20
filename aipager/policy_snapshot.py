@@ -81,6 +81,14 @@ def write_snapshot(session_name: str, role, scope, member) -> None:
         log.debug("could not write policy snapshot %s", path, exc_info=True)
 
 
+def read_snapshot(session_name: str) -> dict | None:
+    """Read a session's snapshot, or None if absent/unreadable."""
+    try:
+        return json.loads(snapshot_path(session_name).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
 def clear_snapshot(session_name: str) -> None:
     try:
         snapshot_path(session_name).unlink(missing_ok=True)
