@@ -7,7 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.4.2] - 2026-05-20
+## [0.4.3] - 2026-05-20
+
+### Security
+- **Fixed a safety-boundary bypass for Telegram-driven sessions.** Three
+  issues let a non-owner work around the hard-safety boundary:
+  - The hook detected prompt origin from the *last* `type:"user"`
+    transcript entry, but Claude records tool-results as `type:"user"`
+    too — so only the **first** tool call per turn was enforced; every
+    later call was misread as terminal/unrestricted. Origin is now
+    derived from the last genuine user prompt (tool-results skipped).
+  - Even with that fixed, a blocked command could be reworded to dodge
+    the matcher (e.g. a `cla*-code` glob). A block is now **sticky for
+    the whole turn**: once any tool call is denied, every later tool
+    call that turn is denied too, until the next user prompt.
+  - The session now **halts cleanly** on a block (interrupt + spinner
+    cancelled + back to IDLE) instead of letting Claude keep retrying.
+  - Deny reasons no longer echo the matched regex (which an agent could
+    read to craft a dodge); the pattern is logged server-side only.
 
 ### Fixed
 - **Test suite passes on Python 3.10 / 3.11 again** (CI was red).
