@@ -19,9 +19,28 @@ from aipager import safety
 from aipager.policy_snapshot import read_snapshot
 
 
+def _is_tool_result(entry: dict) -> bool:
+    """True if a transcript entry is a tool-result carrier.
+
+    Claude records tool results as ``type:"user"`` entries whose content
+    is a list of ``tool_result`` blocks — they are NOT user prompts and
+    must be skipped when locating the prompt that governs origin.
+    """
+    content = (entry.get("message") or entry).get("content")
+    return isinstance(content, list) and any(
+        isinstance(b, dict) and b.get("type") == "tool_result" for b in content
+    )
+
+
 def _origin_from_transcript(path: str | None) -> str:
-    """`"telegram"` if the last user message carries the marker, else
-    `"terminal"`. Fail-closed to `"telegram"` when unreadable."""
+    """`"telegram"` if the governing user prompt carries the marker, else
+    `"terminal"`. Fail-closed to `"telegram"` when unreadable.
+
+    Scans back to the last genuine user *prompt*, skipping tool-result
+    entries (also ``type:"user"``). Without that skip, every tool call
+    after the first in a turn would see a marker-less tool_result as the
+    "last user message" and be misread as terminal → a safety bypass.
+    """
     if not path:
         return "telegram"
     try:
@@ -38,6 +57,8 @@ def _origin_from_transcript(path: str | None) -> str:
             continue
         if entry.get("type") != "user":
             continue
+        if _is_tool_result(entry):
+            continue  # tool-results are type:"user" but aren't prompts
         text = _user_text(entry)
         first = text.split("\n", 1)[0].lstrip() if text else ""
         return "telegram" if first.startswith("[via Telegram") else "terminal"
