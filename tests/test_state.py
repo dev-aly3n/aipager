@@ -584,3 +584,35 @@ def test_max_gone_history_evicts_oldest(tmp_state_file):
     assert r.get("claude-alive") is not None
     # The non-GONE trigger session is never touched
     assert r.get("claude-trigger") is not None
+
+
+# ---- all_sessions scope filter (Phase G) --------------------------------
+
+def _mk_scoped(r, name, scope_chat_id):
+    s = r.get_or_create(name)
+    s.scope_chat_id = scope_chat_id
+    s.label = name.replace("claude-", "")
+    return s
+
+
+def test_all_sessions_no_arg_returns_everything():
+    r = SessionRegistry()
+    _mk_scoped(r, "claude-a", 100)
+    _mk_scoped(r, "claude-b", -200)
+    assert set(r.all_sessions()) == {"claude-a", "claude-b"}
+
+
+def test_all_sessions_filters_by_scope():
+    r = SessionRegistry()
+    _mk_scoped(r, "claude-a", 100)
+    _mk_scoped(r, "claude-b", -200)
+    assert set(r.all_sessions(100)) == {"claude-a"}
+    assert set(r.all_sessions(-200)) == {"claude-b"}
+
+
+def test_all_sessions_includes_unstamped_legacy_session():
+    r = SessionRegistry()
+    _mk_scoped(r, "claude-a", 100)
+    _mk_scoped(r, "claude-legacy", 0)  # not yet stamped → matches any scope
+    assert set(r.all_sessions(100)) == {"claude-a", "claude-legacy"}
+    assert set(r.all_sessions(-200)) == {"claude-legacy"}

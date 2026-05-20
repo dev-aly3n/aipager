@@ -338,8 +338,23 @@ class SessionRegistry:
     def remove_message(self, msg_id: int) -> None:
         self._msg_map.pop(msg_id, None)
 
-    def all_sessions(self) -> dict[str, TrackedSession]:
-        return dict(self._sessions)
+    def all_sessions(
+        self, scope_chat_id: int | None = None,
+    ) -> dict[str, TrackedSession]:
+        """All tracked sessions, optionally filtered to a scope.
+
+        Multi-scope safe: when ``scope_chat_id`` is given, returns only
+        sessions belonging to that chat. A not-yet-stamped session
+        (``scope_chat_id == 0``) matches any scope — same legacy-tolerant
+        rule as :meth:`find_by_label` / :meth:`live_labels`. ``None``
+        (the default) returns everything, preserving single-scope callers.
+        """
+        if scope_chat_id is None:
+            return dict(self._sessions)
+        return {
+            name: s for name, s in self._sessions.items()
+            if s.scope_chat_id in (0, scope_chat_id)
+        }
 
     def find_by_label(
         self, label: str, scope_chat_id: int | None = None,
