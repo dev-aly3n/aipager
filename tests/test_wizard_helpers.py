@@ -528,7 +528,90 @@ def test_resolve_returns_which_path(monkeypatch):
     assert settings_patch._resolve("aipager-hook") == "/usr/bin/aipager-hook"
 
 
-def test_resolve_returns_name_when_not_on_path(monkeypatch):
+def test_resolve_returns_name_when_not_on_path(monkeypatch, tmp_path):
+    """Bare-name fallback only fires when sys.executable.parent also misses."""
     monkeypatch.setattr("shutil.which", lambda name: None)
-    # Returns the name unchanged (so claude can still try to resolve it)
+    # Point sys.executable to a dir that has no aipager-hook binary
+    monkeypatch.setattr("sys.executable", str(tmp_path / "python3"))
     assert settings_patch._resolve("aipager-hook") == "aipager-hook"
+
+
+def test_resolve_falls_back_to_sys_executable_parent(monkeypatch, tmp_path):
+    """PATH misses but the binary lives in <venv>/bin/ next to python — use it."""
+    monkeypatch.setattr("shutil.which", lambda name: None)
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.write_text("#!/bin/sh\necho hi\n")
+    fake_bin.chmod(0o755)
+    monkeypatch.setattr("sys.executable", str(tmp_path / "python3"))
+    assert settings_patch._resolve("fake-bin") == str(fake_bin)
+
+
+def test_resolve_ignores_non_executable_file(monkeypatch, tmp_path):
+    """A file next to sys.executable that isn't executable doesn't count."""
+    monkeypatch.setattr("shutil.which", lambda name: None)
+    f = tmp_path / "fake-bin"
+    f.write_text("not a script")
+    f.chmod(0o644)  # readable but not executable
+    monkeypatch.setattr("sys.executable", str(tmp_path / "python3"))
+    assert settings_patch._resolve("fake-bin") == "fake-bin"
+
+
+# ---- _merge_hooks statusLine idempotency -------------------------------
+
+def test_merge_hooks_keeps_existing_reachable_statusline(monkeypatch):
+    """A statusLine pointing at a real binary on PATH is preserved."""
+    monkeypatch.setattr("shutil.which",
+                        lambda name: f"/usr/bin/{name}"
+                        if name in ("aipager-hook", "aipager-statusline", "/usr/bin/true")
+                        else None)
+    settings = {"statusLine": {"type": "command", "command": "/usr/bin/true"}}
+    settings_patch._merge_hooks(settings)
+    assert settings["statusLine"]["command"] == "/usr/bin/true"
+
+
+def test_merge_hooks_keeps_existing_absolute_executable_statusline(monkeypatch, tmp_path):
+    """An absolute-path statusLine that exists and is executable is preserved
+    even when shutil.which can't find it on PATH."""
+    monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}")
+    real_bin = tmp_path / "real-statusline"
+    real_bin.write_text("#!/bin/sh\n")
+    real_bin.chmod(0o755)
+    settings = {"statusLine": {"type": "command", "command": str(real_bin)}}
+    # shutil.which would not find this path under any name lookup
+    monkeypatch.setattr("shutil.which",
+                        lambda name: None if name == str(real_bin) else f"/usr/bin/{name}")
+    settings_patch._merge_hooks(settings)
+    assert settings["statusLine"]["command"] == str(real_bin)
+
+
+def test_merge_hooks_repairs_broken_bare_statusline(monkeypatch):
+    """A bare-name statusLine that's NOT on PATH gets re-resolved."""
+    # which() returns absolute paths for the wizard's known commands
+    # but None for the broken bare name in the existing entry.
+    def _which(name):
+        if name == "broken-name":
+            return None
+        return f"/opt/venv/bin/{name}"
+    monkeypatch.setattr("shutil.which", _which)
+    settings = {"statusLine": {"type": "command", "command": "broken-name"}}
+    settings_patch._merge_hooks(settings)
+    # statusline_path comes from _resolve("aipager-statusline") which
+    # which()-returns "/opt/venv/bin/aipager-statusline"
+    assert settings["statusLine"]["command"] == "/opt/venv/bin/aipager-statusline"
+
+
+def test_merge_hooks_writes_fresh_statusline_when_absent(monkeypatch):
+    """Empty settings get a fresh statusLine entry."""
+    monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}")
+    settings = {}
+    settings_patch._merge_hooks(settings)
+    assert settings["statusLine"]["command"] == "/usr/bin/aipager-statusline"
+
+
+def test_merge_hooks_handles_non_dict_existing_statusline(monkeypatch):
+    """Defensive: existing settings.statusLine as a non-dict is overwritten."""
+    monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}")
+    settings = {"statusLine": "garbage"}  # malformed
+    settings_patch._merge_hooks(settings)
+    assert isinstance(settings["statusLine"], dict)
+    assert settings["statusLine"]["command"] == "/usr/bin/aipager-statusline"

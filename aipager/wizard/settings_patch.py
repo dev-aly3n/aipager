@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
+import sys
 import time
+from pathlib import Path
 
 
 from aipager.ui import console, ok, step
@@ -63,8 +66,23 @@ def _step_deps(step_label: str = "[3/5]") -> bool:
 
 
 def _resolve(cmd: str) -> str:
-    """Resolve a console-script to an absolute path; caller pre-checks."""
-    return shutil.which(cmd) or cmd
+    """Resolve a console-script to an absolute path.
+
+    Tries PATH first; if that misses, checks the bin directory next
+    to the running Python interpreter (true for pip / uv tool /
+    pipx installs — console-scripts live in ``<venv>/bin/`` next to
+    the interpreter that imported this module). Falls back to the
+    bare name only when neither succeeds — Claude Code does NOT
+    augment PATH when running hook commands, so the bare-name
+    fallback typically means a broken settings.json entry.
+    """
+    found = shutil.which(cmd)
+    if found:
+        return found
+    candidate = Path(sys.executable).parent / cmd
+    if candidate.exists() and os.access(candidate, os.X_OK):
+        return str(candidate)
+    return cmd
 
 
 def _has_hook_cmd(entries: list, bare_name: str) -> bool:
@@ -106,7 +124,27 @@ def _merge_hooks(settings: dict) -> None:
             entries.append({"matcher": "*", "hooks": [entry]})
         else:
             entries.append({"hooks": [entry]})
-    settings["statusLine"] = {"type": "command", "command": statusline_path}
+    # Idempotency for statusLine — don't clobber a working entry.
+    # Hooks have `_has_hook_cmd` dedup; mirror that here. If we
+    # unconditionally overwrote, a wizard re-run with the venv off
+    # PATH would replace a working absolute path with a broken bare
+    # name (the failure mode that surfaces as `/status` rendering
+    # `Model —` / `Ctx 0%` / `Cost —`).
+    existing_sl = settings.get("statusLine") or {}
+    existing_cmd = (existing_sl.get("command", "")
+                    if isinstance(existing_sl, dict) else "")
+    sl_already_good = bool(
+        existing_cmd and (
+            shutil.which(existing_cmd)
+            or (os.path.isabs(existing_cmd)
+                and os.path.exists(existing_cmd)
+                and os.access(existing_cmd, os.X_OK))
+        )
+    )
+    if not sl_already_good:
+        settings["statusLine"] = {
+            "type": "command", "command": statusline_path,
+        }
 
 
 def _step_settings(step_label: str = "[4/5]") -> None:
