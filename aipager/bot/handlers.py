@@ -863,7 +863,7 @@ class CommandHandlersMixin:
         sess.last_prompt = text
         self._mark_driver(sess, update)
         self.registry.mark_dirty()
-        ok = await inject.send_text_and_enter(sess.name, text)
+        ok = await self._inject_prompt(sess, text)
         if ok:
             await self._react(update, "👀")
             self.registry.transition(sess.name, Status.BUSY)
@@ -1018,7 +1018,7 @@ class CommandHandlersMixin:
         sess.last_prompt = transcript
         self._mark_driver(sess, update)
         self.registry.mark_dirty()
-        ok = await inject.send_text_and_enter(sess.name, transcript)
+        ok = await self._inject_prompt(sess, transcript)
         if ok:
             await self._react(update, "🎙️")
             self.registry.transition(sess.name, Status.BUSY)
@@ -1137,7 +1137,7 @@ class CommandHandlersMixin:
         sess.last_prompt = prompt
         self._mark_driver(sess, update)
         self.registry.mark_dirty()
-        ok = await inject.send_text_and_enter(sess.name, prompt)
+        ok = await self._inject_prompt(sess, prompt)
         if ok:
             await self._react(update, "👀")
             self.registry.transition(sess.name, Status.BUSY)
@@ -1177,7 +1177,7 @@ class CommandHandlersMixin:
         sess.trigger_msg_id = update.message.message_id
         sess.last_prompt = prompt_text
         self.registry.mark_dirty()
-        ok = await inject.send_text_and_enter(sess.name, prompt_text)
+        ok = await self._inject_prompt(sess, prompt_text)
         if ok:
             await self._react(update, "👀")
             self.registry.transition(sess.name, Status.BUSY)
@@ -1209,7 +1209,7 @@ class CommandHandlersMixin:
             await update.message.reply_text("⚠️ Can't clear while session is busy")
             return
 
-        ok = await inject.send_text_and_enter(sess.name, command_text)
+        ok = await self._inject_prompt(sess, command_text)
         if ok:
             await self._react(update, "✅")
             # Explicit feedback for model changes
@@ -1237,7 +1237,7 @@ class CommandHandlersMixin:
             self.registry.mark_dirty()
             self.registry.last_active_session = name  # user explicitly targeted this session
             asyncio.create_task(self._maybe_update_bot_name(name))
-            ok = await inject.send_text_and_enter(name, prompt_text)
+            ok = await self._inject_prompt(sess, prompt_text)
             if ok:
                 await self._react(update, "👀")
                 self.registry.transition(name, Status.BUSY)
@@ -1256,7 +1256,7 @@ class CommandHandlersMixin:
             self.registry.mark_dirty()
             self.registry.last_active_session = session_name
             asyncio.create_task(self._maybe_update_bot_name(session_name))
-            ok = await inject.send_text_and_enter(session_name, prompt_text)
+            ok = await self._inject_prompt(new_sess, prompt_text)
             if ok:
                 await self._react(update, "👀")
                 self.registry.transition(session_name, Status.BUSY)

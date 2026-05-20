@@ -67,6 +67,36 @@ log = logging.getLogger(__name__)
 class SessionOpsMixin:
     """Mixin for TelegramBot — see :mod:`aipager.bot` overview."""
 
+    def _prompt_marker(self, sess) -> str:
+        """Identity/origin marker prepended to Telegram free-text prompts.
+
+        DM scope → ``[via Telegram · @label]``; group → adds ``· role:X``.
+        Empty for legacy/no-driver sessions (→ no marker).
+        """
+        if self.scopes is None:
+            return ""
+        member = self._driver_user(sess)
+        if member is None:
+            return ""
+        if sess.scope_kind == "group":
+            return f"[via Telegram · @{member.label} · role:{member.role}]"
+        return f"[via Telegram · @{member.label}]"
+
+    async def _inject_prompt(self, sess, text: str) -> bool:
+        """Send a Telegram-originated prompt into the session.
+
+        Marks the session origin = "telegram" (the safety boundary keys
+        off this) and prepends the identity marker for free-text prompts.
+        Slash commands are sent raw (a marker line would break them).
+        """
+        sess.last_prompt_origin = "telegram"
+        body = text
+        if not text.lstrip().startswith("/"):
+            marker = self._prompt_marker(sess)
+            if marker:
+                body = f"{marker}\n{text}"
+        return await inject.send_text_and_enter(sess.name, body)
+
     def _session_system_prompt(self, scope_chat_id, label: str) -> str | None:
         """Write the session folder + SESSION.md and return its body for
         ``--append-system-prompt``. None for legacy/grandfathered sessions

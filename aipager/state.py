@@ -176,6 +176,11 @@ class TrackedSession:
     # value from the single configured chat. `scope_kind` is "dm"|"group".
     scope_chat_id: int = 0
     scope_kind: str = ""
+    # Origin of the most recent prompt (Phase D). "telegram" or "terminal".
+    # Transient (NOT persisted). Defaults fail-closed to "telegram" so the
+    # safety boundary (Phase E) treats unknown/between-turn state as
+    # restricted; a markerless terminal prompt flips it to "terminal".
+    last_prompt_origin: str = "telegram"
     # Concurrency guard for `_send_busy_and_animate` — closes the race where
     # two coroutines could both observe `busy_msg_id is None` and both send.
     # Transient; never persisted.

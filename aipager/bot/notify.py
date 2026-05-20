@@ -23,7 +23,6 @@ from telegram import (
 )
 from telegram.error import Forbidden
 
-from aipager.dtach import inject
 
 from aipager.config import (
     BUSY_EDIT_INTERVAL,
@@ -513,7 +512,7 @@ class NotifyMixin:
                 sess.trigger_msg_id = queued_trigger
                 sess.last_prompt = queued_text
                 self.registry.mark_dirty()
-                ok = await inject.send_text_and_enter(sess.name, queued_text)
+                ok = await self._inject_prompt(sess, queued_text)
                 if ok:
                     self.registry.transition(sess.name, Status.BUSY)
                     await self._send_busy_and_animate(sess)

@@ -182,7 +182,7 @@ class CallbackDispatchMixin:
                 return
             # Re-inject the last prompt (last_prompt stays set for retry-of-retry)
             prompt = sess.last_prompt
-            ok = await inject.send_text_and_enter(session_name, prompt)
+            ok = await self._inject_prompt(sess, prompt)
             if ok:
                 await self._safe_answer(query, f"Retrying [{sess.label}]")
                 # Delete the error message — busy animation replaces it
@@ -208,7 +208,7 @@ class CallbackDispatchMixin:
             if not await inject.is_alive(session_name):
                 await self._safe_answer(query, f"Session '{session_name}' not found")
                 return
-            ok = await inject.send_text_and_enter(session_name, "/compact")
+            ok = await self._inject_prompt(sess, "/compact")
             if ok:
                 await self._safe_answer(query, f"Compacting [{sess.label}]")
                 try:
