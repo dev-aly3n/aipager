@@ -174,6 +174,49 @@ def test_status_unhides_on_revival(mk_bot, mk_update, run_async, monkeypatch):
     assert "jim" in body
 
 
+# ---- _handle_status scope isolation (Phase G) --------------------------
+
+def _scoped_sess(name, label, scope_chat_id, status=Status.IDLE):
+    s = TrackedSession(name=name, label=label, status=status)
+    s.scope_chat_id = scope_chat_id
+    return s
+
+
+def test_status_multiscope_shows_only_calling_scope(
+    mk_bot, mk_update, run_async, monkeypatch,
+):
+    bot = mk_bot(scopes=[object()])  # multi-scope (non-None)
+    bot._authorize = AsyncMock(return_value=True)  # auth not under test here
+    bot.registry._sessions["claude-a__d100"] = _scoped_sess(
+        "claude-a__d100", "ana", 100)
+    bot.registry._sessions["claude-b__d200"] = _scoped_sess(
+        "claude-b__d200", "bob", 200)
+    monkeypatch.setattr("aipager.dtach.inject.is_alive",
+                        AsyncMock(return_value=True))
+    bot._read_status_file = MagicMock(return_value=None)
+    update = mk_update("/status", chat_id=100)
+    run_async(bot._handle_status(update, MagicMock()))
+    body = update.message.reply_text.await_args.args[0]
+    assert "ana" in body
+    assert "bob" not in body
+
+
+def test_status_multiscope_empty_scope_skips_discovery(
+    mk_bot, mk_update, run_async, monkeypatch,
+):
+    bot = mk_bot(scopes=[object()])
+    bot._authorize = AsyncMock(return_value=True)
+    bot.registry._sessions["claude-b__d200"] = _scoped_sess(
+        "claude-b__d200", "bob", 200)
+    discovery = AsyncMock(return_value=["claude-rogue"])
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions", discovery)
+    update = mk_update("/status", chat_id=100)  # scope 100 has nothing
+    run_async(bot._handle_status(update, MagicMock()))
+    body = update.message.reply_text.await_args.args[0]
+    assert "No sessions in this chat" in body
+    discovery.assert_not_called()  # must not adopt other scopes' sockets
+
+
 # ---- _read_status_file -------------------------------------------------
 
 def test_read_status_file_missing_returns_none(mk_bot, tmp_path, monkeypatch):

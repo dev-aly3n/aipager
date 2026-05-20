@@ -326,15 +326,23 @@ class CommandHandlersMixin:
         """Handle /status command — rich per-session dashboard."""
         if not await self._authorize(update, allow_read_only=True):
             return
-        sessions = self.registry.all_sessions()
+        chat_id = calling_chat_id(update)
+        sessions = self.registry.all_sessions(chat_id)
         if not sessions:
+            # Discovery (adopt raw dtach sockets) is a single-scope
+            # recovery aid only. In multi-scope it would create
+            # unstamped (scope_chat_id=0) sessions that leak into every
+            # scope, so an empty scope just says so.
+            if self.scopes is not None:
+                await update.message.reply_text("No sessions in this chat.")
+                return
             discovered = await inject.list_sessions()
             if not discovered:
                 await update.message.reply_text("No sessions found.")
                 return
             for name in discovered:
                 self.registry.get_or_create(name)
-            sessions = self.registry.all_sessions()
+            sessions = self.registry.all_sessions(chat_id)
 
         blocks = []
         has_gone = False
