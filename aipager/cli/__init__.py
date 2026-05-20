@@ -97,8 +97,13 @@ def main() -> None:
                    ).set_defaults(fn=_cmd_config)
     sub.add_parser("version", help="print version"
                    ).set_defaults(fn=_cmd_version)
-    sub.add_parser("doctor", help="run health checks and print a report"
-                   ).set_defaults(fn=_cmd_doctor)
+    doctor_p = sub.add_parser("doctor",
+                              help="run health checks and print a report")
+    doctor_p.add_argument(
+        "--safety-check", dest="safety_check", action="store_true",
+        help="print the active safety policy (paths, bash patterns, roles)",
+    )
+    doctor_p.set_defaults(fn=_cmd_doctor)
 
     status_p = sub.add_parser(
         "status", help="show daemon and session snapshot",

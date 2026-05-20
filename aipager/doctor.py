@@ -474,9 +474,49 @@ def _print_summary(results: list[CheckResult]) -> None:
     console.print(f"\n[muted]{' · '.join(parts)}[/muted]")
 
 
-def cmd_doctor(_args: argparse.Namespace | None = None) -> int:
+def _print_safety_policy() -> None:
+    """Render the active safety policy (paths + bash patterns + roles)."""
+    from aipager.config import POLICY
+    from aipager.ui import console
+
+    console.print("Safety policy (enforced for Telegram-driven sessions):")
+    console.print("  Blocked paths (read+write):")
+    for p in POLICY.safety_deny_paths_no_access:
+        console.print(f"    • {p}")
+    if POLICY.safety_deny_paths_no_write:
+        console.print("  Blocked paths (write):")
+        for p in POLICY.safety_deny_paths_no_write:
+            console.print(f"    • {p}")
+    console.print("  Blocked bash patterns:")
+    for p in POLICY.safety_deny_bash_patterns:
+        console.print(f"    • /{p}/")
+    console.print("  Roles:")
+    for name, role in sorted(POLICY.roles.items()):
+        flags = []
+        if role.bypass_safety:
+            flags.append("bypass_safety")
+        if role.bypass_role_denies:
+            flags.append("bypass_role_denies")
+        if not role.can_prompt:
+            flags.append("read-only")
+        extra = f" ({', '.join(flags)})" if flags else ""
+        console.print(f"    • {name}{extra}")
+    console.print()
+    console.print(
+        "  Note: enforcement is pattern-based; all scopes share one "
+        "filesystem.\n  For hard isolation between untrusted users, run "
+        "separate daemons\n  per OS account. See the multi-scope docs."
+    )
+
+
+def cmd_doctor(args: argparse.Namespace | None = None) -> int:
     from aipager import __version__
+    from aipager.config import SCOPES
     from aipager.ui import console, rule
+
+    if getattr(args, "safety_check", False):
+        _print_safety_policy()
+        return 0
 
     if console.is_terminal:
         rule(f"aipager {__version__} · {platform.system().lower()} · "
@@ -491,6 +531,15 @@ def cmd_doctor(_args: argparse.Namespace | None = None) -> int:
     _print_results(results)
     _print_fixes(results)
     _print_summary(results)
+    if SCOPES and len(SCOPES) > 1:
+        console.print()
+        console.print(
+            "ℹ️  Multiple scopes share one filesystem. Telegram-driven "
+            "sessions can't read each other's aipager data, but this is "
+            "not a hard multi-tenant sandbox — for mutually untrusted "
+            "users, run separate per-OS-user daemons. "
+            "(`aipager doctor --safety-check` shows the policy.)"
+        )
     console.print()
     if any(r.status == FAIL for r in results):
         return 1

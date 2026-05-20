@@ -270,3 +270,31 @@ def test_cmd_doctor_with_failures_returns_1(monkeypatch):
     ])
     rc = doctor.cmd_doctor(argparse.Namespace())
     assert rc == 1
+
+
+def test_cmd_doctor_safety_check_renders(capsys):
+    rc = doctor.cmd_doctor(argparse.Namespace(safety_check=True))
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Safety policy" in out
+    assert "~/.claude/**" in out
+    assert "owner (bypass_safety" in out
+
+
+def test_cmd_doctor_multiscope_note(monkeypatch, capsys):
+    monkeypatch.setattr(doctor, "run_all", lambda: [
+        doctor.CheckResult(doctor.OK, "config", detail=["ok"]),
+    ])
+    monkeypatch.setattr("aipager.config.SCOPES", [object(), object()],
+                        raising=False)
+    doctor.cmd_doctor(argparse.Namespace())
+    assert "Multiple scopes share one filesystem" in capsys.readouterr().out
+
+
+def test_cmd_doctor_no_note_single_scope(monkeypatch, capsys):
+    monkeypatch.setattr(doctor, "run_all", lambda: [
+        doctor.CheckResult(doctor.OK, "config", detail=["ok"]),
+    ])
+    monkeypatch.setattr("aipager.config.SCOPES", [object()], raising=False)
+    doctor.cmd_doctor(argparse.Namespace())
+    assert "Multiple scopes" not in capsys.readouterr().out
