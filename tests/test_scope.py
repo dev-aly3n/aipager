@@ -11,9 +11,21 @@ from aipager.scope import (
     Member,
     Scope,
     ScopeConfigError,
+    disambiguated_name,
     dump_scopes,
     load_scopes,
+    scope_suffix,
 )
+
+
+def test_scope_suffix_dm_and_group():
+    assert scope_suffix(256113222, "dm") == "d256113222"
+    assert scope_suffix(-4152307515, "group") == "g4152307515"
+
+
+def test_disambiguated_name():
+    assert disambiguated_name("jim", 256113222, "dm") == "claude-jim__d256113222"
+    assert disambiguated_name("jim", -4152307515, "group") == "claude-jim__g4152307515"
 
 
 def test_load_scopes_missing_returns_none(tmp_path: Path):

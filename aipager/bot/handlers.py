@@ -67,6 +67,7 @@ from aipager.bot.transport import (  # noqa: F401
     _send_with_retry,
     _TRUNC_SUFFIX,
     _truncate_diff,
+    calling_chat_id,
 )
 
 if TYPE_CHECKING:
@@ -500,12 +501,8 @@ class CommandHandlersMixin:
         # Two-tap confirmation: show inline [💀 Kill] [Cancel] instead of
         # destroying immediately. One mistype on a phone shouldn't wipe a
         # session; the user explicitly confirms here.
-        sessions = self.registry.all_sessions()
-        target_name = None
-        for name, sess in sessions.items():
-            if sess.label == target_label and sess.status != Status.GONE:
-                target_name = name
-                break
+        sess = self.registry.find_by_label(target_label, calling_chat_id(update))
+        target_name = sess.name if sess is not None else None
         if target_name is None:
             await update.message.reply_text(
                 f"⚠️ Unknown or already-gone session: {target_label}",
@@ -564,8 +561,13 @@ class CommandHandlersMixin:
         # typing /new with a familiar name. The button callbacks land
         # in _handle_callback under the new_resume / new_replace /
         # new_cancel actions defined below.
-        session_name_for_check = f"claude-{name}"
-        existing = self.registry.get(session_name_for_check)
+        # Resolve the calling scope from the message's chat. New sessions
+        # get a disambiguated internal name (claude-<label>__<suffix>) so
+        # two scopes can reuse the same label; the user only sees <label>.
+        from aipager.scope import disambiguated_name
+        chat_id = calling_chat_id(update)
+        scope_kind = "group" if (chat_id is not None and chat_id < 0) else "dm"
+        existing = self.registry.find_by_label(name, chat_id, include_gone=True)
         if existing is not None and (
             existing.status != Status.GONE
             or existing.claude_session_id
@@ -584,15 +586,23 @@ class CommandHandlersMixin:
             parse_mode="HTML",
         )
 
-        ok, err = await inject.launch_session(name, skip_perms=skip_perms)
+        if chat_id is not None:
+            session_name = disambiguated_name(name, chat_id, scope_kind)
+        else:
+            session_name = f"claude-{name}"
+        short_name = session_name.removeprefix("claude-")
+
+        ok, err = await inject.launch_session(short_name, skip_perms=skip_perms)
         if not ok:
             await status_msg.edit_text(f"❌ {html_mod.escape(err)}")
             return
 
-        session_name = f"claude-{name}"
-
         # Switch active session to the new one
         sess = self.registry.get_or_create(session_name)
+        sess.label = name
+        if chat_id is not None:
+            sess.scope_chat_id = chat_id
+            sess.scope_kind = scope_kind
         # Recover from GONE/UNKNOWN — we just verified the socket is alive
         if sess.status in (Status.GONE, Status.UNKNOWN):
             self.registry.transition(session_name, Status.IDLE)
@@ -772,11 +782,10 @@ class CommandHandlersMixin:
             if text_lower == "new":
                 await self._handle_new_cmd(update, ctx)
                 return
-            # Check if it matches a known session label
-            for sess in self.registry.all_sessions().values():
-                if sess.label == text and sess.status != Status.GONE:
-                    await self._switch_session(update, text)
-                    return
+            # Check if it matches a known session label (scoped to caller)
+            if self.registry.find_by_label(text, calling_chat_id(update)):
+                await self._switch_session(update, text)
+                return
 
         # Routing precedence:
         #   1. reply_to.message_id → exact match in the msg_map
@@ -1214,26 +1223,27 @@ class CommandHandlersMixin:
 
     async def _direct_send(self, update: Update, target_label: str, prompt_text: str) -> None:
         """Send prompt directly to a session by label."""
-        sessions = self.registry.all_sessions()
-        for name, sess in sessions.items():
-            if sess.label == target_label:
-                if not await inject.is_alive(name):
-                    await update.message.reply_text(f"⚠️ [{target_label}] session not alive")
-                    return
-                sess.trigger_msg_id = update.message.message_id
-                sess.last_prompt = prompt_text
-                self.registry.mark_dirty()
-                self.registry.last_active_session = name  # user explicitly targeted this session
-                asyncio.create_task(self._maybe_update_bot_name(name))
-                ok = await inject.send_text_and_enter(name, prompt_text)
-                if ok:
-                    await self._react(update, "👀")
-                    self.registry.transition(name, Status.BUSY)
-                    await self._send_busy_and_animate(sess)
-                    log.info("[%s] Direct send: %s", target_label, prompt_text[:80])
-                else:
-                    await update.message.reply_text(f"❌ Failed to send to [{target_label}]")
+        sess = self.registry.find_by_label(
+            target_label, calling_chat_id(update), include_gone=True)
+        if sess is not None:
+            name = sess.name
+            if not await inject.is_alive(name):
+                await update.message.reply_text(f"⚠️ [{target_label}] session not alive")
                 return
+            sess.trigger_msg_id = update.message.message_id
+            sess.last_prompt = prompt_text
+            self.registry.mark_dirty()
+            self.registry.last_active_session = name  # user explicitly targeted this session
+            asyncio.create_task(self._maybe_update_bot_name(name))
+            ok = await inject.send_text_and_enter(name, prompt_text)
+            if ok:
+                await self._react(update, "👀")
+                self.registry.transition(name, Status.BUSY)
+                await self._send_busy_and_animate(sess)
+                log.info("[%s] Direct send: %s", target_label, prompt_text[:80])
+            else:
+                await update.message.reply_text(f"❌ Failed to send to [{target_label}]")
+            return
 
         # Not found in registry — try session discovery
         session_name = f"claude-{target_label}"

@@ -26,6 +26,26 @@ SCHEMA_VERSION = 2
 _KINDS = ("dm", "group")
 
 
+def scope_suffix(chat_id: int, kind: str) -> str:
+    """Internal socket/name suffix that disambiguates same-labeled
+    sessions across scopes: ``<kind[0]><abs(chat_id)>`` (e.g. the DM
+    chat 256113222 → ``d256113222``; group -4152307515 → ``g4152307515``).
+    The leading ``-`` of a group id is encoded by the ``g`` prefix, so
+    the result is filesystem-safe. The full chat_id (not a truncation)
+    is used so the suffix is collision-free.
+    """
+    return f"{kind[0]}{abs(chat_id)}"
+
+
+def disambiguated_name(label: str, chat_id: int, kind: str) -> str:
+    """Internal session name for a NEW scoped session:
+    ``claude-<label>__<suffix>``. The user only ever sees ``label``;
+    the suffix lives in the registry key, the dtach socket path, the
+    ``CLAUDE_DTACH_SESSION`` env var and the statusline file name.
+    """
+    return f"claude-{label}__{scope_suffix(chat_id, kind)}"
+
+
 class ScopeConfigError(Exception):
     """Raised when ``aipager.yaml`` is present but malformed.
 

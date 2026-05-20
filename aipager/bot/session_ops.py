@@ -52,6 +52,7 @@ from aipager.bot.transport import (  # noqa: F401
     _send_with_retry,
     _TRUNC_SUFFIX,
     _truncate_diff,
+    calling_chat_id,
 )
 
 if TYPE_CHECKING:
@@ -125,16 +126,10 @@ class SessionOpsMixin:
             else:
                 await source.edit_message_text(text)
 
-        # Find session
-        sessions = self.registry.all_sessions()
-        session_name = None
-        for name, sess in sessions.items():
-            if sess.label == target_label:
-                session_name = name
-                break
-
-        if not session_name:
-            session_name = f"claude-{target_label}"
+        # Find session within the calling scope (label may repeat across scopes)
+        found = self.registry.find_by_label(
+            target_label, calling_chat_id(source), include_gone=True)
+        session_name = found.name if found else f"claude-{target_label}"
 
         # Stop animation if running
         sess = self.registry.get(session_name)
@@ -161,8 +156,9 @@ class SessionOpsMixin:
         for callbacks). ``update`` is used to attribute the driver in team
         mode when available.
         """
-        session_name = f"claude-{label}"
-        sess = self.registry.get(session_name)
+        sess = self.registry.find_by_label(
+            label, calling_chat_id(update or query), include_gone=True)
+        session_name = sess.name if sess is not None else f"claude-{label}"
 
         if sess is None:
             await reply_fn(
@@ -249,14 +245,13 @@ class SessionOpsMixin:
 
     async def _stop_by_label(self, update: Update, target_label: str) -> None:
         """Stop a session by its label."""
-        sessions = self.registry.all_sessions()
-        for name, sess in sessions.items():
-            if sess.label == target_label:
-                if sess.status not in (Status.BUSY, Status.INTERACTIVE):
-                    await update.message.reply_text(f"[{target_label}] is not busy.")
-                    return
-                await self._stop_session(sess, update=update)
+        sess = self.registry.find_by_label(target_label, calling_chat_id(update))
+        if sess is not None:
+            if sess.status not in (Status.BUSY, Status.INTERACTIVE):
+                await update.message.reply_text(f"[{target_label}] is not busy.")
                 return
+            await self._stop_session(sess, update=update)
+            return
         await update.message.reply_text(f"⚠️ Unknown session: {target_label}")
 
     def _guess_session_from_text(self, text: str) -> TrackedSession | None:
@@ -292,15 +287,16 @@ class SessionOpsMixin:
 
     async def _switch_session(self, update: Update, target_label: str) -> None:
         """Switch active session when bare /<label> is tapped (no prompt)."""
-        # Find in registry
-        for name, sess in self.registry.all_sessions().items():
-            if sess.label == target_label:
-                self.registry.last_active_session = name
-                self.registry.mark_dirty()
-                asyncio.create_task(self._maybe_update_bot_name(name))
-                dashboard = self._build_session_dashboard(sess)
-                await update.message.reply_text(dashboard, parse_mode="HTML")
-                return
+        # Find in registry within the calling scope
+        sess = self.registry.find_by_label(target_label, calling_chat_id(update))
+        if sess is not None:
+            name = sess.name
+            self.registry.last_active_session = name
+            self.registry.mark_dirty()
+            asyncio.create_task(self._maybe_update_bot_name(name))
+            dashboard = self._build_session_dashboard(sess)
+            await update.message.reply_text(dashboard, parse_mode="HTML")
+            return
 
         # Try auto-discover
         session_name = f"claude-{target_label}"

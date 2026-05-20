@@ -39,6 +39,21 @@ from aipager.team import Role, User as TeamUser
 log = logging.getLogger("aipager.bot.transport")
 
 
+def calling_chat_id(source) -> int | None:
+    """Chat id of an inbound Update or CallbackQuery (the calling scope).
+
+    Used to scope label→session lookups so a `/jim` in one scope can't
+    resolve another scope's `jim`. Returns None when it can't be
+    determined (callers then fall back to label-only matching).
+    """
+    chat = getattr(getattr(source, "effective_chat", None), "id", None)
+    if chat is not None:
+        return chat
+    msg = getattr(source, "message", None)
+    chat = getattr(getattr(msg, "chat", None), "id", None)
+    return chat
+
+
 def resolve_chat_id(sess):
     """Destination chat for a session's outbound notifications (Phase B).
 

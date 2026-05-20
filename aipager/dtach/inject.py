@@ -184,8 +184,11 @@ async def launch_session(
         return False, "Invalid name (use letters, numbers, hyphens)"
     if name.lower() in _RESERVED:
         return False, f"'{name}' is a reserved command name"
-    if len(name) > 30:
-        return False, "Name too long (max 30 chars)"
+    # The internal name may carry a scope disambiguator suffix
+    # (e.g. "jim__d256113222"), so the cap is generous; the
+    # user-facing label is validated separately at the /new layer.
+    if len(name) > 64:
+        return False, "Name too long (max 64 chars)"
 
     sock = f"{SOCK_PREFIX}{name}.sock"
     if Path(sock).is_socket():
