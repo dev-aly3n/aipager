@@ -12,20 +12,48 @@ from aipager.wizard import display
 # ===== wizard.__init__ =====
 
 def test_wizard_run_routes_to_first_run_when_no_config(monkeypatch, tmp_path):
-    """No config.env → first_run_flow."""
+    """Neither aipager.yaml nor config.env → first_run_flow."""
     from aipager import wizard
+    monkeypatch.setattr("aipager.wizard.scope_io.config_exists", lambda: False)
     monkeypatch.setattr("aipager.wizard.CONFIG_ENV", tmp_path / "nope")
     monkeypatch.setattr("aipager.wizard._first_run_flow", lambda: 7)
     assert wizard.run() == 7
 
 
-def test_wizard_run_routes_to_edit_when_config_exists(monkeypatch, tmp_path):
+def test_wizard_run_routes_to_edit_when_aipager_yaml_exists(monkeypatch):
+    from aipager import wizard
+    monkeypatch.setattr("aipager.wizard.scope_io.config_exists", lambda: True)
+    monkeypatch.setattr("aipager.wizard._handle_draft", lambda: None)
+    monkeypatch.setattr("aipager.wizard._edit_flow", lambda: 11)
+    assert wizard.run() == 11
+
+
+def test_wizard_run_migrates_old_install_then_edits(monkeypatch, tmp_path):
     from aipager import wizard
     target = tmp_path / "config.env"
     target.write_text("CLAUDE_TG_BOT_TOKEN=x\nCLAUDE_TG_CHAT_ID=1\n")
+    monkeypatch.setattr("aipager.wizard.scope_io.config_exists", lambda: False)
     monkeypatch.setattr("aipager.wizard.CONFIG_ENV", target)
+    calls = []
+    monkeypatch.setattr("aipager.migrate.migrate_to_v2",
+                        lambda: calls.append("migrated"))
+    monkeypatch.setattr("aipager.wizard._handle_draft", lambda: None)
     monkeypatch.setattr("aipager.wizard._edit_flow", lambda: 11)
     assert wizard.run() == 11
+    assert calls == ["migrated"]
+
+
+def test_wizard_run_handles_draft_before_edit(monkeypatch):
+    from aipager import wizard
+    monkeypatch.setattr("aipager.wizard.scope_io.config_exists", lambda: True)
+    monkeypatch.setattr("aipager.wizard.scope_io.read_config",
+                        lambda: ([], "TOK"))
+    seen = []
+    monkeypatch.setattr("aipager.wizard.scope_flows.resume_or_discard_draft",
+                        lambda token, bot: seen.append(token))
+    monkeypatch.setattr("aipager.wizard._edit_flow", lambda: 0)
+    wizard.run()
+    assert seen == ["TOK"]
 
 
 def test_wizard_main_calls_sys_exit(monkeypatch):

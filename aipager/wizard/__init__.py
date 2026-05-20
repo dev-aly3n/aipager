@@ -24,16 +24,40 @@ from aipager.wizard.edit_menu import _edit_flow
 from aipager.wizard.first_run import _first_run_flow
 
 
+def _handle_draft() -> None:
+    """Offer to resume/discard a leftover in-progress scope draft."""
+    from aipager.wizard.scope_flows import resume_or_discard_draft
+    from aipager.wizard.scope_io import read_config
+    try:
+        _, token = read_config()
+    except Exception:
+        token = ""
+    resume_or_discard_draft(token, "")
+
+
 def run() -> int:
     """Entry point for ``aipager config``.
 
-    - No config.env on disk → first-run wizard (full token + mode + chat
-      + team-or-not + deps + settings + write).
-    - config.env present → edit menu showing current state.
+    - ``aipager.yaml`` present → scope edit menu.
+    - only the v1 ``config.env`` present (un-started old install) →
+      migrate to v2 in place, then the edit menu.
+    - neither → first-run wizard (token → owner DM scope, no mode
+      question).
+
+    A leftover wizard draft (interrupted scope add) is offered for
+    resume/discard before the edit menu in either edit path.
     """
-    if not CONFIG_ENV.exists():
-        return _first_run_flow()
-    return _edit_flow()
+    from aipager.wizard.scope_io import config_exists
+
+    if config_exists():
+        _handle_draft()
+        return _edit_flow()
+    if CONFIG_ENV.exists():
+        from aipager.migrate import migrate_to_v2
+        migrate_to_v2()
+        _handle_draft()
+        return _edit_flow()
+    return _first_run_flow()
 
 
 def main() -> None:
