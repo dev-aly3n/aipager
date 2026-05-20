@@ -295,6 +295,73 @@ def test_alive_session_loads_as_unknown(tmp_state_file):
     assert r2.get("claude-jim").status == Status.UNKNOWN
 
 
+# ---- multi-scope: scope_chat_id / scope_kind (Phase B) -----------------
+
+def test_scope_fields_round_trip(tmp_state_file):
+    r1 = SessionRegistry()
+    r1.transition("claude-jim", Status.IDLE)
+    sess = r1.get("claude-jim")
+    sess.scope_chat_id = -4152307515
+    sess.scope_kind = "group"
+    r1.save()
+
+    r2 = SessionRegistry()
+    r2.load()
+    s2 = r2.get("claude-jim")
+    assert s2.scope_chat_id == -4152307515
+    assert s2.scope_kind == "group"
+
+
+def test_backfill_scope_from_chat_id_dm(tmp_state_file, monkeypatch):
+    """Legacy session (no scope_chat_id) backfills from config.CHAT_ID."""
+    from aipager import config
+    monkeypatch.setattr(config, "SCOPES", None, raising=False)
+    monkeypatch.setattr(config, "CHAT_ID", "256113222")
+    r1 = SessionRegistry()
+    r1.transition("claude-jim", Status.IDLE)
+    r1.save()
+    # Ensure the saved record has no scope_chat_id (legacy shape).
+    import json
+    data = json.loads(tmp_state_file.read_text())
+    data["sessions"]["claude-jim"].pop("scope_chat_id", None)
+    data["sessions"]["claude-jim"].pop("scope_kind", None)
+    tmp_state_file.write_text(json.dumps(data))
+
+    r2 = SessionRegistry()
+    r2.load()
+    s2 = r2.get("claude-jim")
+    assert s2.scope_chat_id == 256113222
+    assert s2.scope_kind == "dm"   # positive → dm
+
+
+def test_backfill_scope_kind_group_for_negative(tmp_state_file, monkeypatch):
+    from aipager import config
+    monkeypatch.setattr(config, "SCOPES", None, raising=False)
+    monkeypatch.setattr(config, "CHAT_ID", "-100999")
+    r1 = SessionRegistry()
+    r1.transition("claude-jim", Status.IDLE)
+    r1.save()
+
+    r2 = SessionRegistry()
+    r2.load()
+    s2 = r2.get("claude-jim")
+    assert s2.scope_chat_id == -100999
+    assert s2.scope_kind == "group"
+
+
+def test_backfill_skipped_without_config(tmp_state_file, monkeypatch):
+    from aipager import config
+    monkeypatch.setattr(config, "SCOPES", None, raising=False)
+    monkeypatch.setattr(config, "CHAT_ID", "")
+    r1 = SessionRegistry()
+    r1.transition("claude-jim", Status.IDLE)
+    r1.save()
+
+    r2 = SessionRegistry()
+    r2.load()
+    assert r2.get("claude-jim").scope_chat_id == 0   # left unstamped, no crash
+
+
 def test_hidden_from_status_round_trips(tmp_state_file):
     """`hidden_from_status` survives daemon restart via the state file."""
     r1 = SessionRegistry()

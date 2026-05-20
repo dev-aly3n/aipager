@@ -39,6 +39,19 @@ from aipager.team import Role, User as TeamUser
 log = logging.getLogger("aipager.bot.transport")
 
 
+def resolve_chat_id(sess):
+    """Destination chat for a session's outbound notifications (Phase B).
+
+    Returns the session's ``scope_chat_id`` (an int) when set, else the
+    global ``config.CHAT_ID`` (a str). The str fallback preserves the
+    pre-multi-scope behavior exactly for single-scope installs and for
+    sessions not yet stamped (``scope_chat_id == 0``). Read at call time
+    so the value tracks runtime config.
+    """
+    from aipager import config
+    return sess.scope_chat_id or config.CHAT_ID
+
+
 # Sentinel returned by ``_authorize_callback`` in personal mode so
 # callers can distinguish "auth passed in personal mode" from "auth
 # passed in team mode and here is the TeamUser." Not exported.

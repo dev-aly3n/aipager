@@ -26,7 +26,7 @@ from telegram.error import Forbidden
 from aipager.dtach import inject
 
 from aipager.config import (
-    BUSY_EDIT_INTERVAL, CHAT_ID,
+    BUSY_EDIT_INTERVAL,
 )
 from aipager.state import Status, TrackedSession
 
@@ -57,6 +57,7 @@ from aipager.bot.transport import (  # noqa: F401
     _send_with_retry,
     _TRUNC_SUFFIX,
     _truncate_diff,
+    resolve_chat_id,
 )
 
 if TYPE_CHECKING:
@@ -119,7 +120,7 @@ class NotifyMixin:
             if now - sess.last_tool_edit_at >= BUSY_EDIT_INTERVAL:
                 keyboard = self._build_stop_keyboard(sess.name)
                 text = self._build_busy_text(label, "Working", sess)
-                result = await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
+                result = await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard, chat_id=resolve_chat_id(sess))
                 if result is True:
                     sess.last_tool_edit_at = now
                 elif result is None:
@@ -148,7 +149,7 @@ class NotifyMixin:
                     and now - sess.last_tool_edit_at >= BUSY_EDIT_INTERVAL):
                 keyboard = self._build_stop_keyboard(sess.name)
                 text = self._build_busy_text(label, "Working", sess)
-                if await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard):
+                if await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard, chat_id=resolve_chat_id(sess)):
                     sess.last_tool_edit_at = now
             return
 
@@ -172,7 +173,7 @@ class NotifyMixin:
                     and now - sess.last_tool_edit_at >= BUSY_EDIT_INTERVAL):
                 keyboard = self._build_stop_keyboard(sess.name)
                 text = self._build_busy_text(label, "Working", sess)
-                if await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard):
+                if await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard, chat_id=resolve_chat_id(sess)):
                     sess.last_tool_edit_at = now
             return
 
@@ -201,7 +202,7 @@ class NotifyMixin:
                     and now - sess.last_tool_edit_at >= BUSY_EDIT_INTERVAL):
                 keyboard = self._build_stop_keyboard(sess.name)
                 text = self._build_busy_text(label, "Working", sess)
-                if await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard):
+                if await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard, chat_id=resolve_chat_id(sess)):
                     sess.last_tool_edit_at = now
             return
 
@@ -210,13 +211,13 @@ class NotifyMixin:
             self._stop_animation(sess)
             if sess.busy_msg_id and sess.busy_msg_id > 0:
                 text = f"🔄 <b>{html_mod.escape(label)}</b> · Compacting"
-                await self._edit_busy_raw(sess.busy_msg_id, text)
+                await self._edit_busy_raw(sess.busy_msg_id, text, chat_id=resolve_chat_id(sess))
             else:
                 # No busy message — send a new one
                 try:
                     text = f"🔄 <b>{html_mod.escape(label)}</b> · Compacting"
                     msg = await bot.send_message(
-                        CHAT_ID, text, parse_mode="HTML",
+                        resolve_chat_id(sess), text, parse_mode="HTML",
                         reply_to_message_id=sess.trigger_msg_id,
                     )
                     sess.busy_msg_id = msg.message_id
@@ -236,7 +237,7 @@ class NotifyMixin:
                          f"{ctx_pct}% — auto-compact soon")
             try:
                 keyboard = self._build_compact_keyboard(sess.name)
-                await bot.send_message(CHAT_ID, warn_text, parse_mode="HTML",
+                await bot.send_message(resolve_chat_id(sess), warn_text, parse_mode="HTML",
                                        reply_markup=keyboard)
             except Exception:
                 pass
@@ -267,7 +268,7 @@ class NotifyMixin:
             )
             try:
                 keyboard = self._build_stop_keyboard(sess.name)
-                await bot.send_message(CHAT_ID, stale_text, parse_mode="HTML",
+                await bot.send_message(resolve_chat_id(sess), stale_text, parse_mode="HTML",
                                        reply_markup=keyboard)
             except Exception:
                 pass
@@ -283,13 +284,13 @@ class NotifyMixin:
             text = (f"📦 <b>{html_mod.escape(label)}</b> · "
                     f"Compacted: {before_pct}% → {after_pct}%")
             if sess.busy_msg_id and sess.busy_msg_id > 0:
-                result = await self._edit_busy_raw(sess.busy_msg_id, text)
+                result = await self._edit_busy_raw(sess.busy_msg_id, text, chat_id=resolve_chat_id(sess))
                 if result is None:
                     sess.busy_msg_id = None
             else:
                 try:
                     msg = await bot.send_message(
-                        CHAT_ID, text, parse_mode="HTML",
+                        resolve_chat_id(sess), text, parse_mode="HTML",
                         reply_to_message_id=sess.trigger_msg_id,
                     )
                     sess.busy_msg_id = msg.message_id
@@ -308,7 +309,7 @@ class NotifyMixin:
             self._stop_animation(sess)
             if sess.busy_msg_id and sess.busy_msg_id > 0:
                 try:
-                    await bot.delete_message(chat_id=CHAT_ID, message_id=sess.busy_msg_id)
+                    await bot.delete_message(chat_id=resolve_chat_id(sess), message_id=sess.busy_msg_id)
                 except Exception:
                     pass
                 sess.busy_msg_id = None
@@ -325,7 +326,7 @@ class NotifyMixin:
             reason = source_labels.get(source, "exited")
             text = f"🔴 <b>{html_mod.escape(label)}</b> · Session {reason}"
             try:
-                await bot.send_message(CHAT_ID, text, parse_mode="HTML")
+                await bot.send_message(resolve_chat_id(sess), text, parse_mode="HTML")
             except Exception:
                 log.warning("Failed to send session_end notification", exc_info=True)
             if self.observers:
@@ -342,7 +343,7 @@ class NotifyMixin:
             if sess.busy_msg_id and sess.busy_msg_id > 0:
                 try:
                     await bot.delete_message(
-                        chat_id=CHAT_ID,
+                        chat_id=resolve_chat_id(sess),
                         message_id=sess.busy_msg_id,
                     )
                 except Exception:
@@ -363,7 +364,7 @@ class NotifyMixin:
                             if sess.last_prompt else None)
                 try:
                     msg = await bot.send_message(
-                        CHAT_ID, text, parse_mode="HTML",
+                        resolve_chat_id(sess), text, parse_mode="HTML",
                         reply_to_message_id=sess.trigger_msg_id,
                         reply_markup=keyboard,
                     )
@@ -450,7 +451,7 @@ class NotifyMixin:
             log.debug("[%s] Sending IDLE notification (%d chars)", label, len(text))
             try:
                 msg = await _send_with_retry(
-                    bot, chat_id=CHAT_ID, text=text, parse_mode="HTML",
+                    bot, chat_id=resolve_chat_id(sess), text=text, parse_mode="HTML",
                     reply_to_message_id=sess.trigger_msg_id,
                 )
             except TruncationFailed:
@@ -463,7 +464,7 @@ class NotifyMixin:
                 )
                 fallback_text = f"📨 <b>{html_mod.escape(label)}</b> · Finished (response sent as attachment)"
                 msg = await bot.send_message(
-                    CHAT_ID, fallback_text, parse_mode="HTML",
+                    resolve_chat_id(sess), fallback_text, parse_mode="HTML",
                     reply_to_message_id=sess.trigger_msg_id,
                 )
                 send_file = True  # ensure the document send below fires
@@ -488,7 +489,7 @@ class NotifyMixin:
                         tmp.write_text(file_content, encoding="utf-8")
                         with open(tmp, "rb") as f:
                             await bot.send_document(
-                                CHAT_ID, document=f, filename=f"{label}_response.txt",
+                                resolve_chat_id(sess), document=f, filename=f"{label}_response.txt",
                                 reply_to_message_id=msg.message_id,
                             )
                         tmp.unlink(missing_ok=True)
@@ -588,7 +589,7 @@ class NotifyMixin:
                     keyboard = self._build_permission_keyboard(sess.name)
 
                 text = self._build_busy_text(label, "Waiting", sess)
-                result = await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
+                result = await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard, chat_id=resolve_chat_id(sess))
                 if result is None:
                     # Busy message was deleted — fall back to separate message
                     sess.pending_permission = None
@@ -615,7 +616,7 @@ class NotifyMixin:
                     ]])
 
                 msg = await bot.send_message(
-                    CHAT_ID, text, reply_markup=keyboard, parse_mode="HTML",
+                    resolve_chat_id(sess), text, reply_markup=keyboard, parse_mode="HTML",
                     reply_to_message_id=sess.trigger_msg_id,
                 )
                 self.registry.track_message(msg.message_id, sess.name)
@@ -627,7 +628,7 @@ class NotifyMixin:
                 try:
                     await bot.edit_message_text(
                         f"⚙️ <b>{html_mod.escape(label)}</b> · Working…",
-                        chat_id=CHAT_ID,
+                        chat_id=resolve_chat_id(sess),
                         message_id=sess.last_msg_id,
                         parse_mode="HTML",
                     )

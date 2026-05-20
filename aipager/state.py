@@ -43,6 +43,37 @@ TOOL_HISTORY_CAP: int = 200
 MAX_GONE_HISTORY: int = 50
 
 
+def _default_scope() -> tuple[int, str] | None:
+    """Resolve the single configured chat for backfilling legacy sessions.
+
+    Returns ``(chat_id, kind)`` or ``None`` when nothing is configured
+    (e.g. unit tests with no env). Read at call time so tests can
+    monkeypatch ``config``.
+
+    - One v2 scope configured → its ``(chat_id, kind)``.
+    - Multiple → the group scope (the §7 "prefer group" rule; only
+      reachable once multi-scope auth lands).
+    - Else fall back to ``CHAT_ID`` (kind inferred from its sign).
+    """
+    from aipager import config
+
+    scopes = getattr(config, "SCOPES", None)
+    if scopes:
+        if len(scopes) == 1:
+            return scopes[0].chat_id, scopes[0].kind
+        for s in scopes:
+            if s.kind == "group":
+                return s.chat_id, "group"
+        return scopes[0].chat_id, scopes[0].kind
+
+    raw = getattr(config, "CHAT_ID", "") or ""
+    try:
+        cid = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return cid, ("group" if cid < 0 else "dm")
+
+
 class Status(Enum):
     UNKNOWN = auto()
     BUSY = auto()
@@ -138,6 +169,13 @@ class TrackedSession:
     # status == GONE; ignored otherwise. /resume picker ignores this
     # flag entirely so previously-hidden sessions remain resumable.
     hidden_from_status: bool = False
+    # Multi-scope (Phase B): which Telegram chat this session belongs to.
+    # All outbound notifications for the session route here instead of the
+    # global CHAT_ID. `scope_chat_id == 0` means "not yet stamped" — the
+    # notify resolver falls back to CHAT_ID, and `load()` backfills the
+    # value from the single configured chat. `scope_kind` is "dm"|"group".
+    scope_chat_id: int = 0
+    scope_kind: str = ""
     # Concurrency guard for `_send_busy_and_animate` — closes the race where
     # two coroutines could both observe `busy_msg_id is None` and both send.
     # Transient; never persisted.
@@ -322,6 +360,8 @@ class SessionRegistry:
         # Resume support — see TrackedSession docstring.
         "claude_session_id", "cwd", "gone_at", "last_assistant_preview",
         "hidden_from_status",
+        # Multi-scope routing.
+        "scope_chat_id", "scope_kind",
     )
     _MAX_MSG_MAP = 1000  # cap _msg_map entries to avoid unbounded growth
 
@@ -402,6 +442,9 @@ class SessionRegistry:
             except (ValueError, TypeError):
                 continue
 
+        # Resolve the default scope once (for backfilling legacy sessions).
+        _default = _default_scope()
+
         # Reconstruct sessions with only persistable fields; transient fields
         # stay at dataclass defaults. Status → IDLE, last_idle_at → 0.0 so
         # the first real IDLE notification is not debounced.
@@ -449,7 +492,14 @@ class SessionRegistry:
                 gone_at=gone_at,
                 last_assistant_preview=sd.get("last_assistant_preview", ""),
                 hidden_from_status=sd.get("hidden_from_status", False),
+                scope_chat_id=int(sd.get("scope_chat_id", 0) or 0),
+                scope_kind=sd.get("scope_kind", ""),
             )
+            # Multi-scope backfill: stamp legacy sessions (scope_chat_id == 0)
+            # with the single configured chat so notify routing is explicit.
+            if sess.scope_chat_id == 0 and _default is not None:
+                sess.scope_chat_id, sess.scope_kind = _default
+                backfilled = True
             # pending_queue: accept old 2-tuples and new 3-tuples
             # (text, msg_id, queued_at). Drop entries older than the
             # TTL so a daemon that was down for days doesn't flush

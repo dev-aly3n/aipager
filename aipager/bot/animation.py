@@ -50,6 +50,7 @@ from aipager.bot.transport import (  # noqa: F401
     _send_with_retry,
     _TRUNC_SUFFIX,
     _truncate_diff,
+    resolve_chat_id,
 )
 
 if TYPE_CHECKING:
@@ -87,7 +88,7 @@ class AnimationMixin:
         text = f"⚙️ <b>{html_mod.escape(sess.label)}</b> · Thinking…"
         try:
             msg = await self._app.bot.send_message(
-                CHAT_ID, text, parse_mode="HTML",
+                resolve_chat_id(sess), text, parse_mode="HTML",
                 reply_to_message_id=sess.trigger_msg_id,
                 reply_markup=self._build_stop_keyboard(sess.name),
             )
@@ -178,8 +179,13 @@ class AnimationMixin:
         return text
 
     async def _edit_busy_raw(self, msg_id: int, text: str,
-                             reply_markup=None) -> bool | None:
+                             reply_markup=None, chat_id=None) -> bool | None:
         """Edit busy message with pre-built text.
+
+        ``chat_id`` is the chat the busy message lives in; defaults to
+        the global ``CHAT_ID`` for callers that don't route per scope.
+        Sess-aware callers in the notify path pass
+        ``chat_id=resolve_chat_id(sess)``.
 
         Returns True on success, False on transient error,
         None on permanent failure (message gone).
@@ -188,8 +194,8 @@ class AnimationMixin:
             return False
         try:
             await self._app.bot.edit_message_text(
-                text, chat_id=CHAT_ID, message_id=msg_id, parse_mode="HTML",
-                reply_markup=reply_markup,
+                text, chat_id=chat_id or CHAT_ID, message_id=msg_id,
+                parse_mode="HTML", reply_markup=reply_markup,
             )
             return True
         except Exception as e:
@@ -219,14 +225,14 @@ class AnimationMixin:
                 if time.monotonic() - sess.last_tool_edit_at < BUSY_EDIT_INTERVAL:
                     # Still send typing (no edit to cancel it)
                     try:
-                        await self._app.bot.send_chat_action(int(CHAT_ID), "typing")
+                        await self._app.bot.send_chat_action(int(resolve_chat_id(sess)), "typing")
                     except Exception:
                         pass
                     continue
                 verb = verbs[idx % len(verbs)]
                 idx += 1
                 text = self._build_busy_text(sess.label, verb, sess)
-                result = await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
+                result = await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard, chat_id=resolve_chat_id(sess))
                 if result is True:
                     sess.last_tool_edit_at = time.monotonic()
                 elif result is None:
@@ -234,7 +240,7 @@ class AnimationMixin:
                     break
                 # Send typing AFTER edit (edit cancels typing indicator)
                 try:
-                    await self._app.bot.send_chat_action(int(CHAT_ID), "typing")
+                    await self._app.bot.send_chat_action(int(resolve_chat_id(sess)), "typing")
                 except Exception:
                     pass
         except asyncio.CancelledError:
@@ -257,7 +263,7 @@ class AnimationMixin:
                 dot = dots[idx % len(dots)]
                 idx += 1
                 text = f"🔄 <b>{html_mod.escape(sess.label)}</b> · Compacting{dot}"
-                result = await self._edit_busy_raw(sess.busy_msg_id, text)
+                result = await self._edit_busy_raw(sess.busy_msg_id, text, chat_id=resolve_chat_id(sess))
                 if result is None:
                     sess.busy_msg_id = None
                     break
@@ -313,7 +319,7 @@ class AnimationMixin:
             if msg_id:
                 # Send typing AFTER the busy message (sending a message cancels typing)
                 try:
-                    await self._app.bot.send_chat_action(int(CHAT_ID), "typing")
+                    await self._app.bot.send_chat_action(int(resolve_chat_id(sess)), "typing")
                 except Exception:
                     pass
                 sess.busy_msg_id = msg_id
