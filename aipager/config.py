@@ -45,23 +45,22 @@ from aipager.team import load_team as _load_team  # noqa: E402
 TEAM = _load_team()
 del _load_team
 
-# ---- v2 multi-scope config (Phase A: loaded but NOT authoritative) ----
+# ---- v2 multi-scope config ----
 #
 # ``aipager.yaml`` (the "who") + ``policy.yaml`` (the "what") are the
-# v2 config surface. They are loaded here so the rest of the daemon
-# *can* read them, but in Phase A nothing consults SCOPES/POLICY for
-# authorization or routing — ``CHAT_ID`` / ``TEAM`` remain
-# authoritative. A malformed hand-written v2 file fails loud (the
-# loaders raise), which is intended.
+# v2 config surface, authoritative when present. The bot loads scopes
+# fresh at init (see bot/core.py) — these module-level values are the
+# import-time snapshot used by preflight/status/state-backfill. A
+# malformed hand-written v2 file fails loud (the loaders raise).
 from aipager.scope import load_scopes as _load_scopes  # noqa: E402
 from aipager.policy import load_policy as _load_policy  # noqa: E402
 
 _v2 = _load_scopes()
 SCOPES = _v2[0] if _v2 else None
 POLICY = _load_policy()
-if _v2 and not BOT_TOKEN:
-    # Additive only: source the token from v2 when the env/config.env
-    # didn't provide one. Never overrides an existing token.
+if _v2 and _v2[1]:
+    # v2 is authoritative for the bot token when aipager.yaml is present
+    # — this is what lets config.env be retired (Phase C).
     BOT_TOKEN = _v2[1]
 del _load_scopes, _load_policy, _v2
 

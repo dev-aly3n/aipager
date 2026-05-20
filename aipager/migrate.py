@@ -135,3 +135,32 @@ def migrate_to_v2() -> bool:
 
     log.info("migrated to aipager.yaml (v2); v1 files backed up + retained")
     return True
+
+
+def retire_v1() -> bool:
+    """Rename the v1 ``config.env`` / ``team.yaml`` to ``*.retired.<ts>``.
+
+    Only acts once v2 is authoritative: ``aipager.yaml`` must load
+    cleanly AND carry a bot_token, so a broken/absent v2 can never
+    strand the daemon. The Phase-A ``.bak.<ts>`` copies remain
+    regardless. Idempotent — a no-op once the v1 files are gone.
+    Returns True if it renamed anything.
+    """
+    from aipager import config
+
+    try:
+        loaded = _scope.load_scopes(_scope.CONFIG_PATH)
+    except _scope.ScopeConfigError:
+        return False
+    if not loaded or not loaded[1]:
+        return False  # v2 not loadable / no token → keep v1 as-is
+
+    ts = int(time.time())
+    renamed = False
+    for src in (config._XDG_CONFIG, _team.TEAM_CONFIG_PATH):
+        if src.exists():
+            src.rename(src.with_suffix(src.suffix + f".retired.{ts}"))
+            renamed = True
+    if renamed:
+        log.info("retired v1 config (config.env/team.yaml → *.retired.%d)", ts)
+    return renamed

@@ -223,8 +223,12 @@ def _cmd_start(args: argparse.Namespace) -> int:
     # additive — the runtime still authorizes via CHAT_ID/TEAM, and the
     # v1 files are backed up but retained. Idempotent.
     try:
-        from aipager.migrate import migrate_to_v2
+        from aipager.migrate import migrate_to_v2, retire_v1
         migrate_to_v2()
+        # Once v2 is the source of truth, retire the v1 files so they
+        # can't drift. Guarded: only runs when aipager.yaml loads
+        # cleanly with a token.
+        retire_v1()
     except Exception:
         log.warning("v2 config migration skipped (non-fatal)", exc_info=True)
     _check_existing_daemon()

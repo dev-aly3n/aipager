@@ -101,3 +101,35 @@ def test_migrate_no_token_is_noop(paths, monkeypatch):
     monkeypatch.setattr(config, "CHAT_ID", "5")
     assert migrate.migrate_to_v2() is False
     assert not paths["aipager"].exists()
+
+
+# ---- retire_v1 (Phase C) -----------------------------------------------
+
+def test_retire_v1_renames_when_v2_clean(paths, monkeypatch):
+    monkeypatch.setattr(config, "CHAT_ID", "256113222")
+    paths["config_env"].write_text("CLAUDE_TG_BOT_TOKEN=TOK\n")
+    paths["team"].write_text(
+        "mode: team\ngroup_id: -1\nusers:\n  - {id: 1, label: a, role: admin}\n")
+    migrate.migrate_to_v2()           # writes aipager.yaml
+    assert migrate.retire_v1() is True
+    # originals renamed, not present
+    assert not paths["config_env"].exists()
+    assert not paths["team"].exists()
+    assert list(paths["config_env"].parent.glob("config.env.retired.*"))
+    assert list(paths["team"].parent.glob("team.yaml.retired.*"))
+
+
+def test_retire_v1_noop_without_v2(paths, monkeypatch):
+    monkeypatch.setattr(config, "CHAT_ID", "5")
+    paths["config_env"].write_text("CLAUDE_TG_BOT_TOKEN=TOK\n")
+    # No aipager.yaml written → retire must not touch v1
+    assert migrate.retire_v1() is False
+    assert paths["config_env"].exists()
+
+
+def test_retire_v1_idempotent(paths, monkeypatch):
+    monkeypatch.setattr(config, "CHAT_ID", "5")
+    paths["config_env"].write_text("CLAUDE_TG_BOT_TOKEN=TOK\n")
+    migrate.migrate_to_v2()
+    assert migrate.retire_v1() is True
+    assert migrate.retire_v1() is False   # nothing left to retire

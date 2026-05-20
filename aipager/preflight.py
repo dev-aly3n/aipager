@@ -18,13 +18,22 @@ from aipager.errors import friendly_error, friendly_warn
 
 
 def require_config() -> None:
-    """Exit with code 2 if the Telegram bot token or chat ID isn't set."""
-    from aipager.config import BOT_TOKEN, CHAT_ID
+    """Exit with code 2 if aipager isn't configured.
+
+    v2 (``aipager.yaml`` with scopes) fully satisfies config — once the
+    v1 ``config.env`` is retired, ``CHAT_ID`` is empty but the token +
+    scopes come from ``aipager.yaml``. Falls back to the legacy
+    BOT_TOKEN/CHAT_ID check for un-migrated installs.
+    """
+    from aipager.config import BOT_TOKEN, CHAT_ID, SCOPES
+
+    if SCOPES and BOT_TOKEN:
+        return  # v2 is authoritative
 
     missing: list[str] = []
     if not BOT_TOKEN:
         missing.append("CLAUDE_TG_BOT_TOKEN")
-    if not CHAT_ID:
+    if not CHAT_ID and not SCOPES:
         missing.append("CLAUDE_TG_CHAT_ID")
     if not missing:
         return

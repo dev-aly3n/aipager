@@ -6,6 +6,7 @@ from aipager import preflight
 
 
 def test_require_config_missing_both(monkeypatch, capsys):
+    monkeypatch.setattr("aipager.config.SCOPES", None, raising=False)
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "")
     monkeypatch.setattr("aipager.config.CHAT_ID", "")
     with pytest.raises(SystemExit) as exc:
@@ -18,6 +19,7 @@ def test_require_config_missing_both(monkeypatch, capsys):
 
 
 def test_require_config_missing_only_token(monkeypatch, capsys):
+    monkeypatch.setattr("aipager.config.SCOPES", None, raising=False)
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "")
     monkeypatch.setattr("aipager.config.CHAT_ID", "1234")
     with pytest.raises(SystemExit) as exc:
@@ -29,10 +31,29 @@ def test_require_config_missing_only_token(monkeypatch, capsys):
 
 
 def test_require_config_all_set(monkeypatch):
+    monkeypatch.setattr("aipager.config.SCOPES", None, raising=False)
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "abc")
     monkeypatch.setattr("aipager.config.CHAT_ID", "1234")
     # Should not raise
     preflight.require_config()
+
+
+def test_require_config_v2_scopes_satisfy_without_chat_id(monkeypatch):
+    """v2: scopes + token pass even when CHAT_ID is empty (config.env retired)."""
+    monkeypatch.setattr("aipager.config.SCOPES", [object()], raising=False)
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "abc")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "")
+    preflight.require_config()  # should not raise
+
+
+def test_require_config_v2_scopes_but_no_token_fails(monkeypatch, capsys):
+    monkeypatch.setattr("aipager.config.SCOPES", [object()], raising=False)
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "")
+    with pytest.raises(SystemExit) as exc:
+        preflight.require_config()
+    assert exc.value.code == 2
+    assert "CLAUDE_TG_BOT_TOKEN" in capsys.readouterr().err
 
 
 def test_require_claude_missing(monkeypatch, capsys):
