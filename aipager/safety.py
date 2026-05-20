@@ -11,6 +11,10 @@ rationale behind every entry.
 
 from __future__ import annotations
 
+import fnmatch
+import os
+import re
+
 # ---------------------------------------------------------------------------
 # B1 — no-access paths (block READ *and* WRITE from Telegram).
 # These hold other users' data + aipager's own bones. A Telegram session
@@ -39,7 +43,7 @@ DENY_BASH_PATTERNS: tuple[str, ...] = (
     r"^(sudo|su)\b",
     r"\baipager\s+(service|config|start)\b",
     r"\bsystemctl\b.*\baipager\b",
-    r"(?:\b|^)rm\b.*\b(\.config/aipager|\.claude|\.local/share/aipager)\b",
+    r"\brm\b.*(\.config/aipager|\.claude|\.local/share/aipager)",
     # Nested claude invocations + privilege flags (the flag is the
     # smoking gun; catches obfuscated binary names too).
     r"\bclaude\b",
@@ -89,3 +93,93 @@ BUILTIN_ROLE_DEFAULTS: dict[str, dict] = {
         "can_approve": False,
     },
 }
+
+
+# ---------------------------------------------------------------------------
+# Pure matchers (Phase E). Used by the PreToolUse hook to decide whether a
+# Telegram-driven tool call must be denied. No I/O, no daemon state — the
+# caller supplies the resolved deny lists (from the policy snapshot).
+# ---------------------------------------------------------------------------
+
+# Tools whose target is a filesystem path, and the input key holding it.
+_PATH_KEYS = {
+    "Read": "file_path",
+    "Edit": "file_path",
+    "Write": "file_path",
+    "NotebookEdit": "notebook_path",
+    "Glob": "path",
+    "Grep": "path",
+}
+_WRITE_TOOLS = {"Edit", "Write", "NotebookEdit"}
+
+
+def _norm(path: str) -> str:
+    """Absolute, ~-expanded path for glob matching."""
+    return os.path.abspath(os.path.expanduser(str(path)))
+
+
+def _matches(path: str, glob: str) -> bool:
+    """True if a path matches a deny glob.
+
+    Anchored globs (``~/.claude/**``) match by prefix — ``**`` covers the
+    dir itself and everything under it. Unanchored globs (``**/*.lock``,
+    ``*.lock``) match the basename / any tail.
+    """
+    target = _norm(path)
+    g = os.path.expanduser(glob)
+    if g.startswith("/"):
+        if g.endswith("**"):
+            base = g[:-2].rstrip("/")
+            return target == base or target.startswith(base + os.sep)
+        return fnmatch.fnmatch(target, g)
+    tail = g[3:] if g.startswith("**/") else g
+    return (
+        fnmatch.fnmatch(target, g)
+        or fnmatch.fnmatch(os.path.basename(target), tail)
+        or fnmatch.fnmatch(target, "*/" + tail)
+    )
+
+
+def path_violation(
+    tool_name: str, tool_input: dict,
+    no_access: tuple[str, ...], no_write: tuple[str, ...],
+) -> str | None:
+    """Reason string if this tool touches a protected path, else None."""
+    key = _PATH_KEYS.get(tool_name)
+    if not key:
+        return None
+    raw = (tool_input or {}).get(key)
+    if not raw:
+        return None
+    for glob in no_access:
+        if _matches(raw, glob):
+            return f"{tool_name} on protected path {glob}"
+    if tool_name in _WRITE_TOOLS:
+        for glob in no_write:
+            if _matches(raw, glob):
+                return f"{tool_name} write to protected path {glob}"
+    return None
+
+
+def bash_violation(command: str, patterns: tuple[str, ...]) -> str | None:
+    """Reason string if a Bash command matches a deny pattern, else None."""
+    if not command:
+        return None
+    for pat in patterns:
+        try:
+            if re.search(pat, command):
+                return f"Bash command matches blocked pattern /{pat}/"
+        except re.error:
+            continue
+    return None
+
+
+def tool_violation(
+    tool_name: str, deny_tools: tuple[str, ...], allow_tools: tuple[str, ...],
+) -> str | None:
+    """Reason if the tool is denied / not in a non-empty allowlist."""
+    if allow_tools and tool_name not in allow_tools:
+        return f"{tool_name} not in this role's allow_tools"
+    if tool_name in deny_tools:
+        return f"{tool_name} is in this role's deny_tools"
+    return None
