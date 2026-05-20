@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-05-20
+
+### Fixed
+- **Test suite passes on Python 3.10 / 3.11 again** (CI was red).
+  A `_read_statusline` test subclassed `pathlib.Path`, which is
+  unsupported on ≤3.11 (`AttributeError: ... has no attribute
+  '_flavour'`); it now uses a Path factory like its sibling tests.
+  Test-only — no runtime behavior change from 0.4.1.
+
 ## [0.4.1] - 2026-05-20
 
 ### Fixed
