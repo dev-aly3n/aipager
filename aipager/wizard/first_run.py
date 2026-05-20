@@ -22,7 +22,6 @@ from aipager.wizard.settings_patch import (
 )
 from aipager.wizard.team_setup import (
     _show_team_warning_panel,
-    _step_team_setup,
 )
 from aipager.wizard.telegram_api import (
     _fetch_id_from_updates,
@@ -266,14 +265,66 @@ def _step_pick_mode(step_label: str = "[2/N]") -> str:
     return "team"
 
 
-def _first_run_flow() -> int:
-    """Walk a brand-new install through token → mode → chat → save
-    config.env → (team users + rules if team) → deps → settings.
+def _grant_owner_step(chat_id: int, step_label: str = "[3/4]") -> str:
+    """Ask whether to make the operator's own account ``owner``.
 
-    config.env is committed RIGHT AFTER chat-id is captured (not at
-    the very end), so a Ctrl+C anywhere later doesn't throw the
-    admin back to step 1 on re-run — re-entry falls into the edit
-    flow with the partial team.yaml + config.env intact.
+    Owner bypasses everything (incl. the hard-safety boundary), so the
+    grant is gated behind an explicit confirmation (security §3.7c).
+    Declining falls back to ``admin`` — full control, but the safety
+    floor still applies. Returns the chosen role name.
+    """
+    step(f"{step_label}  Owner access")
+    console.print()
+    console.print(
+        "[warn]⚠[/warn]  Granting [path]owner[/path] gives this account "
+        "unrestricted control from Telegram:"
+    )
+    console.print(
+        "[muted]   daemon manipulation · reading every file · nested "
+        "claude · config edits — the safety boundary does not apply.[/muted]"
+    )
+    console.print(
+        "[muted]   Grant only to yourself or someone you'd hand an SSH "
+        "key. (Declining → [/muted][path]admin[/path][muted]: full "
+        "control, but the safety floor still applies.)[/muted]"
+    )
+    grant = _ask(questionary.confirm(
+        "Make your account owner?",
+        default=True, qmark="?", style=_PROMPT_STYLE,
+    ))
+    return "owner" if grant else "admin"
+
+
+def _commit_owner_dm(token: str, chat_id: int, role: str) -> None:
+    """Write the operator's DM scope to ``aipager.yaml`` (token + scope
+    hit disk together — the early-commit resilience guarantee)."""
+    from aipager.scope import Member, Scope
+    from aipager.wizard.scope_io import commit_scope
+
+    scope = Scope(
+        chat_id=chat_id, kind="dm", label="owner DM",
+        members=(Member(id=chat_id, label="owner", role=role),),
+    )
+    commit_scope(scope, token)
+    ok(f"Wrote aipager.yaml — your DM, role {role}.")
+    if role == "owner":
+        try:
+            from aipager import audit
+            audit.append(session="(config)", label="owner",
+                         action="grant-owner", user_id=chat_id)
+        except Exception:
+            pass
+
+
+def _first_run_flow() -> int:
+    """Connect a brand-new install to its bot — no mode question.
+
+    token → auto-capture the operator's DM chat-id → owner/admin grant
+    → write one DM scope to ``aipager.yaml`` (token + scope committed
+    together) → deps → settings. Then offer additive expansion (add a
+    group / person), default done. No ``policy.yaml`` is written — the
+    built-in roles + safety floor cover a solo install. See
+    architecture §3.0.
     """
     if console.is_terminal:
         rule("aipager setup")
@@ -281,37 +332,16 @@ def _first_run_flow() -> int:
         console.print("Welcome to aipager setup.")
 
     try:
-        # Mode determines total step count and the chat-id step's
-        # prompt copy. Token always comes first because we need it to
-        # auto-detect chat ids.
-        token, bot_username = _step_token(step_label="[1/?]")
-        wizard_mode = _step_pick_mode(step_label="[2/?]")
-
-        total = 7 if wizard_mode == "team" else 6
+        token, bot_username = _step_token(step_label="[1/4]")
         chat_id = _step_chat_id(
-            token, bot_username,
-            mode=wizard_mode, step_label=f"[3/{total}]",
+            token, bot_username, mode="personal", step_label="[2/4]",
         )
+        role = _grant_owner_step(chat_id, step_label="[3/4]")
+        # Token + DM scope committed here — a Ctrl+C in any later step
+        # leaves a working config; re-running falls into the edit flow.
+        _commit_owner_dm(token, chat_id, role)
 
-        # Commit token + chat_id to disk EARLY. Subsequent steps
-        # only patch settings.json / write team.yaml — none of them
-        # change these two values, and writing now means an admin
-        # Ctrl+C during a later step doesn't lose their progress
-        # (re-running falls into the edit flow).
-        _step_write_env(
-            token, chat_id,
-            step_label=f"[4/{total}]",
-        )
-
-        if wizard_mode == "team":
-            _step_team_setup(chat_id, step_label=f"[5/{total}]", token=token)
-            deps_step = f"[6/{total}]"
-            settings_step = f"[7/{total}]"
-        else:
-            deps_step = f"[5/{total}]"
-            settings_step = f"[6/{total}]"
-
-        deps_ok = _step_deps(step_label=deps_step)
+        deps_ok = _step_deps(step_label="[4/4]")
         if not deps_ok:
             cont = _ask(questionary.confirm(
                 "Continue anyway? (the daemon will likely fail until you "
@@ -324,7 +354,7 @@ def _first_run_flow() -> int:
                     "re-run `aipager config`.",
                 )
                 return 2
-        _step_settings(step_label=settings_step)
+        _step_settings(step_label="[4/4]")
     except KeyboardInterrupt:
         friendly_warn("Cancelled.")
         return 130
@@ -335,4 +365,11 @@ def _first_run_flow() -> int:
         friendly_error(f"Setup failed: {e}")
         return 1
     _completion_screen()
+    # Additive expansion (default = done). Ctrl-C here is harmless —
+    # the bootstrap is already on disk.
+    try:
+        from aipager.wizard.scope_flows import offer_expansion
+        offer_expansion(token, bot_username)
+    except KeyboardInterrupt:
+        pass
     return 0

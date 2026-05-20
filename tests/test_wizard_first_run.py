@@ -236,76 +236,93 @@ def test_completion_screen_prints(capsys):
     assert "aipager start" in out
 
 
+# ---- _grant_owner_step / _commit_owner_dm --------------------------------
+
+def test_grant_owner_step_yes(monkeypatch):
+    _stub_ask(monkeypatch, [True])
+    assert first_run._grant_owner_step(42) == "owner"
+
+
+def test_grant_owner_step_no_falls_back_to_admin(monkeypatch):
+    _stub_ask(monkeypatch, [False])
+    assert first_run._grant_owner_step(42) == "admin"
+
+
+def _redirect_config(monkeypatch, tmp_path):
+    """Point aipager.yaml + policy.yaml at tmp_path."""
+    import aipager.policy as _policy
+    import aipager.scope as _scope
+    monkeypatch.setattr(_scope, "CONFIG_PATH", tmp_path / "aipager.yaml")
+    monkeypatch.setattr(_policy, "POLICY_PATH", tmp_path / "policy.yaml")
+    return tmp_path / "aipager.yaml", tmp_path / "policy.yaml"
+
+
+def test_commit_owner_dm_writes_scope(monkeypatch, tmp_path):
+    cfg, _ = _redirect_config(monkeypatch, tmp_path)
+    first_run._commit_owner_dm("TOK", 42, "owner")
+    import aipager.scope as _scope
+    scopes, token = _scope.load_scopes(cfg)
+    assert token == "TOK"
+    assert scopes[0].kind == "dm"
+    assert scopes[0].members[0].role == "owner"
+
+
 # ---- _first_run_flow -----------------------------------------------------
 
-def test_first_run_flow_personal_happy_path(monkeypatch, tmp_path):
+def _stub_flow(monkeypatch, *, role="owner", deps=True):
     monkeypatch.setattr(first_run, "_step_token",
-                        lambda step_label: ("tok", "bot_username"))
-    monkeypatch.setattr(first_run, "_step_pick_mode",
-                        lambda step_label: "personal")
-    monkeypatch.setattr(first_run, "_step_chat_id",
-                        lambda *a, **k: 42)
-    monkeypatch.setattr(first_run, "_step_write_env",
-                        lambda *a, **k: None)
-    monkeypatch.setattr(first_run, "_step_deps",
-                        lambda step_label: True)
-    monkeypatch.setattr(first_run, "_step_settings",
-                        lambda step_label: None)
+                        lambda step_label: ("TOK", "bot_username"))
+    monkeypatch.setattr(first_run, "_step_chat_id", lambda *a, **k: 42)
+    monkeypatch.setattr(first_run, "_grant_owner_step", lambda *a, **k: role)
+    monkeypatch.setattr(first_run, "_step_deps", lambda step_label: deps)
+    monkeypatch.setattr(first_run, "_step_settings", lambda step_label: None)
     monkeypatch.setattr(first_run, "_completion_screen", lambda: None)
+    monkeypatch.setattr("aipager.wizard.scope_flows.offer_expansion",
+                        lambda *a, **k: None)
+
+
+def test_first_run_flow_happy_path_owner(monkeypatch, tmp_path):
+    cfg, pol = _redirect_config(monkeypatch, tmp_path)
+    _stub_flow(monkeypatch, role="owner")
     rc = first_run._first_run_flow()
-    assert rc is None or rc == 0
+    assert rc == 0
+    import aipager.scope as _scope
+    scopes, _ = _scope.load_scopes(cfg)
+    assert scopes[0].members[0].role == "owner"
+    assert not pol.exists()  # no policy.yaml on a solo install
 
 
-def test_first_run_flow_team_happy_path(monkeypatch):
-    monkeypatch.setattr(first_run, "_step_token",
-                        lambda step_label: ("tok", "bot_username"))
-    monkeypatch.setattr(first_run, "_step_pick_mode",
-                        lambda step_label: "team")
-    monkeypatch.setattr(first_run, "_step_chat_id",
-                        lambda *a, **k: -100)
-    monkeypatch.setattr(first_run, "_step_write_env",
-                        lambda *a, **k: None)
-    monkeypatch.setattr(first_run, "_step_team_setup",
-                        lambda *a, **k: None)
-    monkeypatch.setattr(first_run, "_step_deps",
-                        lambda step_label: True)
-    monkeypatch.setattr(first_run, "_step_settings",
-                        lambda step_label: None)
-    monkeypatch.setattr(first_run, "_completion_screen", lambda: None)
-    rc = first_run._first_run_flow()
-    assert rc is None or rc == 0
+def test_first_run_flow_no_mode_question(monkeypatch, tmp_path):
+    """The flow must never invoke the old personal/team picker."""
+    _redirect_config(monkeypatch, tmp_path)
+    _stub_flow(monkeypatch, role="admin")
+    monkeypatch.setattr(
+        first_run, "_step_pick_mode",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("asked mode")),
+    )
+    assert first_run._first_run_flow() == 0
 
 
-def test_first_run_flow_deps_missing_user_continues(monkeypatch):
-    monkeypatch.setattr(first_run, "_step_token",
-                        lambda step_label: ("tok", "bot_username"))
-    monkeypatch.setattr(first_run, "_step_pick_mode",
-                        lambda step_label: "personal")
-    monkeypatch.setattr(first_run, "_step_chat_id",
-                        lambda *a, **k: 42)
-    monkeypatch.setattr(first_run, "_step_write_env",
-                        lambda *a, **k: None)
-    monkeypatch.setattr(first_run, "_step_deps",
-                        lambda step_label: False)  # deps missing
+def test_first_run_flow_decline_owner_writes_admin(monkeypatch, tmp_path):
+    cfg, _ = _redirect_config(monkeypatch, tmp_path)
+    _stub_flow(monkeypatch, role="admin")
+    first_run._first_run_flow()
+    import aipager.scope as _scope
+    scopes, _ = _scope.load_scopes(cfg)
+    assert scopes[0].members[0].role == "admin"
+
+
+def test_first_run_flow_deps_missing_user_continues(monkeypatch, tmp_path):
+    _redirect_config(monkeypatch, tmp_path)
+    _stub_flow(monkeypatch, deps=False)
     _stub_ask(monkeypatch, [True])  # "Continue anyway?" yes
-    monkeypatch.setattr(first_run, "_step_settings",
-                        lambda step_label: None)
-    monkeypatch.setattr(first_run, "_completion_screen", lambda: None)
     rc = first_run._first_run_flow()
-    assert rc is None or rc == 0
+    assert rc == 0
 
 
-def test_first_run_flow_deps_missing_user_aborts(monkeypatch):
-    monkeypatch.setattr(first_run, "_step_token",
-                        lambda step_label: ("tok", "bot_username"))
-    monkeypatch.setattr(first_run, "_step_pick_mode",
-                        lambda step_label: "personal")
-    monkeypatch.setattr(first_run, "_step_chat_id",
-                        lambda *a, **k: 42)
-    monkeypatch.setattr(first_run, "_step_write_env",
-                        lambda *a, **k: None)
-    monkeypatch.setattr(first_run, "_step_deps",
-                        lambda step_label: False)
+def test_first_run_flow_deps_missing_user_aborts(monkeypatch, tmp_path):
+    _redirect_config(monkeypatch, tmp_path)
+    _stub_flow(monkeypatch, deps=False)
     _stub_ask(monkeypatch, [False])  # "Continue anyway?" no
     rc = first_run._first_run_flow()
     assert rc == 2
