@@ -401,6 +401,16 @@ class HookReceiver:
                     "history_idx": info["history_idx"] if info else None,
                 })
 
+        elif event == "safety_blocked":
+            # The PreToolUse hook denied a Telegram-driven tool call.
+            # Surface it in the session's chat + audit it.
+            sess = self.registry.get(session_name)
+            if sess is not None:
+                await self.notify_fn(sess, "safety_blocked", {
+                    "tool": msg.get("tool", "?"),
+                    "reason": msg.get("reason", ""),
+                })
+
         elif event == "SessionEnd":
             sess = self.registry.get_or_create(session_name)
             source = msg.get("source", "unknown")

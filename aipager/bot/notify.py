@@ -86,6 +86,29 @@ class NotifyMixin:
         if event == "pinned_update":
             return  # _maybe_update_bot_name already fired at top
 
+        if event == "safety_blocked":
+            tool = context.get("tool", "?")
+            reason = context.get("reason", "")
+            text = (f"🛑 <b>{html_mod.escape(label)}</b> · Blocked by safety "
+                    f"policy: {html_mod.escape(reason)}")
+            try:
+                await bot.send_message(resolve_chat_id(sess), text,
+                                       parse_mode="HTML")
+            except Exception:
+                log.debug("safety_blocked notify failed", exc_info=True)
+            try:
+                from aipager import audit as audit_mod
+                driver = self._driver_user(sess)
+                audit_mod.append(
+                    session=sess.name, label=label, action="Blocked",
+                    tool=tool, summary=reason,
+                    user_id=driver.id if driver else None,
+                    username=driver.label if driver else "",
+                )
+            except Exception:
+                log.debug("safety_blocked audit failed", exc_info=True)
+            return
+
         # ── Live busy-status events ──
         if event == "user_prompt_submit":
             # Fallback for terminal-initiated prompts only.
