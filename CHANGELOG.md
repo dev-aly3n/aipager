@@ -7,6 +7,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Multi-scope mode
+
+One daemon now serves **multiple Telegram chats at once** — any mix of
+1:1 DMs and group chats — with multiple users, per-user roles, and a
+hard safety boundary around Telegram-driven sessions. The old
+"personal vs team" split is gone: a solo install is just one DM scope,
+and you grow into groups/extra people additively, never by switching
+modes. Existing installs migrate automatically (see *Changed*).
+
+#### Added
+- **Scopes.** A *scope* is a Telegram chat (DM or group) plus its
+  members. The bot serves every configured scope concurrently and
+  keeps them isolated — `/status`, `/resume`, `/new`, the `/` command
+  menu, and the keyboard each show **only the calling chat's**
+  sessions. A label like `dev` can be reused across scopes without
+  collision.
+- **Roles + policy.** Built-in roles `owner` / `admin` / `user` /
+  `read_only`, plus arbitrary **custom roles** with their own
+  allow/deny lists, path rules, and bash patterns. Roles + safety live
+  in a user-owned `~/.config/aipager/policy.yaml` (and `policy.d/*.yaml`)
+  that the wizard **never overwrites**.
+- **Hard safety boundary** for Telegram-driven tool calls, enforced at
+  `PreToolUse`: no reading other users' transcripts or aipager's
+  config, no nested `claude`, no `--append-system-prompt` / `--resume`
+  flags, no `sudo` / `rm` on protected paths. Blocks are surfaced in
+  chat ("🛑 Blocked by safety policy"). Terminal-driven sessions stay
+  unrestricted; the `owner` role bypasses everything.
+- **Per-user identity.** Free-text prompts are prefixed with a
+  `[via Telegram · @label · role:…]` marker so Claude knows who is
+  driving, and each session gets a `SESSION.md` roster read into its
+  system prompt at launch.
+- **`/whoami`** — shows your resolved member, role, and **effective**
+  deny/allow list (the merged scope ∪ role ∪ per-user result).
+- **`aipager doctor --safety-check`** — renders the active safety
+  policy (protected paths, bash patterns, per-role flags).
+- **`aipager policy validate`** — lints `policy.yaml` / `policy.d`
+  (unknown keys, bad regexes, undefined role references) without
+  mutating anything.
+- **Scope-attributed audit trail.** Each inbound action records who,
+  what, in which scope, and whether it was denied (+ reason); owner
+  safety-bypasses are flagged. Service logs prefix each event with its
+  scope label. The audit log stays operator-only (never sent to chat).
+- **Resilient wizard.** Adding a group is incremental — each member is
+  drafted to `~/.config/aipager/.wizard-draft.json` as you go, so a
+  crash or Ctrl-C offers a Resume/Discard on the next run and never
+  loses already-committed scopes.
+
+#### Changed
+- **`aipager config` rebuilt around scopes.** First run asks **no mode
+  question** — it connects you to your bot, auto-captures your DM, and
+  (after an explicit confirmation) makes you `owner`. No `policy.yaml`
+  is created on a solo install. Re-running opens a scope list editor:
+  add a group / add a person, edit scopes + members, test reachability,
+  and a read-only **View policy**.
+- **Config format v2.** The wizard now writes
+  `~/.config/aipager/aipager.yaml` (bot token + scopes + members).
+  Existing v1 installs (`config.env` / `team.yaml`) **migrate
+  automatically** on the first daemon start after upgrade — the old
+  files are backed up, then retired once v2 loads cleanly. Running
+  `aipager config` on an un-started v1 install upgrades it in place.
+- **Session enumeration is scope-bounded** — no command surfaces
+  another scope's sessions, and the `/` autocomplete is registered
+  per-chat via `BotCommandScopeChat`.
+
+#### Security
+- Closes the Telegram-driven **self-modification** and **cross-user
+  transcript snooping** risks: a non-owner Telegram session can no
+  longer read `~/.claude/**`, edit aipager's config, resume another
+  user's session, or escalate via a nested `claude` invocation. The
+  `owner` grant (full god-mode from Telegram) is gated behind an
+  explicit wizard confirmation and audit-logged.
+
+#### Removed
+- The **personal / team mode toggle**. Both are now expressed as
+  scopes (a DM scope with one member, or a group scope); they coexist.
+
+#### Known limitations
+- **Observer bots are a global firehose** — they mirror events from
+  every scope with no per-scope filtering. Configure one only if you
+  trust it to see all scopes.
+- Safety is **pattern-based on a shared filesystem**, not a container
+  sandbox — adequate for the trust model (operators allow-list people
+  they'd hand shell access), but not a hard kernel boundary.
+
 ## [0.3.19] - 2026-05-18
 
 ### Fixed
