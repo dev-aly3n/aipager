@@ -74,6 +74,13 @@ def _cmd_service(args: argparse.Namespace) -> int:
     return cmd_service(args)
 
 
+def _cmd_policy(args: argparse.Namespace) -> int:
+    if getattr(args, "policy_cmd", None) == "validate":
+        from aipager.cli.policy import cmd_policy_validate
+        return cmd_policy_validate(args)
+    return 0  # no subcommand → help printed by main()
+
+
 def main() -> None:
     from aipager.errors import install_excepthook
     install_excepthook()
@@ -172,6 +179,17 @@ def main() -> None:
     ]:
         service_sub.add_parser(name, help=summary)
 
+    policy_p = sub.add_parser(
+        "policy",
+        help="inspect/validate the role + safety policy files",
+    )
+    policy_p.set_defaults(fn=_cmd_policy)
+    policy_sub = policy_p.add_subparsers(dest="policy_cmd")
+    policy_sub.add_parser(
+        "validate",
+        help="lint policy.yaml / policy.d (read-only; non-zero on problems)",
+    )
+
     args = parser.parse_args()
     if not args.cmd:
         parser.print_help()
@@ -199,6 +217,9 @@ def main() -> None:
         sys.exit(2)
     if args.cmd == "service" and not getattr(args, "service_cmd", None):
         service_p.print_help()
+        sys.exit(0)
+    if args.cmd == "policy" and not getattr(args, "policy_cmd", None):
+        policy_p.print_help()
         sys.exit(0)
     sys.exit(args.fn(args))
 

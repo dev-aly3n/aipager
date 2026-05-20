@@ -218,6 +218,15 @@ def _cmd_start(args: argparse.Namespace) -> int:
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
         datefmt="%H:%M:%S",
     )
+    # Generate the v2 config (aipager.yaml + policy.yaml seed) from the
+    # current install if it doesn't exist yet. Phase A: this is
+    # additive — the runtime still authorizes via CHAT_ID/TEAM, and the
+    # v1 files are backed up but retained. Idempotent.
+    try:
+        from aipager.migrate import migrate_to_v2
+        migrate_to_v2()
+    except Exception:
+        log.warning("v2 config migration skipped (non-fatal)", exc_info=True)
     _check_existing_daemon()
     bot_username = _telegram_preflight()
     asyncio.run(_run_daemon(bot_username))

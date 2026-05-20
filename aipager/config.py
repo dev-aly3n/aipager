@@ -45,6 +45,26 @@ from aipager.team import load_team as _load_team  # noqa: E402
 TEAM = _load_team()
 del _load_team
 
+# ---- v2 multi-scope config (Phase A: loaded but NOT authoritative) ----
+#
+# ``aipager.yaml`` (the "who") + ``policy.yaml`` (the "what") are the
+# v2 config surface. They are loaded here so the rest of the daemon
+# *can* read them, but in Phase A nothing consults SCOPES/POLICY for
+# authorization or routing — ``CHAT_ID`` / ``TEAM`` remain
+# authoritative. A malformed hand-written v2 file fails loud (the
+# loaders raise), which is intended.
+from aipager.scope import load_scopes as _load_scopes  # noqa: E402
+from aipager.policy import load_policy as _load_policy  # noqa: E402
+
+_v2 = _load_scopes()
+SCOPES = _v2[0] if _v2 else None
+POLICY = _load_policy()
+if _v2 and not BOT_TOKEN:
+    # Additive only: source the token from v2 when the env/config.env
+    # didn't provide one. Never overrides an existing token.
+    BOT_TOKEN = _v2[1]
+del _load_scopes, _load_policy, _v2
+
 
 def _parse_observer_bots(raw: str) -> list[tuple[str, str]]:
     """Parse 'token1:chatid1,token2:chatid2' into [(token, chatid), ...].
