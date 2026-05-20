@@ -321,6 +321,7 @@ class LifecycleMixin:
             BotCommand("stop", "Stop active session"),
             BotCommand("kill", "Kill a session (destroy)"),
             BotCommand("new", "Launch new session"),
+            BotCommand("resume", "Resume a past session"),
             BotCommand("clearqueue", "Drop pending queued prompts"),
         ]
         for label in sorted(labels):
