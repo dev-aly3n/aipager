@@ -278,9 +278,21 @@ class HookReceiver:
                 await self.notify_fn(sess, event, context)
 
         elif event == "UserPromptSubmit":
-            sess = self.registry.transition(session_name, Status.BUSY)
-            if sess:
-                await self.notify_fn(sess, "user_prompt_submit", {})
+            transitioned = self.registry.transition(session_name, Status.BUSY)
+            # Origin tagging (Phase D): the daemon prefixes Telegram prompts
+            # with "[via Telegram …]" on line 1. A markerless prompt was
+            # typed into the terminal directly. Empty payload → leave
+            # unchanged (the fail-closed "telegram" default holds).
+            tag_sess = transitioned or self.registry.get(session_name)
+            if tag_sess is not None:
+                prompt = msg.get("prompt", "")
+                first = prompt.split("\n", 1)[0] if prompt else ""
+                if first.startswith("[via Telegram"):
+                    tag_sess.last_prompt_origin = "telegram"
+                elif prompt:
+                    tag_sess.last_prompt_origin = "terminal"
+            if transitioned:
+                await self.notify_fn(transitioned, "user_prompt_submit", {})
 
         elif event == "PreToolUse":
             tool_name = msg.get("tool_name", "")
@@ -393,6 +405,7 @@ class HookReceiver:
             sess = self.registry.get_or_create(session_name)
             source = msg.get("source", "unknown")
             self.registry.transition(session_name, Status.GONE)
+            sess.last_prompt_origin = "telegram"  # fail-closed between turns
             await self.notify_fn(sess, "session_end", {"source": source})
 
         elif event == "PreCompact":
@@ -512,6 +525,11 @@ class HookReceiver:
             return  # no further notification — animation reads cached values
 
         elif event.lower() in ("idle_prompt", "idle", "stop", "notification"):
+            # Turn finished — reset origin fail-closed (Phase D §3.7a) so the
+            # window before the next prompt is treated as restricted.
+            _idle = self.registry.get(session_name)
+            if _idle is not None:
+                _idle.last_prompt_origin = "telegram"
             sess = self.registry.transition(session_name, Status.IDLE)
             if sess is None:
                 # Force notification if there's an undelivered response

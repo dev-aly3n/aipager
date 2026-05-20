@@ -206,6 +206,52 @@ def test_statusline_null_values_coerced_to_zero(receiver, run_async):
 
 # ---- PreCompact ---------------------------------------------------------
 
+# ---- origin tagging (Phase D) ------------------------------------------
+
+def test_userpromptsubmit_marker_sets_telegram(receiver, run_async):
+    registry, recv, _ = receiver
+    registry.get_or_create("claude-jim")
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          session="claude-jim",
+          prompt="[via Telegram · @bob]\nfix the bug")
+    assert registry.get("claude-jim").last_prompt_origin == "telegram"
+
+
+def test_userpromptsubmit_markerless_sets_terminal(receiver, run_async):
+    registry, recv, _ = receiver
+    registry.get_or_create("claude-jim")
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          session="claude-jim", prompt="fix the bug")
+    assert registry.get("claude-jim").last_prompt_origin == "terminal"
+
+
+def test_userpromptsubmit_empty_payload_unchanged(receiver, run_async):
+    registry, recv, _ = receiver
+    sess = registry.get_or_create("claude-jim")
+    sess.last_prompt_origin = "terminal"
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          session="claude-jim")  # no prompt field
+    assert registry.get("claude-jim").last_prompt_origin == "terminal"
+
+
+def test_stop_resets_origin_failclosed(receiver, run_async):
+    registry, recv, _ = receiver
+    sess = registry.get_or_create("claude-jim")
+    sess.last_prompt_origin = "terminal"
+    _send(recv, run_async, hook_event_name="Stop", session="claude-jim",
+          last_assistant_message="done")
+    assert registry.get("claude-jim").last_prompt_origin == "telegram"
+
+
+def test_session_end_resets_origin_failclosed(receiver, run_async):
+    registry, recv, _ = receiver
+    sess = registry.get_or_create("claude-jim")
+    sess.last_prompt_origin = "terminal"
+    _send(recv, run_async, hook_event_name="SessionEnd", session="claude-jim",
+          source="clear")
+    assert registry.get("claude-jim").last_prompt_origin == "telegram"
+
+
 def test_pre_compact_uses_cached_token_pct(receiver, run_async):
     registry, recv, notify_fn = receiver
     sess = registry.get_or_create("claude-jim")
