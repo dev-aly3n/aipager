@@ -308,10 +308,16 @@ class DashboardMixin:
 
     _RESUME_PAGE_SIZE = 10
 
-    def _gone_sessions_sorted(self) -> list[TrackedSession]:
-        """Return GONE sessions, newest-first by gone_at, for /resume listings."""
+    def _gone_sessions_sorted(
+        self, scope_chat_id: int | None = None,
+    ) -> list[TrackedSession]:
+        """GONE sessions, newest-first by gone_at, for /resume listings.
+
+        ``scope_chat_id`` restricts the list to the calling chat's scope
+        so a DM/group only ever sees its own previous sessions.
+        """
         gone = [
-            s for s in self.registry.all_sessions().values()
+            s for s in self.registry.all_sessions(scope_chat_id).values()
             if s.status == Status.GONE
         ]
         gone.sort(key=lambda s: s.gone_at or 0.0, reverse=True)
@@ -331,9 +337,14 @@ class DashboardMixin:
             return f"{delta // 3600}h ago"
         return f"{delta // 86400}d ago"
 
-    def _render_resume_picker(self, page: int = 0) -> tuple[str, InlineKeyboardMarkup | None]:
-        """Render the paginated /resume picker. Returns (text, keyboard or None)."""
-        gone = self._gone_sessions_sorted()
+    def _render_resume_picker(
+        self, page: int = 0, scope_chat_id: int | None = None,
+    ) -> tuple[str, InlineKeyboardMarkup | None]:
+        """Render the paginated /resume picker. Returns (text, keyboard or None).
+
+        ``scope_chat_id`` scopes the listing to the calling chat.
+        """
+        gone = self._gone_sessions_sorted(scope_chat_id)
         if not gone:
             return "📭 No previous sessions to resume.", None
 

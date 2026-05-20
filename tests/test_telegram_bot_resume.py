@@ -164,6 +164,39 @@ def test_picker_navigates_to_second_page(mk_bot, mk_update, run_async):
     assert not any("resume_page:2" in c for c in cb_data2)
 
 
+def test_picker_scopes_to_calling_chat(mk_bot, mk_update, run_async):
+    """A scope only sees its own GONE sessions in the picker (Phase G)."""
+    registry = SessionRegistry()
+    a = _gone_session(label="mine")
+    a.name = "claude-mine__d100"
+    a.scope_chat_id = 100
+    b = _gone_session(label="theirs")
+    b.name = "claude-theirs__d200"
+    b.scope_chat_id = 200
+    registry._sessions[a.name] = a
+    registry._sessions[b.name] = b
+    bot = mk_bot(registry)
+    text, kb = bot._render_resume_picker(page=0, scope_chat_id=100)
+    assert "1 total" in text
+    assert "mine" in text
+    assert "theirs" not in text
+    cb = [btn.callback_data for row in kb.inline_keyboard for btn in row]
+    assert cb == ["claude-mine__d100:resume"]
+
+
+def test_picker_no_scope_arg_lists_everything(mk_bot, mk_update, run_async):
+    """Legacy callers (no scope_chat_id) still see all GONE sessions."""
+    registry = SessionRegistry()
+    for i in range(2):
+        s = _gone_session(label=f"s{i}")
+        s.name = f"claude-s{i}"
+        s.scope_chat_id = 100 + i
+        registry._sessions[s.name] = s
+    bot = mk_bot(registry)
+    text, _kb = bot._render_resume_picker(page=0)
+    assert "2 total" in text
+
+
 def test_picker_callback_format_is_session_name_resume(mk_bot, mk_update, run_async):
     registry = SessionRegistry()
     s = _gone_session(label="jim")

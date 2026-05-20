@@ -43,6 +43,7 @@ from aipager.bot.transport import (  # noqa: F401
     TELEGRAM_MAX_TEXT_LEN,
     TruncationFailed,
     _build_diff_block,
+    calling_chat_id,
     _detect_api_error,
     _DIFF_MAX_CHARS,
     _DIFF_MAX_LINES,
@@ -284,7 +285,9 @@ class CallbackDispatchMixin:
                 page = int(action.split(":", 1)[1])
             except (IndexError, ValueError):
                 page = 0
-            text, kb = self._render_resume_picker(page=page)
+            text, kb = self._render_resume_picker(
+                page=page, scope_chat_id=calling_chat_id(query),
+            )
             try:
                 await query.edit_message_text(
                     text, parse_mode="HTML", reply_markup=kb,

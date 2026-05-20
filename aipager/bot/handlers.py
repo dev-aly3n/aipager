@@ -703,7 +703,9 @@ class CommandHandlersMixin:
             return
         parts = (update.message.text or "").split(maxsplit=1)
         if len(parts) < 2:
-            text, kb = self._render_resume_picker(page=0)
+            text, kb = self._render_resume_picker(
+                page=0, scope_chat_id=calling_chat_id(update),
+            )
             await update.message.reply_text(
                 text, parse_mode="HTML", reply_markup=kb,
             )
