@@ -89,8 +89,19 @@ class NotifyMixin:
         if event == "safety_blocked":
             tool = context.get("tool", "?")
             reason = context.get("reason", "")
+            # Interrupt the turn (Escape×2, like /stop) so Claude can't
+            # keep retrying the goal with reworded/dodged commands. The
+            # hook's sticky turn-block already denies every later tool
+            # call; this just halts the loop promptly.
+            try:
+                from aipager.dtach import inject
+                await inject.send_keys(sess.name, "Escape")
+                await asyncio.sleep(0.15)
+                await inject.send_keys(sess.name, "Escape")
+            except Exception:
+                log.debug("safety_blocked interrupt failed", exc_info=True)
             text = (f"🛑 <b>{html_mod.escape(label)}</b> · Blocked by safety "
-                    f"policy: {html_mod.escape(reason)}")
+                    f"policy: {html_mod.escape(reason)} — session interrupted.")
             try:
                 await bot.send_message(resolve_chat_id(sess), text,
                                        parse_mode="HTML")

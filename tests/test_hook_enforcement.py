@@ -75,7 +75,8 @@ def test_bash_nested_claude_blocked(tmp_path, monkeypatch):
     d = _data(tmp_path, tool_name="Bash",
               tool_input={"command": "claude --resume abc"})
     block = decide(d)
-    assert block and "blocked pattern" in block["reason"]
+    assert block and "blocked by safety policy" in block["reason"]
+    assert "\\b" not in block["reason"]  # must NOT leak the raw regex
 
 
 def test_normal_edit_allowed(tmp_path, monkeypatch):
@@ -145,7 +146,7 @@ def test_second_tool_call_bash_still_blocked(tmp_path, monkeypatch):
         transcript_path=_multi_tool_transcript(tmp_path, marker=True),
     )
     block = decide(d)
-    assert block and "blocked pattern" in block["reason"]
+    assert block and "blocked by safety policy" in block["reason"]
 
 
 def test_second_tool_call_read_still_blocked(tmp_path, monkeypatch):
@@ -173,3 +174,87 @@ def test_second_tool_call_terminal_still_allowed(tmp_path, monkeypatch):
             tmp_path, marker=False, name="t_term2.jsonl"),
     )
     assert decide(d) is None
+
+
+# ---- sticky turn-block: one block denies the rest of the turn ----------
+
+def _blocked_turn_transcript(tmp_path, *, marker: bool, cross_turn: bool,
+                             name="t_block.jsonl"):
+    """A turn where a prior tool call was already blocked (its tool_result
+    carries the 'aipager safety policy' marker). If ``cross_turn``, a NEW
+    user prompt follows the block (so the block is in the PRIOR turn)."""
+    p = tmp_path / name
+    prompt = ("[via Telegram · @bob · role:user]\ncheck claude version"
+              if marker else "check claude version")
+    lines = [
+        {"type": "user", "message": {"content": prompt}},
+        {"type": "assistant",
+         "message": {"content": [{"type": "tool_use", "name": "Bash",
+                                  "input": {"command": "claude --version"}}]}},
+        {"type": "user",
+         "message": {"content": [{"type": "tool_result",
+                                  "content": "aipager safety policy: Bash "
+                                             "command blocked by safety policy"}]}},
+        {"type": "assistant",
+         "message": {"content": [{"type": "text", "text": "blocked, dodging"}]}},
+    ]
+    if cross_turn:
+        lines.append({"type": "user",
+                      "message": {"content": "[via Telegram · @bob · role:user]"
+                                             "\nnow list files"}})
+    p.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+    return str(p)
+
+
+def test_turn_already_blocked_detects_prior_block(tmp_path):
+    assert enforce._turn_already_blocked(
+        _blocked_turn_transcript(tmp_path, marker=True, cross_turn=False)) is True
+    # A fresh prompt after the block clears it (new turn).
+    assert enforce._turn_already_blocked(
+        _blocked_turn_transcript(tmp_path, marker=True, cross_turn=True,
+                                 name="t_block_x.jsonl")) is False
+
+
+def test_sticky_blocks_nonmatching_workaround(tmp_path, monkeypatch):
+    """The glob-dodge: a benign command matching NO pattern is still
+    blocked because the turn already had a safety block."""
+    _patch_snap(tmp_path, monkeypatch)
+    _snap(tmp_path, "claude-x__g100")
+    d = _data(
+        tmp_path,
+        tool_name="Bash",
+        # matches no deny pattern on its own:
+        tool_input={"command": "grep version cla*-code/package.json"},
+        transcript_path=_blocked_turn_transcript(
+            tmp_path, marker=True, cross_turn=False),
+    )
+    block = decide(d)
+    assert block and "session halted" in block["reason"]
+
+
+def test_sticky_not_applied_to_terminal_turn(tmp_path, monkeypatch):
+    _patch_snap(tmp_path, monkeypatch)
+    _snap(tmp_path, "claude-x__g100")
+    d = _data(
+        tmp_path,
+        tool_name="Bash",
+        tool_input={"command": "grep version cla*-code/package.json"},
+        transcript_path=_blocked_turn_transcript(
+            tmp_path, marker=False, cross_turn=False, name="t_block_term.jsonl"),
+    )
+    assert decide(d) is None  # terminal origin → unrestricted
+
+
+def test_sticky_cleared_by_new_prompt(tmp_path, monkeypatch):
+    """After a new user prompt, a benign command runs again (block was
+    per-turn, not permanent)."""
+    _patch_snap(tmp_path, monkeypatch)
+    _snap(tmp_path, "claude-x__g100")
+    d = _data(
+        tmp_path,
+        tool_name="Bash",
+        tool_input={"command": "grep version cla*-code/package.json"},
+        transcript_path=_blocked_turn_transcript(
+            tmp_path, marker=True, cross_turn=True, name="t_block_new.jsonl"),
+    )
+    assert decide(d) is None  # new turn, benign command, no prior block

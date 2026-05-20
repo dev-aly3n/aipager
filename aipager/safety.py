@@ -12,8 +12,11 @@ rationale behind every entry.
 from __future__ import annotations
 
 import fnmatch
+import logging
 import os
 import re
+
+log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # B1 — no-access paths (block READ *and* WRITE from Telegram).
@@ -162,13 +165,21 @@ def path_violation(
 
 
 def bash_violation(command: str, patterns: tuple[str, ...]) -> str | None:
-    """Reason string if a Bash command matches a deny pattern, else None."""
+    """Reason string if a Bash command matches a deny pattern, else None.
+
+    The reason is intentionally generic — it must NOT echo the matched
+    regex. Returning the pattern (e.g. ``/\\bclaude\\b/``) hands an agent
+    the exact filter to reverse-engineer a dodge (observed: a glob
+    ``cla*-code`` read the same file). The matched pattern is still logged
+    server-side for the operator.
+    """
     if not command:
         return None
     for pat in patterns:
         try:
             if re.search(pat, command):
-                return f"Bash command matches blocked pattern /{pat}/"
+                log.info("bash_violation: command blocked by pattern %r", pat)
+                return "Bash command blocked by safety policy"
         except re.error:
             continue
     return None
