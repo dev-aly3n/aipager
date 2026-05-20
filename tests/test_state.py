@@ -362,6 +362,49 @@ def test_backfill_skipped_without_config(tmp_state_file, monkeypatch):
     assert r2.get("claude-jim").scope_chat_id == 0   # left unstamped, no crash
 
 
+# ---- scoped lookup helpers (Phase C) -----------------------------------
+
+def _mk(reg, name, label, scope, status=Status.IDLE):
+    reg.transition(name, status)
+    s = reg.get(name)
+    s.label = label
+    s.scope_chat_id = scope
+    return s
+
+
+def test_find_by_label_scoped(tmp_state_file):
+    r = SessionRegistry()
+    _mk(r, "claude-jim__d111", "jim", 111)
+    _mk(r, "claude-jim__g-222", "jim", -222)
+    # Same label, different scopes → resolve independently.
+    assert r.find_by_label("jim", 111).name == "claude-jim__d111"
+    assert r.find_by_label("jim", -222).name == "claude-jim__g-222"
+
+
+def test_find_by_label_excludes_gone(tmp_state_file):
+    r = SessionRegistry()
+    _mk(r, "claude-jim__d111", "jim", 111, status=Status.GONE)
+    assert r.find_by_label("jim", 111) is None
+    assert r.find_by_label("jim", 111, include_gone=True) is not None
+
+
+def test_find_by_label_grandfathered_flat(tmp_state_file):
+    """A flat-named, unstamped (scope 0) session matches any scope."""
+    r = SessionRegistry()
+    _mk(r, "claude-tim", "tim", 0)
+    assert r.find_by_label("tim", 256113222).name == "claude-tim"
+
+
+def test_live_labels_scoped(tmp_state_file):
+    r = SessionRegistry()
+    _mk(r, "claude-a__d111", "a", 111)
+    _mk(r, "claude-b__g-222", "b", -222)
+    _mk(r, "claude-c__d111", "c", 111, status=Status.GONE)
+    assert r.live_labels(111) == {"a"}
+    assert r.live_labels(-222) == {"b"}
+    assert r.live_labels() == {"a", "b"}  # all scopes, GONE excluded
+
+
 def test_hidden_from_status_round_trips(tmp_state_file):
     """`hidden_from_status` survives daemon restart via the state file."""
     r1 = SessionRegistry()

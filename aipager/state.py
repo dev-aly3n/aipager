@@ -336,6 +336,45 @@ class SessionRegistry:
     def all_sessions(self) -> dict[str, TrackedSession]:
         return dict(self._sessions)
 
+    def find_by_label(
+        self, label: str, scope_chat_id: int | None = None,
+        *, include_gone: bool = False,
+    ) -> TrackedSession | None:
+        """Resolve a session by its user-facing label within a scope.
+
+        Multi-scope safe: a label may repeat across scopes, so callers
+        pass the calling chat's ``scope_chat_id`` to disambiguate. When
+        ``scope_chat_id`` is None, matches by label alone (legacy /
+        single-scope callers). Skips GONE sessions unless
+        ``include_gone``. Works for both flat (grandfathered) and
+        suffixed session names because it matches on ``sess.label``,
+        never on parsing the name.
+        """
+        for sess in self._sessions.values():
+            if sess.label != label:
+                continue
+            if scope_chat_id is not None and sess.scope_chat_id not in (
+                0, scope_chat_id,
+            ):
+                continue
+            if not include_gone and sess.status == Status.GONE:
+                continue
+            return sess
+        return None
+
+    def live_labels(self, scope_chat_id: int | None = None) -> set[str]:
+        """Labels of non-GONE sessions, optionally filtered to a scope."""
+        out: set[str] = set()
+        for sess in self._sessions.values():
+            if sess.status == Status.GONE or not sess.label:
+                continue
+            if scope_chat_id is not None and sess.scope_chat_id not in (
+                0, scope_chat_id,
+            ):
+                continue
+            out.add(sess.label)
+        return out
+
     def remove(self, name: str) -> None:
         sess = self._sessions.pop(name, None)
         if sess:
