@@ -72,6 +72,20 @@ def test_inject_slash_command_no_marker(mk_bot, run_async, monkeypatch):
     assert sess.last_prompt_origin == "telegram"
 
 
+def test_inject_writes_policy_snapshot(mk_bot, run_async, monkeypatch):
+    from aipager import policy_snapshot
+    bot = _bot(mk_bot)
+    monkeypatch.setattr(inject, "send_text_and_enter", AsyncMock(return_value=True))
+    captured = {}
+    monkeypatch.setattr(policy_snapshot, "write_snapshot",
+                        lambda name, role, scope, member: captured.update(
+                            name=name, role=role, member=member))
+    run_async(bot._inject_prompt(_sess(), "do the thing"))
+    assert captured["name"] == "claude-x__g100"
+    assert captured["member"].label == "bob"        # driver resolved
+    assert captured["role"].name == "user"
+
+
 def test_inject_legacy_no_marker_but_sets_origin(mk_bot, run_async, monkeypatch):
     bot = mk_bot()  # scopes=None → no marker
     monkeypatch.setattr(inject, "send_text_and_enter", AsyncMock(return_value=True))

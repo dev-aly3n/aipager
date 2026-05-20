@@ -90,6 +90,18 @@ class SessionOpsMixin:
         Slash commands are sent raw (a marker line would break them).
         """
         sess.last_prompt_origin = "telegram"
+        # Write the policy snapshot for this turn so the PreToolUse hook
+        # can enforce the safety boundary (Phase E). Best-effort.
+        if self.scopes is not None:
+            try:
+                from aipager.policy_snapshot import write_snapshot
+                member = self._driver_user(sess)
+                role = (self.policy.get_role(member.role)
+                        if member is not None else None)
+                scope = self._scope_for(sess.scope_chat_id)
+                write_snapshot(sess.name, role, scope, member)
+            except Exception:
+                log.debug("policy snapshot write failed", exc_info=True)
         body = text
         if not text.lstrip().startswith("/"):
             marker = self._prompt_marker(sess)
