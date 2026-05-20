@@ -125,7 +125,7 @@ class CommandHandlersMixin:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
-        except (OSError, asyncio.SubprocessError) as e:
+        except (OSError, subprocess.SubprocessError) as e:
             await self._safe_edit_callback(
                 query, f"❌ Couldn't start installer: {html_mod.escape(str(e))}",
             )

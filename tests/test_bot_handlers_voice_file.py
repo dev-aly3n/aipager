@@ -410,9 +410,41 @@ def test_install_voice_extra_no_recipe(mk_bot, run_async, monkeypatch):
     assert "no installer recipe" in text
 
 
-# NOTE: there's a latent bug at aipager/bot/handlers.py:128 where the
-# except clause references ``asyncio.SubprocessError`` which doesn't
-# exist (should be ``subprocess.SubprocessError``). Testing the spawn-
-# failure path triggers an AttributeError before the handler runs. We
-# leave a single failing test commented out as a marker and skip the
-# scenario here. Filed for a follow-up fix.
+def test_install_voice_extra_subprocess_spawn_failure(mk_bot, run_async, monkeypatch):
+    """Regression: the except clause used to reference asyncio.SubprocessError
+    which doesn't exist, causing an AttributeError before the handler ran."""
+    bot = mk_bot()
+    query = MagicMock()
+    bot._safe_edit_callback = AsyncMock()
+
+    async def _boom(*a, **k):
+        raise OSError("ENOENT")
+
+    monkeypatch.setattr("aipager.bot.handlers.asyncio.create_subprocess_exec",
+                        _boom)
+    monkeypatch.setattr("aipager.updater._detect_installer", lambda: "pip")
+    monkeypatch.setattr("aipager.updater.install_extra_cmd",
+                        lambda inst, extra: ["pip", "install", "x"])
+    run_async(bot._install_voice_extra(query))
+    calls = [c.args[1] for c in bot._safe_edit_callback.await_args_list]
+    assert any("Couldn't start" in t for t in calls)
+
+
+def test_install_voice_extra_subprocess_error_swallowed(mk_bot, run_async, monkeypatch):
+    """`subprocess.SubprocessError` (the real one) is also caught."""
+    bot = mk_bot()
+    query = MagicMock()
+    bot._safe_edit_callback = AsyncMock()
+
+    import subprocess
+    async def _boom(*a, **k):
+        raise subprocess.SubprocessError("bad")
+
+    monkeypatch.setattr("aipager.bot.handlers.asyncio.create_subprocess_exec",
+                        _boom)
+    monkeypatch.setattr("aipager.updater._detect_installer", lambda: "pip")
+    monkeypatch.setattr("aipager.updater.install_extra_cmd",
+                        lambda inst, extra: ["pip", "install", "x"])
+    run_async(bot._install_voice_extra(query))
+    calls = [c.args[1] for c in bot._safe_edit_callback.await_args_list]
+    assert any("Couldn't start" in t for t in calls)
