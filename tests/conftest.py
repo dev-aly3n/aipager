@@ -38,7 +38,7 @@ def mk_bot():
     from aipager.bot import TelegramBot
     from aipager.state import SessionRegistry
 
-    def _mk(registry=None, *, team=None):
+    def _mk(registry=None, *, team=None, scopes=None):
         if registry is None:
             registry = SessionRegistry()
         bot = TelegramBot(registry)
@@ -46,6 +46,10 @@ def mk_bot():
         bot._app.bot = MagicMock()
         bot._app.bot.send_message = AsyncMock()
         bot.team = team
+        # Default to legacy mode in tests — the constructor may have
+        # picked up a real ~/.config/aipager/aipager.yaml. Tests opt into
+        # multi-scope by passing scopes=[...].
+        bot.scopes = scopes
         return bot
     return _mk
 

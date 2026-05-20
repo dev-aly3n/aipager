@@ -83,13 +83,53 @@ class AuthMixin:
     # actions that mutate state.
     # ------------------------------------------------------------------
 
-    def _team_user(self, update: Update) -> TeamUser | None:
-        """Resolve the Telegram sender to a ``team.User``.
+    # ---- scope helpers (Phase C — used when self.scopes is not None) ----
 
-        Returns ``None`` in personal mode OR when the sender isn't on
-        the allow-list. Callers distinguish the two via
-        ``self.team is None``.
+    def _scope_for(self, chat_id):
+        """Return the Scope whose chat_id matches, or None."""
+        if not self.scopes or chat_id is None:
+            return None
+        for s in self.scopes:
+            if s.chat_id == chat_id:
+                return s
+        return None
+
+    def _member_in_scope(self, scope, user_id):
+        if scope is None:
+            return None
+        for m in scope.members:
+            if m.id == user_id:
+                return m
+        return None
+
+    def _member_anywhere(self, user_id):
+        """Find a member by id across all scopes (for driver attribution)."""
+        for s in (self.scopes or []):
+            for m in s.members:
+                if m.id == user_id:
+                    return m
+        return None
+
+    def _role_can_prompt(self, member) -> bool:
+        if member is None:
+            return False
+        role = self.policy.get_role(member.role)
+        return bool(role and role.can_prompt)
+
+    def _team_user(self, update: Update):
+        """Resolve the Telegram sender to a member/user, or None.
+
+        Scope mode (``self.scopes`` set): the ``scope.Member`` for the
+        sender within the message's scope. Legacy mode: the
+        ``team.User`` from the allow-list (None in personal mode).
         """
+        if self.scopes is not None:
+            tg_user = update.effective_user
+            if tg_user is None:
+                return None
+            chat = update.effective_chat
+            return self._member_in_scope(
+                self._scope_for(chat.id if chat else None), tg_user.id)
         if self.team is None:
             return None
         tg_user = update.effective_user
@@ -110,6 +150,10 @@ class AuthMixin:
         then silently ignores subsequent messages from that user
         until daemon restart.
         """
+        if self.scopes is not None:
+            return await self._authorize_scoped(
+                update, allow_read_only=allow_read_only)
+
         if self.team is None:
             return True
 
@@ -176,6 +220,76 @@ class AuthMixin:
                     )
                 except Exception:
                     log.debug("reply to read-only user failed", exc_info=True)
+            return False
+
+        return True
+
+    async def _authorize_scoped(
+        self, update: Update, *, allow_read_only: bool = False,
+    ) -> bool:
+        """Scope-aware authorization (Phase C). True iff the sender is a
+        member of the scope this message belongs to and may act."""
+        tg_user = update.effective_user
+        chat = update.effective_chat
+        if tg_user is None or chat is None:
+            return False
+
+        scope = self._scope_for(chat.id)
+        if scope is None:
+            # Unknown chat. Groups: silent (someone added the bot to a
+            # group we don't serve). DMs (positive chat_id): one polite
+            # reply so the person knows to ask the operator.
+            if chat.id > 0 and not remember_unauthorized(tg_user.id):
+                msg = update.effective_message
+                if msg is not None:
+                    try:
+                        await msg.reply_text(
+                            "🚫 This bot isn't configured to talk to you. "
+                            f"Ask the operator to add your Telegram user ID "
+                            f"({tg_user.id}) via `aipager config`.",
+                        )
+                    except Exception:
+                        log.debug("reply to unknown-DM user failed", exc_info=True)
+            return False
+
+        member = self._member_in_scope(scope, tg_user.id)
+        if member is None:
+            handle = tg_user.username or ""
+            display = (tg_user.first_name or "") + (
+                f" {tg_user.last_name}" if tg_user.last_name else ""
+            )
+            try:
+                record_pending_user(
+                    tg_user.id, username=handle,
+                    display_name=display.strip(), chat_id=chat.id,
+                )
+            except Exception:
+                log.debug("record_pending_user failed", exc_info=True)
+            if not remember_unauthorized(tg_user.id):
+                msg = update.effective_message
+                if msg is not None:
+                    try:
+                        await msg.reply_text(
+                            "🚫 You're not on this scope's allow-list. "
+                            f"Ask the operator to add your Telegram user ID "
+                            f"({tg_user.id}) via `aipager config`.",
+                        )
+                    except Exception:
+                        log.debug("reply to non-member failed", exc_info=True)
+            return False
+
+        if not self._role_can_prompt(member) and not allow_read_only:
+            msg = update.effective_message
+            if msg is not None:
+                try:
+                    await msg.reply_text(
+                        f"👀 {attribution_label(member)} — your role is "
+                        f"<i>{html_mod.escape(member.role)}</i>; you can use "
+                        "<code>/status</code> but can't drive sessions.",
+                        parse_mode="HTML",
+                    )
+                except Exception:
+                    log.debug("reply to read-only member failed", exc_info=True)
             return False
 
         return True
@@ -264,6 +378,17 @@ class AuthMixin:
         ``sess.created_by_user_id``. The returned :class:`team.User`
         is used by callers to attribute prompts and audit records.
         """
+        if self.scopes is not None:
+            tg_user = update.effective_user
+            if tg_user is None:
+                return None
+            member = self._member_anywhere(tg_user.id)
+            if member is None:
+                return None
+            sess.last_driver_user_id = member.id
+            if sess.created_by_user_id is None:
+                sess.created_by_user_id = member.id
+            return member
         if self.team is None:
             return None
         tg_user = update.effective_user
@@ -284,6 +409,10 @@ class AuthMixin:
         loaded, or the driver was removed from the allow-list since
         their last interaction.
         """
+        if self.scopes is not None:
+            if sess.last_driver_user_id is None:
+                return None
+            return self._member_anywhere(sess.last_driver_user_id)
         if self.team is None or sess.last_driver_user_id is None:
             return None
         return self.team.get(sess.last_driver_user_id)
@@ -297,6 +426,21 @@ class AuthMixin:
         sentinel — never ``None`` — so callers can keep their
         existing flow.
         """
+        if self.scopes is not None:
+            tg_user = query.from_user
+            if tg_user is None:
+                return None
+            chat = getattr(query, "message", None)
+            chat_id = getattr(getattr(chat, "chat", None), "id", None)
+            member = self._member_in_scope(self._scope_for(chat_id), tg_user.id)
+            if member is None:
+                try:
+                    await query.answer("Not on the allow-list", show_alert=True)
+                except Exception:
+                    log.debug("toast to unauthorized callback failed", exc_info=True)
+                return None
+            return member
+
         if self.team is None:
             return _PERSONAL_MODE_SENTINEL
 

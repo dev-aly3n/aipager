@@ -63,3 +63,14 @@ class TelegramBot(
         # which preserves the existing one-user-one-DM behaviour.
         from aipager.config import TEAM
         self.team: Team | None = TEAM
+        # v2 multi-scope config (Phase C: authoritative for authorization
+        # when present). Loaded FRESH here — not via config.SCOPES — because
+        # migrate_to_v2() writes aipager.yaml at daemon start, *after*
+        # config was imported, so config.SCOPES would be stale (None) on the
+        # first post-upgrade run. When self.scopes is None the auth methods
+        # fall back to the legacy team/personal model.
+        from aipager.policy import load_policy
+        from aipager.scope import load_scopes
+        _v2 = load_scopes()
+        self.scopes = _v2[0] if _v2 else None
+        self.policy = load_policy()

@@ -523,7 +523,7 @@ class CallbackDispatchMixin:
                 # `member` was resolved by _authorize_callback at the top
                 # of _handle_callback; in personal mode it's a sentinel
                 # (id=0) — only record real allow-listed users.
-                actor = member if self.team is not None and member.id != 0 else None
+                actor = member if member is not None and member.id != 0 else None
                 audit_mod.append(
                     session=sess.name, label=sess.label, action="Answered",
                     tool="AskUserQuestion",
@@ -633,7 +633,7 @@ class CallbackDispatchMixin:
                 # Persistent audit trail to disk (jsonl).
                 from aipager import audit as audit_mod
                 actor = (
-                    member if self.team is not None and member.id != 0 else None
+                    member if member is not None and member.id != 0 else None
                 )
                 audit_mod.append(
                     session=sess.name, label=sess.label, action=verb,

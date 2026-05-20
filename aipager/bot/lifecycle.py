@@ -85,6 +85,20 @@ class LifecycleMixin:
         ``self.team`` becomes ``None`` and all handlers fall back to
         the personal-mode path.
         """
+        # Reload v2 scopes/policy too (authoritative when present). A
+        # broken hand-edit keeps the previous in-memory config so the
+        # operator can't lock themselves out with a typo.
+        try:
+            from aipager.policy import PolicyError, load_policy
+            from aipager.scope import ScopeConfigError, load_scopes
+            _v2 = load_scopes()
+            self.scopes = _v2[0] if _v2 else None
+            self.policy = load_policy()
+            log.info("Scope reload: %s scope(s)",
+                     len(self.scopes) if self.scopes else 0)
+        except (ScopeConfigError, PolicyError) as e:
+            log.warning("Scope/policy reload failed — keeping previous: %s", e)
+
         from aipager.team import (
             TEAM_CONFIG_PATH, TeamConfigError, load_team,
         )
@@ -150,21 +164,28 @@ class LifecycleMixin:
         self._app.add_handler(CommandHandler("new", self._handle_new_cmd))
         self._app.add_handler(CommandHandler("resume", self._handle_resume_cmd))
         self._app.add_handler(CommandHandler("clearqueue", self._handle_clearqueue_cmd))
+        # Chat gate for message handlers. Multi-scope: accept every
+        # configured scope's chat. Legacy: the single CHAT_ID. (Command
+        # handlers above are not chat-filtered; _authorize gates them.)
+        if self.scopes:
+            chat_gate = filters.Chat({s.chat_id for s in self.scopes})
+        else:
+            chat_gate = filters.Chat(int(CHAT_ID))
         # Media handler: photos and documents → save file, inject prompt
         self._app.add_handler(MessageHandler(
-            (filters.PHOTO | filters.Document.ALL) & filters.Chat(int(CHAT_ID)),
+            (filters.PHOTO | filters.Document.ALL) & chat_gate,
             self._handle_file,
         ))
         # Voice messages → faster-whisper transcribe → inject as prompt.
         # Item 5.3. Only fires when the `voice` extra is installed; the
         # handler itself surfaces a friendly error otherwise.
         self._app.add_handler(MessageHandler(
-            filters.VOICE & filters.Chat(int(CHAT_ID)),
+            filters.VOICE & chat_gate,
             self._handle_voice,
         ))
         # Catch-all for text messages (replies and /<label> commands)
         self._app.add_handler(MessageHandler(
-            filters.TEXT & filters.Chat(int(CHAT_ID)),
+            filters.TEXT & chat_gate,
             self._handle_message,
         ))
 
