@@ -2,6 +2,11 @@
 
 Each observer has its own telegram.Bot instance and chat_id.
 Sends are fire-and-forget — observer failures never affect the primary bot.
+
+Multi-scope (R10): observers are a GLOBAL firehose — they mirror events
+from every scope with no per-scope filtering. An observer chat therefore
+sees all scopes' activity; only configure one you trust with that breadth.
+Per-scope observer routing is a documented non-goal.
 """
 
 from __future__ import annotations

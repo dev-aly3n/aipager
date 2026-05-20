@@ -720,6 +720,60 @@ class CommandHandlersMixin:
             update=update,
         )
 
+    async def _handle_whoami(self, update: Update,
+                             ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /whoami — show the caller their resolved identity +
+        effective policy (role + merged deny/allow list). Replies only
+        to the calling chat; never reveals other scopes' data."""
+        if not await self._authorize(update, allow_read_only=True):
+            return
+
+        if self.scopes is not None:
+            from aipager.policy_snapshot import resolve_snapshot
+            chat = update.effective_chat
+            tg_user = update.effective_user
+            scope = self._scope_for(chat.id if chat else None)
+            member = self._member_in_scope(scope, tg_user.id if tg_user else None)
+            if member is None:
+                await update.message.reply_text(
+                    "🪪 You're not a member of this scope.")
+                return
+            role = self.policy.get_role(member.role)
+            snap = resolve_snapshot(role, scope, member)
+            deny = ", ".join(snap["deny_tools"]) or "(none)"
+            allow = ", ".join(snap["allow_tools"]) or "(any)"
+            lines = [
+                f"🪪 <b>@{html_mod.escape(member.label)}</b> "
+                f"in <b>{html_mod.escape(scope.label)}</b>",
+                f"  role: <b>{html_mod.escape(member.role)}</b>",
+                f"  bypass_safety: {'yes' if snap['bypass_safety'] else 'no'}",
+                f"  bypass_role_denies: "
+                f"{'yes' if (role and role.bypass_role_denies) else 'no'}",
+                f"  effective deny_tools: {html_mod.escape(deny)}",
+                f"  effective allow_tools: {html_mod.escape(allow)}",
+            ]
+            await update.message.reply_text(
+                "\n".join(lines), parse_mode="HTML")
+            return
+
+        if self.team is not None:
+            tg_user = update.effective_user
+            member = self.team.get(tg_user.id) if tg_user else None
+            if member is None:
+                await update.message.reply_text(
+                    "🪪 You're not on this bot's allow-list.")
+                return
+            deny = ", ".join(self.team.rules.deny_tools) or "(none)"
+            await update.message.reply_text(
+                f"🪪 <b>@{html_mod.escape(member.label)}</b>\n"
+                f"  role: <b>{html_mod.escape(member.role.value)}</b>\n"
+                f"  deny_tools: {html_mod.escape(deny)}",
+                parse_mode="HTML")
+            return
+
+        await update.message.reply_text(
+            "🪪 Personal mode — full control of this machine from this DM.")
+
     async def _handle_message(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle text messages — replies to notifications or /<label> commands."""
         if not await self._authorize(update):

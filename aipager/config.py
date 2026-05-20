@@ -87,6 +87,10 @@ def _parse_observer_bots(raw: str) -> list[tuple[str, str]]:
     return result
 
 
+# NOTE (multi-scope / R10): observer bots are a GLOBAL firehose — they
+# receive a copy of events from EVERY scope, with no per-scope filtering.
+# Treat an observer chat as trusted to see all scopes' activity. Per-scope
+# observer routing is a documented non-goal (see researches multi-scope §R10).
 OBSERVER_BOTS: list[tuple[str, str]] = _parse_observer_bots(
     os.environ.get("OBSERVER_BOTS", "")
 )

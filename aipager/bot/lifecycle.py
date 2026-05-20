@@ -165,6 +165,7 @@ class LifecycleMixin:
         self._app.add_handler(CommandHandler("new", self._handle_new_cmd))
         self._app.add_handler(CommandHandler("resume", self._handle_resume_cmd))
         self._app.add_handler(CommandHandler("clearqueue", self._handle_clearqueue_cmd))
+        self._app.add_handler(CommandHandler("whoami", self._handle_whoami))
         # Chat gate for message handlers. Multi-scope: accept every
         # configured scope's chat. Legacy: the single CHAT_ID. (Command
         # handlers above are not chat-filtered; _authorize gates them.)
@@ -349,6 +350,7 @@ class LifecycleMixin:
             BotCommand("new", "Launch new session"),
             BotCommand("resume", "Resume a past session"),
             BotCommand("clearqueue", "Drop pending queued prompts"),
+            BotCommand("whoami", "Show your role + permissions"),
         ]
         for label in sorted(labels):
             commands.append(BotCommand(label, f"Send to [{label}]"))
