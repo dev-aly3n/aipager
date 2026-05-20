@@ -6,18 +6,15 @@ from __future__ import annotations
 import questionary
 
 from aipager.errors import friendly_warn
-from aipager.ui import console, err_console, hint, ok, step
+from aipager.ui import console, err_console, hint, ok
 from aipager.wizard._constants import (
-    TEAM_YAML, _PROMPT_STYLE,
+    _PROMPT_STYLE,
 )
 
 from aipager.wizard.display import (
     _ask,
     _spin,
 )
-# `_step_pick_mode` is imported lazily inside `_step_team_config`
-# below — first_run.py imports `_step_team_setup` from this module, so
-# a module-level import here would close a circular-import loop.
 from aipager.wizard.telegram_api import (
     _fetch_id_from_updates,
     _http_json,
@@ -151,94 +148,6 @@ def _resolve_user(
             except (KeyError, TypeError, ValueError):
                 continue
     return None
-
-
-def _show_team_warning_panel() -> None:
-    """The "you're handing out shell access" panel. Shown before
-    every Team mode commit (first-run AND Switch-to-Team edit)."""
-    from rich.panel import Panel
-    warning_body = (
-        "[warn]⚠️  Team mode grants every allow-listed user the ability to:[/warn]\n\n"
-        "   • Inject prompts into Claude Code sessions on this machine\n"
-        "   • Approve / deny tool calls (run shell commands, edit files)\n"
-        "   • Create new sessions, kill sessions, switch active session\n\n"
-        "   This is a code-execution boundary. Only allow-list users you\n"
-        "   trust the same way you trust local shell access on this\n"
-        "   machine. You can clamp dangerous tools (Write, Edit, Bash)\n"
-        "   via [path]~/.config/aipager/team.yaml[/path] [path]rules.deny_tools[/path]."
-    )
-    if console.is_terminal:
-        console.print()
-        console.print(Panel(warning_body, border_style="warn", expand=False,
-                            padding=(0, 1)))
-    else:
-        console.print()
-        console.print(warning_body)
-    console.print()
-
-
-def _collect_users(
-    existing_ids: set[int] | None = None,
-    existing_labels: set[str] | None = None,
-    *,
-    token: str = "",
-) -> list[dict]:
-    """Interactive loop: prompt for label / Telegram id / role, repeat
-    until the user says stop. Returns a list of ``{id, label, role}``
-    dicts ready to feed into a :class:`team.Team`.
-
-    ``existing_ids`` / ``existing_labels`` are for the edit flow when
-    we're appending to an existing team — duplicate-detection then
-    spans both the new entries and the prior ones.
-
-    When ``token`` is provided, each user-id prompt offers an
-    auto-detect mode: the wizard polls ``getUpdates`` for a recent
-    message and captures the sender's id + Telegram username, then
-    pre-fills the label from the username. Saves admins from
-    making members hand-look-up their numeric ids.
-    """
-    existing_ids = set(existing_ids or ())
-    existing_labels = set(existing_labels or ())
-    users: list[dict] = []
-
-    console.print()
-    console.print("Add allowed users (Telegram user IDs).")
-    console.print(
-        "[muted]  Each user gets a label (shown in chat as @label) and a role:[/muted]"
-    )
-    console.print(
-        "[muted]    admin       full control; bypasses deny_tools rules[/muted]"
-    )
-    console.print(
-        "[muted]    developer   prompt + approve, subject to deny_tools[/muted]"
-    )
-    console.print(
-        "[muted]    read_only   /status only; messages otherwise ignored[/muted]"
-    )
-
-    while True:
-        idx = len(users) + 1
-        captured = _capture_user_identity(
-            idx,
-            existing_ids=existing_ids | {u["id"] for u in users},
-            existing_labels=existing_labels | {u["label"] for u in users},
-            token=token,
-        )
-        if captured is None:
-            # Cancelled this user — break out of the add-more loop.
-            break
-
-        role = _pick_role(idx)
-        users.append({**captured, "role": role})
-
-        more = _ask(questionary.confirm(
-            "Add another user?",
-            default=False, qmark="?", style=_PROMPT_STYLE,
-        ))
-        if not more:
-            break
-
-    return users
 
 
 def _capture_user_identity(
@@ -469,153 +378,3 @@ def _collect_deny_tools() -> list[str]:
         default=True, qmark="?", style=_PROMPT_STYLE,
     ))
     return ["Write", "Edit"] if enable_default_deny else []
-
-
-def _pick_role(idx: int) -> str:
-    """Single-question helper: prompts for a role with the canonical
-    three choices. Used by both the first-run team setup and the
-    edit-flow add-user path so the prompt copy stays consistent."""
-    return _ask(questionary.select(
-        f"User #{idx} role:",
-        choices=["admin", "developer", "read_only"],
-        qmark="?", style=_PROMPT_STYLE,
-    ))
-
-
-def _step_team_setup(
-    group_id: int, step_label: str = "[4/N]", *, token: str = "",
-) -> None:
-    """Collect users + rules, persist ``team.yaml`` **incrementally**.
-
-    Drives the add-user loop here so every successful add is written
-    to disk immediately. If the admin Ctrl+Cs mid-loop, all prior
-    users survive — re-running ``aipager config`` falls into the
-    edit flow and shows them in the current-config panel.
-
-    Writes ``~/.config/aipager/team.yaml`` via :func:`team.dump_team`
-    after every user + after the deny-rules selection.
-    """
-    from aipager.team import (
-        Role, Rules as TeamRules, Team, User as TeamUser, dump_team,
-    )
-
-    step(f"{step_label}  Team allow-list")
-
-    console.print()
-    console.print("Add allowed users (Telegram user IDs).")
-    console.print(
-        "[muted]  Each user gets a label (shown in chat as @label) and a role:[/muted]"
-    )
-    console.print(
-        "[muted]    admin       full control; bypasses deny_tools rules[/muted]"
-    )
-    console.print(
-        "[muted]    developer   prompt + approve, subject to deny_tools[/muted]"
-    )
-    console.print(
-        "[muted]    read_only   /status only; messages otherwise ignored[/muted]"
-    )
-
-    team: Team | None = None
-
-    def _save() -> None:
-        try:
-            dump_team(team, TEAM_YAML)
-        except OSError as e:
-            raise OSError(f"cannot write {TEAM_YAML}: {e}") from e
-
-    while True:
-        idx = (len(team.users) if team is not None else 0) + 1
-        existing_ids = set(team.users) if team is not None else set()
-        existing_labels = (
-            {u.label for u in team.users.values()} if team is not None else set()
-        )
-
-        captured = _capture_user_identity(
-            idx,
-            existing_ids=existing_ids,
-            existing_labels=existing_labels,
-            token=token,
-        )
-        if captured is None:
-            # Admin cancelled this user — stop adding, keep whoever's
-            # already on disk.
-            break
-
-        role = _pick_role(idx)
-        new_user = TeamUser(
-            id=captured["id"], label=captured["label"], role=Role(role),
-        )
-
-        if team is None:
-            team = Team(
-                group_id=group_id,
-                users={new_user.id: new_user},
-                rules=TeamRules(),
-            )
-        else:
-            team = team.with_user(new_user)
-
-        _save()
-        ok(
-            f"Saved → {len(team.users)} user"
-            f"{'s' if len(team.users) != 1 else ''} "
-            f"in team.yaml"
-        )
-
-        more = _ask(questionary.confirm(
-            "Add another user?",
-            default=False, qmark="?", style=_PROMPT_STYLE,
-        ))
-        if not more:
-            break
-
-    if team is None:
-        friendly_warn(
-            "No users added — team.yaml not written.",
-            "The daemon will stay in personal mode until you add at",
-            "least one allowed user (re-run `aipager config` → Add a user).",
-        )
-        return
-
-    if not any(u.role == Role.ADMIN for u in team.users.values()):
-        friendly_warn(
-            "No admin user added.",
-            "You'll need to promote one via `aipager config` → "
-            "Change a user's role before deny_tools rules can be",
-            "bypassed.",
-        )
-
-    deny_tools = _collect_deny_tools()
-    if tuple(deny_tools) != team.rules.deny_tools:
-        team = team.with_deny_tools(deny_tools)
-        _save()
-        ok(f"Saved → deny_tools = {deny_tools or '(none)'}")
-
-
-def _step_team_config() -> bool:
-    """Backwards-compatible wrapper. Returns True iff team mode was
-    written. Used by the legacy linear flow when team mode was tacked
-    onto the end; new flows call :func:`_step_pick_mode` + (later)
-    :func:`_step_team_setup` directly.
-    """
-    from aipager.wizard.first_run import _step_pick_mode
-    if _step_pick_mode("[6/6]") == "personal":
-        return False
-    # The group_id was never captured in the legacy flow — fall back
-    # to a manual prompt for backwards compatibility.
-    while True:
-        raw = _ask(questionary.text(
-            "Group chat ID (negative integer, e.g. -100123456789):",
-            qmark="?", style=_PROMPT_STYLE,
-        ))
-        try:
-            group_id = int(raw.strip())
-            if group_id >= 0:
-                friendly_warn("Group IDs are negative. Try again.")
-                continue
-            break
-        except ValueError:
-            friendly_warn("Not a valid integer. Try again.")
-    _step_team_setup(group_id, step_label="[6/6]")
-    return True

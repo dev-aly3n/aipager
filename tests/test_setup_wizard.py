@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from aipager.wizard import _constants, first_run, settings_patch, team_setup, telegram_api
+from aipager.wizard import _constants, settings_patch, team_setup, telegram_api
 
 
 # ----- _normalize_token -----
@@ -190,26 +190,6 @@ def test_step_deps_returns_false_when_hook_missing(monkeypatch):
             return "/usr/bin/dtach"
     monkeypatch.setitem(_sys.modules, "dtach_bin", _FakeDtachBin)
     assert settings_patch._step_deps() is False
-
-
-# ----- _step_write_env permissions tolerance -----
-
-def test_step_write_env_chmod_failure_warns(monkeypatch, tmp_path, capsys):
-    target = tmp_path / "config.env"
-    monkeypatch.setattr(first_run, "CONFIG_DIR", tmp_path)
-    monkeypatch.setattr(first_run, "CONFIG_ENV", target)
-
-    def _boom(*a, **k):
-        raise OSError("Operation not permitted")
-    monkeypatch.setattr(first_run.os, "chmod", _boom)
-
-    first_run._step_write_env("toktok", 99)
-    assert target.exists()
-    contents = target.read_text()
-    assert "toktok" in contents
-    assert "99" in contents
-    err = capsys.readouterr().err
-    assert "chmod" in err.lower() or "non-POSIX" in err
 
 
 # ----- _resolve_user --------------------------------------------------

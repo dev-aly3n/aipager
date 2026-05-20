@@ -26,14 +26,6 @@ def _no_spin(monkeypatch):
                         lambda msg: contextlib.nullcontext())
 
 
-# ---- _show_team_warning_panel ------------------------------------------
-
-def test_show_team_warning_panel(capsys):
-    team_setup._show_team_warning_panel()
-    out = capsys.readouterr().out
-    assert "shell access" in out or "shell" in out.lower()
-
-
 # ---- _finalize_user ----------------------------------------------------
 
 def test_finalize_user_empty_input_uses_suggestion(monkeypatch):
@@ -52,13 +44,6 @@ def test_finalize_user_label_clash_retries(monkeypatch):
     _stub_ask(monkeypatch, ["taken", "ok"])
     out = team_setup._finalize_user(42, "x", {"taken"})
     assert out["label"] == "ok"
-
-
-# ---- _pick_role --------------------------------------------------------
-
-def test_pick_role(monkeypatch):
-    _stub_ask(monkeypatch, ["developer"])
-    assert team_setup._pick_role(1) == "developer"
 
 
 # ---- _collect_deny_tools -----------------------------------------------
@@ -246,124 +231,3 @@ def test_capture_user_identity_cancel_at_method_select(monkeypatch):
         1, existing_ids=set(), existing_labels=set(), token="tok")
     assert out is None
 
-
-# ---- _collect_users ----------------------------------------------------
-
-def test_collect_users_one_user_then_stop(monkeypatch):
-    monkeypatch.setattr(team_setup, "_capture_user_identity",
-                        lambda idx, **k: {"id": 1, "label": "alice"})
-    monkeypatch.setattr(team_setup, "_pick_role", lambda idx: "developer")
-    _stub_ask(monkeypatch, [False])  # don't add another
-    out = team_setup._collect_users()
-    assert out == [{"id": 1, "label": "alice", "role": "developer"}]
-
-
-def test_collect_users_multiple_then_stop(monkeypatch):
-    counter = {"n": 0}
-    def _cap(idx, **k):
-        counter["n"] += 1
-        return {"id": counter["n"], "label": f"u{counter['n']}"}
-    monkeypatch.setattr(team_setup, "_capture_user_identity", _cap)
-    monkeypatch.setattr(team_setup, "_pick_role", lambda idx: "developer")
-    _stub_ask(monkeypatch, [True, True, False])  # add 2 more, then stop
-    out = team_setup._collect_users()
-    assert len(out) == 3
-
-
-def test_collect_users_cancelled_first_user(monkeypatch):
-    """If admin cancels the first add, return empty list."""
-    monkeypatch.setattr(team_setup, "_capture_user_identity",
-                        lambda idx, **k: None)
-    assert team_setup._collect_users() == []
-
-
-def test_collect_users_dedups_against_existing(monkeypatch):
-    counter = {"n": 0}
-    captured_args = []
-    def _cap(idx, *, existing_ids, existing_labels, token):
-        captured_args.append((set(existing_ids), set(existing_labels)))
-        counter["n"] += 1
-        return {"id": 99, "label": "new"}
-    monkeypatch.setattr(team_setup, "_capture_user_identity", _cap)
-    monkeypatch.setattr(team_setup, "_pick_role", lambda idx: "developer")
-    _stub_ask(monkeypatch, [False])  # stop after first
-    team_setup._collect_users(
-        existing_ids={1, 2}, existing_labels={"a", "b"}, token="tok")
-    assert captured_args[0][0] == {1, 2}
-    assert captured_args[0][1] == {"a", "b"}
-
-
-# ---- _step_team_setup --------------------------------------------------
-
-def test_step_team_setup_adds_one_admin_with_rules(monkeypatch):
-    """Full team setup writes team.yaml with users and rules."""
-    # _step_team_setup drives its own add-user loop; mock the per-user
-    # helpers and the "Add another?" confirm.
-    monkeypatch.setattr(team_setup, "_capture_user_identity",
-                        lambda idx, **k: {"id": 1, "label": "admin"})
-    monkeypatch.setattr(team_setup, "_pick_role", lambda idx: "admin")
-    monkeypatch.setattr(team_setup, "_collect_deny_tools",
-                        lambda: ["Bash"])
-    _stub_ask(monkeypatch, [False])  # "Add another?" no
-    saved = []
-    monkeypatch.setattr("aipager.team.dump_team",
-                        lambda t, path=None: saved.append(t))
-    team_setup._step_team_setup(group_id=-100, step_label="[5/7]", token="tok")
-    assert len(saved) >= 1
-    last = saved[-1]
-    assert 1 in last.users
-    assert "Bash" in last.rules.deny_tools
-
-
-def test_step_team_setup_no_users_skips_team_yaml(monkeypatch):
-    """If admin cancels at the first user, no team.yaml is written."""
-    monkeypatch.setattr(team_setup, "_capture_user_identity",
-                        lambda idx, **k: None)
-    saved = []
-    monkeypatch.setattr("aipager.team.dump_team",
-                        lambda t, path=None: saved.append(t))
-    team_setup._step_team_setup(group_id=-100, step_label="[5/7]", token="tok")
-    assert saved == []  # nothing written
-
-
-def test_step_team_setup_warns_when_no_admin(monkeypatch, capsys):
-    """If only developers added, warn but still save."""
-    monkeypatch.setattr(team_setup, "_capture_user_identity",
-                        lambda idx, **k: {"id": 1, "label": "dev"})
-    monkeypatch.setattr(team_setup, "_pick_role", lambda idx: "developer")
-    monkeypatch.setattr(team_setup, "_collect_deny_tools", lambda: [])
-    _stub_ask(monkeypatch, [False])
-    saved = []
-    monkeypatch.setattr("aipager.team.dump_team",
-                        lambda t, path=None: saved.append(t))
-    team_setup._step_team_setup(group_id=-100, step_label="[5/7]", token="tok")
-    assert len(saved) >= 1
-
-
-# ---- _step_team_config (backwards-compat wrapper) --------------------
-
-def test_step_team_config_personal_returns_false(monkeypatch):
-    monkeypatch.setattr(team_setup, "_step_team_setup", lambda *a, **k: None)
-    from aipager.wizard import first_run
-    monkeypatch.setattr(first_run, "_step_pick_mode",
-                        lambda *a, **k: "personal")
-    assert team_setup._step_team_config() is False
-
-
-def test_step_team_config_team_collects_group_id(monkeypatch):
-    monkeypatch.setattr(team_setup, "_step_team_setup", lambda *a, **k: None)
-    from aipager.wizard import first_run
-    monkeypatch.setattr(first_run, "_step_pick_mode",
-                        lambda *a, **k: "team")
-    _stub_ask(monkeypatch, ["-100"])
-    assert team_setup._step_team_config() is True
-
-
-def test_step_team_config_team_invalid_then_valid(monkeypatch):
-    monkeypatch.setattr(team_setup, "_step_team_setup", lambda *a, **k: None)
-    from aipager.wizard import first_run
-    monkeypatch.setattr(first_run, "_step_pick_mode",
-                        lambda *a, **k: "team")
-    _stub_ask(monkeypatch, ["notanumber", "5", "-100"])
-    # "notanumber" → not int; "5" → positive (rejected); "-100" → ok
-    assert team_setup._step_team_config() is True

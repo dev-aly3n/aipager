@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import os
-
 import questionary
 
 from aipager.errors import friendly_error, friendly_warn
 from aipager.ui import GLYPH_OK, console, err_console, hint, ok, rule, step
 from aipager.wizard._constants import (
-    CONFIG_DIR, CONFIG_ENV, _CHAT_NOT_FOUND_RE, _PROMPT_STYLE,
+    _CHAT_NOT_FOUND_RE, _PROMPT_STYLE,
 )
 
 from aipager.wizard.display import (
@@ -19,9 +17,6 @@ from aipager.wizard.display import (
 from aipager.wizard.settings_patch import (
     _step_deps,
     _step_settings,
-)
-from aipager.wizard.team_setup import (
-    _show_team_warning_panel,
 )
 from aipager.wizard.telegram_api import (
     _fetch_id_from_updates,
@@ -166,44 +161,6 @@ def _step_chat_id(
         err_console.print(f"  [err]Test send failed: {err}[/err]")
 
 
-def _step_write_env(token: str, chat_id: int, step_label: str = "[5/5]") -> None:
-    step(f"{step_label}  Write config")
-    try:
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    except OSError as e:
-        raise OSError(f"cannot create {CONFIG_DIR}: {e}") from e
-
-    if CONFIG_ENV.exists():
-        try:
-            existing = CONFIG_ENV.read_text()
-        except OSError:
-            existing = ""
-        if f"CLAUDE_TG_BOT_TOKEN={token}" not in existing or \
-           f"CLAUDE_TG_CHAT_ID={chat_id}" not in existing:
-            answer = _ask(questionary.confirm(
-                f"{CONFIG_ENV} already has different settings. Overwrite?",
-                default=False, qmark="?", style=_PROMPT_STYLE,
-            ))
-            if not answer:
-                friendly_warn("Keeping existing config; new token not written.")
-                return
-
-    try:
-        CONFIG_ENV.write_text(
-            f"CLAUDE_TG_BOT_TOKEN={token}\nCLAUDE_TG_CHAT_ID={chat_id}\n"
-        )
-    except OSError as e:
-        raise OSError(f"cannot write {CONFIG_ENV}: {e}") from e
-    try:
-        os.chmod(CONFIG_ENV, 0o600)
-    except OSError:
-        friendly_warn(
-            f"Could not chmod 0600 on {CONFIG_ENV} — non-POSIX filesystem?",
-            "  Your token file is readable by other users on this machine.",
-        )
-    ok(f"Wrote {CONFIG_ENV}")
-
-
 def _completion_screen() -> None:
     """Show the post-setup summary in a panel (or plain text off-TTY)."""
     from rich.panel import Panel
@@ -227,42 +184,6 @@ def _completion_screen() -> None:
         console.print("  Start the daemon:    aipager start")
         console.print("  Launch a session:    aipager session dev")
         console.print("  Health check:        aipager doctor")
-
-
-def _step_pick_mode(step_label: str = "[2/N]") -> str:
-    """Ask Personal vs Team. Returns ``"personal"`` or ``"team"``.
-
-    Picking Team triggers the trust-warning panel and a hard-stop
-    confirm; declining the confirm collapses back to Personal.
-    """
-    step(f"{step_label}  Personal or Team")
-
-    pick = _ask(questionary.select(
-        "How will you use aipager?",
-        choices=[
-            questionary.Choice("Personal (1:1 DM with the bot — recommended)",
-                               value="personal"),
-            questionary.Choice("Team (group chat with multiple devs)",
-                               value="team"),
-        ],
-        # `default` must match a Choice ``value``, not its title.
-        default="personal",
-        qmark="?", style=_PROMPT_STYLE,
-    ))
-
-    if pick == "personal":
-        ok("Personal mode — no team.yaml needed.")
-        return "personal"
-
-    _show_team_warning_panel()
-    proceed = _ask(questionary.confirm(
-        "Continue with team-mode setup?",
-        default=False, qmark="?", style=_PROMPT_STYLE,
-    ))
-    if not proceed:
-        friendly_warn("Team setup cancelled. Falling back to personal mode.")
-        return "personal"
-    return "team"
 
 
 def _grant_owner_step(chat_id: int, step_label: str = "[3/4]") -> str:

@@ -8,8 +8,6 @@ a TTY.
 from __future__ import annotations
 
 
-import pytest
-
 from aipager.wizard import first_run
 
 
@@ -148,85 +146,6 @@ def test_step_chat_id_chat_not_found_then_retry(monkeypatch):
     assert cid == 5
 
 
-# ---- _step_write_env ----------------------------------------------------
-
-def test_step_write_env_writes_new_file(tmp_path, monkeypatch):
-    monkeypatch.setattr(first_run, "CONFIG_DIR", tmp_path)
-    monkeypatch.setattr(first_run, "CONFIG_ENV", tmp_path / "config.env")
-    first_run._step_write_env("tok", 42)
-    assert (tmp_path / "config.env").exists()
-    content = (tmp_path / "config.env").read_text()
-    assert "tok" in content
-    assert "42" in content
-
-
-def test_step_write_env_overwrite_confirmed(tmp_path, monkeypatch):
-    target = tmp_path / "config.env"
-    target.write_text("CLAUDE_TG_BOT_TOKEN=OLD\nCLAUDE_TG_CHAT_ID=1\n")
-    monkeypatch.setattr(first_run, "CONFIG_DIR", tmp_path)
-    monkeypatch.setattr(first_run, "CONFIG_ENV", target)
-    _stub_ask(monkeypatch, [True])  # confirm overwrite
-    first_run._step_write_env("NEW", 99)
-    assert "NEW" in target.read_text()
-
-
-def test_step_write_env_overwrite_declined_keeps_old(tmp_path, monkeypatch):
-    target = tmp_path / "config.env"
-    target.write_text("CLAUDE_TG_BOT_TOKEN=OLD\nCLAUDE_TG_CHAT_ID=1\n")
-    monkeypatch.setattr(first_run, "CONFIG_DIR", tmp_path)
-    monkeypatch.setattr(first_run, "CONFIG_ENV", target)
-    _stub_ask(monkeypatch, [False])  # decline overwrite
-    first_run._step_write_env("NEW", 99)
-    # Old content preserved
-    assert "OLD" in target.read_text()
-
-
-def test_step_write_env_chmod_failure_warns(tmp_path, monkeypatch, capsys):
-    target = tmp_path / "config.env"
-    monkeypatch.setattr(first_run, "CONFIG_DIR", tmp_path)
-    monkeypatch.setattr(first_run, "CONFIG_ENV", target)
-    monkeypatch.setattr(first_run.os, "chmod",
-                        lambda *a, **k: (_ for _ in ()).throw(OSError("EROFS")))
-    first_run._step_write_env("tok", 42)
-    assert target.exists()
-
-
-def test_step_write_env_cannot_create_dir_raises(tmp_path, monkeypatch):
-    monkeypatch.setattr(first_run, "CONFIG_DIR", tmp_path / "nope")
-    monkeypatch.setattr(first_run, "CONFIG_ENV", tmp_path / "nope" / "config.env")
-    monkeypatch.setattr(first_run.os, "chmod", lambda *a, **k: None)
-    # Force mkdir failure
-    real_mkdir = first_run.CONFIG_DIR.__class__.mkdir
-    def _boom(self, *a, **k):
-        raise OSError("EROFS")
-    monkeypatch.setattr(first_run.CONFIG_DIR.__class__, "mkdir", _boom)
-    try:
-        with pytest.raises(OSError):
-            first_run._step_write_env("tok", 42)
-    finally:
-        monkeypatch.setattr(first_run.CONFIG_DIR.__class__, "mkdir", real_mkdir)
-
-
-# ---- _step_pick_mode -----------------------------------------------------
-
-def test_step_pick_mode_personal(monkeypatch):
-    _stub_ask(monkeypatch, ["personal"])
-    assert first_run._step_pick_mode() == "personal"
-
-
-def test_step_pick_mode_team_confirmed(monkeypatch):
-    _stub_ask(monkeypatch, ["team", True])  # accepts trust warning
-    # _show_team_warning_panel lives in team_setup module — stub it
-    monkeypatch.setattr(first_run, "_show_team_warning_panel", lambda: None)
-    assert first_run._step_pick_mode() == "team"
-
-
-def test_step_pick_mode_team_then_decline_falls_back(monkeypatch):
-    _stub_ask(monkeypatch, ["team", False])
-    monkeypatch.setattr(first_run, "_show_team_warning_panel", lambda: None)
-    assert first_run._step_pick_mode() == "personal"
-
-
 # ---- _completion_screen --------------------------------------------------
 
 def test_completion_screen_prints(capsys):
@@ -293,13 +212,10 @@ def test_first_run_flow_happy_path_owner(monkeypatch, tmp_path):
 
 
 def test_first_run_flow_no_mode_question(monkeypatch, tmp_path):
-    """The flow must never invoke the old personal/team picker."""
+    """The old personal/team picker is gone — the flow never asks."""
+    assert not hasattr(first_run, "_step_pick_mode")
     _redirect_config(monkeypatch, tmp_path)
     _stub_flow(monkeypatch, role="admin")
-    monkeypatch.setattr(
-        first_run, "_step_pick_mode",
-        lambda *a, **k: (_ for _ in ()).throw(AssertionError("asked mode")),
-    )
     assert first_run._first_run_flow() == 0
 
 
