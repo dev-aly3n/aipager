@@ -59,6 +59,15 @@ packages = ["aipager"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# e2e tests drive REAL Claude (claude -p) + the real hook; they need claude
+# auth + network + tokens, so they're excluded from the default run and CI.
+# Run them with:  pytest -m e2e        (all)
+#                 pytest tests/e2e/test_e2e_sticky.py -m e2e   (one file)
+# The CLI -m overrides this addopts default.
+addopts = "-m 'not e2e'"
+markers = [
+    "e2e: real-Claude end-to-end safety test (opt-in; needs claude auth + network + tokens)",
+]
 
 [tool.ruff]
 line-length = 100
