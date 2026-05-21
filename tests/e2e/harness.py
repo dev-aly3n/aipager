@@ -50,6 +50,27 @@ def new_session() -> str:
     return f"claude-e2e-{uuid.uuid4().hex[:8]}"
 
 
+def daemon_running() -> bool:
+    """True if an aipager daemon process is alive.
+
+    Used to skip the real-dtach halt test: a live daemon's session_monitor
+    would adopt the throwaway dtach session and message the operator. We
+    check the PROCESS (not ``/tmp/aipager.sock`` — that can vanish to /tmp
+    cleanup while the daemon keeps running)."""
+    try:
+        out = subprocess.run(["pgrep", "-f", "aipager start"],
+                             capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        return Path("/tmp/aipager.sock").exists()
+    for pid in out.stdout.split():
+        try:
+            if (Path("/proc") / pid / "comm").read_text().strip() == "aipager":
+                return True
+        except OSError:
+            continue
+    return Path("/tmp/aipager.sock").exists()
+
+
 # ---- project + snapshot setup -------------------------------------------
 
 def make_project(tmp_path: Path, *, events=("PreToolUse",)) -> Path:
@@ -98,6 +119,30 @@ class ClaudeRun:
             return None
         return next(Path.home().glob(
             f".claude/projects/*/{self.session_id}.jsonl"), None)
+
+    def tools_used(self) -> list[str]:
+        """Names of tools Claude actually *invoked* (tool_use blocks in the
+        transcript) — to distinguish a real tool run from Claude answering
+        from memory / narration."""
+        t = self.transcript
+        if not t:
+            return []
+        names: list[str] = []
+        for line in t.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                e = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            content = (e.get("message") or {}).get("content")
+            if not isinstance(content, list):
+                continue
+            for b in content:
+                if isinstance(b, dict) and b.get("type") == "tool_use":
+                    names.append(b.get("name", ""))
+        return names
 
     def tool_result_texts(self) -> list[str]:
         """All tool_result payloads from the transcript (for deny-reason
@@ -150,6 +195,18 @@ class ClaudeRun:
     def assert_output_contains(self, needle: str) -> None:
         assert needle in self.result, (
             f"expected {needle!r} in result; got {self.result[:400]!r}")
+
+    def assert_ran(self, tool: str) -> None:
+        """The tool was actually executed (not denied, and a real tool_use
+        appears) — guards against Claude answering from memory so an
+        'allowed' test can't pass without genuinely exercising the hook."""
+        assert tool not in self.denials, (
+            f"{tool} was denied; expected it to be allowed (denials="
+            f"{self.denials})")
+        used = self.tools_used()
+        assert tool in used, (
+            f"{tool} never executed (Claude may have answered from memory); "
+            f"tools_used={used}; result={self.result[:200]!r}")
 
     def assert_safety_block_recorded(self) -> None:
         joined = " ".join(self.tool_result_texts())

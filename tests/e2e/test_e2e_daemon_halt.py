@@ -24,8 +24,10 @@ from tests.e2e import harness
 def test_halt_for_safety_interrupts_real_dtach(
     claude_available, project, mk_bot, run_async,
 ):
-    if Path("/tmp/aipager.sock").exists():
-        pytest.skip("live daemon running — stop it to run this isolated test")
+    if harness.daemon_running():
+        pytest.skip("live daemon running — it would adopt the throwaway "
+                    "session and message the operator; stop it to run this "
+                    "isolated test")
     name = harness.new_session().replace("claude-", "e2ehalt-")
 
     ok, err = run_async(inject.launch_session(
@@ -59,3 +61,6 @@ def test_halt_for_safety_interrupts_real_dtach(
         anim.cancel.assert_called_once()        # the wedge fix
     finally:
         run_async(inject.kill_session(name))
+        # Clean the statusline file Claude wrote for this throwaway session.
+        Path(f"/tmp/claude-status-claude-{name}.json").unlink(missing_ok=True)
+        Path(f"/tmp/claude-status-{name}.json").unlink(missing_ok=True)

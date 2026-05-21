@@ -18,7 +18,7 @@ def test_terminal_origin_unrestricted(claude_available, project, session):
     harness.write_snapshot(session, role_name="user")  # ignored for terminal
     r = harness.run(_VERSION_TASK, session=session, project=project,
                     marker=False)
-    r.assert_no_denials()
+    r.assert_ran("Bash")              # the command actually executed
     r.assert_output_contains("2.1.")
 
 
@@ -26,7 +26,7 @@ def test_owner_bypasses_safety(claude_available, project, session):
     """Owner role (bypass_safety) → blocked command runs from Telegram."""
     harness.write_snapshot(session, role_name="owner")
     r = harness.run(_VERSION_TASK, session=session, project=project)
-    r.assert_no_denials()
+    r.assert_ran("Bash")              # owner: the blocked command actually ran
     r.assert_output_contains("2.1.")
 
 

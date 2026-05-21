@@ -12,6 +12,7 @@ def test_deny_tools_blocks_write_allows_read(claude_available, project, session)
         "ROLE_WRITE_SENTINEL.",
         session=session, project=project)
     r.assert_denied("Write")
+    r.assert_safety_block_recorded()  # denied by the aipager hook, not Claude
 
 
 def test_allow_tools_allowlist_blocks_others(claude_available, project, session):
