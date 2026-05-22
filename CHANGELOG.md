@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.4] - 2026-05-22
+
+### Security
+- **Blocked Bash reads of aipager's own config/state dirs.** The
+  path-deny boundary only inspected the Read/Glob/Edit tools, so a
+  `user`-role Telegram session could `cat ~/.config/aipager/aipager.yaml`
+  (or `~/.local/{share,state}/aipager/...`) via the **Bash** tool and
+  exfiltrate the bot token + scopes — the dirs contain no "claude"
+  substring, so the nested-claude pattern didn't catch them. Added bash
+  patterns denying any command that references those dirs.
+
+### Added
+- **Opt-in real-Claude end-to-end safety suite** (`tests/e2e/`, run with
+  `pytest -m e2e`) that reproduces a Telegram-driven turn without
+  Telegram and verifies the safety boundary against real Claude —
+  enforcement, sticky turn-block, origin/owner/admin handling, role
+  deny/allow lists, clean session halt, and `/whoami`. Excluded from the
+  default suite + CI.
+
 ## [0.4.3] - 2026-05-20
 
 ### Security
