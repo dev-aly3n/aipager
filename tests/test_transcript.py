@@ -225,3 +225,78 @@ def test_last_assistant_preview_under_limit_no_ellipsis(tmp_path):
         ]}}) + "\n"
     )
     assert transcript.last_assistant_preview(str(f), max_chars=200) == "short"
+
+
+# ----- turn_appears_complete (idle-recovery fallback detector) -----
+
+def _write_jsonl(tmp_path, lines):
+    p = tmp_path / "t.jsonl"
+    p.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+    return str(p)
+
+
+def test_turn_complete_on_assistant_end_turn(tmp_path):
+    path = _write_jsonl(tmp_path, [
+        {"type": "user", "message": {"role": "user", "content": "hello"}},
+        {"type": "assistant", "message": {
+            "role": "assistant",
+            "content": [{"type": "text", "text": "Hi!"}],
+            "stop_reason": "end_turn"}},
+        {"type": "system"},  # trailing hook/bookkeeping records are skipped
+        {"type": "system"},
+    ])
+    assert transcript.turn_appears_complete(path) is True
+
+
+def test_turn_incomplete_on_tool_use(tmp_path):
+    path = _write_jsonl(tmp_path, [
+        {"type": "user", "message": {"role": "user", "content": "do it"}},
+        {"type": "assistant", "message": {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "name": "Bash"}],
+            "stop_reason": "tool_use"}},
+    ])
+    assert transcript.turn_appears_complete(path) is False
+
+
+def test_turn_incomplete_while_thinking(tmp_path):
+    # Last meaningful entry is the user prompt — the agent hasn't replied yet.
+    path = _write_jsonl(tmp_path, [
+        {"type": "assistant", "message": {
+            "role": "assistant",
+            "content": [{"type": "text", "text": "earlier"}],
+            "stop_reason": "end_turn"}},
+        {"type": "user", "message": {"role": "user", "content": "next question"}},
+    ])
+    assert transcript.turn_appears_complete(path) is False
+
+
+def test_turn_incomplete_after_tool_result(tmp_path):
+    path = _write_jsonl(tmp_path, [
+        {"type": "assistant", "message": {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "name": "Read"}],
+            "stop_reason": "tool_use"}},
+        {"type": "user", "message": {
+            "role": "user",
+            "content": [{"type": "tool_result", "content": "data"}]}},
+    ])
+    assert transcript.turn_appears_complete(path) is False
+
+
+def test_turn_complete_on_user_interrupt(tmp_path):
+    path = _write_jsonl(tmp_path, [
+        {"type": "assistant", "message": {
+            "role": "assistant",
+            "content": [{"type": "tool_use", "name": "Bash"}],
+            "stop_reason": "tool_use"}},
+        {"type": "user", "message": {
+            "role": "user",
+            "content": "[Request interrupted by user for tool use]"}},
+    ])
+    assert transcript.turn_appears_complete(path) is True
+
+
+def test_turn_complete_missing_path_is_false():
+    assert transcript.turn_appears_complete("") is False
+    assert transcript.turn_appears_complete("/no/such/file.jsonl") is False

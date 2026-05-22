@@ -122,6 +122,76 @@ def extract_last_response(transcript_path: str) -> str | None:
     return None
 
 
+def _content_text(content) -> str:
+    """Flatten a transcript entry's message.content into plain text."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                parts.append(block.get("text", ""))
+            elif isinstance(block, str):
+                parts.append(block)
+        return "\n".join(parts)
+    return ""
+
+
+def turn_appears_complete(transcript_path: str) -> bool:
+    """Best-effort: does the transcript tail show the agent finished its turn?
+
+    This is a fallback idle detector for the session monitor. The normal
+    BUSY→IDLE transition comes from Claude's Stop hook; if that hook is
+    missed (e.g. the user interrupts a pending permission then immediately
+    sends a new prompt), the session would otherwise animate "Thinking…"
+    forever. This lets the monitor recover.
+
+    Conservative by design: returns True ONLY when the last meaningful entry
+    clearly marks turn-end — an assistant message that stopped for a reason
+    other than ``tool_use``, or a user interrupt marker. A still-thinking
+    turn (last entry is the user prompt, no assistant reply yet) or a
+    mid-tool turn (assistant ``tool_use`` / a ``tool_result``) returns False,
+    so a turn in progress is never cut short.
+    """
+    if not transcript_path:
+        return False
+    try:
+        with open(transcript_path, "r") as f:
+            tail = deque(f, maxlen=40)
+    except (FileNotFoundError, PermissionError, OSError):
+        return False
+
+    for line in reversed(tail):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        etype = entry.get("type")
+        # Hook/bookkeeping records carry no turn signal — skip past them.
+        if etype in ("system", "file-history-snapshot", "summary"):
+            continue
+
+        msg = entry.get("message") or {}
+        if etype == "assistant":
+            # tool_use → paused to call a tool, still mid-turn.
+            # end_turn / stop_sequence / max_tokens / None → turn finished.
+            return msg.get("stop_reason") != "tool_use"
+        if etype == "user":
+            if "Request interrupted" in _content_text(msg.get("content")):
+                return True  # user aborted; agent is idle, awaiting input
+            # A tool_result (agent will continue) or a fresh prompt (agent
+            # hasn't answered yet) both mean the turn is still in progress.
+            return False
+        # Unknown tail entry — don't risk a premature idle.
+        return False
+
+    return False
+
+
 def last_assistant_preview(transcript_path: str, max_chars: int = 200) -> str:
     """Return a single-line, length-capped preview of the last assistant text.
 

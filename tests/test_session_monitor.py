@@ -128,3 +128,120 @@ def test_subagent_without_started_at_kept(run_async):
 
 async def _coroutine_returning(value):
     return value
+
+
+# ----- Idle-recovery fallback (missed Stop hook) -----
+
+import json  # noqa: E402
+import os  # noqa: E402
+
+from aipager.session_monitor import IDLE_RECOVERY_GRACE  # noqa: E402
+
+
+def _write_transcript(tmp_path, lines, age_seconds):
+    p = tmp_path / "rec.jsonl"
+    p.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+    old = time.time() - age_seconds
+    os.utime(p, (old, old))
+    return str(p)
+
+
+def _busy_session(transcript_path, busy_age):
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.busy_started_at = time.monotonic() - busy_age
+    sess.transcript_path = transcript_path
+    return sess
+
+
+_COMPLETE = [
+    {"type": "user", "message": {"role": "user", "content": "hello"}},
+    {"type": "assistant", "message": {
+        "role": "assistant",
+        "content": [{"type": "text", "text": "All done."}],
+        "stop_reason": "end_turn"}},
+]
+_IN_PROGRESS = [
+    {"type": "assistant", "message": {
+        "role": "assistant",
+        "content": [{"type": "tool_use", "name": "Bash"}],
+        "stop_reason": "tool_use"}},
+]
+
+
+def test_busy_recovered_when_turn_complete_and_quiet(monkeypatch, run_async, tmp_path):
+    tp = _write_transcript(tmp_path, _COMPLETE, age_seconds=IDLE_RECOVERY_GRACE + 5)
+    sess = _busy_session(tp, busy_age=IDLE_RECOVERY_GRACE + 5)
+    registry = SessionRegistry()
+    registry._sessions["claude-jim"] = sess
+
+    calls = []
+    async def _notify(s, event, ctx):
+        calls.append((event, ctx))
+    monitor = _mk_monitor(registry, _notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        lambda: _coroutine_returning(["claude-jim"]))
+
+    run_async(monitor._scan())
+
+    assert sess.status == Status.IDLE
+    assert calls and calls[-1][0] == "idle_prompt"
+    assert calls[-1][1].get("summary") == "All done."
+
+
+def test_busy_not_recovered_while_turn_in_progress(monkeypatch, run_async, tmp_path):
+    tp = _write_transcript(tmp_path, _IN_PROGRESS, age_seconds=IDLE_RECOVERY_GRACE + 5)
+    sess = _busy_session(tp, busy_age=IDLE_RECOVERY_GRACE + 5)
+    registry = SessionRegistry()
+    registry._sessions["claude-jim"] = sess
+
+    calls = []
+    async def _notify(s, event, ctx):
+        calls.append((event, ctx))
+    monitor = _mk_monitor(registry, _notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        lambda: _coroutine_returning(["claude-jim"]))
+
+    run_async(monitor._scan())
+
+    assert sess.status == Status.BUSY
+    assert not any(e == "idle_prompt" for e, _ in calls)
+
+
+def test_busy_not_recovered_when_recently_active(monkeypatch, run_async, tmp_path):
+    # Turn looks complete, but the transcript was just written — the normal
+    # Stop hook should win; the monitor must not race it.
+    tp = _write_transcript(tmp_path, _COMPLETE, age_seconds=1)
+    sess = _busy_session(tp, busy_age=IDLE_RECOVERY_GRACE + 5)
+    registry = SessionRegistry()
+    registry._sessions["claude-jim"] = sess
+
+    calls = []
+    async def _notify(s, event, ctx):
+        calls.append((event, ctx))
+    monitor = _mk_monitor(registry, _notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        lambda: _coroutine_returning(["claude-jim"]))
+
+    run_async(monitor._scan())
+
+    assert sess.status == Status.BUSY
+    assert not any(e == "idle_prompt" for e, _ in calls)
+
+
+def test_busy_not_recovered_before_grace(monkeypatch, run_async, tmp_path):
+    # Quiet transcript + complete turn, but the session only just went BUSY.
+    tp = _write_transcript(tmp_path, _COMPLETE, age_seconds=IDLE_RECOVERY_GRACE + 5)
+    sess = _busy_session(tp, busy_age=1)
+    registry = SessionRegistry()
+    registry._sessions["claude-jim"] = sess
+
+    calls = []
+    async def _notify(s, event, ctx):
+        calls.append((event, ctx))
+    monitor = _mk_monitor(registry, _notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        lambda: _coroutine_returning(["claude-jim"]))
+
+    run_async(monitor._scan())
+
+    assert sess.status == Status.BUSY

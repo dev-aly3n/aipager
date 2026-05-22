@@ -17,7 +17,12 @@ import time
 from aipager.dtach import inject as dtach_inject
 from aipager.config import PANE_POLL_INTERVAL, STALE_BUSY_TIMEOUT
 from aipager.state import SessionRegistry, Status
-from aipager.transcript import last_assistant_preview
+from aipager.transcript import (
+    extract_last_response,
+    find_transcript,
+    last_assistant_preview,
+    turn_appears_complete,
+)
 
 log = logging.getLogger(__name__)
 
@@ -39,6 +44,18 @@ INTERACTIVE_TIMEOUT_SECONDS: float = float(
 # event (daemon restart, crash, dropped hook).
 SUBAGENT_TTL_SECONDS: float = float(
     os.environ.get("AIPAGER_SUBAGENT_TTL", "3600")
+)
+
+# Idle-recovery fallback. The normal BUSY→IDLE transition comes from
+# Claude's Stop hook (hook_receiver). If that hook is ever missed — e.g.
+# the user interrupts a pending permission then immediately sends a new
+# prompt — the session would animate "Thinking…" forever. When a BUSY
+# session's transcript shows the turn finished AND the file has been quiet
+# for this long, the monitor recovers it to IDLE the same way the hook
+# would. The grace must comfortably exceed normal hook latency so a
+# fast-completing turn is finalized by the hook, not raced by the monitor.
+IDLE_RECOVERY_GRACE: float = float(
+    os.environ.get("AIPAGER_IDLE_RECOVERY_GRACE", "8")
 )
 
 
@@ -140,6 +157,45 @@ class SessionMonitor:
                              "%d min)", sess.label, aid,
                              int(SUBAGENT_TTL_SECONDS / 60))
                     sess.active_subagents.pop(aid, None)
+
+            # Idle-recovery fallback: a missed Stop hook can strand a session
+            # in BUSY, animating forever. If the transcript shows the turn
+            # finished and the file has gone quiet, recover to IDLE exactly
+            # as the hook would (transition + idle_prompt notify finalizes
+            # the busy message and flushes the queue).
+            if sess.status == Status.BUSY:
+                tp = sess.transcript_path or find_transcript(name)
+                busy_for = (now - sess.busy_started_at) if sess.busy_started_at else 0.0
+                quiet_for = 0.0
+                if tp:
+                    try:
+                        quiet_for = time.time() - os.path.getmtime(tp)
+                    except OSError:
+                        quiet_for = 0.0
+                if (tp and busy_for >= IDLE_RECOVERY_GRACE
+                        and quiet_for >= IDLE_RECOVERY_GRACE
+                        and turn_appears_complete(tp)):
+                    log.warning(
+                        "[%s] BUSY but transcript shows the turn finished and has "
+                        "been quiet %.0fs — recovering to IDLE (missed Stop hook)",
+                        sess.label, quiet_for,
+                    )
+                    recovered = self.registry.transition(name, Status.IDLE)
+                    if recovered:
+                        summary = ""
+                        try:
+                            summary = extract_last_response(tp) or ""
+                        except Exception:
+                            log.debug("[%s] idle-recovery summary failed", name,
+                                      exc_info=True)
+                        try:
+                            await self.notify_fn(recovered, "idle_prompt",
+                                                 {"summary": summary})
+                        except Exception:
+                            log.warning("[%s] idle-recovery notify failed", name,
+                                        exc_info=True)
+                        self.registry.mark_dirty()
+                    continue  # handled this session this scan
 
             # Stale BUSY warning (existing)
             if sess.status != Status.BUSY or sess.stale_warned:
