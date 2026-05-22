@@ -67,8 +67,20 @@ def test_bash_rm_protected_blocked():
     assert bash_violation("rm -rf ~/.config/aipager", BASH) is not None
 
 
+def test_bash_read_of_aipager_dirs_blocked():
+    # Reading aipager's own config/state via Bash must be blocked too —
+    # path_violation only guards the Read/Edit tools, not Bash.
+    assert bash_violation("cat ~/.config/aipager/aipager.yaml", BASH) is not None
+    assert bash_violation("head -5 ~/.local/share/aipager/sessions/x", BASH) is not None
+    assert bash_violation("grep tok ~/.local/state/aipager/y", BASH) is not None
+    # ~/.claude/** reads are covered by the nested-claude pattern.
+    assert bash_violation("cat ~/.claude/settings.json", BASH) is not None
+
+
 def test_bash_innocent_allowed():
     assert bash_violation("ls -la && npm test", BASH) is None
+    # A project file that merely mentions "aipager" is NOT a protected dir.
+    assert bash_violation("cat ~/myproj/aipager-notes.md", BASH) is None
 
 
 # ---- tool_violation -----------------------------------------------------

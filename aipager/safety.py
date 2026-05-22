@@ -47,8 +47,18 @@ DENY_BASH_PATTERNS: tuple[str, ...] = (
     r"\baipager\s+(service|config|start)\b",
     r"\bsystemctl\b.*\baipager\b",
     r"\brm\b.*(\.config/aipager|\.claude|\.local/share/aipager)",
+    # Any command referencing aipager's own dirs — a Telegram session has
+    # no legitimate reason to read OR write them. path_violation only
+    # guards the Read/Glob/Edit tools, so without these a `cat`/`grep`/`cp`
+    # of these paths via Bash would exfiltrate the bot token / scopes.
+    # (~/.claude/** is covered by the \bclaude\b pattern below — keep that
+    # in mind before ever narrowing it.)
+    r"\.config/aipager\b",
+    r"\.local/share/aipager\b",
+    r"\.local/state/aipager\b",
     # Nested claude invocations + privilege flags (the flag is the
-    # smoking gun; catches obfuscated binary names too).
+    # smoking gun; catches obfuscated binary names too). Also incidentally
+    # blocks reads of ~/.claude/** via Bash.
     r"\bclaude\b",
     r"--append-system-prompt\b",
     r"--system-prompt\b",
