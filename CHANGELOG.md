@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-05-30
+
+### Fixed
+- **Recover stranded BUSY sessions when the Stop hook is missed.** If
+  Claude's Stop hook never reached the daemon (e.g. you interrupted a
+  pending permission and then immediately sent a new prompt), the
+  affected session used to sit in BUSY forever — the "Thinking…"
+  message animated indefinitely and new prompts queued behind it,
+  making the bot appear unresponsive. The session monitor now reads the
+  transcript every 2s and recovers a BUSY session to IDLE once the turn
+  has clearly ended (assistant entry with a non-`tool_use` stop_reason,
+  or a user interrupt marker) AND the transcript has been quiet for
+  ≥`AIPAGER_IDLE_RECOVERY_GRACE` seconds (default 8), firing the same
+  `idle_prompt` finalisation the hook would have done. Three guards
+  (turn-complete + transcript quiet + busy-duration) ensure the normal
+  Stop hook always wins on fast turns; a live turn is never cut short.
+
 ## [0.4.4] - 2026-05-22
 
 ### Security
