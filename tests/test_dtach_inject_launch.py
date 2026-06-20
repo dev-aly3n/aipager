@@ -86,3 +86,29 @@ def test_launch_session_rejects_when_cwd_missing(tmp_path, monkeypatch, run_asyn
     assert ok is False
     assert "original project dir is gone" in err
     assert str(bogus) in err
+
+
+def test_launch_session_strips_inherited_oauth_token(tmp_path, monkeypatch, run_async):
+    """A CLAUDE_CODE_OAUTH_TOKEN in the daemon env pins every spawned
+    claude to that token, overriding fresh creds from .credentials.json.
+    The launch must unset it so each session reads from credentials."""
+    captured = {}
+
+    async def _fake_exec(*args, **kwargs):
+        captured["args"] = args
+        return _make_proc(returncode=0)
+
+    monkeypatch.setattr(dtach_inject.asyncio, "create_subprocess_exec", _fake_exec)
+    calls = {"n": 0}
+
+    def _is_socket(self):
+        calls["n"] += 1
+        return calls["n"] > 1
+
+    monkeypatch.setattr(dtach_inject.Path, "is_socket", _is_socket)
+
+    ok, _ = run_async(dtach_inject.launch_session("jim"))
+    assert ok
+    bash_cmd = captured["args"][-1]
+    assert "unset CLAUDE_CODE_OAUTH_TOKEN" in bash_cmd
+    assert "unset CLAUDECODE" in bash_cmd

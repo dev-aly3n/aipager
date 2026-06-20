@@ -213,8 +213,16 @@ async def launch_session(
     # the binary refuses to launch a second time if it sees it ("already
     # inside a Claude Code session"). Strip it so /new sessions can launch
     # cleanly from inside a parent Claude.
+    #
+    # `unset CLAUDE_CODE_OAUTH_TOKEN`: a setup-token in this env var
+    # overrides `.credentials.json` for the whole process tree. Once the
+    # user has done `claude auth login` (broader OAuth scopes than the
+    # setup-token), keeping the env var around pins every dtach-spawned
+    # session to the stale setup-token and kills it on first API call.
+    # Strip it so spawned sessions read fresh OAuth from credentials.
     bash_cmd = (
         f"unset CLAUDECODE; "
+        f"unset CLAUDE_CODE_OAUTH_TOKEN; "
         f"export CLAUDE_DTACH_SESSION=claude-{name}; "
         f"{_CLAUDE_BIN} {perms} {resume} "
         f"--append-system-prompt {shlex.quote(sys_prompt)}"
