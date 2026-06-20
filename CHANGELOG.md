@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-06-20
+
+### Fixed
+- **Stop pinning spawned sessions to an inherited setup-token.** If the
+  daemon was started with `CLAUDE_CODE_OAUTH_TOKEN` in its environment
+  (the long-lived setup-token used to bootstrap containers), every
+  dtach-spawned claude inherited that token and used it for the whole
+  session, overriding any fresh credentials written by
+  `claude auth login`. When the setup-token expired or its scope was
+  too narrow, sessions died on the first API call. The launch wrapper
+  now unsets `CLAUDE_CODE_OAUTH_TOKEN` (alongside the existing
+  `unset CLAUDECODE`) so each session reads from `~/.claude/.credentials.json`.
+
 ## [0.4.5] - 2026-05-30
 
 ### Fixed
