@@ -154,10 +154,15 @@ async def _run_daemon(bot_username: str) -> None:
     from aipager.session_monitor import SessionMonitor
     from aipager.state import SessionRegistry
     from aipager.bot import TelegramBot
+    from aipager.claude_bootstrap import bootstrap_claude_settings
 
     if not BOT_TOKEN:
         log.error("CLAUDE_TG_BOT_TOKEN not set — run `aipager config` first")
         sys.exit(1)
+
+    # Write claude-code's first-run acceptance flags so dtach-launched
+    # sessions never block on dialogs a Telegram-only user can't dismiss.
+    bootstrap_claude_settings()
 
     log.info("connected as @%s, will message chat %s", bot_username, CHAT_ID)
 
