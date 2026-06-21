@@ -1,7 +1,8 @@
 """Idempotent first-run setup for Claude Code's user files.
 
-Two state files block claude-code's TUI on first launch and can't be
-dismissed over Telegram (the user can't see the dialog to tap "Yes"):
+Three things block a fresh container/headless aipager install from
+working over Telegram, because the wizard (``aipager config``) is
+normally what writes them:
 
 1. ``~/.claude/settings.json`` — without ``skipDangerousModePermissionPrompt``,
    claude shows a "WARNING: Bypass Permissions mode" picker every time
@@ -14,11 +15,16 @@ dismissed over Telegram (the user can't see the dialog to tap "Yes"):
    working directory, claude shows a "Do you trust this folder?" picker
    on launch in any new cwd. Same Telegram failure mode.
 
-Run on every ``aipager start`` because both flags are user-state that
-claude-code's wizard sets when the user accepts the prompt
-interactively — a Telegram-only user (containerized friend deploy,
-SSH-less host) never sees those prompts, so aipager has to write the
-acceptance for them.
+3. ``~/.claude/settings.json`` ``hooks`` + ``statusLine`` — without the
+   ``aipager-hook`` wired into ``UserPromptSubmit``/``Stop``/etc.,
+   the daemon never learns each session's transcript path and
+   ``claude_session_id``, so ``/resume`` has nothing to resume to and
+   safety/policy enforcement (PreToolUse) doesn't run.
+
+Run on every ``aipager start`` because these are all user-state that
+the wizard sets when the user accepts the prompts interactively — a
+Telegram-only user (containerized friend deploy, SSH-less host) never
+sees those prompts, so aipager has to write the acceptance for them.
 
 Best-effort: failures are logged at DEBUG and skipped so a missing
 ``~/.claude`` directory or non-writable filesystem never blocks daemon
@@ -30,6 +36,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
+import sys
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -37,6 +45,20 @@ log = logging.getLogger(__name__)
 
 _SETTINGS = Path.home() / ".claude" / "settings.json"
 _CLAUDE_JSON = Path.home() / ".claude.json"
+
+# Mirror the wizard's hook surface so containerized deploys get the
+# same coverage as `aipager config`. Kept in sync with
+# ``aipager.wizard._constants`` (the wizard is the canonical source
+# for users who run it; this module is the fallback for users who
+# don't).
+_HOOK_CMD = "aipager-hook"
+_STATUSLINE_CMD = "aipager-statusline"
+_HOOK_EVENTS = (
+    "SessionStart", "SessionEnd", "UserPromptSubmit",
+    "PreToolUse", "PostToolUse", "PermissionRequest",
+    "Notification", "Stop", "SubagentStop", "PreCompact",
+)
+_TOOL_MATCHER_EVENTS = {"PreToolUse", "PostToolUse", "PermissionRequest"}
 
 
 def _load(path: Path) -> dict:
@@ -88,9 +110,88 @@ def _ensure_workdir_trusted(workdir: str) -> bool:
     return True
 
 
+def _resolve(cmd: str) -> str | None:
+    """Resolve an aipager helper script to an absolute path.
+
+    Tries PATH, then the bin dir next to the running Python interpreter
+    (true for pip / uv tool / pipx / Docker installs). Returns None if
+    we can't find it — Claude Code does NOT augment PATH when running
+    hook commands, so a bare name silently breaks the hook.
+    """
+    found = shutil.which(cmd)
+    if found:
+        return found
+    candidate = Path(sys.executable).parent / cmd
+    if candidate.exists() and os.access(candidate, os.X_OK):
+        return str(candidate)
+    return None
+
+
+def _has_hook_cmd(entries: list, bare_name: str) -> bool:
+    for block in entries:
+        for hook in (block or {}).get("hooks", []):
+            cmd = (hook or {}).get("command", "")
+            if cmd == bare_name or cmd.endswith(f"/{bare_name}"):
+                return True
+    return False
+
+
+def _ensure_hooks_and_statusline() -> bool:
+    """Wire aipager-hook into every hook event + statusLine. Idempotent."""
+    hook_path = _resolve(_HOOK_CMD)
+    statusline_path = _resolve(_STATUSLINE_CMD)
+    if not hook_path:
+        log.debug("claude bootstrap: %s not on PATH; skipping hook wiring", _HOOK_CMD)
+        return False
+
+    settings = _load(_SETTINGS)
+    changed = False
+
+    hooks = settings.get("hooks")
+    if not isinstance(hooks, dict):
+        hooks = {}
+        settings["hooks"] = hooks
+        changed = True
+    entry = {"type": "command", "command": hook_path}
+    for event in _HOOK_EVENTS:
+        entries = hooks.get(event)
+        if not isinstance(entries, list):
+            entries = []
+            hooks[event] = entries
+            changed = True
+        if _has_hook_cmd(entries, _HOOK_CMD):
+            continue
+        if event in _TOOL_MATCHER_EVENTS:
+            entries.append({"matcher": "*", "hooks": [entry]})
+        else:
+            entries.append({"hooks": [entry]})
+        changed = True
+
+    # statusLine — keep an existing working entry; otherwise install ours.
+    existing_sl = settings.get("statusLine") or {}
+    existing_cmd = (existing_sl.get("command", "")
+                    if isinstance(existing_sl, dict) else "")
+    sl_good = bool(
+        existing_cmd and (
+            shutil.which(existing_cmd)
+            or (os.path.isabs(existing_cmd)
+                and os.path.exists(existing_cmd)
+                and os.access(existing_cmd, os.X_OK))
+        )
+    )
+    if not sl_good and statusline_path:
+        settings["statusLine"] = {"type": "command", "command": statusline_path}
+        changed = True
+
+    if changed:
+        _atomic_write(_SETTINGS, settings)
+    return changed
+
+
 def bootstrap_claude_settings(workdir: str | None = None) -> None:
-    """Write the two acceptance flags claude-code's wizard sets
-    interactively. Idempotent; safe to call on every daemon start.
+    """Write the acceptance flags + hooks that claude-code's wizard
+    would normally configure interactively. Idempotent; safe to call
+    on every daemon start.
 
     ``workdir`` defaults to the daemon's cwd (which is also the default
     cwd for spawned sessions — see ``dtach/inject.py:_PROJECT_DIR``).
@@ -107,3 +208,9 @@ def bootstrap_claude_settings(workdir: str | None = None) -> None:
             log.info("claude bootstrap: trusted %s in %s", workdir, _CLAUDE_JSON)
     except Exception:
         log.debug("claude bootstrap: failed to patch .claude.json", exc_info=True)
+    try:
+        if _ensure_hooks_and_statusline():
+            log.info("claude bootstrap: wired %s hooks + statusLine into %s",
+                     _HOOK_CMD, _SETTINGS)
+    except Exception:
+        log.debug("claude bootstrap: failed to wire hooks", exc_info=True)

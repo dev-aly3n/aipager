@@ -21,15 +21,18 @@ def test_writes_bypass_flag_to_empty_settings(tmp_path, monkeypatch):
 
 def test_preserves_existing_settings_keys(tmp_path, monkeypatch):
     settings = tmp_path / "settings.json"
-    settings.write_text(json.dumps({"theme": "dark", "hooks": {"PreToolUse": []}}))
+    settings.write_text(json.dumps({"theme": "dark", "myCustomKey": 42}))
     monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
     monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+    # No aipager-hook available — keeps this test focused on the bypass flag
+    monkeypatch.setattr(claude_bootstrap.shutil, "which", lambda cmd: None)
+    monkeypatch.setattr(claude_bootstrap.sys, "executable", "/nonexistent/python")
 
     claude_bootstrap.bootstrap_claude_settings("/workspace")
 
     data = json.loads(settings.read_text())
     assert data["theme"] == "dark"
-    assert data["hooks"] == {"PreToolUse": []}
+    assert data["myCustomKey"] == 42
     assert data["skipDangerousModePermissionPrompt"] is True
 
 
@@ -47,6 +50,9 @@ def test_trusts_workdir_in_claude_json(tmp_path, monkeypatch):
 def test_idempotent_on_already_set_flags(tmp_path, monkeypatch):
     settings = tmp_path / "settings.json"
     claude_json = tmp_path / ".claude.json"
+    # No aipager-hook available — keep the idempotency test focused
+    monkeypatch.setattr(claude_bootstrap.shutil, "which", lambda cmd: None)
+    monkeypatch.setattr(claude_bootstrap.sys, "executable", "/nonexistent/python")
     settings.write_text(json.dumps({"skipDangerousModePermissionPrompt": True}))
     claude_json.write_text(json.dumps({
         "projects": {"/workspace": {
@@ -97,3 +103,78 @@ def test_recovers_from_corrupted_settings(tmp_path, monkeypatch):
 
     data = json.loads(settings.read_text())
     assert data["skipDangerousModePermissionPrompt"] is True
+
+
+def test_wires_aipager_hook_when_helper_resolves(tmp_path, monkeypatch):
+    settings = tmp_path / "settings.json"
+    hook_bin = tmp_path / "aipager-hook"
+    hook_bin.write_text("#!/bin/sh\nexit 0\n")
+    hook_bin.chmod(0o755)
+    sl_bin = tmp_path / "aipager-statusline"
+    sl_bin.write_text("#!/bin/sh\nexit 0\n")
+    sl_bin.chmod(0o755)
+    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
+    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+    monkeypatch.setattr(claude_bootstrap.shutil, "which",
+                        lambda cmd: str(tmp_path / cmd) if cmd in {"aipager-hook", "aipager-statusline"} else None)
+
+    claude_bootstrap.bootstrap_claude_settings("/workspace")
+
+    data = json.loads(settings.read_text())
+    assert "hooks" in data
+    # Every event the wizard wires must be present
+    for event in ("SessionStart", "UserPromptSubmit", "PreToolUse", "Stop"):
+        entries = data["hooks"][event]
+        assert isinstance(entries, list) and entries, f"no entries for {event}"
+        cmds = [
+            h.get("command", "")
+            for block in entries
+            for h in block.get("hooks", [])
+        ]
+        assert any(c.endswith("/aipager-hook") for c in cmds), \
+            f"aipager-hook missing from {event}"
+    # PreToolUse should be tagged with matcher *
+    assert data["hooks"]["PreToolUse"][0].get("matcher") == "*"
+    # statusLine wired
+    assert data["statusLine"]["command"].endswith("/aipager-statusline")
+
+
+def test_hooks_idempotent_no_duplicate(tmp_path, monkeypatch):
+    settings = tmp_path / "settings.json"
+    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
+    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+    monkeypatch.setattr(claude_bootstrap.shutil, "which",
+                        lambda cmd: f"/usr/bin/{cmd}" if cmd in {"aipager-hook", "aipager-statusline"} else None)
+
+    claude_bootstrap.bootstrap_claude_settings("/workspace")
+    claude_bootstrap.bootstrap_claude_settings("/workspace")
+
+    data = json.loads(settings.read_text())
+    for event in claude_bootstrap._HOOK_EVENTS:
+        entries = data["hooks"][event]
+        cmds = [
+            h.get("command", "")
+            for block in entries
+            for h in block.get("hooks", [])
+        ]
+        aipager_count = sum(1 for c in cmds if c.endswith("/aipager-hook"))
+        assert aipager_count == 1, f"{event} has {aipager_count} aipager-hook entries"
+
+
+def test_skips_hook_wiring_when_helper_missing(tmp_path, monkeypatch):
+    """If aipager-hook isn't on PATH (broken install), don't write a
+    bare command that claude can't execute."""
+    settings = tmp_path / "settings.json"
+    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
+    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+    monkeypatch.setattr(claude_bootstrap.shutil, "which", lambda cmd: None)
+    monkeypatch.setattr(claude_bootstrap.sys, "executable", "/nonexistent/python")
+
+    claude_bootstrap.bootstrap_claude_settings("/workspace")
+
+    data = json.loads(settings.read_text())
+    # Bypass flag still set — that doesn't depend on aipager-hook resolution
+    assert data["skipDangerousModePermissionPrompt"] is True
+    # But hooks absent — we don't want a bare "aipager-hook" claude can't run
+    assert "hooks" not in data
+    assert "statusLine" not in data
