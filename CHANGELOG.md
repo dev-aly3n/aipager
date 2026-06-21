@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.8] - 2026-06-21
+
+### Fixed
+- **Auto-wire `aipager-hook` + `statusLine` into `~/.claude/settings.json`
+  at daemon start.** Containerized / scripted installs that skip
+  `aipager config` had no hooks configured in Claude Code, which meant
+  the daemon never learned each session's transcript path or session id
+  — so `/resume` always returned an empty picker, the Stop-hook BUSY→IDLE
+  fast path couldn't fire, and PreToolUse safety enforcement didn't run.
+  The boot-time bootstrap (introduced in 0.4.7) now also writes the same
+  hook entries the wizard would write, idempotently. Skips silently when
+  `aipager-hook` isn't on PATH (broken install — don't poison settings
+  with a command Claude can't execute).
+
 ## [0.4.7] - 2026-06-21
 
 ### Fixed
