@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.7] - 2026-06-21
+
+### Fixed
+- **Bootstrap Claude Code's first-run acceptance flags on `aipager start`.**
+  Sessions launched with `--dangerously-skip-permissions` (from `/new !name`)
+  used to die instantly on the first prompt: Claude shows a "WARNING: Bypass
+  Permissions mode" confirmation picker that the user can't see or dismiss
+  over Telegram, so their first message arrives as Enter on the default
+  "No, exit" option. Likewise a fresh working directory triggers the
+  "Do you trust this folder?" picker the same way. The daemon now idempotently
+  writes `skipDangerousModePermissionPrompt: true` to `~/.claude/settings.json`
+  and trusts the daemon's working directory in `~/.claude.json` at startup,
+  so both pickers are pre-accepted by the time the first session launches.
+  Affects users who deploy the container image or skip the wizard.
+
 ## [0.4.6] - 2026-06-20
 
 ### Fixed
