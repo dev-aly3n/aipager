@@ -161,9 +161,41 @@ def test_detect_api_error_rate_limit_extracts_alt_format(run_async):
 
 
 def test_detect_api_error_rate_limit_extracts_cooldown(run_async):
-    text = "rate_limit hit; 45 second cooldown"
+    text = "rate_limit_error: 45 second cooldown"
     msg, retry = _detect_api_error(text)
     assert retry == 45
+
+
+def test_detect_api_error_ignores_prose_about_third_party_rate_limit(run_async):
+    """Claude often discusses third-party rate limits in its prose (e.g.
+    'Waiting on the NearBlocks rate-limit'). That MUST NOT trigger the
+    Anthropic rate-limit warning — only real API error markers do.
+    Reported on 2026-06-25 in a multi-turn convo about NearBlocks."""
+    prose = (
+        "He's writing a script to decode every envelope per stable trade "
+        "and isolate the solver's actual cut, separate from the aggregator's "
+        "appFee. NearBlocks rate-limited him so he's waiting it out, then "
+        "running."
+    )
+    assert _detect_api_error(prose) is None
+    assert _detect_api_error("Waiting on the NearBlocks rate-limit") is None
+    assert _detect_api_error("hit the rate limit on a third-party service") is None
+
+
+def test_detect_api_error_matches_canonical_anthropic_body(run_async):
+    """Anthropic's verbatim 429 message body should match even without
+    the explicit ``API Error: 429`` prefix."""
+    body = "This request would exceed your account's rate limit. Please try again later."
+    result = _detect_api_error(body)
+    assert result is not None
+    msg, _ = result
+    assert "Rate limit" in msg
+
+
+def test_detect_api_error_matches_http_429(run_async):
+    """The ``HTTP 429: rate_limit_error`` shape observed in claude-code logs."""
+    result = _detect_api_error("HTTP 429: rate_limit_error: too many requests")
+    assert result is not None
 
 
 def test_detect_api_error_rate_limit_without_seconds_keeps_generic(run_async):

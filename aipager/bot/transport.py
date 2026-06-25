@@ -321,7 +321,19 @@ _ERROR_PATTERNS: list[tuple[re.Pattern, str, str]] = [
     (re.compile(r"API Error:\s*529|overloaded_error|overloaded", re.I),
      "Anthropic's servers are overloaded. Try again in a moment.",
      "overload"),
-    (re.compile(r"API Error:\s*429|rate_limit_error|rate.?limit", re.I),
+    # NOTE: do NOT add a bare ``rate.?limit`` alternation — claude often
+    # discusses third-party APIs hitting rate limits in its prose (e.g.
+    # "Waiting on the NearBlocks rate-limit"), which would trigger this
+    # warning falsely. Anchor on tokens that only appear in real
+    # Anthropic errors: the structured ``rate_limit_error`` token, a
+    # ``429`` / ``HTTP 429`` status, or the verbatim canonical body.
+    (re.compile(
+        r"API Error:\s*429"
+        r"|HTTP 429"
+        r"|rate_limit_error"
+        r"|This request would exceed your account's rate limit",
+        re.I,
+     ),
      "Rate limit hit. Wait a moment before retrying.",
      "rate_limit"),
     (re.compile(r"connection.?(error|reset|refused|timeout)|ECONNR|network.?error", re.I),
