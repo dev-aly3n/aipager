@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.9] - 2026-06-25
+
+### Fixed
+- **Don't show "Rate limit hit" when Claude is just talking about rate
+  limits in its reply.** The error-detection regex matched any
+  occurrence of "rate limit" / "rate-limit" / "ratelimit" anywhere in
+  Claude's final-turn text, so casual prose like "Waiting on the
+  NearBlocks rate-limit" triggered a false-positive warning bubble on
+  Telegram even though the API call had succeeded. The matcher is now
+  anchored on tokens that only appear in real Anthropic errors
+  (`API Error: 429`, `HTTP 429`, the structured `rate_limit_error`
+  token, and the canonical body "This request would exceed your
+  account's rate limit"). Reported via Telegram on 2026-06-25.
+
 ## [0.4.8] - 2026-06-21
 
 ### Fixed
