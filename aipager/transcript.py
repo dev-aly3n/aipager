@@ -174,6 +174,13 @@ def turn_appears_complete(transcript_path: str) -> bool:
         # Hook/bookkeeping records carry no turn signal — skip past them.
         if etype in ("system", "file-history-snapshot", "summary"):
             continue
+        # Newer claude-code appends sidecar records after the final
+        # assistant message (last-prompt, ai-title, mode, permission-mode,
+        # …). They never carry a "message" field, while real turn entries
+        # (assistant/user) always do — skip anything message-less so new
+        # sidecar types can't strand a finished turn in BUSY.
+        if "message" not in entry:
+            continue
 
         msg = entry.get("message") or {}
         if etype == "assistant":

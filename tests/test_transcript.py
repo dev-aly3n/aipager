@@ -300,3 +300,38 @@ def test_turn_complete_on_user_interrupt(tmp_path):
 def test_turn_complete_missing_path_is_false():
     assert transcript.turn_appears_complete("") is False
     assert transcript.turn_appears_complete("/no/such/file.jsonl") is False
+
+
+def test_turn_complete_skips_messageless_sidecar_entries(tmp_path):
+    # Newer claude-code appends bookkeeping records after the final
+    # assistant message. None carry a "message" field, so they must be
+    # skipped when walking the tail — otherwise a finished turn is never
+    # detected and the busy bubble animates forever.
+    path = _write_jsonl(tmp_path, [
+        {"type": "user", "message": {"role": "user", "content": "hello"}},
+        {"type": "assistant", "message": {
+            "role": "assistant",
+            "content": [{"type": "text", "text": "Done."}],
+            "stop_reason": "end_turn"}},
+        {"type": "system"},
+        {"type": "last-prompt", "lastPrompt": "hello", "sessionId": "s1"},
+        {"type": "ai-title", "aiTitle": "Greeting", "sessionId": "s1"},
+        {"type": "mode", "mode": "default", "sessionId": "s1"},
+        {"type": "permission-mode", "permissionMode": "bypassPermissions",
+         "sessionId": "s1"},
+    ])
+    assert transcript.turn_appears_complete(path) is True
+
+
+def test_turn_incomplete_on_unknown_message_bearing_entry(tmp_path):
+    # An unknown entry type that DOES carry a message must still hit the
+    # conservative branch — never cut a possibly-live turn short.
+    path = _write_jsonl(tmp_path, [
+        {"type": "assistant", "message": {
+            "role": "assistant",
+            "content": [{"type": "text", "text": "Done."}],
+            "stop_reason": "end_turn"}},
+        {"type": "mystery-turn", "message": {"role": "assistant",
+                                             "content": "..."}},
+    ])
+    assert transcript.turn_appears_complete(path) is False
