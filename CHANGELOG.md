@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.10] - 2026-07-10
+
+### Fixed
+- **/resume picker buttons now work for scoped session names.** The
+  picker's callback derived the session label by stripping the
+  `claude-` prefix from the internal name, which left the scope suffix
+  (`name__d<chat_id>`) attached — so the resume lookup, which matches
+  on the user-facing label, always failed with "No session named X in
+  history". The callback now resolves the label from the registry
+  entry, the same way the /new conflict handler already did. Typing
+  `/resume <name>` by hand was unaffected.
+
 ## [0.4.9] - 2026-06-25
 
 ### Fixed
