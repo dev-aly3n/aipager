@@ -350,6 +350,24 @@ def test_resume_callback_invokes_do_resume(mk_bot, mk_query, run_async):
     assert bot._do_resume.await_args.kwargs["label"] == "jim"
 
 
+def test_resume_callback_resolves_label_for_suffixed_name(
+        mk_bot, mk_query, run_async):
+    # Suffixed names (label__d<chat_id>) must resolve to the registry
+    # label, not the prefix-stripped internal name — _do_resume looks up
+    # sessions via find_by_label.
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-newName__d1921747733",
+                          label="newName", status=Status.GONE)
+    sess.claude_session_id = "UUID-2"
+    sess.gone_at = 1234.0
+    bot.registry._sessions[sess.name] = sess
+    bot._do_resume = AsyncMock()
+    update, query = mk_query("claude-newName__d1921747733:resume")
+    run_async(bot._handle_callback(update, MagicMock()))
+    bot._do_resume.assert_awaited_once()
+    assert bot._do_resume.await_args.kwargs["label"] == "newName"
+
+
 def test_resume_page_edits_picker(mk_bot, mk_query, run_async):
     bot = mk_bot()
     # Populate enough GONE sessions to render a picker

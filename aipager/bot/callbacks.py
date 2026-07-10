@@ -251,7 +251,11 @@ class CallbackDispatchMixin:
 
         # ---- /resume picker callbacks ---------------------------------
         if action == "resume" and session_name and session_name != "_":
-            label = session_name.removeprefix("claude-")
+            # Resolve the user-facing label from the registry: suffixed
+            # names (label__d<chat_id>) don't round-trip through a plain
+            # prefix strip, and _do_resume matches on sess.label.
+            sess = self.registry.get(session_name)
+            label = sess.label if sess else session_name.removeprefix("claude-")
             # Edit the picker message into a "Resuming…" stub so the user
             # sees feedback even before launch_session returns.
             try:
