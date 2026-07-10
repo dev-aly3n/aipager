@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.11] - 2026-07-10
+
+### Fixed
+- **Sessions no longer strand in BUSY when the Stop hook is missed.**
+  Newer claude-code appends bookkeeping records (`last-prompt`,
+  `ai-title`, `mode`, `permission-mode`) after the final assistant
+  message. The idle-recovery detector treated them as unknown tail
+  entries and refused to declare the turn finished, so the Telegram
+  busy bubble animated forever. The tail-walk now skips any record
+  without a `message` field — real turn entries always carry one —
+  while unknown message-bearing types still conservatively count as
+  turn-in-progress.
+
 ## [0.4.10] - 2026-07-10
 
 ### Fixed
