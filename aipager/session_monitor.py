@@ -15,7 +15,11 @@ import os
 import time
 
 from aipager.dtach import inject as dtach_inject
-from aipager.config import PANE_POLL_INTERVAL, STALE_BUSY_TIMEOUT
+from aipager.config import (
+    PANE_POLL_INTERVAL,
+    STALE_BUSY_TIMEOUT,
+    TOOL_INFLIGHT_MAX_SECONDS,
+)
 from aipager.state import SessionRegistry, Status
 from aipager.transcript import (
     extract_last_response,
@@ -202,6 +206,18 @@ class SessionMonitor:
                 continue
             baseline = sess.last_hook_at or sess.busy_started_at
             if baseline and (now - baseline) > STALE_BUSY_TIMEOUT:
+                # A tool call is legitimately in flight — no hooks fire
+                # between PreToolUse and PostToolUse, so the session
+                # looks quiet even though it's working. Stand down
+                # until either the tool finishes (PostToolUse clears
+                # pending_tool_started_at) or the tool itself has been
+                # running long enough to count as genuinely wedged.
+                # stale_warned stays False so the check re-arms as soon
+                # as the tool completes.
+                tool_start = sess.pending_tool_started_at
+                if (tool_start is not None
+                        and (now - tool_start) < TOOL_INFLIGHT_MAX_SECONDS):
+                    continue
                 sess.stale_warned = True
                 stale_mins = int((now - baseline) / 60)
                 try:

@@ -298,6 +298,30 @@ def test_post_tool_use_fires_tool_done(receiver, run_async):
     assert event == "tool_done"
 
 
+def test_pre_tool_use_marks_tool_in_flight(receiver, run_async):
+    registry, recv, _ = receiver
+    _send(recv, run_async,
+          hook_event_name="PreToolUse",
+          session="claude-jim",
+          tool_name="Bash",
+          tool_input={"command": "ls"})
+    sess = registry.get("claude-jim")
+    assert sess.pending_tool_started_at is not None
+    assert sess.pending_tool_started_at <= time.monotonic()
+
+
+def test_post_tool_use_clears_tool_in_flight(receiver, run_async):
+    registry, recv, _ = receiver
+    sess = registry.get_or_create("claude-jim")
+    sess.pending_tool_started_at = time.monotonic() - 10.0
+    _send(recv, run_async,
+          hook_event_name="PostToolUse",
+          session="claude-jim",
+          tool_name="Bash",
+          tool_input={"command": "ls"})
+    assert sess.pending_tool_started_at is None
+
+
 def test_post_tool_use_failure_fires_tool_failed(receiver, run_async):
     _, recv, notify_fn = receiver
     _send(recv, run_async,
@@ -307,6 +331,18 @@ def test_post_tool_use_failure_fires_tool_failed(receiver, run_async):
           tool_input={"command": "ls"})
     _, event, _ = notify_fn.await_args.args
     assert event == "tool_failed"
+
+
+def test_post_tool_use_failure_clears_tool_in_flight(receiver, run_async):
+    registry, recv, _ = receiver
+    sess = registry.get_or_create("claude-jim")
+    sess.pending_tool_started_at = time.monotonic() - 10.0
+    _send(recv, run_async,
+          hook_event_name="PostToolUseFailure",
+          session="claude-jim",
+          tool_name="Bash",
+          tool_input={"command": "ls"})
+    assert sess.pending_tool_started_at is None
 
 
 def test_subagent_start_records_in_session(receiver, run_async):

@@ -143,6 +143,13 @@ class TrackedSession:
     # Stale session detection
     last_hook_at: float = 0.0        # monotonic timestamp of last hook event received
     stale_warned: bool = False       # prevents re-alerting every scan cycle
+    # Monotonic timestamp of the most recent PreToolUse hook when the
+    # matching PostToolUse hasn't fired yet — i.e. a tool call is
+    # legitimately in flight, so the "no hooks for 2 min" stale detector
+    # should stand down. Never persisted: a monotonic value is
+    # meaningless across daemon restarts, and a fresh daemon should
+    # start with in-flight state clear.
+    pending_tool_started_at: float | None = None
     # Team-mode attribution (None in personal mode). `created_by` is the
     # user who first created/owns the session; `last_driver` is whoever
     # most recently injected a prompt into it — used to attribute

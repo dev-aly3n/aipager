@@ -152,3 +152,78 @@ def test_loop_swallows_scan_exception(monkeypatch, run_async):
     run_async(_go())
     # _scan ran twice — the first error was swallowed and the loop iterated again
     assert calls["n"] >= 2
+
+
+# ---- _scan: stale_busy suppressed while a tool call is in flight -------
+
+def test_scan_stale_busy_suppressed_during_tool_in_flight(monkeypatch, run_async):
+    """A tool that runs longer than STALE_BUSY_TIMEOUT must NOT trigger the
+    'stuck' warning, because no hooks fire between PreToolUse and
+    PostToolUse. The check must re-arm after the tool finishes, so
+    stale_warned stays False."""
+    from aipager.session_monitor import STALE_BUSY_TIMEOUT
+    registry = SessionRegistry()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    # No hooks for 3 min — beyond STALE_BUSY_TIMEOUT (default 120s).
+    sess.last_hook_at = time.monotonic() - STALE_BUSY_TIMEOUT - 60
+    # Tool started 3 min ago — well under the 15 min cap.
+    sess.pending_tool_started_at = time.monotonic() - 180.0
+    registry._sessions["claude-jim"] = sess
+
+    notify = AsyncMock()
+    monitor = _mk_monitor(registry, notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        AsyncMock(return_value=["claude-jim"]))
+    run_async(monitor._scan())
+
+    notify.assert_not_awaited()
+    assert sess.stale_warned is False  # re-armed for post-tool
+
+
+def test_scan_stale_busy_fires_when_tool_exceeds_inflight_cap(monkeypatch,
+                                                              run_async):
+    """A tool that has been in flight beyond TOOL_INFLIGHT_MAX_SECONDS is
+    treated as genuinely wedged — the warning must fire."""
+    from aipager.session_monitor import (
+        STALE_BUSY_TIMEOUT,
+        TOOL_INFLIGHT_MAX_SECONDS,
+    )
+    registry = SessionRegistry()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.last_hook_at = time.monotonic() - STALE_BUSY_TIMEOUT - 60
+    # Tool started 16 min ago — over the 15 min cap.
+    sess.pending_tool_started_at = (
+        time.monotonic() - TOOL_INFLIGHT_MAX_SECONDS - 60
+    )
+    registry._sessions["claude-jim"] = sess
+
+    notify = AsyncMock()
+    monitor = _mk_monitor(registry, notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        AsyncMock(return_value=["claude-jim"]))
+    run_async(monitor._scan())
+
+    notify.assert_awaited_once()
+    assert notify.await_args.args[1] == "stale_busy"
+    assert sess.stale_warned is True
+
+
+def test_scan_stale_busy_fires_when_no_tool_in_flight(monkeypatch, run_async):
+    """Preserve existing behavior: no tool in flight, 2+ min of quiet →
+    warning fires. Regression guard for the plain 'stuck' path."""
+    from aipager.session_monitor import STALE_BUSY_TIMEOUT
+    registry = SessionRegistry()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.last_hook_at = time.monotonic() - STALE_BUSY_TIMEOUT - 60
+    sess.pending_tool_started_at = None  # nothing in flight
+    registry._sessions["claude-jim"] = sess
+
+    notify = AsyncMock()
+    monitor = _mk_monitor(registry, notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        AsyncMock(return_value=["claude-jim"]))
+    run_async(monitor._scan())
+
+    notify.assert_awaited_once()
+    assert notify.await_args.args[1] == "stale_busy"
+    assert sess.stale_warned is True

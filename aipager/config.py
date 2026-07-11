@@ -121,6 +121,18 @@ BUSY_EDIT_INTERVAL: float = 3.0
 # (extended thinking, big WebSearch). Override via the env var.
 STALE_BUSY_TIMEOUT: float = float(os.environ.get("STALE_BUSY_TIMEOUT", "120"))
 
+# Upper bound on how long a single tool call may run before the stale
+# busy detector fires anyway. When a PreToolUse hook has fired without a
+# matching PostToolUse, the session is legitimately "quiet" — no hooks
+# emit mid-tool — so the STALE_BUSY_TIMEOUT is suppressed. This cap
+# guards against a genuinely wedged tool (network hang, subprocess
+# spinning) never surfacing. 15 minutes is long enough for real work
+# (large git clones, deep WebSearches, multi-minute relay round-trips)
+# and short enough that a wedged session still surfaces the same day.
+TOOL_INFLIGHT_MAX_SECONDS: float = float(
+    os.environ.get("TOOL_INFLIGHT_MAX_SECONDS", "900")
+)
+
 # Spinner verbs for animated busy messages (curated from Claude Code's terminal spinner)
 SPINNER_VERBS: list[str] = [
     "Thinking", "Reasoning", "Pondering", "Considering", "Analyzing",

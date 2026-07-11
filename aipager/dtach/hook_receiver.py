@@ -315,6 +315,11 @@ class HookReceiver:
             if tool_name:
                 summary = _summarize_tool(tool_name, tool_input)
                 sess = self.registry.get_or_create(session_name)
+                # Mark tool-in-flight so session_monitor's stale-busy
+                # warning stands down for the duration — no hooks fire
+                # between PreToolUse and PostToolUse, so a long tool
+                # otherwise looks like a wedged session.
+                sess.pending_tool_started_at = time.monotonic()
                 # Ensure we're in BUSY state
                 if sess.status != Status.BUSY:
                     self.registry.transition(session_name, Status.BUSY)
@@ -352,6 +357,7 @@ class HookReceiver:
             if tool_name:
                 summary = _summarize_tool(tool_name, msg.get("tool_input", {}))
                 sess = self.registry.get_or_create(session_name)
+                sess.pending_tool_started_at = None
                 await self.notify_fn(sess, "tool_done", {
                     "tool_name": tool_name,
                     "tool_summary": summary,
@@ -362,6 +368,7 @@ class HookReceiver:
             if tool_name:
                 summary = _summarize_tool(tool_name, msg.get("tool_input", {}))
                 sess = self.registry.get_or_create(session_name)
+                sess.pending_tool_started_at = None
                 await self.notify_fn(sess, "tool_failed", {
                     "tool_name": tool_name,
                     "tool_summary": summary,
@@ -416,6 +423,7 @@ class HookReceiver:
             source = msg.get("source", "unknown")
             self.registry.transition(session_name, Status.GONE)
             sess.last_prompt_origin = "telegram"  # fail-closed between turns
+            sess.pending_tool_started_at = None
             await self.notify_fn(sess, "session_end", {"source": source})
 
         elif event == "PreCompact":
@@ -540,6 +548,7 @@ class HookReceiver:
             _idle = self.registry.get(session_name)
             if _idle is not None:
                 _idle.last_prompt_origin = "telegram"
+                _idle.pending_tool_started_at = None
             sess = self.registry.transition(session_name, Status.IDLE)
             if sess is None:
                 # Force notification if there's an undelivered response
