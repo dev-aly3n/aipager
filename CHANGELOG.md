@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.12] - 2026-07-11
+
+### Fixed
+- **No more false "Stuck on Working for 2+ min" alert during long tool
+  calls.** The stale-busy detector fired whenever no hook event
+  arrived for 2 minutes, but no hooks fire between a `PreToolUse` and
+  its matching `PostToolUse` — so any single Bash / WebSearch / large
+  fetch that ran longer than the threshold triggered the alarm with
+  misleading advice about credit balances. The monitor now tracks
+  tool-in-flight state and stands down for up to 15 minutes; genuinely
+  wedged tools still surface at the cap. Env-overridable via
+  `TOOL_INFLIGHT_MAX_SECONDS`.
+- **`aipager config` wizard now lets you pick `owner` when adding a
+  DM scope.** For single-tenant friend deployments (one friend per
+  container, they own the whole thing), the correct role is `owner`,
+  but the wizard was actively hiding that option — so every friend
+  was silently created as `user` and had legitimate operations blocked
+  by the safety floor. Default is still `user` so multi-user daemons
+  don't accidentally grant bypass.
+
 ## [0.4.11] - 2026-07-10
 
 ### Fixed
