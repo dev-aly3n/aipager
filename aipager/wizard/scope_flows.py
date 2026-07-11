@@ -75,9 +75,15 @@ def add_dm_scope(token: str, bot_username: str) -> bool:
     if captured is None:
         friendly_warn("Cancelled — no DM scope added.")
         return False
+    # A DM scope has exactly one member. Single-tenant deployments (one
+    # friend per aipager container, they own everything) legitimately
+    # need `owner` for that member — otherwise the safety floor blocks
+    # basic work for the container's sole user. Keep the default at
+    # "user" so a multi-user daemon isn't tricked into granting bypass;
+    # the operator picks owner explicitly when that's the setup.
     role = _pick_role(
         f"Role for @{captured['label']} in their DM:",
-        default="user", include_owner=False,
+        default="user", include_owner=True,
     )
     scope = Scope(
         chat_id=captured["id"], kind="dm", label=f"{captured['label']} DM",

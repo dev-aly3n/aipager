@@ -80,6 +80,32 @@ def test_add_dm_scope_writes(env, monkeypatch):
     assert bob.members[0].role == "user"
 
 
+def test_add_dm_scope_offers_owner_role(env, monkeypatch):
+    # A DM scope has one member; single-tenant deployments legitimately
+    # need `owner` for that member. The picker must include it.
+    from aipager.scope import Member, Scope
+    _scope.dump_scopes(
+        [Scope(chat_id=1, kind="dm", label="owner DM",
+               members=(Member(id=1, label="owner", role="owner"),))],
+        "TOK", _scope.CONFIG_PATH,
+    )
+    _stub_captures(monkeypatch, [{"id": 555, "label": "bob"}])
+    seen = {}
+
+    def _capture(prompt, *, default="user", include_owner=True):
+        seen["include_owner"] = include_owner
+        seen["default"] = default
+        return "owner"
+
+    monkeypatch.setattr(scope_flows, "_pick_role", _capture)
+    assert scope_flows.add_dm_scope("TOK", "bot") is True
+    assert seen["include_owner"] is True  # picker must expose owner
+    assert seen["default"] == "user"      # but not default to it
+    scopes, _ = _scope.load_scopes(_scope.CONFIG_PATH)
+    bob = next(s for s in scopes if s.chat_id == 555)
+    assert bob.members[0].role == "owner"
+
+
 def test_add_dm_scope_cancel(env, monkeypatch):
     from aipager.scope import Member, Scope
     _scope.dump_scopes(
