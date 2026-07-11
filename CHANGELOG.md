@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.13] - 2026-07-11
+
+### Fixed
+- **Headless / setup-token installs no longer break with "Not logged
+  in · Please run /login".** Every spawned session used to strip
+  `CLAUDE_CODE_OAUTH_TOKEN` from its environment on the assumption
+  that a fresh `~/.claude/.credentials.json` was authoritative. On
+  headless hosts that use `claude setup-token` — where the env var
+  IS the primary credential and the credentials file is missing or
+  stale — this killed auth on every new session. The strip is now
+  conditional on the credentials file being present and unexpired;
+  otherwise the env token is kept intact. Reminder for headless
+  operators: export `CLAUDE_CODE_OAUTH_TOKEN` in whichever process
+  starts the daemon (systemd unit, docker run `-e`, or the shell
+  running `aipager start`) so spawned sessions inherit it.
+
 ## [0.4.12] - 2026-07-11
 
 ### Fixed
