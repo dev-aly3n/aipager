@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import time
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 from aipager.dtach import inject as dtach_inject
@@ -91,7 +94,8 @@ def test_launch_session_rejects_when_cwd_missing(tmp_path, monkeypatch, run_asyn
 def test_launch_session_strips_inherited_oauth_token(tmp_path, monkeypatch, run_async):
     """A CLAUDE_CODE_OAUTH_TOKEN in the daemon env pins every spawned
     claude to that token, overriding fresh creds from .credentials.json.
-    The launch must unset it so each session reads from credentials."""
+    When the credentials file is fresh, the launch strips the env token
+    so each session reads from credentials."""
     captured = {}
 
     async def _fake_exec(*args, **kwargs):
@@ -106,9 +110,109 @@ def test_launch_session_strips_inherited_oauth_token(tmp_path, monkeypatch, run_
         return calls["n"] > 1
 
     monkeypatch.setattr(dtach_inject.Path, "is_socket", _is_socket)
+    monkeypatch.setattr(dtach_inject, "_credentials_file_is_fresh",
+                        lambda: True)
 
     ok, _ = run_async(dtach_inject.launch_session("jim"))
     assert ok
     bash_cmd = captured["args"][-1]
     assert "unset CLAUDE_CODE_OAUTH_TOKEN" in bash_cmd
     assert "unset CLAUDECODE" in bash_cmd
+
+
+def test_launch_session_keeps_oauth_token_when_no_credentials_file(
+        tmp_path, monkeypatch, run_async):
+    """Headless / setup-token deployments have no fresh credentials
+    file; the env token IS the credential. Stripping it kills the only
+    working auth, so the launch must keep it."""
+    captured = {}
+
+    async def _fake_exec(*args, **kwargs):
+        captured["args"] = args
+        return _make_proc(returncode=0)
+
+    monkeypatch.setattr(dtach_inject.asyncio, "create_subprocess_exec", _fake_exec)
+    calls = {"n": 0}
+
+    def _is_socket(self):
+        calls["n"] += 1
+        return calls["n"] > 1
+
+    monkeypatch.setattr(dtach_inject.Path, "is_socket", _is_socket)
+    monkeypatch.setattr(dtach_inject, "_credentials_file_is_fresh",
+                        lambda: False)
+
+    ok, _ = run_async(dtach_inject.launch_session("jim"))
+    assert ok
+    bash_cmd = captured["args"][-1]
+    assert "unset CLAUDE_CODE_OAUTH_TOKEN" not in bash_cmd
+    assert "unset CLAUDECODE" in bash_cmd  # unrelated, always stripped
+
+
+# ---- _credentials_file_is_fresh ---------------------------------------
+
+def _write_creds(home: str, payload) -> None:
+    """Write a payload to <home>/.claude/.credentials.json."""
+    d = Path(home) / ".claude"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / ".credentials.json").write_text(
+        payload if isinstance(payload, str) else json.dumps(payload)
+    )
+
+
+def _patch_home(monkeypatch, tmp_path):
+    monkeypatch.setattr(dtach_inject.Path, "home",
+                        classmethod(lambda cls: tmp_path))
+
+
+def test_credentials_file_is_fresh_missing_file_returns_false(
+        tmp_path, monkeypatch):
+    _patch_home(monkeypatch, tmp_path)
+    assert dtach_inject._credentials_file_is_fresh() is False
+
+
+def test_credentials_file_is_fresh_malformed_json_returns_false(
+        tmp_path, monkeypatch):
+    _patch_home(monkeypatch, tmp_path)
+    _write_creds(str(tmp_path), "{not valid json")
+    assert dtach_inject._credentials_file_is_fresh() is False
+
+
+def test_credentials_file_is_fresh_missing_oauth_key_returns_false(
+        tmp_path, monkeypatch):
+    _patch_home(monkeypatch, tmp_path)
+    _write_creds(str(tmp_path), {"otherKey": {"expiresAt": 999}})
+    assert dtach_inject._credentials_file_is_fresh() is False
+
+
+def test_credentials_file_is_fresh_missing_expires_at_returns_false(
+        tmp_path, monkeypatch):
+    _patch_home(monkeypatch, tmp_path)
+    _write_creds(str(tmp_path), {"claudeAiOauth": {"accessToken": "x"}})
+    assert dtach_inject._credentials_file_is_fresh() is False
+
+
+def test_credentials_file_is_fresh_expired_returns_false(
+        tmp_path, monkeypatch):
+    _patch_home(monkeypatch, tmp_path)
+    past_ms = int((time.time() - 3600) * 1000)
+    _write_creds(str(tmp_path),
+                 {"claudeAiOauth": {"expiresAt": past_ms}})
+    assert dtach_inject._credentials_file_is_fresh() is False
+
+
+def test_credentials_file_is_fresh_future_returns_true(
+        tmp_path, monkeypatch):
+    _patch_home(monkeypatch, tmp_path)
+    future_ms = int((time.time() + 3600) * 1000)
+    _write_creds(str(tmp_path),
+                 {"claudeAiOauth": {"expiresAt": future_ms}})
+    assert dtach_inject._credentials_file_is_fresh() is True
+
+
+def test_credentials_file_is_fresh_wrong_type_returns_false(
+        tmp_path, monkeypatch):
+    _patch_home(monkeypatch, tmp_path)
+    _write_creds(str(tmp_path),
+                 {"claudeAiOauth": {"expiresAt": "not a number"}})
+    assert dtach_inject._credentials_file_is_fresh() is False

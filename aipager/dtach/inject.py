@@ -6,14 +6,53 @@ Socket naming: session "claude-dev" → /tmp/claude-dtach-dev.sock
 """
 
 import asyncio
+import json
 import logging
 import os
 import re
 import shlex
 import shutil
+import time
 from pathlib import Path
 
 log = logging.getLogger(__name__)
+
+
+def _credentials_file_is_fresh() -> bool:
+    """Return True iff ~/.claude/.credentials.json holds an unexpired token.
+
+    Used by launch_session to decide whether to strip
+    ``CLAUDE_CODE_OAUTH_TOKEN`` from the environment of spawned claude
+    sessions. Two deployment shapes need different behaviour:
+
+    - **Interactive login** (`claude auth login`): the credentials
+      file is written and refreshed by Claude Code. A leftover
+      ``CLAUDE_CODE_OAUTH_TOKEN`` from an earlier setup-token now
+      overrides those fresh credentials for the whole process tree
+      and kills each session on first API call. Strip it.
+
+    - **Headless / setup-token** (`claude setup-token` +
+      ``export CLAUDE_CODE_OAUTH_TOKEN=…`` in profile): there is no
+      credentials file, or the one on disk is stale — the env var
+      IS the credential. Stripping it kills the only working auth.
+      Keep it.
+
+    Fail-open: any exception path (missing file, permission error,
+    malformed JSON, unexpected schema, wrong type on ``expiresAt``,
+    …) returns False so we keep the env token. A false negative
+    reintroduces the original stale-env-pin bug for interactive
+    users, but only when their credentials file is unreadable —
+    which is itself a broken state where they'd need to re-login
+    anyway.
+    """
+    path = Path.home() / ".claude" / ".credentials.json"
+    try:
+        data = json.loads(path.read_text())
+        expires_at = data["claudeAiOauth"]["expiresAt"]
+        # Claude Code stores expiresAt as unix milliseconds.
+        return float(expires_at) / 1000.0 > time.time()
+    except (OSError, ValueError, TypeError, KeyError):
+        return False
 
 SOCK_PREFIX = "/tmp/claude-dtach-"
 
@@ -214,15 +253,27 @@ async def launch_session(
     # inside a Claude Code session"). Strip it so /new sessions can launch
     # cleanly from inside a parent Claude.
     #
-    # `unset CLAUDE_CODE_OAUTH_TOKEN`: a setup-token in this env var
-    # overrides `.credentials.json` for the whole process tree. Once the
-    # user has done `claude auth login` (broader OAuth scopes than the
-    # setup-token), keeping the env var around pins every dtach-spawned
-    # session to the stale setup-token and kills it on first API call.
-    # Strip it so spawned sessions read fresh OAuth from credentials.
+    # `unset CLAUDE_CODE_OAUTH_TOKEN`: only stripped when a fresh
+    # ~/.claude/.credentials.json is on disk. See
+    # _credentials_file_is_fresh() for the rationale — briefly:
+    # stripping unbreaks interactive users who did `claude auth login`
+    # (fresh credentials, stale env token) but breaks headless users
+    # who deployed with `claude setup-token` (env token is the only
+    # credential). The daemon inherits its environment from whatever
+    # started it, so headless setups need the token exported in the
+    # process that launches aipager (systemd unit, docker run -e, or
+    # the shell that runs `aipager start`).
+    unset_token = ("unset CLAUDE_CODE_OAUTH_TOKEN; "
+                   if _credentials_file_is_fresh() else "")
+    log.info(
+        "[%s] launch: %s CLAUDE_CODE_OAUTH_TOKEN (credentials file %s)",
+        name,
+        "stripping" if unset_token else "keeping",
+        "fresh" if unset_token else "missing/expired",
+    )
     bash_cmd = (
         f"unset CLAUDECODE; "
-        f"unset CLAUDE_CODE_OAUTH_TOKEN; "
+        f"{unset_token}"
         f"export CLAUDE_DTACH_SESSION=claude-{name}; "
         f"{_CLAUDE_BIN} {perms} {resume} "
         f"--append-system-prompt {shlex.quote(sys_prompt)}"
