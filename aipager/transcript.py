@@ -18,11 +18,56 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from collections import deque
 from pathlib import Path
 
 log = logging.getLogger(__name__)
+
+
+# Long-context degradation on newer Claude models occasionally causes
+# the assistant to type its tool-invocation markup as plain-text content
+# instead of using structured tool_use blocks. When that happens the
+# raw XML rides along in the transcript's `text` block and — without
+# scrubbing — lands verbatim in the Telegram summary. These regexes
+# catch the leak patterns we've observed in the wild (Anthropic-style
+# tool-use XML: `<invoke ...>...</invoke>`, standalone `<parameter>`
+# blocks, `<function_calls>` wrappers) plus orphan opening/closing
+# tags left behind by truncated emissions. Real structured tool_use
+# lives in its own content block and never comes through this path,
+# so no legitimate tool call is at risk.
+_INVOKE_BLOCK_RE = re.compile(r"<invoke\b[^>]*>.*?</invoke>", re.DOTALL)
+_PARAMETER_BLOCK_RE = re.compile(
+    r"<parameter\b[^>]*>.*?</parameter>", re.DOTALL,
+)
+_FUNCTION_CALLS_BLOCK_RE = re.compile(
+    r"<function_calls\b[^>]*>.*?</function_calls>", re.DOTALL,
+)
+_ORPHAN_TAG_RE = re.compile(
+    r"</?(?:invoke|parameter|function_calls)\b[^>]*>",
+)
+_TRIPLE_BLANK_RE = re.compile(r"\n{3,}")
+
+
+def _strip_leaked_tool_xml(text: str) -> str:
+    """Remove leaked tool-invocation XML from assistant text.
+
+    Best-effort: any residual text that looked like a valid reply
+    around the XML is preserved. Empty / whitespace-only input is
+    returned unchanged. See the module-level regex block for the
+    patterns handled.
+    """
+    if not text or ("<invoke" not in text
+                    and "<parameter" not in text
+                    and "<function_calls" not in text):
+        return text
+    cleaned = _FUNCTION_CALLS_BLOCK_RE.sub("", text)
+    cleaned = _INVOKE_BLOCK_RE.sub("", cleaned)
+    cleaned = _PARAMETER_BLOCK_RE.sub("", cleaned)
+    cleaned = _ORPHAN_TAG_RE.sub("", cleaned)
+    cleaned = _TRIPLE_BLANK_RE.sub("\n\n", cleaned)
+    return cleaned.strip()
 
 # Root of all Claude Code project transcripts on this machine.
 _PROJECTS_DIR = Path.home() / ".claude" / "projects"
@@ -117,7 +162,7 @@ def extract_last_response(transcript_path: str) -> str | None:
                 texts.append(block)
 
         if texts:
-            return "\n\n".join(texts)
+            return _strip_leaked_tool_xml("\n\n".join(texts))
 
     return None
 

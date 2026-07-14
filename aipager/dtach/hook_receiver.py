@@ -20,7 +20,11 @@ from pathlib import Path
 from aipager.config import RICH_SUMMARIES, SOCKET_PATH
 from aipager.md_to_tg import markdown_to_telegram_html
 from aipager.state import SessionRegistry, Status
-from aipager.transcript import extract_last_response, find_transcript
+from aipager.transcript import (
+    _strip_leaked_tool_xml,
+    extract_last_response,
+    find_transcript,
+)
 
 log = logging.getLogger(__name__)
 
@@ -563,7 +567,12 @@ class HookReceiver:
             notify_ctx: dict = {"summary": ""}
 
             # Primary: last_assistant_message from hook JSON (always current)
-            last_msg = msg.get("last_assistant_message", "")
+            # Scrub any leaked tool-invocation XML the assistant may have
+            # typed as plain text (long-context degradation on newer
+            # models). extract_last_response scrubs the fallback path.
+            last_msg = _strip_leaked_tool_xml(
+                msg.get("last_assistant_message", "")
+            )
 
             if last_msg and RICH_SUMMARIES and "```" in last_msg:
                 # Rich HTML formatting for code-heavy responses

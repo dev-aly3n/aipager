@@ -335,3 +335,92 @@ def test_turn_incomplete_on_unknown_message_bearing_entry(tmp_path):
                                              "content": "..."}},
     ])
     assert transcript.turn_appears_complete(path) is False
+
+
+# ----- _strip_leaked_tool_xml (defensive sanitizer) --------------------
+
+def test_strip_leaked_tool_xml_removes_complete_invoke_block():
+    text = (
+        "Here's what I found:\n"
+        "<invoke name=\"Bash\">\n"
+        "<parameter name=\"command\">ls -la</parameter>\n"
+        "</invoke>\n"
+        "That should do it."
+    )
+    out = transcript._strip_leaked_tool_xml(text)
+    assert "<invoke" not in out
+    assert "<parameter" not in out
+    assert "Here's what I found:" in out
+    assert "That should do it." in out
+
+
+def test_strip_leaked_tool_xml_removes_orphan_parameter_after_truncation():
+    # Truncated emission: invoke closed but parameter block left dangling.
+    text = ("done\n"
+            "<parameter name=\"command\">rm -rf tmp</parameter>")
+    out = transcript._strip_leaked_tool_xml(text)
+    assert "<parameter" not in out
+    assert "done" in out
+
+
+def test_strip_leaked_tool_xml_removes_function_calls_wrapper():
+    text = ("<function_calls>\n"
+            "<invoke name=\"Bash\"><parameter name=\"cmd\">ls</parameter>"
+            "</invoke>\n"
+            "</function_calls>\n"
+            "Result: nothing to see.")
+    out = transcript._strip_leaked_tool_xml(text)
+    assert "<function_calls" not in out
+    assert "<invoke" not in out
+    assert "Result: nothing to see." in out
+
+
+def test_strip_leaked_tool_xml_removes_orphan_opening_tag():
+    # Emission cut off mid-tool-use: only the opening tag survived.
+    text = "checking\n<invoke name=\"Bash\">\n"
+    out = transcript._strip_leaked_tool_xml(text)
+    assert "<invoke" not in out
+    assert "checking" in out
+
+
+def test_strip_leaked_tool_xml_passthrough_when_no_xml():
+    text = "Perfectly normal reply with < and > but no invoke tags."
+    assert transcript._strip_leaked_tool_xml(text) == text
+
+
+def test_strip_leaked_tool_xml_only_xml_returns_empty():
+    text = ("<invoke name=\"Bash\">"
+            "<parameter name=\"cmd\">ls</parameter>"
+            "</invoke>")
+    assert transcript._strip_leaked_tool_xml(text) == ""
+
+
+def test_strip_leaked_tool_xml_empty_input_returns_empty():
+    assert transcript._strip_leaked_tool_xml("") == ""
+
+
+def test_extract_last_response_scrubs_leaked_invoke_xml(tmp_path):
+    # Real observed pattern: bare "court" word followed by leaked
+    # invoke XML — the assistant typed its tool markup as plain text.
+    leaked = (
+        "court\n"
+        "<invoke name=\"Bash\">\n"
+        "<parameter name=\"command\">"
+        "tmux send-keys -t main:mohandes C-u"
+        "</parameter>\n"
+        "</invoke>"
+    )
+    p = tmp_path / "t.jsonl"
+    p.write_text(json.dumps({
+        "type": "assistant",
+        "message": {
+            "role": "assistant",
+            "content": [{"type": "text", "text": leaked}],
+            "stop_reason": "end_turn",
+        },
+    }) + "\n")
+    out = transcript.extract_last_response(str(p))
+    assert out is not None
+    assert "<invoke" not in out
+    assert "<parameter" not in out
+    assert "tmux send-keys" not in out
