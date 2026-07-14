@@ -424,3 +424,95 @@ def test_extract_last_response_scrubs_leaked_invoke_xml(tmp_path):
     assert "<invoke" not in out
     assert "<parameter" not in out
     assert "tmux send-keys" not in out
+
+
+# ---- fence-aware sanitizer -----------------------------------------------
+
+def test_strip_leaked_tool_xml_preserves_invoke_inside_xml_fence():
+    text = (
+        "Here's the structure:\n"
+        "```xml\n"
+        "<invoke name=\"Bash\">\n"
+        "<parameter name=\"command\">ls</parameter>\n"
+        "</invoke>\n"
+        "```\n"
+        "Any questions?"
+    )
+    out = transcript._strip_leaked_tool_xml(text)
+    assert "<invoke name=\"Bash\">" in out
+    assert "<parameter name=\"command\">ls</parameter>" in out
+    assert "</invoke>" in out
+    assert "Here's the structure:" in out
+    assert "Any questions?" in out
+
+
+def test_strip_leaked_tool_xml_preserves_invoke_inside_bare_fence():
+    text = (
+        "Look:\n"
+        "```\n"
+        "<invoke name=\"Bash\"><parameter name=\"cmd\">ls</parameter>"
+        "</invoke>\n"
+        "```"
+    )
+    out = transcript._strip_leaked_tool_xml(text)
+    assert "<invoke name=\"Bash\">" in out
+    assert "<parameter" in out
+
+
+def test_strip_leaked_tool_xml_strips_prose_xml_preserves_fenced():
+    # Prose leak (should be stripped) + fenced example (should survive)
+    # in the SAME response.
+    text = (
+        "court\n"
+        "<invoke name=\"Bash\">"
+        "<parameter name=\"command\">rm -rf tmp</parameter>"
+        "</invoke>\n"
+        "\n"
+        "Here's how one looks:\n"
+        "```xml\n"
+        "<invoke name=\"Read\">"
+        "<parameter name=\"file_path\">/x</parameter>"
+        "</invoke>\n"
+        "```"
+    )
+    out = transcript._strip_leaked_tool_xml(text)
+    # The prose leak (rm -rf tmp) must be gone.
+    assert "rm -rf tmp" not in out
+    # The fenced example (Read /x) must survive verbatim.
+    assert "<invoke name=\"Read\">" in out
+    assert "/x" in out
+    assert "```xml" in out
+
+
+def test_strip_leaked_tool_xml_preserves_parameter_in_json_fence():
+    text = (
+        "For the tool schema:\n"
+        "```json\n"
+        "{\"parameters\": \"<parameter name=\\\"foo\\\">bar</parameter>\"}\n"
+        "```"
+    )
+    out = transcript._strip_leaked_tool_xml(text)
+    assert "<parameter" in out
+    assert "```json" in out
+
+
+def test_strip_leaked_tool_xml_unbalanced_fence_conservatively_preserves():
+    # Unclosed fence: everything after the opening ``` is treated as
+    # code and left untouched. Fail-open: prefer real content over
+    # accidental clipping.
+    text = (
+        "reference:\n"
+        "```xml\n"
+        "<invoke name=\"Bash\"><parameter name=\"cmd\">ls</parameter>"
+        "</invoke>\n"
+        "(fence not closed)"
+    )
+    out = transcript._strip_leaked_tool_xml(text)
+    assert "<invoke" in out
+    assert "(fence not closed)" in out
+
+
+def test_strip_leaked_tool_xml_fast_path_no_op_on_clean_text():
+    # No tags → return input unchanged (no split/join round-trip cost).
+    text = "Normal reply with no tags anywhere."
+    assert transcript._strip_leaked_tool_xml(text) == text

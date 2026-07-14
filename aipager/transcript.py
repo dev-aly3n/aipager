@@ -50,24 +50,47 @@ _ORPHAN_TAG_RE = re.compile(
 _TRIPLE_BLANK_RE = re.compile(r"\n{3,}")
 
 
-def _strip_leaked_tool_xml(text: str) -> str:
-    """Remove leaked tool-invocation XML from assistant text.
+def _strip_prose_tool_xml(segment: str) -> str:
+    """Apply the leak-strip regex chain to a single prose segment."""
+    cleaned = _FUNCTION_CALLS_BLOCK_RE.sub("", segment)
+    cleaned = _INVOKE_BLOCK_RE.sub("", cleaned)
+    cleaned = _PARAMETER_BLOCK_RE.sub("", cleaned)
+    return _ORPHAN_TAG_RE.sub("", cleaned)
 
-    Best-effort: any residual text that looked like a valid reply
-    around the XML is preserved. Empty / whitespace-only input is
-    returned unchanged. See the module-level regex block for the
-    patterns handled.
+
+def _strip_leaked_tool_xml(text: str) -> str:
+    """Remove leaked tool-invocation XML from assistant text, fence-aware.
+
+    Walks the text in triple-backtick-fence-aware chunks so that
+    legitimate `<invoke>` / `<parameter>` / `<function_calls>` examples
+    inside fenced code blocks (e.g. ```xml … ```) survive intact,
+    while degraded-model leaks in prose are stripped. Empirically zero
+    real leaks in production have appeared inside fences, so this loses
+    nothing on the strip side.
+
+    Splitting rule: `text.split("```")` produces alternating segments —
+    index 0 is prose, index 1 is a code-fence body, index 2 is prose,
+    and so on. Even indices are sanitized; odd indices are left
+    verbatim. If the number of fences is odd (unbalanced / unclosed
+    fence at end of text), the trailing "code" segment is
+    conservatively preserved as if it were a still-open fence — the
+    rare fail-open case, which prefers letting real content through
+    over accidentally clipping it.
+
+    Empty / whitespace-only input is returned unchanged. See the
+    module-level regex block for the patterns handled.
     """
     if not text or ("<invoke" not in text
                     and "<parameter" not in text
                     and "<function_calls" not in text):
         return text
-    cleaned = _FUNCTION_CALLS_BLOCK_RE.sub("", text)
-    cleaned = _INVOKE_BLOCK_RE.sub("", cleaned)
-    cleaned = _PARAMETER_BLOCK_RE.sub("", cleaned)
-    cleaned = _ORPHAN_TAG_RE.sub("", cleaned)
+    parts = text.split("```")
+    for i in range(0, len(parts), 2):
+        parts[i] = _strip_prose_tool_xml(parts[i])
+    cleaned = "```".join(parts)
     cleaned = _TRIPLE_BLANK_RE.sub("\n\n", cleaned)
     return cleaned.strip()
+
 
 # Root of all Claude Code project transcripts on this machine.
 _PROJECTS_DIR = Path.home() / ".claude" / "projects"
