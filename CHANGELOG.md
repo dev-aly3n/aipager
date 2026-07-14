@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.14] - 2026-07-14
+
+### Fixed
+- **Leaked tool-invocation XML no longer bleeds into Telegram replies.**
+  Long-context degradation on newer Claude models can cause the
+  assistant to type its tool-use markup (`<invoke name="Bash">`,
+  `<parameter>`, `<function_calls>`) as plain-text content instead of
+  using structured tool_use blocks. When that happened, aipager's
+  summary forwarded the raw XML verbatim — huge blocks of unreadable
+  garbage in the chat. The assistant-summary path now scrubs those
+  patterns at both source points (the transcript-fallback path and
+  the hook-JSON primary path), so the user-visible reply stays clean
+  even if the underlying model is misbehaving.
+
 ## [0.4.13] - 2026-07-11
 
 ### Fixed
