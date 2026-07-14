@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.15] - 2026-07-14
+
+### Fixed
+- **The tool-XML sanitizer added in 0.4.14 no longer eats legitimate
+  code examples in markdown fences.** If the assistant explained
+  Claude's tool-use format with a fenced block containing
+  `<invoke>` / `<parameter>` / `<function_calls>` tags, 0.4.14 stripped
+  the whole block and the user saw only the surrounding prose. The
+  sanitizer now walks the text in triple-backtick-aware chunks — tags
+  inside fences survive verbatim, tags in prose still get stripped.
+  Empirical basis: 0/116 real leaks in production had XML inside
+  fences, so fence-awareness loses nothing on the strip side.
+
 ## [0.4.14] - 2026-07-14
 
 ### Fixed
