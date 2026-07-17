@@ -34,6 +34,7 @@ import time
 
 from telegram.error import BadRequest, Forbidden, RetryAfter
 
+from aipager.config import TELEGRAM_MAX_RETRY_AFTER
 from aipager.team import Role, User as TeamUser
 
 log = logging.getLogger("aipager.bot.transport")
@@ -218,6 +219,26 @@ async def _send_with_retry(bot, *, chat_id, text: str, parse_mode: str | None = 
             )
         except RetryAfter as e:
             wait = getattr(e, "retry_after", None) or 1
+            if wait > TELEGRAM_MAX_RETRY_AFTER:
+                # Telegram wants us to back off longer than we're willing to
+                # block the daemon for. Log, notify the user via a reaction
+                # (reactions are a separate rate-limit bucket from
+                # sendMessage, so they still get through), and re-raise so
+                # the caller can update state.
+                log.warning(
+                    "Telegram flood control — retry_after=%ss exceeds "
+                    "cap=%ss, giving up on this message",
+                    wait, TELEGRAM_MAX_RETRY_AFTER,
+                )
+                if reply_to_message_id:
+                    try:
+                        await bot.set_message_reaction(
+                            chat_id, reply_to_message_id, "🚨",
+                        )
+                    except Exception:
+                        log.debug("Failed to set flood-control reaction",
+                                  exc_info=True)
+                raise
             log.warning("Telegram flood control — retrying in %ss", wait)
             await asyncio.sleep(wait)
             last_err = e

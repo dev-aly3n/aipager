@@ -246,3 +246,111 @@ def test_send_with_retry_succeeds_within_truncation_budget(run_async):
     ])
     out = run_async(_send_with_retry(bot, chat_id=1, text=long_text))
     assert out == "MSG"
+
+
+# ----- _send_with_retry: RetryAfter cap + flood-control reaction -----
+
+
+class _ReactionBot:
+    """Bot stub whose send_message raises the given exceptions and whose
+    set_message_reaction records positional calls."""
+
+    def __init__(self, send_side_effects, reaction_side_effect=None):
+        self._send_side = list(send_side_effects)
+        self._reaction_side = reaction_side_effect
+        self.reactions: list[tuple] = []
+
+    async def send_message(self, chat_id, text, **kwargs):
+        s = self._send_side.pop(0)
+        if isinstance(s, Exception):
+            raise s
+        return s
+
+    async def set_message_reaction(self, chat_id, message_id, emoji):
+        self.reactions.append((chat_id, message_id, emoji))
+        if self._reaction_side is not None:
+            raise self._reaction_side
+
+
+def test_send_with_retry_caps_long_retry_after(monkeypatch, run_async):
+    """Retry_after longer than the cap → raise, do NOT sleep."""
+    from aipager.config import TELEGRAM_MAX_RETRY_AFTER
+    bot = _ReactionBot([RetryAfter(17000)])
+
+    async def _guard_sleep(seconds):
+        # If we ever sleep here it must be well under the cap; the
+        # cap-exceeded path must NOT call sleep at all.
+        if seconds > TELEGRAM_MAX_RETRY_AFTER:
+            raise AssertionError(
+                f"unexpected asyncio.sleep({seconds}) beyond cap")
+
+    monkeypatch.setattr(tbt.asyncio, "sleep", _guard_sleep)
+    with pytest.raises(RetryAfter):
+        run_async(_send_with_retry(bot, chat_id=1, text="hi"))
+
+
+def test_send_with_retry_normal_retry_after_still_sleeps(monkeypatch,
+                                                         run_async):
+    """Retry_after under the cap: sleep and retry as before."""
+    bot = _ReactionBot([RetryAfter(30), "MSG"])
+    slept: list[float] = []
+
+    async def _record_sleep(seconds):
+        slept.append(seconds)
+
+    monkeypatch.setattr(tbt.asyncio, "sleep", _record_sleep)
+    out = run_async(_send_with_retry(bot, chat_id=1, text="hi"))
+    assert out == "MSG"
+    assert slept == [30]
+
+
+def test_send_with_retry_sets_flood_reaction_when_giving_up(monkeypatch,
+                                                            run_async):
+    """When give-up threshold is exceeded and a reply-to target is set,
+    react on it with 🚨 (visible signal for the user) before re-raising."""
+    bot = _ReactionBot([RetryAfter(1000)])
+
+    async def _no_sleep(_):
+        return None
+
+    monkeypatch.setattr(tbt.asyncio, "sleep", _no_sleep)
+    with pytest.raises(RetryAfter):
+        run_async(_send_with_retry(
+            bot, chat_id=7, text="hi", reply_to_message_id=42,
+        ))
+    assert bot.reactions == [(7, 42, "🚨")]
+
+
+def test_send_with_retry_no_reaction_when_no_reply_target(monkeypatch,
+                                                          run_async):
+    """No reply target → no reaction attempted (nothing to attach to)."""
+    bot = _ReactionBot([RetryAfter(1000)])
+
+    async def _no_sleep(_):
+        return None
+
+    monkeypatch.setattr(tbt.asyncio, "sleep", _no_sleep)
+    with pytest.raises(RetryAfter):
+        run_async(_send_with_retry(bot, chat_id=7, text="hi"))
+    assert bot.reactions == []
+
+
+def test_send_with_retry_reaction_failure_does_not_mask_retryafter(
+        monkeypatch, run_async):
+    """A failing reaction call must NOT swallow the original RetryAfter —
+    the caller depends on that exception to know the send failed."""
+    bot = _ReactionBot(
+        [RetryAfter(1000)],
+        reaction_side_effect=RuntimeError("reaction api down"),
+    )
+
+    async def _no_sleep(_):
+        return None
+
+    monkeypatch.setattr(tbt.asyncio, "sleep", _no_sleep)
+    with pytest.raises(RetryAfter):
+        run_async(_send_with_retry(
+            bot, chat_id=7, text="hi", reply_to_message_id=42,
+        ))
+    # Reaction was attempted before the raise.
+    assert bot.reactions == [(7, 42, "🚨")]

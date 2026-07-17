@@ -153,6 +153,17 @@ STATUSLINE_ALIVE_SECONDS: float = float(
     os.environ.get("STATUSLINE_ALIVE_SECONDS", "60")
 )
 
+# Upper bound on how long we're willing to `asyncio.sleep` for a single
+# Telegram `RetryAfter` (429). Telegram can return retry_after values in
+# the multi-hour range for aggressive flood-control — obeying that
+# blindly wedges the daemon on one `asyncio.sleep` and blocks every
+# subsequent send. When the reported retry_after exceeds this cap we
+# log + give up on the message, letting the caller propagate the
+# failure and letting the user see a visible signal via reaction.
+TELEGRAM_MAX_RETRY_AFTER: float = float(
+    os.environ.get("TELEGRAM_MAX_RETRY_AFTER", "90")
+)
+
 # Spinner verbs for animated busy messages (curated from Claude Code's terminal spinner)
 SPINNER_VERBS: list[str] = [
     "Thinking", "Reasoning", "Pondering", "Considering", "Analyzing",
