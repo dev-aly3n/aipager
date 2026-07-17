@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.16] - 2026-07-17
+
+### Fixed
+- **No more false "Stuck on Working for 2+ min" warnings during
+  auto-compaction, extended thinking, or heavy first-response on huge
+  contexts.** 0.4.12 covered long tool calls; this release covers the
+  remaining gaps. The stale-busy detector now also stands down while
+  `PreCompact` has fired without a matching post-compact `SessionStart`
+  (capped at 30 min via `COMPACT_INFLIGHT_MAX_SECONDS`), and when the
+  session's statusLine file was updated within `STATUSLINE_ALIVE_SECONDS`
+  (60 s default) — a universal heartbeat signal for "session is doing
+  something" that catches extended-thinking / rate-limit-backoff cases.
+  Both env-overridable.
+- **The warning text itself is now neutral.** Previous copy led with
+  "Anthropic subscription / credit balance ran out — check your
+  dashboard" which needlessly alarmed users when the session was just
+  processing. New copy leads with benign causes (long tool call, heavy
+  generation, compaction) and only mentions subscription/network at the
+  end. Title changed from "Stuck on Working" → "Silent for X+ min".
+
 ## [0.4.15] - 2026-07-14
 
 ### Fixed
