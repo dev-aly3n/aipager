@@ -133,6 +133,26 @@ TOOL_INFLIGHT_MAX_SECONDS: float = float(
     os.environ.get("TOOL_INFLIGHT_MAX_SECONDS", "900")
 )
 
+# Upper bound on how long a compaction may run before the stale-busy
+# detector fires anyway. Between PreCompact and post-compact
+# SessionStart, no hooks fire — a large transcript can take multiple
+# minutes to compact. Observed ~3 min on a 40 MB transcript in
+# production; 30 min gives 10x buffer for larger transcripts / slower
+# model days while still surfacing a genuinely wedged compact.
+COMPACT_INFLIGHT_MAX_SECONDS: float = float(
+    os.environ.get("COMPACT_INFLIGHT_MAX_SECONDS", "1800")
+)
+
+# A session's statusLine file being modified within this window counts
+# as a liveness heartbeat and suppresses the stale-busy warning. The
+# Claude Code statusLine hook fires on many small state changes during
+# active work (streaming, tool cycles, etc.), so a fresh mtime is a
+# reliable "session is doing something" signal even when no
+# aipager-tracked hook (PreToolUse, PreCompact, …) has fired recently.
+STATUSLINE_ALIVE_SECONDS: float = float(
+    os.environ.get("STATUSLINE_ALIVE_SECONDS", "60")
+)
+
 # Spinner verbs for animated busy messages (curated from Claude Code's terminal spinner)
 SPINNER_VERBS: list[str] = [
     "Thinking", "Reasoning", "Pondering", "Considering", "Analyzing",

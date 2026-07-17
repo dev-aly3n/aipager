@@ -428,6 +428,7 @@ class HookReceiver:
             self.registry.transition(session_name, Status.GONE)
             sess.last_prompt_origin = "telegram"  # fail-closed between turns
             sess.pending_tool_started_at = None
+            sess.compact_started_at = None
             await self.notify_fn(sess, "session_end", {"source": source})
 
         elif event == "PreCompact":
@@ -445,6 +446,11 @@ class HookReceiver:
                 if sl:
                     pre_pct = sl.get("context_pct", 0)
             sess.pre_compact_pct = pre_pct
+            # Mark compact-in-flight so session_monitor's stale-busy warning
+            # stands down while claude is compacting — no hooks fire between
+            # PreCompact and the post-compact SessionStart, which can take
+            # minutes on a big transcript.
+            sess.compact_started_at = time.monotonic()
             log.info("[%s] PreCompact (trigger=%s, pre_pct=%d%%)",
                      sess.label, trigger, pre_pct)
             await self.notify_fn(sess, "compacting", {"trigger": trigger})
@@ -457,6 +463,9 @@ class HookReceiver:
                 self.registry.get_or_create(session_name)
                 return
             sess = self.registry.get_or_create(session_name)
+            # Compaction finished — clear the in-flight marker regardless
+            # of whether we manage to compute a delta below.
+            sess.compact_started_at = None
             # Read post-compact context % from piggybacked sl_tokens or file
             sl_tokens = msg.get("sl_tokens")
             post_pct = 0
@@ -527,6 +536,7 @@ class HookReceiver:
             if ctx_pct < 30 and sess.pre_compact_pct > 0:
                 before_pct = sess.pre_compact_pct
                 sess.pre_compact_pct = 0  # reset SYNCHRONOUSLY before await
+                sess.compact_started_at = None  # belt-and-braces if SessionStart missed
                 sess.compact_warned = False
                 log.info("[%s] Compacted (statusLine fallback): %d%% → %d%%",
                          sess.label, before_pct, ctx_pct)
@@ -553,6 +563,7 @@ class HookReceiver:
             if _idle is not None:
                 _idle.last_prompt_origin = "telegram"
                 _idle.pending_tool_started_at = None
+                _idle.compact_started_at = None
             sess = self.registry.transition(session_name, Status.IDLE)
             if sess is None:
                 # Force notification if there's an undelivered response

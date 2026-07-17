@@ -150,6 +150,12 @@ class TrackedSession:
     # meaningless across daemon restarts, and a fresh daemon should
     # start with in-flight state clear.
     pending_tool_started_at: float | None = None
+    # Monotonic timestamp of the most recent PreCompact hook when the
+    # matching post-compact SessionStart hasn't fired yet — compaction
+    # can take minutes on a large transcript with no hooks in between,
+    # which would otherwise trip the stale-busy detector. Not persisted
+    # (same reason as pending_tool_started_at above).
+    compact_started_at: float | None = None
     # Team-mode attribution (None in personal mode). `created_by` is the
     # user who first created/owns the session; `last_driver` is whoever
     # most recently injected a prompt into it — used to attribute

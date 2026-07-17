@@ -13,11 +13,14 @@ import asyncio
 import logging
 import os
 import time
+from pathlib import Path
 
 from aipager.dtach import inject as dtach_inject
 from aipager.config import (
+    COMPACT_INFLIGHT_MAX_SECONDS,
     PANE_POLL_INTERVAL,
     STALE_BUSY_TIMEOUT,
+    STATUSLINE_ALIVE_SECONDS,
     TOOL_INFLIGHT_MAX_SECONDS,
 )
 from aipager.state import SessionRegistry, Status
@@ -218,6 +221,26 @@ class SessionMonitor:
                 if (tool_start is not None
                         and (now - tool_start) < TOOL_INFLIGHT_MAX_SECONDS):
                     continue
+                # Compaction between PreCompact and post-compact SessionStart
+                # emits no hooks — treat the same as tool-in-flight, with a
+                # longer cap since compacting a large transcript is slow.
+                compact_start = sess.compact_started_at
+                if (compact_start is not None
+                        and (now - compact_start) < COMPACT_INFLIGHT_MAX_SECONDS):
+                    continue
+                # Fallback liveness signal: the Claude Code statusLine hook
+                # writes /tmp/claude-status-<session>.json on many state
+                # changes during active work. A fresh mtime means the
+                # session is doing something even if no aipager-tracked
+                # hook has fired. mtime is walltime, so compare via
+                # time.time() (not the monotonic `now` above).
+                statusline_path = Path(f"/tmp/claude-status-{name}.json")
+                try:
+                    sl_age = time.time() - statusline_path.stat().st_mtime
+                    if sl_age < STATUSLINE_ALIVE_SECONDS:
+                        continue
+                except OSError:
+                    pass  # no statusLine yet — fall through
                 sess.stale_warned = True
                 stale_mins = int((now - baseline) / 60)
                 try:

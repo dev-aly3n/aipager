@@ -265,6 +265,9 @@ def test_stale_busy_sends_alert(mk_bot, run_async):
     run_async(bot.notify(sess, "stale_busy", {"minutes": 5}))
     text = bot._app.bot.send_message.await_args.args[1]
     assert "5+ min" in text
+    # New neutral copy leads with legitimate causes, keeps "subscription
+    # limit" in the fallback list.
+    assert "Silent for" in text
     assert "subscription" in text.lower()
 
 

@@ -280,15 +280,17 @@ class NotifyMixin:
             # tap Stop.
             minutes = context.get("minutes", 2)
             stale_text = (
-                f"⚠️ <b>{html_mod.escape(label)}</b> · Stuck on "
-                f"<i>Working</i> for {minutes}+ min with no claude activity.\n"
+                f"⚠️ <b>{html_mod.escape(label)}</b> · Silent for "
+                f"{minutes}+ min\n"
                 "\n"
-                "<b>Most likely causes</b> (in order):\n"
-                "  • Anthropic subscription / credit balance ran out\n"
-                "    — check your dashboard at https://console.anthropic.com\n"
-                "  • Rate limit hit (transient — claude is retrying)\n"
-                "  • Long-running tool call (WebSearch, large fetch)\n"
-                "  • Claude crashed or network is wedged\n"
+                "The session appears busy but hasn't emitted any status "
+                "updates. This is usually normal — likely causes, in "
+                "order:\n"
+                "  • Long-running tool call (Bash, WebSearch, large fetch)\n"
+                "  • Heavy generation on a very large context\n"
+                "  • Compaction in progress\n"
+                "  • Rate-limit backoff or subscription limit\n"
+                "  • Network wedge or claude crash\n"
                 "\n"
                 "<i>Tap Stop to interrupt, or wait it out.</i>"
             )

@@ -227,3 +227,120 @@ def test_scan_stale_busy_fires_when_no_tool_in_flight(monkeypatch, run_async):
     notify.assert_awaited_once()
     assert notify.await_args.args[1] == "stale_busy"
     assert sess.stale_warned is True
+
+
+# ---- _scan: stale_busy suppressed during compaction --------------------
+
+def test_scan_stale_busy_suppressed_during_compact_in_flight(monkeypatch,
+                                                             run_async):
+    """Between PreCompact and post-compact SessionStart no hooks fire —
+    that window can be minutes on a large transcript, and the stale-busy
+    warning must NOT fire during it."""
+    from aipager.session_monitor import STALE_BUSY_TIMEOUT
+    registry = SessionRegistry()
+    sess = TrackedSession(name="claude-cmp1", label="cmp1", status=Status.BUSY)
+    sess.last_hook_at = time.monotonic() - STALE_BUSY_TIMEOUT - 60
+    sess.compact_started_at = time.monotonic() - 300.0  # 5 min ago
+    registry._sessions["claude-cmp1"] = sess
+
+    notify = AsyncMock()
+    monitor = _mk_monitor(registry, notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        AsyncMock(return_value=["claude-cmp1"]))
+    run_async(monitor._scan())
+
+    notify.assert_not_awaited()
+    assert sess.stale_warned is False
+
+
+def test_scan_stale_busy_fires_when_compact_exceeds_inflight_cap(monkeypatch,
+                                                                 run_async):
+    """A compact that has been running longer than
+    COMPACT_INFLIGHT_MAX_SECONDS is treated as genuinely wedged."""
+    from aipager.session_monitor import (
+        COMPACT_INFLIGHT_MAX_SECONDS,
+        STALE_BUSY_TIMEOUT,
+    )
+    registry = SessionRegistry()
+    sess = TrackedSession(name="claude-cmp2", label="cmp2", status=Status.BUSY)
+    sess.last_hook_at = time.monotonic() - STALE_BUSY_TIMEOUT - 60
+    sess.compact_started_at = (
+        time.monotonic() - COMPACT_INFLIGHT_MAX_SECONDS - 60
+    )
+    registry._sessions["claude-cmp2"] = sess
+
+    notify = AsyncMock()
+    monitor = _mk_monitor(registry, notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        AsyncMock(return_value=["claude-cmp2"]))
+    run_async(monitor._scan())
+
+    notify.assert_awaited_once()
+    assert notify.await_args.args[1] == "stale_busy"
+    assert sess.stale_warned is True
+
+
+# ---- _scan: stale_busy suppressed by recent statusLine heartbeat --------
+
+def _statusline_path(name):
+    from pathlib import Path
+    return Path(f"/tmp/claude-status-{name}.json")
+
+
+def test_scan_stale_busy_suppressed_by_recent_statusline(monkeypatch,
+                                                         run_async):
+    """A recent statusLine mtime is a liveness heartbeat — even with no
+    hook activity and no tool/compact in flight, the session is
+    clearly doing something."""
+    from aipager.session_monitor import STALE_BUSY_TIMEOUT
+    NAME = "claude-slalive"
+    p = _statusline_path(NAME)
+    p.write_text("{}")
+    try:
+        registry = SessionRegistry()
+        sess = TrackedSession(name=NAME, label="sl", status=Status.BUSY)
+        sess.last_hook_at = time.monotonic() - STALE_BUSY_TIMEOUT - 60
+        registry._sessions[NAME] = sess
+
+        notify = AsyncMock()
+        monitor = _mk_monitor(registry, notify)
+        monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                            AsyncMock(return_value=[NAME]))
+        run_async(monitor._scan())
+
+        notify.assert_not_awaited()
+        assert sess.stale_warned is False
+    finally:
+        p.unlink(missing_ok=True)
+
+
+def test_scan_stale_busy_fires_when_statusline_stale(monkeypatch, run_async):
+    """A statusLine file older than STATUSLINE_ALIVE_SECONDS is NOT a
+    heartbeat — the warning must fire normally."""
+    import os
+    from aipager.session_monitor import (
+        STALE_BUSY_TIMEOUT,
+        STATUSLINE_ALIVE_SECONDS,
+    )
+    NAME = "claude-slstale"
+    p = _statusline_path(NAME)
+    p.write_text("{}")
+    old = time.time() - STATUSLINE_ALIVE_SECONDS - 60
+    os.utime(p, (old, old))
+    try:
+        registry = SessionRegistry()
+        sess = TrackedSession(name=NAME, label="sl2", status=Status.BUSY)
+        sess.last_hook_at = time.monotonic() - STALE_BUSY_TIMEOUT - 60
+        registry._sessions[NAME] = sess
+
+        notify = AsyncMock()
+        monitor = _mk_monitor(registry, notify)
+        monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                            AsyncMock(return_value=[NAME]))
+        run_async(monitor._scan())
+
+        notify.assert_awaited_once()
+        assert notify.await_args.args[1] == "stale_busy"
+        assert sess.stale_warned is True
+    finally:
+        p.unlink(missing_ok=True)
