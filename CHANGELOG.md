@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.17] - 2026-07-17
+
+### Fixed
+- **Telegram flood-control no longer wedges the daemon for hours.**
+  A single `sendMessage` 429 with a pessimistic `retry_after` (Telegram
+  can return values in the multi-hour range) used to trigger a bare
+  `asyncio.sleep(retry_after)`, blocking every subsequent send behind
+  it. `retry_after` is now capped at `TELEGRAM_MAX_RETRY_AFTER`
+  (default 90 s, env-overridable) — over the cap, the send fails
+  fast so the caller sees the failure.
+- **Users now get a visible signal when their reply is dropped due
+  to flood-control.** On give-up, aipager sets a 🚨 reaction on the
+  Telegram message that couldn't be answered. The reactions endpoint
+  is in a different flood-control bucket from `sendMessage`
+  (empirically verified: while `sendMessage` was returning 429,
+  `setMessageReaction` continued to return 200 OK on the same bot
+  token), so this signal reliably reaches the user even during a
+  full send-block.
+
 ## [0.4.16] - 2026-07-17
 
 ### Fixed
