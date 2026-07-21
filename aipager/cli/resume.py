@@ -19,13 +19,19 @@ def _cmd_resume(args: argparse.Namespace) -> int:
     via dtach. Without an arg: render a paginated list of GONE sessions
     and accept ``<number>`` / ``n`` (next) / ``p`` (prev) / ``q`` (quit).
 
+    Prefix the name with ``!`` to force Auto mode (--dangerously-skip-permissions)
+    regardless of the persisted value (e.g. ``aipager resume !dev``).
+
     The daemon's session_monitor auto-discovers the new socket within ~2s
     and recovers the registry entry to IDLE; we don't write to the state
     file directly here (the daemon owns it).
     """
-    name = (args.name or "").strip().lstrip("@/").lower() if args.name else ""
-    if name:
-        return _resume_one(name)
+    raw_name = (args.name or "").strip().lstrip("@/") if args.name else ""
+    if raw_name:
+        # Support ! prefix to force Auto mode
+        force_auto = raw_name.startswith("!")
+        name = raw_name.lstrip("!").lower()
+        return _resume_one(name, force_auto=force_auto)
     return _resume_picker_loop()
 
 
@@ -46,8 +52,12 @@ def _gone_history() -> list[dict]:
     return gone
 
 
-def _resume_one(label: str) -> int:
-    """Resume a single session by label. Returns shell exit code."""
+def _resume_one(label: str, *, force_auto: bool = False) -> int:
+    """Resume a single session by label. Returns shell exit code.
+
+    ``force_auto`` overrides the persisted ``skip_perms`` and launches
+    with ``--dangerously-skip-permissions`` (Auto mode).
+    """
     import asyncio as _asyncio
     from pathlib import Path
 
@@ -78,13 +88,17 @@ def _resume_one(label: str) -> int:
                 f"  Start a fresh one with: aipager session {label}",
             )
             return 1
+        # Use persisted skip_perms unless force_auto overrides.
+        skip_perms = force_auto or bool(sd.get("skip_perms", False))
         ok, err = _asyncio.run(dtach_inject.launch_session(
             label, resume_id=resume_id, cwd=cwd or None,
+            skip_perms=skip_perms,
         ))
         if not ok:
             friendly_error(f"couldn't resume {label!r}: {err}")
             return 1
-        ui_ok(f"resumed [path]{label}[/path] (session-id {resume_id[:8]}…)")
+        mode_str = "Auto (--dangerously-skip-permissions)" if skip_perms else "Ask"
+        ui_ok(f"resumed [path]{label}[/path] (session-id {resume_id[:8]}…, mode={mode_str})")
         preview = sd.get("last_assistant_preview") or ""
         if preview:
             from aipager.ui import console
