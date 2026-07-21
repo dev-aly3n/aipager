@@ -386,15 +386,16 @@ def test_credentials_file_has_token_returns_false_for_malformed_json(
 
 # ---- _stash_expired_credentials_file: empty-token guard ---------------
 
-def test_stash_no_op_when_creds_file_has_empty_access_token(
+def test_stash_no_op_when_only_refresh_token_populated(
         tmp_path, monkeypatch):
-    """Reproduce Mohamad's shape: empty accessToken + expiresAt=0 +
-    env token present. The new guard must prevent the stash so the
-    placeholder file is preserved for whatever auth path uses it."""
+    """Refresh-token-only file: empty accessToken, non-empty
+    refreshToken. Claude Code may successfully refresh via that token,
+    so leave the file in place — this is NOT a dead-placeholder."""
     _patch_home(monkeypatch, tmp_path)
     monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "sk-token-1")
-    _write_creds(str(tmp_path), {"claudeAiOauth": {"accessToken": "",
-                                                   "expiresAt": 0}})
+    _write_creds(str(tmp_path), {"claudeAiOauth": {
+        "accessToken": "", "refreshToken": "rf-x", "expiresAt": 0,
+    }})
     creds = tmp_path / ".claude" / ".credentials.json"
     result = dtach_inject._stash_expired_credentials_file()
     assert result is None
@@ -423,5 +424,95 @@ def test_stash_no_op_when_creds_file_access_token_wrong_type(
                                                    "expiresAt": past_ms}})
     creds = tmp_path / ".claude" / ".credentials.json"
     assert dtach_inject._stash_expired_credentials_file() is None
+    assert creds.exists()
+
+
+# ---- _credentials_file_is_dead_placeholder ----------------------------
+
+def test_dead_placeholder_true_when_both_tokens_empty(tmp_path, monkeypatch):
+    """Mohamad's exact production shape."""
+    _patch_home(monkeypatch, tmp_path)
+    _write_creds(str(tmp_path), {"claudeAiOauth": {
+        "accessToken": "", "refreshToken": "", "expiresAt": 0,
+    }})
+    assert dtach_inject._credentials_file_is_dead_placeholder() is True
+
+
+def test_dead_placeholder_false_when_accessToken_populated(tmp_path, monkeypatch):
+    _patch_home(monkeypatch, tmp_path)
+    _write_creds(str(tmp_path), {"claudeAiOauth": {
+        "accessToken": "sk-x", "refreshToken": "",
+    }})
+    assert dtach_inject._credentials_file_is_dead_placeholder() is False
+
+
+def test_dead_placeholder_false_when_only_refresh_populated(tmp_path,
+                                                            monkeypatch):
+    """Refresh-token-only: Claude Code may still refresh, don't touch."""
+    _patch_home(monkeypatch, tmp_path)
+    _write_creds(str(tmp_path), {"claudeAiOauth": {
+        "accessToken": "", "refreshToken": "rf-x",
+    }})
+    assert dtach_inject._credentials_file_is_dead_placeholder() is False
+
+
+def test_dead_placeholder_false_when_missing_refresh_key(tmp_path, monkeypatch):
+    """No refreshToken key at all — fail-open, can't confirm both empty."""
+    _patch_home(monkeypatch, tmp_path)
+    _write_creds(str(tmp_path), {"claudeAiOauth": {"accessToken": ""}})
+    assert dtach_inject._credentials_file_is_dead_placeholder() is False
+
+
+def test_dead_placeholder_false_when_wrong_type(tmp_path, monkeypatch):
+    """refreshToken is a non-string — fail-open."""
+    _patch_home(monkeypatch, tmp_path)
+    _write_creds(str(tmp_path), {"claudeAiOauth": {
+        "accessToken": "", "refreshToken": 0,
+    }})
+    assert dtach_inject._credentials_file_is_dead_placeholder() is False
+
+
+def test_dead_placeholder_false_when_missing_file(tmp_path, monkeypatch):
+    _patch_home(monkeypatch, tmp_path)
+    assert dtach_inject._credentials_file_is_dead_placeholder() is False
+
+
+def test_dead_placeholder_false_when_malformed_json(tmp_path, monkeypatch):
+    _patch_home(monkeypatch, tmp_path)
+    _write_creds(str(tmp_path), "{not valid json")
+    assert dtach_inject._credentials_file_is_dead_placeholder() is False
+
+
+# ---- stash integration: dead placeholder + refresh-only ---------------
+
+def test_stash_renames_dead_placeholder_when_env_token_set(
+        tmp_path, monkeypatch):
+    """The new fix path: dead placeholder + env token present → stash so
+    claude falls back to env instead of shadowing with the dead file."""
+    _patch_home(monkeypatch, tmp_path)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "sk-token-1")
+    _write_creds(str(tmp_path), {"claudeAiOauth": {
+        "accessToken": "", "refreshToken": "",
+        "expiresAt": 0, "refreshTokenExpiresAt": 0,
+        "subscriptionType": "max",
+    }})
+    creds = tmp_path / ".claude" / ".credentials.json"
+    stash = creds.with_suffix(creds.suffix + ".stale")
+    result = dtach_inject._stash_expired_credentials_file()
+    assert result == stash
+    assert not creds.exists()
+    assert stash.exists()
+
+
+def test_stash_no_op_for_refresh_only_placeholder(tmp_path, monkeypatch):
+    """Regression guard: refresh-token-only files must not be stashed."""
+    _patch_home(monkeypatch, tmp_path)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "sk-token-1")
+    _write_creds(str(tmp_path), {"claudeAiOauth": {
+        "accessToken": "", "refreshToken": "rf-x", "expiresAt": 0,
+    }})
+    creds = tmp_path / ".claude" / ".credentials.json"
+    result = dtach_inject._stash_expired_credentials_file()
+    assert result is None
     assert creds.exists()
 

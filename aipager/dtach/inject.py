@@ -81,6 +81,37 @@ def _credentials_file_has_token() -> bool:
         return False
 
 
+def _credentials_file_is_dead_placeholder() -> bool:
+    """Return True iff ~/.claude/.credentials.json has BOTH
+    ``claudeAiOauth.accessToken`` and ``claudeAiOauth.refreshToken`` as
+    empty strings.
+
+    Observed on containers where a Max-plan account's credentials file
+    was cleared (both token strings blanked, only account metadata
+    remaining) but the file itself wasn't removed. Claude Code sees the
+    file, tries to refresh via the empty refresh token, and fails with
+    ``OAuth session expired and could not be refreshed`` — even when a
+    valid ``CLAUDE_CODE_OAUTH_TOKEN`` env var is present, because the
+    file's presence shadows the env token in interactive mode.
+
+    Fail-open (returns False on any exception path OR any of {missing
+    file, malformed JSON, missing keys, non-string tokens, either token
+    non-empty}) — refresh-token-only files stay put so Claude Code's
+    internal refresh path can try. Only the "both empty" case is
+    definitively dead-on-arrival.
+    """
+    path = Path.home() / ".claude" / ".credentials.json"
+    try:
+        data = json.loads(path.read_text())
+        oauth = data["claudeAiOauth"]
+        access = oauth["accessToken"]
+        refresh = oauth["refreshToken"]
+        return (isinstance(access, str) and access == ""
+                and isinstance(refresh, str) and refresh == "")
+    except (OSError, ValueError, TypeError, KeyError):
+        return False
+
+
 def _stash_expired_credentials_file() -> Path | None:
     """Rename an expired ~/.claude/.credentials.json aside so claude
     falls back to CLAUDE_CODE_OAUTH_TOKEN.
@@ -91,18 +122,19 @@ def _stash_expired_credentials_file() -> Path | None:
     -p`` uses a different code path and reads env first, which is why
     it authenticates fine while an interactive session does not.)
 
-    Only triggered when ALL of these hold, so we never accidentally
-    downgrade or destroy a working auth setup:
+    Only triggered when ``CLAUDE_CODE_OAUTH_TOKEN`` is set and the
+    credentials file is definitely dead — one of:
 
-    - ``CLAUDE_CODE_OAUTH_TOKEN`` env var is set (env is the fallback
-      we want claude to use once the file is out of the way)
-    - the credentials file exists on disk
-    - the file holds a real (non-empty) ``accessToken`` — placeholder
-      files with empty tokens are opaque state that Claude Code may
-      be managing through a non-file path (Max-plan device auth /
-      account-UUID session), so leave them alone
-    - the file's ``expiresAt`` is in the past (via
-      :func:`_credentials_file_is_fresh`)
+    (a) **Traditional expired**: non-empty ``accessToken`` whose
+        ``expiresAt`` is in the past (the 0.4.18 case).
+    (b) **Dead placeholder**: BOTH ``accessToken`` and ``refreshToken``
+        are empty strings — no token material to authenticate with, no
+        refresh path (observed on cleared Max-plan files that would
+        otherwise sit shadowing the env token forever).
+
+    Refresh-token-only files (empty ``accessToken`` but non-empty
+    ``refreshToken``) are left alone: Claude Code may still refresh
+    successfully, and aipager doesn't do live API validation.
 
     Returns the stash path on success, ``None`` otherwise. Idempotent:
     a follow-up call with no file present is a no-op. Reversible: the
@@ -116,9 +148,11 @@ def _stash_expired_credentials_file() -> Path | None:
     creds = Path.home() / ".claude" / ".credentials.json"
     if not creds.exists():
         return None
-    if not _credentials_file_has_token():
-        return None  # placeholder / cleared file — don't touch
-    if _credentials_file_is_fresh():
+    dead_placeholder = _credentials_file_is_dead_placeholder()
+    traditionally_expired = (
+        _credentials_file_has_token() and not _credentials_file_is_fresh()
+    )
+    if not (dead_placeholder or traditionally_expired):
         return None
     stash = creds.with_suffix(creds.suffix + ".stale")
     try:
