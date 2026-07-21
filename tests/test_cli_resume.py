@@ -178,16 +178,20 @@ def test_cmd_resume_no_arg_calls_picker(monkeypatch):
 def test_cmd_resume_with_name_calls_resume_one(monkeypatch):
     called = {}
     monkeypatch.setattr(cli_resume, "_resume_one",
-                        lambda label: (called.setdefault("label", label), 0)[1])
+                        lambda label, *, force_auto=False:
+                            (called.setdefault("label", label),
+                             called.setdefault("force_auto", force_auto), 0)[2])
     args = argparse.Namespace(name="jim")
     cli_resume._cmd_resume(args)
     assert called["label"] == "jim"
+    assert called["force_auto"] is False
 
 
 def test_cmd_resume_strips_at_and_slash(monkeypatch):
     received = {}
     monkeypatch.setattr(cli_resume, "_resume_one",
-                        lambda label: (received.setdefault("label", label), 0)[1])
+                        lambda label, *, force_auto=False:
+                            (received.setdefault("label", label), 0)[1])
     args = argparse.Namespace(name="@JIM")
     cli_resume._cmd_resume(args)
     assert received["label"] == "jim"

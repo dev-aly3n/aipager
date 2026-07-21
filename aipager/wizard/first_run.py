@@ -237,6 +237,52 @@ def _commit_owner_dm(token: str, chat_id: int, role: str) -> None:
             pass
 
 
+def _step_default_mode(step_label: str = "[5/5]") -> str:
+    """Ask the user which default permission mode to use for new sessions.
+
+    Returns ``"ask"`` or ``"auto"``. The result is stored in ``aipager.yaml``
+    as ``default_mode: ask | auto`` by the caller.
+    """
+    step(f"{step_label}  Default session mode")
+    console.print()
+    console.print(
+        "[muted]  💬 Ask  — Claude prompts before each tool call (recommended).[/muted]"
+    )
+    console.print(
+        "[muted]  🤖 Auto — Claude runs tools without prompting "
+        "(<code>--dangerously-skip-permissions</code>).[/muted]"
+    )
+    console.print()
+    ask_choice = questionary.Choice(
+        "💬 Ask — Claude prompts for each tool call", value="ask")
+    mode = _ask(questionary.select(
+        "Default mode for new sessions:",
+        choices=[
+            ask_choice,
+            questionary.Choice(
+                "🤖 Auto — Claude runs tools without prompting", value="auto"),
+        ],
+        default=ask_choice,
+        qmark="?",
+        style=_PROMPT_STYLE,
+    ))
+    return mode
+
+
+def _commit_default_mode(mode: str) -> None:
+    """Persist ``default_mode`` in ``aipager.yaml``.
+
+    Reads the current scopes so the write is additive — existing scope
+    config is preserved and only ``default_mode`` changes.
+    """
+    from aipager.wizard.scope_io import read_config
+    from aipager import scope as scope_mod
+
+    scopes, token = read_config()
+    scope_mod.dump_scopes(scopes, token, scope_mod.CONFIG_PATH, default_mode=mode)
+    ok(f"Default mode set to {mode}.")
+
+
 def _first_run_flow() -> int:
     """Connect a brand-new install to its bot — no mode question.
 
@@ -253,16 +299,20 @@ def _first_run_flow() -> int:
         console.print("Welcome to aipager setup.")
 
     try:
-        token, bot_username = _step_token(step_label="[1/4]")
+        token, bot_username = _step_token(step_label="[1/5]")
         chat_id = _step_chat_id(
-            token, bot_username, mode="personal", step_label="[2/4]",
+            token, bot_username, mode="personal", step_label="[2/5]",
         )
-        role = _grant_owner_step(chat_id, step_label="[3/4]")
+        role = _grant_owner_step(chat_id, step_label="[3/5]")
         # Token + DM scope committed here — a Ctrl+C in any later step
         # leaves a working config; re-running falls into the edit flow.
         _commit_owner_dm(token, chat_id, role)
 
-        deps_ok = _step_deps(step_label="[4/4]")
+        # Default mode for new sessions (Ask vs Auto).
+        default_mode = _step_default_mode(step_label="[4/5]")
+        _commit_default_mode(default_mode)
+
+        deps_ok = _step_deps(step_label="[5/5]")
         if not deps_ok:
             cont = _ask(questionary.confirm(
                 "Continue anyway? (the daemon will likely fail until you "
@@ -275,7 +325,7 @@ def _first_run_flow() -> int:
                     "re-run `aipager config`.",
                 )
                 return 2
-        _step_settings(step_label="[4/4]")
+        _step_settings(step_label="[5/5]")
     except KeyboardInterrupt:
         friendly_warn("Cancelled.")
         return 130

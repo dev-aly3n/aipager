@@ -64,6 +64,10 @@ if _v2 and _v2[1]:
     BOT_TOKEN = _v2[1]
 del _load_scopes, _load_policy, _v2
 
+from aipager.scope import load_default_mode as _load_dm  # noqa: E402
+DEFAULT_MODE: str = _load_dm()
+del _load_dm
+
 
 def _parse_observer_bots(raw: str) -> list[tuple[str, str]]:
     """Parse 'token1:chatid1,token2:chatid2' into [(token, chatid), ...].

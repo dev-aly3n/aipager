@@ -182,6 +182,10 @@ class TrackedSession:
     # status == GONE; ignored otherwise. /resume picker ignores this
     # flag entirely so previously-hidden sessions remain resumable.
     hidden_from_status: bool = False
+    # Permission mode for this session. When True, claude runs with
+    # --dangerously-skip-permissions (Auto mode, no per-tool prompts).
+    # When False (default), claude prompts before each tool call (Ask mode).
+    skip_perms: bool = False
     # Multi-scope (Phase B): which Telegram chat this session belongs to.
     # All outbound notifications for the session route here instead of the
     # global CHAT_ID. `scope_chat_id == 0` means "not yet stamped" — the
@@ -432,6 +436,8 @@ class SessionRegistry:
         # Resume support — see TrackedSession docstring.
         "claude_session_id", "cwd", "gone_at", "last_assistant_preview",
         "hidden_from_status",
+        # Permission mode — persisted so daemon restarts preserve Auto/Ask.
+        "skip_perms",
         # Multi-scope routing.
         "scope_chat_id", "scope_kind",
     )
@@ -564,6 +570,7 @@ class SessionRegistry:
                 gone_at=gone_at,
                 last_assistant_preview=sd.get("last_assistant_preview", ""),
                 hidden_from_status=sd.get("hidden_from_status", False),
+                skip_perms=sd.get("skip_perms", False),
                 scope_chat_id=int(sd.get("scope_chat_id", 0) or 0),
                 scope_kind=sd.get("scope_kind", ""),
             )

@@ -543,8 +543,9 @@ class CommandHandlersMixin:
         if len(parts) < 2:
             await update.message.reply_text(
                 "Usage: /new &lt;name&gt; [initial prompt]\n"
-                "Prefix the name with <code>!</code> to skip permission checks "
-                "(<code>--dangerously-skip-permissions</code>).\n"
+                "Prefix the name with <code>!</code> to launch in "
+                "🤖 Auto mode (Claude runs tools without prompting; "
+                "<code>--dangerously-skip-permissions</code>).\n"
                 "Example: /new dev fix the auth bug\n"
                 "Example: /new !dev fix the auth bug",
                 parse_mode="HTML",
@@ -560,6 +561,13 @@ class CommandHandlersMixin:
             await update.message.reply_text(
                 "⚠️ Session name is empty after stripping <code>!</code>.",
                 parse_mode="HTML",
+            )
+            return
+
+        # Admin gate: Auto mode (--dangerously-skip-permissions) requires admin.
+        if skip_perms and not self._is_admin(update):
+            await update.message.reply_text(
+                "Switching to Auto mode requires admin role.",
             )
             return
 
@@ -588,9 +596,11 @@ class CommandHandlersMixin:
             )
             return
 
+        mode_icon = "🤖" if skip_perms else "💬"
+        mode_label = "Auto" if skip_perms else "Ask"
         status_msg = await update.message.reply_text(
-            f"🚀 Launching <b>{html_mod.escape(name)}</b>"
-            + (" <code>(unsafe)</code>" if skip_perms else "") + "...",
+            f"🚀 Launching <b>{html_mod.escape(name)}</b> "
+            f"{mode_icon} {mode_label}…",
             parse_mode="HTML",
         )
 
@@ -610,6 +620,7 @@ class CommandHandlersMixin:
         # Switch active session to the new one
         sess = self.registry.get_or_create(session_name)
         sess.label = name
+        sess.skip_perms = skip_perms
         if chat_id is not None:
             sess.scope_chat_id = chat_id
             sess.scope_kind = scope_kind
@@ -630,9 +641,27 @@ class CommandHandlersMixin:
             if sess.queue_prompt(prompt, update.message.message_id):
                 self.registry.mark_dirty()
 
+        # Enriched reply: icon + mode + cwd + optional model + /perms nudge.
+        mode_icon2 = "🤖" if skip_perms else "💬"
+        mode_label2 = "Auto" if skip_perms else "Ask"
+        # Use the actual cwd when it has been populated asynchronously; fall
+        # back to inject._PROJECT_DIR for fresh sessions where the hook
+        # receiver has not yet delivered the first statusLine event.
+        from aipager.dtach import inject as _inject  # local import to avoid cycles
+        effective_cwd = sess.cwd or _inject._PROJECT_DIR
+        cwd_line = f"\n📁 <code>{html_mod.escape(effective_cwd)}</code>"
+        model_line = (f"\n🧠 {html_mod.escape(sess.model_name)}"
+                      if sess.model_name else "")
+        perms_nudge = (
+            "\n\n💡 Use /perms to switch between Ask and Auto mode."
+            if not skip_perms else ""
+        )
         await status_msg.edit_text(
-            f"✅ <b>{html_mod.escape(name)}</b> launched"
-            + ("\n📝 Prompt queued" if prompt else ""),
+            f"✅ <b>{html_mod.escape(name)}</b> created\n"
+            f"{mode_icon2} {mode_label2} mode"
+            f"{model_line}{cwd_line}"
+            + ("\n📝 Prompt queued" if prompt else "")
+            + perms_nudge,
             parse_mode="HTML",
         )
         log.info("Launched session %s (prompt=%s)", name, bool(prompt))
@@ -719,6 +748,99 @@ class CommandHandlersMixin:
             reply_fn=update.message.reply_text,
             update=update,
         )
+
+    async def _handle_perms_cmd(self, update: Update,
+                                ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /perms — toggle permission mode on the active session.
+
+        IDLE Ask→Auto: sends a confirmation keyboard (requires admin).
+        IDLE Auto→Ask: executes the switch directly (no confirmation needed).
+        BUSY: sends a [Stop task & switch] / [Not now] keyboard.
+        No active session: replies with an error.
+        """
+        if not await self._authorize(update):
+            return
+
+        name = self.registry.last_active_session
+        if not name:
+            await update.message.reply_text(
+                "No active session. Use /new to start one.",
+            )
+            return
+
+        sess = self.registry.get(name)
+        if not sess or sess.status == Status.GONE:
+            await update.message.reply_text(
+                "No active session. Use /new to start one.",
+            )
+            return
+
+        target_skip_perms = not sess.skip_perms
+
+        # Admin gate: switching TO Auto mode requires admin.
+        if target_skip_perms and not self._is_admin(update):
+            await update.message.reply_text(
+                "Switching to Auto mode requires admin role.",
+            )
+            return
+
+        if sess.status == Status.UNKNOWN:
+            await update.message.reply_text(
+                f"⚠️ <b>{html_mod.escape(sess.label)}</b>'s status is still initializing."
+                f" Try /perms again in a moment.",
+                parse_mode="HTML",
+            )
+            return
+
+        if sess.status == Status.BUSY:
+            # BUSY flow: show Stop & switch / Not now keyboard.
+            kb = self._build_perms_busy_keyboard(sess.name)
+            mode_label = "Auto" if target_skip_perms else "Ask"
+            sent = await update.message.reply_text(
+                f"⚙️ <b>{html_mod.escape(sess.label)}</b> is busy.\n"
+                f"Switch to {mode_label} mode?",
+                parse_mode="HTML",
+                reply_markup=kb,
+            )
+            self._perms_pending[sess.name] = {
+                "target_skip_perms": target_skip_perms,
+                "msg_id": sent.message_id,
+                "label": sess.label,
+            }
+            return
+
+        # IDLE flow.
+        if target_skip_perms:
+            # Ask→Auto: require confirmation.
+            kb = self._build_perms_confirm_keyboard(sess.name)
+            sent = await update.message.reply_text(
+                f"⚙️ Switch <b>{html_mod.escape(sess.label)}</b> to "
+                f"🤖 Auto mode?\n"
+                f"<i>Claude will run tools without prompting "
+                f"(<code>--dangerously-skip-permissions</code>).</i>",
+                parse_mode="HTML",
+                reply_markup=kb,
+            )
+            self._perms_pending[sess.name] = {
+                "target_skip_perms": True,
+                "msg_id": sent.message_id,
+                "label": sess.label,
+            }
+        else:
+            # Auto→Ask: execute immediately, no confirmation needed.
+            status_msg = await update.message.reply_text(
+                f"⚙️ Switching <b>{html_mod.escape(sess.label)}</b> "
+                f"to 💬 Ask mode…",
+                parse_mode="HTML",
+            )
+
+            async def _edit(text, **kw):
+                try:
+                    await status_msg.edit_text(text, **kw)
+                except Exception:
+                    await update.message.reply_text(text, **kw)
+
+            await self._do_perms_switch_via_fn(sess, False, _edit)
 
     async def _handle_whoami(self, update: Update,
                              ctx: ContextTypes.DEFAULT_TYPE) -> None:

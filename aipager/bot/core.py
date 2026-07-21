@@ -62,6 +62,11 @@ class TelegramBot(
         # taps Resume / Replace / Cancel. Multiple users colliding on the
         # same name race-overwrite — acceptable for a v1 single-admin tool.
         self._new_conflict_pending: dict[str, dict] = {}
+        # `/perms` pending state. Keyed by session_name; value is
+        # {"target_skip_perms": bool, "msg_id": int, "label": str}.
+        self._perms_pending: dict[str, dict] = {}
+        # `/resume` mode-picker pending state. Keyed by session_name → label.
+        self._resume_mode_pending: dict[str, str] = {}
         # Team / allow-list — None for personal-mode installs (no team.yaml),
         # which preserves the existing one-user-one-DM behaviour.
         from aipager.config import TEAM

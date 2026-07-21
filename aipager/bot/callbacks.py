@@ -13,6 +13,7 @@ import asyncio
 import html as html_mod
 import logging
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from telegram import (
@@ -71,6 +72,10 @@ log = logging.getLogger(__name__)
 
 
 
+_PERMS_POLL_COUNT = 15
+_PERMS_POLL_INTERVAL = 0.2
+
+
 class CallbackDispatchMixin:
     """Mixin for TelegramBot — see :mod:`aipager.bot` overview."""
 
@@ -88,6 +93,71 @@ class CallbackDispatchMixin:
             await query.answer(text)
         except Exception:
             pass
+
+    async def _do_perms_switch_via_fn(self, sess, target_skip_perms: bool, edit_fn) -> None:
+        """Kill + poll + relaunch with toggled skip_perms.
+
+        ``edit_fn`` is an async callable ``(text, **kw)`` used to update
+        the in-progress message (either via query.edit_message_text or
+        via status_msg.edit_text / update.message.reply_text, depending on
+        the call site). Preserves ``claude_session_id`` and ``cwd`` so
+        transcript resume continuity is maintained.
+        """
+        session_name = sess.name
+        label = sess.label
+        resume_id = sess.claude_session_id
+        cwd = sess.cwd or None
+
+        # Save these before kill clears registry state.
+        sock = f"{inject.SOCK_PREFIX}{session_name.removeprefix('claude-')}.sock"
+
+        await inject.kill_session(session_name)
+
+        # Poll for socket disappearance (up to 3 s).
+        for _ in range(_PERMS_POLL_COUNT):
+            await asyncio.sleep(_PERMS_POLL_INTERVAL)
+            if not Path(sock).is_socket():
+                break
+        else:
+            # Socket still present after 3 s — give up.
+            await edit_fn(
+                f"⚠️ <b>{html_mod.escape(label)}</b> is still stopping — "
+                f"mode not changed. Try /perms again in a moment.",
+                parse_mode="HTML",
+            )
+            return
+
+        # Relaunch with toggled mode, preserving transcript + cwd.
+        short_name = session_name.removeprefix("claude-")
+        sys_extra = self._session_system_prompt(sess.scope_chat_id, label)
+        ok, err = await inject.launch_session(
+            short_name, skip_perms=target_skip_perms,
+            resume_id=resume_id or None, cwd=cwd,
+            system_prompt_extra=sys_extra,
+        )
+        if not ok:
+            await edit_fn(
+                f"❌ Couldn't switch mode: {html_mod.escape(err)}",
+                parse_mode="HTML",
+            )
+            return
+
+        # Update registry.
+        sess.skip_perms = target_skip_perms
+        sess.claude_session_id = resume_id  # restore — launch_session may clear
+        sess.cwd = cwd or sess.cwd
+        sess.gone_at = None
+        self.registry.transition(session_name, Status.IDLE)
+        self.registry.mark_dirty()
+
+        mode_icon = "🤖" if target_skip_perms else "💬"
+        mode_label = "Auto" if target_skip_perms else "Ask"
+        await edit_fn(
+            f"{mode_icon} <b>{html_mod.escape(label)}</b> is now in "
+            f"{mode_label} mode.",
+            parse_mode="HTML",
+        )
+        log.info("[%s] perms switched to skip_perms=%s", label, target_skip_perms)
 
     async def _handle_callback(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle inline keyboard button tap.
@@ -249,28 +319,40 @@ class CallbackDispatchMixin:
                 await self._safe_answer(query, "No gone sessions to hide")
             return
 
-        # ---- /resume picker callbacks ---------------------------------
-        if action == "resume" and session_name and session_name != "_":
-            # Resolve the user-facing label from the registry: suffixed
-            # names (label__d<chat_id>) don't round-trip through a plain
-            # prefix strip, and _do_resume matches on sess.label.
+        # ---- /perms callbacks -----------------------------------------
+        if action in ("perms_confirm", "perms_cancel",
+                      "perms_stop_switch", "perms_wait"):
+            pending = self._perms_pending.pop(session_name, None)
+            target_skip_perms = (pending or {}).get("target_skip_perms", False)
+            label = (pending or {}).get("label", session_name.removeprefix("claude-"))
             sess = self.registry.get(session_name)
-            label = sess.label if sess else session_name.removeprefix("claude-")
-            # Edit the picker message into a "Resuming…" stub so the user
-            # sees feedback even before launch_session returns.
-            try:
-                await query.edit_message_text(
-                    f"♻️ Resuming <b>{html_mod.escape(label)}</b>…",
-                    parse_mode="HTML",
-                )
-            except Exception:
-                pass
 
-            async def _reply(text, **kw):
-                # The picker message is editable but only once — subsequent
-                # edits on the same message work fine. Fall back to a fresh
-                # message if Telegram rejects the edit (e.g. picker was
-                # deleted).
+            if action == "perms_cancel":
+                try:
+                    await query.edit_message_text("↩️ Cancelled.")
+                except Exception:
+                    pass
+                return
+
+            if action == "perms_wait":
+                try:
+                    await query.edit_message_text(
+                        f"⏳ Cancelled — try /perms again when "
+                        f"<b>{html_mod.escape(label)}</b> is idle.",
+                        parse_mode="HTML",
+                    )
+                except Exception:
+                    pass
+                return
+
+            if sess is None:
+                try:
+                    await query.edit_message_text("⚠️ Session not found.")
+                except Exception:
+                    pass
+                return
+
+            async def _edit(text, **kw):
                 try:
                     await query.edit_message_text(text, **kw)
                 except Exception:
@@ -278,10 +360,126 @@ class CallbackDispatchMixin:
                         chat_id=CHAT_ID, text=text, **kw,
                     )
 
-            # Reuse the same code path as /resume <name>. No update object
-            # here, so driver attribution falls back to leaving the
-            # last_driver field unchanged (still set from prior session).
-            await self._do_resume(label=label, reply_fn=_reply)
+            if action == "perms_confirm":
+                # IDLE Ask→Auto confirmed.
+                await self._do_perms_switch_via_fn(sess, target_skip_perms, _edit)
+                return
+
+            if action == "perms_stop_switch":
+                # BUSY: send Ctrl-C, then poll for socket disappearance.
+                await inject.send_keys(session_name, "C-c")
+                # Short pause to let Ctrl-C signal be processed.
+                await asyncio.sleep(0.5)
+                # Poll for socket disappearance before relaunch.
+                sock = f"{inject.SOCK_PREFIX}{session_name.removeprefix('claude-')}.sock"
+                for _ in range(_PERMS_POLL_COUNT):
+                    await asyncio.sleep(_PERMS_POLL_INTERVAL)
+                    if not Path(sock).is_socket():
+                        break
+                else:
+                    try:
+                        await query.edit_message_text(
+                            f"⚠️ <b>{html_mod.escape(label)}</b> is still stopping — "
+                            f"mode not changed. Try /perms again in a moment.",
+                            parse_mode="HTML",
+                        )
+                    except Exception:
+                        pass
+                    return
+
+                # Relaunch with toggled mode.
+                resume_id = sess.claude_session_id
+                cwd = sess.cwd or None
+                short_name = session_name.removeprefix("claude-")
+                sys_extra = self._session_system_prompt(sess.scope_chat_id, label)
+                ok_r, err_r = await inject.launch_session(
+                    short_name, skip_perms=target_skip_perms,
+                    resume_id=resume_id or None, cwd=cwd,
+                    system_prompt_extra=sys_extra,
+                )
+                if not ok_r:
+                    try:
+                        await query.edit_message_text(
+                            f"❌ Couldn't switch mode: {html_mod.escape(err_r)}",
+                            parse_mode="HTML",
+                        )
+                    except Exception:
+                        pass
+                    return
+
+                sess.skip_perms = target_skip_perms
+                sess.claude_session_id = resume_id
+                sess.cwd = cwd or sess.cwd
+                sess.gone_at = None
+                self.registry.transition(session_name, Status.IDLE)
+                self.registry.mark_dirty()
+
+                mode_icon = "🤖" if target_skip_perms else "💬"
+                mode_label = "Auto" if target_skip_perms else "Ask"
+                try:
+                    await query.edit_message_text(
+                        f"{mode_icon} <b>{html_mod.escape(label)}</b> is now in "
+                        f"{mode_label} mode.",
+                        parse_mode="HTML",
+                    )
+                except Exception:
+                    pass
+                log.info("[%s] perms switched (stop_switch) to skip_perms=%s",
+                         label, target_skip_perms)
+                return
+
+        # ---- /resume mode-picker callbacks ----------------------------
+        if action in ("resume_mode_ask", "resume_mode_auto", "resume_mode_cancel"):
+            sess = self.registry.get(session_name)
+            label = self._resume_mode_pending.pop(session_name, None)
+            if label is None and sess is not None:
+                label = sess.label
+            if label is None:
+                label = session_name.removeprefix("claude-")
+
+            if action == "resume_mode_cancel":
+                try:
+                    await query.edit_message_text("↩️ Cancelled.")
+                except Exception:
+                    pass
+                return
+
+            skip_perms_override = (action == "resume_mode_auto")
+
+            async def _reply(text, **kw):
+                try:
+                    await query.edit_message_text(text, **kw)
+                except Exception:
+                    await self._app.bot.send_message(
+                        chat_id=CHAT_ID, text=text, **kw,
+                    )
+
+            await self._do_resume(
+                label=label, reply_fn=_reply,
+                skip_perms_override=skip_perms_override,
+            )
+            return
+
+        # ---- /resume picker callbacks ---------------------------------
+        if action == "resume" and session_name and session_name != "_":
+            # Resolve the user-facing label from the registry: suffixed
+            # names (label__d<chat_id>) don't round-trip through a plain
+            # prefix strip, and _do_resume matches on sess.label.
+            sess = self.registry.get(session_name)
+            label = sess.label if sess else session_name.removeprefix("claude-")
+            # Store pending label for the mode-picker callbacks.
+            self._resume_mode_pending[session_name] = label
+            # Edit the picker message to show the mode-picker keyboard.
+            persisted_skip_perms = sess.skip_perms if sess else False
+            kb = self._build_resume_mode_keyboard(session_name, persisted_skip_perms)
+            try:
+                await query.edit_message_text(
+                    f"Resume <b>{html_mod.escape(label)}</b> as:",
+                    parse_mode="HTML",
+                    reply_markup=kb,
+                )
+            except Exception:
+                pass
             return
 
         if action.startswith("resume_page:"):
@@ -611,6 +809,16 @@ class CallbackDispatchMixin:
         elif action == "allow":
             verb = ACTION_VERBS[action]
             ok = await inject.send_keys(session_name, "Enter")
+        elif action == "allow_always":
+            verb = ACTION_VERBS[action]
+            # Navigate: Down → Down → Enter (menu position 2 = "Yes, don't ask again")
+            ok = await inject.send_keys(session_name, "Down")
+            if ok:
+                await asyncio.sleep(0.1)
+                ok = await inject.send_keys(session_name, "Down")
+            if ok:
+                await asyncio.sleep(0.1)
+                ok = await inject.send_keys(session_name, "Enter")
         elif action == "deny":
             verb = ACTION_VERBS[action]
             ok = await inject.send_keys(session_name, "Down")

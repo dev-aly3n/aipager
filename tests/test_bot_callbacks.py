@@ -337,7 +337,9 @@ def test_clear_gone_only_targets_gone_sessions(mk_bot, mk_query, run_async):
 
 # ---- action: resume ----------------------------------------------------
 
-def test_resume_callback_invokes_do_resume(mk_bot, mk_query, run_async):
+def test_resume_callback_shows_mode_picker(mk_bot, mk_query, run_async):
+    """Tapping a session in the /resume picker now shows a mode-picker keyboard
+    instead of immediately calling _do_resume."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
     sess.claude_session_id = "UUID-1"
@@ -346,15 +348,18 @@ def test_resume_callback_invokes_do_resume(mk_bot, mk_query, run_async):
     bot._do_resume = AsyncMock()
     update, query = mk_query("claude-jim:resume")
     run_async(bot._handle_callback(update, MagicMock()))
-    bot._do_resume.assert_awaited_once()
-    assert bot._do_resume.await_args.kwargs["label"] == "jim"
+    # Mode picker should be shown, not _do_resume called
+    bot._do_resume.assert_not_awaited()
+    query.edit_message_text.assert_awaited_once()
+    # The pending entry should be set
+    assert "claude-jim" in bot._resume_mode_pending
+    assert bot._resume_mode_pending["claude-jim"] == "jim"
 
 
 def test_resume_callback_resolves_label_for_suffixed_name(
         mk_bot, mk_query, run_async):
     # Suffixed names (label__d<chat_id>) must resolve to the registry
-    # label, not the prefix-stripped internal name — _do_resume looks up
-    # sessions via find_by_label.
+    # label, not the prefix-stripped internal name — mode picker stores correct label.
     bot = mk_bot()
     sess = TrackedSession(name="claude-newName__d1921747733",
                           label="newName", status=Status.GONE)
@@ -364,8 +369,10 @@ def test_resume_callback_resolves_label_for_suffixed_name(
     bot._do_resume = AsyncMock()
     update, query = mk_query("claude-newName__d1921747733:resume")
     run_async(bot._handle_callback(update, MagicMock()))
-    bot._do_resume.assert_awaited_once()
-    assert bot._do_resume.await_args.kwargs["label"] == "newName"
+    # Mode picker shown, not direct resume
+    bot._do_resume.assert_not_awaited()
+    # Pending entry should store the registry label
+    assert bot._resume_mode_pending.get("claude-newName__d1921747733") == "newName"
 
 
 def test_resume_page_edits_picker(mk_bot, mk_query, run_async):

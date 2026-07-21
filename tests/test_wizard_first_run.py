@@ -193,6 +193,8 @@ def _stub_flow(monkeypatch, *, role="owner", deps=True):
                         lambda step_label: ("TOK", "bot_username"))
     monkeypatch.setattr(first_run, "_step_chat_id", lambda *a, **k: 42)
     monkeypatch.setattr(first_run, "_grant_owner_step", lambda *a, **k: role)
+    monkeypatch.setattr(first_run, "_step_default_mode", lambda step_label="[4/5]": "ask")
+    monkeypatch.setattr(first_run, "_commit_default_mode", lambda mode: None)
     monkeypatch.setattr(first_run, "_step_deps", lambda step_label: deps)
     monkeypatch.setattr(first_run, "_step_settings", lambda step_label: None)
     monkeypatch.setattr(first_run, "_completion_screen", lambda: None)
