@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.20] - 2026-07-21
+
+### Fixed
+- **"Dead placeholder" credentials files now get stashed so
+  `CLAUDE_CODE_OAUTH_TOKEN` can take over auth.** 0.4.19 protected all
+  empty-token files from being renamed, but that left genuinely dead
+  placeholders — files where BOTH `accessToken` and `refreshToken` are
+  empty strings — sitting in place and shadowing the env token, with
+  Claude Code trying to refresh via the empty refresh token and
+  failing 401. Observed in production on a Max-plan container where
+  the credentials file had been cleared. The stash logic now also
+  fires when both tokens are empty (no material to authenticate with,
+  no refresh path). Refresh-token-only files (empty `accessToken` but
+  non-empty `refreshToken`) are still left alone — Claude Code may
+  still refresh successfully through them.
+
 ## [0.4.19] - 2026-07-21
 
 ### Fixed
