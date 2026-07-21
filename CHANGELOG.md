@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.22] - 2026-07-21
+
+### Fixed
+- **`aipager-hook` no longer balloons to multi-GB RSS on large
+  transcripts.** `_origin_from_transcript` and
+  `_turn_already_blocked` in `aipager/dtach/enforce.py` used to do
+  `Path(path).read_text().splitlines()` on the ENTIRE transcript on
+  every PreToolUse — allocating 1–2 GB per hook subprocess for a
+  500 MB transcript. dmesg had shown hook OOMs at 767 MB, 1.3 GB,
+  and 5.2 GB anon-rss inside container cgroups. Both functions now
+  stream the transcript from EOF backwards via a new
+  `_iter_lines_reversed` helper and short-circuit at the last real
+  user prompt — typical work is a few KB instead of hundreds of MB.
+  Multi-byte UTF-8 characters at chunk boundaries are buffered
+  correctly (Persian/Arabic content preserved).
+
+### Added
+- **Hook subprocesses now cap their own address space at 1 GB
+  (`RLIMIT_AS`).** Baseline is ~34 MB VmSize, so 1 GB gives ~30×
+  headroom over realistic legitimate use while still catching true
+  runaways (dies with MemoryError instead of eating host RAM). Users
+  who previously deployed manual `ulimit` wrappers
+  (`aipager-hook-capped.sh`) no longer need them. Applies to both
+  `aipager-hook` and `aipager-statusline`.
+- **Telegram notification when a hook subprocess trips the RAM cap.**
+  Users see "⚠️ session · memory cap hit during `<tool>`" in the
+  session's chat, so a silent dropped event no longer goes unnoticed.
+  Uses a zero-allocation pre-opened socket + pre-serialized payload
+  so the notification path survives even when no new memory can be
+  allocated. Includes the in-flight tool name when stdin was parsed
+  before the balloon (typical case); falls back to a bare "cap hit"
+  message otherwise.
+
 ## [0.4.21] - 2026-07-21
 
 ### Fixed
