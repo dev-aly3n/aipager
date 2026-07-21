@@ -644,8 +644,12 @@ class CommandHandlersMixin:
         # Enriched reply: icon + mode + cwd + optional model + /perms nudge.
         mode_icon2 = "🤖" if skip_perms else "💬"
         mode_label2 = "Auto" if skip_perms else "Ask"
-        cwd_line = (f"\n📁 <code>{html_mod.escape(sess.cwd)}</code>"
-                    if sess.cwd else "")
+        # Use the actual cwd when it has been populated asynchronously; fall
+        # back to inject._PROJECT_DIR for fresh sessions where the hook
+        # receiver has not yet delivered the first statusLine event.
+        from aipager.dtach import inject as _inject  # local import to avoid cycles
+        effective_cwd = sess.cwd or _inject._PROJECT_DIR
+        cwd_line = f"\n📁 <code>{html_mod.escape(effective_cwd)}</code>"
         model_line = (f"\n🧠 {html_mod.escape(sess.model_name)}"
                       if sess.model_name else "")
         perms_nudge = (
@@ -777,6 +781,14 @@ class CommandHandlersMixin:
         if target_skip_perms and not self._is_admin(update):
             await update.message.reply_text(
                 "Switching to Auto mode requires admin role.",
+            )
+            return
+
+        if sess.status == Status.UNKNOWN:
+            await update.message.reply_text(
+                f"⚠️ <b>{html_mod.escape(sess.label)}</b>'s status is still initializing."
+                f" Try /perms again in a moment.",
+                parse_mode="HTML",
             )
             return
 

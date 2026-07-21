@@ -95,7 +95,9 @@ def test_sc10_new_ask_reply_contains_perms_nudge():
 
 
 def test_sc10_new_ask_reply_contains_cwd():
-    """SC10: /new ben reply must contain the actual launch cwd."""
+    """SC10: /new ben reply must contain the actual launch cwd (inject._PROJECT_DIR)."""
+    from aipager.dtach import inject as _inject
+
     bot = _make_bot()
     update = _make_update("/new ben")
 
@@ -104,9 +106,12 @@ def test_sc10_new_ask_reply_contains_cwd():
 
     status_msg = update.message.reply_text.return_value
     text = status_msg.edit_text.await_args[0][0]
-    # cwd should appear in the reply — get the current working directory
-    # The handler uses os.getcwd() or similar; at minimum it shouldn't be absent
-    assert "/" in text, f"Reply must contain a cwd path; got: {text}"
+    # For a fresh session sess.cwd is empty; the handler falls back to
+    # inject._PROJECT_DIR which equals os.getcwd() by default.
+    expected_cwd = _inject._PROJECT_DIR
+    assert expected_cwd in text, (
+        f"Reply must contain launch cwd {expected_cwd!r}; got: {text}"
+    )
 
 
 def test_sc10_new_ask_model_omitted_when_unknown():
