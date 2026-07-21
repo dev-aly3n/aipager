@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.18] - 2026-07-21
+
+### Fixed
+- **Interactive sessions no longer 401 when a stale
+  `~/.claude/.credentials.json` shadows a valid
+  `CLAUDE_CODE_OAUTH_TOKEN`.** 0.4.13 taught the launcher to keep the
+  env token when the credentials file is expired, but Claude Code's
+  interactive mode still prefers the on-disk file over the env token
+  even when the file's `expiresAt` is in the past — resulting in
+  "Please run /login" for the user despite a perfectly valid env token
+  in the process environ. The launcher now atomically renames the
+  expired file to `.credentials.json.stale` at session launch (only
+  when the env token is present as a safe fallback), letting claude
+  fall back to the env token. Idempotent, reversible (`mv` the
+  `.stale` back after a successful `claude auth login`), and no-op on
+  every other auth configuration (env-only, creds-fresh, creds-only).
+
 ## [0.4.17] - 2026-07-17
 
 ### Fixed
