@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.19] - 2026-07-21
+
+### Fixed
+- **The 0.4.18 credentials-file stash no longer touches placeholder
+  files with empty tokens.** Observed on Max-plan containers:
+  `~/.claude/.credentials.json` can hold only account-level metadata
+  (`accessToken=""`, `refreshToken=""`, `expiresAt=0`,
+  `subscriptionType="max"`) while Claude Code manages auth through a
+  non-file path (device auth / account UUID / server-side session).
+  Those files LOOK expired to the stash logic but are load-bearing for
+  their auth setup. The stash now additionally requires a non-empty
+  `accessToken` string before renaming — placeholder / cleared files
+  are treated as opaque state and left alone.
+
 ## [0.4.18] - 2026-07-21
 
 ### Fixed
