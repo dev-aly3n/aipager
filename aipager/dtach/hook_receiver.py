@@ -10,6 +10,7 @@ notifications. IDLE uses transcript-based rich summaries when available.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -17,7 +18,11 @@ import socket
 import time
 from pathlib import Path
 
-from aipager.config import RICH_SUMMARIES, SOCKET_PATH
+from aipager.config import (
+    HOOK_DEDUP_WINDOW_SECONDS,
+    RICH_SUMMARIES,
+    SOCKET_PATH,
+)
 from aipager.md_to_tg import markdown_to_telegram_html
 from aipager.state import SessionRegistry, Status
 from aipager.transcript import (
@@ -183,6 +188,14 @@ class HookReceiver:
     def __init__(self, registry: SessionRegistry, notify_fn):
         self.registry = registry
         self.notify_fn = notify_fn
+        # Fingerprint → monotonic timestamp. Keyed by
+        # session:event:md5(payload). Entries older than
+        # 10x HOOK_DEDUP_WINDOW_SECONDS are pruned opportunistically on
+        # every datagram, so no background sweeper is needed. Defends
+        # against double-wired hooks (settings.json has two entries per
+        # event → each event fires the receiver twice) — the second
+        # copy is dropped so the user doesn't see duplicate replies.
+        self._recent_fingerprints: dict[str, float] = {}
 
     async def start(self) -> None:
         try:
@@ -213,9 +226,32 @@ class HookReceiver:
         if not session_name or not event:
             return
 
+        # Dedup: drop identical (session, event, payload) within the
+        # HOOK_DEDUP_WINDOW_SECONDS window. Belt-and-braces against
+        # double-wired hook entries in settings.json.
+        now_mono = time.monotonic()
+        prune_before = now_mono - HOOK_DEDUP_WINDOW_SECONDS * 10
+        if self._recent_fingerprints:
+            self._recent_fingerprints = {
+                k: v for k, v in self._recent_fingerprints.items()
+                if v > prune_before
+            }
+        payload_hash = hashlib.md5(
+            json.dumps(msg, sort_keys=True, default=str).encode(),
+        ).hexdigest()
+        fp = f"{session_name}:{event}:{payload_hash}"
+        seen_at = self._recent_fingerprints.get(fp)
+        if seen_at is not None and (now_mono - seen_at) < HOOK_DEDUP_WINDOW_SECONDS:
+            log.info(
+                "dropping duplicate hook event (fp=%s age=%.2fs)",
+                fp[:16], now_mono - seen_at,
+            )
+            return
+        self._recent_fingerprints[fp] = now_mono
+
         # Update last activity timestamp (stale detection) + store transcript path
         sess_ref = self.registry.get_or_create(session_name)
-        sess_ref.last_hook_at = time.monotonic()
+        sess_ref.last_hook_at = now_mono
         if transcript_path:
             sess_ref.transcript_path = transcript_path
             # The transcript filename IS Claude Code's session id —

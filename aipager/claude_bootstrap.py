@@ -128,10 +128,29 @@ def _resolve(cmd: str) -> str | None:
 
 
 def _has_hook_cmd(entries: list, bare_name: str) -> bool:
+    """Detect whether the aipager hook (or a user's wrapper around it)
+    is already wired for this event.
+
+    Matches any of:
+    - Command is literally ``bare_name`` (e.g. ``aipager-hook``).
+    - Command's basename starts with ``bare_name`` — catches wrapper
+      scripts like ``aipager-hook-capped.sh`` /
+      ``aipager-hook.wrapped`` that users deploy for rate-limits,
+      memory caps, logging, etc. Documented convention: name your
+      wrapper ``aipager-hook*`` and aipager will honor it instead
+      of injecting a duplicate entry.
+    """
+    if not bare_name:
+        return False
     for block in entries:
         for hook in (block or {}).get("hooks", []):
-            cmd = (hook or {}).get("command", "")
-            if cmd == bare_name or cmd.endswith(f"/{bare_name}"):
+            cmd = (hook or {}).get("command", "") or ""
+            if not cmd:
+                continue
+            if cmd == bare_name:
+                return True
+            basename = Path(cmd).name
+            if basename.startswith(bare_name):
                 return True
     return False
 

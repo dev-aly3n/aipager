@@ -164,6 +164,19 @@ TELEGRAM_MAX_RETRY_AFTER: float = float(
     os.environ.get("TELEGRAM_MAX_RETRY_AFTER", "90")
 )
 
+# When two hook events arrive with identical (session, event_name,
+# payload-hash) within this window, drop the second. Belt-and-braces
+# against double-wiring scenarios (e.g. a wrapper script whose name
+# doesn't match the bootstrap detector, so the standard hook gets
+# appended alongside → every event fires twice). 3 s is long enough
+# to catch back-to-back duplicates from a single Claude Code stop
+# event; short enough that legitimately-identical events (rare, but
+# e.g. the same tool called twice in quick succession with the same
+# input) mostly aren't collapsed.
+HOOK_DEDUP_WINDOW_SECONDS: float = float(
+    os.environ.get("HOOK_DEDUP_WINDOW_SECONDS", "3")
+)
+
 # Spinner verbs for animated busy messages (curated from Claude Code's terminal spinner)
 SPINNER_VERBS: list[str] = [
     "Thinking", "Reasoning", "Pondering", "Considering", "Analyzing",

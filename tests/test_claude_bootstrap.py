@@ -178,3 +178,59 @@ def test_skips_hook_wiring_when_helper_missing(tmp_path, monkeypatch):
     # But hooks absent — we don't want a bare "aipager-hook" claude can't run
     assert "hooks" not in data
     assert "statusLine" not in data
+
+
+# ---- _has_hook_cmd: bare-name + wrapper detection ---------------------
+
+from aipager.claude_bootstrap import _has_hook_cmd  # noqa: E402
+
+
+def _wrap(cmd):
+    return [{"hooks": [{"type": "command", "command": cmd}]}]
+
+
+def test_has_hook_cmd_bare_name():
+    assert _has_hook_cmd(_wrap("aipager-hook"), "aipager-hook") is True
+
+
+def test_has_hook_cmd_absolute_path():
+    assert _has_hook_cmd(
+        _wrap("/home/x/.local/bin/aipager-hook"), "aipager-hook",
+    ) is True
+
+
+def test_has_hook_cmd_wrapper_capped():
+    """Wrapper script named aipager-hook-capped.sh (ulimit wrapper
+    pattern) must be detected — this is the bug the fix addresses."""
+    assert _has_hook_cmd(
+        _wrap("/home/x/.claude/scripts/aipager-hook-capped.sh"),
+        "aipager-hook",
+    ) is True
+
+
+def test_has_hook_cmd_wrapper_bare_prefix():
+    """Wrapper without a path — basename-prefix match still fires."""
+    assert _has_hook_cmd(
+        _wrap("aipager-hook-debug"), "aipager-hook",
+    ) is True
+
+
+def test_has_hook_cmd_unrelated_command():
+    """Regression guard: unrelated commands must NOT match."""
+    assert _has_hook_cmd(_wrap("/bin/echo hello"), "aipager-hook") is False
+
+
+def test_has_hook_cmd_missing_command_key():
+    """Hook block without a command key — no crash, return False."""
+    entries = [{"hooks": [{"type": "command"}]}]
+    assert _has_hook_cmd(entries, "aipager-hook") is False
+
+
+def test_has_hook_cmd_empty_command():
+    assert _has_hook_cmd(_wrap(""), "aipager-hook") is False
+
+
+def test_has_hook_cmd_empty_bare_name_returns_false():
+    """Defensive: an empty bare_name must never match anything."""
+    assert _has_hook_cmd(_wrap("/some/aipager-hook"), "") is False
+

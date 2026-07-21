@@ -502,3 +502,107 @@ def test_unknown_event_just_ensures_tracking(receiver, run_async):
           session="claude-jim")
     assert registry.get("claude-jim") is not None
     notify_fn.assert_not_awaited()
+
+
+# ---- receiver-side dedup (defense against double-wired hooks) -------
+
+def test_duplicate_hook_event_dropped_within_window(receiver, run_async):
+    """Identical events within HOOK_DEDUP_WINDOW_SECONDS: second is
+    dropped. Belt-and-braces against settings.json double-wiring."""
+    _, recv, notify_fn = receiver
+    _send(recv, run_async,
+          hook_event_name="PostToolUse",
+          session="claude-jim",
+          tool_name="Bash",
+          tool_input={"command": "ls"})
+    _send(recv, run_async,
+          hook_event_name="PostToolUse",
+          session="claude-jim",
+          tool_name="Bash",
+          tool_input={"command": "ls"})
+    # notify_fn was awaited once for the first event's tool_done; the
+    # duplicate must have been dropped before reaching the notify path.
+    assert notify_fn.await_count == 1
+
+
+def test_duplicate_hook_event_kept_after_window(receiver, run_async,
+                                                monkeypatch):
+    """Same event JSON, but the second arrives past the dedup window
+    (backdated) → both processed."""
+    _, recv, notify_fn = receiver
+    _send(recv, run_async,
+          hook_event_name="PostToolUse",
+          session="claude-jim",
+          tool_name="Bash",
+          tool_input={"command": "ls"})
+    # Backdate the cached fingerprint so it's outside the window.
+    from aipager.config import HOOK_DEDUP_WINDOW_SECONDS
+    now = time.monotonic()
+    old = now - HOOK_DEDUP_WINDOW_SECONDS - 1
+    recv._recent_fingerprints = {k: old for k in recv._recent_fingerprints}
+    _send(recv, run_async,
+          hook_event_name="PostToolUse",
+          session="claude-jim",
+          tool_name="Bash",
+          tool_input={"command": "ls"})
+    assert notify_fn.await_count == 2
+
+
+def test_different_events_same_session_not_deduped(receiver, run_async):
+    """PostToolUse then SubagentStop on the same session are distinct
+    events — both must be processed."""
+    _, recv, notify_fn = receiver
+    # Prime a subagent so SubagentStop finds it.
+    sess = receiver[0].get_or_create("claude-jim")
+    sess.active_subagents["agent-x"] = {
+        "type": "explore", "started_at": time.monotonic() - 3.0,
+        "history_idx": 0,
+    }
+    _send(recv, run_async,
+          hook_event_name="PostToolUse",
+          session="claude-jim",
+          tool_name="Bash",
+          tool_input={"command": "ls"})
+    _send(recv, run_async,
+          hook_event_name="SubagentStop",
+          session="claude-jim",
+          agent_id="agent-x",
+          agent_type="explore")
+    assert notify_fn.await_count == 2
+
+
+def test_different_sessions_same_event_not_deduped(receiver, run_async):
+    """Same event payload but different session — both must be
+    processed (dedup key includes session)."""
+    _, recv, notify_fn = receiver
+    _send(recv, run_async,
+          hook_event_name="PostToolUse",
+          session="claude-alice",
+          tool_name="Bash",
+          tool_input={"command": "ls"})
+    _send(recv, run_async,
+          hook_event_name="PostToolUse",
+          session="claude-bob",
+          tool_name="Bash",
+          tool_input={"command": "ls"})
+    assert notify_fn.await_count == 2
+
+
+def test_dedup_cache_pruned_of_old_entries(receiver, run_async):
+    """Old fingerprints past the prune horizon are evicted on the next
+    datagram, keeping memory bounded."""
+    from aipager.config import HOOK_DEDUP_WINDOW_SECONDS
+    _, recv, _ = receiver
+    stale_age = time.monotonic() - HOOK_DEDUP_WINDOW_SECONDS * 20
+    recv._recent_fingerprints = {
+        "old-1": stale_age, "old-2": stale_age, "old-3": stale_age,
+    }
+    _send(recv, run_async,
+          hook_event_name="PostToolUse",
+          session="claude-jim",
+          tool_name="Bash",
+          tool_input={"command": "ls"})
+    # Stale entries evicted; only the new fingerprint remains.
+    assert all(k.startswith("claude-jim:") for k in recv._recent_fingerprints)
+    assert len(recv._recent_fingerprints) == 1
+
