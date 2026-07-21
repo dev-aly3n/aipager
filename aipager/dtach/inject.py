@@ -55,6 +55,32 @@ def _credentials_file_is_fresh() -> bool:
         return False
 
 
+def _credentials_file_has_token() -> bool:
+    """Return True iff ~/.claude/.credentials.json holds a real,
+    non-empty ``claudeAiOauth.accessToken``.
+
+    Guards :func:`_stash_expired_credentials_file` against renaming
+    files that only hold account-level metadata (empty tokens,
+    ``expiresAt=0``) — observed on Max-plan containers where Claude
+    Code manages auth via a non-file path (device token / account UUID
+    / server-side session). Such files LOOK expired to
+    :func:`_credentials_file_is_fresh` but are actually load-bearing
+    for those setups. Renaming them silently breaks auth.
+
+    Fail-open (returns False on any exception path) so we err toward
+    not-stashing: false-negative merely reproduces the pre-0.4.18
+    behavior (401 on interactive if env token is shadowed), while
+    false-positive would DELETE a working config.
+    """
+    path = Path.home() / ".claude" / ".credentials.json"
+    try:
+        data = json.loads(path.read_text())
+        token = data["claudeAiOauth"]["accessToken"]
+        return isinstance(token, str) and bool(token)
+    except (OSError, ValueError, TypeError, KeyError):
+        return False
+
+
 def _stash_expired_credentials_file() -> Path | None:
     """Rename an expired ~/.claude/.credentials.json aside so claude
     falls back to CLAUDE_CODE_OAUTH_TOKEN.
@@ -64,8 +90,19 @@ def _stash_expired_credentials_file() -> Path | None:
     yielding a 401 that shadows a perfectly-valid env token. (``claude
     -p`` uses a different code path and reads env first, which is why
     it authenticates fine while an interactive session does not.)
-    Only triggered when we're sure the env token IS the fallback we
-    want: env var non-empty AND file exists AND file is not fresh.
+
+    Only triggered when ALL of these hold, so we never accidentally
+    downgrade or destroy a working auth setup:
+
+    - ``CLAUDE_CODE_OAUTH_TOKEN`` env var is set (env is the fallback
+      we want claude to use once the file is out of the way)
+    - the credentials file exists on disk
+    - the file holds a real (non-empty) ``accessToken`` — placeholder
+      files with empty tokens are opaque state that Claude Code may
+      be managing through a non-file path (Max-plan device auth /
+      account-UUID session), so leave them alone
+    - the file's ``expiresAt`` is in the past (via
+      :func:`_credentials_file_is_fresh`)
 
     Returns the stash path on success, ``None`` otherwise. Idempotent:
     a follow-up call with no file present is a no-op. Reversible: the
@@ -79,6 +116,8 @@ def _stash_expired_credentials_file() -> Path | None:
     creds = Path.home() / ".claude" / ".credentials.json"
     if not creds.exists():
         return None
+    if not _credentials_file_has_token():
+        return None  # placeholder / cleared file — don't touch
     if _credentials_file_is_fresh():
         return None
     stash = creds.with_suffix(creds.suffix + ".stale")
