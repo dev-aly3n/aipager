@@ -246,7 +246,7 @@ def _step_default_mode(step_label: str = "[5/5]") -> str:
     step(f"{step_label}  Default session mode")
     console.print()
     console.print(
-        "[muted]  💬 Ask  — Claude prompts before each tool call (safe default).[/muted]"
+        "[muted]  💬 Ask  — Claude prompts before each tool call (recommended).[/muted]"
     )
     console.print(
         "[muted]  🤖 Auto — Claude runs tools without prompting "
