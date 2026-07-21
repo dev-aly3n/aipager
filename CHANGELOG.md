@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.21] - 2026-07-21
+
+### Fixed
+- **Duplicate Telegram replies on upgrade when settings.json points at
+  a wrapper script around `aipager-hook`.** `_has_hook_cmd` now
+  recognizes any command whose basename starts with `aipager-hook`
+  (catches user-deployed wrappers like `aipager-hook-capped.sh` used
+  for ulimit / rate-limit / logging), so bootstrap doesn't
+  re-inject a duplicate hook entry alongside them. Belt-and-braces:
+  the hook receiver also drops identical `(session, event, payload)`
+  events within `HOOK_DEDUP_WINDOW_SECONDS` (3 s default,
+  env-overridable), so any future wiring variant that slips past
+  detection still cannot produce user-visible duplicates.
+- **Two `aipager start` invocations can no longer both start.** The
+  existing socket-probe check has a millisecond-scale race window
+  where two daemons can both pass the probe and the second's
+  HookReceiver silently steals the socket via unlink+rebind. Added a
+  fcntl advisory lockfile at `~/.local/share/aipager/daemon.lock`
+  held for the daemon's lifetime — atomic, process-associated
+  (auto-released on any exit including SIGKILL), no polling. Second
+  daemon exits with a clear "aipager already running (pid=X)"
+  message.
+
 ## [0.4.20] - 2026-07-21
 
 ### Fixed
