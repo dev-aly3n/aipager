@@ -185,6 +185,27 @@ def _parse_scope(entry, i: int) -> Scope:
     )
 
 
+def load_default_mode(path: Path = CONFIG_PATH) -> str:
+    """Return the configured default session mode: ``"ask"`` or ``"auto"``.
+
+    Reads ``aipager.yaml`` and returns the ``default_mode`` key. When the
+    file is absent, unreadable, or the key is missing, returns ``"ask"``
+    so the safe default is always explicit.
+    """
+    if not path.exists():
+        return "ask"
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (yaml.YAMLError, OSError):
+        return "ask"
+    if not isinstance(raw, dict):
+        return "ask"
+    mode = raw.get("default_mode", "ask")
+    if mode not in ("ask", "auto"):
+        return "ask"
+    return mode
+
+
 def load_scopes(path: Path = CONFIG_PATH) -> tuple[list[Scope], str] | None:
     """Load ``aipager.yaml``.
 
@@ -238,9 +259,20 @@ def _member_to_dict(m: Member) -> dict:
 
 
 def dump_scopes(
-    scopes: list[Scope], bot_token: str, path: Path = CONFIG_PATH
+    scopes: list[Scope], bot_token: str, path: Path = CONFIG_PATH,
+    *, default_mode: str = "",
 ) -> None:
-    """Serialize scopes to ``aipager.yaml`` (atomic write, mode 0600)."""
+    """Serialize scopes to ``aipager.yaml`` (atomic write, mode 0600).
+
+    ``default_mode`` is written as a top-level ``default_mode:`` key when
+    non-empty (``"ask"`` or ``"auto"``). Passing ``""`` (the default) leaves
+    any existing ``default_mode`` key in the file unchanged — this function
+    reads the existing value and re-emits it, so callers that don't care
+    about the mode key don't accidentally wipe it.
+    """
+    # Preserve the existing default_mode when the caller didn't pass one.
+    if not default_mode:
+        default_mode = load_default_mode(path)
     data: dict = {
         "schema_version": SCHEMA_VERSION,
         "bot_token": bot_token,
@@ -256,6 +288,14 @@ def dump_scopes(
         if s.deny_tools:
             sd["deny_tools"] = list(s.deny_tools)
         data["scopes"].append(sd)
+
+    # Write default_mode when it's non-default (auto) or when explicitly
+    # requested — always preserve if already set.
+    if default_mode and default_mode != "ask":
+        data["default_mode"] = default_mode
+    elif default_mode == "ask":
+        # Explicitly set to ask — write it so the file is self-documenting.
+        data["default_mode"] = default_mode
 
     body = (
         _AIPAGER_YAML_HEADER
