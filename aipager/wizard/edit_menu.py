@@ -266,6 +266,7 @@ def _menu_choices(has_error: bool) -> list[questionary.Choice]:
         questionary.Choice("Add a DM scope", value="add_dm"),
         questionary.Choice("Edit a scope", value="edit_scope"),
         questionary.Choice("Edit a member", value="edit_member"),
+        questionary.Choice("Change default mode (Ask / Auto)", value="default_mode"),
         questionary.Choice("Test bot reachability", value="test"),
         questionary.Choice("View policy", value="view_policy"),
         questionary.Choice("Re-install Claude Code hooks",
@@ -328,6 +329,13 @@ def _edit_flow() -> int:
                 sc = _pick_scope(scopes, "Member of which scope?")
                 if sc is not None and _edit_member(sc, token):
                     changed = True
+            elif choice == "default_mode":
+                from aipager.wizard.first_run import (
+                    _commit_default_mode, _step_default_mode,
+                )
+                mode = _step_default_mode(step_label="[~]")
+                _commit_default_mode(mode)
+                changed = True
         except KeyboardInterrupt:
             friendly_warn("Cancelled this action.")
             continue
