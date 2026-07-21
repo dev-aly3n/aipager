@@ -60,7 +60,38 @@ def _read_statusline_tokens(session: str) -> dict | None:
     }
 
 
+def _prepare_cap_notifier(session: str) -> tuple[socket.socket | None, bytes]:
+    """Pre-open the daemon socket + pre-serialize the cap-hit payload.
+
+    MUST be called BEFORE ``resource.setrlimit`` so the allocations here
+    (socket object + JSON bytes) can't themselves trigger the cap. Any
+    failure — including a MemoryError from an already-tight parent
+    address space — returns ``(None, b"")`` so the cap-hit path silently
+    gives up on notifying rather than crash the hook.
+    """
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        payload = json.dumps({
+            "type": "hook_memory_cap_hit",
+            "session": session,
+            "hook": "aipager-hook",
+        }).encode()
+        return sock, payload
+    except (OSError, MemoryError):
+        return None, b""
+
+
 def main():
+    # Read the session env var first — the cap-hit notifier needs it in
+    # its pre-serialized payload.
+    session = os.environ.get("CLAUDE_DTACH_SESSION", "")
+
+    # Pre-allocate everything the cap-hit notifier needs BEFORE the cap
+    # is set. At MemoryError time no new allocations are possible, so we
+    # must hold a live socket and pre-encoded bytes ready for a raw
+    # sendto().
+    cap_sock, cap_payload = _prepare_cap_notifier(session)
+
     try:
         resource.setrlimit(
             resource.RLIMIT_AS, (_MEMORY_CAP_BYTES, _MEMORY_CAP_BYTES),
@@ -68,6 +99,23 @@ def main():
     except (ValueError, OSError):
         pass  # some kernels/containers reject rlimit tightening; never wedge claude
 
+    try:
+        _run(session)
+    except MemoryError:
+        # Cap tripped mid-work. Fire the pre-baked datagram (best-effort,
+        # never raises), then exit non-zero so Claude sees the failure.
+        if cap_sock is not None:
+            try:
+                cap_sock.sendto(cap_payload, SOCKET_PATH)
+            except OSError:
+                pass
+        sys.exit(1)
+
+
+def _run(session: str) -> None:
+    """Main hook body — separated so ``main()`` can wrap it in a single
+    ``try/except MemoryError``. Any allocation inside here that pushes
+    the process past the cap will trip that handler."""
     raw = sys.stdin.read()
     if not raw.strip():
         sys.exit(0)
@@ -77,8 +125,6 @@ def main():
     except json.JSONDecodeError:
         sys.exit(0)
 
-    # Detect session name from env var set by claude-dtach launcher
-    session = os.environ.get("CLAUDE_DTACH_SESSION", "")
     if session:
         data["session"] = session
 
@@ -116,6 +162,8 @@ def main():
                     "reason": block["reason"],
                 })
                 print(deny_decision_json(block["reason"]))
+        except MemoryError:
+            raise  # let main() handle it uniformly
         except Exception as e:  # never wedge claude on enforcement bugs
             _debug(f"enforcement error (allowing): {e}")
 

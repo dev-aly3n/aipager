@@ -35,7 +35,26 @@ def _debug(msg: str) -> None:
         print(f"[aipager-statusline] {msg}", file=sys.stderr)
 
 
+def _prepare_cap_notifier(session: str) -> tuple[socket.socket | None, bytes]:
+    """Pre-open the daemon socket + pre-serialize the cap-hit payload.
+    See :mod:`aipager.dtach.notify_hook._prepare_cap_notifier` for the
+    full rationale — this is the same pattern for the statusline hook."""
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        payload = json.dumps({
+            "type": "hook_memory_cap_hit",
+            "session": session,
+            "hook": "aipager-statusline",
+        }).encode()
+        return sock, payload
+    except (OSError, MemoryError):
+        return None, b""
+
+
 def main() -> None:
+    session = os.environ.get("CLAUDE_DTACH_SESSION", "")
+    cap_sock, cap_payload = _prepare_cap_notifier(session)
+
     try:
         resource.setrlimit(
             resource.RLIMIT_AS, (_MEMORY_CAP_BYTES, _MEMORY_CAP_BYTES),
@@ -43,8 +62,21 @@ def main() -> None:
     except (ValueError, OSError):
         pass  # some kernels/containers reject rlimit tightening; never wedge claude
 
+    try:
+        _run(session)
+    except MemoryError:
+        if cap_sock is not None:
+            try:
+                cap_sock.sendto(cap_payload, SOCKET_PATH)
+            except OSError:
+                pass
+        sys.exit(1)
+
+
+def _run(session: str) -> None:
+    """Statusline hook body — separated so ``main()`` can wrap it in a
+    single ``try/except MemoryError``."""
     raw = sys.stdin.read()
-    session = os.environ.get("CLAUDE_DTACH_SESSION", "")
 
     if raw.strip() and session:
         try:

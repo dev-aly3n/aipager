@@ -606,3 +606,33 @@ def test_dedup_cache_pruned_of_old_entries(receiver, run_async):
     assert all(k.startswith("claude-jim:") for k in recv._recent_fingerprints)
     assert len(recv._recent_fingerprints) == 1
 
+
+# ---- hook_memory_cap_hit dispatch ---------------------------------------
+
+def test_hook_memory_cap_hit_dispatches_notify(receiver, run_async):
+    """A datagram with type=hook_memory_cap_hit for a known session
+    fires the notify callback with the right event + hook name."""
+    registry, recv, notify_fn = receiver
+    registry.get_or_create("claude-jim")
+    _send(recv, run_async,
+          type="hook_memory_cap_hit",
+          session="claude-jim",
+          hook="aipager-hook")
+    notify_fn.assert_awaited_once()
+    sess, event, context = notify_fn.call_args.args
+    assert sess.name == "claude-jim"
+    assert event == "hook_memory_cap_hit"
+    assert context == {"hook": "aipager-hook"}
+
+
+def test_hook_memory_cap_hit_defaults_hook_name(receiver, run_async):
+    """Missing ``hook`` field falls back to ``aipager-hook``."""
+    registry, recv, notify_fn = receiver
+    registry.get_or_create("claude-jim")
+    _send(recv, run_async,
+          type="hook_memory_cap_hit",
+          session="claude-jim")
+    notify_fn.assert_awaited_once()
+    _, _, context = notify_fn.call_args.args
+    assert context == {"hook": "aipager-hook"}
+

@@ -458,6 +458,23 @@ class HookReceiver:
                     "reason": msg.get("reason", ""),
                 })
 
+        elif event == "hook_memory_cap_hit":
+            # A hook subprocess tripped its RLIMIT_AS cap and died with
+            # MemoryError. The tool call proceeded (Claude Code treats
+            # non-zero hook exit as allow), but one aipager notification
+            # was dropped. Surface so the user knows something abnormal
+            # happened.
+            hook_name = msg.get("hook", "aipager-hook")
+            log.warning(
+                "hook memory cap hit for session=%s hook=%s",
+                session_name, hook_name,
+            )
+            sess = self.registry.get(session_name)
+            if sess is not None:
+                await self.notify_fn(sess, "hook_memory_cap_hit", {
+                    "hook": hook_name,
+                })
+
         elif event == "SessionEnd":
             sess = self.registry.get_or_create(session_name)
             source = msg.get("source", "unknown")

@@ -326,3 +326,171 @@ def test_statusline_survives_rlimit_oserror(monkeypatch, tmp_path):
     _set_stdin(monkeypatch, "")
     monkeypatch.delenv("CLAUDE_DTACH_SESSION", raising=False)
     statusline_notify.main()  # must not raise
+
+
+# ---- cap-hit MemoryError notification (pre-allocated socket + payload) ---
+
+def test_notify_hook_sends_cap_hit_on_memory_error(monkeypatch, tmp_path):
+    sock_path = tmp_path / "aipager.sock"
+    monkeypatch.setattr(notify_hook, "SOCKET_PATH", str(sock_path))
+
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    srv.bind(str(sock_path))
+    srv.settimeout(1.0)
+    try:
+        # Any MemoryError from anywhere inside _run() must be caught by
+        # main(). We simulate one at sys.stdin.read() to be realistic —
+        # a huge stdin blob is one of the actual real-world triggers.
+        def _boom():
+            raise MemoryError("simulated cap hit")
+        monkeypatch.setattr(sys.stdin, "read", _boom)
+        monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-vic")
+        with pytest.raises(SystemExit) as exc:
+            notify_hook.main()
+        assert exc.value.code == 1
+        data, _ = srv.recvfrom(4096)
+        payload = json.loads(data.decode())
+        assert payload == {
+            "type": "hook_memory_cap_hit",
+            "session": "claude-vic",
+            "hook": "aipager-hook",
+        }
+    finally:
+        srv.close()
+
+
+def test_notify_hook_cap_hit_daemon_down_still_exits(monkeypatch, tmp_path):
+    # SOCKET_PATH points to a non-existent socket → sendto raises OSError,
+    # which the cap-hit handler must swallow. Hook still exits 1.
+    monkeypatch.setattr(notify_hook, "SOCKET_PATH", str(tmp_path / "nope.sock"))
+
+    def _boom():
+        raise MemoryError("simulated cap hit")
+    monkeypatch.setattr(sys.stdin, "read", _boom)
+    monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-vic")
+    with pytest.raises(SystemExit) as exc:
+        notify_hook.main()
+    assert exc.value.code == 1  # exited even though notify path failed
+
+
+def test_notify_hook_survives_socket_preopen_failure(monkeypatch, tmp_path):
+    # If socket.socket() itself fails at pre-open time (e.g. EMFILE), the
+    # hook must still run its normal body — not crash. Empty stdin → exit 0.
+    def _boom(*a, **kw):
+        raise OSError("EMFILE")
+    monkeypatch.setattr(notify_hook.socket, "socket", _boom)
+    _set_stdin(monkeypatch, "")
+    with pytest.raises(SystemExit) as exc:
+        notify_hook.main()
+    assert exc.value.code == 0
+
+
+def test_notify_hook_enforce_memory_error_reraises_to_main(monkeypatch, tmp_path):
+    """A MemoryError raised inside the PreToolUse enforce path must
+    propagate to main() (not get swallowed by the broad ``except
+    Exception``), so the user is notified. Regression guard for a subtle
+    ordering bug."""
+    sock_path = tmp_path / "aipager.sock"
+    monkeypatch.setattr(notify_hook, "SOCKET_PATH", str(sock_path))
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    srv.bind(str(sock_path))
+    srv.settimeout(1.0)
+    try:
+        # Feed a PreToolUse payload so the enforce path runs
+        _set_stdin(monkeypatch,
+                   '{"hook_event_name":"PreToolUse","tool_name":"Bash"}')
+        monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-en")
+
+        # Stub the enforce import to raise MemoryError
+        import aipager.dtach.enforce as enforce_mod
+        def _boom(_data):
+            raise MemoryError("simulated in-enforce cap hit")
+        monkeypatch.setattr(enforce_mod, "decide", _boom)
+
+        with pytest.raises(SystemExit) as exc:
+            notify_hook.main()
+        assert exc.value.code == 1
+        # Skip past any other in-flight datagrams (the pre-enforce _udp
+        # fires an ordinary datagram first).
+        while True:
+            data, _ = srv.recvfrom(4096)
+            payload = json.loads(data.decode())
+            if payload.get("type") == "hook_memory_cap_hit":
+                break
+        assert payload["session"] == "claude-en"
+        assert payload["hook"] == "aipager-hook"
+    finally:
+        srv.close()
+
+
+def test_statusline_sends_cap_hit_on_memory_error(monkeypatch, tmp_path):
+    sock_path = tmp_path / "aipager.sock"
+    monkeypatch.setattr(statusline_notify, "SOCKET_PATH", str(sock_path))
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    srv.bind(str(sock_path))
+    srv.settimeout(1.0)
+    try:
+        def _boom():
+            raise MemoryError("simulated cap hit")
+        monkeypatch.setattr(sys.stdin, "read", _boom)
+        monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-sl")
+        with pytest.raises(SystemExit) as exc:
+            statusline_notify.main()
+        assert exc.value.code == 1
+        data, _ = srv.recvfrom(4096)
+        payload = json.loads(data.decode())
+        assert payload == {
+            "type": "hook_memory_cap_hit",
+            "session": "claude-sl",
+            "hook": "aipager-statusline",
+        }
+    finally:
+        srv.close()
+
+
+def test_statusline_survives_socket_preopen_failure(monkeypatch, tmp_path):
+    def _boom(*a, **kw):
+        raise OSError("EMFILE")
+    monkeypatch.setattr(statusline_notify.socket, "socket", _boom)
+    _set_stdin(monkeypatch, "")
+    monkeypatch.delenv("CLAUDE_DTACH_SESSION", raising=False)
+    statusline_notify.main()  # must not raise, no SystemExit either
+
+
+def test_notify_hook_cap_notifier_ordering(monkeypatch):
+    """The pre-open MUST happen BEFORE setrlimit is called; otherwise a
+    tight cap could kill the socket allocation itself. Verify the call
+    order by recording both."""
+    events: list[str] = []
+    real_socket = socket.socket
+
+    def spy_socket(*a, **kw):
+        events.append("pre_open_socket")
+        return real_socket(*a, **kw)
+    def spy_setrlimit(res, limits):
+        events.append("setrlimit")
+    monkeypatch.setattr(notify_hook.socket, "socket", spy_socket)
+    monkeypatch.setattr(notify_hook.resource, "setrlimit", spy_setrlimit)
+    _set_stdin(monkeypatch, "")
+    with pytest.raises(SystemExit):
+        notify_hook.main()
+    assert events[:2] == ["pre_open_socket", "setrlimit"], events
+
+
+def test_statusline_cap_notifier_ordering(monkeypatch):
+    """Mirror of the notify_hook ordering test: statusline's pre-open
+    also MUST happen before setrlimit."""
+    events: list[str] = []
+    real_socket = socket.socket
+
+    def spy_socket(*a, **kw):
+        events.append("pre_open_socket")
+        return real_socket(*a, **kw)
+    def spy_setrlimit(res, limits):
+        events.append("setrlimit")
+    monkeypatch.setattr(statusline_notify.socket, "socket", spy_socket)
+    monkeypatch.setattr(statusline_notify.resource, "setrlimit", spy_setrlimit)
+    _set_stdin(monkeypatch, "")
+    monkeypatch.delenv("CLAUDE_DTACH_SESSION", raising=False)
+    statusline_notify.main()
+    assert events[:2] == ["pre_open_socket", "setrlimit"], events

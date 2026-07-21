@@ -278,6 +278,37 @@ def test_stale_busy_swallows_failure(mk_bot, run_async):
     run_async(bot.notify(sess, "stale_busy", {"minutes": 2}))
 
 
+# ---- hook_memory_cap_hit ------------------------------------------------
+
+def test_hook_memory_cap_hit_sends_message(mk_bot, run_async):
+    bot = mk_bot()
+    sess = _sess()
+    run_async(bot.notify(sess, "hook_memory_cap_hit", {"hook": "aipager-hook"}))
+    bot._app.bot.send_message.assert_awaited_once()
+    text = bot._app.bot.send_message.await_args.args[1]
+    assert "memory cap hit" in text
+    assert "1 GB" in text
+    assert "aipager-hook" in text
+    assert "jim" in text  # session label surfaces
+
+
+def test_hook_memory_cap_hit_default_hook_name(mk_bot, run_async):
+    bot = mk_bot()
+    sess = _sess()
+    # No "hook" key in context — falls back to default
+    run_async(bot.notify(sess, "hook_memory_cap_hit", {}))
+    text = bot._app.bot.send_message.await_args.args[1]
+    assert "aipager-hook" in text
+
+
+def test_hook_memory_cap_hit_swallows_send_failure(mk_bot, run_async):
+    bot = mk_bot()
+    sess = _sess()
+    bot._app.bot.send_message = AsyncMock(side_effect=Forbidden("blocked"))
+    # MUST NOT raise even if Telegram send fails
+    run_async(bot.notify(sess, "hook_memory_cap_hit", {"hook": "aipager-hook"}))
+
+
 # ---- compact_done ------------------------------------------------------
 
 def test_compact_done_edits_busy_message(mk_bot, run_async, monkeypatch):

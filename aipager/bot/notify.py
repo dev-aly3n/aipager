@@ -86,6 +86,27 @@ class NotifyMixin:
         if event == "pinned_update":
             return  # _maybe_update_bot_name already fired at top
 
+        if event == "hook_memory_cap_hit":
+            hook_name = context.get("hook", "aipager-hook")
+            text = (
+                f"⚠️ <b>{html_mod.escape(label)}</b> · memory cap hit\n"
+                "\n"
+                f"<code>{html_mod.escape(hook_name)}</code> exceeded its "
+                "1 GB limit — one event was dropped. The session is still "
+                "running; the tool call that triggered this proceeded "
+                "normally.\n"
+                "\n"
+                "<i>If this repeats, aipager is compensating for a runaway "
+                "allocation somewhere in the hook path — please report.</i>"
+            )
+            try:
+                await bot.send_message(
+                    resolve_chat_id(sess), text, parse_mode="HTML",
+                )
+            except Exception:
+                log.debug("hook_memory_cap_hit notify failed", exc_info=True)
+            return
+
         if event == "safety_blocked":
             tool = context.get("tool", "?")
             reason = context.get("reason", "")
