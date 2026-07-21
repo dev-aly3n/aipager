@@ -559,3 +559,50 @@ def test_perms_cancel_edits_and_clears_pending():
         f"Cancel must edit to cancellation text; got: {msg}"
     )
     assert "claude-ben" not in bot._perms_pending
+
+
+# --------------------------------------------------------------------------- #
+# UNKNOWN status: /perms must reply "still initializing" and NOT switch mode  #
+# (new guard added in iter 2 — rev-iter1-004)                                 #
+# --------------------------------------------------------------------------- #
+
+def test_perms_unknown_status_sends_initializing_message():
+    """/perms on a session with Status.UNKNOWN must reply with a message
+    indicating the session is still initializing (not switch modes)."""
+    bot = _make_bot()
+    sess = TrackedSession(name="claude-ben", label="ben", status=Status.UNKNOWN)
+    sess.skip_perms = False
+    bot.registry._sessions["claude-ben"] = sess
+    bot.registry.last_active_session = "claude-ben"
+    bot._is_admin = MagicMock(return_value=True)
+
+    update = _make_update("/perms")
+    _run(bot._handle_perms_cmd(update, MagicMock()))
+
+    update.message.reply_text.assert_awaited_once()
+    msg = update.message.reply_text.await_args[0][0]
+    assert "initializing" in msg.lower() or "initializ" in msg.lower(), (
+        f"Must mention initializing; got: {msg}"
+    )
+
+
+def test_perms_unknown_status_does_not_switch_mode():
+    """/perms on a session with Status.UNKNOWN must NOT change skip_perms."""
+    bot = _make_bot()
+    sess = TrackedSession(name="claude-ben", label="ben", status=Status.UNKNOWN)
+    sess.skip_perms = False
+    bot.registry._sessions["claude-ben"] = sess
+    bot.registry.last_active_session = "claude-ben"
+    bot._is_admin = MagicMock(return_value=True)
+
+    update = _make_update("/perms")
+    _run(bot._handle_perms_cmd(update, MagicMock()))
+
+    assert sess.skip_perms is False, (
+        "UNKNOWN-status /perms must not mutate skip_perms; "
+        f"got skip_perms={sess.skip_perms}"
+    )
+    # Pending dict must not be populated either
+    assert "claude-ben" not in bot._perms_pending, (
+        "UNKNOWN-status /perms must not enqueue a pending switch"
+    )
