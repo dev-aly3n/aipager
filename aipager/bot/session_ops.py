@@ -249,7 +249,8 @@ class SessionOpsMixin:
 
     async def _do_resume(self, *, label: str, reply_fn,
                           update: Update | None = None,
-                          query=None) -> None:
+                          query=None,
+                          skip_perms_override: bool | None = None) -> None:
         """Shared resume logic for /resume <name> and picker callbacks.
 
         ``reply_fn`` is the async-callable used to send the result back
@@ -298,9 +299,16 @@ class SessionOpsMixin:
         # Use the session's actual (possibly scope-disambiguated) name so
         # resume reattaches the right socket, not a flat claude-<label>.
         short_name = session_name.removeprefix("claude-")
+        # Determine the effective skip_perms: explicit override wins,
+        # then the persisted value (already recovered from the state file).
+        effective_skip_perms = (
+            skip_perms_override if skip_perms_override is not None
+            else sess.skip_perms
+        )
         sys_extra = self._session_system_prompt(sess.scope_chat_id, label)
         ok, err = await inject.launch_session(
             short_name, resume_id=resume_id, cwd=cwd,
+            skip_perms=effective_skip_perms,
             system_prompt_extra=sys_extra,
         )
         if not ok:
@@ -317,6 +325,7 @@ class SessionOpsMixin:
 
         # Resume succeeded — recover state, dashboard out the result.
         sess.gone_at = None
+        sess.skip_perms = effective_skip_perms
         self.registry.transition(session_name, Status.IDLE)
         if update is not None:
             self._mark_driver(sess, update)
