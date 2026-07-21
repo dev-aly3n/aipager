@@ -1,10 +1,19 @@
 """Daemon-startup paths for `aipager start`.
 
 Split out of the original ``aipager.cli`` so the argparse setup and
-the daemon lifecycle live in separate files. Three concerns:
+the daemon lifecycle live in separate files. Four concerns:
 
-- ``_check_existing_daemon`` — refuses to start if another daemon
-  already owns the Unix socket.
+- ``_check_existing_daemon`` — the fast, informative front door:
+  probes the Unix socket and refuses to start if a live listener
+  responds. Handles the common case cleanly and gives a friendly
+  "already running, stop it first" error.
+- ``_acquire_daemon_lock`` — the airtight backstop: fcntl advisory
+  lock on ``~/.local/share/aipager/daemon.lock``, held for the
+  daemon's lifetime. Closes the socket-probe race window (two
+  ``aipager start`` invocations fired within milliseconds could
+  both pass the probe and both proceed, with the second's
+  HookReceiver silently stealing the socket from the first).
+  fcntl locks auto-release on any process exit including crash.
 - ``_telegram_preflight`` — short circuit before async boot if the
   bot token or chat-id is misconfigured (catches the common errors
   during install / token rotation).
@@ -17,8 +26,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import fcntl
 import json
 import logging
+import os
 import signal
 import socket
 import sys
@@ -27,6 +38,11 @@ import urllib.request
 from pathlib import Path
 
 log = logging.getLogger("aipager")
+
+# Held-for-lifetime file descriptor for the daemon's advisory lock.
+# Module-level so garbage collection can't close it and silently
+# release the lock while the daemon is still running.
+_daemon_lock_fd: int | None = None
 
 
 def _check_existing_daemon() -> None:
@@ -67,6 +83,58 @@ def _check_existing_daemon() -> None:
         "",
     )
     sys.exit(1)
+
+
+def _acquire_daemon_lock() -> None:
+    """Acquire an exclusive fcntl lock on the daemon lockfile.
+
+    Closes the socket-probe race in :func:`_check_existing_daemon`:
+    when two ``aipager start`` invocations arrive within
+    milliseconds, both can pass the probe simultaneously. The
+    second one's ``HookReceiver.start()`` then silently unlinks and
+    rebinds the socket, stealing hook delivery from the first
+    daemon which continues running with an orphaned socket handle.
+    fcntl advisory locks are atomic and process-associated (auto-
+    released on any process exit including SIGKILL / segfault), so
+    exactly one holder is guaranteed regardless of race timing.
+
+    Stores the fd on a module-level global (``_daemon_lock_fd``)
+    for the daemon's lifetime — closing the fd releases the lock,
+    so a function-local would silently drop the guard once this
+    function returned.
+    """
+    from aipager.errors import friendly_error
+    global _daemon_lock_fd
+    lock_path = (
+        Path.home() / ".local" / "share" / "aipager" / "daemon.lock"
+    )
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(str(lock_path), os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        # Someone else holds the lock. Read whatever PID they wrote
+        # so the user can find the offending process.
+        try:
+            with os.fdopen(fd, "r") as f:
+                other_pid = f.read().strip() or "?"
+        except OSError:
+            other_pid = "?"
+        friendly_error(
+            f"aipager is already running (pid={other_pid}).",
+            "",
+            f"  Lockfile: {lock_path}",
+            "  Stop the running daemon first:",
+            "",
+            "      aipager service stop       # if installed as a service",
+            "      pkill -f 'aipager start'   # otherwise",
+            "",
+        )
+        sys.exit(1)
+    # Locked. Record our PID for humans; keep fd open for lifetime.
+    os.ftruncate(fd, 0)
+    os.write(fd, f"{os.getpid()}\n".encode())
+    _daemon_lock_fd = fd
 
 
 def _telegram_preflight() -> str:
@@ -236,7 +304,8 @@ def _cmd_start(args: argparse.Namespace) -> int:
         retire_v1()
     except Exception:
         log.warning("v2 config migration skipped (non-fatal)", exc_info=True)
-    _check_existing_daemon()
+    _check_existing_daemon()   # fast socket-probe with friendly error
+    _acquire_daemon_lock()     # airtight fcntl guard against startup races
     bot_username = _telegram_preflight()
     asyncio.run(_run_daemon(bot_username))
     return 0
