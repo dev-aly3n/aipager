@@ -135,7 +135,7 @@ group with multiple devs (mention `@aipagerbot deploy`,
 `@aipagerbot /jim run the tests`), re-run `aipager config` and
 pick **Team** at the mode prompt. You'll set up an allow-list of
 Telegram user IDs and roles (`admin` / `developer` / `read_only`)
-plus optional `deny_tools` rules that auto-block dangerous tool
+plus optional `deny_tools` rules that auto-block restricted tool
 calls. **Adding a user grants them code-execution rights on the
 host** — see [docs/groups.md](docs/groups.md) for the full trust
 model.

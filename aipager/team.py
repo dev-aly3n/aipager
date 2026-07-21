@@ -3,7 +3,7 @@
 When ``~/.config/aipager/team.yaml`` is present and contains ``mode:
 team``, the daemon flips from personal mode (one DM, one implicit
 user) to team mode: only enumerated users can interact, and
-optional :class:`Rules` clamp dangerous tool calls automatically.
+optional :class:`Rules` clamp restricted tool calls automatically.
 
 The :class:`Team` dataclass is loaded at startup by ``config.py``
 and consulted by every handler in ``telegram_bot.py``. Personal-mode

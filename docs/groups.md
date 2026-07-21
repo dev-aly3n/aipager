@@ -127,7 +127,7 @@ its messages — not every chat in the group.
 | `read_only` | ❌ | ❌ | ❌ | ✅ |
 
 - **admin** — full control. Bypasses `deny_tools` rules so they can
-  manually approve dangerous tools when needed.
+  manually approve restricted tool calls when needed.
 - **developer** — full control except `deny_tools` rules apply.
   Their Allow tap on a denied tool gets auto-rejected.
 - **read_only** — observers. They see every message, can call
