@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import io
 import json
+import resource
 import socket
 import sys
 
@@ -242,3 +243,86 @@ def test_statusline_debug_logs_write_failure(monkeypatch, capsys, tmp_path):
     statusline_notify.main()
     err = capsys.readouterr().err
     assert "could not write" in err
+
+
+# ---- RLIMIT_AS memory cap (defense-in-depth against future leaks) --------
+#
+# We capture the setrlimit call arguments rather than actually clamping this
+# test process's own address space (which would break subsequent tests). The
+# hook subprocesses call setrlimit at the top of main() before any real I/O,
+# so intercepting the call is enough to verify the contract.
+
+def _capture_setrlimit(monkeypatch, module):
+    calls = []
+    def fake(res, limits):
+        calls.append((res, limits))
+    monkeypatch.setattr(module.resource, "setrlimit", fake)
+    return calls
+
+
+def test_notify_hook_sets_memory_rlimit(monkeypatch):
+    calls = _capture_setrlimit(monkeypatch, notify_hook)
+    _set_stdin(monkeypatch, "")
+    with pytest.raises(SystemExit):
+        notify_hook.main()
+    assert calls, "notify_hook.main() must call resource.setrlimit"
+    res, (soft, hard) = calls[0]
+    assert res == resource.RLIMIT_AS
+    assert soft == notify_hook._MEMORY_CAP_BYTES
+    assert hard == notify_hook._MEMORY_CAP_BYTES
+
+
+def test_notify_hook_survives_rlimit_rejection(monkeypatch, tmp_path):
+    # Some kernels/containers refuse to tighten RLIMIT_AS from unprivileged
+    # users. Hook must swallow the error and continue — never wedge claude.
+    def _boom(res, limits):
+        raise ValueError("kernel refuses this tightening")
+    monkeypatch.setattr(notify_hook.resource, "setrlimit", _boom)
+    monkeypatch.setattr(notify_hook, "SOCKET_PATH", str(tmp_path / "nope.sock"))
+    _set_stdin(monkeypatch, '{"hook_event_name":"PreToolUse"}')
+    monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-x")
+    notify_hook.main()  # must not raise
+
+
+def test_notify_hook_survives_rlimit_oserror(monkeypatch, tmp_path):
+    def _boom(res, limits):
+        raise OSError("EPERM")
+    monkeypatch.setattr(notify_hook.resource, "setrlimit", _boom)
+    monkeypatch.setattr(notify_hook, "SOCKET_PATH", str(tmp_path / "nope.sock"))
+    _set_stdin(monkeypatch, '{"hook_event_name":"PreToolUse"}')
+    monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-x")
+    notify_hook.main()  # must not raise
+
+
+def test_statusline_sets_memory_rlimit(monkeypatch):
+    calls = _capture_setrlimit(monkeypatch, statusline_notify)
+    _set_stdin(monkeypatch, "")
+    monkeypatch.delenv("CLAUDE_DTACH_SESSION", raising=False)
+    statusline_notify.main()
+    assert calls, "statusline_notify.main() must call resource.setrlimit"
+    res, (soft, hard) = calls[0]
+    assert res == resource.RLIMIT_AS
+    assert soft == statusline_notify._MEMORY_CAP_BYTES
+    assert hard == statusline_notify._MEMORY_CAP_BYTES
+
+
+def test_statusline_survives_rlimit_rejection(monkeypatch, tmp_path, capsys):
+    def _boom(res, limits):
+        raise ValueError("kernel refuses this tightening")
+    monkeypatch.setattr(statusline_notify.resource, "setrlimit", _boom)
+    monkeypatch.setattr(statusline_notify, "SOCKET_PATH",
+                        str(tmp_path / "nope.sock"))
+    _set_stdin(monkeypatch, "")
+    monkeypatch.delenv("CLAUDE_DTACH_SESSION", raising=False)
+    statusline_notify.main()  # must not raise
+
+
+def test_statusline_survives_rlimit_oserror(monkeypatch, tmp_path):
+    def _boom(res, limits):
+        raise OSError("EPERM")
+    monkeypatch.setattr(statusline_notify.resource, "setrlimit", _boom)
+    monkeypatch.setattr(statusline_notify, "SOCKET_PATH",
+                        str(tmp_path / "nope.sock"))
+    _set_stdin(monkeypatch, "")
+    monkeypatch.delenv("CLAUDE_DTACH_SESSION", raising=False)
+    statusline_notify.main()  # must not raise

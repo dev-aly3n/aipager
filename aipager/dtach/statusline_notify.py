@@ -15,11 +15,17 @@ Claude Code's status bar.
 
 import json
 import os
+import resource
 import socket
 import sys
 from pathlib import Path
 
 SOCKET_PATH = "/tmp/aipager.sock"
+
+# Address-space cap for the statusline subprocess. Mirrors notify_hook:
+# baseline ~34 MB, 1 GB gives ~30× headroom over realistic legitimate
+# use while still catching true runaways.
+_MEMORY_CAP_BYTES = 1024 * 1024 * 1024
 
 _DEBUG = os.environ.get("AIPAGER_DEBUG") == "1"
 
@@ -30,6 +36,13 @@ def _debug(msg: str) -> None:
 
 
 def main() -> None:
+    try:
+        resource.setrlimit(
+            resource.RLIMIT_AS, (_MEMORY_CAP_BYTES, _MEMORY_CAP_BYTES),
+        )
+    except (ValueError, OSError):
+        pass  # some kernels/containers reject rlimit tightening; never wedge claude
+
     raw = sys.stdin.read()
     session = os.environ.get("CLAUDE_DTACH_SESSION", "")
 

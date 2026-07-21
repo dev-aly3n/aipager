@@ -11,11 +11,21 @@ fires right before PreToolUse, so the file is always current.
 
 import json
 import os
+import resource
 import socket
 import sys
 from pathlib import Path
 
 SOCKET_PATH = "/tmp/aipager.sock"
+
+# Address-space cap for the hook subprocess. Baseline is ~34 MB VmSize
+# and realistic post-streaming-rewrite max is ~100 MB (recent-transcript
+# read + JSON parsing overhead). 1 GB is 10× that — no legitimate hook
+# ever approaches it. Its job is to catch true runaways (dmesg has shown
+# 1.3 GB and 5.2 GB in the past) and die with MemoryError instead of
+# eating gigabytes of host RAM. On a 2 GB VPS/container this still means
+# a runaway can't eat more than half the box before self-terminating.
+_MEMORY_CAP_BYTES = 1024 * 1024 * 1024
 
 _DEBUG = os.environ.get("AIPAGER_DEBUG") == "1"
 
@@ -51,6 +61,13 @@ def _read_statusline_tokens(session: str) -> dict | None:
 
 
 def main():
+    try:
+        resource.setrlimit(
+            resource.RLIMIT_AS, (_MEMORY_CAP_BYTES, _MEMORY_CAP_BYTES),
+        )
+    except (ValueError, OSError):
+        pass  # some kernels/containers reject rlimit tightening; never wedge claude
+
     raw = sys.stdin.read()
     if not raw.strip():
         sys.exit(0)

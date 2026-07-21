@@ -13,7 +13,9 @@ turns its result into a Claude Code deny decision + a daemon notify.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+from typing import Iterator
 
 from aipager import safety
 from aipager.policy_snapshot import read_snapshot
@@ -21,6 +23,48 @@ from aipager.policy_snapshot import read_snapshot
 # Marker our deny reasons carry (see deny_decision_json). Once it appears
 # in a tool_result this turn, every later tool call is sticky-blocked.
 _BLOCK_MARKER = "aipager safety policy"
+
+
+def _iter_lines_reversed(
+    path: str | Path, chunk_bytes: int = 65536,
+) -> Iterator[str]:
+    """Yield lines from ``path`` in reverse (last line first).
+
+    Streams the file in ``chunk_bytes`` chunks from EOF backwards; only
+    the tail actually consulted lands in memory. Partial bytes at a
+    chunk boundary are buffered until the previous chunk is read, so
+    multi-byte UTF-8 characters never get split mid-sequence. Files
+    with no trailing newline still yield their final line. Blank lines
+    are yielded as empty strings — callers filter as needed.
+
+    Malformed UTF-8 falls back to ``errors="replace"`` per line rather
+    than raising, matching the caller's existing
+    "skip lines we can't parse" semantics.
+    """
+    with open(path, "rb") as f:
+        f.seek(0, os.SEEK_END)
+        pos = f.tell()
+        if pos == 0:
+            return
+        fragment = b""
+        while pos > 0:
+            read_size = min(chunk_bytes, pos)
+            pos -= read_size
+            f.seek(pos)
+            buf = f.read(read_size) + fragment
+            parts = buf.split(b"\n")
+            if pos > 0:
+                # Leading part may continue into the preceding chunk.
+                fragment = parts[0]
+                complete = parts[1:]
+            else:
+                fragment = b""
+                complete = parts
+            for line in reversed(complete):
+                try:
+                    yield line.decode("utf-8")
+                except UnicodeDecodeError:
+                    yield line.decode("utf-8", errors="replace")
 
 
 def _tool_result_text(entry: dict) -> str:
@@ -60,32 +104,32 @@ def _origin_from_transcript(path: str | None) -> str:
     """`"telegram"` if the governing user prompt carries the marker, else
     `"terminal"`. Fail-closed to `"telegram"` when unreadable.
 
-    Scans back to the last genuine user *prompt*, skipping tool-result
-    entries (also ``type:"user"``). Without that skip, every tool call
+    Streams the transcript from EOF backwards and short-circuits on the
+    last genuine user *prompt* — tool-result entries (also
+    ``type:"user"``) are skipped. Without that skip, every tool call
     after the first in a turn would see a marker-less tool_result as the
     "last user message" and be misread as terminal → a safety bypass.
     """
     if not path:
         return "telegram"
     try:
-        lines = Path(path).read_text(encoding="utf-8").splitlines()
+        for line in _iter_lines_reversed(path):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if entry.get("type") != "user":
+                continue
+            if _is_tool_result(entry):
+                continue  # tool-results are type:"user" but aren't prompts
+            text = _user_text(entry)
+            first = text.split("\n", 1)[0].lstrip() if text else ""
+            return "telegram" if first.startswith("[via Telegram") else "terminal"
     except OSError:
         return "telegram"
-    for line in reversed(lines):
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            entry = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if entry.get("type") != "user":
-            continue
-        if _is_tool_result(entry):
-            continue  # tool-results are type:"user" but aren't prompts
-        text = _user_text(entry)
-        first = text.split("\n", 1)[0].lstrip() if text else ""
-        return "telegram" if first.startswith("[via Telegram") else "terminal"
     return "telegram"
 
 
@@ -93,38 +137,31 @@ def _turn_already_blocked(path: str | None) -> bool:
     """True if a tool call in the **current turn** was already blocked by
     the safety policy.
 
-    Scans forward from the last genuine user prompt and returns True if any
-    tool_result carries the deny marker. Makes a block *sticky* for the
-    rest of the turn: once one tool is denied, every later tool call is
-    denied too — so an agent can't dodge a pattern with a reworded command
-    (e.g. a glob). Per-turn only: a fresh user prompt clears it.
+    Streams from EOF backwards: returns True the moment we encounter a
+    tool_result carrying the deny marker, and returns False the moment
+    we cross the governing user prompt (anything before it belongs to a
+    prior turn and doesn't count). This makes a block *sticky* for the
+    rest of the turn — once one tool is denied, every later tool call
+    is denied too — so an agent can't dodge a pattern with a reworded
+    command (e.g. a glob). Per-turn only: a fresh user prompt clears it.
     """
     if not path:
         return False
     try:
-        lines = Path(path).read_text(encoding="utf-8").splitlines()
+        for line in _iter_lines_reversed(path):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if _BLOCK_MARKER in _tool_result_text(entry):
+                return True
+            if entry.get("type") == "user" and not _is_tool_result(entry):
+                return False  # crossed into the prior turn; stop scanning
     except OSError:
         return False
-    entries = []
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            entries.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
-    # Find the index of the last genuine user prompt (skip tool-results).
-    start = 0
-    for i in range(len(entries) - 1, -1, -1):
-        e = entries[i]
-        if e.get("type") == "user" and not _is_tool_result(e):
-            start = i
-            break
-    # Any safety-policy deny in a tool_result after that prompt?
-    for e in entries[start:]:
-        if _BLOCK_MARKER in _tool_result_text(e):
-            return True
     return False
 
 
