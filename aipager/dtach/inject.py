@@ -54,6 +54,46 @@ def _credentials_file_is_fresh() -> bool:
     except (OSError, ValueError, TypeError, KeyError):
         return False
 
+
+def _stash_expired_credentials_file() -> Path | None:
+    """Rename an expired ~/.claude/.credentials.json aside so claude
+    falls back to CLAUDE_CODE_OAUTH_TOKEN.
+
+    Claude Code's INTERACTIVE mode prefers the credentials file over
+    the env token even when the file's ``expiresAt`` is in the past,
+    yielding a 401 that shadows a perfectly-valid env token. (``claude
+    -p`` uses a different code path and reads env first, which is why
+    it authenticates fine while an interactive session does not.)
+    Only triggered when we're sure the env token IS the fallback we
+    want: env var non-empty AND file exists AND file is not fresh.
+
+    Returns the stash path on success, ``None`` otherwise. Idempotent:
+    a follow-up call with no file present is a no-op. Reversible: the
+    user can ``mv`` the ``.stale`` file back if they later refresh
+    credentials via ``claude auth login``. Never raises — a file-op
+    failure just returns ``None`` and the existing token-strip logic
+    handles it as best it can.
+    """
+    if not os.environ.get("CLAUDE_CODE_OAUTH_TOKEN"):
+        return None
+    creds = Path.home() / ".claude" / ".credentials.json"
+    if not creds.exists():
+        return None
+    if _credentials_file_is_fresh():
+        return None
+    stash = creds.with_suffix(creds.suffix + ".stale")
+    try:
+        creds.replace(stash)  # atomic overwrite of any prior .stale
+        return stash
+    except OSError as e:
+        log.warning(
+            "could not stash expired credentials file (%s → %s): %s — "
+            "interactive claude may 401 on this session",
+            creds, stash.name, e,
+        )
+        return None
+
+
 SOCK_PREFIX = "/tmp/claude-dtach-"
 
 
@@ -263,6 +303,15 @@ async def launch_session(
     # started it, so headless setups need the token exported in the
     # process that launches aipager (systemd unit, docker run -e, or
     # the shell that runs `aipager start`).
+    # If the credentials file is present but expired and we DO have an
+    # env token available, move the file aside — Claude Code's
+    # interactive mode otherwise picks the expired file over the env
+    # token and 401s on first API call. See
+    # _stash_expired_credentials_file() for the full rationale.
+    stashed = _stash_expired_credentials_file()
+    if stashed is not None:
+        log.info("[%s] stashed expired credentials.json → %s "
+                 "(env token will be used instead)", name, stashed.name)
     unset_token = ("unset CLAUDE_CODE_OAUTH_TOKEN; "
                    if _credentials_file_is_fresh() else "")
     log.info(

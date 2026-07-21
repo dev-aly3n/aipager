@@ -216,3 +216,132 @@ def test_credentials_file_is_fresh_wrong_type_returns_false(
     _write_creds(str(tmp_path),
                  {"claudeAiOauth": {"expiresAt": "not a number"}})
     assert dtach_inject._credentials_file_is_fresh() is False
+
+
+# ---- _stash_expired_credentials_file -----------------------------------
+
+def test_stash_no_op_when_env_token_missing(tmp_path, monkeypatch):
+    """Env token unset → do NOT stash even an expired file. Env token
+    is not our fallback in that case, so removing the file would leave
+    claude with no auth at all."""
+    _patch_home(monkeypatch, tmp_path)
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+    past_ms = int((time.time() - 3600) * 1000)
+    _write_creds(str(tmp_path),
+                 {"claudeAiOauth": {"expiresAt": past_ms}})
+    creds = tmp_path / ".claude" / ".credentials.json"
+    assert dtach_inject._stash_expired_credentials_file() is None
+    assert creds.exists()  # untouched
+
+
+def test_stash_no_op_when_creds_file_missing(tmp_path, monkeypatch):
+    _patch_home(monkeypatch, tmp_path)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "sk-token-1")
+    assert dtach_inject._stash_expired_credentials_file() is None
+
+
+def test_stash_no_op_when_creds_fresh(tmp_path, monkeypatch):
+    """Fresh file wins — don't downgrade the user's auth to the env
+    token unnecessarily. Existing strip logic handles this."""
+    _patch_home(monkeypatch, tmp_path)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "sk-token-1")
+    future_ms = int((time.time() + 3600) * 1000)
+    _write_creds(str(tmp_path),
+                 {"claudeAiOauth": {"expiresAt": future_ms}})
+    creds = tmp_path / ".claude" / ".credentials.json"
+    assert dtach_inject._stash_expired_credentials_file() is None
+    assert creds.exists()  # fresh file preserved
+
+
+def test_stash_renames_expired_creds_when_env_token_set(tmp_path,
+                                                        monkeypatch):
+    _patch_home(monkeypatch, tmp_path)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "sk-token-1")
+    past_ms = int((time.time() - 3600) * 1000)
+    _write_creds(str(tmp_path),
+                 {"claudeAiOauth": {"expiresAt": past_ms}})
+    creds = tmp_path / ".claude" / ".credentials.json"
+    stash = creds.with_suffix(creds.suffix + ".stale")
+    result = dtach_inject._stash_expired_credentials_file()
+    assert result == stash
+    assert not creds.exists()  # moved out
+    assert stash.exists()      # into stash slot
+
+
+def test_stash_overwrites_prior_stale_file(tmp_path, monkeypatch):
+    """A pre-existing .stale from a prior stash must be replaced
+    atomically, not error out."""
+    _patch_home(monkeypatch, tmp_path)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "sk-token-1")
+    past_ms = int((time.time() - 3600) * 1000)
+    _write_creds(str(tmp_path),
+                 {"claudeAiOauth": {"expiresAt": past_ms}})
+    creds = tmp_path / ".claude" / ".credentials.json"
+    stash = creds.with_suffix(creds.suffix + ".stale")
+    stash.write_text('{"older": "stash contents"}')
+    result = dtach_inject._stash_expired_credentials_file()
+    assert result == stash
+    assert not creds.exists()
+    # The stash file was replaced with the previously-current expired
+    # creds file — not the older stash contents.
+    assert "expiresAt" in stash.read_text()
+
+
+def test_stash_returns_none_on_rename_error(tmp_path, monkeypatch):
+    """A file-op failure (permission, EBUSY, disk full) must not raise
+    — the launcher continues and the existing strip logic makes the
+    best decision it can."""
+    _patch_home(monkeypatch, tmp_path)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "sk-token-1")
+    past_ms = int((time.time() - 3600) * 1000)
+    _write_creds(str(tmp_path),
+                 {"claudeAiOauth": {"expiresAt": past_ms}})
+
+    def _boom(self, target):
+        raise OSError("simulated rename failure")
+
+    monkeypatch.setattr(dtach_inject.Path, "replace", _boom)
+    assert dtach_inject._stash_expired_credentials_file() is None
+
+
+def test_launch_session_stashes_expired_creds_and_keeps_env_token(
+        tmp_path, monkeypatch, run_async):
+    """End-to-end: launch_session against a home with an expired creds
+    file + env token stashes the file AND keeps the env token in the
+    launcher (unset NOT injected)."""
+    _patch_home(monkeypatch, tmp_path)
+    monkeypatch.setenv("CLAUDE_CODE_OAUTH_TOKEN", "sk-token-1")
+    past_ms = int((time.time() - 3600) * 1000)
+    _write_creds(str(tmp_path),
+                 {"claudeAiOauth": {"expiresAt": past_ms}})
+    creds = tmp_path / ".claude" / ".credentials.json"
+    stash = creds.with_suffix(creds.suffix + ".stale")
+
+    captured = {}
+
+    async def _fake_exec(*args, **kwargs):
+        captured["args"] = args
+        return _make_proc(returncode=0)
+
+    monkeypatch.setattr(dtach_inject.asyncio,
+                        "create_subprocess_exec", _fake_exec)
+    calls = {"n": 0}
+
+    def _is_socket(self):
+        calls["n"] += 1
+        return calls["n"] > 1
+
+    monkeypatch.setattr(dtach_inject.Path, "is_socket", _is_socket)
+
+    ok, _ = run_async(dtach_inject.launch_session(
+        "jim", cwd=str(tmp_path),
+    ))
+    assert ok
+    # File was stashed
+    assert not creds.exists()
+    assert stash.exists()
+    # Env token was kept in the launcher (strip NOT injected)
+    bash_cmd = captured["args"][-1]
+    assert "unset CLAUDE_CODE_OAUTH_TOKEN" not in bash_cmd
+    assert "unset CLAUDECODE" in bash_cmd
+
