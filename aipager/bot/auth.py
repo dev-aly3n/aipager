@@ -458,6 +458,37 @@ class AuthMixin:
             triggerer.label if triggerer else "unknown",
         )
 
+    def _is_admin(self, update) -> bool:
+        """Return True iff the sender may use Admin-only operations.
+
+        Personal mode: always True (caller is the machine owner).
+        Legacy team mode: True iff the sender's role is Role.ADMIN or higher.
+        V2 scope mode: True iff the sender's effective role has bypass_safety.
+        """
+        if self.scopes is not None:
+            tg_user = update.effective_user
+            if tg_user is None:
+                return False
+            chat = update.effective_chat
+            member = self._member_in_scope(
+                self._scope_for(chat.id if chat else None), tg_user.id)
+            if member is None:
+                return False
+            role = self.policy.get_role(member.role)
+            return bool(role and role.bypass_safety)
+
+        if self.team is not None:
+            tg_user = update.effective_user
+            if tg_user is None:
+                return False
+            member = self.team.get(tg_user.id)
+            if member is None:
+                return False
+            return member.role == Role.ADMIN
+
+        # Personal mode — the operator is always admin.
+        return True
+
     def _mark_driver(
         self, sess: TrackedSession, update: Update,
     ) -> TeamUser | None:

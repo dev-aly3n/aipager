@@ -318,6 +318,7 @@ ACTION_VERBS = {
     "allow": "Allowed",
     "deny": "Denied",
     "continue": "Continued",
+    "allow_always": "Allowed always",
 }
 
 # ── API error detection ──

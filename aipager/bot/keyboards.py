@@ -226,11 +226,79 @@ class KeyboardMixin:
         ]])
 
     def _build_permission_keyboard(self, session_name: str) -> InlineKeyboardMarkup:
-        """Permission buttons + Stop for inline permission."""
+        """Permission buttons + Allow always + Stop for inline permission.
+
+        2×2 grid: row 0 = Allow / Deny, row 1 = Allow always / Stop.
+        """
         return InlineKeyboardMarkup([
             [InlineKeyboardButton("✅ Allow", callback_data=f"{session_name}:allow"),
              InlineKeyboardButton("❌ Deny", callback_data=f"{session_name}:deny")],
-            [InlineKeyboardButton("⏹ Stop", callback_data=f"{session_name}:stop")],
+            [InlineKeyboardButton("🟢 Allow always",
+                                  callback_data=f"{session_name}:allow_always"),
+             InlineKeyboardButton("⏹ Stop", callback_data=f"{session_name}:stop")],
+        ])
+
+    @staticmethod
+    def _make_cb(session_name: str, action: str) -> str:
+        """Build a callback_data string, asserting the 64-byte Telegram limit.
+
+        If the combined length exceeds 63 chars (leave 1 byte of margin),
+        the session_name is truncated so the total is exactly 63 bytes.
+        The full session_name should be stored separately in ``_perms_pending``
+        or ``_resume_mode_pending`` for recovery.
+        """
+        raw = f"{session_name}:{action}"
+        if len(raw.encode()) <= 64:
+            return raw
+        # Truncate session_name to fit: action + ":" + truncated_name ≤ 64 bytes
+        max_name_bytes = 64 - len(action.encode()) - 1  # 1 for ":"
+        name_bytes = session_name.encode()[:max_name_bytes]
+        # Decode with errors="ignore" to avoid splitting a multi-byte char
+        truncated = name_bytes.decode("utf-8", errors="ignore")
+        return f"{truncated}:{action}"
+
+    def _build_perms_confirm_keyboard(
+        self, session_name: str,
+    ) -> InlineKeyboardMarkup:
+        """Confirmation keyboard for /perms IDLE Ask→Auto switch."""
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton(
+                "✅ Yes, switch",
+                callback_data=self._make_cb(session_name, "perms_confirm")),
+             InlineKeyboardButton(
+                "↩️ Cancel",
+                callback_data=self._make_cb(session_name, "perms_cancel"))],
+        ])
+
+    def _build_perms_busy_keyboard(
+        self, session_name: str,
+    ) -> InlineKeyboardMarkup:
+        """Keyboard for /perms on a BUSY session."""
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton(
+                "🛑 Stop task & switch",
+                callback_data=self._make_cb(session_name, "perms_stop_switch")),
+             InlineKeyboardButton(
+                "⏳ Not now",
+                callback_data=self._make_cb(session_name, "perms_wait"))],
+        ])
+
+    def _build_resume_mode_keyboard(
+        self, session_name: str, persisted_skip_perms: bool,
+    ) -> InlineKeyboardMarkup:
+        """Mode-picker keyboard shown after session selection in /resume picker."""
+        ask_label = "💬 Ask" + (" (default)" if not persisted_skip_perms else "")
+        auto_label = "🤖 Auto" + (" (default)" if persisted_skip_perms else "")
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton(
+                ask_label,
+                callback_data=self._make_cb(session_name, "resume_mode_ask")),
+             InlineKeyboardButton(
+                auto_label,
+                callback_data=self._make_cb(session_name, "resume_mode_auto"))],
+            [InlineKeyboardButton(
+                "↩️ Cancel",
+                callback_data=self._make_cb(session_name, "resume_mode_cancel"))],
         ])
 
     def _build_inline_ask_keyboard(self, session_name: str, options: list,
