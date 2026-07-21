@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.23] - 2026-07-21
+
+### Added
+- **Ask / Auto permission mode UX for sessions.** Each session now has
+  a persisted mode: **Ask** (💬 — Claude prompts before each tool
+  call, the current default) or **Auto** (🤖 — Claude runs tools
+  without prompting, corresponds to
+  `--dangerously-skip-permissions`). Persisted per session in
+  `~/.claude/aipager-sessions.json`, restored on daemon restart, and
+  respected on `/resume` by default.
+- **`/perms` Telegram command for mid-session mode switching.** Toggles
+  the active session's mode via kill + resume (transcript and cwd
+  preserved). Ask → Auto shows a confirmation keyboard; Auto → Ask
+  fires immediately. If the session is BUSY, offers a
+  `[🛑 Stop task & switch]` / `[⏳ Not now]` choice instead of
+  silent-refusing. Implementation note: Claude Code's
+  `bypassPermissions` mode is launch-time only, so aipager kills and
+  relaunches with `--resume <id>` — you keep your full transcript.
+- **Inline `/resume` picker with per-session mode choice.** Telegram
+  `/resume` now shows a paginated glass-button list of previous
+  sessions (each row: 💬/🤖 icon + label + relative time). Tap a
+  session → a follow-up mode picker asks whether to resume as Ask or
+  Auto, with `(default)` labelling the session's persisted mode. CLI
+  `/resume` keeps its text picker but respects the persisted mode.
+- **`!` prefix override on `/resume`.** Symmetric with `/new !name`:
+  `/resume !ben` forces Auto, `/resume ben` forces Ask, `/resume`
+  (picker) uses the persisted mode as the picker default.
+- **Enriched `/new` reply.** After `/new ben`, aipager replies with
+  mode icon + name, model, launch cwd, and a `/perms` nudge — so you
+  see at a glance which mode a session is in, where it's rooted, and
+  how to change modes.
+- **Default mode wizard step.** `aipager config` now asks whether new
+  sessions should default to Ask or Auto. Stored in
+  `~/.config/aipager/aipager.yaml` as `default_mode`. `/new <name>`
+  respects the default; `/new !<name>` still forces Auto explicitly.
+- **"Allow always" button on the permission-prompt keyboard.** The
+  keyboard for tool-call prompts is now a 2×2 grid:
+  `[✅ Allow] [❌ Deny]` / `[🟢 Allow always] [⏹ Stop]`. Tapping
+  "Allow always" maps to Claude Code's own "Yes, and don't ask again
+  this session" option.
+- **Team-mode admin gating.** In group mode, switching a session to
+  Auto (via `/perms` or `/new !`) requires the caller's role to be
+  `admin`. Non-admins get a polite denial.
+
+### Changed
+- **User-facing terminology scrub.** Replaced "dangerous" and "unsafe"
+  wording in Telegram messages, wizard prompts, `/new` help text, and
+  README with mode-neutral language (Ask / Auto / restricted). The
+  underlying `--dangerously-skip-permissions` CLI flag reference is
+  kept intact (it's Anthropic's flag name).
+
 ## [0.4.22] - 2026-07-21
 
 ### Fixed
