@@ -309,6 +309,27 @@ def test_hook_memory_cap_hit_swallows_send_failure(mk_bot, run_async):
     run_async(bot.notify(sess, "hook_memory_cap_hit", {"hook": "aipager-hook"}))
 
 
+def test_hook_memory_cap_hit_includes_tool_in_headline(mk_bot, run_async):
+    bot = mk_bot()
+    sess = _sess()
+    run_async(bot.notify(sess, "hook_memory_cap_hit",
+                         {"hook": "aipager-hook", "tool": "Bash"}))
+    text = bot._app.bot.send_message.await_args.args[1]
+    assert "memory cap hit during" in text
+    assert "Bash" in text
+    assert "aipager-hook" in text
+
+
+def test_hook_memory_cap_hit_no_tool_omits_suffix(mk_bot, run_async):
+    bot = mk_bot()
+    sess = _sess()
+    run_async(bot.notify(sess, "hook_memory_cap_hit",
+                         {"hook": "aipager-hook", "tool": ""}))
+    text = bot._app.bot.send_message.await_args.args[1]
+    assert "memory cap hit\n" in text  # bare headline, no "during"
+    assert "memory cap hit during" not in text
+
+
 # ---- compact_done ------------------------------------------------------
 
 def test_compact_done_edits_busy_message(mk_bot, run_async, monkeypatch):

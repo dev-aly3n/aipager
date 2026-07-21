@@ -477,6 +477,126 @@ def test_notify_hook_cap_notifier_ordering(monkeypatch):
     assert events[:2] == ["pre_open_socket", "setrlimit"], events
 
 
+def test_notify_hook_cap_hit_includes_tool_when_stdin_parsed(monkeypatch, tmp_path):
+    """Balloon fires AFTER stdin+json.loads succeed (typical case:
+    enforce path). Cap-hit datagram must carry the tool name."""
+    sock_path = tmp_path / "aipager.sock"
+    monkeypatch.setattr(notify_hook, "SOCKET_PATH", str(sock_path))
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    srv.bind(str(sock_path))
+    srv.settimeout(1.0)
+    try:
+        _set_stdin(
+            monkeypatch,
+            '{"hook_event_name":"PreToolUse","tool_name":"Bash"}',
+        )
+        monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-vic")
+
+        # Stub enforce.decide to blow up, so the balloon fires after the
+        # tool_name has been parsed and the enriched payload swapped in.
+        import aipager.dtach.enforce as enforce_mod
+        def _boom(_data):
+            raise MemoryError("simulated cap hit")
+        monkeypatch.setattr(enforce_mod, "decide", _boom)
+
+        with pytest.raises(SystemExit) as exc:
+            notify_hook.main()
+        assert exc.value.code == 1
+
+        # Skip past the initial (pre-enforce) UDP datagram
+        while True:
+            data, _ = srv.recvfrom(4096)
+            payload = json.loads(data.decode())
+            if payload.get("type") == "hook_memory_cap_hit":
+                break
+        assert payload["session"] == "claude-vic"
+        assert payload["hook"] == "aipager-hook"
+        assert payload["tool"] == "Bash"
+    finally:
+        srv.close()
+
+
+def test_notify_hook_cap_hit_no_tool_when_stdin_balloons(monkeypatch, tmp_path):
+    """Balloon fires DURING sys.stdin.read (before we know the tool).
+    Cap-hit datagram uses the base payload — no `tool` key."""
+    sock_path = tmp_path / "aipager.sock"
+    monkeypatch.setattr(notify_hook, "SOCKET_PATH", str(sock_path))
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    srv.bind(str(sock_path))
+    srv.settimeout(1.0)
+    try:
+        def _boom():
+            raise MemoryError("stdin ballooned before parse")
+        monkeypatch.setattr(sys.stdin, "read", _boom)
+        monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-vic")
+
+        with pytest.raises(SystemExit) as exc:
+            notify_hook.main()
+        assert exc.value.code == 1
+
+        data, _ = srv.recvfrom(4096)
+        payload = json.loads(data.decode())
+        assert payload["type"] == "hook_memory_cap_hit"
+        assert payload["session"] == "claude-vic"
+        assert payload["hook"] == "aipager-hook"
+        assert "tool" not in payload  # base payload — no tool field
+    finally:
+        srv.close()
+
+
+def test_notify_hook_cap_hit_survives_payload_swap_failure(monkeypatch, tmp_path):
+    """If the enriched-payload serialization itself raises (e.g. cap
+    trips mid-serialize), the base payload MUST still be sent. Regression
+    guard for the ``except (MemoryError, ValueError, TypeError)`` swallow."""
+    sock_path = tmp_path / "aipager.sock"
+    monkeypatch.setattr(notify_hook, "SOCKET_PATH", str(sock_path))
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    srv.bind(str(sock_path))
+    srv.settimeout(1.0)
+    try:
+        _set_stdin(
+            monkeypatch,
+            '{"hook_event_name":"PreToolUse","tool_name":"Bash"}',
+        )
+        monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-vic")
+
+        # Break the tool-enriched json.dumps call specifically. The
+        # discriminator `obj.get("tool") == "Bash"` uniquely matches the
+        # swap-in payload (the pre-open path already ran with the base
+        # payload; the initial _udp forward keys off hook_event_name,
+        # not "tool").
+        real_dumps = json.dumps
+
+        def flaky_dumps(obj, *a, **kw):
+            if isinstance(obj, dict) and obj.get("tool") == "Bash":
+                raise MemoryError("simulated cap during swap")
+            return real_dumps(obj, *a, **kw)
+
+        monkeypatch.setattr(notify_hook.json, "dumps", flaky_dumps)
+
+        # Now force a MemoryError later in the flow so the exit handler runs
+        import aipager.dtach.enforce as enforce_mod
+        def _boom(_data):
+            raise MemoryError("later cap hit")
+        monkeypatch.setattr(enforce_mod, "decide", _boom)
+
+        with pytest.raises(SystemExit) as exc:
+            notify_hook.main()
+        assert exc.value.code == 1
+
+        # The received cap-hit datagram must be the BASE payload (no tool),
+        # not the enriched one (which failed to serialize).
+        while True:
+            data, _ = srv.recvfrom(4096)
+            payload = json.loads(data.decode())
+            if payload.get("type") == "hook_memory_cap_hit":
+                break
+        assert payload["hook"] == "aipager-hook"
+        assert "tool" not in payload  # fallback fired
+    finally:
+        srv.close()
+
+
 def test_statusline_cap_notifier_ordering(monkeypatch):
     """Mirror of the notify_hook ordering test: statusline's pre-open
     also MUST happen before setrlimit."""

@@ -88,8 +88,14 @@ class NotifyMixin:
 
         if event == "hook_memory_cap_hit":
             hook_name = context.get("hook", "aipager-hook")
+            tool_name = context.get("tool", "")
+            tool_suffix = (
+                f" during <code>{html_mod.escape(tool_name)}</code>"
+                if tool_name else ""
+            )
             text = (
-                f"⚠️ <b>{html_mod.escape(label)}</b> · memory cap hit\n"
+                f"⚠️ <b>{html_mod.escape(label)}</b> · memory cap hit"
+                f"{tool_suffix}\n"
                 "\n"
                 f"<code>{html_mod.escape(hook_name)}</code> exceeded its "
                 "1 GB limit — one event was dropped. The session is still "

@@ -463,16 +463,20 @@ class HookReceiver:
             # MemoryError. The tool call proceeded (Claude Code treats
             # non-zero hook exit as allow), but one aipager notification
             # was dropped. Surface so the user knows something abnormal
-            # happened.
+            # happened. ``tool`` is present when the hook had already
+            # parsed stdin before the balloon (best-effort — empty
+            # otherwise).
             hook_name = msg.get("hook", "aipager-hook")
+            tool_name = msg.get("tool", "")
             log.warning(
-                "hook memory cap hit for session=%s hook=%s",
-                session_name, hook_name,
+                "hook memory cap hit for session=%s hook=%s tool=%s",
+                session_name, hook_name, tool_name or "?",
             )
             sess = self.registry.get(session_name)
             if sess is not None:
                 await self.notify_fn(sess, "hook_memory_cap_hit", {
                     "hook": hook_name,
+                    "tool": tool_name,
                 })
 
         elif event == "SessionEnd":

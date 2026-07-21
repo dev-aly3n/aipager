@@ -622,7 +622,7 @@ def test_hook_memory_cap_hit_dispatches_notify(receiver, run_async):
     sess, event, context = notify_fn.call_args.args
     assert sess.name == "claude-jim"
     assert event == "hook_memory_cap_hit"
-    assert context == {"hook": "aipager-hook"}
+    assert context == {"hook": "aipager-hook", "tool": ""}
 
 
 def test_hook_memory_cap_hit_defaults_hook_name(receiver, run_async):
@@ -634,5 +634,33 @@ def test_hook_memory_cap_hit_defaults_hook_name(receiver, run_async):
           session="claude-jim")
     notify_fn.assert_awaited_once()
     _, _, context = notify_fn.call_args.args
-    assert context == {"hook": "aipager-hook"}
+    assert context == {"hook": "aipager-hook", "tool": ""}
+
+
+def test_hook_memory_cap_hit_forwards_tool(receiver, run_async):
+    """When the datagram carries a ``tool`` field, it's forwarded to
+    notify in the context dict."""
+    registry, recv, notify_fn = receiver
+    registry.get_or_create("claude-jim")
+    _send(recv, run_async,
+          type="hook_memory_cap_hit",
+          session="claude-jim",
+          hook="aipager-hook",
+          tool="Read")
+    notify_fn.assert_awaited_once()
+    _, _, context = notify_fn.call_args.args
+    assert context == {"hook": "aipager-hook", "tool": "Read"}
+
+
+def test_hook_memory_cap_hit_missing_tool_defaults_empty(receiver, run_async):
+    """No ``tool`` field → context has ``tool=""`` (not missing)."""
+    registry, recv, notify_fn = receiver
+    registry.get_or_create("claude-jim")
+    _send(recv, run_async,
+          type="hook_memory_cap_hit",
+          session="claude-jim",
+          hook="aipager-hook")
+    notify_fn.assert_awaited_once()
+    _, _, context = notify_fn.call_args.args
+    assert context["tool"] == ""
 

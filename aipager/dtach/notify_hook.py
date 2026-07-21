@@ -99,23 +99,37 @@ def main():
     except (ValueError, OSError):
         pass  # some kernels/containers reject rlimit tightening; never wedge claude
 
+    # Single-element list acts as a zero-allocation swap slot: ``_run``
+    # can replace ``cap_slot[0]`` with an enriched payload (e.g. one
+    # tagged with the current tool_name) once it knows more. The except
+    # handler below reads ``cap_slot[0]`` without allocating, so it
+    # picks up whatever the most recent successful swap left behind.
+    cap_slot = [cap_payload]
+
     try:
-        _run(session)
+        _run(session, cap_slot)
     except MemoryError:
         # Cap tripped mid-work. Fire the pre-baked datagram (best-effort,
         # never raises), then exit non-zero so Claude sees the failure.
         if cap_sock is not None:
             try:
-                cap_sock.sendto(cap_payload, SOCKET_PATH)
+                cap_sock.sendto(cap_slot[0], SOCKET_PATH)
             except OSError:
                 pass
         sys.exit(1)
 
 
-def _run(session: str) -> None:
+def _run(session: str, cap_slot: list[bytes]) -> None:
     """Main hook body — separated so ``main()`` can wrap it in a single
     ``try/except MemoryError``. Any allocation inside here that pushes
-    the process past the cap will trip that handler."""
+    the process past the cap will trip that handler.
+
+    ``cap_slot`` is a one-element list holding the pre-serialized
+    cap-hit payload; we mutate ``cap_slot[0]`` in place to enrich it
+    (e.g. with the current tool name) as we learn more. Best-effort:
+    any failure to serialize the richer payload silently keeps the
+    fallback bytes, so the notification path never crashes the hook.
+    """
     raw = sys.stdin.read()
     if not raw.strip():
         sys.exit(0)
@@ -124,6 +138,23 @@ def _run(session: str) -> None:
         data = json.loads(raw)
     except json.JSONDecodeError:
         sys.exit(0)
+
+    # Enrich the cap-hit payload with the tool name now that we know it.
+    # If the balloon fires later (typically inside the enforce path),
+    # the notification will read "cap hit during Bash" instead of the
+    # bare "cap hit". If serialization itself trips the cap or the
+    # tool_name is pathological, we silently keep the fallback bytes.
+    tool_name = data.get("tool_name", "")
+    if tool_name:
+        try:
+            cap_slot[0] = json.dumps({
+                "type": "hook_memory_cap_hit",
+                "session": session,
+                "hook": "aipager-hook",
+                "tool": tool_name,
+            }).encode()
+        except (MemoryError, ValueError, TypeError):
+            pass
 
     if session:
         data["session"] = session
