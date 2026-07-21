@@ -240,22 +240,19 @@ class KeyboardMixin:
 
     @staticmethod
     def _make_cb(session_name: str, action: str) -> str:
-        """Build a callback_data string, asserting the 64-byte Telegram limit.
+        """Build a callback_data string within Telegram's 64-byte limit.
 
-        If the combined length exceeds 63 chars (leave 1 byte of margin),
-        the session_name is truncated so the total is exactly 63 bytes.
-        The full session_name should be stored separately in ``_perms_pending``
-        or ``_resume_mode_pending`` for recovery.
+        Realistic session names are well under 20 chars, so max callback_data
+        is ~61 bytes (43-char name + ':' + 'perms_stop_switch' = 61). An
+        assertion fires early at keyboard-construction time — before any
+        Telegram API call — so the operator sees a clear error with the
+        offending name rather than silent misbehavior at dispatch time.
         """
         raw = f"{session_name}:{action}"
-        if len(raw.encode()) <= 64:
-            return raw
-        # Truncate session_name to fit: action + ":" + truncated_name ≤ 64 bytes
-        max_name_bytes = 64 - len(action.encode()) - 1  # 1 for ":"
-        name_bytes = session_name.encode()[:max_name_bytes]
-        # Decode with errors="ignore" to avoid splitting a multi-byte char
-        truncated = name_bytes.decode("utf-8", errors="ignore")
-        return f"{truncated}:{action}"
+        assert len(raw.encode()) <= 64, (
+            f"callback_data overflow ({len(raw.encode())} bytes): {raw!r}"
+        )
+        return raw
 
     def _build_perms_confirm_keyboard(
         self, session_name: str,

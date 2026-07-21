@@ -247,15 +247,12 @@ def test_callback_data_within_64_bytes_for_long_label():
     )
 
 
-def test_callback_data_within_64_bytes_for_very_long_name():
-    """Callback data for a session name exceeding the limit must be truncated
-    to fit within 64 bytes."""
+def test_callback_data_overflow_raises_assertion():
+    """_make_cb raises AssertionError (not silent truncation) when the
+    callback_data would exceed 64 bytes. This gives a clear operator error
+    rather than a silent broken dispatch lookup."""
+    import pytest
     bot = _make_bot()
     very_long = "claude-" + "x" * 60
-    cb = bot._make_cb(very_long, "perms_stop_switch")
-    assert len(cb.encode("utf-8")) <= 64, (
-        f"_make_cb must truncate to ≤ 64 bytes; got {len(cb.encode())} bytes"
-    )
-    assert cb.endswith(":perms_stop_switch"), (
-        "Truncated callback must still end with the action suffix"
-    )
+    with pytest.raises(AssertionError, match="callback_data overflow"):
+        bot._make_cb(very_long, "perms_stop_switch")

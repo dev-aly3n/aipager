@@ -134,10 +134,10 @@ def test_make_cb_normal_within_limit(bot):
     assert cb == "claude-dev:perms_confirm"
 
 
-def test_make_cb_truncates_long_name(bot):
-    # Create a name that would exceed 64 bytes when combined with action
+def test_make_cb_asserts_on_overflow(bot):
+    # _make_cb now raises AssertionError instead of silently truncating,
+    # so operators get a clear error rather than a broken dispatch lookup.
     long_name = "claude-" + "x" * 60
     action = "perms_stop_switch"
-    cb = bot._make_cb(long_name, action)
-    assert len(cb.encode()) <= 64
-    assert cb.endswith(f":{action}")
+    with pytest.raises(AssertionError, match="callback_data overflow"):
+        bot._make_cb(long_name, action)
