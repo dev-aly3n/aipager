@@ -16,6 +16,28 @@ def _isolate_audit_log(tmp_path, monkeypatch):
                         tmp_path / "audit.jsonl")
 
 
+@pytest.fixture(autouse=True)
+def _isolate_wizard_config(tmp_path, monkeypatch):
+    """Redirect wizard/scope config paths to tmp for every test, so any
+    code path that writes ``aipager.yaml`` / ``policy.yaml`` (e.g.
+    ``first_run._commit_owner_dm``, ``scope.dump_scopes``,
+    ``scope_io.commit_scope``) never touches the operator's real
+    ``~/.config/aipager/``.
+
+    Why this is autouse rather than opt-in: prior to this fixture the
+    contract was per-test manual ``monkeypatch.setattr(_scope,
+    "CONFIG_PATH", ...)``. One forgotten redirect during a /ship
+    pipeline run wrote fixture values (``bot_token="TOK"``,
+    ``chat_id=42``, ``label="owner DM"``) to a live user config and
+    broke ``aipager start`` (Telegram 404). Autouse makes it
+    structurally impossible for a future test to skip the redirect.
+    """
+    monkeypatch.setattr("aipager.scope.CONFIG_PATH",
+                        tmp_path / "aipager.yaml")
+    monkeypatch.setattr("aipager.policy.POLICY_PATH",
+                        tmp_path / "policy.yaml")
+
+
 @pytest.fixture
 def tmp_state_file(tmp_path, monkeypatch):
     """Redirect SESSION_STATE_FILE so tests never touch the real one."""
