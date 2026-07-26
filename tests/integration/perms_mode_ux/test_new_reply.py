@@ -7,12 +7,10 @@ SC11: /new !ben → contains 🤖, "Auto", no "/perms" nudge.
 from __future__ import annotations
 
 import asyncio
-import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 
-from aipager.state import SessionRegistry, Status, TrackedSession
+from aipager.state import SessionRegistry
 
 
 def _run(coro):

@@ -142,7 +142,6 @@ def test_telegram_resume_picker_tap_shows_mode_picker():
     # Message must be edited to mode picker
     query.edit_message_text.assert_awaited_once()
     edit_kwargs = query.edit_message_text.await_args[1] or {}
-    edit_text = query.edit_message_text.await_args[0][0] if query.edit_message_text.await_args[0] else None
 
     assert "reply_markup" in edit_kwargs, (
         "Resume tap must show a mode picker keyboard"
@@ -173,13 +172,13 @@ def test_telegram_resume_mode_picker_shows_default_label():
     all_labels = [btn.text for row in kb.inline_keyboard for btn in row]
 
     # Auto button should have (default)
-    auto_labels = [l for l in all_labels if "Auto" in l]
-    ask_labels = [l for l in all_labels if "Ask" in l]
+    auto_labels = [lbl for lbl in all_labels if "Auto" in lbl]
+    ask_labels = [lbl for lbl in all_labels if "Ask" in lbl]
 
-    assert any("(default)" in l for l in auto_labels), (
+    assert any("(default)" in lbl for lbl in auto_labels), (
         f"Auto button must have (default) when persisted=True; labels: {all_labels}"
     )
-    assert not any("(default)" in l for l in ask_labels), (
+    assert not any("(default)" in lbl for lbl in ask_labels), (
         f"Ask button must NOT have (default) when persisted=True; labels: {all_labels}"
     )
 
@@ -251,7 +250,6 @@ def test_callback_data_overflow_raises_assertion():
     """_make_cb raises AssertionError (not silent truncation) when the
     callback_data would exceed 64 bytes. This gives a clear operator error
     rather than a silent broken dispatch lookup."""
-    import pytest
     bot = _make_bot()
     very_long = "claude-" + "x" * 60
     with pytest.raises(AssertionError, match="callback_data overflow"):

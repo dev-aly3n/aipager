@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -83,7 +83,6 @@ def test_new_reply_includes_model_when_known(mk_bot, mk_update, run_async, mk_la
     get_or_create returns the existing entry, which already has model_name set.
     """
     from aipager.scope import disambiguated_name
-    from aipager.state import Status, TrackedSession
 
     bot = mk_bot()
     # With chat_id=0 and scope_kind="dm", the session name is "claude-dev__d0".

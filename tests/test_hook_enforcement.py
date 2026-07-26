@@ -327,7 +327,6 @@ def test_iter_lines_reversed_bounded_memory(tmp_path):
             return getattr(self._w, name)
 
     # Wrap open() only for this file, spy on read()
-    real_open = enforce.open if hasattr(enforce, "open") else open
     import builtins
     original_open = builtins.open
 

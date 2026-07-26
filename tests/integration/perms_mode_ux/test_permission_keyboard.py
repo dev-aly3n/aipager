@@ -7,9 +7,8 @@ SC17: Tapping "Allow always" sends exactly Down, Down, Enter with 0.1s delays.
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 
 from aipager.state import SessionRegistry, Status, TrackedSession
 
@@ -77,11 +76,11 @@ def test_sc16_permission_keyboard_row0_is_allow_and_deny():
     cbs = [btn.callback_data for btn in row0]
 
     # Must have Allow (but NOT Allow always)
-    assert any("Allow" in l and "always" not in l.lower() for l in labels), (
+    assert any("Allow" in lbl and "always" not in lbl.lower() for lbl in labels), (
         f"Row 0 must have Allow (not always); labels: {labels}"
     )
     # Must have Deny
-    assert any("Deny" in l for l in labels), (
+    assert any("Deny" in lbl for lbl in labels), (
         f"Row 0 must have Deny; labels: {labels}"
     )
     # Callback data
@@ -101,11 +100,11 @@ def test_sc16_permission_keyboard_row1_is_allow_always_and_stop():
     cbs = [btn.callback_data for btn in row1]
 
     # Must have Allow always
-    assert any("Allow always" in l or "always" in l.lower() for l in labels), (
+    assert any("Allow always" in lbl or "always" in lbl.lower() for lbl in labels), (
         f"Row 1 must have Allow always; labels: {labels}"
     )
     # Must have Stop
-    assert any("Stop" in l for l in labels), (
+    assert any("Stop" in lbl for lbl in labels), (
         f"Row 1 must have Stop; labels: {labels}"
     )
     # Callback data

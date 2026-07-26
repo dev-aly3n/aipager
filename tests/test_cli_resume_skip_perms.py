@@ -6,7 +6,6 @@ import argparse
 
 from unittest.mock import patch
 
-import pytest
 
 from aipager.cli import resume as cli_resume
 

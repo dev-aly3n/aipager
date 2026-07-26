@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 
 
 # ---- load_default_mode -----------------------------------------------------
@@ -82,7 +81,6 @@ def test_load_default_mode_corrupt_yaml_returns_ask(tmp_path):
 
 def test_dump_scopes_writes_default_mode_auto(tmp_path):
     """dump_scopes with default_mode='auto' writes the key to yaml."""
-    import yaml
     from aipager.scope import Scope, dump_scopes, load_default_mode
 
     cfg = tmp_path / "aipager.yaml"
@@ -99,7 +97,6 @@ def test_dump_scopes_writes_default_mode_auto(tmp_path):
 
 def test_dump_scopes_preserves_existing_default_mode(tmp_path):
     """dump_scopes without default_mode kwarg preserves the existing value."""
-    import yaml
     from aipager.scope import Member, Scope, dump_scopes, load_default_mode
 
     cfg = tmp_path / "aipager.yaml"

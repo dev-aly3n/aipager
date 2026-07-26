@@ -6,7 +6,6 @@ SC13: load_default_mode from yaml without default_mode key returns "ask".
 
 from __future__ import annotations
 
-import pytest
 import yaml
 
 

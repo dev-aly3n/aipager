@@ -24,8 +24,8 @@ def test_permission_keyboard_row0_allow_deny(bot):
     row0 = kb.inline_keyboard[0]
     assert len(row0) == 2
     labels = [btn.text for btn in row0]
-    assert any("Allow" in l and "always" not in l.lower() for l in labels), labels
-    assert any("Deny" in l for l in labels), labels
+    assert any("Allow" in lbl and "always" not in lbl.lower() for lbl in labels), labels
+    assert any("Deny" in lbl for lbl in labels), labels
 
 
 def test_permission_keyboard_row1_allow_always_stop(bot):
@@ -33,8 +33,8 @@ def test_permission_keyboard_row1_allow_always_stop(bot):
     row1 = kb.inline_keyboard[1]
     assert len(row1) == 2
     labels = [btn.text for btn in row1]
-    assert any("Allow always" in l or "allow always" in l.lower() for l in labels), labels
-    assert any("Stop" in l for l in labels), labels
+    assert any("Allow always" in lbl or "allow always" in lbl.lower() for lbl in labels), labels
+    assert any("Stop" in lbl for lbl in labels), labels
 
 
 def test_permission_keyboard_callback_data(bot):
@@ -58,8 +58,8 @@ def test_perms_confirm_keyboard_buttons(bot):
     row = kb.inline_keyboard[0]
     labels = [btn.text for btn in row]
     cbs = [btn.callback_data for btn in row]
-    assert any("Yes" in l or "switch" in l.lower() for l in labels), labels
-    assert any("Cancel" in l for l in labels), labels
+    assert any("Yes" in lbl or "switch" in lbl.lower() for lbl in labels), labels
+    assert any("Cancel" in lbl for lbl in labels), labels
     assert any("perms_confirm" in c for c in cbs), cbs
     assert any("perms_cancel" in c for c in cbs), cbs
 
@@ -76,8 +76,8 @@ def test_perms_busy_keyboard_buttons(bot):
     row = kb.inline_keyboard[0]
     labels = [btn.text for btn in row]
     cbs = [btn.callback_data for btn in row]
-    assert any("Stop" in l or "switch" in l.lower() for l in labels), labels
-    assert any("Not now" in l or "now" in l.lower() for l in labels), labels
+    assert any("Stop" in lbl or "switch" in lbl.lower() for lbl in labels), labels
+    assert any("Not now" in lbl or "now" in lbl.lower() for lbl in labels), labels
     assert any("perms_stop_switch" in c for c in cbs), cbs
     assert any("perms_wait" in c for c in cbs), cbs
 
@@ -94,8 +94,8 @@ def test_resume_mode_keyboard_default_label_ask(bot):
     kb = bot._build_resume_mode_keyboard("claude-dev", persisted_skip_perms=False)
     row0 = kb.inline_keyboard[0]
     labels = [btn.text for btn in row0]
-    ask_label = next(l for l in labels if "Ask" in l)
-    auto_label = next(l for l in labels if "Auto" in l)
+    ask_label = next(lbl for lbl in labels if "Ask" in lbl)
+    auto_label = next(lbl for lbl in labels if "Auto" in lbl)
     assert "(default)" in ask_label
     assert "(default)" not in auto_label
 
@@ -105,8 +105,8 @@ def test_resume_mode_keyboard_default_label_auto(bot):
     kb = bot._build_resume_mode_keyboard("claude-dev", persisted_skip_perms=True)
     row0 = kb.inline_keyboard[0]
     labels = [btn.text for btn in row0]
-    ask_label = next(l for l in labels if "Ask" in l)
-    auto_label = next(l for l in labels if "Auto" in l)
+    ask_label = next(lbl for lbl in labels if "Ask" in lbl)
+    auto_label = next(lbl for lbl in labels if "Auto" in lbl)
     assert "(default)" not in ask_label
     assert "(default)" in auto_label
 

@@ -9,9 +9,8 @@ from __future__ import annotations
 
 import json
 
-import pytest
 
-from aipager.state import SessionRegistry, Status, TrackedSession
+from aipager.state import SessionRegistry, Status
 
 
 # --------------------------------------------------------------------------- #

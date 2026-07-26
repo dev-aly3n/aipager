@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -192,7 +192,6 @@ def test_perms_stop_switch_sends_ctrl_c(mk_bot, mk_query, run_async):
 
     update, query = mk_query("claude-dev:perms_stop_switch")
 
-    from pathlib import Path
 
     with patch("aipager.dtach.inject.send_keys", side_effect=mock_send_keys), \
          patch("aipager.dtach.inject.launch_session", side_effect=mock_launch_session), \
