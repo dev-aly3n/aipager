@@ -59,11 +59,12 @@ def test_dispatch_table_covers_both_platforms():
             assert sub in service._DISPATCH[plat], f"missing {plat}/{sub}"
 
 
-def test_paths_use_home():
+def test_paths_use_home(real_home_paths):
+    # Asserts the production constants, not the tmp redirects the
+    # autouse isolation fixture installs.
     home = Path.home()
-    assert service.LINUX_UNIT_PATH.is_relative_to(home)
-    assert service.MACOS_PLIST_PATH.is_relative_to(home)
-    assert service.MACOS_LOG_PATH.is_relative_to(home)
+    for name in ("LINUX_UNIT_PATH", "MACOS_PLIST_PATH", "MACOS_LOG_PATH"):
+        assert real_home_paths[f"aipager.service.{name}"].is_relative_to(home)
 
 
 # ----- _run -----

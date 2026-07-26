@@ -10,14 +10,19 @@ without redirecting ``_scope.CONFIG_PATH``. The autouse fixture in
 
 from __future__ import annotations
 
+from importlib import import_module
 from pathlib import Path
+
+import pytest
 
 import aipager.policy as _policy
 import aipager.scope as _scope
 
 
-_REAL_CONFIG = Path.home() / ".config" / "aipager" / "aipager.yaml"
-_REAL_POLICY = Path.home() / ".config" / "aipager" / "policy.yaml"
+_CFG = Path.home() / ".config" / "aipager"
+_CLAUDE = Path.home() / ".claude"
+_REAL_CONFIG = _CFG / "aipager.yaml"
+_REAL_POLICY = _CFG / "policy.yaml"
 
 
 def test_scope_config_path_is_isolated_from_real_home(tmp_path):
@@ -62,3 +67,63 @@ def test_dumping_scope_writes_to_tmp_not_home():
     # inspect it directly without racing, so we just re-assert that
     # ``_scope.CONFIG_PATH`` still points at tmp.
     assert _scope.CONFIG_PATH != _REAL_CONFIG
+
+
+# Every module-level write target ``_isolate_home_paths`` redirects, as
+# ``(dotted attribute, real path it must not equal)``. Entries that
+# differ only by consumer module are listed separately on purpose: a
+# by-value ``from x import CONST`` keeps its own copy, so patching the
+# defining module alone would leave the consumer pointing at real home.
+_REDIRECTED = [
+    ("aipager.claude_bootstrap._SETTINGS", _CLAUDE / "settings.json"),
+    ("aipager.claude_bootstrap._CLAUDE_JSON", Path.home() / ".claude.json"),
+    ("aipager.team.PENDING_USERS_PATH",
+     _CLAUDE / "aipager-pending-users.json"),
+    ("aipager.team.TEAM_CONFIG_PATH", _CFG / "team.yaml"),
+    ("aipager.policy.POLICY_D_DIR", _CFG / "policy.d"),
+    ("aipager.config.SESSION_STATE_FILE", _CLAUDE / "aipager-sessions.json"),
+    ("aipager.state.SESSION_STATE_FILE", _CLAUDE / "aipager-sessions.json"),
+    ("aipager.status.SESSION_STATE_FILE", _CLAUDE / "aipager-sessions.json"),
+    ("aipager.config._KEYBOARD_CONFIG_PATH", _CFG / "keyboard.json"),
+    ("aipager.session_store.SESSIONS_ROOT",
+     Path.home() / ".local" / "share" / "aipager" / "sessions"),
+    ("aipager.service.LINUX_UNIT_PATH",
+     Path.home() / ".config" / "systemd" / "user" / "aipager.service"),
+    ("aipager.service.MACOS_PLIST_PATH",
+     Path.home() / "Library" / "LaunchAgents" / "com.aipager.daemon.plist"),
+    ("aipager.service.MACOS_LOG_PATH",
+     Path.home() / "Library" / "Logs" / "aipager.log"),
+    ("aipager.wizard._constants.CLAUDE_SETTINGS", _CLAUDE / "settings.json"),
+    ("aipager.wizard.settings_patch.CLAUDE_SETTINGS",
+     _CLAUDE / "settings.json"),
+    ("aipager.wizard._constants.CONFIG_DIR", _CFG),
+    ("aipager.wizard.daemon_io.CONFIG_DIR", _CFG),
+    ("aipager.wizard.draft.CONFIG_DIR", _CFG),
+    ("aipager.wizard._constants.CONFIG_ENV", _CFG / "config.env"),
+    ("aipager.wizard.daemon_io.CONFIG_ENV", _CFG / "config.env"),
+    ("aipager.wizard.CONFIG_ENV", _CFG / "config.env"),
+    ("aipager.wizard._constants.TEAM_YAML", _CFG / "team.yaml"),
+    ("aipager.wizard.draft.DRAFT_PATH", _CFG / ".wizard-draft.json"),
+]
+
+
+@pytest.mark.parametrize("dotted,real", _REDIRECTED)
+def test_home_write_targets_are_isolated(dotted, real):
+    module_name, _, attr = dotted.rpartition(".")
+    value = getattr(import_module(module_name), attr)
+    assert value != real, f"{dotted} leaks the real user path: {value}"
+    assert "pytest-" in str(value), (
+        f"{dotted} should be under a pytest tmp_path, got: {value}"
+    )
+
+
+def test_uninstall_removal_lists_are_isolated():
+    """``cmd_uninstall(force=True)`` rmtrees everything in these lists —
+    an unredirected entry would delete a live install."""
+    import aipager.updater as _updater
+
+    for name in ("_USER_PATHS_TO_REMOVE", "_MACOS_PATHS_TO_REMOVE"):
+        for path in getattr(_updater, name):
+            assert "pytest-" in str(path), (
+                f"updater.{name} entry escapes tmp_path: {path}"
+            )
