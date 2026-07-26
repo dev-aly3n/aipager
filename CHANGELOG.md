@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.24] - 2026-07-26
+
+### Fixed
+- **`aipager doctor` and `aipager status` no longer crash on a
+  malformed config.** A hand-edited `~/.config/aipager/aipager.yaml`
+  that failed to parse took down every command, including `doctor` —
+  the exact command the generic error handler tells you to run. The
+  parse failure is now recorded instead of raised: `doctor` reports it
+  as a failed check (`✗ Config file parses`) and completes its full
+  run, and `status` prints the parse error above its normal output
+  (`status --json` gains a `config_error` field). The daemon still
+  refuses to start, but now names the file and the specific error
+  instead of claiming aipager "isn't configured yet".
+- **Running the test suite from a source checkout no longer overwrites
+  your real config.** Tests derived their paths from `$HOME`, so a
+  local `pytest` run could rewrite `~/.config/aipager/aipager.yaml`,
+  `~/.claude/settings.json`, and the pending-users queue. Every
+  home-derived path is now redirected to a temp directory, with a
+  session-level guard that fails the run if anything under `$HOME` is
+  touched. Only affects people running the suite from a checkout —
+  installed users were never at risk.
+
 ## [0.4.23] - 2026-07-21
 
 ### Added
