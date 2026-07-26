@@ -25,7 +25,24 @@ def require_config() -> None:
     scopes come from ``aipager.yaml``. Falls back to the legacy
     BOT_TOKEN/CHAT_ID check for un-migrated installs.
     """
-    from aipager.config import BOT_TOKEN, CHAT_ID, SCOPES
+    from aipager.config import BOT_TOKEN, CHAT_ID, CONFIG_ERROR, SCOPES
+
+    if CONFIG_ERROR:
+        # Refuse to start on an unparseable v2 file. `config` degrades to
+        # ``SCOPES = None`` so diagnostics keep working, but that value
+        # means "legacy personal mode" to the auth layer — starting on it
+        # would drop scope enforcement, so this gate must stay closed.
+        friendly_error(
+            "aipager's config file is malformed.",
+            "",
+            f"  {CONFIG_ERROR}",
+            "",
+            "  Fix the file by hand, or re-run the setup wizard:",
+            "",
+            "      aipager config",
+            "",
+        )
+        sys.exit(2)
 
     if SCOPES and BOT_TOKEN:
         return  # v2 is authoritative

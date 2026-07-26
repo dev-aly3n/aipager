@@ -50,19 +50,54 @@ del _load_team
 # ``aipager.yaml`` (the "who") + ``policy.yaml`` (the "what") are the
 # v2 config surface, authoritative when present. The bot loads scopes
 # fresh at init (see bot/core.py) — these module-level values are the
-# import-time snapshot used by preflight/status/state-backfill. A
-# malformed hand-written v2 file fails loud (the loaders raise).
+# import-time snapshot used by preflight/status/state-backfill.
+#
+# A malformed v2 file is recorded in ``CONFIG_ERROR`` rather than raised
+# here. Raising at import time took down every command that imports this
+# module, including `aipager doctor` — the one the error message tells
+# users to run. Diagnostics must survive a broken config to be able to
+# report it.
+#
+# This does NOT soften the daemon: ``bot/core.py`` re-loads scopes and
+# policy itself and still raises, and ``preflight.require_config``
+# refuses to start when ``CONFIG_ERROR`` is set. Both matter, because
+# ``SCOPES = None`` means "legacy personal mode", under which
+# ``auth._is_admin`` returns True for everyone — degrading to it on a
+# parse error would be a fail-open. ``TEAM`` above is deliberately still
+# loaded eagerly-and-loudly for the same reason: ``bot/core.py`` reads
+# the snapshot rather than reloading, so it has no second line of
+# defence.
+from aipager.scope import ScopeConfigError as _ScopeConfigError  # noqa: E402
 from aipager.scope import load_scopes as _load_scopes  # noqa: E402
+from aipager.policy import PolicyError as _PolicyError  # noqa: E402
 from aipager.policy import load_policy as _load_policy  # noqa: E402
 
-_v2 = _load_scopes()
+CONFIG_ERROR: str | None = None
+
+try:
+    _v2 = _load_scopes()
+except _ScopeConfigError as e:
+    CONFIG_ERROR = str(e)
+    _v2 = None
 SCOPES = _v2[0] if _v2 else None
-POLICY = _load_policy()
+
+try:
+    POLICY = _load_policy()
+except _PolicyError as e:
+    if CONFIG_ERROR is None:
+        CONFIG_ERROR = str(e)
+    # Built-in defaults = the restrictive safety floor. `load_policy`
+    # documents "missing files → built-in defaults only", so pointing it
+    # at a path that cannot exist yields that floor without the
+    # unparseable layer.
+    POLICY = _load_policy(Path("/nonexistent/aipager"),
+                          Path("/nonexistent/aipager.d"))
+
 if _v2 and _v2[1]:
     # v2 is authoritative for the bot token when aipager.yaml is present
     # — this is what lets config.env be retired (Phase C).
     BOT_TOKEN = _v2[1]
-del _load_scopes, _load_policy, _v2
+del _load_scopes, _load_policy, _v2, _ScopeConfigError, _PolicyError
 
 from aipager.scope import load_default_mode as _load_dm  # noqa: E402
 DEFAULT_MODE: str = _load_dm()

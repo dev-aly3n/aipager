@@ -22,7 +22,7 @@ import socket
 from pathlib import Path
 
 from aipager.config import BOT_TOKEN, CHAT_ID, SESSION_STATE_FILE, SOCKET_PATH
-from aipager.errors import friendly_error
+from aipager.errors import friendly_error, friendly_warn
 from aipager.ui import console
 
 
@@ -228,15 +228,24 @@ def cmd_status(args: argparse.Namespace | None = None) -> int:
     of a rendered table.
     """
     as_json = bool(getattr(args, "as_json", False))
+    # Read late: `config` degrades instead of raising, and tests patch it.
+    from aipager.config import CONFIG_ERROR
 
     if not BOT_TOKEN or not CHAT_ID:
         if as_json:
             print(json.dumps({
-                "error": "config missing",
+                "error": "config malformed" if CONFIG_ERROR else "config missing",
+                "config_error": CONFIG_ERROR,
                 "missing": [k for k, v in
                             (("CLAUDE_TG_BOT_TOKEN", BOT_TOKEN),
                              ("CLAUDE_TG_CHAT_ID", CHAT_ID)) if not v],
             }))
+        elif CONFIG_ERROR:
+            friendly_error(
+                "aipager's config file is malformed.",
+                f"  {CONFIG_ERROR}",
+                "  Run `aipager doctor` for the full diagnosis.",
+            )
         else:
             friendly_error(
                 "aipager isn't configured yet.",
@@ -251,10 +260,20 @@ def cmd_status(args: argparse.Namespace | None = None) -> int:
     if as_json:
         print(json.dumps({
             "daemon": {"up": daemon_up, "chat_id": CHAT_ID},
+            "config_error": CONFIG_ERROR,
             "sessions": sessions,
             "total_cost_usd": round(total_cost, 4),
         }, indent=2))
-    elif console.is_terminal:
+        return 0 if daemon_up else 1
+
+    if CONFIG_ERROR:
+        friendly_warn(
+            "aipager's config file is malformed.",
+            f"  {CONFIG_ERROR}",
+            "  The daemon will refuse to start until this is fixed.",
+            "",
+        )
+    if console.is_terminal:
         _render_rich(daemon_up, sessions, total_cost)
     else:
         _render_plain(daemon_up, sessions, total_cost)

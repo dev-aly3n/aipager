@@ -62,6 +62,25 @@ def _http_json(url: str, timeout: float = 10.0) -> tuple[dict | None, str]:
         return None, str(e)
 
 
+def check_config_parses() -> CheckResult:
+    """Report an unparseable ``aipager.yaml`` / ``policy.yaml``.
+
+    Runs first: when this fails, every later check is reading a config
+    that is not the one on disk, so the user needs to see it before
+    interpreting anything below.
+    """
+    from aipager.config import CONFIG_ERROR
+
+    if CONFIG_ERROR:
+        return CheckResult(
+            FAIL,
+            "Config file parses",
+            detail=[CONFIG_ERROR],
+            fix="aipager config  # or hand-edit the file named above",
+        )
+    return CheckResult(OK, "Config file parses")
+
+
 def check_config() -> CheckResult:
     from aipager.config import BOT_TOKEN, CHAT_ID
 
@@ -399,6 +418,7 @@ def check_team() -> CheckResult:
 
 
 CHECKS: list[Callable[[], CheckResult]] = [
+    check_config_parses,
     check_config,
     check_token_valid,
     check_chat_reachable,
