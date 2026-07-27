@@ -12,6 +12,7 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import time
 from pathlib import Path
 
@@ -266,14 +267,42 @@ async def send_text_and_enter(session: str, text: str) -> bool:
     return ok
 
 
-async def kill_session(session: str) -> bool:
-    """Kill a dtach session by finding its host PID and terminating it."""
-    sock = _sock_path(session)
-    sock_path = Path(sock)
-    if not sock_path.is_socket():
-        return False
+def _proc_socket_pids(sock: str) -> list[int]:
+    """PIDs of dtach processes holding ``sock``, via a /proc scan.
 
-    # Find the dtach host process (dtach -n <sock> ...)
+    Only matches processes whose argv[0] is a dtach binary, so an
+    unrelated process that merely mentions the socket path on its
+    command line is never signalled.
+    """
+    proc_dir = Path("/proc")
+    if not proc_dir.is_dir():
+        return []
+    needle = sock.encode()
+    pids: list[int] = []
+    for entry in proc_dir.iterdir():
+        if not entry.name.isdigit():
+            continue
+        pid = int(entry.name)
+        if pid == os.getpid():
+            continue
+        try:
+            argv = (entry / "cmdline").read_bytes().split(b"\0")
+        except OSError:
+            continue  # process exited mid-scan, or not ours to read
+        if not argv or b"dtach" not in os.path.basename(argv[0]):
+            continue
+        if any(needle in arg for arg in argv[1:]):
+            pids.append(pid)
+    return pids
+
+
+async def _fuser_socket_pids(sock: str) -> list[int]:
+    """PIDs holding ``sock`` according to ``fuser``.
+
+    Fallback for platforms without /proc. ``fuser`` is not declared as
+    a dependency anywhere and is absent from slim container images, so
+    a missing binary is an expected outcome, not an error.
+    """
     try:
         proc = await asyncio.create_subprocess_exec(
             "fuser", sock,
@@ -281,18 +310,44 @@ async def kill_session(session: str) -> bool:
             stderr=asyncio.subprocess.PIPE,
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
-        pids = stdout.decode().split()
-        for pid_str in pids:
-            pid_str = pid_str.strip()
-            if pid_str.isdigit():
-                import os
-                import signal
-                os.kill(int(pid_str), signal.SIGTERM)
-                log.info("Killed dtach PID %s for %s", pid_str, session)
     except Exception:
-        log.warning("Failed to find/kill dtach PID for %s", session, exc_info=True)
+        log.warning("fuser lookup failed for %s", sock, exc_info=True)
+        return []
+    return [int(tok) for tok in stdout.decode().split() if tok.strip().isdigit()]
 
-    # Remove socket as fallback (dtach should clean up, but ensure it)
+
+async def kill_session(session: str) -> bool:
+    """Kill a dtach session by finding its host PID and terminating it.
+
+    Returns False — leaving the socket in place — when no process could
+    be signalled. The socket is the only handle aipager has on a running
+    session: unlinking it after a failed kill strands a live claude that
+    the monitor then reports as gone, and the orphan later deletes the
+    socket of whatever session has since taken its place.
+    """
+    sock = _sock_path(session)
+    sock_path = Path(sock)
+    if not sock_path.is_socket():
+        return False
+
+    pids = _proc_socket_pids(sock) or await _fuser_socket_pids(sock)
+
+    signalled = False
+    for pid in pids:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
+            log.warning("Could not SIGTERM PID %s for %s", pid, session,
+                        exc_info=True)
+            continue
+        signalled = True
+        log.info("Killed dtach PID %s for %s", pid, session)
+
+    if not signalled:
+        log.warning("No dtach process signalled for %s — keeping socket %s",
+                    session, sock)
+        return False
+
     try:
         sock_path.unlink(missing_ok=True)
     except OSError:

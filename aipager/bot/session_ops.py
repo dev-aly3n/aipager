@@ -244,6 +244,10 @@ class SessionOpsMixin:
             self.registry.mark_dirty()
             await _reply(f"💀 Killed [{target_label}]")
             asyncio.create_task(self._update_bot_commands())
+        elif await inject.is_alive(session_name):
+            # Socket still there: the process survived. Saying "not found"
+            # here would tell the user it is gone while it keeps running.
+            await _reply(f"⚠️ Could not kill [{target_label}] — still running")
         else:
             await _reply(f"⚠️ Session [{target_label}] not found")
 

@@ -21,11 +21,14 @@ FROM python:3.12-slim
 #     graceful-shutdown handler (registry.save, hook_receiver.stop,
 #     bot.stop) runs on `docker stop`.
 #   - curl + ca-certificates are needed only to install Node.
+#   - psmisc provides `fuser`, kill_session's fallback for locating the
+#     dtach process when the /proc scan finds nothing.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         tini \
         curl \
         ca-certificates \
+        psmisc \
     && rm -rf /var/lib/apt/lists/*
 
 # Node 22 LTS + claude code. Strip the npm cache afterwards so it

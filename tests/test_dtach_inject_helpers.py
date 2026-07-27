@@ -221,6 +221,7 @@ def test_kill_session_sigterms_fuser_pids(tmp_path, monkeypatch, run_async):
         proc.communicate = AsyncMock(return_value=(b"12345 67890\n", b""))
         return proc
 
+    monkeypatch.setattr(inject, "_proc_socket_pids", lambda sock: [])
     monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", _fake_exec)
     monkeypatch.setattr("os.kill", lambda pid, sig: killed.append((pid, sig)))
 
@@ -232,11 +233,20 @@ def test_kill_session_sigterms_fuser_pids(tmp_path, monkeypatch, run_async):
         srv.close()
 
 
-def test_kill_session_handles_fuser_failure(tmp_path, monkeypatch, run_async):
+def test_kill_session_fails_and_keeps_socket_when_fuser_missing(
+    tmp_path, monkeypatch, run_async,
+):
+    """No PID found → False, and the socket must survive.
+
+    The socket is aipager's only handle on the session: unlinking it
+    after a failed kill strands a live claude that the monitor then
+    reports as gone.
+    """
     sock_path = tmp_path / "claude-dtach-jim.sock"
     srv = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
     srv.bind(str(sock_path))
     monkeypatch.setattr(inject, "_sock_path", lambda s: str(sock_path))
+    monkeypatch.setattr(inject, "_proc_socket_pids", lambda sock: [])
 
     async def _fake_exec(*args, **kwargs):
         raise OSError("fuser binary missing")
@@ -244,11 +254,100 @@ def test_kill_session_handles_fuser_failure(tmp_path, monkeypatch, run_async):
     monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", _fake_exec)
 
     try:
-        # Should still return True (socket file deletion is a separate path)
-        ok = run_async(inject.kill_session("claude-jim"))
-        assert ok is True
+        assert run_async(inject.kill_session("claude-jim")) is False
+        assert sock_path.is_socket()
     finally:
         srv.close()
+
+
+def test_kill_session_fails_when_no_pids_found(tmp_path, monkeypatch, run_async):
+    """fuser succeeding but returning nothing is still a failed kill."""
+    sock_path = tmp_path / "claude-dtach-jim.sock"
+    srv = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+    srv.bind(str(sock_path))
+    monkeypatch.setattr(inject, "_sock_path", lambda s: str(sock_path))
+    monkeypatch.setattr(inject, "_proc_socket_pids", lambda sock: [])
+
+    async def _fake_exec(*args, **kwargs):
+        from unittest.mock import AsyncMock
+        proc = AsyncMock()
+        proc.communicate = AsyncMock(return_value=(b"\n", b""))
+        return proc
+
+    monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", _fake_exec)
+
+    try:
+        assert run_async(inject.kill_session("claude-jim")) is False
+        assert sock_path.is_socket()
+    finally:
+        srv.close()
+
+
+def test_kill_session_fails_when_sigterm_raises(tmp_path, monkeypatch, run_async):
+    """A PID that cannot be signalled (already gone) is not a kill."""
+    sock_path = tmp_path / "claude-dtach-jim.sock"
+    srv = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+    srv.bind(str(sock_path))
+    monkeypatch.setattr(inject, "_sock_path", lambda s: str(sock_path))
+    monkeypatch.setattr(inject, "_proc_socket_pids", lambda sock: [12345])
+
+    def _boom(pid, sig):
+        raise ProcessLookupError("no such process")
+
+    monkeypatch.setattr("os.kill", _boom)
+
+    try:
+        assert run_async(inject.kill_session("claude-jim")) is False
+        assert sock_path.is_socket()
+    finally:
+        srv.close()
+
+
+def test_kill_session_uses_proc_scan_without_fuser(tmp_path, monkeypatch, run_async):
+    """The /proc scan alone suffices — fuser is never consulted."""
+    sock_path = tmp_path / "claude-dtach-jim.sock"
+    srv = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+    srv.bind(str(sock_path))
+    monkeypatch.setattr(inject, "_sock_path", lambda s: str(sock_path))
+    monkeypatch.setattr(inject, "_proc_socket_pids", lambda sock: [4242])
+
+    killed = []
+    monkeypatch.setattr("os.kill", lambda pid, sig: killed.append((pid, sig)))
+
+    async def _fail(*args, **kwargs):
+        raise AssertionError("fuser must not run when /proc found a PID")
+
+    monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", _fail)
+
+    try:
+        assert run_async(inject.kill_session("claude-jim")) is True
+        assert killed == [(4242, 15)]  # SIGTERM
+        assert not sock_path.exists()
+    finally:
+        srv.close()
+
+
+def test_proc_socket_pids_ignores_non_dtach_processes(tmp_path, monkeypatch):
+    """A process merely mentioning the socket path must not be signalled."""
+    sock = "/tmp/claude-dtach-jim.sock"
+    proc_dir = tmp_path / "proc"
+    for pid, argv in {
+        "10": [b"/usr/local/bin/dtach", b"-n", sock.encode(), b"-Ez"],
+        "11": [b"/bin/grep", sock.encode(), b"/var/log/syslog"],
+        "12": [b"/usr/bin/claude", b"--resume", b"abc"],
+    }.items():
+        d = proc_dir / pid
+        d.mkdir(parents=True)
+        (d / "cmdline").write_bytes(b"\0".join(argv) + b"\0")
+    (proc_dir / "self").mkdir()  # non-numeric entry must be skipped
+
+    real_path = inject.Path
+    monkeypatch.setattr(
+        inject, "Path",
+        lambda arg, *a, **kw: real_path(proc_dir) if arg == "/proc"
+        else real_path(arg, *a, **kw),
+    )
+    assert inject._proc_socket_pids(sock) == [10]
 
 
 # ---- list_sessions ------------------------------------------------------
