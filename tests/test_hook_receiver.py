@@ -664,3 +664,118 @@ def test_hook_memory_cap_hit_missing_tool_defaults_empty(receiver, run_async):
     _, _, context = notify_fn.call_args.args
     assert context["tool"] == ""
 
+
+# ---- PostCompact handler -------------------------------------------------
+
+def test_post_compact_clears_compact_started_at(receiver, run_async):
+    """PostCompact sets compact_started_at back to None."""
+    registry, recv, _ = receiver
+    sess = registry.get_or_create("claude-jim")
+    sess.compact_started_at = time.monotonic() - 30.0
+    _send(recv, run_async,
+          hook_event_name="PostCompact",
+          session="claude-jim")
+    assert sess.compact_started_at is None
+
+
+def test_post_compact_does_not_fire_compact_done(receiver, run_async):
+    """PostCompact must NOT fire compact_done — it lacks the delta context."""
+    _, recv, notify_fn = receiver
+    _send(recv, run_async,
+          hook_event_name="PostCompact",
+          session="claude-jim")
+    # notify_fn must not have been called at all
+    notify_fn.assert_not_awaited()
+
+
+# ---- StopFailure handler -------------------------------------------------
+
+def test_stop_failure_transitions_to_idle(receiver, run_async):
+    """StopFailure moves a BUSY session to IDLE."""
+    registry, recv, _ = receiver
+    registry.transition("claude-jim", Status.BUSY)
+    _send(recv, run_async,
+          hook_event_name="StopFailure",
+          session="claude-jim")
+    assert registry.get("claude-jim").status == Status.IDLE
+
+
+def test_stop_failure_fires_idle_prompt(receiver, run_async):
+    """StopFailure emits an idle_prompt notification."""
+    registry, recv, notify_fn = receiver
+    registry.transition("claude-jim", Status.BUSY)
+    notify_fn.reset_mock()
+    _send(recv, run_async,
+          hook_event_name="StopFailure",
+          session="claude-jim")
+    notify_fn.assert_awaited_once()
+    _, event, _ = notify_fn.await_args.args
+    assert event == "idle_prompt"
+
+
+def test_stop_failure_clears_pending_tool_and_compact(receiver, run_async):
+    """StopFailure resets both in-flight markers."""
+    registry, recv, _ = receiver
+    sess = registry.get_or_create("claude-jim")
+    sess.pending_tool_started_at = time.monotonic() - 5.0
+    sess.compact_started_at = time.monotonic() - 10.0
+    _send(recv, run_async,
+          hook_event_name="StopFailure",
+          session="claude-jim")
+    assert sess.pending_tool_started_at is None
+    assert sess.compact_started_at is None
+
+
+def test_stop_failure_sets_last_prompt_origin_fail_closed(receiver, run_async):
+    """StopFailure resets last_prompt_origin to 'telegram' (fail-closed)."""
+    registry, recv, _ = receiver
+    sess = registry.get_or_create("claude-jim")
+    sess.last_prompt_origin = "terminal"
+    _send(recv, run_async,
+          hook_event_name="StopFailure",
+          session="claude-jim")
+    assert sess.last_prompt_origin == "telegram"
+
+
+def test_stop_failure_empty_summary_when_no_transcript(receiver, run_async):
+    """StopFailure with no transcript path yields an empty summary (no crash)."""
+    registry, recv, notify_fn = receiver
+    registry.transition("claude-jim", Status.BUSY)
+    notify_fn.reset_mock()
+    _send(recv, run_async,
+          hook_event_name="StopFailure",
+          session="claude-jim")
+    _, _, ctx = notify_fn.await_args.args
+    assert ctx["summary"] == ""
+
+
+def test_stop_failure_debounce_bypass(receiver, run_async):
+    """StopFailure on an already-IDLE session still fires idle_prompt.
+
+    This is the key property: debounce must not suppress finalization.
+    When transition() returns None (session already IDLE), we fall back to
+    get() and still deliver the notification — stranding must not occur.
+
+    We put the session into IDLE via registry.transition() directly (not via
+    a hook datagram, to avoid the fingerprint dedup) and then send a fresh
+    StopFailure datagram. transition(IDLE) returns None (same-state no-op),
+    so the handler must fall back to get() and still notify.
+    """
+    registry, recv, notify_fn = receiver
+    # Bring session to IDLE directly (bypasses the dedup cache entirely)
+    registry.transition("claude-jim", Status.BUSY)
+    registry.transition("claude-jim", Status.IDLE)
+    assert registry.get("claude-jim").status == Status.IDLE
+    notify_fn.reset_mock()
+
+    # Now send a StopFailure — transition(IDLE) returns None (same-state),
+    # but the handler must still deliver idle_prompt.
+    _send(recv, run_async,
+          hook_event_name="StopFailure",
+          session="claude-jim",
+          extra_field="unique-to-avoid-fingerprint-collision")
+    # Must have notified even though session was already IDLE
+    notify_fn.assert_awaited_once()
+    _, event, _ = notify_fn.await_args.args
+    assert event == "idle_prompt"
+
