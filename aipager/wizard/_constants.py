@@ -37,8 +37,9 @@ HOOK_CMD = "aipager-hook"
 STATUSLINE_CMD = "aipager-statusline"
 HOOK_EVENTS = (
     "SessionStart", "SessionEnd", "UserPromptSubmit",
-    "PreToolUse", "PostToolUse", "PermissionRequest",
-    "Notification", "Stop", "SubagentStop", "PreCompact",
+    "PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest",
+    "Notification", "Stop", "StopFailure", "SubagentStart", "SubagentStop",
+    "PreCompact", "PostCompact",
 )
 TOOL_MATCHER_EVENTS = {"PreToolUse", "PostToolUse", "PermissionRequest"}
 

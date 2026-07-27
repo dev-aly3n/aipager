@@ -373,3 +373,59 @@ def test_resolve_user_numeric_skips_updates_scan(monkeypatch):
     assert out is None
     # Only one call (the getChat); no fallback scan for numeric input.
     assert len(seen_urls) == 1 and "getChat" in seen_urls[0]
+
+
+# ---- _merge_hooks: new-event subscription --------------------------------
+
+def test_merge_hooks_adds_new_events_to_existing_settings(monkeypatch):
+    """_merge_hooks adds the four new events when settings.json already has
+    only the original 10. The existing 10 must be undisturbed (idempotent)."""
+    from aipager.wizard._constants import HOOK_EVENTS, HOOK_CMD
+
+    _old_events = (
+        "SessionStart", "SessionEnd", "UserPromptSubmit",
+        "PreToolUse", "PostToolUse", "PermissionRequest",
+        "Notification", "Stop", "SubagentStop", "PreCompact",
+    )
+    _new_events = ("StopFailure", "PostCompact", "SubagentStart", "PostToolUseFailure")
+
+    # Build a settings dict with only the original 10 events already wired
+    existing_hooks: dict = {}
+    for event in _old_events:
+        existing_hooks[event] = [{"hooks": [{"type": "command", "command": "/usr/bin/aipager-hook"}]}]
+    settings: dict = {"hooks": existing_hooks, "myOtherKey": "preserved"}
+
+    # Monkeypatch shutil.which used inside settings_patch to resolve the hook cmd
+    monkeypatch.setattr(settings_patch.shutil, "which",
+                        lambda name: f"/usr/bin/{name}")
+
+    settings_patch._merge_hooks(settings)
+
+    hooks = settings["hooks"]
+
+    # All 14 events present
+    for event in HOOK_EVENTS:
+        assert event in hooks, f"{event} missing after _merge_hooks"
+
+    # The four new events now have an aipager-hook entry
+    for event in _new_events:
+        cmds = [
+            h.get("command", "")
+            for block in hooks[event]
+            for h in block.get("hooks", [])
+        ]
+        assert any(HOOK_CMD in c for c in cmds), \
+            f"{event} missing aipager-hook after _merge_hooks"
+
+    # Original 10 still have exactly one entry (not duplicated)
+    for event in _old_events:
+        cmds = [
+            h.get("command", "")
+            for block in hooks[event]
+            for h in block.get("hooks", [])
+        ]
+        count = sum(1 for c in cmds if HOOK_CMD in c)
+        assert count == 1, f"{event} has {count} entries after _merge_hooks"
+
+    # Unrelated key preserved
+    assert settings["myOtherKey"] == "preserved"

@@ -234,3 +234,69 @@ def test_has_hook_cmd_empty_bare_name_returns_false():
     """Defensive: an empty bare_name must never match anything."""
     assert _has_hook_cmd(_wrap("/some/aipager-hook"), "") is False
 
+
+# ---- new-event subscription tests ----------------------------------------
+
+_NEW_EVENTS = ("StopFailure", "PostCompact", "SubagentStart", "PostToolUseFailure")
+_OLD_EVENTS = (
+    "SessionStart", "SessionEnd", "UserPromptSubmit",
+    "PreToolUse", "PostToolUse", "PermissionRequest",
+    "Notification", "Stop", "SubagentStop", "PreCompact",
+)
+
+
+def test_new_events_wired_on_fresh_install(tmp_path, monkeypatch):
+    """On a fresh settings.json the four new events are subscribed."""
+    settings = tmp_path / "settings.json"
+    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
+    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+    monkeypatch.setattr(claude_bootstrap.shutil, "which",
+                        lambda cmd: f"/usr/bin/{cmd}" if cmd in {"aipager-hook", "aipager-statusline"} else None)
+
+    claude_bootstrap.bootstrap_claude_settings("/workspace")
+
+    data = json.loads(settings.read_text())
+    hooks = data["hooks"]
+    for event in _NEW_EVENTS:
+        assert event in hooks, f"{event} missing from hooks"
+        entries = hooks[event]
+        assert isinstance(entries, list) and entries, f"no entries for {event}"
+
+
+def test_new_events_patched_into_existing_settings(tmp_path, monkeypatch):
+    """Start from the 10 original hooks; after bootstrap all 14 are present
+    and the original 10 are undisturbed."""
+    settings = tmp_path / "settings.json"
+    # Write a settings.json that only has the original 10 events
+    existing_hooks: dict = {}
+    for event in _OLD_EVENTS:
+        if event in {"PreToolUse", "PostToolUse", "PermissionRequest"}:
+            existing_hooks[event] = [{"matcher": "*", "hooks": [{"type": "command", "command": "/usr/bin/aipager-hook"}]}]
+        else:
+            existing_hooks[event] = [{"hooks": [{"type": "command", "command": "/usr/bin/aipager-hook"}]}]
+    settings.write_text(json.dumps({"hooks": existing_hooks}))
+
+    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", settings)
+    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+    monkeypatch.setattr(claude_bootstrap.shutil, "which",
+                        lambda cmd: f"/usr/bin/{cmd}" if cmd in {"aipager-hook", "aipager-statusline"} else None)
+
+    claude_bootstrap.bootstrap_claude_settings("/workspace")
+
+    data = json.loads(settings.read_text())
+    hooks = data["hooks"]
+
+    # All 14 events present
+    for event in (*_OLD_EVENTS, *_NEW_EVENTS):
+        assert event in hooks, f"{event} missing after patch"
+
+    # Original 10 undisturbed: exactly one aipager-hook entry each
+    for event in _OLD_EVENTS:
+        cmds = [
+            h.get("command", "")
+            for block in hooks[event]
+            for h in block.get("hooks", [])
+        ]
+        count = sum(1 for c in cmds if "aipager-hook" in c)
+        assert count == 1, f"{event} has {count} aipager-hook entries after patch"
+
