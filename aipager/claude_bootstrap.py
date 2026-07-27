@@ -48,15 +48,19 @@ _CLAUDE_JSON = Path.home() / ".claude.json"
 
 # Mirror the wizard's hook surface so containerized deploys get the
 # same coverage as `aipager config`. Kept in sync with
-# ``aipager.wizard._constants`` (the wizard is the canonical source
-# for users who run it; this module is the fallback for users who
-# don't).
+# ``aipager.wizard._constants.HOOK_EVENTS`` (the wizard is the canonical
+# source for users who run it; this module is the fallback for users who
+# don't). Both tuples must list events in the same order. They are kept
+# separate rather than consolidated because ``_constants`` imports
+# ``questionary`` at module level — pulling it in here would drag
+# ``questionary``/``prompt_toolkit`` into every daemon start.
 _HOOK_CMD = "aipager-hook"
 _STATUSLINE_CMD = "aipager-statusline"
 _HOOK_EVENTS = (
     "SessionStart", "SessionEnd", "UserPromptSubmit",
-    "PreToolUse", "PostToolUse", "PermissionRequest",
-    "Notification", "Stop", "SubagentStop", "PreCompact",
+    "PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest",
+    "Notification", "Stop", "StopFailure", "SubagentStart", "SubagentStop",
+    "PreCompact", "PostCompact",
 )
 _TOOL_MATCHER_EVENTS = {"PreToolUse", "PostToolUse", "PermissionRequest"}
 

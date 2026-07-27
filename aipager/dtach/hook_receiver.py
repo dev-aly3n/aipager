@@ -513,6 +513,17 @@ class HookReceiver:
             await self.notify_fn(sess, "compacting", {"trigger": trigger})
             return
 
+        elif event == "PostCompact":
+            # Compaction completed — clear the in-flight marker so the
+            # stale-busy suppression window closes precisely. Do NOT fire
+            # compact_done here: this event carries no before/after context
+            # delta. The delta-carrying notification is emitted by the
+            # SessionStart(source=compact) path or the statusLine fallback.
+            sess = self.registry.get_or_create(session_name)
+            sess.compact_started_at = None
+            log.info("[%s] PostCompact: compaction window closed", sess.label)
+            return
+
         elif event == "SessionStart":
             # SessionStart with source=compact fires after compaction completes
             source = msg.get("source", "")
@@ -612,6 +623,52 @@ class HookReceiver:
                       sess.label, ctx_pct, sess.last_output_tokens,
                       sess.output_baseline or 0, total_out)
             return  # no further notification — animation reads cached values
+
+        elif event == "StopFailure":
+            # A turn ended in failure — no Stop is emitted, so we must
+            # finalize here or the session strands in BUSY. Unlike the
+            # Stop handler, StopFailure never carries last_assistant_message,
+            # so the debounce bypass that requires it cannot fire. We always
+            # finalize: call transition() and fall back to get() if the
+            # session was already IDLE (race or duplicate). This is the
+            # exact stranding bug being fixed — do not gate on debounce.
+            _sf = self.registry.get(session_name)
+            if _sf is not None:
+                _sf.last_prompt_origin = "telegram"  # fail-closed
+                _sf.pending_tool_started_at = None
+                _sf.compact_started_at = None
+            sess = self.registry.transition(session_name, Status.IDLE)
+            if sess is None:
+                # Already IDLE (or debounce blocked) — get the session so
+                # we can still notify. Finalizing must not be skipped.
+                sess = self.registry.get(session_name)
+            if sess is None:
+                return
+
+            # Build summary from transcript only — no last_assistant_message
+            # on StopFailure. An empty summary is acceptable.
+            notify_ctx: dict = {"summary": ""}
+            tracked = self.registry.get(session_name)
+            tp = transcript_path or (tracked.transcript_path if tracked else "")
+            if not tp and RICH_SUMMARIES:
+                tp = find_transcript(session_name)
+            if tp:
+                try:
+                    md = extract_last_response(tp)
+                    if md and RICH_SUMMARIES and "```" in md:
+                        html_summary = markdown_to_telegram_html(md)
+                        notify_ctx = {
+                            "summary": html_summary,
+                            "html_summary": True,
+                            "raw_md": md,
+                        }
+                    elif md:
+                        notify_ctx = {"summary": md}
+                except Exception:
+                    log.info("[%s] StopFailure: transcript summary failed",
+                             session_name)
+            log.info("[%s] StopFailure: transitioned to IDLE", sess.label)
+            await self.notify_fn(sess, "idle_prompt", notify_ctx)
 
         elif event.lower() in ("idle_prompt", "idle", "stop", "notification"):
             # Turn finished — reset origin fail-closed (Phase D §3.7a) so the
