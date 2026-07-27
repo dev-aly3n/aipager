@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.25] - 2026-07-27
+
+### Fixed
+- **`/kill` no longer reports success while leaving a live `claude`
+  process behind.** `kill_session` shelled out to `fuser` to find the
+  dtach process, swallowed every failure, deleted the socket anyway,
+  and returned success regardless. On images without `fuser` — which
+  included the published Docker image — `/kill` was a silent no-op:
+  the session kept running and burning tokens, and relaunching it
+  produced two `claude` processes writing the same transcript. PID
+  discovery now falls back to scanning `/proc` when `fuser` is
+  unavailable, and a failed kill returns failure and keeps the socket,
+  which is aipager's only handle on the process. `psmisc` was added to
+  the Docker image.
+- **Far fewer false "Silent for 2+ min" warnings.** The busy/idle
+  state machine now subscribes to four more Claude Code lifecycle
+  hooks — `StopFailure`, `PostCompact`, `SubagentStart` and
+  `PostToolUseFailure` — so it observes turn, tool and compaction
+  completion directly instead of inferring them. A turn that ended in
+  failure, or a tool call that errored, previously left the session
+  stranded in "working" until the warning fired. The new subscriptions
+  are patched into `~/.claude/settings.json` automatically on the next
+  `aipager start` — no config re-run needed, and hand-authored hooks
+  are left untouched.
+
 ## [0.4.24] - 2026-07-26
 
 ### Fixed
