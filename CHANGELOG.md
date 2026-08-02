@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   written since the turn started, and a turn that never really started
   falls through to the honest "silent for 2+ min" warning instead.
 
+## [0.4.25] - 2026-07-27
+
 ### Fixed
 - **`/kill` no longer reports success while leaving a live `claude`
   process behind.** `kill_session` shelled out to `fuser` to find the
