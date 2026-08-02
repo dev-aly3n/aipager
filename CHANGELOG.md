@@ -7,7 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.4.25] - 2026-07-27
+## [0.4.26] - 2026-08-02
+
+### Fixed
+- **A session no longer answers a new prompt with the previous turn's
+  reply.** The idle-recovery fallback — which rescues a session whose
+  `Stop` hook was missed — measured transcript quiet time in absolute
+  terms, never against when the current turn began. A turn whose prompt
+  never reached `claude` therefore looked identical to one that had
+  finished and gone quiet: eight seconds in, the monitor read the
+  *previous* turn's transcript tail, declared the turn complete, and
+  published that turn's last message as the answer. It arrived as a
+  confident "Finished", so the only symptom was a reply that did not
+  match the question. Recovery now requires the transcript to have been
+  written since the turn started, and a turn that never really started
+  falls through to the honest "silent for 2+ min" warning instead.
 
 ### Fixed
 - **`/kill` no longer reports success while leaving a live `claude`
