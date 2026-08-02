@@ -65,6 +65,13 @@ IDLE_RECOVERY_GRACE: float = float(
     os.environ.get("AIPAGER_IDLE_RECOVERY_GRACE", "8")
 )
 
+# Slack for the "was the transcript written during this turn?" check.
+# Some filesystems (tmpfs, HFS+, older NFS) store mtime at 1-second
+# resolution, so a write that really did land just after the turn started
+# can report an mtime a fraction under it. Well below IDLE_RECOVERY_GRACE,
+# so this cannot re-admit a transcript that is genuinely a turn behind.
+MTIME_GRANULARITY_SLACK: float = 1.0
+
 
 class SessionMonitor:
     """Periodically discovers dtach sessions and marks dead ones GONE."""
@@ -174,13 +181,28 @@ class SessionMonitor:
                 tp = sess.transcript_path or find_transcript(name)
                 busy_for = (now - sess.busy_started_at) if sess.busy_started_at else 0.0
                 quiet_for = 0.0
+                mtime: float | None = None
                 if tp:
                     try:
-                        quiet_for = time.time() - os.path.getmtime(tp)
+                        mtime = os.path.getmtime(tp)
+                        quiet_for = time.time() - mtime
                     except OSError:
+                        mtime = None
                         quiet_for = 0.0
+                # The transcript must have been written since this turn
+                # began. Without that, a turn whose prompt never reached
+                # claude is indistinguishable from one that finished and
+                # went quiet — turn_appears_complete() would be reading the
+                # PREVIOUS turn's tail, and recovery would publish that
+                # turn's answer as the reply to the new prompt.
+                written_this_turn = bool(
+                    tp and sess.busy_started_wall
+                    and mtime is not None
+                    and mtime >= sess.busy_started_wall - MTIME_GRANULARITY_SLACK
+                )
                 if (tp and busy_for >= IDLE_RECOVERY_GRACE
                         and quiet_for >= IDLE_RECOVERY_GRACE
+                        and written_this_turn
                         and turn_appears_complete(tp)):
                     log.warning(
                         "[%s] BUSY but transcript shows the turn finished and has "

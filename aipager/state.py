@@ -124,6 +124,12 @@ class TrackedSession:
     last_lines_added: int = 0       # lines added THIS TURN (delta)
     last_lines_removed: int = 0     # lines removed THIS TURN (delta)
     busy_started_at: float = 0.0     # monotonic timestamp when BUSY started (for "thought Xs")
+    # Wall-clock twin of busy_started_at, comparable against transcript
+    # mtimes (which are wall-clock). Kept separate because busy_started_at
+    # is shifted forward while a permission prompt is waiting so the
+    # "thought Xs" display excludes that wait — shifting this one would
+    # let the idle-recovery guard accept a pre-turn transcript again.
+    busy_started_wall: float = 0.0
     # Queued messages (sent one-at-a-time when session becomes IDLE)
     pending_queue: list = field(default_factory=list)  # list of (text, trigger_msg_id)
     # Reply threading — Telegram message_id of the user's prompt that started this work
@@ -316,6 +322,19 @@ class SessionRegistry:
         if new_status == Status.BUSY:
             sess.last_idle_at = 0.0
             sess.stale_warned = False
+            # Stamp the turn start here rather than at any single call
+            # site: several paths enter BUSY (Telegram prompt, terminal
+            # UserPromptSubmit, permission answer, the INTERACTIVE
+            # watchdog), and a path that missed the stamp would leave the
+            # idle-recovery guard permanently unsatisfied.
+            #
+            # Coming back from INTERACTIVE is a permission answer resuming
+            # the SAME turn, so the existing stamp is still the true turn
+            # start — re-stamping there would move the marker past writes
+            # this turn already made and blind the guard for the rest of
+            # it. (BUSY→BUSY can't reach here; same-state returns above.)
+            if sess.status != Status.INTERACTIVE:
+                sess.busy_started_wall = time.time()
 
         old = sess.status
         sess.status = new_status
