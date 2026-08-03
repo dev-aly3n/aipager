@@ -52,6 +52,41 @@ def _gone_history() -> list[dict]:
     return gone
 
 
+def _all_records() -> list[dict]:
+    """Every persisted session record, live ones included."""
+    from aipager.status import _read_state
+    persisted = (_read_state().get("sessions", {}) or {}).values()
+    return [sd for sd in persisted if sd.get("name")]
+
+
+def _resolve_record(label: str,
+                    records: list[dict]) -> tuple[dict | None, list[str]]:
+    """Resolve a user-typed label to one session record.
+
+    Sessions opened from Telegram are named ``claude-<label>__d<chat_id>``,
+    so reconstructing ``claude-<label>`` from user input misses them. Match
+    on the record instead: exact name first, then the record's own ``label``.
+
+    Returns ``(record, [])`` on a unique hit, ``(None, [names])`` when the
+    label is ambiguous across scopes, and ``(None, [])`` when nothing matches.
+    """
+    named = [sd for sd in records if sd.get("name")]
+
+    exact = f"claude-{label}"
+    for sd in named:
+        if sd["name"] == exact:
+            return sd, []
+
+    by_label = [sd for sd in named if sd.get("label") == label]
+    if len(by_label) == 1:
+        return by_label[0], []
+    if by_label:
+        return None, sorted(
+            sd["name"].removeprefix("claude-") for sd in by_label
+        )
+    return None, []
+
+
 def _resume_one(label: str, *, force_auto: bool = False) -> int:
     """Resume a single session by label. Returns shell exit code.
 
@@ -65,54 +100,84 @@ def _resume_one(label: str, *, force_auto: bool = False) -> int:
     from aipager.errors import friendly_error
     from aipager.ui import ok as ui_ok
 
-    sock = Path(f"/tmp/claude-dtach-{label}.sock")
+    sd, ambiguous = _resolve_record(label, _gone_history())
+
+    if sd is None:
+        if ambiguous:
+            friendly_error(
+                f"{label!r} matches more than one session:",
+                *(f"    {n}" for n in ambiguous),
+                "  Re-run with the full name.",
+            )
+            return 1
+        # Not resumable. It may still be running — _gone_history() excludes
+        # live sessions — so resolve against the full set to name its socket.
+        live_sd, live_ambiguous = _resolve_record(label, _all_records())
+        if live_ambiguous:
+            friendly_error(
+                f"{label!r} matches more than one session:",
+                *(f"    {n}" for n in live_ambiguous),
+                "  Re-run with the full name.",
+            )
+            return 1
+        live_label = live_sd["name"].removeprefix("claude-") if live_sd else label
+        sock = Path(f"/tmp/claude-dtach-{live_label}.sock")
+        if sock.is_socket():
+            friendly_error(
+                f"session {live_label!r} is already running.",
+                f"  Socket: {sock}",
+                "  Attach it directly:",
+                f"    dtach -a {sock}",
+            )
+            return 1
+        friendly_error(
+            f"no session named {label!r} in history.",
+            "  Run `aipager resume` with no arg to see what's available.",
+        )
+        return 1
+
+    # Everything downstream keys off the resolved name, never the raw input:
+    # the socket and the label dtach launches under both carry the scope suffix.
+    full_label = sd["name"].removeprefix("claude-")
+    sock = Path(f"/tmp/claude-dtach-{full_label}.sock")
 
     if sock.is_socket():
         friendly_error(
-            f"session {label!r} is already running.",
+            f"session {full_label!r} is already running.",
             f"  Socket: {sock}",
             "  Attach it directly:",
             f"    dtach -a {sock}",
         )
         return 1
 
-    session_name = f"claude-{label}"
-    for sd in _gone_history():
-        if sd.get("name") != session_name:
-            continue
-        resume_id = sd.get("claude_session_id") or ""
-        cwd = sd.get("cwd") or ""
-        if not resume_id:
-            friendly_error(
-                f"session {label!r} has no resumable transcript on disk.",
-                f"  Start a fresh one with: aipager session {label}",
-            )
-            return 1
-        # Use persisted skip_perms unless force_auto overrides.
-        skip_perms = force_auto or bool(sd.get("skip_perms", False))
-        ok, err = _asyncio.run(dtach_inject.launch_session(
-            label, resume_id=resume_id, cwd=cwd or None,
-            skip_perms=skip_perms,
-        ))
-        if not ok:
-            friendly_error(f"couldn't resume {label!r}: {err}")
-            return 1
-        mode_str = "Auto (--dangerously-skip-permissions)" if skip_perms else "Ask"
-        ui_ok(f"resumed [path]{label}[/path] (session-id {resume_id[:8]}…, mode={mode_str})")
-        preview = sd.get("last_assistant_preview") or ""
-        if preview:
-            from aipager.ui import console
-            console.print()
-            console.print("[muted]Last response:[/muted]")
-            console.print(f"  {preview}")
-        print(f"\nAttach with: dtach -a {sock}")
-        return 0
-
-    friendly_error(
-        f"no session named {label!r} in history.",
-        "  Run `aipager resume` with no arg to see what's available.",
-    )
-    return 1
+    resume_id = sd.get("claude_session_id") or ""
+    cwd = sd.get("cwd") or ""
+    if not resume_id:
+        friendly_error(
+            f"session {full_label!r} has no resumable transcript on disk.",
+            f"  Start a fresh one with: aipager session {label}",
+        )
+        return 1
+    # Use persisted skip_perms unless force_auto overrides.
+    skip_perms = force_auto or bool(sd.get("skip_perms", False))
+    ok, err = _asyncio.run(dtach_inject.launch_session(
+        full_label, resume_id=resume_id, cwd=cwd or None,
+        skip_perms=skip_perms,
+    ))
+    if not ok:
+        friendly_error(f"couldn't resume {full_label!r}: {err}")
+        return 1
+    mode_str = "Auto (--dangerously-skip-permissions)" if skip_perms else "Ask"
+    ui_ok(f"resumed [path]{full_label}[/path] "
+          f"(session-id {resume_id[:8]}…, mode={mode_str})")
+    preview = sd.get("last_assistant_preview") or ""
+    if preview:
+        from aipager.ui import console
+        console.print()
+        console.print("[muted]Last response:[/muted]")
+        console.print(f"  {preview}")
+    print(f"\nAttach with: dtach -a {sock}")
+    return 0
 
 
 def _resume_picker_loop() -> int:
@@ -169,9 +234,12 @@ def _resume_picker_loop() -> int:
         if choice.isdigit():
             idx = int(choice) - 1
             if 0 <= idx < len(chunk):
-                label = chunk[idx].get("label", "")
-                if label:
-                    return _resume_one(label)
+                # Pass the full name: the picker already knows exactly which
+                # record was chosen, so don't re-resolve a possibly ambiguous
+                # short label.
+                name = chunk[idx].get("name", "")
+                if name:
+                    return _resume_one(name.removeprefix("claude-"))
         # Unrecognized input — re-loop with the same page
 
 

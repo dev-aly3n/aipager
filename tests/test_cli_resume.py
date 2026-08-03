@@ -289,3 +289,189 @@ def test_picker_out_of_range_number_keeps_looping(monkeypatch):
     monkeypatch.setattr("builtins.input", lambda *a: next(calls))
     rc = cli_resume._resume_picker_loop()
     assert rc == 0
+
+
+def test_picker_passes_full_name_for_scoped_session(monkeypatch):
+    """The picker knows the record — it must not re-resolve a short label."""
+    monkeypatch.setattr(cli_resume, "_gone_history", lambda: [{
+        "name": "claude-ddd__d447759837", "label": "ddd",
+        "claude_session_id": "X", "gone_at": 1000.0,
+    }])
+    called = {}
+    monkeypatch.setattr(cli_resume, "_resume_one",
+                        lambda label: (called.setdefault("label", label), 0)[1])
+    monkeypatch.setattr("builtins.input", lambda *a: "1")
+    cli_resume._resume_picker_loop()
+    assert called["label"] == "ddd__d447759837"
+
+
+# ---- scope-suffixed session resolution -----------------------------------
+
+_DDD = {
+    "name": "claude-ddd__d447759837", "label": "ddd",
+    "claude_session_id": "1d86b6ee-2927-4009-aa63-7ba50119d0c8",
+    "cwd": "/home/aipager", "gone_at": 1785752900.28, "skip_perms": True,
+}
+
+
+def test_resume_one_resolves_scope_suffixed_session_by_short_label(
+    monkeypatch, capsys,
+):
+    """Production regression: `aipager resume ddd` for claude-ddd__d447759837.
+
+    The socket and the label handed to dtach must both carry the scope
+    suffix — resuming under the bare label would create a second, orphan
+    socket that the daemon never associates with the session.
+    """
+    monkeypatch.setattr("pathlib.Path.is_socket", lambda self: False)
+    monkeypatch.setattr(cli_resume, "_gone_history", lambda: [dict(_DDD)])
+    launch = AsyncMock(return_value=(True, ""))
+    monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
+
+    rc = cli_resume._resume_one("ddd")
+
+    assert rc == 0
+    assert launch.await_args.args[0] == "ddd__d447759837"
+    assert launch.await_args.kwargs["skip_perms"] is True
+    out = capsys.readouterr().out
+    assert "ddd__d447759837" in out
+    assert "/tmp/claude-dtach-ddd__d447759837.sock" in out
+
+
+def test_resume_one_already_running_guard_uses_suffixed_socket(
+    monkeypatch, capsys,
+):
+    """The guard must check the real socket path, not /tmp/claude-dtach-ddd.sock."""
+    seen = []
+
+    def _is_socket(self):
+        seen.append(str(self))
+        return str(self) == "/tmp/claude-dtach-ddd__d447759837.sock"
+
+    monkeypatch.setattr("pathlib.Path.is_socket", _is_socket)
+    monkeypatch.setattr(cli_resume, "_gone_history", lambda: [dict(_DDD)])
+    launch = AsyncMock(return_value=(True, ""))
+    monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
+
+    rc = cli_resume._resume_one("ddd")
+
+    assert rc == 1
+    assert "already running" in capsys.readouterr().err
+    launch.assert_not_awaited()
+    assert "/tmp/claude-dtach-ddd__d447759837.sock" in seen
+
+
+def test_resume_one_force_auto_works_with_suffixed_session(monkeypatch):
+    """`aipager resume !ddd` overrides a persisted skip_perms=False."""
+    monkeypatch.setattr("pathlib.Path.is_socket", lambda self: False)
+    monkeypatch.setattr(cli_resume, "_gone_history",
+                        lambda: [dict(_DDD, skip_perms=False)])
+    launch = AsyncMock(return_value=(True, ""))
+    monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
+
+    assert cli_resume._resume_one("ddd", force_auto=True) == 0
+    assert launch.await_args.args[0] == "ddd__d447759837"
+    assert launch.await_args.kwargs["skip_perms"] is True
+
+
+def test_resume_one_ambiguous_label_refuses_to_guess(monkeypatch, capsys):
+    """Same label in two scopes: name both candidates, launch nothing."""
+    monkeypatch.setattr("pathlib.Path.is_socket", lambda self: False)
+    monkeypatch.setattr(cli_resume, "_gone_history", lambda: [
+        dict(_DDD, name="claude-ddd__d111"),
+        dict(_DDD, name="claude-ddd__d222"),
+    ])
+    launch = AsyncMock(return_value=(True, ""))
+    monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
+
+    rc = cli_resume._resume_one("ddd")
+
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "ddd__d111" in err
+    assert "ddd__d222" in err
+    launch.assert_not_awaited()
+
+
+def test_resume_one_exact_name_wins_over_label_match(monkeypatch):
+    """An unsuffixed session must stay reachable even if a scoped one shares
+    its label — otherwise the exact name the user typed would be ambiguous."""
+    monkeypatch.setattr("pathlib.Path.is_socket", lambda self: False)
+    monkeypatch.setattr(cli_resume, "_gone_history", lambda: [
+        dict(_DDD, name="claude-ddd__d111"),
+        dict(_DDD, name="claude-ddd", label="ddd"),
+    ])
+    launch = AsyncMock(return_value=(True, ""))
+    monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
+
+    assert cli_resume._resume_one("ddd") == 0
+    assert launch.await_args.args[0] == "ddd"
+
+
+def test_resume_one_full_name_resolves_exactly(monkeypatch):
+    """The documented workaround keeps working."""
+    monkeypatch.setattr("pathlib.Path.is_socket", lambda self: False)
+    monkeypatch.setattr(cli_resume, "_gone_history", lambda: [dict(_DDD)])
+    launch = AsyncMock(return_value=(True, ""))
+    monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
+
+    assert cli_resume._resume_one("ddd__d447759837") == 0
+    assert launch.await_args.args[0] == "ddd__d447759837"
+
+
+def test_resume_one_running_scoped_session_reports_already_running(
+    monkeypatch, capsys,
+):
+    """A live session is absent from _gone_history; the guard must still fire
+    by resolving it against the full persisted set."""
+    monkeypatch.setattr(cli_resume, "_gone_history", lambda: [])
+    monkeypatch.setattr(cli_resume, "_all_records", lambda: [dict(_DDD)])
+    monkeypatch.setattr(
+        "pathlib.Path.is_socket",
+        lambda self: str(self) == "/tmp/claude-dtach-ddd__d447759837.sock",
+    )
+
+    rc = cli_resume._resume_one("ddd")
+
+    assert rc == 1
+    assert "already running" in capsys.readouterr().err
+
+
+def test_resume_one_ambiguous_live_label_refuses_to_guess(monkeypatch, capsys):
+    """Two live sessions sharing a label are both absent from _gone_history.
+
+    Without checking the fallback lookup's ambiguity, the guard would probe
+    /tmp/claude-dtach-ddd.sock — neither session's socket — and report
+    "no session named ddd", which is the same misresolution being fixed.
+    """
+    monkeypatch.setattr(cli_resume, "_gone_history", lambda: [])
+    monkeypatch.setattr(cli_resume, "_all_records", lambda: [
+        dict(_DDD, name="claude-ddd__d111"),
+        dict(_DDD, name="claude-ddd__d222"),
+    ])
+    monkeypatch.setattr("pathlib.Path.is_socket", lambda self: False)
+
+    rc = cli_resume._resume_one("ddd")
+
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "ddd__d111" in err
+    assert "ddd__d222" in err
+    assert "no session named" not in err.lower()
+
+
+def test_resume_one_unknown_label_still_errors(monkeypatch, capsys):
+    monkeypatch.setattr("pathlib.Path.is_socket", lambda self: False)
+    monkeypatch.setattr(cli_resume, "_gone_history", lambda: [dict(_DDD)])
+    monkeypatch.setattr(cli_resume, "_all_records", lambda: [dict(_DDD)])
+    rc = cli_resume._resume_one("nope")
+    assert rc == 1
+    assert "no session named" in capsys.readouterr().err.lower()
+
+
+# ---- _resolve_record -----------------------------------------------------
+
+def test_resolve_record_ignores_records_without_a_name():
+    sd, ambiguous = cli_resume._resolve_record("ddd", [{"label": "ddd"}])
+    assert sd is None
+    assert ambiguous == []
