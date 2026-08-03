@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.27] - 2026-08-03
+
+### Added
+- **Replies now render as real Telegram rich messages.** Claude's raw
+  markdown is sent through Bot API 10.1 `sendRichMessage` instead of
+  being converted to a narrow HTML subset. GFM tables keep their column
+  alignment, fenced code is syntax-highlighted and stays in one block,
+  nested bullets keep their markers, task lists become real checkboxes,
+  and `---` renders as a rule. `~~strike~~` and `***bold italic***` now
+  work — the latter previously produced improperly nested HTML that
+  Telegram rejected outright, silently losing the entire reply.
+- **Right-to-left replies are detected and marked.** Persian and Arabic
+  answers are sent with `is_rtl`, so they align and bullet correctly.
+- **Live streaming in direct messages.** While a turn runs, new assistant
+  text is streamed into an ephemeral draft via `sendRichMessageDraft`,
+  then persisted as a normal message when the turn ends. Drafts are a
+  Telegram private-chat feature, so group scopes are unaffected. The busy
+  message, its **Stop** button and the token/cost stats are unchanged —
+  drafts carry no keyboard, so streaming runs alongside them rather than
+  replacing them.
+- Any rich-message failure falls back to sending the raw markdown as
+  plain text with no parse mode, which cannot fail to parse. A reply can
+  no longer be lost to a formatting error.
+
+### Changed
+- The expandable-blockquote wrapper is gone. Answers render expanded
+  instead of collapsing to two lines behind a chevron, and a blockquote
+  now appears only where the markdown actually asked for one.
+- The reply ceiling rises from 4096 to 32768 bytes, retiring most
+  truncation: the head/tail split, the `TRUNCATED` banner and most
+  `.txt` attachment fallbacks no longer trigger.
+
+### Fixed
+- **The bot token no longer appears in the logs.** `httpx` logs every
+  request at INFO, and the Bot API embeds the token in the URL, so each
+  `getUpdates` poll printed it in plaintext. Now suppressed to WARNING.
+- **A session's draft can no longer stream another session's transcript.**
+  Transcript discovery picks the most recently modified file across all
+  projects and caches it for five minutes without checking ownership, so
+  any concurrently-running session could win the race — and a byte offset
+  measured against one file could be applied to another, emitting an
+  arbitrary slice of it. The transcript is now resolved once per turn
+  from the hook-stamped path and pinned for that turn's duration.
+
 ## [0.4.26] - 2026-08-02
 
 ### Fixed
