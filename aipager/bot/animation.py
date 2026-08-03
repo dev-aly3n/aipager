@@ -258,7 +258,13 @@ class AnimationMixin:
         Called on every ``_animate_busy`` iteration for DM scopes.
         Silently disables drafts for the remainder of the turn by setting
         ``sess.draft_id = 0`` when ``send_rich_message_draft`` returns False.
+
+        The caller is also expected to guard on ``sess.draft_id`` before
+        calling this method (belt-and-braces: the caller avoids the
+        ``find_transcript`` + file-read cost on every tick for non-DM scopes).
         """
+        if not sess.draft_id:
+            return
         tp = find_transcript(sess.name)
         if not tp:
             return

@@ -355,3 +355,65 @@ def test_send_busy_and_animate_send_failure_clears_sentinel(mk_bot, run_async):
     run_async(bot._send_busy_and_animate(sess))
     # Sentinel cleared back to None on failure
     assert sess.busy_msg_id is None
+
+
+# ===== _push_draft ===========================================================
+
+def test_push_draft_zero_draft_id_makes_no_api_call(mk_bot, run_async, monkeypatch):
+    """_push_draft must return immediately when sess.draft_id == 0.
+
+    Regression for rev-iter1-001: without the early guard, _push_draft would
+    call send_rich_message_draft(chat_id, 0, ...) which the Telegram API
+    rejects (draft_id must be positive).
+    """
+    import aipager.bot.animation as anim_mod
+
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.draft_id = 0  # explicitly zero — no active draft
+    sess.stream_text = "some accumulated text"
+
+    draft_calls: list = []
+
+    async def _fake_draft(chat_id, draft_id, markdown, *, is_rtl=False) -> bool:
+        draft_calls.append((chat_id, draft_id, markdown))
+        return True
+
+    monkeypatch.setattr(anim_mod, "send_rich_message_draft", _fake_draft)
+    # find_transcript would only matter if we got past the guard; mock it
+    # just in case to avoid filesystem access.
+    monkeypatch.setattr(anim_mod, "find_transcript", lambda name: "/fake/path.jsonl")
+
+    run_async(bot._push_draft(sess))
+
+    assert draft_calls == [], (
+        "send_rich_message_draft must not be called when draft_id == 0"
+    )
+
+
+def test_push_draft_positive_draft_id_calls_api(mk_bot, run_async, monkeypatch):
+    """_push_draft forwards a non-zero draft_id to send_rich_message_draft."""
+    import aipager.bot.animation as anim_mod
+
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.draft_id = 12345
+    sess.scope_chat_id = 999  # ensure resolve_chat_id returns an int
+    sess.stream_text = "hello world"
+    sess.stream_offset = 0
+
+    draft_calls: list = []
+
+    async def _fake_draft(chat_id, draft_id, markdown, *, is_rtl=False) -> bool:
+        draft_calls.append((chat_id, draft_id, markdown))
+        return True
+
+    monkeypatch.setattr(anim_mod, "send_rich_message_draft", _fake_draft)
+    monkeypatch.setattr(anim_mod, "find_transcript", lambda name: "/fake/path.jsonl")
+    monkeypatch.setattr(anim_mod, "read_turn_text", lambda path, offset: ("", offset))
+
+    run_async(bot._push_draft(sess))
+
+    assert len(draft_calls) == 1
+    _chat_id, sent_draft_id, _markdown = draft_calls[0]
+    assert sent_draft_id == 12345
