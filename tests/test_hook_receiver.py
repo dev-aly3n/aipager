@@ -495,6 +495,118 @@ def test_idle_event_with_summary_fires_idle_prompt(receiver, run_async):
     assert ctx["summary"] == "All done."
 
 
+# ---- synthetic no-response placeholder --------------------------------------
+#
+# The Stop hook's last_assistant_message takes precedence over both
+# transcript readers, so filtering only those would leave the reported
+# symptom in place. The payload carries no model field, so this path has to
+# recognise the placeholder by its exact text.
+
+_NO_RESPONSE = "No response requested."
+
+
+def test_stop_hook_no_response_placeholder_is_not_the_summary(receiver, run_async):
+    registry, recv, notify_fn = receiver
+    registry.transition("claude-jim", Status.BUSY)
+    notify_fn.reset_mock()
+    _send(recv, run_async,
+          hook_event_name="Stop",
+          session="claude-jim",
+          last_assistant_message=_NO_RESPONSE)
+    _, event, ctx = notify_fn.await_args.args
+    assert event == "idle_prompt"
+    assert ctx["summary"] == "", f"placeholder leaked as the answer: {ctx!r}"
+
+
+def test_stop_hook_no_response_placeholder_sets_no_response_flag(receiver, run_async):
+    """Without the flag, notify falls back to the previous turn's summary."""
+    registry, recv, notify_fn = receiver
+    registry.transition("claude-jim", Status.BUSY)
+    notify_fn.reset_mock()
+    _send(recv, run_async,
+          hook_event_name="Stop",
+          session="claude-jim",
+          last_assistant_message=_NO_RESPONSE)
+    _, _event, ctx = notify_fn.await_args.args
+    assert ctx.get("no_response") is True
+
+
+def test_stop_hook_placeholder_matched_exactly_not_as_substring(receiver, run_async):
+    """A real answer quoting the phrase must still be published."""
+    registry, recv, notify_fn = receiver
+    registry.transition("claude-jim", Status.BUSY)
+    notify_fn.reset_mock()
+    real = f'Claude Code writes "{_NO_RESPONSE}" after a compact.'
+    _send(recv, run_async,
+          hook_event_name="Stop",
+          session="claude-jim",
+          last_assistant_message=real)
+    _, _event, ctx = notify_fn.await_args.args
+    assert ctx["summary"] == real
+    assert not ctx.get("no_response")
+
+
+def test_stop_hook_real_message_sets_no_flag(receiver, run_async):
+    registry, recv, notify_fn = receiver
+    registry.transition("claude-jim", Status.BUSY)
+    notify_fn.reset_mock()
+    _send(recv, run_async,
+          hook_event_name="Stop",
+          session="claude-jim",
+          last_assistant_message="All done.")
+    _, _event, ctx = notify_fn.await_args.args
+    assert not ctx.get("no_response")
+
+
+def test_stop_hook_placeholder_falls_through_to_transcript(receiver, run_async, tmp_path):
+    """Payload placeholder ⇒ consult the transcript, which is also filtered.
+
+    The transcript's newest assistant entry is the same placeholder, so
+    extract_last_response returns "" rather than scanning back to the
+    previous turn's answer.
+    """
+    registry, recv, notify_fn = receiver
+    tp = tmp_path / "t.jsonl"
+    tp.write_text(
+        json.dumps({
+            "type": "assistant",
+            "message": {"content": [{"type": "text", "text": "PREVIOUS TURN"}]},
+        }) + "\n"
+        + json.dumps({
+            "type": "assistant",
+            "isApiErrorMessage": False,
+            "message": {
+                "model": "<synthetic>",
+                "content": [{"type": "text", "text": _NO_RESPONSE}],
+            },
+        }) + "\n"
+    )
+    registry.transition("claude-jim", Status.BUSY)
+    notify_fn.reset_mock()
+    _send(recv, run_async,
+          hook_event_name="Stop",
+          session="claude-jim",
+          transcript_path=str(tp),
+          last_assistant_message=_NO_RESPONSE)
+    _, _event, ctx = notify_fn.await_args.args
+    assert ctx["summary"] == "", f"stale turn republished: {ctx!r}"
+    assert ctx.get("no_response") is True
+
+
+def test_stop_hook_api_error_message_still_published(receiver, run_async):
+    """API errors share the synthetic model; they must reach the error card."""
+    registry, recv, notify_fn = receiver
+    registry.transition("claude-jim", Status.BUSY)
+    notify_fn.reset_mock()
+    _send(recv, run_async,
+          hook_event_name="Stop",
+          session="claude-jim",
+          last_assistant_message="API Error: 529 Overloaded.")
+    _, _event, ctx = notify_fn.await_args.args
+    assert "529" in ctx["summary"]
+    assert not ctx.get("no_response")
+
+
 def test_unknown_event_just_ensures_tracking(receiver, run_async):
     registry, recv, notify_fn = receiver
     _send(recv, run_async,

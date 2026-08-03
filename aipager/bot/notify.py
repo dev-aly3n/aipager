@@ -424,7 +424,18 @@ class NotifyMixin:
             # ── content-selection (design §1, named rule) ──────────────────
             # raw_md takes precedence; fall through to summary, then the
             # session's cached summary, then empty string.
-            content = raw_md or context.get("summary", "") or sess.summary or ""
+            #
+            # `no_response` short-circuits the sess.summary step. It is set
+            # only when a producer positively established that the turn
+            # emitted Claude Code's no-response placeholder, i.e. produced no
+            # text at all. sess.summary holds the PREVIOUS turn's answer, so
+            # reaching for it here would publish stale text as the reply to
+            # the current prompt — plausible enough to be believed, and so
+            # worse than sending no body. An empty content sends the header
+            # alone, which is honest.
+            content = raw_md or context.get("summary", "")
+            if not content and not context.get("no_response"):
+                content = sess.summary or ""
 
             # Reset streaming state — the turn is over.
             sess.draft_id = 0

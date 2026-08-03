@@ -18,6 +18,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   drops from two Downs to one; on a prompt with no scope to widen it
   refuses rather than guessing, since a mistap must never broaden
   permissions. Present since 0.4.21.
+- **"No response requested." is no longer published as the session's
+  answer.** That line is not aipager's — Claude Code writes it into the
+  transcript when a turn ends without producing any text, typically after
+  an auto-compact. aipager read it back as the reply and streamed it into
+  the live draft. A turn that produced nothing now sends the header alone
+  rather than a placeholder, and deliberately does not fall back to the
+  previous turn's cached answer, which would read as a plausible reply to
+  the wrong prompt. Genuine API errors (rate limits, expired auth, 5xx)
+  are recorded the same way but are still surfaced with their error card
+  and retry button.
+- **Streaming no longer stops after the first chunk.** The transcript
+  reader advanced its byte offset one past the end of each line, so every
+  line appended after it lost its first character, failed to parse, and
+  was silently dropped.
 
 ## [0.4.28] - 2026-08-03
 

@@ -567,6 +567,156 @@ def test_read_turn_text_cross_turn_isolation(tmp_path):
     assert new_off == offset_at_turn_start
 
 
+# ---- synthetic no-response placeholder --------------------------------------
+#
+# Claude Code records `{"model": "<synthetic>", ... "No response requested."}`
+# when a turn ends without the model emitting text — reliably reproduced by
+# the continuation prompt an auto-compact injects. Published unfiltered it
+# became the session's answer in Telegram while the turn was still running.
+#
+# The same "<synthetic>" model marks API errors (rate limits, expired auth,
+# "Prompt is too long"), which the notify path turns into the error card and
+# retry button. Hence the discriminator is the isApiErrorMessage flag, not
+# the model alone — filtering on model alone would silence every API-failure
+# notification.
+
+def _no_response_entry() -> dict:
+    """Shape observed in real transcripts, fields that matter preserved."""
+    return {
+        "type": "assistant",
+        "isApiErrorMessage": False,
+        "message": {
+            "model": "<synthetic>",
+            "role": "assistant",
+            "stop_reason": "stop_sequence",
+            "usage": {"input_tokens": 0, "output_tokens": 0},
+            "content": [{"type": "text", "text": "No response requested."}],
+        },
+    }
+
+
+def _api_error_entry(text: str) -> dict:
+    return {
+        "type": "assistant",
+        "isApiErrorMessage": True,
+        "message": {
+            "model": "<synthetic>",
+            "role": "assistant",
+            "stop_reason": "stop_sequence",
+            "content": [{"type": "text", "text": text}],
+        },
+    }
+
+
+def test_is_no_response_entry_true_for_placeholder():
+    assert transcript.is_no_response_entry(_no_response_entry()) is True
+
+
+def test_is_no_response_entry_false_for_api_error():
+    """API errors share the synthetic model but must keep flowing through.
+
+    _detect_api_error builds the error card and the retry button from them;
+    filtering these would silence every rate-limit and auth notification.
+    """
+    entry = _api_error_entry("API Error: 529 Overloaded.")
+    assert transcript.is_no_response_entry(entry) is False
+
+
+def test_is_no_response_entry_false_for_real_assistant_message():
+    assert transcript.is_no_response_entry(_entry(["a real answer"])) is False
+
+
+def test_extract_last_response_returns_empty_for_placeholder(tmp_path):
+    """"" (not None) — the turn is over and produced nothing."""
+    f = tmp_path / "t.jsonl"
+    f.write_text(json.dumps(_no_response_entry()) + "\n")
+    assert transcript.extract_last_response(str(f)) == ""
+
+
+def test_extract_last_response_does_not_scan_past_placeholder(tmp_path):
+    """The previous turn's answer must not surface as this turn's.
+
+    Skipping the placeholder and continuing would find "OLD ANSWER" — real
+    assistant text, but belonging to an earlier turn. Publishing that as the
+    reply to the current prompt is a stale answer, which reads as plausible
+    and so is harder to catch than an empty reply.
+    """
+    f = tmp_path / "t.jsonl"
+    f.write_text(
+        json.dumps(_entry(["OLD ANSWER"])) + "\n"
+        + json.dumps({"type": "user", "message": {"content": "Continue"}}) + "\n"
+        + json.dumps(_no_response_entry()) + "\n"
+    )
+    out = transcript.extract_last_response(str(f))
+    assert out == "", f"expected no text, got {out!r}"
+
+
+def test_extract_last_response_still_returns_api_errors(tmp_path):
+    f = tmp_path / "t.jsonl"
+    f.write_text(json.dumps(_api_error_entry("API Error: 500")) + "\n")
+    assert transcript.extract_last_response(str(f)) == "API Error: 500"
+
+
+def test_extract_last_response_keeps_real_message_quoting_the_phrase(tmp_path):
+    """A real answer may quote the placeholder; only synthetic ones are filtered."""
+    f = tmp_path / "t.jsonl"
+    text = 'Claude Code logs "No response requested." after a compact.'
+    f.write_text(json.dumps(_entry([text])) + "\n")
+    assert transcript.extract_last_response(str(f)) == text
+
+
+def test_read_turn_text_skips_placeholder(tmp_path):
+    path = _write_jsonl_bytes(tmp_path, [_no_response_entry()])
+    text, _ = transcript.read_turn_text(path, 0)
+    assert text == "", f"placeholder must not stream into the draft; got {text!r}"
+
+
+def test_read_turn_text_advances_offset_past_placeholder(tmp_path):
+    """Skipping the entry must not stall the offset, or it re-reads forever."""
+    path = _write_jsonl_bytes(tmp_path, [_no_response_entry()])
+    size = len(open(path, "rb").read())
+    text, off = transcript.read_turn_text(path, 0)
+    assert text == ""
+    assert off == size, f"offset must consume the line; got {off} of {size}"
+    # A second call from the returned offset sees nothing new.
+    text2, off2 = transcript.read_turn_text(path, off)
+    assert text2 == ""
+    assert off2 == off
+
+
+def test_read_turn_text_offset_lands_exactly_on_the_next_line(tmp_path):
+    """Sequential reads of an appended-to transcript must not skip a line.
+
+    An offset one byte past the newline eats the next line's leading "{",
+    so it fails to parse and is dropped — the streaming draft goes silent
+    after its first chunk.
+    """
+    path = _write_jsonl_bytes(tmp_path, [_entry(["first"])])
+    text, off = transcript.read_turn_text(path, 0)
+    assert "first" in text
+    assert off == len(open(path, "rb").read())
+    with open(path, "a") as fh:
+        fh.write(json.dumps(_entry(["second"])) + "\n")
+    text2, _ = transcript.read_turn_text(path, off)
+    assert "second" in text2, "appended line was skipped by a drifting offset"
+
+
+def test_read_turn_text_keeps_real_text_around_placeholder(tmp_path):
+    path = _write_jsonl_bytes(tmp_path, [
+        _entry(["real answer"]),
+        _no_response_entry(),
+    ])
+    text, _ = transcript.read_turn_text(path, 0)
+    assert "real answer" in text
+    assert "No response requested." not in text
+
+
+def test_read_turn_text_still_streams_api_errors(tmp_path):
+    path = _write_jsonl_bytes(tmp_path, [_api_error_entry("API Error: 500")])
+    text, _ = transcript.read_turn_text(path, 0)
+    assert "API Error: 500" in text
+
+
 # ---- no path discovery ---------------------------------------------------
 
 def test_module_exposes_no_path_discovery():

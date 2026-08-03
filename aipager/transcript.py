@@ -23,6 +23,40 @@ from collections import deque
 log = logging.getLogger(__name__)
 
 
+SYNTHETIC_MODEL = "<synthetic>"
+
+# The text Claude Code records when a turn produced no assistant output.
+# The hook payload carries no model field, so hook_receiver can only
+# recognise the placeholder by this exact string.
+NO_RESPONSE_TEXT = "No response requested."
+
+
+def is_no_response_entry(entry: dict) -> bool:
+    """True if *entry* is Claude Code's "this turn produced no text" marker.
+
+    Claude Code writes assistant entries with ``message.model ==
+    "<synthetic>"`` that no model produced, and they split into two groups
+    that must be treated oppositely:
+
+    ``isApiErrorMessage`` true
+        Rate limits, expired auth, "Prompt is too long", 5xx. These must
+        keep flowing through to the notify path — ``_detect_api_error``
+        turns them into the error card and the retry button. Filtering
+        them would silence every API-failure notification.
+    ``isApiErrorMessage`` false
+        Only ever ``NO_RESPONSE_TEXT``, recorded when a turn ended without
+        the model emitting any text — typically the continuation prompt
+        after an auto-compact.
+
+    Only the second group is a placeholder. Discriminating on the flag
+    rather than on the English text keeps error reporting intact and
+    survives Anthropic rewording the placeholder.
+    """
+    if entry.get("isApiErrorMessage"):
+        return False
+    return entry.get("message", {}).get("model") == SYNTHETIC_MODEL
+
+
 # Long-context degradation on newer Claude models occasionally causes
 # the assistant to type its tool-invocation markup as plain-text content
 # instead of using structured tool_use blocks. When that happens the
@@ -96,7 +130,17 @@ def extract_last_response(transcript_path: str) -> str | None:
     transcripts), finds the last assistant message, and joins all text
     content blocks.
 
+    Returns ``""`` when the newest assistant entry is Claude Code's
+    no-response placeholder — the turn is over and produced nothing.
     Returns None on any error or if no assistant text is found.
+
+    The placeholder deliberately STOPS the scan rather than being skipped
+    over. Continuing would find the newest *real* assistant text, which by
+    definition belongs to an earlier turn, and the caller would publish it
+    as the answer to the current prompt. A stale-but-plausible answer is
+    much harder for a remote operator to catch than an empty one, so the
+    empty result is the safe direction. Callers distinguish it from None
+    to suppress their own cached-summary fallbacks.
     """
     try:
         with open(transcript_path, "r") as f:
@@ -116,6 +160,9 @@ def extract_last_response(transcript_path: str) -> str | None:
 
         if entry.get("type") != "assistant":
             continue
+
+        if is_no_response_entry(entry):
+            return ""
 
         content = entry.get("message", {}).get("content", [])
         texts = []
@@ -237,9 +284,13 @@ def read_turn_text(transcript_path: str, offset: int) -> tuple[str, int]:
     # Split on newlines, keeping the delimiter, so we can detect a partial
     # trailing line (one that doesn't end in \n yet).
     lines = raw.split(b"\n")
-    # If the last "line" is non-empty, the file was mid-write — discard it.
-    if lines and lines[-1]:
-        lines = lines[:-1]
+    # The final element is never a complete record: it is b"" when the read
+    # ended on a newline, and a half-written line otherwise. Dropping it
+    # unconditionally is what keeps the offset exact. Counting the empty one
+    # advanced the offset a byte past the newline, so the next append lost
+    # its leading "{", failed to parse, and was silently skipped — which
+    # stalled the streaming draft after its first chunk.
+    lines = lines[:-1]
 
     texts: list[str] = []
     consumed_bytes = 0
@@ -254,6 +305,11 @@ def read_turn_text(transcript_path: str, offset: int) -> tuple[str, int]:
         except json.JSONDecodeError:
             continue
         if entry.get("type") != "assistant":
+            continue
+        # Skip the no-response placeholder but keep the offset advancing —
+        # streaming it would push "No response requested." into the draft
+        # as though it were the reply taking shape.
+        if is_no_response_entry(entry):
             continue
         content = entry.get("message", {}).get("content", [])
         for block in content:

@@ -83,6 +83,44 @@ def test_content_selection_empty_means_no_body_call(bot_with_rich, run_async):
     rich_mock.assert_not_awaited()
 
 
+def test_no_response_suppresses_sess_summary_fallback(bot_with_rich, run_async):
+    """no_response ⇒ header only, never the previous turn's cached answer.
+
+    sess.summary holds the last turn's text. When the current turn produced
+    nothing, falling through to it publishes a stale answer under the new
+    prompt — plausible enough to be believed, and so a worse failure than
+    sending no body at all.
+    """
+    bot, rich_mock = bot_with_rich
+    sess = _sess()
+    sess.summary = "answer to the PREVIOUS prompt"
+    run_async(bot.notify(sess, "idle_prompt", {
+        "summary": "", "no_response": True,
+    }))
+    rich_mock.assert_not_awaited()
+
+
+def test_no_response_still_sends_the_finished_header(bot_with_rich, run_async):
+    bot, _ = bot_with_rich
+    sess = _sess()
+    sess.summary = "answer to the PREVIOUS prompt"
+    run_async(bot.notify(sess, "idle_prompt", {
+        "summary": "", "no_response": True,
+    }))
+    header = bot._app.bot.send_message.await_args.args[1]
+    assert "Finished" in header
+
+
+def test_no_response_does_not_suppress_real_content(bot_with_rich, run_async):
+    """The flag only gates the cached fallback; real text still publishes."""
+    bot, rich_mock = bot_with_rich
+    sess = _sess()
+    run_async(bot.notify(sess, "idle_prompt", {
+        "raw_md": "a real answer", "summary": "", "no_response": True,
+    }))
+    assert rich_mock.await_args.args[1] == "a real answer"
+
+
 def test_content_selection_idle_recovery_path(bot_with_rich, run_async):
     """The session_monitor idle-recovery path sends {"summary": ...} with no raw_md."""
     bot, rich_mock = bot_with_rich

@@ -28,6 +28,7 @@ from aipager.state import SessionRegistry, Status
 from aipager.transcript import (
     _strip_leaked_tool_xml,
     extract_last_response,
+    NO_RESPONSE_TEXT,
 )
 
 log = logging.getLogger(__name__)
@@ -661,6 +662,8 @@ class HookReceiver:
                         }
                     elif md:
                         notify_ctx = {"summary": md}
+                    elif md == "":
+                        notify_ctx["no_response"] = True
                 except Exception:
                     log.info("[%s] StopFailure: transcript summary failed",
                              session_name)
@@ -696,6 +699,14 @@ class HookReceiver:
                 msg.get("last_assistant_message", "")
             )
 
+            # The hook payload has no model field, so the no-response
+            # placeholder can only be recognised by its text. Exact match on
+            # the stripped string, never a substring: a real answer is free
+            # to quote the phrase.
+            no_response = last_msg.strip() == NO_RESPONSE_TEXT
+            if no_response:
+                last_msg = ""
+
             if last_msg and RICH_SUMMARIES and "```" in last_msg:
                 # Rich HTML formatting for code-heavy responses
                 try:
@@ -726,8 +737,13 @@ class HookReceiver:
                             }
                         elif md:
                             notify_ctx = {"summary": md}
+                        elif md == "":
+                            no_response = True
                     except Exception:
                         log.info("[%s] Transcript summary failed", session_name)
+
+            if no_response:
+                notify_ctx["no_response"] = True
 
             await self.notify_fn(sess, "idle_prompt", notify_ctx)
 

@@ -215,15 +215,20 @@ class SessionMonitor:
                     )
                     recovered = self.registry.transition(name, Status.IDLE)
                     if recovered:
-                        summary = ""
+                        summary = None
                         try:
-                            summary = extract_last_response(tp) or ""
+                            summary = extract_last_response(tp)
                         except Exception:
                             log.debug("[%s] idle-recovery summary failed", name,
                                       exc_info=True)
+                        ctx = {"summary": summary or ""}
+                        # "" (not None) means the turn ended having produced
+                        # no text — say so, or notify falls back to the
+                        # previous turn's cached summary.
+                        if summary == "":
+                            ctx["no_response"] = True
                         try:
-                            await self.notify_fn(recovered, "idle_prompt",
-                                                 {"summary": summary})
+                            await self.notify_fn(recovered, "idle_prompt", ctx)
                         except Exception:
                             log.warning("[%s] idle-recovery notify failed", name,
                                         exc_info=True)
