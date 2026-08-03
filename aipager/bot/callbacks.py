@@ -69,7 +69,31 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-
+# Claude Code renders its permission prompt as a cursor menu whose shape
+# depends on the tool. Observed on v2.1.220 for a Bash call:
+#
+#     > 1. Yes
+#       2. Yes, and always allow access to <dir>/ from this project
+#       3. No
+#
+# A tool with no directory scope to widen shows only Yes/No, so the index
+# of "No" is NOT fixed. The daemon cannot read the labels: the
+# PermissionRequest hook payload carries only tool_name/tool_input
+# (dtach/hook_receiver.py), never the rendered options. So a deny has to
+# be expressed as cursor movement that is correct for every shape.
+#
+# The invariant that makes that possible: the menu CLAMPS at the last
+# item, it does not wrap. Verified by pushing Down five times at a
+# three-item prompt — the cursor stopped on "3. No" rather than cycling
+# back to "Yes". Overshooting therefore always lands on the last option,
+# which is the negative one in every shape observed.
+#
+# Getting this wrong is not symmetric. Until this constant existed, deny
+# sent a single Down and selected "Yes, and always allow" — it ran the
+# tool the operator had just refused AND widened permissions for the rest
+# of the session, while reporting "Denied" to the user and to the audit
+# log. Overshooting can only ever land on a refusal, so it fails safe.
+_DENY_OVERSHOOT = 5
 
 
 _PERMS_POLL_COUNT = 15
@@ -811,19 +835,23 @@ class CallbackDispatchMixin:
             ok = await inject.send_keys(session_name, "Enter")
         elif action == "allow_always":
             verb = ACTION_VERBS[action]
-            # Navigate: Down → Down → Enter (menu position 2 = "Yes, don't ask again")
+            # One Down → "Yes, and always allow …", the second item when the
+            # tool has a scope to widen. When it has none the menu is only
+            # Yes/No, so this lands on "No" and refuses — the harmless
+            # direction to be wrong in.
             ok = await inject.send_keys(session_name, "Down")
-            if ok:
-                await asyncio.sleep(0.1)
-                ok = await inject.send_keys(session_name, "Down")
             if ok:
                 await asyncio.sleep(0.1)
                 ok = await inject.send_keys(session_name, "Enter")
         elif action == "deny":
             verb = ACTION_VERBS[action]
-            ok = await inject.send_keys(session_name, "Down")
-            if ok:
+            # Overshoot to the last item — see _DENY_OVERSHOOT.
+            for _ in range(_DENY_OVERSHOOT):
+                if not await inject.send_keys(session_name, "Down"):
+                    ok = False
+                    break
                 await asyncio.sleep(0.1)
+            if ok:
                 ok = await inject.send_keys(session_name, "Enter")
         elif action == "continue":
             verb = ACTION_VERBS[action]

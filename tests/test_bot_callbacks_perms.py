@@ -33,15 +33,21 @@ def mk_query():
     return _mk
 
 
-# ---- allow_always: Down + Down + Enter keystroke sequence ------------------
+# ---- permission-answer keystroke sequences ---------------------------------
+#
+# Claude Code's permission menu has no fixed length — a tool with a
+# directory scope to widen renders "Yes / Yes-and-always / No", one without
+# renders just "Yes / No" — and the daemon never sees the labels. These
+# tests pin the cursor movement for each button, because an off-by-one here
+# does not fail loudly: it silently selects the neighbouring option. Deny
+# sending one Down used to select "Yes, and always allow", which ran the
+# refused tool and widened permissions while reporting "Denied".
 
-def test_allow_always_sends_down_down_enter(mk_bot, mk_query, run_async):
-    """allow_always action must inject Down, Down, Enter with 0.1s delays."""
-    from aipager.state import Status, TrackedSession
-    bot = mk_bot()
+def _keys_for(bot, mk_query, run_async, action):
+    """Run a permission callback and return the keys it injected."""
     sess = TrackedSession(name="claude-dev", label="dev", status=Status.INTERACTIVE)
     bot.registry._sessions["claude-dev"] = sess
-    update, query = mk_query("claude-dev:allow_always")
+    update, _query = mk_query(f"claude-dev:{action}")
 
     key_calls = []
 
@@ -55,9 +61,42 @@ def test_allow_always_sends_down_down_enter(mk_bot, mk_query, run_async):
     with patch("aipager.dtach.inject.send_keys", side_effect=mock_send_keys), \
          patch("aipager.dtach.inject.is_alive", side_effect=mock_is_alive):
         run_async(bot._handle_callback(update, MagicMock()))
+    return key_calls
 
-    assert key_calls == ["Down", "Down", "Enter"], (
-        f"Expected ['Down', 'Down', 'Enter'], got {key_calls}"
+
+def test_allow_sends_only_enter(mk_bot, mk_query, run_async):
+    """Allow confirms the pre-selected first item, which is always "Yes"."""
+    assert _keys_for(mk_bot(), mk_query, run_async, "allow") == ["Enter"]
+
+
+def test_allow_always_sends_one_down_then_enter(mk_bot, mk_query, run_async):
+    """Allow-always picks item 2, "Yes, and always allow …".
+
+    On a menu without that option this lands on "No" and refuses, which is
+    the safe direction to be wrong in.
+    """
+    assert _keys_for(mk_bot(), mk_query, run_async, "allow_always") == [
+        "Down", "Enter",
+    ]
+
+
+def test_deny_overshoots_to_the_last_option(mk_bot, mk_query, run_async):
+    """Deny must overshoot, not step to a fixed index.
+
+    The menu clamps at its last item rather than wrapping, so pushing Down
+    past the end lands on the refusal whatever the menu's length. Stepping
+    a fixed number of times selects whatever happens to sit at that index —
+    which for one Down is "Yes, and always allow".
+    """
+    keys = _keys_for(mk_bot(), mk_query, run_async, "deny")
+
+    assert keys[-1] == "Enter", f"deny must confirm a selection; got {keys}"
+    downs = keys[:-1]
+    assert set(downs) == {"Down"}, f"deny must only move down; got {keys}"
+    assert len(downs) >= 3, (
+        f"deny sent {len(downs)} Down(s) — too few to clamp past a "
+        f"three-item menu, so it selects an affirmative option instead of "
+        f"the refusal; got {keys}"
     )
 
 

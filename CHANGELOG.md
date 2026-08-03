@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **"Deny" on a permission prompt no longer runs the tool.** The buttons
+  drive Claude Code's cursor menu, and the assumed order was wrong: Deny
+  stepped down one item onto "Yes, and always allow …", so refusing a
+  tool executed it *and* took a session-wide grant — while the toast, the
+  tool history and the audit log all said "Denied". Deny now overshoots
+  past the end of the menu, which clamps on its last item, so it lands on
+  the refusal whatever the prompt's shape. **Allow always** correspondingly
+  drops from two Downs to one; on a prompt with no scope to widen it
+  refuses rather than guessing, since a mistap must never broaden
+  permissions. Present since 0.4.21.
+
 ## [0.4.28] - 2026-08-03
 
 ### Changed

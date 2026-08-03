@@ -566,7 +566,11 @@ def test_allow_sends_enter(mk_bot, mk_query, run_async, monkeypatch):
     assert sent.await_args.args[1] == "Enter"
 
 
-def test_deny_sends_down_then_enter(mk_bot, mk_query, run_async, monkeypatch):
+def test_deny_overshoots_then_enters(mk_bot, mk_query, run_async, monkeypatch):
+    """Deny walks past the end of the menu, which clamps on the refusal.
+
+    A single Down would land on "Yes, and always allow …" instead.
+    """
     bot = mk_bot()
     _setup_alive_session(bot, monkeypatch)
     sent = AsyncMock(return_value=True)
@@ -577,9 +581,12 @@ def test_deny_sends_down_then_enter(mk_bot, mk_query, run_async, monkeypatch):
     monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
     update, query = mk_query("claude-jim:deny")
     run_async(bot._handle_callback(update, MagicMock()))
-    # Deny sends Down then Enter
     keys_sent = [c.args[1] for c in sent.await_args_list]
-    assert keys_sent == ["Down", "Enter"]
+    assert keys_sent[-1] == "Enter"
+    assert set(keys_sent[:-1]) == {"Down"}
+    assert len(keys_sent) - 1 >= 3, (
+        f"too few Downs to clamp past a three-item menu; got {keys_sent}"
+    )
 
 
 def test_continue_sends_enter(mk_bot, mk_query, run_async, monkeypatch):

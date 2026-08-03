@@ -1,7 +1,10 @@
 """Integration tests: SC16, SC17 — Allow always keyboard and keystroke.
 
 SC16: Permission keyboard has exactly 2 rows; row 0 = [Allow, Deny], row 1 = [Allow always, Stop].
-SC17: Tapping "Allow always" sends exactly Down, Down, Enter with 0.1s delays.
+SC17: Tapping "Allow always" sends exactly Down, Enter with 0.1s delays —
+the always-allow option is item 2 of "1. Yes / 2. Yes, and always allow … /
+3. No". Deny does not step to a fixed index; it overshoots so the menu
+clamps on the last item, which is the refusal at every menu length.
 """
 
 from __future__ import annotations
@@ -143,11 +146,14 @@ def test_sc16_permission_keyboard_allow_always_icon():
 
 
 # --------------------------------------------------------------------------- #
-# SC17 — Allow always sends Down + Down + Enter with 0.1s delays              #
+# SC17 — Allow always sends Down + Enter with 0.1s delays                     #
+#                                                                             #
+# The menu is "1. Yes / 2. Yes, and always allow … / 3. No", so the           #
+# always-option is item 2 — one Down from the pre-selected first item.        #
 # --------------------------------------------------------------------------- #
 
-def test_sc17_allow_always_sends_exactly_down_down_enter():
-    """SC17: Tapping Allow always must inject keys in order: Down, Down, Enter."""
+def test_sc17_allow_always_sends_exactly_down_enter():
+    """SC17: Tapping Allow always must inject keys in order: Down, Enter."""
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.INTERACTIVE)
     bot.registry._sessions["claude-ben"] = sess
@@ -166,13 +172,17 @@ def test_sc17_allow_always_sends_exactly_down_down_enter():
          patch("aipager.dtach.inject.is_alive", side_effect=mock_is_alive):
         _run(bot._handle_callback(update, MagicMock()))
 
-    assert key_calls == ["Down", "Down", "Enter"], (
-        f"allow_always must send ['Down', 'Down', 'Enter']; got {key_calls}"
+    assert key_calls == ["Down", "Enter"], (
+        f"allow_always must send ['Down', 'Enter']; got {key_calls}"
     )
 
 
-def test_sc17_allow_always_sends_three_keys_not_two_not_four():
-    """SC17: Boundary — exactly 3 send_keys calls (not 2=deny, not 4=extra)."""
+def test_sc17_allow_always_sends_two_keys_not_one_not_three():
+    """SC17: Boundary — exactly 2 send_keys calls.
+
+    One fewer selects "Yes" outright; one more overshoots toward the
+    refusal, which is safe but not what the button says.
+    """
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.INTERACTIVE)
     bot.registry._sessions["claude-ben"] = sess
@@ -191,8 +201,8 @@ def test_sc17_allow_always_sends_three_keys_not_two_not_four():
          patch("aipager.dtach.inject.is_alive", side_effect=mock_is_alive):
         _run(bot._handle_callback(update, MagicMock()))
 
-    assert len(key_calls) == 3, (
-        f"allow_always must send exactly 3 keys; got {len(key_calls)}: {key_calls}"
+    assert len(key_calls) == 2, (
+        f"allow_always must send exactly 2 keys; got {len(key_calls)}: {key_calls}"
     )
 
 
@@ -261,8 +271,14 @@ def test_allow_sends_only_enter():
     assert "Enter" in key_calls, f"Allow must send Enter; got {key_calls}"
 
 
-def test_allow_always_has_more_down_presses_than_deny():
-    """Allow always (Down+Down+Enter) must send more Down presses than Deny (Down+Enter)."""
+def test_deny_has_more_down_presses_than_allow_always():
+    """Deny must travel past Allow-always, never stop short of it.
+
+    Allow-always sits at item 2 and the refusal is last. If Deny ever sent
+    the same number of Downs or fewer, it would select the always-allow
+    option — running the tool the operator refused and widening permissions
+    for the rest of the session.
+    """
     bot = _make_bot()
 
     async def mock_is_alive(name):
@@ -298,7 +314,7 @@ def test_allow_always_has_more_down_presses_than_deny():
 
     deny_downs = deny_keys.count("Down")
     aa_downs = aa_keys.count("Down")
-    assert aa_downs > deny_downs, (
-        f"Allow always must send more Down presses than Deny; "
-        f"allow_always={aa_downs}, deny={deny_downs}"
+    assert deny_downs > aa_downs, (
+        f"Deny must send more Down presses than Allow always, or it selects "
+        f"the always-allow option; deny={deny_downs}, allow_always={aa_downs}"
     )
