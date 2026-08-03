@@ -33,6 +33,7 @@ from aipager.bot.rich_message import (
 
 from aipager.config import (
     BUSY_EDIT_INTERVAL,
+    STALE_BUSY_TIMEOUT,
 )
 from aipager.state import Status, TrackedSession
 
@@ -309,24 +310,29 @@ class NotifyMixin:
             # No hook has fired for STALE_BUSY_TIMEOUT seconds — claude
             # is either silently retrying an API call (exhausted
             # subscription, network), in a long-running extended-think
-            # /tool call (legitimate), or wedged. Surface the most
-            # likely causes so the user can decide whether to wait or
-            # tap Stop.
-            minutes = context.get("minutes", 2)
+            # /tool call (legitimate), or wedged.
+            #
+            # The legitimate cases dominate, so this reads as a status
+            # note, not an alert: hourglass rather than ⚠️, and the
+            # diagnostic causes collapsed into an expandable blockquote
+            # that only opens if the user taps it. Users were reading
+            # the old warning-triangle-plus-bullet-wall as a failure
+            # report and interrupting healthy sessions.
+            # max(1, …) so a sub-60s STALE_BUSY_TIMEOUT override (ops
+            # testing) never renders "quiet for 0 min".
+            minutes = context.get("minutes", max(1, int(STALE_BUSY_TIMEOUT / 60)))
             stale_text = (
-                f"⚠️ <b>{html_mod.escape(label)}</b> · Silent for "
-                f"{minutes}+ min\n"
+                f"⏳ <b>{html_mod.escape(label)}</b> · still working — "
+                f"quiet for {minutes} min\n"
                 "\n"
-                "The session appears busy but hasn't emitted any status "
-                "updates. This is usually normal — likely causes, in "
-                "order:\n"
+                "No status updates yet. This is usually normal.\n"
+                "\n"
+                "<blockquote expandable>What could be happening\n"
                 "  • Long-running tool call (Bash, WebSearch, large fetch)\n"
                 "  • Heavy generation on a very large context\n"
                 "  • Compaction in progress\n"
                 "  • Rate-limit backoff or subscription limit\n"
-                "  • Network wedge or claude crash\n"
-                "\n"
-                "<i>Tap Stop to interrupt, or wait it out.</i>"
+                "  • Network wedge or claude crash</blockquote>"
             )
             try:
                 keyboard = self._build_stop_keyboard(sess.name)

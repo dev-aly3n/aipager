@@ -70,3 +70,18 @@ def test_strips_quotes(tmp_path, monkeypatch):
     _clear("TEST_KEY_QUOTED")
     cfg._load_env_file()
     assert os.environ.get("TEST_KEY_QUOTED") == "quoted value"
+
+
+def test_stale_busy_timeout_below_inflight_caps():
+    """The in-flight caps must stay above the stale-busy threshold.
+
+    TOOL_INFLIGHT_MAX_SECONDS and COMPACT_INFLIGHT_MAX_SECONDS SUPPRESS the
+    stale-busy note while a tool call or compaction is running. If either
+    ever drops to or below STALE_BUSY_TIMEOUT, its suppression window closes
+    before the note could have fired and the suppression silently becomes
+    dead code — every long tool call would surface as "still working" again.
+    Raising STALE_BUSY_TIMEOUT from 120s to 600s narrowed the tool margin
+    from 7.5x to 1.5x, so this ordering is now worth asserting.
+    """
+    assert cfg.STALE_BUSY_TIMEOUT < cfg.TOOL_INFLIGHT_MAX_SECONDS
+    assert cfg.STALE_BUSY_TIMEOUT < cfg.COMPACT_INFLIGHT_MAX_SECONDS

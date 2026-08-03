@@ -150,15 +150,20 @@ SESSION_STATE_FILE = Path.home() / ".claude" / "aipager-sessions.json"
 # Minimum seconds between busy-message edits (rate-limit for Telegram API)
 BUSY_EDIT_INTERVAL: float = 3.0
 
-# Stale busy session threshold (seconds) — alert if BUSY with no hooks for this long
-# Seconds a session can stay BUSY with no hook activity before the
-# bot surfaces a "stuck" alert in chat. The common stuck causes — an
-# exhausted Anthropic subscription, a wedged tool call, or a hung
-# network request — are otherwise invisible to the user because no
-# Stop / PostToolUse hook ever fires. 120s (2 min) catches these
-# quickly without false-positiving on legitimate long operations
-# (extended thinking, big WebSearch). Override via the env var.
-STALE_BUSY_TIMEOUT: float = float(os.environ.get("STALE_BUSY_TIMEOUT", "120"))
+# Seconds a session can stay BUSY with no hook activity before the bot
+# posts an informational "still working" note in chat. Nothing is wrong
+# when this fires — a session running a long tool call, generating
+# against a big context, or compacting emits no hooks and looks
+# identical to a wedged one. The note exists only so a genuinely stuck
+# session (exhausted subscription, hung network, crashed claude) is
+# discoverable at all, since no Stop / PostToolUse hook will ever
+# arrive to reveal it.
+#
+# Was 120s, which fired constantly on healthy sessions and trained
+# users to read it as an error. 600s (10 min) sits above the duration
+# of nearly every legitimate quiet stretch, so the note becomes rare
+# enough to be worth reading. Override via the env var.
+STALE_BUSY_TIMEOUT: float = float(os.environ.get("STALE_BUSY_TIMEOUT", "600"))
 
 # Upper bound on how long a single tool call may run before the stale
 # busy detector fires anyway. When a PreToolUse hook has fired without a

@@ -37,7 +37,8 @@ log = logging.getLogger(__name__)
 # claude crashed mid-permission-prompt, the user can never see / answer
 # it, so the session shouldn't sit forever. Demoting to BUSY lets the
 # session_monitor's existing stale-busy logic surface it after another
-# STALE_BUSY_TIMEOUT, instead of silently rotting.
+# STALE_BUSY_TIMEOUT, instead of silently rotting. The two compound, so
+# a crashed permission prompt surfaces in 300s + STALE_BUSY_TIMEOUT.
 #
 # Tunable via `AIPAGER_INTERACTIVE_TIMEOUT` (seconds) for ops testing.
 INTERACTIVE_TIMEOUT_SECONDS: float = float(

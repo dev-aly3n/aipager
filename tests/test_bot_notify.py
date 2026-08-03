@@ -264,11 +264,68 @@ def test_stale_busy_sends_alert(mk_bot, run_async):
     sess = _sess()
     run_async(bot.notify(sess, "stale_busy", {"minutes": 5}))
     text = bot._app.bot.send_message.await_args.args[1]
-    assert "5+ min" in text
-    # New neutral copy leads with legitimate causes, keeps "subscription
-    # limit" in the fallback list.
-    assert "Silent for" in text
+    assert "quiet for 5 min" in text
+    assert "still working" in text
+    # "subscription limit" stays available in the collapsed cause list.
     assert "subscription" in text.lower()
+
+
+def test_stale_busy_reads_as_status_not_error(mk_bot, run_async):
+    """The note must not look like a failure report.
+
+    Users were reading the old ⚠️-plus-bullet-wall as "something broke"
+    and interrupting healthy sessions — a quiet session is usually just
+    running a long tool call. The neutral headline is the whole point of
+    the message, so guard it rather than the incidental wording.
+    """
+    bot = mk_bot()
+    sess = _sess()
+    run_async(bot.notify(sess, "stale_busy", {"minutes": 10}))
+    text = bot._app.bot.send_message.await_args.args[1]
+    assert "⚠️" not in text
+    assert text.startswith("⏳")
+
+
+def test_stale_busy_collapses_causes_behind_expandable_quote(mk_bot, run_async):
+    """Diagnostic causes are available but must not lead the message."""
+    bot = mk_bot()
+    sess = _sess()
+    run_async(bot.notify(sess, "stale_busy", {"minutes": 10}))
+    text = bot._app.bot.send_message.await_args.args[1]
+    assert "<blockquote expandable>" in text
+    causes = text.split("<blockquote expandable>", 1)[1]
+    for cause in ("tool call", "Compaction", "Rate-limit",
+                  "subscription", "Network wedge"):
+        assert cause in causes, f"{cause!r} escaped the collapsed section"
+
+
+def test_stale_busy_keeps_stop_keyboard(mk_bot, run_async):
+    """Softening the copy must not cost the user the ability to interrupt."""
+    bot = mk_bot()
+    sess = _sess()
+    run_async(bot.notify(sess, "stale_busy", {"minutes": 10}))
+    kwargs = bot._app.bot.send_message.await_args.kwargs
+    assert kwargs.get("reply_markup") is not None
+
+
+def test_stale_busy_minutes_default_tracks_threshold(mk_bot, run_async):
+    """With no minutes in context, fall back to the configured threshold."""
+    from aipager.config import STALE_BUSY_TIMEOUT
+    bot = mk_bot()
+    sess = _sess()
+    run_async(bot.notify(sess, "stale_busy", {}))
+    text = bot._app.bot.send_message.await_args.args[1]
+    assert f"quiet for {int(STALE_BUSY_TIMEOUT / 60)} min" in text
+
+
+def test_stale_busy_escapes_label(mk_bot, run_async):
+    """A session label with HTML metacharacters must not break parse_mode."""
+    bot = mk_bot()
+    sess = _sess()
+    sess.label = "a<b>&c"
+    run_async(bot.notify(sess, "stale_busy", {"minutes": 10}))
+    text = bot._app.bot.send_message.await_args.args[1]
+    assert "a&lt;b&gt;&amp;c" in text
 
 
 def test_stale_busy_swallows_failure(mk_bot, run_async):

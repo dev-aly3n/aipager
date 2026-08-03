@@ -164,9 +164,8 @@ def test_scan_stale_busy_suppressed_during_tool_in_flight(monkeypatch, run_async
     from aipager.session_monitor import STALE_BUSY_TIMEOUT
     registry = SessionRegistry()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
-    # No hooks for 3 min — beyond STALE_BUSY_TIMEOUT (default 120s).
     sess.last_hook_at = time.monotonic() - STALE_BUSY_TIMEOUT - 60
-    # Tool started 3 min ago — well under the 15 min cap.
+    # Tool started 3 min ago — well under TOOL_INFLIGHT_MAX_SECONDS.
     sess.pending_tool_started_at = time.monotonic() - 180.0
     registry._sessions["claude-jim"] = sess
 
