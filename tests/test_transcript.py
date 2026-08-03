@@ -516,3 +516,143 @@ def test_strip_leaked_tool_xml_fast_path_no_op_on_clean_text():
     # No tags → return input unchanged (no split/join round-trip cost).
     text = "Normal reply with no tags anywhere."
     assert transcript._strip_leaked_tool_xml(text) == text
+
+
+# ---- read_turn_text ---------------------------------------------------------
+
+def _entry(text_blocks: list[str]) -> dict:
+    return {
+        "type": "assistant",
+        "message": {
+            "content": [{"type": "text", "text": t} for t in text_blocks],
+            "stop_reason": "end_turn",
+        },
+    }
+
+
+def _write_jsonl_bytes(tmp_path, lines: list[dict]) -> str:
+    p = tmp_path / "t.jsonl"
+    content = "\n".join(json.dumps(x) for x in lines) + "\n"
+    p.write_bytes(content.encode("utf-8"))
+    return str(p)
+
+
+def test_read_turn_text_empty_path():
+    text, offset = transcript.read_turn_text("", 0)
+    assert text == ""
+    assert offset == 0
+
+
+def test_read_turn_text_missing_file(tmp_path):
+    text, offset = transcript.read_turn_text(str(tmp_path / "nope.jsonl"), 0)
+    assert text == ""
+    assert offset == 0
+
+
+def test_read_turn_text_empty_file(tmp_path):
+    p = tmp_path / "empty.jsonl"
+    p.write_bytes(b"")
+    text, offset = transcript.read_turn_text(str(p), 0)
+    assert text == ""
+    assert offset == 0
+
+
+def test_read_turn_text_reads_assistant_blocks(tmp_path):
+    path = _write_jsonl_bytes(tmp_path, [_entry(["Hello", "World"])])
+    text, new_off = transcript.read_turn_text(path, 0)
+    assert "Hello" in text
+    assert "World" in text
+    assert new_off > 0
+
+
+def test_read_turn_text_skips_non_assistant(tmp_path):
+    lines = [
+        {"type": "user", "message": {"content": "prompt"}},
+        _entry(["Answer"]),
+        {"type": "system"},
+    ]
+    path = _write_jsonl_bytes(tmp_path, lines)
+    text, _ = transcript.read_turn_text(path, 0)
+    assert "Answer" in text
+    assert "prompt" not in text
+
+
+def test_read_turn_text_advances_offset(tmp_path):
+    """After consuming one entry, the new offset lets the next call skip it."""
+    path = _write_jsonl_bytes(tmp_path, [_entry(["First"])])
+    _, off1 = transcript.read_turn_text(path, 0)
+    # Second call from the advanced offset sees nothing new.
+    text2, off2 = transcript.read_turn_text(path, off1)
+    assert text2 == ""
+    assert off2 == off1
+
+
+def test_read_turn_text_partial_line_not_consumed(tmp_path):
+    """A trailing line without \\n is not consumed and offset not advanced past it."""
+    p = tmp_path / "t.jsonl"
+    full_line = (json.dumps(_entry(["Block one"])) + "\n").encode("utf-8")
+    partial = json.dumps(_entry(["Block two"]))  # NO trailing newline
+    p.write_bytes(full_line + partial.encode("utf-8"))
+
+    text1, off1 = transcript.read_turn_text(str(p), 0)
+    # Only "Block one" from the complete line
+    assert "Block one" in text1
+    assert "Block two" not in text1
+
+    # Simulate the partial line being completed later.
+    p.write_bytes(full_line + (partial + "\n").encode("utf-8"))
+    text2, off2 = transcript.read_turn_text(str(p), off1)
+    assert "Block two" in text2
+    assert off2 > off1
+
+
+def test_read_turn_text_multiple_blocks_joined_with_blank_lines(tmp_path):
+    path = _write_jsonl_bytes(tmp_path, [
+        _entry(["First block"]),
+        _entry(["Second block"]),
+    ])
+    text, _ = transcript.read_turn_text(path, 0)
+    assert "First block" in text
+    assert "Second block" in text
+    # Blocks are joined by double newline
+    assert "\n\n" in text
+
+
+def test_read_turn_text_strips_leaked_xml(tmp_path):
+    leaked = "Answer\n<invoke name=\"Bash\"><parameter name=\"cmd\">ls</parameter></invoke>"
+    path = _write_jsonl_bytes(tmp_path, [_entry([leaked])])
+    text, _ = transcript.read_turn_text(path, 0)
+    assert "Answer" in text
+    assert "<invoke" not in text
+
+
+def test_read_turn_text_no_assistant_returns_empty(tmp_path):
+    path = _write_jsonl_bytes(tmp_path, [
+        {"type": "user", "message": {"content": "go"}},
+    ])
+    text, off = transcript.read_turn_text(path, 0)
+    assert text == ""
+    # Offset still advances past the consumed complete line.
+    assert off > 0
+
+
+def test_read_turn_text_cross_turn_isolation(tmp_path):
+    """Given a transcript with a previous turn already written, a call
+    starting from that turn's byte size returns nothing new — the previous
+    turn's text is never streamed as the current turn's.
+
+    This is the regression test for success criterion 13 in design.md
+    (same class of bug as the false-idle-recovery incident fixed in 0.4.26).
+    """
+    prev_turn_lines = [
+        _entry(["Previous turn text"]),
+    ]
+    content = ("\n".join(json.dumps(x) for x in prev_turn_lines) + "\n").encode("utf-8")
+    p = tmp_path / "t.jsonl"
+    p.write_bytes(content)
+    # The offset is seeded to the current file size (as _send_busy_and_animate does).
+    offset_at_turn_start = len(content)
+    # No new assistant blocks have been written yet.
+    text, new_off = transcript.read_turn_text(str(p), offset_at_turn_start)
+    assert text == ""
+    assert new_off == offset_at_turn_start

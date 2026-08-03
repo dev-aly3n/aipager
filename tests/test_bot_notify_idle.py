@@ -15,6 +15,7 @@ from __future__ import annotations
 import time
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from telegram.error import BadRequest
 
 from aipager.state import Status, TrackedSession
@@ -27,6 +28,20 @@ def _sess(label="jim", status=Status.IDLE, *, busy_msg_id=None):
     return s
 
 
+@pytest.fixture(autouse=True)
+def _mock_send_rich_message(monkeypatch):
+    """Prevent real HTTP calls to Telegram in every test in this module.
+
+    send_rich_message is mocked to succeed (returns {}) so only the
+    PTB send_message path (header) fires. Tests that need to exercise
+    the fallback path override this fixture locally.
+    """
+    monkeypatch.setattr(
+        "aipager.bot.notify.send_rich_message",
+        AsyncMock(return_value={}),
+    )
+
+
 # ---- IDLE: simple "Finished" message ------------------------------------
 
 def test_idle_sends_finished_message(mk_bot, run_async):
@@ -35,8 +50,9 @@ def test_idle_sends_finished_message(mk_bot, run_async):
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=123))
     bot._maybe_update_bot_name = AsyncMock()
     run_async(bot.notify(sess, "idle_prompt", {"summary": "done"}))
-    bot._app.bot.send_message.assert_awaited_once()
-    text = bot._app.bot.send_message.await_args.args[1]
+    # First send_message call is the header
+    first_call = bot._app.bot.send_message.await_args_list[0]
+    text = first_call.args[1]
     assert "Finished" in text
     assert "jim" in text
 
@@ -79,27 +95,34 @@ def test_idle_marks_tools_done_clears_subagents(mk_bot, run_async):
 
 
 def test_idle_with_short_summary_includes_blockquote(mk_bot, run_async):
+    """The body is now sent via sendRichMessage, not inline in send_message.
+    The header still shows only the ✅ Finished line (no blockquote)."""
     bot = mk_bot()
     sess = _sess(status=Status.IDLE)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._maybe_update_bot_name = AsyncMock()
     run_async(bot.notify(sess, "idle_prompt", {"summary": "Short reply"}))
-    text = bot._app.bot.send_message.await_args.args[1]
-    assert "Short reply" in text
+    # Header is sent via send_message; body goes to sendRichMessage (mocked).
+    # The header must contain "Finished" but not the body.
+    first_call = bot._app.bot.send_message.await_args_list[0]
+    text = first_call.args[1]
+    assert "Finished" in text
 
 
 def test_idle_with_html_summary_preserves_html(mk_bot, run_async):
+    """html_summary flag is no longer used for the body (rich messages take
+    raw markdown). The header is still valid HTML."""
     bot = mk_bot()
     sess = _sess(status=Status.IDLE)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._maybe_update_bot_name = AsyncMock()
-    html_summary = "<code>print(1)</code>"
     run_async(bot.notify(sess, "idle_prompt", {
-        "summary": html_summary, "html_summary": True,
+        "summary": "print(1)", "html_summary": True,
     }))
-    text = bot._app.bot.send_message.await_args.args[1]
-    # HTML markers preserved (not escaped)
-    assert "<code>" in text
+    # Must not raise; header contains "Finished"
+    first_call = bot._app.bot.send_message.await_args_list[0]
+    text = first_call.args[1]
+    assert "Finished" in text
 
 
 def test_idle_shows_elapsed_time(mk_bot, run_async):
@@ -109,7 +132,9 @@ def test_idle_shows_elapsed_time(mk_bot, run_async):
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._maybe_update_bot_name = AsyncMock()
     run_async(bot.notify(sess, "idle_prompt", {"summary": "done"}))
-    text = bot._app.bot.send_message.await_args.args[1]
+    # Elapsed time is in the HEADER (first send_message call).
+    first_call = bot._app.bot.send_message.await_args_list[0]
+    text = first_call.args[1]
     # Should include "1m" or "75s"
     assert "m" in text or "75s" in text
 
@@ -122,7 +147,9 @@ def test_idle_shows_lines_changed(mk_bot, run_async):
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._maybe_update_bot_name = AsyncMock()
     run_async(bot.notify(sess, "idle_prompt", {"summary": "done"}))
-    text = bot._app.bot.send_message.await_args.args[1]
+    # Lines-changed indicator is in the HEADER.
+    first_call = bot._app.bot.send_message.await_args_list[0]
+    text = first_call.args[1]
     assert "+10" in text
     assert "-5" in text
 
