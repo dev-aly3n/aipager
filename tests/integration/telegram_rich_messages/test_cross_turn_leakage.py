@@ -58,8 +58,8 @@ def test_sc13_no_draft_when_new_turn_has_written_nothing(mk_bot, tmp_path, monke
     sess.draft_id = 17
     sess.stream_text = ""
     sess.stream_offset = prev_size  # seeded to file size at turn start
+    sess.stream_transcript_path = tp  # pinned at seed time
 
-    monkeypatch.setattr("aipager.bot.animation.find_transcript", lambda name: tp)
     send_draft_mock = AsyncMock(return_value=True)
     monkeypatch.setattr("aipager.bot.animation.send_rich_message_draft", send_draft_mock)
 
@@ -82,6 +82,7 @@ def test_sc13_previous_turn_text_not_in_draft(mk_bot, tmp_path, monkeypatch):
     sess.draft_id = 18
     sess.stream_text = ""  # no accumulated text yet
     sess.stream_offset = prev_size
+    sess.stream_transcript_path = tp  # pinned at seed time
 
     captured_markdown = []
 
@@ -89,7 +90,6 @@ def test_sc13_previous_turn_text_not_in_draft(mk_bot, tmp_path, monkeypatch):
         captured_markdown.append(markdown)
         return True
 
-    monkeypatch.setattr("aipager.bot.animation.find_transcript", lambda name: tp)
     monkeypatch.setattr("aipager.bot.animation.send_rich_message_draft", _capture)
 
     asyncio.new_event_loop().run_until_complete(bot._push_draft(sess))
@@ -131,7 +131,7 @@ def test_sc13_new_text_after_offset_is_streamed(mk_bot, tmp_path, monkeypatch):
     with open(str(p), "ab") as f:
         f.write((json.dumps(new_entry) + "\n").encode("utf-8"))
 
-    monkeypatch.setattr("aipager.bot.animation.find_transcript", lambda name: str(p))
+    sess.stream_transcript_path = str(p)  # pinned at seed time
     send_draft_mock = AsyncMock(return_value=True)
     monkeypatch.setattr("aipager.bot.animation.send_rich_message_draft", send_draft_mock)
     monkeypatch.setattr("aipager.bot.animation.detect_rtl", lambda t: False)

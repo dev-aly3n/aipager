@@ -261,11 +261,14 @@ class AnimationMixin:
 
         The caller is also expected to guard on ``sess.draft_id`` before
         calling this method (belt-and-braces: the caller avoids the
-        ``find_transcript`` + file-read cost on every tick for non-DM scopes).
+        file-read cost on every tick for non-DM scopes).
         """
         if not sess.draft_id:
             return
-        tp = find_transcript(sess.name)
+        # Use the path pinned at turn-seed time; never re-discover mid-turn.
+        # If no path was pinned (no transcript found at seed time), fail closed:
+        # a draft is cosmetic and must never stream from an unknown file.
+        tp = sess.stream_transcript_path
         if not tp:
             return
 
@@ -368,12 +371,23 @@ class AnimationMixin:
             # the current transcript size so the previous turn's text is
             # never re-streamed as this turn's (analogous to the
             # false-idle-recovery bug fixed in 0.4.26).
+            #
+            # Path resolution order (cross-session leak fix):
+            #   1. sess.transcript_path — stamped from the hook payload;
+            #      authoritative and session-specific.
+            #   2. find_transcript(sess.name) — fallback when the hook path
+            #      is empty (e.g. session created before this field existed).
+            # The resolved path is pinned on sess.stream_transcript_path for
+            # the whole turn so that _push_draft never re-discovers a
+            # different file mid-turn (failure mode 2 in the bug report).
             sess.stream_text = ""
             sess.stream_offset = 0
+            sess.stream_transcript_path = ""
             sess.draft_id = 0
             if sess.scope_kind == "dm":
-                tp = find_transcript(sess.name)
+                tp = sess.transcript_path or find_transcript(sess.name)
                 if tp:
+                    sess.stream_transcript_path = tp
                     try:
                         sess.stream_offset = os.path.getsize(tp)
                     except OSError:

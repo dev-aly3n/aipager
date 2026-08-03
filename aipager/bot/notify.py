@@ -424,6 +424,7 @@ class NotifyMixin:
             sess.draft_id = 0
             sess.stream_text = ""
             sess.stream_offset = 0
+            sess.stream_transcript_path = ""
 
             # ── API error detection → friendly message + retry button ──
             error_source = raw_md or summary or ""

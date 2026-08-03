@@ -391,7 +391,7 @@ def test_push_draft_zero_draft_id_makes_no_api_call(mk_bot, run_async, monkeypat
     )
 
 
-def test_push_draft_positive_draft_id_calls_api(mk_bot, run_async, monkeypatch):
+def test_push_draft_positive_draft_id_calls_api(mk_bot, run_async, tmp_path, monkeypatch):
     """_push_draft forwards a non-zero draft_id to send_rich_message_draft."""
     import aipager.bot.animation as anim_mod
 
@@ -401,6 +401,10 @@ def test_push_draft_positive_draft_id_calls_api(mk_bot, run_async, monkeypatch):
     sess.scope_chat_id = 999  # ensure resolve_chat_id returns an int
     sess.stream_text = "hello world"
     sess.stream_offset = 0
+    # Pin a real transcript path so _push_draft proceeds past the early guard.
+    tp = tmp_path / "t.jsonl"
+    tp.write_text("")
+    sess.stream_transcript_path = str(tp)
 
     draft_calls: list = []
 
@@ -409,7 +413,6 @@ def test_push_draft_positive_draft_id_calls_api(mk_bot, run_async, monkeypatch):
         return True
 
     monkeypatch.setattr(anim_mod, "send_rich_message_draft", _fake_draft)
-    monkeypatch.setattr(anim_mod, "find_transcript", lambda name: "/fake/path.jsonl")
     monkeypatch.setattr(anim_mod, "read_turn_text", lambda path, offset: ("", offset))
 
     run_async(bot._push_draft(sess))

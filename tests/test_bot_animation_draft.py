@@ -126,7 +126,7 @@ def test_push_draft_calls_send_draft(mk_bot, run_async, tmp_path, monkeypatch):
     sess.stream_offset = 0
     sess.stream_text = ""
     tp = _write_assistant(tmp_path, "Hello Claude")
-    monkeypatch.setattr("aipager.bot.animation.find_transcript", lambda name: tp)
+    sess.stream_transcript_path = tp  # pinned at seed time
     send_draft_mock = AsyncMock(return_value=True)
     monkeypatch.setattr("aipager.bot.animation.send_rich_message_draft", send_draft_mock)
     monkeypatch.setattr("aipager.bot.animation.detect_rtl", lambda t: False)
@@ -145,7 +145,7 @@ def test_push_draft_uses_same_draft_id_across_ticks(mk_bot, run_async, tmp_path,
     sess.stream_offset = 0
     sess.stream_text = ""
     tp = _write_assistant(tmp_path, "Partial answer")
-    monkeypatch.setattr("aipager.bot.animation.find_transcript", lambda name: tp)
+    sess.stream_transcript_path = tp  # pinned at seed time
     send_draft_mock = AsyncMock(return_value=True)
     monkeypatch.setattr("aipager.bot.animation.send_rich_message_draft", send_draft_mock)
     monkeypatch.setattr("aipager.bot.animation.detect_rtl", lambda t: False)
@@ -164,7 +164,7 @@ def test_push_draft_failure_disables_drafts(mk_bot, run_async, tmp_path, monkeyp
     sess.stream_offset = 0
     sess.stream_text = ""
     tp = _write_assistant(tmp_path, "Some text")
-    monkeypatch.setattr("aipager.bot.animation.find_transcript", lambda name: tp)
+    sess.stream_transcript_path = tp  # pinned at seed time
     monkeypatch.setattr("aipager.bot.animation.send_rich_message_draft",
                         AsyncMock(return_value=False))
     monkeypatch.setattr("aipager.bot.animation.detect_rtl", lambda t: False)
@@ -173,12 +173,13 @@ def test_push_draft_failure_disables_drafts(mk_bot, run_async, tmp_path, monkeyp
 
 
 def test_push_draft_no_transcript_skips(mk_bot, run_async, monkeypatch):
-    """If find_transcript returns None, _push_draft returns without calling send_draft."""
+    """If stream_transcript_path is empty (no transcript found at seed time),
+    _push_draft returns without calling send_draft."""
     bot = mk_bot()
     sess = _dm_sess()
     sess.draft_id = 3
     sess.stream_offset = 0
-    monkeypatch.setattr("aipager.bot.animation.find_transcript", lambda name: None)
+    sess.stream_transcript_path = ""  # no path was pinned at seed time
     send_draft_mock = AsyncMock(return_value=True)
     monkeypatch.setattr("aipager.bot.animation.send_rich_message_draft", send_draft_mock)
     run_async(bot._push_draft(sess))
@@ -194,7 +195,7 @@ def test_push_draft_empty_text_skips_send(mk_bot, run_async, tmp_path, monkeypat
     p = tmp_path / "t.jsonl"
     p.write_text(json.dumps({"type": "user", "message": {"content": "hi"}}) + "\n")
     sess.stream_offset = 0
-    monkeypatch.setattr("aipager.bot.animation.find_transcript", lambda name: str(p))
+    sess.stream_transcript_path = str(p)  # pinned at seed time
     send_draft_mock = AsyncMock(return_value=True)
     monkeypatch.setattr("aipager.bot.animation.send_rich_message_draft", send_draft_mock)
     run_async(bot._push_draft(sess))
@@ -216,7 +217,7 @@ def test_push_draft_no_cross_turn_leakage(mk_bot, run_async, tmp_path, monkeypat
     prev_size = os.path.getsize(tp)
     # Seed offset to the file size at turn start (as _send_busy_and_animate does).
     sess.stream_offset = prev_size
-    monkeypatch.setattr("aipager.bot.animation.find_transcript", lambda name: tp)
+    sess.stream_transcript_path = tp  # pinned at seed time
     send_draft_mock = AsyncMock(return_value=True)
     monkeypatch.setattr("aipager.bot.animation.send_rich_message_draft", send_draft_mock)
     run_async(bot._push_draft(sess))
@@ -286,12 +287,13 @@ def test_animate_busy_group_no_push_draft(mk_bot, run_async, monkeypatch):
 # ── notify IDLE: stream fields reset ─────────────────────────────────────────
 
 def test_idle_resets_stream_fields(mk_bot, run_async, monkeypatch):
-    """On IDLE, draft_id / stream_offset / stream_text are all reset."""
+    """On IDLE, draft_id / stream_offset / stream_text / stream_transcript_path are all reset."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
     sess.draft_id = 99
     sess.stream_offset = 5000
     sess.stream_text = "partial answer"
+    sess.stream_transcript_path = "/some/path/turn.jsonl"
     sess.busy_started_at = time.monotonic()
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", AsyncMock(return_value={}))
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=1))
@@ -300,3 +302,137 @@ def test_idle_resets_stream_fields(mk_bot, run_async, monkeypatch):
     assert sess.draft_id == 0
     assert sess.stream_offset == 0
     assert sess.stream_text == ""
+    assert sess.stream_transcript_path == ""
+
+
+# ── Cross-session leak fix tests ─────────────────────────────────────────────
+
+def test_seed_prefers_transcript_path_over_find_transcript(
+    mk_bot, run_async, tmp_path, monkeypatch
+):
+    """Seeding uses sess.transcript_path when set; find_transcript is NOT called."""
+    bot = mk_bot()
+    sess = _dm_sess()
+
+    # The authoritative transcript from the hook payload.
+    hook_tp = tmp_path / "hook_transcript.jsonl"
+    hook_tp.write_text('{"type":"user","message":{}}\n')
+    sess.transcript_path = str(hook_tp)
+
+    # A different file that find_transcript would return (wrong session).
+    other_tp = tmp_path / "other_session.jsonl"
+    other_tp.write_text('{"type":"assistant","message":{}}\n' * 5)
+
+    find_calls: list[str] = []
+
+    def _mock_find(name: str) -> str:
+        find_calls.append(name)
+        return str(other_tp)
+
+    monkeypatch.setattr("aipager.bot.animation.find_transcript", _mock_find)
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=42))
+    bot._app.bot.send_chat_action = AsyncMock()
+    bot._start_animation = MagicMock()
+    run_async(bot._send_busy_and_animate(sess))
+
+    # find_transcript must NOT have been called — hook path takes precedence.
+    assert find_calls == []
+    # Pinned path is the hook transcript, not the other session's file.
+    assert sess.stream_transcript_path == str(hook_tp)
+    assert sess.stream_offset == hook_tp.stat().st_size
+
+
+def test_seed_falls_back_to_find_transcript_when_transcript_path_empty(
+    mk_bot, run_async, tmp_path, monkeypatch
+):
+    """When sess.transcript_path is empty, find_transcript is used as fallback."""
+    bot = mk_bot()
+    sess = _dm_sess()
+    sess.transcript_path = ""  # not yet stamped by hook
+
+    fallback_tp = tmp_path / "fallback.jsonl"
+    fallback_tp.write_text('{"type":"user","message":{}}\n')
+
+    monkeypatch.setattr("aipager.bot.animation.find_transcript",
+                        lambda name: str(fallback_tp))
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=42))
+    bot._app.bot.send_chat_action = AsyncMock()
+    bot._start_animation = MagicMock()
+    run_async(bot._send_busy_and_animate(sess))
+
+    assert sess.stream_transcript_path == str(fallback_tp)
+    assert sess.stream_offset == fallback_tp.stat().st_size
+
+
+def test_push_draft_uses_pinned_path_not_find_transcript(
+    mk_bot, run_async, tmp_path, monkeypatch
+):
+    """_push_draft reads from stream_transcript_path, not from find_transcript.
+
+    Regression test for failure mode 2: seeding pins fileA, then find_transcript
+    would return fileB mid-turn.  Without the fix this emits a mid-file slice of
+    fileB; with the fix _push_draft ignores find_transcript entirely.
+    """
+    bot = mk_bot()
+    sess = _dm_sess()
+    sess.draft_id = 11
+
+    # Pin the correct transcript at seed time.
+    pinned_tp = _write_assistant(tmp_path, "correct turn text")
+    sess.stream_offset = 0
+    sess.stream_transcript_path = pinned_tp
+
+    # find_transcript would return a DIFFERENT file (the wrong session).
+    wrong_tp = tmp_path / "wrong_session.jsonl"
+    wrong_entry = {"type": "assistant", "message": {
+        "content": [{"type": "text", "text": "WRONG SESSION CONTENT"}],
+        "stop_reason": "end_turn",
+    }}
+    wrong_tp.write_text(json.dumps(wrong_entry) + "\n")
+    find_calls: list[str] = []
+
+    def _mock_find(name: str) -> str:
+        find_calls.append(name)
+        return str(wrong_tp)
+
+    monkeypatch.setattr("aipager.bot.animation.find_transcript", _mock_find)
+    send_draft_mock = AsyncMock(return_value=True)
+    monkeypatch.setattr("aipager.bot.animation.send_rich_message_draft", send_draft_mock)
+    monkeypatch.setattr("aipager.bot.animation.detect_rtl", lambda t: False)
+    run_async(bot._push_draft(sess))
+
+    # find_transcript was never consulted mid-turn.
+    assert find_calls == []
+    # The draft was sent with correct content, not the wrong session's content.
+    send_draft_mock.assert_awaited_once()
+    sent_content = send_draft_mock.await_args.args[2]
+    assert "correct turn text" in sent_content
+    assert "WRONG SESSION CONTENT" not in sent_content
+
+
+def test_push_draft_no_stream_when_no_path_pinned(mk_bot, run_async, monkeypatch):
+    """_push_draft does not stream when stream_transcript_path is empty.
+
+    This covers the case where no transcript was found at seed time.
+    Failing closed (no draft) is always correct — never stream from an
+    unknown file.
+    """
+    bot = mk_bot()
+    sess = _dm_sess()
+    sess.draft_id = 3
+    sess.stream_transcript_path = ""  # no path was pinned
+
+    # find_transcript would have a file to offer, but must not be called.
+    find_calls: list[str] = []
+
+    def _mock_find(name: str) -> str:
+        find_calls.append(name)
+        return "/some/other/file.jsonl"
+
+    monkeypatch.setattr("aipager.bot.animation.find_transcript", _mock_find)
+    send_draft_mock = AsyncMock(return_value=True)
+    monkeypatch.setattr("aipager.bot.animation.send_rich_message_draft", send_draft_mock)
+    run_async(bot._push_draft(sess))
+
+    assert find_calls == []
+    send_draft_mock.assert_not_awaited()

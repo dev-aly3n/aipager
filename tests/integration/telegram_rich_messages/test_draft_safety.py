@@ -186,6 +186,7 @@ def test_sc12_same_draft_id_across_ticks(mk_bot, tmp_path, monkeypatch):
     sess.draft_id = 55
     sess.stream_offset = 0
     sess.stream_text = ""
+    sess.stream_transcript_path = tp  # pinned at seed time
 
     recorded_ids = []
 
@@ -193,7 +194,6 @@ def test_sc12_same_draft_id_across_ticks(mk_bot, tmp_path, monkeypatch):
         recorded_ids.append(draft_id)
         return True
 
-    monkeypatch.setattr("aipager.bot.animation.find_transcript", lambda name: tp)
     monkeypatch.setattr("aipager.bot.animation.send_rich_message_draft", _capture_draft)
     monkeypatch.setattr("aipager.bot.animation.detect_rtl", lambda t: False)
 
@@ -216,8 +216,8 @@ def test_sc14_draft_failure_sets_draft_id_zero(mk_bot, tmp_path, monkeypatch):
     sess.draft_id = 33
     sess.stream_offset = 0
     sess.stream_text = ""
+    sess.stream_transcript_path = tp  # pinned at seed time
 
-    monkeypatch.setattr("aipager.bot.animation.find_transcript", lambda name: tp)
     monkeypatch.setattr("aipager.bot.animation.send_rich_message_draft",
                         AsyncMock(return_value=False))
     monkeypatch.setattr("aipager.bot.animation.detect_rtl", lambda t: False)
