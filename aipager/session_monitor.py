@@ -26,7 +26,6 @@ from aipager.config import (
 from aipager.state import SessionRegistry, Status
 from aipager.transcript import (
     extract_last_response,
-    find_transcript,
     last_assistant_preview,
     turn_appears_complete,
 )
@@ -177,8 +176,12 @@ class SessionMonitor:
             # finished and the file has gone quiet, recover to IDLE exactly
             # as the hook would (transition + idle_prompt notify finalizes
             # the busy message and flushes the queue).
+            #
+            # Only the hook-stamped path is trusted. A session with no stamped
+            # path recovers nothing and falls through to STALE_BUSY_TIMEOUT —
+            # guessing here once published another session's answer.
             if sess.status == Status.BUSY:
-                tp = sess.transcript_path or find_transcript(name)
+                tp = sess.transcript_path
                 busy_for = (now - sess.busy_started_at) if sess.busy_started_at else 0.0
                 quiet_for = 0.0
                 mtime: float | None = None

@@ -1,107 +1,16 @@
-"""Tests for aipager.transcript — finding + extracting Claude Code
-transcript content.
+"""Tests for aipager.transcript — extracting Claude Code transcript content.
 
 The transcript module is the bridge between Claude Code's JSONL session
-log and our notify/resume display.
+log and our notify/resume display. It deliberately does NOT discover paths:
+callers pass the hook-stamped ``TrackedSession.transcript_path``. See
+``test_module_exposes_no_path_discovery`` at the bottom.
 """
 
 from __future__ import annotations
 
 import json
-import time
-
-import pytest
 
 from aipager import transcript
-
-
-@pytest.fixture(autouse=True)
-def _reset_cache(monkeypatch):
-    """Clear the module-level path cache between tests."""
-    monkeypatch.setattr(transcript, "_path_cache", {})
-
-
-# ---- find_transcript -----------------------------------------------------
-
-def test_find_transcript_returns_none_when_dir_missing(monkeypatch, tmp_path):
-    monkeypatch.setattr(transcript, "_PROJECTS_DIR", tmp_path / "nope")
-    assert transcript.find_transcript("claude-jim") is None
-
-
-def test_find_transcript_no_files_returns_none(tmp_path, monkeypatch):
-    monkeypatch.setattr(transcript, "_PROJECTS_DIR", tmp_path)
-    assert transcript.find_transcript("claude-jim") is None
-
-
-def test_find_transcript_picks_recent_file(tmp_path, monkeypatch):
-    """A fresh JSONL (mtime within 5s) is selected."""
-    monkeypatch.setattr(transcript, "_PROJECTS_DIR", tmp_path)
-    proj = tmp_path / "proj-1"
-    proj.mkdir()
-    jsonl = proj / "UUID.jsonl"
-    jsonl.write_text('{"type":"assistant","message":{"content":[]}}\n')
-    # Force a recent mtime
-    now = time.time()
-    import os
-    os.utime(jsonl, (now, now))
-    out = transcript.find_transcript("claude-jim")
-    assert out and out.endswith("UUID.jsonl")
-
-
-def test_find_transcript_stale_file_returns_none(tmp_path, monkeypatch):
-    """A JSONL older than 5s is ignored."""
-    monkeypatch.setattr(transcript, "_PROJECTS_DIR", tmp_path)
-    proj = tmp_path / "proj-1"
-    proj.mkdir()
-    jsonl = proj / "old.jsonl"
-    jsonl.write_text("{}\n")
-    import os
-    old_ts = time.time() - 100
-    os.utime(jsonl, (old_ts, old_ts))
-    assert transcript.find_transcript("claude-jim") is None
-
-
-def test_find_transcript_uses_cache_when_recent(tmp_path, monkeypatch):
-    """If a recent cache entry exists and the file is still on disk,
-    short-circuit."""
-    monkeypatch.setattr(transcript, "_PROJECTS_DIR", tmp_path)
-    f = tmp_path / "cached.jsonl"
-    f.write_text("{}\n")
-    monkeypatch.setattr(transcript, "_path_cache",
-                        {"claude-jim": (str(f), time.time())})
-    assert transcript.find_transcript("claude-jim") == str(f)
-
-
-def test_find_transcript_cache_miss_when_file_gone(tmp_path, monkeypatch):
-    """Cached path but file is deleted → cache is bypassed, fallback scan."""
-    monkeypatch.setattr(transcript, "_PROJECTS_DIR", tmp_path / "empty")
-    (tmp_path / "empty").mkdir()
-    bogus = "/nonexistent/path.jsonl"
-    monkeypatch.setattr(transcript, "_path_cache",
-                        {"claude-jim": (bogus, time.time())})
-    # No files in _PROJECTS_DIR → returns None
-    assert transcript.find_transcript("claude-jim") is None
-
-
-def test_find_transcript_falls_back_to_cache_when_files_stale(tmp_path, monkeypatch):
-    """Stale on-disk file + valid cache → returns cache."""
-    monkeypatch.setattr(transcript, "_PROJECTS_DIR", tmp_path)
-    proj = tmp_path / "proj"
-    proj.mkdir()
-    # Stale file
-    stale = proj / "stale.jsonl"
-    stale.write_text("{}\n")
-    import os
-    old_ts = time.time() - 100
-    os.utime(stale, (old_ts, old_ts))
-    # Cached path that DOES exist
-    cached = tmp_path / "cached.jsonl"
-    cached.write_text("{}\n")
-    monkeypatch.setattr(transcript, "_path_cache",
-                        {"claude-jim": (str(cached), 0.0)})
-    # The cache time is 0 (very old), so it shouldn't be the "recent" cache
-    # hit — but the fallback path uses it
-    assert transcript.find_transcript("claude-jim") == str(cached)
 
 
 # ---- extract_last_response ----------------------------------------------
@@ -656,3 +565,23 @@ def test_read_turn_text_cross_turn_isolation(tmp_path):
     text, new_off = transcript.read_turn_text(str(p), offset_at_turn_start)
     assert text == ""
     assert new_off == offset_at_turn_start
+
+
+# ---- no path discovery ---------------------------------------------------
+
+def test_module_exposes_no_path_discovery():
+    """Regression guard for the cross-session transcript leak.
+
+    ``find_transcript`` resolved a path by globbing ~/.claude/projects across
+    every project on the machine and taking the most recently modified JSONL,
+    with no check that the file belonged to the asking session. On a host
+    running concurrent Claude Code sessions that regularly returned somebody
+    else's transcript, which was then streamed or published to Telegram.
+
+    Callers must use the hook-stamped ``TrackedSession.transcript_path`` and
+    fail closed when it is empty. This asserts the guessing helper — and the
+    module state that made it sticky — stay gone.
+    """
+    assert not hasattr(transcript, "find_transcript")
+    assert not hasattr(transcript, "_path_cache")
+    assert not hasattr(transcript, "_PROJECTS_DIR")

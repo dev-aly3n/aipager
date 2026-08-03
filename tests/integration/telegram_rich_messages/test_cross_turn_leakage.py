@@ -155,7 +155,7 @@ def test_sc13_stream_offset_seeded_to_file_size_at_turn_start(
 
     bot = mk_bot()
     sess = _dm_sess()
-    monkeypatch.setattr("aipager.bot.animation.find_transcript", lambda name: str(tp))
+    sess.transcript_path = str(tp)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=1))
     bot._app.bot.send_chat_action = AsyncMock()
     bot._start_animation = MagicMock()
@@ -176,7 +176,7 @@ def test_sc13_group_scope_never_seeds_draft_id(mk_bot, run_async, tmp_path, monk
     sess.scope_kind = "group"
     sess.scope_chat_id = -100
 
-    monkeypatch.setattr("aipager.bot.animation.find_transcript", lambda name: str(tp))
+    sess.transcript_path = str(tp)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=1))
     bot._app.bot.send_chat_action = AsyncMock()
     bot._start_animation = MagicMock()

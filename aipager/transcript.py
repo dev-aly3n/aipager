@@ -4,14 +4,13 @@ Claude Code writes a JSONL transcript where each line is a JSON object.
 Assistant messages have type="assistant" with message.content containing
 text blocks. We read only the tail of the file for efficiency.
 
-Transcript discovery: each Claude Code session writes its transcript to
-~/.claude/projects/<cwd-slug>/<session-id>.jsonl, where <cwd-slug> is the
-session's cwd with "/" replaced by "-". We scan every project subdir
-and pick the JSONL with the most recent mtime; the existing 5-second
-freshness check disambiguates between concurrent sessions.
-
-This fallback only fires when the hook payload didn't carry
-transcript_path and the registry hasn't seen one yet for this session.
+This module never discovers transcript paths. Callers pass the path stamped
+per-session from the hook payload (``TrackedSession.transcript_path``), which
+is the only signal that actually ties a file to a session. An earlier
+``find_transcript`` helper guessed by scanning ~/.claude/projects for the
+most-recently-modified JSONL across every project on the machine; with
+concurrent sessions that regularly resolved to somebody else's transcript,
+which then reached Telegram. When no stamped path exists, callers fail closed.
 """
 
 from __future__ import annotations
@@ -19,9 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-import time
 from collections import deque
-from pathlib import Path
 
 log = logging.getLogger(__name__)
 
@@ -90,62 +87,6 @@ def _strip_leaked_tool_xml(text: str) -> str:
     cleaned = "```".join(parts)
     cleaned = _TRIPLE_BLANK_RE.sub("\n\n", cleaned)
     return cleaned.strip()
-
-
-# Root of all Claude Code project transcripts on this machine.
-_PROJECTS_DIR = Path.home() / ".claude" / "projects"
-
-# Cache: session name → (transcript_path, mtime)
-# Avoids re-scanning the directory on every poll cycle
-_path_cache: dict[str, tuple[str, float]] = {}
-
-
-def find_transcript(session_name: str) -> str | None:
-    """Find the most recently modified transcript JSONL for a session.
-
-    Strategy: when a session just went idle, its transcript was JUST written.
-    We find the JSONL that was modified most recently (within last 30s).
-    We cache the result so subsequent polls don't re-scan.
-
-    Falls back to cached path if available and file still exists.
-    """
-    # Check cache first — if we have a path and it was found recently, reuse it
-    if session_name in _path_cache:
-        cached_path, cache_time = _path_cache[session_name]
-        if time.time() - cache_time < 300:  # cache for 5 minutes
-            if Path(cached_path).exists():
-                return cached_path
-
-    try:
-        jsonl_files = sorted(
-            _PROJECTS_DIR.glob("*/*.jsonl"),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
-        )
-    except (FileNotFoundError, PermissionError):
-        return None
-
-    if not jsonl_files:
-        return None
-
-    # The most recently modified file is likely the one for the session
-    # that just went idle. We verify by checking its mtime is very recent
-    # (within 5s) to avoid misattributing another session's transcript.
-    best = jsonl_files[0]
-    mtime = best.stat().st_mtime
-    if time.time() - mtime > 5:
-        # File wasn't modified recently — probably stale
-        # Fall back to cache if available
-        if session_name in _path_cache:
-            cached_path, _ = _path_cache[session_name]
-            if Path(cached_path).exists():
-                return cached_path
-        return None
-
-    path = str(best)
-    _path_cache[session_name] = (path, time.time())
-    log.info("[%s] Discovered transcript: %s", session_name, best.name)
-    return path
 
 
 def extract_last_response(transcript_path: str) -> str | None:

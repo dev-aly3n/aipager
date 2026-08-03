@@ -215,9 +215,8 @@ class TrackedSession:
     #   the previous turn's text.
     # stream_text: assistant text accumulated so far this turn for the draft.
     # stream_transcript_path: the transcript file pinned at turn-seed time.
-    #   _push_draft reads exclusively from this path for the whole turn;
-    #   it never calls find_transcript mid-turn to avoid cross-session leaks
-    #   and the offset/file-mismatch failure mode (failure mode 2).
+    #   _push_draft reads exclusively from this path for the whole turn, so
+    #   the offset can never be applied to a file it wasn't measured against.
     draft_id: int = 0
     stream_offset: int = 0
     stream_text: str = ""

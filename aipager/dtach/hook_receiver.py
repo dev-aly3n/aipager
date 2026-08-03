@@ -28,7 +28,6 @@ from aipager.state import SessionRegistry, Status
 from aipager.transcript import (
     _strip_leaked_tool_xml,
     extract_last_response,
-    find_transcript,
 )
 
 log = logging.getLogger(__name__)
@@ -650,8 +649,6 @@ class HookReceiver:
             notify_ctx: dict = {"summary": ""}
             tracked = self.registry.get(session_name)
             tp = transcript_path or (tracked.transcript_path if tracked else "")
-            if not tp and RICH_SUMMARIES:
-                tp = find_transcript(session_name)
             if tp:
                 try:
                     md = extract_last_response(tp)
@@ -717,8 +714,6 @@ class HookReceiver:
                 # Fallback: transcript (for hooks that don't include last_assistant_message)
                 tracked = self.registry.get(session_name)
                 tp = transcript_path or (tracked.transcript_path if tracked else "")
-                if not tp and RICH_SUMMARIES:
-                    tp = find_transcript(session_name)
                 if tp:
                     try:
                         md = extract_last_response(tp)

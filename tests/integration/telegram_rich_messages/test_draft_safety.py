@@ -80,7 +80,7 @@ def test_sc10_dm_draft_id_nonzero_after_turn_start(mk_bot, tmp_path, monkeypatch
 
     bot = mk_bot()
     sess = _dm_sess()
-    monkeypatch.setattr("aipager.bot.animation.find_transcript", lambda name: str(tp))
+    sess.transcript_path = str(tp)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=1))
     bot._app.bot.send_chat_action = AsyncMock()
     bot._start_animation = MagicMock()
@@ -98,7 +98,7 @@ def test_sc10_dm_stream_text_empty_after_turn_start(mk_bot, tmp_path, monkeypatc
     bot = mk_bot()
     sess = _dm_sess()
     sess.stream_text = "stale from previous turn"
-    monkeypatch.setattr("aipager.bot.animation.find_transcript", lambda name: str(tp))
+    sess.transcript_path = str(tp)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=1))
     bot._app.bot.send_chat_action = AsyncMock()
     bot._start_animation = MagicMock()
@@ -116,7 +116,7 @@ def test_sc10_dm_stream_offset_equals_file_size(mk_bot, tmp_path, monkeypatch):
 
     bot = mk_bot()
     sess = _dm_sess()
-    monkeypatch.setattr("aipager.bot.animation.find_transcript", lambda name: str(tp))
+    sess.transcript_path = str(tp)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=1))
     bot._app.bot.send_chat_action = AsyncMock()
     bot._start_animation = MagicMock()
@@ -135,7 +135,7 @@ def test_sc11_group_draft_id_stays_zero(mk_bot, tmp_path, monkeypatch):
 
     bot = mk_bot()
     sess = _group_sess()
-    monkeypatch.setattr("aipager.bot.animation.find_transcript", lambda name: str(tp))
+    sess.transcript_path = str(tp)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=1))
     bot._app.bot.send_chat_action = AsyncMock()
     bot._start_animation = MagicMock()
@@ -319,7 +319,7 @@ def test_sc15_busy_message_sent_for_dm_scope(mk_bot, tmp_path, monkeypatch):
 
     bot = mk_bot()
     sess = _dm_sess()
-    monkeypatch.setattr("aipager.bot.animation.find_transcript", lambda name: str(tp))
+    sess.transcript_path = str(tp)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=42))
     bot._app.bot.send_chat_action = AsyncMock()
     bot._start_animation = MagicMock()
@@ -336,7 +336,7 @@ def test_sc15_busy_message_has_stop_keyboard(mk_bot, tmp_path, monkeypatch):
 
     bot = mk_bot()
     sess = _dm_sess()
-    monkeypatch.setattr("aipager.bot.animation.find_transcript", lambda name: str(tp))
+    sess.transcript_path = str(tp)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=42))
     bot._app.bot.send_chat_action = AsyncMock()
     bot._start_animation = MagicMock()

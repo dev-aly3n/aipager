@@ -380,9 +380,6 @@ def test_push_draft_zero_draft_id_makes_no_api_call(mk_bot, run_async, monkeypat
         return True
 
     monkeypatch.setattr(anim_mod, "send_rich_message_draft", _fake_draft)
-    # find_transcript would only matter if we got past the guard; mock it
-    # just in case to avoid filesystem access.
-    monkeypatch.setattr(anim_mod, "find_transcript", lambda name: "/fake/path.jsonl")
 
     run_async(bot._push_draft(sess))
 

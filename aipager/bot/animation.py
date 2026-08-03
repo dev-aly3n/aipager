@@ -21,7 +21,7 @@ from aipager.config import (
     BUSY_EDIT_INTERVAL, CHAT_ID, SPINNER_VERBS,
 )
 from aipager.bot.rich_message import detect_rtl, send_rich_message_draft
-from aipager.transcript import find_transcript, read_turn_text
+from aipager.transcript import read_turn_text
 from aipager.state import Status, TrackedSession
 
 # Pure-function helpers and constants live in aipager.bot.transport
@@ -265,9 +265,9 @@ class AnimationMixin:
         """
         if not sess.draft_id:
             return
-        # Use the path pinned at turn-seed time; never re-discover mid-turn.
-        # If no path was pinned (no transcript found at seed time), fail closed:
-        # a draft is cosmetic and must never stream from an unknown file.
+        # Use the path pinned at turn-seed time; never resolve one mid-turn.
+        # If nothing was pinned, fail closed: a draft is cosmetic and must
+        # never stream from a file this session doesn't own.
         tp = sess.stream_transcript_path
         if not tp:
             return
@@ -372,20 +372,18 @@ class AnimationMixin:
             # never re-streamed as this turn's (analogous to the
             # false-idle-recovery bug fixed in 0.4.26).
             #
-            # Path resolution order (cross-session leak fix):
-            #   1. sess.transcript_path — stamped from the hook payload;
-            #      authoritative and session-specific.
-            #   2. find_transcript(sess.name) — fallback when the hook path
-            #      is empty (e.g. session created before this field existed).
-            # The resolved path is pinned on sess.stream_transcript_path for
-            # the whole turn so that _push_draft never re-discovers a
-            # different file mid-turn (failure mode 2 in the bug report).
+            # Only sess.transcript_path is trusted — it is stamped per-session
+            # from the hook payload. There is deliberately no fallback: an
+            # unstamped session streams nothing rather than risk streaming
+            # another session's transcript into this DM.
+            # The path is pinned on sess.stream_transcript_path for the whole
+            # turn so _push_draft never resolves a different file mid-turn.
             sess.stream_text = ""
             sess.stream_offset = 0
             sess.stream_transcript_path = ""
             sess.draft_id = 0
             if sess.scope_kind == "dm":
-                tp = sess.transcript_path or find_transcript(sess.name)
+                tp = sess.transcript_path
                 if tp:
                     sess.stream_transcript_path = tp
                     try:
