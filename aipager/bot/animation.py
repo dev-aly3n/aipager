@@ -12,15 +12,16 @@ from __future__ import annotations
 import asyncio
 import html as html_mod
 import logging
+import os
+import random
 import time
 from typing import TYPE_CHECKING
-
-
-import random
 
 from aipager.config import (
     BUSY_EDIT_INTERVAL, CHAT_ID, SPINNER_VERBS,
 )
+from aipager.bot.rich_message import detect_rtl, send_rich_message_draft
+from aipager.transcript import find_transcript, read_turn_text
 from aipager.state import Status, TrackedSession
 
 # Pure-function helpers and constants live in aipager.bot.transport
@@ -221,6 +222,11 @@ class AnimationMixin:
                 first_tick = False
                 if not sess.busy_msg_id or sess.status != Status.BUSY:
                     break
+                # Draft push runs on every iteration, BEFORE the debounce
+                # check — the draft has its own cadence and must not be
+                # blocked by the busy-message rate limit.
+                if sess.draft_id and sess.scope_kind == "dm":
+                    await self._push_draft(sess)
                 # Debounce: skip if any handler edited the busy msg recently
                 if time.monotonic() - sess.last_tool_edit_at < BUSY_EDIT_INTERVAL:
                     # Still send typing (no edit to cancel it)
@@ -245,6 +251,52 @@ class AnimationMixin:
                     pass
         except asyncio.CancelledError:
             pass
+
+    async def _push_draft(self, sess: TrackedSession) -> None:
+        """Read new assistant text from the transcript and push a draft update.
+
+        Called on every ``_animate_busy`` iteration for DM scopes.
+        Silently disables drafts for the remainder of the turn by setting
+        ``sess.draft_id = 0`` when ``send_rich_message_draft`` returns False.
+
+        The caller is also expected to guard on ``sess.draft_id`` before
+        calling this method (belt-and-braces: the caller avoids the
+        file-read cost on every tick for non-DM scopes).
+        """
+        if not sess.draft_id:
+            return
+        # Use the path pinned at turn-seed time; never re-discover mid-turn.
+        # If no path was pinned (no transcript found at seed time), fail closed:
+        # a draft is cosmetic and must never stream from an unknown file.
+        tp = sess.stream_transcript_path
+        if not tp:
+            return
+
+        new_text, sess.stream_offset = read_turn_text(tp, sess.stream_offset)
+        if new_text:
+            if sess.stream_text:
+                sess.stream_text = (sess.stream_text + "\n\n" + new_text).strip()
+            else:
+                sess.stream_text = new_text.strip()
+
+        if not sess.stream_text:
+            return
+
+        # Drafts obey the same 32768-char ceiling.
+        content = sess.stream_text
+        if len(content.encode("utf-8")) > 32768:
+            # Truncate at a UTF-8 safe boundary.
+            encoded = content.encode("utf-8")[:32768]
+            content = encoded.decode("utf-8", errors="ignore")
+
+        ok = await send_rich_message_draft(
+            int(resolve_chat_id(sess)),
+            sess.draft_id,
+            content,
+            is_rtl=detect_rtl(content),
+        )
+        if not ok:
+            sess.draft_id = 0  # disable drafts for this turn
 
     def _start_animation(self, sess: TrackedSession) -> None:
         """Start the spinner animation task, cancelling any existing one."""
@@ -315,6 +367,32 @@ class AnimationMixin:
             sess.cost_baseline = None
             sess.subagent_count_this_turn = 0
             sess.busy_started_at = time.monotonic()
+            # Seed streaming state for this turn.  stream_offset is set to
+            # the current transcript size so the previous turn's text is
+            # never re-streamed as this turn's (analogous to the
+            # false-idle-recovery bug fixed in 0.4.26).
+            #
+            # Path resolution order (cross-session leak fix):
+            #   1. sess.transcript_path — stamped from the hook payload;
+            #      authoritative and session-specific.
+            #   2. find_transcript(sess.name) — fallback when the hook path
+            #      is empty (e.g. session created before this field existed).
+            # The resolved path is pinned on sess.stream_transcript_path for
+            # the whole turn so that _push_draft never re-discovers a
+            # different file mid-turn (failure mode 2 in the bug report).
+            sess.stream_text = ""
+            sess.stream_offset = 0
+            sess.stream_transcript_path = ""
+            sess.draft_id = 0
+            if sess.scope_kind == "dm":
+                tp = sess.transcript_path or find_transcript(sess.name)
+                if tp:
+                    sess.stream_transcript_path = tp
+                    try:
+                        sess.stream_offset = os.path.getsize(tp)
+                    except OSError:
+                        sess.stream_offset = 0
+                sess.draft_id = random.getrandbits(31) or 1  # non-zero, positive
             msg_id = await self.send_busy(sess)
             if msg_id:
                 # Send typing AFTER the busy message (sending a message cancels typing)

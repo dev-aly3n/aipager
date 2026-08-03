@@ -291,6 +291,10 @@ def _cmd_start(args: argparse.Namespace) -> int:
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
         datefmt="%H:%M:%S",
     )
+    # httpx logs the full request URL (including the bot token) at INFO.
+    # Suppress it here so neither the getUpdates polling loop nor the
+    # sendRichMessage / sendRichMessageDraft calls leak the token into logs.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     # Generate the v2 config (aipager.yaml + policy.yaml seed) from the
     # current install if it doesn't exist yet. Phase A: this is
     # additive — the runtime still authorizes via CHAT_ID/TEAM, and the

@@ -5,9 +5,9 @@ from __future__ import annotations
 import time
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from telegram.error import Forbidden
 
-from aipager.bot.transport import TruncationFailed
 from aipager.state import Status, TrackedSession
 
 
@@ -17,34 +17,53 @@ def _sess(status=Status.IDLE):
     return s
 
 
-# ===== IDLE: long response → file attachment =============================
+@pytest.fixture(autouse=True)
+def _mock_send_rich_message(monkeypatch):
+    """Prevent real HTTP calls in every test in this module."""
+    monkeypatch.setattr(
+        "aipager.bot.notify.send_rich_message",
+        AsyncMock(return_value={}),
+    )
+
+
+# ===== IDLE: long response (>32 768 UTF-8 bytes) → file attachment =======
 
 def test_idle_long_response_sends_file_attachment(mk_bot, run_async):
+    """A raw_md body that exceeds 32 768 UTF-8 bytes triggers overflow:
+    the body is truncated to a safe boundary AND a .txt attachment is sent."""
     bot = mk_bot()
     sess = _sess()
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._app.bot.send_document = AsyncMock()
     bot._maybe_update_bot_name = AsyncMock()
-    long_md = "# Header\n\n" + ("x" * 5000)
+    # 34 000 'x' chars → 34 000 UTF-8 bytes > 32 768.
+    long_md = "x" * 34_000
     run_async(bot.notify(sess, "idle_prompt", {
-        "summary": long_md,
-        "html_summary": True,
         "raw_md": long_md,
     }))
     # File attachment fired
     bot._app.bot.send_document.assert_awaited_once()
 
 
-def test_idle_truncation_failed_falls_back_to_attachment(mk_bot, run_async, monkeypatch):
-    """When _send_with_retry raises TruncationFailed, the IDLE handler
-    sends a fallback notice + attachment."""
+def test_idle_under_limit_no_attachment(mk_bot, run_async):
+    """A body under 32 768 UTF-8 bytes must NOT trigger the file attachment."""
     bot = mk_bot()
     sess = _sess()
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
+    bot._app.bot.send_document = AsyncMock()
+    bot._maybe_update_bot_name = AsyncMock()
+    run_async(bot.notify(sess, "idle_prompt", {
+        "raw_md": "# Header\n\n" + ("x" * 500),
+    }))
+    bot._app.bot.send_document.assert_not_awaited()
 
-    async def _send_failing(*a, **k):
-        raise TruncationFailed("too long after all")
 
-    monkeypatch.setattr("aipager.bot.notify._send_with_retry", _send_failing)
+def test_idle_truncation_failed_no_longer_applies(mk_bot, run_async, monkeypatch):
+    """The new IDLE path does not use _send_with_retry, so TruncationFailed
+    from that call site is never raised. The header goes via send_message
+    and the body via sendRichMessage (both independently)."""
+    bot = mk_bot()
+    sess = _sess()
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._app.bot.send_document = AsyncMock()
     bot._maybe_update_bot_name = AsyncMock()
@@ -52,10 +71,11 @@ def test_idle_truncation_failed_falls_back_to_attachment(mk_bot, run_async, monk
         "summary": "Short content",
         "raw_md": "Short content",
     }))
-    # Sent the fallback message
-    bot._app.bot.send_message.assert_awaited_once()
-    text = bot._app.bot.send_message.await_args.args[1]
-    assert "attachment" in text
+    # Only the header send_message fires; no fallback "attachment" notice.
+    first_call = bot._app.bot.send_message.await_args_list[0]
+    text = first_call.args[1]
+    assert "Finished" in text
+    assert "attachment" not in text
 
 
 def test_idle_oversized_file_skips_attachment(mk_bot, run_async, monkeypatch):
@@ -66,10 +86,8 @@ def test_idle_oversized_file_skips_attachment(mk_bot, run_async, monkeypatch):
     bot._app.bot.send_document = AsyncMock()
     bot._maybe_update_bot_name = AsyncMock()
     monkeypatch.setattr("aipager.bot.notify.TELEGRAM_MAX_DOC_BYTES", 100)
-    long_md = "x" * 5000
+    long_md = "x" * 34_000
     run_async(bot.notify(sess, "idle_prompt", {
-        "summary": long_md,
-        "html_summary": True,
         "raw_md": long_md,
     }))
     bot._app.bot.send_document.assert_not_awaited()
@@ -82,11 +100,9 @@ def test_idle_file_send_forbidden_swallowed(mk_bot, run_async):
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._app.bot.send_document = AsyncMock(side_effect=Forbidden("blocked"))
     bot._maybe_update_bot_name = AsyncMock()
-    long_md = "x" * 5000
+    long_md = "x" * 34_000
     # MUST NOT raise
     run_async(bot.notify(sess, "idle_prompt", {
-        "summary": long_md,
-        "html_summary": True,
         "raw_md": long_md,
     }))
 
@@ -98,10 +114,8 @@ def test_idle_file_send_generic_exception_swallowed(mk_bot, run_async):
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._app.bot.send_document = AsyncMock(side_effect=RuntimeError("io"))
     bot._maybe_update_bot_name = AsyncMock()
-    long_md = "x" * 5000
+    long_md = "x" * 34_000
     run_async(bot.notify(sess, "idle_prompt", {
-        "summary": long_md,
-        "html_summary": True,
         "raw_md": long_md,
     }))
 

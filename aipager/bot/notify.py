@@ -23,6 +23,13 @@ from telegram import (
 )
 from telegram.error import Forbidden
 
+from aipager.bot.rich_message import (
+    RichMessageBlocked,
+    RichMessageFallbackRequired,
+    detect_rtl,
+    send_rich_message,
+)
+
 
 from aipager.config import (
     BUSY_EDIT_INTERVAL,
@@ -406,8 +413,18 @@ class NotifyMixin:
                 sess.busy_msg_id = None
 
             summary = context.get("summary", sess.summary)
-            is_html = context.get("html_summary", False)
             raw_md = context.get("raw_md", "")
+
+            # ── content-selection (design §1, named rule) ──────────────────
+            # raw_md takes precedence; fall through to summary, then the
+            # session's cached summary, then empty string.
+            content = raw_md or context.get("summary", "") or sess.summary or ""
+
+            # Reset streaming state — the turn is over.
+            sess.draft_id = 0
+            sess.stream_text = ""
+            sess.stream_offset = 0
+            sess.stream_transcript_path = ""
 
             # ── API error detection → friendly message + retry button ──
             error_source = raw_md or summary or ""
@@ -448,87 +465,112 @@ class NotifyMixin:
             # Build suffix: combine non-empty parts with comma
             parts = [p for p in (elapsed_str, lines_str) if p]
             suffix = f" ({', '.join(parts)})" if parts else ""
-            text = f"✅ <b>{html_mod.escape(label)}</b> · Finished{suffix}"
+            header_text = f"✅ <b>{html_mod.escape(label)}</b> · Finished{suffix}"
+
+            # ── Overflow detection ─────────────────────────────────────────
             send_file = False
-            if summary:
-                escaped = summary if is_html else html_mod.escape(summary)
-                log.info("[%s] IDLE summary: is_html=%s, raw_md=%d, escaped=%d",
-                         label, is_html, len(raw_md), len(escaped))
-                if len(escaped) > 3400 and is_html and raw_md:
-                    # Split at safe markdown boundaries (outside fenced code
-                    # blocks), convert each piece to HTML independently.
-                    from aipager.md_to_tg import markdown_to_telegram_html
-                    bounds = _md_safe_boundaries(raw_md)
-                    md_limit = len(raw_md) // 3
-                    # Head: largest safe boundary within first ~1/3
-                    head_cut = 0
+            body_content = content  # may be truncated below
+            if content:
+                content_utf8 = content.encode("utf-8")
+                if len(content_utf8) > 32768:
+                    # Truncate at the last markdown-safe boundary under 32768.
+                    bounds = _md_safe_boundaries(content)
+                    cut = 0
                     for b in bounds:
-                        if b <= md_limit:
-                            head_cut = b
-                    head_md = raw_md[:head_cut] if head_cut else raw_md[:md_limit]
-                    # Tail: smallest safe boundary within last ~1/3
-                    tail_start = len(raw_md)
-                    for b in reversed(bounds):
-                        if b >= len(raw_md) - md_limit:
-                            tail_start = b
-                    tail_md = raw_md[tail_start:] if tail_start < len(raw_md) else raw_md[-md_limit:]
-                    head_html = markdown_to_telegram_html(head_md)
-                    tail_html = markdown_to_telegram_html(tail_md)
-                    # Safety: truncate each half if HTML blew up.
-                    # Budget: 1500+1500+sep(~100)+header(~60)+blockquote(~40) < 4096
-                    if len(head_html) > 1500:
-                        head_html = _safe_truncate(head_html, 1500, True)
-                    if len(tail_html) > 1500:
-                        tail_html = _safe_truncate(tail_html, 1500, True)
-                    sep = (
-                        "\n\n"
-                        "╔══════════════════════╗\n"
-                        "║   ✂️ TRUNCATED ✂️   ║\n"
-                        "╚══════════════════════╝"
-                        "\n\n"
-                    )
-                    escaped = head_html + sep + tail_html
+                        b_bytes = len(content[:b].encode("utf-8"))
+                        if b_bytes <= 32768:
+                            cut = b
+                    if cut:
+                        body_content = content[:cut]
+                    else:
+                        # No safe boundary found — truncate at byte limit.
+                        body_content = content_utf8[:32768].decode("utf-8", errors="ignore")
                     send_file = True
-                # Hard safety cap — never exceed Telegram's 4096 limit.
-                # Header + blockquote tags use ~80 chars, leave ~4000 for content.
-                if len(escaped) > 3800:
-                    escaped = _safe_truncate(escaped, 3800, is_html)
-                    send_file = True
-                if len(escaped) > 500:
-                    text += f"\n\n<blockquote expandable>{escaped}</blockquote>"
-                else:
-                    text += f"\n\n<blockquote>{escaped}</blockquote>"
-            # When the response was big enough to spill into a file
-            # attachment, tell the reader explicitly so they don't miss
-            # the .txt that lands below the inline preview.
+
+            # ── Send the header (HTML, via PTB) ────────────────────────────
+            # This is the message_id that registry.track_message records.
             if send_file:
-                text += "\n\n📎 <i>Full response attached below ↓</i>"
-            log.debug("[%s] Sending IDLE notification (%d chars)", label, len(text))
+                header_text += "\n\n📎 <i>Full response attached below ↓</i>"
+            log.debug("[%s] Sending IDLE notification (%d chars header)", label, len(header_text))
             try:
-                msg = await _send_with_retry(
-                    bot, chat_id=resolve_chat_id(sess), text=text, parse_mode="HTML",
-                    reply_to_message_id=sess.trigger_msg_id,
-                )
-            except TruncationFailed:
-                # Truncation attempts exhausted — fall back to sending the
-                # response as a plain-text document attachment.
-                log.warning(
-                    "[%s] IDLE summary too long after %d truncations — "
-                    "falling back to document send",
-                    label, _MAX_TRUNCATIONS,
-                )
-                fallback_text = f"📨 <b>{html_mod.escape(label)}</b> · Finished (response sent as attachment)"
                 msg = await bot.send_message(
-                    resolve_chat_id(sess), fallback_text, parse_mode="HTML",
+                    resolve_chat_id(sess), header_text, parse_mode="HTML",
                     reply_to_message_id=sess.trigger_msg_id,
                 )
-                send_file = True  # ensure the document send below fires
+            except Exception:
+                log.warning("[%s] Failed to send IDLE header", label, exc_info=True)
+                # We still try to send the body below; use a dummy msg_id
+                # so track_message doesn't crash.
+                class _FakeMsg:
+                    message_id = 0
+                msg = _FakeMsg()
+
+            # ── Send the body via sendRichMessage ──────────────────────────
+            if body_content:
+                is_rtl = detect_rtl(body_content)
+                log.info("[%s] sendRichMessage: %d chars, rtl=%s, overflow=%s",
+                         label, len(body_content), is_rtl, send_file)
+                try:
+                    await send_rich_message(
+                        int(resolve_chat_id(sess)),
+                        body_content,
+                        is_rtl=is_rtl,
+                    )
+                except RichMessageBlocked:
+                    _log_blocked_once(Exception("sendRichMessage 403"))
+                except (RichMessageFallbackRequired, Exception):
+                    # Plain-text fallback — split into ≤4096-char chunks at
+                    # markdown-safe boundaries so the send cannot fail to parse.
+                    log.warning("[%s] sendRichMessage failed — falling back to plain text",
+                                label, exc_info=True)
+                    bounds = _md_safe_boundaries(body_content)
+                    chunks: list[str] = []
+                    prev = 0
+                    for b in bounds:
+                        chunk = body_content[prev:b]
+                        if len(chunk.encode("utf-8")) > 4096:
+                            # Safety: hard-cut at 4096 bytes if a single segment
+                            # exceeds the limit (very long paragraph, no breaks).
+                            encoded = chunk.encode("utf-8")
+                            pos = 0
+                            while pos < len(encoded):
+                                piece = encoded[pos:pos + 4096].decode("utf-8", errors="ignore")
+                                if piece:
+                                    chunks.append(piece)
+                                pos += 4096
+                        elif chunk:
+                            chunks.append(chunk)
+                        prev = b
+                    tail = body_content[prev:]
+                    if tail:
+                        encoded = tail.encode("utf-8")
+                        pos = 0
+                        while pos < len(encoded):
+                            piece = encoded[pos:pos + 4096].decode("utf-8", errors="ignore")
+                            if piece:
+                                chunks.append(piece)
+                            pos += 4096
+                    if not chunks:
+                        chunks = [body_content[:4096]]
+                    for chunk in chunks:
+                        try:
+                            await bot.send_message(
+                                resolve_chat_id(sess), chunk,
+                                # No parse_mode → Telegram cannot raise a parse
+                                # error; this is the "never lose a reply" safety net.
+                            )
+                        except Exception:
+                            log.warning("[%s] plain-text fallback chunk send failed",
+                                        label, exc_info=True)
+
             sess.trigger_msg_id = None  # reply cycle complete
             self.registry.mark_dirty()
-            self.registry.track_message(msg.message_id, sess.name)
+            if msg.message_id:
+                self.registry.track_message(msg.message_id, sess.name)
             await self._maybe_update_bot_name(sess.name)
-            # Send full response as file for long messages
-            file_content = raw_md or (summary if send_file else "")
+
+            # ── Send full response as .txt attachment for overflow ─────────
+            file_content = content if send_file else ""
             if send_file and file_content:
                 content_bytes = file_content.encode("utf-8")
                 if len(content_bytes) > TELEGRAM_MAX_DOC_BYTES:
@@ -545,7 +587,7 @@ class NotifyMixin:
                         with open(tmp, "rb") as f:
                             await bot.send_document(
                                 resolve_chat_id(sess), document=f, filename=f"{label}_response.txt",
-                                reply_to_message_id=msg.message_id,
+                                reply_to_message_id=msg.message_id if msg.message_id else None,
                             )
                         tmp.unlink(missing_ok=True)
                     except Forbidden as e:
@@ -553,14 +595,16 @@ class NotifyMixin:
                     except Exception:
                         log.warning("Failed to send full response file", exc_info=True)
 
-            # Broadcast to observer bots (text only, or text + document)
+            # Broadcast to observer bots (header only — rich messages are not
+            # observable via the same channel; send the header as summary).
             if self.observers:
+                obs_text = header_text
                 if send_file and file_content:
                     doc_bytes = file_content.encode("utf-8")
                     asyncio.create_task(self.observers.broadcast_document(
-                        text, doc_bytes, f"{label}_response.txt"))
+                        obs_text, doc_bytes, f"{label}_response.txt"))
                 else:
-                    asyncio.create_task(self.observers.broadcast(text))
+                    asyncio.create_task(self.observers.broadcast(obs_text))
 
             # Flush next queued message (one at a time, rest flush on next IDLE)
             if sess.pending_queue:
