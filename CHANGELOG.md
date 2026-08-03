@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.28] - 2026-08-03
+
 ### Changed
 - **The "still working" note no longer reads as an error.** A quiet
   session is almost always healthy — a long tool call, a heavy
