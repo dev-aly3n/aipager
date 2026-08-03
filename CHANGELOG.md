@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **The "still working" note no longer reads as an error.** A quiet
+  session is almost always healthy — a long tool call, a heavy
+  generation, a compaction — but the note announced itself with a
+  warning triangle above a wall of failure causes, so people read it as
+  a crash report and interrupted sessions that were fine. It now leads
+  with an hourglass and a single line ("still working — quiet for N
+  min"), one reassuring sentence, and the diagnostic causes collapsed
+  behind an expandable quote that only opens if tapped. The **Stop**
+  button is unchanged.
+- **The note waits 10 minutes instead of 2.** `STALE_BUSY_TIMEOUT` rises
+  from 120s to 600s, above the duration of nearly every legitimate quiet
+  stretch, so the note becomes rare enough to be worth reading. Still
+  overridable via the environment variable. A hung permission prompt now
+  surfaces at 15 minutes rather than 7.
+
+### Fixed
+- **Transcript reads no longer guess which file belongs to a session.**
+  When a session had no hook-stamped transcript path, four call sites
+  fell back to scanning `~/.claude/projects` for the most recently
+  modified JSONL on the machine and caching it under the session name
+  for five minutes — with no check that the file had anything to do with
+  that session. On a busy host the winner was routinely somebody else's
+  conversation, which was then published into this session's chat. The
+  fallback is gone; every path now uses only the transcript the hooks
+  stamped, and reads nothing when there is none. The trade-off is
+  deliberate: a session whose `Stop` hook is missed no longer
+  auto-recovers from a guessed transcript and instead falls through to
+  the "still working" note above.
+
 ## [0.4.27] - 2026-08-03
 
 ### Added
