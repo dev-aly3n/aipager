@@ -54,6 +54,9 @@ class RichMessageBlocked(Exception):
 
 def _get_client() -> httpx.AsyncClient:
     global _client
+    # Suppress httpx's INFO-level "HTTP Request: POST …/botTOKEN/…" lines,
+    # which would otherwise print the bot token in plaintext on every call.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     if _client is None or _client.is_closed:
         _client = httpx.AsyncClient(
             timeout=httpx.Timeout(15.0),

@@ -307,6 +307,94 @@ def test_close_client_closes_open_client(run_async, monkeypatch):
     assert rm._client is None
 
 
+# ── httpx logger level ───────────────────────────────────────────────────────
+
+def test_get_client_silences_httpx_logger(monkeypatch):
+    """_get_client() must set the httpx logger to WARNING or higher.
+
+    Regression for rev-iter1-002: httpx logs the full request URL (which
+    embeds the bot token) at INFO. Silencing it in _get_client() ensures the
+    fix is in effect even when the daemon's logging setup has not run (tests,
+    embedded use, other entrypoints).
+    """
+    import logging
+    import aipager.bot.rich_message as rm_mod
+
+    # Reset to a known state — force a fresh client creation.
+    monkeypatch.setattr(rm_mod, "_client", None)
+
+    # Lower the httpx logger to DEBUG so we can confirm _get_client raises it.
+    httpx_logger = logging.getLogger("httpx")
+    httpx_logger.setLevel(logging.DEBUG)
+
+    rm_mod._get_client()
+
+    assert httpx_logger.level >= logging.WARNING, (
+        f"httpx logger level is {httpx_logger.level}, expected >= {logging.WARNING} "
+        "(WARNING=30). httpx logs the bot token in its INFO lines."
+    )
+
+
+def test_get_client_no_token_in_info_logs(run_async, monkeypatch):
+    """The bot token must never reach log output.
+
+    Drives the REAL ``_post`` through an httpx MockTransport so httpx's own
+    logger actually runs.  Mocking ``_post`` instead would make this test
+    vacuous: httpx would never execute, no record could contain the token,
+    and the assertion would pass even with the suppression deleted.
+
+    Phase 1 is a control proving the harness can see a leak; phase 2 is the
+    real assertion.  Uses an obviously fake token — never a real one.
+    """
+    import logging
+
+    FAKE_TOKEN = "FAKE_BOT_TOKEN_FOR_TESTING_999"
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", FAKE_TOKEN)
+
+    records: list[logging.LogRecord] = []
+
+    class _Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            records.append(record)
+
+    handler = _Capture()
+    handler.setLevel(logging.DEBUG)
+
+    def _respond(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"ok": True, "result": {"message_id": 1}})
+
+    httpx_logger = logging.getLogger("httpx")
+    original_level = httpx_logger.level
+    httpx_logger.addHandler(handler)
+    try:
+        client = httpx.AsyncClient(transport=httpx.MockTransport(_respond))
+        monkeypatch.setattr(rm, "_client", client)
+
+        # Phase 1 (control): bypass _get_client so nothing suppresses httpx.
+        # Proves httpx really does log the token-bearing URL and that the
+        # capture harness sees it.
+        httpx_logger.setLevel(logging.INFO)
+        run_async(client.post(rm._api_url("sendRichMessage"), json={}))
+        assert any(FAKE_TOKEN in r.getMessage() for r in records), (
+            "Control failed: httpx did not log the token-bearing URL, so this "
+            "test cannot prove the suppression works. Either the harness is "
+            "broken or httpx stopped logging request URLs."
+        )
+
+        # Phase 2: the real path. _post() calls _get_client(), which must
+        # raise the httpx logger to WARNING before the request goes out.
+        records.clear()
+        httpx_logger.setLevel(logging.INFO)
+        run_async(send_rich_message(12345, "hello"))
+        assert not any(FAKE_TOKEN in r.getMessage() for r in records), (
+            "The bot token appeared in log output — the httpx INFO "
+            "suppression in _get_client() is not working."
+        )
+    finally:
+        httpx_logger.removeHandler(handler)
+        httpx_logger.setLevel(original_level)
+
+
 # ── request body shape ────────────────────────────────────────────────────────
 
 def test_send_rich_message_body_shape(run_async, monkeypatch):
