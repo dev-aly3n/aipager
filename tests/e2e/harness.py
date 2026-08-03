@@ -55,8 +55,9 @@ def daemon_running() -> bool:
 
     Used to skip the real-dtach halt test: a live daemon's session_monitor
     would adopt the throwaway dtach session and message the operator. We
-    check the PROCESS (not ``/tmp/aipager.sock`` — that can vanish to /tmp
-    cleanup while the daemon keeps running)."""
+    check the PROCESS (not ``/tmp/aipager.sock`` — that can vanish while the
+    daemon keeps running, since the daemon holds the socket bound even after
+    it is unlinked from disk)."""
     try:
         out = subprocess.run(["pgrep", "-f", "aipager start"],
                              capture_output=True, text=True, timeout=5)

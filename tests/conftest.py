@@ -179,6 +179,47 @@ def _guard_real_home():
         )
 
 
+def _snapshot_live_sockets() -> set[str]:
+    tmp = Path("/tmp")
+    socks = {str(p) for p in tmp.glob("claude-dtach-*.sock")}
+    aipager_sock = tmp / "aipager.sock"
+    if aipager_sock.exists():
+        socks.add(str(aipager_sock))
+    return socks
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _guard_live_sockets():
+    """Fail the run if the suite unlinked a live daemon or session socket.
+
+    The sibling ``_guard_real_home`` covers ``$HOME`` only, which is why
+    this hole stayed open: ``updater._remove_tmp_sockets`` deletes
+    ``/tmp/aipager.sock`` and every ``/tmp/claude-dtach-*.sock``, so a
+    test invoking it without redirecting ``updater.Path`` runs it
+    against the real /tmp. That happened — the host daemon's hook socket
+    was unlinked mid-suite and hooks then stayed silently dead, because
+    the daemon goes on serving the now-unreachable bound socket. The
+    dtach sockets are worse: their sessions keep running but can never
+    be reattached.
+
+    Guarded for existence rather than mtime: a session starting mid-run
+    legitimately adds a socket, but nothing the suite does may remove
+    one. ``/tmp/claude-status-*.json`` is deliberately excluded — live
+    sessions rewrite it every few seconds, so it would false-positive.
+    """
+    before = _snapshot_live_sockets()
+    yield
+    gone = sorted(before - _snapshot_live_sockets())
+    if gone:
+        pytest.fail(
+            "tests unlinked live sockets under /tmp:\n  "
+            + "\n  ".join(gone)
+            + "\n\nSandbox the responsible test by redirecting that "
+              "module's Path to tmp_path. (If you stopped the daemon or "
+              "a session while the suite ran, this is a false positive.)"
+        )
+
+
 @pytest.fixture
 def tmp_state_file(tmp_path, monkeypatch):
     """Redirect SESSION_STATE_FILE so tests never touch the real one."""

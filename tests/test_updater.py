@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
-from pathlib import Path
 
 from aipager import updater
 
@@ -229,8 +229,34 @@ def test_install_extra_cmd_unknown_extra_returns_none():
 
 # ----- _remove_tmp_sockets -----
 
-def test_remove_tmp_sockets_handles_missing(monkeypatch):
+def test_remove_tmp_sockets_handles_missing(monkeypatch, tmp_path):
     # Should not raise even when no matching files exist.
-    monkeypatch.setattr(updater, "Path",
-                        lambda p: Path(p))
-    updater._remove_tmp_sockets()  # smoke: no exception
+    real_path = updater.Path
+
+    def _fake_path(p):
+        if p == "/tmp":
+            return tmp_path
+        if p == "/tmp/aipager.sock":
+            return real_path(tmp_path / "aipager.sock")
+        return real_path(p)
+
+    # Assert containment BEFORE the call, not after: _remove_tmp_sockets
+    # unlinks the live daemon's hook socket and every running session's
+    # dtach socket, so a sandbox that leaks would already have destroyed
+    # them by the time a post-hoc assertion could notice.
+    assert _fake_path("/tmp") == tmp_path
+    assert _fake_path("/tmp/aipager.sock").parent == tmp_path
+
+    # Positive proof, for any leak the two assertions above cannot see: a
+    # decoy at a real /tmp path matching one of the globs, which must
+    # survive. A status file rather than a socket on purpose — a stray
+    # /tmp/claude-dtach-*.sock would look like a live session to a daemon
+    # running on this machine.
+    decoy = real_path(f"/tmp/claude-status-updater-sandbox-{os.getpid()}.json")
+    decoy.write_text("{}")
+    try:
+        monkeypatch.setattr(updater, "Path", _fake_path)
+        updater._remove_tmp_sockets()  # smoke: no exception, tmp_path is empty
+        assert decoy.exists(), "sandbox leaked — the real /tmp was reached"
+    finally:
+        decoy.unlink(missing_ok=True)
