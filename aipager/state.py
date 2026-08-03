@@ -208,6 +208,15 @@ class TrackedSession:
     # two coroutines could both observe `busy_msg_id is None` and both send.
     # Transient; never persisted.
     animate_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
+    # Rich-message streaming state — transient, never in _PERSIST_FIELDS.
+    # draft_id: non-zero while a draft is active for the current DM turn.
+    # stream_offset: byte offset into the transcript for the current turn;
+    #   seeded to the file size at turn start so a new turn never reads
+    #   the previous turn's text.
+    # stream_text: assistant text accumulated so far this turn for the draft.
+    draft_id: int = 0
+    stream_offset: int = 0
+    stream_text: str = ""
 
     def queue_prompt(self, text: str, msg_id: int,
                      cap: int = QUEUE_CAP) -> bool:

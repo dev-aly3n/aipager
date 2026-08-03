@@ -217,6 +217,10 @@ class LifecycleMixin:
                 await t
             except (asyncio.CancelledError, Exception):
                 pass
+        # Close the rich-message httpx client before PTB shuts down so we
+        # don't leave open connections dangling after the event loop ends.
+        from aipager.bot.rich_message import close_client
+        await close_client()
         if self._app:
             await self._app.updater.stop()
             await self._app.stop()

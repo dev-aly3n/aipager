@@ -12,15 +12,16 @@ from __future__ import annotations
 import asyncio
 import html as html_mod
 import logging
+import os
+import random
 import time
 from typing import TYPE_CHECKING
-
-
-import random
 
 from aipager.config import (
     BUSY_EDIT_INTERVAL, CHAT_ID, SPINNER_VERBS,
 )
+from aipager.bot.rich_message import detect_rtl, send_rich_message_draft
+from aipager.transcript import find_transcript, read_turn_text
 from aipager.state import Status, TrackedSession
 
 # Pure-function helpers and constants live in aipager.bot.transport
@@ -221,6 +222,11 @@ class AnimationMixin:
                 first_tick = False
                 if not sess.busy_msg_id or sess.status != Status.BUSY:
                     break
+                # Draft push runs on every iteration, BEFORE the debounce
+                # check — the draft has its own cadence and must not be
+                # blocked by the busy-message rate limit.
+                if sess.draft_id and sess.scope_kind == "dm":
+                    await self._push_draft(sess)
                 # Debounce: skip if any handler edited the busy msg recently
                 if time.monotonic() - sess.last_tool_edit_at < BUSY_EDIT_INTERVAL:
                     # Still send typing (no edit to cancel it)
@@ -245,6 +251,43 @@ class AnimationMixin:
                     pass
         except asyncio.CancelledError:
             pass
+
+    async def _push_draft(self, sess: TrackedSession) -> None:
+        """Read new assistant text from the transcript and push a draft update.
+
+        Called on every ``_animate_busy`` iteration for DM scopes.
+        Silently disables drafts for the remainder of the turn by setting
+        ``sess.draft_id = 0`` when ``send_rich_message_draft`` returns False.
+        """
+        tp = find_transcript(sess.name)
+        if not tp:
+            return
+
+        new_text, sess.stream_offset = read_turn_text(tp, sess.stream_offset)
+        if new_text:
+            if sess.stream_text:
+                sess.stream_text = (sess.stream_text + "\n\n" + new_text).strip()
+            else:
+                sess.stream_text = new_text.strip()
+
+        if not sess.stream_text:
+            return
+
+        # Drafts obey the same 32768-char ceiling.
+        content = sess.stream_text
+        if len(content.encode("utf-8")) > 32768:
+            # Truncate at a UTF-8 safe boundary.
+            encoded = content.encode("utf-8")[:32768]
+            content = encoded.decode("utf-8", errors="ignore")
+
+        ok = await send_rich_message_draft(
+            int(resolve_chat_id(sess)),
+            sess.draft_id,
+            content,
+            is_rtl=detect_rtl(content),
+        )
+        if not ok:
+            sess.draft_id = 0  # disable drafts for this turn
 
     def _start_animation(self, sess: TrackedSession) -> None:
         """Start the spinner animation task, cancelling any existing one."""
@@ -315,6 +358,21 @@ class AnimationMixin:
             sess.cost_baseline = None
             sess.subagent_count_this_turn = 0
             sess.busy_started_at = time.monotonic()
+            # Seed streaming state for this turn.  stream_offset is set to
+            # the current transcript size so the previous turn's text is
+            # never re-streamed as this turn's (analogous to the
+            # false-idle-recovery bug fixed in 0.4.26).
+            sess.stream_text = ""
+            sess.stream_offset = 0
+            sess.draft_id = 0
+            if sess.scope_kind == "dm":
+                tp = find_transcript(sess.name)
+                if tp:
+                    try:
+                        sess.stream_offset = os.path.getsize(tp)
+                    except OSError:
+                        sess.stream_offset = 0
+                sess.draft_id = random.getrandbits(31) or 1  # non-zero, positive
             msg_id = await self.send_busy(sess)
             if msg_id:
                 # Send typing AFTER the busy message (sending a message cancels typing)

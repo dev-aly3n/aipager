@@ -267,6 +267,70 @@ def turn_appears_complete(transcript_path: str) -> bool:
     return False
 
 
+def read_turn_text(transcript_path: str, offset: int) -> tuple[str, int]:
+    """Read assistant text blocks appended to *transcript_path* after *offset*.
+
+    Returns ``(text, new_offset)`` where *text* is all assistant text blocks
+    found in the bytes starting at *offset*, joined by blank lines and passed
+    through ``_strip_leaked_tool_xml``.  *new_offset* is the byte offset of
+    the last **complete** line consumed — a trailing line that does not end in
+    ``\\n`` (i.e. still being written) is NOT consumed and the offset is not
+    advanced past it, so the next call picks it up once it is complete.
+
+    Returns ``("", offset)`` on any error (file not found, permission denied,
+    JSON decode, etc.) — the function never raises.
+    """
+    if not transcript_path:
+        return ("", offset)
+    try:
+        with open(transcript_path, "rb") as fh:
+            fh.seek(offset)
+            raw = fh.read()
+    except (FileNotFoundError, PermissionError, OSError) as exc:
+        log.debug("read_turn_text: cannot open %s: %s", transcript_path, exc)
+        return ("", offset)
+
+    if not raw:
+        return ("", offset)
+
+    # Split on newlines, keeping the delimiter, so we can detect a partial
+    # trailing line (one that doesn't end in \n yet).
+    lines = raw.split(b"\n")
+    # If the last "line" is non-empty, the file was mid-write — discard it.
+    if lines and lines[-1]:
+        lines = lines[:-1]
+
+    texts: list[str] = []
+    consumed_bytes = 0
+    for line_bytes in lines:
+        # Each "line" here excludes the trailing \n; add 1 for the separator.
+        consumed_bytes += len(line_bytes) + 1
+        line = line_bytes.decode("utf-8", errors="replace").strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if entry.get("type") != "assistant":
+            continue
+        content = entry.get("message", {}).get("content", [])
+        for block in content:
+            if isinstance(block, dict) and block.get("type") == "text":
+                t = block.get("text", "")
+                if t:
+                    texts.append(t)
+            elif isinstance(block, str) and block:
+                texts.append(block)
+
+    if not texts:
+        return ("", offset + consumed_bytes)
+
+    joined = "\n\n".join(texts)
+    cleaned = _strip_leaked_tool_xml(joined)
+    return (cleaned, offset + consumed_bytes)
+
+
 def last_assistant_preview(transcript_path: str, max_chars: int = 200) -> str:
     """Return a single-line, length-capped preview of the last assistant text.
 
