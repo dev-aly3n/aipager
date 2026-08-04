@@ -209,18 +209,24 @@ class TrackedSession:
     # Transient; never persisted.
     animate_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
     # Rich-message streaming state — transient, never in _PERSIST_FIELDS.
-    # draft_id: non-zero while a draft is active for the current DM turn.
     # stream_offset: byte offset into the transcript for the current turn;
     #   seeded to the file size at turn start so a new turn never reads
     #   the previous turn's text.
-    # stream_text: assistant text accumulated so far this turn for the draft.
     # stream_transcript_path: the transcript file pinned at turn-seed time.
-    #   _push_draft reads exclusively from this path for the whole turn, so
-    #   the offset can never be applied to a file it wasn't measured against.
-    draft_id: int = 0
+    #   _read_stream_text reads exclusively from this path for the whole turn,
+    #   so the offset can never be applied to a file it wasn't measured against.
+    # stream_pending: text read from the transcript but not yet shown in the card.
+    # stream_shown: text currently rendered in the card body (the visible portion).
+    # stream_dirty: set True by hook handlers when the card needs a redraw;
+    #   cleared by _edit_busy_rich after a successful POST.
+    # stream_last_rendered: last markdown successfully POSTed; used to skip
+    #   byte-identical edits before hitting the network.
     stream_offset: int = 0
-    stream_text: str = ""
     stream_transcript_path: str = ""
+    stream_pending: str = ""
+    stream_shown: str = ""
+    stream_dirty: bool = False
+    stream_last_rendered: str = ""
 
     def queue_prompt(self, text: str, msg_id: int,
                      cap: int = QUEUE_CAP) -> bool:

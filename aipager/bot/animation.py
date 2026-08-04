@@ -14,13 +14,21 @@ import html as html_mod
 import logging
 import os
 import random
+import re
 import time
 from typing import TYPE_CHECKING
 
 from aipager.config import (
     BUSY_EDIT_INTERVAL, CHAT_ID, SPINNER_VERBS,
+    STREAM_BODY_CHARS, STREAM_EDIT_INTERVAL, STREAM_MAX_REVEAL_STEPS,
+    STREAM_REVEAL_CHARS,
 )
-from aipager.bot.rich_message import detect_rtl, send_rich_message_draft
+from aipager.bot.rich_message import (
+    detect_rtl,
+    edit_message_text_rich,
+    RichMessageBlocked,
+    RichMessageGone,
+)
 from aipager.transcript import read_turn_text
 from aipager.state import Status, TrackedSession
 
@@ -59,7 +67,156 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+_RICH_LIMIT = 32_768  # UTF-8 byte ceiling for rich messages
+_DIVIDER = "────────────────"
 
+
+# ── Module-level pure helpers ────────────────────────────────────────────────
+
+def _read_stream_text(sess: TrackedSession) -> bool:
+    """Read new assistant text from the transcript into ``sess.stream_pending``.
+
+    Returns True when new text arrived, False otherwise.
+
+    # Thinking blocks stay out of the card: read_turn_text collects only
+    # type="text" content, and thinking is verbose internal reasoning that
+    # was never written for a reader. Only prose commentary streams.
+    """
+    if not sess.stream_transcript_path:
+        return False
+    new_text, sess.stream_offset = read_turn_text(
+        sess.stream_transcript_path, sess.stream_offset,
+    )
+    if not new_text:
+        return False
+    # Separate blocks with a blank line against what is buffered OR already on
+    # screen: once pending drains into shown, a bare append glues the next
+    # block onto the tail of the previous sentence.
+    if sess.stream_pending or sess.stream_shown:
+        sess.stream_pending = sess.stream_pending + "\n\n" + new_text
+    else:
+        sess.stream_pending = new_text
+    return True
+
+
+def _reveal_chunk(sess: TrackedSession) -> bool:
+    """Move up to ``STREAM_REVEAL_CHARS`` characters from pending to shown.
+
+    Breaks at the last whitespace within the window so words are never split.
+    Returns True when something was revealed, False when the buffer is empty.
+    """
+    if not sess.stream_pending:
+        return False
+    # Small steps read as typing; scale up when a big blob is queued so the
+    # card never lags a minute behind the turn it is narrating.
+    step = max(
+        STREAM_REVEAL_CHARS,
+        -(-len(sess.stream_pending) // STREAM_MAX_REVEAL_STEPS),
+    )
+    window = sess.stream_pending[:step]
+    if len(sess.stream_pending) > step:
+        # Cut at last whitespace so words never split mid-token.
+        cut = window.rfind(" ")
+        if cut == -1:
+            cut = step
+        else:
+            cut += 1  # include the space in the revealed portion
+        chunk = sess.stream_pending[:cut]
+        sess.stream_pending = sess.stream_pending[cut:]
+    else:
+        chunk = sess.stream_pending
+        sess.stream_pending = ""
+    if sess.stream_shown:
+        sess.stream_shown = sess.stream_shown + chunk
+    else:
+        sess.stream_shown = chunk
+    return True
+
+
+def build_stream_card(sess: TrackedSession, verb: str) -> str:
+    """Build the streaming busy-card markdown. Pure: no I/O, no mutation.
+
+    Returns a string that is always ≤ 32 768 UTF-8 bytes.
+    """
+    # Escape markdown metacharacters in the label so they don't break formatting.
+    safe_label = re.sub(r"([*_`\[\]])", r"\\\1", sess.label)
+    header = f"🔧 **{safe_label}** · {verb}"
+
+    # ── Footer segments ──
+    footer_parts: list[str] = []
+    if sess.busy_started_at:
+        elapsed_s = int(time.monotonic() - sess.busy_started_at)
+        if elapsed_s >= 60:
+            footer_parts.append(f"{elapsed_s // 60}m {elapsed_s % 60}s")
+        elif elapsed_s >= 2:
+            footer_parts.append(f"{elapsed_s}s")
+
+    if (sess.cost_baseline is not None
+            and sess.last_cost_usd > 0):
+        delta = sess.last_cost_usd - sess.cost_baseline
+        if delta > 0.001:
+            footer_parts.append(f"${delta:.2f}")
+
+    if sess.tool_history:
+        tally: dict[str, int] = {}
+        for summary, _done in sess.tool_history:
+            # Summaries are "Read: /path", "Grep: pat in dir" or "🤖 agent-type".
+            # Everything before the colon is the tool name; without one, the
+            # first word stands in.
+            head = summary.split(":", 1)[0] if ":" in summary else summary
+            parts = head.split()
+            name = parts[0][:20] if parts else ""
+            if not name:
+                continue
+            tally[name] = tally.get(name, 0) + 1
+        footer_parts.extend(f"{n} ×{c}" for n, c in tally.items())
+
+    footer = "⏳ " + " · ".join(footer_parts) if footer_parts else "⏳"
+
+    body = sess.stream_shown
+    if len(body) > STREAM_BODY_CHARS:
+        # Keep the card glanceable: show only the most recent commentary,
+        # starting at a paragraph break where one is close to the cut.
+        tail = body[-STREAM_BODY_CHARS:]
+        para = tail.find("\n\n")
+        if para != -1 and para < STREAM_BODY_CHARS // 2:
+            tail = tail[para + 2:]
+        else:
+            space = tail.find(" ")
+            if space != -1:
+                tail = tail[space + 1:]
+        body = "… " + tail
+
+    # ── Assemble the card ──
+    # The divider and footer need a blank line between them: Telegram's rich
+    # markdown collapses a single newline into a space, which would put the
+    # footer on the divider's line. With no body there is nothing to divide.
+    if body:
+        raw = f"{header}\n\n{body}\n\n{_DIVIDER}\n\n{footer}"
+    else:
+        raw = f"{header}\n\n{footer}"
+
+    # ── Truncation: drop the head of the body if over the byte ceiling ──
+    encoded = raw.encode("utf-8")
+    if len(encoded) <= _RICH_LIMIT:
+        return raw
+
+    if body:
+        # Compute how many bytes we can spare for the body.
+        skeleton = f"{header}\n\n…\n\n{_DIVIDER}\n\n{footer}"
+        skeleton_bytes = len(skeleton.encode("utf-8"))
+        body_budget = _RICH_LIMIT - skeleton_bytes
+        if body_budget > 0:
+            body_bytes = body.encode("utf-8")
+            if len(body_bytes) > body_budget:
+                # Drop from the head (oldest text).
+                truncated = body_bytes[-body_budget:].decode("utf-8", errors="ignore")
+                body = "…" + truncated
+            raw = f"{header}\n\n{body}\n\n{_DIVIDER}\n\n{footer}"
+        else:
+            # Skeleton alone exceeds the limit — drop the body entirely.
+            raw = f"{header}\n\n{footer}"
+    return raw
 
 
 
@@ -208,95 +365,108 @@ class AnimationMixin:
             log.debug("Edit busy failed: %s", e)
             return False  # transient: rate-limit, network, etc.
 
+    async def _edit_busy_rich(
+        self, sess: TrackedSession, verb: str,
+    ) -> bool | None:
+        """Edit the busy message with the streaming card.
+
+        Returns
+        -------
+        True   — success; ``last_tool_edit_at`` and ``stream_last_rendered``
+                 updated, ``stream_dirty`` cleared.
+        False  — transient failure; caller should retry on the next tick.
+        None   — permanent failure (blocked or message gone); caller must stop
+                 animating.
+        """
+        if not sess.busy_msg_id or sess.busy_msg_id < 0:
+            return False
+        # Serialise edits per session. The POST below is a suspension point, so
+        # without this a hook-driven edit can start while the animation loop's
+        # edit is still in flight; Telegram then rejects the first one with
+        # 400 "canceled by new edit message request". The waiter re-renders
+        # inside the lock, so a burst collapses into the dedupe below instead
+        # of racing.
+        lock = getattr(sess, "_stream_edit_lock", None)
+        if lock is None:
+            lock = asyncio.Lock()
+            sess._stream_edit_lock = lock
+
+        async with lock:
+            markdown = build_stream_card(sess, verb)
+            # Dedupe: skip the POST when nothing changed since the last render.
+            # Primary guard against the "message is not modified" 400.
+            if markdown == sess.stream_last_rendered:
+                return True
+            is_rtl = detect_rtl(sess.stream_shown or "")
+            reply_markup = self._build_stop_keyboard(sess.name).to_dict()
+            try:
+                result = await edit_message_text_rich(
+                    int(resolve_chat_id(sess)),
+                    int(sess.busy_msg_id),
+                    markdown,
+                    is_rtl=is_rtl,
+                    reply_markup=reply_markup,
+                )
+            except RichMessageBlocked:
+                log.warning("[%s] editMessageText blocked — stopping animation", sess.label)
+                return None
+            except RichMessageGone:
+                log.debug("[%s] editMessageText: message gone — clearing busy_msg_id",
+                          sess.label)
+                sess.busy_msg_id = 0
+                return None
+            if result is None:
+                # Transient failure (timeout, network, 429 exhausted, etc.)
+                return False
+            # Success
+            sess.last_tool_edit_at = time.monotonic()
+            sess.stream_last_rendered = markdown
+            sess.stream_dirty = False
+            return True
+
     async def _animate_busy(self, sess: TrackedSession) -> None:
-        """Background task: rotate spinner verbs while session is BUSY."""
+        """Background task: stream transcript text while session is BUSY."""
         verbs = list(SPINNER_VERBS)
         random.shuffle(verbs)
         idx = 0
-        keyboard = self._build_stop_keyboard(sess.name)
         first_tick = True
         try:
             while sess.busy_msg_id and sess.status == Status.BUSY:
-                # First tick at 1.5s for quick stats display, then normal interval
-                await asyncio.sleep(1.5 if first_tick else BUSY_EDIT_INTERVAL)
+                # First tick at 1.5 s for a quick initial render, then stream cadence.
+                await asyncio.sleep(1.5 if first_tick else STREAM_EDIT_INTERVAL)
                 first_tick = False
                 if not sess.busy_msg_id or sess.status != Status.BUSY:
                     break
-                # Draft push runs on every iteration, BEFORE the debounce
-                # check — the draft has its own cadence and must not be
-                # blocked by the busy-message rate limit.
-                if sess.draft_id and sess.scope_kind == "dm":
-                    await self._push_draft(sess)
-                # Debounce: skip if any handler edited the busy msg recently
-                if time.monotonic() - sess.last_tool_edit_at < BUSY_EDIT_INTERVAL:
-                    # Still send typing (no edit to cancel it)
+                # Read transcript on every tick regardless of debounce.
+                _read_stream_text(sess)
+                # Choose the required minimum gap.
+                gap = (STREAM_EDIT_INTERVAL if (sess.stream_pending or sess.stream_dirty)
+                       else BUSY_EDIT_INTERVAL)
+                now = time.monotonic()
+                if now - sess.last_tool_edit_at < gap:
+                    # Debounced — still send typing indicator.
                     try:
-                        await self._app.bot.send_chat_action(int(resolve_chat_id(sess)), "typing")
+                        await self._app.bot.send_chat_action(
+                            int(resolve_chat_id(sess)), "typing",
+                        )
                     except Exception:
                         pass
                     continue
+                _reveal_chunk(sess)
                 verb = verbs[idx % len(verbs)]
                 idx += 1
-                text = self._build_busy_text(sess.label, verb, sess)
-                result = await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard, chat_id=resolve_chat_id(sess))
-                if result is True:
-                    sess.last_tool_edit_at = time.monotonic()
-                elif result is None:
-                    sess.busy_msg_id = None  # message gone
-                    break
-                # Send typing AFTER edit (edit cancels typing indicator)
+                result = await self._edit_busy_rich(sess, verb)
+                if result is None:
+                    break  # permanent failure
+                # Send typing AFTER edit (edit cancels the typing indicator).
                 try:
-                    await self._app.bot.send_chat_action(int(resolve_chat_id(sess)), "typing")
+                    await self._app.bot.send_chat_action(
+                        int(resolve_chat_id(sess)), "typing",
+                    )
                 except Exception:
                     pass
         except asyncio.CancelledError:
             pass
-
-    async def _push_draft(self, sess: TrackedSession) -> None:
-        """Read new assistant text from the transcript and push a draft update.
-
-        Called on every ``_animate_busy`` iteration for DM scopes.
-        Silently disables drafts for the remainder of the turn by setting
-        ``sess.draft_id = 0`` when ``send_rich_message_draft`` returns False.
-
-        The caller is also expected to guard on ``sess.draft_id`` before
-        calling this method (belt-and-braces: the caller avoids the
-        file-read cost on every tick for non-DM scopes).
-        """
-        if not sess.draft_id:
-            return
-        # Use the path pinned at turn-seed time; never resolve one mid-turn.
-        # If nothing was pinned, fail closed: a draft is cosmetic and must
-        # never stream from a file this session doesn't own.
-        tp = sess.stream_transcript_path
-        if not tp:
-            return
-
-        new_text, sess.stream_offset = read_turn_text(tp, sess.stream_offset)
-        if new_text:
-            if sess.stream_text:
-                sess.stream_text = (sess.stream_text + "\n\n" + new_text).strip()
-            else:
-                sess.stream_text = new_text.strip()
-
-        if not sess.stream_text:
-            return
-
-        # Drafts obey the same 32768-char ceiling.
-        content = sess.stream_text
-        if len(content.encode("utf-8")) > 32768:
-            # Truncate at a UTF-8 safe boundary.
-            encoded = content.encode("utf-8")[:32768]
-            content = encoded.decode("utf-8", errors="ignore")
-
-        ok = await send_rich_message_draft(
-            int(resolve_chat_id(sess)),
-            sess.draft_id,
-            content,
-            is_rtl=detect_rtl(content),
-        )
-        if not ok:
-            sess.draft_id = 0  # disable drafts for this turn
 
     def _start_animation(self, sess: TrackedSession) -> None:
         """Start the spinner animation task, cancelling any existing one."""
@@ -375,22 +545,22 @@ class AnimationMixin:
             # Only sess.transcript_path is trusted — it is stamped per-session
             # from the hook payload. There is deliberately no fallback: an
             # unstamped session streams nothing rather than risk streaming
-            # another session's transcript into this DM.
+            # another session's transcript into this one.
             # The path is pinned on sess.stream_transcript_path for the whole
-            # turn so _push_draft never resolves a different file mid-turn.
-            sess.stream_text = ""
+            # turn so _read_stream_text never resolves a different file mid-turn.
+            sess.stream_pending = ""
+            sess.stream_shown = ""
+            sess.stream_dirty = False
+            sess.stream_last_rendered = ""
             sess.stream_offset = 0
             sess.stream_transcript_path = ""
-            sess.draft_id = 0
-            if sess.scope_kind == "dm":
-                tp = sess.transcript_path
-                if tp:
-                    sess.stream_transcript_path = tp
-                    try:
-                        sess.stream_offset = os.path.getsize(tp)
-                    except OSError:
-                        sess.stream_offset = 0
-                sess.draft_id = random.getrandbits(31) or 1  # non-zero, positive
+            tp = sess.transcript_path
+            if tp:
+                sess.stream_transcript_path = tp
+                try:
+                    sess.stream_offset = os.path.getsize(tp)
+                except OSError:
+                    sess.stream_offset = 0
             msg_id = await self.send_busy(sess)
             if msg_id:
                 # Send typing AFTER the busy message (sending a message cancels typing)

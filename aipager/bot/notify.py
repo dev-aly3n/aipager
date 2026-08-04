@@ -32,8 +32,8 @@ from aipager.bot.rich_message import (
 
 
 from aipager.config import (
-    BUSY_EDIT_INTERVAL,
     STALE_BUSY_TIMEOUT,
+    STREAM_EDIT_INTERVAL,
 )
 from aipager.state import Status, TrackedSession
 
@@ -176,16 +176,10 @@ class NotifyMixin:
             # Skip edit if busy msg not ready yet (animation will pick up cached stats)
             if not sess.busy_msg_id or sess.busy_msg_id < 0 or not tool_summary:
                 return
+            sess.stream_dirty = True
             now = time.monotonic()
-            # Debounce: only edit if enough time since ANY busy msg edit
-            if now - sess.last_tool_edit_at >= BUSY_EDIT_INTERVAL:
-                keyboard = self._build_stop_keyboard(sess.name)
-                text = self._build_busy_text(label, "Working", sess)
-                result = await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard, chat_id=resolve_chat_id(sess))
-                if result is True:
-                    sess.last_tool_edit_at = now
-                elif result is None:
-                    sess.busy_msg_id = None  # message gone, stop editing
+            if now - sess.last_tool_edit_at >= STREAM_EDIT_INTERVAL:
+                if await self._edit_busy_rich(sess, "Working") is None:
                     self._stop_animation(sess)
             return
 
@@ -205,13 +199,11 @@ class NotifyMixin:
                             sess.tool_history[i] = (sess.tool_history[i][0], mark)
                             break
             # Update display (debounced — animation picks up state if skipped)
-            now = time.monotonic()
-            if (sess.busy_msg_id and sess.busy_msg_id > 0
-                    and now - sess.last_tool_edit_at >= BUSY_EDIT_INTERVAL):
-                keyboard = self._build_stop_keyboard(sess.name)
-                text = self._build_busy_text(label, "Working", sess)
-                if await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard, chat_id=resolve_chat_id(sess)):
-                    sess.last_tool_edit_at = now
+            if sess.busy_msg_id and sess.busy_msg_id > 0:
+                sess.stream_dirty = True
+                if time.monotonic() - sess.last_tool_edit_at >= STREAM_EDIT_INTERVAL:
+                    if await self._edit_busy_rich(sess, "Working") is None:
+                        self._stop_animation(sess)
             return
 
         if event == "subagent_start":
@@ -229,13 +221,11 @@ class NotifyMixin:
             if agent_id and agent_id in sess.active_subagents:
                 sess.active_subagents[agent_id]["history_idx"] = history_idx
             # Edit busy message if ready (debounced)
-            now = time.monotonic()
-            if (sess.busy_msg_id and sess.busy_msg_id > 0
-                    and now - sess.last_tool_edit_at >= BUSY_EDIT_INTERVAL):
-                keyboard = self._build_stop_keyboard(sess.name)
-                text = self._build_busy_text(label, "Working", sess)
-                if await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard, chat_id=resolve_chat_id(sess)):
-                    sess.last_tool_edit_at = now
+            if sess.busy_msg_id and sess.busy_msg_id > 0:
+                sess.stream_dirty = True
+                if time.monotonic() - sess.last_tool_edit_at >= STREAM_EDIT_INTERVAL:
+                    if await self._edit_busy_rich(sess, "Working") is None:
+                        self._stop_animation(sess)
             return
 
         if event == "subagent_stop":
@@ -258,13 +248,11 @@ class NotifyMixin:
                 # No matching start (daemon restart?) — append as done entry
                 sess.record_tool(done_summary, True)
             # Edit busy message if ready (debounced)
-            now = time.monotonic()
-            if (sess.busy_msg_id and sess.busy_msg_id > 0
-                    and now - sess.last_tool_edit_at >= BUSY_EDIT_INTERVAL):
-                keyboard = self._build_stop_keyboard(sess.name)
-                text = self._build_busy_text(label, "Working", sess)
-                if await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard, chat_id=resolve_chat_id(sess)):
-                    sess.last_tool_edit_at = now
+            if sess.busy_msg_id and sess.busy_msg_id > 0:
+                sess.stream_dirty = True
+                if time.monotonic() - sess.last_tool_edit_at >= STREAM_EDIT_INTERVAL:
+                    if await self._edit_busy_rich(sess, "Working") is None:
+                        self._stop_animation(sess)
             return
 
         if event == "compacting":
@@ -438,8 +426,10 @@ class NotifyMixin:
                 content = sess.summary or ""
 
             # Reset streaming state — the turn is over.
-            sess.draft_id = 0
-            sess.stream_text = ""
+            sess.stream_pending = ""
+            sess.stream_shown = ""
+            sess.stream_dirty = False
+            sess.stream_last_rendered = ""
             sess.stream_offset = 0
             sess.stream_transcript_path = ""
 

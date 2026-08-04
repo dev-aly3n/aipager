@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Busy message now streams Claude's mid-turn prose.** The card reveals
+  transcript text progressively — 32 characters per 0.9 s edit, scaling the
+  step up so a large blob always drains within 14 edits, and breaking on
+  whitespace so words never split — with a footer showing elapsed time,
+  turn cost, and tool tally. Only the most recent 600 characters stay
+  visible, so the card stays glanceable on a long turn. Hook events
+  (`tool_use`, `tool_done`, `subagent_start`, etc.) trigger immediate card
+  updates (debounced at 0.9 s); the clock-only refresh falls back to 3 s
+  when nothing new is pending. Edits are serialised per session, so a
+  hook-driven update cannot race the animation loop into Telegram's
+  `400 canceled by new edit message request`. Every edit carries the Stop
+  button. Groups and DMs use the same path.
+
+### Removed
+- **Removed the `sendRichMessageDraft` busy-message path.** The API itself
+  works — a live probe pushed 24 updates with zero failures, rendering on
+  both Desktop and Android — and it is the only way to get Telegram's native
+  word-by-word typing animation, which `editMessageText` cannot reproduce.
+  It was still rejected, on three grounds:
+
+  1. **A draft is a 30-second ephemeral preview.** Per the Bot API docs, it
+     "acts as a temporary 30-second preview — once the output is finalized,
+     you must call `sendMessage` with the complete message to persist it",
+     and clients drop it after `message_typing_draft_ttl` (30 s) or as soon
+     as a real message arrives in the chat. aipager turns run for minutes,
+     so keeping a draft alive means pushing updates continuously for the
+     whole turn. There is no quiet keep-alive.
+  2. **Streaming a draft locks the composer on Telegram Android** — the send
+     button becomes a loading indicator and the user cannot reply
+     (bugs.telegram.org/c/62189, closed by Telegram as intended behaviour).
+     Reproduced on real hardware on 2026-08-04; Desktop is unaffected, which
+     is why an earlier Desktop-only test looked clean. Combined with (1),
+     the composer would stay locked for the entire turn. Queuing a follow-up
+     prompt mid-turn is a core aipager feature, so this is disqualifying.
+  3. **Drafts cannot carry a `reply_markup`**, so the Stop button — the one
+     control the user needs mid-turn — could not be attached.
+
+  There is no third mechanism: the native animation and mid-turn replies are
+  mutually exclusive on Android. Do not reinstate drafts without new evidence
+  that Telegram has changed (1) or (2).
+
 ### Fixed
 - **"Deny" on a permission prompt no longer runs the tool.** The buttons
   drive Claude Code's cursor menu, and the assumed order was wrong: Deny

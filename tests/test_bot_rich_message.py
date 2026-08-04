@@ -19,7 +19,6 @@ from aipager.bot.rich_message import (
     close_client,
     detect_rtl,
     send_rich_message,
-    send_rich_message_draft,
 )
 
 
@@ -246,48 +245,6 @@ def test_send_rich_message_429_twice_raises_fallback(run_async, monkeypatch):
     monkeypatch.setattr(asyncio, "sleep", AsyncMock())
     with pytest.raises(RichMessageFallbackRequired):
         run_async(send_rich_message(1, "text"))
-
-
-# ── send_rich_message_draft: success & failure ────────────────────────────────
-
-def test_send_rich_message_draft_ok_returns_true(run_async, monkeypatch):
-    monkeypatch.setattr(rm, "_post", AsyncMock(return_value={"ok": True}))
-    assert run_async(send_rich_message_draft(1, 42, "text")) is True
-
-
-def test_send_rich_message_draft_error_returns_false(run_async, monkeypatch):
-    monkeypatch.setattr(rm, "_post", AsyncMock(return_value={
-        "ok": False, "error_code": 400, "description": "bad",
-    }))
-    assert run_async(send_rich_message_draft(1, 42, "text")) is False
-
-
-def test_send_rich_message_draft_403_returns_false(run_async, monkeypatch):
-    monkeypatch.setattr(rm, "_post", AsyncMock(return_value={
-        "ok": False, "error_code": 403, "description": "Forbidden",
-    }))
-    assert run_async(send_rich_message_draft(1, 42, "text")) is False
-
-
-def test_send_rich_message_draft_network_error_returns_false(run_async, monkeypatch):
-    monkeypatch.setattr(rm, "_post",
-                        AsyncMock(side_effect=httpx.ConnectError("refused")))
-    assert run_async(send_rich_message_draft(1, 42, "text")) is False
-
-
-def test_send_rich_message_draft_never_raises(run_async, monkeypatch):
-    """send_rich_message_draft must NEVER raise, even on unexpected errors."""
-    monkeypatch.setattr(rm, "_post",
-                        AsyncMock(side_effect=RuntimeError("boom")))
-    # MUST NOT raise
-    result = run_async(send_rich_message_draft(1, 42, "text"))
-    assert result is False
-
-
-def test_send_rich_message_draft_timeout_returns_false(run_async, monkeypatch):
-    monkeypatch.setattr(rm, "_post",
-                        AsyncMock(side_effect=httpx.TimeoutException("timed out")))
-    assert run_async(send_rich_message_draft(1, 42, "text")) is False
 
 
 # ── close_client ──────────────────────────────────────────────────────────────

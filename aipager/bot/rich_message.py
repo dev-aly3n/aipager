@@ -1,19 +1,28 @@
 """Raw HTTPS client for Bot API 10.1 Rich Messages.
 
 python-telegram-bot 22.7 supports Bot API 9.5 and does not expose
-sendRichMessage / sendRichMessageDraft. This module sits beside PTB and
-makes those two calls directly with httpx, reusing the configured bot
-token at call time (never captured at import).
+sendRichMessage / editMessageText (with rich_message). This module sits
+beside PTB and makes those calls directly with httpx, reusing the
+configured bot token at call time (never captured at import).
 
 Public API
 ----------
 send_rich_message(chat_id, markdown, *, is_rtl, reply_to_message_id)
-send_rich_message_draft(chat_id, draft_id, markdown, *, is_rtl)
+edit_message_text_rich(chat_id, message_id, markdown, *, is_rtl, reply_markup)
 detect_rtl(text)
 close_client()
 
 RichMessageFallbackRequired  -- caller should re-send as plain text
 RichMessageBlocked           -- bot is blocked; no fallback
+RichMessageGone              -- target message no longer exists
+
+sendRichMessageDraft is deliberately absent. It is the only source of
+Telegram's native word-by-word animation, but a draft is a 30-second
+ephemeral preview and streaming one locks the send button on Telegram
+Android for as long as it runs (bugs.telegram.org/c/62189, closed as
+intended behaviour, reproduced on hardware 2026-08-04). A turn lasting
+minutes would leave the user unable to reply for its whole duration.
+See the CHANGELOG entry before reinstating it.
 """
 
 from __future__ import annotations
@@ -48,6 +57,10 @@ class RichMessageFallbackRequired(Exception):
 
 class RichMessageBlocked(Exception):
     """Raised on HTTP 403; caller must NOT attempt a plain-text fallback."""
+
+
+class RichMessageGone(Exception):
+    """Raised when the message being edited no longer exists (deleted)."""
 
 
 # ── HTTP client ──────────────────────────────────────────────────────────────
@@ -201,39 +214,105 @@ async def _handle_response(
     raise RichMessageFallbackRequired(f"{error_code}: {description}")
 
 
-async def send_rich_message_draft(
+async def edit_message_text_rich(
     chat_id: int,
-    draft_id: int,
+    message_id: int,
     markdown: str,
     *,
     is_rtl: bool = False,
-) -> bool:
-    """POST sendRichMessageDraft. Returns True on ok, False on every failure.
+    reply_markup: dict | None = None,
+) -> dict | None:
+    """POST editMessageText with rich_message (Bot API 10.1).
 
-    Never raises — a draft is cosmetic and must not affect the turn.
-    On 403, logs at WARNING once; all other failures log at DEBUG.
+    Returns the Telegram ``result`` dict on success, or ``None`` on any
+    non-fatal failure (transient errors, rate-limits, unchanged content).
+
+    Raises
+    ------
+    RichMessageBlocked
+        HTTP 403 — bot is blocked; caller must stop editing.
+    RichMessageGone
+        The target message no longer exists (deleted by the user or by
+        Telegram); caller must clear ``busy_msg_id`` and stop editing.
     """
-    payload = {
+    payload: dict = {
         "chat_id": chat_id,
-        "draft_id": draft_id,
+        "message_id": message_id,
         "rich_message": {"markdown": markdown, "is_rtl": is_rtl},
     }
+    if reply_markup is not None:
+        payload["reply_markup"] = reply_markup
     try:
-        data = await _post("sendRichMessageDraft", payload)
+        data = await _post("editMessageText", payload)
+    except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
+        log.warning("editMessageText network error: %s", type(exc).__name__)
+        return None
     except Exception as exc:
-        log.debug("sendRichMessageDraft failed: %s", exc)
-        return False
+        log.warning("editMessageText unexpected error: %s", exc)
+        return None
+    return await _handle_edit_response(data, payload=payload)
 
+
+async def _handle_edit_response(data: dict, *, payload: dict) -> dict | None:
+    """Interpret the Telegram response for an editMessageText rich call.
+
+    Distinct from ``_handle_response`` because 400 ``message is not modified``
+    is a benign no-op here — it must NOT disable streaming or trigger a
+    plain-text fallback. All other outcomes follow the error table in design §1.
+    """
     if data.get("ok"):
-        return True
+        result = data.get("result")
+        if isinstance(result, dict):
+            return result
+        return None
 
-    error_code = data.get("error_code", 0)
-    description = data.get("description", "")
+    error_code: int = data.get("error_code", 0)
+    description: str = data.get("description", "")
+    desc_lower = description.lower()
+
     if error_code == 403:
-        log.warning("sendRichMessageDraft blocked (403): %s", description)
-    else:
-        log.debug("sendRichMessageDraft error %d: %s", error_code, description)
-    return False
+        log.warning("editMessageText blocked (403): %s", description)
+        raise RichMessageBlocked(description)
+
+    if error_code == 400:
+        if "message is not modified" in desc_lower:
+            log.debug("editMessageText: message is not modified (benign)")
+            return None
+        if ("message to edit not found" in desc_lower
+                or "message_id_invalid" in desc_lower):
+            log.debug("editMessageText: message gone: %s", description)
+            raise RichMessageGone(description)
+        log.warning("editMessageText bad request (400): %s", description)
+        return None
+
+    if error_code == 429:
+        params = data.get("parameters") or {}
+        retry_after: int = min(int(params.get("retry_after", 30)), 30)
+        log.warning("editMessageText rate-limited (429), sleeping %ds then retrying",
+                    retry_after)
+        await asyncio.sleep(retry_after)
+        try:
+            data2 = await _post("editMessageText", payload)
+        except Exception as exc:
+            log.warning("editMessageText retry error: %s", exc)
+            return None
+        # Second 429 → give up quietly
+        if not data2.get("ok") and data2.get("error_code") == 429:
+            log.warning("editMessageText rate-limited again after retry")
+            return None
+        return await _handle_edit_response(data2, payload=payload)
+
+    if error_code == 404 or "method not found" in desc_lower:
+        log.warning("editMessageText not found (404): %s", description)
+        return None
+
+    if error_code >= 500:
+        log.warning("editMessageText server error (%d): %s", error_code, description)
+        return None
+
+    # Any other 4xx
+    log.warning("editMessageText error (%d): %s", error_code, description)
+    return None
 
 
 # ── RTL detection ────────────────────────────────────────────────────────────

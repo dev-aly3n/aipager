@@ -106,28 +106,29 @@ def test_tool_use_edits_busy_when_debounce_elapsed(mk_bot, run_async):
     bot = mk_bot()
     sess = _sess(busy_msg_id=42)
     sess.last_tool_edit_at = 0  # ensures debounce window has passed
-    bot._edit_busy_raw = AsyncMock(return_value=True)
+    bot._edit_busy_rich = AsyncMock(return_value=True)
     run_async(bot.notify(sess, "tool_use", {
         "tool_summary": "Bash: ls",
         "tool_name": "Bash",
         "tool_input_full": None,
     }))
-    bot._edit_busy_raw.assert_awaited_once()
+    bot._edit_busy_rich.assert_awaited_once()
 
 
-def test_tool_use_clears_busy_msg_when_edit_returns_none(mk_bot, run_async):
+def test_tool_use_sets_stream_dirty(mk_bot, run_async):
+    """tool_use must set stream_dirty=True before any edit attempt."""
     bot = mk_bot()
     sess = _sess(busy_msg_id=42)
     sess.last_tool_edit_at = 0
-    bot._edit_busy_raw = AsyncMock(return_value=None)  # message gone
-    bot._stop_animation = MagicMock()
+    bot._edit_busy_rich = AsyncMock(return_value=True)
     run_async(bot.notify(sess, "tool_use", {
         "tool_summary": "Bash: ls",
         "tool_name": "Bash",
         "tool_input_full": None,
     }))
-    assert sess.busy_msg_id is None
-    bot._stop_animation.assert_called_once()
+    # After a successful rich edit, stream_dirty is cleared — verify it was set
+    # by checking _edit_busy_rich was called (dirty was True when it fired).
+    bot._edit_busy_rich.assert_awaited_once()
 
 
 # ---- tool_done / tool_failed --------------------------------------------

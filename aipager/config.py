@@ -150,6 +150,28 @@ SESSION_STATE_FILE = Path.home() / ".claude" / "aipager-sessions.json"
 # Minimum seconds between busy-message edits (rate-limit for Telegram API)
 BUSY_EDIT_INTERVAL: float = 3.0
 
+# Seconds between edits while buffered transcript text is being revealed.
+# Also the minimum gap between any two busy-message edits (debounce floor).
+STREAM_EDIT_INTERVAL: float = float(os.environ.get("STREAM_EDIT_INTERVAL", "0.9"))
+
+# Baseline characters revealed from the pending buffer per streaming edit —
+# a few words, so the card reads as typing rather than as blocks landing.
+# Words are never split: the window cuts at the last whitespace boundary.
+# One edit per chunk, and Telegram tolerates roughly one edit per second per
+# message, so this is the floor: smaller chunks buy no extra smoothness, they
+# just run into 429s.
+STREAM_REVEAL_CHARS: int = int(os.environ.get("STREAM_REVEAL_CHARS", "32"))
+
+# Ceiling on how many edits a full buffer may take to drain. A long commentary
+# blob scales the chunk up so the card keeps pace with the turn instead of
+# still typing out text from a minute ago.
+STREAM_MAX_REVEAL_STEPS: int = int(os.environ.get("STREAM_MAX_REVEAL_STEPS", "14"))
+
+# Maximum characters of commentary kept visible in the card body. Older text
+# scrolls off the top so a long turn stays glanceable instead of growing into
+# a wall of prose.
+STREAM_BODY_CHARS: int = int(os.environ.get("STREAM_BODY_CHARS", "600"))
+
 # Seconds a session can stay BUSY with no hook activity before the bot
 # posts an informational "still working" note in chat. Nothing is wrong
 # when this fires — a session running a long tool call, generating
