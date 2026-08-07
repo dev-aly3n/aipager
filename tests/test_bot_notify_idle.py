@@ -59,7 +59,7 @@ def test_idle_sends_finished_message(mk_bot, run_async):
 
 def test_idle_renders_final_card_and_clears_busy_msg(mk_bot, run_async, monkeypatch):
     """The card stays in the chat, re-rendered once, and is no longer live."""
-    monkeypatch.setattr("aipager.bot.notify.KEEP_FINISHED_CARD", True)
+    monkeypatch.setattr("aipager.preferences.KEEP_FINISHED_CARD", True)
     bot = mk_bot()
     sess = _sess(status=Status.IDLE, busy_msg_id=42)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
@@ -74,7 +74,7 @@ def test_idle_renders_final_card_and_clears_busy_msg(mk_bot, run_async, monkeypa
 
 
 def test_idle_final_render_failure_never_breaks_the_turn(mk_bot, run_async, monkeypatch):
-    monkeypatch.setattr("aipager.bot.notify.KEEP_FINISHED_CARD", True)
+    monkeypatch.setattr("aipager.preferences.KEEP_FINISHED_CARD", True)
     bot = mk_bot()
     sess = _sess(status=Status.IDLE, busy_msg_id=42)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
@@ -88,7 +88,7 @@ def test_idle_final_render_failure_never_breaks_the_turn(mk_bot, run_async, monk
 
 
 def test_idle_deletes_busy_msg_when_knob_off(mk_bot, run_async, monkeypatch):
-    monkeypatch.setattr("aipager.bot.notify.KEEP_FINISHED_CARD", False)
+    monkeypatch.setattr("aipager.preferences.KEEP_FINISHED_CARD", False)
     bot = mk_bot()
     sess = _sess(status=Status.IDLE, busy_msg_id=42)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
@@ -101,7 +101,7 @@ def test_idle_deletes_busy_msg_when_knob_off(mk_bot, run_async, monkeypatch):
 
 
 def test_idle_swallows_delete_failure(mk_bot, run_async, monkeypatch):
-    monkeypatch.setattr("aipager.bot.notify.KEEP_FINISHED_CARD", False)
+    monkeypatch.setattr("aipager.preferences.KEEP_FINISHED_CARD", False)
     bot = mk_bot()
     sess = _sess(status=Status.IDLE, busy_msg_id=42)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
@@ -111,6 +111,43 @@ def test_idle_swallows_delete_failure(mk_bot, run_async, monkeypatch):
     run_async(bot.notify(sess, "idle_prompt", {"summary": "done"}))
     # Cleared anyway
     assert sess.busy_msg_id is None
+
+
+# ---- layout stage 3: stored /settings preference vs the env-var seed -----
+
+def test_idle_no_stored_pref_keep_finished_card_off_matches_replace(
+    mk_bot, run_async, monkeypatch,
+):
+    """No stored layout + KEEP_FINISHED_CARD=0 behaves like a stored
+    "replace" preference: the busy card is deleted."""
+    monkeypatch.setattr("aipager.preferences.KEEP_FINISHED_CARD", False)
+    bot = mk_bot()
+    sess = _sess(status=Status.IDLE, busy_msg_id=42)
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
+    bot._app.bot.delete_message = AsyncMock()
+    bot._maybe_update_bot_name = AsyncMock()
+    bot._stop_animation = MagicMock()
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "done"}))
+    bot._app.bot.delete_message.assert_awaited_once()
+
+
+def test_idle_stored_card_preference_overrides_keep_finished_card_off(
+    mk_bot, run_async, monkeypatch,
+):
+    """A stored "card" preference wins over KEEP_FINISHED_CARD=0."""
+    from aipager import preferences
+    monkeypatch.setattr("aipager.preferences.KEEP_FINISHED_CARD", False)
+    preferences.set_preference(0, "layout", "card")
+    bot = mk_bot()
+    sess = _sess(status=Status.IDLE, busy_msg_id=42)
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
+    bot._app.bot.delete_message = AsyncMock()
+    bot._maybe_update_bot_name = AsyncMock()
+    bot._stop_animation = MagicMock()
+    bot._edit_busy_rich = AsyncMock(return_value=True)
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "done"}))
+    bot._app.bot.delete_message.assert_not_awaited()
+    assert bot._edit_busy_rich.await_args.kwargs["final"] is True
 
 
 def test_idle_marks_tools_done_clears_subagents(mk_bot, run_async):
@@ -372,7 +409,7 @@ def test_interactive_team_rule_auto_denies_tool(mk_bot, run_async):
 # ---- The "Finished" header is redundant once the card stays ---------------
 
 def _finished_card_bot(mk_bot, monkeypatch, *, card_kept=True):
-    monkeypatch.setattr("aipager.bot.notify.KEEP_FINISHED_CARD", True)
+    monkeypatch.setattr("aipager.preferences.KEEP_FINISHED_CARD", True)
     bot = mk_bot()
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._app.bot.delete_message = AsyncMock()
@@ -450,7 +487,7 @@ def test_idle_keeps_the_header_when_the_answer_overflows(
 def test_idle_backstop_drops_a_mis_anchored_answer(mk_bot, run_async, monkeypatch):
     """When the anchor slips, the persisted card must still not quote the
     answer above the message carrying it."""
-    monkeypatch.setattr("aipager.bot.notify.KEEP_FINISHED_CARD", True)
+    monkeypatch.setattr("aipager.preferences.KEEP_FINISHED_CARD", True)
     bot = mk_bot()
     sess = _sess(status=Status.IDLE, busy_msg_id=42)
     sess.stream_commentary = [(0, "Let me check that file."),

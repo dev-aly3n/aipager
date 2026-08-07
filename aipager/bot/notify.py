@@ -31,8 +31,8 @@ from aipager.bot.rich_message import (
 )
 
 
+from aipager import preferences
 from aipager.config import (
-    KEEP_FINISHED_CARD,
     STALE_BUSY_TIMEOUT,
     STREAM_EDIT_INTERVAL,
 )
@@ -468,9 +468,13 @@ class NotifyMixin:
             # Stop animation and clean up busy message
             self._stop_animation(sess)
             sess.pending_permission = None  # clear stale inline permission if any
+            # `layout` resolves per-scope: a stored /settings preference always
+            # wins; an untouched scope falls back to the KEEP_FINISHED_CARD seed
+            # (aipager.preferences is the sole owner of that resolution).
+            layout = preferences.get_preferences(sess.scope_chat_id).layout
             card_kept = False
             if sess.busy_msg_id and sess.busy_msg_id > 0:
-                if KEEP_FINISHED_CARD:
+                if layout == "card":
                     # Leave the timeline in the chat: which tools ran, in what
                     # order, and what Claude said between them is the record of
                     # how this answer was reached. Rendered here — before the
@@ -486,6 +490,8 @@ class NotifyMixin:
                     except Exception:
                         log.debug("Final busy-card render failed", exc_info=True)
                 else:
+                    # "replace" — the pre-v0.5.0 behaviour: delete the busy
+                    # card, then send header + answer as today.
                     try:
                         await bot.delete_message(
                             chat_id=resolve_chat_id(sess),
