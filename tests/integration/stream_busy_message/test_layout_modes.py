@@ -5,18 +5,16 @@ entrypoints.md — the HTTP layer is mocked at `rich_message._post` (same
 convention as test_transport_contracts.py); PTB's own `send_message` /
 `delete_message` are mocked on the bot's `_app.bot`.
 
-Message-count contract (per design.md's stage 4 success criteria, which
-match today's actual v0.5.0 `card` / `KEEP_FINISHED_CARD=0` behaviour —
-`replace` sends a header message THEN the answer message, i.e. TWO
-outbound sends, not one; design.md's own stage-4 success criteria say
-"falls back to two-message `replace` behaviour" for the identical code
-path. entrypoints.md's "1 outbound message" phrasing for plain `replace`
-appears to be a documentation error — flagged in implementation.md):
+Message-count contract (per the user's own framing in features-source.md:
+"still we have only one message after user message but busy message gets
+removed" — `replace` deletes the busy card and sends the answer ALONE,
+header skipped, exactly like `card` skips its header because the finished
+card already says it):
 
-- `card`:   1 edit (finished card) + 1 new message (answer)  = 2 sends
-- `replace`: 1 new message (header) + 1 new message (answer) = 2 sends
-- `merged` (success): 1 edit (card + separator + answer)     = 1 send
-- `merged` (fallback, either reason): same as `replace`      = 2 sends
+- `card`:    1 edit (finished card) + 1 new message (answer)   = 2 sends
+- `replace`: 1 deleted busy card    + 1 new message (answer)   = 1 send
+- `merged` (success): 1 edit (card + separator + answer)       = 1 send
+- `merged` (fallback, either reason): same as `replace`        = 1 send
 """
 
 from __future__ import annotations
@@ -79,17 +77,40 @@ def test_card_layout_edits_card_then_sends_answer(mk_bot, run_async, rich_calls)
 
 # ---- replace -----------------------------------------------------------------
 
-def test_replace_layout_deletes_card_sends_header_and_answer(mk_bot, run_async, rich_calls):
+def test_replace_layout_deletes_card_sends_answer_alone(mk_bot, run_async, rich_calls):
+    """One message after the busy card: the answer, header skipped — same
+    reasoning `card` already uses to skip its own header, applied here
+    because the card is gone rather than kept."""
     bot = _wire_bot(mk_bot)
+    sess = _sess()
+    prefs.set_preference(sess.scope_chat_id, "layout", "replace")
+    sess.trigger_msg_id = 9
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "the answer"}))
+
+    bot._app.bot.delete_message.assert_awaited_once()
+    bot._app.bot.send_message.assert_not_awaited()  # header skipped
+    methods = [m for m, _p in rich_calls]
+    assert methods == ["sendRichMessage"]  # answer body — the only send
+    payload = rich_calls[0][1]
+    assert payload["reply_to_message_id"] == 9
+    assert sess.busy_msg_id is None
+
+
+def test_replace_layout_keeps_header_when_card_delete_fails(
+    mk_bot, run_async, rich_calls,
+):
+    """If the busy card couldn't actually be removed, nothing else in the
+    chat identifies the turn — the header must still go out."""
+    bot = _wire_bot(mk_bot)
+    bot._app.bot.delete_message = AsyncMock(side_effect=Exception("gone already"))
     sess = _sess()
     prefs.set_preference(sess.scope_chat_id, "layout", "replace")
     run_async(bot.notify(sess, "idle_prompt", {"summary": "the answer"}))
 
     bot._app.bot.delete_message.assert_awaited_once()
-    bot._app.bot.send_message.assert_awaited_once()  # header
+    bot._app.bot.send_message.assert_awaited_once()  # header kept
     methods = [m for m, _p in rich_calls]
-    assert methods == ["sendRichMessage"]  # answer body
-    assert sess.busy_msg_id is None
+    assert methods == ["sendRichMessage"]
 
 
 def test_no_stored_pref_with_keep_finished_card_off_matches_replace(
@@ -100,7 +121,9 @@ def test_no_stored_pref_with_keep_finished_card_off_matches_replace(
     sess = _sess(scope_chat_id=777)  # untouched scope — no stored preference
     run_async(bot.notify(sess, "idle_prompt", {"summary": "the answer"}))
     bot._app.bot.delete_message.assert_awaited_once()
-    bot._app.bot.send_message.assert_awaited_once()
+    bot._app.bot.send_message.assert_not_awaited()  # header skipped, one message total
+    methods = [m for m, _p in rich_calls]
+    assert methods == ["sendRichMessage"]
 
 
 # ---- merged: success ----------------------------------------------------
@@ -178,7 +201,10 @@ def test_merged_layout_edit_failure_still_delivers_the_answer(
     mk_bot, run_async, monkeypatch,
 ):
     """editMessageText_rich fails (any reason) → falls back to the
-    replace-style send so the answer is never silently dropped."""
+    replace-style send so the answer is never silently dropped — and, like
+    `replace` itself, that's a ONE-message fallback: the card is deleted
+    and the header is skipped, since nothing is left behind for it to
+    redundantly restate."""
     bot = _wire_bot(mk_bot)
     sess = _sess()
     prefs.set_preference(sess.scope_chat_id, "layout", "merged")
@@ -200,7 +226,7 @@ def test_merged_layout_edit_failure_still_delivers_the_answer(
     body_payload = next(p for m, p in calls if m == "sendRichMessage")
     assert "the answer" in body_payload["rich_message"]["markdown"]
     bot._app.bot.delete_message.assert_awaited_once()
-    bot._app.bot.send_message.assert_awaited_once()  # header
+    bot._app.bot.send_message.assert_not_awaited()  # header skipped
     assert sess.busy_msg_id is None
 
 
@@ -222,14 +248,49 @@ def test_merged_layout_api_error_does_not_strand_the_busy_card(
     assert "editMessageText" not in [m for m, _p in rich_calls]
 
 
+def test_merged_layout_no_numeric_chat_id_falls_back_and_delivers_answer(
+    mk_bot, run_async, monkeypatch, rich_calls,
+):
+    """An unscoped session with no global CHAT_ID configured has no
+    numeric destination to edit at all — ``_send_merged_final`` used to
+    let that ``int('')`` raise straight out of ``notify()`` with no
+    ``except Exception`` anywhere on the way up, aborting the turn before
+    the busy card was even cleaned up (let alone the answer sent). Must
+    now degrade to the same replace-style fallback every other merged
+    failure mode uses."""
+    monkeypatch.setattr("aipager.config.CHAT_ID", "")
+    bot = _wire_bot(mk_bot)
+    sess = _sess(scope_chat_id=0)  # unscoped — no numeric destination at all
+    prefs.set_preference(0, "layout", "merged")
+
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "the answer"}))
+
+    # No edit was attempted (nothing to address it to) — busy card just
+    # gets deleted, same as every other merged-fallback case.
+    assert "editMessageText" not in [m for m, _p in rich_calls]
+    bot._app.bot.delete_message.assert_awaited_once()
+    assert sess.busy_msg_id is None
+    # The answer still went out — plain-text fallback, since sendRichMessage
+    # has no numeric chat id either.
+    sent_texts = [c.args[1] for c in bot._app.bot.send_message.await_args_list]
+    assert any("the answer" in t for t in sent_texts)
+
+
 def test_merged_layout_message_gone_falls_back_and_clears_busy_msg_id(
     mk_bot, run_async, monkeypatch,
 ):
+    """The card was already gone before the fallback delete could even run
+    (`_send_merged_final` clears `busy_msg_id` itself on `RichMessageGone`)
+    — there's nothing left in the chat for the header to avoid duplicating,
+    so it's skipped here too, same as every other merged-fallback case."""
     bot = _wire_bot(mk_bot)
     sess = _sess()
     prefs.set_preference(sess.scope_chat_id, "layout", "merged")
 
+    calls = []
+
     async def _fake_post(method, payload):
+        calls.append((method, payload))
         if method == "editMessageText":
             return {
                 "ok": False, "error_code": 400,
@@ -240,5 +301,9 @@ def test_merged_layout_message_gone_falls_back_and_clears_busy_msg_id(
     monkeypatch.setattr("aipager.bot.rich_message._post", _fake_post)
     run_async(bot.notify(sess, "idle_prompt", {"summary": "the answer"}))
 
-    bot._app.bot.send_message.assert_awaited_once()  # answer still delivered
+    bot._app.bot.send_message.assert_not_awaited()  # header skipped
+    # No explicit delete either — the card was already gone; the answer
+    # still went out via the rich body-send.
+    bot._app.bot.delete_message.assert_not_awaited()
+    assert "sendRichMessage" in [m for m, _p in calls]
     assert sess.busy_msg_id is None

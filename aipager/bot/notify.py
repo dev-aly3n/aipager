@@ -533,6 +533,16 @@ class NotifyMixin:
             # (aipager.preferences is the sole owner of that resolution).
             layout = preferences.get_preferences(sess.scope_chat_id).layout
             card_kept = False
+            # True once the busy card has been successfully disposed of —
+            # either kept as the finished card (`card_kept`, below) or
+            # deleted outright (`replace`, and `merged`'s own delete-on-
+            # fallback a little further down). Either way there's nothing
+            # left in the chat repeating what the header would say, so the
+            # header itself becomes skippable — see `skip_header` below.
+            # Per the user's own framing of `replace`: "still we have only
+            # one message after user message but busy message gets
+            # removed" — one message, not a removed-card-plus-two-sends.
+            card_deleted = False
             if sess.busy_msg_id and sess.busy_msg_id > 0:
                 if layout in ("card", "merged"):
                     # Leave the timeline in the chat: which tools ran, in what
@@ -555,13 +565,15 @@ class NotifyMixin:
                     # combined edit (timeline + answer) happens below, once
                     # the answer text is known, and clears it either way.
                 else:
-                    # "replace" — the pre-v0.5.0 behaviour: delete the busy
-                    # card, then send header + answer as today.
+                    # "replace" — delete the busy card, then send the answer
+                    # alone (header skipped below — nothing is left in the
+                    # chat that repeats what it would say).
                     try:
                         await bot.delete_message(
                             chat_id=resolve_chat_id(sess),
                             message_id=sess.busy_msg_id,
                         )
+                        card_deleted = True
                     except Exception:
                         pass
                     sess.busy_msg_id = None
@@ -659,18 +671,31 @@ class NotifyMixin:
             # ordinary send below — the exact same path "replace" uses.
             merged_delivered = False
             if layout == "merged" and sess.busy_msg_id and sess.busy_msg_id > 0:
+                pre_merge_busy_msg_id = sess.busy_msg_id
                 merged_delivered = await self._send_merged_final(sess, content)
                 if not merged_delivered:
                     # Losing the timeline is acceptable; losing the answer is
                     # never acceptable — fall back to the replace-style send
                     # below by clearing the (now presumed-gone-or-stale) card.
-                    try:
-                        await bot.delete_message(
-                            chat_id=resolve_chat_id(sess),
-                            message_id=sess.busy_msg_id,
-                        )
-                    except Exception:
-                        pass
+                    # Falling back to "replace" means behaving exactly like
+                    # it: one message, header skipped, once the card is gone.
+                    if sess.busy_msg_id:
+                        # Still live — _send_merged_final's own failure
+                        # wasn't a RichMessageGone, so the card needs an
+                        # explicit delete here.
+                        try:
+                            await bot.delete_message(
+                                chat_id=resolve_chat_id(sess),
+                                message_id=pre_merge_busy_msg_id,
+                            )
+                            card_deleted = True
+                        except Exception:
+                            pass
+                    else:
+                        # _send_merged_final already found the card gone
+                        # (RichMessageGone) and cleared busy_msg_id itself —
+                        # nothing left in the chat either way.
+                        card_deleted = True
                 sess.busy_msg_id = None
 
             # ── Overflow detection ─────────────────────────────────────────
@@ -697,12 +722,20 @@ class NotifyMixin:
                     send_file = True
 
             # ── Send the header (HTML, via PTB) ────────────────────────────
-            # Skipped when the finished card is already sitting right above the
-            # answer saying the same thing — ✅, label, elapsed. The body then
-            # carries the reply link and the tracked message_id in its place.
-            # The overflow case keeps the header: the "attached below" note and
-            # the document's reply target both live on it.
-            skip_header = card_kept and bool(body_content) and not send_file
+            # Skipped whenever the busy card has already been disposed of —
+            # either kept as the finished card (`card_kept`, so the header
+            # would repeat what's already sitting right above the answer:
+            # ✅, label, elapsed) or deleted outright (`card_deleted` —
+            # `replace`, and `merged` falling back to that same one-message
+            # behaviour). Either way the body carries the reply link and the
+            # tracked message_id in the header's place.
+            # Two cases keep the header regardless: overflow (the "attached
+            # below" note and the document's reply target both live on it)
+            # and card disposal having failed (nothing else identifies the
+            # turn).
+            skip_header = (
+                (card_kept or card_deleted) and bool(body_content) and not send_file
+            )
             msg_id = 0
             if not merged_delivered and not skip_header:
                 if send_file:
