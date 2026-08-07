@@ -1,17 +1,17 @@
 """Integration tests: build_stream_card layout and truncation.
 
 Covers the contract from entrypoints.md:
-  - shape with body text: header · verb, body, divider, footer
-  - shape with no body text: no empty body line before divider
+  - shape with body text: header · verb · status, then the timeline below
+  - shape with no body text: the header line alone
   - output always ≤ 32 768 UTF-8 bytes
   - head of body dropped (not tail) when truncation occurs
-  - footer still present after truncation
+  - header still present after truncation
   - cost_baseline unset → no $ segment
   - cost delta ≤ 0.001 → no $ segment
   - tool_history empty → no tally
   - tool_history with 3 Read + 1 Grep → Read ×3 and Grep ×1
   - elapsed ≥ 60 s → Xm Ys format
-  - elapsed < 2 s → elapsed segment omitted
+  - elapsed shown from 0 s, never blank
   - verb="Thinking" → header contains Thinking
   - label with *, _, ` → markdown not broken
   - calling twice → byte-identical output (purity)
@@ -47,42 +47,32 @@ def _sess(label="dev", *, elapsed_s=10.0):
 # ── SC-CARD-1: Shape with body text: body between header and divider ──────────
 
 def test_card_full_shape_with_body():
-    """entrypoints.md: Shape with body text must have header, body, divider, footer."""
+    """entrypoints.md: the status header on top, the timeline below it."""
     sess = _sess()
-    sess.stream_shown = "Let me look at the project structure."
+    sess.stream_commentary = [(0, "Let me look at the project structure.")]
     card = build_stream_card(sess, "Reading files")
 
-    lines = card.split("\n")
-    # Find positions by searching for each section
-    header_idx = next((i for i, ln in enumerate(lines) if "Reading files" in ln), None)
-    body_idx = next((i for i, ln in enumerate(lines) if "Let me look" in ln), None)
-    divider_idx = next((i for i, ln in enumerate(lines) if "────────────────" in ln), None)
-    footer_idx = next((i for i, ln in enumerate(lines) if "⏳" in ln), None)
-
-    assert header_idx is not None, "Header line not found"
-    assert body_idx is not None, "Body text not found"
-    assert divider_idx is not None, "Divider not found"
-    assert footer_idx is not None, "Footer not found"
-    assert header_idx < body_idx < divider_idx < footer_idx, (
-        "Card sections are out of order: "
-        f"header={header_idx}, body={body_idx}, divider={divider_idx}, footer={footer_idx}"
-    )
+    header, sep, body = card.partition("\n\n")
+    assert sep, "Card has no body below the header"
+    # Everything the old footer carried now rides on the top line.
+    assert "Reading files" in header
+    assert "⏳" in header
+    assert "Let me look at the project structure." in body
 
 
-# ── SC-CARD-2: No empty body line before divider when stream_shown is empty ───
+# ── SC-CARD-2: No empty body line before divider when the timeline is empty ───
 
 def test_card_no_empty_body_line_when_no_text():
     """entrypoints.md: shape with no body text → header and footer only."""
     sess = _sess()
-    sess.stream_shown = ""
+    sess.stream_commentary = []
+    sess.tool_history = []
     card = build_stream_card(sess, "Working")
 
-    # No three consecutive newlines (that would indicate an empty body block)
-    assert "\n\n\n" not in card, (
-        "Empty body placeholder (triple newline) found when stream_shown is empty"
+    # An empty timeline leaves the header standing alone — no blank block below.
+    assert "\n\n" not in card, (
+        "Empty body placeholder found when the timeline is empty"
     )
-    # No body means no divider — a rule with nothing above it reads as a glitch.
-    assert "────────────────" not in card
     assert "⏳" in card
 
 
@@ -158,17 +148,11 @@ def test_card_elapsed_format_minutes_and_seconds():
 
 # ── SC-CARD-8: elapsed < 2 s → elapsed segment omitted ──────────────────────
 
-def test_card_elapsed_omitted_under_2s():
-    """entrypoints.md: elapsed < 2 s → elapsed segment omitted."""
+def test_card_elapsed_shown_from_the_first_second():
+    """The clock counts from the start: a blank that jumps to "5s" reads broken."""
     sess = _sess(elapsed_s=1)  # 1 second
-    card = build_stream_card(sess, "Working")
-    # No elapsed indicator in footer (no "s" in the footer context)
-    # The footer line starts with ⏳ — if elapsed is shown, "1s" appears after it
-    lines = card.split("\n")
-    footer_line = next((ln for ln in lines if "⏳" in ln), "")
-    assert "1s" not in footer_line, (
-        f"Elapsed shown for <2s turn: {footer_line!r}"
-    )
+    header = build_stream_card(sess, "Working").partition("\n\n")[0]
+    assert "1s" in header, f"Elapsed hidden on a 1s turn: {header!r}"
 
 
 # ── SC-CARD-9: verb present in header ────────────────────────────────────────
@@ -205,7 +189,7 @@ def test_card_label_with_underscore_escaped():
 def test_card_purity_same_output_on_second_call():
     """entrypoints.md: calling twice with identical sess and verb → byte-identical."""
     sess = _sess(elapsed_s=10)
-    sess.stream_shown = "some body text"
+    sess.stream_commentary = [(0, "some body text")]
     sess.cost_baseline = 0.0
     sess.last_cost_usd = 0.05
     sess.tool_history = [("Read: /x", True)]
@@ -221,23 +205,28 @@ def test_card_purity_same_output_on_second_call():
 
 # ── SC-CARD-12: Truncation — head dropped, footer preserved, valid UTF-8 ──────
 
-def test_card_truncation_head_dropped_footer_preserved():
+def test_card_truncation_head_dropped_header_preserved():
     """entrypoints.md: body large enough to exceed 32 768 bytes →
-    the HEAD of the body is dropped; footer still present; output is valid UTF-8."""
+    the HEAD of the body is dropped; header still present; output is valid UTF-8."""
     sess = _sess()
     # First marker at the head, last marker near the tail
-    head_marker = "HEAD_MARKER_THAT_MUST_BE_DROPPED"
+    # No markdown metacharacters in the markers: _md_escape would backslash
+    # them and the substring check below would miss.
+    head_marker = "HEADMARKERTHATMUSTBEDROPPED"
     tail_content = "y" * 35_000
-    tail_marker = "TAIL_MARKER_THAT_MUST_STAY"
-    sess.stream_shown = head_marker + tail_content + tail_marker
+    tail_marker = "TAILMARKERTHATMUSTSTAY"
+    # Commentary is capped by STREAM_BODY_CHARS, so only a pathological tool
+    # summary can still reach the byte ceiling.
+    sess.tool_history = [
+        ("Bash: " + head_marker + tail_content + tail_marker, True),
+    ]
 
     card = build_stream_card(sess, "Working")
 
     assert len(card.encode("utf-8")) <= 32_768, "Card exceeds 32 768 UTF-8 bytes"
     assert head_marker not in card, "Head of body was kept instead of being dropped"
     assert tail_marker in card, "Tail of body was dropped; head should have been dropped instead"
-    assert "────────────────" in card, "Footer divider missing after truncation"
-    assert "⏳" in card, "Footer elapsed marker missing after truncation"
+    assert card.startswith("⏳ "), "Status header missing after truncation"
 
     # Must be valid UTF-8
     try:
@@ -250,7 +239,7 @@ def test_card_truncation_multibyte_valid_utf8():
     """entrypoints.md: output is valid UTF-8 even when the body contains
     multi-byte sequences (e.g., Persian text)."""
     sess = _sess()
-    sess.stream_shown = "سلام دنیا " * 5000  # well over 32 768 bytes
+    sess.tool_history = [("Bash: " + "سلام دنیا " * 5000, True)]  # over 32 768 bytes
 
     card = build_stream_card(sess, "Working")
 

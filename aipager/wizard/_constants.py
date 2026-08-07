@@ -39,7 +39,7 @@ HOOK_EVENTS = (
     "SessionStart", "SessionEnd", "UserPromptSubmit",
     "PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest",
     "Notification", "Stop", "StopFailure", "SubagentStart", "SubagentStop",
-    "PreCompact", "PostCompact",
+    "PreCompact", "PostCompact", "MessageDisplay",
 )
 TOOL_MATCHER_EVENTS = {"PreToolUse", "PostToolUse", "PermissionRequest"}
 

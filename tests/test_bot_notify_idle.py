@@ -57,7 +57,38 @@ def test_idle_sends_finished_message(mk_bot, run_async):
     assert "jim" in text
 
 
-def test_idle_clears_busy_msg_when_present(mk_bot, run_async):
+def test_idle_renders_final_card_and_clears_busy_msg(mk_bot, run_async, monkeypatch):
+    """The card stays in the chat, re-rendered once, and is no longer live."""
+    monkeypatch.setattr("aipager.bot.notify.KEEP_FINISHED_CARD", True)
+    bot = mk_bot()
+    sess = _sess(status=Status.IDLE, busy_msg_id=42)
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
+    bot._app.bot.delete_message = AsyncMock()
+    bot._maybe_update_bot_name = AsyncMock()
+    bot._stop_animation = MagicMock()
+    bot._edit_busy_rich = AsyncMock(return_value=True)
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "done"}))
+    bot._app.bot.delete_message.assert_not_awaited()
+    assert bot._edit_busy_rich.await_args.kwargs["final"] is True
+    assert sess.busy_msg_id is None
+
+
+def test_idle_final_render_failure_never_breaks_the_turn(mk_bot, run_async, monkeypatch):
+    monkeypatch.setattr("aipager.bot.notify.KEEP_FINISHED_CARD", True)
+    bot = mk_bot()
+    sess = _sess(status=Status.IDLE, busy_msg_id=42)
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
+    bot._maybe_update_bot_name = AsyncMock()
+    bot._stop_animation = MagicMock()
+    bot._edit_busy_rich = AsyncMock(side_effect=RuntimeError("telegram exploded"))
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "done"}))
+    assert sess.busy_msg_id is None
+    # The answer still went out.
+    bot._app.bot.send_message.assert_awaited()
+
+
+def test_idle_deletes_busy_msg_when_knob_off(mk_bot, run_async, monkeypatch):
+    monkeypatch.setattr("aipager.bot.notify.KEEP_FINISHED_CARD", False)
     bot = mk_bot()
     sess = _sess(status=Status.IDLE, busy_msg_id=42)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
@@ -69,7 +100,8 @@ def test_idle_clears_busy_msg_when_present(mk_bot, run_async):
     assert sess.busy_msg_id is None
 
 
-def test_idle_swallows_delete_failure(mk_bot, run_async):
+def test_idle_swallows_delete_failure(mk_bot, run_async, monkeypatch):
+    monkeypatch.setattr("aipager.bot.notify.KEEP_FINISHED_CARD", False)
     bot = mk_bot()
     sess = _sess(status=Status.IDLE, busy_msg_id=42)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
@@ -335,3 +367,81 @@ def test_interactive_team_rule_auto_denies_tool(mk_bot, run_async):
                        "input": {"command": "rm -rf /"}},
     }))
     bot._auto_deny.assert_awaited_once()
+
+
+# ---- The "Finished" header is redundant once the card stays ---------------
+
+def _finished_card_bot(mk_bot, monkeypatch, *, card_kept=True):
+    monkeypatch.setattr("aipager.bot.notify.KEEP_FINISHED_CARD", True)
+    bot = mk_bot()
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
+    bot._app.bot.delete_message = AsyncMock()
+    bot._maybe_update_bot_name = AsyncMock()
+    bot._stop_animation = MagicMock()
+    bot._edit_busy_rich = AsyncMock(return_value=card_kept)
+    return bot
+
+
+def _headers(bot):
+    return [c.args[1] for c in bot._app.bot.send_message.await_args_list
+            if "Finished" in str(c.args[1])]
+
+
+def test_idle_skips_the_finished_header_when_the_card_stays(
+    mk_bot, run_async, monkeypatch,
+):
+    """The card above the answer already says ✅ label · Done · elapsed."""
+    bot = _finished_card_bot(mk_bot, monkeypatch)
+    sess = _sess(status=Status.IDLE, busy_msg_id=42)
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "the answer"}))
+    assert _headers(bot) == []
+
+
+def test_idle_answer_carries_the_reply_link_when_the_header_is_skipped(
+    mk_bot, run_async, monkeypatch,
+):
+    """Dropping the header must not orphan the reply from its prompt."""
+    sent = AsyncMock(return_value={"message_id": 555})
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message", sent)
+    bot = _finished_card_bot(mk_bot, monkeypatch)
+    sess = _sess(status=Status.IDLE, busy_msg_id=42)
+    sess.trigger_msg_id = 7
+    bot.registry.track_message = MagicMock()
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "the answer"}))
+    assert sent.await_args.kwargs["reply_to_message_id"] == 7
+    # The body takes over as the tracked message for this reply.
+    bot.registry.track_message.assert_called_once_with(555, sess.name)
+
+
+def test_idle_keeps_the_header_when_the_card_was_not_kept(
+    mk_bot, run_async, monkeypatch,
+):
+    """A failed final render leaves nothing above the answer to name it."""
+    bot = _finished_card_bot(mk_bot, monkeypatch, card_kept=False)
+    sess = _sess(status=Status.IDLE, busy_msg_id=42)
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "the answer"}))
+    assert len(_headers(bot)) == 1
+
+
+def test_idle_keeps_the_header_when_there_is_no_body(
+    mk_bot, run_async, monkeypatch,
+):
+    """With no answer text the header is the only message — never drop it."""
+    bot = _finished_card_bot(mk_bot, monkeypatch)
+    sess = _sess(status=Status.IDLE, busy_msg_id=42)
+    run_async(bot.notify(sess, "idle_prompt",
+                         {"summary": "", "no_response": True}))
+    assert len(_headers(bot)) == 1
+
+
+def test_idle_keeps_the_header_when_the_answer_overflows(
+    mk_bot, run_async, monkeypatch,
+):
+    """The overflow note and the document's reply target both live on it."""
+    bot = _finished_card_bot(mk_bot, monkeypatch)
+    bot._app.bot.send_document = AsyncMock()
+    sess = _sess(status=Status.IDLE, busy_msg_id=42)
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "x" * 40_000}))
+    assert len(_headers(bot)) == 1
+    assert "attached below" in _headers(bot)[0]
+

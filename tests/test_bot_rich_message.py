@@ -21,6 +21,11 @@ from aipager.bot.rich_message import (
     send_rich_message,
 )
 
+# Captured at import, before conftest's _block_real_telegram_http replaces it.
+# The token-leak test below has to drive the real _post (through an httpx
+# MockTransport) or it would assert nothing.
+_REAL_POST = rm._post
+
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -307,6 +312,7 @@ def test_get_client_no_token_in_info_logs(run_async, monkeypatch):
 
     FAKE_TOKEN = "FAKE_BOT_TOKEN_FOR_TESTING_999"
     monkeypatch.setattr("aipager.config.BOT_TOKEN", FAKE_TOKEN)
+    monkeypatch.setattr(rm, "_post", _REAL_POST)
 
     records: list[logging.LogRecord] = []
 

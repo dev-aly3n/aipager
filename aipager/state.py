@@ -215,16 +215,49 @@ class TrackedSession:
     # stream_transcript_path: the transcript file pinned at turn-seed time.
     #   _read_stream_text reads exclusively from this path for the whole turn,
     #   so the offset can never be applied to a file it wasn't measured against.
-    # stream_pending: text read from the transcript but not yet shown in the card.
-    # stream_shown: text currently rendered in the card body (the visible portion).
+    # stream_commentary: Claude's prose blocks for this turn, each paired with
+    #   the tool_history index of the row that follows it in the transcript.
+    #   That anchor is what lets the card interleave prose with tool rows in
+    #   the order they actually happened; tool_history itself must keep its
+    #   shape because active_subagents[...]["history_idx"] indexes into it.
+    # stream_tool_cursor: how far into tool_history the transcript scan has
+    #   walked this turn — the anchor handed to the next prose block. Only
+    #   used by the transcript fallback; the MessageDisplay hook anchors on
+    #   len(tool_history) at arrival, which is accurate because the hook
+    #   fires as the prose is generated rather than seconds later.
+    # stream_msg_id: Claude's message id for the commentary block currently
+    #   being appended to, so a later chunk of the same message grows that
+    #   block instead of starting a new row.
+    # stream_batch_since: when the first tool row of the current unattributed
+    #   batch was recorded, or None when every row has prose above it. Rows
+    #   from the floor up are held out of the live card until that prose
+    #   arrives, because a short preamble reaches the hook only at message
+    #   end — measured at 20-515 ms after the batch's first PreToolUse — and
+    #   drawing the row first made the quote jump in above it a moment later.
+    # stream_anchor_floor: where the next new prose block is anchored — the
+    #   tool count as of the last block that was placed. A short preamble is
+    #   flushed to the hook at message end, i.e. after Claude has already
+    #   emitted that message's tool calls and their PreToolUse rows landed,
+    #   so anchoring on the live count puts prose below the tools it
+    #   introduced. The rows since the last block are exactly that message's,
+    #   so the floor is where the prose belongs.
+    # stream_hook_live: set once a MessageDisplay chunk has been seen from
+    #   this session, which proves the hook is wired. From then on the
+    #   transcript is never read for prose, so the two sources cannot both
+    #   deliver the same text. Session-scoped, not per-turn: the capability
+    #   does not come and go mid-session.
     # stream_dirty: set True by hook handlers when the card needs a redraw;
     #   cleared by _edit_busy_rich after a successful POST.
     # stream_last_rendered: last markdown successfully POSTed; used to skip
     #   byte-identical edits before hitting the network.
     stream_offset: int = 0
     stream_transcript_path: str = ""
-    stream_pending: str = ""
-    stream_shown: str = ""
+    stream_commentary: list[tuple[int, str]] = field(default_factory=list, repr=False)
+    stream_tool_cursor: int = 0
+    stream_msg_id: str = ""
+    stream_anchor_floor: int = 0
+    stream_batch_since: float | None = field(default=None, repr=False)
+    stream_hook_live: bool = False
     stream_dirty: bool = False
     stream_last_rendered: str = ""
 
@@ -260,6 +293,11 @@ class TrackedSession:
         ``active_subagents``.
         """
         self.tool_history.append((summary, done))
+        # Open a batch on the first row that has no prose above it yet. Every
+        # append lands here, so no call site can add a row the live card would
+        # draw before the sentence introducing it.
+        if self.stream_batch_since is None:
+            self.stream_batch_since = time.monotonic()
         new_idx = len(self.tool_history) - 1
         if len(self.tool_history) > TOOL_HISTORY_CAP:
             drop = len(self.tool_history) - TOOL_HISTORY_CAP

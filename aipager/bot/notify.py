@@ -32,10 +32,12 @@ from aipager.bot.rich_message import (
 
 
 from aipager.config import (
+    KEEP_FINISHED_CARD,
     STALE_BUSY_TIMEOUT,
     STREAM_EDIT_INTERVAL,
 )
 from aipager.state import Status, TrackedSession
+from aipager.bot.animation import FINAL_VERB
 
 # Pure-function helpers and constants live in aipager.bot.transport
 # now. Re-export the names this module uses internally so the
@@ -71,8 +73,6 @@ if TYPE_CHECKING:
     pass
 
 log = logging.getLogger(__name__)
-
-
 
 
 
@@ -179,6 +179,38 @@ class NotifyMixin:
             sess.stream_dirty = True
             now = time.monotonic()
             if now - sess.last_tool_edit_at >= STREAM_EDIT_INTERVAL:
+                if await self._edit_busy_rich(sess, "Working") is None:
+                    self._stop_animation(sess)
+            return
+
+        if event == "assistant_text":
+            # A chunk of Claude's prose, straight from the display path.
+            # Latching this flag turns the transcript fallback off for good:
+            # both sources would otherwise deliver the same sentences.
+            sess.stream_hook_live = True
+            delta = context.get("delta", "")
+            msg_id = context.get("message_id", "")
+            if not delta:
+                return
+            # One assistant message is one block that grows, not a row per
+            # chunk. A new message_id starts a new block at the floor: the
+            # tool rows recorded since the last block are the ones this
+            # message introduced, because a short preamble only reaches the
+            # hook once the message — tool calls included — is complete.
+            # Everything known is then attributed, so the floor moves up.
+            if msg_id and msg_id == sess.stream_msg_id and sess.stream_commentary:
+                anchor, text = sess.stream_commentary[-1]
+                sess.stream_commentary[-1] = (anchor, text + delta)
+            else:
+                sess.stream_msg_id = msg_id
+                sess.stream_commentary.append((sess.stream_anchor_floor, delta))
+                sess.stream_anchor_floor = len(sess.tool_history)
+                # The batch now has its sentence; the card can draw both.
+                sess.stream_batch_since = None
+            if not sess.busy_msg_id or sess.busy_msg_id < 0:
+                return
+            sess.stream_dirty = True
+            if time.monotonic() - sess.last_tool_edit_at >= STREAM_EDIT_INTERVAL:
                 if await self._edit_busy_rich(sess, "Working") is None:
                     self._stop_animation(sess)
             return
@@ -396,14 +428,28 @@ class NotifyMixin:
             # Stop animation and clean up busy message
             self._stop_animation(sess)
             sess.pending_permission = None  # clear stale inline permission if any
+            card_kept = False
             if sess.busy_msg_id and sess.busy_msg_id > 0:
-                try:
-                    await bot.delete_message(
-                        chat_id=resolve_chat_id(sess),
-                        message_id=sess.busy_msg_id,
-                    )
-                except Exception:
-                    pass
+                if KEEP_FINISHED_CARD:
+                    # Leave the timeline in the chat: which tools ran, in what
+                    # order, and what Claude said between them is the record of
+                    # how this answer was reached. Rendered here — before the
+                    # streaming state is reset below and before the answer goes
+                    # out — so scrollback reads card, header, body.
+                    try:
+                        card_kept = await self._edit_busy_rich(
+                            sess, FINAL_VERB, final=True,
+                        ) is True
+                    except Exception:
+                        log.debug("Final busy-card render failed", exc_info=True)
+                else:
+                    try:
+                        await bot.delete_message(
+                            chat_id=resolve_chat_id(sess),
+                            message_id=sess.busy_msg_id,
+                        )
+                    except Exception:
+                        pass
                 sess.busy_msg_id = None
 
             summary = context.get("summary", sess.summary)
@@ -426,8 +472,11 @@ class NotifyMixin:
                 content = sess.summary or ""
 
             # Reset streaming state — the turn is over.
-            sess.stream_pending = ""
-            sess.stream_shown = ""
+            sess.stream_commentary = []
+            sess.stream_tool_cursor = 0
+            sess.stream_msg_id = ""
+            sess.stream_anchor_floor = 0
+            sess.stream_batch_since = None
             sess.stream_dirty = False
             sess.stream_last_rendered = ""
             sess.stream_offset = 0
@@ -495,34 +544,45 @@ class NotifyMixin:
                     send_file = True
 
             # ── Send the header (HTML, via PTB) ────────────────────────────
-            # This is the message_id that registry.track_message records.
-            if send_file:
-                header_text += "\n\n📎 <i>Full response attached below ↓</i>"
-            log.debug("[%s] Sending IDLE notification (%d chars header)", label, len(header_text))
-            try:
-                msg = await bot.send_message(
-                    resolve_chat_id(sess), header_text, parse_mode="HTML",
-                    reply_to_message_id=sess.trigger_msg_id,
-                )
-            except Exception:
-                log.warning("[%s] Failed to send IDLE header", label, exc_info=True)
-                # We still try to send the body below; use a dummy msg_id
-                # so track_message doesn't crash.
-                class _FakeMsg:
-                    message_id = 0
-                msg = _FakeMsg()
+            # Skipped when the finished card is already sitting right above the
+            # answer saying the same thing — ✅, label, elapsed. The body then
+            # carries the reply link and the tracked message_id in its place.
+            # The overflow case keeps the header: the "attached below" note and
+            # the document's reply target both live on it.
+            skip_header = card_kept and bool(body_content) and not send_file
+            msg_id = 0
+            if not skip_header:
+                if send_file:
+                    header_text += "\n\n📎 <i>Full response attached below ↓</i>"
+                log.debug("[%s] Sending IDLE notification (%d chars header)",
+                          label, len(header_text))
+                try:
+                    msg = await bot.send_message(
+                        resolve_chat_id(sess), header_text, parse_mode="HTML",
+                        reply_to_message_id=sess.trigger_msg_id,
+                    )
+                    msg_id = msg.message_id
+                except Exception:
+                    log.warning("[%s] Failed to send IDLE header", label, exc_info=True)
+                    # We still try to send the body below; msg_id stays 0 so
+                    # nothing downstream tracks or replies to a message that
+                    # was never sent.
 
             # ── Send the body via sendRichMessage ──────────────────────────
             if body_content:
                 is_rtl = detect_rtl(body_content)
                 log.info("[%s] sendRichMessage: %d chars, rtl=%s, overflow=%s",
                          label, len(body_content), is_rtl, send_file)
+                reply_to = sess.trigger_msg_id if skip_header else None
                 try:
-                    await send_rich_message(
+                    sent = await send_rich_message(
                         int(resolve_chat_id(sess)),
                         body_content,
                         is_rtl=is_rtl,
+                        reply_to_message_id=reply_to,
                     )
+                    if skip_header and isinstance(sent, dict):
+                        msg_id = sent.get("message_id") or 0
                 except RichMessageBlocked:
                     _log_blocked_once(Exception("sendRichMessage 403"))
                 except (RichMessageFallbackRequired, Exception):
@@ -561,19 +621,26 @@ class NotifyMixin:
                         chunks = [body_content[:4096]]
                     for chunk in chunks:
                         try:
-                            await bot.send_message(
+                            fallback = await bot.send_message(
                                 resolve_chat_id(sess), chunk,
                                 # No parse_mode → Telegram cannot raise a parse
                                 # error; this is the "never lose a reply" safety net.
+                                reply_to_message_id=(
+                                    reply_to if not msg_id else None
+                                ),
                             )
+                            # With no header, the first chunk that lands takes
+                            # over as the tracked message for this reply.
+                            if skip_header and not msg_id:
+                                msg_id = fallback.message_id
                         except Exception:
                             log.warning("[%s] plain-text fallback chunk send failed",
                                         label, exc_info=True)
 
             sess.trigger_msg_id = None  # reply cycle complete
             self.registry.mark_dirty()
-            if msg.message_id:
-                self.registry.track_message(msg.message_id, sess.name)
+            if msg_id:
+                self.registry.track_message(msg_id, sess.name)
             await self._maybe_update_bot_name(sess.name)
 
             # ── Send full response as .txt attachment for overflow ─────────
@@ -594,7 +661,7 @@ class NotifyMixin:
                         with open(tmp, "rb") as f:
                             await bot.send_document(
                                 resolve_chat_id(sess), document=f, filename=f"{label}_response.txt",
-                                reply_to_message_id=msg.message_id if msg.message_id else None,
+                                reply_to_message_id=msg_id or None,
                             )
                         tmp.unlink(missing_ok=True)
                     except Forbidden as e:

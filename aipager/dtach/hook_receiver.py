@@ -414,6 +414,21 @@ class HookReceiver:
                     "tool_summary": summary,
                 })
 
+        elif event == "MessageDisplay":
+            # Claude's prose as it reaches the screen, in paragraph-sized
+            # chunks. This is the only source that is current: the transcript
+            # is not written until the message's tool-result round finishes,
+            # which is seconds after the tools it introduced have run.
+            delta = msg.get("delta", "")
+            if delta:
+                sess = self.registry.get_or_create(session_name)
+                await self.notify_fn(sess, "assistant_text", {
+                    "delta": delta,
+                    "message_id": msg.get("message_id", ""),
+                    "index": msg.get("index", 0),
+                    "final": bool(msg.get("final")),
+                })
+
         elif event == "SubagentStart":
             agent_id = msg.get("agent_id", "")
             agent_type = msg.get("agent_type", "unknown")

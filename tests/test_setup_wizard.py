@@ -429,3 +429,31 @@ def test_merge_hooks_adds_new_events_to_existing_settings(monkeypatch):
 
     # Unrelated key preserved
     assert settings["myOtherKey"] == "preserved"
+
+
+def test_merge_hooks_adds_message_display_to_an_existing_install(monkeypatch):
+    """An upgrade must wire MessageDisplay into settings.json that predates it,
+    leaving every already-wired event untouched."""
+    from aipager.wizard._constants import HOOK_EVENTS
+
+    existing = {e: [{"hooks": [{"type": "command",
+                                "command": "/usr/bin/aipager-hook"}]}]
+                for e in HOOK_EVENTS if e != "MessageDisplay"}
+    settings: dict = {"hooks": existing, "keepMe": "untouched"}
+    monkeypatch.setattr(settings_patch.shutil, "which",
+                        lambda name: f"/usr/bin/{name}")
+
+    settings_patch._merge_hooks(settings)
+
+    assert "MessageDisplay" in settings["hooks"]
+    assert settings["keepMe"] == "untouched"
+    # The pre-existing events keep exactly one entry each — no duplicates.
+    for event in HOOK_EVENTS:
+        if event != "MessageDisplay":
+            assert len(settings["hooks"][event]) == 1, event
+
+
+def test_message_display_hook_has_no_tool_matcher():
+    """It is not a tool event; a "*" matcher there would be meaningless."""
+    from aipager.wizard._constants import TOOL_MATCHER_EVENTS
+    assert "MessageDisplay" not in TOOL_MATCHER_EVENTS

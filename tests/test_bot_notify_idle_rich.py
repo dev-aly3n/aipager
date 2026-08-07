@@ -267,14 +267,12 @@ def test_idle_resets_all_stream_fields(bot_with_rich, run_async):
     bot, _ = bot_with_rich
     sess = _sess()
     sess.stream_offset = 9999
-    sess.stream_pending = "pending text"
-    sess.stream_shown = "shown text"
+    sess.stream_commentary = [(0, "commentary text")]
     sess.stream_dirty = True
     sess.stream_last_rendered = "old render"
     run_async(bot.notify(sess, "idle_prompt", {"raw_md": "done"}))
     assert sess.stream_offset == 0
-    assert sess.stream_pending == ""
-    assert sess.stream_shown == ""
+    assert sess.stream_commentary == []
     assert sess.stream_dirty is False
     assert sess.stream_last_rendered == ""
     assert sess.stream_transcript_path == ""

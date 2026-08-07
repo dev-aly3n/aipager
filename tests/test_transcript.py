@@ -735,3 +735,45 @@ def test_module_exposes_no_path_discovery():
     assert not hasattr(transcript, "find_transcript")
     assert not hasattr(transcript, "_path_cache")
     assert not hasattr(transcript, "_PROJECTS_DIR")
+
+
+# ---- read_turn_stream -------------------------------------------------------
+
+def test_read_turn_stream_preserves_interleaving(tmp_path):
+    """Prose and tool calls come back in file order, which is what anchors the card."""
+    entry = {
+        "type": "assistant",
+        "message": {
+            "content": [
+                {"type": "text", "text": "first"},
+                {"type": "tool_use", "id": "a", "name": "Bash", "input": {}},
+                {"type": "text", "text": "second"},
+            ],
+            "stop_reason": "tool_use",
+        },
+    }
+    path = _write_jsonl_bytes(tmp_path, [entry])
+    items, _off = transcript.read_turn_stream(path, 0)
+    assert items == [("text", "first"), ("tool", "Bash"), ("text", "second")]
+
+
+def test_read_turn_stream_skips_thinking_blocks(tmp_path):
+    entry = {
+        "type": "assistant",
+        "message": {
+            "content": [
+                {"type": "thinking", "thinking": "internal"},
+                {"type": "text", "text": "shown"},
+            ],
+            "stop_reason": "end_turn",
+        },
+    }
+    path = _write_jsonl_bytes(tmp_path, [entry])
+    items, _off = transcript.read_turn_stream(path, 0)
+    assert items == [("text", "shown")]
+
+
+def test_read_turn_stream_missing_file_returns_empty(tmp_path):
+    items, off = transcript.read_turn_stream(str(tmp_path / "nope.jsonl"), 7)
+    assert items == []
+    assert off == 7

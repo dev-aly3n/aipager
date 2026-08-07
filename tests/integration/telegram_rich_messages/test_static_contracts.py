@@ -47,8 +47,7 @@ def test_sc16_new_fields_default_to_falsy():
     sess = TrackedSession(name="claude-test", label="test")
     assert sess.stream_offset == 0
     assert sess.stream_transcript_path == ""
-    assert sess.stream_pending == ""
-    assert sess.stream_shown == ""
+    assert sess.stream_commentary == []
     assert sess.stream_dirty is False
     assert sess.stream_last_rendered == ""
 
@@ -60,18 +59,20 @@ def test_sc16_tracked_session_has_stream_offset_attribute():
     assert hasattr(sess, "stream_offset")
 
 
-def test_sc16_tracked_session_has_stream_pending_attribute():
-    """TrackedSession must have stream_pending as an attribute."""
+def test_sc16_tracked_session_has_stream_commentary_attribute():
+    """TrackedSession must have stream_commentary as an attribute."""
     from aipager.state import TrackedSession
     sess = TrackedSession(name="claude-test", label="test")
-    assert hasattr(sess, "stream_pending")
+    assert hasattr(sess, "stream_commentary")
 
 
-def test_sc16_tracked_session_has_stream_shown_attribute():
-    """TrackedSession must have stream_shown as an attribute."""
+def test_sc16_stream_commentary_not_shared_between_sessions():
+    """A mutable default must not leak across sessions."""
     from aipager.state import TrackedSession
-    sess = TrackedSession(name="claude-test", label="test")
-    assert hasattr(sess, "stream_shown")
+    a = TrackedSession(name="claude-a", label="a")
+    b = TrackedSession(name="claude-b", label="b")
+    a.stream_commentary.append((0, "only mine"))
+    assert b.stream_commentary == []
 
 
 def test_sc16_tracked_session_no_draft_id():
@@ -100,8 +101,7 @@ def test_sc16_persisted_state_excludes_stream_fields(tmp_path, monkeypatch):
     sess = TrackedSession(name="claude-persist-test", label="persist-test",
                           status=Status.IDLE)
     sess.stream_offset = 9999
-    sess.stream_pending = "pending text"
-    sess.stream_shown = "shown text"
+    sess.stream_commentary = [(0, "commentary text")]
     sess.stream_dirty = True
     sess.stream_last_rendered = "rendered"
     registry._sessions["claude-persist-test"] = sess
@@ -113,8 +113,7 @@ def test_sc16_persisted_state_excludes_stream_fields(tmp_path, monkeypatch):
     persisted = sessions_data.get("claude-persist-test", {})
 
     assert "stream_offset" not in persisted
-    assert "stream_pending" not in persisted
-    assert "stream_shown" not in persisted
+    assert "stream_commentary" not in persisted
     assert "stream_dirty" not in persisted
     assert "stream_last_rendered" not in persisted
     assert "draft_id" not in persisted

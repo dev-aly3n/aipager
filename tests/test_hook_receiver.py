@@ -891,3 +891,47 @@ def test_stop_failure_debounce_bypass(receiver, run_async):
     _, event, _ = notify_fn.await_args.args
     assert event == "idle_prompt"
 
+
+
+# ---- MessageDisplay ------------------------------------------------------
+
+def test_message_display_forwards_the_delta(receiver, run_async):
+    """The prose chunk reaches the bot as an assistant_text event."""
+    _registry, recv, notify_fn = receiver
+    _send(recv, run_async, session="claude-x", hook_event_name="MessageDisplay",
+          delta="First step: listing the directories.", message_id="m1",
+          index=0, final=False)
+    notify_fn.assert_awaited_once()
+    _sess, event, ctx = notify_fn.await_args.args
+    assert event == "assistant_text"
+    assert ctx["delta"] == "First step: listing the directories."
+    assert ctx["message_id"] == "m1"
+    assert ctx["index"] == 0
+    assert ctx["final"] is False
+
+
+def test_message_display_without_a_delta_is_ignored(receiver, run_async):
+    _registry, recv, notify_fn = receiver
+    _send(recv, run_async, session="claude-x", hook_event_name="MessageDisplay",
+          delta="", message_id="m1", index=0, final=True)
+    notify_fn.assert_not_awaited()
+
+
+def test_successive_chunks_of_one_message_all_survive_dedup(receiver, run_async):
+    """Chunks differ by index, so the payload-hash dedup must not eat them."""
+    _registry, recv, notify_fn = receiver
+    for i, text in enumerate(["one ", "two ", "three"]):
+        _send(recv, run_async, session="claude-x",
+              hook_event_name="MessageDisplay", delta=text,
+              message_id="m1", index=i, final=(i == 2))
+    assert notify_fn.await_count == 3
+
+
+def test_identical_repeated_chunk_is_still_deduped(receiver, run_async):
+    """A double-wired hook sends the same payload twice — drop the copy."""
+    _registry, recv, notify_fn = receiver
+    for _ in range(2):
+        _send(recv, run_async, session="claude-x",
+              hook_event_name="MessageDisplay", delta="same",
+              message_id="m1", index=0, final=True)
+    assert notify_fn.await_count == 1

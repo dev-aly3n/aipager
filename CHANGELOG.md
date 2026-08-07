@@ -7,19 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **The busy card now stays in the chat after the turn ends.** It used to be
+  deleted the moment the answer arrived, throwing away the only record of
+  which tools ran, in what order, and what Claude said between them. It is
+  now re-rendered once as a finished timeline — settled `✅` footer, Stop
+  button removed — and left above the answer. The finished render drops the
+  live card's caps: every tool row and every commentary block is shown, and
+  tool rows are shed oldest-first (noted as "N earlier tools") only if the
+  card would otherwise exceed Telegram's 32 768-byte ceiling. Commentary is
+  never shed. Set `KEEP_FINISHED_CARD=0` to restore the old delete
+  behaviour. A failed final render is swallowed — the answer still goes out.
+  With the card in place the separate `✅ label · Finished (23s)` header is
+  redundant, so it is no longer sent: the answer body carries the reply link
+  and the tracked message id instead. It still goes out when the card was
+  not kept, when the turn produced no answer text, and when the answer
+  overflows to a file — that note and the document's reply target live on it.
+
 ### Changed
-- **Busy message now streams Claude's mid-turn prose.** The card reveals
-  transcript text progressively — 32 characters per 0.9 s edit, scaling the
-  step up so a large blob always drains within 14 edits, and breaking on
-  whitespace so words never split — with a footer showing elapsed time,
-  turn cost, and tool tally. Only the most recent 600 characters stay
-  visible, so the card stays glanceable on a long turn. Hook events
-  (`tool_use`, `tool_done`, `subagent_start`, etc.) trigger immediate card
-  updates (debounced at 0.9 s); the clock-only refresh falls back to 3 s
-  when nothing new is pending. Edits are serialised per session, so a
-  hook-driven update cannot race the animation loop into Telegram's
-  `400 canceled by new edit message request`. Every edit carries the Stop
-  button. Groups and DMs use the same path.
+- **Commentary now streams from Claude Code's `MessageDisplay` hook**, not
+  from the JSONL transcript. The transcript is written only once a message's
+  tool-result round finishes — measured at 2.5 s, 4.5 s and 11.8 s behind
+  generation on one real turn — so a sentence introducing a tool could not be
+  read until that tool had already completed, and it appeared under a `✅`
+  instead of above the `⏳`. The hook fires as the text reaches the screen, in
+  paragraph-sized chunks (a 2 768-character message arrived as five), so the
+  quote now lands before or alongside the tool row it introduces. Chunks of
+  one message grow a single block rather than each becoming a row. The
+  transcript path remains as the fallback for a Claude Code that does not send
+  the event, and switches off permanently for a session the moment the hook
+  proves itself, so the two can never both deliver the same prose. A block is
+  shown only once a tool row sits at or after its anchor: the hook streams the
+  final answer as well, and that block introduces nothing, so it stays out of
+  the card instead of being quoted directly above the message carrying it.
+  Prose is anchored where the previous block left off rather than at the tool
+  count when it arrives — a short preamble only reaches the hook once its
+  message is complete, by which point its own tool rows have already landed.
+  For the same reason a batch of tool rows waits up to 1.5 s for the sentence
+  that introduced it, so the rows appear together with their quote instead of
+  the quote jumping in above them a moment later; measured, that wait is
+  20–515 ms. It only runs out when a message called tools without saying
+  anything, and those rows then settle so the next sentence lands below them. The hook
+  runs inside Claude's own display path, so it skips the statusLine read that
+  the other events piggyback. `aipager config` wires the new event; existing
+  installs pick it up on the next wizard run.
+- **Busy message is now a chronological timeline.** The card interleaves
+  Claude's mid-turn prose (`💬`) with the tool rows it already showed
+  (`✅` done, `⏳` running, `❌` failed), each block placed where it actually
+  arrived — so "let me check X", then the tools, then "layout is clear"
+  reads in order. Placement is derived from the transcript's own byte order,
+  not from when the hooks fired: Claude Code runs its PreToolUse hook before
+  it flushes the assistant entry, so the tool row exists by the time its
+  introducing prose is readable. A block appears whole as soon as it is read
+  from the transcript; there is no character-by-character reveal. Older tool rows
+  collapse into an "N earlier tools" line past 15, and commentary anchored
+  to a collapsed row moves to the top of the visible window rather than
+  disappearing. Only the most recent 600 characters of prose stay visible,
+  dropped a whole block at a time, so the card stays glanceable on a long
+  turn. Below a divider, a footer shows elapsed time, turn cost and the
+  tool tally. Hook events (`tool_use`, `tool_done`, `subagent_start`, etc.)
+  trigger immediate card updates (debounced at 0.9 s); the clock-only
+  refresh falls back to 3 s when nothing has changed. Edits are serialised
+  per session, so a hook-driven update cannot race the animation loop into
+  Telegram's `400 canceled by new edit message request`. Every edit carries
+  the Stop button. Groups and DMs use the same path.
+- **Card layout: status back on the top line.** Elapsed time, turn cost and
+  the tool tally ride on the header (`⏳ **label** · Working · 20s · $0.12 ·
+  Bash ×2`) as they did before the streaming rework, so the divider and the
+  separate footer are gone. Elapsed counts from `0s` instead of staying blank
+  until 2 s and then jumping straight to `5s`. Claude's prose renders as a
+  blockquote and tool rows as monospace code spans — a summary full of globs
+  and paths is now literal, so it needs no backslash escaping, and a summary
+  containing backticks gets a longer fence rather than breaking out of it.
+  A tool row is still drawn the moment its hook fires, so it shows as `⏳`
+  and flips to `✅` when it completes; the prose introducing it therefore
+  arrives a second or two later and inserts itself above the row. Holding
+  the row back until the transcript placed it would remove that shuffle, but
+  it would also mean a tool finishing in under ~2 s never appeared as
+  running at all — the live `⏳` was judged worth the shuffle.
 
 ### Removed
 - **Removed the `sendRichMessageDraft` busy-message path.** The API itself

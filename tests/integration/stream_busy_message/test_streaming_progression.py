@@ -1,18 +1,19 @@
 """Integration tests: streaming progression through the animation loop.
 
-Covers the contract from entrypoints.md "Observable state — streaming progression":
+Covers the contract from entrypoints.md "Observable state — streaming progression",
+restated for the chronological timeline card:
 
-- A 1000-character blob must take MORE than one edit to become fully visible.
-- Intermediate stream_shown values end at a whitespace boundary (no mid-word splits).
-- Card markdown passed to HTTP layer grows monotonically in body content while buffer drains.
-- Once stream_pending empties, the body stops growing (only footer changes).
-- Text written before the turn started never appears in stream_shown (offset seeding /
+- A commentary block appears whole the moment it is read (no progressive reveal).
+- Blocks render in the order they arrived, interleaved with the tool rows that
+  ran between them.
+- The card body never shrinks a block back out of view while a turn runs.
+- Text written before the turn started never appears (offset seeding /
   cross-turn leakage guard) — tested for BOTH DM and group scope.
-- A turn that produces no assistant text leaves stream_shown == "" but card has a footer.
+- A turn that produces no assistant text leaves stream_commentary == [] but the
+  card still renders its header.
 
-These are BLACK-BOX tests: we drive the animation loop via the public surface
-(_read_stream_text, _reveal_chunk, build_stream_card, _edit_busy_rich) with the HTTP
-boundary (edit_message_text_rich) monkeypatched.  We do NOT read implementation internals.
+These are BLACK-BOX tests: we drive the loop via the public surface
+(_read_stream_text, build_stream_card) and never read implementation internals.
 """
 
 from __future__ import annotations
@@ -25,7 +26,6 @@ from aipager.state import Status, TrackedSession
 from aipager.bot.animation import (
     build_stream_card,
     _read_stream_text,
-    _reveal_chunk,
 )
 
 
@@ -52,141 +52,112 @@ def _write_assistant_entry(path, text: str, mode="w"):
         f.write(json.dumps(entry) + "\n")
 
 
-# ── SC-PROG-1: A 1000-char blob takes MORE than one edit ──────────────────────
+def _run_tool(path, sess, name: str, summary: str, done=True):
+    """A tool call as it really lands: the hook appends the row, the transcript
+    grows its tool_use block afterwards."""
+    sess.tool_history.append((summary, done))
+    entry = {
+        "type": "assistant",
+        "message": {
+            "content": [{"type": "tool_use", "id": "t", "name": name, "input": {}}],
+            "stop_reason": "tool_use",
+        },
+    }
+    with open(path, "a") as f:
+        f.write(json.dumps(entry) + "\n")
 
-def test_1000_char_blob_requires_multiple_reveal_steps():
-    """entrypoints.md: A 1000-character blob must take more than one edit to become
-    fully visible. This tests _reveal_chunk directly as the inner-loop primitive."""
+
+def _rows(card: str) -> list[str]:
+    """The timeline rows, in order, without the header line."""
+    _header, _, body = card.partition("\n\n")
+    return body.split("\n\n") if body else []
+
+
+# ── SC-PROG-1: A block appears whole on the first read ───────────────────────
+
+def test_block_appears_whole_on_first_read(tmp_path):
+    """No progressive drip: one read makes the entire block visible."""
+    p = tmp_path / "t.jsonl"
+    text = "word " * 200  # 1000 chars — would once have taken several reveals
+    _write_assistant_entry(p, text)
     sess = _sess()
-    text = "word " * 200  # 1000 chars
-    sess.stream_pending = text
-    sess.stream_shown = ""
+    sess.stream_transcript_path = str(p)
+    sess.stream_offset = 0
 
-    edit_count = 0
-    while sess.stream_pending:
-        prev_shown = sess.stream_shown
-        _reveal_chunk(sess)
-        if sess.stream_shown != prev_shown:
-            edit_count += 1
-        if edit_count > 100:
-            break  # safety against infinite loop
-
-    assert edit_count > 1, (
-        "A 1000-char blob must take more than one reveal step; "
-        f"it was done in {edit_count}"
-    )
+    assert _read_stream_text(sess) is True
+    assert sess.stream_commentary == [(0, text.strip())]
 
 
-# ── SC-PROG-2: Monotonic growth of body in HTTP payloads ─────────────────────
+# ── SC-PROG-2: Chronological interleaving through the real read path ─────────
 
-def test_card_body_grows_monotonically_across_reveals(tmp_path):
-    """entrypoints.md: The card markdown passed to the HTTP layer grows monotonically
-    in body content while the buffer drains."""
+def test_commentary_interleaves_with_tools_in_arrival_order(tmp_path):
+    """Claude speaks, runs tools, speaks again — the card must preserve that order."""
+    p = tmp_path / "t.jsonl"
     sess = _sess()
-    # Seed a large pending buffer (simulating what _read_stream_text would have loaded)
-    sess.stream_pending = "word " * 200  # 1000 chars
-    sess.stream_shown = ""
+    sess.stream_transcript_path = str(p)
+    sess.stream_offset = 0
 
-    body_lengths = []
-    while sess.stream_pending:
-        _reveal_chunk(sess)
-        build_stream_card(sess, "Working")  # verify card is buildable at each step
-        # Track length of the body portion (between header line and divider)
-        body_lengths.append(len(sess.stream_shown))
+    _write_assistant_entry(p, "Starting with the overall shape.")
+    _read_stream_text(sess)
 
-    # Lengths must be non-decreasing
-    for i in range(1, len(body_lengths)):
-        assert body_lengths[i] >= body_lengths[i - 1], (
-            f"Body shrank at step {i}: {body_lengths[i - 1]} -> {body_lengths[i]}"
-        )
+    _run_tool(p, sess, "Bash", "Bash: cloc aipager/")
+    _run_tool(p, sess, "Glob", "Glob: x.py")
+
+    _write_assistant_entry(p, "Layout is clear: five zones.", mode="a")
+    _read_stream_text(sess)
+
+    _run_tool(p, sess, "Read", "Read: animation.py", done=False)
+
+    assert _rows(build_stream_card(sess, "Working")) == [
+        "> Starting with the overall shape.",
+        "✅ `Bash: cloc aipager/`",
+        "✅ `Glob: x.py`",
+        "> Layout is clear: five zones.",
+        "⏳ `Read: animation.py`",
+    ]
 
 
-# ── SC-PROG-3: No mid-word splits ─────────────────────────────────────────────
+# ── SC-PROG-3: Body never loses a block mid-turn ─────────────────────────────
 
-def test_intermediate_shown_ends_at_whitespace_boundary():
-    """entrypoints.md: Text is never split mid-word — every intermediate
-    stream_shown value ends at a whitespace boundary (unless no whitespace at all)."""
+def test_body_does_not_shrink_across_reads(tmp_path):
+    """Successive reads only append; earlier rows stay put while under the cap."""
+    p = tmp_path / "t.jsonl"
     sess = _sess()
-    # Construct text where a naive 280-char cut would land mid-word.
-    # Use a long word that straddles the 280-char boundary.
-    prefix = "ab " * 93   # 279 chars (93 × "ab ")
-    long_word = "verylongwordthatmustnotbesplit"
-    rest = " more words here"
-    sess.stream_pending = prefix + long_word + rest
-    sess.stream_shown = ""
+    sess.stream_transcript_path = str(p)
+    sess.stream_offset = 0
 
-    _reveal_chunk(sess)
+    seen: list[int] = []
+    for i in range(5):
+        _write_assistant_entry(p, f"block {i}", mode="a")
+        _read_stream_text(sess)
+        seen.append(len(_rows(build_stream_card(sess, "Working"))))
 
-    shown = sess.stream_shown
-    # If there is still pending text, the cut was at a boundary
-    if sess.stream_pending:
-        # The shown text must not end in the middle of a word
-        # (i.e., shown should end with whitespace or be followed by whitespace in the original)
-        assert not shown[-1:].isalpha() or shown.endswith(" "), (
-            f"stream_shown ends mid-word: ...{shown[-20:]!r}"
-        )
-        # Specifically: the long word must NOT have been partially included
-        if long_word[:10] in shown:
-            # If any part of long_word is included, it must be the whole thing
-            assert long_word in shown, (
-                "Long word was split: partial word appears in shown text"
-            )
+    assert seen == [1, 2, 3, 4, 5]
+    rows = _rows(build_stream_card(sess, "Working"))
+    assert rows == [f"> block {i}" for i in range(5)]
 
 
-def test_no_word_split_for_exactly_window_size_text():
-    """_reveal_chunk must not split a word even when the text is exactly
-    STREAM_REVEAL_CHARS long with a word crossing the boundary."""
-    from aipager.config import STREAM_REVEAL_CHARS
+# ── SC-PROG-4: Reading again with nothing new leaves the card unchanged ──────
+
+def test_repeat_read_with_no_new_text_is_a_no_op(tmp_path):
+    p = tmp_path / "t.jsonl"
+    _write_assistant_entry(p, "hello world")
     sess = _sess()
-    # Build: (STREAM_REVEAL_CHARS - 5) chars + a word crossing the boundary
-    prefix = "x " * ((STREAM_REVEAL_CHARS - 5) // 2)  # word-aligned prefix
-    word_at_boundary = "boundary"
-    suffix = " trailing text here"
-    sess.stream_pending = prefix + word_at_boundary + suffix
-    sess.stream_shown = ""
+    sess.stream_transcript_path = str(p)
+    sess.stream_offset = 0
 
-    _reveal_chunk(sess)
+    _read_stream_text(sess)
+    before = build_stream_card(sess, "Working")
 
-    shown = sess.stream_shown
-    if sess.stream_pending:
-        # word_at_boundary must be entirely shown or entirely pending
-        partial_shown = any(
-            word_at_boundary[:k] == shown[-k:]
-            for k in range(1, len(word_at_boundary))
-        )
-        assert not partial_shown, (
-            f"Word was split across boundary: shown ends with {shown[-20:]!r}"
-        )
-
-
-# ── SC-PROG-4: Body stops growing once pending is empty ──────────────────────
-
-def test_body_stops_growing_after_pending_empties():
-    """entrypoints.md: Once stream_pending empties, the body stops growing
-    and only the footer changes."""
-    sess = _sess()
-    sess.stream_pending = "hello world"
-    sess.stream_shown = ""
-
-    # Drain the pending buffer
-    while sess.stream_pending:
-        _reveal_chunk(sess)
-
-    final_shown = sess.stream_shown
-    assert sess.stream_pending == ""
-
-    # Call reveal again — shown must not change
-    _reveal_chunk(sess)
-    assert sess.stream_shown == final_shown, (
-        "stream_shown grew after pending was empty"
-    )
+    assert _read_stream_text(sess) is False
+    assert build_stream_card(sess, "Working") == before
 
 
 # ── SC-PROG-5: Cross-turn leakage guard (DM scope) ───────────────────────────
 
 def test_cross_turn_leakage_guard_dm(tmp_path):
     """entrypoints.md: Text written to the transcript before the turn started
-    must never appear in stream_shown. DM scope."""
+    must never appear in the card. DM scope."""
     sess = _sess("dev", "dm")
     tp = tmp_path / "t.jsonl"
 
@@ -200,13 +171,13 @@ def test_cross_turn_leakage_guard_dm(tmp_path):
     # Now append the new turn's text
     _write_assistant_entry(str(tp), "New turn commentary", mode="a")
 
-    # Read stream text
     _read_stream_text(sess)
 
-    assert "Previous turn answer that must not leak" not in sess.stream_pending, (
-        "Cross-turn leakage: pre-turn text appeared in stream_pending (DM)"
+    card = build_stream_card(sess, "Working")
+    assert "Previous turn answer that must not leak" not in card, (
+        "Cross-turn leakage: pre-turn text appeared in the card (DM)"
     )
-    assert "New turn commentary" in sess.stream_pending, (
+    assert "New turn commentary" in card, (
         "New turn's text was not picked up (DM)"
     )
 
@@ -231,19 +202,20 @@ def test_cross_turn_leakage_guard_group(tmp_path):
 
     _read_stream_text(sess)
 
-    assert "Old group turn text" not in sess.stream_pending, (
+    card = build_stream_card(sess, "Working")
+    assert "Old group turn text" not in card, (
         "Cross-turn leakage in group scope: pre-turn text appeared"
     )
-    assert "Group new turn commentary" in sess.stream_pending, (
+    assert "Group new turn commentary" in card, (
         "New group turn text was not picked up"
     )
 
 
-# ── SC-PROG-7: No assistant text → stream_shown stays "" → card has footer ───
+# ── SC-PROG-7: No assistant text → empty commentary → card still has a footer ─
 
-def test_no_assistant_text_stream_shown_empty(tmp_path):
+def test_no_assistant_text_leaves_commentary_empty(tmp_path):
     """entrypoints.md: A turn that produces no assistant text at all leaves
-    stream_shown == ''."""
+    stream_commentary == []."""
     sess = _sess()
     tp = tmp_path / "empty.jsonl"
     # Write only a tool_use entry (no text content)
@@ -256,60 +228,42 @@ def test_no_assistant_text_stream_shown_empty(tmp_path):
     sess.stream_transcript_path = str(tp)
     sess.stream_offset = 0
 
-    _read_stream_text(sess)
-
-    # No text content → stream_pending stays empty
-    assert sess.stream_pending == "", (
-        f"stream_pending should be empty for tool_use-only turn; got {sess.stream_pending!r}"
-    )
-    assert sess.stream_shown == ""
+    assert _read_stream_text(sess) is False
+    assert sess.stream_commentary == []
 
 
-def test_no_assistant_text_card_has_footer():
+def test_no_assistant_text_card_still_has_a_header():
     """entrypoints.md: A turn that produces no assistant text still renders
-    a card with a footer (not just an empty string)."""
+    a card with its status line (not just an empty string)."""
     sess = _sess()
-    sess.stream_shown = ""
-    sess.stream_pending = ""
+    sess.stream_commentary = []
+    sess.tool_history = []
 
     card = build_stream_card(sess, "Working")
 
-    assert "⏳" in card, "Footer missing for no-text turn"
+    assert "⏳" in card, "Status missing for no-text turn"
     assert "Working" in card, "Header missing for no-text turn"
-    # No commentary means there is nothing to divide.
-    assert "────────────────" not in card
+    # An empty timeline leaves the header standing alone.
+    assert _rows(card) == []
 
 
-# ── SC-PROG-8: stream_shown monotonically grows while draining ───────────────
-
-def test_stream_shown_never_shrinks_during_reveal():
-    """entrypoints.md: stream_shown grows monotonically while draining —
-    it must not shrink between reveal steps."""
+def test_tools_only_turn_still_renders_timeline():
+    """The pre-stream shape — tool rows and nothing else — must still work."""
     sess = _sess()
-    sess.stream_pending = ("hello world " * 100)  # 1200 chars
-    sess.stream_shown = ""
-
-    prev_len = 0
-    steps = 0
-    while sess.stream_pending and steps < 50:
-        _reveal_chunk(sess)
-        steps += 1
-        cur_len = len(sess.stream_shown)
-        assert cur_len >= prev_len, (
-            f"stream_shown shrank at step {steps}: {prev_len} -> {cur_len}"
-        )
-        prev_len = cur_len
+    sess.tool_history = [("Read: a.py", True), ("Bash: ls", False)]
+    assert _rows(build_stream_card(sess, "Working")) == [
+        "✅ `Read: a.py`",
+        "⏳ `Bash: ls`",
+    ]
 
 
 # ── Regression: successive text blocks must not be glued together ─────────────
 
-def test_successive_blocks_separated_after_buffer_drains(tmp_path):
-    """A block arriving after the buffer has fully drained into stream_shown must
-    still be separated by a blank line.
+def test_successive_blocks_are_separate_rows(tmp_path):
+    """A block arriving after an earlier one must render as its own row.
 
-    Regression: the separator was chosen on stream_pending alone, so once the
-    buffer emptied the next block appended bare, producing
-    "...a subpackage.Layout is clear:" in a live turn.
+    Regression: the old buffer appended blocks bare once it had drained,
+    producing "...a subpackage.Layout is clear:" in a live turn.
     """
     p = tmp_path / "t.jsonl"
     _write_assistant_entry(p, "First block ends here.")
@@ -318,15 +272,59 @@ def test_successive_blocks_separated_after_buffer_drains(tmp_path):
     sess.stream_offset = 0
 
     _read_stream_text(sess)
-    while _reveal_chunk(sess):
-        pass
-    assert sess.stream_pending == ""
-    assert sess.stream_shown == "First block ends here."
-
     _write_assistant_entry(p, "Second block starts here.", mode="a")
     _read_stream_text(sess)
-    while _reveal_chunk(sess):
-        pass
 
-    assert "here.Second" not in sess.stream_shown
-    assert "First block ends here.\n\nSecond block starts here." == sess.stream_shown
+    card = build_stream_card(sess, "Working")
+    assert "here.Second" not in card
+    assert _rows(card) == [
+        "> First block ends here.",
+        "> Second block starts here.",
+    ]
+
+
+# ── Regression: prose must anchor BEFORE the tools it introduces ─────────────
+
+def test_opening_prose_anchors_before_the_tools_it_introduces(
+    mk_bot, run_async, tmp_path,
+):
+    """Claude narrates, then fires tools in the SAME assistant entry.
+
+    Live regression (2026-08-04): Claude Code fires PreToolUse *before* it
+    flushes the assistant entry, so by the time the prose is readable both
+    tool rows already exist. Anchoring on the live tool count rendered a
+    turn's opening line below the tools it was introducing. The anchor has
+    to come from the transcript's own order instead.
+    """
+    bot = mk_bot()
+    sess = _sess()
+    sess.busy_msg_id = 0  # suppress the card edit; we only assert on state
+
+    p = tmp_path / "t.jsonl"
+    sess.stream_transcript_path = str(p)
+    sess.stream_offset = 0
+
+    # Both tool hooks fire off that one entry, back to back — and land before
+    # anything of it is on disk.
+    run_async(bot.notify(sess, "tool_use", {"tool_summary": "WebSearch: father"}))
+    run_async(bot.notify(sess, "tool_use", {"tool_summary": "Bash: ls"}))
+
+    entry = {"type": "assistant", "message": {
+        "content": [
+            {"type": "text", "text": "Three things — starting both lookups."},
+            {"type": "tool_use", "id": "t1", "name": "WebSearch", "input": {}},
+            {"type": "tool_use", "id": "t2", "name": "Bash", "input": {}},
+        ],
+        "stop_reason": "tool_use",
+    }}
+    p.write_text(json.dumps(entry) + "\n")
+    _read_stream_text(sess)
+
+    assert sess.stream_commentary == [(0, "Three things — starting both lookups.")], (
+        "Opening prose was not anchored ahead of the tools it introduced"
+    )
+    assert _rows(build_stream_card(sess, "Working")) == [
+        "> Three things — starting both lookups.",
+        "⏳ `WebSearch: father`",
+        "⏳ `Bash: ls`",
+    ]

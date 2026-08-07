@@ -179,6 +179,24 @@ def _guard_real_home():
         )
 
 
+@pytest.fixture(autouse=True)
+def _block_real_telegram_http(monkeypatch):
+    """Fail loudly rather than POST to api.telegram.org.
+
+    ``rich_message._post`` is the single transport for every raw Telegram
+    call, so blocking it here covers send_rich_message, edit_message_text_rich
+    and anything added later. Tests that exercise the transport patch ``_post``
+    themselves; a function-scoped patch inside the test body wins over this one.
+    """
+    async def _refuse(method, payload):
+        raise AssertionError(
+            f"test attempted a real Telegram API call: {method}. "
+            "Mock aipager.bot.rich_message._post (or the calling helper)."
+        )
+
+    monkeypatch.setattr("aipager.bot.rich_message._post", _refuse)
+
+
 def _snapshot_live_sockets() -> set[str]:
     tmp = Path("/tmp")
     socks = {str(p) for p in tmp.glob("claude-dtach-*.sock")}

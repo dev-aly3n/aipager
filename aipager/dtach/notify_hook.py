@@ -159,8 +159,12 @@ def _run(session: str, cap_slot: list[bytes]) -> None:
     if session:
         data["session"] = session
 
-    # Piggyback statusLine token data on hook events
-    if session:
+    # Piggyback statusLine token data on hook events. Skipped for
+    # MessageDisplay: it runs synchronously inside Claude Code's display
+    # path — a slow hook stalls Claude's own rendering — it fires several
+    # times per assistant message, and the card reads token counts from the
+    # tool events anyway.
+    if session and data.get("hook_event_name") != "MessageDisplay":
         tokens = _read_statusline_tokens(session)
         if tokens:
             data["sl_tokens"] = tokens

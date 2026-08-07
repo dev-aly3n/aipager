@@ -3,7 +3,8 @@
 Covers the contract from entrypoints.md "Observable state — IDLE":
 
 After the IDLE notify path:
-  stream_pending, stream_shown, stream_last_rendered are "";
+  stream_commentary is [];
+  stream_last_rendered is "";
   stream_dirty is False;
   stream_offset is 0;
   stream_transcript_path is "".
@@ -29,8 +30,7 @@ def _sess_with_streaming_state(tmp_path, scope_kind="dm"):
     s.scope_chat_id = 12345 if scope_kind == "dm" else -100111222333
     s.busy_started_at = time.monotonic() - 30
     # Populate stream fields as if a turn just finished
-    s.stream_pending = "text still in the buffer"
-    s.stream_shown = "text already shown in the card"
+    s.stream_commentary = [(0, "opening line"), (2, "text shown in the card")]
     s.stream_dirty = True
     s.stream_last_rendered = "last card markdown"
     s.stream_offset = 4096
@@ -40,10 +40,10 @@ def _sess_with_streaming_state(tmp_path, scope_kind="dm"):
     return s
 
 
-# ── SC-IDLE-1: stream_pending cleared on IDLE ────────────────────────────────
+# ── SC-IDLE-1: stream_commentary cleared on IDLE ─────────────────────────────
 
-def test_idle_clears_stream_pending(mk_bot, run_async, tmp_path, monkeypatch):
-    """entrypoints.md: After IDLE, stream_pending must be ''."""
+def test_idle_clears_stream_commentary(mk_bot, run_async, tmp_path, monkeypatch):
+    """entrypoints.md: After IDLE, stream_commentary must be []."""
     bot = mk_bot()
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=1))
     bot._maybe_update_bot_name = AsyncMock()
@@ -52,25 +52,8 @@ def test_idle_clears_stream_pending(mk_bot, run_async, tmp_path, monkeypatch):
     sess = _sess_with_streaming_state(tmp_path)
     run_async(bot.notify(sess, "idle_prompt", {"summary": "done"}))
 
-    assert sess.stream_pending == "", (
-        f"stream_pending not cleared on IDLE; got {sess.stream_pending!r}"
-    )
-
-
-# ── SC-IDLE-2: stream_shown cleared on IDLE ──────────────────────────────────
-
-def test_idle_clears_stream_shown(mk_bot, run_async, tmp_path, monkeypatch):
-    """entrypoints.md: After IDLE, stream_shown must be ''."""
-    bot = mk_bot()
-    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=1))
-    bot._maybe_update_bot_name = AsyncMock()
-    monkeypatch.setattr("aipager.bot.notify.send_rich_message", AsyncMock(return_value={}))
-
-    sess = _sess_with_streaming_state(tmp_path)
-    run_async(bot.notify(sess, "idle_prompt", {"summary": "done"}))
-
-    assert sess.stream_shown == "", (
-        f"stream_shown not cleared on IDLE; got {sess.stream_shown!r}"
+    assert sess.stream_commentary == [], (
+        f"stream_commentary not cleared on IDLE; got {sess.stream_commentary!r}"
     )
 
 
@@ -139,4 +122,29 @@ def test_idle_clears_stream_transcript_path(mk_bot, run_async, tmp_path, monkeyp
 
     assert sess.stream_transcript_path == "", (
         f"stream_transcript_path not cleared on IDLE; got {sess.stream_transcript_path!r}"
+    )
+
+
+# ── SC-IDLE-7: stream_hook_live SURVIVES the reset ──────────────────────────
+
+def test_idle_keeps_stream_hook_live(mk_bot, run_async, tmp_path, monkeypatch):
+    """The hook latch is session-scoped, not per-turn.
+
+    It records that this session's Claude Code sends MessageDisplay, which is
+    a capability and does not come and go between turns. Clearing it here
+    would re-enable the transcript fallback for the next turn and print every
+    sentence twice — the invariant the whole no-duplication design rests on.
+    """
+    bot = mk_bot()
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=1))
+    bot._maybe_update_bot_name = AsyncMock()
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message", AsyncMock(return_value={}))
+
+    sess = _sess_with_streaming_state(tmp_path)
+    sess.stream_hook_live = True
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "done"}))
+
+    assert sess.stream_hook_live is True, (
+        "stream_hook_live was cleared on IDLE; the transcript fallback would "
+        "come back and duplicate every commentary block next turn"
     )

@@ -227,7 +227,7 @@ def test_rtl_body_sends_is_rtl_true(mk_bot, run_async, monkeypatch):
 
     bot = mk_bot()
     sess = _sess()
-    sess.stream_shown = "سلام دنیا " * 10  # Persian text (RTL)
+    sess.stream_commentary = [(0, "سلام دنیا " * 10)]  # Persian text (RTL)
     sess.stream_last_rendered = ""
 
     payloads = []

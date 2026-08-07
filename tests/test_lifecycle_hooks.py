@@ -12,7 +12,7 @@ Coverage targets (design.md success criteria not already tested):
   - settings.json: user-authored hook for a new event is NOT duplicated
   - settings.json: unrelated top-level keys untouched after patching
   - settings.json: excluded events (PostToolBatch, Elicitation) NOT added
-  - bootstrap _HOOK_EVENTS: exactly 14 events including all four new ones
+  - bootstrap _HOOK_EVENTS: exactly 15 events including all four new ones
   - _merge_hooks with a user-authored hook already present for a new event
 """
 
@@ -358,10 +358,12 @@ def test_bootstrap_does_not_wire_excluded_event(tmp_path, monkeypatch, excluded_
 # Bootstrap _HOOK_EVENTS count and new-event inclusion
 # ---------------------------------------------------------------------------
 
-def test_bootstrap_hook_events_count_is_14(tmp_path, monkeypatch):
-    """After bootstrap, settings.json must have exactly 14 hook events.
+def test_bootstrap_hook_events_count_is_15(tmp_path, monkeypatch):
+    """After bootstrap, settings.json must have exactly 15 hook events.
 
-    Success criterion: the four new events bring the total from 10 to 14.
+    Success criterion: the four lifecycle events took the total from 10 to 14,
+    and MessageDisplay — the source of the busy card's live commentary —
+    brings it to 15.
     """
     from aipager import claude_bootstrap
 
@@ -375,8 +377,8 @@ def test_bootstrap_hook_events_count_is_14(tmp_path, monkeypatch):
 
     data = json.loads(settings.read_text())
     hook_events = list(data.get("hooks", {}).keys())
-    assert len(hook_events) == 14, (
-        f"Expected 14 hook events, got {len(hook_events)}: {sorted(hook_events)}"
+    assert len(hook_events) == 15, (
+        f"Expected 15 hook events, got {len(hook_events)}: {sorted(hook_events)}"
     )
 
 

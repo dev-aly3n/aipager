@@ -255,31 +255,39 @@ def turn_appears_complete(transcript_path: str) -> bool:
     return False
 
 
-def read_turn_text(transcript_path: str, offset: int) -> tuple[str, int]:
-    """Read assistant text blocks appended to *transcript_path* after *offset*.
+def read_turn_stream(
+    transcript_path: str, offset: int,
+) -> tuple[list[tuple[str, str]], int]:
+    """Read assistant text and tool calls appended after *offset*, in file order.
 
-    Returns ``(text, new_offset)`` where *text* is all assistant text blocks
-    found in the bytes starting at *offset*, joined by blank lines and passed
-    through ``_strip_leaked_tool_xml``.  *new_offset* is the byte offset of
-    the last **complete** line consumed — a trailing line that does not end in
-    ``\\n`` (i.e. still being written) is NOT consumed and the offset is not
-    advanced past it, so the next call picks it up once it is complete.
+    Returns ``(items, new_offset)`` where *items* is a list of
+    ``("text", block)`` and ``("tool", tool_name)`` pairs in the order they
+    appear in the file. Text blocks are NOT joined or cleaned here — that is
+    ``read_turn_text``'s job.
 
-    Returns ``("", offset)`` on any error (file not found, permission denied,
-    JSON decode, etc.) — the function never raises.
+    The interleaving is the point: Claude Code fires its PreToolUse hook
+    *before* it flushes the assistant entry, so hook arrival order says
+    nothing about whether a piece of prose came before or after a tool call.
+    The transcript's own byte order does.
+
+    *new_offset* is the byte offset of the last **complete** line consumed — a
+    trailing line that does not end in ``\\n`` (i.e. still being written) is NOT
+    consumed, so the next call picks it up once it is complete.
+
+    Returns ``([], offset)`` on any error — the function never raises.
     """
     if not transcript_path:
-        return ("", offset)
+        return ([], offset)
     try:
         with open(transcript_path, "rb") as fh:
             fh.seek(offset)
             raw = fh.read()
     except (FileNotFoundError, PermissionError, OSError) as exc:
-        log.debug("read_turn_text: cannot open %s: %s", transcript_path, exc)
-        return ("", offset)
+        log.debug("read_turn_stream: cannot open %s: %s", transcript_path, exc)
+        return ([], offset)
 
     if not raw:
-        return ("", offset)
+        return ([], offset)
 
     # Split on newlines, keeping the delimiter, so we can detect a partial
     # trailing line (one that doesn't end in \n yet).
@@ -292,7 +300,7 @@ def read_turn_text(transcript_path: str, offset: int) -> tuple[str, int]:
     # stalled the streaming draft after its first chunk.
     lines = lines[:-1]
 
-    texts: list[str] = []
+    items: list[tuple[str, str]] = []
     consumed_bytes = 0
     for line_bytes in lines:
         # Each "line" here excludes the trailing \n; add 1 for the separator.
@@ -313,19 +321,40 @@ def read_turn_text(transcript_path: str, offset: int) -> tuple[str, int]:
             continue
         content = entry.get("message", {}).get("content", [])
         for block in content:
-            if isinstance(block, dict) and block.get("type") == "text":
-                t = block.get("text", "")
-                if t:
-                    texts.append(t)
+            if isinstance(block, dict):
+                kind = block.get("type")
+                if kind == "text":
+                    t = _strip_leaked_tool_xml(block.get("text", ""))
+                    if t:
+                        items.append(("text", t))
+                elif kind == "tool_use":
+                    items.append(("tool", block.get("name", "")))
             elif isinstance(block, str) and block:
-                texts.append(block)
+                t = _strip_leaked_tool_xml(block)
+                if t:
+                    items.append(("text", t))
 
+    return (items, offset + consumed_bytes)
+
+
+def read_turn_text(transcript_path: str, offset: int) -> tuple[str, int]:
+    """Read assistant text blocks appended to *transcript_path* after *offset*.
+
+    Returns ``(text, new_offset)`` where *text* is all assistant text blocks
+    found in the bytes starting at *offset*, joined by blank lines and passed
+    through ``_strip_leaked_tool_xml``.  *new_offset* is the byte offset of
+    the last **complete** line consumed — a trailing line that does not end in
+    ``\\n`` (i.e. still being written) is NOT consumed and the offset is not
+    advanced past it, so the next call picks it up once it is complete.
+
+    Returns ``("", offset)`` on any error (file not found, permission denied,
+    JSON decode, etc.) — the function never raises.
+    """
+    items, new_offset = read_turn_stream(transcript_path, offset)
+    texts = [t for kind, t in items if kind == "text"]
     if not texts:
-        return ("", offset + consumed_bytes)
-
-    joined = "\n\n".join(texts)
-    cleaned = _strip_leaked_tool_xml(joined)
-    return (cleaned, offset + consumed_bytes)
+        return ("", new_offset)
+    return ("\n\n".join(texts), new_offset)
 
 
 def last_assistant_preview(transcript_path: str, max_chars: int = 200) -> str:

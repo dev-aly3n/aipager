@@ -1,7 +1,7 @@
 """Unit tests for the streaming card and buffer helpers.
 
-Covers build_stream_card (pure function), _read_stream_text, _reveal_chunk,
-and the _edit_busy_rich method on AnimationMixin.
+Covers build_stream_card (pure function), _read_stream_text, and the
+_edit_busy_rich method on AnimationMixin.
 """
 
 from __future__ import annotations
@@ -18,7 +18,6 @@ from aipager.state import Status, TrackedSession
 from aipager.bot.animation import (
     build_stream_card,
     _read_stream_text,
-    _reveal_chunk,
 )
 
 
@@ -53,48 +52,45 @@ def test_card_header_contains_label():
     assert "myproj" in card
 
 
-def test_card_no_body_omits_divider():
+def test_card_with_no_body_is_the_header_alone():
     sess = _sess()
-    sess.stream_shown = ""
+    sess.stream_commentary = []
+    sess.tool_history = []
     card = build_stream_card(sess, "Working")
-    # Should NOT have two consecutive blank lines (empty body placeholder)
-    assert "\n\n\n" not in card
-    # Nothing to divide, so the divider is dropped — a bare rule above the
-    # footer reads as a rendering glitch.
-    assert "────────────────" not in card
+    # No trailing blank lines standing in for an empty body.
+    assert "\n\n" not in card
     assert "⏳" in card
 
 
 def test_card_with_body_contains_body():
     sess = _sess()
-    sess.stream_shown = "Here is some prose."
+    sess.stream_commentary = [(0, "Here is some prose.")]
     card = build_stream_card(sess, "Working")
     assert "Here is some prose." in card
-    assert "────────────────" in card
 
 
-def test_card_body_appears_between_header_and_divider():
+def test_card_body_appears_below_the_header():
     sess = _sess()
-    sess.stream_shown = "body text"
+    sess.stream_commentary = [(0, "body text")]
     card = build_stream_card(sess, "Working")
-    divider_pos = card.index("────────────────")
-    body_pos = card.index("body text")
-    assert body_pos < divider_pos
+    header, _, body = card.partition("\n\n")
+    assert "⏳" in header
+    assert "body text" in body
 
 
-def test_card_footer_after_divider():
+def test_card_status_rides_on_the_header_line():
+    """Elapsed, cost and tally sit on the top line — not in a footer below."""
     sess = _sess()
-    sess.stream_shown = "body text"
-    card = build_stream_card(sess, "Working")
-    divider_pos = card.index("────────────────")
-    footer_pos = card.index("⏳")
-    assert footer_pos > divider_pos
-    # A blank line must separate them: Telegram collapses a lone newline and
-    # would render the footer on the divider's line.
-    assert f"────────────────\n\n{card[footer_pos:]}" in card
+    sess.busy_started_at = time.monotonic() - 7
+    sess.cost_baseline = 0.0
+    sess.last_cost_usd = 0.25
+    sess.tool_history = [("Bash: ls", True)]
+    sess.stream_commentary = [(0, "body text")]
+    header = build_stream_card(sess, "Working").partition("\n\n")[0]
+    assert header == "⏳ **dev** · Working · 7s · $0.25 · Bash ×1"
 
 
-# ── build_stream_card: footer segments ───────────────────────────────────────
+# ── build_stream_card: header segments ───────────────────────────────────────
 
 def test_card_elapsed_shown_when_ge_2s():
     sess = _sess()
@@ -103,12 +99,13 @@ def test_card_elapsed_shown_when_ge_2s():
     assert "5s" in card
 
 
-def test_card_elapsed_omitted_when_lt_2s():
+def test_card_elapsed_shown_from_the_first_second():
+    """The clock counts from 0s. It used to appear blank until 2s, then jump."""
     sess = _sess()
     sess.busy_started_at = time.monotonic() - 1
-    card = build_stream_card(sess, "Working")
-    # Should not show "1s"
-    assert "1s" not in card
+    assert "1s" in build_stream_card(sess, "Working")
+    sess.busy_started_at = time.monotonic()
+    assert "0s" in build_stream_card(sess, "Working")
 
 
 def test_card_elapsed_format_minutes():
@@ -176,11 +173,8 @@ def test_card_tool_tally_omitted_when_empty():
     sess = _sess()
     sess.tool_history = []
     card = build_stream_card(sess, "Working")
-    # Footer exists but no tally segments beyond ⏳
-    lines = card.split("\n")
-    footer_line = next(ln for ln in lines if "⏳" in ln)
-    # No × symbol (tally format is "Name ×N")
-    assert "×" not in footer_line
+    # Header exists but carries no tally segment (format is "Name ×N")
+    assert "×" not in card.partition("\n\n")[0]
 
 
 # ── build_stream_card: label escaping ────────────────────────────────────────
@@ -205,7 +199,7 @@ def test_card_label_backtick_escaped():
 
 def test_card_is_pure_identical_output():
     sess = _sess()
-    sess.stream_shown = "some text"
+    sess.stream_commentary = [(0, "some text")]
     sess.busy_started_at = 1000.0  # fixed monotonic
     sess.cost_baseline = 0.0
     sess.last_cost_usd = 0.0
@@ -217,36 +211,37 @@ def test_card_is_pure_identical_output():
 
 def test_card_does_not_mutate_sess():
     sess = _sess()
-    sess.stream_shown = "text"
-    shown_before = sess.stream_shown
-    pending_before = sess.stream_pending
+    sess.stream_commentary = [(0, "text")]
+    sess.tool_history = [("Read: /a.py", True)]
+    commentary_before = list(sess.stream_commentary)
+    history_before = list(sess.tool_history)
     build_stream_card(sess, "Working")
-    assert sess.stream_shown == shown_before
-    assert sess.stream_pending == pending_before
+    assert sess.stream_commentary == commentary_before
+    assert sess.tool_history == history_before
 
 
 # ── build_stream_card: truncation ────────────────────────────────────────────
 
 def test_card_truncation_output_within_limit():
     sess = _sess()
-    # Generate a body that is much larger than 32768 bytes
-    sess.stream_shown = "x" * 40_000
+    # One pathological tool summary is the only way past the byte ceiling now
+    # that commentary is capped by STREAM_BODY_CHARS.
+    sess.tool_history = [("Bash: " + "x" * 40_000, True)]
     card = build_stream_card(sess, "Working")
     assert len(card.encode("utf-8")) <= 32_768
 
 
-def test_card_truncation_footer_preserved():
+def test_card_truncation_header_preserved():
     sess = _sess()
-    sess.stream_shown = "y" * 40_000
+    sess.tool_history = [("Bash: " + "y" * 40_000, True)]
     card = build_stream_card(sess, "Working")
-    assert "────────────────" in card
-    assert "⏳" in card
+    assert card.startswith("⏳ **dev** · Working ·")
 
 
 def test_card_truncation_head_dropped():
     sess = _sess()
     # The head of the body is "FIRST" and the tail is "LAST"
-    sess.stream_shown = "FIRST " + "middle " * 5000 + "LAST"
+    sess.tool_history = [("Bash: FIRST " + "middle " * 5000 + "LAST", True)]
     card = build_stream_card(sess, "Working")
     # The head should have been dropped
     assert "FIRST" not in card
@@ -256,7 +251,7 @@ def test_card_truncation_head_dropped():
 def test_card_truncation_valid_utf8():
     sess = _sess()
     # Persian text repeated to exceed the limit
-    sess.stream_shown = "سلام دنیا " * 4000
+    sess.tool_history = [("Bash: " + "سلام دنیا " * 4000, True)]
     card = build_stream_card(sess, "Working")
     assert len(card.encode("utf-8")) <= 32_768
     card.encode("utf-8")  # must not raise
@@ -281,7 +276,7 @@ def test_read_stream_text_returns_true_when_new_text(tmp_path):
     sess.stream_offset = 0
     result = _read_stream_text(sess)
     assert result is True
-    assert "new commentary" in sess.stream_pending
+    assert sess.stream_commentary == [(0, "new commentary")]
 
 
 def test_read_stream_text_returns_false_when_no_path():
@@ -298,26 +293,47 @@ def test_read_stream_text_returns_false_when_no_new_text(tmp_path):
     sess.stream_offset = os.path.getsize(tp)  # seeded to file size
     result = _read_stream_text(sess)
     assert result is False
-    assert sess.stream_pending == ""
+    assert sess.stream_commentary == []
 
 
-def test_read_stream_text_appends_with_blank_line(tmp_path):
+def test_read_stream_text_anchors_each_block_separately(tmp_path):
+    """Blocks read at different tool counts must anchor where they arrived."""
     tp = _write_assistant(tmp_path, "first block")
     sess = _sess()
     sess.stream_transcript_path = tp
     sess.stream_offset = 0
     _read_stream_text(sess)
-    # Simulate a second block appended
+    # A tool runs, then Claude speaks again.
+    sess.tool_history.append(("Read: /a.py", True))
     entry2 = {"type": "assistant", "message": {
-        "content": [{"type": "text", "text": "second block"}],
+        "content": [
+            {"type": "tool_use", "id": "t1", "name": "Read", "input": {}},
+            {"type": "text", "text": "second block"},
+        ],
         "stop_reason": "end_turn",
     }}
     with open(tp, "a") as f:
         f.write(json.dumps(entry2) + "\n")
     _read_stream_text(sess)
-    assert "first block" in sess.stream_pending
-    assert "second block" in sess.stream_pending
-    assert "\n\n" in sess.stream_pending
+    assert sess.stream_commentary == [(0, "first block"), (1, "second block")]
+
+
+def test_read_stream_text_splits_multi_block_read(tmp_path):
+    """read_turn_text joins blocks with a blank line — they become separate rows."""
+    entry = {"type": "assistant", "message": {
+        "content": [
+            {"type": "text", "text": "alpha"},
+            {"type": "text", "text": "beta"},
+        ],
+        "stop_reason": "end_turn",
+    }}
+    tp = tmp_path / "t.jsonl"
+    tp.write_text(json.dumps(entry) + "\n")
+    sess = _sess()
+    sess.stream_transcript_path = str(tp)
+    sess.stream_offset = 0
+    _read_stream_text(sess)
+    assert sess.stream_commentary == [(0, "alpha"), (0, "beta")]
 
 
 def test_read_stream_text_advances_offset(tmp_path):
@@ -329,79 +345,141 @@ def test_read_stream_text_advances_offset(tmp_path):
     assert sess.stream_offset > 0
 
 
-# ── _reveal_chunk ─────────────────────────────────────────────────────────────
+# ── build_stream_card: chronological interleaving ────────────────────────────
 
-def test_reveal_chunk_returns_false_when_pending_empty():
+def _body(card: str) -> list[str]:
+    """The timeline rows, in order, without the header line."""
+    _head, _, body = card.partition("\n\n")
+    return body.split("\n\n") if body else []
+
+
+def test_timeline_interleaves_commentary_between_tools():
     sess = _sess()
-    sess.stream_pending = ""
-    assert _reveal_chunk(sess) is False
+    sess.tool_history = [("Bash: cloc aipager/", True), ("Glob: x.py", True)]
+    sess.stream_commentary = [(0, "Starting with the shape."), (2, "Layout is clear.")]
+    rows = _body(build_stream_card(sess, "Working"))
+    assert rows == [
+        "> Starting with the shape.",
+        "✅ `Bash: cloc aipager/`",
+        "✅ `Glob: x.py`",
+        "> Layout is clear.",
+    ]
 
 
-def test_reveal_chunk_returns_true_when_text_available():
+def test_timeline_commentary_mid_run_lands_between_rows():
     sess = _sess()
-    sess.stream_pending = "some text here"
-    assert _reveal_chunk(sess) is True
+    sess.tool_history = [("Bash: a", True), ("Bash: b", True), ("Bash: c", False)]
+    sess.stream_commentary = [(1, "after the first tool")]
+    rows = _body(build_stream_card(sess, "Working"))
+    assert rows[1] == "> after the first tool"
+    assert rows[0] == "✅ `Bash: a`"
+    assert rows[2] == "✅ `Bash: b`"
 
 
-def test_reveal_chunk_moves_text_to_shown():
+def test_timeline_rows_separated_by_blank_line():
+    """Telegram collapses a lone newline — rows need a blank line between them."""
     sess = _sess()
-    sess.stream_pending = "hello world"
-    sess.stream_shown = ""
-    _reveal_chunk(sess)
-    assert "hello world" in sess.stream_shown
+    sess.tool_history = [("Bash: a", True), ("Bash: b", True)]
+    card = build_stream_card(sess, "Working")
+    assert "✅ `Bash: a`\n\n✅ `Bash: b`" in card
 
 
-def test_reveal_chunk_does_not_split_words():
+def test_timeline_failed_and_running_markers():
     sess = _sess()
-    # A string where a 280-char cut would land mid-word.
-    # Make a word that straddles the boundary.
-    prefix = "a " * 139   # 278 chars (139 "a " pairs)
-    long_word = "longwordhere"
-    tail = " after"
-    sess.stream_pending = prefix + long_word + tail
-    sess.stream_shown = ""
-    _reveal_chunk(sess)
-    # The shown text must end at a whitespace boundary, not mid-word
-    shown = sess.stream_shown
-    # The last character of shown must not be in the middle of a word
-    # (i.e., the next char in the original string should be a space or we used all)
-    if sess.stream_pending:
-        # There's still pending text, which means we stopped at a boundary
-        assert shown.endswith(" ") or shown == sess.stream_shown
+    sess.tool_history = [("Bash: a", "failed"), ("Read: b.py", False)]
+    rows = _body(build_stream_card(sess, "Working"))
+    assert rows == ["❌ `Bash: a`", "⏳ `Read: b.py`"]
 
 
-def test_reveal_chunk_small_pending_clears_it():
+def test_timeline_tool_summary_goes_in_a_code_span():
+    """A glob like **/*.py must not reformat everything after it. Inside a code
+    span it is literal, so it needs no backslashes either."""
     sess = _sess()
-    sess.stream_pending = "short"
-    sess.stream_shown = ""
-    _reveal_chunk(sess)
-    assert sess.stream_pending == ""
-    assert sess.stream_shown == "short"
+    sess.tool_history = [("Glob: **/*.py", True)]
+    rows = _body(build_stream_card(sess, "Working"))
+    assert rows == ["✅ `Glob: **/*.py`"]
 
 
-def test_reveal_chunk_large_pending_leaves_remainder():
+def test_timeline_tool_summary_with_backticks_keeps_its_span_intact():
+    """A summary of its own backticks must not break out of the code span.
+
+    The fence grows past the longest run inside, and the padding spaces are
+    symmetric — CommonMark strips one from each side, so a summary ending in a
+    backtick survives verbatim.
+    """
     sess = _sess()
-    # 600 chars of text — more than STREAM_REVEAL_CHARS (280)
-    long_text = "word " * 120  # 600 chars
-    sess.stream_pending = long_text
-    sess.stream_shown = ""
-    _reveal_chunk(sess)
-    assert len(sess.stream_shown) <= 280 + 5  # +5 tolerance for boundary
-    assert sess.stream_pending != ""  # still something left
+    sess.tool_history = [("Bash: echo `date`", True)]
+    rows = _body(build_stream_card(sess, "Working"))
+    assert rows == ["✅ `` Bash: echo `date` ``"]
 
 
-def test_reveal_chunk_1000_chars_needs_multiple_reveals():
+def test_timeline_commentary_left_unescaped():
+    """Claude's prose is meant to render its own markdown."""
     sess = _sess()
-    text = "word " * 200  # 1000 chars
-    sess.stream_pending = text
-    sess.stream_shown = ""
-    count = 0
-    while sess.stream_pending:
-        _reveal_chunk(sess)
-        count += 1
-        if count > 50:
-            break  # safety
-    assert count > 1, "A 1000-char blob must take more than one reveal"
+    sess.stream_commentary = [(0, "the **bot/** package")]
+    rows = _body(build_stream_card(sess, "Working"))
+    assert rows == ["> the **bot/** package"]
+
+
+def test_timeline_collapses_old_tools_into_count():
+    sess = _sess()
+    sess.tool_history = [(f"Read: f{i}.py", True) for i in range(20)]
+    rows = _body(build_stream_card(sess, "Working"))
+    assert rows[0] == "✅ _5 earlier tools_"
+    assert len(rows) == 16  # the note plus 15 visible rows
+    assert rows[1] == "✅ `Read: f5.py`"
+
+
+def test_timeline_hidden_commentary_reanchors_to_window_top():
+    """Commentary anchored to a scrolled-off tool must still show, not vanish."""
+    sess = _sess()
+    sess.tool_history = [(f"Read: f{i}.py", True) for i in range(20)]
+    sess.stream_commentary = [(1, "said this very early")]
+    rows = _body(build_stream_card(sess, "Working"))
+    assert "> said this very early" in rows
+    # It lands at the top of the visible window, right after the earlier-tools note.
+    assert rows.index("> said this very early") == 1
+
+
+def test_timeline_anchor_past_history_end_renders_last():
+    """A block read before its tool row was appended must not be dropped."""
+    sess = _sess()
+    sess.tool_history = [("Bash: a", True)]
+    sess.stream_commentary = [(9, "trailing")]
+    rows = _body(build_stream_card(sess, "Working"))
+    assert rows == ["✅ `Bash: a`", "> trailing"]
+
+
+def test_timeline_subagent_elapsed_suffix_preserved():
+    sess = _sess()
+    sess.tool_history = [("\U0001f916 Explore", False)]
+    sess.active_subagents = {
+        "abc": {"history_idx": 0, "started_at": time.monotonic() - 5},
+    }
+    rows = _body(build_stream_card(sess, "Working"))
+    assert rows == ["⏳ `\U0001f916 Explore (5s)`"]
+
+
+def test_timeline_commentary_budget_drops_oldest_blocks():
+    sess = _sess()
+    sess.stream_commentary = [
+        (0, "old " * 100),   # 400 chars
+        (0, "mid " * 100),   # 400 chars
+        (0, "new block"),
+    ]
+    rows = _body(build_stream_card(sess, "Working"))
+    joined = "\n".join(rows)
+    assert "new block" in joined
+    assert "old " not in joined  # oldest dropped first
+
+
+def test_timeline_newest_block_always_survives():
+    sess = _sess()
+    sess.stream_commentary = [(0, "z" * 5_000)]
+    rows = _body(build_stream_card(sess, "Working"))
+    assert len(rows) == 1
+    assert rows[0].startswith("> zzz")
+    assert rows[0].endswith("…")
 
 
 # ── _edit_busy_rich via AnimationMixin ────────────────────────────────────────
@@ -554,7 +632,7 @@ def test_edit_busy_rich_rtl_body_passes_is_rtl_true(mk_bot, run_async, monkeypat
     sess = _sess()
     sess.busy_msg_id = 10
     sess.busy_started_at = time.monotonic() - 5
-    sess.stream_shown = "سلام دنیا " * 20  # Persian text
+    sess.stream_commentary = [(0, "سلام دنیا " * 20)]  # Persian text
     sess.stream_last_rendered = ""
 
     payloads = []
@@ -584,8 +662,7 @@ def test_send_busy_seeds_stream_fields_dm(mk_bot, run_async, tmp_path):
     run_async(bot._send_busy_and_animate(sess))
     assert sess.stream_transcript_path == str(tp)
     assert sess.stream_offset == tp.stat().st_size
-    assert sess.stream_pending == ""
-    assert sess.stream_shown == ""
+    assert sess.stream_commentary == []
     assert sess.stream_dirty is False
     assert sess.stream_last_rendered == ""
 
@@ -603,8 +680,7 @@ def test_send_busy_seeds_stream_fields_group(mk_bot, run_async, tmp_path):
     run_async(bot._send_busy_and_animate(sess))
     assert sess.stream_transcript_path == str(tp)
     assert sess.stream_offset == tp.stat().st_size
-    assert sess.stream_pending == ""
-    assert sess.stream_shown == ""
+    assert sess.stream_commentary == []
 
 
 def test_send_busy_no_draft_id_attribute(mk_bot, run_async, tmp_path):
@@ -641,7 +717,7 @@ def test_send_busy_offset_seeded_to_file_size_prevents_cross_turn_leak(
     # Now simulate _read_stream_text — should find nothing new
     result = _read_stream_text(sess)
     assert result is False
-    assert sess.stream_pending == ""
+    assert sess.stream_commentary == []
 
 
 # ── _animate_compact regression guard ────────────────────────────────────────
@@ -684,17 +760,17 @@ def test_animate_compact_never_calls_edit_message_text_rich(
 def test_card_body_capped_to_recent_window():
     """A long turn must not grow the card into a wall of prose."""
     sess = _sess()
-    sess.stream_shown = "alpha " * 400  # 2400 chars
+    sess.stream_commentary = [(0, "alpha " * 400)]  # 2400 chars
     card = build_stream_card(sess, "Working")
     body = card.split("\n\n")[1]
     assert len(body) < 700
-    assert body.startswith("…")
+    assert body.endswith("…")
     assert card.rstrip().endswith(card[card.index("⏳"):].rstrip())
 
 
 def test_card_short_body_not_truncated():
     sess = _sess()
-    sess.stream_shown = "short commentary"
+    sess.stream_commentary = [(0, "short commentary")]
     card = build_stream_card(sess, "Working")
     assert "…" not in card
     assert "short commentary" in card
@@ -734,9 +810,464 @@ def test_concurrent_edits_are_serialised(run_async, monkeypatch):
     async def _drive():
         # Distinct bodies so the dedupe cannot mask the race.
         async def _one(text):
-            sess.stream_shown = text
+            sess.stream_commentary = [(0, text)]
             return await bot._edit_busy_rich(sess, "Working")
         return await asyncio.gather(_one("first body"), _one("second body"))
 
     run_async(_drive())
     assert overlaps == [], f"Concurrent edits overlapped on the wire: {overlaps}"
+
+
+# ── The finished card (final=True) ────────────────────────────────────────────
+
+def _rows(card: str) -> list[str]:
+    """The timeline rows, in order, without the header line."""
+    _header, _, body = card.partition("\n\n")
+    return body.split("\n\n") if body else []
+
+
+def test_final_card_keeps_every_tool_row():
+    """No 15-row collapse: the finished card is the turn's record."""
+    sess = _sess()
+    sess.tool_history = [(f"Read: f{i}.py", True) for i in range(40)]
+    card = build_stream_card(sess, "Done", final=True)
+    assert "earlier tool" not in card
+    assert len(_rows(card)) == 40
+
+
+def test_live_card_still_collapses_old_tool_rows():
+    """The live cap is untouched — only the finished card is uncapped."""
+    sess = _sess()
+    sess.tool_history = [(f"Read: f{i}.py", True) for i in range(40)]
+    assert "earlier tools" in build_stream_card(sess, "Working")
+
+
+def test_final_card_keeps_every_commentary_block():
+    """No 600-char budget: all prose survives on the finished card."""
+    sess = _sess()
+    sess.stream_commentary = [(0, "block %d %s" % (i, "x" * 200)) for i in range(6)]
+    card = build_stream_card(sess, "Done", final=True)
+    for i in range(6):
+        assert f"block {i} " in card
+
+
+def test_live_card_still_drops_oldest_commentary():
+    sess = _sess()
+    sess.stream_commentary = [(0, "block %d %s" % (i, "x" * 200)) for i in range(6)]
+    card = build_stream_card(sess, "Working")
+    assert "block 0 " not in card
+    assert "block 5 " in card
+
+
+def test_final_card_footer_is_settled_not_hourglass():
+    sess = _sess()
+    sess.tool_history = [("Read: a.py", True)]
+    card = build_stream_card(sess, "Done", final=True)
+    footer = card.rsplit("\n\n", 1)[-1]
+    assert footer.startswith("✅")
+
+
+def test_final_card_sheds_oldest_tools_keeping_commentary():
+    """Over the ceiling, tool rows go oldest-first; prose always survives."""
+    sess = _sess()
+    sess.tool_history = [(f"Bash: {i} " + "y" * 2000, True) for i in range(30)]
+    sess.stream_commentary = [(0, "OPENINGPROSE"), (30, "CLOSINGPROSE")]
+
+    card = build_stream_card(sess, "Done", final=True)
+
+    assert len(card.encode("utf-8")) <= 32_768
+    assert "OPENINGPROSE" in card
+    assert "CLOSINGPROSE" in card
+    assert "Bash: 0 " not in card, "oldest tool row survived instead of being shed"
+    assert "Bash: 29 " in card, "newest tool row was shed"
+    assert "earlier tools" in card, "shed rows were not accounted for"
+
+
+def test_final_card_shedding_is_a_no_op_when_it_already_fits():
+    sess = _sess()
+    sess.tool_history = [("Read: a.py", True), ("Bash: ls", True)]
+    sess.stream_commentary = [(1, "midway")]
+    assert _rows(build_stream_card(sess, "Done", final=True)) == [
+        "✅ `Read: a.py`",
+        "> midway",
+        "✅ `Bash: ls`",
+    ]
+
+
+def test_final_card_survives_commentary_alone_over_the_ceiling():
+    """Nothing left to shed — the byte-level backstop still holds the ceiling."""
+    sess = _sess()
+    sess.stream_commentary = [(0, "z" * 40_000)]
+    card = build_stream_card(sess, "Done", final=True)
+    assert len(card.encode("utf-8")) <= 32_768
+
+
+def test_final_edit_omits_reply_markup(mk_bot, run_async, monkeypatch):
+    """A finished turn must not keep a live Stop button."""
+    import aipager.bot.rich_message as rm_mod
+    bot = mk_bot()
+    sess = _sess()
+    sess.busy_msg_id = 10
+    payloads = []
+
+    async def _fake_post(method, payload):
+        payloads.append(payload)
+        return {"ok": True, "result": {}}
+
+    monkeypatch.setattr(rm_mod, "_post", _fake_post)
+    run_async(bot._edit_busy_rich(sess, "Done", final=True))
+    assert len(payloads) == 1
+    assert "reply_markup" not in payloads[0]
+
+
+def test_final_edit_bypasses_the_dedupe(mk_bot, run_async, monkeypatch):
+    """Even byte-identical, the final edit must go out — it clears the button."""
+    import aipager.bot.rich_message as rm_mod
+    bot = mk_bot()
+    sess = _sess()
+    sess.busy_msg_id = 10
+    sess.stream_last_rendered = build_stream_card(sess, "Done", final=True)
+    payloads = []
+
+    async def _fake_post(method, payload):
+        payloads.append(payload)
+        return {"ok": True, "result": {}}
+
+    monkeypatch.setattr(rm_mod, "_post", _fake_post)
+    run_async(bot._edit_busy_rich(sess, "Done", final=True))
+    assert len(payloads) == 1
+
+
+def test_final_card_shed_marker_sits_below_the_opening_prose():
+    """Chronology holds even under shedding: prose that opened the turn stays
+    above the tools it introduced, shed or not."""
+    sess = _sess()
+    sess.tool_history = [(f"Bash: {i} " + "y" * 2000, True) for i in range(30)]
+    sess.stream_commentary = [(0, "OPENINGPROSE")]
+    rows = _rows(build_stream_card(sess, "Done", final=True))
+    assert rows[0] == "> OPENINGPROSE"
+    assert "earlier tools" in rows[1]
+
+
+# ── Anchoring comes from the transcript, not from hook timing ────────────────
+
+def _write_entry(path, content: list[dict], mode="a") -> None:
+    entry = {"type": "assistant",
+             "message": {"content": content, "stop_reason": "tool_use"}}
+    with open(path, mode) as f:
+        f.write(json.dumps(entry) + "\n")
+
+
+def test_prose_anchors_ahead_of_rows_already_recorded(tmp_path):
+    """The regression: PreToolUse lands the row before the prose is readable.
+
+    Both tool rows exist by the time the transcript entry is flushed, so an
+    anchor taken from len(tool_history) would push the opening line below the
+    tools it introduced.
+    """
+    tp = tmp_path / "t.jsonl"
+    tp.write_text("")
+    sess = _sess()
+    sess.stream_transcript_path = str(tp)
+    sess.stream_offset = 0
+    sess.tool_history = [("Bash: one", True), ("Grep: two", False)]
+
+    _write_entry(tp, [
+        {"type": "text", "text": "opening line"},
+        {"type": "tool_use", "id": "a", "name": "Bash", "input": {}},
+        {"type": "tool_use", "id": "b", "name": "Grep", "input": {}},
+    ])
+    assert _read_stream_text(sess) is True
+    assert sess.stream_commentary == [(0, "opening line")]
+
+
+def test_prose_between_two_tools_anchors_between_them(tmp_path):
+    tp = tmp_path / "t.jsonl"
+    tp.write_text("")
+    sess = _sess()
+    sess.stream_transcript_path = str(tp)
+    sess.stream_offset = 0
+    sess.tool_history = [("Bash: one", True), ("Grep: two", False)]
+
+    _write_entry(tp, [{"type": "tool_use", "id": "a", "name": "Bash", "input": {}}])
+    _write_entry(tp, [
+        {"type": "text", "text": "now grepping"},
+        {"type": "tool_use", "id": "b", "name": "Grep", "input": {}},
+    ])
+    _read_stream_text(sess)
+    assert sess.stream_commentary == [(1, "now grepping")]
+
+
+def test_subagent_row_is_stepped_over(tmp_path):
+    """A Task adds a 🤖 row on top of its own; it belongs to no tool_use block."""
+    tp = tmp_path / "t.jsonl"
+    tp.write_text("")
+    sess = _sess()
+    sess.stream_transcript_path = str(tp)
+    sess.stream_offset = 0
+    sess.tool_history = [("Task: audit", True), ("🤖 explorer", True),
+                         ("Bash: after", False)]
+
+    _write_entry(tp, [{"type": "tool_use", "id": "a", "name": "Task", "input": {}}])
+    _write_entry(tp, [
+        {"type": "text", "text": "agent done, running the check"},
+        {"type": "tool_use", "id": "b", "name": "Bash", "input": {}},
+    ])
+    _read_stream_text(sess)
+    assert sess.stream_commentary == [(2, "agent done, running the check")]
+
+
+def test_unrecorded_tool_leaves_the_cursor_put(tmp_path):
+    """No matching row yet — the cursor must not run off the end of the history."""
+    tp = tmp_path / "t.jsonl"
+    tp.write_text("")
+    sess = _sess()
+    sess.stream_transcript_path = str(tp)
+    sess.stream_offset = 0
+    sess.tool_history = [("Bash: one", True)]
+
+    _write_entry(tp, [
+        {"type": "tool_use", "id": "a", "name": "WebFetch", "input": {}},
+        {"type": "text", "text": "still early"},
+    ])
+    _read_stream_text(sess)
+    assert sess.stream_commentary == [(0, "still early")]
+    assert sess.stream_tool_cursor == 0
+
+
+
+# ── Commentary streamed from the MessageDisplay hook ─────────────────────────
+
+def _md(bot, run_async, sess, delta, msg_id="m1", final=False):
+    run_async(bot.notify(sess, "assistant_text", {
+        "delta": delta, "message_id": msg_id, "index": 0, "final": final,
+    }))
+
+
+def test_hook_chunks_of_one_message_grow_a_single_block(mk_bot, run_async):
+    """A message is one block that grows, not a row per chunk."""
+    bot = mk_bot()
+    sess = _sess()
+    sess.busy_msg_id = 0  # suppress the edit; assert on state only
+    _md(bot, run_async, sess, "First step — ")
+    _md(bot, run_async, sess, "listing the directories.")
+    assert sess.stream_commentary == [(0, "First step — listing the directories.")]
+
+
+def test_a_new_message_id_starts_a_new_block(mk_bot, run_async):
+    """A tool recorded between two blocks belongs to the SECOND message.
+
+    A short preamble only reaches the hook once its message is complete, so a
+    row that lands after one block and before the next was introduced by the
+    next one — both blocks therefore sit above it.
+    """
+    bot = mk_bot()
+    sess = _sess()
+    sess.busy_msg_id = 0
+    _md(bot, run_async, sess, "first", msg_id="m1")
+    sess.record_tool("Bash: ls", False)
+    _md(bot, run_async, sess, "second", msg_id="m2")
+    assert sess.stream_commentary == [(0, "first"), (0, "second")]
+
+
+def test_prose_anchors_above_the_batch_of_tools_it_introduced(mk_bot, run_async):
+    """The live regression: three parallel tools land before their preamble.
+
+    Reported 2026-08-04 — the quote rendered below all three Bash rows it
+    was introducing, because the anchor was the tool count at arrival.
+    """
+    bot = mk_bot()
+    sess = _sess()
+    sess.busy_msg_id = 0
+    for summary in ("Bash: list dirs", "Bash: count lines", "Bash: git log"):
+        sess.record_tool(summary, True)
+    _md(bot, run_async, sess, "I'll start with three parallel lookups.", msg_id="m1")
+
+    assert _body(build_stream_card(sess, "Working")) == [
+        "> I'll start with three parallel lookups.",
+        "✅ `Bash: list dirs`",
+        "✅ `Bash: count lines`",
+        "✅ `Bash: git log`",
+    ]
+
+
+def test_each_message_keeps_its_own_batch(mk_bot, run_async):
+    """Two preambles, each with its own tools, stay in their own groups."""
+    bot = mk_bot()
+    sess = _sess()
+    sess.busy_msg_id = 0
+    sess.record_tool("Bash: one", True)
+    _md(bot, run_async, sess, "first step", msg_id="m1")
+    sess.record_tool("Bash: two", True)
+    _md(bot, run_async, sess, "second step", msg_id="m2")
+
+    assert _body(build_stream_card(sess, "Working")) == [
+        "> first step",
+        "✅ `Bash: one`",
+        "> second step",
+        "✅ `Bash: two`",
+    ]
+
+
+def test_a_batch_waits_for_the_sentence_that_introduces_it(mk_bot, run_async):
+    """Live regression (2026-08-07): the row was drawn first and the quote
+    jumped in above it. Measured, the prose is 20-515 ms behind, so the batch
+    waits rather than showing rows in the wrong order."""
+    bot = mk_bot()
+    sess = _sess()
+    sess.busy_msg_id = 0
+    # Latched by the session's first streamed chunk; holding is pointless
+    # before the hook has proved itself, or the fallback path would stall.
+    sess.stream_hook_live = True
+    sess.record_tool("Bash: ls", False)
+    assert _body(build_stream_card(sess, "Working")) == []
+
+    _md(bot, run_async, sess, "Listing the directories now.", msg_id="m1")
+    assert _body(build_stream_card(sess, "Working")) == [
+        "> Listing the directories now.",
+        "⏳ `Bash: ls`",
+    ]
+
+
+def test_hook_latches_off_the_transcript_fallback(mk_bot, run_async, tmp_path):
+    """Both sources delivering the same prose would print every line twice."""
+    bot = mk_bot()
+    sess = _sess()
+    sess.busy_msg_id = 0
+    tp = tmp_path / "t.jsonl"
+    tp.write_text("")
+    sess.stream_transcript_path = str(tp)
+    sess.stream_offset = 0
+
+    _md(bot, run_async, sess, "Listing the directories now.", msg_id="m1")
+    assert sess.stream_hook_live is True
+
+    # The transcript catches up minutes later with the very same sentence.
+    _write_entry(tp, [{"type": "text", "text": "Listing the directories now."}])
+    assert _read_stream_text(sess) is False
+    assert sess.stream_commentary == [(0, "Listing the directories now.")]
+
+
+def test_transcript_fallback_still_works_without_the_hook(tmp_path):
+    """An older Claude Code never sends MessageDisplay — keep reading the file."""
+    sess = _sess()
+    tp = tmp_path / "t.jsonl"
+    tp.write_text("")
+    sess.stream_transcript_path = str(tp)
+    sess.stream_offset = 0
+    _write_entry(tp, [{"type": "text", "text": "from the transcript"}])
+    assert _read_stream_text(sess) is True
+    assert sess.stream_commentary == [(0, "from the transcript")]
+
+
+# ── The final answer must not be quoted into the card ────────────────────────
+
+def test_the_answer_block_is_not_rendered(mk_bot, run_async):
+    """The hook streams the answer too; it belongs in the answer message."""
+    bot = mk_bot()
+    sess = _sess()
+    sess.busy_msg_id = 0
+    sess.record_tool("Bash: ls", True)
+    _md(bot, run_async, sess, "Step 1 — listing.", msg_id="m1")
+    _md(bot, run_async, sess, "Here is the full answer.", msg_id="m2")
+
+    assert _body(build_stream_card(sess, "Working")) == [
+        "> Step 1 — listing.",
+        "✅ `Bash: ls`",
+    ]
+
+
+def test_the_answer_does_not_evict_real_commentary(mk_bot, run_async):
+    """Live regression (2026-08-07): mid-turn the card lost both quotes and
+    showed a dump of the answer, then the quotes came back on the finished
+    card. The answer is long, so it ate the whole commentary budget."""
+    bot = mk_bot()
+    sess = _sess()
+    sess.busy_msg_id = 0
+    for summary in ("Bash: one", "Bash: two", "Bash: three"):
+        sess.record_tool(summary, True)
+    _md(bot, run_async, sess, "Re-running step 1 fresh.", msg_id="m1")
+    sess.record_tool("Bash: grep", True)
+    _md(bot, run_async, sess, "Now step 2 — reading and grepping.", msg_id="m2")
+    _md(bot, run_async, sess, "ANSWER " * 400, msg_id="m3")  # 2800 chars
+
+    rows = _body(build_stream_card(sess, "Working"))
+    assert rows[0] == "> Re-running step 1 fresh."
+    assert "> Now step 2 — reading and grepping." in rows
+    assert not any("ANSWER" in r for r in rows)
+
+
+def test_the_answer_is_absent_from_the_finished_card_too(mk_bot, run_async):
+    bot = mk_bot()
+    sess = _sess()
+    sess.busy_msg_id = 0
+    sess.record_tool("Bash: ls", True)
+    _md(bot, run_async, sess, "Step 1 — listing.", msg_id="m1")
+    _md(bot, run_async, sess, "Here is the full answer.", msg_id="m2")
+
+    assert _body(build_stream_card(sess, "Done", final=True)) == [
+        "> Step 1 — listing.",
+        "✅ `Bash: ls`",
+    ]
+
+
+def test_a_block_appears_once_its_tools_fire(mk_bot, run_async):
+    """A long message streams before its tools; it must not be lost, only
+    deferred until they land and the batch settles."""
+    import aipager.bot.animation as anim
+    bot = mk_bot()
+    sess = _sess()
+    sess.busy_msg_id = 0
+    _md(bot, run_async, sess, "About to grep for that symbol.", msg_id="m1")
+    assert _body(build_stream_card(sess, "Working")) == []
+
+    sess.record_tool("Bash: grep", False)
+    sess.stream_batch_since = time.monotonic() - anim._BATCH_HOLD_SECS - 0.1
+    anim._expire_tool_batch(sess)
+    assert _body(build_stream_card(sess, "Working")) == [
+        "> About to grep for that symbol.",
+        "⏳ `Bash: grep`",
+    ]
+
+
+def test_a_silent_batch_settles_so_later_prose_lands_below_it(mk_bot, run_async):
+    """A message that called tools without saying anything must not have the
+    NEXT message's sentence claim its rows."""
+    import aipager.bot.animation as anim
+    bot = mk_bot()
+    sess = _sess()
+    sess.busy_msg_id = 0
+    sess.record_tool("Bash: quiet", True)
+    sess.stream_batch_since = time.monotonic() - anim._BATCH_HOLD_SECS - 0.1
+    anim._expire_tool_batch(sess)
+    assert sess.stream_anchor_floor == 1
+
+    sess.record_tool("Bash: loud", True)
+    _md(bot, run_async, sess, "Now the second step.", msg_id="m2")
+    assert _body(build_stream_card(sess, "Working")) == [
+        "✅ `Bash: quiet`",
+        "> Now the second step.",
+        "✅ `Bash: loud`",
+    ]
+
+
+def test_a_turn_with_no_tools_quotes_nothing(mk_bot, run_async):
+    """Claude just answers — the card carries its header and nothing else."""
+    bot = mk_bot()
+    sess = _sess()
+    sess.busy_msg_id = 0
+    _md(bot, run_async, sess, "Short answer, no tools needed.", msg_id="m1")
+    assert _body(build_stream_card(sess, "Done", final=True)) == []
+
+
+def test_the_fallback_still_renders_an_anchor_past_the_end(tmp_path):
+    """Without the hook the rule does not apply: there an anchor past the end
+    means the prose was read before its tool row landed."""
+    sess = _sess()
+    sess.tool_history = [("Bash: a", True)]
+    sess.stream_commentary = [(9, "trailing")]
+    assert sess.stream_hook_live is False
+    assert _body(build_stream_card(sess, "Working")) == [
+        "✅ `Bash: a`",
+        "> trailing",
+    ]
