@@ -672,6 +672,17 @@ class NotifyMixin:
             merged_delivered = False
             if layout == "merged" and sess.busy_msg_id and sess.busy_msg_id > 0:
                 pre_merge_busy_msg_id = sess.busy_msg_id
+                # `_send_merged_final` EDITS the existing busy message in
+                # place rather than sending a new one, so on success no
+                # `registry.track_message` call happens here — reply
+                # routing for this message_id keeps working only because
+                # it was already registered when the busy message was
+                # first sent (see animation.py's `track_message` call
+                # right after `send_busy`) and that message_id is never
+                # reused for anything else. If a future refactor ever
+                # made the merged edit target a *different* message_id
+                # than the one tracked at send time, replies to it would
+                # silently stop resolving to this session.
                 merged_delivered = await self._send_merged_final(sess, content)
                 if not merged_delivered:
                     # Losing the timeline is acceptable; losing the answer is
