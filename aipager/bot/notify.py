@@ -589,6 +589,18 @@ class NotifyMixin:
             error_source = raw_md or summary or ""
             error_detection = _detect_api_error(error_source)
             if error_detection:
+                if layout == "merged" and sess.busy_msg_id and sess.busy_msg_id > 0:
+                    # This branch returns before the merged-delivery attempt
+                    # below ever runs — clean up here so the busy card isn't
+                    # stranded showing "Working…" with a Stop button forever.
+                    try:
+                        await bot.delete_message(
+                            chat_id=resolve_chat_id(sess),
+                            message_id=sess.busy_msg_id,
+                        )
+                    except Exception:
+                        pass
+                    sess.busy_msg_id = None
                 friendly_error, _retry_after = error_detection
                 text = (f"⚠️ <b>{html_mod.escape(label)}</b> · {friendly_error}")
                 keyboard = (self._build_retry_keyboard(sess.name)

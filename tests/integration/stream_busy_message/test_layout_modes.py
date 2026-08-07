@@ -204,6 +204,24 @@ def test_merged_layout_edit_failure_still_delivers_the_answer(
     assert sess.busy_msg_id is None
 
 
+def test_merged_layout_api_error_does_not_strand_the_busy_card(
+    mk_bot, run_async, rich_calls,
+):
+    """The API-error branch returns before the merge attempt ever runs —
+    it must clean up the still-live busy card itself rather than leaving
+    it stuck showing "Working…" with a Stop button forever."""
+    bot = _wire_bot(mk_bot)
+    sess = _sess()
+    prefs.set_preference(sess.scope_chat_id, "layout", "merged")
+    run_async(bot.notify(sess, "idle_prompt", {
+        "summary": "Claude AI usage limit reached|1700000000",
+    }))
+    bot._app.bot.delete_message.assert_awaited_once()
+    assert sess.busy_msg_id is None
+    # No merge was attempted — the error path is a distinct short-circuit.
+    assert "editMessageText" not in [m for m, _p in rich_calls]
+
+
 def test_merged_layout_message_gone_falls_back_and_clears_busy_msg_id(
     mk_bot, run_async, monkeypatch,
 ):
