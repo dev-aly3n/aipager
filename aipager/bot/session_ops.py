@@ -90,18 +90,33 @@ class SessionOpsMixin:
         Slash commands are sent raw (a marker line would break them).
         """
         sess.last_prompt_origin = "telegram"
-        # Write the policy snapshot for this turn so the PreToolUse hook
-        # can enforce the safety boundary (Phase E). Best-effort.
-        if self.scopes is not None:
-            try:
-                from aipager.policy_snapshot import write_snapshot
+        # Write the policy snapshot for this turn. The safety-relevant
+        # fields (role/scope/member, Phase E) only matter in v2 scope
+        # mode — the marker line that flips a hook's origin check to
+        # "telegram" is only ever prepended there (see _prompt_marker
+        # above), so writing a snapshot in legacy/personal mode cannot
+        # change PreToolUse enforcement. style_text is different: it's
+        # keyed by the scope's real Telegram chat id, not by aipager.yaml
+        # scope config, so it's meaningful in every mode. This is the one
+        # place a session's UserPromptSubmit-hook style guidance gets
+        # refreshed, and it must run on every Telegram-originated prompt
+        # so a /settings change reaches the very next reply, no restart.
+        # Best-effort.
+        try:
+            from aipager import preferences as prefs_mod
+            from aipager.policy_snapshot import write_snapshot
+            member = role = scope = None
+            if self.scopes is not None:
                 member = self._driver_user(sess)
                 role = (self.policy.get_role(member.role)
                         if member is not None else None)
                 scope = self._scope_for(sess.scope_chat_id)
-                write_snapshot(sess.name, role, scope, member)
-            except Exception:
-                log.debug("policy snapshot write failed", exc_info=True)
+            style = prefs_mod.style_text(
+                prefs_mod.get_preferences(sess.scope_chat_id or 0)
+            )
+            write_snapshot(sess.name, role, scope, member, style_text=style)
+        except Exception:
+            log.debug("policy snapshot write failed", exc_info=True)
         body = text
         if not text.lstrip().startswith("/"):
             marker = self._prompt_marker(sess)

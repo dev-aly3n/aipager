@@ -24,13 +24,20 @@ def snapshot_path(session_name: str) -> Path:
     return Path(f"/tmp/claude-policy-{session_name}.json")
 
 
-def resolve_snapshot(role, scope, member) -> dict:
+def resolve_snapshot(role, scope, member, style_text: str = "") -> dict:
     """Compute the effective rule sets for a driver (pure).
 
     ``role`` is a policy.Role (or None), ``scope`` a scope.Scope (or
     None), ``member`` a scope.Member (or None). Deny lists union across
     scope + role + member; the safety floor (paths + bash) always
     applies on top of any role/member additions.
+
+    ``style_text`` is unrelated to safety — it's the precomputed
+    `/settings` reply-style instruction block (see
+    ``aipager.preferences.style_text``) for the ``UserPromptSubmit``
+    hook to print verbatim. Carried on this snapshot rather than a
+    second file because it's the same "what does the hook need to know
+    about this turn" write, already firing at the right time.
     """
     bypass_safety = bool(role and role.bypass_safety)
     bypass_role_denies = bool(role and role.bypass_role_denies)
@@ -62,12 +69,14 @@ def resolve_snapshot(role, scope, member) -> dict:
         "deny_paths_no_access": sorted(no_access),
         "deny_paths_no_write": sorted(no_write),
         "deny_bash_patterns": sorted(bash),
+        "style_text": style_text,
     }
 
 
-def write_snapshot(session_name: str, role, scope, member) -> None:
+def write_snapshot(session_name: str, role, scope, member,
+                   style_text: str = "") -> None:
     """Atomic-write the resolved snapshot for a session (best-effort)."""
-    data = resolve_snapshot(role, scope, member)
+    data = resolve_snapshot(role, scope, member, style_text)
     path = snapshot_path(session_name)
     try:
         tmp = path.with_suffix(path.suffix + ".tmp")

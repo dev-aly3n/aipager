@@ -202,6 +202,32 @@ def _run(session: str, cap_slot: list[bytes]) -> None:
         except Exception as e:  # never wedge claude on enforcement bugs
             _debug(f"enforcement error (allowing): {e}")
 
+    # /settings reply-style injection (item 6.2). The daemon precomputes
+    # `style_text` on the session's policy snapshot at prompt-injection
+    # time (aipager.preferences.style_text); this hook's job is trivial
+    # by design — a dict lookup and one print — so it stays fast and
+    # can't itself get the instruction text wrong. This is the FIRST
+    # event this hook ever writes to stdout on, so the shape mirrors the
+    # PreToolUse branch above (try/except Exception, never wedge claude)
+    # and prints nothing at all — not even an empty line — when there's
+    # nothing to say, matching every other event's existing silence.
+    elif data.get("hook_event_name") == "UserPromptSubmit":
+        try:
+            from aipager.policy_snapshot import read_snapshot
+            snap = read_snapshot(data.get("session", ""))
+            style = (snap or {}).get("style_text", "")
+            if style:
+                print(json.dumps({
+                    "hookSpecificOutput": {
+                        "hookEventName": "UserPromptSubmit",
+                        "additionalContext": style,
+                    },
+                }))
+        except MemoryError:
+            raise
+        except Exception as e:  # never wedge claude on a style-lookup bug
+            _debug(f"style injection error (skipping): {e}")
+
 
 if __name__ == "__main__":
     main()
