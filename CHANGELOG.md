@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-07
+
 ### Added
 - **The busy card now stays in the chat after the turn ends.** It used to be
   deleted the moment the answer arrived, throwing away the only record of
