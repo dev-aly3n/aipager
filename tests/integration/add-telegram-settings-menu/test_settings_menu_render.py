@@ -41,9 +41,13 @@ def test_root_does_not_offer_back():
     assert "_:set:back" not in _all_callback_data(kb)
 
 
-def test_root_exactly_one_marker_reflecting_current_prefs():
-    """entrypoints.md: 'Exactly one button among the four section rows
-    contains a ✅ / current-value marker reflecting get_preferences'."""
+def test_root_exactly_one_marker_at_all_default_prefs():
+    """entrypoints.md: each section row is marked independently based on
+    whether its own value differs from its default. At all-default
+    preferences only `layout` is marked — it always resolves to a
+    concretely active mode, so its row is never unmarked — while
+    `formatting`/`length`/`level` sit at their "off"/"none" defaults and
+    carry no marker."""
     _, kb = render_settings_root(2)
     assert len(_marked_buttons(kb)) == 1
 
@@ -54,15 +58,20 @@ def test_root_callback_data_all_under_64_bytes():
         assert len(cb.encode("utf-8")) <= 64, f"{cb!r} exceeds Telegram's 64-byte cap"
 
 
-def test_root_still_exactly_one_marker_after_a_second_option_is_customized():
-    """entrypoints.md states unconditionally: 'Exactly one button among the
-    four section rows contains a ... marker reflecting get_preferences'.
-    Customizing a second option (on top of the always-resolved layout
-    section) must not produce a second marker."""
+def test_root_marks_each_customized_section_independently():
+    """entrypoints.md: each section row's marker reflects *that section's*
+    current value against *its own* default — it is not a single global
+    "you have customized something" indicator. Customizing a second
+    option (simple_formatting, on top of the always-marked layout row)
+    must add a second marker, one per non-default section."""
     chat_id = 4001
     set_preference(chat_id, "simple_formatting", True)
     _, kb_after = render_settings_root(chat_id)
-    assert len(_marked_buttons(kb_after)) == 1
+    marked = _marked_buttons(kb_after)
+    assert len(marked) == 2
+    marked_texts = [btn.text for btn in marked]
+    assert any("layout" in t.lower() for t in marked_texts)
+    assert any("formatting" in t.lower() for t in marked_texts)
 
 
 # ---- section menus ----------------------------------------------------------
