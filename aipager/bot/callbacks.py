@@ -224,7 +224,9 @@ class CallbackDispatchMixin:
         (`_:set:<section>:<value>`) additionally requires admin in a
         **group** scope (`chat_id < 0`); DM scopes and personal-mode
         installs skip the check entirely, matching `_is_admin`'s own
-        semantics there.
+        semantics there. An unresolvable `chat_id` (`None`) is treated the
+        same as a group scope — fail closed rather than silently skip
+        the check.
         """
         chat_id = calling_chat_id(update)
         parts = action.split(":")[1:]  # drop the leading "set"
@@ -263,7 +265,15 @@ class CallbackDispatchMixin:
                 await self._safe_answer(query, "Invalid callback")
                 return
 
-            if chat_id is not None and chat_id < 0 and not self._is_admin(update):
+            # Fail closed: an unresolvable chat_id (`calling_chat_id`
+            # returning None) is treated the same as a group scope rather
+            # than skipped like a DM. `_is_admin` still returns True for a
+            # genuinely-ungated case (personal-mode installs are always
+            # admin), so this only tightens the check for the team/scope
+            # modes where it matters — a permission gate should never
+            # degrade to "allow" just because it couldn't identify the
+            # chat.
+            if (chat_id is None or chat_id < 0) and not self._is_admin(update):
                 await self._safe_answer(
                     query, "Only an admin can change settings in this group.",
                     show_alert=True,

@@ -190,3 +190,45 @@ def test_malformed_value_token_toasts_invalid_for_every_section(
     assert query.answer.await_args.args[0] == "Invalid value"
     query.edit_message_text.assert_not_awaited()
 
+
+# ---- admin gate fails closed when chat_id can't be resolved ---------------
+
+def test_value_tap_with_unresolvable_chat_id_fails_closed(mk_bot, run_async):
+    """`calling_chat_id` returning None must not skip the admin gate.
+
+    `query.message.chat.id` is set so `_authorize_callback`'s allow-list
+    check (which reads off `query`, not `update`) resolves the member
+    normally; `update.effective_chat`/`update.message` are both absent so
+    `calling_chat_id(update)` — what `_dispatch_settings_action` actually
+    gates on — returns None. Even the group's owner must be refused: a
+    permission check that can't identify the chat has no scope to grant
+    bypass_safety in, so it must default to deny, not allow.
+    """
+    bot = mk_bot(scopes=_group_scopes())
+    bot.policy = load_policy()
+
+    query = MagicMock()
+    query.data = "_:set:layout:merged"
+    query.answer = AsyncMock()
+    query.edit_message_text = AsyncMock()
+    query.edit_message_reply_markup = AsyncMock()
+    query.message = MagicMock()
+    query.message.message_id = 42
+    query.message.text = ""
+    query.message.chat = MagicMock()
+    query.message.chat.id = -1001  # resolves the allow-list check
+    query.from_user = MagicMock()
+    query.from_user.id = 1  # owner — would pass if the gate were skipped
+
+    update = MagicMock()
+    update.callback_query = query
+    update.effective_user = query.from_user
+    update.effective_chat = None
+    update.message = None
+
+    run_async(bot._handle_callback(update, MagicMock()))
+
+    assert prefs.get_preferences(-1001).layout != "merged"
+    toast_texts = [c.args[0] for c in query.answer.await_args_list if c.args and c.args[0]]
+    assert any("admin" in t.lower() for t in toast_texts)
+    query.edit_message_text.assert_not_awaited()
