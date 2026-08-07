@@ -33,6 +33,7 @@ from telegram.ext import (
 
 from aipager.dtach import inject
 
+from aipager.bot.settings_menu import render_settings_root
 from aipager.config import (
     BACK_BUTTON, COMMANDS_BUTTON,
     FILE_DOWNLOAD_DIR, KEYBOARD_PARENTS, MODELS_BUTTON,
@@ -321,6 +322,20 @@ class CommandHandlersMixin:
             log.warning("Failed to send /start welcome", exc_info=True)
         # Make sure the persistent keyboard is showing.
         await self._send_keyboard(level="main", chat_id=calling_chat_id(update))
+
+    async def _handle_settings_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /settings — open the root preferences menu.
+
+        Gated like /status (``allow_read_only=True``): viewing current
+        values is never restricted. Changing a value is admin-gated in
+        groups inside the callback dispatcher, not here (see
+        ``callbacks._dispatch_settings_action``).
+        """
+        if not await self._authorize(update, allow_read_only=True):
+            return
+        chat_id = calling_chat_id(update)
+        text, kb = render_settings_root(chat_id or 0)
+        await update.message.reply_text(text, parse_mode="HTML", reply_markup=kb)
 
     async def _handle_status(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /status command — rich per-session dashboard."""

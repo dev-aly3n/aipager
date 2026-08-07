@@ -341,3 +341,30 @@ def test_direct_send_send_failure(mk_bot, mk_update, run_async, monkeypatch):
     run_async(bot._direct_send(update, "jim", "fail"))
     text = update.message.reply_text.await_args.args[0]
     assert "Failed to send" in text
+
+
+# ===== /settings =========================================================
+
+def test_handle_settings_cmd_opens_root_menu(mk_bot, mk_update, run_async):
+    bot = mk_bot()
+    update = mk_update("/settings", chat_id=555)
+    run_async(bot._handle_settings_cmd(update, MagicMock()))
+    update.message.reply_text.assert_awaited_once()
+    args, kwargs = update.message.reply_text.await_args
+    assert "Settings" in args[0]
+    assert kwargs.get("parse_mode") == "HTML"
+    assert kwargs.get("reply_markup") is not None
+
+
+def test_handle_settings_cmd_available_to_read_only(mk_bot, mk_update, run_async):
+    """Viewing /settings is never gated — even a read-only team member
+    can open the menu (only value-set taps are gated, in callbacks.py)."""
+    from aipager.team import Role, Rules, Team, User as TeamUser
+    bot = mk_bot(team=Team(
+        group_id=-100,
+        users={7: TeamUser(id=7, label="ro", role=Role.READ_ONLY)},
+        rules=Rules(deny_tools=[]),
+    ))
+    update = mk_update("/settings", user_id=7, chat_id=-100)
+    run_async(bot._handle_settings_cmd(update, MagicMock()))
+    update.message.reply_text.assert_awaited_once()
