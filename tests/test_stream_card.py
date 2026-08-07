@@ -1271,3 +1271,71 @@ def test_the_fallback_still_renders_an_anchor_past_the_end(tmp_path):
         "✅ `Bash: a`",
         "> trailing",
     ]
+
+
+# ── Prose that flushes before its own tools (long streaming message) ─────────
+
+def test_a_stale_batch_does_not_pull_the_next_block_up(mk_bot, run_async):
+    """Found in review (2026-08-07): a message that flushed its prose BEFORE
+    calling its tool left the floor behind, so the next block — usually the
+    final answer — anchored above that tool and was rendered."""
+    import aipager.bot.animation as anim
+    bot = mk_bot()
+    sess = _sess()
+    sess.busy_msg_id = 0
+    sess.stream_hook_live = True
+
+    _md(bot, run_async, sess, "Let me check that file.", msg_id="m1")
+    sess.record_tool("Read: X", True)
+    # The answer takes seconds to write, so its batch has long gone stale.
+    sess.stream_batch_since = time.monotonic() - anim._BATCH_HOLD_SECS - 0.1
+    _md(bot, run_async, sess, "The file looks fine.", msg_id="m2")
+
+    assert _body(build_stream_card(sess, "Done", final=True)) == [
+        "> Let me check that file.",
+        "✅ `Read: X`",
+    ]
+
+
+def test_two_tool_introducing_messages_then_an_answer(mk_bot, run_async):
+    """The shape the reviewer asked for: chained batches plus a final answer."""
+    bot = mk_bot()
+    sess = _sess()
+    sess.busy_msg_id = 0
+    sess.stream_hook_live = True
+
+    sess.record_tool("Bash: one", True)
+    sess.record_tool("Bash: two", True)
+    _md(bot, run_async, sess, "First step — two lookups.", msg_id="m1")
+    sess.record_tool("Read: f.py", True)
+    _md(bot, run_async, sess, "Second step — reading the file.", msg_id="m2")
+    _md(bot, run_async, sess, "Here is the final answer text.", msg_id="m3")
+
+    assert _body(build_stream_card(sess, "Done", final=True)) == [
+        "> First step — two lookups.",
+        "✅ `Bash: one`",
+        "✅ `Bash: two`",
+        "> Second step — reading the file.",
+        "✅ `Read: f.py`",
+    ]
+
+
+def test_trimming_the_history_shifts_the_card_anchors():
+    """tool_history is trimmed from the front at TOOL_HISTORY_CAP; anchors
+    index into it, so they must move with it or prose drifts upward."""
+    from aipager.state import TOOL_HISTORY_CAP
+    sess = _sess()
+    sess.stream_commentary = [(0, "opening line")]
+    sess.stream_anchor_floor = 0
+    sess.stream_tool_cursor = 0
+    for i in range(TOOL_HISTORY_CAP + 5):
+        sess.record_tool(f"Bash: {i}", True)
+
+    assert len(sess.tool_history) == TOOL_HISTORY_CAP
+    assert sess.stream_anchor_floor >= 0
+    assert sess.stream_commentary[0][0] == 0
+    # It re-anchors to the top of the visible window, just under the
+    # "N earlier tools" note — never below the rows it opened the turn above.
+    rows = _body(build_stream_card(sess, "Working"))
+    assert "earlier tools" in rows[0]
+    assert rows[1] == "> opening line"

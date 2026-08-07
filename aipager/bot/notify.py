@@ -37,7 +37,7 @@ from aipager.config import (
     STREAM_EDIT_INTERVAL,
 )
 from aipager.state import Status, TrackedSession
-from aipager.bot.animation import FINAL_VERB
+from aipager.bot.animation import FINAL_VERB, _expire_tool_batch
 
 # Pure-function helpers and constants live in aipager.bot.transport
 # now. Re-export the names this module uses internally so the
@@ -73,6 +73,31 @@ if TYPE_CHECKING:
     pass
 
 log = logging.getLogger(__name__)
+
+
+def _drop_answer_tail(sess: TrackedSession, answer: str) -> None:
+    """Drop trailing commentary blocks that are just the final answer.
+
+    A backstop for the finished card only. The card normally keeps the answer
+    out structurally — a block with no tool row after its anchor is not shown —
+    but that relies on the anchor being right, and the anchor is inferred from
+    hook arrival order. When a message flushes its prose *before* calling its
+    tools the inference can slip, and the cost of it slipping is the whole
+    answer quoted directly above the message carrying it, left in the chat for
+    good. Text is compared rather than trusted arithmetic, and only a trailing
+    run is trimmed, so mid-turn commentary that merely resembles the answer
+    survives.
+    """
+    if not answer:
+        return
+    hay = " ".join(answer.split())
+    while sess.stream_commentary:
+        block = " ".join(sess.stream_commentary[-1][1].split())
+        # A whitespace-only block must not halt the walk, or a real duplicate
+        # sitting below one would survive.
+        if block and block not in hay:
+            return
+        sess.stream_commentary.pop()
 
 
 
@@ -192,6 +217,13 @@ class NotifyMixin:
             msg_id = context.get("message_id", "")
             if not delta:
                 return
+            # Settle a batch that has been waiting too long to be this
+            # message's. A preamble reaches the hook within half a second of
+            # its own rows; anything older belongs to the message before it,
+            # which flushed its prose early and called tools afterwards.
+            # Checked here rather than only on the animation tick so the
+            # floor is right whatever the tick happened to be doing.
+            _expire_tool_batch(sess)
             # One assistant message is one block that grows, not a row per
             # chunk. A new message_id starts a new block at the floor: the
             # tool rows recorded since the last block are the ones this
@@ -436,6 +468,9 @@ class NotifyMixin:
                     # how this answer was reached. Rendered here — before the
                     # streaming state is reset below and before the answer goes
                     # out — so scrollback reads card, header, body.
+                    _drop_answer_tail(
+                        sess, context.get("raw_md") or context.get("summary") or "",
+                    )
                     try:
                         card_kept = await self._edit_busy_rich(
                             sess, FINAL_VERB, final=True,

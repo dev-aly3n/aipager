@@ -306,6 +306,16 @@ class TrackedSession:
             for info in self.active_subagents.values():
                 if "history_idx" in info and info["history_idx"] is not None:
                     info["history_idx"] -= drop
+            # The card's anchors index into the same list, so they shift with
+            # it. Left unshifted they would drift toward the top of the
+            # timeline on a turn long enough to trim, quietly putting prose
+            # above tools it never introduced.
+            self.stream_anchor_floor = max(0, self.stream_anchor_floor - drop)
+            self.stream_tool_cursor = max(0, self.stream_tool_cursor - drop)
+            self.stream_commentary = [
+                (max(0, anchor - drop), text)
+                for anchor, text in self.stream_commentary
+            ]
         return new_idx
 
 

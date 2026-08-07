@@ -445,3 +445,25 @@ def test_idle_keeps_the_header_when_the_answer_overflows(
     assert len(_headers(bot)) == 1
     assert "attached below" in _headers(bot)[0]
 
+
+
+def test_idle_backstop_drops_a_mis_anchored_answer(mk_bot, run_async, monkeypatch):
+    """When the anchor slips, the persisted card must still not quote the
+    answer above the message carrying it."""
+    monkeypatch.setattr("aipager.bot.notify.KEEP_FINISHED_CARD", True)
+    bot = mk_bot()
+    sess = _sess(status=Status.IDLE, busy_msg_id=42)
+    sess.stream_commentary = [(0, "Let me check that file."),
+                              (0, "The file looks fine.")]
+    captured = {}
+
+    async def _capture(s, _verb, **_kw):
+        captured["commentary"] = list(s.stream_commentary)
+        return True
+
+    bot._edit_busy_rich = _capture
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
+    bot._maybe_update_bot_name = AsyncMock()
+    bot._stop_animation = MagicMock()
+    run_async(bot.notify(sess, "idle_prompt", {"raw_md": "The file looks fine."}))
+    assert captured["commentary"] == [(0, "Let me check that file.")]
