@@ -270,12 +270,23 @@ class CallbackDispatchMixin:
                 )
                 return
 
+            # Safe: `section` was checked against SETTINGS_SECTIONS above,
+            # and this dict's keys are exactly SETTINGS_SECTIONS's members
+            # (both come from settings_menu.SECTIONS), so the lookup below
+            # can never raise KeyError.
             field = {
                 "layout": "layout", "formatting": "simple_formatting",
                 "length": "answer_length", "level": "language_level",
             }[section]
             value_map = self._SETTINGS_VALUE_TOKENS.get(section)
-            value = value_map[token] if value_map is not None else token
+            # `.get(token, token)` — an unrecognised token (e.g.
+            # "_:set:formatting:sideways") falls through as the raw string
+            # rather than raising KeyError here. That lets `set_preference`
+            # be the single validation authority: its allow-list check
+            # rejects the bogus value with `ValueError`, caught below, the
+            # same way every other section's malformed tokens are already
+            # handled.
+            value = value_map.get(token, token) if value_map is not None else token
             try:
                 preferences.set_preference(chat_id or 0, field, value)
             except ValueError:

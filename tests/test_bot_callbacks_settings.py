@@ -166,3 +166,27 @@ def test_invalid_value_toasts_and_does_not_mutate(mk_bot, mk_query, run_async):
     run_async(bot._handle_callback(update, MagicMock()))
     assert prefs.get_preferences(555).layout != "sideways"
     assert query.answer.await_args.args[0] == "Invalid value"
+
+
+# ---- malformed value token: every section must reach the same validator
+# (regression for the `formatting` section's map lookup raising an
+# unhandled KeyError instead of a caught ValueError — see callbacks.py's
+# `_dispatch_settings_action`) ------------------------------------------
+
+@pytest.mark.parametrize("callback_data", [
+    "_:set:layout:sideways",
+    "_:set:formatting:sideways",
+    "_:set:length:sideways",
+    "_:set:level:sideways",
+])
+def test_malformed_value_token_toasts_invalid_for_every_section(
+    mk_bot, mk_query, run_async, callback_data,
+):
+    bot = mk_bot()
+    update, query = mk_query(callback_data, chat_id=555)
+    # Must not raise (this is the regression: `formatting`'s value_map
+    # lookup used to raise a bare KeyError that escaped the handler).
+    run_async(bot._handle_callback(update, MagicMock()))
+    assert query.answer.await_args.args[0] == "Invalid value"
+    query.edit_message_text.assert_not_awaited()
+
