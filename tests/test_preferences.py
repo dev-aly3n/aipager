@@ -51,6 +51,22 @@ def test_negative_group_chat_id_round_trips():
     assert prefs.get_preferences(-1001234567890).answer_length == "long"
 
 
+# ---- get_preferences never raises, for any input ---------------------------
+#
+# entrypoints.md's contract: "always returns a fully-resolved value — never
+# raises, never returns None, regardless of whether chat_id has ever been
+# seen before". A session with an unstamped scope (``TrackedSession.
+# scope_chat_id == 0``) or one whose scope resolution otherwise degrades to
+# ``None``/``""`` must resolve to plain defaults, not blow up.
+@pytest.mark.parametrize("chat_id", [None, 0, "", -1001234567890, "-1", "abc"])
+def test_get_preferences_never_raises(chat_id):
+    p = prefs.get_preferences(chat_id)
+    assert p.layout in ("card", "merged", "replace")
+    assert p.simple_formatting is False
+    assert p.answer_length == "none"
+    assert p.language_level == "none"
+
+
 def test_set_preference_persists_to_disk(tmp_path, monkeypatch):
     path = tmp_path / "preferences.json"
     monkeypatch.setattr(prefs, "_PREFERENCES_PATH", path)

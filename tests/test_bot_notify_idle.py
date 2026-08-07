@@ -443,11 +443,44 @@ def test_idle_answer_carries_the_reply_link_when_the_header_is_skipped(
     bot = _finished_card_bot(mk_bot, monkeypatch)
     sess = _sess(status=Status.IDLE, busy_msg_id=42)
     sess.trigger_msg_id = 7
+    # A resolvable numeric destination, deliberately independent of the
+    # ambient (possibly-empty) config.CHAT_ID — this test's point is the
+    # reply-link/tracking wiring around a *reached* sendRichMessage call,
+    # not chat-id resolution itself (covered separately).
+    sess.scope_chat_id = 4242
     bot.registry.track_message = MagicMock()
     run_async(bot.notify(sess, "idle_prompt", {"summary": "the answer"}))
     assert sent.await_args.kwargs["reply_to_message_id"] == 7
     # The body takes over as the tracked message for this reply.
     bot.registry.track_message.assert_called_once_with(555, sess.name)
+
+
+def test_idle_answer_delivered_when_session_has_no_scope_and_no_chat_id(
+    mk_bot, run_async, monkeypatch,
+):
+    """An unscoped session (``scope_chat_id == 0``) with no global
+    ``CHAT_ID`` configured either has no numeric destination for the rich-
+    message API — that must never abort the IDLE branch outright. The
+    answer still has to reach the user via the plain-text fallback path,
+    and `get_preferences` must resolve (not raise) for this same
+    unscoped chat id along the way.
+    """
+    monkeypatch.setattr("aipager.config.CHAT_ID", "")
+    bot = _finished_card_bot(mk_bot, monkeypatch)
+    sess = _sess(status=Status.IDLE, busy_msg_id=42)
+    assert sess.scope_chat_id == 0  # unscoped — never explicitly stamped
+    sess.trigger_msg_id = 7
+    bot.registry.track_message = MagicMock()
+
+    # Must not raise — this is the regression itself: notify() aborting
+    # partway through, before anything is sent.
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "the answer"}))
+
+    # No numeric chat id → sendRichMessage is never reached; the answer
+    # still goes out through the plain-text fallback (bot.send_message).
+    sent_texts = [c.args[1] for c in bot._app.bot.send_message.await_args_list]
+    assert any("the answer" in t for t in sent_texts)
+    bot.registry.track_message.assert_called_once()
 
 
 def test_idle_keeps_the_header_when_the_card_was_not_kept(

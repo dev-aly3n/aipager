@@ -68,6 +68,30 @@ def resolve_chat_id(sess):
     return sess.scope_chat_id or config.CHAT_ID
 
 
+def resolve_chat_id_int(sess) -> int | None:
+    """``int``-cast :func:`resolve_chat_id`, never raising.
+
+    A session with no stamped scope (``scope_chat_id == 0``) falls back
+    to ``config.CHAT_ID``, which is a perfectly normal empty string on
+    an unconfigured/pre-wizard install or a scope-only (v2) install that
+    never set the legacy single-chat env var — plenty of the test suite
+    exercises exactly this combination deliberately. Any caller that
+    needs a definite numeric chat id for a rich-message API call must go
+    through this rather than ``int(resolve_chat_id(sess))`` directly, so
+    an unresolvable id degrades to "this call can't be made" (``None``,
+    handled by the caller's own fallback) instead of raising a
+    ``ValueError`` that aborts whatever's left of the caller — up to and
+    including the rest of a turn's answer never being delivered.
+    """
+    raw = resolve_chat_id(sess)
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        log.warning("no numeric chat id resolved for %r (raw=%r)",
+                    getattr(sess, "label", sess), raw)
+        return None
+
+
 # Sentinel returned by ``_authorize_callback`` in personal mode so
 # callers can distinguish "auth passed in personal mode" from "auth
 # passed in team mode and here is the TeamUser." Not exported.

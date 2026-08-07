@@ -69,6 +69,7 @@ from aipager.bot.transport import (  # noqa: F401
     _TRUNC_SUFFIX,
     _truncate_diff,
     resolve_chat_id,
+    resolve_chat_id_int,
 )
 
 if TYPE_CHECKING:
@@ -134,6 +135,16 @@ class NotifyMixin:
             log.info("[%s] merged: combined card+answer over the byte ceiling "
                      "— falling back to replace", sess.label)
             return False
+        chat_id = resolve_chat_id_int(sess)
+        if chat_id is None:
+            # No numeric destination to edit (unscoped session, no global
+            # CHAT_ID configured) — the caller's replace-style fallback
+            # can't reach this chat either, but it degrades to that
+            # existing, already-tolerant path instead of this ``await``
+            # raising and aborting the rest of the turn, answer included.
+            log.info("[%s] merged: no numeric chat id — falling back to replace",
+                     sess.label)
+            return False
         # Combined-text RTL detection (not the answer alone): an RTL answer
         # following an LTR toolchain timeline must still be judged
         # majority-RTL by sample, matching how the plain single-message
@@ -141,7 +152,7 @@ class NotifyMixin:
         is_rtl = detect_rtl(combined)
         try:
             result = await edit_message_text_rich(
-                int(resolve_chat_id(sess)), int(sess.busy_msg_id), combined,
+                chat_id, int(sess.busy_msg_id), combined,
                 is_rtl=is_rtl, reply_markup=None,
             )
         except RichMessageBlocked:
@@ -716,9 +727,20 @@ class NotifyMixin:
                 log.info("[%s] sendRichMessage: %d chars, rtl=%s, overflow=%s",
                          label, len(body_content), is_rtl, send_file)
                 reply_to = sess.trigger_msg_id if skip_header else None
+                chat_id = resolve_chat_id_int(sess)
                 try:
+                    if chat_id is None:
+                        # Unscoped session, no global CHAT_ID configured —
+                        # there's no numeric destination for the rich-message
+                        # API call. Go straight to the plain-text fallback
+                        # below (it still addresses the chat by whatever
+                        # resolve_chat_id(sess) returned) instead of letting
+                        # int(None-ish) raise and lose the answer outright.
+                        raise RichMessageFallbackRequired(
+                            "no numeric chat id resolved",
+                        )
                     sent = await send_rich_message(
-                        int(resolve_chat_id(sess)),
+                        chat_id,
                         body_content,
                         is_rtl=is_rtl,
                         reply_to_message_id=reply_to,
