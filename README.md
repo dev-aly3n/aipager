@@ -1,5 +1,9 @@
 # aipager
 
+[![PyPI](https://img.shields.io/pypi/v/aipager?label=pypi&color=3775A9)](https://pypi.org/project/aipager/)
+[![Python](https://img.shields.io/pypi/pyversions/aipager?color=3775A9)](https://pypi.org/project/aipager/)
+[![License](https://img.shields.io/badge/license-MIT-black)](LICENSE)
+
 Telegram remote-control for [Claude Code](https://claude.com/claude-code)
 CLI sessions. Run Claude inside a detached terminal (`dtach`), drive it
 from your phone — read responses, send prompts, approve permission
