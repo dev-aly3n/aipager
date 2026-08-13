@@ -17,3 +17,61 @@ jobs:
       - run: pip install build
       - run: python -m build
       - uses: pypa/gh-action-pypi-publish@release/v1
+
+  # Keep the Homebrew tap on the version we just published. Without this the
+  # formula only moved when someone remembered, and it drifted six releases
+  # behind — anyone running `brew install dev-aly3n/tap/aipager` got 0.4.23
+  # while PyPI served 0.5.0.
+  bump-tap:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the tap
+        uses: actions/checkout@v4
+        with:
+          repository: dev-aly3n/homebrew-tap
+          # Cross-repo push: the default GITHUB_TOKEN is scoped to this
+          # repository only. Fine-grained PAT with Contents: write on the tap.
+          token: ${{ secrets.TAP_TOKEN }}
+
+      # Match the formula's `depends_on "python@3.12"`, so dependency markers
+      # resolve the same way the built venv will.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Wait for PyPI to serve the new version
+        # The publish step returns before the CDN reliably serves the file,
+        # and regen-formula.py reads the sdist URL + sha256 straight from
+        # PyPI. Polling here keeps a fast CDN from being a flaky formula.
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for _ in $(seq 1 30); do
+            if curl -sf "https://pypi.org/pypi/aipager/${version}/json" > /dev/null; then
+              echo "PyPI is serving ${version}"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::PyPI did not serve ${version} within 5 minutes"
+          exit 1
+
+      - name: Regenerate the formula
+        # Regenerated, never hand-edited: the formula installs an OFFLINE venv
+        # from its `resource` blocks, so every transitive pin has to move too.
+        # Hand-editing just the url+sha is what left seven dependencies stale.
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          python3 scripts/regen-formula.py "$version" > Formula/aipager.rb
+
+      - name: Commit and push
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if git diff --quiet -- Formula/aipager.rb; then
+            echo "Formula already at ${version} — nothing to do"
+            exit 0
+          fi
+          git config user.name "dev-aly3n"
+          git config user.email "dev.aly3n@gmail.com"
+          git commit -m "aipager ${version}" -- Formula/aipager.rb
+          git push
