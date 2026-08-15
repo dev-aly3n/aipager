@@ -164,6 +164,16 @@ STREAM_BODY_CHARS: int = int(os.environ.get("STREAM_BODY_CHARS", "600"))
 # which tools ran and what Claude said between them, so throwing it away at
 # the moment it becomes readable loses the turn's whole shape. Set to 0 for
 # the old behaviour where the card disappears as the answer arrives.
+#
+# Since /settings shipped, this is a SEED, not the last word: it only
+# supplies a scope's *default* `layout` ("card" when true, "replace" when
+# false) for a scope that has never touched the Message layout section
+# of `/settings`. A stored per-scope preference (including "merged", a
+# third mode this env var predates) always overrides it — see
+# `aipager.preferences`'s layout resolution, the sole owner of "what
+# does this scope's layout resolve to". Existing `KEEP_FINISHED_CARD=0`
+# installs see zero behaviour change on upgrade: the seed reproduces
+# their current default exactly, until they tap something in /settings.
 KEEP_FINISHED_CARD: bool = os.environ.get(
     "KEEP_FINISHED_CARD", "1",
 ) not in ("0", "false", "no")

@@ -26,18 +26,20 @@ from telegram.error import Forbidden
 from aipager.bot.rich_message import (
     RichMessageBlocked,
     RichMessageFallbackRequired,
+    RichMessageGone,
     detect_rtl,
+    edit_message_text_rich,
     send_rich_message,
 )
 
 
+from aipager import preferences
 from aipager.config import (
-    KEEP_FINISHED_CARD,
     STALE_BUSY_TIMEOUT,
     STREAM_EDIT_INTERVAL,
 )
 from aipager.state import Status, TrackedSession
-from aipager.bot.animation import FINAL_VERB, _expire_tool_batch
+from aipager.bot.animation import FINAL_VERB, _RICH_LIMIT, _expire_tool_batch, build_stream_card
 
 # Pure-function helpers and constants live in aipager.bot.transport
 # now. Re-export the names this module uses internally so the
@@ -67,12 +69,19 @@ from aipager.bot.transport import (  # noqa: F401
     _TRUNC_SUFFIX,
     _truncate_diff,
     resolve_chat_id,
+    resolve_chat_id_int,
 )
 
 if TYPE_CHECKING:
     pass
 
 log = logging.getLogger(__name__)
+
+# Separator row between the finished timeline and the answer in `merged`
+# layout — a literal row, not a second "✅ Finished" header (that would be
+# redundant with the card's own header, per the same reasoning the
+# header-skip logic below already uses for `card` layout).
+_MERGED_SEPARATOR = "―――――――――――――"
 
 
 def _drop_answer_tail(sess: TrackedSession, answer: str) -> None:
@@ -103,6 +112,57 @@ def _drop_answer_tail(sess: TrackedSession, answer: str) -> None:
 
 class NotifyMixin:
     """Mixin for TelegramBot — see :mod:`aipager.bot` overview."""
+
+    async def _send_merged_final(self, sess: TrackedSession, answer: str) -> bool:
+        """Try to deliver a finished turn as ONE edit: the finished timeline
+        (exactly what ``card`` mode renders) with the answer appended below
+        a separator, on the existing busy message.
+
+        Returns ``True`` on success — the turn is fully delivered, the
+        caller sends nothing else. Returns ``False`` when the caller MUST
+        fall back to the ``replace``-style send so the answer is never
+        lost: either the combined text exceeds the byte ceiling (checked
+        before any network call — no edit is attempted at all) or the
+        edit itself failed for any reason. Never raises.
+        """
+        try:
+            card_md = build_stream_card(sess, FINAL_VERB, final=True)
+        except Exception:
+            log.debug("[%s] merged: card render failed", sess.label, exc_info=True)
+            return False
+        combined = f"{card_md}\n\n{_MERGED_SEPARATOR}\n\n{answer}" if answer else card_md
+        if len(combined.encode("utf-8")) > _RICH_LIMIT:
+            log.info("[%s] merged: combined card+answer over the byte ceiling "
+                     "— falling back to replace", sess.label)
+            return False
+        chat_id = resolve_chat_id_int(sess)
+        if chat_id is None:
+            # No numeric destination to edit (unscoped session, no global
+            # CHAT_ID configured) — the caller's replace-style fallback
+            # can't reach this chat either, but it degrades to that
+            # existing, already-tolerant path instead of this ``await``
+            # raising and aborting the rest of the turn, answer included.
+            log.info("[%s] merged: no numeric chat id — falling back to replace",
+                     sess.label)
+            return False
+        # Combined-text RTL detection (not the answer alone): an RTL answer
+        # following an LTR toolchain timeline must still be judged
+        # majority-RTL by sample, matching how the plain single-message
+        # body-send already treats detect_rtl(body_content) above.
+        is_rtl = detect_rtl(combined)
+        try:
+            result = await edit_message_text_rich(
+                chat_id, int(sess.busy_msg_id), combined,
+                is_rtl=is_rtl, reply_markup=None,
+            )
+        except RichMessageBlocked:
+            log.warning("[%s] merged: editMessageText blocked", sess.label)
+            return False
+        except RichMessageGone:
+            log.debug("[%s] merged: busy message gone", sess.label)
+            sess.busy_msg_id = 0
+            return False
+        return result is not None
 
     async def notify(self, sess: TrackedSession, event: str, context: dict) -> None:
         """Send appropriate Telegram notification for a state change."""
@@ -468,9 +528,23 @@ class NotifyMixin:
             # Stop animation and clean up busy message
             self._stop_animation(sess)
             sess.pending_permission = None  # clear stale inline permission if any
+            # `layout` resolves per-scope: a stored /settings preference always
+            # wins; an untouched scope falls back to the KEEP_FINISHED_CARD seed
+            # (aipager.preferences is the sole owner of that resolution).
+            layout = preferences.get_preferences(sess.scope_chat_id).layout
             card_kept = False
+            # True once the busy card has been successfully disposed of —
+            # either kept as the finished card (`card_kept`, below) or
+            # deleted outright (`replace`, and `merged`'s own delete-on-
+            # fallback a little further down). Either way there's nothing
+            # left in the chat repeating what the header would say, so the
+            # header itself becomes skippable — see `skip_header` below.
+            # Per the user's own framing of `replace`: "still we have only
+            # one message after user message but busy message gets
+            # removed" — one message, not a removed-card-plus-two-sends.
+            card_deleted = False
             if sess.busy_msg_id and sess.busy_msg_id > 0:
-                if KEEP_FINISHED_CARD:
+                if layout in ("card", "merged"):
                     # Leave the timeline in the chat: which tools ran, in what
                     # order, and what Claude said between them is the record of
                     # how this answer was reached. Rendered here — before the
@@ -479,21 +553,30 @@ class NotifyMixin:
                     _drop_answer_tail(
                         sess, context.get("raw_md") or context.get("summary") or "",
                     )
-                    try:
-                        card_kept = await self._edit_busy_rich(
-                            sess, FINAL_VERB, final=True,
-                        ) is True
-                    except Exception:
-                        log.debug("Final busy-card render failed", exc_info=True)
+                    if layout == "card":
+                        try:
+                            card_kept = await self._edit_busy_rich(
+                                sess, FINAL_VERB, final=True,
+                            ) is True
+                        except Exception:
+                            log.debug("Final busy-card render failed", exc_info=True)
+                        sess.busy_msg_id = None
+                    # "merged": busy_msg_id stays live on purpose — the one
+                    # combined edit (timeline + answer) happens below, once
+                    # the answer text is known, and clears it either way.
                 else:
+                    # "replace" — delete the busy card, then send the answer
+                    # alone (header skipped below — nothing is left in the
+                    # chat that repeats what it would say).
                     try:
                         await bot.delete_message(
                             chat_id=resolve_chat_id(sess),
                             message_id=sess.busy_msg_id,
                         )
+                        card_deleted = True
                     except Exception:
                         pass
-                sess.busy_msg_id = None
+                    sess.busy_msg_id = None
 
             summary = context.get("summary", sess.summary)
             raw_md = context.get("raw_md", "")
@@ -529,6 +612,18 @@ class NotifyMixin:
             error_source = raw_md or summary or ""
             error_detection = _detect_api_error(error_source)
             if error_detection:
+                if layout == "merged" and sess.busy_msg_id and sess.busy_msg_id > 0:
+                    # This branch returns before the merged-delivery attempt
+                    # below ever runs — clean up here so the busy card isn't
+                    # stranded showing "Working…" with a Stop button forever.
+                    try:
+                        await bot.delete_message(
+                            chat_id=resolve_chat_id(sess),
+                            message_id=sess.busy_msg_id,
+                        )
+                    except Exception:
+                        pass
+                    sess.busy_msg_id = None
                 friendly_error, _retry_after = error_detection
                 text = (f"⚠️ <b>{html_mod.escape(label)}</b> · {friendly_error}")
                 keyboard = (self._build_retry_keyboard(sess.name)
@@ -566,10 +661,61 @@ class NotifyMixin:
             suffix = f" ({', '.join(parts)})" if parts else ""
             header_text = f"✅ <b>{html_mod.escape(label)}</b> · Finished{suffix}"
 
+            # ── merged layout: one combined edit, timeline + answer ────────
+            # Attempted here — after the header text exists (used only by the
+            # observer broadcast below) but before the per-answer-alone
+            # overflow check, since merged has its own combined-text ceiling
+            # check inside _send_merged_final. Only attempted when the busy
+            # card is still live; if it isn't (e.g. it was already lost) there
+            # is nothing to merge into, so the turn falls through to the
+            # ordinary send below — the exact same path "replace" uses.
+            merged_delivered = False
+            if layout == "merged" and sess.busy_msg_id and sess.busy_msg_id > 0:
+                pre_merge_busy_msg_id = sess.busy_msg_id
+                # `_send_merged_final` EDITS the existing busy message in
+                # place rather than sending a new one, so on success no
+                # `registry.track_message` call happens here — reply
+                # routing for this message_id keeps working only because
+                # it was already registered when the busy message was
+                # first sent (see animation.py's `track_message` call
+                # right after `send_busy`) and that message_id is never
+                # reused for anything else. If a future refactor ever
+                # made the merged edit target a *different* message_id
+                # than the one tracked at send time, replies to it would
+                # silently stop resolving to this session.
+                merged_delivered = await self._send_merged_final(sess, content)
+                if not merged_delivered:
+                    # Losing the timeline is acceptable; losing the answer is
+                    # never acceptable — fall back to the replace-style send
+                    # below by clearing the (now presumed-gone-or-stale) card.
+                    # Falling back to "replace" means behaving exactly like
+                    # it: one message, header skipped, once the card is gone.
+                    if sess.busy_msg_id:
+                        # Still live — _send_merged_final's own failure
+                        # wasn't a RichMessageGone, so the card needs an
+                        # explicit delete here.
+                        try:
+                            await bot.delete_message(
+                                chat_id=resolve_chat_id(sess),
+                                message_id=pre_merge_busy_msg_id,
+                            )
+                            card_deleted = True
+                        except Exception:
+                            pass
+                    else:
+                        # _send_merged_final already found the card gone
+                        # (RichMessageGone) and cleared busy_msg_id itself —
+                        # nothing left in the chat either way.
+                        card_deleted = True
+                sess.busy_msg_id = None
+
             # ── Overflow detection ─────────────────────────────────────────
+            # Skipped when the merged edit above already delivered the whole
+            # turn — its own combined-text ceiling check already covers this
+            # turn's answer.
             send_file = False
             body_content = content  # may be truncated below
-            if content:
+            if not merged_delivered and content:
                 content_utf8 = content.encode("utf-8")
                 if len(content_utf8) > 32768:
                     # Truncate at the last markdown-safe boundary under 32768.
@@ -587,14 +733,22 @@ class NotifyMixin:
                     send_file = True
 
             # ── Send the header (HTML, via PTB) ────────────────────────────
-            # Skipped when the finished card is already sitting right above the
-            # answer saying the same thing — ✅, label, elapsed. The body then
-            # carries the reply link and the tracked message_id in its place.
-            # The overflow case keeps the header: the "attached below" note and
-            # the document's reply target both live on it.
-            skip_header = card_kept and bool(body_content) and not send_file
+            # Skipped whenever the busy card has already been disposed of —
+            # either kept as the finished card (`card_kept`, so the header
+            # would repeat what's already sitting right above the answer:
+            # ✅, label, elapsed) or deleted outright (`card_deleted` —
+            # `replace`, and `merged` falling back to that same one-message
+            # behaviour). Either way the body carries the reply link and the
+            # tracked message_id in the header's place.
+            # Two cases keep the header regardless: overflow (the "attached
+            # below" note and the document's reply target both live on it)
+            # and card disposal having failed (nothing else identifies the
+            # turn).
+            skip_header = (
+                (card_kept or card_deleted) and bool(body_content) and not send_file
+            )
             msg_id = 0
-            if not skip_header:
+            if not merged_delivered and not skip_header:
                 if send_file:
                     header_text += "\n\n📎 <i>Full response attached below ↓</i>"
                 log.debug("[%s] Sending IDLE notification (%d chars header)",
@@ -612,14 +766,25 @@ class NotifyMixin:
                     # was never sent.
 
             # ── Send the body via sendRichMessage ──────────────────────────
-            if body_content:
+            if not merged_delivered and body_content:
                 is_rtl = detect_rtl(body_content)
                 log.info("[%s] sendRichMessage: %d chars, rtl=%s, overflow=%s",
                          label, len(body_content), is_rtl, send_file)
                 reply_to = sess.trigger_msg_id if skip_header else None
+                chat_id = resolve_chat_id_int(sess)
                 try:
+                    if chat_id is None:
+                        # Unscoped session, no global CHAT_ID configured —
+                        # there's no numeric destination for the rich-message
+                        # API call. Go straight to the plain-text fallback
+                        # below (it still addresses the chat by whatever
+                        # resolve_chat_id(sess) returned) instead of letting
+                        # int(None-ish) raise and lose the answer outright.
+                        raise RichMessageFallbackRequired(
+                            "no numeric chat id resolved",
+                        )
                     sent = await send_rich_message(
-                        int(resolve_chat_id(sess)),
+                        chat_id,
                         body_content,
                         is_rtl=is_rtl,
                         reply_to_message_id=reply_to,

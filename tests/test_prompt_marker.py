@@ -77,9 +77,10 @@ def test_inject_writes_policy_snapshot(mk_bot, run_async, monkeypatch):
     bot = _bot(mk_bot)
     monkeypatch.setattr(inject, "send_text_and_enter", AsyncMock(return_value=True))
     captured = {}
-    monkeypatch.setattr(policy_snapshot, "write_snapshot",
-                        lambda name, role, scope, member: captured.update(
-                            name=name, role=role, member=member))
+    monkeypatch.setattr(
+        policy_snapshot, "write_snapshot",
+        lambda name, role, scope, member, style_text="": captured.update(
+            name=name, role=role, member=member, style_text=style_text))
     run_async(bot._inject_prompt(_sess(), "do the thing"))
     assert captured["name"] == "claude-x__g100"
     assert captured["member"].label == "bob"        # driver resolved

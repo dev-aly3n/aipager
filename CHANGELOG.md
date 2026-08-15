@@ -34,6 +34,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   therefore killed it. The resume flag is now dropped when no transcript
   exists for that id — an id with no conversation has no history to preserve.
 
+### Added
+- **`/settings` command** — a nested inline-keyboard menu for four
+  per-scope preferences: message layout (`card` / `merged` / `replace`),
+  simple formatting, answer length (`extra short` / `short` /
+  `medium` / `long`), and language level. Layout is pure
+  presentation and applies instantly; the other three reach Claude via
+  the `UserPromptSubmit` hook on the very next prompt, no session
+  restart. Each option's "don't apply any rule" / off state injects
+  nothing at all — it's a distinct default choice, not a synonym for
+  "normal". Opening the menu is available to any scope member; changing
+  a value in a group scope requires admin. Stored in
+  `~/.config/aipager/preferences.json`, survives a daemon restart.
+
+### Changed
+- **`KEEP_FINISHED_CARD` is now a seed, not the last word.** It still
+  supplies a scope's *default* message layout (`card` when true,
+  `replace` when false), but a stored `/settings` → Message layout
+  preference for that scope now overrides it — including the new
+  `merged` mode, a third layout this env var predates. Existing
+  `KEEP_FINISHED_CARD=0` installs see no behaviour change on upgrade
+  until they tap something in `/settings`.
 
 ## [0.5.0] - 2026-08-07
 

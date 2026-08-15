@@ -129,6 +129,89 @@ def test_notify_hook_debug_prints(monkeypatch, capsys, tmp_path):
     assert "unreachable" in err
 
 
+# ---- notify_hook: UserPromptSubmit / settings style injection -----------
+
+def test_user_prompt_submit_no_snapshot_no_stdout(monkeypatch, tmp_path, capsys):
+    """No snapshot file at all for this session → prints nothing."""
+    monkeypatch.setattr(notify_hook, "SOCKET_PATH", str(tmp_path / "nope.sock"))
+    from aipager import policy_snapshot
+    monkeypatch.setattr(policy_snapshot, "snapshot_path",
+                        lambda n: tmp_path / f"{n}.json")
+    _set_stdin(monkeypatch, '{"hook_event_name":"UserPromptSubmit"}')
+    monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-nosnap")
+    notify_hook.main()
+    assert capsys.readouterr().out == ""
+
+
+def test_user_prompt_submit_empty_style_text_no_stdout(monkeypatch, tmp_path, capsys):
+    """Snapshot exists but style_text is empty (all-default preferences)."""
+    monkeypatch.setattr(notify_hook, "SOCKET_PATH", str(tmp_path / "nope.sock"))
+    from aipager import policy_snapshot
+    monkeypatch.setattr(policy_snapshot, "snapshot_path",
+                        lambda n: tmp_path / f"{n}.json")
+    policy_snapshot.write_snapshot("claude-empty", None, None, None, style_text="")
+    _set_stdin(monkeypatch, '{"hook_event_name":"UserPromptSubmit"}')
+    monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-empty")
+    notify_hook.main()
+    assert capsys.readouterr().out == ""
+
+
+def test_user_prompt_submit_non_empty_style_prints_exact_json(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(notify_hook, "SOCKET_PATH", str(tmp_path / "nope.sock"))
+    from aipager import policy_snapshot
+    monkeypatch.setattr(policy_snapshot, "snapshot_path",
+                        lambda n: tmp_path / f"{n}.json")
+    style = "Apply this reply-style guidance to your next answer; do not mention or quote it:\n- Keep the answer short — a few sentences."
+    policy_snapshot.write_snapshot("claude-styled", None, None, None, style_text=style)
+    _set_stdin(monkeypatch, '{"hook_event_name":"UserPromptSubmit"}')
+    monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-styled")
+    notify_hook.main()
+    out = capsys.readouterr().out.strip()
+    payload = json.loads(out)
+    assert payload == {
+        "hookSpecificOutput": {
+            "hookEventName": "UserPromptSubmit",
+            "additionalContext": style,
+        }
+    }
+
+
+def test_user_prompt_submit_still_forwards_udp(monkeypatch, tmp_path):
+    """The daemon-notify UDP forward happens regardless of style_text."""
+    sock_path = tmp_path / "aipager.sock"
+    monkeypatch.setattr(notify_hook, "SOCKET_PATH", str(sock_path))
+    from aipager import policy_snapshot
+    monkeypatch.setattr(policy_snapshot, "snapshot_path",
+                        lambda n: tmp_path / f"{n}.json")
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    srv.bind(str(sock_path))
+    srv.settimeout(1.0)
+    try:
+        _set_stdin(monkeypatch, '{"hook_event_name":"UserPromptSubmit"}')
+        monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-udp")
+        notify_hook.main()
+        data, _ = srv.recvfrom(4096)
+        payload = json.loads(data.decode())
+        assert payload["hook_event_name"] == "UserPromptSubmit"
+        assert payload["session"] == "claude-udp"
+    finally:
+        srv.close()
+
+
+def test_user_prompt_submit_swallows_read_snapshot_error(monkeypatch, tmp_path, capsys):
+    """A style-lookup bug must never wedge the hook — no stdout, no raise."""
+    monkeypatch.setattr(notify_hook, "SOCKET_PATH", str(tmp_path / "nope.sock"))
+    from aipager import policy_snapshot
+
+    def _boom(_session):
+        raise RuntimeError("simulated bug")
+    monkeypatch.setattr(policy_snapshot, "read_snapshot", _boom)
+    _set_stdin(monkeypatch, '{"hook_event_name":"UserPromptSubmit"}')
+    monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-x")
+    notify_hook.main()  # must not raise
+    assert capsys.readouterr().out == ""
+
+
 # ---- statusline_notify ---------------------------------------------------
 
 def test_statusline_empty_stdin_writes_empty_stdout(monkeypatch, capsys):

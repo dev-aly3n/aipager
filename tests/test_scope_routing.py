@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
-from aipager.bot.transport import resolve_chat_id
+from aipager.bot.transport import resolve_chat_id, resolve_chat_id_int
 from aipager.state import Status, TrackedSession
 
 
@@ -27,6 +27,35 @@ def test_resolve_falls_back_to_chat_id_str(monkeypatch):
     monkeypatch.setattr(config, "CHAT_ID", "111")
     # Unstamped session → original CHAT_ID string (preserves old behavior)
     assert resolve_chat_id(_sess(scope_chat_id=0)) == "111"
+
+
+# ---- resolve_chat_id_int --------------------------------------------------
+
+def test_resolve_int_casts_a_stamped_scope(monkeypatch):
+    from aipager import config
+    monkeypatch.setattr(config, "CHAT_ID", "111")
+    assert resolve_chat_id_int(_sess(scope_chat_id=999)) == 999
+
+
+def test_resolve_int_casts_a_numeric_chat_id_fallback(monkeypatch):
+    from aipager import config
+    monkeypatch.setattr(config, "CHAT_ID", "111")
+    assert resolve_chat_id_int(_sess(scope_chat_id=0)) == 111
+
+
+def test_resolve_int_returns_none_instead_of_raising_when_unresolvable(monkeypatch):
+    """Unscoped session, no global CHAT_ID configured — a perfectly normal
+    state (pre-wizard install, scope-only install that never set the
+    legacy env var). Must degrade to ``None``, never raise."""
+    from aipager import config
+    monkeypatch.setattr(config, "CHAT_ID", "")
+    assert resolve_chat_id_int(_sess(scope_chat_id=0)) is None
+
+
+def test_resolve_int_returns_none_for_a_non_numeric_chat_id(monkeypatch):
+    from aipager import config
+    monkeypatch.setattr(config, "CHAT_ID", "not-a-number")
+    assert resolve_chat_id_int(_sess(scope_chat_id=0)) is None
 
 
 # ---- notify routing -----------------------------------------------------

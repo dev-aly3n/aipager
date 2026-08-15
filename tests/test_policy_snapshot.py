@@ -63,3 +63,32 @@ def test_write_and_clear(tmp_path, monkeypatch):
 def test_floor_constants_match():
     snap = ps.resolve_snapshot(None, None, None)
     assert set(safety.DENY_PATHS_NO_ACCESS) <= set(snap["deny_paths_no_access"])
+
+
+# ---- style_text field (item 6.2) -----------------------------------------
+
+def test_resolve_snapshot_style_text_defaults_empty():
+    snap = ps.resolve_snapshot(None, None, None)
+    assert snap["style_text"] == ""
+
+
+def test_resolve_snapshot_carries_style_text():
+    snap = ps.resolve_snapshot(None, None, None, style_text="Keep it short.")
+    assert snap["style_text"] == "Keep it short."
+
+
+def test_write_snapshot_persists_style_text(tmp_path, monkeypatch):
+    monkeypatch.setattr(ps, "snapshot_path", lambda n: tmp_path / f"{n}.json")
+    pol = _policy()
+    ps.write_snapshot("claude-x__d1", pol.get_role("user"), None, None,
+                      style_text="Use simple, everyday words.")
+    data = json.loads((tmp_path / "claude-x__d1.json").read_text())
+    assert data["style_text"] == "Use simple, everyday words."
+
+
+def test_write_snapshot_style_text_defaults_empty(tmp_path, monkeypatch):
+    monkeypatch.setattr(ps, "snapshot_path", lambda n: tmp_path / f"{n}.json")
+    pol = _policy()
+    ps.write_snapshot("claude-x__d1", pol.get_role("user"), None, None)
+    data = json.loads((tmp_path / "claude-x__d1.json").read_text())
+    assert data["style_text"] == ""

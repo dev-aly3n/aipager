@@ -25,6 +25,12 @@ from telegram.ext import (
 
 from aipager.dtach import inject
 
+from aipager import preferences
+from aipager.bot.settings_menu import (
+    SECTIONS as SETTINGS_SECTIONS,
+    render_settings_root,
+    render_settings_section,
+)
 from aipager.config import (
     CHAT_ID,
 )
@@ -110,17 +116,18 @@ class CallbackDispatchMixin:
     """Mixin for TelegramBot — see :mod:`aipager.bot` overview."""
 
     @staticmethod
-    async def _safe_answer(query, text: str | None = None) -> None:
-        """Call ``query.answer(text)`` swallowing any "query is too old"
-        or "already answered" errors.
+    async def _safe_answer(query, text: str | None = None, **kwargs) -> None:
+        """Call ``query.answer(text, **kwargs)`` swallowing any "query is
+        too old" or "already answered" errors.
 
         Used everywhere we want to set a toast text after the eager
         ack at the top of ``_handle_callback`` — Telegram refuses a
         second answer for the same query, so without this wrapper the
         whole handler would crash on the second ``answer`` call.
+        ``kwargs`` forwards e.g. ``show_alert=True`` for a modal toast.
         """
         try:
-            await query.answer(text)
+            await query.answer(text, **kwargs)
         except Exception:
             pass
 
@@ -199,6 +206,111 @@ class CallbackDispatchMixin:
             parse_mode="HTML",
         )
         log.info("[%s] perms switched to skip_perms=%s", label, target_skip_perms)
+
+    # Callback-data value tokens → the field value `preferences.set_preference`
+    # expects. Only `simple_formatting` needs translation (bool ↔ on/off);
+    # every other field's values already double as their own tokens, so
+    # they round-trip through this map unchanged.
+    _SETTINGS_VALUE_TOKENS = {
+        "formatting": {"on": True, "off": False},
+    }
+
+    async def _dispatch_settings_action(self, update: Update, query, action: str) -> None:
+        """Route one `_:set...` callback (see settings_menu.py's module
+        docstring for the full callback-data contract).
+
+        Navigation (root/section/back/close) is always allowed — viewing
+        current values is never gated. A value-set tap
+        (`_:set:<section>:<value>`) additionally requires admin in a
+        **group** scope (`chat_id < 0`); DM scopes and personal-mode
+        installs skip the check entirely, matching `_is_admin`'s own
+        semantics there. An unresolvable `chat_id` (`None`) is treated the
+        same as a group scope — fail closed rather than silently skip
+        the check.
+        """
+        chat_id = calling_chat_id(update)
+        parts = action.split(":")[1:]  # drop the leading "set"
+
+        if not parts or parts == ["back"]:
+            text, kb = render_settings_root(chat_id or 0)
+            try:
+                await query.edit_message_text(text, parse_mode="HTML", reply_markup=kb)
+            except Exception:
+                pass
+            return
+
+        if parts == ["close"]:
+            try:
+                await query.edit_message_reply_markup(reply_markup=None)
+            except Exception:
+                pass
+            return
+
+        if len(parts) == 1:
+            section = parts[0]
+            rendered = render_settings_section(chat_id or 0, section)
+            if rendered is None:
+                await self._safe_answer(query, "Invalid callback")
+                return
+            text, kb = rendered
+            try:
+                await query.edit_message_text(text, parse_mode="HTML", reply_markup=kb)
+            except Exception:
+                pass
+            return
+
+        if len(parts) == 2:
+            section, token = parts
+            if section not in SETTINGS_SECTIONS:
+                await self._safe_answer(query, "Invalid callback")
+                return
+
+            # Fail closed: an unresolvable chat_id (`calling_chat_id`
+            # returning None) is treated the same as a group scope rather
+            # than skipped like a DM. `_is_admin` still returns True for a
+            # genuinely-ungated case (personal-mode installs are always
+            # admin), so this only tightens the check for the team/scope
+            # modes where it matters — a permission gate should never
+            # degrade to "allow" just because it couldn't identify the
+            # chat.
+            if (chat_id is None or chat_id < 0) and not self._is_admin(update):
+                await self._safe_answer(
+                    query, "Only an admin can change settings in this group.",
+                    show_alert=True,
+                )
+                return
+
+            # Safe: `section` was checked against SETTINGS_SECTIONS above,
+            # and this dict's keys are exactly SETTINGS_SECTIONS's members
+            # (both come from settings_menu.SECTIONS), so the lookup below
+            # can never raise KeyError.
+            field = {
+                "layout": "layout", "formatting": "simple_formatting",
+                "length": "answer_length", "level": "language_level",
+            }[section]
+            value_map = self._SETTINGS_VALUE_TOKENS.get(section)
+            # `.get(token, token)` — an unrecognised token (e.g.
+            # "_:set:formatting:sideways") falls through as the raw string
+            # rather than raising KeyError here. That lets `set_preference`
+            # be the single validation authority: its allow-list check
+            # rejects the bogus value with `ValueError`, caught below, the
+            # same way every other section's malformed tokens are already
+            # handled.
+            value = value_map.get(token, token) if value_map is not None else token
+            try:
+                preferences.set_preference(chat_id or 0, field, value)
+            except ValueError:
+                await self._safe_answer(query, "Invalid value")
+                return
+
+            text, kb = render_settings_section(chat_id or 0, section)
+            try:
+                await query.edit_message_text(text, parse_mode="HTML", reply_markup=kb)
+            except Exception:
+                pass
+            return
+
+        await self._safe_answer(query, "Invalid callback")
 
     async def _handle_callback(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle inline keyboard button tap.
@@ -333,6 +445,17 @@ class CallbackDispatchMixin:
                 log.info("[%s] Compact triggered by user", sess.label)
             else:
                 await self._safe_answer(query, "Failed to send /compact")
+            return
+
+        # ---- /settings menu callbacks ----------------------------------
+        # `_:set`, `_:set:<section>`, `_:set:back`, `_:set:close` (nav —
+        # always allowed) and `_:set:<section>:<value>` (write — admin-
+        # gated in groups). `action` already carries everything after the
+        # first colon (e.g. "set:layout:merged"); the "set" prefix is a
+        # decoy of the `session_name, action = cb_data.split(":", 1)`
+        # split above landing on the `_` global-action sentinel.
+        if session_name == "_" and (action == "set" or action.startswith("set:")):
+            await self._dispatch_settings_action(update, query, action)
             return
 
         if action == "clear_gone":

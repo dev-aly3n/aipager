@@ -138,6 +138,13 @@ def test_update_bot_commands_includes_session_labels(mk_bot, run_async):
     assert "jim" in cmd_names
 
 
+def test_command_list_includes_settings():
+    from aipager.bot.lifecycle import LifecycleMixin
+    cmds = LifecycleMixin._command_list(set())
+    cmd_names = {c.command for c in cmds}
+    assert "settings" in cmd_names
+
+
 def test_update_bot_commands_excludes_gone_sessions(mk_bot, run_async):
     bot = mk_bot()
     sess = TrackedSession(name="claude-gone", label="gone", status=Status.GONE)

@@ -81,6 +81,7 @@ def _isolate_home_paths(tmp_path, monkeypatch):
         "aipager.state.SESSION_STATE_FILE": sessions_json,
         "aipager.status.SESSION_STATE_FILE": sessions_json,
         "aipager.config._KEYBOARD_CONFIG_PATH": cfg / "keyboard.json",
+        "aipager.preferences._PREFERENCES_PATH": cfg / "preferences.json",
         "aipager.session_store.SESSIONS_ROOT":
             home / ".local" / "share" / "aipager" / "sessions",
         "aipager.service.LINUX_UNIT_PATH":
@@ -113,6 +114,25 @@ def _isolate_home_paths(tmp_path, monkeypatch):
         originals[dotted] = getattr(import_module(module_name), attr)
         monkeypatch.setattr(dotted, value)
     return originals
+
+
+@pytest.fixture(autouse=True)
+def _reset_preferences_cache(_isolate_home_paths):
+    """Reset ``preferences``'s in-memory cache for every test.
+
+    Unlike ``keyboard.json``'s load-once-at-import constants,
+    ``preferences.py`` deliberately keeps a mutable module-level cache
+    (see its docstring) so a running daemon never has to restart to pick
+    up a `/settings` change. That same design means the cache would leak
+    across tests — one test's ``set_preference`` call would silently be
+    visible to the next — without an explicit reset. Depends on
+    ``_isolate_home_paths`` so it always runs after the path redirect is
+    in place, not before.
+    """
+    import aipager.preferences as _prefs
+    _prefs._cache = None
+    yield
+    _prefs._cache = None
 
 
 @pytest.fixture
