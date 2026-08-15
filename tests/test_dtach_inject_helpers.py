@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import signal as _signal
 import socket as _socket
 
 import pytest
@@ -223,7 +224,21 @@ def test_kill_session_sigterms_fuser_pids(tmp_path, monkeypatch, run_async):
 
     monkeypatch.setattr(inject, "_proc_socket_pids", lambda sock: [])
     monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", _fake_exec)
-    monkeypatch.setattr("os.kill", lambda pid, sig: killed.append((pid, sig)))
+
+    # Model a process that actually dies: SIGTERM is recorded, and the
+    # liveness probe (signal 0) reports it gone from then on. kill_session
+    # waits for exactly that before it returns.
+    dead = set()
+
+    def _fake_kill(pid, sig):
+        if sig == 0:
+            if pid in dead:
+                raise ProcessLookupError(pid)
+            return
+        killed.append((pid, sig))
+        dead.add(pid)
+
+    monkeypatch.setattr("os.kill", _fake_kill)
 
     try:
         ok = run_async(inject.kill_session("claude-jim"))
@@ -312,7 +327,17 @@ def test_kill_session_uses_proc_scan_without_fuser(tmp_path, monkeypatch, run_as
     monkeypatch.setattr(inject, "_proc_socket_pids", lambda sock: [4242])
 
     killed = []
-    monkeypatch.setattr("os.kill", lambda pid, sig: killed.append((pid, sig)))
+    dead = set()
+
+    def _fake_kill(pid, sig):
+        if sig == 0:
+            if pid in dead:
+                raise ProcessLookupError(pid)
+            return
+        killed.append((pid, sig))
+        dead.add(pid)
+
+    monkeypatch.setattr("os.kill", _fake_kill)
 
     async def _fail(*args, **kwargs):
         raise AssertionError("fuser must not run when /proc found a PID")
@@ -372,3 +397,160 @@ def test_list_sessions_finds_socket_files(tmp_path, monkeypatch, run_async):
         assert "claude-not-a-socket" not in result
     finally:
         srv.close()
+
+
+# ---- kill_session waits for the process to actually exit -----------------
+
+def test_kill_session_waits_before_unlinking(tmp_path, monkeypatch, run_async):
+    """Live regression (2026-08-15): kill_session unlinked and returned while
+    the process was still dying. `/perms` relaunched into the same socket
+    path microseconds later, and the corpse removed the NEW session's socket
+    on its way out — the restarted session vanished two seconds after being
+    reported alive."""
+    sock_path = tmp_path / "claude-dtach-jim.sock"
+    srv = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+    srv.bind(str(sock_path))
+    monkeypatch.setattr(inject, "_sock_path", lambda s: str(sock_path))
+    monkeypatch.setattr(inject, "_proc_socket_pids", lambda sock: [4242])
+    monkeypatch.setattr(inject, "_KILL_POLL_INTERVAL", 0.001)
+
+    # Stays alive for the first few liveness probes, then exits.
+    probes = {"n": 0}
+    unlinked_while_alive = []
+
+    def _fake_kill(pid, sig):
+        if sig == 0:
+            probes["n"] += 1
+            if probes["n"] > 3:
+                raise ProcessLookupError(pid)
+            # Still running — the socket must NOT have been removed yet.
+            unlinked_while_alive.append(not sock_path.exists())
+            return
+        return
+
+    monkeypatch.setattr("os.kill", _fake_kill)
+
+    try:
+        assert run_async(inject.kill_session("claude-jim")) is True
+        assert probes["n"] > 3, "did not wait for the process to exit"
+        assert not any(unlinked_while_alive), (
+            "socket was unlinked while the process was still alive"
+        )
+        assert not sock_path.exists()
+    finally:
+        srv.close()
+
+
+def test_kill_session_escalates_to_sigkill(tmp_path, monkeypatch, run_async):
+    """A process ignoring SIGTERM must not hang the caller forever."""
+    sock_path = tmp_path / "claude-dtach-jim.sock"
+    srv = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+    srv.bind(str(sock_path))
+    monkeypatch.setattr(inject, "_sock_path", lambda s: str(sock_path))
+    monkeypatch.setattr(inject, "_proc_socket_pids", lambda sock: [4242])
+    monkeypatch.setattr(inject, "_KILL_POLL_INTERVAL", 0.001)
+    monkeypatch.setattr(inject, "_KILL_TIMEOUT", 0.01)
+
+    sent = []
+    dead = {"yes": False}
+
+    def _fake_kill(pid, sig):
+        if sig == 0:
+            if dead["yes"]:
+                raise ProcessLookupError(pid)
+            return
+        sent.append(sig)
+        if sig == _signal.SIGKILL:
+            dead["yes"] = True   # SIGKILL cannot be ignored
+
+    monkeypatch.setattr("os.kill", _fake_kill)
+
+    try:
+        assert run_async(inject.kill_session("claude-jim")) is True
+        assert _signal.SIGTERM in sent and _signal.SIGKILL in sent
+    finally:
+        srv.close()
+
+
+def test_kill_session_gives_up_on_an_unkillable_process(
+    tmp_path, monkeypatch, run_async,
+):
+    """Never hang: a pid that survives SIGKILL still returns."""
+    sock_path = tmp_path / "claude-dtach-jim.sock"
+    srv = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+    srv.bind(str(sock_path))
+    monkeypatch.setattr(inject, "_sock_path", lambda s: str(sock_path))
+    monkeypatch.setattr(inject, "_proc_socket_pids", lambda sock: [4242])
+    monkeypatch.setattr(inject, "_KILL_POLL_INTERVAL", 0.001)
+    monkeypatch.setattr(inject, "_KILL_TIMEOUT", 0.01)
+    monkeypatch.setattr("os.kill", lambda pid, sig: None)  # never dies
+
+    try:
+        assert run_async(inject.kill_session("claude-jim")) is True
+    finally:
+        srv.close()
+
+
+# ---- resume only when there is a conversation to resume ------------------
+
+def test_conversation_exists_finds_a_transcript(tmp_path, monkeypatch):
+    projects = tmp_path / ".claude" / "projects" / "-home-aly"
+    projects.mkdir(parents=True)
+    (projects / "abc-123.jsonl").write_text("{}\n")
+    monkeypatch.setattr(inject.Path, "home", staticmethod(lambda: tmp_path))
+    assert inject._conversation_exists("abc-123") is True
+
+
+def test_conversation_exists_false_for_an_unknown_id(tmp_path, monkeypatch):
+    (tmp_path / ".claude" / "projects").mkdir(parents=True)
+    monkeypatch.setattr(inject.Path, "home", staticmethod(lambda: tmp_path))
+    assert inject._conversation_exists("nope-999") is False
+    assert inject._conversation_exists("") is False
+
+
+def test_launch_drops_resume_when_the_conversation_is_missing(
+    tmp_path, monkeypatch, run_async,
+):
+    """Live regression (2026-08-15): `/perms` on a freshly-created session
+    relaunched it with `--resume <id>`, but a session that has taken no turns
+    has no conversation on disk. Claude Code exits 1 with "No conversation
+    found with session ID", so switching mode killed the session outright."""
+    captured = {}
+
+    async def _fake_exec(*args, **kwargs):
+        from unittest.mock import AsyncMock
+        captured["argv"] = args
+        proc = AsyncMock()
+        proc.communicate = AsyncMock(return_value=(b"", b""))
+        proc.returncode = 0
+        return proc
+
+    monkeypatch.setattr(inject, "_conversation_exists", lambda sid: False)
+    monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(inject, "_PROJECT_DIR", str(tmp_path))
+    run_async(inject.launch_session("jim", resume_id="ghost-id",
+                                    cwd=str(tmp_path)))
+    joined = " ".join(str(a) for a in captured.get("argv", ()))
+    assert "--resume" not in joined, "resumed a conversation that does not exist"
+
+
+def test_launch_keeps_resume_when_the_conversation_exists(
+    tmp_path, monkeypatch, run_async,
+):
+    captured = {}
+
+    async def _fake_exec(*args, **kwargs):
+        from unittest.mock import AsyncMock
+        captured["argv"] = args
+        proc = AsyncMock()
+        proc.communicate = AsyncMock(return_value=(b"", b""))
+        proc.returncode = 0
+        return proc
+
+    monkeypatch.setattr(inject, "_conversation_exists", lambda sid: True)
+    monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", _fake_exec)
+    monkeypatch.setattr(inject, "_PROJECT_DIR", str(tmp_path))
+    run_async(inject.launch_session("jim", resume_id="real-id",
+                                    cwd=str(tmp_path)))
+    joined = " ".join(str(a) for a in captured.get("argv", ()))
+    assert "--resume" in joined and "real-id" in joined

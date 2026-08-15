@@ -384,3 +384,47 @@ def test_busy_not_recovered_before_grace(monkeypatch, run_async, tmp_path):
     run_async(monitor._scan())
 
     assert sess.status == Status.BUSY
+
+
+# ----- a deliberate restart is not a disappearance -----
+
+def test_restarting_session_is_not_marked_gone(monkeypatch, run_async):
+    """`/perms` kills and relaunches; between the two the socket is absent by
+    design. Marking it GONE raced the relaunch and alarmed the user about a
+    session that was coming right back."""
+    registry = SessionRegistry()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    sess.restarting_until = time.monotonic() + 10
+    registry._sessions["claude-jim"] = sess
+    notified = []
+
+    async def _notify(s, event, ctx):
+        notified.append(event)
+
+    monitor = _mk_monitor(registry, _notify)
+    monkeypatch.setattr(
+        "aipager.dtach.inject.list_sessions",
+        lambda: _coroutine_returning([]),      # socket gone
+    )
+    run_async(monitor._scan())
+    assert sess.status == Status.IDLE
+    assert notified == []
+
+
+def test_a_genuinely_missing_session_is_still_marked_gone(monkeypatch, run_async):
+    registry = SessionRegistry()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    registry._sessions["claude-jim"] = sess
+    notified = []
+
+    async def _notify(s, event, ctx):
+        notified.append(event)
+
+    monitor = _mk_monitor(registry, _notify)
+    monkeypatch.setattr(
+        "aipager.dtach.inject.list_sessions",
+        lambda: _coroutine_returning([]),
+    )
+    run_async(monitor._scan())
+    assert sess.status == Status.GONE
+    assert "session_end" in notified

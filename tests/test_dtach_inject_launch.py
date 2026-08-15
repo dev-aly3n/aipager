@@ -29,6 +29,9 @@ def test_launch_session_includes_resume_flag(tmp_path, monkeypatch, run_async):
         return _make_proc(returncode=0)
 
     monkeypatch.setattr(dtach_inject.asyncio, "create_subprocess_exec", _fake_exec)
+    # The flag is only passed when a conversation actually exists to resume;
+    # this test is about the pass-through, so say it does.
+    monkeypatch.setattr(dtach_inject, "_conversation_exists", lambda sid: True)
     # is_socket() is called twice: once for the "already exists" pre-check
     # (must return False) and again during the post-launch appearance wait
     # (must return True so the loop exits successfully).

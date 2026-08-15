@@ -102,6 +102,12 @@ class SessionMonitor:
         # Mark disappeared sessions as GONE and notify
         for name, sess in list(self.registry.all_sessions().items()):
             if name not in sessions and sess.status != Status.GONE:
+                if sess.is_restarting():
+                    # Deliberate kill-and-relaunch (`/perms`): the socket is
+                    # expected to be missing for the moment between the two.
+                    # Marking it GONE here would race the relaunch and alarm
+                    # the user about a session that is coming right back.
+                    continue
                 self.registry.transition(name, Status.GONE)
                 # Stamp the GONE moment + capture a last-message preview
                 # so /resume can show "where you left off" without

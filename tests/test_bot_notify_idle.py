@@ -467,3 +467,46 @@ def test_idle_backstop_drops_a_mis_anchored_answer(mk_bot, run_async, monkeypatc
     bot._stop_animation = MagicMock()
     run_async(bot.notify(sess, "idle_prompt", {"raw_md": "The file looks fine."}))
     assert captured["commentary"] == [(0, "Let me check that file.")]
+
+
+# ---- a deliberate restart is not a crash ---------------------------------
+
+def test_session_end_during_a_restart_is_not_announced(mk_bot, run_async):
+    """`/perms` kills the session to relaunch it. Reporting that exit as a
+    crash told the user the session was fine and dead in the same breath."""
+    import time as _t
+    bot = mk_bot()
+    sess = _sess(status=Status.IDLE)
+    sess.restarting_until = _t.monotonic() + 10
+    bot._app.bot.send_message = AsyncMock()
+    bot._maybe_update_bot_name = AsyncMock()
+    bot._stop_animation = MagicMock()
+    run_async(bot.notify(sess, "session_end", {"source": "prompt_input_exit"}))
+    bot._app.bot.send_message.assert_not_awaited()
+
+
+def test_a_real_crash_is_still_announced(mk_bot, run_async):
+    """The suppression must be scoped to the restart window, not global."""
+    bot = mk_bot()
+    sess = _sess(status=Status.IDLE)
+    assert sess.restarting_until == 0.0
+    bot._app.bot.send_message = AsyncMock()
+    bot._maybe_update_bot_name = AsyncMock()
+    bot._stop_animation = MagicMock()
+    run_async(bot.notify(sess, "session_end", {"source": "disappeared"}))
+    bot._app.bot.send_message.assert_awaited_once()
+    assert "crashed or killed" in bot._app.bot.send_message.await_args.args[1]
+
+
+def test_the_restart_window_expires_on_its_own(mk_bot, run_async):
+    """A flag that failed to clear would silence real crashes forever."""
+    import time as _t
+    bot = mk_bot()
+    sess = _sess(status=Status.IDLE)
+    sess.restarting_until = _t.monotonic() - 0.01   # already elapsed
+    assert sess.is_restarting() is False
+    bot._app.bot.send_message = AsyncMock()
+    bot._maybe_update_bot_name = AsyncMock()
+    bot._stop_animation = MagicMock()
+    run_async(bot.notify(sess, "session_end", {"source": "disappeared"}))
+    bot._app.bot.send_message.assert_awaited_once()

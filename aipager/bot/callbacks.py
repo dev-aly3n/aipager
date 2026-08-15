@@ -98,6 +98,12 @@ _DENY_OVERSHOOT = 5
 
 _PERMS_POLL_COUNT = 15
 _PERMS_POLL_INTERVAL = 0.2
+# How long a `/perms` restart stays "expected" for the exit-alarm paths.
+# Generous on purpose: the dying session's SessionEnd hook is a separate
+# subprocess and can land after the relaunch has already succeeded, and that
+# late arrival is precisely what used to be announced as a crash. The window
+# expires on its own, so a genuine crash a moment later is still reported.
+_PERMS_RESTART_QUIET = 10.0
 
 
 class CallbackDispatchMixin:
@@ -135,6 +141,11 @@ class CallbackDispatchMixin:
         # Save these before kill clears registry state.
         sock = f"{inject.SOCK_PREFIX}{session_name.removeprefix('claude-')}.sock"
 
+        # Everything from here to a confirmed relaunch is an expected outage.
+        # Opened before the kill so the dying session's own SessionEnd hook —
+        # which can arrive before kill_session returns — is covered too.
+        sess.restarting_until = time.monotonic() + _PERMS_RESTART_QUIET
+
         await inject.kill_session(session_name)
 
         # Poll for socket disappearance (up to 3 s).
@@ -143,7 +154,10 @@ class CallbackDispatchMixin:
             if not Path(sock).is_socket():
                 break
         else:
-            # Socket still present after 3 s — give up.
+            # Socket still present after 3 s — give up. Reopen the alarm: no
+            # relaunch is coming, so whatever state the session is in is now
+            # news the user needs.
+            sess.restarting_until = 0.0
             await edit_fn(
                 f"⚠️ <b>{html_mod.escape(label)}</b> is still stopping — "
                 f"mode not changed. Try /perms again in a moment.",
@@ -160,6 +174,9 @@ class CallbackDispatchMixin:
             system_prompt_extra=sys_extra,
         )
         if not ok:
+            # The relaunch failed, so the session really is gone — stop
+            # suppressing, or the user is left believing it survived.
+            sess.restarting_until = 0.0
             await edit_fn(
                 f"❌ Couldn't switch mode: {html_mod.escape(err)}",
                 parse_mode="HTML",
@@ -391,6 +408,9 @@ class CallbackDispatchMixin:
 
             if action == "perms_stop_switch":
                 # BUSY: send Ctrl-C, then poll for socket disappearance.
+                # Same deliberate outage as the IDLE path — the session is
+                # meant to exit here, so its exit is not news.
+                sess.restarting_until = time.monotonic() + _PERMS_RESTART_QUIET
                 await inject.send_keys(session_name, "C-c")
                 # Short pause to let Ctrl-C signal be processed.
                 await asyncio.sleep(0.5)
@@ -401,6 +421,8 @@ class CallbackDispatchMixin:
                     if not Path(sock).is_socket():
                         break
                 else:
+                    # No relaunch is coming — let exit alarms through again.
+                    sess.restarting_until = 0.0
                     try:
                         await query.edit_message_text(
                             f"⚠️ <b>{html_mod.escape(label)}</b> is still stopping — "
@@ -422,6 +444,8 @@ class CallbackDispatchMixin:
                     system_prompt_extra=sys_extra,
                 )
                 if not ok_r:
+                    # Relaunch failed — the session is genuinely gone.
+                    sess.restarting_until = 0.0
                     try:
                         await query.edit_message_text(
                             f"❌ Couldn't switch mode: {html_mod.escape(err_r)}",

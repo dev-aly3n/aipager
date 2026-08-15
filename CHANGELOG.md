@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`/perms` no longer destroys the session it is restarting.** Switching
+  between Ask and Auto kills the session and relaunches it under the other
+  permission flag. `kill_session` sent SIGTERM, unlinked the socket and
+  returned immediately, without waiting for the process to actually exit —
+  so the relaunch created a new session at the same socket path, and the
+  still-dying predecessor removed that socket on its way out. The switch
+  reported success and the session vanished two seconds later. The kill now
+  waits for the process to exit (escalating to SIGKILL if it outlives a
+  short grace, and giving up rather than hanging if it survives even that)
+  before unlinking, so no caller that relaunches can be clobbered.
+- **A deliberate restart is no longer announced as a crash.** The same
+  switch produced three messages: the mode confirmation, then "Session
+  exited" from the old session's SessionEnd hook, then "Session crashed or
+  killed" from the monitor noticing the socket disappear. Both alarm paths
+  now stay quiet for the moment a restart is in flight, so the switch sends
+  exactly one message. The quiet window is a deadline that expires on its
+  own and is closed early when a relaunch fails, so a genuine crash — before,
+  during or after — is still reported.
+- **A session is no longer relaunched into a conversation that does not
+  exist.** `/perms` relaunches with `--resume <session-id>` to keep the
+  transcript, but a session that has not taken a turn yet has no conversation
+  on disk, and Claude Code exits 1 with "No conversation found with session
+  ID" when asked to resume one. Switching mode on a freshly-created session
+  therefore killed it. The resume flag is now dropped when no transcript
+  exists for that id — an id with no conversation has no history to preserve.
+
+
 ## [0.5.0] - 2026-08-07
 
 ### Added

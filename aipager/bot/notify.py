@@ -443,6 +443,14 @@ class NotifyMixin:
                 "other": "exited unexpectedly",
                 "unknown": "exited",
             }
+            if sess.is_restarting():
+                # The user asked for this exit — `/perms` kills the session to
+                # relaunch it under the other permission mode. Reporting it as
+                # a crash, alongside the switch confirmation, told the user the
+                # session was both fine and dead in the same breath.
+                log.info("[%s] session_end during a deliberate restart (%s)"
+                         " — not alerting", label, source)
+                return
             reason = source_labels.get(source, "exited")
             text = f"🔴 <b>{html_mod.escape(label)}</b> · Session {reason}"
             try:

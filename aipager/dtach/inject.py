@@ -18,6 +18,12 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
+# How long a signalled dtach gets to exit before the signal is escalated,
+# and how often its liveness is rechecked. A clean dtach shutdown is a few
+# milliseconds; the ceiling only matters for a wedged one.
+_KILL_TIMEOUT: float = 3.0
+_KILL_POLL_INTERVAL: float = 0.02
+
 
 def _credentials_file_is_fresh() -> bool:
     """Return True iff ~/.claude/.credentials.json holds an unexpired token.
@@ -316,8 +322,61 @@ async def _fuser_socket_pids(sock: str) -> list[int]:
     return [int(tok) for tok in stdout.decode().split() if tok.strip().isdigit()]
 
 
+def _pid_alive(pid: int) -> bool:
+    """True while *pid* still exists. Signal 0 checks without delivering."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True  # alive, just not ours to signal
+    return True
+
+
+async def _await_exit(pids: list[int], session: str) -> None:
+    """Block until every pid in *pids* is gone, escalating if it lingers.
+
+    SIGTERM is a request, not an event: dtach removes its own socket as it
+    shuts down, so returning while it is still dying lets it delete the
+    socket of whatever session is created next. `/perms` relaunches within
+    milliseconds, and that is exactly what happened — the restarted session
+    was reported alive, then vanished two seconds later when the corpse of
+    its predecessor finished cleaning up.
+    """
+    deadline = time.monotonic() + _KILL_TIMEOUT
+    escalated = False
+    while True:
+        alive = [pid for pid in pids if _pid_alive(pid)]
+        if not alive:
+            return
+        if not escalated and time.monotonic() >= deadline:
+            # Ignoring SIGTERM for this long means it is not coming down
+            # politely. SIGKILL cannot be caught, so the socket is ours to
+            # reclaim right after.
+            escalated = True
+            for pid in alive:
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                    log.warning("SIGKILLed dtach PID %s for %s after %.0fs",
+                                pid, session, _KILL_TIMEOUT)
+                except OSError:
+                    pass
+            deadline = time.monotonic() + _KILL_TIMEOUT
+        elif escalated and time.monotonic() >= deadline:
+            # Unkillable (uninterruptible sleep, or not ours). Give up
+            # waiting rather than hang the caller forever.
+            log.warning("PIDs %s for %s outlived SIGKILL — proceeding",
+                        alive, session)
+            return
+        await asyncio.sleep(_KILL_POLL_INTERVAL)
+
+
 async def kill_session(session: str) -> bool:
     """Kill a dtach session by finding its host PID and terminating it.
+
+    Waits for the process to actually exit before unlinking, so a caller
+    that relaunches immediately (``/perms``) cannot have its new socket
+    deleted by the previous session's shutdown.
 
     Returns False — leaving the socket in place — when no process could
     be signalled. The socket is the only handle aipager has on a running
@@ -332,7 +391,7 @@ async def kill_session(session: str) -> bool:
 
     pids = _proc_socket_pids(sock) or await _fuser_socket_pids(sock)
 
-    signalled = False
+    signalled: list[int] = []
     for pid in pids:
         try:
             os.kill(pid, signal.SIGTERM)
@@ -340,13 +399,15 @@ async def kill_session(session: str) -> bool:
             log.warning("Could not SIGTERM PID %s for %s", pid, session,
                         exc_info=True)
             continue
-        signalled = True
+        signalled.append(pid)
         log.info("Killed dtach PID %s for %s", pid, session)
 
     if not signalled:
         log.warning("No dtach process signalled for %s — keeping socket %s",
                     session, sock)
         return False
+
+    await _await_exit(signalled, session)
 
     try:
         sock_path.unlink(missing_ok=True)
@@ -365,6 +426,27 @@ _VALID_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
 _RESERVED = {"status", "stop", "kill", "new", "help", "start", "settings"}
 _PROJECT_DIR = os.environ.get("AIPAGER_WORK_DIR", os.getcwd())
 _CLAUDE_BIN = shutil.which("claude") or "claude"
+
+
+def _conversation_exists(session_id: str) -> bool:
+    """True when Claude Code has a transcript it could resume for *session_id*.
+
+    Transcripts live at ``~/.claude/projects/<cwd-slug>/<session-id>.jsonl``.
+    The slug depends on the directory the session ran in, which the caller
+    does not always know, so match on the id across every project — a session
+    id is a UUID, so a hit in the wrong project is not a realistic collision.
+    Returns False if the lookup itself fails: dropping the resume costs a
+    session its history, but keeping it risks the session exiting on launch,
+    and a live session with no history beats a dead one.
+    """
+    if not session_id:
+        return False
+    try:
+        projects = Path.home() / ".claude" / "projects"
+        return any(projects.glob(f"*/{session_id}.jsonl"))
+    except OSError:
+        log.debug("conversation lookup failed for %s", session_id, exc_info=True)
+        return False
 
 
 async def launch_session(
@@ -408,6 +490,17 @@ async def launch_session(
 
     # Build the bash -c command — wraps claude with env vars and prompt
     perms = "--dangerously-skip-permissions" if skip_perms else ""
+    if resume_id and not _conversation_exists(resume_id):
+        # Claude Code exits 1 with "No conversation found with session ID"
+        # when asked to resume something it cannot find, and a session that
+        # has not taken a turn yet has no conversation on disk. `/perms`
+        # relaunches with the id it was given, so switching mode on a
+        # freshly-created session killed it outright. Nothing is lost by
+        # dropping the flag here: an id with no conversation has no history
+        # to preserve.
+        log.info("[%s] no conversation for %s — launching fresh instead of "
+                 "resuming", name, resume_id)
+        resume_id = None
     resume = f"--resume {shlex.quote(resume_id)}" if resume_id else ""
     sys_prompt = (f'Your session name is "{name}". '
                   f'When users address you by this name, respond naturally '

@@ -162,6 +162,15 @@ class TrackedSession:
     # which would otherwise trip the stale-busy detector. Not persisted
     # (same reason as pending_tool_started_at above).
     compact_started_at: float | None = None
+    # Monotonic deadline until which this session is being deliberately
+    # restarted (``/perms`` kills and relaunches to change the permission
+    # flag). The old process's SessionEnd hook and the monitor noticing its
+    # socket vanish both mean "expected", not "crashed", inside this window,
+    # so neither raises an alarm. A deadline rather than a boolean because a
+    # flag that fails to clear would silence real crashes forever; this one
+    # expires on its own. Not persisted — a restart never spans a daemon
+    # restart.
+    restarting_until: float = 0.0
     # Team-mode attribution (None in personal mode). `created_by` is the
     # user who first created/owns the session; `last_driver` is whoever
     # most recently injected a prompt into it — used to attribute
@@ -278,6 +287,10 @@ class TrackedSession:
             return False
         self.pending_queue.append((text, msg_id, time.time()))
         return True
+
+    def is_restarting(self) -> bool:
+        """True while a deliberate kill-and-relaunch is still in flight."""
+        return time.monotonic() < self.restarting_until
 
     def record_tool(self, summary: str, done: bool | str = False) -> int:
         """Append to ``tool_history``, trim to cap, return the new index.
