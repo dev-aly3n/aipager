@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`aipager config` now repoints hooks left behind by an earlier install.**
+  An entry counted as "already wired" if its command merely ended in
+  `/aipager-hook`, whatever directory it lived in, so once an event was
+  written it was never updated. Installing a second way — pipx after pip, a
+  venv then a system install, a moved home — left events split across builds:
+  seen in the wild with 10 of 15 events on a stale editable venv while the
+  rest ran the current one, which silently broke a feature while looking
+  correctly configured. Our own hooks (and the `statusLine`) are now moved to
+  the running install's path; third-party hooks are never touched, no entry is
+  duplicated, and a working absolute path is still never replaced by a bare
+  name that Claude Code could not resolve.
+- **`aipager status` and `aipager doctor` no longer call a working install
+  unconfigured.** Schema v2 made `aipager.yaml` authoritative for the bot
+  token, which is what allowed `config.env` to be retired — but nothing
+  filled `CHAT_ID`, and both commands gate on it. Every migrated install got
+  "aipager isn't configured yet" from precisely the tools you reach for when
+  something is wrong. `CHAT_ID` is now derived from the configured scopes
+  (a lone scope wins, otherwise the group — the same rule the session
+  registry already uses), and an explicitly-set `CLAUDE_TG_CHAT_ID` still
+  takes precedence. It stayed hidden because a source checkout has a legacy
+  `.env` that fills the gap; only real installs were affected.
+
+
 ## [0.6.0] - 2026-08-15
 
 ### Fixed

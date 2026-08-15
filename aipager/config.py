@@ -97,6 +97,21 @@ if _v2 and _v2[1]:
     # v2 is authoritative for the bot token when aipager.yaml is present
     # — this is what lets config.env be retired (Phase C).
     BOT_TOKEN = _v2[1]
+
+if SCOPES and not CHAT_ID:
+    # v2 has no single chat id — scopes carry them — but plenty of code
+    # predates scopes and still reads CHAT_ID: `aipager status` and
+    # `doctor` gate on it, and `resolve_chat_id` uses it for a session
+    # with no stamped scope. Once config.env was retired those callers saw
+    # an empty string and reported a working install as unconfigured.
+    # Same rule as state._default_scope(), deliberately not a second
+    # definition of "the default chat": a lone scope wins outright,
+    # otherwise the group does.
+    _default_scope_obj = next(
+        (s for s in SCOPES if s.kind == "group"), SCOPES[0],
+    )
+    CHAT_ID = str(_default_scope_obj.chat_id)
+    del _default_scope_obj
 del _load_scopes, _load_policy, _v2, _ScopeConfigError, _PolicyError
 
 from aipager.scope import load_default_mode as _load_dm  # noqa: E402

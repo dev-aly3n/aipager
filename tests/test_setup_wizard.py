@@ -457,3 +457,155 @@ def test_message_display_hook_has_no_tool_matcher():
     """It is not a tool event; a "*" matcher there would be meaningless."""
     from aipager.wizard._constants import TOOL_MATCHER_EVENTS
     assert "MessageDisplay" not in TOOL_MATCHER_EVENTS
+
+
+# ---- stale hook paths are repointed, not left behind ----------------------
+
+def test_merge_hooks_repoints_a_stale_absolute_path(monkeypatch):
+    """Found in the wild 2026-08-15: matching by basename alone meant a hook
+    kept pointing at whichever install first wrote it, so a second install
+    left events split across builds — half running stale code, all of it
+    looking correctly configured."""
+    from aipager.wizard._constants import HOOK_EVENTS
+
+    stale = "/old/venv/bin/aipager-hook"
+    settings = {"hooks": {
+        e: [{"hooks": [{"type": "command", "command": stale}]}]
+        for e in HOOK_EVENTS
+    }}
+    monkeypatch.setattr(settings_patch.shutil, "which",
+                        lambda name: f"/usr/bin/{name}")
+
+    settings_patch._merge_hooks(settings)
+
+    for event in HOOK_EVENTS:
+        cmds = [h["command"] for b in settings["hooks"][event] for h in b["hooks"]]
+        assert cmds == ["/usr/bin/aipager-hook"], f"{event} not repointed: {cmds}"
+
+
+def test_merge_hooks_leaves_other_peoples_hooks_alone(monkeypatch):
+    """Only our own console script may be rewritten."""
+    settings = {"hooks": {"PreToolUse": [
+        {"hooks": [{"type": "command", "command": "/usr/local/bin/someone-else"},
+                   {"type": "command", "command": "/old/venv/bin/aipager-hook"}]},
+    ]}}
+    monkeypatch.setattr(settings_patch.shutil, "which",
+                        lambda name: f"/usr/bin/{name}")
+
+    settings_patch._merge_hooks(settings)
+
+    cmds = [h["command"] for b in settings["hooks"]["PreToolUse"] for h in b["hooks"]]
+    assert "/usr/local/bin/someone-else" in cmds, "clobbered a third-party hook"
+    assert "/usr/bin/aipager-hook" in cmds
+    assert "/old/venv/bin/aipager-hook" not in cmds
+
+
+def test_merge_hooks_does_not_duplicate_when_repointing(monkeypatch):
+    from aipager.wizard._constants import HOOK_EVENTS
+    settings = {"hooks": {
+        e: [{"hooks": [{"type": "command", "command": "/old/bin/aipager-hook"}]}]
+        for e in HOOK_EVENTS
+    }}
+    monkeypatch.setattr(settings_patch.shutil, "which",
+                        lambda name: f"/usr/bin/{name}")
+    settings_patch._merge_hooks(settings)
+    for event in HOOK_EVENTS:
+        assert len(settings["hooks"][event]) == 1, f"{event} gained a duplicate"
+
+
+def test_merge_hooks_never_replaces_an_absolute_path_with_a_bare_name(monkeypatch):
+    """A bare name means `_resolve` found nothing. Claude Code does not
+    augment PATH for hooks, so writing it would break the working entry —
+    the same trap the statusLine block has always guarded against."""
+    good = "/usr/bin/aipager-hook"
+    settings = {"hooks": {"PreToolUse": [
+        {"hooks": [{"type": "command", "command": good}]},
+    ]}}
+    monkeypatch.setattr(settings_patch.shutil, "which", lambda name: None)
+    monkeypatch.setattr(settings_patch.sys, "executable", "/nonexistent/bin/python")
+
+    settings_patch._merge_hooks(settings)
+
+    cmds = [h["command"] for b in settings["hooks"]["PreToolUse"] for h in b["hooks"]]
+    assert cmds == [good], "clobbered a working absolute path with a bare name"
+
+
+def test_merge_hooks_repoints_a_stale_statusline(monkeypatch):
+    settings = {"statusLine": {"type": "command",
+                               "command": "/old/venv/bin/aipager-statusline"}}
+    monkeypatch.setattr(settings_patch.shutil, "which",
+                        lambda name: f"/usr/bin/{name}")
+    settings_patch._merge_hooks(settings)
+    assert settings["statusLine"]["command"] == "/usr/bin/aipager-statusline"
+
+
+def test_merge_hooks_leaves_a_third_party_statusline_alone(monkeypatch):
+    settings = {"statusLine": {"type": "command", "command": "/usr/bin/env"}}
+    monkeypatch.setattr(settings_patch.shutil, "which",
+                        lambda name: f"/usr/bin/{name}")
+    settings_patch._merge_hooks(settings)
+    assert settings["statusLine"]["command"] == "/usr/bin/env"
+
+
+def test_repoint_is_reported_once_not_twice(monkeypatch, tmp_path):
+    """`_step_settings` runs `_merge_hooks` twice — once on a throwaway copy
+    to decide whether anything changed, once for the real write. Reporting
+    from inside the mutator said it twice, the first time before the backup
+    line, on exactly the upgrade this fix exists to repair."""
+    import json as _json
+    from aipager.wizard._constants import HOOK_EVENTS
+
+    settings_file = tmp_path / "settings.json"
+    settings_file.write_text(_json.dumps({"hooks": {
+        e: [{"hooks": [{"type": "command",
+                        "command": "/old/venv/bin/aipager-hook"}]}]
+        for e in HOOK_EVENTS
+    }}, indent=2) + "\n")
+
+    lines: list[str] = []
+    monkeypatch.setattr(settings_patch, "CLAUDE_SETTINGS", settings_file)
+    monkeypatch.setattr(settings_patch.shutil, "which",
+                        lambda n: f"/usr/bin/{n}")
+    monkeypatch.setattr(settings_patch.console, "print",
+                        lambda *a, **k: lines.append(str(a[0]) if a else ""))
+    monkeypatch.setattr(settings_patch, "ok", lambda *a, **k: None)
+    monkeypatch.setattr(settings_patch, "step", lambda *a, **k: None)
+
+    settings_patch._step_settings("[test]")
+
+    assert sum("repointed" in ln for ln in lines) == 1
+    # And the backup is announced first — repointing must not appear to
+    # precede the safety net.
+    backup_at = next(i for i, ln in enumerate(lines) if "backed up" in ln)
+    repoint_at = next(i for i, ln in enumerate(lines) if "repointed" in ln)
+    assert backup_at < repoint_at
+
+
+def test_merge_hooks_survives_a_hand_edited_settings_file(monkeypatch):
+    """settings.json is hand-editable; a malformed entry must be stepped
+    over rather than crash the wizard mid-write."""
+    settings = {"hooks": {"PreToolUse": [
+        "not-a-dict",
+        {"hooks": "not-a-list"},
+        {"hooks": ["not-a-dict", {"type": "command", "command": 42},
+                   {"type": "command", "command": "/old/bin/aipager-hook"}]},
+    ]}}
+    monkeypatch.setattr(settings_patch.shutil, "which",
+                        lambda n: f"/usr/bin/{n}")
+
+    settings_patch._merge_hooks(settings)   # must not raise
+
+    cmds = [h.get("command") for b in settings["hooks"]["PreToolUse"]
+            if isinstance(b, dict) and isinstance(b.get("hooks"), list)
+            for h in b["hooks"] if isinstance(h, dict)]
+    assert "/usr/bin/aipager-hook" in cmds
+
+
+def test_merge_hooks_survives_a_non_string_statusline_command(monkeypatch):
+    """A hand-edited `"command": 42` used to crash in shutil.which before any
+    of the staleness logic ran."""
+    monkeypatch.setattr(settings_patch.shutil, "which",
+                        lambda n: f"/usr/bin/{n}")
+    settings = {"statusLine": {"type": "command", "command": 42}}
+    settings_patch._merge_hooks(settings)   # must not raise
+    assert settings["statusLine"]["command"] == "/usr/bin/aipager-statusline"

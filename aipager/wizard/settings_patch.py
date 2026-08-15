@@ -85,13 +85,59 @@ def _resolve(cmd: str) -> str:
     return cmd
 
 
+def _is_aipager_hook(cmd: str, bare_name: str) -> bool:
+    """True when *cmd* invokes our console script, wherever it lives."""
+    return cmd == bare_name or cmd.endswith(f"/{bare_name}")
+
+
 def _has_hook_cmd(entries: list, bare_name: str) -> bool:
     for block in entries:
-        for hook in block.get("hooks", []):
-            cmd = hook.get("command", "")
-            if cmd == bare_name or cmd.endswith(f"/{bare_name}"):
+        if not isinstance(block, dict):
+            continue
+        for hook in block.get("hooks") or ():
+            if not isinstance(hook, dict):
+                continue
+            cmd = hook.get("command")
+            if isinstance(cmd, str) and _is_aipager_hook(cmd, bare_name):
                 return True
     return False
+
+
+def _repoint_hook_cmds(entries: list, bare_name: str, resolved: str) -> int:
+    """Point every aipager hook in *entries* at *resolved*. Returns the count.
+
+    Matching an entry by basename alone was enough to consider the event
+    "already wired", so a hook kept pointing at whichever install first
+    wrote it — for good. Installing a second way (pipx after pip, a venv
+    then a system install, a moved home) left events split across builds:
+    observed in the wild with 10 of 15 events on a stale editable venv
+    while the rest ran the current one, which silently broke a feature and
+    looked correctly configured the whole time.
+
+    Only rewrites when *resolved* is absolute. A bare name means
+    ``_resolve`` found nothing on PATH or beside the interpreter, and
+    Claude Code does not augment PATH for hooks — overwriting a working
+    absolute path with it would break the very hook we are fixing. That is
+    the same failure the statusLine block below guards against.
+    """
+    if not os.path.isabs(resolved):
+        return 0
+    changed = 0
+    for block in entries:
+        if not isinstance(block, dict):
+            continue
+        for hook in block.get("hooks") or ():
+            # settings.json is hand-editable; a malformed entry must be
+            # stepped over, not crash the wizard mid-write.
+            if not isinstance(hook, dict):
+                continue
+            cmd = hook.get("command")
+            if not isinstance(cmd, str):
+                continue
+            if _is_aipager_hook(cmd, bare_name) and cmd != resolved:
+                hook["command"] = resolved
+                changed += 1
+    return changed
 
 
 def _validate_settings_schema(settings: dict) -> None:
@@ -111,14 +157,18 @@ def _validate_settings_schema(settings: dict) -> None:
             )
 
 
-def _merge_hooks(settings: dict) -> None:
+def _merge_hooks(settings: dict) -> int:
     hook_path = _resolve(HOOK_CMD)
     statusline_path = _resolve(STATUSLINE_CMD)
     hooks = settings.setdefault("hooks", {})
     entry = {"type": "command", "command": hook_path}
+    repointed = 0
     for event in HOOK_EVENTS:
         entries = hooks.setdefault(event, [])
         if _has_hook_cmd(entries, HOOK_CMD):
+            # Already wired — but possibly to a different install. Bring it
+            # to this one rather than leaving the event on a stale build.
+            repointed += _repoint_hook_cmds(entries, HOOK_CMD, hook_path)
             continue
         if event in TOOL_MATCHER_EVENTS:
             entries.append({"matcher": "*", "hooks": [entry]})
@@ -133,6 +183,11 @@ def _merge_hooks(settings: dict) -> None:
     existing_sl = settings.get("statusLine") or {}
     existing_cmd = (existing_sl.get("command", "")
                     if isinstance(existing_sl, dict) else "")
+    if not isinstance(existing_cmd, str):
+        # Hand-edited file: a non-string command would blow up in
+        # shutil.which below. Treat it as absent so the entry is rewritten
+        # rather than crashing the wizard mid-run.
+        existing_cmd = ""
     sl_already_good = bool(
         existing_cmd and (
             shutil.which(existing_cmd)
@@ -141,10 +196,25 @@ def _merge_hooks(settings: dict) -> None:
                 and os.access(existing_cmd, os.X_OK))
         )
     )
-    if not sl_already_good:
+    # "Working" is not the same as "ours and current": a statusLine left
+    # behind by an earlier install still resolves and still runs — it just
+    # runs the wrong build, the same split this function now repairs for
+    # hooks. Repoint when the existing entry is our own console script at a
+    # different path, and we have an absolute path to move it to.
+    sl_is_ours_but_stale = (
+        _is_aipager_hook(existing_cmd, STATUSLINE_CMD)
+        and existing_cmd != statusline_path
+        and os.path.isabs(statusline_path)
+    )
+    if not sl_already_good or sl_is_ours_but_stale:
         settings["statusLine"] = {
             "type": "command", "command": statusline_path,
         }
+    # Reported by the caller, not here: `_step_settings` runs this twice —
+    # once on a throwaway copy to decide whether anything changed, once for
+    # the real write — so printing from inside would say it twice, the first
+    # time before the "backed up" line.
+    return repointed + int(sl_is_ours_but_stale)
 
 
 def _step_settings(step_label: str = "[4/5]") -> None:
@@ -171,6 +241,8 @@ def _step_settings(step_label: str = "[4/5]") -> None:
         except ValueError as e:
             raise ValueError(f"{CLAUDE_SETTINGS} schema problem: {e}") from e
         new_settings = json.loads(existing_text)
+        # Dry run on a copy purely to decide whether anything changed — its
+        # return value is discarded; the real write below reports.
         _merge_hooks(new_settings)
         new_text = json.dumps(new_settings, indent=2) + "\n"
         if new_text == existing_text:
@@ -183,7 +255,13 @@ def _step_settings(step_label: str = "[4/5]") -> None:
         console.print(f"  [muted]• backed up existing settings → {backup.name}[/muted]")
     else:
         CLAUDE_SETTINGS.parent.mkdir(parents=True, exist_ok=True)
-    _merge_hooks(settings)
+    repointed = _merge_hooks(settings)
+    if repointed:
+        console.print(
+            f"  [muted]• repointed {repointed} "
+            f"entr{'y' if repointed == 1 else 'ies'} from an earlier "
+            f"install[/muted]"
+        )
     try:
         CLAUDE_SETTINGS.write_text(json.dumps(settings, indent=2) + "\n")
     except OSError as e:
