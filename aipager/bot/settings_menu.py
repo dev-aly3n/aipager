@@ -41,11 +41,12 @@ _FORMATTING_ORDER = (False, True)
 
 _LENGTH_LABELS = {
     "none": "Don't apply any rule",
+    "xshort": "Extra short",
     "short": "Short",
     "medium": "Medium",
     "long": "Long",
 }
-_LENGTH_ORDER = ("none", "short", "medium", "long")
+_LENGTH_ORDER = ("none", "xshort", "short", "medium", "long")
 
 _LEVEL_LABELS = {
     "none": "Don't apply any rule",

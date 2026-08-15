@@ -45,7 +45,7 @@ log = logging.getLogger(__name__)
 _PREFERENCES_PATH = Path.home() / ".config" / "aipager" / "preferences.json"
 
 _VALID_LAYOUT = ("card", "merged", "replace")
-_VALID_ANSWER_LENGTH = ("none", "short", "medium", "long")
+_VALID_ANSWER_LENGTH = ("none", "xshort", "short", "medium", "long")
 _VALID_LANGUAGE_LEVEL = ("none", "simple", "normal", "advanced")
 
 # One validator per settable field — used both to sanitise a value coming
@@ -205,6 +205,7 @@ _FORMATTING_LINE = (
 )
 
 _LENGTH_LINES = {
+    "xshort": "Answer in one or two sentences. No preamble, no summary.",
     "short": "Keep the answer short — a few sentences.",
     "medium": "Keep the answer to a medium length — a short paragraph or two.",
     "long": "Give a long, thorough answer.",

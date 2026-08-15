@@ -223,3 +223,21 @@ def test_style_text_none_values_inject_nothing():
     p = prefs.Preferences(layout="card", simple_formatting=False,
                           answer_length="none", language_level="none")
     assert prefs.style_text(p) == ""
+
+
+def test_extra_short_is_a_valid_length_with_its_own_line():
+    """Added on user request 2026-08-15 — tighter than "short"."""
+    p = prefs.set_preference(777, "answer_length", "xshort")
+    assert p.answer_length == "xshort"
+    text = prefs.style_text(p)
+    assert "one or two sentences" in text
+    # A distinct instruction, not an alias for "short".
+    short_text = prefs.style_text(
+        prefs.set_preference(777, "answer_length", "short")
+    )
+    assert text != short_text
+
+
+def test_extra_short_survives_a_reload():
+    prefs.set_preference(778, "answer_length", "xshort")
+    assert prefs.get_preferences(778).answer_length == "xshort"

@@ -37,7 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **`/settings` command** — a nested inline-keyboard menu for four
   per-scope preferences: message layout (`card` / `merged` / `replace`),
-  simple formatting, answer length, and language level. Layout is pure
+  simple formatting, answer length (`extra short` / `short` /
+  `medium` / `long`), and language level. Layout is pure
   presentation and applies instantly; the other three reach Claude via
   the `UserPromptSubmit` hook on the very next prompt, no session
   restart. Each option's "don't apply any rule" / off state injects

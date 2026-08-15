@@ -82,7 +82,7 @@ def test_section_length_values():
     _text, kb = sm.render_settings_section(1, "length")
     data = _all_callback_data(kb)
     assert data == [
-        "_:set:length:none", "_:set:length:short",
+        "_:set:length:none", "_:set:length:xshort", "_:set:length:short",
         "_:set:length:medium", "_:set:length:long", "_:set:back",
     ]
 
