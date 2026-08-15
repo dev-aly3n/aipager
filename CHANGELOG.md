@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-08-15
+
 ### Fixed
 - **`aipager config` now repoints hooks left behind by an earlier install.**
   An entry counted as "already wired" if its command merely ended in
