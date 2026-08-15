@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-15
+
 ### Fixed
 - **`/perms` no longer destroys the session it is restarting.** Switching
   between Ask and Auto kills the session and relaunches it under the other
