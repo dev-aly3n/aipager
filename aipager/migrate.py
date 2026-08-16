@@ -137,6 +137,97 @@ def migrate_to_v2() -> bool:
     return True
 
 
+def _miniapp_from_env_file(path: Path) -> dict | None:
+    """Extract only the three ``MINIAPP_*`` keys from a ``config.env``-format
+    file, or None if it has none.
+
+    Never returns, logs, or otherwise surfaces any other key — these files
+    can contain ``CLAUDE_TG_BOT_TOKEN``, and this runs during startup with
+    logging already configured.
+    """
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    found: dict[str, str] = {}
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, _, value = stripped.partition("=")
+        key = key.strip()
+        if key in ("MINIAPP_ENABLED", "MINIAPP_PORT", "MINIAPP_PUBLIC_URL"):
+            found[key] = value.strip().strip("\"'")
+    if not found:
+        return None
+    try:
+        port = int(found.get("MINIAPP_PORT", "8765"))
+    except ValueError:
+        port = 8765
+    return {
+        "enabled": found.get("MINIAPP_ENABLED", "0") not in ("0", "false", "no", ""),
+        "port": port,
+        "public_url": found.get("MINIAPP_PUBLIC_URL", ""),
+    }
+
+
+def upgrade_to_v3() -> bool:
+    """Move any Mini App settings from ``config.env`` into ``aipager.yaml``.
+
+    Stage-1 of the Mini App wrote ``MINIAPP_*`` to ``config.env``, which
+    :func:`retire_v1` renames away on every daemon start — so the setting
+    survived exactly one restart and then silently turned the Mini App off.
+    This carries those values over, once, into the file that is never
+    retired.
+
+    Also recovers from the most recent ``config.env.retired.*`` when the
+    live ``config.env`` is already gone: on a machine that has started the
+    daemon since enabling the Mini App, the retired copy is the *only*
+    remaining record of the operator's port and public URL.
+
+    Idempotent and non-destructive: skipped entirely once ``aipager.yaml``
+    already carries a ``miniapp:`` block, and it never clears a block that
+    is already there. Returns True if it wrote anything.
+    """
+    from aipager import config as _config
+
+    path = _scope.CONFIG_PATH
+    if not path.exists():
+        return False
+    if isinstance(_scope._raw_yaml(path).get(_scope._MINIAPP_KEY), dict):
+        return False  # already migrated — never re-import stale values
+
+    candidates: list[Path] = []
+    if _config._XDG_CONFIG.exists():
+        candidates.append(_config._XDG_CONFIG)
+    # Newest retired copy last-resort: sort by the numeric timestamp suffix.
+    retired = sorted(
+        _config._XDG_CONFIG.parent.glob("config.env.retired.*"),
+        key=lambda p: p.name,
+    )
+    candidates.extend(reversed(retired))
+
+    for candidate in candidates:
+        settings = _miniapp_from_env_file(candidate)
+        if settings is None:
+            continue
+        # Back up before the first rewrite of aipager.yaml — this is the
+        # step that also bumps schema_version to 3, and it is the only
+        # way back to the pre-upgrade document if anything here mangles
+        # bot_token or scopes. Same `.bak.<ts>` convention retire_v1 uses.
+        _backup(path)
+        try:
+            _scope.dump_miniapp(settings, path)
+        except _scope.ScopeConfigError:
+            return False
+        log.info(
+            "migrated Mini App settings into aipager.yaml (schema v3) from %s",
+            candidate.name,
+        )
+        return True
+    return False
+
+
 def retire_v1() -> bool:
     """Rename the v1 ``config.env`` / ``team.yaml`` to ``*.retired.<ts>``.
 

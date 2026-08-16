@@ -329,8 +329,12 @@ def _cmd_start(args: argparse.Namespace) -> int:
     # additive — the runtime still authorizes via CHAT_ID/TEAM, and the
     # v1 files are backed up but retained. Idempotent.
     try:
-        from aipager.migrate import migrate_to_v2, retire_v1
+        from aipager.migrate import migrate_to_v2, retire_v1, upgrade_to_v3
         migrate_to_v2()
+        # Carry any Mini App settings out of config.env BEFORE retiring it —
+        # they used to live there, and retire_v1() is what silently turned
+        # the Mini App off on the second restart.
+        upgrade_to_v3()
         # Once v2 is the source of truth, retire the v1 files so they
         # can't drift. Guarded: only runs when aipager.yaml loads
         # cleanly with a token.

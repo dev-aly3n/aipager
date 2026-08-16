@@ -22,8 +22,21 @@ log = logging.getLogger(__name__)
 
 CONFIG_PATH: Path = Path.home() / ".config" / "aipager" / "aipager.yaml"
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
+# v2 files load unchanged: v3 only ADDS the optional `miniapp:` block, so
+# every v2 document is a valid v3 document minus that key. Accepting both
+# is what keeps an existing install from dying with ScopeConfigError the
+# moment it upgrades — the version is rewritten to 3 lazily, the next
+# time anything calls dump_scopes()/dump_miniapp().
+_READABLE_SCHEMA_VERSIONS = (2, 3)
 _KINDS = ("dm", "group")
+
+# Mini App settings live here rather than in config.env because
+# `migrate.retire_v1()` renames config.env away on every daemon start once
+# aipager.yaml is authoritative — a setting written there survives exactly
+# one restart. aipager.yaml is never retired.
+_MINIAPP_KEY = "miniapp"
+_MINIAPP_DEFAULTS: dict = {"enabled": False, "port": 8765, "public_url": ""}
 
 
 def scope_suffix(chat_id: int, kind: str) -> str:
@@ -206,6 +219,88 @@ def load_default_mode(path: Path = CONFIG_PATH) -> str:
     return mode
 
 
+def _raw_yaml(path: Path) -> dict:
+    """Best-effort read of the whole document as a plain dict.
+
+    Never raises: the Mini App accessors below must work from a cold CLI
+    process against a file that may be absent or half-written, the same
+    tolerance :func:`load_default_mode` already applies.
+    """
+    if not path.exists():
+        return {}
+    try:
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (yaml.YAMLError, OSError):
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _atomic_write_yaml(data: dict, path: Path) -> None:
+    body = (
+        _AIPAGER_YAML_HEADER
+        + yaml.safe_dump(data, sort_keys=False, default_flow_style=False)
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(body, encoding="utf-8")
+    try:
+        os.chmod(tmp, 0o600)
+    except OSError:
+        log.debug("could not chmod %s", tmp, exc_info=True)
+    os.replace(tmp, path)
+
+
+def load_miniapp(path: Path = CONFIG_PATH) -> dict:
+    """Return the Mini App block: ``{enabled: bool, port: int, public_url: str}``.
+
+    Missing file, missing key, or a malformed value each fall back to the
+    built-in default for that field — off, 8765, no override — so a
+    damaged config can never turn the listener ON by accident.
+    """
+    block = _raw_yaml(path).get(_MINIAPP_KEY)
+    out = dict(_MINIAPP_DEFAULTS)
+    if not isinstance(block, dict):
+        return out
+    # `is True`, not bool(): a hand-edited `enabled: "no"` (or "false",
+    # or "off") is a non-empty string, and bool() would read all three as
+    # True — opening a listening socket for a config that plainly says
+    # not to. Only a real YAML boolean enables the server. YAML's own
+    # `yes`/`on` already parse to True before reaching here.
+    out["enabled"] = block.get("enabled", out["enabled"]) is True
+    try:
+        out["port"] = int(block.get("port", out["port"]))
+    except (TypeError, ValueError):
+        pass
+    url = block.get("public_url", out["public_url"])
+    out["public_url"] = str(url).strip() if url else ""
+    return out
+
+
+def dump_miniapp(settings: dict, path: Path = CONFIG_PATH) -> None:
+    """Persist only the ``miniapp:`` block, leaving the rest of the
+    document byte-identical.
+
+    Deliberately NOT built on :func:`dump_scopes`, which rebuilds the file
+    from a parsed scope list — round-tripping the whole config just to
+    flip a boolean would risk dropping any key that function doesn't know
+    about. Same atomic-write + 0600 discipline as dump_scopes.
+    """
+    raw = _raw_yaml(path)
+    if not raw:
+        raise ScopeConfigError(
+            "aipager.yaml is missing or unreadable — run `aipager config` first"
+        )
+    raw[_MINIAPP_KEY] = {
+        "enabled": settings.get("enabled", False) is True,
+        "port": int(settings.get("port", _MINIAPP_DEFAULTS["port"])),
+        "public_url": str(settings.get("public_url", "") or ""),
+    }
+    # Writing through this path also lands the current SCHEMA_VERSION, so a
+    # v2 file becomes a v3 file the first time the Mini App is configured.
+    raw["schema_version"] = SCHEMA_VERSION
+    _atomic_write_yaml(raw, path)
+
+
 def load_scopes(path: Path = CONFIG_PATH) -> tuple[list[Scope], str] | None:
     """Load ``aipager.yaml``.
 
@@ -224,9 +319,10 @@ def load_scopes(path: Path = CONFIG_PATH) -> tuple[list[Scope], str] | None:
         raise ScopeConfigError("aipager.yaml: expected a mapping at the top level")
 
     version = raw.get("schema_version")
-    if version != SCHEMA_VERSION:
+    if version not in _READABLE_SCHEMA_VERSIONS:
+        readable = " or ".join(str(v) for v in _READABLE_SCHEMA_VERSIONS)
         raise ScopeConfigError(
-            f"aipager.yaml: schema_version must be {SCHEMA_VERSION}, got {version!r}"
+            f"aipager.yaml: schema_version must be {readable}, got {version!r}"
         )
 
     bot_token = str(raw.get("bot_token", "")).strip()
@@ -273,6 +369,12 @@ def dump_scopes(
     # Preserve the existing default_mode when the caller didn't pass one.
     if not default_mode:
         default_mode = load_default_mode(path)
+    # Same reasoning for the Mini App block: this function rebuilds the
+    # document from scratch, so anything not re-emitted here is silently
+    # dropped. Without this, `aipager config` adding a scope would wipe the
+    # Mini App settings — the exact silent-loss bug that moving them out of
+    # config.env exists to fix.
+    existing_miniapp = _raw_yaml(path).get(_MINIAPP_KEY)
     data: dict = {
         "schema_version": SCHEMA_VERSION,
         "bot_token": bot_token,
@@ -297,15 +399,7 @@ def dump_scopes(
         # Explicitly set to ask — write it so the file is self-documenting.
         data["default_mode"] = default_mode
 
-    body = (
-        _AIPAGER_YAML_HEADER
-        + yaml.safe_dump(data, sort_keys=False, default_flow_style=False)
-    )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(body, encoding="utf-8")
-    try:
-        os.chmod(tmp, 0o600)
-    except OSError:
-        log.debug("could not chmod %s", tmp, exc_info=True)
-    os.replace(tmp, path)
+    if isinstance(existing_miniapp, dict):
+        data[_MINIAPP_KEY] = existing_miniapp
+
+    _atomic_write_yaml(data, path)

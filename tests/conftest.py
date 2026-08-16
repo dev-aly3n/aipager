@@ -81,6 +81,10 @@ def _isolate_home_paths(tmp_path, monkeypatch):
         "aipager.state.SESSION_STATE_FILE": sessions_json,
         "aipager.status.SESSION_STATE_FILE": sessions_json,
         "aipager.config._KEYBOARD_CONFIG_PATH": cfg / "keyboard.json",
+        # migrate.upgrade_to_v3() reads this (and its .retired.* siblings)
+        # to recover Mini App settings — without a redirect it would read
+        # the operator's real config.env.
+        "aipager.config._XDG_CONFIG": config_env,
         "aipager.preferences._PREFERENCES_PATH": cfg / "preferences.json",
         "aipager.session_store.SESSIONS_ROOT":
             home / ".local" / "share" / "aipager" / "sessions",
