@@ -61,6 +61,10 @@ def test_app_dm_enabled_with_url_sends_button(mk_bot, mk_update, run_async, monk
     monkeypatch.setattr("aipager.config.MINIAPP_ENABLED", True)
     monkeypatch.setattr("aipager.config.MINIAPP_PORT", 8765)
     monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", "")
+    # Personal mode's /app additionally requires the caller be the
+    # operator (rev-iter1-003 / orchestrator F1) — this DM's sender
+    # (user_id=555, _dm_update's default) IS the operator here.
+    monkeypatch.setattr("aipager.config.CHAT_ID", "555")
     monkeypatch.setattr(
         "aipager.miniapp.tunnel.detect_public_url",
         lambda: "https://my-node.tailxyz.ts.net/",
@@ -86,6 +90,10 @@ def test_app_dm_enabled_manual_url_override_skips_autodetect(
     monkeypatch.setattr("aipager.config.MINIAPP_ENABLED", True)
     monkeypatch.setattr("aipager.config.MINIAPP_PORT", 8765)
     monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", "https://manual.example/")
+    # Personal mode's /app additionally requires the caller be the
+    # operator (rev-iter1-003 / orchestrator F1) — this DM's sender
+    # (user_id=555, _dm_update's default) IS the operator here.
+    monkeypatch.setattr("aipager.config.CHAT_ID", "555")
 
     def _should_not_be_called():
         raise AssertionError("detect_public_url must not run when a manual URL is set")
@@ -100,6 +108,136 @@ def test_app_dm_enabled_manual_url_override_skips_autodetect(
     args, kwargs = update.message.reply_text.await_args
     buttons = [b for row in kwargs["reply_markup"].inline_keyboard for b in row]
     assert buttons[0].web_app.url == "https://manual.example/"
+
+
+def test_app_detect_public_url_runs_off_the_event_loop(
+    mk_bot, mk_update, run_async, monkeypatch,
+):
+    """rev-iter1-002: detect_public_url() shells out synchronously
+    (subprocess.run with a timeout) — it must be dispatched via
+    run_in_executor, never awaited/called directly on the shared loop,
+    or a hung tailscale binary would freeze every other scope's message
+    handling for up to _TAILSCALE_TIMEOUT_SECONDS."""
+    monkeypatch.setattr("aipager.config.MINIAPP_ENABLED", True)
+    monkeypatch.setattr("aipager.config.MINIAPP_PORT", 8765)
+    monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", "")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "555")
+    monkeypatch.setattr(
+        "aipager.miniapp.tunnel.detect_public_url",
+        lambda: "https://my-node.tailxyz.ts.net/",
+    )
+
+    # asyncio.AbstractEventLoop.run_in_executor is just an abstract
+    # stub -- the real implementation every concrete loop actually uses
+    # (and overrides the abstract one via MRO) lives on BaseEventLoop.
+    from asyncio.base_events import BaseEventLoop
+
+    calls = []
+    real_run_in_executor = BaseEventLoop.run_in_executor
+
+    def _spy(self, executor, func, *args):
+        calls.append((executor, func))
+        return real_run_in_executor(self, executor, func, *args)
+
+    monkeypatch.setattr(BaseEventLoop, "run_in_executor", _spy)
+
+    bot = mk_bot()
+    update = _dm_update(mk_update)
+    run_async(bot._handle_app_cmd(update, MagicMock()))
+
+    assert calls, "detect_public_url must be dispatched via run_in_executor"
+    executor, func = calls[0]
+    assert executor is None  # default executor — matches voice.py:101
+    assert func() == "https://my-node.tailxyz.ts.net/"  # it's detect_public_url
+    # And the result still made it into the button, proving the
+    # executor call is actually on the request path, not a decoy.
+    args, kwargs = update.message.reply_text.await_args
+    buttons = [b for row in kwargs["reply_markup"].inline_keyboard for b in row]
+    assert buttons[0].web_app.url == "https://my-node.tailxyz.ts.net/"
+
+
+# ===== Personal-mode operator gate (rev-iter1-003 / orchestrator F1) ===
+#
+# In personal mode (no team.yaml, no scopes.yaml) every other command is
+# reachable by anyone who can DM the bot -- _authorize returns True
+# unconditionally, and CommandHandlers are never chat-filtered. /app is
+# the one exception: tapping its button discloses the tunnel URL and
+# gets Telegram to sign an initData for the tapper's own user id, which
+# /api/status would otherwise trust as "the operator" (see
+# AuthMixin._is_personal_mode_operator / MiniAppServer's matching guard
+# in tests/test_miniapp_server.py). So /app itself must refuse to hand
+# the button to anyone but the operator.
+
+def test_app_personal_mode_non_operator_denied_no_button(
+    mk_bot, mk_update, run_async, monkeypatch,
+):
+    """A stranger DMing a personal-mode bot must get the standard
+    not-authorized reply, never the launcher button -- the button IS
+    the disclosure (it carries the tunnel URL)."""
+    monkeypatch.setattr("aipager.config.MINIAPP_ENABLED", True)
+    monkeypatch.setattr("aipager.config.MINIAPP_PORT", 8765)
+    monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", "")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "555")  # the operator is 555
+    monkeypatch.setattr(
+        "aipager.miniapp.tunnel.detect_public_url",
+        lambda: "https://should-not-be-disclosed.example/",
+    )
+    bot = mk_bot()  # team=None, scopes=None -> personal mode
+    update = _dm_update(mk_update, user_id=999999)  # not the operator
+
+    run_async(bot._handle_app_cmd(update, MagicMock()))
+
+    update.message.reply_text.assert_awaited_once()
+    args, kwargs = update.message.reply_text.await_args
+    assert kwargs.get("reply_markup") is None
+    assert "should-not-be-disclosed" not in args[0]
+    assert "isn't configured to talk to you" in args[0].lower() \
+        or "not on" in args[0].lower() or "allow-list" in args[0].lower()
+
+
+def test_app_personal_mode_operator_still_gets_button(
+    mk_bot, mk_update, run_async, monkeypatch,
+):
+    """The operator themself must be unaffected by the new gate."""
+    monkeypatch.setattr("aipager.config.MINIAPP_ENABLED", True)
+    monkeypatch.setattr("aipager.config.MINIAPP_PORT", 8765)
+    monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", "")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "555")
+    monkeypatch.setattr(
+        "aipager.miniapp.tunnel.detect_public_url",
+        lambda: "https://my-node.tailxyz.ts.net/",
+    )
+    bot = mk_bot()
+    update = _dm_update(mk_update, user_id=555)  # the operator
+
+    run_async(bot._handle_app_cmd(update, MagicMock()))
+
+    args, kwargs = update.message.reply_text.await_args
+    assert kwargs.get("reply_markup") is not None
+    buttons = [b for row in kwargs["reply_markup"].inline_keyboard for b in row]
+    assert buttons[0].web_app.url == "https://my-node.tailxyz.ts.net/"
+
+
+def test_app_personal_mode_malformed_chat_id_fails_closed(
+    mk_bot, mk_update, run_async, monkeypatch,
+):
+    """No operator identity configured (or unparsable CHAT_ID) must
+    deny, never fall open to 'any Telegram user is the operator'."""
+    monkeypatch.setattr("aipager.config.MINIAPP_ENABLED", True)
+    monkeypatch.setattr("aipager.config.MINIAPP_PORT", 8765)
+    monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", "")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "")  # unconfigured
+    monkeypatch.setattr(
+        "aipager.miniapp.tunnel.detect_public_url",
+        lambda: "https://should-not-be-disclosed.example/",
+    )
+    bot = mk_bot()
+    update = _dm_update(mk_update, user_id=555)
+
+    run_async(bot._handle_app_cmd(update, MagicMock()))
+
+    args, kwargs = update.message.reply_text.await_args
+    assert kwargs.get("reply_markup") is None
 
 
 def test_app_unauthorized_team_member_gets_standard_denial(

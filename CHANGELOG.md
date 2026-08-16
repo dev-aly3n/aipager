@@ -16,15 +16,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hardcoded, never configurable; a user-installed tunnel (Tailscale Funnel
   recommended, Cloudflare or anything else usable via a manual
   `--url` override) is the only intended way in. Every API request is
-  authenticated with Telegram's `initData` HMAC signature (freshness-checked,
-  ~5 min window) and then authorized against the same scope/role rules
-  `/status` already uses — a valid signature alone only proves *a* Telegram
-  user, not an authorized one. Requires the new `aipager[miniapp]` install
+  authenticated with Telegram's `initData` HMAC signature (freshness-checked
+  in both directions, ~5 min window, small clock-skew tolerance) and then
+  authorized against the same scope/role rules `/status` already uses — a
+  valid signature alone only proves *a* Telegram user, not an authorized
+  one. In personal mode (no team/scope config), `/app` and the dashboard it
+  links to additionally require the caller to be the operator (the Telegram
+  user id behind `CHAT_ID`) — unlike a DM's `/status`, tapping the button
+  discloses the tunnel URL itself and produces a credential usable over the
+  open internet, so personal mode's usual "anyone who can DM the bot" trust
+  model doesn't extend to it. Requires the new `aipager[miniapp]` install
   extra (`pip install 'aipager[miniapp]'`); the base install is unaffected.
   Mini Apps are a private-chat-only Bot API feature, so `/app` in a group
-  replies with a plain-text explanation instead of a button. This is stage 1
-  of a multi-stage rollout — everything is read-only; settings editing,
-  session control, and multi-bot management land in later releases.
+  replies with a plain-text explanation instead of a button. A failure to
+  bind the server's port (e.g. already in use) logs a warning and disables
+  the feature for that run rather than taking the whole daemon down. This is
+  stage 1 of a multi-stage rollout — everything is read-only; settings
+  editing, session control, and multi-bot management land in later releases.
 
 ## [0.6.1] - 2026-08-15
 

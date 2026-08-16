@@ -152,9 +152,17 @@ class MiniAppServer:
         if self.bot.team is not None:
             return chat_id if self.bot.team.get(user_id) is not None else None
 
-        # Personal mode: no allow-list configured — any Telegram user
-        # with a valid signature is treated as the operator, same trust
-        # model as a DM in personal mode today.
+        # Personal mode: no allow-list configured. This is NOT the same
+        # trust model as a DM in personal mode today — a DM's /status
+        # never leaves Telegram and is rate-limited/friction-bounded by
+        # the Telegram client itself, whereas this credential (and the
+        # tunnel URL that produced it) is usable over the raw internet
+        # once obtained. So, unlike every other personal-mode command,
+        # require the caller to actually BE the operator rather than
+        # "any Telegram user with a validly-signed initData" — see
+        # AuthMixin._is_personal_mode_operator.
+        if not self.bot._is_personal_mode_operator(user_id):
+            return None
         return chat_id
 
     def _build_status_payload(self, scope_chat_id: int) -> dict:

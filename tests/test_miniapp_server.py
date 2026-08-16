@@ -212,6 +212,95 @@ def test_status_scopes_sessions_to_authenticated_users_scope(mk_bot, run_async):
     run_async(_run())
 
 
+# ===== Personal mode (rev-iter1-003 / orchestrator F1) ==================
+#
+# Every other test in this file uses scope mode (mk_bot(..., scopes=[...])).
+# Personal mode (team=None, scopes=None) has no allow-list at all, so
+# unlike scope/team mode a valid signature alone would otherwise be
+# treated as "the operator" -- which is exactly the widened blast radius
+# the review flagged: a stranger who gets a signed initData (e.g. via
+# /app, see tests/test_bot_app_command.py's matching guard) would get
+# the operator's dashboard. MiniAppServer._resolve_scope_chat_id must
+# additionally require user_id == the operator's own CHAT_ID.
+
+def test_status_personal_mode_operator_returns_200(mk_bot, run_async, monkeypatch):
+    monkeypatch.setattr("aipager.config.CHAT_ID", "555")
+    registry = SessionRegistry()
+    bot = mk_bot(registry)  # team=None, scopes=None -> personal mode
+    bot._app.bot.username = "solo_bot"
+    sess = registry.get_or_create("claude-solo")
+    sess.label = "solo"
+    sess.scope_chat_id = 555
+    server = MiniAppServer(bot, registry, port=8765)
+
+    async def _run():
+        client = await _client_for(server)
+        try:
+            good = _init_data(555)  # the operator
+            resp = await client.get(
+                "/api/status", headers={"X-Telegram-Init-Data": good},
+            )
+            assert resp.status == 200
+            body = await resp.json()
+            assert {s["label"] for s in body["sessions"]} == {"solo"}
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_status_personal_mode_non_operator_returns_403(mk_bot, run_async, monkeypatch):
+    """The defect this guards against: a stranger with a validly-signed
+    initData for their OWN Telegram user id must not receive the
+    operator's session list just because personal mode has no
+    allow-list to check membership against. Fails if the guard in
+    MiniAppServer._resolve_scope_chat_id is removed (verified by hand:
+    removing it makes this assert 403 == 200 and fail)."""
+    monkeypatch.setattr("aipager.config.CHAT_ID", "555")
+    registry = SessionRegistry()
+    bot = mk_bot(registry)
+    bot._app.bot.username = "solo_bot"
+    sess = registry.get_or_create("claude-solo")
+    sess.label = "solo"
+    sess.scope_chat_id = 555
+    server = MiniAppServer(bot, registry, port=8765)
+
+    async def _run():
+        client = await _client_for(server)
+        try:
+            stranger = _init_data(999999)  # valid signature, not the operator
+            resp = await client.get(
+                "/api/status", headers={"X-Telegram-Init-Data": stranger},
+            )
+            assert resp.status == 403
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_status_personal_mode_unconfigured_chat_id_fails_closed(
+    mk_bot, run_async, monkeypatch,
+):
+    """No operator identity resolvable (e.g. a fresh/malformed install)
+    must deny, never fall open to 'any signed request is the operator'."""
+    monkeypatch.setattr("aipager.config.CHAT_ID", "")
+    registry = SessionRegistry()
+    bot = mk_bot(registry)
+    bot._app.bot.username = "solo_bot"
+    server = MiniAppServer(bot, registry, port=8765)
+
+    async def _run():
+        client = await _client_for(server)
+        try:
+            any_user = _init_data(555)
+            resp = await client.get(
+                "/api/status", headers={"X-Telegram-Init-Data": any_user},
+            )
+            assert resp.status == 403
+        finally:
+            await client.close()
+    run_async(_run())
+
+
 def test_no_route_accepts_post(scoped_server, run_async):
     """Stage 1 is strictly read-only — no route registers POST/PUT/DELETE."""
     async def _run():
