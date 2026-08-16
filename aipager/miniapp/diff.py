@@ -114,13 +114,56 @@ async def _run_git(
             if drained >= _STDERR_DRAIN_CAP:
                 return
 
+    # Race the two reads instead of gathering them: a plain
+    # ``asyncio.gather`` under ``wait_for`` (the original approach) waits
+    # for BOTH to finish, but ``_read_stdout`` returns the instant it hits
+    # ``max_bytes`` while the child is still alive and blocked writing to
+    # that now-unread stdout pipe -- so ``_drain_stderr`` never sees EOF
+    # and the whole call sits until the full ``timeout`` elapses. Instead,
+    # loop on ``FIRST_COMPLETED`` and stop the moment stdout truncates:
+    # killing the child below immediately closes its stderr pipe too, so
+    # there's nothing left worth waiting on.
+    stdout_task: asyncio.Task[None] = asyncio.ensure_future(_read_stdout())
+    stderr_task: asyncio.Task[None] = asyncio.ensure_future(_drain_stderr())
+    pending: set[asyncio.Task[None]] = {stdout_task, stderr_task}
+
     timed_out = False
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
     try:
-        await asyncio.wait_for(
-            asyncio.gather(_read_stdout(), _drain_stderr()), timeout=timeout,
-        )
-    except asyncio.TimeoutError:
-        timed_out = True
+        while pending:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                timed_out = True
+                break
+            done, pending = await asyncio.wait(
+                pending, timeout=remaining, return_when=asyncio.FIRST_COMPLETED,
+            )
+            if not done:
+                # asyncio.wait's own timeout elapsed without either task
+                # completing.
+                timed_out = True
+                break
+            if stdout_task in done and truncated:
+                # A capped read is a successful, bounded result -- stop
+                # waiting on stderr the instant it happens rather than
+                # draining it to completion (which is exactly what
+                # deadlocked before).
+                break
+    finally:
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+
+    # Propagate any exception raised inside either reader task (mirrors
+    # the original ``gather``-under-``wait_for`` behaviour for anything
+    # other than the timeout it was catching).
+    for task in (stdout_task, stderr_task):
+        if task.done() and not task.cancelled():
+            exc = task.exception()
+            if exc is not None:
+                raise exc
 
     if truncated or timed_out:
         # Either way we've stopped reading before the child was done —
@@ -136,12 +179,36 @@ async def _run_git(
             except ProcessLookupError:
                 pass
 
+    async def _drain_to_eof(stream: asyncio.StreamReader | None) -> None:
+        # asyncio.Process.wait() only resolves once every pipe transport
+        # has reported EOF (BaseSubprocessTransport._try_finish gates the
+        # exit-waiter on ALL pipes being "disconnected"). A pipe whose
+        # internal buffer we filled past its high-water mark without
+        # draining -- exactly what stopping at truncation leaves behind --
+        # is *paused* by asyncio's own flow control and never resumes on
+        # its own, so `proc.wait()` would otherwise hang indefinitely even
+        # though the child is already dead and killed. Resuming reads
+        # (discarding the bytes -- we've already taken what we need)
+        # drains the remaining kernel buffer and lets the transport
+        # observe EOF quickly, since the killed child has no more writers.
+        if stream is None:
+            return
+        try:
+            while not stream.at_eof():
+                await stream.read(65536)
+        except (ValueError, ConnectionResetError):
+            pass
+
     try:
-        # Bounded even here: reaping a just-killed child is normally
-        # near-instant, but this must never become the unbounded wait
-        # this whole function exists to avoid if a wedged child (e.g.
-        # blocked in uninterruptible disk I/O on a stalled network
-        # filesystem) is slow to actually die and be reaped.
+        # Bounded even here: draining+reaping a just-killed child is
+        # normally near-instant, but this must never become the
+        # unbounded wait this whole function exists to avoid if a wedged
+        # child (e.g. blocked in uninterruptible disk I/O on a stalled
+        # network filesystem) is slow to actually die and be reaped.
+        await asyncio.wait_for(
+            asyncio.gather(_drain_to_eof(proc.stdout), _drain_to_eof(proc.stderr)),
+            timeout=_KILL_REAP_GRACE_SECONDS,
+        )
         await asyncio.wait_for(proc.wait(), timeout=_KILL_REAP_GRACE_SECONDS)
     except asyncio.TimeoutError:
         log.warning("git subprocess (pid=%s) still not reaped after kill()", proc.pid)
@@ -230,26 +297,37 @@ async def _diff_one_file(cwd: str, path: str, change_type: str, budget: int) -> 
     result = await _run_git(args, cwd, max_bytes=per_file_cap)
 
     if result.not_found or result.timed_out:
-        return {
-            "path": path, "change_type": change_type, "binary": False,
-            "patch": None, "truncated": True,
-        }
-
-    ok_codes = (0, 1)
-    if result.returncode not in ok_codes:
-        # Exit >1 (or --no-index's equivalent) is a per-file git error —
-        # surfaced as an incomplete entry, never a 500 for the whole
-        # request (design.md Decision 2).
+        # A genuine timeout (or a missing `git` binary) has no usable
+        # content at all -- this is the only case with a null patch.
         return {
             "path": path, "change_type": change_type, "binary": False,
             "patch": None, "truncated": True,
         }
 
     if _is_binary_diff(result.stdout):
+        # git's binary marker line is short and always emitted up front,
+        # so this check is meaningful whether or not the read was capped.
         return {
             "path": path, "change_type": change_type, "binary": True,
             "patch": None, "truncated": result.truncated,
         }
+
+    if not result.truncated:
+        ok_codes = (0, 1)
+        if result.returncode not in ok_codes:
+            # Exit >1 (or --no-index's equivalent) is a per-file git
+            # error — surfaced as an incomplete entry, never a 500 for
+            # the whole request (design.md Decision 2). Skipped when
+            # `truncated` is set: a capped read is a SUCCESS with a
+            # bounded payload, and `_run_git` kills the child to enforce
+            # the cap, which leaves an arbitrary (often negative/signal)
+            # returncode that says nothing about whether the diff itself
+            # would have succeeded — treating it as an error here would
+            # turn every oversized file into a null patch again.
+            return {
+                "path": path, "change_type": change_type, "binary": False,
+                "patch": None, "truncated": True,
+            }
 
     patch = result.stdout.decode("utf-8", "replace") if result.stdout else ""
     return {
