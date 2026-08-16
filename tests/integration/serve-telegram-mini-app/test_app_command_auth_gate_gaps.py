@@ -117,6 +117,10 @@ def test_app_authorized_happy_path_sends_exactly_one_message_and_one_button(
         "aipager.miniapp.tunnel.detect_public_url",
         lambda: "https://my-node.tailxyz.ts.net/",
     )
+    # Personal mode's operator IS CHAT_ID (a DM's chat_id is the peer's
+    # user id), so pin it to the sender — without this the sender is
+    # just "some Telegram user" and the operator guard correctly denies.
+    monkeypatch.setattr("aipager.config.CHAT_ID", "555")
     bot = mk_bot()
     update = mk_update("/app", user_id=555, chat_id=555)
 
