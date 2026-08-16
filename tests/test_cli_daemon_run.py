@@ -24,8 +24,14 @@ def _make_event_done():
     return ev
 
 
-def _patch_components(monkeypatch, *, with_observers=False):
-    """Common mocks for _run_daemon's collaborators. Returns the patches."""
+def _patch_components(monkeypatch, *, with_observers=False, with_miniapp=None):
+    """Common mocks for _run_daemon's collaborators. Returns the patches.
+
+    ``with_miniapp``: None → MINIAPP_ENABLED stays False (untouched);
+    a MagicMock → MINIAPP_ENABLED=True and MiniAppServer(...) returns
+    it; the string "unavailable" → MINIAPP_ENABLED=True and
+    MiniAppServer.start() raises MiniAppUnavailable.
+    """
     bot = MagicMock()
     bot.start = AsyncMock()
     bot.stop = AsyncMock()
@@ -66,6 +72,27 @@ def _patch_components(monkeypatch, *, with_observers=False):
         monkeypatch.setattr("aipager.bot.observer.ObserverBroadcaster",
                             lambda cfg: observers)
 
+    miniapp_server = None
+    if with_miniapp is not None:
+        monkeypatch.setattr("aipager.config.MINIAPP_ENABLED", True)
+        monkeypatch.setattr("aipager.config.MINIAPP_PORT", 8765)
+        from aipager.miniapp.server import MiniAppUnavailable
+        if with_miniapp == "unavailable":
+            miniapp_server = MagicMock()
+            miniapp_server.start = AsyncMock(
+                side_effect=MiniAppUnavailable("aipager[miniapp] not installed"))
+            miniapp_server.stop = AsyncMock()
+        else:
+            miniapp_server = MagicMock()
+            miniapp_server.start = AsyncMock()
+            miniapp_server.stop = AsyncMock()
+        monkeypatch.setattr(
+            "aipager.miniapp.server.MiniAppServer",
+            lambda bot_, r, port: miniapp_server,
+        )
+    else:
+        monkeypatch.setattr("aipager.config.MINIAPP_ENABLED", False)
+
     # Make stop.wait() return instantly
     real_event = asyncio.Event
     def _fake_event():
@@ -74,7 +101,7 @@ def _patch_components(monkeypatch, *, with_observers=False):
         return ev
     monkeypatch.setattr("aipager.cli.daemon.asyncio.Event", _fake_event)
 
-    return bot, hook_receiver, session_monitor, registry, observers
+    return bot, hook_receiver, session_monitor, registry, observers, miniapp_server
 
 
 def test_run_daemon_exits_when_no_token(monkeypatch):
@@ -89,7 +116,7 @@ def test_run_daemon_happy_path_personal_mode(monkeypatch):
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
     monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
-    bot, hook, monitor, registry, _ = _patch_components(monkeypatch)
+    bot, hook, monitor, registry, _, _ = _patch_components(monkeypatch)
 
     loop = asyncio.new_event_loop()
     loop.run_until_complete(daemon._run_daemon("bot_username"))
@@ -112,7 +139,7 @@ def test_run_daemon_with_observers_starts_and_stops_them(monkeypatch):
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
     monkeypatch.setattr("aipager.config.OBSERVER_BOTS",
                         [("obs_tok", "obs_chat")])
-    bot, hook, monitor, registry, observers = _patch_components(
+    bot, hook, monitor, registry, observers, _ = _patch_components(
         monkeypatch, with_observers=True,
     )
 
@@ -143,3 +170,73 @@ def test_run_daemon_handles_sigusr1_not_supported(monkeypatch, caplog):
     asyncio.set_event_loop(real_loop)
     real_loop.run_until_complete(daemon._run_daemon("bot_username"))
     # No raise; daemon shut down cleanly
+
+
+# ===== Mini App server lifecycle (opt-in, off by default) ===============
+
+def test_run_daemon_miniapp_disabled_never_constructed(monkeypatch):
+    """MINIAPP_ENABLED unset/false → no MiniAppServer is ever built, so a
+    base install (no `miniapp` extra) never even attempts the import."""
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
+    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
+    _patch_components(monkeypatch)  # with_miniapp=None → MINIAPP_ENABLED=False
+
+    called = MagicMock()
+    monkeypatch.setattr(
+        "aipager.miniapp.server.MiniAppServer",
+        lambda *a, **k: called() or MagicMock(),
+    )
+
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(daemon._run_daemon("bot_username"))
+    called.assert_not_called()
+
+
+def test_run_daemon_miniapp_enabled_starts_last_stops_first(monkeypatch):
+    """Design.md ordering: the Mini App server is the newest/highest-risk
+    component, so it starts after everything else and stops before
+    session_monitor (the first teardown step)."""
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
+    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
+    bot, hook, monitor, registry, _, miniapp = _patch_components(
+        monkeypatch, with_miniapp=True,
+    )
+
+    order = []
+    monitor.start.side_effect = lambda: order.append("monitor.start")
+    miniapp.start.side_effect = lambda: order.append("miniapp.start")
+    miniapp.stop.side_effect = lambda: order.append("miniapp.stop")
+    monitor.stop.side_effect = lambda: order.append("monitor.stop")
+
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(daemon._run_daemon("bot_username"))
+
+    miniapp.start.assert_awaited_once()
+    miniapp.stop.assert_awaited_once()
+    assert order.index("monitor.start") < order.index("miniapp.start")
+    assert order.index("miniapp.stop") < order.index("monitor.stop")
+
+
+def test_run_daemon_miniapp_unavailable_does_not_crash_daemon(monkeypatch, caplog):
+    """aiohttp missing (extra not installed) → MiniAppServer.start() raises
+    MiniAppUnavailable; the daemon logs a friendly warning and keeps
+    every other component running instead of crashing."""
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
+    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
+    bot, hook, monitor, registry, _, miniapp = _patch_components(
+        monkeypatch, with_miniapp="unavailable",
+    )
+
+    loop = asyncio.new_event_loop()
+    with caplog.at_level("WARNING"):
+        loop.run_until_complete(daemon._run_daemon("bot_username"))
+
+    miniapp.start.assert_awaited_once()
+    # Never stopped — start() failed, so there's nothing to stop.
+    miniapp.stop.assert_not_awaited()
+    bot.start.assert_awaited_once()
+    bot.stop.assert_awaited_once()
+    assert any("Mini App" in r.getMessage() for r in caplog.records)
