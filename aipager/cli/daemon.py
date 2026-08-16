@@ -267,6 +267,16 @@ async def _run_daemon(bot_username: str) -> None:
         except MiniAppUnavailable as e:
             log.warning("Mini App server not started: %s", e)
             miniapp_server = None
+        except OSError as e:
+            # Most plausibly EADDRINUSE — another `aipager start`, or an
+            # unrelated local service, already bound MINIAPP_PORT. The
+            # Mini App is opt-in and must never take the rest of the
+            # daemon (bot, hooks, session monitor) down with it.
+            log.warning(
+                "Mini App server not started — port %d unavailable: %s",
+                MINIAPP_PORT, e,
+            )
+            miniapp_server = None
 
     log.info("AIPager running — all components started")
 

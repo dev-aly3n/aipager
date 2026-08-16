@@ -82,6 +82,11 @@ def _patch_components(monkeypatch, *, with_observers=False, with_miniapp=None):
             miniapp_server.start = AsyncMock(
                 side_effect=MiniAppUnavailable("aipager[miniapp] not installed"))
             miniapp_server.stop = AsyncMock()
+        elif with_miniapp == "port_in_use":
+            miniapp_server = MagicMock()
+            miniapp_server.start = AsyncMock(
+                side_effect=OSError(98, "Address already in use"))
+            miniapp_server.stop = AsyncMock()
         else:
             miniapp_server = MagicMock()
             miniapp_server.start = AsyncMock()
@@ -239,4 +244,40 @@ def test_run_daemon_miniapp_unavailable_does_not_crash_daemon(monkeypatch, caplo
     miniapp.stop.assert_not_awaited()
     bot.start.assert_awaited_once()
     bot.stop.assert_awaited_once()
+    assert any("Mini App" in r.getMessage() for r in caplog.records)
+
+
+def test_run_daemon_miniapp_port_in_use_does_not_crash_daemon(monkeypatch, caplog):
+    """rev-iter1-001: a non-MiniAppUnavailable startup failure (most
+    plausibly OSError/EADDRINUSE from a second `aipager start`, or an
+    unrelated local service already bound to MINIAPP_PORT) must not
+    propagate out of _run_daemon and take the bot, hook receiver,
+    session monitor, and observers down with it — the Mini App is
+    opt-in and must never take the rest of the daemon down."""
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
+    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
+    bot, hook, monitor, registry, _, miniapp = _patch_components(
+        monkeypatch, with_miniapp="port_in_use",
+    )
+
+    loop = asyncio.new_event_loop()
+    with caplog.at_level("WARNING"):
+        # Must not raise — this is exactly the bug: previously an OSError
+        # here propagated out of the un-wrapped asyncio.run(...) in
+        # _cmd_start and crashed the whole daemon before stop.wait() was
+        # even reached.
+        loop.run_until_complete(daemon._run_daemon("bot_username"))
+
+    miniapp.start.assert_awaited_once()
+    miniapp.stop.assert_not_awaited()
+    # Every other component still came up AND shut down cleanly.
+    bot.start.assert_awaited_once()
+    hook.start.assert_awaited_once()
+    monitor.start.assert_awaited_once()
+    bot.recover_sessions.assert_awaited_once()
+    monitor.stop.assert_called_once()
+    hook.stop.assert_called_once()
+    bot.stop.assert_awaited_once()
+    registry.save.assert_called_once()
     assert any("Mini App" in r.getMessage() for r in caplog.records)
