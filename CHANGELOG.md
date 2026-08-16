@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Mini App session page, rebuilt around what Claude last said.** Tapping a
+  session now opens a single scrolling page led by the last few lines of
+  Claude's reply, with a scannable label/value info line above it and the diff
+  collapsed below as "Changed files (N)". A session waiting on you says what it
+  is waiting for — the permission prompt or the question — instead of just
+  showing the word "waiting". The timeline moved into its own collapsed section
+  and, when empty, explains why: it only covers the current daemon run and is
+  not saved across restarts, which is why every older session appeared blank.
+  Values a finished session never recorded are now omitted rather than rendered
+  as "0% ctx · $0.00", and a clean repository says so by name instead of showing
+  an empty panel.
 - **Mini App Settings tab — every reply-style option on one screen.** Message
   layout, simple formatting, answer length and language level, each with a line
   explaining what it does, all visible at once instead of a tap per value

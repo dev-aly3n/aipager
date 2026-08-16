@@ -139,7 +139,7 @@ def session_detail(sess: "TrackedSession", now: float) -> dict[str, Any]:
     busy_elapsed = None
     if sess.busy_started_at and sess.status in (Status.BUSY, Status.INTERACTIVE):
         busy_elapsed = round(now - sess.busy_started_at)
-    return {
+    detail = {
         "label": sess.label,
         "status": status,
         "waiting_kind": waiting_kind,
@@ -150,8 +150,88 @@ def session_detail(sess: "TrackedSession", now: float) -> dict[str, Any]:
         "cwd": sess.cwd or "",
         "last_active_seconds_ago": last_active,
         "busy_elapsed_seconds": busy_elapsed,
+        # The page's headline content. Unlike `timeline`, this survives a
+        # daemon restart (`last_assistant_preview` is in state.py's
+        # _PERSIST_FIELDS, tool_history/stream_commentary are not), so it
+        # is the one thing that reliably has content for an older session.
+        "last_message": preview_lines(sess.last_assistant_preview),
         "timeline": build_timeline(sess),
     }
+    detail["facts"] = display_facts(detail)
+    return detail
+
+
+# Roughly three phone-width lines. `last_assistant_preview` is already a
+# ~200-char extract upstream; this only guards against a longer one
+# arriving and pushing everything below it off the screen.
+_PREVIEW_MAX_CHARS = 240
+
+
+def preview_lines(preview: str | None) -> str:
+    """Normalise the stored assistant preview for display.
+
+    Collapses runs of blank lines (the stored extract can carry markdown
+    paragraph breaks that waste half the visible box on a phone) and caps
+    the length on a word boundary so the section stays about three lines.
+    Returns "" for anything empty, so the client renders its explicit
+    "nothing captured" state rather than an empty box.
+    """
+    if not preview or not preview.strip():
+        return ""
+    lines = [line.strip() for line in preview.strip().splitlines()]
+    text = "\n".join(line for line in lines if line)
+    if len(text) <= _PREVIEW_MAX_CHARS:
+        return text
+    clipped = text[:_PREVIEW_MAX_CHARS]
+    # Prefer cutting at the last space so the tail is not a half-word.
+    cut = clipped.rfind(" ")
+    if cut > _PREVIEW_MAX_CHARS // 2:
+        clipped = clipped[:cut]
+    return clipped.rstrip() + "…"
+
+
+def display_facts(detail: dict[str, Any]) -> list[dict[str, str]]:
+    """The info line as ordered ``{label, value}`` pairs, omitting what
+    would be noise.
+
+    A finished session legitimately reports ``model: ""``, ``cost 0`` and
+    ``context 0``; rendering those as "0% ctx · $0.00" tells the operator
+    something false-looking about a session that simply never recorded
+    them. Built here rather than in JavaScript so the omission rules are
+    pinned by pytest.
+    """
+    facts: list[dict[str, str]] = []
+    if detail.get("model"):
+        facts.append({"label": "Model", "value": str(detail["model"])})
+    if detail.get("context_pct"):
+        facts.append({"label": "Context", "value": f"{detail['context_pct']}%"})
+    if detail.get("cost_usd"):
+        facts.append({"label": "Cost", "value": f"${detail['cost_usd']:.2f}"})
+    if detail.get("busy_elapsed_seconds"):
+        facts.append({
+            "label": "Working for",
+            "value": _short_duration(detail["busy_elapsed_seconds"]),
+        })
+    age = detail.get("last_active_seconds_ago")
+    if age is not None:
+        facts.append({"label": "Last active", "value": _short_duration(age) + " ago"})
+    if detail.get("cwd"):
+        facts.append({"label": "Directory", "value": str(detail["cwd"])})
+    return facts
+
+
+def _short_duration(seconds) -> str:
+    try:
+        seconds = int(seconds)
+    except (TypeError, ValueError):
+        return ""
+    if seconds < 60:
+        return f"{max(0, seconds)}s"
+    if seconds < 3600:
+        return f"{seconds // 60}m"
+    if seconds < 86400:
+        return f"{seconds // 3600}h"
+    return f"{seconds // 86400}d"
 
 
 def build_timeline(sess: "TrackedSession") -> list[dict[str, Any]]:
@@ -195,6 +275,8 @@ def build_timeline(sess: "TrackedSession") -> list[dict[str, Any]]:
 
 __all__ = [
     "build_timeline",
+    "display_facts",
+    "preview_lines",
     "grid_totals",
     "session_detail",
     "session_summary",

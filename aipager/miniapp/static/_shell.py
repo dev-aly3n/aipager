@@ -71,13 +71,21 @@ HTML_BODY = """\
     <span id="detail-label" class="detail-label"></span>
     <span id="detail-status" class="status"></span>
   </div>
-  <div id="detail-meta" class="muted"></div>
-  <div class="tabs">
-    <button type="button" class="tab-btn" id="tab-timeline">Timeline</button>
-    <button type="button" class="tab-btn" id="tab-diff">Diff</button>
-  </div>
-  <div id="panel-timeline" class="panel"></div>
+  <div id="detail-waiting" class="waiting-note" hidden></div>
+  <dl id="detail-facts" class="facts"></dl>
+
+  <h2 class="sect-title">Last message</h2>
+  <div id="detail-preview" class="preview"></div>
+
+  <button type="button" class="sect-toggle" id="tab-diff"></button>
   <div id="panel-diff" class="panel" hidden></div>
+
+  <button type="button" class="sect-toggle" id="tab-timeline"></button>
+  <div id="timeline-note" class="sect-note" hidden>
+    The timeline only covers the current daemon run — it isn't saved across
+    restarts, so an older session shows nothing here.
+  </div>
+  <div id="panel-timeline" class="panel" hidden></div>
 </section>
 """
 

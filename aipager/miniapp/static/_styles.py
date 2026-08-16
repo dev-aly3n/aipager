@@ -156,6 +156,48 @@ CSS = """\
   .setopt-help { display: block; font-size: 0.78rem; opacity: 0.75; margin-top: 2px; }
   .setopt.is-saving { opacity: 0.6; }
 
+  /* Session page. A label/value grid rather than a comma-separated run,
+     so the info line stays scannable on a narrow screen. */
+  .facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 10px 0 0; }
+  .facts dt { color: var(--tg-theme-hint-color, #888888); font-size: 0.85rem; }
+  .facts dd {
+    margin: 0;
+    font-size: 0.85rem;
+    overflow-wrap: anywhere;   /* a long cwd must wrap, not widen the page */
+  }
+  .waiting-note {
+    margin-top: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(220, 38, 38, 0.12);
+    font-size: 0.9rem;
+  }
+  .sect-title { font-size: 0.95rem; margin: 20px 0 6px; }
+  .preview {
+    white-space: pre-wrap;
+    line-height: 1.45;
+    padding: 10px 12px;
+    border-left: 3px solid var(--tg-theme-hint-color, #e0e0e0);
+    background: var(--tg-theme-secondary-bg-color, rgba(127, 127, 127, 0.08));
+    border-radius: 0 8px 8px 0;
+  }
+  .preview.is-empty { color: var(--tg-theme-hint-color, #888888); font-style: italic; }
+  .sect-toggle {
+    display: block;
+    width: 100%;
+    text-align: left;
+    margin-top: 18px;
+    padding: 9px 10px;
+    font: inherit;
+    font-weight: 600;
+    color: var(--tg-theme-text-color, #000000);
+    background: transparent;
+    border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .sect-note { margin-top: 10px; font-size: 0.9rem; color: var(--tg-theme-hint-color, #888888); }
+
   .empty, .placeholder { margin-top: 18px; line-height: 1.5; }
   .empty p, .placeholder p { margin: 0 0 6px; }
   .row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; gap: 8px; }
@@ -201,27 +243,7 @@ CSS = """\
   #view-grid[hidden], #view-detail[hidden], #view-settings[hidden] { display: none; }
 
   .detail-label { font-weight: 700; font-size: 1.05rem; margin-right: 8px; }
-  #detail-meta { margin: 4px 0 12px; }
 
-  .tabs {
-    display: flex;
-    gap: 8px;
-    border-bottom: 1px solid var(--tg-theme-hint-color, #e0e0e0);
-    margin-bottom: 12px;
-  }
-  .tab-btn {
-    background: none;
-    border: none;
-    padding: 8px 4px;
-    font-size: 0.95rem;
-    color: var(--tg-theme-hint-color, #888888);
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-  }
-  .tab-btn.active {
-    color: var(--tg-theme-link-color, #2563eb);
-    border-bottom-color: var(--tg-theme-link-color, #2563eb);
-  }
   .panel[hidden] { display: none; }
 
   .timeline-row {

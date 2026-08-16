@@ -40,6 +40,8 @@ APP_JS = r"""
   var lastSessionsByLabel = Object.create(null); // label -> last row, so tickAges re-stamps
                                 // age labels between polls without a refetch
   var diffLoadedForLabel = null;
+  var lastDetailData = null;   // last /api/sessions/{label} payload
+  var lastDiffData = null;     // last /diff payload, for the section header
 
   function escapeHtml(value) {
     var s = (value === null || value === undefined) ? "" : String(value);
@@ -339,23 +341,88 @@ APP_JS = r"""
   }
 
   function renderDetailData(data) {
+    lastDetailData = data;
     document.getElementById("detail-label").textContent = data.label || "";
     var statusEl = document.getElementById("detail-status");
     statusEl.className = statusClass(data.status);
     statusEl.textContent = (data.status === "waiting" && data.waiting_kind)
       ? data.status + " (" + data.waiting_kind + ")" : (data.status || "");
 
-    var metaParts = [];
-    if (data.model) { metaParts.push(data.model); }
-    if (typeof data.context_pct === "number") { metaParts.push(data.context_pct + "% ctx"); }
-    if (typeof data.cost_usd === "number") { metaParts.push("$" + data.cost_usd.toFixed(2)); }
-    if (data.busy_elapsed_seconds !== null && data.busy_elapsed_seconds !== undefined) {
-      metaParts.push(data.busy_elapsed_seconds + "s elapsed");
+    // What it is blocked on, prominently — this is the reason the
+    // operator opened the page at all. The API has returned these two
+    // fields since stage 2; the old tab-strip page ignored them.
+    var waitEl = document.getElementById("detail-waiting");
+    if (data.status === "waiting") {
+      var what = data.waiting_summary
+        ? data.waiting_summary
+        : (data.waiting_kind === "question" ? "a question" : "a permission prompt");
+      waitEl.textContent = "Waiting on you: " + what;
+      waitEl.hidden = false;
+    } else {
+      waitEl.hidden = true;
     }
-    if (data.waiting_summary) { metaParts.push("waiting: " + data.waiting_summary); }
-    document.getElementById("detail-meta").textContent = metaParts.join(" · ");
+
+    // `facts` is built server-side (sessions.display_facts) and already
+    // omits what would be noise — a finished session has no model, cost
+    // or context to report, and "0% ctx · $0.00" reads like a fault.
+    var dl = document.getElementById("detail-facts");
+    dl.innerHTML = "";
+    (data.facts || []).forEach(function (fact) {
+      var dt = document.createElement("dt");
+      dt.textContent = fact.label;
+      var dd = document.createElement("dd");
+      dd.textContent = fact.value;
+      dl.appendChild(dt);
+      dl.appendChild(dd);
+    });
+
+    var prev = document.getElementById("detail-preview");
+    if (data.last_message) {
+      prev.className = "preview";
+      prev.textContent = data.last_message;
+    } else {
+      prev.className = "preview is-empty";
+      prev.textContent = data.status === "gone"
+        ? "Nothing was captured before this session ended."
+        : "Nothing captured yet — it arrives once Claude replies.";
+    }
 
     renderTimeline(data.timeline);
+    updateSectionHeaders(data);
+  }
+
+  // Section headers double as the toggle, and say what is inside before
+  // you open it — a count, or why there is nothing to see.
+  function updateSectionHeaders(data) {
+    var tl = document.getElementById("tab-timeline");
+    var rows = (data && data.timeline) ? data.timeline.length : 0;
+    tl.textContent = (timelineOpen ? "▾ " : "▸ ") +
+      (rows ? "Timeline (" + rows + ")" : "Timeline — empty");
+
+    var note = document.getElementById("timeline-note");
+    if (note) {
+      // The honest explanation: tool_history/stream_commentary are not
+      // persisted, so a restart empties this for every older session.
+      // Only while the section is open — collapsed sections must not
+      // push the last message off the screen with an explanation.
+      note.hidden = !(timelineOpen && rows === 0);
+    }
+    updateDiffHeader();
+  }
+
+  function updateDiffHeader() {
+    var btn = document.getElementById("tab-diff");
+    var caret = diffOpen ? "▾ " : "▸ ";
+    if (!lastDiffData) {
+      btn.textContent = caret + "Changed files";
+      return;
+    }
+    if (!lastDiffData.available) {
+      btn.textContent = caret + "Changed files — none";
+      return;
+    }
+    var n = (lastDiffData.files || []).length;
+    btn.textContent = caret + (n ? "Changed files (" + n + ")" : "Changed files — none");
   }
 
   // ---- drill-down: diff -----------------------------------------------
@@ -409,6 +476,7 @@ APP_JS = r"""
   }
 
   function renderDiff(data) {
+    lastDiffData = data;
     var panel = document.getElementById("panel-diff");
     if (!data.available) {
       panel.innerHTML = '<div class="diff-truncated">' +
@@ -417,7 +485,19 @@ APP_JS = r"""
     }
     var files = data.files || [];
     if (files.length === 0) {
-      panel.innerHTML = '<div class="muted">No changes.</div>';
+      // Name the repo. "No changes." alone reads like the viewer failed;
+      // "no uncommitted changes in aipager" is a statement about the repo.
+      // Belt and braces: only trust the cached detail payload when it is
+      // demonstrably for the session on screen.
+      var forThisSession = lastDetailData &&
+        lastDetailData.label === currentView.label;
+      var repo = forThisSession && lastDetailData.cwd
+        ? lastDetailData.cwd.split("/").filter(Boolean).pop()
+        : "";
+      var msg = repo
+        ? "No uncommitted changes in " + repo + "."
+        : "No uncommitted changes.";
+      panel.innerHTML = '<div class="muted">' + escapeHtml(msg) + "</div>";
       return;
     }
     panel.innerHTML = "";
@@ -452,22 +532,41 @@ APP_JS = r"""
 
   // ---- view switching ---------------------------------------------------
 
-  function setActiveTab(name) {
-    currentView.tab = name;
-    document.getElementById("tab-timeline").classList.toggle("active", name === "timeline");
-    document.getElementById("tab-diff").classList.toggle("active", name === "diff");
-    document.getElementById("panel-timeline").hidden = name !== "timeline";
-    document.getElementById("panel-diff").hidden = name !== "diff";
-    if (name === "diff") { loadDiffIfNeeded(); }
+  // Independent collapsible sections, not a tab strip: the page leads
+  // with the last message, and both of these are secondary. Collapsed by
+  // default so nothing below the fold competes with it.
+  var diffOpen = false;
+  var timelineOpen = false;
+
+  function toggleDiff() {
+    diffOpen = !diffOpen;
+    document.getElementById("panel-diff").hidden = !diffOpen;
+    if (diffOpen) { loadDiffIfNeeded(); }
+    updateDiffHeader();
+  }
+
+  function toggleTimeline() {
+    timelineOpen = !timelineOpen;
+    document.getElementById("panel-timeline").hidden = !timelineOpen;
+    updateSectionHeaders(lastDetailData);
   }
 
   function openDetail(label) {
-    currentView = { type: "detail", label: label, tab: "timeline" };
+    currentView = { type: "detail", label: label };
+    diffOpen = false;
+    timelineOpen = false;
+    lastDiffData = null;
+    // Reset the detail payload too: renderDiff names the repo from
+    // lastDetailData.cwd, and expanding "Changed files" on this session
+    // before its own detail poll lands would otherwise name the PREVIOUS
+    // session's directory next to this one's diff.
+    lastDetailData = null;
+    document.getElementById("panel-diff").hidden = true;
+    document.getElementById("panel-timeline").hidden = true;
     diffLoadedForLabel = null;
     document.getElementById("view-grid").hidden = true;
     document.getElementById("view-detail").hidden = false;
     if (tg && tg.BackButton) { tg.BackButton.show(); }
-    setActiveTab("timeline");
     pollTick();
   }
 
@@ -622,8 +721,8 @@ APP_JS = r"""
     goneCollapsed = !goneCollapsed;
     if (lastGridData) { renderGrid(lastGridData); }
   });
-  document.getElementById("tab-timeline").addEventListener("click", function () { setActiveTab("timeline"); });
-  document.getElementById("tab-diff").addEventListener("click", function () { setActiveTab("diff"); });
+  document.getElementById("tab-timeline").addEventListener("click", toggleTimeline);
+  document.getElementById("tab-diff").addEventListener("click", toggleDiff);
 
   // Ages tick on their own so "2m ago" does not sit stale between polls.
   setInterval(function () {
