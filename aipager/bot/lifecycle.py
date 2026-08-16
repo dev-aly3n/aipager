@@ -168,6 +168,7 @@ class LifecycleMixin:
         self._app.add_handler(CommandHandler("whoami", self._handle_whoami))
         self._app.add_handler(CommandHandler("perms", self._handle_perms_cmd))
         self._app.add_handler(CommandHandler("settings", self._handle_settings_cmd))
+        self._app.add_handler(CommandHandler("app", self._handle_app_cmd))
         # Chat gate for message handlers. Multi-scope: accept every
         # configured scope's chat. Legacy: the single CHAT_ID. (Command
         # handlers above are not chat-filtered; _authorize gates them.)
@@ -360,6 +361,11 @@ class LifecycleMixin:
             BotCommand("clearqueue", "Drop pending queued prompts"),
             BotCommand("whoami", "Show your role + permissions"),
         ]
+        # Read late (not module-level) so a live `aipager miniapp enable`
+        # + restart is reflected without re-importing this module.
+        from aipager.config import MINIAPP_ENABLED
+        if MINIAPP_ENABLED:
+            commands.append(BotCommand("app", "Open the Mini App dashboard"))
         for label in sorted(labels):
             commands.append(BotCommand(label, f"Send to [{label}]"))
         return commands

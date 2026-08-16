@@ -26,6 +26,7 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Update,
+    WebAppInfo,
 )
 from telegram.ext import (
     ContextTypes,
@@ -336,6 +337,57 @@ class CommandHandlersMixin:
         chat_id = calling_chat_id(update)
         text, kb = render_settings_root(chat_id or 0)
         await update.message.reply_text(text, parse_mode="HTML", reply_markup=kb)
+
+    async def _handle_app_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /app — send the Mini App launcher button.
+
+        Gated like /status (``allow_read_only=True`` — viewing the
+        dashboard is never restricted). Mini Apps are a private-chat-only
+        Bot API feature (both button types), so groups get a plain-text
+        explanation instead, never a button (see design.md / spec.md).
+        """
+        if not await self._authorize(update, allow_read_only=True):
+            return
+
+        chat = update.effective_chat
+        if chat is None or chat.id <= 0:
+            await update.message.reply_text(
+                "📱 The Mini App only works in a private chat — DM the bot "
+                "and send /app there."
+            )
+            return
+
+        from aipager.config import MINIAPP_ENABLED, MINIAPP_PORT, MINIAPP_PUBLIC_URL
+        if not MINIAPP_ENABLED:
+            await update.message.reply_text(
+                "The Mini App server isn't enabled on this machine.\n"
+                "Ask the operator to run <code>aipager miniapp enable</code> "
+                "and restart the daemon.",
+                parse_mode="HTML",
+            )
+            return
+
+        from aipager.miniapp.tunnel import detect_public_url
+        url = MINIAPP_PUBLIC_URL or detect_public_url()
+        if not url or not url.startswith("https://"):
+            await update.message.reply_text(
+                "No public URL is configured or auto-detectable yet.\n\n"
+                "Set up Tailscale Funnel on the machine running aipager:\n"
+                "<code>curl -fsSL https://tailscale.com/install.sh | sh\n"
+                "sudo tailscale up\n"
+                f"sudo tailscale funnel {MINIAPP_PORT} on</code>\n\n"
+                "…or set a manual URL: "
+                "<code>aipager miniapp enable --url https://your-tunnel</code>",
+                parse_mode="HTML",
+            )
+            return
+
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("📱 Open Mini App", web_app=WebAppInfo(url=url)),
+        ]])
+        await update.message.reply_text(
+            "Tap to open the aipager dashboard:", reply_markup=keyboard,
+        )
 
     async def _handle_status(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /status command — rich per-session dashboard."""
