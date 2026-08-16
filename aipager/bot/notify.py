@@ -528,10 +528,16 @@ class NotifyMixin:
             # Stop animation and clean up busy message
             self._stop_animation(sess)
             sess.pending_permission = None  # clear stale inline permission if any
-            # `layout` resolves per-scope: a stored /settings preference always
-            # wins; an untouched scope falls back to the KEEP_FINISHED_CARD seed
-            # (aipager.preferences is the sole owner of that resolution).
-            layout = preferences.get_preferences(sess.scope_chat_id).layout
+            # `layout` resolves per-session first: this session's own override
+            # (if any) wins; otherwise falls back to the scope's stored
+            # /settings preference; an untouched scope falls back further to
+            # the KEEP_FINISHED_CARD seed (aipager.preferences is the sole
+            # owner of that resolution — resolve_preferences, not
+            # get_preferences, so a session override actually takes effect
+            # here rather than only in the prompt-injection path).
+            layout = preferences.resolve_preferences(
+                sess.scope_chat_id, sess.preference_overrides(),
+            ).layout
             card_kept = False
             # True once the busy card has been successfully disposed of —
             # either kept as the finished card (`card_kept`, below) or

@@ -100,7 +100,11 @@ class SessionOpsMixin:
         # scope config, so it's meaningful in every mode. This is the one
         # place a session's UserPromptSubmit-hook style guidance gets
         # refreshed, and it must run on every Telegram-originated prompt
-        # so a /settings change reaches the very next reply, no restart.
+        # so a /settings change — OR a per-session override set from the
+        # Mini App — reaches the very next reply, no restart. Goes through
+        # resolve_preferences (never get_preferences directly): this is
+        # THE critical path per design.md — a caller here that bypassed
+        # it would make the per-session settings feature do nothing.
         # Best-effort.
         try:
             from aipager import preferences as prefs_mod
@@ -112,7 +116,9 @@ class SessionOpsMixin:
                         if member is not None else None)
                 scope = self._scope_for(sess.scope_chat_id)
             style = prefs_mod.style_text(
-                prefs_mod.get_preferences(sess.scope_chat_id or 0)
+                prefs_mod.resolve_preferences(
+                    sess.scope_chat_id or 0, sess.preference_overrides(),
+                )
             )
             write_snapshot(sess.name, role, scope, member, style_text=style)
         except Exception:
