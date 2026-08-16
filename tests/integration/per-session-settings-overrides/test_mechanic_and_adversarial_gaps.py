@@ -470,11 +470,19 @@ def test_put_persists_to_the_session_state_file_and_survives_a_reload(
 ):
     """entrypoints.md's Side effects section: a successful PUT/DELETE
     writes `override_*` into the persisted session-state file
-    (aipager-sessions.json), scoped to one TrackedSession entry. Proven
-    end to end: PUT over HTTP, then load a BRAND NEW SessionRegistry
-    from the same file (no shared in-memory state with the server under
-    test) and confirm a fresh MiniAppServer built on it reports the same
-    override via GET."""
+    (aipager-sessions.json), scoped to one TrackedSession entry.
+
+    The write is ASYNCHRONOUS, which an earlier version of this test got
+    wrong and reported as "overrides never persist". Route handlers call
+    `registry.mark_dirty()`; `SessionMonitor._loop` drains that with
+    `save_if_dirty()` on its ~2s tick. That is the established pattern
+    for every per-session field — chat's own `skip_perms` writes
+    (`callbacks.py:194, 581`) persist exactly the same way and never call
+    `save()` directly. No monitor runs in this harness, so the test
+    drives the same `save_if_dirty()` the monitor would, then loads a
+    BRAND NEW SessionRegistry from the file (no shared in-memory state)
+    and confirms the override survived.
+    """
     async def _run():
         _mk_session(server, "dev")
         client = await _client_for(server)
@@ -486,6 +494,9 @@ def test_put_persists_to_the_session_state_file_and_survives_a_reload(
             assert resp.status == 200
         finally:
             await client.close()
+
+        # Exactly what SessionMonitor._loop does on its next tick.
+        server.registry.save_if_dirty()
 
         assert tmp_state_file.exists(), (
             "no session-state file was written after a successful PUT"
