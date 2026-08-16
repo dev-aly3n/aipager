@@ -241,3 +241,167 @@ def test_extra_short_is_a_valid_length_with_its_own_line():
 def test_extra_short_survives_a_reload():
     prefs.set_preference(778, "answer_length", "xshort")
     assert prefs.get_preferences(778).answer_length == "xshort"
+
+
+# ---- is_valid_value ---------------------------------------------------
+
+@pytest.mark.parametrize("field,value", [
+    ("layout", "card"), ("layout", "merged"), ("layout", "replace"),
+    ("simple_formatting", True), ("simple_formatting", False),
+    ("answer_length", "none"), ("answer_length", "xshort"),
+    ("language_level", "none"), ("language_level", "advanced"),
+])
+def test_is_valid_value_accepts_every_real_option(field, value):
+    assert prefs.is_valid_value(field, value) is True
+
+
+@pytest.mark.parametrize("field,value", [
+    ("layout", "sideways"),
+    ("simple_formatting", "yes"),   # str, not bool — must not pass as truthy
+    ("simple_formatting", 1),       # int, not bool
+    ("answer_length", "enormous"),
+    ("language_level", None),
+    ("not_a_real_field", "card"),
+])
+def test_is_valid_value_rejects_bad_field_or_value(field, value):
+    assert prefs.is_valid_value(field, value) is False
+
+
+def test_is_valid_value_never_raises_on_unknown_field():
+    # The whole point: an unknown field is a normal `False`, not KeyError.
+    assert prefs.is_valid_value("bogus", "whatever") is False
+
+
+# ---- resolve_preferences ------------------------------------------------
+#
+# Success criteria this file pins directly (see design.md):
+# - resolve_preferences(scope, {}) == get_preferences(scope) exactly.
+# - An override wins for its own field only; the other three track scope.
+# - Changing the scope default after an override is set moves
+#   `get_preferences`'s value but never the override itself.
+# - An invalid/corrupt override degrades to "unset" for that field alone.
+
+def test_resolve_with_no_overrides_matches_get_preferences_exactly():
+    prefs.set_preference(50, "answer_length", "long")
+    assert prefs.resolve_preferences(50, None) == prefs.get_preferences(50)
+    assert prefs.resolve_preferences(50, {}) == prefs.get_preferences(50)
+
+
+def test_resolve_override_wins_regardless_of_scope_value():
+    prefs.set_preference(51, "answer_length", "long")
+    resolved = prefs.resolve_preferences(51, {"answer_length": "short"})
+    assert resolved.answer_length == "short"
+
+
+def test_resolve_override_touches_only_its_own_field():
+    prefs.set_preference(52, "answer_length", "long")
+    prefs.set_preference(52, "language_level", "advanced")
+    resolved = prefs.resolve_preferences(52, {"answer_length": "short"})
+    # The overridden field changed...
+    assert resolved.answer_length == "short"
+    # ...but every other field still tracks the SCOPE's own value, not some
+    # blanked-out default. This is the guard most likely to be implemented
+    # backwards: resolve_preferences must not silently discard the scope's
+    # other settings just because one field is overridden.
+    assert resolved.language_level == "advanced"
+    assert resolved.layout == prefs.get_preferences(52).layout
+    assert resolved.simple_formatting == prefs.get_preferences(52).simple_formatting
+
+
+def test_resolve_all_four_fields_can_be_overridden_independently():
+    overrides = {
+        "layout": "merged",
+        "simple_formatting": True,
+        "answer_length": "xshort",
+        "language_level": "simple",
+    }
+    resolved = prefs.resolve_preferences(53, overrides)
+    assert resolved.layout == "merged"
+    assert resolved.simple_formatting is True
+    assert resolved.answer_length == "xshort"
+    assert resolved.language_level == "simple"
+
+
+def test_resolve_none_is_unset_not_a_selectable_value():
+    """None must mean 'no override here', never a literal override value —
+    collapsing that would destroy the tri-state and (for answer_length /
+    language_level) collide with the real, selectable string "none"."""
+    resolved = prefs.resolve_preferences(54, {"answer_length": None})
+    assert resolved.answer_length == prefs.get_preferences(54).answer_length
+
+
+def test_resolve_string_none_is_a_real_selectable_value_distinct_from_unset():
+    """The operator added the "none" *value* deliberately in v0.6.0 ("don't
+    apply any rule"). It must be honoured as a real override, not treated
+    as if the field were unset."""
+    prefs.set_preference(55, "answer_length", "long")
+    resolved = prefs.resolve_preferences(55, {"answer_length": "none"})
+    assert resolved.answer_length == "none"
+    # And it must be distinguishable, in the raw mapping itself, from an
+    # actually-absent key — this is the mapping resolve_preferences takes,
+    # not a JSON-serialized round trip, so `is None` is the correct test.
+    assert resolved.answer_length is not None
+
+
+def test_resolve_invalid_override_value_degrades_to_unset_for_that_field_only():
+    prefs.set_preference(56, "answer_length", "long")
+    prefs.set_preference(56, "language_level", "advanced")
+    resolved = prefs.resolve_preferences(56, {
+        "answer_length": "not-a-real-length",   # e.g. hand-edited state file
+        "language_level": "simple",
+    })
+    assert resolved.answer_length == "long"       # fell back to scope
+    assert resolved.language_level == "simple"    # this one still applied
+
+
+def test_resolve_unknown_override_key_is_ignored_not_an_error():
+    resolved = prefs.resolve_preferences(57, {"not_a_real_field": "x"})
+    assert resolved == prefs.get_preferences(57)
+
+
+def test_resolve_wrong_type_simple_formatting_override_degrades_to_scope():
+    """`False` is a legal value for simple_formatting — a non-bool override
+    (corrupt state) must fail validation, not be coerced by truthiness."""
+    prefs.set_preference(58, "simple_formatting", True)
+    resolved = prefs.resolve_preferences(58, {"simple_formatting": "true"})
+    assert resolved.simple_formatting is True  # scope value, override rejected
+
+
+def test_resolve_does_not_mutate_the_overrides_mapping():
+    overrides = {"answer_length": "short"}
+    before = dict(overrides)
+    prefs.resolve_preferences(59, overrides)
+    assert overrides == before
+
+
+def test_resolve_returns_a_fresh_preferences_not_the_scope_cached_instance():
+    scope_prefs = prefs.get_preferences(60)
+    resolved = prefs.resolve_preferences(60, {"answer_length": "short"})
+    assert resolved is not scope_prefs
+
+
+# ---- scope-change independence — the tag/fill mechanic's foundation ----
+#
+# design.md's central invariant: `scope_default` (get_preferences, ignoring
+# overrides) and `effective` (resolve_preferences, WITH overrides) must come
+# from two independent calls that never contaminate each other. This test
+# pins that at the pure-function level, before any HTTP payload exists.
+
+def test_changing_scope_default_after_override_moves_scope_value_only():
+    prefs.set_preference(61, "answer_length", "medium")
+    overrides = {"answer_length": "short"}
+    # Before the scope change.
+    assert prefs.get_preferences(61).answer_length == "medium"
+    assert prefs.resolve_preferences(61, overrides).answer_length == "short"
+
+    # The scope default changes (e.g. an admin edits /settings)...
+    prefs.set_preference(61, "answer_length", "long")
+
+    # ...scope_default moves...
+    assert prefs.get_preferences(61).answer_length == "long"
+    # ...but the override — untouched — still wins, unaffected by the
+    # scope's change. Overriding the operator's own construction: the
+    # override dict itself was never re-read from anywhere, so this is
+    # really asserting resolve_preferences never lets a stale scope read
+    # leak into what should stay a session's own explicit choice.
+    assert prefs.resolve_preferences(61, overrides).answer_length == "short"

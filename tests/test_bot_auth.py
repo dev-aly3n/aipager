@@ -391,3 +391,55 @@ def test_authorize_callback_swallows_toast_failure(mk_bot, run_async):
     query.answer = AsyncMock(side_effect=RuntimeError("flooded"))
     # MUST NOT raise
     assert run_async(bot._authorize_callback(query)) is None
+
+
+# ---- _can_prompt_user (batch 4: session-scoped preference writes) --------
+#
+# The bar for the Mini App's per-session preference PUT/DELETE — see
+# design.md's Authorization section. Legacy team-mode + personal-mode
+# coverage lives here; scope mode (the primary path today) is covered in
+# test_bot_auth_scoped.py alongside its `_is_admin_user` asymmetry check.
+
+def test_can_prompt_user_personal_mode_always_true(mk_bot):
+    bot = mk_bot()  # team=None, scopes=None
+    assert bot._can_prompt_user(12345, -100) is True
+    assert bot._can_prompt_user(None, None) is True
+
+
+def test_can_prompt_user_team_mode_admin_and_developer_true(mk_bot):
+    bot = mk_bot()
+    bot.team = _team(_admin(), _developer())
+    assert bot._can_prompt_user(1, -100) is True
+    assert bot._can_prompt_user(2, -100) is True
+
+
+def test_can_prompt_user_team_mode_read_only_false(mk_bot):
+    """READ_ONLY can authenticate + GET in the Mini App, but must never be
+    handed a capability they have nowhere else — the escalation this gate
+    exists to close."""
+    bot = mk_bot()
+    bot.team = _team(_readonly())
+    assert bot._can_prompt_user(3, -100) is False
+
+
+def test_can_prompt_user_team_mode_unknown_user_false(mk_bot):
+    bot = mk_bot()
+    bot.team = _team(_admin())
+    assert bot._can_prompt_user(999, -100) is False
+
+
+def test_can_prompt_user_team_mode_none_user_id_false(mk_bot):
+    bot = mk_bot()
+    bot.team = _team(_admin())
+    assert bot._can_prompt_user(None, -100) is False
+
+
+def test_can_prompt_user_developer_true_but_is_admin_user_false(mk_bot):
+    """The asymmetry the whole design decision rests on: a developer may
+    set a session override (can_prompt) but may NOT change the scope-wide
+    setting (not admin). Same user, same chat, two different answers from
+    two deliberately different gates."""
+    bot = mk_bot()
+    bot.team = _team(_developer())
+    assert bot._can_prompt_user(2, -100) is True
+    assert bot._is_admin_user(2, -100) is False

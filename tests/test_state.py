@@ -586,6 +586,140 @@ def test_max_gone_history_evicts_oldest(tmp_state_file):
     assert r.get("claude-trigger") is not None
 
 
+# ---- per-session preference overrides (batch 4) -------------------------
+
+def test_preference_overrides_empty_by_default(tmp_state_file):
+    r = SessionRegistry()
+    sess = r.get_or_create("claude-dev")
+    assert sess.preference_overrides() == {}
+
+
+def test_preference_override_fields_constant_covers_all_four_settable_fields():
+    from aipager.state import PREFERENCE_OVERRIDE_FIELDS
+    assert set(PREFERENCE_OVERRIDE_FIELDS) == {
+        "layout", "simple_formatting", "answer_length", "language_level",
+    }
+
+
+def test_preference_overrides_distinguishes_false_from_unset():
+    """`simple_formatting=False` is a real, explicit override — it must
+    show up in preference_overrides(), not be treated as if it were the
+    None/unset default just because it's falsy."""
+    r = SessionRegistry()
+    sess = r.get_or_create("claude-dev")
+    sess.override_simple_formatting = False
+    overrides = sess.preference_overrides()
+    assert "simple_formatting" in overrides
+    assert overrides["simple_formatting"] is False
+
+
+def test_preference_overrides_distinguishes_string_none_from_unset():
+    """The string "none" (a real, selectable answer_length/language_level
+    value meaning "no rule") must not be conflated with the field being
+    unset — only Python None means unset."""
+    r = SessionRegistry()
+    sess = r.get_or_create("claude-dev")
+    sess.override_answer_length = "none"
+    overrides = sess.preference_overrides()
+    assert "answer_length" in overrides
+    assert overrides["answer_length"] == "none"
+
+
+def test_preference_overrides_omits_unset_fields_entirely(tmp_state_file):
+    r = SessionRegistry()
+    sess = r.get_or_create("claude-dev")
+    sess.override_answer_length = "short"
+    overrides = sess.preference_overrides()
+    assert "answer_length" in overrides
+    # The three untouched fields are absent — not present with a None
+    # value — matching what resolve_preferences expects (an absent key
+    # falls back to scope; a present None key would need a second rule).
+    assert "layout" not in overrides
+    assert "simple_formatting" not in overrides
+    assert "language_level" not in overrides
+
+
+def test_override_fields_round_trip(tmp_state_file):
+    r1 = SessionRegistry()
+    sess = r1.get_or_create("claude-dev")
+    sess.label = "dev"
+    sess.override_layout = "merged"
+    sess.override_simple_formatting = False
+    sess.override_answer_length = "none"
+    sess.override_language_level = "advanced"
+    r1.save()
+
+    r2 = SessionRegistry()
+    r2.load()
+    s2 = r2.get("claude-dev")
+    assert s2.override_layout == "merged"
+    assert s2.override_simple_formatting is False
+    assert s2.override_answer_length == "none"
+    assert s2.override_language_level == "advanced"
+    assert s2.preference_overrides() == {
+        "layout": "merged",
+        "simple_formatting": False,
+        "answer_length": "none",
+        "language_level": "advanced",
+    }
+
+
+def test_unset_overrides_round_trip_as_none(tmp_state_file):
+    """A session that never touched per-session settings persists and
+    reloads with every override field still None, not e.g. missing keys
+    that `.get()` would coerce into some other default."""
+    r1 = SessionRegistry()
+    r1.get_or_create("claude-dev")
+    r1.save()
+
+    r2 = SessionRegistry()
+    r2.load()
+    s2 = r2.get("claude-dev")
+    assert s2.override_layout is None
+    assert s2.override_simple_formatting is None
+    assert s2.override_answer_length is None
+    assert s2.override_language_level is None
+    assert s2.preference_overrides() == {}
+
+
+def test_evict_then_recreate_same_name_has_no_overrides(tmp_state_file):
+    """A label is reused across a session's whole lifetime (`/new`,
+    a fresh `claude-<label>` after the old one went GONE and aged out of
+    MAX_GONE_HISTORY). Overrides must not leak from one occupant of a name
+    to the next — closed by construction: eviction pops the whole
+    TrackedSession object (state.py's SessionRegistry._evict_gone_overflow),
+    and get_or_create makes a brand-new one from dataclass defaults, not by
+    a cleanup step that walks stale overrides and could be forgotten."""
+    from aipager.state import MAX_GONE_HISTORY
+
+    r = SessionRegistry()
+    sess = r.get_or_create("claude-dev")
+    sess.override_answer_length = "short"
+    sess.override_simple_formatting = True
+    assert sess.preference_overrides() == {
+        "answer_length": "short", "simple_formatting": True,
+    }
+    r.transition("claude-dev", Status.GONE)
+    r.get("claude-dev").gone_at = 1.0  # oldest — evicted first once over cap
+
+    # MAX_GONE_HISTORY more, newer, GONE sessions push the total past the
+    # cap so the next get_or_create's eviction pass fires and claude-dev
+    # (the oldest) is the one dropped.
+    for i in range(MAX_GONE_HISTORY):
+        name = f"claude-filler{i}"
+        r.transition(name, Status.GONE)
+        r.get(name).gone_at = 1000.0 + i
+
+    r.get_or_create("claude-trigger")
+    assert r.get("claude-dev") is None  # confirms the object was evicted
+
+    fresh = r.get_or_create("claude-dev")
+    assert fresh is not sess
+    assert fresh.preference_overrides() == {}
+    assert fresh.override_answer_length is None
+    assert fresh.override_simple_formatting is None
+
+
 # ---- all_sessions scope filter (Phase G) --------------------------------
 
 def _mk_scoped(r, name, scope_chat_id):
