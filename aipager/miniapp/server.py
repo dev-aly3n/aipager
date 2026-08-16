@@ -75,6 +75,22 @@ class MiniAppServer:
         # path so batch 4's per-session variant can slot in beside it as
         # /api/sessions/{label}/preferences/{field} without reshaping this.
         app.router.add_put("/api/preferences/{field}", self._handle_preferences_put)
+        # Per-session preference overrides (batch 4) — same shape as the
+        # scope-wide route above, one path segment deeper. GET is any
+        # scope member (matches _handle_session_detail); PUT/DELETE are
+        # gated by _can_prompt_user, not _is_admin_user (design.md
+        # Authorization).
+        app.router.add_get(
+            "/api/sessions/{label}/preferences", self._handle_session_preferences_get,
+        )
+        app.router.add_put(
+            "/api/sessions/{label}/preferences/{field}",
+            self._handle_session_preferences_put,
+        )
+        app.router.add_delete(
+            "/api/sessions/{label}/preferences/{field}",
+            self._handle_session_preferences_delete,
+        )
         return app
 
     async def start(self) -> None:
@@ -318,6 +334,252 @@ class MiniAppServer:
             )
         except Exception:
             log.debug("miniapp: preference mirror to chat failed", exc_info=True)
+
+    # ---- per-session preference overrides (batch 4) ----------------------
+
+    def _session_preferences_values(self, sess) -> dict:
+        """The ``values`` block shared by GET/PUT/DELETE on a session's
+        preferences — one entry per settable field, each carrying the four
+        numbers the client needs and nothing it has to compute itself:
+
+        - ``effective``: what this session will actually use right now —
+          from :func:`resolve_preferences`, WITH the override applied.
+        - ``scope_default``: the scope's own current value — from
+          :func:`get_preferences`, WITHOUT any override. Deliberately a
+          second, independent call rather than derived from ``effective``:
+          design.md's mechanic requires the "default" tag to track the
+          scope's value regardless of what this session chose, and the two
+          numbers must never be allowed to contaminate each other.
+        - ``override_value``: the raw stored override, or ``None`` when
+          unset.
+        - ``overridden``: whether an override is stored at all — independent
+          of whether it happens to equal the scope default (mechanic case
+          2: "explicitly set to the same value as the scope" still counts
+          as overridden).
+
+        The client then does zero resolution of its own: per option,
+        ``selected = option.value == values[field].effective`` and
+        ``default_tag = option.value == values[field].scope_default``.
+        """
+        from aipager.preferences import get_preferences, resolve_preferences
+        from aipager.state import PREFERENCE_OVERRIDE_FIELDS
+
+        overrides = sess.preference_overrides()
+        effective = resolve_preferences(sess.scope_chat_id or 0, overrides)
+        scope_default = get_preferences(sess.scope_chat_id or 0)
+        return {
+            field: {
+                "effective": getattr(effective, field),
+                "scope_default": getattr(scope_default, field),
+                "override_value": overrides.get(field),
+                "overridden": field in overrides,
+            }
+            for field in PREFERENCE_OVERRIDE_FIELDS
+        }
+
+    async def _resolve_own_scope_session(self, request, route_name: str):
+        """Shared auth → label-resolution prelude for all three session-
+        preference routes. Returns ``(sess, scope_chat_id, user_id)`` on
+        success, or a ready-to-return ``web.Response``.
+
+        Mirrors ``_handle_session_detail``'s pattern exactly:
+        ``find_by_label(..., include_gone=True)`` scoped to the caller's
+        own ``scope_chat_id`` so a foreign-scope label 404s byte-identically
+        to one that doesn't exist anywhere — this stage adds no new way to
+        probe for a session's existence across scopes. ``include_gone=True``
+        because viewing (and, for a GONE-but-not-yet-evicted session,
+        adjusting) its settings is as legitimate a read as the session
+        detail page already treats it.
+        """
+        from aiohttp import web
+
+        result = await self._authenticate_user(request, route_name)
+        if isinstance(result, web.Response):
+            return result
+        scope_chat_id, user_id = result
+
+        label = request.match_info["label"]
+        sess = self.registry.find_by_label(
+            label, scope_chat_id=scope_chat_id, include_gone=True,
+        )
+        if sess is None:
+            log.info("miniapp: %s rejected (404) — not found in scope", route_name)
+            return web.json_response({"error": "not_found"}, status=404)
+
+        return sess, scope_chat_id, user_id
+
+    async def _handle_session_preferences_get(self, request):
+        from aiohttp import web
+
+        from aipager.bot.settings_menu import settings_schema
+
+        result = await self._resolve_own_scope_session(
+            request, "/api/sessions/{label}/preferences",
+        )
+        if isinstance(result, web.Response):
+            return result
+        sess, scope_chat_id, user_id = result
+
+        return web.json_response({
+            "schema": settings_schema(),
+            "values": self._session_preferences_values(sess),
+            # can_edit here is _can_prompt_user, NOT _is_admin_user — see
+            # design.md Authorization. A READ_ONLY member reads fine
+            # (scope membership alone gates GET) but sees controls greyed
+            # out, exactly as the scope-wide Settings tab does for a
+            # non-admin.
+            "can_edit": bool(self.bot._can_prompt_user(user_id, scope_chat_id)),
+        })
+
+    async def _handle_session_preferences_put(self, request):
+        from aiohttp import web
+
+        from aipager.preferences import is_valid_value
+        from aipager.state import PREFERENCE_OVERRIDE_FIELDS
+
+        result = await self._resolve_own_scope_session(
+            request, "/api/sessions/{label}/preferences/{field}",
+        )
+        if isinstance(result, web.Response):
+            return result
+        sess, scope_chat_id, user_id = result
+
+        # Session-scoped write: gated by _can_prompt_user, NOT
+        # _is_admin_user. Anyone already authorized to drive this session
+        # could achieve the same effect turn by turn; admin-gating a
+        # durable version of that would be strictly more restrictive than
+        # the capability this caller already holds (design.md
+        # Authorization). READ_ONLY members fail this and get 403.
+        if not self.bot._can_prompt_user(user_id, scope_chat_id):
+            log.info(
+                "miniapp: session preferences write rejected (403) — "
+                "caller cannot prompt this session",
+            )
+            return web.json_response({"error": "forbidden"}, status=403)
+
+        if not self._allow_write(user_id):
+            log.info("miniapp: session preferences write rejected (429) — rate limited")
+            return web.json_response({"error": "too_many_requests"}, status=429)
+
+        field = request.match_info["field"]
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"error": "bad_request"}, status=400)
+        if not isinstance(body, dict) or "value" not in body:
+            return web.json_response({"error": "bad_request"}, status=400)
+        value = body["value"]
+
+        # Same allow-list a scope write validates through
+        # (set_preference's is_valid_value) — the UI is not the gate, and
+        # a session override can never accept a value chat's /settings
+        # would reject.
+        if field not in PREFERENCE_OVERRIDE_FIELDS or not is_valid_value(field, value):
+            log.info("miniapp: session preferences write rejected (400) — invalid field/value")
+            return web.json_response({"error": "bad_request"}, status=400)
+
+        before = sess.preference_overrides().get(field)
+        setattr(sess, PREFERENCE_OVERRIDE_FIELDS[field], value)
+        self.registry.mark_dirty()
+
+        # `None -> "short"` counts as changed even when "short" already
+        # equals the scope default — an explicit choice was just recorded
+        # (design.md mechanic case 2), so this compares the override
+        # itself, never `effective`.
+        changed = before != value
+        if changed:
+            await self._mirror_session_preference_change(
+                scope_chat_id, sess.label, field, value, reset=False,
+            )
+
+        return web.json_response({
+            "values": self._session_preferences_values(sess),
+            "changed": changed,
+        })
+
+    async def _handle_session_preferences_delete(self, request):
+        from aiohttp import web
+
+        from aipager.preferences import get_preferences
+        from aipager.state import PREFERENCE_OVERRIDE_FIELDS
+
+        result = await self._resolve_own_scope_session(
+            request, "/api/sessions/{label}/preferences/{field}",
+        )
+        if isinstance(result, web.Response):
+            return result
+        sess, scope_chat_id, user_id = result
+
+        if not self.bot._can_prompt_user(user_id, scope_chat_id):
+            log.info(
+                "miniapp: session preferences delete rejected (403) — "
+                "caller cannot prompt this session",
+            )
+            return web.json_response({"error": "forbidden"}, status=403)
+
+        if not self._allow_write(user_id):
+            log.info("miniapp: session preferences delete rejected (429) — rate limited")
+            return web.json_response({"error": "too_many_requests"}, status=429)
+
+        field = request.match_info["field"]
+        if field not in PREFERENCE_OVERRIDE_FIELDS:
+            return web.json_response({"error": "bad_request"}, status=400)
+
+        attr = PREFERENCE_OVERRIDE_FIELDS[field]
+        # Idempotent: clearing an already-unset field is a no-op — no
+        # write, no mirror, still 200 with changed: false.
+        had_override = getattr(sess, attr) is not None
+        if had_override:
+            setattr(sess, attr, None)
+            self.registry.mark_dirty()
+            new_value = getattr(get_preferences(scope_chat_id or 0), field)
+            await self._mirror_session_preference_change(
+                scope_chat_id, sess.label, field, new_value, reset=True,
+            )
+
+        return web.json_response({
+            "values": self._session_preferences_values(sess),
+            "changed": had_override,
+        })
+
+    async def _mirror_session_preference_change(
+        self, scope_chat_id, session_label: str, field: str, value, *, reset: bool,
+    ) -> None:
+        """Same purpose as :meth:`_mirror_preference_change`, extended to
+        name the session — the chat log stays the audit trail for a
+        per-session override too, even though `/settings` itself is not
+        touched (design.md: "`/settings` in chat stays scope-level,
+        unchanged"). Best-effort: a failed mirror must never fail a write
+        that already happened.
+        """
+        from aipager.bot.settings_menu import settings_schema
+
+        field_label = field
+        shown = value
+        for section in settings_schema():
+            if section["field"] != field:
+                continue
+            field_label = section["title"]
+            for option in section["options"]:
+                if option["value"] == value:
+                    shown = option["label"]
+                    break
+            break
+
+        if reset:
+            text = (
+                f"⚙️ {field_label} reset to default ({shown}) for session "
+                f"{session_label} (changed from the Mini App)"
+            )
+        else:
+            text = (
+                f"⚙️ {field_label} → {shown} for session {session_label} "
+                f"(changed from the Mini App)"
+            )
+        try:
+            await self.bot._app.bot.send_message(chat_id=scope_chat_id, text=text)
+        except Exception:
+            log.debug("miniapp: session preference mirror to chat failed", exc_info=True)
 
     async def _handle_session_detail(self, request):
         from aiohttp import web
