@@ -87,6 +87,18 @@ class Status(Enum):
 # quick command, Claude responds in <1s, hook fires idle again).
 IDLE_DEBOUNCE: float = 10.0
 
+# Preference field name -> the TrackedSession attribute holding that
+# field's session-level override. Shared by preference_overrides() below
+# and by the Mini App's per-session preference routes, so there is one
+# place that knows the field<->attribute mapping rather than a second
+# hand-maintained copy that could silently drift out of step.
+PREFERENCE_OVERRIDE_FIELDS: dict[str, str] = {
+    "layout": "override_layout",
+    "simple_formatting": "override_simple_formatting",
+    "answer_length": "override_answer_length",
+    "language_level": "override_language_level",
+}
+
 
 @dataclass
 class TrackedSession:
@@ -201,6 +213,24 @@ class TrackedSession:
     # --dangerously-skip-permissions (Auto mode, no per-tool prompts).
     # When False (default), claude prompts before each tool call (Ask mode).
     skip_perms: bool = False
+    # Per-session preference overrides (batch 4's "Per session settings").
+    # `None` means unset/inherit the scope's own /settings value — never a
+    # legal value for any of these four: layout/answer_length/
+    # language_level are closed enumerations that never include None, and
+    # simple_formatting's own legal `False` must not be confused with
+    # "unset", which is exactly why `None` alone (not `False`, not a
+    # missing-key sentinel) is the unset marker — it is disjoint from
+    # every field's real values. Never read directly: resolve together
+    # with the scope's own preferences via
+    # `aipager.preferences.resolve_preferences(scope_chat_id,
+    # sess.preference_overrides())`, the same rule for chat and the Mini
+    # App. Persisted like `skip_perms` above (a per-session boolean that
+    # changes behaviour); intentionally NOT cleared by the `/new` replace
+    # flow (callbacks.py) — see design.md Risks.
+    override_layout: str | None = None
+    override_simple_formatting: bool | None = None
+    override_answer_length: str | None = None
+    override_language_level: str | None = None
     # Multi-scope (Phase B): which Telegram chat this session belongs to.
     # All outbound notifications for the session route here instead of the
     # global CHAT_ID. `scope_chat_id == 0` means "not yet stamped" — the
@@ -291,6 +321,28 @@ class TrackedSession:
     def is_restarting(self) -> bool:
         """True while a deliberate kill-and-relaunch is still in flight."""
         return time.monotonic() < self.restarting_until
+
+    def preference_overrides(self) -> dict:
+        """Only the fields this session has explicitly set — the exact
+        shape `aipager.preferences.resolve_preferences` expects as its
+        `session_overrides` argument. An unset field (`None`) is omitted
+        entirely rather than included as `None`: `resolve_preferences`
+        treats an *absent* key as "fall back to scope", so sending `None`
+        explicitly would need a second special case instead of just not
+        being there.
+
+        A session created (or recreated in place — see `override_layout`'s
+        docstring above) fresh from `SessionRegistry.get_or_create` starts
+        with every `override_*` at its `None` default, so this returns
+        `{}` until the Mini App writes to it — closing the label-reuse
+        collision by construction, not by a cleanup step that could be
+        forgotten.
+        """
+        return {
+            field: getattr(self, attr)
+            for field, attr in PREFERENCE_OVERRIDE_FIELDS.items()
+            if getattr(self, attr) is not None
+        }
 
     def record_tool(self, summary: str, done: bool | str = False) -> int:
         """Append to ``tool_history``, trim to cap, return the new index.
@@ -539,6 +591,9 @@ class SessionRegistry:
         "skip_perms",
         # Multi-scope routing.
         "scope_chat_id", "scope_kind",
+        # Per-session preference overrides — see TrackedSession docstring.
+        "override_layout", "override_simple_formatting",
+        "override_answer_length", "override_language_level",
     )
     _MAX_MSG_MAP = 1000  # cap _msg_map entries to avoid unbounded growth
 
@@ -672,6 +727,17 @@ class SessionRegistry:
                 skip_perms=sd.get("skip_perms", False),
                 scope_chat_id=int(sd.get("scope_chat_id", 0) or 0),
                 scope_kind=sd.get("scope_kind", ""),
+                # Raw passthrough, exactly like every other field above —
+                # NOT re-validated here. A hand-edited or since-invalidated
+                # value is caught at resolution time by
+                # preferences.resolve_preferences's is_valid_value check
+                # (fails safe to "unset" for that one field alone), not at
+                # load time, matching the fail-safe philosophy the scope
+                # store already uses in preferences._resolve_field.
+                override_layout=sd.get("override_layout"),
+                override_simple_formatting=sd.get("override_simple_formatting"),
+                override_answer_length=sd.get("override_answer_length"),
+                override_language_level=sd.get("override_language_level"),
             )
             # Multi-scope backfill: stamp legacy sessions (scope_chat_id == 0)
             # with the single configured chat so notify routing is explicit.
