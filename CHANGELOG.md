@@ -33,6 +33,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the feature for that run rather than taking the whole daemon down. This is
   stage 1 of a multi-stage rollout — everything is read-only; settings
   editing, session control, and multi-bot management land in later releases.
+- **Mini App sessions grid, drill-down and diff viewer (stage 2 — still
+  read-only).** The dashboard from stage 1 grows into a live, auto-refreshing
+  grid of every session in your scope (label, status, model, context %,
+  cost, last-active), tapping a session opens a drill-down with its complete
+  scrollable timeline (no more chat's truncated tool list) and a real diff
+  viewer with syntax-colored, foldable hunks. "Waiting on permission" now
+  gets one unmistakable status across every session at a glance — derived
+  server-side from the same state chat already tracks, never a new status
+  value. Diffs come from `git` against the session's own working directory
+  (bounded: a hard per-call timeout, capped output size, capped file count —
+  never a hang, never a multi-megabyte response, and a non-git/missing/empty
+  repo reports cleanly instead of erroring); a file larger than the per-file
+  cap still shows its first ~200 KB with a truncation marker rather than no
+  content at all, and the timeline is emitted as
+  plain structured JSON rather than Telegram markdown. The page adds
+  Telegram-native chrome (matches your device's light/dark theme, a back
+  button on the drill-down, a haptic pulse on status changes) and is honest
+  about staleness — a visible live/reconnecting/offline indicator, polling
+  that pauses while the app is backgrounded and refreshes immediately on
+  return, and a clear "reopen from Telegram" message instead of retrying
+  forever once the page's signed session expires. The API stays strictly
+  GET-only — no session control, settings, or other mutating routes exist
+  yet. Every request re-verifies `initData` and re-resolves scope membership,
+  and a session label is only ever resolved within the caller's own scope —
+  a label belonging to another scope 404s identically to one that doesn't
+  exist anywhere, so no scope can probe another's session list.
 
 ### Changed
 - **Mini App settings now live in `aipager.yaml` (config schema v3), not

@@ -71,6 +71,10 @@ def scoped_server(mk_bot):
     sess.last_token_pct = 42
     sess.last_cost_usd = 1.2345
     sess.last_hook_at = time.monotonic() - 5
+    sess.cwd = "/home/dev/myproject"
+    sess.busy_started_at = time.monotonic() - 12
+    sess.tool_history = [("Read foo.py", True), ("Bash: pytest", False)]
+    sess.stream_commentary = [(0, "Let me check that file")]
 
     server = MiniAppServer(bot, registry, port=8765)
     return server
@@ -308,6 +312,365 @@ def test_no_route_accepts_post(scoped_server, run_async):
         try:
             resp = await client.post("/api/status")
             assert resp.status in (404, 405)
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+# ===== Stage 2: /api/sessions (grid) =====================================
+
+def test_sessions_returns_scoped_grid_with_project_and_no_cwd(scoped_server, run_async):
+    async def _run():
+        client = await _client_for(scoped_server)
+        try:
+            good = _init_data(555)
+            resp = await client.get(
+                "/api/sessions", headers={"X-Telegram-Init-Data": good},
+            )
+            assert resp.status == 200
+            body = await resp.json()
+            assert body["daemon"]["bot_username"] == "aipager_test_bot"
+            assert len(body["sessions"]) == 1
+            row = body["sessions"][0]
+            assert row["label"] == "dev"
+            assert row["status"] == "busy"
+            assert row["waiting_kind"] is None
+            assert row["project"] == "myproject"
+            assert "cwd" not in row
+            assert "waiting_summary" not in row
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_sessions_never_invokes_git(scoped_server, run_async, monkeypatch):
+    """The polled grid endpoint must stay fast regardless of pending
+    diffs — it must never spawn git at all. Monkeypatching
+    create_subprocess_exec to raise proves it: the request must still
+    succeed 200."""
+    async def _boom(*args, **kwargs):
+        raise AssertionError("GET /api/sessions must never invoke git")
+    monkeypatch.setattr("asyncio.create_subprocess_exec", _boom)
+
+    async def _run():
+        client = await _client_for(scoped_server)
+        try:
+            good = _init_data(555)
+            resp = await client.get(
+                "/api/sessions", headers={"X-Telegram-Init-Data": good},
+            )
+            assert resp.status == 200
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_sessions_hides_gone_and_hidden_from_status(mk_bot, run_async):
+    registry = SessionRegistry()
+    scope = Scope(
+        chat_id=-100, kind="group", label="team",
+        members=(Member(id=555, label="ada", role="developer"),),
+    )
+    bot = mk_bot(registry, scopes=[scope])
+    bot._app.bot.username = "aipager_test_bot"
+
+    live = registry.get_or_create("claude-live")
+    live.label = "live"
+    live.scope_chat_id = -100
+    live.status = Status.IDLE
+
+    hidden_gone = registry.get_or_create("claude-gone")
+    hidden_gone.label = "gone-hidden"
+    hidden_gone.scope_chat_id = -100
+    hidden_gone.status = Status.GONE
+    hidden_gone.hidden_from_status = True
+
+    visible_gone = registry.get_or_create("claude-gone2")
+    visible_gone.label = "gone-visible"
+    visible_gone.scope_chat_id = -100
+    visible_gone.status = Status.GONE
+
+    server = MiniAppServer(bot, registry, port=8765)
+
+    async def _run():
+        client = await _client_for(server)
+        try:
+            good = _init_data(555)
+            resp = await client.get(
+                "/api/sessions", headers={"X-Telegram-Init-Data": good},
+            )
+            body = await resp.json()
+            labels = {s["label"] for s in body["sessions"]}
+            assert labels == {"live", "gone-visible"}
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+# ===== Stage 2: /api/sessions/{label} (drill-down) ========================
+
+def test_session_detail_returns_full_payload_for_owned_session(scoped_server, run_async):
+    async def _run():
+        client = await _client_for(scoped_server)
+        try:
+            good = _init_data(555)
+            resp = await client.get(
+                "/api/sessions/dev", headers={"X-Telegram-Init-Data": good},
+            )
+            assert resp.status == 200
+            body = await resp.json()
+            assert body["label"] == "dev"
+            assert body["status"] == "busy"
+            assert body["cwd"] == "/home/dev/myproject"
+            assert body["busy_elapsed_seconds"] is not None
+            # timeline is complete: 2 tool rows + 1 commentary row, nothing capped
+            assert len(body["timeline"]) == 3
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_session_detail_unknown_label_returns_404(scoped_server, run_async):
+    async def _run():
+        client = await _client_for(scoped_server)
+        try:
+            good = _init_data(555)
+            resp = await client.get(
+                "/api/sessions/does-not-exist",
+                headers={"X-Telegram-Init-Data": good},
+            )
+            assert resp.status == 404
+            body = await resp.json()
+            assert body == {"error": "not_found"}
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_session_detail_cross_scope_label_identical_to_unknown(mk_bot, run_async):
+    """A label that exists but belongs to a DIFFERENT scope must produce
+    a response byte-for-byte identical to a genuinely unknown label —
+    this is the headline requirement this stage introduces (see
+    design.md's cross-scope-resolution section)."""
+    registry = SessionRegistry()
+    scope_a = Scope(chat_id=-1, kind="group", label="a",
+                    members=(Member(id=1, label="alice", role="developer"),))
+    scope_b = Scope(chat_id=-2, kind="group", label="b",
+                    members=(Member(id=2, label="bob", role="developer"),))
+    bot = mk_bot(registry, scopes=[scope_a, scope_b])
+    bot._app.bot.username = "bot"
+
+    sess_b = registry.get_or_create("claude-b")
+    sess_b.label = "shared-label"
+    sess_b.scope_chat_id = -2
+
+    server = MiniAppServer(bot, registry, port=8765)
+
+    async def _run():
+        client = await _client_for(server)
+        try:
+            alice = _init_data(1)
+            resp_other_scope = await client.get(
+                "/api/sessions/shared-label",
+                headers={"X-Telegram-Init-Data": alice},
+            )
+            resp_unknown = await client.get(
+                "/api/sessions/totally-unknown-label",
+                headers={"X-Telegram-Init-Data": alice},
+            )
+            assert resp_other_scope.status == resp_unknown.status == 404
+            body_other_scope = await resp_other_scope.json()
+            body_unknown = await resp_unknown.json()
+            assert body_other_scope == body_unknown == {"error": "not_found"}
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_session_detail_diff_cross_scope_label_identical_to_unknown(mk_bot, run_async):
+    """Same identical-404 guarantee, for the /diff route."""
+    registry = SessionRegistry()
+    scope_a = Scope(chat_id=-1, kind="group", label="a",
+                    members=(Member(id=1, label="alice", role="developer"),))
+    scope_b = Scope(chat_id=-2, kind="group", label="b",
+                    members=(Member(id=2, label="bob", role="developer"),))
+    bot = mk_bot(registry, scopes=[scope_a, scope_b])
+    bot._app.bot.username = "bot"
+
+    sess_b = registry.get_or_create("claude-b")
+    sess_b.label = "shared-label"
+    sess_b.scope_chat_id = -2
+
+    server = MiniAppServer(bot, registry, port=8765)
+
+    async def _run():
+        client = await _client_for(server)
+        try:
+            alice = _init_data(1)
+            resp_other_scope = await client.get(
+                "/api/sessions/shared-label/diff",
+                headers={"X-Telegram-Init-Data": alice},
+            )
+            resp_unknown = await client.get(
+                "/api/sessions/totally-unknown-label/diff",
+                headers={"X-Telegram-Init-Data": alice},
+            )
+            assert resp_other_scope.status == resp_unknown.status == 404
+            body_other_scope = await resp_other_scope.json()
+            body_unknown = await resp_unknown.json()
+            assert body_other_scope == body_unknown == {"error": "not_found"}
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+# ===== Stage 2: /api/sessions/{label}/diff =================================
+
+def test_session_diff_wired_against_collect_diff(scoped_server, run_async, monkeypatch):
+    async def _fake_collect_diff(cwd):
+        assert cwd == "/home/dev/myproject"
+        return {"available": True, "files": [], "files_truncated": False}
+    monkeypatch.setattr(
+        "aipager.miniapp.diff.collect_diff", _fake_collect_diff,
+    )
+
+    async def _run():
+        client = await _client_for(scoped_server)
+        try:
+            good = _init_data(555)
+            resp = await client.get(
+                "/api/sessions/dev/diff", headers={"X-Telegram-Init-Data": good},
+            )
+            assert resp.status == 200
+            body = await resp.json()
+            assert body == {"available": True, "files": [], "files_truncated": False}
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_session_diff_never_receives_a_client_supplied_path(scoped_server, run_async, monkeypatch):
+    """collect_diff must only ever be called with the session's own
+    server-stamped cwd — never anything derived from the request."""
+    seen = {}
+    async def _fake_collect_diff(cwd):
+        seen["cwd"] = cwd
+        return {"available": False, "reason": "not_a_git_repo"}
+    monkeypatch.setattr(
+        "aipager.miniapp.diff.collect_diff", _fake_collect_diff,
+    )
+
+    async def _run():
+        client = await _client_for(scoped_server)
+        try:
+            good = _init_data(555)
+            await client.get(
+                "/api/sessions/dev/diff?cwd=/etc/passwd",
+                headers={"X-Telegram-Init-Data": good},
+            )
+        finally:
+            await client.close()
+    run_async(_run())
+    assert seen["cwd"] == "/home/dev/myproject"
+
+
+# ===== Stage 2: auth gate applies to every new route, before any registry read
+
+@pytest.mark.parametrize("path", [
+    "/api/sessions", "/api/sessions/dev", "/api/sessions/dev/diff",
+])
+def test_new_routes_reject_missing_header_401(scoped_server, run_async, path):
+    async def _run():
+        client = await _client_for(scoped_server)
+        try:
+            resp = await client.get(path)
+            assert resp.status == 401
+            body = await resp.json()
+            assert body == {"error": "unauthorized"}
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+@pytest.mark.parametrize("path", [
+    "/api/sessions", "/api/sessions/dev", "/api/sessions/dev/diff",
+])
+def test_new_routes_reject_forged_signature_401(scoped_server, run_async, path):
+    async def _run():
+        client = await _client_for(scoped_server)
+        try:
+            forged = _init_data(555, bot_token="000000:forged-token-abcdefghijklmno")
+            resp = await client.get(path, headers={"X-Telegram-Init-Data": forged})
+            assert resp.status == 401
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+@pytest.mark.parametrize("path", [
+    "/api/sessions", "/api/sessions/dev", "/api/sessions/dev/diff",
+])
+def test_new_routes_reject_stale_init_data_401(scoped_server, run_async, path):
+    async def _run():
+        client = await _client_for(scoped_server)
+        try:
+            stale = _init_data(555, auth_date=int(time.time()) - 3600)
+            resp = await client.get(path, headers={"X-Telegram-Init-Data": stale})
+            assert resp.status == 401
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+@pytest.mark.parametrize("path", [
+    "/api/sessions", "/api/sessions/dev", "/api/sessions/dev/diff",
+])
+def test_new_routes_reject_non_member_403(scoped_server, run_async, path):
+    async def _run():
+        client = await _client_for(scoped_server)
+        try:
+            stranger = _init_data(999999)  # valid signature, not a scope member
+            resp = await client.get(path, headers={"X-Telegram-Init-Data": stranger})
+            assert resp.status == 403
+            body = await resp.json()
+            assert body == {"error": "forbidden"}
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+@pytest.mark.parametrize("path", [
+    "/api/sessions", "/api/sessions/dev", "/api/sessions/dev/diff",
+])
+def test_new_routes_reject_missing_header_before_any_registry_read(scoped_server, run_async, path, monkeypatch):
+    """Auth must be checked BEFORE the registry is ever touched — proven
+    by making any registry read raise and confirming a header-less
+    request still cleanly 401s instead of blowing up."""
+    def _boom(*args, **kwargs):
+        raise AssertionError("registry must not be read before auth succeeds")
+    monkeypatch.setattr(scoped_server.registry, "find_by_label", _boom)
+    monkeypatch.setattr(scoped_server.registry, "all_sessions", _boom)
+
+    async def _run():
+        client = await _client_for(scoped_server)
+        try:
+            resp = await client.get(path)
+            assert resp.status == 401
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+@pytest.mark.parametrize("path", [
+    "/api/sessions", "/api/sessions/dev", "/api/sessions/dev/diff",
+])
+def test_new_routes_reject_post_put_delete_patch(scoped_server, run_async, path):
+    async def _run():
+        client = await _client_for(scoped_server)
+        try:
+            for method in ("post", "put", "delete", "patch"):
+                resp = await getattr(client, method)(path)
+                assert resp.status in (404, 405), f"{method.upper()} {path} -> {resp.status}"
         finally:
             await client.close()
     run_async(_run())
