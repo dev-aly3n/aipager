@@ -35,10 +35,38 @@ HTML_BODY = """\
   <span id="conn-badge" class="conn conn-live" hidden></span>
 </header>
 
+<nav class="tabbar" id="tabbar">
+  <button type="button" class="tabbar-btn is-active" id="maintab-sessions">
+    Sessions<span id="waiting-badge" class="badge" hidden></span>
+  </button>
+  <button type="button" class="tabbar-btn" id="maintab-settings">Settings</button>
+</nav>
+
 <div id="error" role="alert"></div>
+<div id="notice" role="status"></div>
 
 <section id="view-grid">
-  <div id="sessions"></div>
+  <div id="grid-totals" class="totals muted"></div>
+  <div id="sessions" class="grid"></div>
+  <div id="empty-state" class="empty" hidden>
+    <p><strong>No sessions yet.</strong></p>
+    <p class="muted">Tap <em>New session</em> above to start one.</p>
+  </div>
+  <div id="gone-wrap" hidden>
+    <button type="button" class="gone-toggle" id="gone-toggle"></button>
+    <div id="sessions-gone" class="grid" hidden></div>
+  </div>
+</section>
+
+<section id="view-settings" hidden>
+  <div class="placeholder">
+    <p><strong>Settings are coming next.</strong></p>
+    <p class="muted">
+      This is where the defaults for new sessions will live — answer length,
+      formatting, message layout and language level. For now, use
+      <code>/settings</code> in chat.
+    </p>
+  </div>
 </section>
 
 <section id="view-detail" hidden>

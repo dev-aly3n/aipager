@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Mini App sessions grid, rebuilt as a control panel.** Two columns, with a
+  dashed **New session** cell always first and every session ordered by last
+  activity. Finished sessions are dimmed and collapsed into a "show N finished"
+  group instead of padding the grid — previously a machine with a dozen dead
+  sessions opened onto a wall of names with no data behind them. Sessions
+  waiting on a permission prompt or a question sort to the very top and put a
+  count badge on the Sessions tab, so the one state that costs you time is
+  visible without reading the grid. The header shows how many are live and what
+  the run has cost in total, relative times tick on their own between refreshes,
+  and an empty install now explains itself rather than showing a lone dashed
+  box. A second top-level **Settings** tab is present and will hold the defaults
+  for new sessions; it currently points at `/settings` in chat.
 - **Self-hosted Telegram Mini App server (stage 1 — read-only).** aipager can
   now serve a small dashboard (daemon status + session list) straight from
   the machine it runs on, opened from Telegram via a new `/app` DM command.

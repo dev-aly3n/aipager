@@ -288,7 +288,11 @@ class MiniAppServer:
         gap without touching stage 1's builder.
         """
         from aipager import __version__
-        from aipager.miniapp.sessions import session_summary
+        from aipager.miniapp.sessions import (
+            grid_totals,
+            session_summary,
+            sort_for_display,
+        )
         from aipager.state import Status
 
         now = time.monotonic()
@@ -297,6 +301,10 @@ class MiniAppServer:
             for sess in self.registry.all_sessions(scope_chat_id).values()
             if not (sess.status == Status.GONE and sess.hidden_from_status)
         ]
+        # Ordered server-side so the rule (waiting first, gone last, then
+        # most-recently-active) is one pure function pytest can pin, rather
+        # than a comparator buried in the page's JavaScript.
+        sessions = sort_for_display(sessions)
 
         bot_user = getattr(self.bot._app, "bot", None) if self.bot._app else None
         bot_username = getattr(bot_user, "username", "") or ""
@@ -306,6 +314,7 @@ class MiniAppServer:
                 "bot_username": bot_username,
                 "uptime_seconds": round(now - self._started_at),
             },
+            "totals": grid_totals(sessions),
             "sessions": sessions,
         }
 

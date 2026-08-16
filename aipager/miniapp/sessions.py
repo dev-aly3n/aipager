@@ -56,6 +56,52 @@ def _derive_status(sess: "TrackedSession") -> tuple[str, str | None, str | None]
     return _WAITING_STATUS, "permission", perm.get("tool_summary")
 
 
+# Display order for the grid (design §2: "ordered by last activity", with
+# gone sorted last regardless of recency so the grid never becomes a
+# graveyard — the failure observed live, 14 dead sessions padding the view).
+# Computed server-side rather than in JavaScript so it is a pure function
+# pytest can exercise directly; the client renders the order it is given.
+_STATUS_RANK = {"waiting": 0, "busy": 1, "idle": 2, "unknown": 3, "gone": 4}
+_UNKNOWN_RANK = _STATUS_RANK["unknown"]
+
+
+def _order_key(row: dict[str, Any]) -> tuple[int, float, str]:
+    """Sort key: status group, then most-recently-active, then label.
+
+    ``last_active_seconds_ago`` is ``None`` for a session with no recorded
+    activity — those sort LAST within their group rather than being read as
+    "0 seconds ago" (which would push never-used sessions to the top).
+    Label is the final tiebreaker so the order is stable across polls
+    instead of shuffling on every refresh.
+    """
+    rank = _STATUS_RANK.get(row.get("status", ""), _UNKNOWN_RANK)
+    age = row.get("last_active_seconds_ago")
+    return (rank, float("inf") if age is None else age, row.get("label", ""))
+
+
+def sort_for_display(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Order grid rows for the two-column Sessions tab."""
+    return sorted(rows, key=_order_key)
+
+
+def grid_totals(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Header stats derived from the same rows the grid renders.
+
+    Computed here, not client-side, so the numbers the operator reads are
+    covered by the same tests as the rows themselves.
+    """
+    live = [r for r in rows if r.get("status") != "gone"]
+    return {
+        "total": len(rows),
+        "live": len(live),
+        "gone": len(rows) - len(live),
+        "waiting": sum(1 for r in rows if r.get("status") == "waiting"),
+        # Spend is meaningful across every session that ever ran, including
+        # finished ones — that is what the run actually cost.
+        "cost_usd": round(sum(r.get("cost_usd") or 0.0 for r in rows), 4),
+    }
+
+
 def session_summary(sess: "TrackedSession", now: float) -> dict[str, Any]:
     """Shape one grid-row entry for ``GET /api/sessions``.
 
@@ -147,4 +193,10 @@ def build_timeline(sess: "TrackedSession") -> list[dict[str, Any]]:
     return rows
 
 
-__all__ = ["build_timeline", "session_detail", "session_summary"]
+__all__ = [
+    "build_timeline",
+    "grid_totals",
+    "session_detail",
+    "session_summary",
+    "sort_for_display",
+]

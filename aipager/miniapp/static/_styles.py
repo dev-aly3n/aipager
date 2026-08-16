@@ -27,14 +27,111 @@ CSS = """\
   h1 { font-size: 1.1rem; margin: 0 0 4px; }
   .muted { color: var(--tg-theme-hint-color, #888888); font-size: 0.85rem; }
 
+  /* Top-level tab bar (design §2). Two tabs, Sessions is the landing one. */
+  .tabbar { display: flex; gap: 8px; margin: 14px 0 4px; }
+  .tabbar-btn {
+    flex: 1;
+    padding: 9px 10px;
+    font: inherit;
+    font-weight: 600;
+    color: var(--tg-theme-hint-color, #888888);
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid var(--tg-theme-hint-color, #e0e0e0);
+    cursor: pointer;
+  }
+  .tabbar-btn.is-active {
+    color: var(--tg-theme-text-color, #000000);
+    border-bottom-color: var(--tg-theme-link-color, #2481cc);
+  }
+  /* Waiting count rides the tab so the state is visible without reading
+     the grid — it is the only status that costs the operator time. */
+  .badge {
+    display: inline-block;
+    min-width: 18px;
+    margin-left: 6px;
+    padding: 0 5px;
+    font-size: 0.75rem;
+    line-height: 18px;
+    color: #ffffff;
+    background: #dc2626;
+    border-radius: 999px;
+  }
+
+  .totals { margin: 10px 0 2px; }
+
+  /* Exactly two columns — a phone held in one hand, not a responsive
+     many-column grid (design §2). */
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 10px;
+  }
+
   .card {
     border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
     border-radius: 10px;
     padding: 12px 14px;
-    margin-top: 12px;
     cursor: pointer;
+    min-height: 84px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 6px;
+    overflow: hidden;
   }
   .card:active { opacity: 0.7; }
+  /* The name is the thing the operator navigates by, so it is the
+     primary element on the card. */
+  .card-name {
+    font-weight: 700;
+    font-size: 1rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .card-foot { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+  .card-age { font-size: 0.78rem; color: var(--tg-theme-hint-color, #888888); }
+  /* Finished sessions stay reachable but must never dominate the grid. */
+  .card-gone { opacity: 0.55; }
+
+  /* Reads as an affordance, not a session. Always the first cell. */
+  .card-new {
+    border: 2px dashed var(--tg-theme-link-color, #2481cc);
+    color: var(--tg-theme-link-color, #2481cc);
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-weight: 700;
+  }
+  .card-new .plus { font-size: 1.5rem; line-height: 1; }
+
+  .gone-toggle {
+    width: 100%;
+    margin-top: 14px;
+    padding: 8px;
+    font: inherit;
+    color: var(--tg-theme-hint-color, #888888);
+    background: transparent;
+    border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  /* Transient notices sit apart from #error so a self-clearing note can
+     never wipe a fatal message that must stay on screen. */
+  #notice {
+    margin-top: 12px;
+    padding: 8px 10px;
+    border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    display: none;
+  }
+
+  .empty, .placeholder { margin-top: 18px; line-height: 1.5; }
+  .empty p, .placeholder p { margin: 0 0 6px; }
   .row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; gap: 8px; }
   .row .label { font-weight: 600; }
 
@@ -75,7 +172,7 @@ CSS = """\
   .conn-reconnecting { color: #d97706; }
   .conn-offline { color: #dc2626; }
 
-  #view-grid[hidden], #view-detail[hidden] { display: none; }
+  #view-grid[hidden], #view-detail[hidden], #view-settings[hidden] { display: none; }
 
   .detail-label { font-weight: 700; font-size: 1.05rem; margin-right: 8px; }
   #detail-meta { margin: 4px 0 12px; }
