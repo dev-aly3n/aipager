@@ -59,13 +59,10 @@ HTML_BODY = """\
 </section>
 
 <section id="view-settings" hidden>
-  <div class="placeholder">
-    <p><strong>Settings are coming next.</strong></p>
-    <p class="muted">
-      This is where the defaults for new sessions will live — answer length,
-      formatting, message layout and language level. For now, use
-      <code>/settings</code> in chat.
-    </p>
+  <p class="muted" id="settings-intro">These apply to every session in this chat.</p>
+  <div id="settings-groups"></div>
+  <div id="settings-readonly" class="muted" hidden>
+    Only an admin can change these.
   </div>
 </section>
 

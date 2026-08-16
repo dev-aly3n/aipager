@@ -497,23 +497,35 @@ class AuthMixin:
         Legacy team mode: True iff the sender's role is Role.ADMIN or higher.
         V2 scope mode: True iff the sender's effective role has bypass_safety.
         """
+        tg_user = update.effective_user
+        chat = update.effective_chat
+        return self._is_admin_user(
+            tg_user.id if tg_user else None,
+            chat.id if chat else None,
+        )
+
+    def _is_admin_user(self, user_id: int | None, chat_id: int | None) -> bool:
+        """The rule behind :meth:`_is_admin`, expressed over ids instead of
+        an ``Update``.
+
+        Split out so a surface with no ``Update`` — the Mini App's write
+        routes — enforces the *same* admin rule rather than a parallel
+        reimplementation that could drift from what chat enforces. Chat's
+        behaviour is unchanged: ``_is_admin`` simply delegates here.
+        """
         if self.scopes is not None:
-            tg_user = update.effective_user
-            if tg_user is None:
+            if user_id is None:
                 return False
-            chat = update.effective_chat
-            member = self._member_in_scope(
-                self._scope_for(chat.id if chat else None), tg_user.id)
+            member = self._member_in_scope(self._scope_for(chat_id), user_id)
             if member is None:
                 return False
             role = self.policy.get_role(member.role)
             return bool(role and role.bypass_safety)
 
         if self.team is not None:
-            tg_user = update.effective_user
-            if tg_user is None:
+            if user_id is None:
                 return False
-            member = self.team.get(tg_user.id)
+            member = self.team.get(user_id)
             if member is None:
                 return False
             return member.role == Role.ADMIN

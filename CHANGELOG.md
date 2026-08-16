@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Mini App Settings tab — every reply-style option on one screen.** Message
+  layout, simple formatting, answer length and language level, each with a line
+  explaining what it does, all visible at once instead of a tap per value
+  through nested menus. Tapping saves immediately; a failed save puts the real
+  stored value back rather than leaving a button that lies. The options, their
+  order and their wording come from the same source `/settings` renders from, so
+  the two surfaces cannot drift apart, and a change made in either shows up in
+  the other. This is the Mini App's first write route: it re-verifies your
+  Telegram signature on every request, applies the same admin rule chat applies
+  to settings changes, validates the value server-side rather than trusting the
+  page, posts a one-line note to the chat so the change is on the record, and is
+  rate-limited. Non-admins see the settings but cannot change them.
 - **Mini App sessions grid, rebuilt as a control panel.** Two columns, with a
   dashed **New session** cell always first and every session ordered by last
   activity. Finished sessions are dimmed and collapsed into a "show N finished"

@@ -64,6 +64,68 @@ _SECTION_FIELD = {
 }
 
 
+# One short line per option, for surfaces with room to explain rather than
+# just label. The inline keyboard has no room for these; the Mini App does.
+_OPTION_HELP = {
+    ("layout", "card"): "Busy card stays, the answer arrives as its own message.",
+    ("layout", "merged"): "The answer replaces the busy card's body in place.",
+    ("layout", "replace"): "The busy card is replaced by the answer alone.",
+    ("formatting", False): "Claude formats replies however it likes.",
+    ("formatting", True): "Plain prose and dashed lists only — no tables or code blocks.",
+    ("length", "none"): "No length guidance at all.",
+    ("length", "xshort"): "One or two sentences. No preamble, no summary.",
+    ("length", "short"): "A few sentences.",
+    ("length", "medium"): "A couple of paragraphs.",
+    ("length", "long"): "Full detail when the answer needs it.",
+    ("level", "none"): "No vocabulary guidance at all.",
+    ("level", "simple"): "Everyday words, short sentences.",
+    ("level", "normal"): "Ordinary technical writing.",
+    ("level", "advanced"): "Assumes expertise; no hand-holding.",
+}
+
+_SECTION_ORDERS = {
+    "layout": _LAYOUT_ORDER,
+    "formatting": _FORMATTING_ORDER,
+    "length": _LENGTH_ORDER,
+    "level": _LEVEL_ORDER,
+}
+_SECTION_LABELS = {
+    "layout": _LAYOUT_LABELS,
+    "formatting": _FORMATTING_LABELS,
+    "length": _LENGTH_LABELS,
+    "level": _LEVEL_LABELS,
+}
+
+
+def settings_schema() -> list[dict]:
+    """The settable sections as plain data: field name, title, and the
+    ordered options with their labels and help text.
+
+    Exists so a second surface (the Mini App) renders exactly the sections,
+    ordering and wording `/settings` uses, instead of keeping its own copy
+    that silently drifts. Derived from the same constants the inline
+    keyboard renders from — there is no second list to keep in step.
+    """
+    out = []
+    for section in SECTIONS:
+        order = _SECTION_ORDERS[section]
+        labels = _SECTION_LABELS[section]
+        out.append({
+            "section": section,
+            "field": _SECTION_FIELD[section],
+            "title": _SECTION_TITLES[section],
+            "options": [
+                {
+                    "value": value,
+                    "label": labels[value],
+                    "help": _OPTION_HELP.get((section, value), ""),
+                }
+                for value in order
+            ],
+        })
+    return out
+
+
 def _current_value(prefs: Preferences, section: str):
     return getattr(prefs, _SECTION_FIELD[section])
 

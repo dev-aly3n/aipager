@@ -130,6 +130,32 @@ CSS = """\
     display: none;
   }
 
+  /* Settings groups: one screen, every option visible, no nested menus —
+     the whole point of doing this here instead of in chat. */
+  .setgroup { margin-top: 20px; }
+  .setgroup-title { font-weight: 700; margin-bottom: 8px; }
+  .setopt {
+    display: block;
+    width: 100%;
+    text-align: left;
+    margin-top: 6px;
+    padding: 9px 12px;
+    font: inherit;
+    color: var(--tg-theme-text-color, #000000);
+    background: transparent;
+    border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .setopt.is-active {
+    border-color: var(--tg-theme-link-color, #2481cc);
+    background: var(--tg-theme-link-color, #2481cc);
+    color: #ffffff;
+  }
+  .setopt[disabled] { opacity: 0.5; cursor: default; }
+  .setopt-help { display: block; font-size: 0.78rem; opacity: 0.75; margin-top: 2px; }
+  .setopt.is-saving { opacity: 0.6; }
+
   .empty, .placeholder { margin-top: 18px; line-height: 1.5; }
   .empty p, .placeholder p { margin: 0 0 6px; }
   .row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; gap: 8px; }

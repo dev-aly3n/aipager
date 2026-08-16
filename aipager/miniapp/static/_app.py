@@ -480,6 +480,117 @@ APP_JS = r"""
     pollTick();
   }
 
+  // ---- settings -------------------------------------------------------
+
+  var settingsData = null;   // {schema, values, can_edit} from the server
+
+  function renderSettings() {
+    var root = document.getElementById("settings-groups");
+    root.innerHTML = "";
+    if (!settingsData) { return; }
+    document.getElementById("settings-readonly").hidden = !!settingsData.can_edit;
+
+    settingsData.schema.forEach(function (group) {
+      var wrap = document.createElement("div");
+      wrap.className = "setgroup";
+      var title = document.createElement("div");
+      title.className = "setgroup-title";
+      title.textContent = group.title;
+      wrap.appendChild(title);
+
+      group.options.forEach(function (opt) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "setopt" +
+          (settingsData.values[group.field] === opt.value ? " is-active" : "");
+        var label = document.createElement("span");
+        label.textContent = opt.label;
+        btn.appendChild(label);
+        if (opt.help) {
+          var help = document.createElement("span");
+          help.className = "setopt-help";
+          help.textContent = opt.help;
+          btn.appendChild(help);
+        }
+        if (!settingsData.can_edit) {
+          btn.disabled = true;
+        } else {
+          btn.addEventListener("click", function () {
+            savePreference(group.field, opt.value, btn);
+          });
+        }
+        wrap.appendChild(btn);
+      });
+      root.appendChild(wrap);
+    });
+  }
+
+  // Per-field request counter. Two rapid taps on the same field race:
+  // without this, if the SECOND write succeeds and the FIRST then fails
+  // (entirely plausible on a flaky tunnel), the first request's error
+  // handler would roll the field back to a value that is no longer what
+  // the server holds — and claim the save failed when it did not. Only
+  // the newest request for a field is allowed to touch state.
+  var saveSeq = Object.create(null);
+
+  function savePreference(field, value, btn) {
+    if (!settingsData || settingsData.values[field] === value) { return; }
+    // Optimistic: paint the choice immediately, but keep the previous
+    // value so a failed write can put the truth back rather than leaving
+    // a button that lies about what is stored.
+    var previous = settingsData.values[field];
+    var seq = (saveSeq[field] || 0) + 1;
+    saveSeq[field] = seq;
+    settingsData.values[field] = value;
+    renderSettings();
+    btn.classList.add("is-saving");
+
+    fetch("/api/preferences/" + encodeURIComponent(field), {
+      method: "PUT",
+      headers: {
+        "X-Telegram-Init-Data": initData,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ value: value })
+    }).then(function (res) {
+      if (res.status === 401 || res.status === 403) {
+        var authErr = new Error("auth");
+        authErr.authFailed = true;
+        throw authErr;
+      }
+      if (!res.ok) { throw new Error("HTTP " + res.status); }
+      return res.json();
+    }).then(function (data) {
+      if (saveSeq[field] !== seq) { return; }   // superseded — ignore
+      settingsData.values = data.values;
+      renderSettings();
+      showNotice("Saved.");
+      if (tg && tg.HapticFeedback) {
+        try { tg.HapticFeedback.notificationOccurred("success"); } catch (e) { /* old client */ }
+      }
+    }).catch(function (err) {
+      if (err && err.authFailed) {
+        // Same terminal state every other request uses, rather than
+        // reporting a permanent auth failure as a transient save error.
+        handleFetchError(err);
+        return;
+      }
+      if (saveSeq[field] !== seq) { return; }   // superseded — ignore
+      settingsData.values[field] = previous;
+      renderSettings();
+      showNotice("Couldn't save — the value on screen is what's stored.");
+    });
+  }
+
+  function loadSettings() {
+    apiFetch("/api/preferences")
+      .then(function (data) {
+        settingsData = data;
+        renderSettings();
+      })
+      .catch(handleFetchError);
+  }
+
   // ---- top-level tabs -------------------------------------------------
 
   var mainTab = "sessions";
@@ -497,7 +608,7 @@ APP_JS = r"""
       .classList.toggle("is-active", name === "sessions");
     document.getElementById("maintab-settings")
       .classList.toggle("is-active", name === "settings");
-    if (name === "sessions") { pollTick(); }
+    if (name === "sessions") { pollTick(); } else { loadSettings(); }
   }
 
   if (tg && tg.BackButton) {
@@ -524,6 +635,9 @@ APP_JS = r"""
   function pollTick() {
     if (authExpired) { return; }
     if (document.visibilityState !== "visible") { return; }
+    // The Settings tab is a real view now — polling the grid behind it is
+    // pure battery and tunnel traffic for something nobody is looking at.
+    if (mainTab !== "sessions") { return; }
 
     if (currentView.type === "grid") {
       apiFetch("/api/sessions")
