@@ -271,25 +271,39 @@ def test_oversized_file_over_pipe_buffer_keeps_bounded_patch_not_null(
     triggers backpressure at all, which is why it passed even with the bug
     present.
     """
-    monkeypatch.setattr(diff, "MAX_DIFF_BYTES_PER_FILE", 5_000)
+    # The cap must be well ABOVE asyncio's 64 KB stream high-water mark, not
+    # below it. With a small cap (an earlier version of this test used 5 000)
+    # the reader stops after a single read(65536), the transport never fills
+    # past its high-water mark, so it never pauses -- and an unpaused pipe
+    # reaches EOF on kill just fine, meaning the test passed 6/6 even with
+    # the drain-to-eof step removed. Reading several chunks before stopping
+    # is what actually leaves the transport paused, which is the state that
+    # makes `proc.wait()` hang forever without the drain.
+    monkeypatch.setattr(diff, "MAX_DIFF_BYTES_PER_FILE", 150_000)
     repo = tmp_path / "repo"
     repo.mkdir()
     _init_repo(repo)
     (repo / "big.txt").write_text("baseline\n")
     _commit_all(repo)
-    # A single ~800 KB line, comfortably larger than any pipe buffer, so
-    # git is still writing (and therefore blocked on the unread pipe once
-    # we stop reading at the 5000-byte cap) well before it would ever
-    # finish on its own.
-    (repo / "big.txt").write_text("x" * 800_000 + "\n")
+    # ~3 MB on one line: git is still writing long after we stop reading at
+    # the 150 KB cap, so it blocks on the unread pipe rather than finishing.
+    (repo / "big.txt").write_text("x" * 3_000_000 + "\n")
 
     start = time.monotonic()
     result = run_async(diff.collect_diff(str(repo)))
     elapsed = time.monotonic() - start
 
-    assert elapsed < 2.0, (
-        f"oversized-file diff took {elapsed:.2f}s -- looks like the "
-        f"truncation deadlock is back"
+    # Tied to _KILL_REAP_GRACE_SECONDS rather than hardcoded: without the
+    # drain-to-eof step, `proc.wait()` never resolves (a flow-control-paused
+    # pipe never sees EOF) and the call falls through at exactly the grace
+    # window -- so a bare `< 2.0` would pass the moment someone lowered that
+    # constant, silently un-pinning this regression. The fixed path takes
+    # ~0.04s, so half the window is still a ~25x margin.
+    deadline = diff._KILL_REAP_GRACE_SECONDS / 2
+    assert elapsed < deadline, (
+        f"oversized-file diff took {elapsed:.2f}s (limit {deadline:.2f}s) -- "
+        f"looks like the truncation deadlock is back, or the child is no "
+        f"longer being drained to EOF before reaping"
     )
     entry = result["files"][0]
     assert entry["path"] == "big.txt"
@@ -299,7 +313,7 @@ def test_oversized_file_over_pipe_buffer_keeps_bounded_patch_not_null(
         "reported/treated as a timeout or error again, so _diff_one_file "
         "is discarding the bounded read instead of returning it"
     )
-    assert len(entry["patch"].encode("utf-8")) <= 5_000
+    assert len(entry["patch"].encode("utf-8")) <= 150_000
 
 
 # ===== process-level failure modes =========================================
