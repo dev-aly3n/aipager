@@ -38,6 +38,13 @@ dev = ["pytest>=7", "ruff>=0.5", "build", "twine"]
 # on first voice message (cached under ~/.cache/huggingface/hub).
 # Default install stays at its current ~3 MB.
 voice = ["faster-whisper>=1.0"]
+# Self-hosted Telegram Mini App server — install with
+# `pip install 'aipager[miniapp]'` / `uv tool install 'aipager[miniapp]'`.
+# Opt-in, off by default (see aipager.config.MINIAPP_ENABLED); a base
+# install never imports aiohttp at all. aiohttp's own dependency tree
+# (multidict, yarl, attrs, frozenlist, aiosignal — no separate ASGI/h11
+# stack) adds a few MB. Default install stays at its current ~3 MB.
+miniapp = ["aiohttp>=3.9,<4"]
 
 [project.scripts]
 aipager            = "aipager.cli:main"
