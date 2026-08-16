@@ -60,6 +60,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a label belonging to another scope 404s identically to one that doesn't
   exist anywhere, so no scope can probe another's session list.
 
+### Changed
+- **Mini App settings now live in `aipager.yaml` (config schema v3), not
+  `config.env`.** Storing them in `config.env` was a silent-data-loss bug:
+  the daemon retires that file on every start once `aipager.yaml` is
+  authoritative, so `aipager miniapp enable` survived exactly one restart
+  and then turned the Mini App off again with no error and no log line.
+  Settings now live in a `miniapp:` block alongside the bot token and
+  scopes, which is never retired. The upgrade is automatic and needs no
+  action: the daemon carries any existing `MINIAPP_*` values across on its
+  next start — including recovering them from an already-retired
+  `config.env.retired.*` copy, which on an affected machine is the only
+  remaining record of the configured port and public URL. Existing
+  `schema_version: 2` files keep loading unchanged and are rewritten to
+  v3 the next time the config is saved, so nothing breaks on upgrade.
+  `aipager miniapp enable/disable/status` keep exactly the same flags and
+  output, and the `MINIAPP_*` environment variables still override the
+  file for one-off runs.
+
 ## [0.6.1] - 2026-08-15
 
 ### Fixed

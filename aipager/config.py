@@ -118,6 +118,17 @@ from aipager.scope import load_default_mode as _load_dm  # noqa: E402
 DEFAULT_MODE: str = _load_dm()
 del _load_dm
 
+from aipager import scope as _scope_mod  # noqa: E402
+
+
+def _load_miniapp() -> dict:
+    # Reads `_scope_mod.CONFIG_PATH` at call time rather than relying on
+    # load_miniapp's default argument, which binds the path once at
+    # scope.py import and so ignores any later redirect (tests patch
+    # `aipager.scope.CONFIG_PATH`; a default-bound path would silently
+    # read the operator's real config instead).
+    return _scope_mod.load_miniapp(_scope_mod.CONFIG_PATH)
+
 
 def _parse_observer_bots(raw: str) -> list[tuple[str, str]]:
     """Parse 'token1:chatid1,token2:chatid2' into [(token, chatid), ...].
@@ -153,17 +164,40 @@ OBSERVER_BOTS: list[tuple[str, str]] = _parse_observer_bots(
 #
 # Opt-in loopback HTTP server, embedded in the daemon, serving one
 # read-only Telegram Mini App page (daemon status + session list). Off
-# by default: no listener, no tunnel, until explicitly enabled. Like
-# every other config.py-backed setting, toggling requires a daemon
-# restart — `aipager miniapp enable/disable` only edits this file.
-MINIAPP_ENABLED: bool = os.environ.get(
-    "MINIAPP_ENABLED", "0",
-) not in ("0", "false", "no")
-MINIAPP_PORT: int = int(os.environ.get("MINIAPP_PORT", "8765"))
+# by default: no listener, no tunnel, until explicitly enabled. Toggling
+# requires a daemon restart — `aipager miniapp enable/disable` only
+# writes the file.
+#
+# Source of truth is the `miniapp:` block in aipager.yaml, NOT config.env:
+# `migrate.retire_v1()` renames config.env away on every daemon start once
+# aipager.yaml is authoritative, so a setting stored there survived exactly
+# one restart and then silently turned the Mini App off. Environment
+# variables still win, matching _load_env_file's setdefault semantics and
+# keeping one-off runs and tests overridable.
+_miniapp_file: dict = _load_miniapp()
+
+MINIAPP_ENABLED: bool = (
+    os.environ["MINIAPP_ENABLED"] not in ("0", "false", "no", "")
+    if "MINIAPP_ENABLED" in os.environ
+    else bool(_miniapp_file["enabled"])
+)
+try:
+    # `or` so an env var set to "" falls back to the file's port rather
+    # than to the hardcoded default — consistent with MINIAPP_ENABLED and
+    # MINIAPP_PUBLIC_URL, where an empty env var is not treated as a
+    # request to discard what the file says.
+    MINIAPP_PORT: int = int(
+        os.environ.get("MINIAPP_PORT") or _miniapp_file["port"],
+    )
+except ValueError:
+    MINIAPP_PORT = 8765
 # Manual override for the Mini App's public URL (e.g. a Cloudflare
 # tunnel). Empty means "auto-detect via `tailscale status --json`" —
 # see aipager.miniapp.tunnel.detect_public_url().
-MINIAPP_PUBLIC_URL: str = os.environ.get("MINIAPP_PUBLIC_URL", "")
+MINIAPP_PUBLIC_URL: str = os.environ.get(
+    "MINIAPP_PUBLIC_URL", _miniapp_file["public_url"],
+)
+del _miniapp_file
 
 # Unix datagram socket for hook → daemon communication
 SOCKET_PATH: str = "/tmp/aipager.sock"
