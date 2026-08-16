@@ -12,6 +12,7 @@ Subcommands:
   resume   resume a previously-gone Claude session
   session  open / manage a Claude Code session under dtach
   service  install / manage daemon as a systemd-user or launchd service
+  miniapp  enable / disable / inspect the self-hosted Mini App dashboard
 
 The ``_cmd_*`` functions in this file are thin dispatchers that
 delegate to feature modules (cli.daemon, cli.session, cli.resume) or
@@ -78,6 +79,27 @@ def _cmd_policy(args: argparse.Namespace) -> int:
     if getattr(args, "policy_cmd", None) == "validate":
         from aipager.cli.policy import cmd_policy_validate
         return cmd_policy_validate(args)
+    return 0  # no subcommand → help printed by main()
+
+
+def _cmd_miniapp(args: argparse.Namespace) -> int:
+    # Lazy import: aipager.miniapp.cli never imports aiohttp itself (it
+    # only edits config.env and shells out to `tailscale`), but keeping
+    # the import here matches the rest of the miniapp surface — nothing
+    # under aipager.miniapp loads at CLI-parse time for users who never
+    # touch this subcommand.
+    from aipager.miniapp.cli import (
+        _cmd_miniapp_disable,
+        _cmd_miniapp_enable,
+        _cmd_miniapp_status,
+    )
+    sub = getattr(args, "miniapp_cmd", None)
+    if sub == "enable":
+        return _cmd_miniapp_enable(args)
+    if sub == "disable":
+        return _cmd_miniapp_disable(args)
+    if sub == "status":
+        return _cmd_miniapp_status(args)
     return 0  # no subcommand → help printed by main()
 
 
@@ -195,6 +217,34 @@ def main() -> None:
         help="lint policy.yaml / policy.d (read-only; non-zero on problems)",
     )
 
+    miniapp_p = sub.add_parser(
+        "miniapp",
+        help="enable/disable/inspect the self-hosted Mini App dashboard",
+    )
+    miniapp_p.set_defaults(fn=_cmd_miniapp)
+    miniapp_sub = miniapp_p.add_subparsers(dest="miniapp_cmd")
+    miniapp_enable_p = miniapp_sub.add_parser(
+        "enable", help="turn the Mini App server on (requires a daemon restart)",
+    )
+    miniapp_enable_p.add_argument(
+        "--port", type=int,
+        help="TCP port to bind on 127.0.0.1 (default: 8765, or the "
+             "already-configured port on re-enable)",
+    )
+    miniapp_enable_p.add_argument(
+        "--url",
+        help="manual public URL override (must start with https://); "
+             "omit to rely on Tailscale auto-detect",
+    )
+    miniapp_sub.add_parser(
+        "disable", help="turn the Mini App server off (requires a daemon restart)",
+    )
+    miniapp_sub.add_parser(
+        "status",
+        help="show the configured enabled/port/URL and whether a "
+             "public URL is currently auto-detectable",
+    )
+
     args = parser.parse_args()
     if not args.cmd:
         parser.print_help()
@@ -225,6 +275,9 @@ def main() -> None:
         sys.exit(0)
     if args.cmd == "policy" and not getattr(args, "policy_cmd", None):
         policy_p.print_help()
+        sys.exit(0)
+    if args.cmd == "miniapp" and not getattr(args, "miniapp_cmd", None):
+        miniapp_p.print_help()
         sys.exit(0)
     sys.exit(args.fn(args))
 
