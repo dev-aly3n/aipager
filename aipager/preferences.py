@@ -35,7 +35,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from aipager.config import KEEP_FINISHED_CARD
@@ -145,11 +146,22 @@ def _resolve_field(scope_raw: dict, field: str, default):
 
 
 def get_preferences(chat_id: int) -> Preferences:
-    """Return the fully-resolved preferences for ``chat_id``.
+    """Return the fully-resolved SCOPE preferences for ``chat_id``, with
+    no session override applied — the scope's own value, ignoring what
+    any individual session may have chosen for itself.
 
     Never raises, never returns ``None`` — a chat_id never seen before,
     or a preferences.json that doesn't exist at all, resolves to the
     same built-in defaults v0.5.0 always used.
+
+    A caller that has a ``TrackedSession`` in hand (the prompt-injection
+    path, idle-notification layout, or any future one) must call
+    :func:`resolve_preferences` with ``sess.preference_overrides()``
+    instead of this function directly — otherwise that session's
+    override silently does nothing, because this function has no way to
+    see it. This function stays the right (and only) choice for
+    genuinely scope-wide reads: rendering ``/settings`` itself and the
+    Mini App's scope-wide Settings tab, neither of which has a session.
     """
     store = _ensure_loaded()
     raw = store.get(str(chat_id))
@@ -168,6 +180,65 @@ def get_preferences(chat_id: int) -> Preferences:
     )
 
 
+def is_valid_value(field: str, value: object) -> bool:
+    """``True`` iff ``field`` is one of the four settable fields and
+    ``value`` is one of that field's allowed options. Never raises —
+    an unknown field name returns ``False`` rather than ``KeyError``,
+    because this is also used to sanity-check untrusted input (a
+    session override read back off disk, a Mini App request body)
+    where "not a real field" must be a normal, checkable outcome, not
+    an exception the caller has to guard against separately.
+
+    The single allow-list both scope writes (:func:`set_preference`)
+    and session-override writes validate through — so a value the Mini
+    App's per-session route accepts is always one chat's ``/settings``
+    would also accept, and vice versa.
+    """
+    validator = _FIELD_VALIDATORS.get(field)
+    return validator is not None and validator(value)
+
+
+def resolve_preferences(
+    scope_chat_id: int,
+    session_overrides: Mapping[str, object] | None = None,
+) -> Preferences:
+    """The one function both chat and the Mini App must call for a
+    session's effective preferences: a session override wins field by
+    field over the scope's own value.
+
+    Pure — never mutates ``session_overrides`` or the scope cache, and
+    always returns a fresh :class:`Preferences` (``dataclasses.replace``
+    over ``get_preferences(scope_chat_id)``, never the scope's own
+    object mutated in place).
+
+    With ``session_overrides`` ``None`` or ``{}`` this is byte-for-byte
+    identical to ``get_preferences(scope_chat_id)`` — a session with no
+    overrides inherits the scope exactly as if the per-session layer
+    did not exist.
+
+    A key present in ``session_overrides`` wins over the scope value
+    only when :func:`is_valid_value` accepts it for that field; an
+    absent key, or a value that fails validation, falls back to the
+    scope value for that one field alone. This is the same fail-safe
+    philosophy :func:`_resolve_field` already applies to a scope's own
+    stored fields, now applied on every call rather than only at load
+    time — a hand-edited state file, or an option a later release
+    removed, degrades to "unset" for just that field instead of
+    raising or corrupting the other three.
+    """
+    scope_prefs = get_preferences(scope_chat_id)
+    if not session_overrides:
+        return scope_prefs
+    changes = {
+        field: value
+        for field, value in session_overrides.items()
+        if is_valid_value(field, value)
+    }
+    if not changes:
+        return scope_prefs
+    return replace(scope_prefs, **changes)
+
+
 def set_preference(chat_id: int, field: str, value: object) -> Preferences:
     """Validate + persist one field for ``chat_id``, returning the scope's
     newly-resolved :class:`Preferences`.
@@ -176,10 +247,9 @@ def set_preference(chat_id: int, field: str, value: object) -> Preferences:
     that field's allowed set — validated *before* the cache or disk are
     touched, so a rejected call never writes anything.
     """
-    validator = _FIELD_VALIDATORS.get(field)
-    if validator is None:
+    if field not in _FIELD_VALIDATORS:
         raise ValueError(f"unknown preference field: {field!r}")
-    if not validator(value):
+    if not is_valid_value(field, value):
         raise ValueError(f"invalid value for {field!r}: {value!r}")
 
     store = _ensure_loaded()

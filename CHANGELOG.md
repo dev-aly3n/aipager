@@ -8,6 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Per-session settings overrides.** Any session can now override
+  `/settings`'s reply-style options (message layout, simple formatting,
+  answer length, language level) for itself, and falls back to the scope's
+  own value for anything it hasn't touched. The Mini App session page gains
+  a "Per session settings" section: each option shows both what the
+  session will actually use and, separately, a small tag on whichever
+  option matches the scope's own current default — so overriding never
+  hides what you diverged from, and the tag keeps tracking the scope even
+  after you override (or the scope default later changes). "Reset to
+  defaults" returns a session to inheriting. Chat's `/settings` menu is
+  unchanged and stays scope-only, but a session override now names the
+  session in its chat mirror line so it is never silently invisible from
+  chat. Both the prompt-injection path and the idle-notification layout
+  resolve through the same shared function chat and the Mini App both
+  call, so the two surfaces cannot disagree about what a session is
+  actually using. Writing an override requires only being authorized to
+  prompt that session (not full admin) — the same bar an operator already
+  clears by typing into it — while a read-only member can see the section
+  but not change it.
 - **Mini App session page, rebuilt around what Claude last said.** Tapping a
   session now opens a single scrolling page led by the last few lines of
   Claude's reply, with a scannable label/value info line above it and the diff

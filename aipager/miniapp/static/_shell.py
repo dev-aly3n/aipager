@@ -77,6 +77,15 @@ HTML_BODY = """\
   <h2 class="sect-title">Last message</h2>
   <div id="detail-preview" class="preview"></div>
 
+  <h2 class="sect-title">Per session settings</h2>
+  <div id="session-settings-groups"></div>
+  <div id="session-settings-readonly" class="muted" hidden>
+    Only someone who can prompt this session can change these.
+  </div>
+  <button type="button" class="session-settings-reset" id="session-settings-reset" hidden>
+    Reset to defaults
+  </button>
+
   <button type="button" class="sect-toggle" id="tab-diff"></button>
   <div id="panel-diff" class="panel" hidden></div>
 

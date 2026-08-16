@@ -425,6 +425,208 @@ APP_JS = r"""
     btn.textContent = caret + (n ? "Changed files (" + n + ")" : "Changed files — none");
   }
 
+  // ---- per-session settings (design §4 default-vs-override mechanic) --
+
+  // {schema, values, can_edit} from GET /api/sessions/{label}/preferences,
+  // or null before the first fetch resolves / while switching sessions.
+  var sessionSettingsData = null;
+  // Which session sessionSettingsData is *for* — every callback below
+  // checks this before touching shared state, so a slow response for a
+  // session the operator has already navigated away from can never paint
+  // (or, worse, silently roll back) the session on screen now.
+  var sessionSettingsLabel = null;
+
+  function renderSessionSettings() {
+    var root = document.getElementById("session-settings-groups");
+    var resetBtn = document.getElementById("session-settings-reset");
+    root.innerHTML = "";
+    if (!sessionSettingsData) {
+      document.getElementById("session-settings-readonly").hidden = true;
+      resetBtn.hidden = true;
+      return;
+    }
+    document.getElementById("session-settings-readonly").hidden = !!sessionSettingsData.can_edit;
+
+    var anyOverridden = false;
+
+    sessionSettingsData.schema.forEach(function (group) {
+      var fv = sessionSettingsData.values[group.field];
+      if (!fv) { return; }
+      if (fv.overridden) { anyOverridden = true; }
+
+      var wrap = document.createElement("div");
+      wrap.className = "setgroup";
+      var title = document.createElement("div");
+      title.className = "setgroup-title";
+      title.textContent = group.title;
+      wrap.appendChild(title);
+
+      group.options.forEach(function (opt) {
+        // The mechanic, restated in code so it cannot be implemented
+        // backwards: `selected` (the fill) comes ONLY from `effective`;
+        // `isDefault` (the tag) comes ONLY from `scope_default`. Two
+        // independent equality checks against server-supplied scalars —
+        // no precedence logic on the client that could get this backwards.
+        var selected = fv.effective === opt.value;
+        var isDefault = fv.scope_default === opt.value;
+
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "setopt" + (selected ? " is-active" : "");
+        var label = document.createElement("span");
+        label.textContent = opt.label;
+        btn.appendChild(label);
+        if (isDefault) {
+          var tag = document.createElement("span");
+          tag.className = "setopt-default-tag";
+          tag.textContent = "scope default";
+          btn.appendChild(tag);
+        }
+        if (opt.help) {
+          var help = document.createElement("span");
+          help.className = "setopt-help";
+          help.textContent = opt.help;
+          btn.appendChild(help);
+        }
+        if (!sessionSettingsData.can_edit) {
+          btn.disabled = true;
+        } else {
+          btn.addEventListener("click", function () {
+            saveSessionPreference(group.field, opt.value, btn);
+          });
+        }
+        wrap.appendChild(btn);
+      });
+      root.appendChild(wrap);
+    });
+
+    resetBtn.hidden = !(sessionSettingsData.can_edit && anyOverridden);
+  }
+
+  // Per-field request counter — same race guard as the scope-wide
+  // savePreference: only the newest request for a field may touch state.
+  var sessionSaveSeq = Object.create(null);
+
+  function saveSessionPreference(field, value, btn) {
+    if (!sessionSettingsData) { return; }
+    var current = sessionSettingsData.values[field];
+    if (current && current.overridden && current.override_value === value) { return; }
+    var label = sessionSettingsLabel;
+    var previous = current;
+    var seq = (sessionSaveSeq[field] || 0) + 1;
+    sessionSaveSeq[field] = seq;
+
+    // Optimistic: paint this session as now overriding `field` to
+    // `value` immediately; keep `previous` so a failed write can put the
+    // truth back instead of leaving a button that lies about what is
+    // stored — same pattern as the scope-wide savePreference.
+    sessionSettingsData.values[field] = {
+      effective: value,
+      scope_default: previous ? previous.scope_default : value,
+      override_value: value,
+      overridden: true
+    };
+    renderSessionSettings();
+    btn.classList.add("is-saving");
+
+    fetch("/api/sessions/" + encodeURIComponent(label) + "/preferences/" + encodeURIComponent(field), {
+      method: "PUT",
+      headers: {
+        "X-Telegram-Init-Data": initData,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ value: value })
+    }).then(function (res) {
+      if (res.status === 401 || res.status === 403) {
+        var authErr = new Error("auth");
+        authErr.authFailed = true;
+        throw authErr;
+      }
+      if (!res.ok) { throw new Error("HTTP " + res.status); }
+      return res.json();
+    }).then(function (data) {
+      if (sessionSaveSeq[field] !== seq || sessionSettingsLabel !== label) { return; }
+      sessionSettingsData.values = data.values;
+      renderSessionSettings();
+      showNotice("Saved.");
+      if (tg && tg.HapticFeedback) {
+        try { tg.HapticFeedback.notificationOccurred("success"); } catch (e) { /* old client */ }
+      }
+    }).catch(function (err) {
+      if (err && err.authFailed) {
+        handleFetchError(err);
+        return;
+      }
+      if (sessionSaveSeq[field] !== seq || sessionSettingsLabel !== label) { return; }
+      sessionSettingsData.values[field] = previous;
+      renderSessionSettings();
+      showNotice("Couldn't save — the value on screen is what's stored.");
+    });
+  }
+
+  // "Reset to default" (design §4): one DELETE per overridden field. A
+  // mid-sequence failure leaves some fields reset and some not — each
+  // DELETE is independently idempotent, so the next tap (or the next
+  // page load) self-heals; there is no invalid intermediate state.
+  function resetSessionSettings() {
+    if (!sessionSettingsData) { return; }
+    var label = sessionSettingsLabel;
+    var fields = Object.keys(sessionSettingsData.values).filter(function (field) {
+      return sessionSettingsData.values[field].overridden;
+    });
+    if (fields.length === 0) { return; }
+
+    var resetBtn = document.getElementById("session-settings-reset");
+    resetBtn.disabled = true;
+    var remaining = fields.length;
+    var hadError = false;
+
+    fields.forEach(function (field) {
+      fetch("/api/sessions/" + encodeURIComponent(label) + "/preferences/" + encodeURIComponent(field), {
+        method: "DELETE",
+        headers: { "X-Telegram-Init-Data": initData }
+      }).then(function (res) {
+        if (res.status === 401 || res.status === 403) {
+          var authErr = new Error("auth");
+          authErr.authFailed = true;
+          throw authErr;
+        }
+        if (!res.ok) { throw new Error("HTTP " + res.status); }
+        return res.json();
+      }).then(function (data) {
+        if (sessionSettingsLabel === label) { sessionSettingsData.values = data.values; }
+      }).catch(function (err) {
+        hadError = true;
+        if (err && err.authFailed) { handleFetchError(err); }
+      }).then(function () {
+        remaining -= 1;
+        if (remaining > 0) { return; }
+        if (sessionSettingsLabel !== label) { return; }
+        resetBtn.disabled = false;
+        renderSessionSettings();
+        showNotice(hadError
+          ? "Some settings could not be reset — reopen to retry."
+          : "Reset to defaults.");
+      });
+    });
+  }
+
+  function loadSessionSettings(label) {
+    sessionSettingsLabel = label;
+    sessionSettingsData = null;
+    renderSessionSettings();
+    apiFetch("/api/sessions/" + encodeURIComponent(label) + "/preferences")
+      .then(function (data) {
+        if (sessionSettingsLabel !== label) { return; }
+        sessionSettingsData = data;
+        renderSessionSettings();
+      })
+      .catch(function (err) {
+        if (sessionSettingsLabel !== label) { return; }
+        handleFetchError(err);
+      });
+  }
+
   // ---- drill-down: diff -----------------------------------------------
 
   var DIFF_REASONS = {
@@ -567,6 +769,7 @@ APP_JS = r"""
     document.getElementById("view-grid").hidden = true;
     document.getElementById("view-detail").hidden = false;
     if (tg && tg.BackButton) { tg.BackButton.show(); }
+    loadSessionSettings(label);
     pollTick();
   }
 
@@ -723,6 +926,7 @@ APP_JS = r"""
   });
   document.getElementById("tab-timeline").addEventListener("click", toggleTimeline);
   document.getElementById("tab-diff").addEventListener("click", toggleDiff);
+  document.getElementById("session-settings-reset").addEventListener("click", resetSessionSettings);
 
   // Ages tick on their own so "2m ago" does not sit stale between polls.
   setInterval(function () {

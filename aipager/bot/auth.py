@@ -533,6 +533,47 @@ class AuthMixin:
         # Personal mode — the operator is always admin.
         return True
 
+    def _can_prompt_user(self, user_id: int | None, chat_id: int | None) -> bool:
+        """The bar for a SESSION-level preference override (PUT/DELETE on
+        the Mini App's ``/api/sessions/{label}/preferences/{field}``) —
+        deliberately NOT :meth:`_is_admin_user`.
+
+        A scope-wide ``/settings`` write changes behaviour for everyone in
+        the chat, so it is admin-gated. A session override changes one
+        session, and anyone already authorized to prompt that session can
+        achieve the same effect turn by turn (e.g. "keep it short from now
+        on"); requiring full admin here would be *more* restrictive than
+        the capability that caller already holds, for no security gain.
+
+        What this must still refuse: a READ_ONLY member can authenticate
+        and read in the Mini App (scope-membership-only check — see
+        ``_handle_session_preferences_get``), but has never been able to
+        prompt anything. Ungated, they could change a session's behaviour
+        despite being unable to type into it — a genuine escalation this
+        gate exists to close.
+
+        Shaped exactly like :meth:`_is_admin_user` (ids, not an
+        ``Update``) for the same reason: the Mini App's write routes have
+        no ``Update`` to authorize from, and must enforce the *same* rule
+        chat's own ``can_prompt`` checks use (:meth:`_role_can_prompt`,
+        ``team.User.can_prompt``) rather than a third, parallel
+        reimplementation that could drift from either.
+        """
+        if self.scopes is not None:
+            member = self._member_in_scope(self._scope_for(chat_id), user_id)
+            return self._role_can_prompt(member)
+
+        if self.team is not None:
+            member = self.team.get(user_id)
+            return member is not None and member.can_prompt
+
+        # Personal mode: no allow-list, so the only "member" is the
+        # operator — already gated upstream by
+        # AuthMixin._is_personal_mode_operator via
+        # MiniAppServer._resolve_scope_chat_id before any handler with a
+        # session in hand is ever reached.
+        return True
+
     def _mark_driver(
         self, sess: TrackedSession, update: Update,
     ) -> TeamUser | None:

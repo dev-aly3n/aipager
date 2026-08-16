@@ -155,6 +155,42 @@ CSS = """\
   .setopt[disabled] { opacity: 0.5; cursor: default; }
   .setopt-help { display: block; font-size: 0.78rem; opacity: 0.75; margin-top: 2px; }
   .setopt.is-saving { opacity: 0.6; }
+  /* The "default" tag (design §4): marks the SCOPE's value, independent of
+     which option is filled/selected. Deliberately understated relative to
+     .is-active's solid fill — it is a note about where an override
+     diverged from, not the thing currently in effect. */
+  .setopt-default-tag {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 7px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--tg-theme-hint-color, #888888);
+    border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+    border-radius: 999px;
+    vertical-align: middle;
+  }
+  .setopt.is-active .setopt-default-tag {
+    color: rgba(255, 255, 255, 0.85);
+    border-color: rgba(255, 255, 255, 0.55);
+  }
+
+  /* "Reset to default" (design §4) — a one-way door without it, so it
+     gets its own always-visible control rather than living inside the
+     collapsed sections below. */
+  .session-settings-reset {
+    display: block;
+    width: 100%;
+    margin-top: 14px;
+    padding: 9px 10px;
+    font: inherit;
+    color: var(--tg-theme-link-color, #2481cc);
+    background: transparent;
+    border: 1px solid var(--tg-theme-link-color, #2481cc);
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .session-settings-reset[disabled] { opacity: 0.5; cursor: default; }
 
   /* Session page. A label/value grid rather than a comma-separated run,
      so the info line stays scannable on a narrow screen. */

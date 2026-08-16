@@ -87,6 +87,36 @@ def test_inject_writes_policy_snapshot(mk_bot, run_async, monkeypatch):
     assert captured["role"].name == "user"
 
 
+def test_inject_prompt_style_text_reflects_session_override(mk_bot, run_async, monkeypatch):
+    """THE load-bearing regression test for design.md's critical path
+    (session_ops.py's _inject_prompt): style_text must be built from
+    resolve_preferences(scope, sess.preference_overrides()), never
+    get_preferences(scope) alone. A caller that regresses to the latter
+    passes every OTHER test in this feature while the per-session
+    settings feature does nothing in production — this is the one test
+    standing between that regression and green CI (design.md Risks)."""
+    from aipager import policy_snapshot, preferences as prefs_mod
+    bot = _bot(mk_bot)
+    monkeypatch.setattr(inject, "send_text_and_enter", AsyncMock(return_value=True))
+    captured = {}
+    monkeypatch.setattr(
+        policy_snapshot, "write_snapshot",
+        lambda name, role, scope, member, style_text="": captured.update(
+            style_text=style_text))
+
+    sess = _sess()
+    # Scope default: no style guidance at all.
+    prefs_mod.set_preference(sess.scope_chat_id, "answer_length", "none")
+    run_async(bot._inject_prompt(sess, "hello"))
+    assert captured["style_text"] == ""  # nothing to inject at the scope default
+
+    # This session overrides answer_length; the scope itself is untouched.
+    sess.override_answer_length = "xshort"
+    run_async(bot._inject_prompt(sess, "hello again"))
+    assert "one or two sentences" in captured["style_text"]
+    assert prefs_mod.get_preferences(sess.scope_chat_id).answer_length == "none"
+
+
 def test_inject_legacy_no_marker_but_sets_origin(mk_bot, run_async, monkeypatch):
     bot = mk_bot()  # scopes=None → no marker
     monkeypatch.setattr(inject, "send_text_and_enter", AsyncMock(return_value=True))

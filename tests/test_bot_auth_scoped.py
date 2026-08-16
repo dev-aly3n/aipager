@@ -83,6 +83,48 @@ def test_mark_and_resolve_driver(mk_bot):
     assert bot._driver_user(sess).label == "bob"
 
 
+# ---- _can_prompt_user (batch 4: session-scoped preference writes) --------
+
+def test_can_prompt_user_owner_and_user_true(mk_bot):
+    bot = _bot(mk_bot)
+    assert bot._can_prompt_user(1, -100) is True  # owner
+    assert bot._can_prompt_user(2, -100) is True  # user
+
+
+def test_can_prompt_user_read_only_false(mk_bot):
+    bot = _bot(mk_bot)
+    assert bot._can_prompt_user(3, -100) is False  # read_only
+
+
+def test_can_prompt_user_non_member_false(mk_bot):
+    bot = _bot(mk_bot)
+    assert bot._can_prompt_user(999, -100) is False
+
+
+def test_can_prompt_user_unknown_chat_false(mk_bot):
+    bot = _bot(mk_bot)
+    assert bot._can_prompt_user(1, -9999) is False
+
+
+def test_can_prompt_user_respects_scope_boundary_like_is_admin_user(mk_bot):
+    """Same identity, two scopes: user 2 is a member of the group but not
+    of user 1's DM — must not be able to prompt a session scoped there."""
+    bot = _bot(mk_bot)
+    assert bot._can_prompt_user(2, -100) is True   # group: member
+    assert bot._can_prompt_user(2, 555) is False   # DM: not a member
+
+
+def test_can_prompt_user_true_but_is_admin_user_false_for_ordinary_member(mk_bot):
+    """The asymmetry the whole per-session design decision rests on: an
+    ordinary "user"-role member may set a session override (can_prompt)
+    but the built-in "user" role does not bypass_safety, so the SAME
+    identity is refused the scope-wide write. Two deliberately different
+    gates, not one gate reused."""
+    bot = _bot(mk_bot)
+    assert bot._can_prompt_user(2, -100) is True
+    assert bot._is_admin_user(2, -100) is False
+
+
 def test_authorize_callback_scoped(mk_bot, run_async):
     bot = _bot(mk_bot)
     q = MagicMock()

@@ -150,6 +150,31 @@ def test_idle_stored_card_preference_overrides_keep_finished_card_off(
     assert bot._edit_busy_rich.await_args.kwargs["final"] is True
 
 
+def test_idle_session_override_wins_over_scope_layout(mk_bot, run_async, monkeypatch):
+    """THE load-bearing regression test for design.md's second critical
+    read site (notify.py's idle-notification layout): it must resolve via
+    resolve_preferences(scope, sess.preference_overrides()), never
+    get_preferences(scope) alone, or a session's layout override silently
+    does nothing for the one place an operator would actually see it."""
+    from aipager import preferences
+    # Scope default resolves to "replace" (no stored pref, knob off) —
+    # the busy card would normally be deleted outright.
+    monkeypatch.setattr("aipager.preferences.KEEP_FINISHED_CARD", False)
+    bot = mk_bot()
+    sess = _sess(status=Status.IDLE, busy_msg_id=42)
+    sess.override_layout = "card"  # THIS session keeps the card
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
+    bot._app.bot.delete_message = AsyncMock()
+    bot._maybe_update_bot_name = AsyncMock()
+    bot._stop_animation = MagicMock()
+    bot._edit_busy_rich = AsyncMock(return_value=True)
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "done"}))
+    bot._app.bot.delete_message.assert_not_awaited()
+    assert bot._edit_busy_rich.await_args.kwargs["final"] is True
+    # And the scope's own preference was never touched by the override.
+    assert preferences.get_preferences(sess.scope_chat_id).layout == "replace"
+
+
 def test_idle_marks_tools_done_clears_subagents(mk_bot, run_async):
     bot = mk_bot()
     sess = _sess(status=Status.IDLE)
