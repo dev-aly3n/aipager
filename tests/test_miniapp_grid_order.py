@@ -260,10 +260,45 @@ def _css():
 
 
 def _rule_blocks(css):
-    """(selector, body) for each rule. Crude but sufficient — the stylesheet
-    is a hand-written string with no nesting or at-rule bodies to speak of."""
+    """(selector, body) for each rule.
+
+    Deliberately crude. It mis-splits the one nested construct in the file
+    (`@keyframes pulse-waiting`) into fragments, then re-synchronises on
+    the next real rule — verified harmless today because nothing after it
+    pairs a theme background with hardcoded text. If a filled-surface rule
+    is ever added INSIDE an at-rule body, this would skip it; swap in a
+    brace-depth splitter at that point.
+    """
     import re
     return re.findall(r"([^{}]+)\{([^}]*)\}", css)
+
+
+# The three elements the operator's bug actually manifested on. Named
+# explicitly because an extraction that silently stops finding one of them
+# is exactly how this guard went blind the first time.
+_HIDDEN_TARGETS = ("tabbar", "waiting-badge", "sessions-gone")
+
+
+def _js_hidden_ids(page):
+    """Ids the script hides via the `hidden` property.
+
+    Catches both `getElementById("x").hidden = …` AND the far more common
+    `var el = document.getElementById("x"); … el.hidden = …`. An earlier
+    version matched only the inline form, so it never saw `#waiting-badge`
+    (`badge.hidden`) or `#sessions-gone` (`goneEl.hidden`) — it guarded one
+    element while claiming three.
+    """
+    import re
+
+    ids = set(re.findall(r'getElementById\("([^"]+)"\)\.hidden', page))
+    # variable -> id, for the assign-then-use form
+    var_to_id = dict(
+        re.findall(r'var\s+(\w+)\s*=\s*document\.getElementById\("([^"]+)"\)', page)
+    )
+    for var, eid in var_to_id.items():
+        if re.search(r"\b%s\.hidden\s*=" % re.escape(var), page):
+            ids.add(eid)
+    return ids
 
 
 def test_hidden_is_not_defeated_by_an_author_display_rule():
@@ -273,10 +308,6 @@ def test_hidden_is_not_defeated_by_an_author_display_rule():
     `.grid` is grid — so `el.hidden = true` did nothing for the tab bar,
     the waiting badge and the finished-sessions list. The JS was correct
     and the CSS silently ignored it.
-
-    A global `!important` guard settles it for every element. This test
-    fails if that guard is removed while any hidden target still carries a
-    competing display rule.
     """
     import re
 
@@ -287,17 +318,18 @@ def test_hidden_is_not_defeated_by_an_author_display_rule():
         re.search(r"\[hidden\]\s*\{[^}]*display:\s*none\s*!important", css)
     )
 
-    hidden_ids = set(re.findall(r'getElementById\("([^"]+)"\)\.hidden', INDEX_HTML))
-    assert hidden_ids, "no elements hidden via the hidden attribute — page changed?"
+    hidden_ids = _js_hidden_ids(INDEX_HTML)
+    # Assert the SPECIFIC elements, not merely "found something". A
+    # non-empty result told us nothing when only one of the three was ever
+    # in it.
+    missing = [t for t in _HIDDEN_TARGETS if t not in hidden_ids]
+    assert not missing, (
+        f"this guard no longer sees {missing} — the extraction has gone "
+        "blind and would pass even with the bug reintroduced"
+    )
 
     conflicted = []
     for eid in sorted(hidden_ids):
-        # Match the whole tag, then pull class out of it — attribute order
-        # is not fixed. An earlier version of this test only looked for
-        # class AFTER id, so `<nav class="tabbar" id="tabbar">` matched
-        # nothing and the test passed while the bug was live. That is the
-        # exact failure mode this test exists to prevent, in the test
-        # itself.
         tag = re.search(r"<[^>]*\bid=\"%s\"[^>]*>" % re.escape(eid), INDEX_HTML)
         if not tag:
             continue
@@ -309,19 +341,37 @@ def test_hidden_is_not_defeated_by_an_author_display_rule():
             if rule and "display:" in rule.group(1):
                 conflicted.append(f"#{eid} (.{token})")
 
-    # Fixture self-check: these three are known to carry a competing
-    # display rule. If the extraction stops finding them the test has gone
-    # blind and would pass regardless of the guard.
     assert conflicted, (
         "no conflicting elements found — the class/display extraction is "
         "broken, so this test would pass even with the guard removed"
     )
-
     if conflicted and not has_global_guard:
         raise AssertionError(
             "these elements are hidden from JS but have an author display "
             f"rule and there is no global [hidden] guard: {conflicted}"
         )
+
+
+def test_no_id_rule_can_outrank_the_hidden_guard():
+    """The global guard is an attribute selector (specificity 0,1,0). An
+    id-selector rule with `!important` (1,0,0) would beat it for that one
+    element and silently restore the bug — a reviewer demonstrated exactly
+    this with `#waiting-badge { display: inline-block !important; }`.
+
+    The guard is meant to be the only `display: … !important` in the
+    stylesheet; anything else is either a bypass or needs to be justified.
+    """
+    import re
+
+    css = _css()
+    important_display = re.findall(
+        r"([^{}]+)\{[^}]*display:[^;}]*!important", css
+    )
+    stripped = [sel.strip().splitlines()[-1].strip() for sel in important_display]
+    assert stripped == ["[hidden]"], (
+        "another rule uses `display: … !important` and may outrank the "
+        f"[hidden] guard: {stripped}"
+    )
 
 
 def test_no_theme_background_is_paired_with_hardcoded_white_text():
@@ -335,13 +385,20 @@ def test_no_theme_background_is_paired_with_hardcoded_white_text():
     chosen together and no theme can pull them apart); only mixing the two
     is the mistake.
     """
+    import re
+
     offenders = []
     for selector, body in _rule_blocks(_css()):
         low = body.lower()
         if "--tg-theme" not in low:
             continue
         bg = "background" in low and "--tg-theme" in low
-        white_text = "color: #ffffff" in low or "color: #fff;" in low
+        # Tolerate spacing/casing variants and the named/rgb forms — a
+        # literal "color: #ffffff" match is trivially stepped around.
+        white_text = bool(re.search(
+            r"(?<!-)color:\s*(#fff(?:fff)?\b|white\b|rgb\(\s*255\s*,\s*255\s*,\s*255)",
+            low,
+        ))
         if bg and white_text:
             offenders.append(selector.strip())
     assert offenders == [], (
