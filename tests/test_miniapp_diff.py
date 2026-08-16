@@ -182,6 +182,126 @@ def test_max_files_cap_sets_files_truncated(tmp_path, run_async, monkeypatch):
     assert len(result["files"]) == 2
 
 
+# ===== truncation deadlock / truncated-vs-timed-out correctness ===========
+#
+# `test_oversized_file_is_truncated_and_bounded` above uses a ~13 KB diff,
+# which completes before the pipe ever fills — it can't catch the deadlock
+# where `_read_stdout` returns early at `max_bytes` while the child is still
+# alive and blocked writing to the now-unread stdout pipe. The tests below
+# deliberately produce output well past a single 64 KB pipe buffer so that
+# backpressure genuinely occurs.
+
+def test_run_git_truncation_returns_promptly_and_is_not_a_timeout(
+    tmp_path, run_async, monkeypatch,
+):
+    """A capped read must return almost instantly and report
+    `truncated=True, timed_out=False` — not pay anywhere near
+    `GIT_TIMEOUT_SECONDS` and not masquerade as a timeout, which is what
+    silently turned every oversized file's patch into `None` downstream
+    (`_diff_one_file` checked `timed_out` before `truncated`).
+
+    The fake `git` never exits on its own and floods stdout continuously,
+    so the child is still writing (and therefore still blocked on the
+    unread pipe once we stop reading at ``max_bytes``) for as long as this
+    test lets it run.
+    """
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    fake_git = fake_bin / "git"
+    fake_git.write_text(
+        "#!/bin/sh\nwhile true; do dd if=/dev/zero bs=65536 count=1 2>/dev/null; done\n",
+    )
+    fake_git.chmod(0o755)
+    monkeypatch.setenv("PATH", str(fake_bin) + os.pathsep + os.environ.get("PATH", ""))
+
+    start = time.monotonic()
+    result = run_async(diff._run_git(["diff"], str(tmp_path), max_bytes=1000))
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 1.0, (
+        f"truncated read took {elapsed:.2f}s -- should return almost "
+        f"instantly, not pay anywhere near GIT_TIMEOUT_SECONDS "
+        f"({diff.GIT_TIMEOUT_SECONDS}s)"
+    )
+    assert result.truncated is True
+    assert result.timed_out is False
+    assert len(result.stdout) == 1000
+
+
+def test_run_git_genuine_timeout_is_not_reported_as_truncated(
+    tmp_path, run_async, monkeypatch,
+):
+    """The flip side of the same distinction: a child that produces output
+    well under ``max_bytes`` but never exits on its own (a real hang, not a
+    capped read) must report ``timed_out=True, truncated=False`` — the two
+    flags must never collapse into meaning the same thing. ``sleep 1`` (not
+    a longer sleep) matches ``test_timeout_returns_git_error_without_hanging``
+    above: ``/bin/sh`` forks ``sleep`` as a separate child that inherits the
+    stdout/stderr pipes, so if the grace-window drain can't fully unblock
+    on the killed shell alone, the grandchild still exits and closes them
+    on its own well inside the grace window.
+    """
+    fake_bin = tmp_path / "fake-bin"
+    fake_bin.mkdir()
+    fake_git = fake_bin / "git"
+    fake_git.write_text("#!/bin/sh\nsleep 1\n")
+    fake_git.chmod(0o755)
+    monkeypatch.setenv("PATH", str(fake_bin) + os.pathsep + os.environ.get("PATH", ""))
+    monkeypatch.setattr(diff, "GIT_TIMEOUT_SECONDS", 0.2)
+
+    start = time.monotonic()
+    result = run_async(
+        diff._run_git(["diff"], str(tmp_path), max_bytes=1_000_000),
+    )
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 3.0, f"genuine timeout took {elapsed:.2f}s -- looks like a hang"
+    assert result.timed_out is True
+    assert result.truncated is False
+
+
+def test_oversized_file_over_pipe_buffer_keeps_bounded_patch_not_null(
+    tmp_path, run_async, monkeypatch,
+):
+    """The part the deadlock fix alone would miss: once truncation no
+    longer masquerades as a timeout, `_diff_one_file` must actually return
+    the bounded patch with `truncated: true` for a file whose diff exceeds
+    a single 64 KB pipe buffer — not silently fall back to `patch: None`.
+    A ~13 KB diff (as in the pre-existing oversized-file test) never
+    triggers backpressure at all, which is why it passed even with the bug
+    present.
+    """
+    monkeypatch.setattr(diff, "MAX_DIFF_BYTES_PER_FILE", 5_000)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo)
+    (repo / "big.txt").write_text("baseline\n")
+    _commit_all(repo)
+    # A single ~800 KB line, comfortably larger than any pipe buffer, so
+    # git is still writing (and therefore blocked on the unread pipe once
+    # we stop reading at the 5000-byte cap) well before it would ever
+    # finish on its own.
+    (repo / "big.txt").write_text("x" * 800_000 + "\n")
+
+    start = time.monotonic()
+    result = run_async(diff.collect_diff(str(repo)))
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 2.0, (
+        f"oversized-file diff took {elapsed:.2f}s -- looks like the "
+        f"truncation deadlock is back"
+    )
+    entry = result["files"][0]
+    assert entry["path"] == "big.txt"
+    assert entry["truncated"] is True
+    assert entry["patch"] is not None, (
+        "oversized file entry has a null patch -- truncation is being "
+        "reported/treated as a timeout or error again, so _diff_one_file "
+        "is discarding the bounded read instead of returning it"
+    )
+    assert len(entry["patch"].encode("utf-8")) <= 5_000
+
+
 # ===== process-level failure modes =========================================
 
 def test_git_not_installed_returns_that_reason(tmp_path, run_async, monkeypatch):
