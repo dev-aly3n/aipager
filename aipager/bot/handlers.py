@@ -368,7 +368,18 @@ class CommandHandlersMixin:
             return
 
         from aipager.miniapp.tunnel import detect_public_url
-        url = MINIAPP_PUBLIC_URL or detect_public_url()
+        if MINIAPP_PUBLIC_URL:
+            url = MINIAPP_PUBLIC_URL
+        else:
+            # detect_public_url() shells out to `tailscale status --json`
+            # synchronously (up to _TAILSCALE_TIMEOUT_SECONDS). This is an
+            # async handler on the daemon's single shared event loop, so
+            # a slow/hung tailscale binary must never block every other
+            # scope's message handling, hook processing, and animation
+            # ticks — run it off-loop, same pattern as voice.py:101.
+            url = await asyncio.get_running_loop().run_in_executor(
+                None, detect_public_url,
+            )
         if not url or not url.startswith("https://"):
             await update.message.reply_text(
                 "No public URL is configured or auto-detectable yet.\n\n"
