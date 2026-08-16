@@ -377,6 +377,8 @@ def test_read_routes_still_reject_writes(server, run_async, path):
         client = await _client_for(server)
         try:
             for method in ("put", "post", "delete", "patch"):
+                if method == "post" and path == "/api/sessions":
+                    continue   # batch 5's create route — see test_miniapp_session_create_api
                 resp = await getattr(client, method)(path, headers=_hdr(ADMIN_ID))
                 assert resp.status == 405, (
                     f"{method.upper()} {path} returned {resp.status}, expected 405"

@@ -259,7 +259,13 @@ def test_new_routes_never_return_200_for_any_mutating_verb(mk_bot, run_async, pa
 
     status, _body = run_async(_run())
     assert status != 200
-    assert status in (404, 405)
+    if method == "POST" and path == "/api/sessions":
+        # Batch 5 added POST /api/sessions as the session-create route, so
+        # the verb is now routed — but unauthenticated it must still be
+        # refused, which is the property this test actually guards.
+        assert status == 401
+    else:
+        assert status in (404, 405)
 
 
 def test_index_still_returns_html_no_secret_with_stage2_session_present(mk_bot, run_async):

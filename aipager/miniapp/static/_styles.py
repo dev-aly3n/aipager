@@ -234,6 +234,63 @@ CSS = """\
   }
   .sect-note { margin-top: 10px; font-size: 0.9rem; color: var(--tg-theme-hint-color, #888888); }
 
+  /* New-session form. Name and model are visible; everything else is
+     behind Advanced so the common case is two fields, not a wall. */
+  .field-label { display: block; font-weight: 600; margin: 16px 0 6px; }
+  .field-input {
+    width: 100%;
+    padding: 10px 12px;
+    font: inherit;
+    color: var(--tg-theme-text-color, #000000);
+    background: var(--tg-theme-secondary-bg-color, rgba(127, 127, 127, 0.08));
+    border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+    border-radius: 8px;
+  }
+  .field-error { margin-top: 6px; font-size: 0.85rem; color: #dc2626; }
+  .optrow { display: flex; flex-wrap: wrap; gap: 6px; }
+  .optrow .opt {
+    padding: 8px 12px;
+    font: inherit;
+    font-size: 0.9rem;
+    color: var(--tg-theme-text-color, #000000);
+    background: transparent;
+    border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+    border-radius: 999px;
+    cursor: pointer;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .optrow .opt.is-active {
+    border-color: var(--tg-theme-link-color, #2481cc);
+    background: var(--tg-theme-link-color, #2481cc);
+    color: #ffffff;
+  }
+  .optrow .opt[disabled] { opacity: 0.45; cursor: default; }
+  /* Launching a process should never be a surprise — say what will
+     happen, in words, directly above the button that does it. */
+  .new-summary {
+    margin: 20px 0 10px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--tg-theme-secondary-bg-color, rgba(127, 127, 127, 0.08));
+    font-size: 0.9rem;
+    line-height: 1.45;
+  }
+  .primary {
+    width: 100%;
+    padding: 12px;
+    font: inherit;
+    font-weight: 700;
+    color: #ffffff;
+    background: var(--tg-theme-button-color, #2481cc);
+    border: 0;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .primary[disabled] { opacity: 0.5; cursor: default; }
+
   .empty, .placeholder { margin-top: 18px; line-height: 1.5; }
   .empty p, .placeholder p { margin: 0 0 6px; }
   .row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; gap: 8px; }

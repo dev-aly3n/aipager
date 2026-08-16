@@ -58,6 +58,32 @@ HTML_BODY = """\
   </div>
 </section>
 
+<section id="view-new" hidden>
+  <h2 class="sect-title">New session</h2>
+  <label class="field-label" for="new-name">Name</label>
+  <input id="new-name" class="field-input" type="text" autocomplete="off"
+         placeholder="frontend" maxlength="64">
+  <div id="new-name-error" class="field-error" hidden></div>
+
+  <label class="field-label" for="new-model">Model</label>
+  <div id="new-model" class="optrow"></div>
+
+  <button type="button" class="sect-toggle" id="new-advanced-toggle">▸ Advanced</button>
+  <div id="new-advanced" hidden>
+    <label class="field-label" for="new-cwd">Working directory</label>
+    <div id="new-cwd" class="optrow"></div>
+    <label class="field-label">Permission mode</label>
+    <div id="new-mode" class="optrow"></div>
+    <div id="new-mode-note" class="muted" hidden>
+      Auto mode requires admin.
+    </div>
+    <div id="new-prefs"></div>
+  </div>
+
+  <div id="new-summary" class="new-summary"></div>
+  <button type="button" class="primary" id="new-create">Create session</button>
+</section>
+
 <section id="view-settings" hidden>
   <p class="muted" id="settings-intro">These apply to every session in this chat.</p>
   <div id="settings-groups"></div>

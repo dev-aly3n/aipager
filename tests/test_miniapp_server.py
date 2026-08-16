@@ -669,6 +669,10 @@ def test_new_routes_reject_post_put_delete_patch(scoped_server, run_async, path)
         client = await _client_for(scoped_server)
         try:
             for method in ("post", "put", "delete", "patch"):
+                if method == "post" and path == "/api/sessions":
+                    # Batch 5 added POST /api/sessions as the session-create
+                    # route. Every other verb/path combination stays refused.
+                    continue
                 resp = await getattr(client, method)(path)
                 assert resp.status in (404, 405), f"{method.upper()} {path} -> {resp.status}"
         finally:

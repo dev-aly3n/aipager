@@ -130,6 +130,71 @@ class SessionOpsMixin:
                 body = f"{marker}\n{text}"
         return await inject.send_text_and_enter(sess.name, body)
 
+    async def create_session(
+        self, label: str, *, scope_chat_id, skip_perms: bool = False,
+        cwd: str | None = None, driver_user_id: int | None = None,
+    ) -> tuple[str, str]:
+        """Launch a session and register it. Returns ``(session_name, "")``
+        or ``("", error)``.
+
+        The single seam both entry points go through: chat's ``/new`` and
+        the Mini App's create route. Everything that makes a launched
+        process *a tracked aipager session* — the disambiguated name, the
+        registry entry, the scope stamping, the GONE/UNKNOWN recovery,
+        the bot-name and command refresh — lives here once, so the two
+        surfaces cannot drift into registering sessions differently.
+
+        Deliberately NOT included: the caller's own authorization, the
+        name-conflict prompt, and the reply it sends. Those are
+        surface-specific (chat asks Resume/Replace/Cancel with buttons;
+        the Mini App answers inline before the request is even sent), and
+        folding them in here would force one surface to fake the other's
+        interaction model.
+        """
+        import asyncio
+
+        from aipager.scope import disambiguated_name
+        from aipager.state import Status
+
+        if scope_chat_id is not None:
+            scope_kind = "group" if scope_chat_id < 0 else "dm"
+            session_name = disambiguated_name(label, scope_chat_id, scope_kind)
+        else:
+            scope_kind = "dm"
+            session_name = f"claude-{label}"
+        short_name = session_name.removeprefix("claude-")
+
+        sys_extra = self._session_system_prompt(scope_chat_id, label)
+        ok, err = await inject.launch_session(
+            short_name, skip_perms=skip_perms, cwd=cwd or None,
+            system_prompt_extra=sys_extra,
+        )
+        if not ok:
+            return "", err
+
+        sess = self.registry.get_or_create(session_name)
+        sess.label = label
+        sess.skip_perms = skip_perms
+        if cwd:
+            # The hook receiver stamps cwd on the first statusLine event,
+            # but the operator picked this one explicitly — record it now
+            # so the session page and the directory picker show the truth
+            # before the first hook arrives.
+            sess.cwd = cwd
+        if scope_chat_id is not None:
+            sess.scope_chat_id = scope_chat_id
+            sess.scope_kind = scope_kind
+        if sess.status in (Status.GONE, Status.UNKNOWN):
+            self.registry.transition(session_name, Status.IDLE)
+        if driver_user_id is not None:
+            sess.created_by_user_id = sess.created_by_user_id or driver_user_id
+            sess.last_driver_user_id = driver_user_id
+        self.registry.last_active_session = session_name
+        self.registry.mark_dirty()
+        asyncio.create_task(self._maybe_update_bot_name(session_name))
+        asyncio.create_task(self._update_bot_commands())
+        return session_name, ""
+
     def _session_system_prompt(self, scope_chat_id, label: str) -> str | None:
         """Write the session folder + SESSION.md and return its body for
         ``--append-system-prompt``. None for legacy/grandfathered sessions

@@ -235,9 +235,7 @@ APP_JS = r"""
     label.textContent = "New session";
     card.appendChild(plus);
     card.appendChild(label);
-    card.addEventListener("click", function () {
-      showNotice("Creating sessions from here is coming next — use /new in chat for now.");
-    });
+    card.addEventListener("click", openNewSession);
     return card;
   }
 
@@ -776,6 +774,7 @@ APP_JS = r"""
   function showGrid() {
     currentView = { type: "grid" };
     document.getElementById("view-detail").hidden = true;
+    document.getElementById("view-new").hidden = true;
     document.getElementById("view-grid").hidden = mainTab !== "sessions";
     document.getElementById("view-settings").hidden = mainTab !== "settings";
     if (tg && tg.BackButton) { tg.BackButton.hide(); }
@@ -893,6 +892,194 @@ APP_JS = r"""
       .catch(handleFetchError);
   }
 
+
+  // ---- new session ----------------------------------------------------
+
+  var newOptions = null;      // /api/session-options payload
+  // prefs: field -> chosen value, only for fields the operator diverged on.
+  var newState = { model: "", cwd: "", skip_perms: false, prefs: {} };
+
+  function optButton(text, active, disabled, onClick) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "opt" + (active ? " is-active" : "");
+    b.textContent = text;
+    if (disabled) { b.disabled = true; } else { b.addEventListener("click", onClick); }
+    return b;
+  }
+
+  function renderNewForm() {
+    var models = document.getElementById("new-model");
+    models.innerHTML = "";
+    // "" = leave the session on Claude Code's own default.
+    var modelChoices = [""].concat((newOptions && newOptions.models) || []);
+    modelChoices.forEach(function (m) {
+      models.appendChild(optButton(m || "default", newState.model === m, false, function () {
+        newState.model = m;
+        renderNewForm();
+      }));
+    });
+
+    // Directories come from the server's allow-list — the same list
+    // validate_cwd checks against, so the picker can never offer a path
+    // the server would refuse.
+    var dirs = document.getElementById("new-cwd");
+    dirs.innerHTML = "";
+    var choices = [""].concat((newOptions && newOptions.directories) || []);
+    choices.forEach(function (d) {
+      var label = d ? d.split("/").filter(Boolean).pop() : "default";
+      dirs.appendChild(optButton(label, newState.cwd === d, false, function () {
+        newState.cwd = d;
+        renderNewForm();
+      }));
+    });
+
+    var canAuto = !!(newOptions && newOptions.can_use_auto);
+    var modes = document.getElementById("new-mode");
+    modes.innerHTML = "";
+    modes.appendChild(optButton("Ask", !newState.skip_perms, false, function () {
+      newState.skip_perms = false;
+      renderNewForm();
+    }));
+    modes.appendChild(optButton("Auto", newState.skip_perms, !canAuto, function () {
+      newState.skip_perms = true;
+      renderNewForm();
+    }));
+    document.getElementById("new-mode-note").hidden = canAuto;
+
+
+    // Reply-style settings, each tagged with what the scope default is —
+    // the same mechanic batch 4 uses on the session page, so creating a
+    // session is also the moment you can diverge from the defaults.
+    var prefsEl = document.getElementById("new-prefs");
+    prefsEl.innerHTML = "";
+    var schema = (newOptions && newOptions.schema) || [];
+    var scopeDefaults = (newOptions && newOptions.scope_defaults) || {};
+    schema.forEach(function (group) {
+      var title = document.createElement("div");
+      title.className = "field-label";
+      title.textContent = group.title;
+      prefsEl.appendChild(title);
+      var row = document.createElement("div");
+      row.className = "optrow";
+      group.options.forEach(function (opt) {
+        var chosen = Object.prototype.hasOwnProperty.call(newState.prefs, group.field)
+          ? newState.prefs[group.field]
+          : scopeDefaults[group.field];
+        var isDefault = opt.value === scopeDefaults[group.field];
+        var text = opt.label + (isDefault ? " · default" : "");
+        row.appendChild(optButton(text, opt.value === chosen, false, function () {
+          if (opt.value === scopeDefaults[group.field]) {
+            delete newState.prefs[group.field];   // back to inheriting
+          } else {
+            newState.prefs[group.field] = opt.value;
+          }
+          renderNewForm();
+        }));
+      });
+      prefsEl.appendChild(row);
+    });
+
+    var name = document.getElementById("new-name").value.trim();
+    var where = newState.cwd
+      ? newState.cwd
+      : "the daemon's own directory";
+    document.getElementById("new-summary").textContent =
+      "Starts Claude" + (name ? " as " + name : "") + " in " + where +
+      ", in " + (newState.skip_perms ? "Auto" : "Ask") + " mode.";
+
+    var create = document.getElementById("new-create");
+    create.disabled = !name || !(newOptions && newOptions.can_create);
+  }
+
+  function openNewSession() {
+    currentView = { type: "new" };
+    document.getElementById("view-grid").hidden = true;
+    document.getElementById("view-detail").hidden = true;
+    document.getElementById("view-settings").hidden = true;
+    document.getElementById("view-new").hidden = false;
+    document.getElementById("new-name-error").hidden = true;
+    if (tg && tg.BackButton) { tg.BackButton.show(); }
+    renderNewForm();
+    apiFetch("/api/session-options")
+      .then(function (data) { newOptions = data; renderNewForm(); })
+      .catch(handleFetchError);
+  }
+
+  function submitNewSession() {
+    var nameEl = document.getElementById("new-name");
+    var errEl = document.getElementById("new-name-error");
+    var create = document.getElementById("new-create");
+    var name = nameEl.value.trim();
+    if (!name) { return; }
+    errEl.hidden = true;
+    create.disabled = true;
+
+    fetch("/api/sessions", {
+      method: "POST",
+      headers: {
+        "X-Telegram-Init-Data": initData,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        name: name,
+        model: newState.model,
+        cwd: newState.cwd,
+        skip_perms: newState.skip_perms
+      })
+    }).then(function (res) {
+      return res.json().then(function (data) { return { status: res.status, data: data }; });
+    }).then(function (r) {
+      if (r.status === 200) {
+        nameEl.value = "";
+        if (tg && tg.HapticFeedback) {
+          try { tg.HapticFeedback.notificationOccurred("success"); } catch (e) { /* old client */ }
+        }
+        // Chosen reply-style settings become per-session overrides through
+        // batch 4's existing route — no second write path for the same data.
+        var label = r.data.label;
+        // Await the overrides before navigating. The session page loads its
+        // settings once, with no re-poll, so racing these against that GET
+        // would land the operator on a page showing scope defaults for
+        // settings they just chose — a silent lie with no self-correction.
+        var writes = Object.keys(newState.prefs).map(function (field) {
+          return fetch("/api/sessions/" + encodeURIComponent(label) +
+                "/preferences/" + encodeURIComponent(field), {
+            method: "PUT",
+            headers: {
+              "X-Telegram-Init-Data": initData,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ value: newState.prefs[field] })
+          }).catch(function () { /* session exists; page will show truth */ });
+        });
+        newState.prefs = {};
+        Promise.all(writes).then(function () { openDetail(label); });
+        return;
+      }
+      // A name collision or a rejected directory is answered inline, next
+      // to the field that caused it — not as a generic failure toast.
+      errEl.textContent = (r.data && r.data.detail) ||
+        (r.status === 403 ? "You're not allowed to create sessions here."
+                          : "Couldn't create that session.");
+      errEl.hidden = false;
+      create.disabled = false;
+    }).catch(function () {
+      errEl.textContent = "Couldn't reach the server — the session was not created.";
+      errEl.hidden = false;
+      create.disabled = false;
+    });
+  }
+
+  document.getElementById("new-name").addEventListener("input", renderNewForm);
+  document.getElementById("new-create").addEventListener("click", submitNewSession);
+  document.getElementById("new-advanced-toggle").addEventListener("click", function () {
+    var adv = document.getElementById("new-advanced");
+    adv.hidden = !adv.hidden;
+    document.getElementById("new-advanced-toggle").textContent =
+      (adv.hidden ? "▸ " : "▾ ") + "Advanced";
+  });
+
   // ---- top-level tabs -------------------------------------------------
 
   var mainTab = "sessions";
@@ -903,6 +1090,7 @@ APP_JS = r"""
     // the back button is for going back, the tab bar is for switching.
     currentView = { type: "grid" };
     document.getElementById("view-detail").hidden = true;
+    document.getElementById("view-new").hidden = true;
     if (tg && tg.BackButton) { tg.BackButton.hide(); }
     document.getElementById("view-grid").hidden = name !== "sessions";
     document.getElementById("view-settings").hidden = name !== "settings";

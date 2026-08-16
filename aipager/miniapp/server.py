@@ -66,6 +66,12 @@ class MiniAppServer:
         app.router.add_get("/", self._handle_index)
         app.router.add_get("/api/status", self._handle_status)
         app.router.add_get("/api/sessions", self._handle_sessions)
+        # The only route in aipager that can spawn a process. Gated
+        # like chat's /new: can_prompt to create at all, plus admin
+        # for Auto mode, and the working directory is checked against
+        # an allow-list server-side (miniapp/launch.py).
+        app.router.add_post("/api/sessions", self._handle_session_create)
+        app.router.add_get("/api/session-options", self._handle_session_options)
         app.router.add_get("/api/sessions/{label}", self._handle_session_detail)
         app.router.add_get("/api/sessions/{label}/diff", self._handle_session_diff)
         app.router.add_get("/api/preferences", self._handle_preferences_get)
@@ -206,6 +212,156 @@ class MiniAppServer:
         if isinstance(result, web.Response):
             return result
         return web.json_response(self._build_sessions_payload(result))
+
+    async def _handle_session_create(self, request):
+        from aiohttp import web
+
+        from aipager.miniapp.launch import (
+            allowed_roots,
+            validate_cwd,
+            validate_session_name,
+        )
+        from aipager.state import Status
+
+        result = await self._authenticate_user(request, "POST /api/sessions")
+        if isinstance(result, web.Response):
+            return result
+        scope_chat_id, user_id = result
+
+        # Creating a session is the same capability as driving one — the
+        # same gate batch 4 established for session-scoped writes. A
+        # READ_ONLY member cannot prompt, so must not be able to spawn.
+        if not self.bot._can_prompt_user(user_id, scope_chat_id):
+            log.info("miniapp: session create rejected (403) — caller cannot prompt")
+            return web.json_response({"error": "forbidden"}, status=403)
+        if not self._allow_write(user_id):
+            log.info("miniapp: session create rejected (429) — rate limited")
+            return web.json_response({"error": "too_many_requests"}, status=429)
+
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"error": "bad_request"}, status=400)
+        if not isinstance(body, dict):
+            return web.json_response({"error": "bad_request"}, status=400)
+
+        name, err = validate_session_name(body.get("name"))
+        if err:
+            return web.json_response({"error": "bad_request", "detail": err}, status=400)
+
+        skip_perms = body.get("skip_perms") is True
+        # Auto mode is admin-gated in chat (`/new !name`, handlers.py).
+        # Without the same gate here, the Mini App would be a way to get
+        # --dangerously-skip-permissions that chat deliberately denies.
+        if skip_perms and not self.bot._is_admin_user(user_id, scope_chat_id):
+            return web.json_response(
+                {"error": "forbidden", "detail": "Auto mode requires admin."},
+                status=403,
+            )
+
+        cwd, err = validate_cwd(
+            body.get("cwd"), allowed_roots(self.registry, scope_chat_id),
+        )
+        if err:
+            return web.json_response({"error": "bad_request", "detail": err}, status=400)
+
+        # Answer a name collision before spawning anything. Chat offers
+        # Resume/Replace/Cancel buttons here; the Mini App says so inline
+        # so the operator renames instead of getting a failed POST.
+        existing = self.registry.find_by_label(
+            name, scope_chat_id=scope_chat_id, include_gone=True,
+        )
+        if existing is not None and (
+            existing.status != Status.GONE or existing.claude_session_id
+        ):
+            return web.json_response({
+                "error": "conflict",
+                "detail": f"A session named {name} already exists in this chat.",
+            }, status=409)
+
+        session_name, err = await self.bot.create_session(
+            name, scope_chat_id=scope_chat_id, skip_perms=skip_perms,
+            cwd=cwd or None, driver_user_id=user_id,
+        )
+        if not session_name:
+            log.info("miniapp: session create failed — launch refused")
+            return web.json_response({"error": "launch_failed", "detail": err}, status=400)
+
+        # Model selection rides Claude Code's own `/model <name>` slash
+        # command, queued to drain on first IDLE — `launch_session` has no
+        # model flag, and this is the same mechanism the chat keyboard's
+        # Model submenu uses (config.MODEL_CHOICES).
+        #
+        # The queued text is MODEL_CHOICES' own `send` string, never one
+        # rebuilt from the label: `keyboard.json` lets an operator map a
+        # label to an unrelated command (e.g. "Claude 4.5 Opus" ->
+        # "/model claude-opus-4-5"), and lowercasing the label would type
+        # a nonsense command into their session while chat sent the right
+        # one. The label is only ever the lookup key.
+        model = body.get("model")
+        if isinstance(model, str) and model:
+            from aipager.config import MODEL_CHOICES
+            valid = {label.lower(): send for label, send in MODEL_CHOICES}
+            command = valid.get(model.strip().lower())
+            if command:
+                sess = self.registry.get_or_create(session_name)
+                if sess.queue_prompt(command, 0):
+                    self.registry.mark_dirty()
+
+        await self._mirror_session_created(scope_chat_id, name, skip_perms, cwd)
+        return web.json_response({"label": name, "session_name": session_name})
+
+    async def _mirror_session_created(self, scope_chat_id, label, skip_perms, cwd) -> None:
+        """Announce the new session in chat. Best-effort — the process is
+        already running by now, so a failed notification must not turn a
+        successful launch into an error the operator might retry."""
+        mode = "🤖 Auto" if skip_perms else "💬 Ask"
+        where = f"\n📁 {cwd}" if cwd else ""
+        try:
+            await self.bot._app.bot.send_message(
+                chat_id=scope_chat_id,
+                text=f"🚀 {label} created from the Mini App · {mode}{where}",
+            )
+        except Exception:
+            log.debug("miniapp: session-created mirror failed", exc_info=True)
+
+    async def _handle_session_options(self, request):
+        """Directory choices + the scope's defaults, for the create form.
+
+        The picker is seeded server-side from directories this scope has
+        actually used: the client never proposes a path the server has not
+        already sanctioned, and the same list is what `validate_cwd`
+        checks against.
+        """
+        from aiohttp import web
+
+        from aipager.bot.settings_menu import settings_schema
+        from aipager.miniapp.launch import allowed_roots
+        from aipager.preferences import get_preferences
+
+        result = await self._authenticate_user(request, "/api/session-options")
+        if isinstance(result, web.Response):
+            return result
+        scope_chat_id, user_id = result
+
+        prefs = get_preferences(scope_chat_id)
+        from aipager.config import MODEL_CHOICES
+
+        return web.json_response({
+            "directories": allowed_roots(self.registry, scope_chat_id),
+            # One source of truth for model names — the same list the chat
+            # keyboard offers, so the two surfaces cannot drift.
+            "models": [label for label, _send in MODEL_CHOICES],
+            "schema": settings_schema(),
+            "scope_defaults": {
+                "layout": prefs.layout,
+                "simple_formatting": prefs.simple_formatting,
+                "answer_length": prefs.answer_length,
+                "language_level": prefs.language_level,
+            },
+            "can_create": bool(self.bot._can_prompt_user(user_id, scope_chat_id)),
+            "can_use_auto": bool(self.bot._is_admin_user(user_id, scope_chat_id)),
+        })
 
     async def _handle_preferences_get(self, request):
         from aiohttp import web

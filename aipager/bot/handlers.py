@@ -677,9 +677,7 @@ class CommandHandlersMixin:
         # Resolve the calling scope from the message's chat. New sessions
         # get a disambiguated internal name (claude-<label>__<suffix>) so
         # two scopes can reuse the same label; the user only sees <label>.
-        from aipager.scope import disambiguated_name
         chat_id = calling_chat_id(update)
-        scope_kind = "group" if (chat_id is not None and chat_id < 0) else "dm"
         existing = self.registry.find_by_label(name, chat_id, include_gone=True)
         if existing is not None and (
             existing.status != Status.GONE
@@ -701,35 +699,18 @@ class CommandHandlersMixin:
             parse_mode="HTML",
         )
 
-        if chat_id is not None:
-            session_name = disambiguated_name(name, chat_id, scope_kind)
-        else:
-            session_name = f"claude-{name}"
-        short_name = session_name.removeprefix("claude-")
-
-        sys_extra = self._session_system_prompt(chat_id, name)
-        ok, err = await inject.launch_session(
-            short_name, skip_perms=skip_perms, system_prompt_extra=sys_extra)
-        if not ok:
+        # The shared seam — the Mini App's create route calls the same
+        # method, so both surfaces register a session identically.
+        session_name, err = await self.create_session(
+            name, scope_chat_id=chat_id, skip_perms=skip_perms,
+        )
+        if not session_name:
             await status_msg.edit_text(f"❌ {html_mod.escape(err)}")
             return
 
-        # Switch active session to the new one
         sess = self.registry.get_or_create(session_name)
-        sess.label = name
-        sess.skip_perms = skip_perms
-        if chat_id is not None:
-            sess.scope_chat_id = chat_id
-            sess.scope_kind = scope_kind
-        # Recover from GONE/UNKNOWN — we just verified the socket is alive
-        if sess.status in (Status.GONE, Status.UNKNOWN):
-            self.registry.transition(session_name, Status.IDLE)
         # Team-mode attribution: record the creator (and current driver).
         self._mark_driver(sess, update)
-        self.registry.last_active_session = session_name
-        self.registry.mark_dirty()
-        asyncio.create_task(self._maybe_update_bot_name(session_name))
-        asyncio.create_task(self._update_bot_commands())
 
         # Queue the initial prompt if given — it'll drain on first IDLE
         if prompt:

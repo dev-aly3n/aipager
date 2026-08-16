@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Start a session from the Mini App.** The dashed **New session** cell now
+  opens a form: a name and a model, with working directory, permission mode and
+  the reply-style settings tucked under **Advanced**. Picking a model applies it
+  to the new session, and any reply-style choice you make becomes that session's
+  own override, leaving the chat-wide defaults alone. It tells you in words what
+  is about to happen — which directory, which mode — before you tap Create,
+  because launching a process shouldn't be a surprise. A name already in use is
+  answered inline so you can rename instead of getting a failed request. The
+  directory picker only ever offers directories this chat already works in, and
+  the server independently re-checks the choice against that same list, so a
+  crafted request cannot start Claude somewhere else — symlinks and `..` are
+  resolved before the check, and a directory that merely *starts with* an
+  allowed path is refused. Auto mode (`--dangerously-skip-permissions`) needs
+  admin here exactly as `/new !name` does in chat, and a read-only member cannot
+  create sessions at all. Both surfaces now launch through one shared code path,
+  so a session started from the Mini App is registered identically to one
+  started with `/new`.
 - **Per-session settings overrides.** Any session can now override
   `/settings`'s reply-style options (message layout, simple formatting,
   answer length, language level) for itself, and falls back to the scope's
