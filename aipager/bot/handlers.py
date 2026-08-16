@@ -26,6 +26,7 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Update,
+    WebAppInfo,
 )
 from telegram.ext import (
     ContextTypes,
@@ -336,6 +337,87 @@ class CommandHandlersMixin:
         chat_id = calling_chat_id(update)
         text, kb = render_settings_root(chat_id or 0)
         await update.message.reply_text(text, parse_mode="HTML", reply_markup=kb)
+
+    async def _handle_app_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """Handle /app — send the Mini App launcher button.
+
+        Gated like /status (``allow_read_only=True`` — viewing the
+        dashboard is never restricted). Mini Apps are a private-chat-only
+        Bot API feature (both button types), so groups get a plain-text
+        explanation instead, never a button (see design.md / spec.md).
+        """
+        if not await self._authorize(update, allow_read_only=True):
+            return
+
+        chat = update.effective_chat
+        if chat is None or chat.id <= 0:
+            await update.message.reply_text(
+                "📱 The Mini App only works in a private chat — DM the bot "
+                "and send /app there."
+            )
+            return
+
+        from aipager.config import MINIAPP_ENABLED, MINIAPP_PORT, MINIAPP_PUBLIC_URL
+        if not MINIAPP_ENABLED:
+            await update.message.reply_text(
+                "The Mini App server isn't enabled on this machine.\n"
+                "Ask the operator to run <code>aipager miniapp enable</code> "
+                "and restart the daemon.",
+                parse_mode="HTML",
+            )
+            return
+
+        from aipager.miniapp.tunnel import detect_public_url
+        if MINIAPP_PUBLIC_URL:
+            url = MINIAPP_PUBLIC_URL
+        else:
+            # detect_public_url() shells out to `tailscale status --json`
+            # synchronously (up to _TAILSCALE_TIMEOUT_SECONDS). This is an
+            # async handler on the daemon's single shared event loop, so
+            # a slow/hung tailscale binary must never block every other
+            # scope's message handling, hook processing, and animation
+            # ticks — run it off-loop, same pattern as voice.py:101.
+            url = await asyncio.get_running_loop().run_in_executor(
+                None, detect_public_url,
+            )
+        if not url or not url.startswith("https://"):
+            await update.message.reply_text(
+                "No public URL is configured or auto-detectable yet.\n\n"
+                "Set up Tailscale Funnel on the machine running aipager:\n"
+                "<code>curl -fsSL https://tailscale.com/install.sh | sh\n"
+                "sudo tailscale up\n"
+                f"sudo tailscale funnel {MINIAPP_PORT} on</code>\n\n"
+                "…or set a manual URL: "
+                "<code>aipager miniapp enable --url https://your-tunnel</code>",
+                parse_mode="HTML",
+            )
+            return
+
+        # Personal mode only (scope/team mode already gated above via
+        # _authorize's own membership checks): from here on we're about
+        # to disclose the tunnel URL itself via the button below, so
+        # require the caller to actually be the operator — same guard,
+        # same reasoning as MiniAppServer._resolve_scope_chat_id (see
+        # AuthMixin._is_personal_mode_operator).
+        if self.scopes is None and self.team is None:
+            tg_user = update.effective_user
+            if not self._is_personal_mode_operator(
+                tg_user.id if tg_user is not None else None,
+            ):
+                await update.message.reply_text(
+                    "🚫 This bot isn't configured to talk to you. "
+                    "Ask the operator to add your Telegram user ID "
+                    f"({tg_user.id if tg_user is not None else '?'}) "
+                    "via `aipager config`.",
+                )
+                return
+
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("📱 Open Mini App", web_app=WebAppInfo(url=url)),
+        ]])
+        await update.message.reply_text(
+            "Tap to open the aipager dashboard:", reply_markup=keyboard,
+        )
 
     async def _handle_status(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /status command — rich per-session dashboard."""

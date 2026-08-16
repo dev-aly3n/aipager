@@ -220,6 +220,38 @@ class AuthMixin:
             return None
         return self.team.get(tg_user.id)
 
+    def _is_personal_mode_operator(self, user_id: int | None) -> bool:
+        """True iff ``user_id`` is the operator's own Telegram user id.
+
+        Only meaningful in personal mode (``self.scopes is None and
+        self.team is None``) — callers gate on that themselves; scope
+        and team mode have their own membership checks and never call
+        this.
+
+        A DM's ``chat_id`` *is* the peer's Telegram user id, so this is
+        exactly ``user_id == int(CHAT_ID)``. Fails closed (``False``)
+        if ``CHAT_ID`` isn't a valid positive int — a group ``CHAT_ID``
+        has no user id to match, and Mini Apps are DM-only anyway, so
+        there is no case where "unresolvable" should mean "allow".
+
+        Used by the Mini App's ``/app`` launcher and
+        ``MiniAppServer._resolve_scope_chat_id`` — unlike a DM's
+        ``/status`` (Telegram-level friction, no data leaves Telegram),
+        a Mini App credential/URL is usable over the raw internet via
+        the tunnel once obtained, so those two call sites need to know
+        the caller is actually the operator, not just "any Telegram
+        user" (personal mode's usual, deliberately permissive, trust
+        model everywhere else).
+        """
+        from aipager.config import CHAT_ID as _current_chat_id
+        if not isinstance(user_id, int):
+            return False
+        try:
+            operator_id = int(_current_chat_id)
+        except (TypeError, ValueError):
+            return False
+        return operator_id > 0 and user_id == operator_id
+
     async def _authorize(
         self, update: Update, *, allow_read_only: bool = False,
     ) -> bool:

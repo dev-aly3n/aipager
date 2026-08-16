@@ -149,6 +149,22 @@ OBSERVER_BOTS: list[tuple[str, str]] = _parse_observer_bots(
     os.environ.get("OBSERVER_BOTS", "")
 )
 
+# ---- Mini App server (stage 1 — plumbing + auth) -----------------------
+#
+# Opt-in loopback HTTP server, embedded in the daemon, serving one
+# read-only Telegram Mini App page (daemon status + session list). Off
+# by default: no listener, no tunnel, until explicitly enabled. Like
+# every other config.py-backed setting, toggling requires a daemon
+# restart — `aipager miniapp enable/disable` only edits this file.
+MINIAPP_ENABLED: bool = os.environ.get(
+    "MINIAPP_ENABLED", "0",
+) not in ("0", "false", "no")
+MINIAPP_PORT: int = int(os.environ.get("MINIAPP_PORT", "8765"))
+# Manual override for the Mini App's public URL (e.g. a Cloudflare
+# tunnel). Empty means "auto-detect via `tailscale status --json`" —
+# see aipager.miniapp.tunnel.detect_public_url().
+MINIAPP_PUBLIC_URL: str = os.environ.get("MINIAPP_PUBLIC_URL", "")
+
 # Unix datagram socket for hook → daemon communication
 SOCKET_PATH: str = "/tmp/aipager.sock"
 
