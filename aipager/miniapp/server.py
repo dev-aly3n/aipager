@@ -32,10 +32,11 @@ class MiniAppUnavailable(Exception):
 
 
 class MiniAppServer:
-    """``GET /`` (static shell) + ``GET /api/status`` (authenticated JSON).
+    """``GET /`` (static shell) + read-only authenticated JSON routes.
 
-    Stage 1 is strictly read-only — no other routes exist, and none of
-    them accept anything but GET.
+    Stage 1 shipped ``/api/status``; stage 2 adds ``/api/sessions``,
+    ``/api/sessions/{label}`` and ``/api/sessions/{label}/diff``. Every
+    route stays strictly GET-only — none of them accept anything else.
     """
 
     def __init__(self, bot: "TelegramBot", registry: "SessionRegistry", port: int):
@@ -56,6 +57,9 @@ class MiniAppServer:
         app = web.Application()
         app.router.add_get("/", self._handle_index)
         app.router.add_get("/api/status", self._handle_status)
+        app.router.add_get("/api/sessions", self._handle_sessions)
+        app.router.add_get("/api/sessions/{label}", self._handle_session_detail)
+        app.router.add_get("/api/sessions/{label}/diff", self._handle_session_diff)
         return app
 
     async def start(self) -> None:
@@ -90,7 +94,21 @@ class MiniAppServer:
         from aipager.miniapp.static import INDEX_HTML
         return web.Response(text=INDEX_HTML, content_type="text/html")
 
-    async def _handle_status(self, request):
+    async def _authenticate(self, request, route_name: str):
+        """Shared auth gate for every JSON route: header read → initData
+        verify → scope resolve. Returns the caller's ``scope_chat_id``
+        (an ``int``) on success, or a ready-to-return ``web.Response``
+        on failure — callers do ``result = await self._authenticate(...);
+        if isinstance(result, web.Response): return result``.
+
+        Not a new authorization system: still calls ``verify_init_data``
+        and ``_resolve_scope_chat_id`` unmodified, just from one place
+        instead of once per handler (design.md Decision 5). Every
+        rejection path returns the same fixed, generic body per error
+        class so a prober can't distinguish "bad signature" from
+        "unknown user" from the outside — the same rule stage 1 applied
+        to ``/api/status`` alone, now shared by every route.
+        """
         from aiohttp import web
 
         from aipager.config import BOT_TOKEN
@@ -102,29 +120,95 @@ class MiniAppServer:
         )
 
         # Check the header's presence and validity BEFORE touching the
-        # registry (design.md's non-negotiable). A fixed, generic body
-        # on every rejection path so a prober can't distinguish "bad
-        # signature" from "unknown user" from the outside.
+        # registry (design.md's non-negotiable).
         init_data = request.headers.get("X-Telegram-Init-Data", "")
         try:
             user = verify_init_data(init_data, BOT_TOKEN)
         except InitDataMissingError:
-            log.info("miniapp: /api/status rejected (401) — missing/malformed initData")
+            log.info("miniapp: %s rejected (401) — missing/malformed initData", route_name)
             return web.json_response({"error": "unauthorized"}, status=401)
         except InitDataSignatureError:
-            log.info("miniapp: /api/status rejected (401) — bad signature")
+            log.info("miniapp: %s rejected (401) — bad signature", route_name)
             return web.json_response({"error": "unauthorized"}, status=401)
         except InitDataStaleError:
-            log.info("miniapp: /api/status rejected (401) — stale auth_date")
+            log.info("miniapp: %s rejected (401) — stale auth_date", route_name)
             return web.json_response({"error": "unauthorized"}, status=401)
 
         user_id = user.get("id")
         scope_chat_id = self._resolve_scope_chat_id(user_id)
         if scope_chat_id is None:
-            log.info("miniapp: /api/status rejected (403) — user not a scope member")
+            log.info("miniapp: %s rejected (403) — user not a scope member", route_name)
             return web.json_response({"error": "forbidden"}, status=403)
 
-        return web.json_response(self._build_status_payload(scope_chat_id))
+        log.debug("miniapp: %s authorized (scope_chat_id=%s)", route_name, scope_chat_id)
+        return scope_chat_id
+
+    async def _handle_status(self, request):
+        from aiohttp import web
+
+        result = await self._authenticate(request, "/api/status")
+        if isinstance(result, web.Response):
+            return result
+        return web.json_response(self._build_status_payload(result))
+
+    async def _handle_sessions(self, request):
+        from aiohttp import web
+
+        result = await self._authenticate(request, "/api/sessions")
+        if isinstance(result, web.Response):
+            return result
+        return web.json_response(self._build_sessions_payload(result))
+
+    async def _handle_session_detail(self, request):
+        from aiohttp import web
+
+        from aipager.miniapp.sessions import session_detail
+
+        result = await self._authenticate(request, "/api/sessions/{label}")
+        if isinstance(result, web.Response):
+            return result
+        scope_chat_id = result
+
+        label = request.match_info["label"]
+        # include_gone=True: viewing a finished session's final
+        # timeline/diff is a legitimate, safe read (design.md Decision
+        # 5). Resolved only within the caller's own scope — a label
+        # belonging to a different scope must 404 identically to one
+        # that doesn't exist anywhere (the headline requirement this
+        # stage introduces).
+        sess = self.registry.find_by_label(
+            label, scope_chat_id=scope_chat_id, include_gone=True,
+        )
+        if sess is None:
+            log.info("miniapp: /api/sessions/{label} rejected (404) — not found in scope")
+            return web.json_response({"error": "not_found"}, status=404)
+
+        return web.json_response(session_detail(sess, time.monotonic()))
+
+    async def _handle_session_diff(self, request):
+        from aiohttp import web
+
+        from aipager.miniapp.diff import collect_diff
+
+        result = await self._authenticate(request, "/api/sessions/{label}/diff")
+        if isinstance(result, web.Response):
+            return result
+        scope_chat_id = result
+
+        label = request.match_info["label"]
+        sess = self.registry.find_by_label(
+            label, scope_chat_id=scope_chat_id, include_gone=True,
+        )
+        if sess is None:
+            log.info("miniapp: /api/sessions/{label}/diff rejected (404) — not found in scope")
+            return web.json_response({"error": "not_found"}, status=404)
+
+        # sess.cwd is the ONLY source of the path handed to git — it is
+        # stamped server-side from the SessionStart hook payload
+        # (dtach/hook_receiver.py:269-271) and never comes from this
+        # request. There is no code path from an HTTP parameter to a
+        # `cwd` argument passed to git (design.md Decision 2).
+        return web.json_response(await collect_diff(sess.cwd))
 
     def _resolve_scope_chat_id(self, user_id) -> int | None:
         """Authorization only — never re-derives the allow-list rules.
@@ -182,6 +266,37 @@ class MiniAppServer:
                 "cost_usd": round(sess.last_cost_usd or 0.0, 4),
                 "last_active_seconds_ago": last_active,
             })
+
+        bot_user = getattr(self.bot._app, "bot", None) if self.bot._app else None
+        bot_username = getattr(bot_user, "username", "") or ""
+        return {
+            "daemon": {
+                "version": __version__,
+                "bot_username": bot_username,
+                "uptime_seconds": round(now - self._started_at),
+            },
+            "sessions": sessions,
+        }
+
+    def _build_sessions_payload(self, scope_chat_id: int) -> dict:
+        """Grid payload for ``GET /api/sessions``. Deliberately never
+        invokes ``git`` — the polled endpoint stays fast regardless of
+        pending diffs (design.md Decision 5). Applies the same
+        ``hidden_from_status`` filter chat's ``/status`` uses
+        (``bot/handlers.py:454-460``) to GONE sessions — stage 1's
+        ``_build_status_payload`` never applied it; this closes that
+        gap without touching stage 1's builder.
+        """
+        from aipager import __version__
+        from aipager.miniapp.sessions import session_summary
+        from aipager.state import Status
+
+        now = time.monotonic()
+        sessions = [
+            session_summary(sess, now)
+            for sess in self.registry.all_sessions(scope_chat_id).values()
+            if not (sess.status == Status.GONE and sess.hidden_from_status)
+        ]
 
         bot_user = getattr(self.bot._app, "bot", None) if self.bot._app else None
         bot_username = getattr(bot_user, "username", "") or ""
