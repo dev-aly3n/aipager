@@ -467,11 +467,10 @@ APP_JS = r"""
     reset.hidden = !(canEdit && anyOverridden);
   }
 
-  function saveSessionPreference(field, value, btn) {
+  function saveSessionPreference(label, field, value) {
     if (!sessionSettingsData) { return; }
     var current = sessionSettingsData.values[field];
     if (current && current.overridden && current.override_value === value) { return; }
-    var label = sessionSettingsLabel;
     var previous = current;
     var seq = (sessionSaveSeq[field] || 0) + 1;
     sessionSaveSeq[field] = seq;
@@ -725,6 +724,25 @@ APP_JS = r"""
     document.getElementById("panel-timeline").hidden = true;
     diffLoadedForLabel = null;
     showView("detail", { label: label });
+
+    // Paint from the row the grid already has, so the page is never blank
+    // while the detail request is in flight. The poll overwrites this with
+    // the authoritative payload a moment later.
+    var known = lastSessionsByLabel[label];
+    document.getElementById("detail-label").textContent = label;
+    var st = document.getElementById("detail-status");
+    if (known) {
+      st.className = statusClass(known.status);
+      st.textContent = known.status;
+    } else {
+      st.className = "status";
+      st.textContent = "";
+    }
+    document.getElementById("detail-waiting").hidden = true;
+    skeleton(document.getElementById("detail-facts"), 3);
+    skeleton(document.getElementById("detail-preview"), 2);
+    skeleton(document.getElementById("session-settings-groups"), 4, "skel-row");
+
     loadSessionSettings(label);
     pollTick();
   }
@@ -815,6 +833,20 @@ APP_JS = r"""
       wrap.appendChild(list);
     }
     host.appendChild(wrap);
+  }
+
+
+  // A shaped placeholder while a fetch is in flight. An empty panel that
+  // fills in half a second later reads as broken — which is what the
+  // operator reported as "comes in with a delay".
+  function skeleton(host, rows, cls) {
+    host.innerHTML = "";
+    for (var i = 0; i < rows; i++) {
+      var d = document.createElement("div");
+      d.className = "skel " + (cls || "skel-line") +
+        (cls ? "" : [" w90", " w70", " w40"][i % 3]);
+      host.appendChild(d);
+    }
   }
 
   // ---- views ----------------------------------------------------------
@@ -936,6 +968,11 @@ APP_JS = r"""
   }
 
   function loadSettings() {
+    // Re-entering the tab shows the values already held while the refresh
+    // runs; only a first visit gets the skeleton.
+    if (settingsData) { renderSettings(); } else {
+      skeleton(document.getElementById("settings-groups"), 4, "skel-row");
+    }
     apiFetch("/api/preferences")
       .then(function (data) {
         settingsData = data;
@@ -1052,6 +1089,9 @@ APP_JS = r"""
   function openNewSession() {
     showView("new");
     document.getElementById("new-name-error").hidden = true;
+    if (!newOptions) {
+      skeleton(document.getElementById("new-model"), 1, "skel-row");
+    }
     renderNewForm();
     apiFetch("/api/session-options")
       .then(function (data) { newOptions = data; renderNewForm(); })

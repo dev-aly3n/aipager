@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Per-session settings can actually be changed.** Every tap on a session's own
+  settings was sending the session's name where the setting name belonged, so the
+  server rejected it and the option silently snapped back — indistinguishable
+  from the feature not existing.
+- **Selected options are readable on every theme.** Two earlier attempts still
+  painted the theme's accent behind inverted text, which on a light-blue accent
+  is unreadable. Selection no longer inverts anything: the text keeps the theme's
+  own colour and the accent appears only as a left bar, a faint tint and a check.
+- **Opening a session or switching tabs no longer shows a blank panel.** The
+  session page paints immediately from what the grid already knows and shows
+  shaped placeholders for the parts still loading; revisiting Settings shows the
+  values you already had while it refreshes.
 - **The Sessions / Settings tabs really do disappear on sub-pages now.** The
   previous attempt set the right flag but a stylesheet rule quietly overrode it,
   so nothing changed on screen. The same override was also stopping the waiting

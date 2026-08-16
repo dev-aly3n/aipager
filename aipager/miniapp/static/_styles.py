@@ -51,7 +51,7 @@ CSS = """\
   }
   .tabbar-btn.is-active {
     color: var(--tg-theme-text-color, #000000);
-    border-bottom-color: var(--tg-theme-link-color, #2481cc);
+    border-bottom-color: var(--tg-theme-button-color, #2481cc);
   }
   /* Waiting count rides the tab so the state is visible without reading
      the grid — it is the only status that costs the operator time. */
@@ -158,8 +158,10 @@ CSS = """\
   }
   .setopt.is-active {
     border-color: var(--tg-theme-button-color, #2481cc);
-    background: var(--tg-theme-button-color, #2481cc);
-    color: var(--tg-theme-button-text-color, #ffffff);
+    background: rgba(36, 129, 204, 0.12);
+    background: color-mix(in srgb, var(--tg-theme-button-color, #2481cc) 14%, transparent);
+    color: var(--tg-theme-text-color, #000000);
+    font-weight: 600;
   }
   .setopt[disabled] { opacity: 0.5; cursor: default; }
   .setopt-help { display: block; font-size: 0.78rem; opacity: 0.75; margin-top: 2px; }
@@ -309,15 +311,27 @@ CSS = """\
     cursor: pointer;
   }
   /* Unmistakable rather than a subtle tint: a filled bar with a check. */
-  /* Telegram ships button-color and button-text-color as a designed,
-     guaranteed-readable pair. Using link-color as a fill and assuming white
-     text is what made the selected option unreadable on light themes. */
+  /* Selection never inverts the text. Painting the accent behind
+     white text depends on the accent being dark, and a theme may pick a
+     pale blue — which is exactly what the operator kept seeing. Text
+     stays the theme's own on the theme's own background (readable by
+     construction); the accent shows as a left bar, a faint tint and a
+     check. colour-mix keeps the tint proportional to whatever accent the
+     theme supplies, with a plain rgba fallback for older webviews. */
   .choice.is-active {
-    background: var(--tg-theme-button-color, #2481cc);
-    color: var(--tg-theme-button-text-color, #ffffff);
+    background: rgba(36, 129, 204, 0.12);
+    background: color-mix(in srgb, var(--tg-theme-button-color, #2481cc) 14%, transparent);
+    color: var(--tg-theme-text-color, #000000);
+    border-color: var(--tg-theme-button-color, #2481cc);
+    box-shadow: inset 3px 0 0 var(--tg-theme-button-color, #2481cc);
+    font-weight: 600;
   }
-  .choice.is-active .choice-main::after { content: "  ✓"; font-weight: 700; }
-  .choice.is-active .choice-help { color: currentColor; opacity: 0.85; }
+  .choice.is-active .choice-main::after {
+    content: "  ✓";
+    font-weight: 700;
+    color: var(--tg-theme-button-color, #2481cc);
+  }
+  .choice.is-active .choice-help { color: currentColor; opacity: 0.75; }
   .choice[disabled] { opacity: 0.45; cursor: default; }
   .choice-main { display: block; font-weight: 600; }
   .choice-help { display: block; font-size: 0.8rem; margin-top: 2px; opacity: 0.75; }
@@ -335,7 +349,7 @@ CSS = """\
     border: 1px solid currentColor;
     border-radius: 999px;
   }
-  .choice.is-active .tag { color: currentColor; opacity: 0.9; }
+  .choice.is-active .tag { color: var(--tg-theme-hint-color, #888888); }
 
   .optrow { display: flex; flex-wrap: wrap; gap: 6px; }
   .optrow .opt {
@@ -354,8 +368,10 @@ CSS = """\
   }
   .optrow .opt.is-active {
     border-color: var(--tg-theme-button-color, #2481cc);
-    background: var(--tg-theme-button-color, #2481cc);
-    color: var(--tg-theme-button-text-color, #ffffff);
+    background: rgba(36, 129, 204, 0.12);
+    background: color-mix(in srgb, var(--tg-theme-button-color, #2481cc) 14%, transparent);
+    color: var(--tg-theme-text-color, #000000);
+    font-weight: 600;
   }
   .optrow .opt[disabled] { opacity: 0.45; cursor: default; }
   /* Launching a process should never be a surprise — say what will
@@ -380,6 +396,27 @@ CSS = """\
     cursor: pointer;
   }
   .primary[disabled] { opacity: 0.5; cursor: default; }
+
+  /* Loading placeholders. A blank panel that fills in a moment later
+     reads as broken; a shaped skeleton reads as "coming". */
+  .skel {
+    background: var(--tg-theme-secondary-bg-color, rgba(127, 127, 127, 0.10));
+    border-radius: 8px;
+    animation: skel-pulse 1.2s ease-in-out infinite;
+  }
+  .skel-line { height: 12px; margin: 8px 0; }
+  .skel-line.w40 { width: 40%; }
+  .skel-line.w70 { width: 70%; }
+  .skel-line.w90 { width: 90%; }
+  .skel-row { height: 46px; margin-top: 10px; }
+  @keyframes skel-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .skel { animation: none; }
+    .status-waiting { animation: none; }
+  }
 
   .empty, .placeholder { margin-top: 18px; line-height: 1.5; }
   .empty p, .placeholder p { margin: 0 0 6px; }

@@ -405,3 +405,85 @@ def test_no_theme_background_is_paired_with_hardcoded_white_text():
         "theme-variable background paired with hardcoded white text "
         f"(use --tg-theme-button-text-color): {offenders}"
     )
+
+
+# ===== JS call sites match their definitions ==============================
+
+def test_save_call_sites_agree_with_their_parameter_names():
+    """The bug this pins: `saveSessionPreference` was declared
+    `(field, value, btn)` but called `(label, group.field, value)`. Every
+    per-session settings tap therefore sent the session LABEL as the field
+    name; the server correctly answered 400 and the option silently refused
+    to change — on a phone, indistinguishable from the feature being broken.
+
+    Note an arity check CANNOT catch this: both sides have three arguments.
+    What gives it away is that the call passes `value` in the slot the
+    definition calls `btn`, while `value` is a parameter one position
+    earlier — a transposition. This looks for a bare-identifier argument
+    that matches a parameter name at a DIFFERENT position, which is the
+    signature of exactly that mistake.
+
+    Heuristic, and deliberately scoped to the save paths: a general version
+    would trip over every helper that legitimately reuses a common name.
+    """
+    import re
+
+    page = _page()
+
+    declared = {}
+    for m in re.finditer(r"function\s+(\w+)\s*\(([^)]*)\)", page):
+        params = [p.strip() for p in m.group(2).split(",") if p.strip()]
+        declared[m.group(1)] = params
+
+    watched = sorted(n for n in declared if n.startswith("save"))
+    assert "saveSessionPreference" in watched and "savePreference" in watched, (
+        f"watched set no longer covers the save paths: {watched}"
+    )
+
+    def split_args(argstr):
+        depth, out, cur = 0, [], ""
+        for ch in argstr:
+            if ch in "([{":
+                depth += 1
+            elif ch in ")]}":
+                depth -= 1
+            if ch == "," and depth == 0:
+                out.append(cur)
+                cur = ""
+            else:
+                cur += ch
+        if cur.strip():
+            out.append(cur)
+        return [a.strip() for a in out if a.strip()]
+
+    problems = []
+    for name in watched:
+        params = declared[name]
+        for m in re.finditer(r"(?<![\w.])%s\(" % re.escape(name), page):
+            if page[max(0, m.start() - 9):m.start()].rstrip().endswith("function"):
+                continue
+            depth, i = 0, m.end() - 1
+            while i < len(page):
+                if page[i] in "([{":
+                    depth += 1
+                elif page[i] in ")]}":
+                    depth -= 1
+                    if depth == 0:
+                        break
+                i += 1
+            args = split_args(page[m.end():i])
+            if len(args) != len(params):
+                problems.append(
+                    f"{name}: {len(params)} params, called with {len(args)}"
+                )
+                continue
+            for idx, arg in enumerate(args):
+                if not re.fullmatch(r"[A-Za-z_]\w*", arg):
+                    continue          # not a bare identifier; nothing to compare
+                if arg in params and params.index(arg) != idx:
+                    problems.append(
+                        f"{name}: argument {idx} is `{arg}`, but `{arg}` is "
+                        f"parameter {params.index(arg)} — arguments look transposed "
+                        f"(params: {', '.join(params)})"
+                    )
+    assert problems == [], "; ".join(problems)
