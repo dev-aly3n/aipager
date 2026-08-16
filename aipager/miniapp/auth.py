@@ -30,6 +30,13 @@ from urllib.parse import parse_qsl
 # of a permanent one (spec "Security requirements" #2).
 DEFAULT_MAX_AGE_SECONDS = 300
 
+# The freshness check is two-sided (see verify_init_data): an auth_date
+# in the future is rejected too, not just a stale one. This tolerance
+# absorbs genuine clock skew between the Telegram client/server and this
+# host — small enough to still catch a meaningfully-future-dated
+# initData, large enough that ordinary NTP drift never false-positives.
+CLOCK_SKEW_TOLERANCE_SECONDS = 60
+
 
 class InitDataError(Exception):
     """Base class for initData verification failures."""
@@ -44,7 +51,8 @@ class InitDataSignatureError(InitDataError):
 
 
 class InitDataStaleError(InitDataError):
-    """``auth_date`` is older than ``max_age_seconds``."""
+    """``auth_date`` is older than ``max_age_seconds``, or further in the
+    future than ``CLOCK_SKEW_TOLERANCE_SECONDS``."""
 
 
 def _secret_key(bot_token: str) -> bytes:
@@ -64,7 +72,8 @@ def verify_init_data(
     Raises :class:`InitDataMissingError` for empty/unparsable input or a
     missing required field, :class:`InitDataSignatureError` for a bad
     signature, and :class:`InitDataStaleError` for an ``auth_date``
-    older than ``max_age_seconds``. Checked in that order deliberately:
+    older than ``max_age_seconds`` or further in the future than
+    ``CLOCK_SKEW_TOLERANCE_SECONDS``. Checked in that order deliberately:
     nothing in ``data`` (including ``auth_date``) is trusted until the
     signature over the whole payload has verified.
     """
@@ -106,7 +115,15 @@ def verify_init_data(
     except ValueError as e:
         raise InitDataMissingError("malformed auth_date") from e
 
-    if time.time() - auth_date > max_age_seconds:
+    # Two-sided: a future-dated auth_date must be rejected too, not just
+    # a stale one. `time.time() - auth_date > max_age_seconds` alone lets
+    # any far-future timestamp sail through un-flagged (a one-sided
+    # check only ever catches *old* dates), which weakens the freshness
+    # window's whole purpose — bounding a captured initData to a
+    # short-lived credential. CLOCK_SKEW_TOLERANCE_SECONDS keeps
+    # legitimate NTP-level skew from false-positiving on the future side.
+    age = time.time() - auth_date
+    if age > max_age_seconds or age < -CLOCK_SKEW_TOLERANCE_SECONDS:
         raise InitDataStaleError("auth_date stale")
 
     try:
@@ -120,6 +137,7 @@ def verify_init_data(
 
 
 __all__ = [
+    "CLOCK_SKEW_TOLERANCE_SECONDS",
     "DEFAULT_MAX_AGE_SECONDS",
     "InitDataError",
     "InitDataMissingError",

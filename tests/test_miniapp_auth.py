@@ -100,6 +100,32 @@ def test_stale_auth_date_rejected():
         verify_init_data(init_data, BOT_TOKEN)
 
 
+def test_future_auth_date_rejected():
+    """The freshness check must be two-sided: `time.time() - auth_date >
+    max_age_seconds` alone only ever catches OLD dates, so a far-future
+    auth_date sailed through un-flagged (tester's finding). A forged
+    future auth_date requires a correctly-signed initData — i.e. the
+    real bot token — but the freshness window's whole purpose is to
+    bound a captured/replayed credential to a short lifetime, and a
+    one-sided check quietly drops that guarantee on the future side."""
+    tomorrow = int(time.time()) + 86400
+    init_data = _make_init_data(auth_date=tomorrow)
+    with pytest.raises(InitDataStaleError):
+        verify_init_data(init_data, BOT_TOKEN)
+
+
+def test_auth_date_within_clock_skew_tolerance_accepted():
+    """A small forward skew (e.g. the host's clock running a few
+    seconds behind Telegram's) must not false-positive as 'future and
+    therefore rejected' -- see CLOCK_SKEW_TOLERANCE_SECONDS."""
+    from aipager.miniapp.auth import CLOCK_SKEW_TOLERANCE_SECONDS
+
+    slightly_ahead = int(time.time()) + (CLOCK_SKEW_TOLERANCE_SECONDS // 2)
+    init_data = _make_init_data(auth_date=slightly_ahead)
+    user = verify_init_data(init_data, BOT_TOKEN)
+    assert user["id"] == 555
+
+
 def test_fresh_auth_date_within_custom_window_accepted():
     ten_min_ago = int(time.time()) - 600
     init_data = _make_init_data(auth_date=ten_min_ago)
