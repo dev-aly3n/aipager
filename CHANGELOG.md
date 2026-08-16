@@ -44,7 +44,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   value. Diffs come from `git` against the session's own working directory
   (bounded: a hard per-call timeout, capped output size, capped file count —
   never a hang, never a multi-megabyte response, and a non-git/missing/empty
-  repo reports cleanly instead of erroring), and the timeline is emitted as
+  repo reports cleanly instead of erroring); a file larger than the per-file
+  cap still shows its first ~200 KB with a truncation marker rather than no
+  content at all, and the timeline is emitted as
   plain structured JSON rather than Telegram markdown. The page adds
   Telegram-native chrome (matches your device's light/dark theme, a back
   button on the drill-down, a haptic pulse on status changes) and is honest
