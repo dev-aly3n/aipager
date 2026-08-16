@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **The Mini App's New session form no longer bounces back to the grid.** Opening
+  it and waiting a couple of seconds threw you back to the session list every
+  time — the background refresh treated the form as if it were a session page,
+  asked the server for a session that didn't exist, and "recovered" by navigating
+  away. Views are now declared in one table that says what each one refreshes, so
+  a view can't be half-added like that again.
+- **The Sessions / Settings tabs now disappear on sub-pages.** They were still
+  showing on the session page and the new-session form, competing with Telegram's
+  own back button and making it unclear where you were.
+
+### Changed
+- **The Mini App's options are grouped and collapsed instead of a wall of
+  buttons.** Each setting is now a labelled row showing the value in force; tap it
+  to see the alternatives, each with a line explaining what it does. The selected
+  choice is filled and check-marked, and the `default` tag is a proper badge
+  rather than text crammed onto the end of a label. Same treatment on the
+  Settings tab, the per-session settings, and the new-session form.
+- **The model picker explains the choices.** Each alias carries a short line
+  (most capable / balanced / fastest) rather than a version number: an alias
+  always means "the latest of that family", so a pinned version would be wrong on
+  the next release. The actual version a session is running is shown on the
+  session itself, sourced from Claude Code's own status line.
+
 ### Added
 - **Start a session from the Mini App.** The dashed **New session** cell now
   opens a form: a name and a model, with working directory, permission mode and

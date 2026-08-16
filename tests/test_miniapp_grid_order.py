@@ -186,3 +186,67 @@ def test_page_has_no_inline_event_handlers():
 
     handlers = re.findall(r'\son(?:click|load|error|change|input)=', INDEX_HTML)
     assert handlers == []
+
+
+# ===== view state machine (static guards for logic pytest can't run) ======
+
+def _page():
+    from aipager.miniapp.static import INDEX_HTML
+    return INDEX_HTML
+
+
+def test_every_view_section_has_a_VIEWS_entry():
+    """The bug this pins: `pollTick` used to branch "grid, else detail".
+    Batch 5 added a third view with no label, so the else-branch fetched
+    /api/sessions/undefined, 404'd, and bounced the operator back to the
+    grid ~2.5s after opening the New session form.
+
+    A view is now only reachable through the VIEWS table, so a section
+    that exists in the markup but not in the table is a half-added view.
+    """
+    import re
+
+    page = _page()
+    sections = set(re.findall(r'<section id="(view-[^"]+)"', page))
+    tabled = set(re.findall(r'section:\s*"(view-[^"]+)"', page))
+    assert sections, "no view sections found — did the page change shape?"
+    assert sections == tabled, (
+        f"view sections not enumerated in VIEWS: "
+        f"missing={sorted(sections - tabled)} extra={sorted(tabled - sections)}"
+    )
+
+
+def test_poll_mode_is_declared_per_view_not_inferred():
+    """Each VIEWS entry must say what it polls. `polls: null` is how the
+    settings tab and the new-session form opt out — the absence of a
+    branch is what caused the bounce-back."""
+    import re
+
+    page = _page()
+    entries = re.findall(r"\{\s*section:\s*\"view-[^\"]+\"[^}]*\}", page)
+    assert len(entries) >= 4, f"expected every view declared, found {len(entries)}"
+    for entry in entries:
+        assert "polls:" in entry, f"VIEWS entry without a polls declaration: {entry}"
+        assert "topLevel:" in entry, f"VIEWS entry without topLevel: {entry}"
+
+
+def test_no_view_section_visibility_is_set_outside_the_table():
+    """Visibility must flow through showView(). A stray
+    `getElementById("view-x").hidden = ...` is how the old code drifted
+    into four functions each toggling a different subset."""
+    import re
+
+    page = _page()
+    strays = re.findall(r'getElementById\("(view-[^"]+)"\)\.hidden', page)
+    assert strays == [], f"view visibility set outside showView(): {strays}"
+
+
+def test_the_tab_bar_is_driven_by_the_view_table():
+    """The Sessions|Settings bar is top-level navigation; on a sub-page it
+    competes with Telegram's BackButton. Its visibility must come from the
+    view's own topLevel flag, not from ad-hoc calls."""
+    page = _page()
+    assert 'document.getElementById("tabbar").hidden = !spec.topLevel;' in page
+    assert page.count('getElementById("tabbar").hidden') == 1, (
+        "tab-bar visibility is set in more than one place"
+    )

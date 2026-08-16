@@ -436,74 +436,36 @@ APP_JS = r"""
 
   function renderSessionSettings() {
     var root = document.getElementById("session-settings-groups");
-    var resetBtn = document.getElementById("session-settings-reset");
     root.innerHTML = "";
-    if (!sessionSettingsData) {
-      document.getElementById("session-settings-readonly").hidden = true;
-      resetBtn.hidden = true;
-      return;
-    }
-    document.getElementById("session-settings-readonly").hidden = !!sessionSettingsData.can_edit;
+    if (!sessionSettingsData) { return; }
+    var canEdit = !!sessionSettingsData.can_edit;
+    document.getElementById("session-settings-readonly").hidden = canEdit;
 
+    var label = currentView.label;
     var anyOverridden = false;
-
     sessionSettingsData.schema.forEach(function (group) {
-      var fv = sessionSettingsData.values[group.field];
-      if (!fv) { return; }
-      if (fv.overridden) { anyOverridden = true; }
-
-      var wrap = document.createElement("div");
-      wrap.className = "setgroup";
-      var title = document.createElement("div");
-      title.className = "setgroup-title";
-      title.textContent = group.title;
-      wrap.appendChild(title);
-
-      group.options.forEach(function (opt) {
-        // The mechanic, restated in code so it cannot be implemented
-        // backwards: `selected` (the fill) comes ONLY from `effective`;
-        // `isDefault` (the tag) comes ONLY from `scope_default`. Two
-        // independent equality checks against server-supplied scalars —
-        // no precedence logic on the client that could get this backwards.
-        var selected = fv.effective === opt.value;
-        var isDefault = fv.scope_default === opt.value;
-
-        var btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "setopt" + (selected ? " is-active" : "");
-        var label = document.createElement("span");
-        label.textContent = opt.label;
-        btn.appendChild(label);
-        if (isDefault) {
-          var tag = document.createElement("span");
-          tag.className = "setopt-default-tag";
-          tag.textContent = "scope default";
-          btn.appendChild(tag);
+      var v = sessionSettingsData.values[group.field] || {};
+      if (v.overridden) { anyOverridden = true; }
+      renderOptionGroup(root, {
+        key: "sess:" + group.field,
+        title: group.title,
+        options: group.options,
+        // Fill = what this session will actually use. Tag = what the chat
+        // default is. Two independent values; the tag never follows the
+        // selection.
+        current: v.effective,
+        defaultValue: v.scope_default,
+        disabled: !canEdit,
+        rerender: renderSessionSettings,
+        onPick: function (value) {
+          saveSessionPreference(label, group.field, value);
         }
-        if (opt.help) {
-          var help = document.createElement("span");
-          help.className = "setopt-help";
-          help.textContent = opt.help;
-          btn.appendChild(help);
-        }
-        if (!sessionSettingsData.can_edit) {
-          btn.disabled = true;
-        } else {
-          btn.addEventListener("click", function () {
-            saveSessionPreference(group.field, opt.value, btn);
-          });
-        }
-        wrap.appendChild(btn);
       });
-      root.appendChild(wrap);
     });
 
-    resetBtn.hidden = !(sessionSettingsData.can_edit && anyOverridden);
+    var reset = document.getElementById("session-settings-reset");
+    reset.hidden = !(canEdit && anyOverridden);
   }
-
-  // Per-field request counter — same race guard as the scope-wide
-  // savePreference: only the newest request for a field may touch state.
-  var sessionSaveSeq = Object.create(null);
 
   function saveSessionPreference(field, value, btn) {
     if (!sessionSettingsData) { return; }
@@ -525,7 +487,6 @@ APP_JS = r"""
       overridden: true
     };
     renderSessionSettings();
-    btn.classList.add("is-saving");
 
     fetch("/api/sessions/" + encodeURIComponent(label) + "/preferences/" + encodeURIComponent(field), {
       method: "PUT",
@@ -752,7 +713,6 @@ APP_JS = r"""
   }
 
   function openDetail(label) {
-    currentView = { type: "detail", label: label };
     diffOpen = false;
     timelineOpen = false;
     lastDiffData = null;
@@ -764,21 +724,142 @@ APP_JS = r"""
     document.getElementById("panel-diff").hidden = true;
     document.getElementById("panel-timeline").hidden = true;
     diffLoadedForLabel = null;
-    document.getElementById("view-grid").hidden = true;
-    document.getElementById("view-detail").hidden = false;
-    if (tg && tg.BackButton) { tg.BackButton.show(); }
+    showView("detail", { label: label });
     loadSessionSettings(label);
     pollTick();
   }
 
   function showGrid() {
-    currentView = { type: "grid" };
-    document.getElementById("view-detail").hidden = true;
-    document.getElementById("view-new").hidden = true;
-    document.getElementById("view-grid").hidden = mainTab !== "sessions";
-    document.getElementById("view-settings").hidden = mainTab !== "settings";
-    if (tg && tg.BackButton) { tg.BackButton.hide(); }
+    // Back from a sub-page returns to whichever top-level tab was active.
+    showView(mainTab === "settings" ? "settings" : "grid");
     pollTick();
+  }
+
+
+
+  // ---- settings group rendering (shared by all three surfaces) --------
+  //
+  // Collapsed by default, showing only the heading and the value in
+  // force. Every alternative on screen at once — four groups x up to five
+  // options — was what the operator meant by "make user lost in there".
+  var openGroups = Object.create(null);
+
+  function renderOptionGroup(host, opts) {
+    // opts: {key, title, options[], current, defaultValue, disabled, onPick}
+    var wrap = document.createElement("div");
+    wrap.className = "grp";
+
+    var head = document.createElement("button");
+    head.type = "button";
+    head.className = "grp-head";
+    var isOpen = !!openGroups[opts.key];
+
+    var title = document.createElement("span");
+    title.className = "grp-title";
+    title.textContent = opts.title;
+
+    var value = document.createElement("span");
+    value.className = "grp-value";
+    var currentOpt = null;
+    opts.options.forEach(function (o) {
+      if (o.value === opts.current) { currentOpt = o; }
+    });
+    value.textContent = currentOpt ? currentOpt.label : "—";
+
+    var caret = document.createElement("span");
+    caret.className = "grp-caret";
+    caret.textContent = isOpen ? "▾" : "▸";
+
+    head.appendChild(title);
+    head.appendChild(value);
+    head.appendChild(caret);
+    head.addEventListener("click", function () {
+      openGroups[opts.key] = !openGroups[opts.key];
+      opts.rerender();
+    });
+    wrap.appendChild(head);
+
+    if (isOpen) {
+      var list = document.createElement("div");
+      list.className = "grp-body";
+      opts.options.forEach(function (o) {
+        var row = document.createElement("button");
+        row.type = "button";
+        row.className = "choice" + (o.value === opts.current ? " is-active" : "");
+        if (opts.disabled) { row.disabled = true; }
+
+        var main = document.createElement("span");
+        main.className = "choice-main";
+        main.textContent = o.label;
+        row.appendChild(main);
+
+        // The tag marks the SCOPE's value and never follows the
+        // selection — see the per-session settings mechanic.
+        if (opts.defaultValue !== undefined && o.value === opts.defaultValue) {
+          var tag = document.createElement("span");
+          tag.className = "tag";
+          tag.textContent = "default";
+          row.appendChild(tag);
+        }
+        if (o.help) {
+          var help = document.createElement("span");
+          help.className = "choice-help";
+          help.textContent = o.help;
+          row.appendChild(help);
+        }
+        if (!opts.disabled) {
+          row.addEventListener("click", function () { opts.onPick(o.value); });
+        }
+        list.appendChild(row);
+      });
+      wrap.appendChild(list);
+    }
+    host.appendChild(wrap);
+  }
+
+  // ---- views ----------------------------------------------------------
+  //
+  // Every view is declared here once. Before this, visibility was a set of
+  // per-function `hidden` assignments and pollTick branched on "grid or
+  // else", so adding the new-session view in batch 5 silently made
+  // pollTick treat it as a session detail: it fetched
+  // /api/sessions/undefined, got a 404, and the 404 handler sent the
+  // operator back to the grid ~2.5s after opening the form. A table means
+  // a new view cannot be half-added — it either has an entry or it does
+  // not render at all.
+  //
+  //   section  - the DOM section this view shows
+  //   topLevel - true if the Sessions|Settings tab bar belongs on screen
+  //              (it is top-level navigation; on a sub-page it competes
+  //              with Telegram's BackButton and makes the page feel lost)
+  //   polls    - "grid" | "detail" | null (no polling at all)
+  var VIEWS = {
+    grid:     { section: "view-grid",     topLevel: true,  polls: "grid" },
+    settings: { section: "view-settings", topLevel: true,  polls: null },
+    detail:   { section: "view-detail",   topLevel: false, polls: "detail" },
+    "new":    { section: "view-new",      topLevel: false, polls: null }
+  };
+
+  function showView(name, extra) {
+    var spec = VIEWS[name];
+    if (!spec) { return; }            // unknown view: change nothing
+    currentView = { type: name };
+    if (extra) {
+      for (var k in extra) {
+        if (Object.prototype.hasOwnProperty.call(extra, k)) {
+          currentView[k] = extra[k];
+        }
+      }
+    }
+    for (var key in VIEWS) {
+      if (Object.prototype.hasOwnProperty.call(VIEWS, key)) {
+        document.getElementById(VIEWS[key].section).hidden = key !== name;
+      }
+    }
+    document.getElementById("tabbar").hidden = !spec.topLevel;
+    if (tg && tg.BackButton) {
+      if (spec.topLevel) { tg.BackButton.hide(); } else { tg.BackButton.show(); }
+    }
   }
 
   // ---- settings -------------------------------------------------------
@@ -792,49 +873,21 @@ APP_JS = r"""
     document.getElementById("settings-readonly").hidden = !!settingsData.can_edit;
 
     settingsData.schema.forEach(function (group) {
-      var wrap = document.createElement("div");
-      wrap.className = "setgroup";
-      var title = document.createElement("div");
-      title.className = "setgroup-title";
-      title.textContent = group.title;
-      wrap.appendChild(title);
-
-      group.options.forEach(function (opt) {
-        var btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "setopt" +
-          (settingsData.values[group.field] === opt.value ? " is-active" : "");
-        var label = document.createElement("span");
-        label.textContent = opt.label;
-        btn.appendChild(label);
-        if (opt.help) {
-          var help = document.createElement("span");
-          help.className = "setopt-help";
-          help.textContent = opt.help;
-          btn.appendChild(help);
+      renderOptionGroup(root, {
+        key: "scope:" + group.field,
+        title: group.title,
+        options: group.options,
+        current: settingsData.values[group.field],
+        disabled: !settingsData.can_edit,
+        rerender: renderSettings,
+        onPick: function (value) {
+          savePreference(group.field, value);
         }
-        if (!settingsData.can_edit) {
-          btn.disabled = true;
-        } else {
-          btn.addEventListener("click", function () {
-            savePreference(group.field, opt.value, btn);
-          });
-        }
-        wrap.appendChild(btn);
       });
-      root.appendChild(wrap);
     });
   }
 
-  // Per-field request counter. Two rapid taps on the same field race:
-  // without this, if the SECOND write succeeds and the FIRST then fails
-  // (entirely plausible on a flaky tunnel), the first request's error
-  // handler would roll the field back to a value that is no longer what
-  // the server holds — and claim the save failed when it did not. Only
-  // the newest request for a field is allowed to touch state.
-  var saveSeq = Object.create(null);
-
-  function savePreference(field, value, btn) {
+  function savePreference(field, value) {
     if (!settingsData || settingsData.values[field] === value) { return; }
     // Optimistic: paint the choice immediately, but keep the previous
     // value so a failed write can put the truth back rather than leaving
@@ -844,7 +897,6 @@ APP_JS = r"""
     saveSeq[field] = seq;
     settingsData.values[field] = value;
     renderSettings();
-    btn.classList.add("is-saving");
 
     fetch("/api/preferences/" + encodeURIComponent(field), {
       method: "PUT",
@@ -899,25 +951,24 @@ APP_JS = r"""
   // prefs: field -> chosen value, only for fields the operator diverged on.
   var newState = { model: "", cwd: "", skip_perms: false, prefs: {} };
 
-  function optButton(text, active, disabled, onClick) {
-    var b = document.createElement("button");
-    b.type = "button";
-    b.className = "opt" + (active ? " is-active" : "");
-    b.textContent = text;
-    if (disabled) { b.disabled = true; } else { b.addEventListener("click", onClick); }
-    return b;
-  }
-
   function renderNewForm() {
     var models = document.getElementById("new-model");
     models.innerHTML = "";
-    // "" = leave the session on Claude Code's own default.
-    var modelChoices = [""].concat((newOptions && newOptions.models) || []);
-    modelChoices.forEach(function (m) {
-      models.appendChild(optButton(m || "default", newState.model === m, false, function () {
-        newState.model = m;
-        renderNewForm();
-      }));
+    // "" = leave the session on Claude Code's own default. Aliases carry a
+    // hint rather than a version: an alias always resolves to the latest of
+    // its family, so a baked-in "Opus 5" would be wrong on the next release.
+    // The real version shows on the session once it reports one.
+    var modelOpts = [{ value: "", label: "Default", help: "Whatever the CLI is configured to use" }];
+    ((newOptions && newOptions.models) || []).forEach(function (m) {
+      modelOpts.push({ value: m.label, label: m.label, help: m.hint || "" });
+    });
+    renderOptionGroup(models, {
+      key: "new:model",
+      title: "Model",
+      options: modelOpts,
+      current: newState.model,
+      rerender: renderNewForm,
+      onPick: function (value) { newState.model = value; renderNewForm(); }
     });
 
     // Directories come from the server's allow-list — the same list
@@ -925,59 +976,65 @@ APP_JS = r"""
     // the server would refuse.
     var dirs = document.getElementById("new-cwd");
     dirs.innerHTML = "";
-    var choices = [""].concat((newOptions && newOptions.directories) || []);
-    choices.forEach(function (d) {
-      var label = d ? d.split("/").filter(Boolean).pop() : "default";
-      dirs.appendChild(optButton(label, newState.cwd === d, false, function () {
-        newState.cwd = d;
-        renderNewForm();
-      }));
+    var dirOpts = [{ value: "", label: "Default", help: "The daemon's own directory" }];
+    ((newOptions && newOptions.directories) || []).forEach(function (d) {
+      dirOpts.push({ value: d, label: d.split("/").filter(Boolean).pop(), help: d });
+    });
+    renderOptionGroup(dirs, {
+      key: "new:cwd",
+      title: "Working directory",
+      options: dirOpts,
+      current: newState.cwd,
+      rerender: renderNewForm,
+      onPick: function (value) { newState.cwd = value; renderNewForm(); }
     });
 
     var canAuto = !!(newOptions && newOptions.can_use_auto);
     var modes = document.getElementById("new-mode");
     modes.innerHTML = "";
-    modes.appendChild(optButton("Ask", !newState.skip_perms, false, function () {
-      newState.skip_perms = false;
-      renderNewForm();
-    }));
-    modes.appendChild(optButton("Auto", newState.skip_perms, !canAuto, function () {
-      newState.skip_perms = true;
-      renderNewForm();
-    }));
+    renderOptionGroup(modes, {
+      key: "new:mode",
+      title: "Permission mode",
+      options: [
+        { value: false, label: "Ask", help: "Claude asks before running tools" },
+        { value: true, label: "Auto",
+          help: canAuto ? "Runs tools without asking" : "Requires admin" }
+      ],
+      current: newState.skip_perms,
+      rerender: renderNewForm,
+      onPick: function (value) {
+        if (value === true && !canAuto) { return; }
+        newState.skip_perms = value;
+        renderNewForm();
+      }
+    });
     document.getElementById("new-mode-note").hidden = canAuto;
 
-
-    // Reply-style settings, each tagged with what the scope default is —
-    // the same mechanic batch 4 uses on the session page, so creating a
-    // session is also the moment you can diverge from the defaults.
+    // Reply-style settings, each tagged with the chat default.
     var prefsEl = document.getElementById("new-prefs");
     prefsEl.innerHTML = "";
     var schema = (newOptions && newOptions.schema) || [];
     var scopeDefaults = (newOptions && newOptions.scope_defaults) || {};
     schema.forEach(function (group) {
-      var title = document.createElement("div");
-      title.className = "field-label";
-      title.textContent = group.title;
-      prefsEl.appendChild(title);
-      var row = document.createElement("div");
-      row.className = "optrow";
-      group.options.forEach(function (opt) {
-        var chosen = Object.prototype.hasOwnProperty.call(newState.prefs, group.field)
-          ? newState.prefs[group.field]
-          : scopeDefaults[group.field];
-        var isDefault = opt.value === scopeDefaults[group.field];
-        var text = opt.label + (isDefault ? " · default" : "");
-        row.appendChild(optButton(text, opt.value === chosen, false, function () {
-          if (opt.value === scopeDefaults[group.field]) {
-            delete newState.prefs[group.field];   // back to inheriting
+      var chosen = Object.prototype.hasOwnProperty.call(newState.prefs, group.field)
+        ? newState.prefs[group.field]
+        : scopeDefaults[group.field];
+      renderOptionGroup(prefsEl, {
+        key: "new:" + group.field,
+        title: group.title,
+        options: group.options,
+        current: chosen,
+        defaultValue: scopeDefaults[group.field],
+        rerender: renderNewForm,
+        onPick: function (value) {
+          if (value === scopeDefaults[group.field]) {
+            delete newState.prefs[group.field];    // back to inheriting
           } else {
-            newState.prefs[group.field] = opt.value;
+            newState.prefs[group.field] = value;
           }
           renderNewForm();
-        }));
+        }
       });
-      prefsEl.appendChild(row);
     });
 
     var name = document.getElementById("new-name").value.trim();
@@ -993,13 +1050,8 @@ APP_JS = r"""
   }
 
   function openNewSession() {
-    currentView = { type: "new" };
-    document.getElementById("view-grid").hidden = true;
-    document.getElementById("view-detail").hidden = true;
-    document.getElementById("view-settings").hidden = true;
-    document.getElementById("view-new").hidden = false;
+    showView("new");
     document.getElementById("new-name-error").hidden = true;
-    if (tg && tg.BackButton) { tg.BackButton.show(); }
     renderNewForm();
     apiFetch("/api/session-options")
       .then(function (data) { newOptions = data; renderNewForm(); })
@@ -1086,14 +1138,9 @@ APP_JS = r"""
 
   function setMainTab(name) {
     mainTab = name;
-    // Switching tabs from inside a drill-down returns to the top level —
+    // Switching tabs from inside a sub-page returns to the top level —
     // the back button is for going back, the tab bar is for switching.
-    currentView = { type: "grid" };
-    document.getElementById("view-detail").hidden = true;
-    document.getElementById("view-new").hidden = true;
-    if (tg && tg.BackButton) { tg.BackButton.hide(); }
-    document.getElementById("view-grid").hidden = name !== "sessions";
-    document.getElementById("view-settings").hidden = name !== "settings";
+    showView(name === "settings" ? "settings" : "grid");
     document.getElementById("maintab-sessions")
       .classList.toggle("is-active", name === "sessions");
     document.getElementById("maintab-settings")
@@ -1128,9 +1175,15 @@ APP_JS = r"""
     if (document.visibilityState !== "visible") { return; }
     // The Settings tab is a real view now — polling the grid behind it is
     // pure battery and tunnel traffic for something nobody is looking at.
-    if (mainTab !== "sessions") { return; }
+    // What (if anything) this view polls is declared in VIEWS, not
+    // inferred. A view with polls:null — the settings tab, the new-session
+    // form — is left alone entirely.
+    var spec = VIEWS[currentView.type];
+    var mode = spec ? spec.polls : null;
+    if (mode === null || mode === undefined) { return; }
+    if (mode === "detail" && !currentView.label) { return; }
 
-    if (currentView.type === "grid") {
+    if (mode === "grid") {
       apiFetch("/api/sessions")
         .then(function (data) {
           lastSuccessAt = Date.now();

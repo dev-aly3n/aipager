@@ -247,6 +247,83 @@ CSS = """\
     border-radius: 8px;
   }
   .field-error { margin-top: 6px; font-size: 0.85rem; color: #dc2626; }
+  /* Settings groups: collapsed to heading + current value, expanding to
+     the choices. Four groups x five options all on screen at once is what
+     made the page feel like a wall of pills. */
+  .grp {
+    border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+    border-radius: 12px;
+    margin-top: 10px;
+    overflow: hidden;
+  }
+  .grp-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 12px 14px;
+    font: inherit;
+    text-align: left;
+    color: var(--tg-theme-text-color, #000000);
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+  }
+  /* Hierarchy: the heading is the label, the value is the answer, the
+     caret is the affordance — three distinct weights, not three equals. */
+  .grp-title { font-weight: 600; flex: 0 0 auto; }
+  .grp-value {
+    flex: 1 1 auto;
+    text-align: right;
+    color: var(--tg-theme-hint-color, #888888);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .grp-caret { flex: 0 0 auto; color: var(--tg-theme-hint-color, #888888); }
+  .grp-body {
+    border-top: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+    padding: 6px;
+  }
+  .choice {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 10px 12px;
+    margin: 4px 0;
+    font: inherit;
+    color: var(--tg-theme-text-color, #000000);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    cursor: pointer;
+  }
+  /* Unmistakable rather than a subtle tint: a filled bar with a check. */
+  .choice.is-active {
+    background: var(--tg-theme-link-color, #2481cc);
+    color: #ffffff;
+  }
+  .choice.is-active .choice-main::after { content: "  ✓"; font-weight: 700; }
+  .choice.is-active .choice-help { color: rgba(255, 255, 255, 0.85); }
+  .choice[disabled] { opacity: 0.45; cursor: default; }
+  .choice-main { display: block; font-weight: 600; }
+  .choice-help { display: block; font-size: 0.8rem; margin-top: 2px; opacity: 0.75; }
+  /* Legible pill, not a cramped suffix on the label. */
+  .tag {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 1px 7px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    vertical-align: 1px;
+    color: var(--tg-theme-hint-color, #888888);
+    border: 1px solid currentColor;
+    border-radius: 999px;
+  }
+  .choice.is-active .tag { color: rgba(255, 255, 255, 0.9); }
+
   .optrow { display: flex; flex-wrap: wrap; gap: 6px; }
   .optrow .opt {
     padding: 8px 12px;

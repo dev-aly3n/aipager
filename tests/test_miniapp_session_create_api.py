@@ -410,7 +410,18 @@ def test_options_serves_the_canonical_model_list(server, run_async):
             body = await (await client.get(
                 "/api/session-options", headers=_hdr(ADMIN_ID))).json()
             from aipager.config import MODEL_CHOICES
-            assert body["models"] == [label for label, _ in MODEL_CHOICES]
+            assert [m["label"] for m in body["models"]] == \
+                [label for label, _ in MODEL_CHOICES]
+            # Each alias carries a "what is this for" hint instead of a
+            # version number: an alias always resolves to the latest of its
+            # family, so a baked-in version would be wrong on the next
+            # release. No entry may look like one.
+            import re
+            for m in body["models"]:
+                assert "hint" in m
+                assert not re.search(r"\d+(\.\d+)?$", m["hint"] or "x"), (
+                    f"model hint looks like a pinned version: {m!r}"
+                )
         finally:
             await client.close()
     run_async(_run())

@@ -26,6 +26,18 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+# Short "what is this for" lines for the model picker. Keyed by the alias
+# label, lowercased; an alias with no entry simply shows no hint rather
+# than a wrong one. Deliberately no version numbers — see the comment at
+# the /api/session-options payload.
+_MODEL_HINTS = {
+    "opus": "Most capable — deep reasoning, hardest problems",
+    "sonnet": "Balanced — the everyday default",
+    "haiku": "Fastest and cheapest — quick edits and lookups",
+    "opusplan": "Opus for planning, Sonnet to execute",
+    "fable": "Newest family alias",
+}
+
 class MiniAppUnavailable(Exception):
     """Raised from :meth:`MiniAppServer.start` when ``aiohttp`` isn't
     installed. Mirrors :class:`aipager.bot.voice.VoiceUnavailable`."""
@@ -351,7 +363,17 @@ class MiniAppServer:
             "directories": allowed_roots(self.registry, scope_chat_id),
             # One source of truth for model names — the same list the chat
             # keyboard offers, so the two surfaces cannot drift.
-            "models": [label for label, _send in MODEL_CHOICES],
+            #
+            # An alias means "the latest of that family" (`claude --help`:
+            # "Provide an alias for the latest model ... or a model's full
+            # name"), so no version is baked in here — a hardcoded "Opus 5"
+            # would be wrong the day the next one ships. The running
+            # session reports its actual version via the statusline, and
+            # that is what the grid and session page display.
+            "models": [
+                {"label": label, "hint": _MODEL_HINTS.get(label.lower(), "")}
+                for label, _send in MODEL_CHOICES
+            ],
             "schema": settings_schema(),
             "scope_defaults": {
                 "layout": prefs.layout,
