@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **The Sessions / Settings tabs really do disappear on sub-pages now.** The
+  previous attempt set the right flag but a stylesheet rule quietly overrode it,
+  so nothing changed on screen. The same override was also stopping the waiting
+  count from clearing and the "show N finished" list from collapsing — one cause,
+  three symptoms, now fixed for every element at once.
+- **Selected options are readable again.** Filled controls painted a theme colour
+  behind hardcoded white text, which on lighter Telegram themes made the chosen
+  option nearly invisible. They now use the background/foreground pair Telegram
+  provides for exactly this, so the selected choice stays legible whatever theme
+  you use.
 - **The Mini App's New session form no longer bounces back to the grid.** Opening
   it and waiting a couple of seconds threw you back to the session list every
   time — the background refresh treated the form as if it were a session page,

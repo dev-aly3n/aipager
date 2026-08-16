@@ -16,6 +16,15 @@ from __future__ import annotations
 CSS = """\
   :root { color-scheme: light dark; }
   * { box-sizing: border-box; }
+  /* The browser's own `[hidden] { display: none }` is a USER-AGENT rule, so
+     any author `display:` beats it. Every element the script hides carries a
+     class with an explicit display (.tabbar is flex, .badge is inline-block,
+     .grid is grid), which silently defeated `el.hidden = true` — the tab bar
+     stayed on sub-pages, the waiting badge never cleared, and the finished
+     list never collapsed. One author-level rule with !important settles it
+     for every element, present and future, instead of another per-selector
+     patch each time someone notices. */
+  [hidden] { display: none !important; }
   body {
     margin: 0;
     padding: 16px;
@@ -148,9 +157,9 @@ CSS = """\
     cursor: pointer;
   }
   .setopt.is-active {
-    border-color: var(--tg-theme-link-color, #2481cc);
-    background: var(--tg-theme-link-color, #2481cc);
-    color: #ffffff;
+    border-color: var(--tg-theme-button-color, #2481cc);
+    background: var(--tg-theme-button-color, #2481cc);
+    color: var(--tg-theme-button-text-color, #ffffff);
   }
   .setopt[disabled] { opacity: 0.5; cursor: default; }
   .setopt-help { display: block; font-size: 0.78rem; opacity: 0.75; margin-top: 2px; }
@@ -171,8 +180,9 @@ CSS = """\
     vertical-align: middle;
   }
   .setopt.is-active .setopt-default-tag {
-    color: rgba(255, 255, 255, 0.85);
-    border-color: rgba(255, 255, 255, 0.55);
+    color: currentColor;
+    opacity: 0.85;
+    border-color: currentColor;
   }
 
   /* "Reset to default" (design §4) — a one-way door without it, so it
@@ -299,12 +309,15 @@ CSS = """\
     cursor: pointer;
   }
   /* Unmistakable rather than a subtle tint: a filled bar with a check. */
+  /* Telegram ships button-color and button-text-color as a designed,
+     guaranteed-readable pair. Using link-color as a fill and assuming white
+     text is what made the selected option unreadable on light themes. */
   .choice.is-active {
-    background: var(--tg-theme-link-color, #2481cc);
-    color: #ffffff;
+    background: var(--tg-theme-button-color, #2481cc);
+    color: var(--tg-theme-button-text-color, #ffffff);
   }
   .choice.is-active .choice-main::after { content: "  ✓"; font-weight: 700; }
-  .choice.is-active .choice-help { color: rgba(255, 255, 255, 0.85); }
+  .choice.is-active .choice-help { color: currentColor; opacity: 0.85; }
   .choice[disabled] { opacity: 0.45; cursor: default; }
   .choice-main { display: block; font-weight: 600; }
   .choice-help { display: block; font-size: 0.8rem; margin-top: 2px; opacity: 0.75; }
@@ -322,7 +335,7 @@ CSS = """\
     border: 1px solid currentColor;
     border-radius: 999px;
   }
-  .choice.is-active .tag { color: rgba(255, 255, 255, 0.9); }
+  .choice.is-active .tag { color: currentColor; opacity: 0.9; }
 
   .optrow { display: flex; flex-wrap: wrap; gap: 6px; }
   .optrow .opt {
@@ -340,9 +353,9 @@ CSS = """\
     white-space: nowrap;
   }
   .optrow .opt.is-active {
-    border-color: var(--tg-theme-link-color, #2481cc);
-    background: var(--tg-theme-link-color, #2481cc);
-    color: #ffffff;
+    border-color: var(--tg-theme-button-color, #2481cc);
+    background: var(--tg-theme-button-color, #2481cc);
+    color: var(--tg-theme-button-text-color, #ffffff);
   }
   .optrow .opt[disabled] { opacity: 0.45; cursor: default; }
   /* Launching a process should never be a surprise — say what will
@@ -360,7 +373,7 @@ CSS = """\
     padding: 12px;
     font: inherit;
     font-weight: 700;
-    color: #ffffff;
+    color: var(--tg-theme-button-text-color, #ffffff);
     background: var(--tg-theme-button-color, #2481cc);
     border: 0;
     border-radius: 10px;
@@ -410,11 +423,9 @@ CSS = """\
   .conn-reconnecting { color: #d97706; }
   .conn-offline { color: #dc2626; }
 
-  #view-grid[hidden], #view-detail[hidden], #view-settings[hidden] { display: none; }
 
   .detail-label { font-weight: 700; font-size: 1.05rem; margin-right: 8px; }
 
-  .panel[hidden] { display: none; }
 
   .timeline-row {
     padding: 6px 0;
@@ -444,7 +455,6 @@ CSS = """\
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 0.85rem;
   }
-  .diff-body[hidden] { display: none; }
   .diff-line {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 0.8rem;

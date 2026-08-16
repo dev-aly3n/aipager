@@ -250,3 +250,101 @@ def test_the_tab_bar_is_driven_by_the_view_table():
     assert page.count('getElementById("tabbar").hidden') == 1, (
         "tab-bar visibility is set in more than one place"
     )
+
+
+# ===== CSS cannot silently defeat the page's own logic =====================
+
+def _css():
+    from aipager.miniapp.static._styles import CSS
+    return CSS
+
+
+def _rule_blocks(css):
+    """(selector, body) for each rule. Crude but sufficient — the stylesheet
+    is a hand-written string with no nesting or at-rule bodies to speak of."""
+    import re
+    return re.findall(r"([^{}]+)\{([^}]*)\}", css)
+
+
+def test_hidden_is_not_defeated_by_an_author_display_rule():
+    """The bug this pins, which shipped and was approved once already:
+    `[hidden] { display: none }` is a USER-AGENT rule, so ANY author
+    `display:` beats it. `.tabbar` is flex, `.badge` is inline-block,
+    `.grid` is grid — so `el.hidden = true` did nothing for the tab bar,
+    the waiting badge and the finished-sessions list. The JS was correct
+    and the CSS silently ignored it.
+
+    A global `!important` guard settles it for every element. This test
+    fails if that guard is removed while any hidden target still carries a
+    competing display rule.
+    """
+    import re
+
+    from aipager.miniapp.static import INDEX_HTML
+
+    css = _css()
+    has_global_guard = bool(
+        re.search(r"\[hidden\]\s*\{[^}]*display:\s*none\s*!important", css)
+    )
+
+    hidden_ids = set(re.findall(r'getElementById\("([^"]+)"\)\.hidden', INDEX_HTML))
+    assert hidden_ids, "no elements hidden via the hidden attribute — page changed?"
+
+    conflicted = []
+    for eid in sorted(hidden_ids):
+        # Match the whole tag, then pull class out of it — attribute order
+        # is not fixed. An earlier version of this test only looked for
+        # class AFTER id, so `<nav class="tabbar" id="tabbar">` matched
+        # nothing and the test passed while the bug was live. That is the
+        # exact failure mode this test exists to prevent, in the test
+        # itself.
+        tag = re.search(r"<[^>]*\bid=\"%s\"[^>]*>" % re.escape(eid), INDEX_HTML)
+        if not tag:
+            continue
+        cls = re.search(r'class="([^"]*)"', tag.group(0))
+        if not cls:
+            continue
+        for token in cls.group(1).split():
+            rule = re.search(r"\.%s\s*\{([^}]*)\}" % re.escape(token), css)
+            if rule and "display:" in rule.group(1):
+                conflicted.append(f"#{eid} (.{token})")
+
+    # Fixture self-check: these three are known to carry a competing
+    # display rule. If the extraction stops finding them the test has gone
+    # blind and would pass regardless of the guard.
+    assert conflicted, (
+        "no conflicting elements found — the class/display extraction is "
+        "broken, so this test would pass even with the guard removed"
+    )
+
+    if conflicted and not has_global_guard:
+        raise AssertionError(
+            "these elements are hidden from JS but have an author display "
+            f"rule and there is no global [hidden] guard: {conflicted}"
+        )
+
+
+def test_no_theme_background_is_paired_with_hardcoded_white_text():
+    """Telegram ships `--tg-theme-button-color` and
+    `--tg-theme-button-text-color` as a designed, readable pair. Painting a
+    theme-derived background and then assuming the text can be `#ffffff`
+    produces unreadable controls on any theme with a light accent — which
+    is what the operator saw on their phone.
+
+    A hardcoded background paired with hardcoded text is fine (the two are
+    chosen together and no theme can pull them apart); only mixing the two
+    is the mistake.
+    """
+    offenders = []
+    for selector, body in _rule_blocks(_css()):
+        low = body.lower()
+        if "--tg-theme" not in low:
+            continue
+        bg = "background" in low and "--tg-theme" in low
+        white_text = "color: #ffffff" in low or "color: #fff;" in low
+        if bg and white_text:
+            offenders.append(selector.strip())
+    assert offenders == [], (
+        "theme-variable background paired with hardcoded white text "
+        f"(use --tg-theme-button-text-color): {offenders}"
+    )
