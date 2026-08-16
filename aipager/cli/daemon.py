@@ -18,8 +18,8 @@ the daemon lifecycle live in separate files. Four concerns:
   bot token or chat-id is misconfigured (catches the common errors
   during install / token rotation).
 - ``_run_daemon`` — the actual async boot that wires up the bot,
-  the hook receiver, the session monitor, and (optionally) observer
-  broadcasters.
+  the hook receiver, the session monitor, (optionally) observer
+  broadcasters, and (optionally, opt-in) the loopback Mini App server.
 """
 
 from __future__ import annotations
@@ -216,7 +216,9 @@ def _telegram_preflight() -> str:
 
 async def _run_daemon(bot_username: str) -> None:
     """Boot the daemon and run until SIGINT/SIGTERM."""
-    from aipager.config import BOT_TOKEN, CHAT_ID, OBSERVER_BOTS
+    from aipager.config import (
+        BOT_TOKEN, CHAT_ID, MINIAPP_ENABLED, MINIAPP_PORT, OBSERVER_BOTS,
+    )
     from aipager.dtach.hook_receiver import HookReceiver
     from aipager.bot.observer import ObserverBroadcaster
     from aipager.session_monitor import SessionMonitor
@@ -251,6 +253,21 @@ async def _run_daemon(bot_username: str) -> None:
     session_monitor.on_sessions_changed = bot._update_bot_commands
     await session_monitor.start()
 
+    # Mini App server — newest and highest-risk component, so it starts
+    # last and (below) stops first. Behind a lazy import so a base
+    # install with no `miniapp` extra never imports aiohttp; a
+    # MiniAppUnavailable (extra not installed) logs a friendly one-liner
+    # instead of taking the whole daemon down.
+    miniapp_server = None
+    if MINIAPP_ENABLED:
+        from aipager.miniapp.server import MiniAppServer, MiniAppUnavailable
+        miniapp_server = MiniAppServer(bot, registry, MINIAPP_PORT)
+        try:
+            await miniapp_server.start()
+        except MiniAppUnavailable as e:
+            log.warning("Mini App server not started: %s", e)
+            miniapp_server = None
+
     log.info("AIPager running — all components started")
 
     stop = asyncio.Event()
@@ -275,6 +292,8 @@ async def _run_daemon(bot_username: str) -> None:
 
     log.info("Shutting down...")
     registry.save()
+    if miniapp_server is not None:
+        await miniapp_server.stop()
     session_monitor.stop()
     hook_receiver.stop()
     if observers:
