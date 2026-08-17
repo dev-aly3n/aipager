@@ -242,6 +242,14 @@ async def _run_daemon(bot_username: str) -> None:
     hook_receiver = HookReceiver(registry, bot.notify)
     session_monitor = SessionMonitor(registry, bot.notify)
 
+    # Resolved BEFORE bot.start(), because start() ends by sending the
+    # first persistent keyboard and that keyboard has to know whether
+    # there is a Mini App to offer. No Telegram call happens here — the
+    # menu button still waits until the server below is confirmed up.
+    from aipager.miniapp.tunnel import resolve_public_url
+    miniapp_url = await resolve_public_url() if MINIAPP_ENABLED else ""
+    bot.prime_miniapp_url(miniapp_url)
+
     await bot.start()
     observers = None
     if OBSERVER_BOTS:
@@ -277,6 +285,14 @@ async def _run_daemon(bot_username: str) -> None:
                 MINIAPP_PORT, e,
             )
             miniapp_server = None
+
+    # The permanent launch button, published only once the server it
+    # points at is actually listening — a button that opens a dead port
+    # is worse than no button. An empty URL clears any button a previous
+    # run left behind, so disabling the Mini App really does remove it.
+    await bot.publish_miniapp_button(
+        miniapp_url if miniapp_server is not None else "",
+    )
 
     log.info("AIPager running — all components started")
 

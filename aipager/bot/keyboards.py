@@ -18,12 +18,13 @@ from telegram import (
     InlineKeyboardMarkup,
     KeyboardButton,
     ReplyKeyboardMarkup,
+    WebAppInfo,
 )
 from telegram.error import BadRequest, Forbidden
 
 
 from aipager.config import (
-    BACK_BUTTON, CHAT_ID, COMMANDS_BUTTON,
+    APP_BUTTON, BACK_BUTTON, CHAT_ID, COMMANDS_BUTTON,
     MODEL_CHOICES, MODELS_BUTTON,
     QUICK_COMMANDS, QUICK_TEMPLATES, TEMPLATES_BUTTON,
 )
@@ -96,6 +97,19 @@ class KeyboardMixin:
         if level is None:
             level = self._keyboard_level
 
+        # Resolved up front because the main keyboard needs to know the
+        # chat type before it builds its rows. A positive Telegram chat
+        # id IS the peer's user id, i.e. a private chat; groups and
+        # channels are negative. That matters here because a `web_app`
+        # button is private-chat-only, and Telegram rejects the WHOLE
+        # keyboard if one is present in a group — costing the operator
+        # every other button too, not just this one.
+        target = chat_id if chat_id is not None else CHAT_ID
+        try:
+            is_private = int(target) > 0
+        except (TypeError, ValueError):
+            is_private = False
+
         if level == "templates":
             rows = self._build_button_rows([lbl for lbl, _ in QUICK_TEMPLATES])
             rows.append([KeyboardButton(BACK_BUTTON)])
@@ -122,7 +136,16 @@ class KeyboardMixin:
             if labels:
                 rows = self._build_button_rows(labels)
             rows.append([KeyboardButton("status"), KeyboardButton("stop"), KeyboardButton("kill")])
-            rows.append([KeyboardButton(TEMPLATES_BUTTON), KeyboardButton(COMMANDS_BUTTON)])
+            # Rides along on the existing nav row rather than claiming one
+            # of its own: three across matches the status/stop/kill row
+            # above it, and the keyboard is already the busiest surface in
+            # the chat.
+            nav = [KeyboardButton(TEMPLATES_BUTTON), KeyboardButton(COMMANDS_BUTTON)]
+            if self._miniapp_url and is_private:
+                nav.append(KeyboardButton(
+                    APP_BUTTON, web_app=WebAppInfo(url=self._miniapp_url),
+                ))
+            rows.append(nav)
             msg_text = "\u2328\ufe0f"
 
         self._keyboard_level = level
@@ -132,7 +155,6 @@ class KeyboardMixin:
             resize_keyboard=True,
         )
 
-        target = chat_id if chat_id is not None else CHAT_ID
         try:
             await self._app.bot.send_message(
                 target, msg_text,

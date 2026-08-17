@@ -30,7 +30,7 @@ from telegram.error import BadRequest, Forbidden, RetryAfter
 from aipager.dtach import inject
 
 from aipager.config import (
-    BOT_TOKEN, CHAT_ID,
+    APP_BUTTON, BOT_TOKEN, CHAT_ID,
 )
 from aipager.state import TrackedSession
 
@@ -385,6 +385,119 @@ class LifecycleMixin:
             log.warning("Failed to set bot commands", exc_info=True)
             if first_run:
                 self._registered_labels = labels
+
+    # ---- Mini App launch button ----------------------------------------
+
+    def _miniapp_button_chats(self) -> list[int]:
+        """Private chats that may be handed the Mini App URL.
+
+        Deliberately an explicit list rather than "all private chats".
+        ``set_chat_menu_button`` with no ``chat_id`` sets the bot's
+        *default* menu button, which would show the Mini App — and so
+        disclose the tunnel hostname — to anyone who so much as opens a
+        chat with the bot. A Mini App URL is usable over the raw
+        internet once obtained (see
+        :meth:`AuthMixin._is_personal_mode_operator`), and this exact
+        class of leak was already caught once, on ``/app``.
+
+        Group scopes are skipped because they cannot have one: every
+        Mini App launch surface is private-chat-only in the Bot API, and
+        a group ``chat_id`` has no menu button to set.
+        """
+        if self.scopes is not None:
+            return [s.chat_id for s in self.scopes
+                    if s.kind == "dm" and s.chat_id > 0]
+        # Personal and team mode share one configured chat. In practice
+        # that means only personal mode gets a button: `doctor.check_team`
+        # requires a team install's CHAT_ID to equal team.yaml's
+        # `group_id`, which is a group — so the `> 0` test below returns
+        # nothing for it. That is the correct outcome (a group has no
+        # menu button), reached by the same rule rather than a special
+        # case, and it is why the rule is a sign test and not a mode test.
+        try:
+            chat_id = int(CHAT_ID)
+        except (TypeError, ValueError):
+            return []
+        # A negative id is a group: no menu button exists there.
+        return [chat_id] if chat_id > 0 else []
+
+    def prime_miniapp_url(self, url: str) -> None:
+        """Record the launch URL before the first keyboard goes out.
+
+        :meth:`start` ends by calling ``_update_bot_commands``, which in
+        personal mode sends the persistent keyboard straight away — long
+        before the Mini App server has started and
+        :meth:`publish_miniapp_button` has run. Without this the very
+        first keyboard after every restart is missing its App button,
+        and nothing re-sends it until some unrelated event (a session
+        created, a Templates→Back tap) happens to refresh it.
+
+        Makes no Telegram call and sets no menu button: that still waits
+        until the server is confirmed listening. If the server then
+        fails to start, ``publish_miniapp_button("")`` clears this, so
+        only the single keyboard already sent can carry a button whose
+        target is not up — a URL the operator could have got from
+        ``/app`` anyway.
+        """
+        self._miniapp_url = url
+
+    async def publish_miniapp_button(self, url: str) -> None:
+        """Show (or remove) the Mini App button in each authorized chat.
+
+        ``url`` empty means "there is no Mini App right now" — the Mini
+        App is disabled, its server failed to start, or no public HTTPS
+        URL resolves. That case restores the ``/`` commands menu rather
+        than leaving last run's button pointing at a port nothing is
+        listening on; a button that opens a broken page is worse than no
+        button, and it would otherwise survive every restart.
+
+        Failures are logged per chat and never raised: this runs during
+        startup, and one blocked or unknown chat must not cost the other
+        scopes their button, let alone take the daemon down.
+        """
+        from telegram import MenuButtonCommands, MenuButtonWebApp, WebAppInfo
+
+        self._miniapp_url = url
+        if not self._app:
+            return          # same guard every sibling that touches _app.bot uses
+
+        try:
+            chats = self._miniapp_button_chats()
+            button = (
+                MenuButtonWebApp(text=APP_BUTTON, web_app=WebAppInfo(url=url))
+                if url else MenuButtonCommands()
+            )
+        except Exception:
+            # The docstring promises this never raises, so the work
+            # BEFORE the API call has to be covered too — otherwise the
+            # guarantee holds only for the one line that happens to sit
+            # inside the loop's try.
+            #
+            # Fail closed: if the URL could not even be made into a
+            # button, the keyboard must not go on offering it either, or
+            # the two surfaces would disagree about whether there is a
+            # Mini App at all.
+            self._miniapp_url = ""
+            log.warning("Could not build the Mini App menu button", exc_info=True)
+            return
+
+        for chat_id in chats:
+            try:
+                # chat_id is passed ALWAYS and BY KEYWORD — see
+                # _miniapp_button_chats for why the no-chat_id form is
+                # not an acceptable shortcut here.
+                await self._app.bot.set_chat_menu_button(
+                    chat_id=chat_id, menu_button=button,
+                )
+            except Exception:
+                log.warning(
+                    "Failed to set the Mini App menu button for chat %s",
+                    chat_id, exc_info=True,
+                )
+        log.info(
+            "Mini App menu button %s for %d chat(s)",
+            "published" if url else "cleared", len(chats),
+        )
 
     async def _update_bot_commands_per_scope(self) -> None:
         """Per-chat `/menu` via ``BotCommandScopeChat`` so each scope's

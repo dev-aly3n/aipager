@@ -52,6 +52,14 @@ class TelegramBot(
         # so we only re-register a scope's `/menu` when its labels change.
         self._registered_scope_labels: dict[int, set[str]] = {}
         self._keyboard_level: str = "main"  # "main", "templates", "commands", "models"
+        # The Mini App's public URL for this daemon run. "" = no Mini
+        # App, which is what the keyboard checks before offering its
+        # launch button. Written twice at startup, in this order:
+        # prime_miniapp_url() before start() (so the FIRST keyboard
+        # already carries the button), then publish_miniapp_button()
+        # once the Mini App server is confirmed listening — which
+        # re-clears this if it turned out not to be.
+        self._miniapp_url: str = ""
         self._template_map: dict[str, str] = {label: prompt for label, prompt in QUICK_TEMPLATES}
         self._command_map: dict[str, str] = {label: cmd for label, cmd in QUICK_COMMANDS}
         self._model_map: dict[str, str] = {label: cmd for label, cmd in MODEL_CHOICES}

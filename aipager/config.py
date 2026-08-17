@@ -327,6 +327,11 @@ SPINNER_VERBS: list[str] = [
 # Quick template buttons for Telegram persistent keyboard
 TEMPLATES_BUTTON = "Templates"
 BACK_BUTTON = "\u00ab Back"
+# Opens the Mini App straight from the keyboard. A `web_app` keyboard
+# button sends no text when tapped \u2014 it just opens the app \u2014 so the
+# label only ever reaches the router on a client too old to know what
+# `web_app` is, where it falls back to /app's inline button.
+APP_BUTTON = "\U0001f4f1 App"
 _DEFAULT_TEMPLATES: list[tuple[str, str]] = [
     ("Continue", "Continue"),
     ("Run tests", "Run the tests"),

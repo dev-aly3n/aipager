@@ -36,7 +36,7 @@ from aipager.dtach import inject
 
 from aipager.bot.settings_menu import render_settings_root
 from aipager.config import (
-    BACK_BUTTON, COMMANDS_BUTTON,
+    APP_BUTTON, BACK_BUTTON, COMMANDS_BUTTON,
     FILE_DOWNLOAD_DIR, KEYBOARD_PARENTS, MODELS_BUTTON,
     TEMPLATES_BUTTON,
 )
@@ -357,7 +357,7 @@ class CommandHandlersMixin:
             )
             return
 
-        from aipager.config import MINIAPP_ENABLED, MINIAPP_PORT, MINIAPP_PUBLIC_URL
+        from aipager.config import MINIAPP_ENABLED, MINIAPP_PORT
         if not MINIAPP_ENABLED:
             await update.message.reply_text(
                 "The Mini App server isn't enabled on this machine.\n"
@@ -367,20 +367,12 @@ class CommandHandlersMixin:
             )
             return
 
-        from aipager.miniapp.tunnel import detect_public_url
-        if MINIAPP_PUBLIC_URL:
-            url = MINIAPP_PUBLIC_URL
-        else:
-            # detect_public_url() shells out to `tailscale status --json`
-            # synchronously (up to _TAILSCALE_TIMEOUT_SECONDS). This is an
-            # async handler on the daemon's single shared event loop, so
-            # a slow/hung tailscale binary must never block every other
-            # scope's message handling, hook processing, and animation
-            # ticks — run it off-loop, same pattern as voice.py:101.
-            url = await asyncio.get_running_loop().run_in_executor(
-                None, detect_public_url,
-            )
-        if not url or not url.startswith("https://"):
+        # One resolver for every surface that hands out this URL (/app,
+        # the chat menu button, the keyboard button) — it also keeps the
+        # blocking tailscale probe off the event loop.
+        from aipager.miniapp.tunnel import resolve_public_url
+        url = await resolve_public_url()
+        if not url:
             await update.message.reply_text(
                 "No public URL is configured or auto-detectable yet.\n\n"
                 "Set up Tailscale Funnel on the machine running aipager:\n"
@@ -993,6 +985,13 @@ class CommandHandlersMixin:
             return
         if text == MODELS_BUTTON:
             await self._send_keyboard(level="models", chat_id=kb_chat)
+            return
+        if text == APP_BUTTON:
+            # A `web_app` keyboard button sends no text when tapped, so
+            # reaching here means a client too old to know what one is.
+            # Fall back to /app's inline button rather than letting the
+            # label through as a prompt to Claude.
+            await self._handle_app_cmd(update, ctx)
             return
         if text == BACK_BUTTON:
             # Context-aware: go to parent of current level (models→commands, etc.)

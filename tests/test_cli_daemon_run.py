@@ -27,7 +27,7 @@ def _make_event_done():
 def _patch_components(monkeypatch, *, with_observers=False, with_miniapp=None):
     """Common mocks for _run_daemon's collaborators. Returns the patches.
 
-    ``with_miniapp``: None → MINIAPP_ENABLED stays False (untouched);
+    ``with_miniapp``: None → MINIAPP_ENABLED patched False;
     a MagicMock → MINIAPP_ENABLED=True and MiniAppServer(...) returns
     it; the string "unavailable" → MINIAPP_ENABLED=True and
     MiniAppServer.start() raises MiniAppUnavailable.
@@ -40,6 +40,7 @@ def _patch_components(monkeypatch, *, with_observers=False, with_miniapp=None):
     bot.reload_team = AsyncMock()
     bot.observers = None
     bot._update_bot_commands = AsyncMock()
+    bot.publish_miniapp_button = AsyncMock()
 
     hook_receiver = MagicMock()
     hook_receiver.start = AsyncMock()
@@ -76,6 +77,10 @@ def _patch_components(monkeypatch, *, with_observers=False, with_miniapp=None):
     if with_miniapp is not None:
         monkeypatch.setattr("aipager.config.MINIAPP_ENABLED", True)
         monkeypatch.setattr("aipager.config.MINIAPP_PORT", 8765)
+        # Pinned so the launch button's URL never depends on whatever
+        # tunnel the machine running the tests happens to have configured.
+        monkeypatch.setattr(
+            "aipager.config.MINIAPP_PUBLIC_URL", "https://test.example/")
         from aipager.miniapp.server import MiniAppUnavailable
         if with_miniapp == "unavailable":
             miniapp_server = MagicMock()
@@ -281,3 +286,87 @@ def test_run_daemon_miniapp_port_in_use_does_not_crash_daemon(monkeypatch, caplo
     bot.stop.assert_awaited_once()
     registry.save.assert_called_once()
     assert any("Mini App" in r.getMessage() for r in caplog.records)
+    # …and no launch button is published for a server that is not
+    # listening. An empty URL clears whatever a previous run left, so a
+    # Mini App that failed to start does not leave a button that opens a
+    # broken page and survives every restart.
+    bot.publish_miniapp_button.assert_awaited_once_with("")
+
+
+def test_run_daemon_publishes_no_button_when_miniapp_is_disabled(monkeypatch):
+    """Same rule for the ordinary "never enabled" case — the empty URL
+    still goes out, so disabling the Mini App really does remove a button
+    an earlier run published."""
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
+    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
+    bot, _hook, _monitor, _registry, _, _miniapp = _patch_components(
+        monkeypatch, with_miniapp=None,
+    )
+
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(daemon._run_daemon("bot_username"))
+
+    bot.publish_miniapp_button.assert_awaited_once_with("")
+
+
+def test_run_daemon_publishes_the_button_once_the_server_is_up(monkeypatch):
+    """The button exists iff the server it points at is listening."""
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
+    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
+    bot, _hook, _monitor, _registry, _, miniapp = _patch_components(
+        monkeypatch, with_miniapp=True,
+    )
+
+    async def _url():
+        return "https://tunnel.example/"
+
+    monkeypatch.setattr("aipager.miniapp.tunnel.resolve_public_url", _url)
+
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(daemon._run_daemon("bot_username"))
+
+    miniapp.start.assert_awaited_once()
+    bot.publish_miniapp_button.assert_awaited_once_with("https://tunnel.example/")
+
+
+def test_run_daemon_primes_the_url_before_the_bot_starts(monkeypatch):
+    """rev-iter1-001. `bot.start()` ends by sending the first persistent
+    keyboard. If the Mini App URL is not known by then, that keyboard has
+    no App button and nothing re-sends it — the feature is silently
+    missing from the surface the operator looks at most, on every
+    restart."""
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
+    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
+    bot, _hook, _monitor, _registry, _, _miniapp = _patch_components(
+        monkeypatch, with_miniapp=True,
+    )
+
+    order = []
+    bot.prime_miniapp_url = MagicMock(
+        side_effect=lambda url: order.append(("prime", url)))
+    bot.start = AsyncMock(side_effect=lambda: order.append(("start", None)))
+
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(daemon._run_daemon("bot_username"))
+
+    assert [step for step, _ in order] == ["prime", "start"], (
+        f"the URL must be known before start() sends the keyboard: {order}"
+    )
+    assert order[0][1] == "https://test.example/"
+
+
+def test_run_daemon_primes_nothing_when_the_miniapp_is_off(monkeypatch):
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
+    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
+    bot, _hook, _monitor, _registry, _, _miniapp = _patch_components(
+        monkeypatch, with_miniapp=None,
+    )
+
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(daemon._run_daemon("bot_username"))
+
+    bot.prime_miniapp_url.assert_called_once_with("")

@@ -286,3 +286,21 @@ def test_app_refuses_non_https_manual_url(mk_bot, mk_update, run_async, monkeypa
 
     args, kwargs = update.message.reply_text.await_args
     assert kwargs.get("reply_markup") is None
+
+
+def test_the_app_keyboard_label_routes_to_the_app_command(mk_bot, mk_update, run_async):
+    """rev-iter1-004. A `web_app` keyboard button sends no text, so this
+    label only ever arrives from a client too old to understand one.
+    It must reach /app's inline-button fallback rather than being taken
+    for a prompt and typed into a session."""
+    from unittest.mock import AsyncMock
+
+    from aipager.config import APP_BUTTON
+
+    bot = mk_bot()
+    bot._handle_app_cmd = AsyncMock()
+    update = mk_update(APP_BUTTON)
+
+    run_async(bot._handle_message(update, None))
+
+    bot._handle_app_cmd.assert_awaited_once()

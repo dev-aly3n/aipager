@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **The Mini App now has a permanent button in Telegram.** It used to be
+  reachable only by remembering to type `/app`. The daemon now puts an *App*
+  button next to the message box in every chat it's configured for, and adds one
+  to the persistent keyboard beside *Templates* and *Commands* — so the
+  dashboard is one tap away, always. The button is published when the daemon
+  starts and removed again if the Mini App is switched off, so it never points
+  at something that isn't running. Note the trade-off: the button next to the
+  message box takes the place of the `/` commands shortcut in that chat —
+  commands still work, you just type `/` to see them. Group chats don't get
+  either button; Telegram only allows Mini Apps to be opened from private
+  chats.
 - **Create a working directory from the Mini App.** The New session form's
   working-directory picker has a *New folder* row: pick a directory, type a
   name, and the folder is made and selected before you create the session. A folder
