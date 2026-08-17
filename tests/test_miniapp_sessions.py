@@ -10,12 +10,16 @@ import time
 from aipager.miniapp.sessions import (
     NO_PERMISSION_REASON,
     NO_TRANSCRIPT_REASON,
+    PERMS_ADMIN_REQUIRED_REASON,
+    QUEUE_EMPTY_REASON,
+    QUEUE_FULL_REASON,
     _derive_status,
     build_timeline,
     session_actions,
     session_detail,
     session_summary,
 )
+from aipager.state import QUEUE_CAP
 from aipager.state import Status, TrackedSession
 
 
@@ -212,7 +216,16 @@ def test_session_detail_includes_actions_key():
     sess = _sess(status=Status.BUSY)
     detail = session_detail(sess, time.monotonic())
     assert "actions" in detail
-    assert detail["actions"] == {"stop": {"available": True, "reason": None}}
+    # Not admin, no queue -> perms unavailable, clearqueue unavailable,
+    # everything else on offer for a BUSY session available.
+    assert detail["actions"] == {
+        "stop": {"available": True, "reason": None},
+        "clearqueue": {"available": False, "reason": QUEUE_EMPTY_REASON},
+        "compact": {"available": True, "reason": None},
+        "rename": {"available": True, "reason": None},
+        "perms": {"available": False, "reason": PERMS_ADMIN_REQUIRED_REASON},
+        "restart": {"available": True, "reason": None},
+    }
 
 
 def test_session_detail_default_can_act_is_permissive():
@@ -232,27 +245,57 @@ def test_session_detail_can_act_false_disables_actions():
     }
 
 
+def test_session_detail_includes_skip_perms_and_queue_depth():
+    sess = _sess(status=Status.BUSY)
+    sess.skip_perms = True
+    sess.queue_prompt("a", 1)
+    sess.queue_prompt("b", 2)
+    detail = session_detail(sess, time.monotonic())
+    assert detail["skip_perms"] is True
+    assert detail["queue_depth"] == 2
+
+
+def test_session_detail_passes_is_admin_into_perms_action():
+    sess = _sess(status=Status.IDLE)
+    sess.skip_perms = False  # target is Auto -> needs admin
+    detail = session_detail(sess, time.monotonic(), is_admin=True)
+    assert detail["actions"]["perms"] == {"available": True, "reason": None}
+
+
 # ===== session_actions (status -> buttons matrix) ==========================
 
-def test_session_actions_busy_shows_only_stop():
-    actions = session_actions("busy", resumable=False, can_act=True)
-    assert actions == {"stop": {"available": True, "reason": None}}
+def test_session_actions_busy_shows_the_full_busy_set_in_canonical_order():
+    actions = session_actions(
+        "busy", resumable=False, can_act=True, is_admin=True, queue_depth=1,
+    )
+    assert list(actions.keys()) == [
+        "stop", "clearqueue", "compact", "rename", "perms", "restart",
+    ]
+    for key in actions:
+        assert actions[key] == {"available": True, "reason": None}
 
 
-def test_session_actions_waiting_shows_only_stop():
-    actions = session_actions("waiting", resumable=False, can_act=True)
-    assert actions == {"stop": {"available": True, "reason": None}}
+def test_session_actions_waiting_excludes_compact():
+    """Compact is deliberately excluded from waiting — an open
+    permission/question prompt risks reading `/compact` as its input."""
+    actions = session_actions(
+        "waiting", resumable=False, can_act=True, is_admin=True, queue_depth=1,
+    )
+    assert list(actions.keys()) == ["stop", "clearqueue", "rename", "perms", "restart"]
+    assert "compact" not in actions
 
 
-def test_session_actions_idle_shows_only_kill():
-    actions = session_actions("idle", resumable=False, can_act=True)
-    assert actions == {"kill": {"available": True, "reason": None}}
+def test_session_actions_idle_shows_compact_but_not_stop_or_clearqueue():
+    actions = session_actions("idle", resumable=False, can_act=True, is_admin=True)
+    assert list(actions.keys()) == ["compact", "rename", "kill", "perms", "restart"]
+    assert actions["compact"] == {"available": True, "reason": None}
 
 
-def test_session_actions_gone_resumable_shows_resume_and_delete_available():
+def test_session_actions_gone_resumable_shows_resume_rename_and_delete_available():
     actions = session_actions("gone", resumable=True, can_act=True)
     assert actions == {
         "resume": {"available": True, "reason": None},
+        "rename": {"available": True, "reason": None},
         "delete": {"available": True, "reason": None},
     }
 
@@ -265,6 +308,7 @@ def test_session_actions_gone_not_resumable_resume_unavailable():
     # Delete never depends on resumability — a GONE session can always
     # be forgotten regardless of whether its transcript is resumable.
     assert actions["delete"] == {"available": True, "reason": None}
+    assert actions["rename"] == {"available": True, "reason": None}
 
 
 def test_session_actions_unknown_status_shows_nothing():
@@ -273,16 +317,21 @@ def test_session_actions_unknown_status_shows_nothing():
 
 def test_session_actions_cannot_act_disables_every_present_key():
     """any status + can_act=False -> every present key unavailable with
-    the permission reason."""
-    busy = session_actions("busy", resumable=False, can_act=False)
-    assert busy["stop"] == {"available": False, "reason": NO_PERMISSION_REASON}
+    the permission reason — including the four new keys."""
+    busy = session_actions(
+        "busy", resumable=False, can_act=False, is_admin=True, queue_depth=1,
+    )
+    for key, entry in busy.items():
+        assert entry == {"available": False, "reason": NO_PERMISSION_REASON}, key
 
-    idle = session_actions("idle", resumable=False, can_act=False)
-    assert idle["kill"] == {"available": False, "reason": NO_PERMISSION_REASON}
+    idle = session_actions("idle", resumable=False, can_act=False, is_admin=True)
+    for key, entry in idle.items():
+        assert entry == {"available": False, "reason": NO_PERMISSION_REASON}, key
 
     gone = session_actions("gone", resumable=True, can_act=False)
     assert gone["resume"] == {"available": False, "reason": NO_PERMISSION_REASON}
     assert gone["delete"] == {"available": False, "reason": NO_PERMISSION_REASON}
+    assert gone["rename"] == {"available": False, "reason": NO_PERMISSION_REASON}
 
 
 def test_session_actions_permission_reason_wins_over_no_transcript():
@@ -293,6 +342,99 @@ def test_session_actions_permission_reason_wins_over_no_transcript():
     assert actions["resume"] == {
         "available": False, "reason": NO_PERMISSION_REASON,
     }
+
+
+def test_session_actions_permission_reason_wins_over_admin_reason():
+    """can_act=False must win over the perms admin gate too — the same
+    "one reason, not two" rule generalised to the new key."""
+    actions = session_actions(
+        "busy", resumable=False, can_act=False, is_admin=False, skip_perms=False,
+    )
+    assert actions["perms"] == {"available": False, "reason": NO_PERMISSION_REASON}
+
+
+# ---- clearqueue ------------------------------------------------------------
+
+def test_session_actions_clearqueue_unavailable_when_empty():
+    actions = session_actions("busy", resumable=False, can_act=True, queue_depth=0)
+    assert actions["clearqueue"] == {"available": False, "reason": QUEUE_EMPTY_REASON}
+
+
+def test_session_actions_clearqueue_available_when_non_empty():
+    actions = session_actions("busy", resumable=False, can_act=True, queue_depth=1)
+    assert actions["clearqueue"] == {"available": True, "reason": None}
+
+
+def test_session_actions_clearqueue_absent_when_idle():
+    actions = session_actions("idle", resumable=False, can_act=True, queue_depth=5)
+    assert "clearqueue" not in actions
+
+
+# ---- compact ----------------------------------------------------------------
+
+def test_session_actions_compact_busy_unavailable_at_cap():
+    actions = session_actions(
+        "busy", resumable=False, can_act=True, queue_depth=QUEUE_CAP,
+    )
+    assert actions["compact"] == {"available": False, "reason": QUEUE_FULL_REASON}
+
+
+def test_session_actions_compact_busy_available_below_cap():
+    actions = session_actions(
+        "busy", resumable=False, can_act=True, queue_depth=QUEUE_CAP - 1,
+    )
+    assert actions["compact"] == {"available": True, "reason": None}
+
+
+def test_session_actions_compact_idle_ignores_queue_depth():
+    """IDLE compact sends immediately rather than queueing — no
+    queue-depth rule applies, even at a (nonsensical) full depth."""
+    actions = session_actions(
+        "idle", resumable=False, can_act=True, queue_depth=QUEUE_CAP,
+    )
+    assert actions["compact"] == {"available": True, "reason": None}
+
+
+def test_session_actions_compact_absent_when_waiting():
+    actions = session_actions("waiting", resumable=False, can_act=True)
+    assert "compact" not in actions
+
+
+# ---- perms --------------------------------------------------------------
+
+def test_session_actions_perms_target_auto_requires_admin():
+    """skip_perms=False -> target is Auto -> needs admin."""
+    actions = session_actions(
+        "idle", resumable=False, can_act=True, is_admin=False, skip_perms=False,
+    )
+    assert actions["perms"] == {
+        "available": False, "reason": PERMS_ADMIN_REQUIRED_REASON,
+    }
+
+
+def test_session_actions_perms_target_auto_admin_allowed():
+    actions = session_actions(
+        "idle", resumable=False, can_act=True, is_admin=True, skip_perms=False,
+    )
+    assert actions["perms"] == {"available": True, "reason": None}
+
+
+def test_session_actions_perms_target_ask_never_needs_admin():
+    """skip_perms=True -> target is Ask -> allowed for a non-admin too,
+    matching chat's own /perms rule."""
+    actions = session_actions(
+        "idle", resumable=False, can_act=True, is_admin=False, skip_perms=True,
+    )
+    assert actions["perms"] == {"available": True, "reason": None}
+
+
+def test_session_actions_perms_present_for_busy_waiting_and_idle():
+    for status in ("busy", "waiting", "idle"):
+        actions = session_actions(
+            status, resumable=False, can_act=True, is_admin=True,
+        )
+        assert "perms" in actions, status
+    assert "perms" not in session_actions("gone", resumable=True, can_act=True)
 
 
 def test_build_timeline_trailing_commentary_past_last_tool_is_appended():
