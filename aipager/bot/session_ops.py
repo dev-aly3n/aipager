@@ -14,6 +14,7 @@ import html as html_mod
 import logging
 import re
 import time
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from telegram import (
@@ -61,6 +62,40 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+@dataclass
+class StopOutcome:
+    """Result of :meth:`SessionOpsMixin._stop_session_core`."""
+
+    ok: bool
+    label: str
+    dropped: int = 0
+
+
+@dataclass
+class KillOutcome:
+    """Result of :meth:`SessionOpsMixin._kill_session_core`.
+
+    ``result`` is one of ``"killed"``, ``"still_running"``, ``"not_found"``.
+    """
+
+    result: str
+    label: str
+    session_name: str
+
+
+@dataclass
+class ResumeOutcome:
+    """Result of :meth:`SessionOpsMixin._do_resume_core`.
+
+    ``reason`` is one of ``"not_gone"``, ``"no_transcript"``,
+    ``"launch_failed"``, ``"resumed"``. Never ``"not_found"`` — the
+    caller resolves the session before calling the core, and handles a
+    missing session itself (see the core's own docstring).
+    """
+
+    ok: bool
+    reason: str
+    err: str = ""
 
 
 
@@ -214,10 +249,17 @@ class SessionOpsMixin:
 
     # ── Telegram handlers ──
 
-    async def _stop_session(self, sess: TrackedSession,
-                            update: Update | None = None,
-                            query=None) -> None:
-        """Interrupt a busy session: send Escape, clean up state."""
+    async def _stop_session_core(self, sess: TrackedSession) -> StopOutcome:
+        """Interrupt a busy session: send Escape, clean up state.
+
+        The shared seam both chat and the Mini App call — edit behaviour
+        here, not in the wrapper. Refuses immediately, with no awaits and
+        no side effects, when the session is not actually busy — this
+        makes the refusal pytest-testable with zero dtach mocking.
+        """
+        if sess.status not in (Status.BUSY, Status.INTERACTIVE):
+            return StopOutcome(ok=False, label=sess.label)
+
         # 1. Send Escape twice to Claude Code
         await inject.send_keys(sess.name, "Escape")
         await asyncio.sleep(0.15)
@@ -243,10 +285,27 @@ class SessionOpsMixin:
         sess.last_idle_at = time.monotonic()  # prevent debounce of next real IDLE
         self.registry.mark_dirty()
 
-        # 5. Acknowledge
+        log.info("[%s] Stopped by user (dropped %d queued)", sess.label, dropped)
+        return StopOutcome(ok=True, label=sess.label, dropped=dropped)
+
+    async def _stop_session(self, sess: TrackedSession,
+                            update: Update | None = None,
+                            query=None) -> StopOutcome:
+        """Interrupt a busy session: send Escape, clean up state.
+
+        Thin wrapper around :meth:`_stop_session_core` — chat's own
+        acknowledgement (edit the busy message / react to the command),
+        the core's behaviour lives in the core.
+        """
+        outcome = await self._stop_session_core(sess)
+        if not outcome.ok:
+            return outcome
+
+        # Acknowledge
         ack = f"Stopped [{sess.label}]"
-        if dropped:
-            ack += f" ({dropped} queued message{'s' if dropped > 1 else ''} discarded)"
+        if outcome.dropped:
+            ack += (f" ({outcome.dropped} queued message"
+                    f"{'s' if outcome.dropped > 1 else ''} discarded)")
 
         if query:
             await self._safe_answer(query, ack)
@@ -261,7 +320,7 @@ class SessionOpsMixin:
         elif update:
             await self._react(update, "✅")
 
-        log.info("[%s] Stopped by user (dropped %d queued)", sess.label, dropped)
+        return outcome
 
     async def _halt_for_safety(self, sess: TrackedSession, reason: str) -> None:
         """Cleanly halt a session after a safety block.
@@ -306,8 +365,39 @@ class SessionOpsMixin:
         self.registry.mark_dirty()
         log.info("[%s] halted by safety policy", sess.label)
 
+    async def _kill_session_core(self, session_name: str, label: str) -> KillOutcome:
+        """Kill a session by its (already-resolved) dtach session name.
+
+        The shared seam both chat and the Mini App call — edit behaviour
+        here, not in the wrapper.
+        """
+        # Stop animation if running
+        sess = self.registry.get(session_name)
+        if sess:
+            self._stop_animation(sess)
+
+        # Kill the dtach process
+        killed = await inject.kill_session(session_name)
+        if killed:
+            self.registry.remove(session_name)
+            self.registry.mark_dirty()
+            asyncio.create_task(self._update_bot_commands())
+            return KillOutcome(result="killed", label=label, session_name=session_name)
+        if await inject.is_alive(session_name):
+            # Socket still there: the process survived. Saying "not found"
+            # here would tell the user it is gone while it keeps running.
+            return KillOutcome(
+                result="still_running", label=label, session_name=session_name,
+            )
+        return KillOutcome(result="not_found", label=label, session_name=session_name)
+
     async def _kill_session_by_label(self, source, target_label: str) -> None:
-        """Kill a session by label. source is Update or CallbackQuery."""
+        """Kill a session by label. source is Update or CallbackQuery.
+
+        Thin wrapper around :meth:`_kill_session_core` — the chat-only
+        label→name resolution (with its ``claude-<label>`` fallback,
+        unreachable from the Mini App) and reply phrasing live here.
+        """
         async def _reply(text: str) -> None:
             if hasattr(source, 'message') and source.message:
                 await source.message.reply_text(text)
@@ -319,66 +409,40 @@ class SessionOpsMixin:
             target_label, calling_chat_id(source), include_gone=True)
         session_name = found.name if found else f"claude-{target_label}"
 
-        # Stop animation if running
-        sess = self.registry.get(session_name)
-        if sess:
-            self._stop_animation(sess)
-
-        # Kill the dtach process
-        killed = await inject.kill_session(session_name)
-        if killed:
-            self.registry.remove(session_name)
-            self.registry.mark_dirty()
+        outcome = await self._kill_session_core(session_name, target_label)
+        if outcome.result == "killed":
             await _reply(f"💀 Killed [{target_label}]")
-            asyncio.create_task(self._update_bot_commands())
-        elif await inject.is_alive(session_name):
-            # Socket still there: the process survived. Saying "not found"
-            # here would tell the user it is gone while it keeps running.
+        elif outcome.result == "still_running":
             await _reply(f"⚠️ Could not kill [{target_label}] — still running")
         else:
             await _reply(f"⚠️ Session [{target_label}] not found")
 
-    async def _do_resume(self, *, label: str, reply_fn,
-                          update: Update | None = None,
-                          query=None,
-                          skip_perms_override: bool | None = None) -> None:
-        """Shared resume logic for /resume <name> and picker callbacks.
+    async def _do_resume_core(
+        self, sess: TrackedSession, *,
+        skip_perms_override: bool | None = None,
+        driver_user_id: int | None = None,
+    ) -> ResumeOutcome:
+        """Resume an already-resolved GONE session.
 
-        ``reply_fn`` is the async-callable used to send the result back
-        (``update.message.reply_text`` for command, ``query.edit_message_text``
-        for callbacks). ``update`` is used to attribute the driver in team
-        mode when available.
+        The shared seam both chat and the Mini App call — edit behaviour
+        here, not in the wrapper. Assumes ``sess`` is already resolved
+        (never receives ``None`` — the caller handles "no such session"
+        itself, since that reply differs by surface and needs no dtach
+        work at all).
+
+        ``driver_user_id``, when given, attributes this resume directly
+        (mirroring :meth:`create_session`'s own precedent) rather than
+        via :meth:`aipager.bot.auth.AuthMixin._mark_driver`, which needs
+        an ``Update`` the Mini App does not have.
         """
-        sess = self.registry.find_by_label(
-            label, calling_chat_id(update or query), include_gone=True)
-        session_name = sess.name if sess is not None else f"claude-{label}"
-
-        if sess is None:
-            await reply_fn(
-                f"⚠️ No session named <b>{html_mod.escape(label)}</b> in history.\n"
-                f"Send <code>/resume</code> with no name to see what's available.",
-                parse_mode="HTML",
-            )
-            return
-
         if sess.status != Status.GONE:
-            await reply_fn(
-                f"⚠️ <b>{html_mod.escape(label)}</b> is already running.\n"
-                f"Tap <code>/{html_mod.escape(label)}</code> in the keyboard "
-                f"to switch to it.",
-                parse_mode="HTML",
-            )
-            return
+            return ResumeOutcome(ok=False, reason="not_gone")
 
         if not sess.claude_session_id:
-            await reply_fn(
-                f"⚠️ Session <b>{html_mod.escape(label)}</b> has no resumable "
-                f"transcript on disk.\n"
-                f"Start a fresh one with <code>/new {html_mod.escape(label)}</code>.",
-                parse_mode="HTML",
-            )
-            return
+            return ResumeOutcome(ok=False, reason="no_transcript")
 
+        label = sess.label
+        session_name = sess.name
         resume_id = sess.claude_session_id
         cwd = sess.cwd or None
         # Defensive: clear the id BEFORE launch so a repeat-failure doesn't
@@ -407,24 +471,87 @@ class SessionOpsMixin:
             # broke (e.g. removing a stale socket).
             sess.claude_session_id = resume_id
             self.registry.mark_dirty()
-            await reply_fn(
-                f"❌ Couldn't resume <b>{html_mod.escape(label)}</b>: "
-                f"{html_mod.escape(err)}",
-                parse_mode="HTML",
-            )
-            return
+            return ResumeOutcome(ok=False, reason="launch_failed", err=err)
 
-        # Resume succeeded — recover state, dashboard out the result.
+        # Resume succeeded — recover state.
         sess.gone_at = None
         sess.skip_perms = effective_skip_perms
         self.registry.transition(session_name, Status.IDLE)
-        if update is not None:
-            self._mark_driver(sess, update)
+        if driver_user_id is not None:
+            sess.last_driver_user_id = driver_user_id
+            sess.created_by_user_id = sess.created_by_user_id or driver_user_id
         self.registry.last_active_session = session_name
         self.registry.mark_dirty()
         asyncio.create_task(self._maybe_update_bot_name(session_name))
         asyncio.create_task(self._update_bot_commands())
 
+        log.info("[%s] Resumed (claude_session_id=%s, cwd=%s)",
+                 label, resume_id, cwd or "<daemon>")
+        return ResumeOutcome(ok=True, reason="resumed")
+
+    async def _do_resume(self, *, label: str, reply_fn,
+                          update: Update | None = None,
+                          query=None,
+                          skip_perms_override: bool | None = None) -> None:
+        """Shared resume logic for /resume <name> and picker callbacks.
+
+        ``reply_fn`` is the async-callable used to send the result back
+        (``update.message.reply_text`` for command, ``query.edit_message_text``
+        for callbacks). ``update`` is used to attribute the driver in team
+        mode when available.
+
+        Thin wrapper around :meth:`_do_resume_core`: this is the only
+        place that resolves the label to a session and handles "no such
+        session" — the core is never called with ``sess is None``.
+        """
+        sess = self.registry.find_by_label(
+            label, calling_chat_id(update or query), include_gone=True)
+
+        if sess is None:
+            await reply_fn(
+                f"⚠️ No session named <b>{html_mod.escape(label)}</b> in history.\n"
+                f"Send <code>/resume</code> with no name to see what's available.",
+                parse_mode="HTML",
+            )
+            return
+
+        driver_user_id = (
+            update.effective_user.id
+            if update is not None and update.effective_user is not None
+            else None
+        )
+        outcome = await self._do_resume_core(
+            sess, skip_perms_override=skip_perms_override,
+            driver_user_id=driver_user_id,
+        )
+
+        if outcome.reason == "not_gone":
+            await reply_fn(
+                f"⚠️ <b>{html_mod.escape(label)}</b> is already running.\n"
+                f"Tap <code>/{html_mod.escape(label)}</code> in the keyboard "
+                f"to switch to it.",
+                parse_mode="HTML",
+            )
+            return
+
+        if outcome.reason == "no_transcript":
+            await reply_fn(
+                f"⚠️ Session <b>{html_mod.escape(label)}</b> has no resumable "
+                f"transcript on disk.\n"
+                f"Start a fresh one with <code>/new {html_mod.escape(label)}</code>.",
+                parse_mode="HTML",
+            )
+            return
+
+        if outcome.reason == "launch_failed":
+            await reply_fn(
+                f"❌ Couldn't resume <b>{html_mod.escape(label)}</b>: "
+                f"{html_mod.escape(outcome.err)}",
+                parse_mode="HTML",
+            )
+            return
+
+        # Resumed — dashboard out the result.
         dashboard = self._build_session_dashboard(sess)
         # Always try to surface where the user left off. If the cached
         # preview is empty (e.g. SessionEnd hook was dropped at GONE
@@ -446,17 +573,14 @@ class SessionOpsMixin:
             body = f"{header}\n\n{dashboard}"
 
         await reply_fn(body, parse_mode="HTML")
-        log.info("[%s] Resumed (claude_session_id=%s, cwd=%s)",
-                 label, resume_id, cwd or "<daemon>")
 
     async def _stop_by_label(self, update: Update, target_label: str) -> None:
         """Stop a session by its label."""
         sess = self.registry.find_by_label(target_label, calling_chat_id(update))
         if sess is not None:
-            if sess.status not in (Status.BUSY, Status.INTERACTIVE):
+            outcome = await self._stop_session(sess, update=update)
+            if not outcome.ok:
                 await update.message.reply_text(f"[{target_label}] is not busy.")
-                return
-            await self._stop_session(sess, update=update)
             return
         await update.message.reply_text(f"⚠️ Unknown session: {target_label}")
 

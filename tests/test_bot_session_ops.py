@@ -324,3 +324,212 @@ def test_do_resume_failure_restores_session_id(mk_bot, run_async, monkeypatch):
     # The claude_session_id is restored so user can retry
     assert sess.claude_session_id == "UUID-1"
     assert sess.status == Status.GONE
+
+
+# ---- _stop_session_core / _kill_session_core / _do_resume_core ----------
+#
+# The shared seam both chat's wrappers above AND the Mini App's routes
+# call. Each refusal is the FIRST statement, before any await — several
+# tests below prove this directly by making the very next dtach call
+# raise if it is ever reached, rather than merely asserting the return
+# value (design.md's "no awaits before this check").
+
+def test_stop_session_core_refuses_when_idle(mk_bot, run_async, monkeypatch):
+    """A non-busy session must refuse before touching dtach at all."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    bot.registry._sessions["claude-jim"] = sess
+
+    async def _boom(*args, **kwargs):
+        raise AssertionError("inject.send_keys must not run for a non-busy session")
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", _boom)
+
+    outcome = run_async(bot._stop_session_core(sess))
+    assert outcome.ok is False
+    assert outcome.label == "jim"
+    assert outcome.dropped == 0
+
+
+def test_stop_session_core_refuses_when_gone(mk_bot, run_async):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
+    outcome = run_async(bot._stop_session_core(sess))
+    assert outcome.ok is False
+
+
+def test_stop_session_core_ok_true_with_dropped_count(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.queue_prompt("a", 1)
+    sess.queue_prompt("b", 2)
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr("aipager.dtach.inject.send_keys",
+                        AsyncMock(return_value=True))
+    async def _no_sleep(_): pass
+    monkeypatch.setattr("aipager.bot.session_ops.asyncio.sleep", _no_sleep)
+    bot._stop_animation = MagicMock()
+    bot._edit_busy_raw = AsyncMock()
+
+    outcome = run_async(bot._stop_session_core(sess))
+    assert outcome.ok is True
+    assert outcome.label == "jim"
+    assert outcome.dropped == 2
+    assert sess.status == Status.IDLE
+
+
+def test_kill_session_core_returns_killed(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr("aipager.dtach.inject.kill_session",
+                        AsyncMock(return_value=True))
+    bot._update_bot_commands = AsyncMock()
+
+    outcome = run_async(bot._kill_session_core("claude-jim", "jim"))
+    assert outcome.result == "killed"
+    assert outcome.label == "jim"
+    assert outcome.session_name == "claude-jim"
+    assert bot.registry.get("claude-jim") is None
+
+
+def test_kill_session_core_returns_still_running_when_alive_but_not_killed(
+    mk_bot, run_async, monkeypatch,
+):
+    bot = mk_bot()
+    monkeypatch.setattr("aipager.dtach.inject.kill_session",
+                        AsyncMock(return_value=False))
+    monkeypatch.setattr("aipager.dtach.inject.is_alive",
+                        AsyncMock(return_value=True))
+
+    outcome = run_async(bot._kill_session_core("claude-jim", "jim"))
+    assert outcome.result == "still_running"
+    assert outcome.label == "jim"
+
+
+def test_kill_session_core_returns_not_found(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    monkeypatch.setattr("aipager.dtach.inject.kill_session",
+                        AsyncMock(return_value=False))
+    monkeypatch.setattr("aipager.dtach.inject.is_alive",
+                        AsyncMock(return_value=False))
+
+    outcome = run_async(bot._kill_session_core("claude-jim", "jim"))
+    assert outcome.result == "not_found"
+    assert outcome.label == "jim"
+
+
+def test_do_resume_core_refuses_when_not_gone(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+
+    async def _boom(*args, **kwargs):
+        raise AssertionError("inject.launch_session must not run when not GONE")
+    monkeypatch.setattr("aipager.dtach.inject.launch_session", _boom)
+
+    outcome = run_async(bot._do_resume_core(sess))
+    assert outcome.ok is False
+    assert outcome.reason == "not_gone"
+
+
+def test_do_resume_core_refuses_when_no_transcript(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
+    # No claude_session_id set — default is "".
+
+    async def _boom(*args, **kwargs):
+        raise AssertionError("inject.launch_session must not run with no transcript")
+    monkeypatch.setattr("aipager.dtach.inject.launch_session", _boom)
+
+    outcome = run_async(bot._do_resume_core(sess))
+    assert outcome.ok is False
+    assert outcome.reason == "no_transcript"
+
+
+def test_do_resume_core_launch_failure_restores_id(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
+    sess.claude_session_id = "UUID-1"
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr("aipager.dtach.inject.launch_session",
+                        AsyncMock(return_value=(False, "dtach broken")))
+
+    outcome = run_async(bot._do_resume_core(sess))
+    assert outcome.ok is False
+    assert outcome.reason == "launch_failed"
+    assert outcome.err == "dtach broken"
+    assert sess.claude_session_id == "UUID-1"
+    assert sess.status == Status.GONE
+
+
+def test_do_resume_core_happy_path_transitions_idle(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
+    sess.claude_session_id = "UUID-1"
+    sess.gone_at = 1234.0
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr("aipager.dtach.inject.launch_session",
+                        AsyncMock(return_value=(True, "")))
+    bot._maybe_update_bot_name = AsyncMock()
+    bot._update_bot_commands = AsyncMock()
+
+    outcome = run_async(bot._do_resume_core(sess))
+    assert outcome.ok is True
+    assert outcome.reason == "resumed"
+    assert sess.status == Status.IDLE
+    assert sess.gone_at is None
+
+
+def test_do_resume_core_sets_driver_user_id_directly(mk_bot, run_async, monkeypatch):
+    """Locks in the design's "Unknown 2" decision: a given
+    ``driver_user_id`` is stamped directly onto the session rather than
+    routed through ``_mark_driver`` (which needs an ``Update`` the Mini
+    App never has)."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
+    sess.claude_session_id = "UUID-1"
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr("aipager.dtach.inject.launch_session",
+                        AsyncMock(return_value=(True, "")))
+    bot._maybe_update_bot_name = AsyncMock()
+    bot._update_bot_commands = AsyncMock()
+
+    outcome = run_async(bot._do_resume_core(sess, driver_user_id=777))
+    assert outcome.ok is True
+    assert sess.last_driver_user_id == 777
+    assert sess.created_by_user_id == 777
+
+
+def test_do_resume_core_keeps_existing_created_by_user_id(mk_bot, run_async, monkeypatch):
+    """created_by_user_id is first-touch-only — a resume must not
+    overwrite who originally created the session, only who is currently
+    driving it."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
+    sess.claude_session_id = "UUID-1"
+    sess.created_by_user_id = 111
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr("aipager.dtach.inject.launch_session",
+                        AsyncMock(return_value=(True, "")))
+    bot._maybe_update_bot_name = AsyncMock()
+    bot._update_bot_commands = AsyncMock()
+
+    outcome = run_async(bot._do_resume_core(sess, driver_user_id=777))
+    assert outcome.ok is True
+    assert sess.last_driver_user_id == 777
+    assert sess.created_by_user_id == 111
+
+
+def test_do_resume_core_no_driver_when_none_given(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
+    sess.claude_session_id = "UUID-1"
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr("aipager.dtach.inject.launch_session",
+                        AsyncMock(return_value=(True, "")))
+    bot._maybe_update_bot_name = AsyncMock()
+    bot._update_bot_commands = AsyncMock()
+
+    outcome = run_async(bot._do_resume_core(sess))
+    assert outcome.ok is True
+    assert sess.last_driver_user_id is None
+    assert sess.created_by_user_id is None

@@ -385,6 +385,7 @@ APP_JS = r"""
         : "Nothing captured yet — it arrives once Claude replies.";
     }
 
+    renderDetailActions(data);
     renderTimeline(data.timeline);
     updateSectionHeaders(data);
   }
@@ -705,6 +706,141 @@ APP_JS = r"""
       });
   }
 
+  // ---- detail-page write actions (Stop/Kill/Resume/Delete) --------------
+  //
+  // `data.actions` is built server-side (sessions.session_actions) and
+  // already omits what the current status makes irrelevant, and marks
+  // what the caller cannot do right now — this only renders exactly the
+  // keys it is given, disabling a present-but-unavailable entry and
+  // showing its `reason` verbatim (design.md: "the client renders what
+  // it's given").
+  //
+  // Stop/Resume act on a single tap. Kill/Delete are destructive and
+  // require a second tap within 5s ("armed" -> "Confirm?"); the timer is
+  // accident-prevention beyond the letter of the spec, in its spirit —
+  // one mistyped tap on a phone should not end a session.
+  var armedAction = null;   // {label, action} while a two-tap action is armed
+  var armTimer = null;
+
+  var ACTION_TITLES = { stop: "Stop", kill: "Kill", resume: "Resume", delete: "Delete" };
+  // path segment appended to /api/sessions/{label} for each action; Delete
+  // has none — it IS that resource, via the DELETE verb.
+  var ACTION_PATHS = { stop: "stop", kill: "kill", resume: "resume", delete: "" };
+  var ACTION_METHODS = { stop: "POST", kill: "POST", resume: "POST", delete: "DELETE" };
+  var TWO_TAP_ACTIONS = { kill: true, delete: true };
+  // Order matters only in that it is stable across renders; at most one
+  // of stop/kill and at most one of resume/delete is ever present at once
+  // (design.md's status matrix), so this never produces more than two rows.
+  var ACTION_ORDER = ["stop", "kill", "resume", "delete"];
+
+  function clearArmedAction() {
+    armedAction = null;
+    if (armTimer) { clearTimeout(armTimer); armTimer = null; }
+  }
+
+  function postSessionAction(label, action, method) {
+    var path = "/api/sessions/" + encodeURIComponent(label) +
+      (action ? "/" + action : "");
+    var headers = { "X-Telegram-Init-Data": initData };
+    if (method === "POST") { headers["Content-Type"] = "application/json"; }
+    return fetch(path, { method: method, headers: headers })
+      .then(function (res) {
+        return res.json().then(function (data) {
+          return { status: res.status, data: data };
+        });
+      });
+  }
+
+  function runDetailAction(label, action) {
+    var method = ACTION_METHODS[action];
+    postSessionAction(label, ACTION_PATHS[action], method).then(function (r) {
+      if (action === "kill" || action === "delete") {
+        if (r.status === 200 || (r.status === 404 && action === "kill")) {
+          // Kill's post-lookup race (socket already gone) reads the
+          // session as gone either way — same reaction as a clean 200.
+          showNotice(r.status === 404 ? "Already gone."
+            : (action === "kill" ? "Killed." : "Deleted."));
+          showGrid();
+          return;
+        }
+        showNotice((r.data && r.data.detail) || "Couldn't complete that.");
+        return;
+      }
+      // stop / resume
+      if (r.status === 200) {
+        showNotice(action === "stop" ? "Stopped." : "Resumed.");
+        pollTick();
+        return;
+      }
+      showNotice((r.data && r.data.detail) || "Couldn't complete that.");
+    }).catch(function () {
+      showNotice("Couldn't reach the server — nothing changed.");
+      if (TWO_TAP_ACTIONS[action]) { renderDetailActions(lastDetailData); }
+    });
+  }
+
+  function onDetailActionTap(label, action) {
+    if (TWO_TAP_ACTIONS[action]) {
+      var isArmed = armedAction && armedAction.label === label &&
+        armedAction.action === action;
+      if (!isArmed) {
+        // First tap: arm, start the 5s window, issue NO request.
+        armedAction = { label: label, action: action };
+        if (armTimer) { clearTimeout(armTimer); }
+        armTimer = setTimeout(function () {
+          armedAction = null;
+          armTimer = null;
+          renderDetailActions(lastDetailData);
+        }, 5000);
+        renderDetailActions(lastDetailData);
+        return;
+      }
+      // Second tap while armed: disarm immediately (so the button reads
+      // normal again regardless of how long the request takes), then act.
+      clearArmedAction();
+      renderDetailActions(lastDetailData);
+      runDetailAction(label, action);
+      return;
+    }
+    runDetailAction(label, action);
+  }
+
+  function renderDetailActions(data) {
+    var host = document.getElementById("detail-actions");
+    host.innerHTML = "";
+    if (!data || !data.actions) { return; }
+    ACTION_ORDER.forEach(function (key) {
+      var spec = data.actions[key];
+      if (!spec) { return; }
+
+      var row = document.createElement("div");
+      row.className = "action-row";
+
+      var isArmed = !!(armedAction && armedAction.label === data.label &&
+        armedAction.action === key);
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "action-btn" + (isArmed ? " is-armed" : "");
+      btn.textContent = isArmed ? "Confirm?" : ACTION_TITLES[key];
+      if (!spec.available) {
+        btn.disabled = true;
+      } else {
+        btn.addEventListener("click", function () {
+          onDetailActionTap(data.label, key);
+        });
+      }
+      row.appendChild(btn);
+
+      if (!spec.available && spec.reason) {
+        var note = document.createElement("div");
+        note.className = "reveal-note";
+        note.textContent = spec.reason;
+        row.appendChild(note);
+      }
+      host.appendChild(row);
+    });
+  }
+
   // ---- view switching ---------------------------------------------------
 
   // Independent collapsible sections, not a tab strip: the page leads
@@ -730,6 +866,9 @@ APP_JS = r"""
     diffOpen = false;
     timelineOpen = false;
     lastDiffData = null;
+    // Navigating to a (possibly different) session must never carry a
+    // stale two-tap arm along with it — see clearArmedAction's callers.
+    clearArmedAction();
     // Reset the detail payload too: renderDiff names the repo from
     // lastDetailData.cwd, and expanding "Changed files" on this session
     // before its own detail poll lands would otherwise name the PREVIOUS
@@ -763,6 +902,8 @@ APP_JS = r"""
   }
 
   function showGrid() {
+    // Leaving the detail page — the same rule as openDetail.
+    clearArmedAction();
     // Back from a sub-page returns to whichever top-level tab was active.
     showView(mainTab === "settings" ? "settings" : "grid");
     pollTick();

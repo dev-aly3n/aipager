@@ -673,6 +673,14 @@ def test_new_routes_reject_post_put_delete_patch(scoped_server, run_async, path)
                     # Batch 5 added POST /api/sessions as the session-create
                     # route. Every other verb/path combination stays refused.
                     continue
+                if method == "delete" and path == "/api/sessions/dev":
+                    # The session-controls batch added DELETE on this exact
+                    # path (the Delete action) — a real, auth-gated route
+                    # now, so a header-less request 401s (see the dedicated
+                    # session-controls test file) rather than 404/405ing at
+                    # the router. Every other verb/path combination here
+                    # stays refused.
+                    continue
                 resp = await getattr(client, method)(path)
                 assert resp.status in (404, 405), f"{method.upper()} {path} -> {resp.status}"
         finally:
