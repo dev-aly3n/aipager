@@ -433,6 +433,14 @@ APP_JS = r"""
   // session the operator has already navigated away from can never paint
   // (or, worse, silently roll back) the session on screen now.
   var sessionSettingsLabel = null;
+  // Per-field write counter, so a slow PUT that resolves after a newer one
+  // cannot roll the field back. Declared here rather than beside its only
+  // reader: it was previously declared inside the block that rendered the
+  // settings, and a rewrite of that block deleted it — every tap then threw
+  // `sessionSaveSeq is not defined` on the first line of the save handler,
+  // which aborts the click silently. Nothing repainted, nothing was sent,
+  // and the option simply did not respond.
+  var sessionSaveSeq = Object.create(null);
 
   function renderSessionSettings() {
     var root = document.getElementById("session-settings-groups");
@@ -441,7 +449,10 @@ APP_JS = r"""
     var canEdit = !!sessionSettingsData.can_edit;
     document.getElementById("session-settings-readonly").hidden = canEdit;
 
-    var label = currentView.label;
+    // The label the LOADED DATA belongs to, not whatever view is current —
+    // those can diverge mid-navigation, and a write must target the session
+    // whose values are on screen.
+    var label = sessionSettingsLabel;
     var anyOverridden = false;
     sessionSettingsData.schema.forEach(function (group) {
       var v = sessionSettingsData.values[group.field] || {};
@@ -504,6 +515,10 @@ APP_JS = r"""
       return res.json();
     }).then(function (data) {
       if (sessionSaveSeq[field] !== seq || sessionSettingsLabel !== label) { return; }
+      // Only adopt a well-formed body. Assigning an absent `values` would
+      // leave the client with no values object at all, and the next render
+      // or tap would throw on it.
+      if (!data || !data.values) { return; }
       sessionSettingsData.values = data.values;
       renderSessionSettings();
       showNotice("Saved.");

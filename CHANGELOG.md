@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Per-session settings respond to a tap.** A refactor had deleted a variable
+  the save handler used on its very first line, so every tap threw before it
+  could do anything — no visible change, no request, nothing. The page's
+  JavaScript is now executed and driven by the test suite rather than only read,
+  which is what finally caught it.
 - **Per-session settings can actually be changed.** Every tap on a session's own
   settings was sending the session's name where the setting name belonged, so the
   server rejected it and the option silently snapped back — indistinguishable
