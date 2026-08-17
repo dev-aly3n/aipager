@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **The session page can now Stop, Kill, Resume and Delete a session.** Four
+  buttons appear on the detail page depending on what the session is doing:
+  Stop while it is busy or waiting on you, Kill once it is idle, and Resume or
+  Delete once it is gone. Each shares its real implementation with chat's own
+  `/stop`, `/kill` and `/resume`, so the two surfaces can never drift apart.
+  Kill and Delete need a second tap to confirm — a stray first tap does
+  nothing — and every action is announced back in the chat it belongs to, the
+  same way creating a session already is. Anyone who can already send a
+  message to a session can use these buttons; nothing here needs admin.
+  Delete only forgets a finished session from the list — it never touches a
+  transcript on disk, and refuses on anything still running.
 - **The Mini App now has a permanent button in Telegram.** It used to be
   reachable only by remembering to type `/app`. The daemon now puts an *App*
   button next to the message box in every chat it's configured for, and adds one
