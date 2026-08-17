@@ -784,3 +784,42 @@ def test_a_created_folder_can_then_be_used_as_a_working_directory(server, run_as
         finally:
             await client.close()
     run_async(_run())
+
+
+# ===== which directory the form starts on =================================
+
+def test_options_names_the_daemons_own_directory(server, run_async):
+    """The client tags this one `default` instead of offering a second
+    "Default" row beside it — since the daemon's directory became an
+    allowed root, the two were the same directory listed twice."""
+    async def _run():
+        client = await _client_for(server)
+        try:
+            body = await (await client.get(
+                "/api/session-options", headers=_hdr(ADMIN_ID))).json()
+            import os
+            assert body["default_directory"] == os.path.realpath(server._project_dir)
+            assert body["default_directory"] in body["directories"], (
+                "a tag pointing at a directory the picker does not list"
+            )
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_options_reports_no_default_directory_when_it_is_not_a_root(
+    server, run_async, monkeypatch,
+):
+    """`allowed_roots` drops the daemon's directory when it is `/` or
+    gone. Naming it anyway would tag a row that isn't there."""
+    monkeypatch.setattr("aipager.dtach.inject._PROJECT_DIR", "/")
+
+    async def _run():
+        client = await _client_for(server)
+        try:
+            body = await (await client.get(
+                "/api/session-options", headers=_hdr(ADMIN_ID))).json()
+            assert body["default_directory"] == ""
+        finally:
+            await client.close()
+    run_async(_run())

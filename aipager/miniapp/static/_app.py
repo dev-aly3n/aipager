@@ -778,7 +778,22 @@ APP_JS = r"""
   var openGroups = Object.create(null);
 
   function renderOptionGroup(host, opts) {
-    // opts: {key, title, options[], current, defaultValue, disabled, onPick}
+    // opts: {key, title, options[], current, defaultValue, disabled, onPick,
+    //        valueText, reveal}
+    //
+    // The last two are optional and used only by the new-session form; the
+    // Settings tab and the session page pass neither and render exactly as
+    // before. `valueText` overrides what the collapsed header shows, for a
+    // group whose value is typed rather than picked (the option's own label
+    // would say "Other model…" forever). `reveal` is
+    // {after: <option value>, node: <element>} — a PERSISTENT element moved
+    // into place beneath that row, so what is typed into it survives the
+    // next structural render.
+    //
+    // An option may also carry `create: true` (render as the dashed ＋ row)
+    // and `active: <bool>` (drive the selected state from something other
+    // than `current` — a row that performs an action rather than being a
+    // value cannot use `current`, which has to keep holding the value).
     var wrap = document.createElement("div");
     wrap.className = "grp";
 
@@ -797,7 +812,9 @@ APP_JS = r"""
     opts.options.forEach(function (o) {
       if (o.value === opts.current) { currentOpt = o; }
     });
-    value.textContent = currentOpt ? currentOpt.label : "—";
+    value.textContent = opts.valueText !== undefined
+      ? opts.valueText
+      : (currentOpt ? currentOpt.label : "—");
 
     var caret = document.createElement("span");
     caret.className = "grp-caret";
@@ -818,7 +835,11 @@ APP_JS = r"""
       opts.options.forEach(function (o) {
         var row = document.createElement("button");
         row.type = "button";
-        row.className = "choice" + (o.value === opts.current ? " is-active" : "");
+        var isActive = o.active !== undefined
+          ? !!o.active
+          : o.value === opts.current;
+        row.className = "choice" + (o.create ? " choice-new" : "") +
+          (isActive ? " is-active" : "");
         if (opts.disabled) { row.disabled = true; }
 
         var main = document.createElement("span");
@@ -844,10 +865,19 @@ APP_JS = r"""
           row.addEventListener("click", function () { opts.onPick(o.value); });
         }
         list.appendChild(row);
+        // Immediately after the row that revealed it — the whole point of
+        // a conditional reveal is that the two read as one thing.
+        if (opts.reveal && opts.reveal.after === o.value) {
+          list.appendChild(opts.reveal.node);
+        }
       });
       wrap.appendChild(list);
     }
     host.appendChild(wrap);
+    // Handed back so a caller can update the collapsed header without a
+    // structural render — the new-session form needs the header to track
+    // what is being typed into a reveal, keystroke by keystroke.
+    return { wrap: wrap, value: value };
   }
 
 
@@ -1001,7 +1031,16 @@ APP_JS = r"""
 
   var newOptions = null;      // /api/session-options payload
   // prefs: field -> chosen value, only for fields the operator diverged on.
-  var newState = { model: "", cwd: "", skip_perms: false, prefs: {} };
+  // folderOpen: the New folder reveal is showing. Deliberately NOT stored in
+  // `cwd` — the folder is created *inside* whatever is selected, so the
+  // selection has to keep holding a real directory while the reveal is open.
+  // folderError / folderBusy make the folder reveal's note a pure function
+  // of state in refreshNewForm, rather than something three places poke at
+  // and one of them forgets.
+  var newState = {
+    model: "", cwd: "", skip_perms: false, prefs: {},
+    folderOpen: false, folderError: "", folderBusy: false
+  };
   // Sentinel for "I'll type a full model name". Not a value the server
   // ever sees — chosenModel() resolves it to the typed text, and Create
   // stays disabled while that text is empty or malformed.
@@ -1010,6 +1049,14 @@ APP_JS = r"""
   // operator finds out before the POST, not after it. The server remains
   // the gate; this is only a courtesy.
   var MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
+  var CWD_NEW_FOLDER = "cwd:new-folder";
+  // Set when a reveal has just been opened, consumed by the next
+  // renderNewForm. Focusing on every render would steal the keyboard back
+  // from whatever the operator actually tapped.
+  var pendingFocus = null;
+  // The Model group's collapsed-header value node, so a keystroke can
+  // update it without rebuilding the group underneath the caret.
+  var modelValueNode = null;
 
   function typedModel() {
     return document.getElementById("new-model-name").value.trim();
@@ -1019,71 +1066,147 @@ APP_JS = r"""
     return newState.model === MODEL_CUSTOM ? typedModel() : newState.model;
   }
 
-  function renderNewForm() {
-    var models = document.getElementById("new-model");
-    models.innerHTML = "";
+  // What the collapsed Model header shows. Rendering the option's own
+  // label would leave it reading "Other model" forever, no matter what
+  // was typed — the header would name the row, not the answer.
+  function modelValueText() {
+    if (newState.model === MODEL_CUSTOM) { return typedModel() || "Not set yet"; }
+    var found = null;
+    modelOptions().forEach(function (o) {
+      if (o.value === newState.model) { found = o; }
+    });
+    return found ? found.label : "—";
+  }
+
+  function basename(path) {
+    return path.split("/").filter(Boolean).pop() || path;
+  }
+
+  // The tail of a path is the part that identifies it; the head is
+  // scenery. Shown as a field prefix, where there is room for neither in
+  // full.
+  function shortPath(path) {
+    var parts = path.split("/").filter(Boolean);
+    if (parts.length <= 2) { return path; }
+    return "…/" + parts.slice(-2).join("/");
+  }
+
+  // Park a reveal back in the stash before its host is cleared. The node
+  // is reused rather than rebuilt so the text in it — and the caret —
+  // survive a structural render.
+  function stashNode(id) {
+    document.getElementById("node-stash")
+      .appendChild(document.getElementById(id));
+  }
+
+  function modelOptions() {
     // "" = leave the session on Claude Code's own default. Aliases carry a
     // hint rather than a version: an alias always resolves to the latest of
     // its family, so a baked-in "Opus 5" would be wrong on the next release.
     // The real version shows on the session once it reports one.
-    var modelOpts = [{ value: "", label: "Default", help: "Whatever the CLI is configured to use" }];
+    var opts = [{ value: "", label: "Default", help: "Whatever the CLI is configured to use" }];
     ((newOptions && newOptions.models) || []).forEach(function (m) {
-      modelOpts.push({ value: m.label, label: m.label, help: m.hint || "" });
+      opts.push({ value: m.label, label: m.label, help: m.hint || "" });
     });
     // An alias means "the latest of that family"; a full name pins one.
     // The CLI accepts both, so the form has to as well.
-    modelOpts.push({
-      value: MODEL_CUSTOM, label: "Type a name…",
-      help: "A full model name, e.g. claude-opus-5"
+    opts.push({
+      value: MODEL_CUSTOM, label: "Other model",
+      help: "Type a full name, e.g. claude-opus-5", create: true
     });
-    renderOptionGroup(models, {
+    return opts;
+  }
+
+  function directoryOptions() {
+    var dirs = (newOptions && newOptions.directories) || [];
+    var defaultDir = (newOptions && newOptions.default_directory) || "";
+    var opts = [];
+    // The daemon's own directory is in `dirs` under its real path, so
+    // offering a separate "Default" pill as well would list one directory
+    // twice. It stays only when there is nothing to point at instead.
+    if (!dirs.length || !defaultDir) {
+      opts.push({ value: "", label: "Default", help: "The daemon's own directory" });
+    }
+    dirs.forEach(function (d) {
+      opts.push({ value: d, label: basename(d), help: d });
+    });
+    // Creating needs somewhere to create in, and permission to do it.
+    if (dirs.length && newOptions && newOptions.can_create) {
+      opts.push({
+        value: CWD_NEW_FOLDER, label: "New folder",
+        help: "Inside the directory selected above", create: true,
+        active: newState.folderOpen
+      });
+    }
+    return opts;
+  }
+
+  // ---- structural render: rebuilds the option groups ------------------
+  //
+  // Split from refreshNewForm deliberately. Typing used to run this, so
+  // every character rebuilt every group in the form.
+  function renderNewForm() {
+    var modelOpts = modelOptions();
+    var isCustomModel = newState.model === MODEL_CUSTOM;
+    var models = document.getElementById("new-model");
+    stashNode("new-model-reveal");
+    models.innerHTML = "";
+    modelValueNode = renderOptionGroup(models, {
       key: "new:model",
       title: "Model",
       options: modelOpts,
       current: newState.model,
+      // What was typed, not the label of the row that let them type it.
+      valueText: modelValueText(),
+      reveal: isCustomModel
+        ? { after: MODEL_CUSTOM, node: document.getElementById("new-model-reveal") }
+        : null,
       rerender: renderNewForm,
-      onPick: function (value) { newState.model = value; renderNewForm(); }
-    });
-
-    var isCustomModel = newState.model === MODEL_CUSTOM;
-    var typed = typedModel();
-    var modelBad = isCustomModel && !!typed && !MODEL_RE.test(typed);
-    document.getElementById("new-model-custom").hidden = !isCustomModel;
-    var modelErr = document.getElementById("new-model-error");
-    modelErr.textContent = modelBad
-      ? "Use letters, numbers, dots and hyphens; start with a letter or number."
-      : "";
-    modelErr.hidden = !modelBad;
+      onPick: function (value) {
+        newState.model = value;
+        if (value === MODEL_CUSTOM) { pendingFocus = "new-model-name"; }
+        renderNewForm();
+      }
+    }).value;
 
     // Directories come from the server's allow-list — the same list
     // validate_cwd checks against, so the picker can never offer a path
     // the server would refuse.
+    var dirOpts = directoryOptions();
     var dirs = document.getElementById("new-cwd");
+    stashNode("new-folder-reveal");
     dirs.innerHTML = "";
-    var dirOpts = [{ value: "", label: "Default", help: "The daemon's own directory" }];
-    ((newOptions && newOptions.directories) || []).forEach(function (d) {
-      dirOpts.push({ value: d, label: d.split("/").filter(Boolean).pop(), help: d });
+    var currentDir = null;
+    dirOpts.forEach(function (o) {
+      if (o.value === newState.cwd) { currentDir = o; }
     });
     renderOptionGroup(dirs, {
       key: "new:cwd",
       title: "Working directory",
       options: dirOpts,
       current: newState.cwd,
+      // The tag marks the daemon's own directory — the one a session lands
+      // in when nobody picks.
+      defaultValue: (newOptions && newOptions.default_directory) || undefined,
+      valueText: currentDir ? currentDir.label : "—",
+      reveal: newState.folderOpen
+        ? { after: CWD_NEW_FOLDER, node: document.getElementById("new-folder-reveal") }
+        : null,
       rerender: renderNewForm,
-      onPick: function (value) { newState.cwd = value; renderNewForm(); }
+      onPick: function (value) {
+        if (value === CWD_NEW_FOLDER) {
+          // An action, not a value: the selected directory stays selected,
+          // because it is the parent the folder will be created in.
+          newState.folderOpen = !newState.folderOpen;
+          if (newState.folderOpen) { pendingFocus = "new-folder-name"; }
+          renderNewForm();
+          return;
+        }
+        newState.cwd = value;
+        newState.folderOpen = false;
+        renderNewForm();
+      }
     });
-
-    // A folder can only be made inside a directory that is already
-    // allowed, which is exactly what the picker above lists — so the
-    // control says what it will do rather than failing at the server.
-    var canCreate = !!(newOptions && newOptions.can_create);
-    document.getElementById("new-folder-parent").textContent = !canCreate
-      ? "You're not allowed to create anything in this chat."
-      : (newState.cwd
-          ? "Creates a folder inside " + newState.cwd
-          : "Pick a working directory above first.");
-    document.getElementById("new-folder-create").disabled =
-      !newState.cwd || !canCreate;
 
     var canAuto = !!(newOptions && newOptions.can_use_auto);
     var modes = document.getElementById("new-mode");
@@ -1133,10 +1256,71 @@ APP_JS = r"""
       });
     });
 
+    refreshNewForm();
+
+    if (pendingFocus) {
+      var focusEl = document.getElementById(pendingFocus);
+      pendingFocus = null;
+      if (focusEl && focusEl.focus) {
+        try { focusEl.focus(); } catch (e) { /* older webview */ }
+      }
+    }
+  }
+
+  // ---- targeted refresh: no DOM rebuilt, safe to run per keystroke ----
+  function refreshNewForm() {
+    var canCreate = !!(newOptions && newOptions.can_create);
+    var isCustomModel = newState.model === MODEL_CUSTOM;
+    var typed = typedModel();
+    var modelBad = isCustomModel && !!typed && !MODEL_RE.test(typed);
+
+    // The disabled Create button always has a reason on screen next to the
+    // field that caused it — a dead button with no explanation is the same
+    // as a broken one.
+    if (modelValueNode) { modelValueNode.textContent = modelValueText(); }
+
+    var modelNote = document.getElementById("new-model-note");
+    if (modelBad) {
+      modelNote.textContent =
+        "Use letters, numbers, dots and hyphens; start with a letter or number.";
+      modelNote.className = "reveal-note is-error";
+    } else if (isCustomModel && !typed) {
+      modelNote.textContent = "Type a model name to continue.";
+      modelNote.className = "reveal-note";
+    } else {
+      modelNote.textContent = "";
+      modelNote.className = "reveal-note";
+    }
+
+    // The parent shown inside the field IS the current selection, so the
+    // two cannot disagree.
+    document.getElementById("new-folder-prefix").textContent =
+      newState.cwd ? shortPath(newState.cwd) + "/" : "";
+    var folderName = document.getElementById("new-folder-name").value.trim();
+    document.getElementById("new-folder-create").disabled =
+      !folderName || !newState.cwd || !canCreate;
+
+    // Same rule as the model note: a control that cannot be used says why.
+    // "Default" is a selection with no path behind it, so it cannot be a
+    // parent — and without this the reveal would open onto an empty field
+    // and a dead button.
+    var folderNote = document.getElementById("new-folder-note");
+    if (!newState.cwd) {
+      folderNote.textContent = "Pick a working directory above first.";
+      folderNote.className = "reveal-note";
+    } else if (newState.folderError) {
+      folderNote.textContent = newState.folderError;
+      folderNote.className = "reveal-note is-error";
+    } else if (newState.folderBusy) {
+      folderNote.textContent = "Creating…";
+      folderNote.className = "reveal-note";
+    } else {
+      folderNote.textContent = "";
+      folderNote.className = "reveal-note";
+    }
+
     var name = document.getElementById("new-name").value.trim();
-    var where = newState.cwd
-      ? newState.cwd
-      : "the daemon's own directory";
+    var where = newState.cwd ? newState.cwd : "the daemon's own directory";
     // The summary promises "what will happen", so a typed model name has
     // to appear in it — it is the one setting the operator can get wrong
     // by a keystroke and not otherwise see again before Create.
@@ -1159,8 +1343,71 @@ APP_JS = r"""
     }
     renderNewForm();
     apiFetch("/api/session-options")
-      .then(function (data) { newOptions = data; renderNewForm(); })
+      .then(function (data) {
+        newOptions = data;
+        // Land on the directory a session would use anyway, so something
+        // real is always selected — which is what lets "New folder" know
+        // where to create without a separate step.
+        if (!newState.cwd && data.default_directory) {
+          newState.cwd = data.default_directory;
+        }
+        renderNewForm();
+      })
       .catch(handleFetchError);
+  }
+
+  function createFolder() {
+    var nameEl = document.getElementById("new-folder-name");
+    var btn = document.getElementById("new-folder-create");
+    var folder = nameEl.value.trim();
+    if (!folder || !newState.cwd) { return; }
+    newState.folderError = "";
+    newState.folderBusy = true;
+    refreshNewForm();
+    btn.disabled = true;
+    fetch("/api/directories", {
+      method: "POST",
+      headers: {
+        "X-Telegram-Init-Data": initData,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ parent: newState.cwd, name: folder })
+    }).then(function (res) {
+      return res.json().then(function (data) { return { status: res.status, data: data }; });
+    }).then(function (r) {
+      newState.folderBusy = false;
+      btn.disabled = false;
+      if (r.status !== 200 || !r.data || !r.data.path) {
+        newState.folderError = (r.data && r.data.detail) ||
+          (r.status === 403 ? "You're not allowed to create folders here."
+                            : "Couldn't create that folder.");
+        refreshNewForm();
+        return;
+      }
+      // The server has just sanctioned this exact path, and it sits
+      // inside an allowed root, so validate_cwd will accept it on
+      // Create. Adding it locally is what lets the operator see it
+      // selected before committing — it is not in allowed_roots() yet,
+      // which only lists directories a session has actually run in.
+      var path = r.data.path;
+      if (!newOptions) { newOptions = {}; }
+      if (!newOptions.directories) { newOptions.directories = []; }
+      if (newOptions.directories.indexOf(path) === -1) {
+        newOptions.directories.push(path);
+      }
+      newState.cwd = path;
+      newState.folderOpen = false;
+      newState.folderError = "";
+      nameEl.value = "";
+      showNotice(r.data.existed ? "That folder already existed — selected it."
+                                : "Folder created.");
+      renderNewForm();
+    }).catch(function () {
+      newState.folderBusy = false;
+      btn.disabled = false;
+      newState.folderError = "Couldn't reach the server — no folder was created.";
+      refreshNewForm();
+    });
   }
 
   function submitNewSession() {
@@ -1228,75 +1475,22 @@ APP_JS = r"""
     });
   }
 
-  function createFolder() {
-    var nameEl = document.getElementById("new-folder-name");
-    var errEl = document.getElementById("new-folder-error");
-    var btn = document.getElementById("new-folder-create");
-    var folder = nameEl.value.trim();
-    errEl.hidden = true;
-    if (!folder) {
-      errEl.textContent = "Type a folder name first.";
-      errEl.hidden = false;
-      return;
-    }
-    if (!newState.cwd) {
-      errEl.textContent = "Pick a working directory above first.";
-      errEl.hidden = false;
-      return;
-    }
-    btn.disabled = true;
-    fetch("/api/directories", {
-      method: "POST",
-      headers: {
-        "X-Telegram-Init-Data": initData,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ parent: newState.cwd, name: folder })
-    }).then(function (res) {
-      return res.json().then(function (data) { return { status: res.status, data: data }; });
-    }).then(function (r) {
-      btn.disabled = false;
-      if (r.status !== 200 || !r.data || !r.data.path) {
-        errEl.textContent = (r.data && r.data.detail) ||
-          (r.status === 403 ? "You're not allowed to create folders here."
-                            : "Couldn't create that folder.");
-        errEl.hidden = false;
-        return;
-      }
-      // The server has just sanctioned this exact path, and it sits
-      // inside an allowed root, so validate_cwd will accept it on
-      // Create. Adding it locally is what lets the operator see it
-      // selected before committing — it is not in allowed_roots() yet,
-      // which only lists directories a session has actually run in.
-      var path = r.data.path;
-      if (!newOptions) { newOptions = {}; }
-      if (!newOptions.directories) { newOptions.directories = []; }
-      if (newOptions.directories.indexOf(path) === -1) {
-        newOptions.directories.push(path);
-      }
-      newState.cwd = path;
-      nameEl.value = "";
-      document.getElementById("new-folder").hidden = true;
-      document.getElementById("new-folder-toggle").textContent = "▸ New folder";
-      showNotice(r.data.existed ? "That folder already existed — selected it."
-                                : "Folder created.");
-      renderNewForm();
-    }).catch(function () {
-      btn.disabled = false;
-      errEl.textContent = "Couldn't reach the server — no folder was created.";
-      errEl.hidden = false;
-    });
-  }
-
-  document.getElementById("new-name").addEventListener("input", renderNewForm);
-  document.getElementById("new-model-name").addEventListener("input", renderNewForm);
-  document.getElementById("new-folder-create").addEventListener("click", createFolder);
-  document.getElementById("new-folder-toggle").addEventListener("click", function () {
-    var box = document.getElementById("new-folder");
-    box.hidden = !box.hidden;
-    document.getElementById("new-folder-toggle").textContent =
-      (box.hidden ? "▸ " : "▾ ") + "New folder";
+  // Typing runs the targeted refresh only. Wiring these to renderNewForm
+  // rebuilt every option group in the form on every character.
+  document.getElementById("new-name").addEventListener("input", refreshNewForm);
+  document.getElementById("new-model-name").addEventListener("input", refreshNewForm);
+  document.getElementById("new-folder-name").addEventListener("input", function () {
+    newState.folderError = "";       // typing IS the retry
+    refreshNewForm();
   });
+  document.getElementById("new-folder-name").addEventListener("keydown", function (e) {
+    // Enter is the commit for a one-field reveal; the ＋ is for thumbs.
+    if (e && (e.key === "Enter" || e.keyCode === 13)) {
+      if (e.preventDefault) { e.preventDefault(); }
+      createFolder();
+    }
+  });
+  document.getElementById("new-folder-create").addEventListener("click", createFolder);
   document.getElementById("new-create").addEventListener("click", submitNewSession);
   document.getElementById("new-advanced-toggle").addEventListener("click", function () {
     var adv = document.getElementById("new-advanced");

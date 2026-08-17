@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Create a working directory from the Mini App.** The New session form's
-  Advanced section has a *New folder* control: pick a directory, type a name,
-  and the folder is made and selected before you create the session. A folder
+  working-directory picker has a *New folder* row: pick a directory, type a
+  name, and the folder is made and selected before you create the session. A folder
   can only be made inside a directory this chat already works in, the name must
   be a single plain path segment, and a folder that already exists is simply
   selected rather than refused. New folders are announced in chat, and creating
@@ -25,6 +25,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   you type is shown back in the summary line before you create the session.
 
 ### Changed
+- **Making a folder and naming a model are now part of the picker they belong
+  to.** Both used to be separate panels bolted underneath: the folder control
+  sat two collapses deep and needed a directory picked first, six taps before
+  you could type anything, and the typed model name appeared in a box outside
+  the Model list while the list's own header still read *Type a name…*. Each is
+  now the last row of its picker, marked with the same dashed `＋` as the *New
+  session* card, and tapping it opens one field right there — the folder field
+  carries the parent path inside it and commits on Enter, and the Model header
+  shows what you actually typed. Working directory moved out of *Advanced* to
+  sit beside Model.
+- **The working-directory picker no longer lists the daemon's own directory
+  twice.** It appeared as both *Default* and its real path once it became a
+  selectable root; there is now one row, marked `default`, and the form starts
+  on it.
+- **Typing in the new-session form no longer rebuilds it.** Every keystroke used
+  to re-render every group on the page, which flickered and threw away which
+  sections you had open.
+- **A greyed-out Create button now says why.** Choosing to type a model name and
+  leaving it empty disabled Create with nothing on screen to explain it.
 - **A model the server can't accept is now an error instead of being ignored.**
   It used to be dropped silently, so the session launched on a different model
   than the one picked with nothing on screen to say so.

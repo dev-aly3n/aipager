@@ -351,29 +351,93 @@ CSS = """\
   }
   .choice.is-active .tag { color: var(--tg-theme-hint-color, #888888); }
 
-  .optrow { display: flex; flex-wrap: wrap; gap: 6px; }
-  .optrow .opt {
-    padding: 8px 12px;
+  /* "Make something new" rows — the dashed ＋ of the New session card, so
+     the same intent looks the same wherever it appears (Telegram's own
+     guidance: mimic components that already exist). An action, not a
+     value: it never takes the selected-choice check. */
+  .choice-new {
+    min-height: 44px;
+    border: 1px dashed var(--tg-theme-link-color, #2481cc);
+    color: var(--tg-theme-link-color, #2481cc);
+  }
+  .choice-new .choice-main::before { content: "＋ "; font-weight: 700; }
+  .choice-new.is-active {
+    border-style: solid;
+    box-shadow: none;
+    background: transparent;
+    color: var(--tg-theme-link-color, #2481cc);
+  }
+  .choice-new.is-active .choice-main::after { content: ""; }
+
+  /* A conditional reveal: exactly one input, directly beneath the row
+     that revealed it, tied to it by an indent and a rule. GOV.UK's
+     research is explicit that reveals test well when they hold a single
+     input and nothing more — a panel of fields belongs in its own step. */
+  .reveal {
+    margin: 2px 4px 8px 14px;
+    padding: 8px 0 2px 12px;
+    border-left: 2px solid var(--tg-theme-button-color, #2481cc);
+  }
+  .reveal-label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--tg-theme-hint-color, #888888);
+  }
+  .reveal-note {
+    margin-top: 6px;
+    font-size: 0.82rem;
+    line-height: 1.4;
+    color: var(--tg-theme-hint-color, #888888);
+  }
+  .reveal-note.is-error { color: #dc2626; }
+
+  /* Material's prefix pattern: the parent path is "input given in
+     advance", shown inside the field, so where the folder lands needs no
+     caption above it and cannot drift out of sync with the picker. */
+  .prefix-field {
+    display: flex;
+    align-items: stretch;
+    background: var(--tg-theme-secondary-bg-color, rgba(127, 127, 127, 0.08));
+    border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .prefix-text {
+    flex: 0 1 auto;
+    align-self: center;
+    max-width: 48%;
+    padding-left: 10px;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    color: var(--tg-theme-hint-color, #888888);
+  }
+  .prefix-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 12px 8px;
     font: inherit;
-    font-size: 0.9rem;
     color: var(--tg-theme-text-color, #000000);
     background: transparent;
-    border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
-    border-radius: 999px;
+    border: 0;
+    outline: none;
+  }
+  .prefix-go {
+    flex: 0 0 auto;
+    min-width: 44px;
+    padding: 0 12px;
+    font: inherit;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--tg-theme-button-text-color, #ffffff);
+    background: var(--tg-theme-button-color, #2481cc);
+    border: 0;
     cursor: pointer;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
-  .optrow .opt.is-active {
-    border-color: var(--tg-theme-button-color, #2481cc);
-    background: rgba(36, 129, 204, 0.12);
-    background: color-mix(in srgb, var(--tg-theme-button-color, #2481cc) 14%, transparent);
-    color: var(--tg-theme-text-color, #000000);
-    font-weight: 600;
-  }
-  .optrow .opt[disabled] { opacity: 0.45; cursor: default; }
+  .prefix-go[disabled] { opacity: 0.45; cursor: default; }
   /* Launching a process should never be a surprise — say what will
      happen, in words, directly above the button that does it. */
   .new-summary {
@@ -396,21 +460,6 @@ CSS = """\
     cursor: pointer;
   }
   .primary[disabled] { opacity: 0.5; cursor: default; }
-  /* Secondary action inside a field group (Create folder) — deliberately
-     not .primary, so the one primary button on the page stays the one
-     that actually starts a session. */
-  .field-btn {
-    margin-top: 8px;
-    padding: 8px 14px;
-    font: inherit;
-    font-weight: 600;
-    color: var(--tg-theme-text-color, #000000);
-    background: var(--tg-theme-secondary-bg-color, rgba(127, 127, 127, 0.10));
-    border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
-    border-radius: 8px;
-    cursor: pointer;
-  }
-  .field-btn[disabled] { opacity: 0.5; cursor: default; }
 
   /* Loading placeholders. A blank panel that fills in a moment later
      reads as broken; a shaped skeleton reads as "coming". */

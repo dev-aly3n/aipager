@@ -93,11 +93,13 @@ def test_the_harness_actually_detects_a_broken_page(node_bin, tmp_path):
     )
 
 
-def _drive_form(node_bin, tmp_path, html, name="page.html"):
+def _drive_form(node_bin, tmp_path, html, name="page.html", scenario=None):
+    """Drive the form harness. `scenario` picks which shape of scope the
+    server is pretending to be — see SCENARIOS in the harness."""
     page = tmp_path / name
     page.write_text(html, encoding="utf-8")
     return subprocess.run(
-        [node_bin, str(FORM_HARNESS), str(page)],
+        [node_bin, str(FORM_HARNESS), str(page)] + ([scenario] if scenario else []),
         capture_output=True, text=True, timeout=60,
     )
 
@@ -122,8 +124,60 @@ def test_new_session_form_applies_every_setting_it_offers(node_bin, tmp_path):
         f"new-session form failed when driven:\nstdout: {proc.stdout}\n"
         f"stderr: {proc.stderr}"
     )
-    assert "ok: form -> POST /api/directories -> POST /api/sessions -> PUT" \
+    assert "ok: reveal -> Enter -> POST /api/directories -> POST /api/sessions -> PUT" \
         in proc.stdout, proc.stdout
+
+
+def test_a_scope_with_no_directories_still_works(node_bin, tmp_path):
+    """A fresh install has no allowed roots at all. The picker must fall
+    back to the lone "Default" option and post `cwd: ""` — the behaviour
+    that existed before there was a picker — and must NOT offer New
+    folder, which would have nowhere to create.
+    """
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_form(node_bin, tmp_path, INDEX_HTML, "empty.html", scenario="empty")
+    assert proc.returncode == 0, (
+        f"empty-directory scope failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert 'ok: no directories -> one Default row -> cwd ""' in proc.stdout, proc.stdout
+
+
+def test_new_folder_on_the_default_row_says_why_it_cannot_run(node_bin, tmp_path):
+    """"Default" is a selection with no path behind it, so it cannot be a
+    parent. Opening New folder on it must state that rather than present
+    an empty field and a dead button — the same rule the model reveal
+    follows, applied to the one place it was missing.
+    """
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_form(
+        node_bin, tmp_path, INDEX_HTML, "noparent.html", scenario="noparent",
+    )
+    assert proc.returncode == 0, (
+        f"no-parent scope failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: no parent -> create-folder disabled WITH a stated reason" \
+        in proc.stdout, proc.stdout
+
+
+def test_the_harness_detects_a_dead_create_folder_button(node_bin, tmp_path):
+    """Guard the guard for the case above: drop the explanation and the
+    no-parent scenario must fail rather than pass on an empty note."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    broken = INDEX_HTML.replace(
+        'folderNote.textContent = "Pick a working directory above first.";',
+        'folderNote.textContent = "";', 1,
+    )
+    assert broken != INDEX_HTML, "folder-note code not found"
+
+    proc = _drive_form(
+        node_bin, tmp_path, broken, "broken-note.html", scenario="noparent",
+    )
+    assert proc.returncode != 0, (
+        "harness passed a page whose create-folder button is dead and silent"
+    )
 
 
 def test_the_form_harness_detects_a_dropped_preference_step(node_bin, tmp_path):
@@ -169,11 +223,87 @@ def test_the_form_harness_detects_a_folder_that_is_not_selected(node_bin, tmp_pa
     from aipager.miniapp.static import INDEX_HTML
 
     broken = INDEX_HTML.replace(
-        "      newState.cwd = path;\n      nameEl.value = \"\";", "      nameEl.value = \"\";", 1,
+        "      newState.cwd = path;\n      newState.folderOpen = false;",
+        "      newState.folderOpen = false;", 1,
     )
     assert broken != INDEX_HTML, "folder-selection code not found"
 
     proc = _drive_form(node_bin, tmp_path, broken, "broken-folder.html")
     assert proc.returncode != 0, (
         "harness passed a page that creates a folder and then ignores it"
+    )
+
+
+def test_the_form_harness_detects_a_rebuild_on_every_keystroke(node_bin, tmp_path):
+    """Guard the guard, and the regression test for the defect itself.
+
+    Wiring the text inputs to the structural render is what the form used
+    to do: every character destroyed and rebuilt every option group in
+    `#view-new`, which is visible flicker on a phone and throws away the
+    open/closed state the operator is looking at. Putting that back must
+    fail the harness.
+    """
+    from aipager.miniapp.static import INDEX_HTML
+
+    broken = INDEX_HTML.replace(
+        'document.getElementById("new-model-name").addEventListener("input", refreshNewForm);',
+        'document.getElementById("new-model-name").addEventListener("input", renderNewForm);',
+        1,
+    )
+    assert broken != INDEX_HTML, "model input listener not found"
+
+    proc = _drive_form(node_bin, tmp_path, broken, "broken-rerender.html")
+    assert proc.returncode != 0, (
+        "harness passed a page that rebuilds every group on every keystroke"
+    )
+
+
+def test_the_form_harness_detects_a_reveal_left_outside_its_group(node_bin, tmp_path):
+    """Guard the guard: the whole point of a conditional reveal is that
+    the input and the option that revealed it read as one thing. An input
+    rendered somewhere else on the page is the layout this replaced."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    broken = INDEX_HTML.replace(
+        "        if (opts.reveal && opts.reveal.after === o.value) {\n"
+        "          list.appendChild(opts.reveal.node);\n"
+        "        }", "", 1,
+    )
+    assert broken != INDEX_HTML, "reveal placement code not found"
+
+    proc = _drive_form(node_bin, tmp_path, broken, "broken-reveal.html")
+    assert proc.returncode != 0, (
+        "harness passed a page that never moves a reveal into its group"
+    )
+
+
+def test_the_form_harness_detects_a_stale_collapsed_model_header(node_bin, tmp_path):
+    """Guard the guard: the collapsed Model header must show what was
+    typed. Rendering the option's own label leaves it reading `Other
+    model` forever — it names the row instead of the answer."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    broken = INDEX_HTML.replace(
+        "if (modelValueNode) { modelValueNode.textContent = modelValueText(); }", "", 1,
+    )
+    assert broken != INDEX_HTML, "header-refresh code not found"
+
+    proc = _drive_form(node_bin, tmp_path, broken, "broken-header.html")
+    assert proc.returncode != 0, (
+        "harness passed a page whose collapsed header ignores what was typed"
+    )
+
+
+def test_the_form_harness_detects_the_duplicated_default_directory(node_bin, tmp_path):
+    """Guard the guard: the daemon's own directory is in `directories`
+    under its real path, so offering a separate `Default` row as well
+    lists one directory twice — which is what the operator saw."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    broken = INDEX_HTML.replace("if (!dirs.length || !defaultDir) {", "if (true) {", 1)
+    assert broken != INDEX_HTML, "default-directory branch not found"
+
+    proc = _drive_form(node_bin, tmp_path, broken, "broken-dupe.html")
+    assert proc.returncode != 0, (
+        "harness passed a page that lists the daemon's directory twice"
     )

@@ -14,6 +14,7 @@ bundled) is the sole intended ingress. See design.md's threat model.
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import TYPE_CHECKING
 
@@ -419,8 +420,23 @@ class MiniAppServer:
         prefs = get_preferences(scope_chat_id)
         from aipager.config import MODEL_CHOICES
 
+        roots = allowed_roots(self.registry, scope_chat_id)
+        # Which entry is the one a session lands in when nobody picks. The
+        # client tags it `default` instead of offering a second "Default"
+        # choice beside it — since _PROJECT_DIR became a root, the two were
+        # the same directory listed twice. Reported only when it is really
+        # in the list: `allowed_roots` drops it for `/` or a missing path,
+        # and a tag pointing at nothing would be worse than no tag.
+        from aipager.dtach import inject
+        try:
+            project_dir = os.path.realpath(inject._PROJECT_DIR or "")
+        except OSError:
+            project_dir = ""
+        default_directory = project_dir if project_dir in roots else ""
+
         return web.json_response({
-            "directories": allowed_roots(self.registry, scope_chat_id),
+            "directories": roots,
+            "default_directory": default_directory,
             # One source of truth for model names — the same list the chat
             # keyboard offers, so the two surfaces cannot drift.
             #

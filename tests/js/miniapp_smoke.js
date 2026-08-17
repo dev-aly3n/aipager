@@ -23,7 +23,16 @@ class El {
   set textContent(v) { this._text = String(v); }
   get innerHTML() { return this._html; }
   set innerHTML(v) { this._html = v; this.children = []; }
-  appendChild(c) { this.children.push(c); c.parent = this; return c; }
+  // Real appendChild MOVES a node that already has a parent. The page
+  // relies on that: reveals are parked in a stash and moved into place.
+  appendChild(c) {
+    if (c.parent) {
+      const i = c.parent.children.indexOf(c);
+      if (i >= 0) { c.parent.children.splice(i, 1); }
+    }
+    this.children.push(c); c.parent = this; return c;
+  }
+  focus() { this.focused = true; }
   setAttribute(k, v) { this.attrs[k] = v; }
   getAttribute(k) { return this.attrs[k]; }
   addEventListener(ev, fn) { (this.listeners[ev] = this.listeners[ev] || []).push(fn); }

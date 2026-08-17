@@ -65,28 +65,16 @@ HTML_BODY = """\
          placeholder="frontend" maxlength="64">
   <div id="new-name-error" class="field-error" hidden></div>
 
-  <label class="field-label" for="new-model">Model</label>
-  <div id="new-model" class="optrow"></div>
-  <div id="new-model-custom" hidden>
-    <input id="new-model-name" class="field-input" type="text" autocomplete="off"
-           spellcheck="false" placeholder="claude-opus-5" maxlength="64">
-    <div id="new-model-error" class="field-error" hidden></div>
-  </div>
+  <label class="field-label">Model</label>
+  <div id="new-model"></div>
+
+  <label class="field-label">Working directory</label>
+  <div id="new-cwd"></div>
 
   <button type="button" class="sect-toggle" id="new-advanced-toggle">▸ Advanced</button>
   <div id="new-advanced" hidden>
-    <label class="field-label" for="new-cwd">Working directory</label>
-    <div id="new-cwd" class="optrow"></div>
-    <button type="button" class="sect-toggle" id="new-folder-toggle">▸ New folder</button>
-    <div id="new-folder" hidden>
-      <input id="new-folder-name" class="field-input" type="text" autocomplete="off"
-             spellcheck="false" placeholder="my-project" maxlength="64">
-      <div id="new-folder-parent" class="sect-note"></div>
-      <button type="button" class="field-btn" id="new-folder-create">Create folder</button>
-      <div id="new-folder-error" class="field-error" hidden></div>
-    </div>
     <label class="field-label">Permission mode</label>
-    <div id="new-mode" class="optrow"></div>
+    <div id="new-mode"></div>
     <div id="new-mode-note" class="muted" hidden>
       Auto mode requires admin.
     </div>
@@ -96,6 +84,38 @@ HTML_BODY = """\
   <div id="new-summary" class="new-summary"></div>
   <button type="button" class="primary" id="new-create">Create session</button>
 </section>
+
+<!--
+  Conditional reveals for the new-session form. They live here, outside any
+  group, because the group hosts are rebuilt wholesale on every structural
+  render — a reveal built inside one would lose its value and its focus on
+  the next tap. renderOptionGroup MOVES the node into place under the row
+  that revealed it, and renderNewForm parks it back here before clearing.
+  The node identity is what makes the text survive; see GOV.UK's finding
+  that a reveal should hold a single input and nothing more.
+-->
+<div id="node-stash" hidden>
+  <div id="new-model-reveal" class="reveal">
+    <label class="reveal-label" for="new-model-name">Model name</label>
+    <input id="new-model-name" class="field-input" type="text" autocomplete="off"
+           autocapitalize="none" spellcheck="false" placeholder="claude-opus-5"
+           maxlength="64">
+    <div id="new-model-note" class="reveal-note"></div>
+  </div>
+
+  <div id="new-folder-reveal" class="reveal">
+    <label class="reveal-label" for="new-folder-name">New folder name</label>
+    <div class="prefix-field">
+      <span id="new-folder-prefix" class="prefix-text"></span>
+      <input id="new-folder-name" class="prefix-input" type="text" autocomplete="off"
+             autocapitalize="none" spellcheck="false" placeholder="my-project"
+             maxlength="64" enterkeyhint="done">
+      <button type="button" class="prefix-go" id="new-folder-create"
+              aria-label="Create this folder">＋</button>
+    </div>
+    <div id="new-folder-note" class="reveal-note"></div>
+  </div>
+</div>
 
 <section id="view-settings" hidden>
   <p class="muted" id="settings-intro">These apply to every session in this chat.</p>
