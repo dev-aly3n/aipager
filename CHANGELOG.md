@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **The session page's ⋮ menu now also switches permission mode, clears the
+  queue, compacts now, restarts, and renames.** Switch permission mode toggles
+  a session between Ask and Auto — switching to Auto still needs admin, the
+  same as everywhere else, and a busy session gets the same "stop the current
+  task first?" prompt chat's `/perms` already asks. Clear queue drops whatever
+  is waiting behind the current turn without interrupting it. Compact now
+  queues a `/compact` behind a busy turn (refusing once the queue is already
+  full, rather than dropping it silently) or runs it immediately when idle.
+  Restart kills and relaunches a session with its history and permission mode
+  intact — useful when a session feels stuck without wanting to lose its
+  transcript. Rename changes only the label everywhere it's shown (Mini App,
+  chat's dashboard, chat's `/`-command list); the session's actual history and
+  working directory never move, and a rename to a name already taken in this
+  chat is refused. Every one of these is announced back in the chat the
+  session belongs to, same as the four actions already there.
 - **The session page can now Stop, Kill, Resume and Delete a session.** A ⋮
   menu in the session's header offers whatever applies to what it is doing
   right now: Stop while it is busy or waiting on you, Kill once it is idle, and

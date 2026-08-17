@@ -301,7 +301,7 @@ class TrackedSession:
     stream_dirty: bool = False
     stream_last_rendered: str = ""
 
-    def queue_prompt(self, text: str, msg_id: int,
+    def queue_prompt(self, text: str, msg_id: int | None,
                      cap: int = QUEUE_CAP) -> bool:
         """Append a queued prompt with a current wall-clock timestamp.
 
@@ -311,6 +311,12 @@ class TrackedSession:
         ``(text, msg_id, queued_at)`` 3-tuples; existing 2-tuples loaded
         from older state files retain their shape (see ``load`` for the
         compatibility shim).
+
+        ``msg_id`` is ``None`` for a prompt with no originating Telegram
+        message to attribute a reply to (the Mini App's Compact route) —
+        already the documented meaning of ``trigger_msg_id: int | None``
+        downstream, so this only makes the type honest about a case that
+        already occurs.
         """
         if len(self.pending_queue) >= cap:
             log.warning("[%s] queue full (cap=%d); rejecting prompt: %r",

@@ -8,6 +8,7 @@ silent break in the registry / dtach plumbing surfaces in CI.
 
 from __future__ import annotations
 
+import time
 from unittest.mock import AsyncMock, MagicMock
 
 
@@ -533,3 +534,405 @@ def test_do_resume_core_no_driver_when_none_given(mk_bot, run_async, monkeypatch
     assert outcome.ok is True
     assert sess.last_driver_user_id is None
     assert sess.created_by_user_id is None
+
+
+# ---- _kill_and_relaunch_core / _perms_switch_core / _restart_session_core -
+#
+# The single kill/poll/relaunch seam chat's /perms (both branches) and the
+# Mini App's perms + restart routes all go through now (design.md
+# ORCHESTRATOR OVERRIDE). asyncio.sleep is neutered so no test actually
+# waits out the 0.5s Ctrl-C pause or the up-to-3s poll loop; the socket
+# poll itself is controlled via aipager.bot.session_ops.Path so the
+# still-stopping/success branches are deterministic regardless of what is
+# or isn't a real file on this machine.
+
+def _neuter_sleep(monkeypatch):
+    async def _no_sleep(_):
+        pass
+    monkeypatch.setattr("aipager.bot.session_ops.asyncio.sleep", _no_sleep)
+
+
+def _fake_path_cls(exists):
+    return MagicMock(return_value=MagicMock(
+        is_socket=MagicMock(return_value=exists),
+    ))
+
+
+def test_kill_and_relaunch_core_refuses_when_not_live(mk_bot, run_async, monkeypatch):
+    """GONE/UNKNOWN must refuse before touching dtach at all - no awaits,
+    no side effects, so the refusal is testable with zero mocking."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
+
+    async def _boom(*a, **k):
+        raise AssertionError("dtach must not be touched for a non-live session")
+    monkeypatch.setattr("aipager.dtach.inject.kill_session", _boom)
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", _boom)
+
+    outcome = run_async(bot._kill_and_relaunch_core(
+        sess, target_skip_perms=True, interrupt_first=False,
+    ))
+    assert outcome.ok is False
+    assert outcome.reason == "not_live"
+    assert outcome.label == "jim"
+
+
+def test_kill_and_relaunch_core_refuses_when_already_restarting(
+    mk_bot, run_async, monkeypatch,
+):
+    """A second kill/relaunch must not start while one is already in
+    flight - the guard a stale Mini App menu or a double-tap needs."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    sess.restarting_until = time.monotonic() + 10.0
+
+    async def _boom(*a, **k):
+        raise AssertionError("dtach must not be touched while already restarting")
+    monkeypatch.setattr("aipager.dtach.inject.kill_session", _boom)
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", _boom)
+
+    outcome = run_async(bot._kill_and_relaunch_core(
+        sess, target_skip_perms=True, interrupt_first=False,
+    ))
+    assert outcome.ok is False
+    assert outcome.reason == "already_restarting"
+
+
+def test_kill_and_relaunch_core_interrupt_first_sends_ctrl_c_not_kill(
+    mk_bot, run_async, monkeypatch,
+):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    bot.registry._sessions["claude-jim"] = sess
+    _neuter_sleep(monkeypatch)
+    monkeypatch.setattr("aipager.bot.session_ops.Path", _fake_path_cls(False))
+    send_keys = AsyncMock(return_value=True)
+    kill_session = AsyncMock(return_value=True)
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", send_keys)
+    monkeypatch.setattr("aipager.dtach.inject.kill_session", kill_session)
+    monkeypatch.setattr("aipager.dtach.inject.launch_session",
+                        AsyncMock(return_value=(True, "")))
+
+    outcome = run_async(bot._kill_and_relaunch_core(
+        sess, target_skip_perms=True, interrupt_first=True,
+    ))
+    assert outcome.ok is True
+    send_keys.assert_awaited_once_with("claude-jim", "C-c")
+    kill_session.assert_not_awaited()
+
+
+def test_kill_and_relaunch_core_hard_kill_not_ctrl_c(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    bot.registry._sessions["claude-jim"] = sess
+    _neuter_sleep(monkeypatch)
+    monkeypatch.setattr("aipager.bot.session_ops.Path", _fake_path_cls(False))
+    send_keys = AsyncMock(return_value=True)
+    kill_session = AsyncMock(return_value=True)
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", send_keys)
+    monkeypatch.setattr("aipager.dtach.inject.kill_session", kill_session)
+    monkeypatch.setattr("aipager.dtach.inject.launch_session",
+                        AsyncMock(return_value=(True, "")))
+
+    outcome = run_async(bot._kill_and_relaunch_core(
+        sess, target_skip_perms=False, interrupt_first=False,
+    ))
+    assert outcome.ok is True
+    kill_session.assert_awaited_once_with("claude-jim")
+    send_keys.assert_not_awaited()
+
+
+def test_kill_and_relaunch_core_still_stopping_clears_restarting_until(
+    mk_bot, run_async, monkeypatch,
+):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    bot.registry._sessions["claude-jim"] = sess
+    _neuter_sleep(monkeypatch)
+    # Socket never disappears -> the poll loop exhausts its budget.
+    monkeypatch.setattr("aipager.bot.session_ops.Path", _fake_path_cls(True))
+    monkeypatch.setattr("aipager.dtach.inject.kill_session",
+                        AsyncMock(return_value=True))
+
+    async def _boom(*a, **k):
+        raise AssertionError("launch_session must not run after a still_stopping timeout")
+    monkeypatch.setattr("aipager.dtach.inject.launch_session", _boom)
+
+    outcome = run_async(bot._kill_and_relaunch_core(
+        sess, target_skip_perms=True, interrupt_first=False,
+    ))
+    assert outcome.ok is False
+    assert outcome.reason == "still_stopping"
+    assert sess.restarting_until == 0.0
+
+
+def test_kill_and_relaunch_core_launch_failed_clears_restarting_until(
+    mk_bot, run_async, monkeypatch,
+):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    bot.registry._sessions["claude-jim"] = sess
+    _neuter_sleep(monkeypatch)
+    monkeypatch.setattr("aipager.bot.session_ops.Path", _fake_path_cls(False))
+    monkeypatch.setattr("aipager.dtach.inject.kill_session",
+                        AsyncMock(return_value=True))
+    monkeypatch.setattr("aipager.dtach.inject.launch_session",
+                        AsyncMock(return_value=(False, "dtach broken")))
+
+    outcome = run_async(bot._kill_and_relaunch_core(
+        sess, target_skip_perms=True, interrupt_first=False,
+    ))
+    assert outcome.ok is False
+    assert outcome.reason == "launch_failed"
+    assert outcome.err == "dtach broken"
+    assert sess.restarting_until == 0.0
+
+
+def test_kill_and_relaunch_core_success_restores_state_and_transitions_idle(
+    mk_bot, run_async, monkeypatch,
+):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    sess.claude_session_id = "uuid-1"
+    sess.cwd = "/home/user/project"
+    bot.registry._sessions["claude-jim"] = sess
+    _neuter_sleep(monkeypatch)
+    monkeypatch.setattr("aipager.bot.session_ops.Path", _fake_path_cls(False))
+    monkeypatch.setattr("aipager.dtach.inject.kill_session",
+                        AsyncMock(return_value=True))
+    launch = AsyncMock(return_value=(True, ""))
+    monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
+
+    outcome = run_async(bot._kill_and_relaunch_core(
+        sess, target_skip_perms=True, interrupt_first=False,
+    ))
+    assert outcome.ok is True
+    assert outcome.reason == "done"
+    assert outcome.skip_perms is True
+    assert sess.skip_perms is True
+    assert sess.claude_session_id == "uuid-1"
+    assert sess.cwd == "/home/user/project"
+    assert sess.status == Status.IDLE
+    launch.assert_awaited_once()
+    assert launch.await_args.kwargs["resume_id"] == "uuid-1"
+    assert launch.await_args.kwargs["cwd"] == "/home/user/project"
+
+
+def test_perms_switch_core_busy_interrupts_first(mk_bot, run_async, monkeypatch):
+    """The perms wrapper's interrupt_first=True derivation for BUSY."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    bot.registry._sessions["claude-jim"] = sess
+    _neuter_sleep(monkeypatch)
+    monkeypatch.setattr("aipager.bot.session_ops.Path", _fake_path_cls(False))
+    send_keys = AsyncMock(return_value=True)
+    kill_session = AsyncMock(return_value=True)
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", send_keys)
+    monkeypatch.setattr("aipager.dtach.inject.kill_session", kill_session)
+    monkeypatch.setattr("aipager.dtach.inject.launch_session",
+                        AsyncMock(return_value=(True, "")))
+
+    outcome = run_async(bot._perms_switch_core(sess, True))
+    assert outcome.ok is True
+    send_keys.assert_awaited_once_with("claude-jim", "C-c")
+    kill_session.assert_not_awaited()
+
+
+def test_perms_switch_core_idle_hard_kills(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    bot.registry._sessions["claude-jim"] = sess
+    _neuter_sleep(monkeypatch)
+    monkeypatch.setattr("aipager.bot.session_ops.Path", _fake_path_cls(False))
+    send_keys = AsyncMock(return_value=True)
+    kill_session = AsyncMock(return_value=True)
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", send_keys)
+    monkeypatch.setattr("aipager.dtach.inject.kill_session", kill_session)
+    monkeypatch.setattr("aipager.dtach.inject.launch_session",
+                        AsyncMock(return_value=(True, "")))
+
+    outcome = run_async(bot._perms_switch_core(sess, True))
+    assert outcome.ok is True
+    kill_session.assert_awaited_once_with("claude-jim")
+    send_keys.assert_not_awaited()
+
+
+def test_perms_switch_core_waiting_hard_kills_like_idle(mk_bot, run_async, monkeypatch):
+    """chat's own /perms folds INTERACTIVE into the same IDLE flow - the
+    core reproduces that fold, so a waiting session hard-kills too."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
+    bot.registry._sessions["claude-jim"] = sess
+    _neuter_sleep(monkeypatch)
+    monkeypatch.setattr("aipager.bot.session_ops.Path", _fake_path_cls(False))
+    send_keys = AsyncMock(return_value=True)
+    kill_session = AsyncMock(return_value=True)
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", send_keys)
+    monkeypatch.setattr("aipager.dtach.inject.kill_session", kill_session)
+    monkeypatch.setattr("aipager.dtach.inject.launch_session",
+                        AsyncMock(return_value=(True, "")))
+
+    outcome = run_async(bot._perms_switch_core(sess, True))
+    assert outcome.ok is True
+    kill_session.assert_awaited_once_with("claude-jim")
+    send_keys.assert_not_awaited()
+
+
+def test_restart_session_core_hard_kills_even_when_busy(mk_bot, run_async, monkeypatch):
+    """Restart deliberately does NOT reuse perms' busy-only Ctrl-C
+    courtesy - a user-invoked restart is Kill's hard-kill semantics."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.skip_perms = False
+    bot.registry._sessions["claude-jim"] = sess
+    _neuter_sleep(monkeypatch)
+    monkeypatch.setattr("aipager.bot.session_ops.Path", _fake_path_cls(False))
+    send_keys = AsyncMock(return_value=True)
+    kill_session = AsyncMock(return_value=True)
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", send_keys)
+    monkeypatch.setattr("aipager.dtach.inject.kill_session", kill_session)
+    launch = AsyncMock(return_value=(True, ""))
+    monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
+
+    outcome = run_async(bot._restart_session_core(sess))
+    assert outcome.ok is True
+    kill_session.assert_awaited_once_with("claude-jim")
+    send_keys.assert_not_awaited()
+    # skip_perms is unchanged - a restart is not a mode switch.
+    assert launch.await_args.kwargs["skip_perms"] is False
+
+
+# ---- _clear_queue_core ----------------------------------------------------
+
+def test_clear_queue_core_refuses_when_empty(mk_bot, run_async):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    outcome = run_async(bot._clear_queue_core(sess))
+    assert outcome.ok is False
+    assert outcome.dropped == 0
+
+
+def test_clear_queue_core_clears_and_reports_dropped_count(mk_bot, run_async):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.queue_prompt("a", 1)
+    sess.queue_prompt("b", 2)
+    bot.registry._sessions["claude-jim"] = sess
+
+    outcome = run_async(bot._clear_queue_core(sess))
+    assert outcome.ok is True
+    assert outcome.dropped == 2
+    assert sess.pending_queue == []
+
+
+# ---- _compact_session_core -------------------------------------------------
+
+def test_compact_session_core_refuses_when_not_live(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
+
+    async def _boom(*a, **k):
+        raise AssertionError("must not touch dtach for a non-live session")
+    monkeypatch.setattr("aipager.dtach.inject.send_text_and_enter", _boom)
+
+    outcome = run_async(bot._compact_session_core(sess))
+    assert outcome.ok is False
+    assert outcome.reason == "not_live"
+
+
+def test_compact_session_core_busy_queues_the_slash_command(mk_bot, run_async):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    bot.registry._sessions["claude-jim"] = sess
+
+    outcome = run_async(bot._compact_session_core(sess))
+    assert outcome.ok is True
+    assert outcome.reason == "queued"
+    assert sess.pending_queue == [("/compact", None, sess.pending_queue[0][2])]
+
+
+def test_compact_session_core_busy_refuses_when_queue_is_full(mk_bot, run_async):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    for i in range(50):
+        sess.queue_prompt(f"msg{i}", i)
+    bot.registry._sessions["claude-jim"] = sess
+
+    outcome = run_async(bot._compact_session_core(sess))
+    assert outcome.ok is False
+    assert outcome.reason == "queue_full"
+    assert len(sess.pending_queue) == 50  # unchanged
+
+
+def test_compact_session_core_idle_sends_immediately(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    bot.registry._sessions["claude-jim"] = sess
+    send = AsyncMock(return_value=True)
+    monkeypatch.setattr("aipager.dtach.inject.send_text_and_enter", send)
+
+    outcome = run_async(bot._compact_session_core(sess))
+    assert outcome.ok is True
+    assert outcome.reason == "sent"
+    send.assert_awaited_once()
+    assert send.await_args.args == ("claude-jim", "/compact")
+    # No pending_queue growth on the immediate path.
+    assert sess.pending_queue == []
+
+
+def test_compact_session_core_idle_send_failed(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr("aipager.dtach.inject.send_text_and_enter",
+                        AsyncMock(return_value=False))
+
+    outcome = run_async(bot._compact_session_core(sess))
+    assert outcome.ok is False
+    assert outcome.reason == "send_failed"
+
+
+# ---- _rename_session_core --------------------------------------------------
+
+def test_rename_session_core_no_op_when_unchanged(mk_bot, run_async):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    bot.registry._sessions["claude-jim"] = sess
+    bot._update_bot_commands = AsyncMock()
+    bot.registry._dirty = False
+
+    outcome = run_async(bot._rename_session_core(sess, "jim"))
+    assert outcome.ok is True
+    assert outcome.changed is False
+    assert outcome.previous_label == "jim"
+    assert outcome.new_label == "jim"
+    assert sess.label == "jim"
+    assert bot.registry._dirty is False
+    bot._update_bot_commands.assert_not_awaited()
+
+
+def test_rename_session_core_real_change_schedules_command_refresh(
+    mk_bot, run_async, monkeypatch,
+):
+    """_update_bot_commands must be scheduled ONLY on a real change - a
+    no-op rename must not touch chat's `/`-command list at all."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    bot.registry._sessions["claude-jim"] = sess
+
+    scheduled = []
+
+    def fake_create_task(coro):
+        scheduled.append(coro)
+        coro.close()  # avoid an "unawaited coroutine" warning
+        return MagicMock()
+    monkeypatch.setattr("aipager.bot.session_ops.asyncio.create_task", fake_create_task)
+
+    outcome = run_async(bot._rename_session_core(sess, "james"))
+    assert outcome.ok is True
+    assert outcome.changed is True
+    assert outcome.previous_label == "jim"
+    assert outcome.new_label == "james"
+    assert sess.label == "james"
+    assert bot.registry._dirty is True
+    assert len(scheduled) == 1

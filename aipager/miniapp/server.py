@@ -104,6 +104,23 @@ class MiniAppServer:
             "/api/sessions/{label}/resume", self._handle_session_resume,
         )
         app.router.add_delete("/api/sessions/{label}", self._handle_session_delete)
+        # Five more session-menu actions (design.md: perms switch, clear
+        # queue, compact, restart, rename). Same five-step shape as the
+        # four routes above; perms additionally requires _is_admin_user
+        # when the switch targets Auto mode.
+        app.router.add_post("/api/sessions/{label}/perms", self._handle_session_perms)
+        app.router.add_post(
+            "/api/sessions/{label}/clearqueue", self._handle_session_clearqueue,
+        )
+        app.router.add_post(
+            "/api/sessions/{label}/compact", self._handle_session_compact,
+        )
+        app.router.add_post(
+            "/api/sessions/{label}/restart", self._handle_session_restart,
+        )
+        app.router.add_post(
+            "/api/sessions/{label}/rename", self._handle_session_rename,
+        )
         app.router.add_get("/api/preferences", self._handle_preferences_get)
         # The Mini App's first mutating route. PUT (not POST) because
         # setting a field to a value is idempotent by construction — the
@@ -867,8 +884,9 @@ class MiniAppServer:
         sess, scope_chat_id, user_id = result
 
         can_act = self.bot._can_prompt_user(user_id, scope_chat_id)
+        is_admin = self.bot._is_admin_user(user_id, scope_chat_id)
         return web.json_response(
-            session_detail(sess, time.monotonic(), can_act=can_act),
+            session_detail(sess, time.monotonic(), can_act=can_act, is_admin=is_admin),
         )
 
     async def _handle_session_diff(self, request):
@@ -1058,6 +1076,327 @@ class MiniAppServer:
 
         await self._mirror_session_deleted(scope_chat_id, label)
         return web.json_response({"status": "deleted", "label": label})
+
+    # ---- session detail-page write actions: perms / clearqueue /
+    #      compact / restart / rename (design.md: "Mini App session menu
+    #      actions") -----------------------------------------------------
+    #
+    # Same five-step shape as Stop/Kill/Resume/Delete above:
+    # _resolve_own_scope_session -> _can_prompt_user (403) -> [admin
+    # check, perms only] -> _allow_write (429) -> action-specific state
+    # guard (409/400) -> the shared session_ops core -> mirror to chat on
+    # success only.
+
+    def _restart_outcome_response(self, outcome, *, still_stopping_detail: str):
+        """Map a :class:`~aipager.bot.session_ops.RestartOutcome`'s
+        failure reasons to the JSON response the route should return.
+        Returns ``None`` when ``outcome.ok`` — the caller then builds
+        its own success body.
+
+        Shared between perms and restart: both routes call all the way
+        through to :meth:`~aipager.bot.session_ops.SessionOpsMixin.
+        _kill_and_relaunch_core`, so both refuse with the identical set
+        of reasons — only the still-stopping wording differs per route.
+        """
+        from aiohttp import web
+
+        if outcome.reason == "not_live":
+            return web.json_response({
+                "error": "not_live", "detail": "Session isn't running.",
+            }, status=409)
+        if outcome.reason == "already_restarting":
+            return web.json_response({
+                "error": "already_restarting",
+                "detail": "This session is already restarting — wait a moment.",
+            }, status=409)
+        if outcome.reason == "still_stopping":
+            return web.json_response({
+                "error": "still_stopping", "detail": still_stopping_detail,
+            }, status=409)
+        if outcome.reason == "launch_failed":
+            return web.json_response({
+                "error": "launch_failed", "detail": outcome.err,
+            }, status=400)
+        return None
+
+    async def _handle_session_perms(self, request):
+        from aiohttp import web
+
+        result = await self._resolve_own_scope_session(
+            request, "POST /api/sessions/{label}/perms",
+        )
+        if isinstance(result, web.Response):
+            return result
+        sess, scope_chat_id, user_id = result
+
+        if not self.bot._can_prompt_user(user_id, scope_chat_id):
+            log.info(
+                "miniapp: session perms rejected (403) — "
+                "caller cannot prompt this session",
+            )
+            return web.json_response({"error": "forbidden"}, status=403)
+
+        # The client never sends a target — the server derives it by
+        # toggling the session's own current mode, closing off a
+        # body-tampering surface (design.md).
+        target_skip_perms = not sess.skip_perms
+        # Auto mode requires admin — the same gate chat's own /perms and
+        # session creation apply. Switching TO Ask never needs admin.
+        if target_skip_perms and not self.bot._is_admin_user(user_id, scope_chat_id):
+            log.info("miniapp: session perms rejected (403) — Auto requires admin")
+            return web.json_response(
+                {"error": "forbidden", "detail": "Auto mode requires admin."},
+                status=403,
+            )
+
+        if not self._allow_write(user_id):
+            log.info("miniapp: session perms rejected (429) — rate limited")
+            return web.json_response({"error": "too_many_requests"}, status=429)
+
+        outcome = await self.bot._perms_switch_core(sess, target_skip_perms)
+        resp = self._restart_outcome_response(
+            outcome,
+            still_stopping_detail=(
+                f"{outcome.label} is still stopping — mode not changed. "
+                f"Try again in a moment."
+            ),
+        )
+        if resp is not None:
+            return resp
+
+        await self._mirror_session_perms_switched(
+            scope_chat_id, outcome.label, target_skip_perms,
+        )
+        return web.json_response({
+            "status": "switched", "label": outcome.label,
+            "skip_perms": target_skip_perms,
+        })
+
+    async def _handle_session_clearqueue(self, request):
+        from aiohttp import web
+
+        from aipager.miniapp.sessions import QUEUE_EMPTY_REASON
+
+        result = await self._resolve_own_scope_session(
+            request, "POST /api/sessions/{label}/clearqueue",
+        )
+        if isinstance(result, web.Response):
+            return result
+        sess, scope_chat_id, user_id = result
+
+        if not self.bot._can_prompt_user(user_id, scope_chat_id):
+            log.info(
+                "miniapp: session clearqueue rejected (403) — "
+                "caller cannot prompt this session",
+            )
+            return web.json_response({"error": "forbidden"}, status=403)
+        if not self._allow_write(user_id):
+            log.info("miniapp: session clearqueue rejected (429) — rate limited")
+            return web.json_response({"error": "too_many_requests"}, status=429)
+
+        outcome = await self.bot._clear_queue_core(sess)
+        if not outcome.ok:
+            return web.json_response({
+                "error": "queue_empty", "detail": QUEUE_EMPTY_REASON,
+            }, status=409)
+
+        await self._mirror_session_queue_cleared(
+            scope_chat_id, outcome.label, outcome.dropped,
+        )
+        return web.json_response({
+            "status": "cleared", "label": outcome.label, "dropped": outcome.dropped,
+        })
+
+    async def _handle_session_compact(self, request):
+        from aiohttp import web
+
+        from aipager.miniapp.sessions import QUEUE_FULL_REASON
+
+        result = await self._resolve_own_scope_session(
+            request, "POST /api/sessions/{label}/compact",
+        )
+        if isinstance(result, web.Response):
+            return result
+        sess, scope_chat_id, user_id = result
+
+        if not self.bot._can_prompt_user(user_id, scope_chat_id):
+            log.info(
+                "miniapp: session compact rejected (403) — "
+                "caller cannot prompt this session",
+            )
+            return web.json_response({"error": "forbidden"}, status=403)
+        if not self._allow_write(user_id):
+            log.info("miniapp: session compact rejected (429) — rate limited")
+            return web.json_response({"error": "too_many_requests"}, status=429)
+
+        outcome = await self.bot._compact_session_core(sess)
+        if outcome.reason == "not_live":
+            return web.json_response({
+                "error": "not_live", "detail": "Session isn't running.",
+            }, status=409)
+        if outcome.reason == "queue_full":
+            return web.json_response({
+                "error": "queue_full", "detail": QUEUE_FULL_REASON,
+            }, status=409)
+        if outcome.reason == "send_failed":
+            return web.json_response({
+                "error": "send_failed", "detail": "Couldn't send /compact.",
+            }, status=400)
+
+        await self._mirror_session_compacted(scope_chat_id, outcome.label)
+        # "queued" when the session was busy, "sent" when it ran
+        # immediately (IDLE) — outcome.reason already carries the exact
+        # distinction, straight from _compact_session_core.
+        return web.json_response({"status": outcome.reason, "label": outcome.label})
+
+    async def _handle_session_restart(self, request):
+        from aiohttp import web
+
+        result = await self._resolve_own_scope_session(
+            request, "POST /api/sessions/{label}/restart",
+        )
+        if isinstance(result, web.Response):
+            return result
+        sess, scope_chat_id, user_id = result
+
+        if not self.bot._can_prompt_user(user_id, scope_chat_id):
+            log.info(
+                "miniapp: session restart rejected (403) — "
+                "caller cannot prompt this session",
+            )
+            return web.json_response({"error": "forbidden"}, status=403)
+        if not self._allow_write(user_id):
+            log.info("miniapp: session restart rejected (429) — rate limited")
+            return web.json_response({"error": "too_many_requests"}, status=429)
+
+        outcome = await self.bot._restart_session_core(sess)
+        resp = self._restart_outcome_response(
+            outcome,
+            still_stopping_detail=(
+                f"{outcome.label} is still stopping. Try again in a moment."
+            ),
+        )
+        if resp is not None:
+            return resp
+
+        await self._mirror_session_restarted(scope_chat_id, outcome.label)
+        return web.json_response({"status": "restarted", "label": outcome.label})
+
+    async def _handle_session_rename(self, request):
+        from aiohttp import web
+
+        from aipager.miniapp.launch import validate_session_name
+        from aipager.state import Status
+
+        result = await self._resolve_own_scope_session(
+            request, "POST /api/sessions/{label}/rename",
+        )
+        if isinstance(result, web.Response):
+            return result
+        sess, scope_chat_id, user_id = result
+
+        if not self.bot._can_prompt_user(user_id, scope_chat_id):
+            log.info(
+                "miniapp: session rename rejected (403) — "
+                "caller cannot prompt this session",
+            )
+            return web.json_response({"error": "forbidden"}, status=403)
+        if not self._allow_write(user_id):
+            log.info("miniapp: session rename rejected (429) — rate limited")
+            return web.json_response({"error": "too_many_requests"}, status=429)
+
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"error": "bad_request"}, status=400)
+        if not isinstance(body, dict):
+            return web.json_response({"error": "bad_request"}, status=400)
+
+        new_label, err = validate_session_name(body.get("label"))
+        if err:
+            return web.json_response({"error": "bad_request", "detail": err}, status=400)
+
+        previous_label = sess.label
+        if new_label != previous_label:
+            # Same collision rule POST /api/sessions applies (design.md
+            # Unknown 3): a GONE session with a resumable transcript
+            # still blocks — find_by_label has no tiebreaker, so two
+            # entries claiming the same label the moment the GONE one
+            # is resumed makes every future lookup non-deterministic.
+            existing = self.registry.find_by_label(
+                new_label, scope_chat_id=scope_chat_id, include_gone=True,
+            )
+            if existing is not None and (
+                existing.status != Status.GONE or existing.claude_session_id
+            ):
+                return web.json_response({
+                    "error": "conflict",
+                    "detail": f"A session named {new_label} already exists in this chat.",
+                }, status=409)
+
+        outcome = await self.bot._rename_session_core(sess, new_label)
+        if outcome.changed:
+            await self._mirror_session_renamed(
+                scope_chat_id, outcome.previous_label, outcome.new_label,
+            )
+        return web.json_response({
+            "status": "renamed", "label": outcome.new_label,
+            "previous_label": outcome.previous_label, "changed": outcome.changed,
+        })
+
+    async def _mirror_session_perms_switched(
+        self, scope_chat_id, label, skip_perms,
+    ) -> None:
+        icon = "🤖" if skip_perms else "💬"
+        mode_label = "Auto" if skip_perms else "Ask"
+        try:
+            await self.bot._app.bot.send_message(
+                chat_id=scope_chat_id,
+                text=f"{icon} {label} switched to {mode_label} mode from the Mini App",
+            )
+        except Exception:
+            log.debug("miniapp: session-perms-switched mirror failed", exc_info=True)
+
+    async def _mirror_session_queue_cleared(self, scope_chat_id, label, dropped) -> None:
+        plural = "" if dropped == 1 else "s"
+        try:
+            await self.bot._app.bot.send_message(
+                chat_id=scope_chat_id,
+                text=(
+                    f"🧹 Cleared {dropped} queued message{plural} for "
+                    f"[{label}] from the Mini App"
+                ),
+            )
+        except Exception:
+            log.debug("miniapp: session-queue-cleared mirror failed", exc_info=True)
+
+    async def _mirror_session_compacted(self, scope_chat_id, label) -> None:
+        try:
+            await self.bot._app.bot.send_message(
+                chat_id=scope_chat_id,
+                text=f"📦 Compact triggered for [{label}] from the Mini App",
+            )
+        except Exception:
+            log.debug("miniapp: session-compacted mirror failed", exc_info=True)
+
+    async def _mirror_session_restarted(self, scope_chat_id, label) -> None:
+        try:
+            await self.bot._app.bot.send_message(
+                chat_id=scope_chat_id, text=f"🔁 Restarted [{label}] from the Mini App",
+            )
+        except Exception:
+            log.debug("miniapp: session-restarted mirror failed", exc_info=True)
+
+    async def _mirror_session_renamed(
+        self, scope_chat_id, previous_label, new_label,
+    ) -> None:
+        try:
+            await self.bot._app.bot.send_message(
+                chat_id=scope_chat_id,
+                text=f"✏️ [{previous_label}] renamed to [{new_label}] from the Mini App",
+            )
+        except Exception:
+            log.debug("miniapp: session-renamed mirror failed", exc_info=True)
 
     async def _mirror_session_stopped(self, scope_chat_id, label, dropped) -> None:
         """Best-effort — the stop already happened; a failed mirror must

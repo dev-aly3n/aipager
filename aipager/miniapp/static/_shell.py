@@ -97,6 +97,19 @@ HTML_BODY = """\
        aria-labelledby="confirm-title" hidden>
     <h2 id="confirm-title" class="modal-title"></h2>
     <p id="confirm-body" class="modal-body"></p>
+    <!--
+      Rename's field. Present in the SAME dialog every other session
+      action confirms through — see design.md "Rename input UX": the
+      confirm modal is already the page's general "this tap needs one
+      more deliberate step" surface, so this is one optional input on
+      it rather than a second parallel overlay. Hidden for every other
+      action; shown, pre-filled and focused only when the pending
+      action is rename.
+    -->
+    <input id="confirm-rename-input" class="field-input" type="text"
+           autocomplete="off" autocapitalize="none" spellcheck="false"
+           maxlength="64" hidden>
+    <div id="confirm-rename-error" class="field-error" hidden></div>
     <div class="modal-actions">
       <button type="button" id="confirm-cancel" class="modal-btn">Cancel</button>
       <button type="button" id="confirm-ok" class="modal-btn is-danger"></button>

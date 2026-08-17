@@ -73,12 +73,25 @@ global.window = { Telegram: { WebApp: {
 global.Telegram = global.window.Telegram;
 const fetchCalls = [];
 let DETAIL_OVERRIDE = null;   // see driveMenuDriftCloses
+// A scenario can make ONE specific write route answer something other
+// than its default FIXTURES entry — used by driveRenameServerConflict
+// to model the server refusing a rename with a 409.
+let POST_STATUS_OVERRIDE = null; // { path, method, status, body }
 global.fetch = (url, opts) => {
-  fetchCalls.push({ url, method: (opts && opts.method) || "GET" });
+  const method = (opts && opts.method) || "GET";
+  fetchCalls.push({ url, method });
+  const path = url.split("?")[0];
+  if (POST_STATUS_OVERRIDE && path === POST_STATUS_OVERRIDE.path
+      && method === POST_STATUS_OVERRIDE.method) {
+    const override = POST_STATUS_OVERRIDE;
+    return Promise.resolve({
+      ok: override.status < 400, status: override.status,
+      json: () => Promise.resolve(override.body),
+    });
+  }
   return Promise.resolve({
     ok: true, status: 200,
     json: () => {
-      const path = url.split("?")[0];
       // A scenario can make the NEXT poll of the session detail return
       // something else, to model the session changing underneath.
       if (DETAIL_OVERRIDE && path === "/api/sessions/dev") {
@@ -153,6 +166,102 @@ const SESSION_DETAIL_FIXTURES = {
   confirm_isolation: detailFor("idle", false),
 };
 
+// ---- Mini App session MENU actions (perms/clearqueue/compact/restart/
+//      rename) fixtures -----------------------------------------------
+//
+// Deliberately a SEPARATE builder from actionsFor()/detailFor() above,
+// rather than extending those: the four original scenarios (stop_busy,
+// kill_idle, ...) assert an EXACT single-item menu, and giving
+// actionsFor() the new keys would silently grow those menus to six
+// items and break assertions that were never meant to exercise this
+// batch at all.
+//
+// Mirrors aipager.miniapp.sessions.{PERMS_ADMIN_REQUIRED_REASON,
+// QUEUE_EMPTY_REASON,QUEUE_FULL_REASON} verbatim, same rationale as
+// NO_TRANSCRIPT_REASON above.
+const PERMS_ADMIN_REQUIRED_REASON = "Switching to Auto mode requires admin.";
+const QUEUE_EMPTY_REASON = "Nothing queued to clear.";
+const QUEUE_FULL_REASON =
+  "Queue is full (50 pending) — clear it or wait for it to drain.";
+const QUEUE_CAP = 50;
+
+function fullActionsFor(status, opts) {
+  opts = opts || {};
+  const isAdmin = !!opts.isAdmin;
+  const skipPerms = !!opts.skipPerms;
+  const queueDepth = opts.queueDepth || 0;
+  const resumable = !!opts.resumable;
+
+  const permsEntry = (!skipPerms && !isAdmin)
+    ? { available: false, reason: PERMS_ADMIN_REQUIRED_REASON }
+    : { available: true, reason: null };
+
+  if (status === "busy" || status === "waiting") {
+    const out = {
+      stop: { available: true, reason: null },
+      clearqueue: queueDepth > 0
+        ? { available: true, reason: null }
+        : { available: false, reason: QUEUE_EMPTY_REASON },
+      rename: { available: true, reason: null },
+      perms: permsEntry,
+      restart: { available: true, reason: null },
+    };
+    if (status === "busy") {
+      out.compact = queueDepth >= QUEUE_CAP
+        ? { available: false, reason: QUEUE_FULL_REASON }
+        : { available: true, reason: null };
+    }
+    return out;
+  }
+  if (status === "idle") {
+    return {
+      compact: { available: true, reason: null },
+      rename: { available: true, reason: null },
+      kill: { available: true, reason: null },
+      perms: permsEntry,
+      restart: { available: true, reason: null },
+    };
+  }
+  if (status === "gone") {
+    return {
+      resume: resumable
+        ? { available: true, reason: null }
+        : { available: false, reason: NO_TRANSCRIPT_REASON },
+      rename: { available: true, reason: null },
+      delete: { available: true, reason: null },
+    };
+  }
+  return {};
+}
+
+function fullDetailFor(status, opts) {
+  opts = opts || {};
+  return {
+    label: "dev", status: status, waiting_kind: null, waiting_summary: null,
+    model: "", context_pct: 0, cost_usd: 0, cwd: "",
+    last_active_seconds_ago: null, busy_elapsed_seconds: null,
+    skip_perms: !!opts.skipPerms, queue_depth: opts.queueDepth || 0,
+    last_message: "", timeline: [], facts: [],
+    actions: fullActionsFor(status, opts),
+  };
+}
+
+Object.assign(SESSION_DETAIL_FIXTURES, {
+  perms_idle: fullDetailFor("idle", { isAdmin: true, skipPerms: false }),
+  perms_busy: fullDetailFor("busy", { isAdmin: true, skipPerms: false }),
+  perms_auto_requires_admin: fullDetailFor("idle", { isAdmin: false, skipPerms: false }),
+  restart_idle: fullDetailFor("idle", { isAdmin: true }),
+  restart_busy: fullDetailFor("busy", { isAdmin: true }),
+  clearqueue_busy: fullDetailFor("busy", { isAdmin: true, queueDepth: 3 }),
+  compact_busy_queues: fullDetailFor("busy", { isAdmin: true, queueDepth: 2 }),
+  compact_idle_sends: fullDetailFor("idle", { isAdmin: true }),
+  compact_queue_full: fullDetailFor("busy", { isAdmin: true, queueDepth: QUEUE_CAP }),
+  rename_valid: fullDetailFor("idle", { isAdmin: true }),
+  rename_client_side_invalid: fullDetailFor("idle", { isAdmin: true }),
+  rename_server_conflict: fullDetailFor("idle", { isAdmin: true }),
+  menu_grouping_divider: fullDetailFor("busy", { isAdmin: true, queueDepth: 3 }),
+});
+
 const SCHEMA = [
   { section: "length", field: "answer_length", title: "Answer length",
     options: [
@@ -196,6 +305,13 @@ const FIXTURES = {
   "/api/sessions/dev/stop": { status: "stopped", label: "dev", dropped: 0 },
   "/api/sessions/dev/kill": { status: "killed", label: "dev" },
   "/api/sessions/dev/resume": { status: "resumed", label: "dev" },
+  "/api/sessions/dev/perms": { status: "switched", label: "dev", skip_perms: true },
+  "/api/sessions/dev/clearqueue": { status: "cleared", label: "dev", dropped: 3 },
+  "/api/sessions/dev/compact": { status: "queued", label: "dev" },
+  "/api/sessions/dev/restart": { status: "restarted", label: "dev" },
+  "/api/sessions/dev/rename": {
+    status: "renamed", label: "frontend", previous_label: "dev", changed: true,
+  },
 };
 
 // extract and run the page script
@@ -590,6 +706,323 @@ function driveBackdropCancels() {
   }, 10);
 }
 
+// ===== Mini App session MENU actions (perms/clearqueue/compact/restart/
+//       rename) =========================================================
+
+// ---- scenario: perms, IDLE, admin targeting Auto -----------------------
+function drivePermsIdle() {
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    const menu = openMenu();
+    const item = itemNamed(menu, "Switch to Auto");
+    if (item.disabled) fail("perms must be available for an admin targeting Auto");
+
+    const before = fetchCalls.length;
+    item.click();
+    if (fetchCalls.length !== before)
+      fail("choosing perms from the menu issued a request before confirming");
+    if (!modalIsOpen()) fail("choosing perms did not open the confirm modal");
+    if (byId["confirm-title"].textContent.indexOf("Auto") === -1)
+      fail("confirm title does not name the target mode: " +
+           JSON.stringify(byId["confirm-title"].textContent));
+    if (byId["confirm-ok"].textContent !== "Switch")
+      fail("idle perms confirm label should be 'Switch', got " +
+           JSON.stringify(byId["confirm-ok"].textContent));
+
+    byId["confirm-ok"].click();
+    const sent = fetchCalls.slice(before);
+    if (sent.length !== 1)
+      fail("confirming perms sent " + sent.length + " requests, expected one");
+    if (!sent.find(f => f.method === "POST" && /\/dev\/perms$/.test(f.url)))
+      fail("confirming perms sent no POST /api/sessions/dev/perms");
+
+    console.log("ok: perms idle -> menu -> modal -> POST /api/sessions/dev/perms");
+    process.exit(0);
+  }, 10);
+}
+
+// ---- scenario: perms, BUSY -- Stop task & switch wording ---------------
+function drivePermsBusy() {
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    const menu = openMenu();
+    const item = itemNamed(menu, "Switch to Auto");
+
+    item.click();
+    if (!modalIsOpen())
+      fail("choosing perms on a busy session did not open the confirm modal");
+    if (byId["confirm-title"].textContent.indexOf("Stop the current task") === -1)
+      fail("busy perms confirm must use the stop-task wording: " +
+           JSON.stringify(byId["confirm-title"].textContent));
+    if (byId["confirm-ok"].textContent !== "Stop task & switch")
+      fail("busy perms confirm label wrong: " +
+           JSON.stringify(byId["confirm-ok"].textContent));
+    if (byId["confirm-cancel"].textContent !== "Not now")
+      fail("busy perms cancel label wrong: " +
+           JSON.stringify(byId["confirm-cancel"].textContent));
+
+    const before = fetchCalls.length;
+    byId["confirm-ok"].click();
+    const sent = fetchCalls.slice(before);
+    if (!sent.find(f => f.method === "POST" && /\/dev\/perms$/.test(f.url)))
+      fail("confirming busy perms sent no POST /api/sessions/dev/perms");
+
+    console.log("ok: perms busy -> Stop task & switch wording -> POST /api/sessions/dev/perms");
+    process.exit(0);
+  }, 10);
+}
+
+// ---- scenario: perms, non-admin targeting Auto -- inert with reason ----
+function drivePermsAutoRequiresAdmin() {
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    const menu = openMenu();
+    const item = itemNamed(menu, "Switch to Auto");
+    if (!item.disabled) fail("a non-admin targeting Auto must see perms disabled");
+
+    const note = menu.children.find(c => c.className === "menu-note");
+    if (!note || note.textContent.indexOf("admin") === -1)
+      fail("disabled perms must state the admin reason: " +
+           JSON.stringify(note && note.textContent));
+
+    const before = fetchCalls.length;
+    item.click();   // a disabled control in this shim has no listener attached
+    if (fetchCalls.length !== before) fail("an inert perms row still sent a request");
+
+    console.log("ok: perms auto requires admin -> disabled with reason, no fetch");
+    process.exit(0);
+  }, 10);
+}
+
+// ---- scenario: restart (IDLE / BUSY -- same client behaviour either way)
+function driveRestart(okMessage) {
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    const menu = openMenu();
+    const item = itemNamed(menu, "Restart");
+    if (item.disabled) fail("restart must be available");
+
+    const before = fetchCalls.length;
+    item.click();
+    if (fetchCalls.length !== before)
+      fail("choosing Restart issued a request before confirming");
+    if (!modalIsOpen()) fail("choosing Restart did not open the confirm modal");
+    // Restart's own wording, not Kill/Delete's generic fallback body —
+    // the two happen to share a confirmLabel ("Restart"), so only the
+    // body text actually distinguishes a dedicated branch from a
+    // silently-correct-looking fallback onto the generic one.
+    if (byId["confirm-body"].textContent.indexOf("relaunches") === -1)
+      fail("restart's confirm body does not describe a relaunch: " +
+           JSON.stringify(byId["confirm-body"].textContent));
+
+    byId["confirm-ok"].click();
+    const sent = fetchCalls.slice(before);
+    if (sent.length !== 1)
+      fail("confirming Restart sent " + sent.length + " requests, expected one");
+    if (!sent.find(f => f.method === "POST" && /\/dev\/restart$/.test(f.url)))
+      fail("confirming Restart sent no POST /api/sessions/dev/restart");
+
+    console.log(okMessage);
+    process.exit(0);
+  }, 10);
+}
+function driveRestartIdle() {
+  driveRestart("ok: restart idle -> menu -> modal -> POST /api/sessions/dev/restart");
+}
+function driveRestartBusy() {
+  driveRestart("ok: restart busy -> menu -> modal -> POST /api/sessions/dev/restart");
+}
+
+// ---- scenario: Clear queue (single tap, BUSY + non-empty queue) --------
+function driveClearqueueBusy() {
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    const menu = openMenu();
+    const item = itemNamed(menu, "Clear queue");
+    if (item.disabled) fail("clearqueue must be available when the queue is non-empty");
+
+    const before = fetchCalls.length;
+    item.click();
+    const sent = fetchCalls.slice(before);
+    if (sent.length !== 1)
+      fail("tapping Clear queue sent " + sent.length + " requests, expected one");
+    if (!sent.find(f => f.method === "POST" && /\/dev\/clearqueue$/.test(f.url)))
+      fail("tapping Clear queue sent no POST /api/sessions/dev/clearqueue");
+    if (modalIsOpen())
+      fail("Clear queue is recoverable and must not ask for confirmation");
+
+    console.log("ok: clearqueue -> menu -> one POST /api/sessions/dev/clearqueue");
+    process.exit(0);
+  }, 10);
+}
+
+// ---- scenario: Compact now (single tap, no confirm) ---------------------
+function driveCompact(okMessage) {
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    const menu = openMenu();
+    const item = itemNamed(menu, "Compact now");
+    if (item.disabled) fail("compact must be available below the queue cap");
+
+    const before = fetchCalls.length;
+    item.click();
+    const sent = fetchCalls.slice(before);
+    if (sent.length !== 1)
+      fail("tapping Compact now sent " + sent.length + " requests, expected one");
+    if (!sent.find(f => f.method === "POST" && /\/dev\/compact$/.test(f.url)))
+      fail("tapping Compact now sent no POST /api/sessions/dev/compact");
+    if (modalIsOpen())
+      fail("Compact is recoverable and must not ask for confirmation");
+
+    console.log(okMessage);
+    process.exit(0);
+  }, 10);
+}
+function driveCompactBusyQueues() {
+  driveCompact("ok: compact busy -> menu -> one POST /api/sessions/dev/compact (queues)");
+}
+function driveCompactIdleSends() {
+  driveCompact("ok: compact idle -> menu -> one POST /api/sessions/dev/compact (sends)");
+}
+
+// ---- scenario: Compact, queue at cap -- inert with reason ---------------
+function driveCompactQueueFull() {
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    const menu = openMenu();
+    const item = itemNamed(menu, "Compact now");
+    if (!item.disabled) fail("compact must be disabled at the queue cap");
+
+    const note = menu.children.find(c => c.className === "menu-note");
+    if (!note || note.textContent.indexOf("Queue is full") === -1)
+      fail("disabled compact must state the queue-full reason: " +
+           JSON.stringify(note && note.textContent));
+
+    const before = fetchCalls.length;
+    item.click();
+    if (fetchCalls.length !== before) fail("an inert compact row still sent a request");
+
+    console.log("ok: compact queue full -> disabled with reason, no fetch");
+    process.exit(0);
+  }, 10);
+}
+
+// ---- scenario: Rename, a valid new name ----------------------------------
+function driveRenameValid() {
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    const menu = openMenu();
+    const item = itemNamed(menu, "Rename");
+
+    const before = fetchCalls.length;
+    item.click();
+    if (fetchCalls.length !== before)
+      fail("choosing Rename issued a request before confirming");
+    if (!modalIsOpen()) fail("choosing Rename did not open the confirm modal");
+
+    const input = byId["confirm-rename-input"];
+    if (input.hidden) fail("Rename's text field is not shown");
+    if (input.value !== "dev")
+      fail("Rename's field is not pre-filled with the current label: " +
+           JSON.stringify(input.value));
+
+    input.value = "frontend";
+    (input.listeners.input || []).forEach(f => f.call(input, {}));
+    if (byId["confirm-ok"].disabled) fail("a valid new name must leave Save enabled");
+
+    byId["confirm-ok"].click();
+    const sent = fetchCalls.slice(before);
+    if (sent.length !== 1)
+      fail("confirming Rename sent " + sent.length + " requests, expected one");
+    if (!sent.find(f => f.method === "POST" && /\/dev\/rename$/.test(f.url)))
+      fail("confirming Rename sent no POST /api/sessions/dev/rename");
+
+    console.log("ok: rename valid -> menu -> modal -> POST /api/sessions/dev/rename");
+    process.exit(0);
+  }, 10);
+}
+
+// ---- scenario: Rename, a client-side-invalid name -- Save stays disabled
+function driveRenameClientSideInvalid() {
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    const menu = openMenu();
+    itemNamed(menu, "Rename").click();
+    if (!modalIsOpen()) fail("choosing Rename did not open the confirm modal");
+
+    const input = byId["confirm-rename-input"];
+    input.value = "bad name!";
+    (input.listeners.input || []).forEach(f => f.call(input, {}));
+    if (!byId["confirm-ok"].disabled)
+      fail("an invalid new name must leave Save disabled");
+    if (byId["confirm-rename-error"].hidden || !byId["confirm-rename-error"].textContent)
+      fail("a disabled Save must say why");
+
+    const before = fetchCalls.length;
+    byId["confirm-ok"].click();   // a disabled Save must still refuse to submit
+    if (fetchCalls.length !== before)
+      fail("tapping a disabled Save still sent a request");
+
+    console.log("ok: rename client-side invalid -> Save disabled, no fetch");
+    process.exit(0);
+  }, 10);
+}
+
+// ---- scenario: Rename, the server refuses (409 conflict) ----------------
+function driveRenameServerConflict() {
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    const menu = openMenu();
+    itemNamed(menu, "Rename").click();
+
+    const input = byId["confirm-rename-input"];
+    input.value = "frontend";
+    (input.listeners.input || []).forEach(f => f.call(input, {}));
+
+    POST_STATUS_OVERRIDE = {
+      path: "/api/sessions/dev/rename", method: "POST", status: 409,
+      body: {
+        error: "conflict",
+        detail: "A session named frontend already exists in this chat.",
+      },
+    };
+    byId["confirm-ok"].click();
+
+    setTimeoutReal(() => {
+      if (byId["notice"].textContent.indexOf("already exists in this chat") === -1)
+        fail("the notice does not show the server's detail verbatim: " +
+             JSON.stringify(byId["notice"].textContent));
+      console.log("ok: rename server conflict -> notice shows the server detail verbatim");
+      process.exit(0);
+    }, 20);
+  }, 10);
+}
+
+// ---- scenario: the menu divider sits between the two groups -------------
+function driveMenuGroupingDivider() {
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    const menu = openMenu();
+    const classes = menu.children.map(c => c.className);
+    const dividerIdx = classes.findIndex(c => c === "menu-divider");
+    if (dividerIdx === -1)
+      fail("no divider rendered for a menu with both control and destructive items: " +
+           JSON.stringify(classes));
+
+    const before = menu.children[dividerIdx - 1];
+    const after = menu.children[dividerIdx + 1];
+    if (!before || before.className.indexOf("act-rename") === -1)
+      fail("divider is not immediately after the last control item (rename); got " +
+           JSON.stringify(classes));
+    if (!after || after.className.indexOf("act-perms") === -1)
+      fail("divider is not immediately before the first destructive item (perms); got " +
+           JSON.stringify(classes));
+
+    console.log("ok: divider sits between the last control item and the first destructive one");
+    process.exit(0);
+  }, 10);
+}
+
 const DRIVERS = {
   settings: driveSettings,
   stop_busy: driveStopBusy,
@@ -603,5 +1036,18 @@ const DRIVERS = {
   reset_confirm: driveResetConfirm,
   menu_drift_closes: driveMenuDriftCloses,
   confirm_isolation: driveConfirmIsolation,
+  perms_idle: drivePermsIdle,
+  perms_busy: drivePermsBusy,
+  perms_auto_requires_admin: drivePermsAutoRequiresAdmin,
+  restart_idle: driveRestartIdle,
+  restart_busy: driveRestartBusy,
+  clearqueue_busy: driveClearqueueBusy,
+  compact_busy_queues: driveCompactBusyQueues,
+  compact_idle_sends: driveCompactIdleSends,
+  compact_queue_full: driveCompactQueueFull,
+  rename_valid: driveRenameValid,
+  rename_client_side_invalid: driveRenameClientSideInvalid,
+  rename_server_conflict: driveRenameServerConflict,
+  menu_grouping_divider: driveMenuGroupingDivider,
 };
 (DRIVERS[SCENARIO] || (() => fail("unknown scenario: " + SCENARIO)))();

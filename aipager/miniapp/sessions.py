@@ -20,7 +20,7 @@ import time
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
-from aipager.state import Status
+from aipager.state import QUEUE_CAP, Status
 
 if TYPE_CHECKING:
     from aipager.state import TrackedSession
@@ -36,6 +36,14 @@ _WAITING_STATUS = "waiting"
 # one string, not two that could drift apart.
 NO_TRANSCRIPT_REASON = "No resumable transcript — start a fresh session instead."
 NO_PERMISSION_REASON = "You don't have permission to control this session."
+# Shared verbatim between session_actions()'s client-facing reason and the
+# corresponding write route's refusal body (entrypoints.md), same rationale
+# as the two constants above — one string, not two that could drift apart.
+PERMS_ADMIN_REQUIRED_REASON = "Switching to Auto mode requires admin."
+QUEUE_EMPTY_REASON = "Nothing queued to clear."
+QUEUE_FULL_REASON = (
+    f"Queue is full ({QUEUE_CAP} pending) — clear it or wait for it to drain."
+)
 
 
 def _derive_status(sess: "TrackedSession") -> tuple[str, str | None, str | None]:
@@ -132,51 +140,95 @@ def session_summary(sess: "TrackedSession", now: float) -> dict[str, Any]:
     }
 
 
+# Canonical, stable emission order (design.md): the server always builds
+# the ``actions`` dict by walking this tuple, so key order in the JSON
+# response never depends on set/dict iteration order. The client's own
+# ACTION_ORDER (static/_app.py) is the same nine keys in the same order —
+# the first five are the "session control" menu group, the last four are
+# "destructive/disruptive" (confirm-modal) — so filtering this tuple by
+# presence is exactly what produces the client's grouped rendering.
+_CANONICAL_ACTION_ORDER = (
+    "stop", "clearqueue", "compact", "resume", "rename",
+    "kill", "perms", "restart", "delete",
+)
+
+# Which keys are even relevant for a given status, before any
+# availability rule is evaluated. `clearqueue` is busy/waiting only —
+# `pending_queue` is only ever populated while a turn is in flight, so
+# offering it at idle would only ever 409. `compact` excludes `waiting`
+# on purpose: the terminal is displaying an open permission/question
+# prompt, and typing `/compact` there risks being read as input to that
+# prompt rather than a new turn.
+_STATUS_ACTION_KEYS: dict[str, frozenset[str]] = {
+    "busy": frozenset({"stop", "clearqueue", "compact", "rename", "perms", "restart"}),
+    "waiting": frozenset({"stop", "clearqueue", "rename", "perms", "restart"}),
+    "idle": frozenset({"kill", "compact", "rename", "perms", "restart"}),
+    "gone": frozenset({"resume", "rename", "delete"}),
+}
+
+
 def session_actions(
     status: str, *, resumable: bool, can_act: bool,
+    is_admin: bool = False, skip_perms: bool = False, queue_depth: int = 0,
 ) -> dict[str, dict[str, Any]]:
     """The status→button matrix (design.md), computed server-side so
-    every refusal rule — status match, resumability, permission — is
-    testable directly in pytest with zero DOM, and so the client can
-    never show a button whose tap would just bounce off a 409.
+    every refusal rule — status match, resumability, permission, admin,
+    queue depth — is testable directly in pytest with zero DOM, and so
+    the client can never show a button whose tap would just bounce off
+    a 409.
 
-    Returns only the keys the matrix says are relevant for ``status``:
-
-    - ``"busy"``/``"waiting"`` → ``{"stop": ...}``
-    - ``"idle"`` → ``{"kill": ...}``
-    - ``"gone"`` → ``{"resume": ..., "delete": ...}``
-    - anything else (``"unknown"``) → ``{}``
+    Returns only the keys :data:`_STATUS_ACTION_KEYS` says are relevant
+    for ``status``, in :data:`_CANONICAL_ACTION_ORDER`; anything else
+    (``"unknown"``) → ``{}``.
 
     Each present entry is ``{"available": bool, "reason": str | None}``.
     ``available`` is ``False`` whenever ``can_act`` is ``False``
-    (reason = :data:`NO_PERMISSION_REASON`), and additionally for
-    ``resume`` when ``not resumable`` (reason =
-    :data:`NO_TRANSCRIPT_REASON`, unless ``can_act`` is already
-    ``False``, in which case the permission reason wins — a caller who
-    cannot act at all should not be told the OTHER reason it can't act).
+    (reason = :data:`NO_PERMISSION_REASON`) — this wins over every
+    OTHER reason for every key, generalising the original resume-only
+    rule to all nine: a caller who cannot act at all should not be told
+    some OTHER reason it can't act. When ``can_act`` is ``True``, three
+    keys carry their own extra rule:
+
+    - ``resume``: unavailable when ``not resumable``
+      (:data:`NO_TRANSCRIPT_REASON`).
+    - ``clearqueue``: unavailable when ``queue_depth <= 0``
+      (:data:`QUEUE_EMPTY_REASON`) — nothing queued to clear.
+    - ``compact``: unavailable, on a BUSY session only, when
+      ``queue_depth >= QUEUE_CAP`` (:data:`QUEUE_FULL_REASON`). An IDLE
+      compact sends immediately rather than queueing, so it has no
+      queue-depth rule at all.
+    - ``perms``: the switch's target is derived, never stored —
+      ``target_is_auto = not skip_perms``. Unavailable only when the
+      target is Auto and the caller is not admin
+      (:data:`PERMS_ADMIN_REQUIRED_REASON`); switching *to* Ask never
+      needs admin, matching chat's own ``/perms`` rule.
     """
-    if status in ("busy", "waiting"):
-        keys = ("stop",)
-    elif status == "idle":
-        keys = ("kill",)
-    elif status == "gone":
-        keys = ("resume", "delete")
-    else:
+    relevant = _STATUS_ACTION_KEYS.get(status)
+    if relevant is None:
         return {}
 
     actions: dict[str, dict[str, Any]] = {}
-    for key in keys:
+    for key in _CANONICAL_ACTION_ORDER:
+        if key not in relevant:
+            continue
         if not can_act:
             actions[key] = {"available": False, "reason": NO_PERMISSION_REASON}
         elif key == "resume" and not resumable:
             actions[key] = {"available": False, "reason": NO_TRANSCRIPT_REASON}
+        elif key == "clearqueue" and queue_depth <= 0:
+            actions[key] = {"available": False, "reason": QUEUE_EMPTY_REASON}
+        elif key == "compact" and status == "busy" and queue_depth >= QUEUE_CAP:
+            actions[key] = {"available": False, "reason": QUEUE_FULL_REASON}
+        elif key == "perms" and not skip_perms and not is_admin:
+            actions[key] = {"available": False, "reason": PERMS_ADMIN_REQUIRED_REASON}
         else:
             actions[key] = {"available": True, "reason": None}
     return actions
 
 
 def session_detail(
-    sess: "TrackedSession", now: float, *, can_act: bool = True,
+    sess: "TrackedSession", now: float, *,
+    can_act: bool = True, is_admin: bool = False,
 ) -> dict[str, Any]:
     """Shape the drill-down payload for ``GET /api/sessions/{label}``.
 
@@ -186,16 +238,18 @@ def session_detail(
     wait per its docstring in state.py, so it stays meaningful there
     too); ``None`` for IDLE/GONE/UNKNOWN, where it would just be stale.
 
-    ``can_act`` defaults to ``True`` so the existing unit tests that call
-    this positionally (``session_detail(sess, time.monotonic())``) need
-    no changes — they get a permissive default and simply gain the new
-    ``actions`` key without asserting on it.
+    ``can_act``/``is_admin`` default to permissive-off values so the
+    existing unit tests that call this positionally
+    (``session_detail(sess, time.monotonic())``) need no changes — they
+    get a permissive default and simply gain the new keys without
+    asserting on them.
     """
     status, waiting_kind, waiting_summary = _derive_status(sess)
     last_active = round(now - sess.last_hook_at) if sess.last_hook_at else None
     busy_elapsed = None
     if sess.busy_started_at and sess.status in (Status.BUSY, Status.INTERACTIVE):
         busy_elapsed = round(now - sess.busy_started_at)
+    queue_depth = len(sess.pending_queue)
     detail = {
         "label": sess.label,
         "status": status,
@@ -207,6 +261,13 @@ def session_detail(
         "cwd": sess.cwd or "",
         "last_active_seconds_ago": last_active,
         "busy_elapsed_seconds": busy_elapsed,
+        # The session's current permission mode and how many prompts sit
+        # behind its in-progress turn — both consulted client-side to
+        # word the perms confirm dialog and to decide whether Clear
+        # queue/Compact would just bounce off a 409, and both fed into
+        # session_actions() below so the SAME numbers gate the buttons.
+        "skip_perms": bool(sess.skip_perms),
+        "queue_depth": queue_depth,
         # The page's headline content. Unlike `timeline`, this survives a
         # daemon restart (`last_assistant_preview` is in state.py's
         # _PERSIST_FIELDS, tool_history/stream_commentary are not), so it
@@ -217,6 +278,7 @@ def session_detail(
     detail["facts"] = display_facts(detail)
     detail["actions"] = session_actions(
         detail["status"], resumable=bool(sess.claude_session_id), can_act=can_act,
+        is_admin=is_admin, skip_perms=bool(sess.skip_perms), queue_depth=queue_depth,
     )
     return detail
 
@@ -336,6 +398,9 @@ def build_timeline(sess: "TrackedSession") -> list[dict[str, Any]]:
 __all__ = [
     "NO_PERMISSION_REASON",
     "NO_TRANSCRIPT_REASON",
+    "PERMS_ADMIN_REQUIRED_REASON",
+    "QUEUE_EMPTY_REASON",
+    "QUEUE_FULL_REASON",
     "build_timeline",
     "display_facts",
     "preview_lines",
