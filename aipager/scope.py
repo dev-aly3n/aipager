@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -48,6 +49,24 @@ def scope_suffix(chat_id: int, kind: str) -> str:
     is used so the suffix is collision-free.
     """
     return f"{kind[0]}{abs(chat_id)}"
+
+
+# Inverse of the suffix `scope_suffix` appends. Anchored to the END and
+# requiring digits, because a label may legitimately contain "__"
+# (`inject._VALID_NAME` allows underscores) — a naive split would turn
+# "my__thing" into "my". `[dg]` are the only first characters
+# `scope_suffix` can emit, from kind "dm" / "group".
+_SCOPE_SUFFIX_RE = re.compile(r"__[dg]\d+$")
+
+
+def strip_scope_suffix(name: str) -> str:
+    """Undo :func:`scope_suffix`'s contribution to a disambiguated name.
+
+    ``"Jkhk__d256113222"`` → ``"Jkhk"``; ``"my__thing"`` (no suffix) and
+    ``"my__dabc"`` (not digits) are returned unchanged. Only a trailing
+    suffix is removed, so ``"my__thing__d123"`` → ``"my__thing"``.
+    """
+    return _SCOPE_SUFFIX_RE.sub("", name)
 
 
 def disambiguated_name(label: str, chat_id: int, kind: str) -> str:

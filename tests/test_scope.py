@@ -15,6 +15,7 @@ from aipager.scope import (
     dump_scopes,
     load_scopes,
     scope_suffix,
+    strip_scope_suffix,
 )
 
 
@@ -146,3 +147,52 @@ def test_empty_scopes_rejected(tmp_path: Path):
     f.write_text("schema_version: 2\nbot_token: x\nscopes: []\n")
     with pytest.raises(ScopeConfigError, match="non-empty"):
         load_scopes(f)
+
+
+# ===== strip_scope_suffix — the inverse of a disambiguated name ==========
+#
+# Reported 2026-08-17: a killed session reappeared in the gone list as
+# "Jkhk__d256113222" instead of "Jkhk". `SessionRegistry.get_or_create`
+# derives a label when it adopts a session it did not create, and it was
+# stripping only the "claude-" prefix, leaving the scope disambiguator.
+
+
+
+@pytest.mark.parametrize("name,expected", [
+    ("Jkhk__d256113222", "Jkhk"),          # the reported case
+    ("dev__g4152307515", "dev"),           # group scope
+    ("dev", "dev"),                        # unscoped / legacy
+    ("", ""),
+])
+def test_a_real_suffix_is_removed(name, expected):
+    assert strip_scope_suffix(name) == expected
+
+
+@pytest.mark.parametrize("name", [
+    "my__thing",        # underscores are legal in a label
+    "my__d",            # no digits — not a suffix
+    "my__dabc",         # not digits
+    "my__x123",         # neither d nor g
+    "my__1234",         # no kind letter
+    "d256113222",       # a suffix shape with no separator is just a name
+    "my__d123x",        # trailing junk after the digits
+])
+def test_something_that_only_looks_like_a_suffix_survives(name):
+    assert strip_scope_suffix(name) == name
+
+
+def test_only_the_trailing_suffix_goes():
+    """A label may itself contain `__`; only the disambiguator at the end
+    is the machine's, and only one of them."""
+    assert strip_scope_suffix("my__thing__d123") == "my__thing"
+    assert strip_scope_suffix("a__d1__d2") == "a__d1"
+
+
+@pytest.mark.parametrize("label", ["dev", "Jkhk", "my__thing", "a", "x-1_2"])
+@pytest.mark.parametrize("chat_id,kind", [(256113222, "dm"), (-4152307515, "group")])
+def test_round_trip_with_the_real_name_builder(label, chat_id, kind):
+    """Pinned against `disambiguated_name` itself, so the two cannot
+    drift into disagreeing about the format."""
+    name = disambiguated_name(label, chat_id, kind)
+    assert strip_scope_suffix(name.removeprefix("claude-")) == label
+    assert name.endswith("__" + scope_suffix(chat_id, kind))

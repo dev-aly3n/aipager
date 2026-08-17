@@ -23,6 +23,7 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Any
 
+from aipager.scope import strip_scope_suffix
 from aipager.config import SESSION_STATE_FILE
 
 log = logging.getLogger(__name__)
@@ -399,7 +400,13 @@ class SessionRegistry:
 
     def get_or_create(self, name: str) -> TrackedSession:
         if name not in self._sessions:
-            label = name.removeprefix("claude-") if name.startswith("claude-") else name
+            # Strip the scope disambiguator too, not just the prefix:
+            # a discovered session would otherwise wear its INTERNAL
+            # name everywhere the label is shown (grid, gone list,
+            # /status, keyboard) — "Jkhk__d256113222" for a session
+            # the operator named "Jkhk".
+            core = name.removeprefix("claude-") if name.startswith("claude-") else name
+            label = strip_scope_suffix(core)
             self._sessions[name] = TrackedSession(name=name, label=label)
             log.info("Tracking new session: %s [%s]", name, label)
             self._evict_gone_overflow()

@@ -524,3 +524,30 @@ def test_scan_no_stale_warning_right_after_a_long_permission_wait(
 
     notify.assert_not_awaited()
     assert sess.stale_warned is False
+
+
+# ---- a discovered session wears its own name, not the internal one ------
+
+def test_get_or_create_derives_a_label_without_the_scope_suffix():
+    """Reported 2026-08-17. Killing a session removes it from the
+    registry; the socket can outlive that into the next 2s scan, so
+    discovery re-creates the entry through `get_or_create` — which is the
+    only path that has to DERIVE a label. It kept the disambiguator, so
+    the session then showed up in the gone list as
+    "Jkhk__d256113222" instead of "Jkhk"."""
+    reg = SessionRegistry()
+    assert reg.get_or_create("claude-Jkhk__d256113222").label == "Jkhk"
+    assert reg.get_or_create("claude-dev").label == "dev"
+    assert reg.get_or_create("claude-my__thing").label == "my__thing"
+
+
+def test_get_or_create_never_rewrites_an_existing_label():
+    """The derivation is a fallback for entries it CREATES. An operator's
+    chosen label — or one already stored — must survive being looked up
+    again, however odd it looks."""
+    reg = SessionRegistry()
+    sess = reg.get_or_create("claude-Jkhk__d256113222")
+    sess.label = "renamed__d999"          # deliberately suffix-shaped
+    again = reg.get_or_create("claude-Jkhk__d256113222")
+    assert again is sess
+    assert again.label == "renamed__d999"
