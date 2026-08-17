@@ -133,6 +133,7 @@ class SessionOpsMixin:
     async def create_session(
         self, label: str, *, scope_chat_id, skip_perms: bool = False,
         cwd: str | None = None, driver_user_id: int | None = None,
+        model: str | None = None,
     ) -> tuple[str, str]:
         """Launch a session and register it. Returns ``(session_name, "")``
         or ``("", error)``.
@@ -167,7 +168,7 @@ class SessionOpsMixin:
         sys_extra = self._session_system_prompt(scope_chat_id, label)
         ok, err = await inject.launch_session(
             short_name, skip_perms=skip_perms, cwd=cwd or None,
-            system_prompt_extra=sys_extra,
+            system_prompt_extra=sys_extra, model=model or None,
         )
         if not ok:
             return "", err

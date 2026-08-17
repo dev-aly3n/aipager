@@ -198,3 +198,67 @@ def test_multiple_roots_each_accepted(roots):
     both = [roots["root"], roots["outside"]]
     assert validate_cwd(roots["root"], both)[1] == ""
     assert validate_cwd(roots["outside"], both)[1] == ""
+
+
+# ===== the model reaches the launch command, not the session ==============
+
+def test_launch_session_puts_the_model_on_the_command_line(monkeypatch, run_async):
+    """`--model` at launch is the whole point: typing `/model x` into the
+    session instead produced a spurious extra turn on first IDLE."""
+    from aipager.dtach import inject
+
+    captured = {}
+
+    async def fake_exec(*args, **kwargs):
+        captured["argv"] = args
+        raise RuntimeError("stop before spawning anything")
+
+    monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", fake_exec)
+    monkeypatch.setattr(inject, "_socket_exists", lambda name: False, raising=False)
+
+    with pytest.raises(RuntimeError):
+        run_async(inject.launch_session("dev", model="opus"))
+    argv = " ".join(str(a) for a in captured.get("argv", ()))
+    assert "--model opus" in argv, argv
+
+
+def test_launch_session_omits_the_flag_when_no_model_is_given(monkeypatch, run_async):
+    from aipager.dtach import inject
+
+    captured = {}
+
+    async def fake_exec(*args, **kwargs):
+        captured["argv"] = args
+        raise RuntimeError("stop before spawning anything")
+
+    monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", fake_exec)
+    monkeypatch.setattr(inject, "_socket_exists", lambda name: False, raising=False)
+
+    with pytest.raises(RuntimeError):
+        run_async(inject.launch_session("dev"))
+    argv = " ".join(str(a) for a in captured.get("argv", ()))
+    assert "--model" not in argv, argv
+
+
+def test_a_model_with_shell_metacharacters_is_quoted(monkeypatch, run_async):
+    """The alias is server-validated against MODEL_CHOICES before it gets
+    here, but it lands inside a `bash -c` string — quote it anyway rather
+    than relying on a caller two layers up."""
+    from aipager.dtach import inject
+
+    captured = {}
+
+    async def fake_exec(*args, **kwargs):
+        captured["argv"] = args
+        raise RuntimeError("stop before spawning anything")
+
+    monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", fake_exec)
+    monkeypatch.setattr(inject, "_socket_exists", lambda name: False, raising=False)
+
+    with pytest.raises(RuntimeError):
+        run_async(inject.launch_session("dev", model="opus; touch /tmp/pwned"))
+    argv = " ".join(str(a) for a in captured.get("argv", ()))
+    # shlex.quote wraps the whole value, so the `;` is inert. Asserting the
+    # QUOTED form is the check; an earlier version stripped the quotes and
+    # then looked for the bare text, which can only ever fail.
+    assert "--model 'opus; touch /tmp/pwned'" in argv, argv

@@ -291,34 +291,31 @@ class MiniAppServer:
                 "detail": f"A session named {name} already exists in this chat.",
             }, status=409)
 
-        session_name, err = await self.bot.create_session(
-            name, scope_chat_id=scope_chat_id, skip_perms=skip_perms,
-            cwd=cwd or None, driver_user_id=user_id,
-        )
-        if not session_name:
-            log.info("miniapp: session create failed — launch refused")
-            return web.json_response({"error": "launch_failed", "detail": err}, status=400)
-
-        # Model selection rides Claude Code's own `/model <name>` slash
-        # command, queued to drain on first IDLE — `launch_session` has no
-        # model flag, and this is the same mechanism the chat keyboard's
-        # Model submenu uses (config.MODEL_CHOICES).
-        #
-        # The queued text is MODEL_CHOICES' own `send` string, never one
-        # rebuilt from the label: `keyboard.json` lets an operator map a
-        # label to an unrelated command (e.g. "Claude 4.5 Opus" ->
-        # "/model claude-opus-4-5"), and lowercasing the label would type
-        # a nonsense command into their session while chat sent the right
-        # one. The label is only ever the lookup key.
+        # Validate the model against the same list the chat keyboard
+        # offers, then hand it to the launch as `--model`. It is NOT
+        # queued as a `/model` prompt: a queued prompt drains on the
+        # session's first IDLE, which is after the operator's first real
+        # message has been answered, so it produced a spurious second
+        # turn and a duplicate answer.
         model = body.get("model")
+        chosen_model = ""
         if isinstance(model, str) and model:
             from aipager.config import MODEL_CHOICES
             valid = {label.lower(): send for label, send in MODEL_CHOICES}
             command = valid.get(model.strip().lower())
             if command:
-                sess = self.registry.get_or_create(session_name)
-                if sess.queue_prompt(command, 0):
-                    self.registry.mark_dirty()
+                # MODEL_CHOICES stores the chat command ("/model opus");
+                # `--model` wants the bare alias.
+                chosen_model = command.split(None, 1)[-1].strip()
+
+        session_name, err = await self.bot.create_session(
+            name, scope_chat_id=scope_chat_id, skip_perms=skip_perms,
+            cwd=cwd or None, driver_user_id=user_id,
+            model=chosen_model or None,
+        )
+        if not session_name:
+            log.info("miniapp: session create failed — launch refused")
+            return web.json_response({"error": "launch_failed", "detail": err}, status=400)
 
         await self._mirror_session_created(scope_chat_id, name, skip_perms, cwd)
         return web.json_response({"label": name, "session_name": session_name})

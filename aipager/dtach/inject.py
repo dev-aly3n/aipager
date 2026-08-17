@@ -456,6 +456,7 @@ async def launch_session(
     resume_id: str | None = None,
     cwd: str | None = None,
     system_prompt_extra: str | None = None,
+    model: str | None = None,
 ) -> tuple[bool, str]:
     """Launch a new Claude Code session inside dtach.
 
@@ -502,6 +503,15 @@ async def launch_session(
                  "resuming", name, resume_id)
         resume_id = None
     resume = f"--resume {shlex.quote(resume_id)}" if resume_id else ""
+    # `--model` at launch, never a queued `/model` prompt. Queuing it made
+    # the model command drain on the session's FIRST IDLE — which is after
+    # the operator's first real message has been answered — so choosing a
+    # model in the new-session form produced a spurious second turn, a
+    # second busy card, and a duplicate of the previous answer (the slash
+    # command yields no new assistant text, so the idle notification
+    # re-sent the last one). Setting it on the command line means the
+    # session simply starts on that model.
+    model_flag = f"--model {shlex.quote(model)}" if model else ""
     sys_prompt = (f'Your session name is "{name}". '
                   f'When users address you by this name, respond naturally '
                   f'-- it is your name in this session.')
@@ -545,7 +555,7 @@ async def launch_session(
         f"unset CLAUDECODE; "
         f"{unset_token}"
         f"export CLAUDE_DTACH_SESSION=claude-{name}; "
-        f"{_CLAUDE_BIN} {perms} {resume} "
+        f"{_CLAUDE_BIN} {perms} {resume} {model_flag} "
         f"--append-system-prompt {shlex.quote(sys_prompt)}"
     )
 

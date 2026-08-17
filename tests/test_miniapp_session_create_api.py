@@ -427,45 +427,76 @@ def test_options_serves_the_canonical_model_list(server, run_async):
     run_async(_run())
 
 
-def test_chosen_model_is_queued_as_a_model_command(server, run_async):
-    """`launch_session` has no model flag; selection rides Claude Code's
-    own /model slash command, queued to drain on first IDLE."""
+def test_chosen_model_is_passed_to_the_launch_not_typed_into_the_session(
+    server, run_async,
+):
+    """The model must reach `launch_session` as `--model`, NOT be queued as
+    a `/model` prompt.
+
+    Queuing it was a real bug seen live: a queued prompt drains on the
+    session's FIRST IDLE, which is after the operator's first real message
+    has been answered. Choosing a model therefore produced a spurious
+    second turn, a second busy card, and a duplicate of the previous
+    answer (a slash command yields no new assistant text, so the idle
+    notification re-sent the last one).
+    """
     async def _run():
         client = await _client_for(server)
         try:
             resp = await _post(client, {"name": "dev", "model": "Opus"})
             assert resp.status == 200
+            assert server.bot.create_session.await_args.kwargs["model"] == "opus"
+            # and nothing was queued to be typed in
             sess = server.registry.get_or_create("claude-dev__g100")
-            queued = [str(item) for item in sess.pending_queue]
-            assert any("/model opus" in q for q in queued), queued
+            assert not sess.pending_queue, sess.pending_queue
         finally:
             await client.close()
     run_async(_run())
 
 
-def test_no_model_choice_queues_nothing(server, run_async):
+def test_no_model_choice_passes_no_model(server, run_async):
     async def _run():
         client = await _client_for(server)
         try:
             await _post(client, {"name": "dev", "model": ""})
-            sess = server.registry.get_or_create("claude-dev__g100")
-            assert not sess.pending_queue
+            assert server.bot.create_session.await_args.kwargs["model"] is None
         finally:
             await client.close()
     run_async(_run())
 
 
 @pytest.mark.parametrize("model", ["gpt-4", "../../etc/passwd", "opus; rm -rf /", 123, None])
-def test_unknown_model_is_ignored_not_injected(server, run_async, model):
-    """An unrecognised model must never reach the session as text — it is
-    dropped, and the session still launches."""
+def test_unknown_model_is_dropped_not_passed_through(server, run_async, model):
+    """An unrecognised model must never reach the launch command line — it
+    is dropped, and the session still launches."""
     async def _run():
         client = await _client_for(server)
         try:
             resp = await _post(client, {"name": "dev", "model": model})
             assert resp.status == 200
-            sess = server.registry.get_or_create("claude-dev__g100")
-            assert not sess.pending_queue, sess.pending_queue
+            assert server.bot.create_session.await_args.kwargs["model"] is None
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_model_alias_comes_from_the_send_field_not_the_label(server, run_async, monkeypatch):
+    """`keyboard.json` lets an operator map a label to an unrelated command.
+    The alias handed to `--model` must come from that command, not from
+    lowercasing the label — the default list hides the difference because
+    every shipped label lowercases into its own alias.
+    """
+    monkeypatch.setattr(
+        "aipager.config.MODEL_CHOICES",
+        [("Claude 4.5 Opus", "/model claude-opus-4-5")],
+    )
+
+    async def _run():
+        client = await _client_for(server)
+        try:
+            resp = await _post(client, {"name": "dev", "model": "Claude 4.5 Opus"})
+            assert resp.status == 200
+            assert server.bot.create_session.await_args.kwargs["model"] == "claude-opus-4-5"
         finally:
             await client.close()
     run_async(_run())
@@ -489,31 +520,3 @@ def test_options_serves_the_schema_and_scope_defaults_for_the_form(server, run_a
     run_async(_run())
 
 
-def test_queued_command_comes_from_the_send_field_not_the_label(server, run_async, monkeypatch):
-    """`keyboard.json` lets an operator map a label to an unrelated
-    command. Rebuilding the command by lowercasing the label would type
-    nonsense into their session while chat sent the right thing.
-
-    The default list hides this — every shipped label lowercases into its
-    own command — so this test uses a mapping where they differ, which is
-    the only shape that discriminates.
-    """
-    monkeypatch.setattr(
-        "aipager.config.MODEL_CHOICES",
-        [("Claude 4.5 Opus", "/model claude-opus-4-5")],
-    )
-
-    async def _run():
-        client = await _client_for(server)
-        try:
-            resp = await _post(client, {"name": "dev", "model": "Claude 4.5 Opus"})
-            assert resp.status == 200
-            sess = server.registry.get_or_create("claude-dev__g100")
-            queued = " ".join(str(item) for item in sess.pending_queue)
-            assert "/model claude-opus-4-5" in queued, queued
-            assert "claude 4.5 opus" not in queued.lower(), (
-                "command was rebuilt from the label instead of using `send`"
-            )
-        finally:
-            await client.close()
-    run_async(_run())

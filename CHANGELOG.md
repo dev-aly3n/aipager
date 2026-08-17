@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Choosing a model no longer causes a duplicate answer.** The model was being
+  typed into the session as a `/model` command, which only ran once the session
+  first went idle — that is, after your first real message had already been
+  answered. The result was a second busy card and a repeat of the previous
+  reply, out of nowhere. The model is now set with Claude Code's own `--model`
+  flag when the session launches, so there is no extra turn at all.
 - **Per-session settings respond to a tap.** A refactor had deleted a variable
   the save handler used on its very first line, so every tap threw before it
   could do anything — no visible change, no request, nothing. The page's
