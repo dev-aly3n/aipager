@@ -686,7 +686,10 @@ def test_the_action_menu_icons_are_real_code_points():
     found = dict(re.findall(
         r"\.menu-item\.act-(\w+)::before \{ content: \"([^\"]*)\"; \}", INDEX_HTML,
     ))
-    assert set(found) == {"stop", "kill", "resume", "delete"}, found
+    assert set(found) == {
+        "stop", "kill", "resume", "delete",
+        "clearqueue", "compact", "perms", "restart", "rename",
+    }, found
     for action, glyph in found.items():
         assert glyph, f"{action} has no icon"
         assert not re.search(r"[0-9A-F]{3,}", glyph), (
@@ -695,3 +698,294 @@ def test_the_action_menu_icons_are_real_code_points():
         assert ord(glyph[0]) > 0x2000, (
             f"{action}'s icon starts with U+{ord(glyph[0]):04X}, not a symbol"
         )
+
+
+# ===== Mini App session MENU actions (perms/clearqueue/compact/restart/
+#       rename) — design.md: "Mini App session menu actions" ============
+#
+# Same harness (miniapp_smoke.js), new scenarios. Every guard below is
+# verified per the project's own burned lesson (spec.md/design.md):
+# remove the production line, confirm THIS test fails with a specific
+# reason, then confirm the mutation actually reproduces the defect
+# (the mutated string genuinely differs, not an accidental no-op) —
+# see implementation.md's guard -> mutation -> failing-test table.
+
+def test_perms_idle_opens_confirm_and_posts(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "perms_idle")
+    assert proc.returncode == 0, (
+        f"perms_idle scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: perms idle -> menu -> modal -> POST /api/sessions/dev/perms" \
+        in proc.stdout, proc.stdout
+
+
+def test_perms_busy_uses_stop_task_wording(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "perms_busy")
+    assert proc.returncode == 0, (
+        f"perms_busy scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: perms busy -> Stop task & switch wording -> POST /api/sessions/dev/perms" \
+        in proc.stdout, proc.stdout
+
+
+def test_the_harness_detects_perms_busy_falling_back_to_idle_wording(node_bin, tmp_path):
+    """Guard the guard: drop the busy-specific title branch so perms
+    always uses the idle wording, and the busy scenario must catch it."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    old = (
+        '        title: busy\n'
+        '          ? "Stop the current task and switch " + label + " to " + targetLabel + "?"\n'
+        '          : "Switch " + label + " to " + targetLabel + " mode?",\n'
+    )
+    new = '        title: "Switch " + label + " to " + targetLabel + " mode?",\n'
+    assert old in INDEX_HTML, "perms busy-wording branch not found — page changed shape"
+    broken = INDEX_HTML.replace(old, new, 1)
+    assert broken != INDEX_HTML, "mutation was a no-op"
+
+    proc = _drive_controls(
+        node_bin, tmp_path, broken, "perms_busy", name="broken-perms-busy.html",
+    )
+    assert proc.returncode != 0, (
+        "harness passed a page where busy perms uses the idle wording"
+    )
+
+
+def test_perms_auto_requires_admin_is_inert_with_reason(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(
+        node_bin, tmp_path, INDEX_HTML, "perms_auto_requires_admin",
+    )
+    assert proc.returncode == 0, (
+        f"perms_auto_requires_admin scenario failed:\n"
+        f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: perms auto requires admin -> disabled with reason, no fetch" \
+        in proc.stdout, proc.stdout
+
+
+def test_restart_idle_opens_confirm_and_posts(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "restart_idle")
+    assert proc.returncode == 0, (
+        f"restart_idle scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: restart idle -> menu -> modal -> POST /api/sessions/dev/restart" \
+        in proc.stdout, proc.stdout
+
+
+def test_restart_busy_opens_confirm_and_posts(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "restart_busy")
+    assert proc.returncode == 0, (
+        f"restart_busy scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: restart busy -> menu -> modal -> POST /api/sessions/dev/restart" \
+        in proc.stdout, proc.stdout
+
+
+def test_clearqueue_busy_acts_without_confirmation(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "clearqueue_busy")
+    assert proc.returncode == 0, (
+        f"clearqueue_busy scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: clearqueue -> menu -> one POST /api/sessions/dev/clearqueue" \
+        in proc.stdout, proc.stdout
+
+
+def test_the_harness_detects_clearqueue_gaining_a_confirmation(node_bin, tmp_path):
+    """Guard the guard: Clear queue is recoverable and must NOT gain a
+    confirm step — if CONFIRM_ACTIONS ever grows to include it, the
+    scenario's own single-POST assertion must catch it."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    old = "var CONFIRM_ACTIONS = { kill: true, delete: true, perms: true, restart: true };"
+    new = ("var CONFIRM_ACTIONS = { kill: true, delete: true, perms: true, "
+           "restart: true, clearqueue: true };")
+    assert old in INDEX_HTML, "CONFIRM_ACTIONS declaration not found — page changed shape"
+    broken = INDEX_HTML.replace(old, new, 1)
+    assert broken != INDEX_HTML, "mutation was a no-op"
+
+    proc = _drive_controls(
+        node_bin, tmp_path, broken, "clearqueue_busy", name="broken-clearqueue.html",
+    )
+    assert proc.returncode != 0, (
+        "harness passed a page where Clear queue now asks for confirmation"
+    )
+
+
+def test_compact_busy_queues_acts_without_confirmation(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "compact_busy_queues")
+    assert proc.returncode == 0, (
+        f"compact_busy_queues scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: compact busy -> menu -> one POST /api/sessions/dev/compact (queues)" \
+        in proc.stdout, proc.stdout
+
+
+def test_compact_idle_sends_acts_without_confirmation(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "compact_idle_sends")
+    assert proc.returncode == 0, (
+        f"compact_idle_sends scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: compact idle -> menu -> one POST /api/sessions/dev/compact (sends)" \
+        in proc.stdout, proc.stdout
+
+
+def test_compact_queue_full_is_inert_with_reason(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "compact_queue_full")
+    assert proc.returncode == 0, (
+        f"compact_queue_full scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: compact queue full -> disabled with reason, no fetch" in proc.stdout, proc.stdout
+
+
+def test_rename_valid_prefills_and_posts_the_new_label(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "rename_valid")
+    assert proc.returncode == 0, (
+        f"rename_valid scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: rename valid -> menu -> modal -> POST /api/sessions/dev/rename" \
+        in proc.stdout, proc.stdout
+
+
+def test_the_harness_detects_a_rename_field_that_is_not_prefilled(node_bin, tmp_path):
+    """Guard the guard: drop the pre-fill so the rename field opens
+    empty instead of showing the current label."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    old = "    input.value = label;\n"
+    new = '    input.value = "";\n'
+    assert old in INDEX_HTML, "rename pre-fill line not found — page changed shape"
+    broken = INDEX_HTML.replace(old, new, 1)
+    assert broken != INDEX_HTML, "mutation was a no-op"
+
+    proc = _drive_controls(
+        node_bin, tmp_path, broken, "rename_valid", name="broken-rename-prefill.html",
+    )
+    assert proc.returncode != 0, (
+        "harness passed a page whose rename field opens without the current label"
+    )
+
+
+def test_rename_client_side_invalid_disables_save_and_sends_nothing(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "rename_client_side_invalid")
+    assert proc.returncode == 0, (
+        f"rename_client_side_invalid scenario failed:\n"
+        f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: rename client-side invalid -> Save disabled, no fetch" \
+        in proc.stdout, proc.stdout
+
+
+def test_the_harness_detects_a_disabled_save_that_still_submits(node_bin, tmp_path):
+    """Guard the guard, and the regression test for the shape of bug
+    this project has shipped before: a disabled Confirm/Save button
+    that a test harness (which does not enforce HTML `disabled`
+    semantics the way a real browser does) can still click straight
+    through to a submit."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    old = '    if (document.getElementById("confirm-ok").disabled) { return; }\n'
+    assert old in INDEX_HTML, "onConfirmTap's disabled guard not found — page changed shape"
+    broken = INDEX_HTML.replace(old, "", 1)
+    assert broken != INDEX_HTML, "mutation was a no-op"
+
+    proc = _drive_controls(
+        node_bin, tmp_path, broken, "rename_client_side_invalid",
+        name="broken-confirm-guard.html",
+    )
+    assert proc.returncode != 0, (
+        "harness passed a page whose disabled Save button still submits"
+    )
+
+
+def test_rename_server_conflict_shows_the_detail_verbatim(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "rename_server_conflict")
+    assert proc.returncode == 0, (
+        f"rename_server_conflict scenario failed:\n"
+        f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: rename server conflict -> notice shows the server detail verbatim" \
+        in proc.stdout, proc.stdout
+
+
+def test_the_harness_detects_a_dropped_server_detail_on_rename_failure(node_bin, tmp_path):
+    """Guard the guard: a rename failure that shows a generic message
+    instead of the server's own `detail` would silently hide WHY the
+    rename was refused (which label is already taken, etc.)."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    old = '      showNotice((r.data && r.data.detail) || "Couldn\'t rename.");\n'
+    new = '      showNotice("Couldn\'t rename.");\n'
+    assert old in INDEX_HTML, "rename failure-notice line not found — page changed shape"
+    broken = INDEX_HTML.replace(old, new, 1)
+    assert broken != INDEX_HTML, "mutation was a no-op"
+
+    proc = _drive_controls(
+        node_bin, tmp_path, broken, "rename_server_conflict",
+        name="broken-rename-detail.html",
+    )
+    assert proc.returncode != 0, (
+        "harness passed a page that drops the server's rename-failure detail"
+    )
+
+
+def test_menu_grouping_divider_sits_between_the_two_groups(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "menu_grouping_divider")
+    assert proc.returncode == 0, (
+        f"menu_grouping_divider scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: divider sits between the last control item and the first destructive one" \
+        in proc.stdout, proc.stdout
+
+
+def test_the_harness_detects_a_missing_menu_divider(node_bin, tmp_path):
+    """Guard the guard. This mechanism ships with ZERO coverage the
+    moment its own scenario is removed — pinning it the same way the
+    pre-existing menu-drift guard was pinned after shipping uncovered."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    old = (
+        '      if (CONFIRM_ACTIONS[key] && !dividerInserted && controlRendered > 0) {\n'
+        '        var divider = document.createElement("div");\n'
+        '        divider.className = "menu-divider";\n'
+        '        menu.appendChild(divider);\n'
+        '        dividerInserted = true;\n'
+        '      }\n'
+        '      if (!CONFIRM_ACTIONS[key]) { controlRendered++; }\n'
+    )
+    new = '      if (!CONFIRM_ACTIONS[key]) { controlRendered++; }\n'
+    assert old in INDEX_HTML, "divider-insertion code not found — page changed shape"
+    broken = INDEX_HTML.replace(old, new, 1)
+    assert broken != INDEX_HTML, "mutation was a no-op"
+
+    proc = _drive_controls(
+        node_bin, tmp_path, broken, "menu_grouping_divider", name="broken-divider.html",
+    )
+    assert proc.returncode != 0, (
+        "harness passed a page with no divider between the menu groups"
+    )

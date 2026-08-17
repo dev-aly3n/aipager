@@ -706,7 +706,8 @@ APP_JS = r"""
       });
   }
 
-  // ---- detail-page write actions (Stop/Kill/Resume/Delete) --------------
+  // ---- detail-page write actions (Stop/Kill/Resume/Delete/perms/
+  //      clearqueue/compact/restart/rename) --------------------------
   //
   // `data.actions` is built server-side (sessions.session_actions) and
   // already omits what the current status makes irrelevant, and marks
@@ -715,27 +716,53 @@ APP_JS = r"""
   // showing its `reason` verbatim (design.md: "the client renders what
   // it's given").
   //
-  // Stop/Resume act on a single tap from the menu — both are
-  // recoverable. Kill/Delete are destructive and route through a
-  // confirm modal, which is the phone-side equivalent of chat's
-  // deliberate two-tap for /kill: "one mistype on a phone shouldn't
-  // wipe a session". The modal's confirm sits centre-screen, nowhere
-  // near the menu row that opened it, so a double-tap cannot reach it.
+  // Stop/Resume/Clear-queue/Compact act on a single tap from the menu —
+  // all four are recoverable. Kill/Delete/Perms/Restart are destructive
+  // or disruptive and route through a confirm modal, which is the
+  // phone-side equivalent of chat's deliberate two-tap for /kill: "one
+  // mistype on a phone shouldn't wipe a session". The modal's confirm
+  // sits centre-screen, nowhere near the menu row that opened it, so a
+  // double-tap cannot reach it. Rename is neither — it opens the SAME
+  // modal (see design.md "Rename input UX") but with an input field
+  // instead of a plain yes/no.
   var overlayCloser = null;   // set while the menu OR the modal is open
   var confirmAction = null;   // {label, action} awaiting confirmation
   var confirmRun = null;      // or a plain callback (Reset to defaults)
   var menuSignature = "";     // what the open menu was built from
 
-  var ACTION_TITLES = { stop: "Stop", kill: "Kill", resume: "Resume", delete: "Delete" };
+  var ACTION_TITLES = {
+    stop: "Stop", kill: "Kill", resume: "Resume", delete: "Delete",
+    clearqueue: "Clear queue", compact: "Compact now", restart: "Restart",
+    rename: "Rename"
+    // perms has no static title — computed from data.skip_perms, see
+    // permsMenuLabel() below.
+  };
   // path segment appended to /api/sessions/{label} for each action; Delete
   // has none — it IS that resource, via the DELETE verb.
-  var ACTION_PATHS = { stop: "stop", kill: "kill", resume: "resume", delete: "" };
-  var ACTION_METHODS = { stop: "POST", kill: "POST", resume: "POST", delete: "DELETE" };
-  var CONFIRM_ACTIONS = { kill: true, delete: true };
-  // Order matters only in that it is stable across renders; at most one
-  // of stop/kill and at most one of resume/delete is ever present at once
-  // (design.md's status matrix), so this never produces more than two rows.
-  var ACTION_ORDER = ["stop", "kill", "resume", "delete"];
+  var ACTION_PATHS = {
+    stop: "stop", kill: "kill", resume: "resume", delete: "",
+    clearqueue: "clearqueue", compact: "compact", perms: "perms",
+    restart: "restart", rename: "rename"
+  };
+  var ACTION_METHODS = {
+    stop: "POST", kill: "POST", resume: "POST", delete: "DELETE",
+    clearqueue: "POST", compact: "POST", perms: "POST", restart: "POST",
+    rename: "POST"
+  };
+  var CONFIRM_ACTIONS = { kill: true, delete: true, perms: true, restart: true };
+  // Canonical, stable order — matches aipager.miniapp.sessions.
+  // _CANONICAL_ACTION_ORDER exactly: the first five are the "session
+  // control" menu group, the last four are "destructive/disruptive"
+  // (confirm-modal). Filtering this by presence is what produces both
+  // the grouped rendering AND the divider placement below.
+  var ACTION_ORDER = [
+    "stop", "clearqueue", "compact", "resume", "rename",
+    "kill", "perms", "restart", "delete"
+  ];
+
+  function permsMenuLabel(skipPerms) {
+    return skipPerms ? "Switch to Ask" : "Switch to Auto";
+  }
 
   // Closing is one function for both layers on purpose: only one is ever
   // open (opening the confirm closes the menu), so "what does Back
@@ -752,6 +779,11 @@ APP_JS = r"""
     document.getElementById("overlay").hidden = true;
     document.getElementById("action-menu").hidden = true;
     document.getElementById("confirm-modal").hidden = true;
+    // Rename's field is part of the same modal every other action
+    // shares — reset it here too, so Back/Escape/backdrop can never
+    // leave it visibly stuck open behind a future non-rename dialog.
+    document.getElementById("confirm-rename-input").hidden = true;
+    document.getElementById("confirm-rename-error").hidden = true;
     var kebab = document.getElementById("detail-menu-btn");
     kebab.setAttribute("aria-expanded", "false");
     if (kebab.focus) { try { kebab.focus(); } catch (e) { /* older webview */ } }
@@ -782,6 +814,17 @@ APP_JS = r"""
       });
   }
 
+  // Success toast per action — every one of these shows a notice and
+  // pollTick()s rather than navigating away (design.md: "they don't
+  // remove the session"). Kill/Delete are handled separately below,
+  // since they DO navigate back to the grid; Rename is handled
+  // separately too (submitRename), since it navigates to the new label
+  // instead of polling the now-stale old one.
+  var ACTION_SUCCESS_NOTICE = {
+    stop: "Stopped.", resume: "Resumed.", clearqueue: "Cleared.",
+    compact: "Compacting…", perms: "Switched.", restart: "Restarted."
+  };
+
   function runDetailAction(label, action) {
     var method = ACTION_METHODS[action];
     postSessionAction(label, ACTION_PATHS[action], method).then(function (r) {
@@ -797,9 +840,9 @@ APP_JS = r"""
         showNotice((r.data && r.data.detail) || "Couldn't complete that.");
         return;
       }
-      // stop / resume
+      // stop / resume / clearqueue / compact / perms / restart
       if (r.status === 200) {
-        showNotice(action === "stop" ? "Stopped." : "Resumed.");
+        showNotice(ACTION_SUCCESS_NOTICE[action] || "Done.");
         pollTick();
         return;
       }
@@ -816,17 +859,33 @@ APP_JS = r"""
     menu.innerHTML = "";
 
     var rendered = 0;
+    var controlRendered = 0;
+    var dividerInserted = false;
     ACTION_ORDER.forEach(function (key) {
       var spec = data.actions[key];
       if (!spec) { return; }
       rendered++;
+
+      // One hairline between the "session control" group and the
+      // "destructive/disruptive" one (design.md: menu order and
+      // grouping) — inserted right before the FIRST destructive item,
+      // and only when at least one control item rendered before it. A
+      // menu that is all-control or all-destructive gets no divider.
+      if (CONFIRM_ACTIONS[key] && !dividerInserted && controlRendered > 0) {
+        var divider = document.createElement("div");
+        divider.className = "menu-divider";
+        menu.appendChild(divider);
+        dividerInserted = true;
+      }
+      if (!CONFIRM_ACTIONS[key]) { controlRendered++; }
 
       var item = document.createElement("button");
       item.type = "button";
       item.className = "menu-item act-" + key +
         (CONFIRM_ACTIONS[key] ? " is-danger" : "");
       item.setAttribute("role", "menuitem");
-      item.textContent = ACTION_TITLES[key];
+      item.textContent = key === "perms"
+        ? permsMenuLabel(data.skip_perms) : ACTION_TITLES[key];
       if (!spec.available) {
         item.disabled = true;
       } else {
@@ -856,11 +915,47 @@ APP_JS = r"""
   }
 
   function onMenuItemTap(label, action) {
+    if (action === "rename") {
+      openRenameModal(label);
+      return;
+    }
     if (!CONFIRM_ACTIONS[action]) {
       closeOverlay();
       runDetailAction(label, action);
       return;
     }
+
+    var data = lastDetailData || {};
+    if (action === "perms") {
+      var targetAuto = !data.skip_perms;
+      var targetLabel = targetAuto ? "Auto" : "Ask";
+      var busy = data.status === "busy";
+      openConfirm({
+        label: label,
+        action: action,
+        title: busy
+          ? "Stop the current task and switch " + label + " to " + targetLabel + "?"
+          : "Switch " + label + " to " + targetLabel + " mode?",
+        body: targetAuto
+          ? "Claude runs tools without prompting."
+          : "Claude asks before running tools.",
+        confirmLabel: busy ? "Stop task & switch" : "Switch",
+        cancelLabel: busy ? "Not now" : "Cancel"
+      });
+      return;
+    }
+    if (action === "restart") {
+      openConfirm({
+        label: label,
+        action: action,
+        title: "Restart " + label + "?",
+        body: "The session stops and relaunches with the same history. "
+          + "Any turn in progress is interrupted.",
+        confirmLabel: "Restart"
+      });
+      return;
+    }
+
     openConfirm({
       label: label,
       action: action,
@@ -874,9 +969,13 @@ APP_JS = r"""
     });
   }
 
-  // The one confirm dialog, shared by the destructive session actions and
-  // by "Reset to defaults" — anything that discards state without a
-  // natural undo should pass through here rather than fire on one tap.
+  // The one confirm dialog, shared by the destructive/disruptive session
+  // actions and by "Reset to defaults" — anything that discards state
+  // (or interrupts a turn) without a natural undo should pass through
+  // here rather than fire on one tap. Rename uses the SAME modal but its
+  // own entry point (openRenameModal) since it needs a text field, not
+  // a plain yes/no — this function always resets the rename field back
+  // to hidden so it can never leak into a non-rename dialog.
   function openConfirm(opts) {
     confirmAction = opts.label ? { label: opts.label, action: opts.action } : null;
     confirmRun = opts.onConfirm || null;
@@ -884,20 +983,137 @@ APP_JS = r"""
     document.getElementById("confirm-body").textContent = opts.body;
     var ok = document.getElementById("confirm-ok");
     ok.textContent = opts.confirmLabel;
+    ok.className = "modal-btn is-danger";
     ok.disabled = false;
+    var cancel = document.getElementById("confirm-cancel");
+    cancel.textContent = opts.cancelLabel || "Cancel";
+    document.getElementById("confirm-rename-input").hidden = true;
+    document.getElementById("confirm-rename-error").hidden = true;
     document.getElementById("action-menu").hidden = true;
     document.getElementById("overlay").hidden = false;
     document.getElementById("confirm-modal").hidden = false;
     document.getElementById("detail-menu-btn").setAttribute("aria-expanded", "false");
     overlayCloser = closeOverlay;
     // Focus lands on Cancel, not the destructive button.
-    var cancel = document.getElementById("confirm-cancel");
     if (cancel.focus) { try { cancel.focus(); } catch (e) { /* older webview */ } }
   }
 
+  // ---- Rename: same confirm modal, plus a text field (design.md
+  //      "Rename input UX") --------------------------------------------
+  //
+  // Client-side validation mirrors, but does not replace, the server's
+  // (miniapp.launch.validate_session_name): non-empty, <=64 chars,
+  // letters/digits/hyphen/underscore starting with a letter or digit,
+  // not a reserved command word. Purely a UX nicety — the server call
+  // is the only gate that actually matters.
+  var RENAME_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+  // Mirrors aipager.dtach.inject._RESERVED verbatim.
+  var RENAME_RESERVED = {
+    status: true, stop: true, kill: true, "new": true,
+    help: true, start: true, settings: true
+  };
+
+  function renameValidationError(value) {
+    var trimmed = (value || "").trim();
+    if (!trimmed) { return "Session name can't be empty."; }
+    if (trimmed.length > 64) {
+      return "Session name must be 64 characters or fewer.";
+    }
+    if (!RENAME_NAME_RE.test(trimmed)) {
+      return "Use letters, numbers, hyphens and underscores; start with a "
+        + "letter or number.";
+    }
+    if (RENAME_RESERVED[trimmed.toLowerCase()]) {
+      return "'" + trimmed + "' is a reserved command name.";
+    }
+    return "";
+  }
+
+  function refreshRenameValidity() {
+    var input = document.getElementById("confirm-rename-input");
+    var ok = document.getElementById("confirm-ok");
+    var errEl = document.getElementById("confirm-rename-error");
+    var err = renameValidationError(input.value);
+    ok.disabled = !!err;
+    errEl.textContent = err;
+    errEl.hidden = !err;
+  }
+
+  function openRenameModal(label) {
+    confirmAction = { label: label, action: "rename" };
+    confirmRun = null;
+    document.getElementById("confirm-title").textContent = "Rename " + label + "?";
+    document.getElementById("confirm-body").textContent =
+      "The session keeps its history and working directory — only the "
+      + "name changes.";
+    var ok = document.getElementById("confirm-ok");
+    ok.textContent = "Save";
+    ok.className = "modal-btn";   // rename isn't destructive — no red.
+    document.getElementById("confirm-cancel").textContent = "Cancel";
+
+    var input = document.getElementById("confirm-rename-input");
+    input.hidden = false;
+    input.value = label;
+
+    document.getElementById("action-menu").hidden = true;
+    document.getElementById("overlay").hidden = false;
+    document.getElementById("confirm-modal").hidden = false;
+    document.getElementById("detail-menu-btn").setAttribute("aria-expanded", "false");
+    overlayCloser = closeOverlay;
+
+    refreshRenameValidity();
+    // Focus lands IN the input, not on Cancel: rename is "start
+    // typing", so the danger-avoidance rule (focus lands on Cancel)
+    // doesn't transfer.
+    if (input.focus) {
+      try { input.focus(); input.select(); } catch (e) { /* older webview */ }
+    }
+  }
+
+  function submitRename(oldLabel, newLabel) {
+    fetch("/api/sessions/" + encodeURIComponent(oldLabel) + "/rename", {
+      method: "POST",
+      headers: {
+        "X-Telegram-Init-Data": initData,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ label: newLabel })
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        return { status: res.status, data: data };
+      });
+    }).then(function (r) {
+      if (r.status === 200) {
+        var body = r.data || {};
+        showNotice(body.changed === false ? "No change." : "Renamed.");
+        // The poll target is keyed by the now-stale OLD label and
+        // would 404 — navigate to the (possibly unchanged) new one
+        // instead of pollTick()ing the old page.
+        openDetail(body.label || newLabel);
+        return;
+      }
+      showNotice((r.data && r.data.detail) || "Couldn't rename.");
+    }).catch(function () {
+      showNotice("Couldn't reach the server — nothing changed.");
+    });
+  }
+
   function onConfirmTap() {
+    // A disabled Confirm must refuse to submit even if something still
+    // manages to dispatch a click at it (a real browser never fires
+    // click on a disabled button; belt-and-braces here rather than
+    // trusting that alone) — this is the only thing standing between a
+    // client-side-invalid rename name and a POST the server would just
+    // 400 anyway.
+    if (document.getElementById("confirm-ok").disabled) { return; }
     var pending = confirmAction;
     var run = confirmRun;
+    if (pending && pending.action === "rename") {
+      var newLabel = document.getElementById("confirm-rename-input").value.trim();
+      closeOverlay();
+      submitRename(pending.label, newLabel);
+      return;
+    }
     closeOverlay();
     if (run) { run(); return; }
     if (pending) { runDetailAction(pending.label, pending.action); }
@@ -1762,6 +1978,16 @@ APP_JS = r"""
   });
   document.getElementById("confirm-cancel").addEventListener("click", closeOverlay);
   document.getElementById("confirm-ok").addEventListener("click", onConfirmTap);
+  document.getElementById("confirm-rename-input")
+    .addEventListener("input", refreshRenameValidity);
+  document.getElementById("confirm-rename-input").addEventListener("keydown", function (e) {
+    // Enter is the commit for a one-field dialog, same precedent as the
+    // new-folder-name field.
+    if (e && (e.key === "Enter" || e.keyCode === 13)) {
+      if (e.preventDefault) { e.preventDefault(); }
+      if (!document.getElementById("confirm-ok").disabled) { onConfirmTap(); }
+    }
+  });
   document.addEventListener("keydown", function (e) {
     if (overlayCloser && e && e.key === "Escape") { closeOverlay(); }
   });

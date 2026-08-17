@@ -340,12 +340,28 @@ CSS = """\
   .menu-item.act-kill::before { content: "💀"; }
   .menu-item.act-resume::before { content: "▶️"; }
   .menu-item.act-delete::before { content: "🗑️"; }
+  .menu-item.act-clearqueue::before { content: "🧹"; }
+  .menu-item.act-compact::before { content: "📦"; }
+  .menu-item.act-perms::before { content: "🔐"; }
+  .menu-item.act-restart::before { content: "🔁"; }
+  .menu-item.act-rename::before { content: "✏️"; }
   .menu-item.is-danger { color: var(--tg-theme-destructive-text-color, #dc2626); }
   .menu-note {
     padding: 0 16px 12px;
     font-size: 0.82rem;
     line-height: 1.4;
     color: var(--tg-theme-subtitle-text-color, var(--tg-theme-hint-color, #888888));
+  }
+  /* Separates the "session control" group from the "destructive" one
+     (design.md: menu order and grouping) — the same hairline treatment
+     .menu-item + .menu-item already uses, with a little extra vertical
+     space so it reads as a section break rather than just another row
+     boundary. Non-interactive: no padding-left icon gutter, no hover
+     state, nothing to tap. */
+  .menu-divider {
+    height: 1px;
+    margin: 6px 0;
+    box-shadow: inset 0 1px 0 var(--tg-theme-section-separator-color, rgba(127, 127, 127, 0.22));
   }
 
   /* Centred, so the confirm button is nowhere near the menu row that
@@ -366,6 +382,12 @@ CSS = """\
     line-height: 1.45;
     color: var(--tg-theme-subtitle-text-color, var(--tg-theme-hint-color, #888888));
   }
+  /* Rename's field, inside the confirm modal (design.md "Rename input
+     UX") — reuses .field-input's own look, just left-aligned against
+     the otherwise centred modal text since a text field reads oddly
+     centred. */
+  #confirm-rename-input { margin: 0 0 6px; text-align: left; }
+  #confirm-rename-error { margin: 0 0 14px; text-align: left; }
   .modal-actions { display: flex; gap: 10px; }
   .modal-btn {
     flex: 1 1 0;
