@@ -346,7 +346,9 @@ class CallbackDispatchMixin:
             if not sess:
                 await self._safe_answer(query, "Session not found")
                 return
-            await self._stop_session(sess, query=query)
+            outcome = await self._stop_session(sess, query=query)
+            if not outcome.ok:
+                await self._safe_answer(query, f"[{sess.label}] is not busy.")
             return
 
         if action == "kill":

@@ -522,11 +522,12 @@ class CommandHandlersMixin:
             await update.message.reply_text("No active session to stop.")
             return
         sess = self.registry.get(name)
-        if not sess or sess.status not in (Status.BUSY, Status.INTERACTIVE):
-            label = sess.label if sess else "?"
-            await update.message.reply_text(f"[{label}] is not busy.")
+        if not sess:
+            await update.message.reply_text("[?] is not busy.")
             return
-        await self._stop_session(sess, update=update)
+        outcome = await self._stop_session(sess, update=update)
+        if not outcome.ok:
+            await update.message.reply_text(f"[{sess.label}] is not busy.")
 
     async def _handle_clearqueue_cmd(
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
