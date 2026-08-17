@@ -379,6 +379,11 @@ def test_read_routes_still_reject_writes(server, run_async, path):
             for method in ("put", "post", "delete", "patch"):
                 if method == "post" and path == "/api/sessions":
                     continue   # batch 5's create route — see test_miniapp_session_create_api
+                if method == "delete" and path == "/api/sessions/dev":
+                    # The session-controls batch added DELETE on this exact
+                    # path (the Delete action) — see
+                    # test_miniapp_session_controls_api.py.
+                    continue
                 resp = await getattr(client, method)(path, headers=_hdr(ADMIN_ID))
                 assert resp.status == 405, (
                     f"{method.upper()} {path} returned {resp.status}, expected 405"

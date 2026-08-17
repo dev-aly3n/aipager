@@ -264,6 +264,11 @@ def test_new_routes_never_return_200_for_any_mutating_verb(mk_bot, run_async, pa
         # the verb is now routed — but unauthenticated it must still be
         # refused, which is the property this test actually guards.
         assert status == 401
+    elif method == "DELETE" and path == "/api/sessions/dev":
+        # The session-controls batch added DELETE on this exact path (the
+        # Delete action) — same reasoning as the POST /api/sessions case
+        # above: now routed, but unauthenticated it must still be refused.
+        assert status == 401
     else:
         assert status in (404, 405)
 
