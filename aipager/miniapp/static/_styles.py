@@ -396,6 +396,21 @@ CSS = """\
     cursor: pointer;
   }
   .primary[disabled] { opacity: 0.5; cursor: default; }
+  /* Secondary action inside a field group (Create folder) — deliberately
+     not .primary, so the one primary button on the page stays the one
+     that actually starts a session. */
+  .field-btn {
+    margin-top: 8px;
+    padding: 8px 14px;
+    font: inherit;
+    font-weight: 600;
+    color: var(--tg-theme-text-color, #000000);
+    background: var(--tg-theme-secondary-bg-color, rgba(127, 127, 127, 0.10));
+    border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .field-btn[disabled] { opacity: 0.5; cursor: default; }
 
   /* Loading placeholders. A blank panel that fills in a moment later
      reads as broken; a shaped skeleton reads as "coming". */

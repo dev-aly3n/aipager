@@ -93,30 +93,37 @@ def test_the_harness_actually_detects_a_broken_page(node_bin, tmp_path):
     )
 
 
+def _drive_form(node_bin, tmp_path, html, name="page.html"):
+    page = tmp_path / name
+    page.write_text(html, encoding="utf-8")
+    return subprocess.run(
+        [node_bin, str(FORM_HARNESS), str(page)],
+        capture_output=True, text=True, timeout=60,
+    )
+
+
 def test_new_session_form_applies_every_setting_it_offers(node_bin, tmp_path):
-    """Drive the real form: it must render controls for model, working
-    directory, permission mode AND the four reply-style settings, and a
-    reply-style choice must actually be applied to the created session.
+    """Drive the real form end to end: render controls for model, working
+    directory, permission mode and the four reply-style settings; type a
+    full model name; create a folder and have it selected; then submit and
+    check what each request actually carried.
 
     The reply-style settings are the only part of the form applied by the
     CLIENT after creation (via the per-session preferences route) rather
     than passed to the launch, so nothing on the server side would notice
-    if that step silently stopped happening.
+    if that step silently stopped happening. The typed model and the
+    created folder have the same property in reverse — the server sees
+    only what the form chose to send.
     """
     from aipager.miniapp.static import INDEX_HTML
 
-    page = tmp_path / "page.html"
-    page.write_text(INDEX_HTML, encoding="utf-8")
-
-    proc = subprocess.run(
-        [node_bin, str(FORM_HARNESS), str(page)],
-        capture_output=True, text=True, timeout=60,
-    )
+    proc = _drive_form(node_bin, tmp_path, INDEX_HTML)
     assert proc.returncode == 0, (
         f"new-session form failed when driven:\nstdout: {proc.stdout}\n"
         f"stderr: {proc.stderr}"
     )
-    assert "ok: form -> POST /api/sessions -> PUT" in proc.stdout, proc.stdout
+    assert "ok: form -> POST /api/directories -> POST /api/sessions -> PUT" \
+        in proc.stdout, proc.stdout
 
 
 def test_the_form_harness_detects_a_dropped_preference_step(node_bin, tmp_path):
@@ -131,13 +138,42 @@ def test_the_form_harness_detects_a_dropped_preference_step(node_bin, tmp_path):
     )
     assert broken != INDEX_HTML, "preference-application code not found"
 
-    page = tmp_path / "broken.html"
-    page.write_text(broken, encoding="utf-8")
-
-    proc = subprocess.run(
-        [node_bin, str(FORM_HARNESS), str(page)],
-        capture_output=True, text=True, timeout=60,
-    )
+    proc = _drive_form(node_bin, tmp_path, broken, "broken.html")
     assert proc.returncode != 0, (
         "harness passed a page that silently drops the chosen settings"
+    )
+
+
+def test_the_form_harness_detects_a_dropped_typed_model(node_bin, tmp_path):
+    """Guard the guard: send the picked *option* instead of the resolved
+    choice, and a typed full model name silently becomes the sentinel.
+
+    This is the shape of the bug the form is most exposed to — the value
+    on screen and the value posted are computed in two different places.
+    """
+    from aipager.miniapp.static import INDEX_HTML
+
+    broken = INDEX_HTML.replace("model: chosenModel(),", "model: newState.model,", 1)
+    assert broken != INDEX_HTML, "model-resolution code not found"
+
+    proc = _drive_form(node_bin, tmp_path, broken, "broken-model.html")
+    assert proc.returncode != 0, (
+        "harness passed a page that posts the sentinel instead of the typed model"
+    )
+
+
+def test_the_form_harness_detects_a_folder_that_is_not_selected(node_bin, tmp_path):
+    """Guard the guard: creating the folder but not selecting it would
+    launch the session in whatever was picked before — silently, since the
+    folder really was created and the notice really did appear."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    broken = INDEX_HTML.replace(
+        "      newState.cwd = path;\n      nameEl.value = \"\";", "      nameEl.value = \"\";", 1,
+    )
+    assert broken != INDEX_HTML, "folder-selection code not found"
+
+    proc = _drive_form(node_bin, tmp_path, broken, "broken-folder.html")
+    assert proc.returncode != 0, (
+        "harness passed a page that creates a folder and then ignores it"
     )

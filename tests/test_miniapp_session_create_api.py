@@ -64,9 +64,13 @@ class _Policy:
 
 
 @pytest.fixture
-def server(mk_bot, tmp_path):
+def server(mk_bot, tmp_path, monkeypatch):
     project = tmp_path / "project"
     project.mkdir()
+    # The daemon's own directory is an allowed root (allowed_roots), so it
+    # must be pinned inside tmp_path or every test here would inherit the
+    # real repo checkout as a launchable — and creatable-in — directory.
+    monkeypatch.setattr("aipager.dtach.inject._PROJECT_DIR", str(project))
     registry = SessionRegistry()
     scope = Scope(
         chat_id=-100, kind="group", label="team",
@@ -465,16 +469,57 @@ def test_no_model_choice_passes_no_model(server, run_async):
     run_async(_run())
 
 
-@pytest.mark.parametrize("model", ["gpt-4", "../../etc/passwd", "opus; rm -rf /", 123, None])
-def test_unknown_model_is_dropped_not_passed_through(server, run_async, model):
-    """An unrecognised model must never reach the launch command line — it
-    is dropped, and the session still launches."""
+def test_no_model_key_at_all_passes_no_model(server, run_async):
+    async def _run():
+        client = await _client_for(server)
+        try:
+            resp = await _post(client, {"name": "dev"})
+            assert resp.status == 200
+            assert server.bot.create_session.await_args.kwargs["model"] is None
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_a_full_model_name_is_passed_through(server, run_async):
+    """`claude --model` takes "an alias for the latest model ... or a
+    model's full name", so the enumeration cannot be the rule. A name the
+    CLI does not know is the CLI's problem to report, not ours to guess
+    at — what matters here is that it arrives unmangled."""
+    async def _run():
+        client = await _client_for(server)
+        try:
+            resp = await _post(client, {"name": "dev", "model": "claude-opus-5"})
+            assert resp.status == 200
+            assert server.bot.create_session.await_args.kwargs["model"] == "claude-opus-5"
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+@pytest.mark.parametrize("model", [
+    "../../etc/passwd",             # traversal
+    "opus; rm -rf /",               # shell metacharacters
+    "opus$(whoami)",
+    "opus`id`",
+    "opus\nsonnet",                 # newline
+    "opus sonnet",                  # space — two argv tokens
+    "opus\x00evil",                 # NUL
+    "-rf",                          # reads as another FLAG, not a value
+    "--dangerously-skip-permissions",   # ...and THAT one is the admin gate
+    "a" * 65,                       # over the cap
+    123, [], {},                    # not text
+])
+def test_a_hostile_model_is_refused_and_nothing_is_launched(server, run_async, model):
+    """A rejected model must be an error, not a silent drop: launching
+    something other than what was picked is the kind of quiet lie that
+    costs an hour to notice."""
     async def _run():
         client = await _client_for(server)
         try:
             resp = await _post(client, {"name": "dev", "model": model})
-            assert resp.status == 200
-            assert server.bot.create_session.await_args.kwargs["model"] is None
+            assert resp.status == 400, model
+            server.bot.create_session.assert_not_awaited()
         finally:
             await client.close()
     run_async(_run())
@@ -520,3 +565,222 @@ def test_options_serves_the_schema_and_scope_defaults_for_the_form(server, run_a
     run_async(_run())
 
 
+
+# ===== POST /api/directories ==============================================
+#
+# The only route in aipager that writes to the filesystem outside its own
+# config, and it is reachable over a public tunnel. Every test here keeps
+# its parent inside tmp_path — nothing may appear anywhere else.
+
+def _mkdir(client, body, user_id=ADMIN_ID):
+    return client.post("/api/directories", headers=_hdr(user_id), json=body)
+
+
+def test_a_folder_is_created_inside_an_allowed_root(server, run_async):
+    async def _run():
+        client = await _client_for(server)
+        try:
+            resp = await _mkdir(client, {
+                "parent": server._project_dir, "name": "fresh",
+            })
+            assert resp.status == 200
+            body = await resp.json()
+            import os
+            expected = os.path.join(os.path.realpath(server._project_dir), "fresh")
+            assert body["path"] == expected
+            assert body["existed"] is False
+            assert os.path.isdir(expected)
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_a_new_folder_is_announced_in_chat(server, run_async):
+    """Every other Mini App write mirrors, and this one writes to the
+    operator's disk from a phone — chat is the only channel they read."""
+    async def _run():
+        client = await _client_for(server)
+        try:
+            await _mkdir(client, {"parent": server._project_dir, "name": "announced"})
+            assert server.bot._app.bot.send_message.await_count == 1
+            kwargs = server.bot._app.bot.send_message.await_args.kwargs
+            assert kwargs["chat_id"] == -100
+            assert "announced" in kwargs["text"]
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_reusing_an_existing_folder_is_not_announced(server, run_async):
+    """Reuse is a no-op on disk; announcing it would be noise."""
+    async def _run():
+        client = await _client_for(server)
+        try:
+            await _mkdir(client, {"parent": server._project_dir, "name": "twice"})
+            server.bot._app.bot.send_message.reset_mock()
+            resp = await _mkdir(client, {"parent": server._project_dir, "name": "twice"})
+            assert resp.status == 200
+            assert (await resp.json())["existed"] is True
+            server.bot._app.bot.send_message.assert_not_awaited()
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_a_failing_chat_mirror_does_not_fail_a_created_folder(server, run_async):
+    """The folder already exists by then — a failed notification must not
+    report it as an error the operator would retry."""
+    async def _run():
+        client = await _client_for(server)
+        server.bot._app.bot.send_message.side_effect = RuntimeError("telegram down")
+        try:
+            resp = await _mkdir(client, {"parent": server._project_dir, "name": "quiet"})
+            assert resp.status == 200
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_a_readonly_member_cannot_create_a_folder(server, run_async):
+    """Same gate as creating a session: no prompting, no writing to disk."""
+    async def _run():
+        client = await _client_for(server)
+        try:
+            resp = await _mkdir(
+                client, {"parent": server._project_dir, "name": "nope"},
+                user_id=READONLY_ID,
+            )
+            assert resp.status == 403
+            import os
+            assert not os.path.exists(
+                os.path.join(server._project_dir, "nope"),
+            )
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_a_non_member_cannot_create_a_folder(server, run_async):
+    async def _run():
+        client = await _client_for(server)
+        try:
+            resp = await _mkdir(
+                client, {"parent": server._project_dir, "name": "nope"},
+                user_id=OUTSIDER_ID,
+            )
+            assert resp.status == 403
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_creating_a_folder_without_init_data_is_unauthorized(server, run_async):
+    async def _run():
+        client = await _client_for(server)
+        try:
+            resp = await client.post(
+                "/api/directories",
+                json={"parent": server._project_dir, "name": "nope"},
+            )
+            assert resp.status == 401
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_folder_creation_is_rate_limited(server, run_async):
+    async def _run():
+        client = await _client_for(server)
+        try:
+            saw_429 = False
+            for i in range(40):
+                resp = await _mkdir(
+                    client, {"parent": server._project_dir, "name": f"d{i}"},
+                )
+                if resp.status == 429:
+                    saw_429 = True
+                    break
+            assert saw_429, "mkdir route accepted unbounded writes"
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_a_parent_outside_the_allowed_roots_is_refused(server, run_async, tmp_path):
+    async def _run():
+        client = await _client_for(server)
+        outside = tmp_path / "not-a-project"
+        outside.mkdir()
+        try:
+            resp = await _mkdir(client, {"parent": str(outside), "name": "evil"})
+            assert resp.status == 400
+            import os
+            assert not os.path.exists(os.path.join(str(outside), "evil"))
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+@pytest.mark.parametrize("name", [
+    "../escaped", "a/b", "..", ".", "-rf", "", None, 123, False,
+])
+def test_a_hostile_folder_name_is_refused(server, run_async, name, tmp_path):
+    """Refused AND inert: nothing may appear anywhere under tmp_path, not
+    just at the one path the traversal case aimed for."""
+    import os
+
+    before = {
+        os.path.join(dirpath, d)
+        for dirpath, dirs, _files in os.walk(str(tmp_path)) for d in dirs
+    }
+
+    async def _run():
+        client = await _client_for(server)
+        try:
+            resp = await _mkdir(
+                client, {"parent": server._project_dir, "name": name},
+            )
+            assert resp.status == 400, name
+        finally:
+            await client.close()
+    run_async(_run())
+
+    after = {
+        os.path.join(dirpath, d)
+        for dirpath, dirs, _files in os.walk(str(tmp_path)) for d in dirs
+    }
+    assert after == before, f"{name!r} created {after - before}"
+
+
+def test_a_malformed_folder_body_is_refused(server, run_async):
+    async def _run():
+        client = await _client_for(server)
+        try:
+            resp = await client.post(
+                "/api/directories", headers=_hdr(ADMIN_ID), data="not json",
+            )
+            assert resp.status == 400
+            resp = await client.post(
+                "/api/directories", headers=_hdr(ADMIN_ID), json=["a", "b"],
+            )
+            assert resp.status == 400
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_a_created_folder_can_then_be_used_as_a_working_directory(server, run_async):
+    """The point of the whole feature: what the route hands back must
+    pass validate_cwd on the create request that follows."""
+    async def _run():
+        client = await _client_for(server)
+        try:
+            made = await (await _mkdir(
+                client, {"parent": server._project_dir, "name": "usable"},
+            )).json()
+            resp = await _post(client, {"name": "dev", "cwd": made["path"]})
+            assert resp.status == 200
+            assert server.bot.create_session.await_args.kwargs["cwd"] == made["path"]
+        finally:
+            await client.close()
+    run_async(_run())

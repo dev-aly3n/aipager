@@ -480,6 +480,15 @@ async def launch_session(
     # user-facing label is validated separately at the /new layer.
     if len(name) > 64:
         return False, "Name too long (max 64 chars)"
+    # `shlex.quote` below makes the model shell-safe, but it cannot make
+    # it argv-safe: a value starting with `-` is quoted to itself and
+    # then read by claude's own parser as another FLAG rather than as
+    # this flag's value. `--model --dangerously-skip-permissions` is a
+    # permission bypass, not a typo. The Mini App validates this far more
+    # strictly before it gets here; this is the layer that holds if a
+    # future caller forgets to.
+    if model and model.startswith("-"):
+        return False, "Invalid model name"
 
     sock = f"{SOCK_PREFIX}{name}.sock"
     if Path(sock).is_socket():

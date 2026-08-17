@@ -34,8 +34,14 @@ class El {
 }
 
 const byId = {};
-// ids the page references
-for (const m of page.matchAll(/id="([^"]+)"/g)) byId[m[1]] = new El("div");
+// ids the page references. The `hidden` attribute is carried over from the
+// markup: an element the shim starts VISIBLE that the page starts hidden
+// makes every "did it become visible?" assertion vacuously true.
+for (const m of page.matchAll(/<[^>]*\bid="([^"]+)"[^>]*>/g)) {
+  const el = new El("div");
+  el.hidden = /\shidden(\s|>|=)/.test(m[0]);
+  byId[m[1]] = el;
+}
 for (const m of page.matchAll(/getElementById\("([^"]+)"\)/g))
   if (!byId[m[1]]) byId[m[1]] = new El("div");
 

@@ -34,8 +34,14 @@ class El {
 }
 
 const byId = {};
-// ids the page references
-for (const m of page.matchAll(/id="([^"]+)"/g)) byId[m[1]] = new El("div");
+// ids the page references. The `hidden` attribute is carried over from the
+// markup: an element the shim starts VISIBLE that the page starts hidden
+// makes every "did it become visible?" assertion vacuously true.
+for (const m of page.matchAll(/<[^>]*\bid="([^"]+)"[^>]*>/g)) {
+  const el = new El("div");
+  el.hidden = /\shidden(\s|>|=)/.test(m[0]);
+  byId[m[1]] = el;
+}
 for (const m of page.matchAll(/getElementById\("([^"]+)"\)/g))
   if (!byId[m[1]]) byId[m[1]] = new El("div");
 
@@ -55,7 +61,10 @@ global.window = { Telegram: { WebApp: {
 global.Telegram = global.window.Telegram;
 const fetchCalls = [];
 global.fetch = (url, opts) => {
-  fetchCalls.push({ url, method: (opts && opts.method) || "GET" });
+  fetchCalls.push({
+    url, method: (opts && opts.method) || "GET",
+    body: opts && opts.body ? JSON.parse(opts.body) : null,
+  });
   return Promise.resolve({
     ok: true, status: 200,
     json: () => Promise.resolve(FIXTURES[url.split("?")[0]] || {}),
@@ -85,6 +94,7 @@ const FIXTURES = {
     can_use_auto: true,
   },
   "/api/sessions": { label: "made", session_name: "claude-made__d1" },
+  "/api/directories": { path: "/home/aly/proj/sub", existed: false },
   "/api/sessions/made/preferences/answer_length": {
     values: { answer_length: { effective: "short", scope_default: "none",
                                override_value: "short", overridden: true } },
@@ -122,12 +132,20 @@ script = script.replace(/\}\)\(\);\s*$/,
   "\n  global.__api = { openNewSession, renderNewForm, submitNewSession, openGroups };\n})();");
 eval(script);
 
-// ---- simulate: open a session, expand the group, tap an option ----
+// ---- simulate: fill in the whole form and submit it ----
 
-// drive loadSessionSettings by clicking a session card is complex; instead
-// invoke the same path the page does when the detail view opens.
-// We emulate by calling the fetch-backed loader through a card click.
 function fail(msg) { console.error("FAIL: " + msg); process.exit(1); }
+function fireInput(el) { (el.listeners.input || []).forEach(f => f.call(el, {})); }
+
+// Expand a collapsed option group and return its list of choices.
+function expand(hostId, index) {
+  const group = byId[hostId].children[index || 0];
+  if (!group) fail(hostId + " rendered no group to expand");
+  group.children[0].click();                      // the header toggles it
+  const list = byId[hostId].children[index || 0].children[1];
+  if (!list) fail(hostId + " group did not expand");
+  return list;
+}
 
 const api = global.__api;
 api.openNewSession();
@@ -139,29 +157,81 @@ setTimeoutReal(() => {
     if (!byId[id].children.length) fail(id + " rendered no controls");
   }
 
-  // choose a reply-style override that differs from the scope default
-  const prefs = byId["new-prefs"];
-  const head = prefs.children[0].children[0];
-  head.click();                                  // expand the group
-  const list = byId["new-prefs"].children[0].children[1];
-  if (!list) fail("reply-style group did not expand");
-  const shortChoice = list.children[1];          // "Short"
-  shortChoice.click();
-
-  // name it and submit
+  // Name it FIRST. Create is also disabled by an empty name, so checking
+  // "a bad model disables Create" before this would pass for the wrong
+  // reason — which is exactly how a guard gets shipped broken.
   byId["new-name"].value = "made";
-  const before = fetchCalls.length;
-  byId["new-create"].click();
+  fireInput(byId["new-name"]);
+  if (byId["new-create"].disabled)
+    fail("Create was disabled on a named, otherwise-default form");
+
+  // ---- a full model name, typed ----------------------------------------
+  const modelChoices = expand("new-model");
+  const custom = modelChoices.children[modelChoices.children.length - 1];
+  custom.click();
+  if (byId["new-model-custom"].hidden)
+    fail("picking the type-a-name option did not reveal the model input");
+  if (!byId["new-create"].disabled)
+    fail("Create stayed enabled with the model name still empty");
+
+  // a malformed name must block Create rather than reach the server
+  byId["new-model-name"].value = "opus; rm -rf /";
+  fireInput(byId["new-model-name"]);
+  if (!byId["new-create"].disabled)
+    fail("Create stayed enabled with a malformed model name");
+  if (byId["new-model-error"].hidden)
+    fail("a malformed model name showed no error");
+
+  byId["new-model-name"].value = "claude-opus-5";
+  fireInput(byId["new-model-name"]);
+  if (byId["new-summary"].textContent.indexOf("claude-opus-5") === -1)
+    fail("the typed model is not shown back in the summary: " +
+         byId["new-summary"].textContent);
+
+  // ---- create a working directory --------------------------------------
+  const dirChoices = expand("new-cwd");
+  dirChoices.children[1].click();                 // the one served directory
+  byId["new-folder-toggle"].click();
+  if (byId["new-folder"].hidden) fail("the New folder panel did not open");
+  byId["new-folder-name"].value = "sub";
+  const beforeMkdir = fetchCalls.length;
+  byId["new-folder-create"].click();
 
   setTimeoutReal(() => {
-    const sent = fetchCalls.slice(before);
-    const post = sent.find(f => f.method === "POST" && /\/api\/sessions$/.test(f.url));
-    if (!post) fail("Create sent no POST /api/sessions");
-    const put = sent.find(f => f.method === "PUT" && /preferences\/answer_length$/.test(f.url));
-    if (!put) fail("chosen reply-style setting was NOT applied after creation");
-    if (!/\/api\/sessions\/made\/preferences\/answer_length$/.test(put.url))
-      fail("preference PUT went to the wrong url: " + put.url);
-    console.log("ok: form -> POST /api/sessions -> PUT " + put.url);
-    process.exit(0);
+    const mk = fetchCalls.slice(beforeMkdir).find(
+      f => f.method === "POST" && /\/api\/directories$/.test(f.url));
+    if (!mk) fail("Create folder sent no POST /api/directories");
+    if (!mk.body || mk.body.parent !== "/home/aly/proj" || mk.body.name !== "sub")
+      fail("mkdir request carried the wrong parent/name: " + JSON.stringify(mk.body));
+    if (byId["new-summary"].textContent.indexOf("/home/aly/proj/sub") === -1)
+      fail("the new folder was not selected after being created: " +
+           byId["new-summary"].textContent);
+
+    // choose a reply-style override that differs from the scope default
+    const list = expand("new-prefs");
+    list.children[1].click();                     // "Short"
+
+    // submit (the name was set at the top)
+    if (byId["new-create"].disabled) fail("Create stayed disabled on a valid form");
+    const before = fetchCalls.length;
+    byId["new-create"].click();
+
+    setTimeoutReal(() => {
+      const sent = fetchCalls.slice(before);
+      const post = sent.find(f => f.method === "POST" && /\/api\/sessions$/.test(f.url));
+      if (!post) fail("Create sent no POST /api/sessions");
+      if (post.body.model !== "claude-opus-5")
+        fail("the typed model did not reach the create request: " +
+             JSON.stringify(post.body));
+      if (post.body.cwd !== "/home/aly/proj/sub")
+        fail("the created folder did not reach the create request: " +
+             JSON.stringify(post.body));
+      const put = sent.find(f => f.method === "PUT" && /preferences\/answer_length$/.test(f.url));
+      if (!put) fail("chosen reply-style setting was NOT applied after creation");
+      if (!/\/api\/sessions\/made\/preferences\/answer_length$/.test(put.url))
+        fail("preference PUT went to the wrong url: " + put.url);
+      console.log("ok: form -> POST /api/directories -> POST /api/sessions -> PUT " + put.url);
+      process.exit(0);
+    }, 20);
   }, 20);
 }, 10);

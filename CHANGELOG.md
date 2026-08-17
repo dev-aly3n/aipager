@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Create a working directory from the Mini App.** The New session form's
+  Advanced section has a *New folder* control: pick a directory, type a name,
+  and the folder is made and selected before you create the session. A folder
+  can only be made inside a directory this chat already works in, the name must
+  be a single plain path segment, and a folder that already exists is simply
+  selected rather than refused. New folders are announced in chat, and creating
+  one needs the same permission as starting a session.
+- **The daemon's own directory now appears in the working-directory picker.**
+  It is already where a session lands when you don't pick one, so it is not a
+  new place to launch — but it does become a place you can create a folder,
+  which is deliberate: a fresh install with no sessions yet had an empty picker
+  and nothing to create under.
+- **Any model name the CLI accepts.** Alongside the quick picks, the Model
+  section takes a typed name such as `claude-opus-5` or `claude-fable-5`. What
+  you type is shown back in the summary line before you create the session.
+
+### Changed
+- **A model the server can't accept is now an error instead of being ignored.**
+  It used to be dropped silently, so the session launched on a different model
+  than the one picked with nothing on screen to say so.
+
 ### Fixed
 - **Choosing a model no longer causes a duplicate answer.** The model was being
   typed into the session as a `/model` command, which only ran once the session

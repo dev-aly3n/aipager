@@ -1002,6 +1002,22 @@ APP_JS = r"""
   var newOptions = null;      // /api/session-options payload
   // prefs: field -> chosen value, only for fields the operator diverged on.
   var newState = { model: "", cwd: "", skip_perms: false, prefs: {} };
+  // Sentinel for "I'll type a full model name". Not a value the server
+  // ever sees — chosenModel() resolves it to the typed text, and Create
+  // stays disabled while that text is empty or malformed.
+  var MODEL_CUSTOM = "custom:free-text";
+  // Same rule the server applies (miniapp/launch.py _VALID_MODEL), so the
+  // operator finds out before the POST, not after it. The server remains
+  // the gate; this is only a courtesy.
+  var MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
+
+  function typedModel() {
+    return document.getElementById("new-model-name").value.trim();
+  }
+
+  function chosenModel() {
+    return newState.model === MODEL_CUSTOM ? typedModel() : newState.model;
+  }
 
   function renderNewForm() {
     var models = document.getElementById("new-model");
@@ -1014,6 +1030,12 @@ APP_JS = r"""
     ((newOptions && newOptions.models) || []).forEach(function (m) {
       modelOpts.push({ value: m.label, label: m.label, help: m.hint || "" });
     });
+    // An alias means "the latest of that family"; a full name pins one.
+    // The CLI accepts both, so the form has to as well.
+    modelOpts.push({
+      value: MODEL_CUSTOM, label: "Type a name…",
+      help: "A full model name, e.g. claude-opus-5"
+    });
     renderOptionGroup(models, {
       key: "new:model",
       title: "Model",
@@ -1022,6 +1044,16 @@ APP_JS = r"""
       rerender: renderNewForm,
       onPick: function (value) { newState.model = value; renderNewForm(); }
     });
+
+    var isCustomModel = newState.model === MODEL_CUSTOM;
+    var typed = typedModel();
+    var modelBad = isCustomModel && !!typed && !MODEL_RE.test(typed);
+    document.getElementById("new-model-custom").hidden = !isCustomModel;
+    var modelErr = document.getElementById("new-model-error");
+    modelErr.textContent = modelBad
+      ? "Use letters, numbers, dots and hyphens; start with a letter or number."
+      : "";
+    modelErr.hidden = !modelBad;
 
     // Directories come from the server's allow-list — the same list
     // validate_cwd checks against, so the picker can never offer a path
@@ -1040,6 +1072,18 @@ APP_JS = r"""
       rerender: renderNewForm,
       onPick: function (value) { newState.cwd = value; renderNewForm(); }
     });
+
+    // A folder can only be made inside a directory that is already
+    // allowed, which is exactly what the picker above lists — so the
+    // control says what it will do rather than failing at the server.
+    var canCreate = !!(newOptions && newOptions.can_create);
+    document.getElementById("new-folder-parent").textContent = !canCreate
+      ? "You're not allowed to create anything in this chat."
+      : (newState.cwd
+          ? "Creates a folder inside " + newState.cwd
+          : "Pick a working directory above first.");
+    document.getElementById("new-folder-create").disabled =
+      !newState.cwd || !canCreate;
 
     var canAuto = !!(newOptions && newOptions.can_use_auto);
     var modes = document.getElementById("new-mode");
@@ -1093,12 +1137,18 @@ APP_JS = r"""
     var where = newState.cwd
       ? newState.cwd
       : "the daemon's own directory";
+    // The summary promises "what will happen", so a typed model name has
+    // to appear in it — it is the one setting the operator can get wrong
+    // by a keystroke and not otherwise see again before Create.
+    var model = chosenModel();
     document.getElementById("new-summary").textContent =
       "Starts Claude" + (name ? " as " + name : "") + " in " + where +
-      ", in " + (newState.skip_perms ? "Auto" : "Ask") + " mode.";
+      ", in " + (newState.skip_perms ? "Auto" : "Ask") + " mode, using " +
+      (model || "the CLI's own default model") + ".";
 
     var create = document.getElementById("new-create");
-    create.disabled = !name || !(newOptions && newOptions.can_create);
+    create.disabled = !name || !canCreate ||
+      (isCustomModel && (!typed || modelBad));
   }
 
   function openNewSession() {
@@ -1130,7 +1180,7 @@ APP_JS = r"""
       },
       body: JSON.stringify({
         name: name,
-        model: newState.model,
+        model: chosenModel(),
         cwd: newState.cwd,
         skip_perms: newState.skip_perms
       })
@@ -1178,7 +1228,75 @@ APP_JS = r"""
     });
   }
 
+  function createFolder() {
+    var nameEl = document.getElementById("new-folder-name");
+    var errEl = document.getElementById("new-folder-error");
+    var btn = document.getElementById("new-folder-create");
+    var folder = nameEl.value.trim();
+    errEl.hidden = true;
+    if (!folder) {
+      errEl.textContent = "Type a folder name first.";
+      errEl.hidden = false;
+      return;
+    }
+    if (!newState.cwd) {
+      errEl.textContent = "Pick a working directory above first.";
+      errEl.hidden = false;
+      return;
+    }
+    btn.disabled = true;
+    fetch("/api/directories", {
+      method: "POST",
+      headers: {
+        "X-Telegram-Init-Data": initData,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ parent: newState.cwd, name: folder })
+    }).then(function (res) {
+      return res.json().then(function (data) { return { status: res.status, data: data }; });
+    }).then(function (r) {
+      btn.disabled = false;
+      if (r.status !== 200 || !r.data || !r.data.path) {
+        errEl.textContent = (r.data && r.data.detail) ||
+          (r.status === 403 ? "You're not allowed to create folders here."
+                            : "Couldn't create that folder.");
+        errEl.hidden = false;
+        return;
+      }
+      // The server has just sanctioned this exact path, and it sits
+      // inside an allowed root, so validate_cwd will accept it on
+      // Create. Adding it locally is what lets the operator see it
+      // selected before committing — it is not in allowed_roots() yet,
+      // which only lists directories a session has actually run in.
+      var path = r.data.path;
+      if (!newOptions) { newOptions = {}; }
+      if (!newOptions.directories) { newOptions.directories = []; }
+      if (newOptions.directories.indexOf(path) === -1) {
+        newOptions.directories.push(path);
+      }
+      newState.cwd = path;
+      nameEl.value = "";
+      document.getElementById("new-folder").hidden = true;
+      document.getElementById("new-folder-toggle").textContent = "▸ New folder";
+      showNotice(r.data.existed ? "That folder already existed — selected it."
+                                : "Folder created.");
+      renderNewForm();
+    }).catch(function () {
+      btn.disabled = false;
+      errEl.textContent = "Couldn't reach the server — no folder was created.";
+      errEl.hidden = false;
+    });
+  }
+
   document.getElementById("new-name").addEventListener("input", renderNewForm);
+  document.getElementById("new-model-name").addEventListener("input", renderNewForm);
+  document.getElementById("new-folder-create").addEventListener("click", createFolder);
+  document.getElementById("new-folder-toggle").addEventListener("click", function () {
+    var box = document.getElementById("new-folder");
+    box.hidden = !box.hidden;
+    document.getElementById("new-folder-toggle").textContent =
+      (box.hidden ? "▸ " : "▾ ") + "New folder";
+  });
   document.getElementById("new-create").addEventListener("click", submitNewSession);
   document.getElementById("new-advanced-toggle").addEventListener("click", function () {
     var adv = document.getElementById("new-advanced");

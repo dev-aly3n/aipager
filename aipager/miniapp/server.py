@@ -84,6 +84,11 @@ class MiniAppServer:
         # an allow-list server-side (miniapp/launch.py).
         app.router.add_post("/api/sessions", self._handle_session_create)
         app.router.add_get("/api/session-options", self._handle_session_options)
+        # Creating a folder is its own route rather than a field on the
+        # create request: a launch that fails after the mkdir would leave
+        # a stray directory behind, and the picker needs the new path
+        # back so it can offer it *selected* before the operator commits.
+        app.router.add_post("/api/directories", self._handle_directory_create)
         app.router.add_get("/api/sessions/{label}", self._handle_session_detail)
         app.router.add_get("/api/sessions/{label}/diff", self._handle_session_diff)
         app.router.add_get("/api/preferences", self._handle_preferences_get)
@@ -228,9 +233,11 @@ class MiniAppServer:
     async def _handle_session_create(self, request):
         from aiohttp import web
 
+        from aipager.config import MODEL_CHOICES
         from aipager.miniapp.launch import (
             allowed_roots,
             validate_cwd,
+            validate_model,
             validate_session_name,
         )
         from aipager.state import Status
@@ -277,6 +284,17 @@ class MiniAppServer:
         if err:
             return web.json_response({"error": "bad_request", "detail": err}, status=400)
 
+        # The model may be one of the chat keyboard's aliases or a full
+        # name the CLI accepts ("claude-opus-5"), so it is pattern-checked
+        # rather than enumerated. It is NOT queued as a `/model` prompt: a
+        # queued prompt drains on the session's first IDLE, which is after
+        # the operator's first real message has been answered, so it
+        # produced a spurious second turn and a duplicate answer. It goes
+        # to the launch as `--model`.
+        chosen_model, err = validate_model(body.get("model"), MODEL_CHOICES)
+        if err:
+            return web.json_response({"error": "bad_request", "detail": err}, status=400)
+
         # Answer a name collision before spawning anything. Chat offers
         # Resume/Replace/Cancel buttons here; the Mini App says so inline
         # so the operator renames instead of getting a failed POST.
@@ -290,23 +308,6 @@ class MiniAppServer:
                 "error": "conflict",
                 "detail": f"A session named {name} already exists in this chat.",
             }, status=409)
-
-        # Validate the model against the same list the chat keyboard
-        # offers, then hand it to the launch as `--model`. It is NOT
-        # queued as a `/model` prompt: a queued prompt drains on the
-        # session's first IDLE, which is after the operator's first real
-        # message has been answered, so it produced a spurious second
-        # turn and a duplicate answer.
-        model = body.get("model")
-        chosen_model = ""
-        if isinstance(model, str) and model:
-            from aipager.config import MODEL_CHOICES
-            valid = {label.lower(): send for label, send in MODEL_CHOICES}
-            command = valid.get(model.strip().lower())
-            if command:
-                # MODEL_CHOICES stores the chat command ("/model opus");
-                # `--model` wants the bare alias.
-                chosen_model = command.split(None, 1)[-1].strip()
 
         session_name, err = await self.bot.create_session(
             name, scope_chat_id=scope_chat_id, skip_perms=skip_perms,
@@ -333,6 +334,68 @@ class MiniAppServer:
             )
         except Exception:
             log.debug("miniapp: session-created mirror failed", exc_info=True)
+
+    async def _handle_directory_create(self, request):
+        """Create one folder inside a directory this scope already works in.
+
+        The only route in aipager that writes to the filesystem outside
+        its own config. It is contained the same way the create route is:
+        the parent goes through the unchanged `validate_cwd`, the leaf is
+        a single validated path segment, and the result is re-resolved
+        after the mkdir before it is handed back.
+        """
+        from aiohttp import web
+
+        from aipager.miniapp.launch import allowed_roots, create_directory
+
+        result = await self._authenticate_user(request, "POST /api/directories")
+        if isinstance(result, web.Response):
+            return result
+        scope_chat_id, user_id = result
+
+        # Same gate as creating a session: a READ_ONLY member cannot
+        # prompt, so must not be able to write to the operator's disk.
+        if not self.bot._can_prompt_user(user_id, scope_chat_id):
+            log.info("miniapp: directory create rejected (403) — caller cannot prompt")
+            return web.json_response({"error": "forbidden"}, status=403)
+        if not self._allow_write(user_id):
+            log.info("miniapp: directory create rejected (429) — rate limited")
+            return web.json_response({"error": "too_many_requests"}, status=429)
+
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"error": "bad_request"}, status=400)
+        if not isinstance(body, dict):
+            return web.json_response({"error": "bad_request"}, status=400)
+
+        path, existed, err = create_directory(
+            body.get("parent"), body.get("name"),
+            allowed_roots(self.registry, scope_chat_id),
+        )
+        if err:
+            return web.json_response({"error": "bad_request", "detail": err}, status=400)
+
+        log.info("miniapp: directory ready (existed=%s)", existed)
+        if not existed:
+            await self._mirror_directory_created(scope_chat_id, path)
+        return web.json_response({"path": path, "existed": existed})
+
+    async def _mirror_directory_created(self, scope_chat_id, path) -> None:
+        """Tell the chat a folder appeared on the operator's machine.
+
+        Every other Mini App write mirrors, and this one writes to disk
+        from a phone — the chat is the only channel the operator actually
+        reads. Only a genuinely new folder is announced: reporting the
+        reuse of an existing one would be noise for a no-op.
+        """
+        try:
+            await self.bot._app.bot.send_message(
+                chat_id=scope_chat_id,
+                text=f"📁 New folder created from the Mini App:\n{path}",
+            )
+        except Exception:
+            log.debug("miniapp: directory-created mirror failed", exc_info=True)
 
     async def _handle_session_options(self, request):
         """Directory choices + the scope's defaults, for the create form.
