@@ -131,6 +131,7 @@ HTML_BODY = """\
     <span id="detail-status" class="status"></span>
   </div>
   <div id="detail-waiting" class="waiting-note" hidden></div>
+  <div id="detail-actions" class="detail-actions"></div>
   <dl id="detail-facts" class="facts"></dl>
 
   <h2 class="sect-title">Last message</h2>

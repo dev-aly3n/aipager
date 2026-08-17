@@ -220,6 +220,40 @@ CSS = """\
     background: rgba(220, 38, 38, 0.12);
     font-size: 0.9rem;
   }
+
+  /* Session detail-page write actions (Stop/Kill/Resume/Delete). At most
+     one row for busy/idle, at most two for gone — never a wall of
+     buttons. Reuses .choice's block/full-width/padding/border-radius
+     shape (same family of control as the settings rows above it), with
+     an explicit min-height the way .choice-new already sets one. */
+  .detail-actions { margin: 12px 0; }
+  .action-row { margin: 8px 0; }
+  .action-btn {
+    display: block;
+    width: 100%;
+    min-height: 44px;
+    text-align: center;
+    padding: 10px 12px;
+    font: inherit;
+    font-weight: 600;
+    color: var(--tg-theme-text-color, #000000);
+    background: transparent;
+    border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+    border-radius: 9px;
+    cursor: pointer;
+  }
+  .action-btn[disabled] { opacity: 0.45; cursor: default; }
+  /* Kill/Delete's armed "Confirm?" state. Per .choice.is-active's own
+     anti-pattern note: never paint a filled danger colour behind white
+     text (a theme's accent may be pale) — the danger reads as an
+     outline/tint on the theme's own text colour, same idiom as
+     .choice.is-active, danger-tinted instead of accent-tinted. */
+  .action-btn.is-armed {
+    color: #dc2626;
+    border-color: #dc2626;
+    background: rgba(220, 38, 38, 0.1);
+    font-weight: 700;
+  }
   .sect-title { font-size: 0.95rem; margin: 20px 0 6px; }
   .preview {
     white-space: pre-wrap;
