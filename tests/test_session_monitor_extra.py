@@ -343,3 +343,184 @@ def test_scan_stale_busy_fires_when_statusline_stale(monkeypatch, run_async):
         assert sess.stale_warned is True
     finally:
         p.unlink(missing_ok=True)
+
+
+# ---- _scan: a re-prompted long-idle session is NOT stale (item 8.5) -----
+
+def test_scan_no_stale_warning_when_only_the_PREVIOUS_turn_was_old(
+    monkeypatch, run_async,
+):
+    """Roadmap 8.5. A session idle for days, then re-prompted, was warned
+    about instantly: `last_hook_at` still held the last hook of the
+    PREVIOUS turn, and the baseline preferred it over this turn's
+    `busy_started_at`. The operator saw "still working — quiet for 20038
+    min" one second after sending a message, on a turn that then answered
+    normally.
+
+    The stall window must start at the most recent sign of life OR the
+    start of this turn, whichever came last.
+    """
+    from aipager.session_monitor import STALE_BUSY_TIMEOUT
+    registry = SessionRegistry()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    # Last hook of the previous turn: 14 days ago, as reported.
+    sess.last_hook_at = time.monotonic() - 14 * 24 * 3600
+    # This turn started just now — the operator's message a second ago.
+    sess.busy_started_at = time.monotonic()
+    registry._sessions["claude-jim"] = sess
+
+    notify = AsyncMock()
+    monitor = _mk_monitor(registry, notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        AsyncMock(return_value=["claude-jim"]))
+    run_async(monitor._scan())
+
+    notify.assert_not_awaited()
+    assert sess.stale_warned is False, (
+        "the warning was armed as if this turn had already stalled"
+    )
+    assert STALE_BUSY_TIMEOUT  # referenced so the import is not decorative
+
+
+def test_scan_still_warns_when_THIS_turn_has_genuinely_stalled(
+    monkeypatch, run_async,
+):
+    """The other direction, and the one that matters most: the fix must
+    not simply silence the warning. A turn that started long ago and has
+    produced no hooks at all is exactly what the feature exists for.
+    """
+    from aipager.session_monitor import STALE_BUSY_TIMEOUT
+    registry = SessionRegistry()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.busy_started_at = time.monotonic() - STALE_BUSY_TIMEOUT - 60
+    sess.last_hook_at = 0.0          # no hook has ever fired for this turn
+    registry._sessions["claude-jim"] = sess
+
+    notify = AsyncMock()
+    monitor = _mk_monitor(registry, notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        AsyncMock(return_value=["claude-jim"]))
+    run_async(monitor._scan())
+
+    notify.assert_awaited_once()
+    assert notify.await_args.args[1] == "stale_busy"
+    assert sess.stale_warned is True
+
+
+def test_scan_reported_quiet_minutes_describe_this_turn_not_the_session(
+    monkeypatch, run_async,
+):
+    """The number in the message was the session's whole idle stretch
+    (20038 min == the card's own "Active 333h58m ago"), which is what
+    made it obviously wrong. It must describe the current turn."""
+    from aipager.session_monitor import STALE_BUSY_TIMEOUT
+    registry = SessionRegistry()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.last_hook_at = time.monotonic() - 14 * 24 * 3600     # 20160 min
+    # This turn has been quiet for a bit over the timeout, no more.
+    sess.busy_started_at = time.monotonic() - STALE_BUSY_TIMEOUT - 60
+    registry._sessions["claude-jim"] = sess
+
+    notify = AsyncMock()
+    monitor = _mk_monitor(registry, notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        AsyncMock(return_value=["claude-jim"]))
+    run_async(monitor._scan())
+
+    notify.assert_awaited_once()
+    minutes = notify.await_args.args[2]["minutes"]
+    assert minutes == int((STALE_BUSY_TIMEOUT + 60) / 60), (
+        f"reported {minutes} min — that is the session's lifetime, not this turn"
+    )
+
+
+def test_scan_interactive_watchdog_uses_the_same_corrected_baseline(
+    monkeypatch, run_async,
+):
+    """A DEFENSIVE pin, not a bug-fix regression test — worth being
+    honest about which it is.
+
+    The INTERACTIVE watchdog carried the identical expression, but not
+    the identical bug: every hook stamps `last_hook_at` before any event
+    branching (`hook_receiver.py`), and all three transitions into
+    INTERACTIVE are downstream of that, so `last_hook_at` is always the
+    fresher stamp there and the old and new formulas agree in every
+    reachable state. The state constructed below is therefore synthetic.
+
+    It is pinned anyway because the consequence at this site is worse
+    than a bogus message — a stale reading demotes the session to BUSY
+    and drops `pending_permission`, losing a prompt the operator was
+    meant to answer. If someone later adds an INTERACTIVE-entry path
+    that skips the `last_hook_at` stamp, this fails instead of that
+    shipping.
+    """
+    registry = SessionRegistry()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
+    sess.last_hook_at = time.monotonic() - 14 * 24 * 3600   # previous turn
+    sess.busy_started_at = time.monotonic()                 # this turn, just now
+    sess.pending_permission = {"tool": "Bash"}
+    registry._sessions["claude-jim"] = sess
+
+    monitor = _mk_monitor(registry, AsyncMock())
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        AsyncMock(return_value=["claude-jim"]))
+    run_async(monitor._scan())
+
+    assert sess.status is Status.INTERACTIVE, "the prompt was demoted to BUSY"
+    assert sess.pending_permission == {"tool": "Bash"}, (
+        "the pending permission prompt was thrown away"
+    )
+
+
+def test_quiet_since_prefers_the_later_stamp_either_way_round():
+    """Pure-function pin: whichever stamp is newer wins, and two zeros
+    mean "not knowable" rather than "the epoch"."""
+    from aipager.session_monitor import _quiet_since
+
+    s = TrackedSession(name="n", label="l")
+    s.last_hook_at, s.busy_started_at = 100.0, 500.0
+    assert _quiet_since(s) == 500.0
+    s.last_hook_at, s.busy_started_at = 900.0, 500.0
+    assert _quiet_since(s) == 900.0
+    s.last_hook_at, s.busy_started_at = 0.0, 0.0
+    assert _quiet_since(s) is None
+
+
+def test_scan_no_stale_warning_right_after_a_long_permission_wait(
+    monkeypatch, run_async,
+):
+    """The second real false-alarm path, and the one that bites in normal
+    use rather than after two weeks away.
+
+    When the operator answers a permission prompt, `callbacks.py` shifts
+    `busy_started_at` FORWARD by however long they took
+    (`sess.busy_started_at += now - wait_start`), so the wait is
+    discounted from the "thought for Xs" timer — the session wasn't
+    thinking, it was waiting for a human. `last_hook_at` is not shifted,
+    so it still points at the moment the prompt was raised.
+
+    Under the old `last_hook_at or busy_started_at`, sitting on a prompt
+    for longer than STALE_BUSY_TIMEOUT and then tapping Allow produced
+    "still working — quiet for 30 min" immediately — the identical false
+    alarm as roadmap 8.5, reachable in an afternoon instead of a
+    fortnight. Taking the later stamp discounts the wait here too.
+    """
+    from aipager.session_monitor import STALE_BUSY_TIMEOUT
+    registry = SessionRegistry()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    now = time.monotonic()
+    waited = STALE_BUSY_TIMEOUT + 1200          # 30 min on the prompt
+    # The prompt hook fired when it was raised, and nothing since.
+    sess.last_hook_at = now - waited
+    # Answering shifted the turn's start forward by the wait.
+    sess.busy_started_at = (now - waited) + waited
+    registry._sessions["claude-jim"] = sess
+
+    notify = AsyncMock()
+    monitor = _mk_monitor(registry, notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        AsyncMock(return_value=["claude-jim"]))
+    run_async(monitor._scan())
+
+    notify.assert_not_awaited()
+    assert sess.stale_warned is False

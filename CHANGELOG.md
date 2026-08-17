@@ -71,6 +71,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than the one picked with nothing on screen to say so.
 
 ### Fixed
+- **Waking a session you hadn't touched in a while no longer claims it's
+  stuck.** Send a message to a session that had been idle for a day or more and
+  the daemon would answer, within the same second, with "still working — quiet
+  for 20038 min" — a number that was actually the session's whole idle stretch,
+  not your turn. The turn then ran perfectly normally. The stall check was
+  measuring from the last sign of life of the *previous* turn instead of the
+  start of the current one. It now measures from whichever came last, so the
+  warning only appears when the turn you are actually waiting on has gone
+  quiet, and the minutes it quotes describe that turn. The same fix clears a
+  second, much easier way to hit this: leaving a permission prompt unanswered
+  for a while and then approving it would also produce the bogus warning
+  immediately, because the time you spent deciding was counted as the session
+  being silent.
 - **Choosing a model no longer causes a duplicate answer.** The model was being
   typed into the session as a `/model` command, which only ran once the session
   first went idle — that is, after your first real message had already been

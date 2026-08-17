@@ -23,7 +23,7 @@ from aipager.config import (
     STATUSLINE_ALIVE_SECONDS,
     TOOL_INFLIGHT_MAX_SECONDS,
 )
-from aipager.state import SessionRegistry, Status
+from aipager.state import SessionRegistry, Status, TrackedSession
 from aipager.transcript import (
     extract_last_response,
     last_assistant_preview,
@@ -71,6 +71,45 @@ IDLE_RECOVERY_GRACE: float = float(
 # can report an mtime a fraction under it. Well below IDLE_RECOVERY_GRACE,
 # so this cannot re-admit a transcript that is genuinely a turn behind.
 MTIME_GRANULARITY_SLACK: float = 1.0
+
+
+def _quiet_since(sess: TrackedSession) -> float | None:
+    """When this turn last showed a sign of life — or ``None`` if that is
+    not knowable yet.
+
+    The **later** of the two stamps, not the first truthy one.
+    ``last_hook_at`` is the last hook of the *previous* turn once a
+    session has taken one, so ``last_hook_at or busy_started_at``
+    preferred a stale value forever. Invisible while a session works —
+    hooks refresh it every few seconds — but a session left idle past
+    the timeout and then re-prompted got warned about on the very next
+    2s scan, quoting its entire idle stretch as the quiet period
+    (roadmap 8.5: "still working — quiet for 20038 min", one second
+    after the operator's message, on a turn that then answered fine).
+
+    ``or None`` keeps the fresh-daemon case honest: both stamps are
+    ``time.monotonic()`` and neither is persisted, so after a restart
+    both are ``0.0`` and every caller's ``if baseline and …`` guard
+    skips the check rather than measuring from the epoch.
+
+    The same correction fixes a second, far more reachable false alarm:
+    answering a permission prompt shifts ``busy_started_at`` *forward* by
+    the wait (``callbacks.py``, so a human's thinking time is discounted
+    from "thought for Xs"), while ``last_hook_at`` still points at the
+    moment the prompt was raised. Sitting on a prompt past the timeout
+    and then tapping Allow used to produce the identical bogus warning
+    within a second — no fortnight required.
+
+    Shared with the INTERACTIVE watchdog for one implementation rather
+    than two, NOT because that site was broken: every hook stamps
+    ``last_hook_at`` before any event branching
+    (``hook_receiver.py``), and all three transitions into INTERACTIVE
+    are downstream of that stamp, so the old and new expressions agree
+    there in every reachable state. It is shared so a future
+    INTERACTIVE-entry path that skips the stamp cannot reintroduce the
+    bug at a second site.
+    """
+    return max(sess.last_hook_at, sess.busy_started_at) or None
 
 
 class SessionMonitor:
@@ -153,7 +192,7 @@ class SessionMonitor:
         for name, sess in self.registry.all_sessions().items():
             # INTERACTIVE watchdog (item 2.2)
             if sess.status == Status.INTERACTIVE:
-                baseline = sess.last_hook_at or sess.busy_started_at
+                baseline = _quiet_since(sess)
                 if baseline and (now - baseline) > INTERACTIVE_TIMEOUT_SECONDS:
                     log.warning(
                         "[%s] INTERACTIVE > %d min with no hooks — "
@@ -244,7 +283,7 @@ class SessionMonitor:
             # Stale BUSY warning (existing)
             if sess.status != Status.BUSY or sess.stale_warned:
                 continue
-            baseline = sess.last_hook_at or sess.busy_started_at
+            baseline = _quiet_since(sess)
             if baseline and (now - baseline) > STALE_BUSY_TIMEOUT:
                 # A tool call is legitimately in flight — no hooks fire
                 # between PreToolUse and PostToolUse, so the session
