@@ -92,6 +92,18 @@ class MiniAppServer:
         app.router.add_post("/api/directories", self._handle_directory_create)
         app.router.add_get("/api/sessions/{label}", self._handle_session_detail)
         app.router.add_get("/api/sessions/{label}/diff", self._handle_session_diff)
+        # Session detail-page write actions (Stop/Kill/Resume/Delete) — all
+        # four share their real implementation with chat's own /stop, /kill
+        # and /resume via aipager.bot.session_ops's *_core methods, and are
+        # gated by _can_prompt_user (not _is_admin_user), the same bar chat
+        # itself applies for the identical capability (design.md
+        # Authorization).
+        app.router.add_post("/api/sessions/{label}/stop", self._handle_session_stop)
+        app.router.add_post("/api/sessions/{label}/kill", self._handle_session_kill)
+        app.router.add_post(
+            "/api/sessions/{label}/resume", self._handle_session_resume,
+        )
+        app.router.add_delete("/api/sessions/{label}", self._handle_session_delete)
         app.router.add_get("/api/preferences", self._handle_preferences_get)
         # The Mini App's first mutating route. PUT (not POST) because
         # setting a field to a value is idempotent by construction — the
@@ -840,26 +852,24 @@ class MiniAppServer:
 
         from aipager.miniapp.sessions import session_detail
 
-        result = await self._authenticate(request, "/api/sessions/{label}")
-        if isinstance(result, web.Response):
-            return result
-        scope_chat_id = result
-
-        label = request.match_info["label"]
         # include_gone=True: viewing a finished session's final
         # timeline/diff is a legitimate, safe read (design.md Decision
         # 5). Resolved only within the caller's own scope — a label
         # belonging to a different scope must 404 identically to one
-        # that doesn't exist anywhere (the headline requirement this
-        # stage introduces).
-        sess = self.registry.find_by_label(
-            label, scope_chat_id=scope_chat_id, include_gone=True,
+        # that doesn't exist anywhere. _resolve_own_scope_session does
+        # this identical lookup and returns the identical 404 body/log
+        # line as the inline block this replaces.
+        result = await self._resolve_own_scope_session(
+            request, "/api/sessions/{label}",
         )
-        if sess is None:
-            log.info("miniapp: /api/sessions/{label} rejected (404) — not found in scope")
-            return web.json_response({"error": "not_found"}, status=404)
+        if isinstance(result, web.Response):
+            return result
+        sess, scope_chat_id, user_id = result
 
-        return web.json_response(session_detail(sess, time.monotonic()))
+        can_act = self.bot._can_prompt_user(user_id, scope_chat_id)
+        return web.json_response(
+            session_detail(sess, time.monotonic(), can_act=can_act),
+        )
 
     async def _handle_session_diff(self, request):
         from aiohttp import web
@@ -885,6 +895,204 @@ class MiniAppServer:
         # request. There is no code path from an HTTP parameter to a
         # `cwd` argument passed to git (design.md Decision 2).
         return web.json_response(await collect_diff(sess.cwd))
+
+    # ---- session detail-page write actions (Stop/Kill/Resume/Delete) -----
+    #
+    # Every one of the four follows the same five-step shape
+    # _handle_session_preferences_put already uses:
+    # _resolve_own_scope_session -> _can_prompt_user (403) ->
+    # _allow_write (429) -> action-specific state guard (409/400) ->
+    # the shared session_ops core, then mirror to chat on success only.
+
+    async def _handle_session_stop(self, request):
+        from aiohttp import web
+
+        result = await self._resolve_own_scope_session(
+            request, "POST /api/sessions/{label}/stop",
+        )
+        if isinstance(result, web.Response):
+            return result
+        sess, scope_chat_id, user_id = result
+
+        if not self.bot._can_prompt_user(user_id, scope_chat_id):
+            log.info(
+                "miniapp: session stop rejected (403) — "
+                "caller cannot prompt this session",
+            )
+            return web.json_response({"error": "forbidden"}, status=403)
+        if not self._allow_write(user_id):
+            log.info("miniapp: session stop rejected (429) — rate limited")
+            return web.json_response({"error": "too_many_requests"}, status=429)
+
+        outcome = await self.bot._stop_session_core(sess)
+        if not outcome.ok:
+            return web.json_response({
+                "error": "not_busy",
+                "detail": "This session isn't busy right now — nothing to stop.",
+            }, status=409)
+
+        await self._mirror_session_stopped(
+            scope_chat_id, outcome.label, outcome.dropped,
+        )
+        return web.json_response({
+            "status": "stopped", "label": outcome.label, "dropped": outcome.dropped,
+        })
+
+    async def _handle_session_kill(self, request):
+        from aiohttp import web
+
+        result = await self._resolve_own_scope_session(
+            request, "POST /api/sessions/{label}/kill",
+        )
+        if isinstance(result, web.Response):
+            return result
+        sess, scope_chat_id, user_id = result
+
+        if not self.bot._can_prompt_user(user_id, scope_chat_id):
+            log.info(
+                "miniapp: session kill rejected (403) — "
+                "caller cannot prompt this session",
+            )
+            return web.json_response({"error": "forbidden"}, status=403)
+        if not self._allow_write(user_id):
+            log.info("miniapp: session kill rejected (429) — rate limited")
+            return web.json_response({"error": "too_many_requests"}, status=429)
+
+        outcome = await self.bot._kill_session_core(sess.name, sess.label)
+        if outcome.result == "killed":
+            await self._mirror_session_killed(scope_chat_id, outcome.label)
+            return web.json_response({"status": "killed", "label": outcome.label})
+        if outcome.result == "still_running":
+            return web.json_response({
+                "error": "still_running",
+                "detail": "Could not kill — the process is still running. Try again.",
+            }, status=409)
+        # "not_found": the dtach socket was already gone by the time we
+        # looked (a post-lookup race). Deliberately the SAME minimal body
+        # as the route-level 404 above, not a distinct code — both cases
+        # produce the identical, correct client reaction: treat the
+        # session as gone and return to the grid (design.md Risks).
+        return web.json_response({"error": "not_found"}, status=404)
+
+    async def _handle_session_resume(self, request):
+        from aiohttp import web
+
+        from aipager.miniapp.sessions import NO_TRANSCRIPT_REASON
+
+        result = await self._resolve_own_scope_session(
+            request, "POST /api/sessions/{label}/resume",
+        )
+        if isinstance(result, web.Response):
+            return result
+        sess, scope_chat_id, user_id = result
+
+        if not self.bot._can_prompt_user(user_id, scope_chat_id):
+            log.info(
+                "miniapp: session resume rejected (403) — "
+                "caller cannot prompt this session",
+            )
+            return web.json_response({"error": "forbidden"}, status=403)
+        if not self._allow_write(user_id):
+            log.info("miniapp: session resume rejected (429) — rate limited")
+            return web.json_response({"error": "too_many_requests"}, status=429)
+
+        label = sess.label
+        # No skip_perms_override: the Mini App always resumes with the
+        # session's own persisted skip_perms, matching chat's bare
+        # `/resume <name>` command (design.md Out of scope — the picker's
+        # Ask/Auto override is a chat-callback-only affordance).
+        outcome = await self.bot._do_resume_core(sess, driver_user_id=user_id)
+        if outcome.reason == "not_gone":
+            return web.json_response({
+                "error": "not_gone", "detail": "This session is already running.",
+            }, status=409)
+        if outcome.reason == "no_transcript":
+            return web.json_response({
+                "error": "no_transcript", "detail": NO_TRANSCRIPT_REASON,
+            }, status=409)
+        if outcome.reason == "launch_failed":
+            # Matches the existing _handle_session_create precedent of
+            # mapping a launch failure to 400.
+            return web.json_response({
+                "error": "launch_failed", "detail": outcome.err,
+            }, status=400)
+
+        await self._mirror_session_resumed(scope_chat_id, label)
+        return web.json_response({"status": "resumed", "label": label})
+
+    async def _handle_session_delete(self, request):
+        from aiohttp import web
+
+        from aipager.state import Status
+
+        result = await self._resolve_own_scope_session(
+            request, "DELETE /api/sessions/{label}",
+        )
+        if isinstance(result, web.Response):
+            return result
+        sess, scope_chat_id, user_id = result
+
+        if not self.bot._can_prompt_user(user_id, scope_chat_id):
+            log.info(
+                "miniapp: session delete rejected (403) — "
+                "caller cannot prompt this session",
+            )
+            return web.json_response({"error": "forbidden"}, status=403)
+        if not self._allow_write(user_id):
+            log.info("miniapp: session delete rejected (429) — rate limited")
+            return web.json_response({"error": "too_many_requests"}, status=429)
+
+        if sess.status != Status.GONE:
+            return web.json_response({
+                "error": "conflict",
+                "detail": "Session is still running. Use Kill to stop it first.",
+            }, status=409)
+
+        label = sess.label
+        # registry.remove() does NOT call mark_dirty() itself (state.py)
+        # — easy to forget, called out explicitly here and in design.md
+        # Risks. Without this, a page refresh would still show the
+        # session because the registry never persists the removal.
+        self.registry.remove(sess.name)
+        self.registry.mark_dirty()
+
+        await self._mirror_session_deleted(scope_chat_id, label)
+        return web.json_response({"status": "deleted", "label": label})
+
+    async def _mirror_session_stopped(self, scope_chat_id, label, dropped) -> None:
+        """Best-effort — the stop already happened; a failed mirror must
+        never fail (or appear to undo) a write that already landed."""
+        text = f"⏹️ Stopped [{label}] from the Mini App"
+        if dropped:
+            text += f" ({dropped} queued message{'s' if dropped > 1 else ''} discarded)"
+        try:
+            await self.bot._app.bot.send_message(chat_id=scope_chat_id, text=text)
+        except Exception:
+            log.debug("miniapp: session-stopped mirror failed", exc_info=True)
+
+    async def _mirror_session_killed(self, scope_chat_id, label) -> None:
+        try:
+            await self.bot._app.bot.send_message(
+                chat_id=scope_chat_id, text=f"💀 Killed [{label}] from the Mini App",
+            )
+        except Exception:
+            log.debug("miniapp: session-killed mirror failed", exc_info=True)
+
+    async def _mirror_session_resumed(self, scope_chat_id, label) -> None:
+        try:
+            await self.bot._app.bot.send_message(
+                chat_id=scope_chat_id, text=f"♻️ Resumed [{label}] from the Mini App",
+            )
+        except Exception:
+            log.debug("miniapp: session-resumed mirror failed", exc_info=True)
+
+    async def _mirror_session_deleted(self, scope_chat_id, label) -> None:
+        try:
+            await self.bot._app.bot.send_message(
+                chat_id=scope_chat_id, text=f"🗑️ Deleted [{label}] from the Mini App",
+            )
+        except Exception:
+            log.debug("miniapp: session-deleted mirror failed", exc_info=True)
 
     def _resolve_scope_chat_id(self, user_id) -> int | None:
         """Authorization only — never re-derives the allow-list rules.

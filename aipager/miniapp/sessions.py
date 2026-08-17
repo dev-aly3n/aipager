@@ -30,6 +30,13 @@ if TYPE_CHECKING:
 # "interactive" member name never appears in a stage-2 response body.
 _WAITING_STATUS = "waiting"
 
+# Shared verbatim between session_actions()'s client-facing reason and
+# server.py's Resume 409 body (design.md file-by-file plan), so the
+# pre-check reason and the enforced refusal always read identically —
+# one string, not two that could drift apart.
+NO_TRANSCRIPT_REASON = "No resumable transcript — start a fresh session instead."
+NO_PERMISSION_REASON = "You don't have permission to control this session."
+
 
 def _derive_status(sess: "TrackedSession") -> tuple[str, str | None, str | None]:
     """Return ``(status, waiting_kind, waiting_summary)``.
@@ -125,7 +132,52 @@ def session_summary(sess: "TrackedSession", now: float) -> dict[str, Any]:
     }
 
 
-def session_detail(sess: "TrackedSession", now: float) -> dict[str, Any]:
+def session_actions(
+    status: str, *, resumable: bool, can_act: bool,
+) -> dict[str, dict[str, Any]]:
+    """The status→button matrix (design.md), computed server-side so
+    every refusal rule — status match, resumability, permission — is
+    testable directly in pytest with zero DOM, and so the client can
+    never show a button whose tap would just bounce off a 409.
+
+    Returns only the keys the matrix says are relevant for ``status``:
+
+    - ``"busy"``/``"waiting"`` → ``{"stop": ...}``
+    - ``"idle"`` → ``{"kill": ...}``
+    - ``"gone"`` → ``{"resume": ..., "delete": ...}``
+    - anything else (``"unknown"``) → ``{}``
+
+    Each present entry is ``{"available": bool, "reason": str | None}``.
+    ``available`` is ``False`` whenever ``can_act`` is ``False``
+    (reason = :data:`NO_PERMISSION_REASON`), and additionally for
+    ``resume`` when ``not resumable`` (reason =
+    :data:`NO_TRANSCRIPT_REASON`, unless ``can_act`` is already
+    ``False``, in which case the permission reason wins — a caller who
+    cannot act at all should not be told the OTHER reason it can't act).
+    """
+    if status in ("busy", "waiting"):
+        keys = ("stop",)
+    elif status == "idle":
+        keys = ("kill",)
+    elif status == "gone":
+        keys = ("resume", "delete")
+    else:
+        return {}
+
+    actions: dict[str, dict[str, Any]] = {}
+    for key in keys:
+        if not can_act:
+            actions[key] = {"available": False, "reason": NO_PERMISSION_REASON}
+        elif key == "resume" and not resumable:
+            actions[key] = {"available": False, "reason": NO_TRANSCRIPT_REASON}
+        else:
+            actions[key] = {"available": True, "reason": None}
+    return actions
+
+
+def session_detail(
+    sess: "TrackedSession", now: float, *, can_act: bool = True,
+) -> dict[str, Any]:
     """Shape the drill-down payload for ``GET /api/sessions/{label}``.
 
     ``busy_elapsed_seconds`` is populated whenever a turn is actually in
@@ -133,6 +185,11 @@ def session_detail(sess: "TrackedSession", now: float) -> dict[str, Any]:
     running (``busy_started_at`` is shifted forward across a permission
     wait per its docstring in state.py, so it stays meaningful there
     too); ``None`` for IDLE/GONE/UNKNOWN, where it would just be stale.
+
+    ``can_act`` defaults to ``True`` so the existing unit tests that call
+    this positionally (``session_detail(sess, time.monotonic())``) need
+    no changes — they get a permissive default and simply gain the new
+    ``actions`` key without asserting on it.
     """
     status, waiting_kind, waiting_summary = _derive_status(sess)
     last_active = round(now - sess.last_hook_at) if sess.last_hook_at else None
@@ -158,6 +215,9 @@ def session_detail(sess: "TrackedSession", now: float) -> dict[str, Any]:
         "timeline": build_timeline(sess),
     }
     detail["facts"] = display_facts(detail)
+    detail["actions"] = session_actions(
+        detail["status"], resumable=bool(sess.claude_session_id), can_act=can_act,
+    )
     return detail
 
 
@@ -274,10 +334,13 @@ def build_timeline(sess: "TrackedSession") -> list[dict[str, Any]]:
 
 
 __all__ = [
+    "NO_PERMISSION_REASON",
+    "NO_TRANSCRIPT_REASON",
     "build_timeline",
     "display_facts",
     "preview_lines",
     "grid_totals",
+    "session_actions",
     "session_detail",
     "session_summary",
     "sort_for_display",
