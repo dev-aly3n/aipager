@@ -13,7 +13,14 @@ import asyncio
 import html as html_mod
 import logging
 import time
-from pathlib import Path
+# Path itself is no longer dereferenced in this module (the poll loop
+# that used it moved to session_ops.py's _kill_and_relaunch_core — see
+# design.md ORCHESTRATOR OVERRIDE) but the name is kept importable here
+# on purpose: tests/test_bot_callbacks_perms.py and
+# tests/integration/perms_mode_ux/test_perms_command.py patch
+# "aipager.bot.callbacks.Path", and removing the import would turn a
+# harmless no-op patch into an AttributeError on every one of them.
+from pathlib import Path  # noqa: F401
 from typing import TYPE_CHECKING
 
 from telegram import (
@@ -134,37 +141,18 @@ class CallbackDispatchMixin:
     async def _do_perms_switch_via_fn(self, sess, target_skip_perms: bool, edit_fn) -> None:
         """Kill + poll + relaunch with toggled skip_perms.
 
-        ``edit_fn`` is an async callable ``(text, **kw)`` used to update
-        the in-progress message (either via query.edit_message_text or
-        via status_msg.edit_text / update.message.reply_text, depending on
-        the call site). Preserves ``claude_session_id`` and ``cwd`` so
-        transcript resume continuity is maintained.
+        Thin wrapper around :meth:`SessionOpsMixin._perms_switch_core` —
+        the single kill/poll/relaunch seam chat and the Mini App now
+        both go through (design.md ORCHESTRATOR OVERRIDE). ``edit_fn``
+        is an async callable ``(text, **kw)`` used to update the
+        in-progress message (either via query.edit_message_text or via
+        status_msg.edit_text / update.message.reply_text, depending on
+        the call site).
         """
-        session_name = sess.name
         label = sess.label
-        resume_id = sess.claude_session_id
-        cwd = sess.cwd or None
+        outcome = await self._perms_switch_core(sess, target_skip_perms)
 
-        # Save these before kill clears registry state.
-        sock = f"{inject.SOCK_PREFIX}{session_name.removeprefix('claude-')}.sock"
-
-        # Everything from here to a confirmed relaunch is an expected outage.
-        # Opened before the kill so the dying session's own SessionEnd hook —
-        # which can arrive before kill_session returns — is covered too.
-        sess.restarting_until = time.monotonic() + _PERMS_RESTART_QUIET
-
-        await inject.kill_session(session_name)
-
-        # Poll for socket disappearance (up to 3 s).
-        for _ in range(_PERMS_POLL_COUNT):
-            await asyncio.sleep(_PERMS_POLL_INTERVAL)
-            if not Path(sock).is_socket():
-                break
-        else:
-            # Socket still present after 3 s — give up. Reopen the alarm: no
-            # relaunch is coming, so whatever state the session is in is now
-            # news the user needs.
-            sess.restarting_until = 0.0
+        if outcome.reason == "still_stopping":
             await edit_fn(
                 f"⚠️ <b>{html_mod.escape(label)}</b> is still stopping — "
                 f"mode not changed. Try /perms again in a moment.",
@@ -172,31 +160,19 @@ class CallbackDispatchMixin:
             )
             return
 
-        # Relaunch with toggled mode, preserving transcript + cwd.
-        short_name = session_name.removeprefix("claude-")
-        sys_extra = self._session_system_prompt(sess.scope_chat_id, label)
-        ok, err = await inject.launch_session(
-            short_name, skip_perms=target_skip_perms,
-            resume_id=resume_id or None, cwd=cwd,
-            system_prompt_extra=sys_extra,
-        )
-        if not ok:
-            # The relaunch failed, so the session really is gone — stop
-            # suppressing, or the user is left believing it survived.
-            sess.restarting_until = 0.0
+        if outcome.reason == "launch_failed":
             await edit_fn(
-                f"❌ Couldn't switch mode: {html_mod.escape(err)}",
+                f"❌ Couldn't switch mode: {html_mod.escape(outcome.err)}",
                 parse_mode="HTML",
             )
             return
 
-        # Update registry.
-        sess.skip_perms = target_skip_perms
-        sess.claude_session_id = resume_id  # restore — launch_session may clear
-        sess.cwd = cwd or sess.cwd
-        sess.gone_at = None
-        self.registry.transition(session_name, Status.IDLE)
-        self.registry.mark_dirty()
+        if not outcome.ok:
+            # not_live / already_restarting: chat's own callers already
+            # filter to a live, not-already-restarting session before
+            # reaching here, so this never trips in practice — a silent
+            # no-op is still safer than crashing on an unhandled branch.
+            return
 
         mode_icon = "🤖" if target_skip_perms else "💬"
         mode_label = "Auto" if target_skip_perms else "Ask"
@@ -534,20 +510,13 @@ class CallbackDispatchMixin:
             if action == "perms_stop_switch":
                 # BUSY: send Ctrl-C, then poll for socket disappearance.
                 # Same deliberate outage as the IDLE path — the session is
-                # meant to exit here, so its exit is not news.
-                sess.restarting_until = time.monotonic() + _PERMS_RESTART_QUIET
-                await inject.send_keys(session_name, "C-c")
-                # Short pause to let Ctrl-C signal be processed.
-                await asyncio.sleep(0.5)
-                # Poll for socket disappearance before relaunch.
-                sock = f"{inject.SOCK_PREFIX}{session_name.removeprefix('claude-')}.sock"
-                for _ in range(_PERMS_POLL_COUNT):
-                    await asyncio.sleep(_PERMS_POLL_INTERVAL)
-                    if not Path(sock).is_socket():
-                        break
-                else:
-                    # No relaunch is coming — let exit alarms through again.
-                    sess.restarting_until = 0.0
+                # meant to exit here, so its exit is not news. Thin
+                # wrapper around the same shared core the IDLE path
+                # (_do_perms_switch_via_fn) and the Mini App both go
+                # through now (design.md ORCHESTRATOR OVERRIDE).
+                outcome = await self._perms_switch_core(sess, target_skip_perms)
+
+                if outcome.reason == "still_stopping":
                     try:
                         await query.edit_message_text(
                             f"⚠️ <b>{html_mod.escape(label)}</b> is still stopping — "
@@ -558,34 +527,18 @@ class CallbackDispatchMixin:
                         pass
                     return
 
-                # Relaunch with toggled mode.
-                resume_id = sess.claude_session_id
-                cwd = sess.cwd or None
-                short_name = session_name.removeprefix("claude-")
-                sys_extra = self._session_system_prompt(sess.scope_chat_id, label)
-                ok_r, err_r = await inject.launch_session(
-                    short_name, skip_perms=target_skip_perms,
-                    resume_id=resume_id or None, cwd=cwd,
-                    system_prompt_extra=sys_extra,
-                )
-                if not ok_r:
-                    # Relaunch failed — the session is genuinely gone.
-                    sess.restarting_until = 0.0
+                if outcome.reason == "launch_failed":
                     try:
                         await query.edit_message_text(
-                            f"❌ Couldn't switch mode: {html_mod.escape(err_r)}",
+                            f"❌ Couldn't switch mode: {html_mod.escape(outcome.err)}",
                             parse_mode="HTML",
                         )
                     except Exception:
                         pass
                     return
 
-                sess.skip_perms = target_skip_perms
-                sess.claude_session_id = resume_id
-                sess.cwd = cwd or sess.cwd
-                sess.gone_at = None
-                self.registry.transition(session_name, Status.IDLE)
-                self.registry.mark_dirty()
+                if not outcome.ok:
+                    return
 
                 mode_icon = "🤖" if target_skip_perms else "💬"
                 mode_label = "Auto" if target_skip_perms else "Ask"

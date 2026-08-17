@@ -15,6 +15,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from telegram import (
@@ -23,6 +24,15 @@ from telegram import (
 
 from aipager.dtach import inject
 
+# Single source of truth for the poll timing (design.md ORCHESTRATOR
+# OVERRIDE) — callbacks.py does not import this module, so this is not
+# a cycle. Kept here as a plain import rather than redefined so a future
+# tuning of the poll window only has to change one place.
+from aipager.bot.callbacks import (
+    _PERMS_POLL_COUNT,
+    _PERMS_POLL_INTERVAL,
+    _PERMS_RESTART_QUIET,
+)
 from aipager.state import Status, TrackedSession
 from aipager.transcript import last_assistant_preview as _read_preview
 
@@ -97,6 +107,59 @@ class ResumeOutcome:
     reason: str
     err: str = ""
 
+
+@dataclass
+class RestartOutcome:
+    """Result of :meth:`SessionOpsMixin._kill_and_relaunch_core` (and its
+    thin callers :meth:`_perms_switch_core` / :meth:`_restart_session_core`).
+
+    ``reason`` is one of ``"not_live"``, ``"already_restarting"``,
+    ``"still_stopping"``, ``"launch_failed"``, ``"done"``. Never
+    ``"not_found"`` — like the other cores in this module, the caller
+    resolves the session before calling in.
+    """
+
+    ok: bool
+    reason: str
+    label: str
+    skip_perms: bool = False
+    err: str = ""
+
+
+@dataclass
+class ClearQueueOutcome:
+    """Result of :meth:`SessionOpsMixin._clear_queue_core`."""
+
+    ok: bool
+    label: str
+    dropped: int = 0
+
+
+@dataclass
+class CompactOutcome:
+    """Result of :meth:`SessionOpsMixin._compact_session_core`.
+
+    ``reason`` is one of ``"not_live"``, ``"queue_full"``,
+    ``"send_failed"``, ``"queued"``, ``"sent"``.
+    """
+
+    ok: bool
+    reason: str
+    label: str
+
+
+@dataclass
+class RenameOutcome:
+    """Result of :meth:`SessionOpsMixin._rename_session_core`.
+
+    Has no failure path — validation (syntax + collision) happens in
+    server.py, before the core is ever called.
+    """
+
+    ok: bool
+    previous_label: str
+    new_label: str
+    changed: bool
 
 
 class SessionOpsMixin:
@@ -641,3 +704,211 @@ class SessionOpsMixin:
             return
 
         await update.message.reply_text(f"⚠️ Unknown session: {target_label}")
+
+    # ── Mini App session menu actions (perms / clear-queue / compact /
+    #    restart / rename) — see design.md's ORCHESTRATOR OVERRIDE ──
+
+    async def _kill_and_relaunch_core(
+        self, sess: TrackedSession, *, target_skip_perms: bool,
+        interrupt_first: bool,
+    ) -> RestartOutcome:
+        """Kill (or interrupt) a live session, poll for its dtach socket
+        to disappear, then relaunch it in place with a possibly-different
+        ``skip_perms`` — preserving ``claude_session_id``/``cwd`` so the
+        transcript resume continuity is maintained.
+
+        THE single seam every kill-then-relaunch sequence in this
+        codebase goes through now — chat's own ``/perms`` (both its BUSY
+        Ctrl-C-first branch and its IDLE hard-kill branch, in
+        callbacks.py) and the Mini App's perms-switch and restart
+        routes. This sequence has the worst bug history in the codebase
+        (roadmap 8.1, two separate causes) — see design.md's
+        ORCHESTRATOR OVERRIDE for why it now exists in exactly one
+        place rather than being duplicated a third time.
+
+        Re-validates liveness and the ``is_restarting()`` guard itself
+        rather than trusting the caller, the same belt-and-braces
+        pattern every other core in this module already uses. Chat's
+        own callers never trip either guard (they already filter to a
+        live, not-already-restarting session before calling in), so
+        this changes nothing about chat's observable behaviour — it
+        only matters for the Mini App, where a stale menu, a direct API
+        probe, or a race with the session monitor must never be able to
+        kick off a second kill/relaunch while one is already in flight.
+        """
+        label = sess.label
+        if sess.status not in (Status.BUSY, Status.INTERACTIVE, Status.IDLE):
+            return RestartOutcome(ok=False, reason="not_live", label=label)
+        if sess.is_restarting():
+            return RestartOutcome(ok=False, reason="already_restarting", label=label)
+
+        session_name = sess.name
+        resume_id = sess.claude_session_id
+        cwd = sess.cwd or None
+        sock = f"{inject.SOCK_PREFIX}{session_name.removeprefix('claude-')}.sock"
+
+        # Everything from here to a confirmed relaunch is an expected
+        # outage. Opened before the kill so the dying session's own
+        # SessionEnd hook — which can arrive before kill_session/send_keys
+        # returns — is covered too.
+        sess.restarting_until = time.monotonic() + _PERMS_RESTART_QUIET
+
+        if interrupt_first:
+            await inject.send_keys(session_name, "C-c")
+            # Short pause to let the Ctrl-C signal be processed before
+            # the poll loop starts checking for the socket.
+            await asyncio.sleep(0.5)
+        else:
+            await inject.kill_session(session_name)
+
+        # Poll for socket disappearance (up to 3 s).
+        for _ in range(_PERMS_POLL_COUNT):
+            await asyncio.sleep(_PERMS_POLL_INTERVAL)
+            if not Path(sock).is_socket():
+                break
+        else:
+            # Socket still present after 3 s — give up. Reopen the
+            # alarm: no relaunch is coming, so whatever state the
+            # session is in now is news the caller needs.
+            sess.restarting_until = 0.0
+            return RestartOutcome(ok=False, reason="still_stopping", label=label)
+
+        short_name = session_name.removeprefix("claude-")
+        sys_extra = self._session_system_prompt(sess.scope_chat_id, label)
+        ok, err = await inject.launch_session(
+            short_name, skip_perms=target_skip_perms,
+            resume_id=resume_id or None, cwd=cwd,
+            system_prompt_extra=sys_extra,
+        )
+        if not ok:
+            # The relaunch failed, so the session really is gone — stop
+            # suppressing, or the caller is left believing it survived.
+            sess.restarting_until = 0.0
+            return RestartOutcome(
+                ok=False, reason="launch_failed", label=label, err=err,
+            )
+
+        # Relaunch succeeded — restore state.
+        sess.skip_perms = target_skip_perms
+        sess.claude_session_id = resume_id  # restore — launch_session may clear
+        sess.cwd = cwd or sess.cwd
+        sess.gone_at = None
+        self.registry.transition(session_name, Status.IDLE)
+        self.registry.mark_dirty()
+
+        log.info("[%s] kill+relaunch done (skip_perms=%s, interrupt_first=%s)",
+                 label, target_skip_perms, interrupt_first)
+        return RestartOutcome(
+            ok=True, reason="done", label=label, skip_perms=target_skip_perms,
+        )
+
+    async def _perms_switch_core(
+        self, sess: TrackedSession, target_skip_perms: bool,
+    ) -> RestartOutcome:
+        """Toggle permission mode on an already-resolved, live session.
+
+        ``interrupt_first`` mirrors chat's own ``/perms`` branching
+        exactly (``handlers._handle_perms_cmd`` /
+        ``callbacks._handle_callback``'s ``perms_stop_switch``): BUSY
+        gets a courtesy Ctrl-C first — one more chance to finish
+        cleanly before the hard kill; anything else — including
+        INTERACTIVE, which chat's own command folds into the same IDLE
+        flow — goes straight to :meth:`_kill_and_relaunch_core`'s hard
+        kill. So the outcome for a given starting status is identical
+        to what ``/perms`` would already produce for it.
+        """
+        interrupt_first = sess.status == Status.BUSY
+        return await self._kill_and_relaunch_core(
+            sess, target_skip_perms=target_skip_perms,
+            interrupt_first=interrupt_first,
+        )
+
+    async def _restart_session_core(self, sess: TrackedSession) -> RestartOutcome:
+        """Kill and relaunch a live session with its OWN current
+        ``skip_perms`` unchanged — a restart is not a mode switch.
+
+        Always a hard kill, regardless of status: deliberately does
+        NOT reuse perms' busy-only Ctrl-C-first courtesy, which exists
+        to give a MODE SWITCH one soft chance. A user-invoked restart
+        means "stop it and bring it back" — the same hard-kill
+        semantics Kill already applies.
+        """
+        return await self._kill_and_relaunch_core(
+            sess, target_skip_perms=sess.skip_perms, interrupt_first=False,
+        )
+
+    async def _clear_queue_core(self, sess: TrackedSession) -> ClearQueueOutcome:
+        """Discard every prompt queued behind the session's in-progress
+        turn. The turn itself is untouched — only Stop interrupts it.
+
+        No awaits: refuses immediately, with no side effects, when
+        there is nothing to clear — the same "no-op refusal" shape
+        :meth:`_stop_session_core` already uses, so the refusal is
+        pytest-testable with zero dtach mocking.
+        """
+        if not sess.pending_queue:
+            return ClearQueueOutcome(ok=False, label=sess.label, dropped=0)
+        dropped = len(sess.pending_queue)
+        sess.pending_queue.clear()
+        self.registry.mark_dirty()
+        log.info("[%s] queue cleared from Mini App (dropped %d)",
+                 sess.label, dropped)
+        return ClearQueueOutcome(ok=True, label=sess.label, dropped=dropped)
+
+    async def _compact_session_core(self, sess: TrackedSession) -> CompactOutcome:
+        """Trigger ``/compact``, treated exactly like a normal queued
+        user prompt — NOT the unconditional inject chat's reactive
+        "Compact Now" button uses.
+
+        Deliberate departure from chat's own compact button (design.md):
+        that button is only ever offered reactively, from a
+        ``context_warning`` hook event, so it never had to consider an
+        already-full queue. This route is offered proactively at any
+        time, so it needs the same overflow protection a normal queued
+        message already gets.
+        """
+        label = sess.label
+        if sess.status not in (Status.BUSY, Status.IDLE):
+            return CompactOutcome(ok=False, reason="not_live", label=label)
+        if sess.status == Status.BUSY:
+            if not sess.queue_prompt("/compact", None):
+                return CompactOutcome(ok=False, reason="queue_full", label=label)
+            self.registry.mark_dirty()
+            return CompactOutcome(ok=True, reason="queued", label=label)
+        ok = await self._inject_prompt(sess, "/compact")
+        if not ok:
+            return CompactOutcome(ok=False, reason="send_failed", label=label)
+        return CompactOutcome(ok=True, reason="sent", label=label)
+
+    async def _rename_session_core(
+        self, sess: TrackedSession, new_label: str,
+    ) -> RenameOutcome:
+        """Pure metadata mutation — ``sess.label`` only, never the
+        internal dtach session name, socket, resume id or transcript
+        path. Syntax validation and the collision check both already
+        happened in server.py before this is ever called, so this core
+        has no ``ok=False`` path at all.
+
+        No-op short-circuit when the new label equals the current one:
+        no mutation, no ``mark_dirty``, no bot-commands refresh — an
+        idempotent no-op, not a silent redundant write.
+        """
+        previous = sess.label
+        if new_label == previous:
+            return RenameOutcome(
+                ok=True, previous_label=previous, new_label=new_label,
+                changed=False,
+            )
+        sess.label = new_label
+        self.registry.mark_dirty()
+        # Refresh Telegram's own `/`-command autocomplete list — the
+        # "command list staleness" landmine (research.md gotcha #4).
+        # Without this, `/oldlabel` keeps appearing in the client's
+        # autocomplete (it now resolves to nothing, since find_by_label
+        # matches on the live label, which just changed) and `/newlabel`
+        # never appears until something else happens to trigger a sync.
+        asyncio.create_task(self._update_bot_commands())
+        log.info("[%s] renamed to %s from Mini App", previous, new_label)
+        return RenameOutcome(
+            ok=True, previous_label=previous, new_label=new_label, changed=True,
+        )
