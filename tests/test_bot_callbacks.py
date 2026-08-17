@@ -79,6 +79,34 @@ def test_stop_with_existing_session_invokes_stop_session(mk_bot, mk_query, run_a
     bot._stop_session.assert_awaited_once()
 
 
+def test_stop_callback_toasts_when_not_busy(mk_bot, mk_query, run_async, monkeypatch):
+    """The one deliberate, narrow behaviour change the refactor
+    introduces (design.md): the `:stop` callback previously had NO
+    status guard at all and would silently run its full body on a
+    non-busy session. It now refuses through the shared core exactly
+    like every other stop path, and says so instead of no-opping.
+
+    Real `_stop_session` runs here (not mocked) so the guard under test
+    is the only thing that can produce this toast — asserting
+    inject.send_keys was never called proves the guard ran before any
+    dtach interaction, not just that SOME toast happened to appear.
+    """
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    bot.registry._sessions["claude-jim"] = sess
+
+    async def _boom(*args, **kwargs):
+        raise AssertionError("inject.send_keys must not run for a non-busy session")
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", _boom)
+
+    update, query = mk_query("claude-jim:stop")
+    run_async(bot._handle_callback(update, MagicMock()))
+
+    answers = [c.args[0] for c in query.answer.await_args_list if c.args]
+    assert any("not busy" in (a or "").lower() for a in answers)
+    assert sess.status == Status.IDLE
+
+
 # ---- action: kill / kill-confirm / kill-cancel -------------------------
 
 def test_kill_calls_kill_by_label(mk_bot, mk_query, run_async):
