@@ -257,10 +257,10 @@ def test_stop_button_sends_one_post_and_refreshes(node_bin, tmp_path):
         f"stop scenario failed when driven:\nstdout: {proc.stdout}\n"
         f"stderr: {proc.stderr}"
     )
-    assert "ok: stop -> one POST /api/sessions/dev/stop" in proc.stdout, proc.stdout
+    assert "ok: stop -> menu -> one POST /api/sessions/dev/stop" in proc.stdout, proc.stdout
 
 
-def test_kill_button_requires_two_taps(node_bin, tmp_path):
+def test_kill_requires_confirming_a_modal(node_bin, tmp_path):
     from aipager.miniapp.static import INDEX_HTML
 
     proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "kill_idle")
@@ -268,7 +268,7 @@ def test_kill_button_requires_two_taps(node_bin, tmp_path):
         f"kill scenario failed when driven:\nstdout: {proc.stdout}\n"
         f"stderr: {proc.stderr}"
     )
-    assert "ok: kill requires two taps -> POST /api/sessions/dev/kill -> grid" \
+    assert "ok: kill -> menu -> modal -> POST /api/sessions/dev/kill -> grid" \
         in proc.stdout, proc.stdout
 
 
@@ -280,7 +280,7 @@ def test_resume_button_sends_one_post_when_transcript_present(node_bin, tmp_path
         f"resume scenario failed when driven:\nstdout: {proc.stdout}\n"
         f"stderr: {proc.stderr}"
     )
-    assert "ok: resume -> one POST /api/sessions/dev/resume" in proc.stdout, proc.stdout
+    assert "ok: resume -> menu -> one POST /api/sessions/dev/resume" in proc.stdout, proc.stdout
 
 
 def test_resume_button_is_inert_with_reason_when_no_transcript(node_bin, tmp_path):
@@ -296,7 +296,7 @@ def test_resume_button_is_inert_with_reason_when_no_transcript(node_bin, tmp_pat
     assert "ok: resume inert with reason" in proc.stdout, proc.stdout
 
 
-def test_delete_button_requires_two_taps_and_returns_to_grid(node_bin, tmp_path):
+def test_delete_requires_confirming_a_modal_and_returns_to_grid(node_bin, tmp_path):
     from aipager.miniapp.static import INDEX_HTML
 
     proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "delete_gone")
@@ -304,19 +304,20 @@ def test_delete_button_requires_two_taps_and_returns_to_grid(node_bin, tmp_path)
         f"delete scenario failed when driven:\nstdout: {proc.stdout}\n"
         f"stderr: {proc.stderr}"
     )
-    assert "ok: delete requires two taps -> DELETE /api/sessions/dev -> grid" \
+    assert "ok: delete -> menu -> modal -> DELETE /api/sessions/dev -> grid" \
         in proc.stdout, proc.stdout
 
 
 def test_the_harness_detects_a_kill_that_skips_confirmation(node_bin, tmp_path):
-    """Guard the guard: neuter the arm check so a session tap runs the
-    "already armed" branch immediately, skipping the confirm step
-    entirely. The kill scenario's own zero-fetch-on-first-tap assertion
-    must catch this."""
+    """Guard the guard: make every action act straight from the menu, so
+    Kill never raises its confirm modal. The kill scenario's own
+    "issued a request before any confirmation" assertion must catch it."""
     from aipager.miniapp.static import INDEX_HTML
 
-    broken = INDEX_HTML.replace("if (!isArmed) {", "if (false) {", 1)
-    assert broken != INDEX_HTML, "arm-check code not found — page changed shape"
+    broken = INDEX_HTML.replace(
+        "    if (!CONFIRM_ACTIONS[action]) {", "    if (true) {", 1,
+    )
+    assert broken != INDEX_HTML, "confirm-routing code not found — page changed shape"
 
     proc = _drive_controls(
         node_bin, tmp_path, broken, "kill_idle", name="broken-kill.html",
@@ -332,7 +333,8 @@ def test_the_harness_detects_a_dead_resume_button_with_no_reason(node_bin, tmp_p
     from aipager.miniapp.static import INDEX_HTML
 
     broken = INDEX_HTML.replace(
-        "note.textContent = spec.reason;", 'note.textContent = "";', 1,
+        'note.className = "menu-note";\n        note.textContent = spec.reason;',
+        'note.className = "menu-note";\n        note.textContent = "";', 1,
     )
     assert broken != INDEX_HTML, "reason-rendering code not found — page changed shape"
 
@@ -418,3 +420,278 @@ def test_the_form_harness_detects_the_duplicated_default_directory(node_bin, tmp
     assert proc.returncode != 0, (
         "harness passed a page that lists the daemon's directory twice"
     )
+
+
+def test_back_closes_the_confirm_modal_instead_of_leaving_the_page(
+    node_bin, tmp_path,
+):
+    """Telegram's back button is registered once at startup and used to
+    go straight to the grid. With a modal open that is a trapdoor, not a
+    dismissal: the operator loses the page as well as the dialog. Back
+    must close the top layer and leave them where they were — and must
+    still navigate once nothing is open."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(
+        node_bin, tmp_path, INDEX_HTML, "modal_back_closes", name="back.html",
+    )
+    assert proc.returncode == 0, (
+        f"back scenario failed when driven:\nstdout: {proc.stdout}\n"
+        f"stderr: {proc.stderr}"
+    )
+    assert "ok: back closes the modal and stays on the page" in proc.stdout, proc.stdout
+
+
+def test_the_backdrop_cancels_without_performing_the_action(node_bin, tmp_path):
+    """A stray tap outside the dialog must mean "no", never "yes"."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(
+        node_bin, tmp_path, INDEX_HTML, "backdrop_cancels", name="backdrop.html",
+    )
+    assert proc.returncode == 0, (
+        f"backdrop scenario failed when driven:\nstdout: {proc.stdout}\n"
+        f"stderr: {proc.stderr}"
+    )
+    assert "ok: backdrop cancels, no request issued" in proc.stdout, proc.stdout
+
+
+def test_the_harness_detects_back_leaving_the_page_with_a_modal_open(
+    node_bin, tmp_path,
+):
+    """Guard the guard for the trapdoor: restore the old unconditional
+    back handler and the scenario must fail rather than pass."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    broken = INDEX_HTML.replace(
+        "      if (overlayCloser) { overlayCloser(); return; }\n      showGrid();",
+        "      showGrid();", 1,
+    )
+    assert broken != INDEX_HTML, "back-handler code not found — page changed shape"
+
+    proc = _drive_controls(
+        node_bin, tmp_path, broken, "modal_back_closes", name="broken-back.html",
+    )
+    assert proc.returncode != 0, (
+        "harness passed a page where Back abandons the session page"
+    )
+
+
+def test_the_harness_detects_a_backdrop_that_confirms(node_bin, tmp_path):
+    """Guard the guard: wire the backdrop to the confirm action instead
+    of to cancel — a stray tap would then delete a session."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    broken = INDEX_HTML.replace(
+        'document.getElementById("overlay").addEventListener("click", closeOverlay);',
+        'document.getElementById("overlay").addEventListener("click", onConfirmTap);', 1,
+    )
+    assert broken != INDEX_HTML, "backdrop wiring not found — page changed shape"
+
+    proc = _drive_controls(
+        node_bin, tmp_path, broken, "backdrop_cancels", name="broken-backdrop.html",
+    )
+    assert proc.returncode != 0, (
+        "harness passed a page whose backdrop performs the destructive action"
+    )
+
+
+def test_a_session_with_no_actions_shows_no_kebab(node_bin, tmp_path):
+    """A status the daemon has never characterised yields an empty
+    `actions` object. Offering the ⋮ anyway would open an empty menu —
+    an affordance that promises something and delivers nothing."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(
+        node_bin, tmp_path, INDEX_HTML, "no_actions", name="noactions.html",
+    )
+    assert proc.returncode == 0, (
+        f"no-actions scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: no actions -> no kebab, no empty menu" in proc.stdout, proc.stdout
+
+
+def test_the_harness_detects_a_kebab_offered_with_no_actions(node_bin, tmp_path):
+    """Guard the guard for the above."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    broken = INDEX_HTML.replace(
+        "    kebab.hidden = count === 0;", "    kebab.hidden = false;", 1,
+    )
+    assert broken != INDEX_HTML, "kebab-visibility code not found — page changed shape"
+
+    proc = _drive_controls(
+        node_bin, tmp_path, broken, "no_actions", name="broken-kebab.html",
+    )
+    assert proc.returncode != 0, (
+        "harness passed a page that offers a kebab with nothing behind it"
+    )
+
+
+def test_reset_to_defaults_asks_before_discarding_overrides(node_bin, tmp_path):
+    """It clears every one of a session's own settings with no undo, and
+    it used to do that on a single tap. It now goes through the same
+    confirm dialog the destructive session actions use — and cancelling
+    must leave the overrides untouched, not merely close the dialog."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(
+        node_bin, tmp_path, INDEX_HTML, "reset_confirm", name="reset.html",
+    )
+    assert proc.returncode == 0, (
+        f"reset scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: reset asks, cancel is safe, confirm clears the override" \
+        in proc.stdout, proc.stdout
+
+
+def test_the_harness_detects_a_reset_that_skips_its_confirmation(node_bin, tmp_path):
+    """Guard the guard: restore the old one-tap behaviour and the
+    scenario must fail rather than pass."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    broken = INDEX_HTML.replace(
+        '    openConfirm({\n      title: "Reset settings to defaults?"',
+        '    resetSessionSettings(); return; openConfirm({\n'
+        '      title: "Reset settings to defaults?"', 1,
+    )
+    assert broken != INDEX_HTML, "reset-confirm code not found — page changed shape"
+
+    proc = _drive_controls(
+        node_bin, tmp_path, broken, "reset_confirm", name="broken-reset.html",
+    )
+    assert proc.returncode != 0, (
+        "harness passed a page where Reset to defaults fires on one tap"
+    )
+
+
+def test_a_menu_left_open_closes_when_the_session_changes_under_it(
+    node_bin, tmp_path,
+):
+    """The menu is built once from the last poll. If the session changes
+    underneath — someone kills it from chat, its transcript is cleaned
+    up — leaving the menu up would have it offering something the server
+    would now refuse, and silently redrawing it would move rows under a
+    finger. It closes and says why.
+
+    Covers both shapes of change: a different set of actions, and the
+    same set with one newly unavailable.
+    """
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(
+        node_bin, tmp_path, INDEX_HTML, "menu_drift_closes", name="drift.html",
+    )
+    assert proc.returncode == 0, (
+        f"drift scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: a changed session closes its open menu and says so" \
+        in proc.stdout, proc.stdout
+
+
+def test_a_cancelled_confirm_does_not_leak_into_the_next_one(node_bin, tmp_path):
+    """`confirmAction` (session actions) and `confirmRun` (Reset) are
+    separate fields consumed by one handler. A stale one would make the
+    dialog on screen perform the OTHER action."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(
+        node_bin, tmp_path, INDEX_HTML, "confirm_isolation", name="isolation.html",
+    )
+    assert proc.returncode == 0, (
+        f"isolation scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: a cancelled confirm does not leak into the next one" \
+        in proc.stdout, proc.stdout
+
+
+def test_the_harness_detects_a_menu_that_ignores_a_changed_session(
+    node_bin, tmp_path,
+):
+    """Guard the guard. This mechanism shipped with ZERO coverage in the
+    first pass — the whole block could be deleted and all ten scenarios
+    still passed."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    broken = INDEX_HTML.replace(
+        "    if (overlayCloser && menuSignature &&\n"
+        "        actionsSignature(data) !== menuSignature) {\n"
+        "      closeOverlay();\n"
+        '      showNotice("This session changed — reopen the menu.");\n'
+        "    }", "", 1,
+    )
+    assert broken != INDEX_HTML, "drift-guard code not found — page changed shape"
+
+    proc = _drive_controls(
+        node_bin, tmp_path, broken, "menu_drift_closes", name="broken-drift.html",
+    )
+    assert proc.returncode != 0, (
+        "harness passed a page whose open menu ignores the session changing"
+    )
+
+
+def test_the_harness_detects_a_change_check_blind_to_availability(
+    node_bin, tmp_path,
+):
+    """Guard the guard, narrower: a signature built from which actions
+    exist — ignoring whether each can run — misses a Resume going
+    inert."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    broken = INDEX_HTML.replace(
+        '        return k + ":" + (data.actions[k].available ? "1" : "0");',
+        "        return k;", 1,
+    )
+    assert broken != INDEX_HTML, "signature code not found — page changed shape"
+
+    proc = _drive_controls(
+        node_bin, tmp_path, broken, "menu_drift_closes", name="broken-sig.html",
+    )
+    assert proc.returncode != 0, (
+        "harness passed a page whose change check ignores availability"
+    )
+
+
+def test_the_page_contains_no_stray_control_characters():
+    """The CSS and JS live in plain (non-raw) Python triple-quoted
+    strings, so a CSS escape like `\\1F480` is eaten by Python as the
+    octal escape `\\1` and ships as U+0001 followed by the literal text
+    "F480" — which is exactly what the operator saw in the action menu.
+
+    Nothing caught it: the page still parsed, every driven scenario still
+    passed, and the damage was purely visual. A sweep for C0 controls is
+    the cheap general guard, since any future escape written the same way
+    lands here too.
+    """
+    from aipager.miniapp.static import INDEX_HTML
+
+    allowed = {"\n", "\t", "\r"}
+    bad = sorted({
+        ch for ch in INDEX_HTML
+        if (ord(ch) < 0x20 or ord(ch) == 0x7F) and ch not in allowed
+    })
+    assert not bad, (
+        "control characters in the served page — almost certainly a CSS or "
+        f"JS backslash escape eaten by Python: {[hex(ord(c)) for c in bad]}"
+    )
+
+
+def test_the_action_menu_icons_are_real_code_points():
+    """The specific regression: each menu icon must be an actual glyph,
+    not the tail of a mangled escape."""
+    import re
+
+    from aipager.miniapp.static import INDEX_HTML
+
+    found = dict(re.findall(
+        r"\.menu-item\.act-(\w+)::before \{ content: \"([^\"]*)\"; \}", INDEX_HTML,
+    ))
+    assert set(found) == {"stop", "kill", "resume", "delete"}, found
+    for action, glyph in found.items():
+        assert glyph, f"{action} has no icon"
+        assert not re.search(r"[0-9A-F]{3,}", glyph), (
+            f"{action}'s icon is hex text, not a character: {glyph!r}"
+        )
+        assert ord(glyph[0]) > 0x2000, (
+            f"{action}'s icon starts with U+{ord(glyph[0]):04X}, not a symbol"
+        )

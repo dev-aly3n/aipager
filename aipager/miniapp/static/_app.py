@@ -715,27 +715,58 @@ APP_JS = r"""
   // showing its `reason` verbatim (design.md: "the client renders what
   // it's given").
   //
-  // Stop/Resume act on a single tap. Kill/Delete are destructive and
-  // require a second tap within 5s ("armed" -> "Confirm?"); the timer is
-  // accident-prevention beyond the letter of the spec, in its spirit —
-  // one mistyped tap on a phone should not end a session.
-  var armedAction = null;   // {label, action} while a two-tap action is armed
-  var armTimer = null;
+  // Stop/Resume act on a single tap from the menu — both are
+  // recoverable. Kill/Delete are destructive and route through a
+  // confirm modal, which is the phone-side equivalent of chat's
+  // deliberate two-tap for /kill: "one mistype on a phone shouldn't
+  // wipe a session". The modal's confirm sits centre-screen, nowhere
+  // near the menu row that opened it, so a double-tap cannot reach it.
+  var overlayCloser = null;   // set while the menu OR the modal is open
+  var confirmAction = null;   // {label, action} awaiting confirmation
+  var confirmRun = null;      // or a plain callback (Reset to defaults)
+  var menuSignature = "";     // what the open menu was built from
 
   var ACTION_TITLES = { stop: "Stop", kill: "Kill", resume: "Resume", delete: "Delete" };
   // path segment appended to /api/sessions/{label} for each action; Delete
   // has none — it IS that resource, via the DELETE verb.
   var ACTION_PATHS = { stop: "stop", kill: "kill", resume: "resume", delete: "" };
   var ACTION_METHODS = { stop: "POST", kill: "POST", resume: "POST", delete: "DELETE" };
-  var TWO_TAP_ACTIONS = { kill: true, delete: true };
+  var CONFIRM_ACTIONS = { kill: true, delete: true };
   // Order matters only in that it is stable across renders; at most one
   // of stop/kill and at most one of resume/delete is ever present at once
   // (design.md's status matrix), so this never produces more than two rows.
   var ACTION_ORDER = ["stop", "kill", "resume", "delete"];
 
-  function clearArmedAction() {
-    armedAction = null;
-    if (armTimer) { clearTimeout(armTimer); armTimer = null; }
+  // Closing is one function for both layers on purpose: only one is ever
+  // open (opening the confirm closes the menu), so "what does Back
+  // close?" stays a single question with a single answer.
+  function closeOverlay() {
+    overlayCloser = null;
+    // Both pending-action fields, not just one: openConfirm happens to
+    // overwrite each on the way in, so an asymmetric reset is harmless
+    // today and a trap the first time a caller sets one without the
+    // other.
+    confirmAction = null;
+    confirmRun = null;
+    menuSignature = "";
+    document.getElementById("overlay").hidden = true;
+    document.getElementById("action-menu").hidden = true;
+    document.getElementById("confirm-modal").hidden = true;
+    var kebab = document.getElementById("detail-menu-btn");
+    kebab.setAttribute("aria-expanded", "false");
+    if (kebab.focus) { try { kebab.focus(); } catch (e) { /* older webview */ } }
+  }
+
+  // What the menu was built from. If a poll changes which actions are
+  // offered while the menu is open, the menu is closed rather than
+  // silently re-drawn under a finger or left advertising something the
+  // session can no longer do.
+  function actionsSignature(data) {
+    if (!data || !data.actions) { return ""; }
+    return ACTION_ORDER.filter(function (k) { return data.actions[k]; })
+      .map(function (k) {
+        return k + ":" + (data.actions[k].available ? "1" : "0");
+      }).join(",") + "|" + (data.label || "");
   }
 
   function postSessionAction(label, action, method) {
@@ -775,70 +806,120 @@ APP_JS = r"""
       showNotice((r.data && r.data.detail) || "Couldn't complete that.");
     }).catch(function () {
       showNotice("Couldn't reach the server — nothing changed.");
-      if (TWO_TAP_ACTIONS[action]) { renderDetailActions(lastDetailData); }
     });
   }
 
-  function onDetailActionTap(label, action) {
-    if (TWO_TAP_ACTIONS[action]) {
-      var isArmed = armedAction && armedAction.label === label &&
-        armedAction.action === action;
-      if (!isArmed) {
-        // First tap: arm, start the 5s window, issue NO request.
-        armedAction = { label: label, action: action };
-        if (armTimer) { clearTimeout(armTimer); }
-        armTimer = setTimeout(function () {
-          armedAction = null;
-          armTimer = null;
-          renderDetailActions(lastDetailData);
-        }, 5000);
-        renderDetailActions(lastDetailData);
-        return;
-      }
-      // Second tap while armed: disarm immediately (so the button reads
-      // normal again regardless of how long the request takes), then act.
-      clearArmedAction();
-      renderDetailActions(lastDetailData);
-      runDetailAction(label, action);
-      return;
-    }
-    runDetailAction(label, action);
-  }
-
-  function renderDetailActions(data) {
-    var host = document.getElementById("detail-actions");
-    host.innerHTML = "";
+  function openActionMenu() {
+    var data = lastDetailData;
     if (!data || !data.actions) { return; }
+    var menu = document.getElementById("action-menu");
+    menu.innerHTML = "";
+
+    var rendered = 0;
     ACTION_ORDER.forEach(function (key) {
       var spec = data.actions[key];
       if (!spec) { return; }
+      rendered++;
 
-      var row = document.createElement("div");
-      row.className = "action-row";
-
-      var isArmed = !!(armedAction && armedAction.label === data.label &&
-        armedAction.action === key);
-      var btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "action-btn" + (isArmed ? " is-armed" : "");
-      btn.textContent = isArmed ? "Confirm?" : ACTION_TITLES[key];
+      var item = document.createElement("button");
+      item.type = "button";
+      item.className = "menu-item act-" + key +
+        (CONFIRM_ACTIONS[key] ? " is-danger" : "");
+      item.setAttribute("role", "menuitem");
+      item.textContent = ACTION_TITLES[key];
       if (!spec.available) {
-        btn.disabled = true;
+        item.disabled = true;
       } else {
-        btn.addEventListener("click", function () {
-          onDetailActionTap(data.label, key);
+        item.addEventListener("click", function () {
+          onMenuItemTap(data.label, key);
         });
       }
-      row.appendChild(btn);
+      menu.appendChild(item);
 
+      // An action that cannot run says why, right under itself. Never
+      // hidden, never silently dead.
       if (!spec.available && spec.reason) {
         var note = document.createElement("div");
-        note.className = "reveal-note";
+        note.className = "menu-note";
         note.textContent = spec.reason;
-        row.appendChild(note);
+        menu.appendChild(note);
       }
-      host.appendChild(row);
     });
+    if (!rendered) { return; }
+
+    menuSignature = actionsSignature(data);
+    document.getElementById("overlay").hidden = false;
+    menu.hidden = false;
+    document.getElementById("confirm-modal").hidden = true;
+    document.getElementById("detail-menu-btn").setAttribute("aria-expanded", "true");
+    overlayCloser = closeOverlay;
+  }
+
+  function onMenuItemTap(label, action) {
+    if (!CONFIRM_ACTIONS[action]) {
+      closeOverlay();
+      runDetailAction(label, action);
+      return;
+    }
+    openConfirm({
+      label: label,
+      action: action,
+      title: ACTION_TITLES[action] + " " + label + "?",
+      body: action === "kill"
+        ? "This stops the session and removes it. Anything it was running "
+          + "is interrupted."
+        : "This removes the session from your list. Its transcript stays "
+          + "on disk.",
+      confirmLabel: ACTION_TITLES[action]
+    });
+  }
+
+  // The one confirm dialog, shared by the destructive session actions and
+  // by "Reset to defaults" — anything that discards state without a
+  // natural undo should pass through here rather than fire on one tap.
+  function openConfirm(opts) {
+    confirmAction = opts.label ? { label: opts.label, action: opts.action } : null;
+    confirmRun = opts.onConfirm || null;
+    document.getElementById("confirm-title").textContent = opts.title;
+    document.getElementById("confirm-body").textContent = opts.body;
+    var ok = document.getElementById("confirm-ok");
+    ok.textContent = opts.confirmLabel;
+    ok.disabled = false;
+    document.getElementById("action-menu").hidden = true;
+    document.getElementById("overlay").hidden = false;
+    document.getElementById("confirm-modal").hidden = false;
+    document.getElementById("detail-menu-btn").setAttribute("aria-expanded", "false");
+    overlayCloser = closeOverlay;
+    // Focus lands on Cancel, not the destructive button.
+    var cancel = document.getElementById("confirm-cancel");
+    if (cancel.focus) { try { cancel.focus(); } catch (e) { /* older webview */ } }
+  }
+
+  function onConfirmTap() {
+    var pending = confirmAction;
+    var run = confirmRun;
+    closeOverlay();
+    if (run) { run(); return; }
+    if (pending) { runDetailAction(pending.label, pending.action); }
+  }
+
+  // The kebab itself: present only when the session actually has actions
+  // (an `unknown` status yields none), so it never opens an empty menu.
+  function renderDetailActions(data) {
+    var kebab = document.getElementById("detail-menu-btn");
+    var count = 0;
+    if (data && data.actions) {
+      ACTION_ORDER.forEach(function (k) { if (data.actions[k]) { count++; } });
+    }
+    kebab.hidden = count === 0;
+
+    // A poll that changes what is on offer must not redraw an open menu
+    // under a finger, nor leave it offering something stale.
+    if (overlayCloser && menuSignature &&
+        actionsSignature(data) !== menuSignature) {
+      closeOverlay();
+      showNotice("This session changed — reopen the menu.");
+    }
   }
 
   // ---- view switching ---------------------------------------------------
@@ -866,9 +947,9 @@ APP_JS = r"""
     diffOpen = false;
     timelineOpen = false;
     lastDiffData = null;
-    // Navigating to a (possibly different) session must never carry a
-    // stale two-tap arm along with it — see clearArmedAction's callers.
-    clearArmedAction();
+    // Navigating to a (possibly different) session must never carry an
+    // open menu or a half-answered confirm along with it.
+    closeOverlay();
     // Reset the detail payload too: renderDiff names the repo from
     // lastDetailData.cwd, and expanding "Changed files" on this session
     // before its own detail poll lands would otherwise name the PREVIOUS
@@ -903,7 +984,7 @@ APP_JS = r"""
 
   function showGrid() {
     // Leaving the detail page — the same rule as openDetail.
-    clearArmedAction();
+    closeOverlay();
     // Back from a sub-page returns to whichever top-level tab was active.
     showView(mainTab === "settings" ? "settings" : "grid");
     pollTick();
@@ -1657,8 +1738,33 @@ APP_JS = r"""
   }
 
   if (tg && tg.BackButton) {
-    tg.BackButton.onClick(showGrid);
+    // Back closes whatever layer is open before it navigates. Without
+    // this, backing out of a confirm dialog would drop the operator on
+    // the grid — a trapdoor, not a dismissal.
+    tg.BackButton.onClick(function () {
+      if (overlayCloser) { overlayCloser(); return; }
+      showGrid();
+    });
   }
+
+  document.getElementById("detail-menu-btn").addEventListener("click", function () {
+    if (overlayCloser) { closeOverlay(); return; }   // tapping ⋮ again closes
+    openActionMenu();
+  });
+  // The backdrop dismisses; a tap that lands INSIDE either layer must not,
+  // so both stop the event before it reaches here.
+  document.getElementById("overlay").addEventListener("click", closeOverlay);
+  document.getElementById("action-menu").addEventListener("click", function (e) {
+    if (e && e.stopPropagation) { e.stopPropagation(); }
+  });
+  document.getElementById("confirm-modal").addEventListener("click", function (e) {
+    if (e && e.stopPropagation) { e.stopPropagation(); }
+  });
+  document.getElementById("confirm-cancel").addEventListener("click", closeOverlay);
+  document.getElementById("confirm-ok").addEventListener("click", onConfirmTap);
+  document.addEventListener("keydown", function (e) {
+    if (overlayCloser && e && e.key === "Escape") { closeOverlay(); }
+  });
   document.getElementById("maintab-sessions")
     .addEventListener("click", function () { setMainTab("sessions"); });
   document.getElementById("maintab-settings")
@@ -1669,7 +1775,17 @@ APP_JS = r"""
   });
   document.getElementById("tab-timeline").addEventListener("click", toggleTimeline);
   document.getElementById("tab-diff").addEventListener("click", toggleDiff);
-  document.getElementById("session-settings-reset").addEventListener("click", resetSessionSettings);
+  document.getElementById("session-settings-reset").addEventListener("click", function () {
+    // Discards every per-session override with no undo — it earns the
+    // same confirmation the destructive session actions get.
+    openConfirm({
+      title: "Reset settings to defaults?",
+      body: "This session's own settings are cleared and it goes back to "
+        + "following the chat's defaults.",
+      confirmLabel: "Reset",
+      onConfirm: resetSessionSettings
+    });
+  });
 
   // Ages tick on their own so "2m ago" does not sit stale between polls.
   setInterval(function () {

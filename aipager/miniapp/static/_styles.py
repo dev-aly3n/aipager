@@ -226,34 +226,168 @@ CSS = """\
      buttons. Reuses .choice's block/full-width/padding/border-radius
      shape (same family of control as the settings rows above it), with
      an explicit min-height the way .choice-new already sets one. */
-  .detail-actions { margin: 12px 0; }
-  .action-row { margin: 8px 0; }
-  .action-btn {
-    display: block;
-    width: 100%;
-    min-height: 44px;
-    text-align: center;
-    padding: 10px 12px;
+  /* The kebab rides the header row, pushed to the far edge. */
+  #detail-header { display: flex; align-items: center; gap: 8px; }
+
+  /* Occasional actions live behind a kebab, not on the page: the
+     session page's content is the last message, and a rank of buttons
+     under it read as the point of the screen. ⋮ is where Telegram puts
+     the same idea, so it needs no explaining.
+
+     Everything below leans on the theme variables Telegram publishes for
+     exactly this (core.telegram.org/bots/webapps): section-bg for a
+     surface that sits ABOVE the page rather than beside it,
+     section-separator for hairlines, destructive-text for danger, and
+     subtitle-text for secondary lines. Hardcoding a red here would look
+     wrong in half the themes Telegram ships. */
+  /* Positioning context for the menu, so the menu hangs off the BUTTON
+     and follows it when the page scrolls. */
+  .kebab-wrap { position: relative; flex: 0 0 auto; margin-left: auto; display: flex; }
+  .kebab {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0;
     font: inherit;
-    font-weight: 600;
+    font-size: 1.35rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.06em;
+    /* Full-strength text colour on a filled pill: at hint-grey it read
+       as decoration rather than a control. */
     color: var(--tg-theme-text-color, #000000);
-    background: transparent;
-    border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
-    border-radius: 9px;
+    background: var(--tg-theme-secondary-bg-color, rgba(127, 127, 127, 0.12));
+    border: 0;
+    border-radius: 999px;
     cursor: pointer;
   }
-  .action-btn[disabled] { opacity: 0.45; cursor: default; }
-  /* Kill/Delete's armed "Confirm?" state. Per .choice.is-active's own
-     anti-pattern note: never paint a filled danger colour behind white
-     text (a theme's accent may be pale) — the danger reads as an
-     outline/tint on the theme's own text colour, same idiom as
-     .choice.is-active, danger-tinted instead of accent-tinted. */
-  .action-btn.is-armed {
-    color: #dc2626;
-    border-color: #dc2626;
-    background: rgba(220, 38, 38, 0.1);
+  .kebab:active,
+  .kebab[aria-expanded="true"] {
+    background: var(--tg-theme-section-separator-color, rgba(127, 127, 127, 0.28));
+  }
+
+  /* Backdrop for both layers. Dismisses on tap; the layers stop the
+     event so a tap inside never closes them. */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.4);
+  }
+
+  /* Anchored under the kebab it came from, like Telegram's own context
+     menus: one surface, items edge to edge, hairline between them, an
+     icon leading each row. */
+  .menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    left: auto;
+    /* Above the backdrop (z-index 50), which is now behind it rather
+       than its parent. */
+    z-index: 60;
+    min-width: 208px;
+    max-width: min(300px, calc(100vw - 32px));
+    padding: 0;
+    overflow: hidden;
+    background: var(--tg-theme-section-bg-color, var(--tg-theme-bg-color, #ffffff));
+    border-radius: 14px;
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.16);
+  }
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 16px;
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 500;
+    text-align: left;
+    color: var(--tg-theme-text-color, #000000);
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    cursor: pointer;
+  }
+  /* Hairline between rows, never above the first — the same treatment
+     Telegram uses inside a grouped section. */
+  .menu-item + .menu-item,
+  .menu-note + .menu-item {
+    box-shadow: inset 0 1px 0 var(--tg-theme-section-separator-color, rgba(127, 127, 127, 0.22));
+  }
+  .menu-item:active { background: var(--tg-theme-secondary-bg-color, rgba(127, 127, 127, 0.12)); }
+  .menu-item[disabled] { opacity: 0.4; cursor: default; }
+  /* An icon per action, via ::before so the button's textContent stays
+     exactly the action name. */
+  /* Literal emoji, NOT CSS unicode escapes. This CSS lives in a plain
+     (non-raw) Python triple-quoted string, so a backslash-1F480 style
+     escape is consumed by PYTHON as an octal escape before CSS ever
+     sees it, shipping U+0001 plus the visible text "F480". The file
+     and the page are both UTF-8, so the characters themselves are
+     simplest and cannot be misread by either layer. (This very
+     comment originally demonstrated the bug it warns about.) */
+  .menu-item::before { font-size: 1.05rem; line-height: 1; }
+  .menu-item.act-stop::before { content: "🛑"; }
+  .menu-item.act-kill::before { content: "💀"; }
+  .menu-item.act-resume::before { content: "▶️"; }
+  .menu-item.act-delete::before { content: "🗑️"; }
+  .menu-item.is-danger { color: var(--tg-theme-destructive-text-color, #dc2626); }
+  .menu-note {
+    padding: 0 16px 12px;
+    font-size: 0.82rem;
+    line-height: 1.4;
+    color: var(--tg-theme-subtitle-text-color, var(--tg-theme-hint-color, #888888));
+  }
+
+  /* Centred, so the confirm button is nowhere near the menu row that
+     opened it — a double-tap on "Delete" must not land on "Delete". */
+  .modal {
+    width: 100%;
+    max-width: 320px;
+    padding: 20px;
+    text-align: center;
+    background: var(--tg-theme-section-bg-color, var(--tg-theme-bg-color, #ffffff));
+    border-radius: 14px;
+    box-shadow: 0 10px 34px rgba(0, 0, 0, 0.32);
+  }
+  .modal-title { margin: 0 0 8px; font-size: 1.05rem; font-weight: 600; }
+  .modal-body {
+    margin: 0 0 18px;
+    font-size: 0.92rem;
+    line-height: 1.45;
+    color: var(--tg-theme-subtitle-text-color, var(--tg-theme-hint-color, #888888));
+  }
+  .modal-actions { display: flex; gap: 10px; }
+  .modal-btn {
+    flex: 1 1 0;
+    min-height: 46px;
+    padding: 12px;
+    font: inherit;
+    font-weight: 600;
+    color: var(--tg-theme-link-color, #2481cc);
+    background: var(--tg-theme-secondary-bg-color, rgba(127, 127, 127, 0.10));
+    border: 0;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  /* Danger as the theme's own destructive colour on a tinted ground —
+     never white-on-accent, per .choice.is-active's note. */
+  .modal-btn.is-danger {
+    color: var(--tg-theme-destructive-text-color, #dc2626);
+    background: rgba(220, 38, 38, 0.12);
     font-weight: 700;
   }
+  .modal-btn[disabled] { opacity: 0.5; cursor: default; }
+
   .sect-title { font-size: 0.95rem; margin: 20px 0 6px; }
   .preview {
     white-space: pre-wrap;

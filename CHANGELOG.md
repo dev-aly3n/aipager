@@ -8,17 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **The session page can now Stop, Kill, Resume and Delete a session.** Four
-  buttons appear on the detail page depending on what the session is doing:
-  Stop while it is busy or waiting on you, Kill once it is idle, and Resume or
-  Delete once it is gone. Each shares its real implementation with chat's own
-  `/stop`, `/kill` and `/resume`, so the two surfaces can never drift apart.
-  Kill and Delete need a second tap to confirm — a stray first tap does
-  nothing — and every action is announced back in the chat it belongs to, the
-  same way creating a session already is. Anyone who can already send a
-  message to a session can use these buttons; nothing here needs admin.
-  Delete only forgets a finished session from the list — it never touches a
-  transcript on disk, and refuses on anything still running.
+- **The session page can now Stop, Kill, Resume and Delete a session.** A ⋮
+  menu in the session's header offers whatever applies to what it is doing
+  right now: Stop while it is busy or waiting on you, Kill once it is idle, and
+  Resume or Delete once it is gone. Each shares its real implementation with
+  chat's own `/stop`, `/kill` and `/resume`, so the two surfaces can never
+  drift apart. Stop and Resume act straight away; Kill and Delete open a
+  confirmation dialog first, so a mistyped tap can't end a session. Every
+  action is announced back in the chat it belongs to, the same way creating a
+  session already is. Anyone who can already send a message to a session can
+  use these; nothing here needs admin. Delete only forgets a finished session
+  from the list — it never touches a transcript on disk, and refuses on
+  anything still running.
+- **"Reset to defaults" now asks first.** It cleared every one of a session's
+  own settings on a single tap, with no undo.
 - **The Mini App now has a permanent button in Telegram.** It used to be
   reachable only by remembering to type `/app`. The daemon now puts an *App*
   button next to the message box in every chat it's configured for, and adds one
@@ -71,6 +74,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than the one picked with nothing on screen to say so.
 
 ### Fixed
+- **A session no longer shows its internal name after being killed.** It would
+  reappear in the finished list as something like `Jkhk__d256113222` instead of
+  the `Jkhk` you named it — the trailing part is a private tag aipager adds so
+  two chats can each have a session called the same thing. The name shown is
+  now always the one you chose. This affected any session aipager adopted
+  rather than started itself, not only killed ones.
 - **Waking a session you hadn't touched in a while no longer claims it's
   stuck.** Send a message to a session that had been idle for a day or more and
   the daemon would answer, within the same second, with "still working — quiet

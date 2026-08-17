@@ -86,6 +86,25 @@ HTML_BODY = """\
 </section>
 
 <!--
+  Backdrop + confirm dialog. The MENU is not here — it lives next to the ⋮
+  in the detail header so it stays anchored to the button when the page
+  scrolls. Only one layer is ever open (opening the confirm closes the
+  menu), which keeps "what does Back close?" a single question with a
+  single answer.
+-->
+<div id="overlay" class="overlay" hidden>
+  <div id="confirm-modal" class="modal" role="dialog" aria-modal="true"
+       aria-labelledby="confirm-title" hidden>
+    <h2 id="confirm-title" class="modal-title"></h2>
+    <p id="confirm-body" class="modal-body"></p>
+    <div class="modal-actions">
+      <button type="button" id="confirm-cancel" class="modal-btn">Cancel</button>
+      <button type="button" id="confirm-ok" class="modal-btn is-danger"></button>
+    </div>
+  </div>
+</div>
+
+<!--
   Conditional reveals for the new-session form. They live here, outside any
   group, because the group hosts are rebuilt wholesale on every structural
   render — a reveal built inside one would lose its value and its focus on
@@ -129,9 +148,17 @@ HTML_BODY = """\
   <div id="detail-header">
     <span id="detail-label" class="detail-label"></span>
     <span id="detail-status" class="status"></span>
+    <span class="kebab-wrap">
+      <button type="button" id="detail-menu-btn" class="kebab"
+              aria-haspopup="menu" aria-expanded="false"
+              aria-label="Session actions" hidden>⋮</button>
+      <!-- Anchored to the button, not to the viewport: parked at a fixed
+           offset inside the overlay it drifted away from the ⋮ as soon as
+           the page scrolled. -->
+      <div id="action-menu" class="menu" role="menu" hidden></div>
+    </span>
   </div>
   <div id="detail-waiting" class="waiting-note" hidden></div>
-  <div id="detail-actions" class="detail-actions"></div>
   <dl id="detail-facts" class="facts"></dl>
 
   <h2 class="sect-title">Last message</h2>
