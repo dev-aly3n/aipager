@@ -234,6 +234,117 @@ def test_the_form_harness_detects_a_folder_that_is_not_selected(node_bin, tmp_pa
     )
 
 
+# ===== session detail-page write actions (Stop/Kill/Resume/Delete) ========
+#
+# Same harness (miniapp_smoke.js), driven with a scenario argument this
+# time — the settings-panel test above still passes none, exercising the
+# default flow unchanged.
+
+def _drive_controls(node_bin, tmp_path, html, scenario, name="controls.html"):
+    page = tmp_path / name
+    page.write_text(html, encoding="utf-8")
+    return subprocess.run(
+        [node_bin, str(HARNESS), str(page), scenario],
+        capture_output=True, text=True, timeout=60,
+    )
+
+
+def test_stop_button_sends_one_post_and_refreshes(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "stop_busy")
+    assert proc.returncode == 0, (
+        f"stop scenario failed when driven:\nstdout: {proc.stdout}\n"
+        f"stderr: {proc.stderr}"
+    )
+    assert "ok: stop -> one POST /api/sessions/dev/stop" in proc.stdout, proc.stdout
+
+
+def test_kill_button_requires_two_taps(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "kill_idle")
+    assert proc.returncode == 0, (
+        f"kill scenario failed when driven:\nstdout: {proc.stdout}\n"
+        f"stderr: {proc.stderr}"
+    )
+    assert "ok: kill requires two taps -> POST /api/sessions/dev/kill -> grid" \
+        in proc.stdout, proc.stdout
+
+
+def test_resume_button_sends_one_post_when_transcript_present(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "resume_gone")
+    assert proc.returncode == 0, (
+        f"resume scenario failed when driven:\nstdout: {proc.stdout}\n"
+        f"stderr: {proc.stderr}"
+    )
+    assert "ok: resume -> one POST /api/sessions/dev/resume" in proc.stdout, proc.stdout
+
+
+def test_resume_button_is_inert_with_reason_when_no_transcript(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(
+        node_bin, tmp_path, INDEX_HTML, "resume_gone_no_transcript",
+    )
+    assert proc.returncode == 0, (
+        f"resume-no-transcript scenario failed when driven:\nstdout: {proc.stdout}\n"
+        f"stderr: {proc.stderr}"
+    )
+    assert "ok: resume inert with reason" in proc.stdout, proc.stdout
+
+
+def test_delete_button_requires_two_taps_and_returns_to_grid(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "delete_gone")
+    assert proc.returncode == 0, (
+        f"delete scenario failed when driven:\nstdout: {proc.stdout}\n"
+        f"stderr: {proc.stderr}"
+    )
+    assert "ok: delete requires two taps -> DELETE /api/sessions/dev -> grid" \
+        in proc.stdout, proc.stdout
+
+
+def test_the_harness_detects_a_kill_that_skips_confirmation(node_bin, tmp_path):
+    """Guard the guard: neuter the arm check so a session tap runs the
+    "already armed" branch immediately, skipping the confirm step
+    entirely. The kill scenario's own zero-fetch-on-first-tap assertion
+    must catch this."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    broken = INDEX_HTML.replace("if (!isArmed) {", "if (false) {", 1)
+    assert broken != INDEX_HTML, "arm-check code not found — page changed shape"
+
+    proc = _drive_controls(
+        node_bin, tmp_path, broken, "kill_idle", name="broken-kill.html",
+    )
+    assert proc.returncode != 0, (
+        "harness passed a page whose Kill button skips the confirm step"
+    )
+
+
+def test_the_harness_detects_a_dead_resume_button_with_no_reason(node_bin, tmp_path):
+    """Guard the guard: blank out the disabled-reason text, and a Resume
+    button with no transcript renders inert but silent."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    broken = INDEX_HTML.replace(
+        "note.textContent = spec.reason;", 'note.textContent = "";', 1,
+    )
+    assert broken != INDEX_HTML, "reason-rendering code not found — page changed shape"
+
+    proc = _drive_controls(
+        node_bin, tmp_path, broken, "resume_gone_no_transcript",
+        name="broken-resume.html",
+    )
+    assert proc.returncode != 0, (
+        "harness passed a page whose disabled Resume button shows no reason"
+    )
+
+
 def test_the_form_harness_detects_a_rebuild_on_every_keystroke(node_bin, tmp_path):
     """Guard the guard, and the regression test for the defect itself.
 
