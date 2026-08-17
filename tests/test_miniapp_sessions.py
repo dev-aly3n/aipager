@@ -8,8 +8,11 @@ plain dict/list, so these are constructed directly.
 import time
 
 from aipager.miniapp.sessions import (
+    NO_PERMISSION_REASON,
+    NO_TRANSCRIPT_REASON,
     _derive_status,
     build_timeline,
+    session_actions,
     session_detail,
     session_summary,
 )
@@ -203,6 +206,93 @@ def test_build_timeline_tool_states():
     rows = build_timeline(sess)
     states = [r["state"] for r in rows]
     assert states == ["done", "failed", "running"]
+
+
+def test_session_detail_includes_actions_key():
+    sess = _sess(status=Status.BUSY)
+    detail = session_detail(sess, time.monotonic())
+    assert "actions" in detail
+    assert detail["actions"] == {"stop": {"available": True, "reason": None}}
+
+
+def test_session_detail_default_can_act_is_permissive():
+    """The existing unit tests in this file call session_detail(sess, now)
+    positionally — the can_act=True default must let those calls through
+    unchanged while gaining the new actions key (design.md)."""
+    sess = _sess(status=Status.IDLE)
+    detail = session_detail(sess, time.monotonic())
+    assert detail["actions"]["kill"]["available"] is True
+
+
+def test_session_detail_can_act_false_disables_actions():
+    sess = _sess(status=Status.IDLE)
+    detail = session_detail(sess, time.monotonic(), can_act=False)
+    assert detail["actions"]["kill"] == {
+        "available": False, "reason": NO_PERMISSION_REASON,
+    }
+
+
+# ===== session_actions (status -> buttons matrix) ==========================
+
+def test_session_actions_busy_shows_only_stop():
+    actions = session_actions("busy", resumable=False, can_act=True)
+    assert actions == {"stop": {"available": True, "reason": None}}
+
+
+def test_session_actions_waiting_shows_only_stop():
+    actions = session_actions("waiting", resumable=False, can_act=True)
+    assert actions == {"stop": {"available": True, "reason": None}}
+
+
+def test_session_actions_idle_shows_only_kill():
+    actions = session_actions("idle", resumable=False, can_act=True)
+    assert actions == {"kill": {"available": True, "reason": None}}
+
+
+def test_session_actions_gone_resumable_shows_resume_and_delete_available():
+    actions = session_actions("gone", resumable=True, can_act=True)
+    assert actions == {
+        "resume": {"available": True, "reason": None},
+        "delete": {"available": True, "reason": None},
+    }
+
+
+def test_session_actions_gone_not_resumable_resume_unavailable():
+    actions = session_actions("gone", resumable=False, can_act=True)
+    assert actions["resume"] == {
+        "available": False, "reason": NO_TRANSCRIPT_REASON,
+    }
+    # Delete never depends on resumability — a GONE session can always
+    # be forgotten regardless of whether its transcript is resumable.
+    assert actions["delete"] == {"available": True, "reason": None}
+
+
+def test_session_actions_unknown_status_shows_nothing():
+    assert session_actions("unknown", resumable=False, can_act=True) == {}
+
+
+def test_session_actions_cannot_act_disables_every_present_key():
+    """any status + can_act=False -> every present key unavailable with
+    the permission reason."""
+    busy = session_actions("busy", resumable=False, can_act=False)
+    assert busy["stop"] == {"available": False, "reason": NO_PERMISSION_REASON}
+
+    idle = session_actions("idle", resumable=False, can_act=False)
+    assert idle["kill"] == {"available": False, "reason": NO_PERMISSION_REASON}
+
+    gone = session_actions("gone", resumable=True, can_act=False)
+    assert gone["resume"] == {"available": False, "reason": NO_PERMISSION_REASON}
+    assert gone["delete"] == {"available": False, "reason": NO_PERMISSION_REASON}
+
+
+def test_session_actions_permission_reason_wins_over_no_transcript():
+    """When BOTH can_act is False and the session isn't resumable, the
+    permission reason wins — a caller who cannot act at all should not
+    be told the OTHER reason it can't act (design.md)."""
+    actions = session_actions("gone", resumable=False, can_act=False)
+    assert actions["resume"] == {
+        "available": False, "reason": NO_PERMISSION_REASON,
+    }
 
 
 def test_build_timeline_trailing_commentary_past_last_tool_is_appended():
