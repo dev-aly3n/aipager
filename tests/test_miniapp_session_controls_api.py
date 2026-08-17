@@ -667,3 +667,103 @@ def test_404_matches_the_existing_detail_route_404_byte_for_byte(
         finally:
             await client.close()
     run_async(_run())
+
+
+# ===== rev-iter1-002: a 403 must leave no trace, not merely 403 ===========
+#
+# The 409-class refusals already assert "no mutation, no mirror". The
+# 403-class ones asserted only the status code, so the property held by
+# code inspection alone — and inspection is exactly what this project's
+# ten name-unrelated test passes were also relying on. These four pin it.
+
+@pytest.mark.parametrize("user_id", [READONLY_ID, OUTSIDER_ID])
+def test_stop_refused_by_permission_changes_nothing(server, run_async, user_id):
+    async def _run():
+        sess = _mk_session(server, "dev", status=Status.BUSY)
+        client = await _client_for(server)
+        try:
+            resp = await client.post(
+                "/api/sessions/dev/stop", headers=_hdr(user_id),
+            )
+            assert resp.status == 403
+            assert sess.status is Status.BUSY, "a refused stop still stopped it"
+            server.bot._app.bot.send_message.assert_not_awaited()
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+@pytest.mark.parametrize("user_id", [READONLY_ID, OUTSIDER_ID])
+def test_kill_refused_by_permission_leaves_the_session_alive(
+    server, run_async, user_id, monkeypatch,
+):
+    """The kill must not even be attempted — `inject.kill_session` is
+    patched to fail the test outright if the guard lets the call through."""
+    async def _boom(*a, **k):
+        raise AssertionError("inject.kill_session reached despite a 403")
+
+    monkeypatch.setattr("aipager.dtach.inject.kill_session", _boom)
+
+    async def _run():
+        sess = _mk_session(server, "dev", status=Status.IDLE)
+        client = await _client_for(server)
+        try:
+            resp = await client.post(
+                "/api/sessions/dev/kill", headers=_hdr(user_id),
+            )
+            assert resp.status == 403
+            assert server.registry.get(sess.name) is not None, (
+                "a refused kill still removed the session"
+            )
+            server.bot._app.bot.send_message.assert_not_awaited()
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+@pytest.mark.parametrize("user_id", [READONLY_ID, OUTSIDER_ID])
+def test_resume_refused_by_permission_launches_nothing(
+    server, run_async, user_id, monkeypatch,
+):
+    async def _boom(*a, **k):
+        raise AssertionError("inject.launch_session reached despite a 403")
+
+    monkeypatch.setattr("aipager.dtach.inject.launch_session", _boom)
+
+    async def _run():
+        sess = _mk_session(server, "dev", status=Status.GONE)
+        sess.claude_session_id = "abc-123"
+        client = await _client_for(server)
+        try:
+            resp = await client.post(
+                "/api/sessions/dev/resume", headers=_hdr(user_id),
+            )
+            assert resp.status == 403
+            assert sess.status is Status.GONE
+            # the defensive clear-before-launch must not have run either
+            assert sess.claude_session_id == "abc-123", (
+                "a refused resume consumed the resumable transcript id"
+            )
+            server.bot._app.bot.send_message.assert_not_awaited()
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+@pytest.mark.parametrize("user_id", [READONLY_ID, OUTSIDER_ID])
+def test_delete_refused_by_permission_keeps_the_session(server, run_async, user_id):
+    async def _run():
+        sess = _mk_session(server, "dev", status=Status.GONE)
+        client = await _client_for(server)
+        try:
+            resp = await client.delete(
+                "/api/sessions/dev", headers=_hdr(user_id),
+            )
+            assert resp.status == 403
+            assert server.registry.get(sess.name) is not None, (
+                "a refused delete still forgot the session"
+            )
+            server.bot._app.bot.send_message.assert_not_awaited()
+        finally:
+            await client.close()
+    run_async(_run())
