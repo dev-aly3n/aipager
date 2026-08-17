@@ -32,6 +32,7 @@ from pathlib import Path
 import pytest
 
 HARNESS = Path(__file__).parent / "js" / "miniapp_smoke.js"
+FORM_HARNESS = Path(__file__).parent / "js" / "miniapp_newsession.js"
 
 
 @pytest.fixture(scope="module")
@@ -89,4 +90,54 @@ def test_the_harness_actually_detects_a_broken_page(node_bin, tmp_path):
     assert proc.returncode != 0, (
         "harness passed a page whose save handler throws on every tap — "
         "it is no longer exercising the interaction"
+    )
+
+
+def test_new_session_form_applies_every_setting_it_offers(node_bin, tmp_path):
+    """Drive the real form: it must render controls for model, working
+    directory, permission mode AND the four reply-style settings, and a
+    reply-style choice must actually be applied to the created session.
+
+    The reply-style settings are the only part of the form applied by the
+    CLIENT after creation (via the per-session preferences route) rather
+    than passed to the launch, so nothing on the server side would notice
+    if that step silently stopped happening.
+    """
+    from aipager.miniapp.static import INDEX_HTML
+
+    page = tmp_path / "page.html"
+    page.write_text(INDEX_HTML, encoding="utf-8")
+
+    proc = subprocess.run(
+        [node_bin, str(FORM_HARNESS), str(page)],
+        capture_output=True, text=True, timeout=60,
+    )
+    assert proc.returncode == 0, (
+        f"new-session form failed when driven:\nstdout: {proc.stdout}\n"
+        f"stderr: {proc.stderr}"
+    )
+    assert "ok: form -> POST /api/sessions -> PUT" in proc.stdout, proc.stdout
+
+
+def test_the_form_harness_detects_a_dropped_preference_step(node_bin, tmp_path):
+    """Guard the guard: if the client stopped applying the chosen
+    reply-style settings, the harness must say so rather than pass."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    # neuter the post-create preference writes
+    broken = INDEX_HTML.replace(
+        "var writes = Object.keys(newState.prefs).map(function (field) {",
+        "var writes = [].map(function (field) {", 1,
+    )
+    assert broken != INDEX_HTML, "preference-application code not found"
+
+    page = tmp_path / "broken.html"
+    page.write_text(broken, encoding="utf-8")
+
+    proc = subprocess.run(
+        [node_bin, str(FORM_HARNESS), str(page)],
+        capture_output=True, text=True, timeout=60,
+    )
+    assert proc.returncode != 0, (
+        "harness passed a page that silently drops the chosen settings"
     )
