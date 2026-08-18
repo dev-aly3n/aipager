@@ -143,6 +143,25 @@ async def spawn_and_discover_url(
         url = await asyncio.wait_for(
             _read_until_url(), timeout=TUNNEL_URL_DISCOVERY_TIMEOUT_SECONDS,
         )
+    except asyncio.CancelledError:
+        # CancelledError is a BaseException, NOT an Exception, so the
+        # handler below does not catch it. Without this branch, cancelling
+        # the supervision task while it waits here — the whole ~7-20s
+        # discovery window, on every spawn AND every restart — leaves
+        # cloudflared running with nobody holding a handle to it:
+        # TunnelManager._proc is only assigned after this function
+        # returns, so stop() has nothing to terminate. That is a leaked
+        # public tunnel surviving daemon shutdown.
+        #
+        # kill() without awaiting: we are already being cancelled, so
+        # awaiting here risks hanging the shutdown path. asyncio's child
+        # watcher reaps it.
+        if proc.returncode is None:
+            try:
+                proc.kill()
+            except ProcessLookupError:
+                pass
+        raise
     except (asyncio.TimeoutError, TunnelLaunchError) as exc:
         if proc.returncode is None:
             try:

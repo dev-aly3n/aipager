@@ -510,3 +510,67 @@ def test_stop_before_start_is_a_safe_noop(run_async):
         assert manager.current_url == ""
 
     run_async(_scenario())
+
+
+# ===== cancellation during URL discovery must not leak the child ==========
+
+def test_cancelling_during_discovery_kills_the_child(run_async, monkeypatch):
+    """The window between spawning cloudflared and discovering its URL is
+    ~7-20 seconds in reality, and it happens on every spawn AND every
+    restart. If the supervision task is cancelled in that window,
+    CancelledError — a BaseException, not an Exception — bypasses the
+    TimeoutError/TunnelLaunchError handler, and TunnelManager._proc has
+    not been assigned yet, so stop() has no handle to terminate.
+
+    Without the fix that leaks a live cloudflared holding a PUBLIC tunnel
+    open past daemon shutdown.
+    """
+    import asyncio
+
+    from aipager.miniapp import tunnel_manager as tm
+
+    killed = []
+
+    class _FakeProc:
+        returncode = None
+        def kill(self):
+            killed.append(True)
+        def terminate(self):
+            pass
+        async def wait(self):
+            return 0
+
+    fake = _FakeProc()
+
+    async def _never_yields_a_url(*_a, **_k):
+        # stderr that stays silent — exactly a tunnel still negotiating.
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(tm.asyncio, "create_subprocess_exec",
+                        _make_spawn_returning(fake), raising=False)
+
+    async def _run():
+        # Drive the REAL spawn_and_discover_url, then cancel it mid-wait.
+        task = asyncio.create_task(tm.spawn_and_discover_url("/nonexistent/cloudflared", 8765))
+        await asyncio.sleep(0)          # let it reach the discovery wait
+        await asyncio.sleep(0)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    run_async(_run())
+    assert killed, "cancelled mid-discovery without killing the child — tunnel leaked"
+
+
+def _make_spawn_returning(proc):
+    async def _spawn(*_a, **_k):
+        class _Stderr:
+            async def readline(self):
+                import asyncio as _a2
+                await _a2.sleep(3600)   # never yields a URL
+                return b""
+        proc.stderr = _Stderr()
+        return proc
+    return _spawn
