@@ -331,6 +331,12 @@ def mk_update():
         # has non-string `.text` / `.caption` attributes that break any
         # handler that runs regex against them.
         update.message.reply_to_message = None
+        # Default to no highlighted-fragment quote (design.md "reply
+        # context" feature). Without this default, the auto-generated
+        # MagicMock is truthy and `.text` unsliceable, which would trip
+        # _build_reply_context's `quote.text[:1000]` in every test that
+        # doesn't care about highlighting.
+        update.message.quote = None
         update.effective_user = MagicMock()
         update.effective_user.id = user_id
         update.effective_chat = MagicMock()

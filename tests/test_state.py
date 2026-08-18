@@ -42,7 +42,7 @@ def test_persistence_round_trip(tmp_state_file):
     sess.transcript_path = "/some/path.jsonl"
     sess.last_prompt = "do the thing"
     r1.last_active_session = "claude-bar"
-    r1.track_message(99, "claude-bar")  # track_message sets last_msg_id=99
+    r1.track_message(99, "claude-bar", 4242)  # track_message sets last_msg_id=99
     r1.save()
 
     r2 = SessionRegistry()
@@ -53,17 +53,43 @@ def test_persistence_round_trip(tmp_state_file):
     assert s2.transcript_path == "/some/path.jsonl"
     assert s2.last_prompt == "do the thing"
     assert r2.last_active_session == "claude-bar"
-    assert r2.get_session_by_msg(99) is not None
+    assert r2.get_session_by_msg(99, 4242) is not None
 
 
 def test_track_message_maps_to_session(tmp_state_file):
     r = SessionRegistry()
     r.transition("claude-foo", Status.IDLE)
-    r.track_message(123, "claude-foo")
-    s = r.get_session_by_msg(123)
+    r.track_message(123, "claude-foo", 4242)
+    s = r.get_session_by_msg(123, 4242)
     assert s is not None
     assert s.name == "claude-foo"
-    assert r.get_session_by_msg(999) is None
+    assert r.get_session_by_msg(999, 4242) is None
+
+
+def test_get_session_by_msg_scoped_to_chat_id_no_cross_chat_collision(tmp_state_file):
+    """Criterion 8: the SAME message_id tracked in two different chats
+    must resolve to each chat's OWN session — never the other chat's."""
+    r = SessionRegistry()
+    r.transition("claude-foo", Status.IDLE)
+    r.transition("claude-bar", Status.IDLE)
+    r.track_message(500, "claude-foo", 1111)
+    r.track_message(500, "claude-bar", 2222)
+    foo_side = r.get_session_by_msg(500, 1111)
+    bar_side = r.get_session_by_msg(500, 2222)
+    assert foo_side is not None and foo_side.name == "claude-foo"
+    assert bar_side is not None and bar_side.name == "claude-bar"
+    # And a THIRD, uninvolved chat_id must resolve to neither.
+    assert r.get_session_by_msg(500, 3333) is None
+
+
+def test_get_session_by_msg_wildcard_matches_unstamped_legacy_entry(tmp_state_file):
+    """A stored chat_id of 0 (unstamped/legacy) is a wildcard — matches
+    any calling chat_id, mirroring all_sessions()/find_by_label()."""
+    r = SessionRegistry()
+    r.transition("claude-legacy", Status.IDLE)
+    r.track_message(700, "claude-legacy", 0)
+    assert r.get_session_by_msg(700, 9999) is not None
+    assert r.get_session_by_msg(700, 9999).name == "claude-legacy"
 
 
 def test_unknown_session_returns_none(tmp_state_file):
@@ -78,10 +104,11 @@ def test_queue_prompt_appends_with_timestamp():
     sess = TrackedSession(name="claude-jim", label="jim")
     assert sess.queue_prompt("hello", 100) is True
     assert len(sess.pending_queue) == 1
-    text, msg_id, ts = sess.pending_queue[0]
+    text, msg_id, ts, reply_context = sess.pending_queue[0]
     assert text == "hello"
     assert msg_id == 100
     assert ts > 0
+    assert reply_context == ""
 
 
 def test_queue_prompt_rejects_when_at_cap():
@@ -158,10 +185,11 @@ def test_load_upgrades_legacy_2tuple_queue_entries(tmp_state_file):
     r.load()
     sess = r.get("claude-jim")
     assert len(sess.pending_queue) == 1
-    text, msg_id, ts = sess.pending_queue[0]
+    text, msg_id, ts, reply_context = sess.pending_queue[0]
     assert text == "legacy"
     assert msg_id == 200
     assert ts > 0  # auto-timestamped to "now"
+    assert reply_context == ""
 
 
 # ----- 2.4 record_tool cap + history_idx adjustment -----
