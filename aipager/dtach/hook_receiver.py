@@ -561,19 +561,28 @@ class HookReceiver:
             # Reset pre_compact_pct SYNCHRONOUSLY before await (race prevention)
             before_pct = sess.pre_compact_pct
             sess.pre_compact_pct = 0
-            if before_pct > 0:
-                # If post_pct is still high (stale file), defer to statusLine fallback
-                if post_pct >= before_pct:
-                    sess.pre_compact_pct = before_pct
-                    log.info("[%s] SessionStart compact: post_pct=%d%% >= before=%d%%, deferring",
-                             sess.label, post_pct, before_pct)
-                else:
-                    sess.compact_warned = False
-                    log.info("[%s] Compacted: %d%% → %d%%", sess.label, before_pct, post_pct)
-                    await self.notify_fn(sess, "compact_done", {
-                        "before_pct": before_pct,
-                        "after_pct": post_pct,
-                    })
+            # If post_pct is still high (stale file), defer to statusLine
+            # fallback — but only when there was actually a nonzero
+            # pre-compact reading to compare against. At before_pct == 0
+            # there is nothing to record (PreCompact saw 0% context), so
+            # deferring would mean this confirming hook — Claude Code's own
+            # positive signal that its compaction cycle closed — never
+            # resolves the card at all (design.md "Chosen approach": the
+            # second, independent half of the observed wedge bug). Always
+            # fire compact_done in that case; reporting before_pct=0 is
+            # truthful, not a fabricated success claim, precisely because
+            # SessionStart(source="compact") is hook-confirmed evidence.
+            if before_pct > 0 and post_pct >= before_pct:
+                sess.pre_compact_pct = before_pct
+                log.info("[%s] SessionStart compact: post_pct=%d%% >= before=%d%%, deferring",
+                         sess.label, post_pct, before_pct)
+            else:
+                sess.compact_warned = False
+                log.info("[%s] Compacted: %d%% → %d%%", sess.label, before_pct, post_pct)
+                await self.notify_fn(sess, "compact_done", {
+                    "before_pct": before_pct,
+                    "after_pct": post_pct,
+                })
             return
 
         elif event == "statusline":

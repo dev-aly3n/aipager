@@ -89,6 +89,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than the one picked with nothing on screen to say so.
 
 ### Fixed
+- **A "Compacting…" card can no longer spin forever, or swallow every message
+  you send afterwards.** Tapping Compact on a session with nothing to compact
+  left the card spinning indefinitely — and because that card held the
+  session's only live-message slot, every prompt sent afterwards silently got
+  no "Thinking…" card at all. Live cards are now tracked on a per-session
+  stack, where a compaction is a layer over the busy card rather than a
+  destructive overwrite of it, and each layer carries a deadline. Three
+  independent fixes fall out of that: a stuck compacting card no longer blocks
+  a new one (it self-heals on your very next message), a confirming hook that
+  arrives at 0% context is no longer discarded, and a card whose hook never
+  arrives is resolved after three minutes with wording that says the
+  compaction was never confirmed rather than claiming it succeeded. The Mini
+  App also greys out Compact with a reason when there is no context to
+  compact.
 - **A session no longer shows its internal name after being killed.** It would
   reappear in the finished list as something like `Jkhk__d256113222` instead of
   the `Jkhk` you named it — the trailing part is a private tag aipager adds so

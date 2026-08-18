@@ -267,6 +267,9 @@ def test_animate_compact_loops_dot_then_message_gone(mk_bot, run_async, monkeypa
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
     sess.busy_msg_id = 42
+    # _animate_compact is tied to the stack: production only starts it from
+    # notify's "compacting" branch, which pushes this entry first.
+    sess.push_compacting(42, time.monotonic(), deadline_seconds=None)
 
     calls = []
     async def _no_sleep(_):
@@ -289,6 +292,7 @@ def test_animate_compact_handles_message_gone(mk_bot, run_async, monkeypatch):
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
     sess.busy_msg_id = 42
+    sess.push_compacting(42, time.monotonic(), deadline_seconds=None)
 
     async def _no_sleep(_): pass
     monkeypatch.setattr("aipager.bot.animation.asyncio.sleep", _no_sleep)

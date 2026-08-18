@@ -214,6 +214,10 @@ def test_build_timeline_tool_states():
 
 def test_session_detail_includes_actions_key():
     sess = _sess(status=Status.BUSY)
+    # Nonzero so `compact` isn't gated off by the live-message-stack
+    # feature's context_pct <= 0 rule (design.md Decision 6) — that rule
+    # has its own dedicated coverage in test_miniapp_session_actions_api.py.
+    sess.last_token_pct = 40
     detail = session_detail(sess, time.monotonic())
     assert "actions" in detail
     # Not admin, no queue -> perms unavailable, clearqueue unavailable,
@@ -267,6 +271,7 @@ def test_session_detail_passes_is_admin_into_perms_action():
 def test_session_actions_busy_shows_the_full_busy_set_in_canonical_order():
     actions = session_actions(
         "busy", resumable=False, can_act=True, is_admin=True, queue_depth=1,
+        context_pct=40,
     )
     assert list(actions.keys()) == [
         "stop", "clearqueue", "compact", "rename", "perms", "restart",
@@ -286,7 +291,9 @@ def test_session_actions_waiting_excludes_compact():
 
 
 def test_session_actions_idle_shows_compact_but_not_stop_or_clearqueue():
-    actions = session_actions("idle", resumable=False, can_act=True, is_admin=True)
+    actions = session_actions(
+        "idle", resumable=False, can_act=True, is_admin=True, context_pct=40,
+    )
     assert list(actions.keys()) == ["compact", "rename", "kill", "perms", "restart"]
     assert actions["compact"] == {"available": True, "reason": None}
 
@@ -375,6 +382,7 @@ def test_session_actions_clearqueue_absent_when_idle():
 def test_session_actions_compact_busy_unavailable_at_cap():
     actions = session_actions(
         "busy", resumable=False, can_act=True, queue_depth=QUEUE_CAP,
+        context_pct=40,
     )
     assert actions["compact"] == {"available": False, "reason": QUEUE_FULL_REASON}
 
@@ -382,6 +390,7 @@ def test_session_actions_compact_busy_unavailable_at_cap():
 def test_session_actions_compact_busy_available_below_cap():
     actions = session_actions(
         "busy", resumable=False, can_act=True, queue_depth=QUEUE_CAP - 1,
+        context_pct=40,
     )
     assert actions["compact"] == {"available": True, "reason": None}
 
@@ -391,6 +400,7 @@ def test_session_actions_compact_idle_ignores_queue_depth():
     queue-depth rule applies, even at a (nonsensical) full depth."""
     actions = session_actions(
         "idle", resumable=False, can_act=True, queue_depth=QUEUE_CAP,
+        context_pct=40,
     )
     assert actions["compact"] == {"available": True, "reason": None}
 

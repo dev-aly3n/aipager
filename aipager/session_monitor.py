@@ -112,6 +112,31 @@ def _quiet_since(sess: TrackedSession) -> float | None:
     return max(sess.last_hook_at, sess.busy_started_at) or None
 
 
+def expired_compacting_sessions(
+    sessions: dict[str, TrackedSession], now: float,
+) -> list[str]:
+    """Names whose live message is a compaction card whose deadline has
+    passed (design.md "Live Message Stack", Decisions 3 and 5).
+
+    Pure — no I/O, no asyncio, no ``time.monotonic()`` call inside it, so
+    it is directly callable in pytest with a fabricated ``now``; no test
+    needs to wait out a real timeout. Deliberately **not** gated on
+    ``status == BUSY``, unlike every other watchdog in this module: a
+    session can desync from BUSY while a compacting card is still live
+    (the observed live bug — status: idle, card still spinning), which
+    would make it invisible to a status-gated check.
+
+    A session with no live ``compacting`` entry, or one that hasn't
+    reached its deadline yet (including one pushed with
+    ``deadline_seconds=None``, which never expires), is never included.
+    """
+    # Delegates the staleness rule to the session itself, so the sweeper
+    # and _send_busy_and_animate's reclaim branch can never disagree about
+    # whether a given card is stale — they ask the same predicate.
+    return [name for name, sess in sessions.items()
+            if sess.compacting_is_overdue(now)]
+
+
 class SessionMonitor:
     """Periodically discovers dtach sessions and marks dead ones GONE."""
 
@@ -189,6 +214,28 @@ class SessionMonitor:
         # has been hanging for too long (claude crashed mid-prompt), and
         # garbage-collect subagent entries whose Stop hook never arrived.
         now = time.monotonic()
+
+        # Compact-card deadline sweep (design.md Decisions 3/5) — one pass
+        # per tick, deliberately NOT folded into the per-status loop below
+        # since it is the one watchdog that is NOT gated on
+        # status == Status.BUSY (see expired_compacting_sessions'
+        # docstring for why that gate is what let the reported bug hide
+        # from every existing watchdog).
+        for expired_name in expired_compacting_sessions(
+            self.registry.all_sessions(), now,
+        ):
+            expired_sess = self.registry.get(expired_name)
+            if expired_sess is None:
+                continue
+            started = expired_sess.compacting_started_at()
+            elapsed = (now - started) if started is not None else 0.0
+            try:
+                await self.notify_fn(
+                    expired_sess, "compact_timeout", {"elapsed_seconds": elapsed},
+                )
+            except Exception:
+                log.warning("Failed to notify compact_timeout for %s", expired_name)
+
         for name, sess in self.registry.all_sessions().items():
             # INTERACTIVE watchdog (item 2.2)
             if sess.status == Status.INTERACTIVE:
