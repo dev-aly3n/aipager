@@ -7,6 +7,7 @@ them one at a time, with mocked Telegram I/O so no network is touched.
 
 from __future__ import annotations
 
+import asyncio
 import time
 from unittest.mock import AsyncMock, MagicMock
 
@@ -43,12 +44,36 @@ def test_notify_pinned_update_does_nothing(mk_bot, run_async):
 # ---- user_prompt_submit -------------------------------------------------
 
 def test_user_prompt_submit_skips_when_busy_msg_exists(mk_bot, run_async):
+    """No duplicate card when one is genuinely live.
+
+    Asserts the OUTCOME (nothing new is sent) rather than the old
+    mechanism (that _send_busy_and_animate was never called). notify no
+    longer pre-judges with its own `if not busy_msg_id` gate — it
+    delegates to _send_busy_and_animate, which bails on its own when a
+    live card exists. That gate could not tell a live card from a wedged
+    one, which is what let a stuck compacting card swallow every
+    terminal-initiated prompt.
+    """
     bot = mk_bot()
     sess = _sess(busy_msg_id=42)
-    # Mock _send_busy_and_animate to detect if it gets called
-    bot._send_busy_and_animate = AsyncMock()
-    run_async(bot.notify(sess, "user_prompt_submit", {}))
-    bot._send_busy_and_animate.assert_not_awaited()
+
+    bot._app.bot.send_message = AsyncMock()
+
+    async def _scenario():
+        # Task must be created on the loop run_async actually runs, or it
+        # belongs to a stale loop and .done() lies.
+        async def _alive():
+            await asyncio.sleep(100)
+        sess.animate_task = asyncio.create_task(_alive())
+        try:
+            await bot.notify(sess, "user_prompt_submit", {})
+        finally:
+            sess.animate_task.cancel()
+
+    run_async(_scenario())
+
+    bot._app.bot.send_message.assert_not_awaited()  # no duplicate card
+    assert sess.busy_msg_id == 42                   # still the same card
 
 
 def test_user_prompt_submit_sends_busy_when_no_msg_id(mk_bot, run_async):

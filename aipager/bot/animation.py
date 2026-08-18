@@ -766,15 +766,24 @@ class AnimationMixin:
                           sess.label, sess.busy_msg_id)
                 sess.busy_msg_id = None
             elif top_kind == "compacting":
-                # This function is only ever reached when
-                # sess.status != Status.BUSY (every call site gates on
-                # that). A live `compacting` top can only legitimately
-                # coexist with status == BUSY (it's pushed over an
-                # in-flight turn's busy card) — so observing one here means
-                # the confirming hook desynced from status, not a genuine
-                # in-progress compaction. Self-heal instead of waiting for
-                # the sweeper's deadline: reclaim it and proceed to a fresh
-                # busy card, regardless of whether its task is still alive.
+                # A compacting card is reclaimed ONLY once its deadline has
+                # passed. An earlier version of this branch reclaimed any
+                # compacting top unconditionally, on the argument that this
+                # function only runs when sess.status != Status.BUSY, so a
+                # compacting top here must be desynced. That argument is
+                # FALSE: _direct_send (handlers.py, the `/label <text>`
+                # path) and the retry callback (callbacks.py) both call
+                # registry.transition(name, Status.BUSY) — which writes
+                # sess.status synchronously — on the line immediately
+                # before calling this function. So a genuinely in-progress
+                # compaction is reachable here, and tearing it down would
+                # orphan its card and misdirect the eventual compact_done
+                # edit onto the replacement card.
+                #
+                # The entry's own deadline is the honest test of staleness,
+                # and it is the same signal the monitor's sweeper uses.
+                if not sess.compacting_is_overdue(time.monotonic()):
+                    return  # genuine compaction in flight — leave it alone
                 entry = sess.pop_compacting()
                 elapsed = (time.monotonic() - entry.created_at
                            if entry is not None else 0.0)

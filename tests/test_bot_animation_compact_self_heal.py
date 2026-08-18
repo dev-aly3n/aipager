@@ -28,7 +28,7 @@ def test_compacting_top_with_live_task_still_gets_a_fresh_busy_card(mk_bot, run_
     the dead-task stale-reset."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
-    sess.push_compacting(msg_id=3218, now=0.0, deadline_seconds=None)
+    sess.push_compacting(msg_id=3218, now=0.0, deadline_seconds=180.0)  # long overdue
 
     loop = asyncio.new_event_loop()
 
@@ -56,7 +56,7 @@ def test_compacting_top_with_dead_task_also_gets_a_fresh_busy_card(mk_bot, run_a
     self-heals identically to the live-task case above."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
-    sess.push_compacting(msg_id=3218, now=0.0, deadline_seconds=None)
+    sess.push_compacting(msg_id=3218, now=0.0, deadline_seconds=180.0)  # long overdue
 
     loop = asyncio.new_event_loop()
 
@@ -87,7 +87,7 @@ def test_compacting_top_reclaim_does_not_disturb_a_busy_layer_underneath_kind(
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
     sess.busy_msg_id = 42  # stale busy layer from a previous, unrelated cycle
-    sess.push_compacting(msg_id=42, now=0.0, deadline_seconds=None)
+    sess.push_compacting(msg_id=42, now=0.0, deadline_seconds=180.0)  # long overdue
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._app.bot.send_chat_action = AsyncMock()
     bot._start_animation = MagicMock()

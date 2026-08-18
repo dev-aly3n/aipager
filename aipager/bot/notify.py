@@ -237,10 +237,20 @@ class NotifyMixin:
 
         # ── Live busy-status events ──
         if event == "user_prompt_submit":
-            # Fallback for terminal-initiated prompts only.
-            # If busy_msg_id is already set, _handle_message already sent it.
-            if not sess.busy_msg_id:
-                await self._send_busy_and_animate(sess)
+            # Fallback for terminal-initiated prompts only (a Telegram-sent
+            # prompt already called _send_busy_and_animate from
+            # _handle_message / _direct_send).
+            #
+            # This used to bail on `if not sess.busy_msg_id`, a blanket
+            # truthiness gate that duplicated — badly — the decision
+            # _send_busy_and_animate already makes properly. It could not
+            # tell a live card from a wedged one, so a stuck compacting
+            # card swallowed every terminal-initiated prompt for that
+            # session, and the dead-animation stale-reset was unreachable
+            # from here too. Delegate instead: that function is the single
+            # authority on whether a fresh card is warranted, and it bails
+            # on its own when one is genuinely live.
+            await self._send_busy_and_animate(sess)
             return
 
         if event == "tool_use":

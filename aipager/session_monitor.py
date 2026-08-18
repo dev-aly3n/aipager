@@ -130,19 +130,11 @@ def expired_compacting_sessions(
     reached its deadline yet (including one pushed with
     ``deadline_seconds=None``, which never expires), is never included.
     """
-    expired: list[str] = []
-    for name, sess in sessions.items():
-        # Reads the underlying stack directly — same feature, state.py's
-        # own owning module family (design.md's "four modules that already
-        # own this lifecycle"); no public accessor exposes a raw deadline.
-        stack = sess._live_stack
-        if not stack:
-            continue
-        top = stack[-1]
-        if (top.kind == "compacting" and top.deadline is not None
-                and now >= top.deadline):
-            expired.append(name)
-    return expired
+    # Delegates the staleness rule to the session itself, so the sweeper
+    # and _send_busy_and_animate's reclaim branch can never disagree about
+    # whether a given card is stale — they ask the same predicate.
+    return [name for name, sess in sessions.items()
+            if sess.compacting_is_overdue(now)]
 
 
 class SessionMonitor:
@@ -235,9 +227,8 @@ class SessionMonitor:
             expired_sess = self.registry.get(expired_name)
             if expired_sess is None:
                 continue
-            stack = expired_sess._live_stack
-            top = stack[-1] if stack else None
-            elapsed = (now - top.created_at) if top is not None else 0.0
+            started = expired_sess.compacting_started_at()
+            elapsed = (now - started) if started is not None else 0.0
             try:
                 await self.notify_fn(
                     expired_sess, "compact_timeout", {"elapsed_seconds": elapsed},

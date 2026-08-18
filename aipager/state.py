@@ -428,6 +428,36 @@ class TrackedSession:
         """``"busy"``, ``"compacting"``, or ``None`` if nothing is live."""
         return self._live_stack[-1].kind if self._live_stack else None
 
+    def compacting_is_overdue(self, now: float) -> bool:
+        """Is a live compacting card past the deadline it was pushed with?
+
+        The single, shared definition of "this compacting card has been up
+        too long to still be believable". Both the monitor's sweeper and
+        ``_send_busy_and_animate``'s reclaim branch ask this, so the two
+        can never disagree about whether a card is stale.
+
+        False when nothing is live, when the top is an ordinary busy card,
+        or when the compaction was pushed with no deadline at all.
+        """
+        if not self._live_stack:
+            return False
+        top = self._live_stack[-1]
+        if top.kind != "compacting" or top.deadline is None:
+            return False
+        return now >= top.deadline
+
+    def compacting_started_at(self) -> float | None:
+        """``created_at`` of a live compacting top, else ``None``.
+
+        Exists so callers outside this module can report how long a card
+        has been up without reaching into ``_live_stack`` — the docstring
+        on ``LiveMessageEntry`` promises that list stays private.
+        """
+        if not self._live_stack:
+            return None
+        top = self._live_stack[-1]
+        return top.created_at if top.kind == "compacting" else None
+
     def queue_prompt(self, text: str, msg_id: int | None,
                      cap: int = QUEUE_CAP) -> bool:
         """Append a queued prompt with a current wall-clock timestamp.
