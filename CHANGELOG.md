@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **The Mini App now gets a public URL with zero manual setup.** With the
+  Mini App enabled and no `MINIAPP_PUBLIC_URL` override configured, aipager
+  starts and supervises its own Cloudflare quick tunnel alongside the
+  daemon, reads the `https://*.trycloudflare.com` address it's assigned,
+  and publishes it to the menu button, the reply keyboard and `/app` —
+  the same three surfaces that already agreed on a manually-configured
+  URL. If the tunnel dies it's restarted automatically (with backoff, up
+  to a bounded number of attempts per run) and the button is republished
+  once a new address is found; while there's no working tunnel, there's
+  no button rather than a broken one. The `cloudflared` binary is
+  downloaded once per version into a local cache and its checksum
+  verified before it's ever run — no dependency on a system-installed
+  copy. Tailscale auto-detect still works exactly as before, both as a
+  manual alternative and as the fallback during the tunnel's brief
+  startup window. See `docs/security.md`'s new "Mini App tunnel" section
+  for what the published URL does and doesn't protect.
 - **Replying to an older message now tells Claude what you're pointing at.**
   Reply to any earlier message in a session — not just the latest one — or
   highlight part of a message before replying, and Claude gets a quiet note

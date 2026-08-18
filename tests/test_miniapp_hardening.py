@@ -217,10 +217,16 @@ def test_diff_refuses_a_concurrent_second_caller(hardening_server, run_async, mo
 
 # ===== 4. never advertise an unverified URL ===============================
 
-def test_probe_reports_dead_url_as_unreachable(run_async):
+def test_probe_reports_dead_url_as_unreachable(run_async, monkeypatch):
     """A hostname that does not resolve — the dead-ephemeral-tunnel case
     that started all of this — must come back False, not raise."""
+    from aipager.miniapp import tunnel as _tun
     from aipager.miniapp.tunnel import probe_public_url
+
+    # Zero the retry delay: probe_public_url now retries across a window
+    # that covers a new tunnel's edge propagation, and this test would
+    # otherwise sit through the whole real one.
+    monkeypatch.setattr(_tun, "PROBE_RETRY_DELAY_SECONDS", 0)
 
     async def _run():
         # .invalid is reserved by RFC 2606 and can never resolve, so this
@@ -272,3 +278,56 @@ def test_reachable_url_still_publishes_the_button(mk_bot, run_async, monkeypatch
                  for c in bot._app.bot.set_chat_menu_button.await_args_list]
     assert published, "no button published for a reachable URL"
     assert type(published[0]).__name__ == "MenuButtonWebApp"
+
+
+# ===== a fresh tunnel answers 530 before it answers 200 ===================
+
+def test_probe_retries_until_a_new_tunnel_becomes_reachable(run_async, monkeypatch):
+    """Observed live: cloudflared reported its URL, the probe fired
+    immediately, Cloudflare's edge returned 530 ("tunnel not ready"), the
+    button was cleared — and the identical URL served 200 a minute later.
+    Nothing republished, because the URL never changed, so the tunnel
+    worked perfectly and the button never appeared at all.
+
+    A single probe therefore asks the wrong question of a brand-new tunnel.
+    """
+    from aipager.miniapp import tunnel as tun
+
+    monkeypatch.setattr(tun, "PROBE_RETRY_DELAY_SECONDS", 0)
+    calls = []
+
+    async def _flaky_once(url):
+        calls.append(url)
+        return len(calls) >= 3          # 530, 530, then up
+
+    monkeypatch.setattr(tun, "_probe_once", _flaky_once)
+
+    async def _run():
+        assert await tun.probe_public_url("https://x.trycloudflare.com/") is True
+
+    run_async(_run())
+    assert len(calls) == 3, f"gave up after {len(calls)} attempts"
+
+
+def test_probe_still_gives_up_on_a_genuinely_dead_url(run_async, monkeypatch):
+    """Retrying must not turn 'dead' into 'wait forever' — a dead URL still
+    has to clear the button, which is the guard's whole purpose."""
+    from aipager.miniapp import tunnel as tun
+
+    monkeypatch.setattr(tun, "PROBE_RETRY_DELAY_SECONDS", 0)
+    monkeypatch.setattr(tun, "PROBE_ATTEMPTS", 4)
+    calls = []
+
+    async def _always_dead(url):
+        calls.append(url)
+        if len(calls) > 20:             # tripwire: bounded, never a spin
+            raise AssertionError("probe retried without bound")
+        return False
+
+    monkeypatch.setattr(tun, "_probe_once", _always_dead)
+
+    async def _run():
+        assert await tun.probe_public_url("https://dead.example/") is False
+
+    run_async(_run())
+    assert len(calls) == 4, f"expected exactly 4 attempts, got {len(calls)}"

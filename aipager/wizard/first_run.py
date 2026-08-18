@@ -171,6 +171,7 @@ def _completion_screen() -> None:
         "  Start the daemon:    [path]aipager start[/path]",
         "  Launch a session:    [path]aipager session dev[/path]",
         "  Health check:        [path]aipager doctor[/path]",
+        "  Mini App (optional): [path]aipager miniapp enable[/path]",
     ]
     body = "\n".join(lines)
     if console.is_terminal:
@@ -184,6 +185,7 @@ def _completion_screen() -> None:
         console.print("  Start the daemon:    aipager start")
         console.print("  Launch a session:    aipager session dev")
         console.print("  Health check:        aipager doctor")
+        console.print("  Mini App (optional): aipager miniapp enable")
 
 
 def _grant_owner_step(chat_id: int, step_label: str = "[3/4]") -> str:

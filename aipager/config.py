@@ -192,12 +192,54 @@ try:
 except ValueError:
     MINIAPP_PORT = 8765
 # Manual override for the Mini App's public URL (e.g. a Cloudflare
-# tunnel). Empty means "auto-detect via `tailscale status --json`" —
-# see aipager.miniapp.tunnel.detect_public_url().
+# tunnel address you run yourself). Empty means "let aipager manage a
+# tunnel" — see aipager.miniapp.tunnel.resolve_public_url() for the
+# full precedence (override → managed tunnel → Tailscale auto-detect).
 MINIAPP_PUBLIC_URL: str = os.environ.get(
     "MINIAPP_PUBLIC_URL", _miniapp_file["public_url"],
 )
 del _miniapp_file
+
+# ---- Managed Mini App tunnel (cloudflared) ------------------------------
+#
+# Operator tunables for aipager.miniapp.tunnel_manager.TunnelManager. The
+# cloudflared version pin and its SHA256 checksums are NOT here — those
+# are maintainer-pinned security constants, not something an operator
+# should be able to override from the environment, and live in
+# aipager.miniapp.cloudflared_fetch instead.
+
+# Lifetime ceiling on failed restart attempts (fetch/spawn/discovery
+# failure OR the child eventually exiting all count) before the
+# supervision loop gives up for the rest of this daemon run. NOT reset
+# on success — see tunnel_manager.py's module docstring for why a
+# lifetime cap was chosen over "N failures in a row".
+TUNNEL_RESTART_MAX_ATTEMPTS: int = int(
+    os.environ.get("TUNNEL_RESTART_MAX_ATTEMPTS", "8")
+)
+
+# Backoff before the Nth restart attempt is `min(BASE * 2**(N-1), MAX)`
+# seconds — see tunnel_manager._backoff_seconds.
+TUNNEL_RESTART_BACKOFF_BASE_SECONDS: float = float(
+    os.environ.get("TUNNEL_RESTART_BACKOFF_BASE_SECONDS", "2.0")
+)
+TUNNEL_RESTART_BACKOFF_MAX_SECONDS: float = float(
+    os.environ.get("TUNNEL_RESTART_BACKOFF_MAX_SECONDS", "60.0")
+)
+
+# How long to wait for cloudflared to print its assigned
+# `https://*.trycloudflare.com` hostname before killing it and counting
+# the attempt as failed. Observed real latency is ~7s against a healthy
+# connection to Cloudflare's edge; 20s is ~3x that, not "generous" —
+# do not lower it.
+TUNNEL_URL_DISCOVERY_TIMEOUT_SECONDS: float = float(
+    os.environ.get("TUNNEL_URL_DISCOVERY_TIMEOUT_SECONDS", "20.0")
+)
+
+# SIGTERM→SIGKILL escalation window when stopping a live cloudflared
+# child, mirroring aipager.dtach.inject._KILL_TIMEOUT's shape.
+TUNNEL_KILL_TIMEOUT_SECONDS: float = float(
+    os.environ.get("TUNNEL_KILL_TIMEOUT_SECONDS", "3.0")
+)
 
 # Unix datagram socket for hook → daemon communication
 SOCKET_PATH: str = "/tmp/aipager.sock"

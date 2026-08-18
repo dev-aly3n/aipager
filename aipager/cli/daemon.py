@@ -217,7 +217,8 @@ def _telegram_preflight() -> str:
 async def _run_daemon(bot_username: str) -> None:
     """Boot the daemon and run until SIGINT/SIGTERM."""
     from aipager.config import (
-        BOT_TOKEN, CHAT_ID, MINIAPP_ENABLED, MINIAPP_PORT, OBSERVER_BOTS,
+        BOT_TOKEN, CHAT_ID, MINIAPP_ENABLED, MINIAPP_PORT, MINIAPP_PUBLIC_URL,
+        OBSERVER_BOTS,
     )
     from aipager.dtach.hook_receiver import HookReceiver
     from aipager.bot.observer import ObserverBroadcaster
@@ -286,10 +287,28 @@ async def _run_daemon(bot_username: str) -> None:
             )
             miniapp_server = None
 
+    # The managed cloudflared tunnel — only ever constructed when the
+    # Mini App is on, nothing has overridden the URL, and the server it
+    # would point at is actually listening. An override or a disabled
+    # Mini App means this object never exists: no spawn, no binary
+    # fetch, no cache write, nothing to race with the probe guard above.
+    # Lazy import matches this file's existing discipline (resolve_public_url,
+    # MiniAppServer just above) so a base install never imports this either.
+    manager = None
+    if MINIAPP_ENABLED and not MINIAPP_PUBLIC_URL and miniapp_server is not None:
+        from aipager.miniapp.tunnel_manager import TunnelManager
+        manager = TunnelManager(MINIAPP_PORT, bot.publish_miniapp_button)
+        await manager.start()
+
     # The permanent launch button, published only once the server it
     # points at is actually listening — a button that opens a dead port
     # is worse than no button. An empty URL clears any button a previous
     # run left behind, so disabling the Mini App really does remove it.
+    # `manager.start()` above is fire-and-forget (never awaits the first
+    # URL), so for a pure managed-tunnel install this first publish call
+    # runs with whatever resolve_public_url() returned earlier — "" —
+    # and the button is simply absent until the tunnel's first URL
+    # republishes it a few seconds later.
     await bot.publish_miniapp_button(
         miniapp_url if miniapp_server is not None else "",
     )
@@ -318,6 +337,11 @@ async def _run_daemon(bot_username: str) -> None:
 
     log.info("Shutting down...")
     registry.save()
+    if manager is not None:
+        # Before miniapp_server.stop(): stop accepting the world's
+        # traffic (terminate the tunnel that publishes it) before
+        # stopping what serves it.
+        await manager.stop()
     if miniapp_server is not None:
         await miniapp_server.stop()
     session_monitor.stop()

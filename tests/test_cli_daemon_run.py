@@ -370,3 +370,138 @@ def test_run_daemon_primes_nothing_when_the_miniapp_is_off(monkeypatch):
     loop.run_until_complete(daemon._run_daemon("bot_username"))
 
     bot.prime_miniapp_url.assert_called_once_with("")
+
+
+# ===== Managed tunnel (TunnelManager) wiring =============================
+
+def _patch_tunnel_manager_class(monkeypatch):
+    """Stub out aipager.miniapp.tunnel_manager.TunnelManager itself (not
+    its internals — that's tests/test_tunnel_manager.py's job). Returns
+    (constructor_calls, manager_double) so a test can assert on the
+    (port, on_url_change) it was built with and on start()/stop() call
+    order relative to the rest of _run_daemon."""
+    manager = MagicMock()
+    manager.start = AsyncMock()
+    manager.stop = AsyncMock()
+    calls = []
+
+    def _fake_ctor(port, on_url_change):
+        calls.append((port, on_url_change))
+        return manager
+
+    monkeypatch.setattr(
+        "aipager.miniapp.tunnel_manager.TunnelManager", _fake_ctor)
+    return calls, manager
+
+
+def test_run_daemon_constructs_and_starts_the_tunnel_manager_with_no_override(
+    monkeypatch,
+):
+    """design.md: TunnelManager is only ever constructed when
+    MINIAPP_ENABLED, MINIAPP_PUBLIC_URL is empty, AND the server actually
+    started."""
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
+    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
+    bot, _hook, _monitor, _registry, _, miniapp = _patch_components(
+        monkeypatch, with_miniapp=True,
+    )
+    # _patch_components(with_miniapp=True) pins a public_url override —
+    # clear it so the managed-tunnel gate actually opens for this test.
+    monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", "")
+    calls, manager = _patch_tunnel_manager_class(monkeypatch)
+
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(daemon._run_daemon("bot_username"))
+    loop.close()
+
+    assert len(calls) == 1
+    port, on_url_change = calls[0]
+    assert port == 8765
+    assert on_url_change == bot.publish_miniapp_button
+    manager.start.assert_awaited_once()
+    manager.stop.assert_awaited_once()
+
+
+def test_run_daemon_never_constructs_a_tunnel_manager_when_url_is_overridden(
+    monkeypatch,
+):
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
+    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
+    # with_miniapp=True already pins MINIAPP_PUBLIC_URL to a non-empty
+    # override — the gate must stay closed.
+    _patch_components(monkeypatch, with_miniapp=True)
+    calls, manager = _patch_tunnel_manager_class(monkeypatch)
+
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(daemon._run_daemon("bot_username"))
+    loop.close()
+
+    assert calls == []
+    manager.start.assert_not_awaited()
+    manager.stop.assert_not_awaited()
+
+
+def test_run_daemon_never_constructs_a_tunnel_manager_when_miniapp_disabled(
+    monkeypatch,
+):
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
+    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
+    _patch_components(monkeypatch, with_miniapp=None)  # MINIAPP_ENABLED=False
+    monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", "")
+    calls, manager = _patch_tunnel_manager_class(monkeypatch)
+
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(daemon._run_daemon("bot_username"))
+    loop.close()
+
+    assert calls == []
+
+
+def test_run_daemon_never_constructs_a_tunnel_manager_when_the_server_failed(
+    monkeypatch,
+):
+    """No override, Mini App enabled, but the server itself never came
+    up (port in use) — no server means nothing for a tunnel to point
+    at, so the manager must not be built either."""
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
+    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
+    _patch_components(monkeypatch, with_miniapp="port_in_use")
+    monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", "")
+    calls, manager = _patch_tunnel_manager_class(monkeypatch)
+
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(daemon._run_daemon("bot_username"))
+    loop.close()
+
+    assert calls == []
+
+
+def test_run_daemon_stops_the_tunnel_manager_before_the_miniapp_server(
+    monkeypatch,
+):
+    """design.md shutdown ordering: stop accepting the world's traffic
+    (the tunnel) before stopping what serves it (the loopback server)."""
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
+    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
+    _bot, _hook, monitor, _registry, _, miniapp = _patch_components(
+        monkeypatch, with_miniapp=True,
+    )
+    monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", "")
+    _calls, manager = _patch_tunnel_manager_class(monkeypatch)
+
+    order = []
+    manager.stop = AsyncMock(side_effect=lambda: order.append("manager.stop"))
+    miniapp.stop = AsyncMock(side_effect=lambda: order.append("miniapp.stop"))
+    monitor.stop.side_effect = lambda: order.append("monitor.stop")
+
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(daemon._run_daemon("bot_username"))
+    loop.close()
+
+    assert order.index("manager.stop") < order.index("miniapp.stop")
+    assert order.index("miniapp.stop") < order.index("monitor.stop")

@@ -25,6 +25,28 @@ log = logging.getLogger(__name__)
 # not hang either of those for long.
 _TAILSCALE_TIMEOUT_SECONDS = 3
 
+# The managed tunnel's current URL, if any. In-memory only — never
+# written to aipager.yaml, config.env, or anywhere under
+# ~/.config/aipager/, so a restarting daemon always re-discovers a
+# fresh hostname rather than advertising a stale one. The ONLY writer
+# is aipager.miniapp.tunnel_manager.TunnelManager; this module just
+# holds the answer, keeping "URL resolution" (here) separate from
+# "process management" (tunnel_manager.py).
+_managed_tunnel_url: str = ""
+
+
+def set_managed_tunnel_url(url: str) -> None:
+    """Set (or clear, with ``""``) the in-memory managed-tunnel URL that
+    :func:`resolve_public_url` consults."""
+    global _managed_tunnel_url
+    _managed_tunnel_url = url
+
+
+def get_managed_tunnel_url() -> str:
+    """Read back whatever :func:`set_managed_tunnel_url` last set —
+    ``""`` if never set, or after a clear."""
+    return _managed_tunnel_url
+
 
 def detect_public_url() -> str | None:
     """Return ``https://<tailnet-dns-name>/`` if Tailscale is installed,
@@ -65,13 +87,19 @@ async def resolve_public_url() -> str:
     ``/app``, the chat menu button and the keyboard button — three
     surfaces that must never disagree about the URL they hand out.
 
-    A configured URL wins; otherwise Tailscale is probed.
-    :func:`detect_public_url` shells out to ``tailscale status --json``
-    **synchronously**, and every caller here is on the daemon's single
-    shared event loop, so the probe runs in an executor. A hung
-    ``tailscale`` binary blocking that loop would stall every scope's
-    message handling, hook processing and animation ticks at once —
-    this is not a theoretical concern, it was a real stage-1 bug.
+    Precedence: an explicit ``MINIAPP_PUBLIC_URL`` override wins
+    outright; otherwise the managed tunnel's current URL (set by
+    :class:`~aipager.miniapp.tunnel_manager.TunnelManager` via
+    :func:`set_managed_tunnel_url`) is used if there is one; otherwise
+    Tailscale is probed as the opt-in fallback for the startup window
+    before the first tunnel URL, and for the (rare) case the tunnel's
+    restart ceiling has been reached.  :func:`detect_public_url` shells
+    out to ``tailscale status --json`` **synchronously**, and every
+    caller here is on the daemon's single shared event loop, so the
+    probe runs in an executor. A hung ``tailscale`` binary blocking that
+    loop would stall every scope's message handling, hook processing and
+    animation ticks at once — this is not a theoretical concern, it was
+    a real stage-1 bug.
 
     Anything that is not an ``https://`` URL is reported as *no URL*:
     Telegram rejects a non-HTTPS Web App outright, so a plain-http value
@@ -82,6 +110,8 @@ async def resolve_public_url() -> str:
 
     if MINIAPP_PUBLIC_URL:
         url = MINIAPP_PUBLIC_URL
+    elif _managed_tunnel_url:
+        url = _managed_tunnel_url
     else:
         url = await asyncio.get_running_loop().run_in_executor(
             None, detect_public_url,
@@ -91,7 +121,10 @@ async def resolve_public_url() -> str:
     return url
 
 
-__all__ = ["detect_public_url", "resolve_public_url"]
+__all__ = [
+    "detect_public_url", "resolve_public_url",
+    "set_managed_tunnel_url", "get_managed_tunnel_url",
+]
 
 
 # Tight on purpose: this runs on the daemon's single shared event loop at
@@ -99,8 +132,27 @@ __all__ = ["detect_public_url", "resolve_public_url"]
 # hook processing or the session monitor coming up.
 PROBE_TIMEOUT_SECONDS = 3.0
 
+# A freshly created quick tunnel is not immediately answerable: Cloudflare's
+# edge returns 530 ("tunnel not ready") for the first several seconds while
+# the hostname propagates. Observed live: cloudflared reported its URL, the
+# probe fired, got 530, cleared the button — and the same URL served 200 a
+# minute later. Because the URL never CHANGED, nothing ever republished, so
+# the tunnel worked perfectly and the button never appeared.
+#
+# So a single probe is the wrong question. Retry across a window that
+# comfortably covers edge propagation before concluding a URL is dead.
+# Sized from MEASUREMENT, not guesswork. Observed live on this machine:
+# cloudflared reported its URL at 20:40:09; the hostname still gave
+# ClientConnectorDNSError at 20:40:21 and was still failing when a 20s
+# window expired at 20:40:41; the very same URL served 200 shortly after.
+# A first guess of 6x4s was therefore too short and produced exactly the
+# bug it was meant to fix — a working tunnel with no button. 15x6s covers
+# ~90s of edge/DNS propagation with headroom.
+PROBE_ATTEMPTS = 15
+PROBE_RETRY_DELAY_SECONDS = 6.0
 
-async def probe_public_url(url: str) -> bool:
+
+async def _probe_once(url: str) -> bool:
     """Does ``url`` actually answer? Never raises.
 
     Exists because the daemon used to publish a Mini App button pointing at
@@ -138,3 +190,31 @@ async def probe_public_url(url: str) -> bool:
         log.warning("Mini App URL %s is unreachable (%s: %s)",
                     url, type(exc).__name__, exc)
         return False
+
+
+async def probe_public_url(url: str) -> bool:
+    """Does ``url`` answer, allowing for a tunnel that is still coming up?
+
+    Retries ``PROBE_ATTEMPTS`` times, ``PROBE_RETRY_DELAY_SECONDS`` apart,
+    returning True on the first success. Never raises.
+
+    The retry is not defensive padding — it is the difference between the
+    feature working and silently not working. A brand-new quick tunnel
+    answers 530 from Cloudflare's edge for the first several seconds. The
+    original single-shot probe fired immediately after cloudflared reported
+    its URL, got that 530, and cleared the button; the very same URL served
+    200 a minute later, but nothing republished because the URL had not
+    changed. Observed live, not hypothetically.
+    """
+    if not url:
+        return False
+    for attempt in range(1, PROBE_ATTEMPTS + 1):
+        if await _probe_once(url):
+            if attempt > 1:
+                log.info("Mini App URL %s answered on attempt %d", url, attempt)
+            return True
+        if attempt < PROBE_ATTEMPTS:
+            await asyncio.sleep(PROBE_RETRY_DELAY_SECONDS)
+    log.warning("Mini App URL %s did not answer after %d attempts",
+                url, PROBE_ATTEMPTS)
+    return False
