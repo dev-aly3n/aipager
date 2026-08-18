@@ -60,6 +60,7 @@ from aipager.bot.transport import (  # noqa: F401
     _TRUNC_SUFFIX,
     _truncate_diff,
     resolve_chat_id,
+    resolve_chat_id_int,
 )
 
 if TYPE_CHECKING:
@@ -854,7 +855,7 @@ class AnimationMixin:
                 sess.last_tool_name = ""
                 # Track the busy message so replies to it route back to this session,
                 # even hours later or after a daemon restart.
-                self.registry.track_message(msg_id, sess.name)
+                self.registry.track_message(msg_id, sess.name, resolve_chat_id_int(sess) or 0)
                 self._start_animation(sess)
                 log.info("[%s] Busy message sent (msg_id=%d, trigger=%s)",
                          sess.label, msg_id, sess.trigger_msg_id)

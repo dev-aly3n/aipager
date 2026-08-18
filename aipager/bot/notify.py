@@ -724,7 +724,7 @@ class NotifyMixin:
                         reply_to_message_id=sess.trigger_msg_id,
                         reply_markup=keyboard,
                     )
-                    self.registry.track_message(msg.message_id, sess.name)
+                    self.registry.track_message(msg.message_id, sess.name, resolve_chat_id_int(sess) or 0)
                     await self._maybe_update_bot_name(sess.name)
                 except Exception:
                     log.warning("Failed to send error notification", exc_info=True)
@@ -938,7 +938,7 @@ class NotifyMixin:
             sess.trigger_msg_id = None  # reply cycle complete
             self.registry.mark_dirty()
             if msg_id:
-                self.registry.track_message(msg_id, sess.name)
+                self.registry.track_message(msg_id, sess.name, resolve_chat_id_int(sess) or 0)
             await self._maybe_update_bot_name(sess.name)
 
             # ── Send full response as .txt attachment for overflow ─────────
@@ -980,11 +980,23 @@ class NotifyMixin:
 
             # Flush next queued message (one at a time, rest flush on next IDLE)
             if sess.pending_queue:
-                queued_text, queued_trigger, _queued_at = sess.pending_queue.pop(0)
+                queued_text, queued_trigger, _queued_at, queued_reply_context = (
+                    sess.pending_queue.pop(0)
+                )
                 sess.trigger_msg_id = queued_trigger
                 sess.last_prompt = queued_text
+                if queued_trigger is not None:
+                    # Queued messages are never tracked at queue time
+                    # (Part 1 only covers the immediate-inject branches)
+                    # — track now so a reply to a queued-then-drained
+                    # message is routable via levels 1/2 right away,
+                    # not only once the next bot message re-tracks the
+                    # session by coincidence (design.md Part 4).
+                    self.registry.track_message(
+                        queued_trigger, sess.name, resolve_chat_id_int(sess) or 0,
+                    )
                 self.registry.mark_dirty()
-                ok = await self._inject_prompt(sess, queued_text)
+                ok = await self._inject_prompt(sess, queued_text, queued_reply_context)
                 if ok:
                     self.registry.transition(sess.name, Status.BUSY)
                     await self._send_busy_and_animate(sess)
@@ -1096,7 +1108,7 @@ class NotifyMixin:
                     resolve_chat_id(sess), text, reply_markup=keyboard, parse_mode="HTML",
                     reply_to_message_id=sess.trigger_msg_id,
                 )
-                self.registry.track_message(msg.message_id, sess.name)
+                self.registry.track_message(msg.message_id, sess.name, resolve_chat_id_int(sess) or 0)
                 await self._maybe_update_bot_name(sess.name)
 
         elif sess.status == Status.BUSY:
