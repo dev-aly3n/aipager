@@ -25,6 +25,28 @@ log = logging.getLogger(__name__)
 # not hang either of those for long.
 _TAILSCALE_TIMEOUT_SECONDS = 3
 
+# The managed tunnel's current URL, if any. In-memory only — never
+# written to aipager.yaml, config.env, or anywhere under
+# ~/.config/aipager/, so a restarting daemon always re-discovers a
+# fresh hostname rather than advertising a stale one. The ONLY writer
+# is aipager.miniapp.tunnel_manager.TunnelManager; this module just
+# holds the answer, keeping "URL resolution" (here) separate from
+# "process management" (tunnel_manager.py).
+_managed_tunnel_url: str = ""
+
+
+def set_managed_tunnel_url(url: str) -> None:
+    """Set (or clear, with ``""``) the in-memory managed-tunnel URL that
+    :func:`resolve_public_url` consults."""
+    global _managed_tunnel_url
+    _managed_tunnel_url = url
+
+
+def get_managed_tunnel_url() -> str:
+    """Read back whatever :func:`set_managed_tunnel_url` last set —
+    ``""`` if never set, or after a clear."""
+    return _managed_tunnel_url
+
 
 def detect_public_url() -> str | None:
     """Return ``https://<tailnet-dns-name>/`` if Tailscale is installed,
@@ -65,13 +87,19 @@ async def resolve_public_url() -> str:
     ``/app``, the chat menu button and the keyboard button — three
     surfaces that must never disagree about the URL they hand out.
 
-    A configured URL wins; otherwise Tailscale is probed.
-    :func:`detect_public_url` shells out to ``tailscale status --json``
-    **synchronously**, and every caller here is on the daemon's single
-    shared event loop, so the probe runs in an executor. A hung
-    ``tailscale`` binary blocking that loop would stall every scope's
-    message handling, hook processing and animation ticks at once —
-    this is not a theoretical concern, it was a real stage-1 bug.
+    Precedence: an explicit ``MINIAPP_PUBLIC_URL`` override wins
+    outright; otherwise the managed tunnel's current URL (set by
+    :class:`~aipager.miniapp.tunnel_manager.TunnelManager` via
+    :func:`set_managed_tunnel_url`) is used if there is one; otherwise
+    Tailscale is probed as the opt-in fallback for the startup window
+    before the first tunnel URL, and for the (rare) case the tunnel's
+    restart ceiling has been reached.  :func:`detect_public_url` shells
+    out to ``tailscale status --json`` **synchronously**, and every
+    caller here is on the daemon's single shared event loop, so the
+    probe runs in an executor. A hung ``tailscale`` binary blocking that
+    loop would stall every scope's message handling, hook processing and
+    animation ticks at once — this is not a theoretical concern, it was
+    a real stage-1 bug.
 
     Anything that is not an ``https://`` URL is reported as *no URL*:
     Telegram rejects a non-HTTPS Web App outright, so a plain-http value
@@ -82,6 +110,8 @@ async def resolve_public_url() -> str:
 
     if MINIAPP_PUBLIC_URL:
         url = MINIAPP_PUBLIC_URL
+    elif _managed_tunnel_url:
+        url = _managed_tunnel_url
     else:
         url = await asyncio.get_running_loop().run_in_executor(
             None, detect_public_url,
@@ -91,7 +121,10 @@ async def resolve_public_url() -> str:
     return url
 
 
-__all__ = ["detect_public_url", "resolve_public_url"]
+__all__ = [
+    "detect_public_url", "resolve_public_url",
+    "set_managed_tunnel_url", "get_managed_tunnel_url",
+]
 
 
 # Tight on purpose: this runs on the daemon's single shared event loop at
