@@ -21,7 +21,11 @@ classifiers = [
     "Topic :: Software Development :: User Interfaces",
 ]
 dependencies = [
-    "python-telegram-bot>=20",
+    # [rate-limiter] pulls aiolimiter, which backs AIORateLimiter. Not
+    # optional in practice: without it every send hits Telegram unthrottled
+    # and a flood-control penalty surfaces as an unhandled RetryAfter at each
+    # of ~64 call sites. See bot/lifecycle.py's rate_limiter() call.
+    "python-telegram-bot[rate-limiter]>=20",
     "httpx>=0.24",
     "dtach-bin>=0.9.1",
     "rich>=14.0,<16",

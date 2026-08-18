@@ -120,6 +120,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than the one picked with nothing on screen to say so.
 
 ### Fixed
+- **Telegram flood control no longer mutes the bot for hours.** Outbound
+  messages now go through a rate limiter that honours Telegram's own
+  "retry after N seconds" instead of hammering the API and failing. Before
+  this, one runaway animation earned a 9.6-hour penalty and every later send
+  raised an unhandled error — prompts still reached Claude, but no reply
+  could be sent back, and the log filled with a traceback per blocked send.
+  Transient network errors (Telegram 5xx) are likewise logged as one line
+  rather than a stack trace; anything unexpected still gets its full
+  traceback.
 - **The Mini App no longer offers you a button it hasn't checked.** If the
   public URL doesn't answer — an ephemeral tunnel that died, a stale address in
   config — aipager now publishes no menu button at all instead of one that
