@@ -141,8 +141,15 @@ PROBE_TIMEOUT_SECONDS = 3.0
 #
 # So a single probe is the wrong question. Retry across a window that
 # comfortably covers edge propagation before concluding a URL is dead.
-PROBE_ATTEMPTS = 6
-PROBE_RETRY_DELAY_SECONDS = 4.0
+# Sized from MEASUREMENT, not guesswork. Observed live on this machine:
+# cloudflared reported its URL at 20:40:09; the hostname still gave
+# ClientConnectorDNSError at 20:40:21 and was still failing when a 20s
+# window expired at 20:40:41; the very same URL served 200 shortly after.
+# A first guess of 6x4s was therefore too short and produced exactly the
+# bug it was meant to fix — a working tunnel with no button. 15x6s covers
+# ~90s of edge/DNS propagation with headroom.
+PROBE_ATTEMPTS = 15
+PROBE_RETRY_DELAY_SECONDS = 6.0
 
 
 async def _probe_once(url: str) -> bool:
