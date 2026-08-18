@@ -39,7 +39,9 @@ def _mock_send_rich_message(monkeypatch):
 
 
 def _isolate_snapshot(monkeypatch, tmp_path):
+    # Both paths — see test_bot_handlers_reply_context.py for why.
     monkeypatch.setattr(ps, "snapshot_path", lambda n: tmp_path / f"{n}.json")
+    monkeypatch.setattr(ps, "reply_context_path", lambda n: tmp_path / f"{n}.txt")
 
 
 def _drive_idle_drain(bot, sess, run_async, monkeypatch):
@@ -88,12 +90,15 @@ def test_queued_non_reply_prompt_drains_with_empty_reply_context(
     assert snap["reply_context"] == ""
 
 
-def test_queued_trigger_gets_tracked_at_drain_time(mk_bot, run_async, monkeypatch):
+def test_queued_trigger_gets_tracked_at_drain_time(
+    mk_bot, run_async, monkeypatch, tmp_path,
+):
     """Part 4: queued messages are never tracked at queue time — the
     drain must track the queued trigger so a reply to it is routable
     immediately, not only once the next bot message re-tracks by
     coincidence."""
     bot = mk_bot()
+    _isolate_snapshot(monkeypatch, tmp_path)
     sess = _sess(scope_chat_id=4242)
     bot.registry._sessions[sess.name] = sess
     sess.queue_prompt("queued text", 777)
@@ -105,12 +110,13 @@ def test_queued_trigger_gets_tracked_at_drain_time(mk_bot, run_async, monkeypatc
 
 
 def test_queued_trigger_none_does_not_crash_and_is_not_tracked(
-    mk_bot, run_async, monkeypatch,
+    mk_bot, run_async, monkeypatch, tmp_path,
 ):
     """msg_id is None for a queued prompt with no originating Telegram
     message (the Mini App's Compact route) — the drain must skip
     track_message rather than pass None as a msg_id."""
     bot = mk_bot()
+    _isolate_snapshot(monkeypatch, tmp_path)
     sess = _sess(scope_chat_id=4242)
     bot.registry._sessions[sess.name] = sess
     sess.queue_prompt("/compact", None)

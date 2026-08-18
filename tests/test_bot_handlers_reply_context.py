@@ -23,7 +23,13 @@ def _ctx():
 
 
 def _isolate_snapshot(monkeypatch, tmp_path):
+    # BOTH paths, always. Patching only snapshot_path let the older-message
+    # branch (allow_file=True) call the real write_reply_context_file and
+    # drop /tmp/claude-reply-claude-jim.txt on the actual filesystem — on a
+    # machine running a live daemon, where a colliding session name would
+    # clobber that session's real file.
     monkeypatch.setattr(ps, "snapshot_path", lambda n: tmp_path / f"{n}.json")
+    monkeypatch.setattr(ps, "reply_context_path", lambda n: tmp_path / f"{n}.txt")
 
 
 def _wire_common(monkeypatch, bot):

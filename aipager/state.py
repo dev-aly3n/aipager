@@ -964,7 +964,7 @@ class SessionRegistry:
             if sess.scope_chat_id == 0 and _default is not None:
                 sess.scope_chat_id, sess.scope_kind = _default
                 backfilled = True
-            # pending_queue: accept old 2-tuples and new 3-tuples
+            # pending_queue: accept old 2-tuples, 3-tuples, and new 4-tuples
             # (text, msg_id, queued_at). Drop entries older than the
             # TTL so a daemon that was down for days doesn't flush
             # stale prompts the moment a session goes IDLE.
