@@ -19,6 +19,7 @@ from telegram import (
     BotCommandScopeChat,
 )
 from telegram.ext import (
+    AIORateLimiter,
     ApplicationBuilder,
     CallbackQueryHandler,
     CommandHandler,
@@ -136,7 +137,42 @@ class LifecycleMixin:
                 list(new_team.rules.deny_tools),
             )
 
-    async def start(self) -> None:
+    async def _on_telegram_error(self, update: object, context) -> None:
+        """Log Telegram-side failures at one line, never as a traceback.
+
+        Two failure modes have actually cost this daemon uptime:
+
+        * ``RetryAfter`` — flood control. With the rate limiter above this
+          should now be absorbed before it ever reaches here; if one still
+          arrives, say so in one line rather than dumping a stack per
+          blocked send (that noise is itself a load on the single event
+          loop shared with polling and the session monitor).
+        * ``NetworkError`` — transient Telegram-side 5xx. A ``Bad Gateway``
+          took the daemon down overnight with nothing to restart it. These
+          are expected weather, not bugs.
+
+        Anything else keeps its traceback: an unexpected error should stay
+        loud.
+        """
+        from telegram.error import NetworkError, RetryAfter
+
+        err = context.error
+        if isinstance(err, RetryAfter):
+            log.warning("Telegram flood control — retry in %ss", err.retry_after)
+        elif isinstance(err, NetworkError):
+            log.warning("Telegram network error (transient): %s", err)
+        else:
+            log.error("Unhandled Telegram error", exc_info=err)
+
+    def _make_builder(self):
+        """Build and configure the PTB ApplicationBuilder.
+
+        Split out of :meth:`start` purely so the configuration is
+        assertable: a test that constructs its own ApplicationBuilder
+        proves the library works, not that THIS daemon is configured —
+        exactly the shape that let a missing rate limiter pass a test
+        named after it.
+        """
         builder = ApplicationBuilder().token(BOT_TOKEN)
 
         # Long-poll config: timeout=30 means Telegram holds the connection
@@ -153,7 +189,25 @@ class LifecycleMixin:
             .connect_timeout(30)
         )
 
+        # Throttle every outbound call and honour Telegram's own
+        # RetryAfter, in the request layer rather than at ~64 individual
+        # send/edit sites.
+        #
+        # Not theoretical: a runaway animation edited one message once a
+        # second for hours, Telegram imposed flood control with
+        # retry_after=34712 (9.6 HOURS), and because nothing honoured it,
+        # every subsequent send raised telegram.error.RetryAfter as an
+        # unhandled traceback. The bot went mute for most of a day —
+        # prompts still reached Claude, but no reply could ever be sent
+        # back. AIORateLimiter queues and retries after the stated
+        # interval instead of hammering and failing.
+        return builder.rate_limiter(AIORateLimiter())
+
+    async def start(self) -> None:
+        builder = self._make_builder()
+
         self._app = builder.build()
+        self._app.add_error_handler(self._on_telegram_error)
 
         # Register handlers
         self._app.add_handler(CallbackQueryHandler(self._handle_callback))
