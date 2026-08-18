@@ -28,6 +28,23 @@ def _menu_calls(bot):
     return bot._app.bot.set_chat_menu_button.await_args_list
 
 
+@pytest.fixture(autouse=True)
+def _reachable_url(monkeypatch):
+    """publish_miniapp_button now probes the URL before advertising it, so a
+    dead URL publishes no button at all. These tests are about *which chats
+    get a button and which object is sent*, not about reachability — the
+    URLs they pass are deliberately fake and would never resolve. Treat
+    them as reachable so each test still exercises what its name says.
+
+    Autouse so a test added later cannot silently start asserting on a
+    no-button-because-unreachable result and think it proved something about
+    scope filtering. The reachability behaviour itself is pinned separately
+    in tests/test_miniapp_hardening.py.
+    """
+    monkeypatch.setattr("aipager.miniapp.tunnel.probe_public_url",
+                        AsyncMock(return_value=True))
+
+
 @pytest.fixture
 def bot(mk_bot):
     b = mk_bot()

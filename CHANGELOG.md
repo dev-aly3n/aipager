@@ -104,6 +104,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than the one picked with nothing on screen to say so.
 
 ### Fixed
+- **The Mini App no longer offers you a button it hasn't checked.** If the
+  public URL doesn't answer — an ephemeral tunnel that died, a stale address in
+  config — aipager now publishes no menu button at all instead of one that
+  spins forever when you tap it. An absent button is honest; a dead one looks
+  identical to a working one.
+- **Hardened the Mini App's public surface.** The auth gate now fails closed on
+  any unexpected error: a request whose `hash` contained a non-ASCII character
+  used to raise out of the signature comparison and return a 500 with a
+  traceback, from a caller who had not authenticated at all. Rejection logging
+  is now budgeted so a flood of bad requests can't amplify into log writes on
+  the event loop that also runs Telegram polling — every request is still
+  rejected, only the logging is capped. And the diff route, which can spawn
+  over a hundred `git` processes per call, now serialises with a bounded wait:
+  two people opening diffs at once still both get results, while a caller
+  looping it is refused.
 - **A "Compacting…" card can no longer spin forever, or swallow every message
   you send afterwards.** Tapping Compact on a session with nothing to compact
   left the card spinning indefinitely — and because that card held the
