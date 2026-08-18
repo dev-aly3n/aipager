@@ -35,6 +35,8 @@ from aipager.bot.rich_message import (
 
 from aipager import preferences
 from aipager.config import (
+    COMPACT_CARD_TIMEOUT_SECONDS,
+    COMPACT_DONE_PAUSE_SECONDS,
     STALE_BUSY_TIMEOUT,
     STREAM_EDIT_INTERVAL,
 )
@@ -382,9 +384,20 @@ class NotifyMixin:
         if event == "compacting":
             # Context compaction started — show dot animation
             self._stop_animation(sess)
-            if sess.busy_msg_id and sess.busy_msg_id > 0:
+            # Reuse-vs-send-new is unchanged from today; only the stack
+            # bookkeeping (push_compacting, below) is new. The freshly-sent
+            # branch calls push_compacting directly with the new message's
+            # id rather than going through the busy_msg_id setter — going
+            # through the setter on an empty stack would push a phantom
+            # kind="busy" entry underneath the compacting one, for a busy
+            # card that never actually existed (design.md Decision 1's
+            # "no phantom entries" rule).
+            existing_msg_id = sess.busy_msg_id
+            pushed_msg_id: int | None = None
+            if existing_msg_id and existing_msg_id > 0:
                 text = f"🔄 <b>{html_mod.escape(label)}</b> · Compacting"
-                await self._edit_busy_raw(sess.busy_msg_id, text, chat_id=resolve_chat_id(sess))
+                await self._edit_busy_raw(existing_msg_id, text, chat_id=resolve_chat_id(sess))
+                pushed_msg_id = existing_msg_id
             else:
                 # No busy message — send a new one
                 try:
@@ -393,9 +406,13 @@ class NotifyMixin:
                         resolve_chat_id(sess), text, parse_mode="HTML",
                         reply_to_message_id=sess.trigger_msg_id,
                     )
-                    sess.busy_msg_id = msg.message_id
+                    pushed_msg_id = msg.message_id
                 except Exception:
                     log.warning("Failed to send compact message", exc_info=True)
+            if pushed_msg_id is not None:
+                sess.push_compacting(
+                    pushed_msg_id, time.monotonic(), COMPACT_CARD_TIMEOUT_SECONDS,
+                )
             # Start dot animation
             sess.animate_task = asyncio.create_task(
                 self._animate_compact(sess))
@@ -457,16 +474,39 @@ class NotifyMixin:
             return
 
         if event == "compact_done":
-            # Compaction finished — show delta, then resume busy animation
+            # Compaction finished — show delta, then resume busy animation.
+            # pop_compacting() reveals whatever was live underneath the
+            # compaction (a no-op if the top isn't kind="compacting" — e.g.
+            # this event firing directly on a plain busy card, or a
+            # duplicate/late fire after SessionEnd already cleared
+            # everything). When nothing was live underneath (compacting
+            # itself sent the only message — Decision 4's "nothing to
+            # restore" case), fall back to the just-popped entry's own
+            # msg_id so this still edits that ONE physical message rather
+            # than sending a second — the "edits exactly one existing
+            # message" invariant holds regardless of which branch of the
+            # "compacting" event originally produced it.
             before_pct = context.get("before_pct", 0)
             after_pct = context.get("after_pct", 0)
             self._stop_animation(sess)
+            popped = sess.pop_compacting()
+            target_msg_id = sess.busy_msg_id
+            if not target_msg_id and popped is not None:
+                target_msg_id = popped.msg_id
             text = (f"📦 <b>{html_mod.escape(label)}</b> · "
                     f"Compacted: {before_pct}% → {after_pct}%")
-            if sess.busy_msg_id and sess.busy_msg_id > 0:
-                result = await self._edit_busy_raw(sess.busy_msg_id, text, chat_id=resolve_chat_id(sess))
+            if target_msg_id and target_msg_id > 0:
+                result = await self._edit_busy_raw(target_msg_id, text, chat_id=resolve_chat_id(sess))
                 if result is None:
                     sess.busy_msg_id = None
+                elif sess.busy_msg_id != target_msg_id:
+                    # Nothing was tracking this message after the pop above
+                    # (the "nothing to restore" case) — re-establish
+                    # tracking on the now-resolved message so later lookups
+                    # (merged-reply routing, the next turn's stale-reset)
+                    # still find it, matching pre-stack behaviour where
+                    # busy_msg_id stayed set after compact_done resolved it.
+                    sess.busy_msg_id = target_msg_id
             else:
                 try:
                     msg = await bot.send_message(
@@ -479,9 +519,43 @@ class NotifyMixin:
             if self.observers:
                 asyncio.create_task(self.observers.broadcast(text))
             # Brief pause so user can read the delta, then resume busy animation
-            await asyncio.sleep(2.0)
+            await asyncio.sleep(COMPACT_DONE_PAUSE_SECONDS)
             sess.last_token_pct = after_pct
             self._start_animation(sess)
+            return
+
+        if event == "compact_timeout":
+            # The compacting card's deadline (COMPACT_CARD_TIMEOUT_SECONDS)
+            # fired before any confirming hook arrived (design.md Decision
+            # 3) — the session_monitor sweeper's synthetic event, fired
+            # regardless of sess.status (unlike every other watchdog in
+            # this file), so a compacting card desynced from status (the
+            # reported bug: observed at status=idle) is still reclaimed.
+            #
+            # This text must never claim success — unlike compact_done
+            # above, a deadline firing means we have NO positive evidence
+            # either way, only the absence of one.
+            elapsed = context.get("elapsed_seconds", 0.0)
+            minutes = max(1, int(elapsed / 60))
+            target_msg_id = sess.busy_msg_id
+            text = (f"⏱️ <b>{html_mod.escape(label)}</b> · Compaction didn't "
+                    f"confirm completion after {minutes} min")
+            if target_msg_id and target_msg_id > 0:
+                result = await self._edit_busy_raw(target_msg_id, text, chat_id=resolve_chat_id(sess))
+                if result is None:
+                    sess.busy_msg_id = None
+            sess.pop_compacting()
+            if sess.status == Status.BUSY and sess.busy_msg_id:
+                # A real turn's busy card was live underneath — resume it
+                # exactly as compact_done already does today.
+                self._start_animation(sess)
+            else:
+                # Nothing legitimate left to resume (the observed bug's
+                # status=idle case, or any other non-BUSY status) — the
+                # edited text above is the final state of this message.
+                sess.busy_msg_id = None
+            if self.observers:
+                asyncio.create_task(self.observers.broadcast(text))
             return
 
         if event == "session_end":

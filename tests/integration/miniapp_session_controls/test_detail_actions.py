@@ -43,7 +43,11 @@ async def _actions_for(client, label, user_id):
 
 def test_busy_status_yields_only_stop_key(server, run_async):
     async def _run():
-        _mk_session(server, "dev", status=Status.BUSY)
+        sess = _mk_session(server, "dev", status=Status.BUSY)
+        # Nonzero so `compact` isn't gated off by the live-message-stack
+        # feature's context_pct <= 0 rule (design.md Decision 6) — that
+        # rule has its own dedicated test elsewhere in this file.
+        sess.last_token_pct = 40
         client = await _client_for(server)
         try:
             status, actions = await _actions_for(client, "dev", ADMIN_ID)
@@ -101,7 +105,11 @@ def test_busy_status_has_no_kill_resume_or_delete_key(server, run_async):
 
 def test_idle_status_yields_only_kill_key(server, run_async):
     async def _run():
-        _mk_session(server, "dev", status=Status.IDLE)
+        sess = _mk_session(server, "dev", status=Status.IDLE)
+        # Nonzero so `compact` isn't gated off by the live-message-stack
+        # feature's context_pct <= 0 rule (design.md Decision 6) — that
+        # rule has its own dedicated test elsewhere in this file.
+        sess.last_token_pct = 40
         client = await _client_for(server)
         try:
             status, actions = await _actions_for(client, "dev", ADMIN_ID)

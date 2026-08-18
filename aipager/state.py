@@ -102,6 +102,33 @@ PREFERENCE_OVERRIDE_FIELDS: dict[str, str] = {
 
 
 @dataclass
+class LiveMessageEntry:
+    """One live Telegram message "layer" on a session's stack.
+
+    Private to state.py — external code (including tests) interacts with
+    the stack only via ``TrackedSession.busy_msg_id`` (the compatibility
+    property) and the three public methods ``push_compacting``,
+    ``pop_compacting``, ``stack_top_kind``. See design.md's "Live Message
+    Stack" Decisions 1-4 for the full contract.
+
+    ``kind`` is one of ``{"busy", "compacting"}`` — never a third
+    "waiting" kind (design.md Decision 2: permission prompts already have
+    their own, working, status-gated watchdog and never push a stack
+    entry at all).
+
+    ``deadline`` is precomputed at push time (``created_at + N``, or
+    ``None`` for no forced expiry) so the sweep in
+    ``session_monitor.expired_compacting_sessions`` is a single
+    comparison, no per-tick arithmetic.
+    """
+
+    msg_id: int
+    kind: str
+    created_at: float
+    deadline: float | None = None
+
+
+@dataclass
 class TrackedSession:
     name: str           # session name, e.g. "claude-dev"
     label: str          # short label, e.g. "dev"
@@ -110,8 +137,19 @@ class TrackedSession:
     summary: str = ""                # last pane summary (for idle notifications)
     last_idle_at: float = 0.0        # monotonic timestamp of last IDLE transition
     transcript_path: str = ""        # path to Claude Code JSONL transcript
-    # Live busy-status tracking
-    busy_msg_id: int | None = None   # Telegram message_id of the "Working…" msg
+    # Live busy-status tracking — a stack of live message "layers" (busy,
+    # compacting), so a compaction card that never receives its terminal
+    # hook signal can be reclaimed without losing what was live underneath
+    # (design.md "Live Message Stack"). Transient — never in
+    # _PERSIST_FIELDS; see load()'s post-construction assignment for how a
+    # persisted busy_msg_id repopulates this on restart.
+    # `busy_msg_id` (defined as a @property further below, after every
+    # dataclass field — a property cannot share a name with a dataclass
+    # field) is a compatibility view over the top of this stack: existing
+    # readers, the CLI, the persisted state-file format, and 179 test
+    # assertions all keep working unchanged. See Decision 1 for the full
+    # getter/setter contract.
+    _live_stack: list["LiveMessageEntry"] = field(default_factory=list, repr=False)
     last_tool_edit_at: float = 0.0   # monotonic timestamp of last busy-msg edit
     last_tool_name: str = ""         # last tool name displayed in busy message
     # Animation state
@@ -300,6 +338,95 @@ class TrackedSession:
     stream_hook_live: bool = False
     stream_dirty: bool = False
     stream_last_rendered: str = ""
+
+    # -- Live message stack (design.md "Live Message Stack") ---------------
+
+    @property
+    def busy_msg_id(self) -> int | None:
+        """Compatibility view over the top of ``_live_stack``.
+
+        Returns the top entry's ``msg_id``, or ``None`` when the stack is
+        empty. See the setter below and Decision 1's four-value ×
+        {empty, non-empty} table for the full contract.
+        """
+        return self._live_stack[-1].msg_id if self._live_stack else None
+
+    @busy_msg_id.setter
+    def busy_msg_id(self, value: int | None) -> None:
+        """Round-trips ``None``, ``0``, ``-1``, or a positive int.
+
+        - ``None`` clears the ENTIRE stack — every production call site
+          that assigns ``None`` means "this physical message is gone for
+          good", never "pop one layer and keep tracking another" (Decision
+          1). The one place a true pop-one-keep-the-other operation is
+          needed — resuming busy after compacting resolves — uses the
+          explicit ``pop_compacting()`` method instead, never this setter.
+        - Any other value pushes a fresh ``kind="busy"`` entry when the
+          stack is empty, or mutates the top entry's ``msg_id`` in place
+          when the stack is non-empty (covers the ``-1``-claim → real-id
+          resolution sequence and the ``RichMessageGone`` → ``0``
+          sequence, both of which mutate the same logical slot, never
+          create a new one).
+        """
+        if value is None:
+            self._live_stack.clear()
+            return
+        if self._live_stack:
+            self._live_stack[-1].msg_id = value
+        else:
+            self._live_stack.append(
+                LiveMessageEntry(
+                    msg_id=value, kind="busy",
+                    created_at=time.monotonic(), deadline=None,
+                )
+            )
+
+    def push_compacting(
+        self, msg_id: int, now: float, deadline_seconds: float | None,
+    ) -> None:
+        """Record that a compaction is now in progress at ``msg_id``.
+
+        The caller supplies whichever msg_id is already correct — an
+        existing live message's id, or a freshly sent one; this method
+        only records it, it never decides whether to reuse or send
+        (that decision stays exactly where it lives today, in
+        ``notify.py``'s "compacting" branch). After this call,
+        ``self.busy_msg_id`` returns ``msg_id``.
+
+        ``deadline_seconds=None`` means no forced expiry; a numeric value
+        means ``session_monitor.expired_compacting_sessions`` will include
+        this session once ``now`` advances past
+        ``now_at_push + deadline_seconds``.
+        """
+        deadline = now + deadline_seconds if deadline_seconds is not None else None
+        self._live_stack.append(
+            LiveMessageEntry(
+                msg_id=msg_id, kind="compacting",
+                created_at=now, deadline=deadline,
+            )
+        )
+
+    def pop_compacting(self) -> LiveMessageEntry | None:
+        """Resolve an in-progress compaction.
+
+        Removes the top entry **iff** its ``kind == "compacting"`` and
+        returns it; no-op (returns ``None``) otherwise, including on an
+        empty stack. This makes "PostCompact after SessionEnd already
+        cleared everything" (research.md's documented race) trivially
+        idempotent — calling this twice in a row is always safe.
+
+        After a successful pop, if a message was live *before* the
+        ``push_compacting`` call that started this compaction,
+        ``self.busy_msg_id`` reverts to returning that message's id
+        again; otherwise it returns ``None``.
+        """
+        if self._live_stack and self._live_stack[-1].kind == "compacting":
+            return self._live_stack.pop()
+        return None
+
+    def stack_top_kind(self) -> str | None:
+        """``"busy"``, ``"compacting"``, or ``None`` if nothing is live."""
+        return self._live_stack[-1].kind if self._live_stack else None
 
     def queue_prompt(self, text: str, msg_id: int | None,
                      cap: int = QUEUE_CAP) -> bool:
@@ -729,7 +856,6 @@ class SessionRegistry:
                 trigger_msg_id=sd.get("trigger_msg_id"),
                 last_prompt=sd.get("last_prompt", ""),
                 last_idle_at=0.0,
-                busy_msg_id=sd.get("busy_msg_id"),
                 created_by_user_id=sd.get("created_by_user_id"),
                 last_driver_user_id=sd.get("last_driver_user_id"),
                 claude_session_id=sd.get("claude_session_id", ""),
@@ -752,6 +878,15 @@ class SessionRegistry:
                 override_answer_length=sd.get("override_answer_length"),
                 override_language_level=sd.get("override_language_level"),
             )
+            # busy_msg_id is a @property (Decision 1) and cannot also be a
+            # dataclass __init__ parameter name — set it post-construction
+            # via the setter, exactly as every test fixture already does
+            # (`s.busy_msg_id = busy_msg_id` right after `TrackedSession(...)`,
+            # the `_sess()` pattern in test_bot_notify.py). A persisted
+            # positive int pushes a single kind="busy" entry; `None` leaves
+            # the stack empty — either way byte-for-byte the same runtime
+            # state as before this property existed.
+            sess.busy_msg_id = sd.get("busy_msg_id")
             # Multi-scope backfill: stamp legacy sessions (scope_chat_id == 0)
             # with the single configured chat so notify routing is explicit.
             if sess.scope_chat_id == 0 and _default is not None:

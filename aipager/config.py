@@ -280,6 +280,58 @@ COMPACT_INFLIGHT_MAX_SECONDS: float = float(
     os.environ.get("COMPACT_INFLIGHT_MAX_SECONDS", "1800")
 )
 
+# How long a "Compacting…" card may show before the live-message-stack
+# sweeper (session_monitor.expired_compacting_sessions) force-resolves it
+# with an honest, non-claiming "didn't confirm completion" edit instead of
+# spinning forever. Deliberately a SEPARATE, much shorter knob from
+# COMPACT_INFLIGHT_MAX_SECONDS above: that one suppresses a warning and
+# should stay generous (a real compaction of a large transcript is slow);
+# this one governs how long a user stares at a card that may be claiming
+# nothing is happening, which should be short-lived. An early timeout is
+# self-correcting — if a genuine compaction's confirming hook arrives
+# after this fires, the same message is still corrected to "Compacted:
+# X% → Y%" (pop_compacting() on an already-popped stack is a no-op, not
+# an error) — so a too-short value costs a briefly-wrong card, while a
+# too-long value costs long-lived silence on a wedged one. Ops can raise
+# this if transcripts routinely compact slower than 3 minutes.
+COMPACT_CARD_TIMEOUT_SECONDS: float = float(
+    os.environ.get("COMPACT_CARD_TIMEOUT_SECONDS", "180")
+)
+
+# Hard iteration ceiling on the "Compacting…" dot animation, independent
+# of any clock. The animation sleeps 1s per tick, so this is ~4x the
+# default card timeout above — generous enough that the sweeper always
+# resolves the card first in production, while still guaranteeing the
+# loop terminates on its own.
+#
+# This exists because much of the test suite patches `asyncio.sleep` via
+# the SHARED asyncio module object (e.g. `setattr("aipager.bot.notify.
+# asyncio.sleep", ...)` — `module.asyncio` IS `asyncio`), which silently
+# removes the pacing from EVERY module's sleeps, not just the target's.
+# A leaked animation task then spins as fast as the loop allows, growing
+# an AsyncMock's `mock_calls` until the machine OOMs. A tick ceiling is
+# the only bound that survives a neutralised clock.
+COMPACT_ANIMATE_MAX_TICKS: int = int(
+    os.environ.get("COMPACT_ANIMATE_MAX_TICKS", "720")
+)
+
+# Seconds between "Compacting…" dot frames. Named (not a bare literal)
+# for the same reason as COMPACT_DONE_PAUSE_SECONDS: a test that needs
+# this loop to run fast can patch THIS, instead of reaching for
+# asyncio.sleep and unpacing every other module in the process.
+COMPACT_ANIMATE_INTERVAL_SECONDS: float = float(
+    os.environ.get("COMPACT_ANIMATE_INTERVAL_SECONDS", "1")
+)
+
+# Pause after a "Compacted: X% → Y%" edit so the user can read the delta
+# before the busy animation resumes over it. A named constant rather than
+# a bare literal specifically so tests can shorten it by patching THIS
+# attribute — patching `asyncio.sleep` instead reaches the shared asyncio
+# module and silently unpaces every other module's loops too.
+COMPACT_DONE_PAUSE_SECONDS: float = float(
+    os.environ.get("COMPACT_DONE_PAUSE_SECONDS", "2")
+)
+
 # A session's statusLine file being modified within this window counts
 # as a liveness heartbeat and suppresses the stale-busy warning. The
 # Claude Code statusLine hook fires on many small state changes during

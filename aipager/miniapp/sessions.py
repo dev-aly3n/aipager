@@ -44,6 +44,14 @@ QUEUE_EMPTY_REASON = "Nothing queued to clear."
 QUEUE_FULL_REASON = (
     f"Queue is full ({QUEUE_CAP} pending) — clear it or wait for it to drain."
 )
+# design.md Decision 6 — the Mini App's own unavailable-with-reason
+# mechanism, reused verbatim rather than adding new client code. Greys
+# out Compact when there is self-evidently nothing to compact, closing
+# the most visible trigger point of the reported live-message-stack bug
+# (a human tapping a button whose tap does nothing). A UI affordance
+# only — the server-side POST route is unaffected (session_ops.py's
+# `_compact_session_core` still accepts it regardless of context_pct).
+NO_CONTEXT_REASON = "Nothing to compact — context is already empty."
 
 
 def _derive_status(sess: "TrackedSession") -> tuple[str, str | None, str | None]:
@@ -170,6 +178,7 @@ _STATUS_ACTION_KEYS: dict[str, frozenset[str]] = {
 def session_actions(
     status: str, *, resumable: bool, can_act: bool,
     is_admin: bool = False, skip_perms: bool = False, queue_depth: int = 0,
+    context_pct: int = 0,
 ) -> dict[str, dict[str, Any]]:
     """The status→button matrix (design.md), computed server-side so
     every refusal rule — status match, resumability, permission, admin,
@@ -193,9 +202,11 @@ def session_actions(
       (:data:`NO_TRANSCRIPT_REASON`).
     - ``clearqueue``: unavailable when ``queue_depth <= 0``
       (:data:`QUEUE_EMPTY_REASON`) — nothing queued to clear.
-    - ``compact``: unavailable, on a BUSY session only, when
-      ``queue_depth >= QUEUE_CAP`` (:data:`QUEUE_FULL_REASON`). An IDLE
-      compact sends immediately rather than queueing, so it has no
+    - ``compact``: unavailable when ``context_pct <= 0`` on either status
+      (:data:`NO_CONTEXT_REASON`, design.md Decision 6 — there is
+      self-evidently nothing to compact); unavailable, on a BUSY session
+      only, when ``queue_depth >= QUEUE_CAP`` (:data:`QUEUE_FULL_REASON`).
+      An IDLE compact sends immediately rather than queueing, so it has no
       queue-depth rule at all.
     - ``perms``: the switch's target is derived, never stored —
       ``target_is_auto = not skip_perms``. Unavailable only when the
@@ -217,6 +228,8 @@ def session_actions(
             actions[key] = {"available": False, "reason": NO_TRANSCRIPT_REASON}
         elif key == "clearqueue" and queue_depth <= 0:
             actions[key] = {"available": False, "reason": QUEUE_EMPTY_REASON}
+        elif key == "compact" and context_pct <= 0:
+            actions[key] = {"available": False, "reason": NO_CONTEXT_REASON}
         elif key == "compact" and status == "busy" and queue_depth >= QUEUE_CAP:
             actions[key] = {"available": False, "reason": QUEUE_FULL_REASON}
         elif key == "perms" and not skip_perms and not is_admin:
@@ -279,6 +292,7 @@ def session_detail(
     detail["actions"] = session_actions(
         detail["status"], resumable=bool(sess.claude_session_id), can_act=can_act,
         is_admin=is_admin, skip_perms=bool(sess.skip_perms), queue_depth=queue_depth,
+        context_pct=detail["context_pct"],
     )
     return detail
 

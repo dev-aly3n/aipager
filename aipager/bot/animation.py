@@ -19,7 +19,8 @@ import time
 from typing import TYPE_CHECKING
 
 from aipager.config import (
-    BUSY_EDIT_INTERVAL, CHAT_ID, SPINNER_VERBS,
+    BUSY_EDIT_INTERVAL, CHAT_ID, COMPACT_ANIMATE_INTERVAL_SECONDS,
+    COMPACT_ANIMATE_MAX_TICKS, SPINNER_VERBS,
     STREAM_BODY_CHARS, STREAM_EDIT_INTERVAL,
 )
 from aipager.bot.rich_message import (
@@ -690,12 +691,37 @@ class AnimationMixin:
         sess.animate_task = asyncio.create_task(self._animate_busy(sess))
 
     async def _animate_compact(self, sess: TrackedSession) -> None:
-        """Dot animation while compacting: . → .. → ... → loop."""
+        """Dot animation while compacting: . → .. → ... → loop.
+
+        Bounded three ways, because an unbounded edit loop is exactly the
+        failure this feature exists to prevent:
+
+        1. ``stack_top_kind()`` — the loop is tied to the stack that owns
+           it, so whatever pops the compacting entry (the confirming hook,
+           or the monitor's deadline sweeper) also ends the animation.
+        2. ``COMPACT_ANIMATE_MAX_TICKS`` — a hard iteration ceiling, sized
+           to comfortably outlast the deadline sweeper. This is the guard
+           that holds even when ``asyncio.sleep`` has been neutralised, as
+           much of the test suite does by patching the shared ``asyncio``
+           module object. Without it a leaked task spins free and grows an
+           AsyncMock's ``mock_calls`` until the machine OOMs.
+        3. The pre-existing ``busy_msg_id`` checks below, unchanged.
+        """
         dots = [".", "..", "..."]
         idx = 0
+        ticks = 0
         try:
             while sess.busy_msg_id and sess.busy_msg_id > 0:
-                await asyncio.sleep(1.0)
+                if sess.stack_top_kind() != "compacting":
+                    break
+                ticks += 1
+                if ticks > COMPACT_ANIMATE_MAX_TICKS:
+                    log.warning(
+                        "[%s] compact animation exceeded %d ticks — stopping",
+                        sess.label, COMPACT_ANIMATE_MAX_TICKS,
+                    )
+                    break
+                await asyncio.sleep(COMPACT_ANIMATE_INTERVAL_SECONDS)
                 if not sess.busy_msg_id or sess.busy_msg_id < 0:
                     break
                 dot = dots[idx % len(dots)]
@@ -725,16 +751,43 @@ class AnimationMixin:
         secondary defence inside the lock.
         """
         async with sess.animate_lock:
-            # Clear stale busy state from previous lifecycle (e.g. GONE → BUSY).
-            # If busy_msg_id is set but the animation task is dead, the previous
-            # cycle ended abnormally — reset so we can send a fresh busy message.
-            if (sess.busy_msg_id and sess.busy_msg_id > 0
-                    and (not sess.animate_task or sess.animate_task.done())):
+            # Stale-reset/bail decision, keyed on the stack's TOP KIND
+            # (design.md Decision 8) rather than raw task liveness — this
+            # is the actual fix for "one stuck compacting card suppresses
+            # every later busy card on this session forever".
+            top_kind = sess.stack_top_kind()
+            if top_kind == "busy":
+                if sess.animate_task and not sess.animate_task.done():
+                    return  # already showing busy — original race guard, unchanged
+                # Clear stale busy state from a previous lifecycle (e.g.
+                # GONE → BUSY). The task is dead, so the previous cycle
+                # ended abnormally — reset so we can send a fresh card.
                 log.debug("[%s] Clearing stale busy_msg_id=%s (animation dead)",
                           sess.label, sess.busy_msg_id)
                 sess.busy_msg_id = None
-            if sess.busy_msg_id:
-                return  # already showing busy (or sentinel claimed by other coroutine)
+            elif top_kind == "compacting":
+                # This function is only ever reached when
+                # sess.status != Status.BUSY (every call site gates on
+                # that). A live `compacting` top can only legitimately
+                # coexist with status == BUSY (it's pushed over an
+                # in-flight turn's busy card) — so observing one here means
+                # the confirming hook desynced from status, not a genuine
+                # in-progress compaction. Self-heal instead of waiting for
+                # the sweeper's deadline: reclaim it and proceed to a fresh
+                # busy card, regardless of whether its task is still alive.
+                entry = sess.pop_compacting()
+                elapsed = (time.monotonic() - entry.created_at
+                           if entry is not None else 0.0)
+                log.warning(
+                    "[%s] Reclaiming abandoned compacting card (msg_id=%s, "
+                    "live %.0fs) to send a fresh busy card",
+                    sess.label, entry.msg_id if entry is not None else None,
+                    elapsed,
+                )
+                sess.busy_msg_id = None  # also stops the old animate task
+                                          # via the normal task-replacement
+                                          # path below.
+            # top_kind is None (empty stack) → proceed as today.
             sess.busy_msg_id = -1  # sentinel: claim slot before async yield
             self._stop_animation(sess)
             sess.last_tool_summary = ""
