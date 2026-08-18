@@ -14,8 +14,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import shutil
 import subprocess
+
+log = logging.getLogger(__name__)
 
 # Kept short — this runs synchronously inside a Telegram command handler
 # (`/app`) and `aipager miniapp status`; a hung `tailscale` binary must
@@ -89,3 +92,49 @@ async def resolve_public_url() -> str:
 
 
 __all__ = ["detect_public_url", "resolve_public_url"]
+
+
+# Tight on purpose: this runs on the daemon's single shared event loop at
+# startup, so a slow or black-holed host must not delay Telegram polling,
+# hook processing or the session monitor coming up.
+PROBE_TIMEOUT_SECONDS = 3.0
+
+
+async def probe_public_url(url: str) -> bool:
+    """Does ``url`` actually answer? Never raises.
+
+    Exists because the daemon used to publish a Mini App button pointing at
+    whatever the config said, having never checked it. When an ephemeral
+    tunnel died, the hostname stopped resolving and the button spun forever
+    on the phone — indistinguishable, from the user's side, from a working
+    one. An unverified endpoint must not be advertised.
+
+    Any HTTP response below 500 counts as reachable: a 404 still proves
+    something is listening and terminating TLS for us, whereas a dead
+    tunnel gives DNS failure, a connection error, or Cloudflare's own
+    502/1033 from an origin that is gone.
+    """
+    if not url:
+        return False
+    try:
+        import aiohttp
+    except ImportError:      # miniapp extra not installed — nothing to probe
+        return False
+    try:
+        timeout = aiohttp.ClientTimeout(total=PROBE_TIMEOUT_SECONDS)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(url, allow_redirects=True) as resp:
+                if resp.status >= 500:
+                    log.warning(
+                        "Mini App URL %s answered %d — treating as unreachable",
+                        url, resp.status,
+                    )
+                    return False
+                return True
+    except Exception as exc:
+        # Includes DNS failure (the dead-tunnel case), TLS errors, and the
+        # timeout above. Deliberately broad: every one of them means "do
+        # not advertise this".
+        log.warning("Mini App URL %s is unreachable (%s: %s)",
+                    url, type(exc).__name__, exc)
+        return False

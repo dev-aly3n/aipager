@@ -49,6 +49,36 @@ class MiniAppUnavailable(Exception):
 _WRITE_WINDOW_SECONDS = 60.0
 _WRITE_MAX_PER_WINDOW = 30
 
+# Auth-failure log budget. The crypto itself is cheap (two HMAC-SHA256);
+# the amplifier under a flood is the *logging* — one log.info per
+# rejection plus one aiohttp access-log line, both synchronous writes to
+# journald from inside the single event loop that also runs Telegram
+# polling and the session monitor. So we keep verifying every request
+# (cheap, and never locking out the legitimate user) and instead cap how
+# often a rejection may write to the log, reporting a suppressed count
+# once per window.
+#
+# Deliberately NOT a per-IP limiter: the server binds loopback and sits
+# behind a tunnel, so EVERY request — attacker and operator alike —
+# arrives from 127.0.0.1. Per-IP buckets would collapse into one, and a
+# flood would lock the operator out of their own daemon.
+_AUTH_LOG_WINDOW_SECONDS = 60.0
+_AUTH_LOG_MAX_PER_WINDOW = 10
+
+# Concurrency cap for /api/sessions/{label}/diff, which shells out to up
+# to 103 git subprocesses per call (3 fixed + MAX_FILES). Unbounded, a
+# caller looping it is a fork bomb by proxy against the event loop.
+#
+# One at a time, but WAITING rather than refusing: two people in a group
+# opening diffs at the same moment is legitimate and must still return two
+# correct results (pinned by
+# test_concurrent_diff_requests_for_different_sessions_stay_isolated). Only
+# a caller that cannot get a slot within the bounded wait is refused, which
+# is the flood case. Serialising costs latency; refusing outright would have
+# cost a working feature.
+_DIFF_MAX_CONCURRENCY = 1
+_DIFF_QUEUE_WAIT_SECONDS = 10.0
+
 
 class MiniAppServer:
     """``GET /`` (static shell) + read-only authenticated JSON routes.
@@ -68,6 +98,13 @@ class MiniAppServer:
         self._started_at = time.monotonic()
         # user_id -> recent write timestamps, for _allow_write.
         self._write_hits: dict = {}
+        # Auth-failure log budget (see _log_auth_failure). Global, not
+        # per-caller: an unauthenticated request has no identity to key on.
+        self._auth_log_hits: list = []
+        self._auth_log_suppressed = 0
+        # Lazily created so constructing the server needs no running loop
+        # (tests build it outside asyncio).
+        self._diff_sem = None
 
     def _build_app(self) -> "web.Application":
         """Construct the aiohttp Application. Split out from start() so
@@ -226,13 +263,26 @@ class MiniAppServer:
         try:
             user = verify_init_data(init_data, BOT_TOKEN)
         except InitDataMissingError:
-            log.info("miniapp: %s rejected (401) — missing/malformed initData", route_name)
+            self._log_auth_failure(route_name, "missing/malformed initData")
             return web.json_response({"error": "unauthorized"}, status=401)
         except InitDataSignatureError:
-            log.info("miniapp: %s rejected (401) — bad signature", route_name)
+            self._log_auth_failure(route_name, "bad signature")
             return web.json_response({"error": "unauthorized"}, status=401)
         except InitDataStaleError:
-            log.info("miniapp: %s rejected (401) — stale auth_date", route_name)
+            self._log_auth_failure(route_name, "stale auth_date")
+            return web.json_response({"error": "unauthorized"}, status=401)
+        except Exception:
+            # FAIL CLOSED on anything unforeseen. This is not theoretical:
+            # hmac.compare_digest raises TypeError for a non-ASCII `hash`,
+            # which an unauthenticated caller controls entirely —
+            #   hash=%C3%A9  ->  TypeError: comparing strings with
+            #                   non-ASCII characters is not supported
+            # With only the three specific excepts above, that escaped to
+            # aiohttp as a 500 plus a full traceback on every request,
+            # from anyone who could reach the port. An auth gate must
+            # never turn an unexpected error into anything but a refusal.
+            self._log_auth_failure(route_name, "malformed initData (rejected)",
+                                   exc_info=True)
             return web.json_response({"error": "unauthorized"}, status=401)
 
         user_id = user.get("id")
@@ -580,6 +630,32 @@ class MiniAppServer:
             "changed": after != before,
         })
 
+    def _log_auth_failure(self, route_name: str, reason: str,
+                          *, exc_info: bool = False) -> None:
+        """Log a rejection, but at most ``_AUTH_LOG_MAX_PER_WINDOW`` per
+        window, reporting the suppressed count when the flood subsides.
+
+        Rejections still happen at full speed — only the logging is
+        budgeted. See the constant's comment for why this is global
+        rather than per-IP.
+        """
+        now = time.monotonic()
+        self._auth_log_hits = [
+            t for t in self._auth_log_hits if now - t < _AUTH_LOG_WINDOW_SECONDS
+        ]
+        if len(self._auth_log_hits) >= _AUTH_LOG_MAX_PER_WINDOW:
+            self._auth_log_suppressed += 1
+            return
+        self._auth_log_hits.append(now)
+        if self._auth_log_suppressed:
+            log.warning(
+                "miniapp: %d further auth rejection(s) suppressed in the last %.0fs",
+                self._auth_log_suppressed, _AUTH_LOG_WINDOW_SECONDS,
+            )
+            self._auth_log_suppressed = 0
+        log.info("miniapp: %s rejected (401) — %s", route_name, reason,
+                 exc_info=exc_info)
+
     def _allow_write(self, user_id) -> bool:
         """Crude per-user write budget. The page is reachable over a public
         tunnel, so an unbounded write route plus any future bug is a bad
@@ -912,7 +988,26 @@ class MiniAppServer:
         # (dtach/hook_receiver.py:269-271) and never comes from this
         # request. There is no code path from an HTTP parameter to a
         # `cwd` argument passed to git (design.md Decision 2).
-        return web.json_response(await collect_diff(sess.cwd))
+        #
+        # Serialised: this call shells out to up to 103 git subprocesses,
+        # so concurrent callers would multiply that against the same event
+        # loop that runs Telegram polling and the session monitor. Refuse
+        # rather than queue — a queued request would still be holding a
+        # connection when its diff is long stale.
+        import asyncio
+        if self._diff_sem is None:
+            self._diff_sem = asyncio.Semaphore(_DIFF_MAX_CONCURRENCY)
+        try:
+            await asyncio.wait_for(self._diff_sem.acquire(),
+                                   timeout=_DIFF_QUEUE_WAIT_SECONDS)
+        except (asyncio.TimeoutError, TimeoutError):
+            log.info("miniapp: /api/sessions/{label}/diff rejected (429) — "
+                     "collector busy for %.0fs", _DIFF_QUEUE_WAIT_SECONDS)
+            return web.json_response({"error": "too_many_requests"}, status=429)
+        try:
+            return web.json_response(await collect_diff(sess.cwd))
+        finally:
+            self._diff_sem.release()
 
     # ---- session detail-page write actions (Stop/Kill/Resume/Delete) -----
     #

@@ -457,6 +457,25 @@ class LifecycleMixin:
         """
         from telegram import MenuButtonCommands, MenuButtonWebApp, WebAppInfo
 
+        # Verify before advertising. The daemon used to publish whatever
+        # URL config held, unchecked — so when an ephemeral tunnel died the
+        # button spun forever on the phone, looking exactly like a working
+        # one. A URL nobody has confirmed is worse than no button: no button
+        # is an honest absence, a dead button is a broken promise.
+        #
+        # Runs here rather than in resolve_public_url() because the URL is
+        # resolved before the Mini App server is listening; only by publish
+        # time is a positive result meaningful.
+        if url:
+            from aipager.miniapp.tunnel import probe_public_url
+            if not await probe_public_url(url):
+                log.warning(
+                    "Mini App URL %s did not answer — publishing no button. "
+                    "The Mini App will be unavailable until it is reachable.",
+                    url,
+                )
+                url = ""
+
         self._miniapp_url = url
         if not self._app:
             return          # same guard every sibling that touches _app.bot uses
