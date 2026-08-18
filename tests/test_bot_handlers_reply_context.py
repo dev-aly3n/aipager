@@ -125,6 +125,10 @@ def test_reply_to_own_earlier_message_routes_to_that_messages_session(
 def test_cross_chat_message_id_collision_never_crosses_chats(
     mk_bot, mk_update, run_async, monkeypatch,
 ):
+    """Both directions checked — a test that only ever drives ONE of the
+    two colliding chats can pass by iteration-order coincidence even
+    when scoping is completely broken (verified against a real mutation
+    while writing this test; see implementation.md)."""
     bot = mk_bot()
     _wire_common(monkeypatch, bot)
     a = TrackedSession(name="claude-a", label="a", status=Status.IDLE)
@@ -143,6 +147,13 @@ def test_cross_chat_message_id_collision_never_crosses_chats(
     run_async(bot._handle_message(update_a, _ctx()))
     assert a.status == Status.BUSY
     assert b.status == Status.IDLE
+
+    update_b = mk_update("hi b", chat_id=222)
+    update_b.message.reply_to_message = MagicMock(
+        message_id=700, text="whatever", caption=None, from_user=None,
+    )
+    run_async(bot._handle_message(update_b, _ctx()))
+    assert b.status == Status.BUSY
 
 
 # ---- criterion 11 -----------------------------------------------------
