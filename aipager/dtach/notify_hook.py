@@ -214,13 +214,20 @@ def _run(session: str, cap_slot: list[bytes]) -> None:
     elif data.get("hook_event_name") == "UserPromptSubmit":
         try:
             from aipager.policy_snapshot import read_snapshot
-            snap = read_snapshot(data.get("session", ""))
-            style = (snap or {}).get("style_text", "")
-            if style:
+            snap = read_snapshot(data.get("session", "")) or {}
+            style = snap.get("style_text", "")
+            reply_context = snap.get("reply_context", "")
+            # A missing, corrupt, or old-shape snapshot must not crash
+            # the hook — filter out anything that isn't actually a
+            # string (e.g. a stray int from manual editing) rather than
+            # letting a non-string slip into the join below.
+            parts = [p for p in (style, reply_context) if isinstance(p, str) and p]
+            combined = "\n\n".join(parts)
+            if combined:
                 print(json.dumps({
                     "hookSpecificOutput": {
                         "hookEventName": "UserPromptSubmit",
-                        "additionalContext": style,
+                        "additionalContext": combined,
                     },
                 }))
         except MemoryError:

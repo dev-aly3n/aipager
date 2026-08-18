@@ -44,7 +44,7 @@ def test_merged_edit_success_preserves_reply_routing_to_busy_msg_id(
     bot.registry._sessions[sess.name] = sess
     # Mirrors animation.py's send_busy → track_message call: the busy
     # message is registered ONCE, before any edit happens.
-    bot.registry.track_message(42, sess.name)
+    bot.registry.track_message(42, sess.name, chat_id)
 
     async def _fake_post(method, payload):
         assert method == "editMessageText"
@@ -58,6 +58,6 @@ def test_merged_edit_success_preserves_reply_routing_to_busy_msg_id(
     bot._app.bot.send_message.assert_not_awaited()
     # A reply to the (still-42) busy message must still resolve to this
     # session after the edit.
-    resolved = bot.registry.get_session_by_msg(42)
+    resolved = bot.registry.get_session_by_msg(42, chat_id)
     assert resolved is not None
     assert resolved.name == sess.name

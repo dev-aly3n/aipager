@@ -121,7 +121,7 @@ def test_compact_done_pop_does_not_disturb_merged_reply_routing(mk_bot, run_asyn
     bot = mk_bot()
     sess = _sess(busy_msg_id=42)
     bot.registry._sessions[sess.name] = sess
-    bot.registry.track_message(42, sess.name)
+    bot.registry.track_message(42, sess.name, 0)
     bot._edit_busy_raw = AsyncMock(return_value=True)
     bot._stop_animation = MagicMock()
     bot._start_animation = MagicMock()
@@ -134,7 +134,7 @@ def test_compact_done_pop_does_not_disturb_merged_reply_routing(mk_bot, run_asyn
     run_async(bot.notify(sess, "compacting", {"trigger": "auto"}))
     run_async(bot.notify(sess, "compact_done", {"before_pct": 80, "after_pct": 5}))
 
-    resolved = bot.registry.get_session_by_msg(42)
+    resolved = bot.registry.get_session_by_msg(42, 0)
     assert resolved is not None
     assert resolved.name == sess.name
 

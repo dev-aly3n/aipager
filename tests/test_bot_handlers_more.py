@@ -448,7 +448,7 @@ def test_handle_message_reply_to_msg_routes_to_owning_session(mk_bot, mk_update,
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
     bot.registry._sessions["claude-jim"] = sess
-    bot.registry._msg_map[200] = "claude-jim"
+    bot.registry._msg_map[(-1001, 200)] = "claude-jim"  # mk_update default chat_id
     monkeypatch.setattr("aipager.dtach.inject.is_alive",
                         AsyncMock(return_value=True))
     monkeypatch.setattr("aipager.dtach.inject.send_text_and_enter",

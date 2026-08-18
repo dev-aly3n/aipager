@@ -1073,7 +1073,9 @@ class CallbackDispatchMixin:
                     await query.edit_message_text(f"{original_text}\n\n→ {verb}")
                 except Exception:
                     pass
-                self.registry.remove_message(query.message.message_id)
+                self.registry.remove_message(
+                    query.message.message_id, calling_chat_id(query) or 0,
+                )
                 # Mark session as busy after user interaction
                 self.registry.transition(session_name, Status.BUSY)
                 log.info("[%s] %s", sess.label, verb)

@@ -79,7 +79,7 @@ def test_inject_writes_policy_snapshot(mk_bot, run_async, monkeypatch):
     captured = {}
     monkeypatch.setattr(
         policy_snapshot, "write_snapshot",
-        lambda name, role, scope, member, style_text="": captured.update(
+        lambda name, role, scope, member, style_text="", reply_context="": captured.update(
             name=name, role=role, member=member, style_text=style_text))
     run_async(bot._inject_prompt(_sess(), "do the thing"))
     assert captured["name"] == "claude-x__g100"
@@ -101,7 +101,7 @@ def test_inject_prompt_style_text_reflects_session_override(mk_bot, run_async, m
     captured = {}
     monkeypatch.setattr(
         policy_snapshot, "write_snapshot",
-        lambda name, role, scope, member, style_text="": captured.update(
+        lambda name, role, scope, member, style_text="", reply_context="": captured.update(
             style_text=style_text))
 
     sess = _sess()

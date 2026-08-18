@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Replying to an older message now tells Claude what you're pointing at.**
+  Reply to any earlier message in a session — not just the latest one — or
+  highlight part of a message before replying, and Claude gets a quiet note
+  about what you're referencing: when it was sent, who sent it, and either
+  the highlighted fragment itself or an excerpt with the full text saved to
+  a file it can read. It's never pasted into the visible prompt and never
+  mistaken for a new instruction. Replying to your own earlier message
+  (rather than the latest) now also routes correctly to that message's
+  session, and a reply's target is scoped to the chat it came from, so the
+  same message id in two different chats can never cross-route. This still
+  works while a session is busy — the pointer survives the queue and reaches
+  Claude once your message is sent, though the full-text file isn't kept for
+  a queued reply. A session that's gone now offers a Resume button right on
+  its "not found" reply, instead of leaving you to hunt for the right
+  command.
 - **The session page's ⋮ menu now also switches permission mode, clears the
   queue, compacts now, restarts, and renames.** Switch permission mode toggles
   a session between Ask and Auto — switching to Auto still needs admin, the

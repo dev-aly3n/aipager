@@ -477,7 +477,7 @@ def test_idle_answer_carries_the_reply_link_when_the_header_is_skipped(
     run_async(bot.notify(sess, "idle_prompt", {"summary": "the answer"}))
     assert sent.await_args.kwargs["reply_to_message_id"] == 7
     # The body takes over as the tracked message for this reply.
-    bot.registry.track_message.assert_called_once_with(555, sess.name)
+    bot.registry.track_message.assert_called_once_with(555, sess.name, 4242)
 
 
 def test_idle_answer_delivered_when_session_has_no_scope_and_no_chat_id(
