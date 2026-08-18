@@ -459,27 +459,34 @@ class TrackedSession:
         return top.created_at if top.kind == "compacting" else None
 
     def queue_prompt(self, text: str, msg_id: int | None,
-                     cap: int = QUEUE_CAP) -> bool:
+                     reply_context: str = "", cap: int = QUEUE_CAP) -> bool:
         """Append a queued prompt with a current wall-clock timestamp.
 
         Returns False (without modifying the queue) if the queue is
         already at ``cap`` entries — the caller is expected to surface
-        the rejection to the user. New entries are stored as
-        ``(text, msg_id, queued_at)`` 3-tuples; existing 2-tuples loaded
-        from older state files retain their shape (see ``load`` for the
-        compatibility shim).
+        the rejection to the user. Entries are stored as
+        ``(text, msg_id, queued_at, reply_context)`` 4-tuples; existing
+        2-/3-tuples loaded from older state files are upgraded to this
+        shape (see ``load`` for the compatibility shim).
 
         ``msg_id`` is ``None`` for a prompt with no originating Telegram
         message to attribute a reply to (the Mini App's Compact route) —
         already the documented meaning of ``trigger_msg_id: int | None``
         downstream, so this only makes the type honest about a case that
         already occurs.
+
+        ``reply_context`` is the already-rendered reply-pointer string
+        (design.md Part 4) computed at queue time, while the live
+        ``Update`` this queued prompt came from still exists — empty
+        when the queued prompt wasn't a reply. Inserted before ``cap`` so
+        every pre-existing 2-positional-arg call site keeps working
+        unchanged.
         """
         if len(self.pending_queue) >= cap:
             log.warning("[%s] queue full (cap=%d); rejecting prompt: %r",
                         self.label, cap, text[:60])
             return False
-        self.pending_queue.append((text, msg_id, time.time()))
+        self.pending_queue.append((text, msg_id, time.time(), reply_context))
         return True
 
     def is_restarting(self) -> bool:
@@ -553,7 +560,7 @@ class SessionRegistry:
 
     def __init__(self):
         self._sessions: dict[str, TrackedSession] = {}  # keyed by session name
-        self._msg_map: dict[int, str] = {}  # message_id → session name
+        self._msg_map: dict[tuple[int, int], str] = {}  # (chat_id, msg_id) → session name
         self.last_active_session: str = ""  # last session that sent a notification
         self.pinned_msg_id: int = 0  # pinned status message in Telegram
         self._dirty: bool = False
@@ -650,31 +657,60 @@ class SessionRegistry:
         # /resume always has a "X ago" to display, regardless of which
         # path fired. If a caller has already stamped gone_at (legacy
         # behaviour) we preserve it.
-        if new_status == Status.GONE and sess.gone_at is None:
-            sess.gone_at = time.time()
+        if new_status == Status.GONE:
+            if sess.gone_at is None:
+                sess.gone_at = time.time()
+            # Best-effort cleanup of this session's /tmp policy + reply-
+            # context files (design.md Part 5). Both GONE-inducing paths
+            # (socket-vanish via session_monitor, Claude's SessionEnd hook
+            # via hook_receiver) converge here, and the idempotency guard
+            # at the top of this method (same-state calls return early)
+            # makes this fire exactly once per real transition. A failed
+            # removal must never block the transition — never raise.
+            try:
+                from aipager.policy_snapshot import clear_session_files
+                clear_session_files(sess.name)
+            except Exception:
+                pass
 
         log.info("[%s] %s → %s", sess.label, old.name, new_status.name)
         self._dirty = True
         return sess
 
-    def track_message(self, msg_id: int, session_name: str) -> None:
-        """Associate a Telegram message_id with a session (for reply lookups)."""
-        self._msg_map[msg_id] = session_name
+    def track_message(self, msg_id: int, session_name: str, chat_id: int) -> None:
+        """Associate a Telegram message_id with a session (for reply lookups).
+
+        Keyed by ``(chat_id, msg_id)`` (design.md Part 0) so a message id
+        that collides across two different chats can never resolve into
+        the wrong chat's session — see :meth:`get_session_by_msg`.
+        """
+        self._msg_map[(chat_id, msg_id)] = session_name
         self.last_active_session = session_name
         sess = self._sessions.get(session_name)
         if sess:
             sess.last_msg_id = msg_id
         self._dirty = True
 
-    def get_session_by_msg(self, msg_id: int) -> TrackedSession | None:
-        """Find session that owns a Telegram message."""
-        name = self._msg_map.get(msg_id)
+    def get_session_by_msg(self, msg_id: int, chat_id: int) -> TrackedSession | None:
+        """Find session that owns a Telegram message, scoped to ``chat_id``.
+
+        A stored chat_id of ``0`` is a wildcard — the same legacy-tolerant
+        convention :meth:`all_sessions` / :meth:`find_by_label` already use
+        for "unstamped" sessions — so it matches any calling ``chat_id``.
+        This matters because bot-message tracking sites resolve their
+        chat id via ``resolve_chat_id_int``, which can legitimately return
+        ``None`` (→ ``0``) on an unconfigured/unstamped install; the
+        wildcard keeps that degenerate case working exactly as before.
+        """
+        name = self._msg_map.get((chat_id, msg_id))
+        if name is None and chat_id != 0:
+            name = self._msg_map.get((0, msg_id))
         if name:
             return self._sessions.get(name)
         return None
 
-    def remove_message(self, msg_id: int) -> None:
-        self._msg_map.pop(msg_id, None)
+    def remove_message(self, msg_id: int, chat_id: int) -> None:
+        self._msg_map.pop((chat_id, msg_id), None)
 
     def all_sessions(
         self, scope_chat_id: int | None = None,
@@ -737,9 +773,19 @@ class SessionRegistry:
         sess = self._sessions.pop(name, None)
         if sess:
             # Clean up message mappings
-            to_remove = [mid for mid, sn in self._msg_map.items() if sn == name]
-            for mid in to_remove:
-                del self._msg_map[mid]
+            to_remove = [key for key, sn in self._msg_map.items() if sn == name]
+            for key in to_remove:
+                del self._msg_map[key]
+            # Best-effort cleanup of this session's /tmp policy + reply-
+            # context files (design.md Part 5). Explicit /kill deletes
+            # the record outright — it never passes through transition()'s
+            # GONE branch — so this is the only place that sees that
+            # disjoint path. A failed removal must never block the kill.
+            try:
+                from aipager.policy_snapshot import clear_session_files
+                clear_session_files(name)
+            except Exception:
+                pass
 
     def mark_dirty(self) -> None:
         """Flag that state has changed and needs saving."""
@@ -765,7 +811,7 @@ class SessionRegistry:
         "override_layout", "override_simple_formatting",
         "override_answer_length", "override_language_level",
     )
-    _MAX_MSG_MAP = 1000  # cap _msg_map entries to avoid unbounded growth
+    _MAX_MSG_MAP = 2000  # cap _msg_map entries to avoid unbounded growth (doubled — Part 1 roughly doubles density by also tracking user prompts)
 
     def save(self) -> None:
         """Serialize persistable state to JSON (atomic write)."""
@@ -775,15 +821,19 @@ class SessionRegistry:
             for f in self._PERSIST_FIELDS:
                 val = getattr(sess, f)
                 if f == "pending_queue":
-                    # tuples → lists for JSON. Always persist as 3-tuples
-                    # so future loads can apply the TTL even if the queue
-                    # contained legacy 2-tuples (now upgraded in load()).
+                    # tuples → lists for JSON. Always persist as 4-tuples
+                    # (text, msg_id, queued_at, reply_context) so future
+                    # loads can apply the TTL / reply pointer even if the
+                    # queue contained legacy 2- or 3-tuples (upgraded in
+                    # load()).
                     normalized = []
                     for item in val:
-                        if len(item) == 3:
+                        if len(item) == 4:
                             normalized.append(list(item))
+                        elif len(item) == 3:
+                            normalized.append([item[0], item[1], item[2], ""])
                         elif len(item) == 2:
-                            normalized.append([item[0], item[1], time.time()])
+                            normalized.append([item[0], item[1], time.time(), ""])
                     val = normalized
                 elif f == "busy_msg_id":
                     # Never persist sentinel (-1) or None
@@ -801,7 +851,7 @@ class SessionRegistry:
             "version": 1,
             "last_active_session": self.last_active_session,
             "pinned_msg_id": self.pinned_msg_id,
-            "msg_map": {str(k): v for k, v in msg_map.items()},
+            "msg_map": {f"{cid}:{mid}": v for (cid, mid), v in msg_map.items()},
             "sessions": sessions,
         }
 
@@ -835,14 +885,6 @@ class SessionRegistry:
 
         self.last_active_session = data.get("last_active_session", "")
         self.pinned_msg_id = data.get("pinned_msg_id", 0)
-
-        # Rebuild _msg_map (JSON keys are strings → convert to int)
-        saved_map = data.get("msg_map", {})
-        for k, v in saved_map.items():
-            try:
-                self._msg_map[int(k)] = v
-            except (ValueError, TypeError):
-                continue
 
         # Resolve the default scope once (for backfilling legacy sessions).
         _default = _default_scope()
@@ -933,12 +975,20 @@ class SessionRegistry:
                 if not isinstance(item, list):
                     continue
                 if len(item) == 2:
-                    # Legacy: no timestamp — treat as fresh.
+                    # Legacy: no timestamp, no reply_context — treat as
+                    # fresh with no reply pointer.
                     sess.pending_queue.append(
-                        (item[0], item[1], now)
+                        (item[0], item[1], now, "")
                     )
-                elif len(item) == 3:
-                    text, msg_id, queued_at = item
+                elif len(item) in (3, 4):
+                    text, msg_id, queued_at = item[0], item[1], item[2]
+                    # reply_context: fail-safe pattern already used for
+                    # override_layout above — a hand-edited or
+                    # since-invalidated value degrades to "no reply
+                    # pointer" rather than crashing the load.
+                    reply_context = item[3] if len(item) == 4 else ""
+                    if not isinstance(reply_context, str):
+                        reply_context = ""
                     try:
                         queued_at_f = float(queued_at)
                     except (TypeError, ValueError):
@@ -946,7 +996,9 @@ class SessionRegistry:
                     if queued_at_f < ttl_cutoff:
                         dropped += 1
                         continue
-                    sess.pending_queue.append((text, msg_id, queued_at_f))
+                    sess.pending_queue.append(
+                        (text, msg_id, queued_at_f, reply_context)
+                    )
             if dropped:
                 log.warning(
                     "[%s] dropped %d queue entries older than %d h",
@@ -961,6 +1013,41 @@ class SessionRegistry:
                          "(orphan session — was missing the stamp)",
                          sess.label)
                 self._dirty = True  # persist on next save_if_dirty
+
+        # Rebuild _msg_map AFTER the sessions loop above, not before it.
+        # ORCHESTRATOR-VERIFIED LOAD-ORDER BUG: the migration below needs
+        # sess.scope_chat_id, which only exists once a session has been
+        # reconstructed (and is itself backfilled from _default_scope()
+        # inside that same loop, right above). Rebuilding _msg_map before
+        # the loop ran would silently drop every legacy (bare-digit-key)
+        # entry, because self._sessions would still be empty.
+        saved_map = data.get("msg_map", {})
+        for k, v in saved_map.items():
+            if ":" in k:
+                # New shape: "<chat_id>:<msg_id>". Split on the FIRST
+                # ':' only — a group chat_id is negative (contains '-')
+                # but never contains ':'.
+                cid_s, mid_s = k.split(":", 1)
+                try:
+                    self._msg_map[(int(cid_s), int(mid_s))] = v
+                except (ValueError, TypeError):
+                    continue
+            else:
+                # Old (pre-Part-0) shape: a bare message_id string, no
+                # chat_id. Attribute it to the owning session's
+                # now-resolved scope_chat_id; drop it if that session is
+                # missing or was never stamped (scope_chat_id == 0) —
+                # cannot attribute safely. Costs one restart's worth of
+                # reply-routing history for that entry; the existing
+                # text-guess/last-active fallback still applies.
+                try:
+                    mid = int(k)
+                except (ValueError, TypeError):
+                    continue
+                owner = self._sessions.get(v)
+                if owner is None or owner.scope_chat_id == 0:
+                    continue
+                self._msg_map[(owner.scope_chat_id, mid)] = v
 
         log.info("Loaded %d sessions, %d message mappings",
                  len(self._sessions), len(self._msg_map))
