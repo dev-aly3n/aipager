@@ -132,8 +132,20 @@ __all__ = [
 # hook processing or the session monitor coming up.
 PROBE_TIMEOUT_SECONDS = 3.0
 
+# A freshly created quick tunnel is not immediately answerable: Cloudflare's
+# edge returns 530 ("tunnel not ready") for the first several seconds while
+# the hostname propagates. Observed live: cloudflared reported its URL, the
+# probe fired, got 530, cleared the button — and the same URL served 200 a
+# minute later. Because the URL never CHANGED, nothing ever republished, so
+# the tunnel worked perfectly and the button never appeared.
+#
+# So a single probe is the wrong question. Retry across a window that
+# comfortably covers edge propagation before concluding a URL is dead.
+PROBE_ATTEMPTS = 6
+PROBE_RETRY_DELAY_SECONDS = 4.0
 
-async def probe_public_url(url: str) -> bool:
+
+async def _probe_once(url: str) -> bool:
     """Does ``url`` actually answer? Never raises.
 
     Exists because the daemon used to publish a Mini App button pointing at
@@ -171,3 +183,31 @@ async def probe_public_url(url: str) -> bool:
         log.warning("Mini App URL %s is unreachable (%s: %s)",
                     url, type(exc).__name__, exc)
         return False
+
+
+async def probe_public_url(url: str) -> bool:
+    """Does ``url`` answer, allowing for a tunnel that is still coming up?
+
+    Retries ``PROBE_ATTEMPTS`` times, ``PROBE_RETRY_DELAY_SECONDS`` apart,
+    returning True on the first success. Never raises.
+
+    The retry is not defensive padding — it is the difference between the
+    feature working and silently not working. A brand-new quick tunnel
+    answers 530 from Cloudflare's edge for the first several seconds. The
+    original single-shot probe fired immediately after cloudflared reported
+    its URL, got that 530, and cleared the button; the very same URL served
+    200 a minute later, but nothing republished because the URL had not
+    changed. Observed live, not hypothetically.
+    """
+    if not url:
+        return False
+    for attempt in range(1, PROBE_ATTEMPTS + 1):
+        if await _probe_once(url):
+            if attempt > 1:
+                log.info("Mini App URL %s answered on attempt %d", url, attempt)
+            return True
+        if attempt < PROBE_ATTEMPTS:
+            await asyncio.sleep(PROBE_RETRY_DELAY_SECONDS)
+    log.warning("Mini App URL %s did not answer after %d attempts",
+                url, PROBE_ATTEMPTS)
+    return False
