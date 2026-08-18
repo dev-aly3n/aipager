@@ -1,46 +1,30 @@
-"""Black-box tests for design.md success criteria 10, 11, 12 -- the
-actual fix for "one stuck compacting card suppresses every later busy
-card forever", the exact bug the operator reported live.
+"""Black-box tests for design.md success criteria 10, 11, 12 — the fix
+for "one stuck compacting card suppresses every later busy card
+forever", the exact bug the operator reported live.
 
-IMPORTANT FINDING, read before trusting a pass/fail count at a glance:
+HISTORY, kept because it explains why these tests are shaped this way:
 
-entrypoints.md's `TelegramBot.notify` section states, verbatim:
+when first written, the `test_documented_entrypoint_*` tests below FAILED.
+`bot.notify(sess, "user_prompt_submit", {})` — the surface entrypoints.md
+names for this behaviour — had its own separate, unconditional early
+return (`if not sess.busy_msg_id: ...`) that bailed BEFORE
+`_send_busy_and_animate`, where the real Decision-8 logic lives. That gate
+was pre-existing (identical at 3a9e2ab), not a regression, but it meant
+the documented surface did not reach the fix at all: a wedged session
+receiving a fresh prompt through that path still got no card.
 
-    "Calling bot.notify(sess, "user_prompt_submit", {}) (or any of the
-    prompt-injection call paths this event models) on a session whose
-    stack_top_kind() is "compacting" now always results in exactly one
-    fresh send_message call for a new busy card, regardless of whether
-    the session's animation task object is still running -- previously
-    this silently did nothing."
+That gate has since been removed — `notify` now delegates unconditionally
+to `_send_busy_and_animate`, which is the single authority on whether a
+fresh card is warranted and bails on its own when one is genuinely live.
+All tests here now pass, and these `test_documented_entrypoint_*` tests
+are the load-bearing guard against that gate being reinstated: the
+orchestrator's own `tests/test_bot_notify.py` replacement does NOT
+distinguish the fix from the bug (verified by mutation in review-2), so
+do not rely on it for this.
 
-`test_documented_entrypoint_*` below calls exactly that documented
-surface and demonstrates it does NOT hold: `bot.notify(sess,
-"user_prompt_submit", {})` has its OWN, separate, unconditional early
-return ("if sess.busy_msg_id: return", confirmed present and identical
-in behavior at the pre-feature commit 3a9e2ab too -- this is not a new
-regression) that bails BEFORE `_send_busy_and_animate` -- where the
-actual, narrowed Decision-8 self-heal logic lives -- is ever reached.
-So via the literal, documented entrypoint, criteria 10 and 12 are
-UNMET: a wedged session that receives a fresh prompt via this call still
-gets no card, exactly reproducing the operator's complaint.
-
-`test_direct_send_busy_and_animate_*` below calls `bot.
-_send_busy_and_animate(sess)` directly instead (an established,
-pre-existing black-box seam in this codebase -- see
-`tests/test_bot_animation.py`'s own docstring, which lists this exact
-function as a target, and design.md's own file-by-file plan, which names
-`_send_busy_and_animate`'s narrowed condition, not `notify()`'s
-`user_prompt_submit` branch, as the fix's real location). Called this
-way, the fix works exactly as designed for all three criteria.
-
-Net effect reported to the orchestrator: **the underlying mechanism
-(Decision 8) is implemented correctly**, but **the specific black-box
-surface entrypoints.md names for exercising it (`bot.notify(sess,
-"user_prompt_submit", {})`) does not reach that mechanism at all**, for
-any of criteria 10/11/12 -- so if a real production caller actually
-goes through that `notify()` branch (as opposed to calling
-`_send_busy_and_animate` some other way), the reported bug is not
-observably fixed via that path. See test-report issues for follow-up.
+`test_direct_send_busy_and_animate_*` exercise `_send_busy_and_animate`
+directly — an established pre-existing seam — and pin the mechanism
+independently of which caller reaches it.
 """
 
 from __future__ import annotations

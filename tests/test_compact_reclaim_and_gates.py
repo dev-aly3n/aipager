@@ -108,3 +108,28 @@ def test_compaction_knobs_are_separate_with_the_chosen_defaults():
     assert COMPACT_CARD_TIMEOUT_SECONDS == 180.0   # operator-chosen 3 min
     assert COMPACT_INFLIGHT_MAX_SECONDS == 1800.0  # unchanged warning window
     assert COMPACT_CARD_TIMEOUT_SECONDS != COMPACT_INFLIGHT_MAX_SECONDS
+
+
+# ===== rev-iter2-001: the user_prompt_submit delegation must be guarded =====
+
+def test_terminal_prompt_on_a_wedged_compacting_session_still_gets_a_card(
+    mk_bot, run_async,
+):
+    """notify's `user_prompt_submit` branch must reach the reclaim logic.
+
+    It used to bail on its own blanket `if not sess.busy_msg_id:` gate,
+    which could not tell a live card from a wedged one — so a stuck
+    compacting card swallowed every terminal-initiated prompt for that
+    session. This test fails if that gate is reinstated; the
+    orchestrator's rewritten test_user_prompt_submit_skips_when_busy_msg_exists
+    does NOT (confirmed by mutation in review-2), so this is the guard.
+    """
+    bot = mk_bot()
+    sess = _compacting_sess(age=600.0)   # long past its 180s deadline
+    sess.status = Status.IDLE
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=999))
+
+    run_async(bot.notify(sess, "user_prompt_submit", {}))
+
+    bot._app.bot.send_message.assert_awaited_once()
+    assert sess.stack_top_kind() == "busy"
