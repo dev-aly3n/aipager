@@ -62,6 +62,30 @@ class TunnelLaunchError(Exception):
     restart ceiling — assert on the type, never on message text."""
 
 
+def _resolve_prctl():
+    """Bind libc's ``prctl`` ONCE, at import time, in the parent.
+
+    Deliberately not done inside the child: ``ctypes.CDLL()`` performs a
+    ``dlopen`` and a non-trivial amount of Python work, and ``preexec_fn``
+    runs after ``fork()`` in a child that has only the forking thread. If
+    any other thread held the dynamic-loader lock at the moment of the
+    fork, that ``dlopen`` can deadlock the child forever — and this daemon
+    genuinely is multi-threaded in the relevant sense: it uses
+    ``run_in_executor`` for the Tailscale probe and for the cloudflared
+    download. Resolving here leaves the child doing a single already-bound
+    C call, which is the only shape that is safe post-fork.
+    """
+    if platform.system() != "Linux":
+        return None
+    try:
+        return ctypes.CDLL(None, use_errno=True).prctl
+    except (OSError, AttributeError):
+        return None
+
+
+_PRCTL = _resolve_prctl()
+
+
 def _set_pdeathsig() -> None:
     """``preexec_fn`` for the spawned child: ask the kernel to deliver
     SIGTERM to it if this process dies without ``stop()`` ever running
@@ -70,17 +94,19 @@ def _set_pdeathsig() -> None:
     one case explicit cleanup structurally cannot reach. Argument-free
     by design: ``preexec_fn`` is called with no arguments in the child,
     after ``fork()`` and before ``exec()``.
+
+    The body is one pre-bound call; see :func:`_resolve_prctl`.
     """
     try:
-        libc = ctypes.CDLL(None, use_errno=True)
-        libc.prctl(1, signal.SIGTERM, 0, 0, 0)  # PR_SET_PDEATHSIG
-    except (OSError, AttributeError):
+        _PRCTL(1, signal.SIGTERM, 0, 0, 0)  # PR_SET_PDEATHSIG
+    except Exception:
         pass  # best-effort only; explicit stop() is the real guarantee
 
 
-# None on every non-Linux platform, which asyncio/subprocess treat
-# identically to "no preexec_fn at all" — safe to pass unconditionally.
-_PREEXEC_FN = _set_pdeathsig if platform.system() == "Linux" else None
+# None when prctl could not be bound (every non-Linux platform, or a libc
+# without it), which asyncio/subprocess treat identically to "no
+# preexec_fn at all" — safe to pass unconditionally.
+_PREEXEC_FN = _set_pdeathsig if _PRCTL is not None else None
 
 
 async def _drain_stderr(proc: asyncio.subprocess.Process) -> None:
