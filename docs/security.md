@@ -132,6 +132,42 @@ Inbound:
 This means: the daemon is not a remote attack surface. A network-
 level attacker cannot reach it without a foothold on the host.
 
+## Mini App tunnel
+
+Enabling the Mini App (`aipager miniapp enable`, with no `--url`
+override) spawns a managed [Cloudflare quick
+tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/)
+pointed at the daemon's own loopback server, and publishes whatever
+public `https://*.trycloudflare.com` address it is assigned as the
+Telegram menu button, the reply-keyboard button, and `/app`'s answer.
+
+That address **is not secret, and is not meant to be**: every request
+the Mini App serves is verified against Telegram's `initData` signature
+(see [Trust boundary](#trust-boundary) above), the same check that
+protects it regardless of how the URL was obtained. Knowing the
+hostname alone gets an attacker nothing they could not already get by
+guessing a `trycloudflare.com` subdomain at random — the signature
+check is the actual gate. Treat it the way you'd treat any other
+unlisted-but-not-secret URL: fine to leave running, not something to
+paste into a public channel for no reason.
+
+The hostname changes on every daemon restart and is held only in
+memory — it is never written to `aipager.yaml`, `config.env`, or
+anywhere under `~/.config/aipager/`. If the tunnel dies mid-run,
+aipager restarts it with backoff and republishes the new address; if
+it cannot come back up after several attempts, the button is removed
+rather than left pointing at a dead port (see [Network
+surface](#network-surface) above for the same "no button is an honest
+absence" principle applied to the loopback server itself).
+
+Setting `MINIAPP_PUBLIC_URL` (or `aipager miniapp enable --url
+https://…`) disables the managed tunnel entirely — no cloudflared
+binary is ever fetched or spawned — and the given URL is used as-is,
+with the same `initData` verification underneath it. Tailscale
+auto-detect (`tailscale status --json`) remains available as a
+lower-effort alternative for anyone who already runs Tailscale and
+would rather not depend on Cloudflare at all.
+
 ## Voice transcription
 
 `faster-whisper` runs in-process. The audio is downloaded as `.ogg`

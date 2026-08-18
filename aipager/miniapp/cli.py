@@ -166,7 +166,20 @@ def _cmd_miniapp_enable(args: argparse.Namespace) -> int:
     if settings["public_url"]:
         console.print(f"    public URL override: {settings['public_url']}")
     else:
-        console.print("    public URL: auto-detect via Tailscale (`tailscale status --json`)")
+        console.print(
+            "    public URL: managed automatically — aipager starts a "
+            "Cloudflare quick tunnel alongside the daemon and publishes "
+            "whatever public https://*.trycloudflare.com address it is "
+            "assigned"
+        )
+        console.print(
+            "[muted]    That address is not secret and is not meant to "
+            "be: every request is verified against Telegram's initData "
+            "signature, not by the URL being hard to guess. The hostname "
+            "changes on every restart and is never written to config — "
+            "if Tailscale is set up, it is used as the fallback while "
+            "the tunnel comes up.[/muted]"
+        )
 
     from aipager.wizard.daemon_io import _restart_hint
     _restart_hint()
@@ -200,7 +213,18 @@ def _cmd_miniapp_status(args: argparse.Namespace) -> int:
     console.print(f"port:           {cfg['port']}")
     console.print(f"manual url:     {cfg['public_url'] or '(not set)'}")
     detected = detect_public_url()
-    console.print(f"auto-detected:  {detected or '(none — install/enable Tailscale Funnel)'}")
+    console.print(
+        f"tailscale:      {detected or '(none — install/enable Tailscale Funnel)'}"
+    )
+    if cfg["public_url"]:
+        managed_note = "disabled — a manual url override is set"
+    else:
+        managed_note = (
+            "starts with the daemon (this command runs cold and cannot "
+            "show a live URL — check the Telegram button or `aipager "
+            "logs`/journalctl once the daemon is running)"
+        )
+    console.print(f"managed tunnel: {managed_note}")
     return 0
 
 
