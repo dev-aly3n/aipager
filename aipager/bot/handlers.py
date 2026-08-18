@@ -1055,38 +1055,22 @@ class CommandHandlersMixin:
                 return
 
         # Routing precedence:
-        #   1. reply_to.message_id → exact match in the msg_map
-        #   2. reply_to.message_id → any session whose last_msg_id matches
-        #      (catches replies to messages too old for the capped map)
-        #   3. parse the reply_to text for a known session label
-        #      (catches replies to OLD messages from before this daemon run,
-        #       e.g. busy messages sent before track_message covered them)
+        #   1-3. _resolve_reply_target: exact msg_map hit, a last_msg_id
+        #        scan, then a text-guess — all scoped to the calling
+        #        chat (design.md Part 0) so a message id colliding
+        #        across two chats can never resolve into the wrong
+        #        chat's session.
         #   4. last_active_session (the session the user most recently addressed)
         #   5. Error: nothing to route to → tell the user instead of silently dropping
         reply_to = update.message.reply_to_message
-        sess = None
+        chat_id = calling_chat_id(update)
+        sess = self._resolve_reply_target(reply_to, chat_id)
         fallback_reason = ""
-        if reply_to:
-            sess = self.registry.get_session_by_msg(reply_to.message_id)
-            if not sess:
-                for cand in self.registry.all_sessions().values():
-                    if cand.last_msg_id == reply_to.message_id:
-                        sess = cand
-                        break
-            if not sess:
-                sess = self._guess_session_from_text(
-                    reply_to.text or reply_to.caption or ""
-                )
-                if sess:
-                    fallback_reason = (
-                        f"reply target msg {reply_to.message_id} not tracked — "
-                        f"recovered session [{sess.label}] from message text"
-                    )
-            if not sess:
-                fallback_reason = (
-                    f"reply target msg {reply_to.message_id} unknown — "
-                    "routed by last_active fallback"
-                )
+        if reply_to and not sess:
+            fallback_reason = (
+                f"reply target msg {reply_to.message_id} unknown — "
+                "routed by last_active fallback"
+            )
         if not sess:
             name = self.registry.last_active_session
             sess = self.registry.get(name) if name else None
@@ -1106,12 +1090,21 @@ class CommandHandlersMixin:
         asyncio.create_task(self._maybe_update_bot_name(sess.name))
 
         if not await inject.is_alive(sess.name):
-            await update.message.reply_text(f"⚠️ Session '{sess.name}' not found")
+            await update.message.reply_text(
+                f"⚠️ Session '{sess.name}' not found",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(
+                    "🔁 Resume", callback_data=f"{sess.name}:resume")]]),
+            )
             return
+
+        reply_context = self._build_reply_context(
+            update.message, sess, bot_id=ctx.bot.id,
+            allow_file=sess.status != Status.BUSY,
+        )
 
         # Queue if session is busy — inject when it goes IDLE
         if sess.status == Status.BUSY:
-            if not sess.queue_prompt(text, update.message.message_id):
+            if not sess.queue_prompt(text, update.message.message_id, reply_context):
                 await update.message.reply_text(
                     f"⚠️ Queue is full ({QUEUE_CAP} pending) for "
                     f"[{html_mod.escape(sess.label)}]. Tap stop or wait "
@@ -1127,8 +1120,9 @@ class CommandHandlersMixin:
         sess.trigger_msg_id = update.message.message_id
         sess.last_prompt = text
         self._mark_driver(sess, update)
+        self.registry.track_message(update.message.message_id, sess.name, chat_id or 0)
         self.registry.mark_dirty()
-        ok = await self._inject_prompt(sess, text)
+        ok = await self._inject_prompt(sess, text, reply_context)
         if ok:
             await self._react(update, "👀")
             self.registry.transition(sess.name, Status.BUSY)
@@ -1237,18 +1231,8 @@ class CommandHandlersMixin:
         their typed text would.
         """
         reply_to = update.message.reply_to_message
-        sess = None
-        if reply_to:
-            sess = self.registry.get_session_by_msg(reply_to.message_id)
-            if not sess:
-                for cand in self.registry.all_sessions().values():
-                    if cand.last_msg_id == reply_to.message_id:
-                        sess = cand
-                        break
-            if not sess:
-                sess = self._guess_session_from_text(
-                    reply_to.text or reply_to.caption or ""
-                )
+        chat_id = calling_chat_id(update)
+        sess = self._resolve_reply_target(reply_to, chat_id)
         if not sess:
             name = self.registry.last_active_session
             sess = self.registry.get(name) if name else None
@@ -1263,12 +1247,21 @@ class CommandHandlersMixin:
         asyncio.create_task(self._maybe_update_bot_name(sess.name))
 
         if not await inject.is_alive(sess.name):
-            await update.message.reply_text(f"⚠️ Session '{sess.name}' not found")
+            await update.message.reply_text(
+                f"⚠️ Session '{sess.name}' not found",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(
+                    "🔁 Resume", callback_data=f"{sess.name}:resume")]]),
+            )
             return
+
+        reply_context = self._build_reply_context(
+            update.message, sess, bot_id=self._app.bot.id,
+            allow_file=sess.status != Status.BUSY,
+        )
 
         # Queue if busy
         if sess.status == Status.BUSY:
-            if not sess.queue_prompt(transcript, update.message.message_id):
+            if not sess.queue_prompt(transcript, update.message.message_id, reply_context):
                 await update.message.reply_text(
                     f"⚠️ Queue full for [{html_mod.escape(sess.label)}].",
                     parse_mode="HTML",
@@ -1282,8 +1275,9 @@ class CommandHandlersMixin:
         sess.trigger_msg_id = update.message.message_id
         sess.last_prompt = transcript
         self._mark_driver(sess, update)
+        self.registry.track_message(update.message.message_id, sess.name, chat_id or 0)
         self.registry.mark_dirty()
-        ok = await self._inject_prompt(sess, transcript)
+        ok = await self._inject_prompt(sess, transcript, reply_context)
         if ok:
             await self._react(update, "🎙️")
             self.registry.transition(sess.name, Status.BUSY)
@@ -1354,18 +1348,8 @@ class CommandHandlersMixin:
 
         # Resolve target session (same routing precedence as _handle_message)
         reply_to = msg.reply_to_message
-        sess = None
-        if reply_to:
-            sess = self.registry.get_session_by_msg(reply_to.message_id)
-            if not sess:
-                for cand in self.registry.all_sessions().values():
-                    if cand.last_msg_id == reply_to.message_id:
-                        sess = cand
-                        break
-            if not sess:
-                sess = self._guess_session_from_text(
-                    reply_to.text or reply_to.caption or ""
-                )
+        chat_id = calling_chat_id(update)
+        sess = self._resolve_reply_target(reply_to, chat_id)
         if not sess:
             name = self.registry.last_active_session
             sess = self.registry.get(name) if name else None
@@ -1381,12 +1365,21 @@ class CommandHandlersMixin:
         asyncio.create_task(self._maybe_update_bot_name(sess.name))
 
         if not await inject.is_alive(sess.name):
-            await msg.reply_text(f"⚠️ Session '{sess.name}' not found")
+            await msg.reply_text(
+                f"⚠️ Session '{sess.name}' not found",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(
+                    "🔁 Resume", callback_data=f"{sess.name}:resume")]]),
+            )
             return
+
+        reply_context = self._build_reply_context(
+            msg, sess, bot_id=ctx.bot.id,
+            allow_file=sess.status != Status.BUSY,
+        )
 
         # Queue if busy
         if sess.status == Status.BUSY:
-            if not sess.queue_prompt(prompt, msg.message_id):
+            if not sess.queue_prompt(prompt, msg.message_id, reply_context):
                 await msg.reply_text(
                     f"⚠️ Queue is full ({QUEUE_CAP} pending) for "
                     f"[{html_mod.escape(sess.label)}]. File not queued.",
@@ -1401,8 +1394,9 @@ class CommandHandlersMixin:
         sess.trigger_msg_id = msg.message_id
         sess.last_prompt = prompt
         self._mark_driver(sess, update)
+        self.registry.track_message(msg.message_id, sess.name, chat_id or 0)
         self.registry.mark_dirty()
-        ok = await self._inject_prompt(sess, prompt)
+        ok = await self._inject_prompt(sess, prompt, reply_context)
         if ok:
             await self._react(update, "👀")
             self.registry.transition(sess.name, Status.BUSY)
@@ -1441,6 +1435,8 @@ class CommandHandlersMixin:
 
         sess.trigger_msg_id = update.message.message_id
         sess.last_prompt = prompt_text
+        self.registry.track_message(update.message.message_id, sess.name,
+                                    calling_chat_id(update) or 0)
         self.registry.mark_dirty()
         ok = await self._inject_prompt(sess, prompt_text)
         if ok:
@@ -1499,6 +1495,8 @@ class CommandHandlersMixin:
                 return
             sess.trigger_msg_id = update.message.message_id
             sess.last_prompt = prompt_text
+            self.registry.track_message(update.message.message_id, name,
+                                        calling_chat_id(update) or 0)
             self.registry.mark_dirty()
             self.registry.last_active_session = name  # user explicitly targeted this session
             asyncio.create_task(self._maybe_update_bot_name(name))
@@ -1518,6 +1516,8 @@ class CommandHandlersMixin:
             new_sess = self.registry.get_or_create(session_name)
             new_sess.trigger_msg_id = update.message.message_id
             new_sess.last_prompt = prompt_text
+            self.registry.track_message(update.message.message_id, session_name,
+                                        calling_chat_id(update) or 0)
             self.registry.mark_dirty()
             self.registry.last_active_session = session_name
             asyncio.create_task(self._maybe_update_bot_name(session_name))
