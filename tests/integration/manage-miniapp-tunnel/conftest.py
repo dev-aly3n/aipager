@@ -189,6 +189,31 @@ class LeakGuard:
 
 
 @pytest.fixture(autouse=True)
+def _no_public_url_override_by_default(monkeypatch):
+    """``aipager.config.MINIAPP_PUBLIC_URL`` is computed once, at process
+    import time, from this machine's real
+    ``~/.config/aipager/`` config -- which (per the orchestrator's own
+    verification notes) currently holds a real, stale tunnel hostname.
+    Discovered empirically: a first draft of these tests asserted
+    ``resolve_public_url()`` returned a freshly-discovered fake URL and
+    instead got back that real stale hostname, because the module-level
+    constant was already baked in before any fixture ran and no test
+    here had overridden it. ``tests/test_bot_app_command.py`` shows this
+    is the established, expected pattern in this codebase (explicit
+    ``monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", ...)`` per
+    test) -- not something ``_isolate_home_paths`` covers, since that
+    patches the *path* the value would be re-read from, not the
+    already-computed value itself.
+
+    Autouse to "no override" so every test in this package starts from
+    the documented default precedence unless it explicitly opts into
+    testing the override path itself (which then sets its own value,
+    taking precedence over this fixture).
+    """
+    monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", "")
+
+
+@pytest.fixture(autouse=True)
 def leak_guard(tmp_path, monkeypatch):
     cache_dir = tmp_path / "cloudflared-cache"
     monkeypatch.setenv("AIPAGER_CLOUDFLARED_CACHE_DIR", str(cache_dir))
