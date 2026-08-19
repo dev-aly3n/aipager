@@ -285,6 +285,47 @@ def _no_real_login_shell_probe(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_real_service_manager(request, monkeypatch):
+    """Refuse to drive the real systemd/launchd session by default.
+
+    ``service._install_linux()`` ends with
+    ``systemctl --user enable --now aipager.service`` — the SAME unit name
+    the operator's live daemon runs under on this machine. A test reaching
+    it unmocked would enable, start or restart their actual daemon, and
+    ``_post_install_probe()`` would then poke the live control socket.
+
+    The sibling ``_no_real_login_shell_probe`` above already guards the
+    other real-subprocess path in this module; this closes the pair. Both
+    exist because this suite has a history of reaching past its sandbox —
+    ``tests/conftest.py``'s own ``/tmp``-socket guard documents a run that
+    unlinked the live daemon's hook socket and left hooks silently dead.
+
+    Commands that are not a service manager (``_run(["x"])`` in the tests
+    of ``_run`` itself) pass through untouched.
+    """
+
+    from aipager import service as _service
+
+    real_run = _service._run          # delegate, do not replace
+
+    def _guarded(cmd, *a, **kw):
+        head = str(cmd[0]) if cmd else ""
+        if head.rsplit("/", 1)[-1] in ("systemctl", "launchctl"):
+            raise AssertionError(
+                f"test invoked the real service manager: {cmd!r}. This can "
+                "enable/restart the operator's live aipager.service. "
+                "Monkeypatch aipager.service._run in your test instead."
+            )
+        # Everything else runs for real — the tests OF _run pass fake argv
+        # like ["x"] and assert on its genuine exit codes, so replacing it
+        # wholesale would break the thing this guard is meant to protect.
+        return real_run(cmd, *a, **kw)
+
+    if "e2e" not in request.keywords:
+        monkeypatch.setattr("aipager.service._run", _guarded)
+
+
+@pytest.fixture(autouse=True)
 def _block_real_telegram_http(monkeypatch):
     """Fail loudly rather than POST to api.telegram.org.
 
