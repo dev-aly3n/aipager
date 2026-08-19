@@ -413,3 +413,33 @@ def test_force_true_bypasses_memo(tmp_path, monkeypatch):
     # With force, the new candidate set is picked up.
     fresh = claude_resolve.resolve_claude_binary(force=True)
     assert fresh.chosen.version == "2.0.0"
+
+
+# ---- criterion 2: every call site agrees given the same candidates -------
+
+def test_all_call_sites_resolve_the_same_binary_from_the_same_candidates(
+        tmp_path, monkeypatch):
+    """preflight.require_claude(), dtach.launcher._claude_version_diag()
+    (via resolution success/failure) and claude_bootstrap.
+    bootstrap_claude_settings()'s provenance line must all agree,
+    because they all funnel through this one resolver — the exact
+    six-independent-lookups bug this module exists to fix."""
+    from aipager import claude_bootstrap, preflight
+    from aipager.dtach import launcher as dtach_launcher
+
+    fx = _write_fixture_claude(tmp_path / "claude", version="2.1.235")
+    monkeypatch.setattr(claude_resolve, "_candidate_paths", lambda: [(str(fx), 4)])
+    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", tmp_path / "settings.json")
+    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+
+    # 1) preflight.require_claude()
+    resolved_path = preflight.require_claude()
+    assert resolved_path == str(fx)
+
+    # 2) _claude_version_diag(): "" means resolution succeeded with no diagnostic.
+    assert dtach_launcher._claude_version_diag() == ""
+
+    # 3) bootstrap_claude_settings()'s provenance names the same path.
+    info = claude_bootstrap.bootstrap_claude_settings("/workspace")
+    assert info is not None
+    assert info.lines[0].startswith(f"claude: {fx} (2.1.235)")

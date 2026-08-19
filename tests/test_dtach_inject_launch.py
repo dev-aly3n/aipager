@@ -80,6 +80,42 @@ def test_launch_session_no_resume_flag_when_id_missing(tmp_path, monkeypatch, ru
     assert "--resume" not in bash_cmd
 
 
+def test_launch_session_passes_explicit_env_with_daemon_credential(
+        tmp_path, monkeypatch, run_async):
+    """criterion 15: the subprocess call includes an explicit `env=`
+    containing the token when the credential file provides one — never
+    solely ambient inheritance (today's `create_subprocess_exec` passed
+    no `env=` at all)."""
+    captured = {}
+
+    async def _fake_exec(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return _make_proc(returncode=0)
+
+    monkeypatch.setattr(dtach_inject.asyncio, "create_subprocess_exec", _fake_exec)
+    calls = {"n": 0}
+
+    def _is_socket(self):
+        calls["n"] += 1
+        return calls["n"] > 1
+
+    monkeypatch.setattr(dtach_inject.Path, "is_socket", _is_socket)
+
+    daemon_env = tmp_path / "daemon.env"
+    daemon_env.write_text("CLAUDE_CODE_OAUTH_TOKEN=sk-from-daemon-env\n")
+    monkeypatch.setattr(dtach_inject.daemon_secrets, "DAEMON_ENV_PATH", daemon_env)
+    monkeypatch.delenv("CREDENTIALS_DIRECTORY", raising=False)
+    # Ambient inheritance must NOT be what carries the token — clear it
+    # from the calling process's own environ.
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+
+    ok, _ = run_async(dtach_inject.launch_session("jim"))
+    assert ok
+    assert "env" in captured["kwargs"]
+    assert captured["kwargs"]["env"]["CLAUDE_CODE_OAUTH_TOKEN"] == "sk-from-daemon-env"
+
+
 def test_launch_session_quotes_claude_bin_with_metacharacters(
         tmp_path, monkeypatch, run_async):
     """A claude binary path containing shell metacharacters must not
