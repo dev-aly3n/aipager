@@ -54,8 +54,8 @@ guards, not just a reuse of them:
 from __future__ import annotations
 
 import json
-import os
 import stat
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -120,6 +120,22 @@ class FakeServiceRun:
 
 
 @pytest.fixture(autouse=True)
+def _no_login_shell_token_discovery_by_default(monkeypatch):
+    """``ensure_daemon_env()`` falls back to
+    ``service._discover_token_via_login_shell()`` when no legacy token
+    is found. ``tests/conftest.py``'s own autouse guard makes that raise
+    loudly by default (see its docstring) rather than spawn a real login
+    shell -- correct, but it means every test in this package that
+    reaches ``_install_linux()``/``ensure_daemon_env()`` for a reason
+    OTHER than exercising token discovery itself needs a default stub,
+    or it fails on an assertion unrelated to what the test is actually
+    about. Tests for the discovery path itself override this locally.
+    """
+    monkeypatch.setattr(
+        "aipager.service._discover_token_via_login_shell", lambda: None)
+
+
+@pytest.fixture(autouse=True)
 def fake_service_run(monkeypatch):
     """See module docstring point 3. Returns the recorder so a test that
     cares about exactly which systemctl invocations happened can assert
@@ -162,7 +178,20 @@ def write_claude_fixture(
     })
 
     body_lines = [
-        "#!/usr/bin/env python3",
+        # An absolute interpreter path (not `#!/usr/bin/env python3`):
+        # several tests here deliberately overwrite `$PATH` down to just
+        # the fixture directories under test, to keep tier-4 ($PATH)
+        # discovery fully deterministic regardless of what's actually
+        # installed on the machine running the suite (see
+        # `test_realpath_dedup_and_precedence.py`'s discovery, made the
+        # hard way: a `/usr/bin/env python3` shebang under a `$PATH`
+        # that no longer contains `/usr/bin` makes the kernel itself
+        # fail the exec with "python3: not found", which
+        # `claude_resolve._verify_candidate` faithfully (and correctly)
+        # reports as "--version exited 127" -- indistinguishable from a
+        # broken candidate. An absolute shebang sidesteps the kernel's
+        # own PATH lookup entirely.
+        f"#!{sys.executable}",
         "import sys",
         "from pathlib import Path",
         "args = sys.argv[1:]",
@@ -205,6 +234,26 @@ def claude_fixture_factory(tmp_path):
         return write_claude_fixture(tmp_path / "bin" / name / "claude", **kwargs)
 
     return _make
+
+
+@pytest.fixture
+def isolate_from_real_local_bin_claude(tmp_path, monkeypatch):
+    """Redirect ``Path.home()`` so tier 3 (``~/.local/bin/claude``) never
+    resolves to this box's REAL, working claude install.
+
+    Tier 3 is a fixed, home-relative path that ``_candidate_paths()``
+    cannot be steered away from by env var or config override, so any
+    test that restores real discovery (``real_candidate_paths``) and
+    does not use this fixture will silently pick up whatever the
+    machine actually running the suite happens to have installed at
+    ``~/.local/bin/claude`` -- verified empirically while writing this
+    package: without this redirect, precedence/dedup tests using
+    ``$PATH``-only fixtures were shadowed outright by this tester's own
+    real install, and a real ``--version`` subprocess ran against it.
+    """
+    fake_home = tmp_path / "fake_home_for_local_bin_tier"
+    monkeypatch.setattr("pathlib.Path.home", staticmethod(lambda: fake_home))
+    return fake_home
 
 
 @pytest.fixture(autouse=True)
