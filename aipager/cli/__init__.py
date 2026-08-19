@@ -246,7 +246,7 @@ def main() -> None:
     miniapp_enable_p.add_argument(
         "--url",
         help="manual public URL override (must start with https://); "
-             "omit to rely on Tailscale auto-detect",
+             "omit and aipager runs its own tunnel for you",
     )
     miniapp_sub.add_parser(
         "disable", help="turn the Mini App server off (requires a daemon restart)",

@@ -357,7 +357,7 @@ class CommandHandlersMixin:
             )
             return
 
-        from aipager.config import MINIAPP_ENABLED, MINIAPP_PORT
+        from aipager.config import MINIAPP_ENABLED
         if not MINIAPP_ENABLED:
             await update.message.reply_text(
                 "The Mini App server isn't enabled on this machine.\n"
@@ -373,16 +373,27 @@ class CommandHandlersMixin:
         from aipager.miniapp.tunnel import resolve_public_url
         url = await resolve_public_url()
         if not url:
-            await update.message.reply_text(
-                "No public URL is configured or auto-detectable yet.\n\n"
-                "Set up Tailscale Funnel on the machine running aipager:\n"
-                "<code>curl -fsSL https://tailscale.com/install.sh | sh\n"
-                "sudo tailscale up\n"
-                f"sudo tailscale funnel {MINIAPP_PORT} on</code>\n\n"
-                "…or set a manual URL: "
-                "<code>aipager miniapp enable --url https://your-tunnel</code>",
-                parse_mode="HTML",
-            )
+            # This used to print Tailscale install instructions, including
+            # `curl | sh` and two `sudo` lines. That predates the managed
+            # Cloudflare tunnel and is now both a contract violation — the
+            # user installs aipager and runs nothing else — and simply
+            # false: on a healthy install the only reason there is no URL
+            # yet is that the tunnel has not finished coming up
+            # (cloudflared needs ~10-30s, and the first DNS probe often
+            # fails and succeeds on the retry).
+            from aipager.miniapp.server import miniapp_extra_available
+            if not miniapp_extra_available():
+                await update.message.reply_text(
+                    "📱 The Mini App isn't available on this machine — "
+                    "aipager was installed without it.\n\n"
+                    "Everything else keeps working; ask whoever set this "
+                    "up to reinstall aipager with the Mini App included.",
+                )
+            else:
+                await update.message.reply_text(
+                    "📱 The Mini App link is still being set up — "
+                    "try /app again in a few seconds.",
+                )
             return
 
         # Personal mode only (scope/team mode already gated above via

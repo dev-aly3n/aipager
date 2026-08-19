@@ -6,9 +6,15 @@ runs on the daemon's own event loop, never spawns a second one.
 
 Security-critical: the host aiohttp binds to is hardcoded to
 ``127.0.0.1`` right below. Do not add a "host" option, read it from
-config, or take it from args/env "for flexibility" — the tunnel
-(Tailscale Funnel or similar, always operator-installed, never
-bundled) is the sole intended ingress. See design.md's threat model.
+config, or take it from args/env "for flexibility" — a tunnel is the
+sole intended ingress. See design.md's threat model.
+
+That tunnel is normally the Cloudflare quick tunnel aipager starts and
+supervises itself (:mod:`aipager.miniapp.tunnel_manager`), which is why
+this docstring no longer says the ingress is "always operator-installed,
+never bundled": it was written before that existed, and the product
+contract is now that the user installs aipager and runs nothing else.
+An operator-provided URL is still honoured as an override.
 """
 
 from __future__ import annotations
@@ -38,6 +44,59 @@ _MODEL_HINTS = {
     "opusplan": "Opus for planning, Sonnet to execute",
     "fable": "Newest family alias",
 }
+
+def reinstall_with_miniapp_hint() -> str:
+    """The single command that installs the optional Mini App extra.
+
+    Matched to whichever installer actually owns this aipager, so the
+    line can be pasted as-is instead of making the reader work out which
+    of four package managers applies to them.
+
+    Lives here rather than in ``aipager.miniapp.cli`` because ``doctor``
+    needs it too, and a health check importing a CLI command module is
+    backwards — the dependency should point at the thing being described,
+    not at one of the things describing it.
+    """
+    try:
+        from aipager.updater import _detect_installer
+        installer = _detect_installer()
+    except Exception:
+        installer = None
+    if installer == "uv":
+        return "uv tool install --reinstall 'aipager[miniapp]'"
+    if installer == "pipx":
+        return "pipx install --force 'aipager[miniapp]'"
+    if installer == "brew":
+        return "brew reinstall aipager"
+    return "pip install 'aipager[miniapp]'"
+
+
+def miniapp_extra_available() -> bool:
+    """Is the optional ``[miniapp]`` dependency set importable?
+
+    The Mini App server needs ``aiohttp``, which a base install does not
+    pull in. Checked by import machinery rather than by importing, so
+    calling this is cheap and has no side effects on the hot path.
+
+    Exists because three surfaces need the same answer and used to
+    disagree: ``aipager miniapp enable`` printed a green tick without
+    checking, ``/app`` blamed a missing tunnel, and ``doctor`` had no
+    opinion at all — so an install whose Mini App could never start
+    reported "13 ok · 0 warn · 0 fail".
+    """
+    from importlib.util import find_spec
+
+    try:
+        return find_spec("aiohttp") is not None
+    except Exception:
+        # Deliberately broad. `doctor.run_all()` wraps its checks in
+        # nothing at all, so anything escaping this function takes down
+        # the entire `aipager doctor` command rather than greying out one
+        # row — and a broken meta-path finder can raise something no
+        # narrower clause anticipates. Reporting "not available" is the
+        # safe answer: it warns, it never blocks.
+        return False
+
 
 class MiniAppUnavailable(Exception):
     """Raised from :meth:`MiniAppServer.start` when ``aiohttp`` isn't
