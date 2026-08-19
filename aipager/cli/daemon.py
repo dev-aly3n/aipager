@@ -214,6 +214,32 @@ def _telegram_preflight() -> str:
     return username
 
 
+async def _finish_auth_check(bot, provenance) -> None:
+    """Resolve and deliver the startup auth warning, off the hot path.
+
+    When ``provenance.pending`` is set, Claude reported itself logged
+    out and the recovery sweep has NOT run yet — it is deferred to here
+    because it can spend ~20s in blocking subprocesses, and doing that
+    before ``bot.start()`` would delay remote control coming up in
+    exactly the situation where the operator needs it most. Run in a
+    worker thread so the event loop keeps serving Telegram meanwhile.
+
+    Never raises: this is a fire-and-forget task, and an unhandled
+    exception here would be swallowed by the loop and reported as a
+    "Task exception was never retrieved" warning rather than anything
+    actionable.
+    """
+    from aipager import claude_bootstrap
+
+    try:
+        text = await asyncio.to_thread(
+            claude_bootstrap.recover_auth_or_notice, provenance.pending)
+        if text:
+            await bot.send_startup_notice(text)
+    except Exception:
+        log.debug("startup auth check failed", exc_info=True)
+
+
 async def _run_daemon(bot_username: str) -> None:
     """Boot the daemon and run until SIGINT/SIGTERM."""
     from aipager.config import (
@@ -257,14 +283,22 @@ async def _run_daemon(bot_username: str) -> None:
 
     await bot.start()
     if provenance is not None:
+        # Always scheduled once a binary resolved — ProvenanceInfo's own
+        # invariant guarantees `pending` is set, because the cheap auth
+        # check cannot see an expired token and so must never be the
+        # last word. Whether anything is actually SENT is decided inside
+        # _finish_auth_check, and only an unusable credential says
+        # anything: the provenance detail (absolute paths, versions,
+        # every install found) goes to the journal, never to a chat
+        # stored on Telegram's servers and, in a team scope, read by
+        # every member of every configured group.
+        #
         # Fire-and-forget, mirroring TunnelManager.start()'s precedent —
         # a slow or failing send must never delay recover_sessions() or
         # the session monitor. Once per process lifetime; nothing
         # re-sends on team-reload, Mini App reconnect, or any session
         # event.
-        asyncio.create_task(
-            bot.send_startup_notice("\n".join(provenance.lines))
-        )
+        asyncio.create_task(_finish_auth_check(bot, provenance))
     observers = None
     if OBSERVER_BOTS:
         observers = ObserverBroadcaster(OBSERVER_BOTS)

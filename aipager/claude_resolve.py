@@ -63,7 +63,10 @@ import logging
 import os
 import platform
 import re
+import secrets
+import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -387,8 +390,241 @@ def format_provenance(resolved: ResolvedClaude, auth: AuthStatus) -> list[str]:
     return lines
 
 
+@dataclass(frozen=True)
+class CredentialCheck:
+    """Result of actually *using* the credential, not just finding one.
+
+    ``state`` is one of:
+
+    ``valid``     the credential works.
+    ``rejected``  a credential was present and the API refused it —
+                  expired, revoked, or malformed. This is the case
+                  ``claude auth status`` cannot see at all.
+    ``absent``    Claude reports no credential configured.
+    ``unknown``   we could not tell: the probe timed out, the machine is
+                  offline, the binary vanished, or Claude said something
+                  we do not recognise. **Always treated as silence.**
+    """
+
+    state: str
+    detail: str | None = None
+
+
+# Matched against the probe's combined output. Deliberately narrow: an
+# unrecognised failure must fall through to "unknown" and stay silent
+# rather than be guessed at as a credential problem.
+_REJECTED_RE = re.compile(
+    r"(\b401\b|Failed to authenticate|OAuth (access )?token is invalid"
+    r"|Invalid API key|authentication_error|invalid_api_key)",
+    re.IGNORECASE,
+)
+_ABSENT_RE = re.compile(r"(Not logged in|Please run /login)", re.IGNORECASE)
+
+# The happy path measured ~3s. 20s leaves generous headroom without
+# letting an unreachable API (which does not fail fast — it hangs and
+# retries) hold the check open indefinitely.
+_PROBE_TIMEOUT = 20.0
+
+# Cheapest real round-trip: print mode, smallest model, one word out.
+# The `haiku` ALIAS rather than a pinned model id, so a model retirement
+# cannot silently turn every probe into "unknown".
+_PROBE_ARGS = ("-p", "say ok", "--model", "haiku")
+
+
+_PROBE_DIR_PREFIX = "aipager-authprobe-"
+
+
+def _make_probe_dir() -> str:
+    """Create the throwaway cwd the probe runs in.
+
+    Hex-only suffix on purpose: ``tempfile.mkdtemp``'s own alphabet
+    includes ``_``, which Claude's project slugification turns into
+    ``-``, so a raw mkdtemp name would make the transcript directory
+    ambiguous and cleanup would miss it. Hex survives slugification
+    unchanged, so the directory we compute is the directory Claude
+    writes.
+
+    Separate function so a test can make the probe run somewhere
+    predictable and prove the cleanup guards are load-bearing.
+    """
+    path = os.path.join(
+        tempfile.gettempdir(), f"{_PROBE_DIR_PREFIX}{secrets.token_hex(8)}")
+    os.mkdir(path, 0o700)
+    return path
+
+
+def _probe_project_dir(cwd: str) -> Path:
+    """Where Claude Code will write this probe's transcript.
+
+    Claude slugifies the working directory into ``~/.claude/projects``.
+    The rule is "every character that is not alphanumeric becomes a
+    hyphen" — measured, not assumed: cwd
+    ``/tmp/aipager-slug.test_dir-x.y`` produces
+    ``-tmp-aipager-slug-test-dir-x-y``. An earlier version of this
+    function replaced only ``/``, which silently computed the wrong
+    directory whenever the path contained ``.`` or ``_`` — including
+    ``tempfile.mkdtemp``'s own random suffix, which draws from an
+    alphabet that includes ``_``. Cleanup then no-opped and transcripts
+    accumulated forever, ~1 start in 8.
+    """
+    slug = re.sub(r"[^A-Za-z0-9]", "-", str(cwd))
+    return Path.home() / ".claude" / "projects" / slug
+
+
+def _run_probe(claude_path: str, env: dict[str, str], cwd: str,
+               timeout: float) -> tuple[int, str]:
+    """Spawn the probe. Isolated as the single seam every test patches —
+    nothing in the suite may ever really run this (it costs money)."""
+    r = subprocess.run(
+        [claude_path, *_PROBE_ARGS],
+        capture_output=True, text=True, timeout=timeout, env=env, cwd=cwd,
+    )
+    return r.returncode, f"{r.stdout}\n{r.stderr}"
+
+
+def validate_credential(
+    claude_path: str, env: dict[str, str], *, timeout: float = _PROBE_TIMEOUT,
+) -> CredentialCheck:
+    """Actually use the credential once, and classify what happened.
+
+    ``claude auth status`` only reports that a credential *exists*: a
+    revoked token still answers ``{"loggedIn": true}``. That blind spot
+    is the expired-token case, where every session silently parks on the
+    login screen and hangs BUSY forever — so this spends one tiny
+    round-trip to learn the truth.
+
+    Runs ``claude`` itself rather than a hand-rolled HTTP call, because
+    only Claude knows how to present whichever credential is in play:
+    env token, credentials file, macOS Keychain, subscription login,
+    Bedrock/Vertex. No single endpoint guess covers those.
+
+    Never raises. Anything ambiguous is ``unknown``, which callers must
+    treat as "say nothing" — warning an offline operator that their
+    credential is bad, on every restart, would be worse than silence.
+    """
+    try:
+        tmpdir = _make_probe_dir()
+    except OSError as e:
+        # Creating the throwaway cwd can fail on its own: a full disk, a
+        # read-only or sandboxed /tmp, a hostile umask. This is OUTSIDE
+        # the try/finally below (there is nothing to clean up yet), so
+        # without this it would escape a function whose contract is
+        # "never raises" — and `doctor.check_claude_auth` has no wrapper
+        # anywhere up to `cmd_doctor`, so it would take down the whole
+        # `aipager doctor` command instead of degrading to one grey row.
+        return CredentialCheck("unknown", f"could not create probe dir: {e}")
+    try:
+        try:
+            code, output = _run_probe(claude_path, env, tmpdir, timeout)
+        except subprocess.TimeoutExpired:
+            return CredentialCheck("unknown", "probe timed out")
+        except FileNotFoundError:
+            return CredentialCheck("unknown", "binary not found")
+        except OSError as e:
+            return CredentialCheck("unknown", str(e))
+        except AssertionError:
+            # tests/conftest.py's _no_real_credential_probe raises this
+            # so an unmocked test fails loudly instead of quietly
+            # spending the operator's money. Swallowing it into
+            # "unknown" would disarm that guard completely. Production
+            # never raises AssertionError from a subprocess call.
+            raise
+        except Exception as e:                      # never raise
+            return CredentialCheck("unknown", str(e))
+
+        if code == 0:
+            return CredentialCheck("valid")
+        # Rejection is checked FIRST: Claude's "Invalid API key" message
+        # also invites you to /login, so matching "absent" first would
+        # file an expired credential under "nothing configured" and send
+        # the operator hunting for a file that is sitting right there.
+        if _REJECTED_RE.search(output):
+            return CredentialCheck("rejected", "credential refused by the API")
+        if _ABSENT_RE.search(output):
+            return CredentialCheck("absent", "claude reports no credential")
+        return CredentialCheck("unknown", f"exit {code}")
+    finally:
+        _cleanup_probe_artifacts(tmpdir)
+
+
+def _cleanup_probe_artifacts(tmpdir: str) -> None:
+    """Remove the temp cwd and the transcript Claude wrote for it.
+
+    Guarded on the path actually living under ``~/.claude/projects`` and
+    carrying this probe's own unique temp-directory name, so a bug here
+    can never delete one of the operator's real project histories.
+    """
+    try:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+    except Exception:
+        pass
+    try:
+        project = _probe_project_dir(tmpdir)
+        projects_root = Path.home() / ".claude" / "projects"
+        if (project.parent == projects_root
+                and _PROBE_DIR_PREFIX in project.name
+                and project.is_dir()):
+            shutil.rmtree(project, ignore_errors=True)
+    except Exception:
+        pass
+
+
+def _with_article(kind: str) -> str:
+    return f"{'an' if kind[:1].lower() in 'aeiou' else 'a'} {kind}"
+
+
+def format_auth_notice(found_kinds: list[str], *, rejected: bool = False) -> str:
+    """Render the ONLY thing this daemon ever says to Telegram about auth.
+
+    Deliberately says nothing about the machine. ``format_provenance``
+    above — absolute binary paths, versions, every install found — is for
+    the local journal and ``aipager doctor``, both of which stay on the
+    operator's own machine. A Telegram message does not: it is stored on
+    Telegram's servers, forwardable, screenshottable, and in a team scope
+    it reaches every member of every configured group. Naming the home
+    directory there leaks the OS username and the machine's layout to an
+    audience that has no use for either.
+
+    So this reports only the *kind* of credential found — enough for the
+    operator to know which thing to go fix — and never where it lives,
+    which version anything is, or what it is called on disk. Anything
+    added here must keep that property; ``tests/test_auth_notice.py``
+    asserts it against the rendered text.
+
+    *found_kinds* is the de-duplicated list of human-readable credential
+    kinds the recovery sweep turned up, in discovery order.
+    """
+    fix = "Run `claude auth login` on the machine running aipager."
+    if rejected:
+        # Distinct from "nothing found": something IS configured, it just
+        # doesn't work any more. Expiry is by far the likeliest cause and
+        # naming it saves the operator hunting for a missing file that is
+        # sitting right where it should be.
+        what = _with_article(found_kinds[0]) if found_kinds else "a credential"
+        return (
+            f"\u26a0\ufe0f Claude rejected {what} — it has probably expired "
+            "or been revoked.\n\n" + fix
+        )
+    if not found_kinds:
+        return (
+            "\u26a0\ufe0f Claude isn't logged in, and I couldn't find a "
+            "credential anywhere I know to look.\n\n" + fix
+        )
+    phrases = [_with_article(k) for k in found_kinds]
+    if len(phrases) == 1:
+        what = phrases[0]
+    else:
+        what = ", ".join(phrases[:-1]) + f" and {phrases[-1]}"
+    return (
+        f"\u26a0\ufe0f Claude isn't logged in, though I did find {what} on "
+        "this machine — Claude isn't picking it up.\n\n" + fix
+    )
+
+
 __all__ = [
     "AuthStatus", "ClaudeInstall", "ClaudeNotFoundError", "ResolvedClaude",
-    "detect_auth", "format_provenance", "resolve_claude_binary",
+    "CredentialCheck", "detect_auth", "format_auth_notice",
+    "format_provenance", "validate_credential",
+    "resolve_claude_binary",
     "try_resolve_claude_binary",
 ]

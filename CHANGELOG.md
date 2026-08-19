@@ -22,15 +22,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     candidate verified with `--version` and de-duplicated by real path.
     Previously six independent lookups could each resolve a different
     binary on the same machine.
-  - **Auth is detected via Claude Code's own `claude auth status`**
-    (JSON, no network call) instead of a hand-rolled credentials-file
-    check — the old check was blind to macOS Keychain auth,
+  - **Auth is checked twice: cheaply, then for real.** Claude Code's own
+    `claude auth status` (JSON, no network call) replaces the
+    hand-rolled credentials-file check — the old check was blind to macOS Keychain auth,
     refresh-token-only credentials, and Max-plan logins, all of which
     work fine but look "logged out" to a file check. **A session is
-    never refused for looking unauthenticated** — aipager warns (daemon
-    log, `aipager doctor`, and a one-time Telegram message naming the
-    resolved binary, version, and auth method) and launches anyway,
-    letting Claude's own error be the ground truth.
+    never refused for looking unauthenticated** — aipager warns and
+    launches anyway, letting Claude's own error be the ground truth.
+    **`auth status` alone is not enough**: it reports that a credential
+    *exists*, not that it *works*. A revoked or expired token still
+    answers `{"loggedIn": true}`, so an expired token used to show a
+    green `aipager doctor` row while every session silently parked on
+    the login screen and hung forever. Once the daemon is up, aipager
+    now spends one tiny `claude -p` round-trip (the `haiku` model, a few
+    tokens) to confirm the credential really works — **a real network
+    call and a real, if negligible, charge on your account, once per
+    daemon start — and once more per `aipager doctor` run, which
+    performs the same check so its auth row cannot show green for a
+    credential that no longer works.** If it comes back rejected, aipager looks for another
+    credential that works before saying anything; if the check is
+    inconclusive (offline, a timeout, anything unrecognised) it stays
+    silent rather than cry wolf.
+    The resolved binary, its version and every other install found are
+    written to the daemon log and shown by `aipager doctor`, both of
+    which stay on your own machine. **Telegram is told nothing on a
+    healthy start.** If Claude reports itself logged out, aipager first
+    looks for a credential that does work — the service credential,
+    `daemon.env`, the environment, a stored login, and your login shell
+    — and uses it silently if it finds one. Only when nothing works does
+    it send a single message, and that message names just the *kind* of
+    credential it found ("a setup token, but Claude rejected it") plus
+    how to fix it. It never names a path, a version, or a filename:
+    that message reaches every configured scope, so in a team setup an
+    absolute path would show every group member the owner's home
+    directory and OS username.
   - **The service unit ships with `LoadCredential=`** instead of
     inlining the token into the daemon's own environment — it now stays
     out of `systemctl show`, unit backups, and pasted-in log output. The

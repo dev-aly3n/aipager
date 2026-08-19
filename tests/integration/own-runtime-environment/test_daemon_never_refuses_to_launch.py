@@ -116,8 +116,14 @@ def test_run_daemon_completes_and_starts_every_component_with_auth_absent(
 
     bot.send_startup_notice.assert_awaited_once()
     (notice_text,), _ = bot.send_startup_notice.await_args
-    assert "auth: none (not logged in)" in notice_text, notice_text
-    assert fixture_path in notice_text
+    assert "isn't logged in" in notice_text, notice_text
+    assert "claude auth login" in notice_text, notice_text
+    # The notice used to carry format_provenance()'s journal line, which
+    # names the resolved binary's absolute path. It must not: this text
+    # goes to every configured scope's chat, i.e. every member of every
+    # team group, and the path leaks the home directory and OS username.
+    assert fixture_path not in notice_text, notice_text
+    assert "/home/" not in notice_text, notice_text
 
 
 def test_run_daemon_exits_cleanly_when_no_token_configured(monkeypatch):

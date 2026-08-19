@@ -573,7 +573,11 @@ class LifecycleMixin:
         )
 
     def _all_notify_chat_ids(self) -> list[int]:
-        """Every chat that gets the one-time startup provenance notice.
+        """Every chat that gets the one-time startup auth warning.
+
+        Note the breadth: in a team setup this is every member of every
+        configured group, which is exactly why the text they receive is
+        machine-free (see ``claude_resolve.format_auth_notice``).
 
         Multi-scope: every configured scope's chat_id. Legacy: the
         single CHAT_ID, parsed the same defensively as
@@ -588,7 +592,13 @@ class LifecycleMixin:
             return []
 
     async def send_startup_notice(self, text: str) -> None:
-        """Send the one-time claude-provenance notice to every chat.
+        """Send the one-time startup auth warning to every chat.
+
+        Called only when Claude is genuinely unauthenticated and the
+        recovery sweep found nothing that works — a healthy start sends
+        nothing. *text* must never contain machine detail; the caller
+        builds it with ``claude_resolve.format_auth_notice``, not from
+        ``format_provenance``'s journal lines.
 
         Fire-and-forget from ``_run_daemon()`` — called once, after
         :meth:`start` has already begun polling, so a slow or failing

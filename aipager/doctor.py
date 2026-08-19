@@ -252,7 +252,34 @@ def check_claude_auth() -> CheckResult:
             WARN, "claude auth", detail=[detail_line],
             fix="claude auth login  # or set an API key / CLAUDE_CODE_OAUTH_TOKEN",
         )
-    return CheckResult(OK, "claude auth", detail=[detail_line])
+
+    # `auth status` says we have a credential — but it only checks that
+    # one EXISTS. A revoked or expired token still answers
+    # `{"loggedIn": true}`, and the operator would see a green row here
+    # while every session silently parks on the login screen. So spend
+    # one small round-trip and report what actually happens.
+    check = claude_resolve.validate_credential(resolved.chosen.path, env)
+    if check.state == "rejected":
+        return CheckResult(
+            WARN, "claude auth",
+            detail=[f"{detail_line} — but the API rejected it "
+                    "(expired or revoked)"],
+            fix="claude auth login  # the stored credential is no longer valid",
+        )
+    if check.state == "absent":
+        return CheckResult(
+            WARN, "claude auth",
+            detail=[f"{detail_line} — but claude reports no usable credential"],
+            fix="claude auth login",
+        )
+    if check.state == "unknown":
+        # Offline, or a probe we could not interpret. Report the cheap
+        # check's answer rather than inventing a verdict.
+        return CheckResult(
+            OK, "claude auth",
+            detail=[f"{detail_line} (not re-verified: {check.detail})"],
+        )
+    return CheckResult(OK, "claude auth", detail=[f"{detail_line} — verified"])
 
 
 def check_service_unit_path() -> CheckResult:

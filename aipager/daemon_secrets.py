@@ -79,6 +79,30 @@ def read_daemon_credential() -> dict[str, str]:
         return {}
 
 
+# Set once, by claude_bootstrap's startup recovery sweep, and only ever
+# to an overlay that was *proven* to authenticate by a real `claude auth
+# status` probe. Empty in the normal case: the sweep runs only when the
+# ordinary sources above already failed that same probe.
+_recovered: dict[str, str] = {}
+
+
+def set_recovered_credential(overlay: dict[str, str]) -> None:
+    """Record a credential the startup sweep proved works.
+
+    Applied by :func:`build_session_env` on top of the file sources,
+    deliberately overriding them: reaching here means the file sources
+    were probed and Claude rejected them, while this overlay was probed
+    and accepted. Preferring the proven-broken value would strand every
+    session on the login screen for no reason.
+
+    In-process only — nothing is written to disk. The next daemon start
+    re-derives it, so a credential the user later fixes properly is
+    picked up normally rather than being shadowed by a stale memo.
+    """
+    global _recovered
+    _recovered = dict(overlay)
+
+
 def build_session_env(base_env: dict[str, str] | None = None) -> dict[str, str]:
     """``(base_env or os.environ)`` overlaid with the daemon credential file.
 
@@ -95,7 +119,12 @@ def build_session_env(base_env: dict[str, str] | None = None) -> dict[str, str]:
         env.update(read_daemon_credential())
     except Exception:
         pass
+    if _recovered:
+        env.update(_recovered)
     return env
 
 
-__all__ = ["DAEMON_ENV_PATH", "build_session_env", "read_daemon_credential"]
+__all__ = [
+    "DAEMON_ENV_PATH", "build_session_env", "read_daemon_credential",
+    "set_recovered_credential",
+]

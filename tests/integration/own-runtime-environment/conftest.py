@@ -136,6 +136,55 @@ def _no_login_shell_token_discovery_by_default(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_recovery_sweep_home(monkeypatch, tmp_path):
+    """``_recover_auth`` checks ``Path.home()/".claude"/".credentials.json"``
+    fresh on every call, to report whether a *stored login* exists.
+
+    That is a real read of the real machine, which makes any test whose
+    assertions touch the notice text non-hermetic — it would say "and a
+    stored login" or not depending on whether whoever runs the suite
+    happens to be logged into Claude. Same class of hazard this file's
+    docstring (point 2) already neutralizes for
+    ``_credentials_file_is_fresh``; the new call site needs the same
+    treatment. Points HOME at an empty tmp dir so "no stored login" is a
+    fact of the fixture, not of the host.
+    """
+    fake_home = tmp_path / "sweep_home"
+    (fake_home / ".claude").mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr("pathlib.Path.home", staticmethod(lambda: fake_home))
+
+
+@pytest.fixture(autouse=True)
+def _allow_fixture_credential_probe(monkeypatch, tmp_path):
+    """Let the real probe run, but ONLY against a fixture binary.
+
+    ``tests/conftest.py``'s ``_no_real_credential_probe`` refuses every
+    ``claude -p`` invocation, because against a real install each one
+    spends money and hits the network. The binaries in this package are
+    fixture scripts under ``tmp_path`` that answer ``-p`` locally and
+    cost nothing, and running them is the whole point of a black-box
+    test — so the refusal is narrowed here to "anything not under
+    tmp_path" rather than lifted.
+    """
+    import subprocess as _sp
+
+    real_tmp = str(tmp_path.parent)
+
+    def _guarded(claude_path, env, cwd, timeout):
+        if not str(claude_path).startswith(real_tmp):
+            raise AssertionError(
+                f"integration test tried to probe a NON-fixture binary "
+                f"({claude_path!r}) — that would cost real money."
+            )
+        r = _sp.run([claude_path, "-p", "say ok", "--model", "haiku"],
+                    capture_output=True, text=True, timeout=timeout,
+                    env=env, cwd=cwd)
+        return r.returncode, f"{r.stdout}\n{r.stderr}"
+
+    monkeypatch.setattr("aipager.claude_resolve._run_probe", _guarded)
+
+
+@pytest.fixture(autouse=True)
 def _stub_resolve_aipager_bin(monkeypatch):
     """``_install_linux()`` renders ExecStart from
     ``service._resolve_aipager_bin()``, which is ``shutil.which("aipager")``
@@ -227,6 +276,17 @@ def write_claude_fixture(
     else:
         body_lines.append(f"    sys.stdout.write({auth_payload!r})")
     body_lines.append(f"    sys.exit({auth_exit})")
+    # Print mode: what validate_credential() probes with. Mirrors the real
+    # binary's observed behaviour -- exit 0 plus a word of output when
+    # authenticated, exit 1 plus "Not logged in" when not.
+    body_lines.append('if "-p" in args:')
+    if logged_in:
+        body_lines.append("    sys.stdout.write('ok' + chr(10))")
+        body_lines.append("    sys.exit(0)")
+    else:
+        body_lines.append(
+            "    sys.stdout.write('Not logged in - Please run /login' + chr(10))")
+        body_lines.append("    sys.exit(1)")
     if invoked_marker is not None:
         body_lines.append(f"Path({str(invoked_marker)!r}).write_text('invoked')")
     body_lines.append("sys.exit(0)")

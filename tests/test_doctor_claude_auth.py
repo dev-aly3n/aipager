@@ -36,10 +36,50 @@ def test_check_claude_auth_logged_in_is_ok(monkeypatch):
     monkeypatch.setattr(claude_resolve, "resolve_claude_binary", lambda **kw: resolved)
     auth = claude_resolve.AuthStatus(logged_in=True, auth_method="oauth_token", source="env")
     monkeypatch.setattr(claude_resolve, "detect_auth", lambda *a, **k: auth)
+    # `auth status` saying "logged in" is no longer the last word — a
+    # revoked token says the same thing — so the row now depends on a
+    # real round-trip as well.
+    monkeypatch.setattr(claude_resolve, "validate_credential",
+                        lambda *a, **k: claude_resolve.CredentialCheck("valid"))
 
     r = doctor.check_claude_auth()
     assert r.status == doctor.OK
     assert "oauth_token" in " ".join(r.detail)
+
+
+def test_check_claude_auth_warns_when_the_credential_is_rejected(monkeypatch):
+    """The blind spot this change closes: present-but-expired used to
+    render a green row while every session hung on the login screen."""
+    resolved = claude_resolve.ResolvedClaude(chosen=_install())
+    monkeypatch.setattr(claude_resolve, "resolve_claude_binary", lambda **kw: resolved)
+    monkeypatch.setattr(
+        claude_resolve, "detect_auth",
+        lambda *a, **k: claude_resolve.AuthStatus(True, "oauth_token", "env"))
+    monkeypatch.setattr(
+        claude_resolve, "validate_credential",
+        lambda *a, **k: claude_resolve.CredentialCheck("rejected", "401"))
+
+    r = doctor.check_claude_auth()
+    assert r.status == doctor.WARN, "an expired credential rendered as OK"
+    assert "rejected" in " ".join(r.detail).lower()
+    assert r.fix
+
+
+def test_check_claude_auth_offline_does_not_become_a_warning(monkeypatch):
+    """Unknown means unknown. Downgrading a working install to WARN on
+    every restart behind a flaky network would train the operator to
+    ignore this row."""
+    resolved = claude_resolve.ResolvedClaude(chosen=_install())
+    monkeypatch.setattr(claude_resolve, "resolve_claude_binary", lambda **kw: resolved)
+    monkeypatch.setattr(
+        claude_resolve, "detect_auth",
+        lambda *a, **k: claude_resolve.AuthStatus(True, "oauth_token", "env"))
+    monkeypatch.setattr(
+        claude_resolve, "validate_credential",
+        lambda *a, **k: claude_resolve.CredentialCheck("unknown", "probe timed out"))
+
+    r = doctor.check_claude_auth()
+    assert r.status == doctor.OK
 
 
 def test_check_claude_auth_probe_failed_is_warn_not_fail(monkeypatch):
@@ -65,6 +105,12 @@ def test_check_claude_auth_uses_build_session_env(monkeypatch):
     monkeypatch.setattr(daemon_secrets, "build_session_env", lambda **kw: sentinel)
 
     captured = {}
+
+    def _fake_validate(path, env, **kw):
+        captured["validate_env"] = env
+        return claude_resolve.CredentialCheck("valid")
+
+    monkeypatch.setattr(claude_resolve, "validate_credential", _fake_validate)
 
     def _fake_detect_auth(path, version, env, **kw):
         captured["env"] = env

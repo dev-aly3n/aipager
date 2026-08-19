@@ -285,6 +285,29 @@ def _no_real_login_shell_probe(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_real_credential_probe(monkeypatch):
+    """Refuse to actually run ``claude -p`` from the test suite.
+
+    ``claude_resolve.validate_credential`` spends a real API call on the
+    operator's account every time it runs. One unmocked test is a few
+    cents; one unmocked test in CI, on every push, is a standing charge —
+    and it would also hit the network from a sandbox that is supposed to
+    have none. ``_run_probe`` exists as a separate function purely to be
+    this seam: a test that wants a particular probe outcome patches
+    ``validate_credential`` (or ``_run_probe``) explicitly.
+    """
+    def _refuse(claude_path, env, cwd, timeout):
+        raise AssertionError(
+            "test tried to run the real `claude -p` credential probe "
+            f"({claude_path!r}) — this costs money and hits the network. "
+            "Patch aipager.claude_resolve.validate_credential (or "
+            "._run_probe) in your test instead."
+        )
+
+    monkeypatch.setattr("aipager.claude_resolve._run_probe", _refuse)
+
+
+@pytest.fixture(autouse=True)
 def _no_real_service_manager(request, monkeypatch):
     """Refuse to drive the real systemd/launchd session by default.
 
