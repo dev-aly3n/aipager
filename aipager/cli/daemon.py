@@ -232,8 +232,12 @@ async def _run_daemon(bot_username: str) -> None:
         sys.exit(1)
 
     # Write claude-code's first-run acceptance flags so dtach-launched
-    # sessions never block on dialogs a Telegram-only user can't dismiss.
-    bootstrap_claude_settings()
+    # sessions never block on dialogs a Telegram-only user can't dismiss,
+    # and resolve the claude binary + auth shape for the startup
+    # provenance line. Runs BEFORE bot.start() so it cannot send Telegram
+    # itself — the notice is fired below, after the bot is up, so a slow
+    # send never delays recover_sessions() or the session monitor.
+    provenance = bootstrap_claude_settings()
 
     log.info("connected as @%s, will message chat %s", bot_username, CHAT_ID)
 
@@ -252,6 +256,15 @@ async def _run_daemon(bot_username: str) -> None:
     bot.prime_miniapp_url(miniapp_url)
 
     await bot.start()
+    if provenance is not None:
+        # Fire-and-forget, mirroring TunnelManager.start()'s precedent —
+        # a slow or failing send must never delay recover_sessions() or
+        # the session monitor. Once per process lifetime; nothing
+        # re-sends on team-reload, Mini App reconnect, or any session
+        # event.
+        asyncio.create_task(
+            bot.send_startup_notice("\n".join(provenance.lines))
+        )
     observers = None
     if OBSERVER_BOTS:
         observers = ObserverBroadcaster(OBSERVER_BOTS)

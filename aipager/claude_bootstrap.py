@@ -38,9 +38,22 @@ import logging
 import os
 import shutil
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ProvenanceInfo:
+    """Returned by :func:`bootstrap_claude_settings` on success.
+
+    ``.lines`` is exactly :func:`aipager.claude_resolve.format_provenance`'s
+    output — the main "claude: ... auth: ..." line, then zero or more
+    "also found: ..." lines.
+    """
+
+    lines: list[str]
 
 
 _SETTINGS = Path.home() / ".claude" / "settings.json"
@@ -211,13 +224,22 @@ def _ensure_hooks_and_statusline() -> bool:
     return changed
 
 
-def bootstrap_claude_settings(workdir: str | None = None) -> None:
+def bootstrap_claude_settings(workdir: str | None = None) -> ProvenanceInfo | None:
     """Write the acceptance flags + hooks that claude-code's wizard
-    would normally configure interactively. Idempotent; safe to call
-    on every daemon start.
+    would normally configure interactively, then resolve the claude
+    binary + auth shape for the startup provenance line. Idempotent;
+    safe to call on every daemon start. Never raises.
 
     ``workdir`` defaults to the daemon's cwd (which is also the default
     cwd for spawned sessions — see ``dtach/inject.py:_PROJECT_DIR``).
+
+    Returns ``None`` if binary resolution failed (nothing to report);
+    otherwise a :class:`ProvenanceInfo` whose ``.lines`` is exactly
+    :func:`aipager.claude_resolve.format_provenance`'s output. One log
+    line is emitted per line, at the point resolution happens — this
+    function is called once per daemon lifetime, before ``bot.start()``,
+    so it never sends Telegram itself; the caller (``cli/daemon.py``)
+    does that after the bot is up.
     """
     if workdir is None:
         workdir = os.environ.get("AIPAGER_WORK_DIR", os.getcwd())
@@ -237,3 +259,32 @@ def bootstrap_claude_settings(workdir: str | None = None) -> None:
                      _HOOK_CMD, _SETTINGS)
     except Exception:
         log.debug("claude bootstrap: failed to wire hooks", exc_info=True)
+
+    from aipager import claude_resolve, daemon_secrets
+
+    try:
+        resolved = claude_resolve.resolve_claude_binary()
+    except claude_resolve.ClaudeNotFoundError as e:
+        log.warning("claude bootstrap: could not resolve a claude binary: %s", e)
+        return None
+
+    try:
+        # Auth is probed exactly here — once per daemon lifecycle — using
+        # the SAME environment a real session launch gets
+        # (daemon_secrets.build_session_env()), never the daemon's own
+        # bare os.environ. Under systemd's LoadCredential=, the token
+        # never enters the daemon's own environ, so probing against it
+        # would falsely report "not logged in" while sessions
+        # authenticate fine. See claude_resolve's module docstring.
+        session_env = daemon_secrets.build_session_env()
+        auth = claude_resolve.detect_auth(
+            resolved.chosen.path, resolved.chosen.version, session_env,
+        )
+        lines = claude_resolve.format_provenance(resolved, auth)
+    except Exception:
+        log.debug("claude bootstrap: provenance formatting failed", exc_info=True)
+        return None
+
+    for line in lines:
+        log.info("claude bootstrap: %s", line)
+    return ProvenanceInfo(lines=lines)

@@ -572,6 +572,44 @@ class LifecycleMixin:
             "published" if url else "cleared", len(chats),
         )
 
+    def _all_notify_chat_ids(self) -> list[int]:
+        """Every chat that gets the one-time startup provenance notice.
+
+        Multi-scope: every configured scope's chat_id. Legacy: the
+        single CHAT_ID, parsed the same defensively as
+        :meth:`_miniapp_button_chats` does at its personal-mode branch.
+        Empty (never raises) when nothing is configured.
+        """
+        if self.scopes is not None:
+            return [s.chat_id for s in self.scopes]
+        try:
+            return [int(CHAT_ID)]
+        except (TypeError, ValueError):
+            return []
+
+    async def send_startup_notice(self, text: str) -> None:
+        """Send the one-time claude-provenance notice to every chat.
+
+        Fire-and-forget from ``_run_daemon()`` — called once, after
+        :meth:`start` has already begun polling, so a slow or failing
+        send can never delay ``recover_sessions()`` or the session
+        monitor. Sent via ``transport._send_with_retry`` (not a bare
+        ``send_message``) so it honours the same flood-control backoff
+        every other outbound message does. Failures are logged per chat
+        and never raised — same discipline as
+        :meth:`publish_miniapp_button`.
+        """
+        if not self._app:
+            return
+        for chat_id in self._all_notify_chat_ids():
+            try:
+                await _send_with_retry(self._app.bot, chat_id=chat_id, text=text)
+            except Exception:
+                log.warning(
+                    "Failed to send startup notice to chat %s", chat_id,
+                    exc_info=True,
+                )
+
     async def _update_bot_commands_per_scope(self) -> None:
         """Per-chat `/menu` via ``BotCommandScopeChat`` so each scope's
         autocomplete lists only its own session labels (Phase G)."""
