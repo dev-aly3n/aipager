@@ -226,7 +226,7 @@ class CommandHandlersMixin:
 
         # No service unit — spawn a detached replacement and self-kill.
         # The shell wrapper polls our PID via `kill -0`; once we die
-        # (HookReceiver.stop unlinks /tmp/aipager.sock as part of
+        # (HookReceiver.stop unlinks the control socket as part of
         # cli.py's SIGTERM handler) the wrapper execs aipager start.
         parent_pid = os.getpid()
         log_path = "/tmp/aipager.log"

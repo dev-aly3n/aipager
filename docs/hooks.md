@@ -9,11 +9,12 @@ audit log entries).
 The wiring is straightforward: `aipager config` patches
 `~/.claude/settings.json` so each event invokes the `aipager-hook`
 console script. That script
-(`aipager.notify_hook:main`) reads the hook JSON on stdin and sends
-a single UDP datagram to `/tmp/aipager.sock`. Total latency budget:
+(`aipager.dtach.notify_hook:main`) reads the hook JSON on stdin and
+sends a single UDP datagram to `$XDG_RUNTIME_DIR/aipager.sock` (falling back to
+`/tmp/aipager.sock`). Total latency budget:
 <5 ms, so claude code keeps moving even on a busy daemon.
 
-The daemon's `HookReceiver` (`aipager/hook_receiver.py`) decodes the
+The daemon's `HookReceiver` (`aipager/dtach/hook_receiver.py`) decodes the
 datagram and dispatches on the `"event"` field. Per-event handling
 is summarized below.
 

@@ -188,9 +188,10 @@ aipager listens on **zero TCP ports**. Outbound:
 
 Inbound:
 
-- Unix datagram socket at `/tmp/aipager.sock`. Bound and chmod'd
-  by the daemon at startup
-  (`aipager/hook_receiver.py:192-197`). Mode `0o666` so any local
+- Unix datagram socket at `$XDG_RUNTIME_DIR/aipager.sock` (falling back to
+  `/tmp/aipager.sock` when `$XDG_RUNTIME_DIR` is unset). Bound and
+  chmod'd by the daemon at startup
+  (`aipager/dtach/hook_receiver.py`). Mode `0o666` so any local
   process can send hook events to it — same trust as
   `~/.claude/settings.json`, which already controls what runs
   hooks.

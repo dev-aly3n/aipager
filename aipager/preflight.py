@@ -97,7 +97,7 @@ def require_claude() -> str:
 
 
 def require_daemon() -> None:
-    """Exit with code 2 if the aipager daemon isn't listening on /tmp/aipager.sock."""
+    """Exit with code 2 if the aipager daemon isn't listening on its socket."""
     from aipager.config import SOCKET_PATH
 
     if Path(SOCKET_PATH).exists():

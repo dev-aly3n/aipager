@@ -46,7 +46,7 @@ _daemon_lock_fd: int | None = None
 
 
 def _check_existing_daemon() -> None:
-    """If /tmp/aipager.sock exists, decide whether to abort or clean up.
+    """If the control socket exists, decide whether to abort or clean up.
 
     - Live daemon (sendto succeeds) → exit 1 with friendly "already running".
     - Stale socket (ConnectionRefusedError) → leave for HookReceiver to unlink.

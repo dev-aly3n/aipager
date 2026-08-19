@@ -3,7 +3,7 @@
 Read-only; never makes Telegram API calls. Pulls everything from local
 files written by the daemon and Claude Code's statusLine hook:
 
-- `/tmp/aipager.sock`          daemon liveness probe
+- `$XDG_RUNTIME_DIR/aipager.sock`  daemon liveness probe (see config.SOCKET_PATH)
 - `/tmp/claude-dtach-*.sock`   live dtach sessions
 - `~/.claude/aipager-sessions.json`  persisted session state
 - `/tmp/claude-status-claude-{label}.json`  live per-session stats
