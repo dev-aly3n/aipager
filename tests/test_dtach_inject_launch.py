@@ -168,18 +168,24 @@ def test_launch_session_quotes_claude_bin_with_metacharacters(
     assert f"{malicious} " not in bash_cmd
 
 
-def test_launch_session_rejects_when_cwd_missing(tmp_path, monkeypatch, run_async):
+def test_launch_session_rejects_when_cwd_missing(tmp_path, monkeypatch, run_async, caplog):
     """If the persisted cwd has been deleted, fail loudly before exec."""
     monkeypatch.setattr(dtach_inject.Path, "is_socket", lambda self: False)
     bogus = tmp_path / "nope"  # doesn't exist
-    ok, err = run_async(dtach_inject.launch_session(
-        "jim",
-        resume_id="abc",
-        cwd=str(bogus),
-    ))
+    with caplog.at_level("WARNING", logger="aipager.dtach.inject"):
+        ok, err = run_async(dtach_inject.launch_session(
+            "jim",
+            resume_id="abc",
+            cwd=str(bogus),
+        ))
     assert ok is False
     assert "original project dir is gone" in err
-    assert str(bogus) in err
+    # ...but NOT which directory. This string is rendered into a Telegram
+    # message; in a group scope the absolute path would show every member
+    # the operator's home directory and OS username.
+    assert str(bogus) not in err
+    # The operator still needs to know which one, so it goes to the journal.
+    assert str(bogus) in caplog.text
 
 
 def test_launch_session_strips_inherited_oauth_token(tmp_path, monkeypatch, run_async):

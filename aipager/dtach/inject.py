@@ -501,7 +501,14 @@ async def launch_session(
 
     launch_cwd = cwd or _PROJECT_DIR
     if cwd and not Path(cwd).is_dir():
-        return False, f"original project dir is gone: {cwd}"
+        # The path goes to the journal, not into the returned string:
+        # this string is rendered straight into a Telegram message, and
+        # in a group scope every member of that group would see the
+        # operator's absolute project path — hence their home directory
+        # and OS username. Same rule as the startup auth notice.
+        log.warning("launch refused for %s: original project dir is gone: %s",
+                    name, cwd)
+        return False, "original project dir is gone"
 
     # Build the bash -c command — wraps claude with env vars and prompt
     perms = "--dangerously-skip-permissions" if skip_perms else ""
