@@ -295,8 +295,12 @@ def _no_real_service_manager(request, monkeypatch):
     ``_post_install_probe()`` would then poke the live control socket.
 
     The sibling ``_no_real_login_shell_probe`` above already guards the
-    other real-subprocess path in this module; this closes the pair. Both
-    exist because this suite has a history of reaching past its sandbox —
+    other real-subprocess path in this module; this closes the pair. The
+    log readers (``_logs_linux`` shelling to ``journalctl``,
+    ``_logs_macos`` to ``tail``) are blocked too — they are read-only so
+    they cannot corrupt anything, but ``journalctl --follow`` would hang
+    a future unmocked test rather than fail it. Both guards exist because
+    this suite has a history of reaching past its sandbox —
     ``tests/conftest.py``'s own ``/tmp``-socket guard documents a run that
     unlinked the live daemon's hook socket and left hooks silently dead.
 
@@ -310,10 +314,11 @@ def _no_real_service_manager(request, monkeypatch):
 
     def _guarded(cmd, *a, **kw):
         head = str(cmd[0]) if cmd else ""
-        if head.rsplit("/", 1)[-1] in ("systemctl", "launchctl"):
+        if head.rsplit("/", 1)[-1] in ("systemctl", "launchctl", "journalctl", "tail"):
             raise AssertionError(
                 f"test invoked the real service manager: {cmd!r}. This can "
-                "enable/restart the operator's live aipager.service. "
+                "enable/restart the operator's live aipager.service, and "
+                "`journalctl --follow` would hang the run. "
                 "Monkeypatch aipager.service._run in your test instead."
             )
         # Everything else runs for real — the tests OF _run pass fake argv
@@ -346,9 +351,18 @@ def _block_real_telegram_http(monkeypatch):
 def _snapshot_live_sockets() -> set[str]:
     tmp = Path("/tmp")
     socks = {str(p) for p in tmp.glob("claude-dtach-*.sock")}
-    aipager_sock = tmp / "aipager.sock"
-    if aipager_sock.exists():
-        socks.add(str(aipager_sock))
+    candidates = [tmp / "aipager.sock"]
+    # The control socket moved to $XDG_RUNTIME_DIR, so the two hardcoded
+    # /tmp paths above no longer describe where the live daemon binds.
+    # Snapshot wherever config actually resolves it too, or this guard
+    # silently stops covering the very socket it was written to protect
+    # the moment a host has $XDG_RUNTIME_DIR set.
+    from aipager import config
+
+    candidates.append(Path(config.SOCKET_PATH))
+    for sock in candidates:
+        if sock.exists():
+            socks.add(str(sock))
     return socks
 
 
@@ -357,10 +371,12 @@ def _guard_live_sockets():
     """Fail the run if the suite unlinked a live daemon or session socket.
 
     The sibling ``_guard_real_home`` covers ``$HOME`` only, which is why
-    this hole stayed open: ``updater._remove_tmp_sockets`` deletes
-    ``/tmp/aipager.sock`` and every ``/tmp/claude-dtach-*.sock``, so a
-    test invoking it without redirecting ``updater.Path`` runs it
-    against the real /tmp. That happened — the host daemon's hook socket
+    this hole stayed open: ``updater._remove_tmp_sockets`` deletes the
+    resolved ``config.SOCKET_PATH``, ``/tmp/aipager.sock`` and every
+    ``/tmp/claude-dtach-*.sock``, so a test invoking it without
+    redirecting both ``updater.Path`` **and** ``config.SOCKET_PATH``
+    runs it against the real paths. That happened — the host daemon's
+    hook socket
     was unlinked mid-suite and hooks then stayed silently dead, because
     the daemon goes on serving the now-unreachable bound socket. The
     dtach sockets are worse: their sessions keep running but can never

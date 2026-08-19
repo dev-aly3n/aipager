@@ -287,6 +287,13 @@ def test_remove_tmp_sockets_glob_swallows_errors(monkeypatch, tmp_path):
     b.touch()
     # Redirect Path("/tmp") to tmp_path
     real_path = updater.Path
+    # Sandbox the resolved control socket as well — see the same
+    # redirect in tests/test_updater.py for why _fake_path alone is not
+    # enough once SOCKET_PATH lives outside /tmp.
+    runtime_sock = tmp_path / "runtime" / "aipager.sock"
+    runtime_sock.parent.mkdir(parents=True, exist_ok=True)
+    runtime_sock.write_text("")
+    monkeypatch.setattr("aipager.config.SOCKET_PATH", str(runtime_sock))
     def _fake_path(p):
         if p == "/tmp":
             return tmp_path
@@ -298,3 +305,4 @@ def test_remove_tmp_sockets_glob_swallows_errors(monkeypatch, tmp_path):
     # Files unlinked
     assert not a.exists()
     assert not b.exists()
+    assert not runtime_sock.exists()
