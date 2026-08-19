@@ -80,6 +80,53 @@ def test_launch_session_no_resume_flag_when_id_missing(tmp_path, monkeypatch, ru
     assert "--resume" not in bash_cmd
 
 
+def test_launch_session_quotes_claude_bin_with_metacharacters(
+        tmp_path, monkeypatch, run_async):
+    """A claude binary path containing shell metacharacters must not
+    execute injected content — inject.py:567's quoting fix.
+
+    Every sibling value on the bash_cmd line (resume, model, sys_prompt)
+    was already shlex.quote()d; _CLAUDE_BIN was the lone exception,
+    safe only while it came verbatim from shutil.which(). Once it can
+    come from config or AIPAGER_CLAUDE_BIN, an unquoted value is a
+    shell-injection sink.
+    """
+    captured = {}
+
+    async def _fake_exec(*args, **kwargs):
+        captured["args"] = args
+        return _make_proc(returncode=0)
+
+    monkeypatch.setattr(dtach_inject.asyncio, "create_subprocess_exec", _fake_exec)
+    calls = {"n": 0}
+
+    def _is_socket(self):
+        calls["n"] += 1
+        return calls["n"] > 1
+
+    monkeypatch.setattr(dtach_inject.Path, "is_socket", _is_socket)
+    # Simulate a resolved (or overridden) binary path an attacker-controlled
+    # config value could plausibly contain: a shell metacharacter sequence
+    # that would run a second command if concatenated unquoted.
+    malicious = "/tmp/claude; touch /tmp/pwned"
+    monkeypatch.setattr(dtach_inject, "_CLAUDE_BIN", malicious)
+
+    ok, _ = run_async(dtach_inject.launch_session("jim"))
+    assert ok
+    bash_cmd = captured["args"][-1]
+    # The whole malicious string must appear as a single shlex-quoted
+    # token, so bash's own parser (not string interpolation) decides
+    # where the token ends.
+    import shlex as _shlex
+    quoted = _shlex.quote(malicious)
+    assert quoted in bash_cmd
+    # If it were interpolated unquoted (the pre-fix bug), the raw path
+    # would be immediately followed by a space (the separator before
+    # `perms`); quoted, it is immediately followed by a closing quote
+    # character instead.
+    assert f"{malicious} " not in bash_cmd
+
+
 def test_launch_session_rejects_when_cwd_missing(tmp_path, monkeypatch, run_async):
     """If the persisted cwd has been deleted, fail loudly before exec."""
     monkeypatch.setattr(dtach_inject.Path, "is_socket", lambda self: False)

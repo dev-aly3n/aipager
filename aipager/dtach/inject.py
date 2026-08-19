@@ -564,7 +564,12 @@ async def launch_session(
         f"unset CLAUDECODE; "
         f"{unset_token}"
         f"export CLAUDE_DTACH_SESSION=claude-{name}; "
-        f"{_CLAUDE_BIN} {perms} {resume} {model_flag} "
+        # Every sibling value on this line is shlex.quote()d; the binary
+        # was the lone exception, safe only because it came verbatim from
+        # shutil.which(). Once it can come from config (claude_path) or
+        # AIPAGER_CLAUDE_BIN, an unquoted value is a shell-injection sink
+        # into this `bash -c` string.
+        f"{shlex.quote(_CLAUDE_BIN)} {perms} {resume} {model_flag} "
         f"--append-system-prompt {shlex.quote(sys_prompt)}"
     )
 
