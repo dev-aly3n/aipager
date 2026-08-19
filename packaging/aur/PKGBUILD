@@ -11,6 +11,11 @@ depends=(
   'python-telegram-bot>=20'
   'python-rich'
   'python-questionary'
+  # Mini App server. Mandatory since aiohttp moved into the project's
+  # base dependencies — this list is hand-maintained and does NOT track
+  # pyproject.toml, so anything added there has to be added here too or
+  # Arch users get an aipager whose Mini App silently cannot start.
+  'python-aiohttp'
   'dtach'
 )
 makedepends=(
