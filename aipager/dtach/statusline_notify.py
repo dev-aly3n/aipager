@@ -4,7 +4,8 @@
 Reads statusLine JSON from stdin and does three things on every tick:
   1. Writes the raw JSON to /tmp/claude-status-<session>.json
      (hook_receiver reads this for fresh token counts on hook events)
-  2. Sends a compact UDP datagram to /tmp/aipager.sock with model/ctx/cost
+  2. Sends a compact UDP datagram to the daemon control socket
+     (see SOCKET_PATH below) with model/ctx/cost
      (drives real-time updates in the Telegram busy message)
   3. Emits a short status line to stdout (shown in Claude Code's terminal)
 
@@ -22,10 +23,14 @@ from pathlib import Path
 
 # Same precedence as aipager.config._default_socket_path() — kept
 # inlined and stdlib-only, see notify_hook.py's identical comment for why.
+# NOTE: bind the *stripped* runtime dir once and use that same value.
+# Reading os.environ["XDG_RUNTIME_DIR"] unstripped while guarding on the
+# stripped copy meant a padded value produced a path the daemon never
+# bound, silently dropping every hook event.
+_XDG_RUNTIME_DIR = os.environ.get("XDG_RUNTIME_DIR", "").strip()
 SOCKET_PATH = (
     os.environ.get("AIPAGER_SOCKET_PATH", "").strip()
-    or (os.path.join(os.environ["XDG_RUNTIME_DIR"], "aipager.sock")
-        if os.environ.get("XDG_RUNTIME_DIR", "").strip() else "")
+    or (os.path.join(_XDG_RUNTIME_DIR, "aipager.sock") if _XDG_RUNTIME_DIR else "")
     or "/tmp/aipager.sock"
 )
 

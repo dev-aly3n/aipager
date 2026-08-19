@@ -2,7 +2,8 @@
 """Claude Code notification hook — fire-and-forget UDP datagram to daemon.
 
 Reads JSON from stdin, detects session name from CLAUDE_DTACH_SESSION env var,
-sends datagram to /tmp/aipager.sock. No HTTP calls, <5ms.
+sends datagram to the daemon control socket (see SOCKET_PATH below).
+No HTTP calls, <5ms.
 
 Also reads the statusLine JSON file (written by the statusLine hook) to
 piggyback accurate token data on every PreToolUse event. The statusLine
@@ -21,10 +22,14 @@ from pathlib import Path
 # hook must stay <5ms and importing config transitively pulls in yaml,
 # team.py, policy.py, and does I/O). If that function's precedence ever
 # changes, mirror the change here and in statusline_notify.py.
+# NOTE: bind the *stripped* runtime dir once and use that same value.
+# Reading os.environ["XDG_RUNTIME_DIR"] unstripped while guarding on the
+# stripped copy meant a padded value produced a path the daemon never
+# bound, silently dropping every hook event.
+_XDG_RUNTIME_DIR = os.environ.get("XDG_RUNTIME_DIR", "").strip()
 SOCKET_PATH = (
     os.environ.get("AIPAGER_SOCKET_PATH", "").strip()
-    or (os.path.join(os.environ["XDG_RUNTIME_DIR"], "aipager.sock")
-        if os.environ.get("XDG_RUNTIME_DIR", "").strip() else "")
+    or (os.path.join(_XDG_RUNTIME_DIR, "aipager.sock") if _XDG_RUNTIME_DIR else "")
     or "/tmp/aipager.sock"
 )
 
