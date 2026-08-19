@@ -348,19 +348,31 @@ def _block_real_telegram_http(monkeypatch):
     monkeypatch.setattr("aipager.bot.rich_message._post", _refuse)
 
 
-def _snapshot_live_sockets() -> set[str]:
-    tmp = Path("/tmp")
-    socks = {str(p) for p in tmp.glob("claude-dtach-*.sock")}
-    candidates = [tmp / "aipager.sock"]
-    # The control socket moved to $XDG_RUNTIME_DIR, so the two hardcoded
-    # /tmp paths above no longer describe where the live daemon binds.
-    # Snapshot wherever config actually resolves it too, or this guard
-    # silently stops covering the very socket it was written to protect
-    # the moment a host has $XDG_RUNTIME_DIR set.
+def _control_socket_path() -> Path:
+    """Resolve the daemon's control socket once, for the whole session.
+
+    The caller must resolve this a single time and reuse the result for
+    both the before and after snapshot. Re-deriving it per call would
+    read whatever ``config.SOCKET_PATH`` happens to be at that moment, so
+    a test that reloads ``aipager.config`` under a different
+    ``$XDG_RUNTIME_DIR`` and fails to restore it would make the two
+    snapshots describe two different files — reporting a socket as
+    "unlinked" that nothing ever touched.
+    """
     from aipager import config
 
-    candidates.append(Path(config.SOCKET_PATH))
-    for sock in candidates:
+    return Path(config.SOCKET_PATH)
+
+
+def _snapshot_live_sockets(control_sock: Path) -> set[str]:
+    tmp = Path("/tmp")
+    socks = {str(p) for p in tmp.glob("claude-dtach-*.sock")}
+    # The control socket moved to $XDG_RUNTIME_DIR, so the hardcoded /tmp
+    # path no longer describes where the live daemon binds. Snapshot the
+    # resolved location too, or this guard silently stops covering the
+    # very socket it was written to protect on any host with
+    # $XDG_RUNTIME_DIR set.
+    for sock in (tmp / "aipager.sock", control_sock):
         if sock.exists():
             socks.add(str(sock))
     return socks
@@ -376,8 +388,8 @@ def _guard_live_sockets():
     ``/tmp/claude-dtach-*.sock``, so a test invoking it without
     redirecting both ``updater.Path`` **and** ``config.SOCKET_PATH``
     runs it against the real paths. That happened — the host daemon's
-    hook socket
-    was unlinked mid-suite and hooks then stayed silently dead, because
+    hook socket was unlinked mid-suite and hooks then stayed silently
+    dead, because
     the daemon goes on serving the now-unreachable bound socket. The
     dtach sockets are worse: their sessions keep running but can never
     be reattached.
@@ -387,12 +399,14 @@ def _guard_live_sockets():
     one. ``/tmp/claude-status-*.json`` is deliberately excluded — live
     sessions rewrite it every few seconds, so it would false-positive.
     """
-    before = _snapshot_live_sockets()
+    # Resolved once, deliberately — see _control_socket_path.
+    control_sock = _control_socket_path()
+    before = _snapshot_live_sockets(control_sock)
     yield
-    gone = sorted(before - _snapshot_live_sockets())
+    gone = sorted(before - _snapshot_live_sockets(control_sock))
     if gone:
         pytest.fail(
-            "tests unlinked live sockets under /tmp:\n  "
+            "tests unlinked live sockets:\n  "
             + "\n  ".join(gone)
             + "\n\nSandbox the responsible test by redirecting that "
               "module's Path to tmp_path. (If you stopped the daemon or "
