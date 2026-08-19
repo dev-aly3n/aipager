@@ -1905,6 +1905,12 @@ APP_JS = r"""
         if (tg && tg.HapticFeedback) {
           try { tg.HapticFeedback.notificationOccurred("success"); } catch (e) { /* old client */ }
         }
+        // Say so in words, not just a buzz. Creating a session navigates
+        // straight to its page, so without this the only confirmation was
+        // a haptic tick — nothing at all on a device with haptics off, and
+        // nothing to read if the new page took a moment to populate. The
+        // toast is fixed-position, so it survives the navigation.
+        showNotice("Session created.", "ok");
         // Chosen reply-style settings become per-session overrides through
         // batch 4's existing route — no second write path for the same data.
         var label = r.data.label;

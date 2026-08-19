@@ -319,6 +319,17 @@ function driveFull() {
     if (byId["new-summary"].textContent.indexOf("/home/aly/proj/sub") === -1)
       fail("the new folder is not in the summary: " + byId["new-summary"].textContent);
 
+    // The operator has to be TOLD the folder was made, not just shown a
+    // changed dropdown. Assert the toast is actually visible and says so,
+    // and that it is flagged as a success rather than a neutral note.
+    const folderToast = byId["notice"];
+    if (!folderToast.className.includes("is-visible"))
+      fail("no toast after creating a folder");
+    if (folderToast.textContent.indexOf("Folder created") === -1)
+      fail("folder toast says: " + folderToast.textContent);
+    if (!folderToast.className.includes("toast-ok"))
+      fail("folder toast is not marked as a success: " + folderToast.className);
+
     // choose a reply-style override that differs from the scope default
     const prefsBody = expand("new-prefs");
     rows(prefsBody)[1].click();                   // "Short"
@@ -339,6 +350,17 @@ function driveFull() {
              JSON.stringify(post.body));
       const put = sent.find(f => f.method === "PUT" && /preferences\/answer_length$/.test(f.url));
       if (!put) fail("chosen reply-style setting was NOT applied after creation");
+
+      // Creating a session navigates straight to its page, so without a
+      // toast the only confirmation was a haptic tick — nothing at all on
+      // a device with haptics off.
+      const createToast = byId["notice"];
+      if (!createToast.className.includes("is-visible"))
+        fail("no toast after creating a session");
+      if (createToast.textContent.indexOf("Session created") === -1)
+        fail("create toast says: " + createToast.textContent);
+      if (!createToast.className.includes("toast-ok"))
+        fail("create toast is not marked as a success: " + createToast.className);
       console.log("ok: reveal -> Enter -> POST /api/directories -> POST /api/sessions -> PUT " + put.url);
       process.exit(0);
     }, 20);
