@@ -376,7 +376,7 @@ def check_daemon() -> CheckResult:
         return CheckResult(
             FAIL, "aipager daemon",
             detail=[f"socket {SOCKET_PATH} exists but no daemon is listening"],
-            fix="rm -f /tmp/aipager.sock && aipager start",
+            fix=f"rm -f {SOCKET_PATH} && aipager start",
         )
     except OSError as e:
         return CheckResult(WARN, "aipager daemon", detail=[str(e)])

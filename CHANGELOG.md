@@ -8,6 +8,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **aipager now owns its runtime environment instead of inheriting an
+  accidental one.** Moving the daemon into a `systemctl --user` service
+  used to silently break two things at once: PATH and the Claude OAuth
+  token, both normally set by shell startup files systemd never sources.
+  A session would launch with whatever `claude` happened to be on the
+  daemon's bare PATH and no credentials, then sit stuck with no visible
+  error. Fixed at the root:
+  - **One shared resolver** now picks the `claude` binary everywhere
+    (`aipager session`, `aipager resume`, the daemon, doctor, the setup
+    wizard) — `claude_path` in `aipager.yaml` → `$AIPAGER_CLAUDE_BIN` →
+    `~/.local/bin` → `$PATH` → the usual Homebrew locations, each
+    candidate verified with `--version` and de-duplicated by real path.
+    Previously six independent lookups could each resolve a different
+    binary on the same machine.
+  - **Auth is detected via Claude Code's own `claude auth status`**
+    (JSON, no network call) instead of a hand-rolled credentials-file
+    check — the old check was blind to macOS Keychain auth,
+    refresh-token-only credentials, and Max-plan logins, all of which
+    work fine but look "logged out" to a file check. **A session is
+    never refused for looking unauthenticated** — aipager warns (daemon
+    log, `aipager doctor`, and a one-time Telegram message naming the
+    resolved binary, version, and auth method) and launches anyway,
+    letting Claude's own error be the ground truth.
+  - **The service unit ships with `LoadCredential=`** instead of
+    inlining the token into the daemon's own environment — it now stays
+    out of `systemctl show`, unit backups, and pasted-in log output. The
+    unit is created (or diffed and re-confirmed before overwriting an
+    existing one — `--yes` skips the prompt for scripted installs) with
+    the installing shell's PATH baked in, `Restart=always`, and no
+    longer references a `config.env` the daemon itself renames away on
+    first boot. `~/.config/aipager/daemon.env` — a plain `KEY=VALUE`
+    file, 0600 — is created automatically the first time you install the
+    service (copied from a legacy config, discovered from your login
+    shell, or left empty with a warning) so the unit never fails to
+    start for want of a credential file.
+  - The daemon's control socket moves to `$XDG_RUNTIME_DIR/aipager.sock`
+    under systemd (falls back to `/tmp` when unset); `aipager doctor`
+    gained a `claude auth` row (never fails the overall check) and a
+    `service unit PATH` row that reads the *installed* unit rather than
+    just checking it exists; `aipager doctor --fix` is new, and
+    interactively offers to discover a credential or pin `claude_path`
+    when more than one install is found. See `docs/security.md` for what
+    file permissions on the credential do and don't protect against —
+    the short version: scope the credential itself, since anything
+    aipager can read, the agent it launches can read too.
 - **The Mini App now gets a public URL with zero manual setup.** With the
   Mini App enabled and no `MINIAPP_PUBLIC_URL` override configured, aipager
   starts and supervises its own Cloudflare quick tunnel alongside the
@@ -120,6 +165,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than the one picked with nothing on screen to say so.
 
 ### Fixed
+- **The resolved `claude` binary path is now shell-quoted before it reaches
+  the session's launch command.** It was the one unquoted value on that
+  line — safe only while it could only ever come from a plain PATH lookup.
+  Now that it can come from `claude_path` in config or `$AIPAGER_CLAUDE_BIN`,
+  an unquoted value would have been a shell-injection sink.
 - **Mini App notices are now a floating toast card.** "Session resumed",
   "Folder created" and friends appear as a small card pinned to the top with
   a tick or an exclamation and a colour matching the outcome, instead of a

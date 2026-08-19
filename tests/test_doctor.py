@@ -175,6 +175,10 @@ def test_check_daemon_socket_stale_no_listener(monkeypatch, tmp_path):
     monkeypatch.setattr(doctor.socket, "socket", FakeSocket)
     r = doctor.check_daemon()
     assert r.status == doctor.FAIL
+    # The fix hint must name the CURRENT socket path (XDG_RUNTIME_DIR
+    # under systemd), not a hardcoded /tmp/aipager.sock that would be
+    # wrong once the control socket moved.
+    assert str(sock_path) in r.fix
     assert "no daemon" in " ".join(r.detail).lower()
 
 
