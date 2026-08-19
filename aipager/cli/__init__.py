@@ -204,7 +204,14 @@ def main() -> None:
         ("logs",      "tail service logs (Ctrl-C to exit)"),
         ("uninstall", "stop the service and remove the unit"),
     ]:
-        service_sub.add_parser(name, help=summary)
+        sub_p = service_sub.add_parser(name, help=summary)
+        if name == "install":
+            sub_p.add_argument(
+                "--yes", action="store_true",
+                help="skip the confirmation prompt when overwriting a "
+                     "differing existing unit (for CI/Docker); still backs "
+                     "up the old unit first",
+            )
 
     policy_p = sub.add_parser(
         "policy",

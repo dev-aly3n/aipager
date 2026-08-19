@@ -92,6 +92,11 @@ def _isolate_home_paths(tmp_path, monkeypatch):
         # dict — never written or printed here, but still a real-file
         # read this suite must never do.
         "aipager.daemon_secrets.DAEMON_ENV_PATH": cfg / "daemon.env",
+        # service.py re-imports the same constant BY VALUE
+        # (`from aipager.daemon_secrets import DAEMON_ENV_PATH`), so it
+        # needs its own entry — see the by-value-import note above.
+        # `ensure_daemon_env()` writes here at `service install` time.
+        "aipager.service.DAEMON_ENV_PATH": cfg / "daemon.env",
         "aipager.preferences._PREFERENCES_PATH": cfg / "preferences.json",
         "aipager.session_store.SESSIONS_ROOT":
             home / ".local" / "share" / "aipager" / "sessions",
@@ -248,6 +253,35 @@ def _no_real_claude_candidates(request, monkeypatch):
     yield
     _cr._memo = None
     _cr._memo_error = None
+
+
+@pytest.fixture(autouse=True)
+def _no_real_login_shell_probe(request, monkeypatch):
+    """Refuse to spawn a real login shell by default.
+
+    ``service.ensure_daemon_env()`` falls back to
+    ``$SHELL -l -i -c 'printenv CLAUDE_CODE_OAUTH_TOKEN'`` when no
+    legacy config.env token is found — a real subprocess that sources
+    the OPERATOR'S OWN shell rc files and could read their real token.
+    Any test reaching ``service.ensure_daemon_env()`` (directly or via
+    ``_install_linux``/``_install_macos``) without mocking this raises
+    loudly instead of silently spawning a real shell — the same
+    "execute a real binary beyond --version on a fixture" constraint
+    that motivates the claude-candidates fixture above. Tests exercising
+    the discovery path itself patch
+    ``aipager.service._discover_token_via_login_shell`` explicitly.
+    """
+    def _refuse():
+        raise AssertionError(
+            "test reached service._discover_token_via_login_shell() "
+            "without mocking it — this would spawn a real login shell "
+            "against the operator's own rc files. Monkeypatch "
+            "aipager.service._discover_token_via_login_shell instead."
+        )
+
+    if "e2e" not in request.keywords:
+        monkeypatch.setattr("aipager.service._discover_token_via_login_shell",
+                            _refuse)
 
 
 @pytest.fixture(autouse=True)

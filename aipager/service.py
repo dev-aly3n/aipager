@@ -13,13 +13,16 @@ identically for pipx, brew, and editable-venv installs.
 from __future__ import annotations
 
 import argparse
+import difflib
 import os
 import platform
+import re
 import shutil
 import subprocess
 import time
 from pathlib import Path
 
+from aipager.daemon_secrets import DAEMON_ENV_PATH
 from aipager.errors import friendly_error, friendly_warn
 from aipager.ui import console, ok, step
 
@@ -28,17 +31,33 @@ MACOS_PLIST_PATH = Path.home() / "Library" / "LaunchAgents" / "com.aipager.daemo
 MACOS_LABEL = "com.aipager.daemon"
 MACOS_LOG_PATH = Path.home() / "Library" / "Logs" / "aipager.log"
 
+# Changes from the old template, each tied to a verified defect (see
+# design):
+#  - After=network-online.target dropped: verified `not-found` for user
+#    units — a silent no-op.
+#  - ExecStartPre=-/bin/rm -f /tmp/aipager.sock dropped: the socket moves
+#    to %t/ (see config._default_socket_path), and the old line risked
+#    deleting another OS user's socket.
+#  - EnvironmentFile=-…/config.env → LoadCredential=: the old target is
+#    renamed away by migrate.retire_v1() on first boot, and the secret
+#    sat in the daemon's own environ (systemctl show, ps, journal).
+#  - Restart=on-failure → always; StartLimitIntervalSec=0 moved into
+#    [Unit] (systemd v229+; under [Service] it's `Unknown key name` and
+#    silently keeps the default).
+#  - Environment=PATH= added — see the inline comment below for why.
 LINUX_UNIT_TEMPLATE = """\
 [Unit]
 Description=AIPager Telegram Bot Daemon
-After=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-ExecStartPre=-/bin/rm -f /tmp/aipager.sock
 ExecStart={aipager_bin} start
-EnvironmentFile=-%h/.config/aipager/config.env
-Restart=on-failure
+# PATH matters here for the agent's own Bash tool inside every session,
+# not just for finding claude — do not delete this as "redundant".
+Environment=PATH={resolved_path_value}
+LoadCredential=claude_oauth:%h/.config/aipager/daemon.env
+Restart=always
 RestartSec=5
 TimeoutStopSec=15
 StandardOutput=journal
@@ -97,8 +116,28 @@ def _resolve_aipager_bin() -> str:
     return p
 
 
+def _resolved_path_value() -> str:
+    """The PATH to bake into the unit's ``Environment=PATH=``.
+
+    Baked at ``aipager service install`` time from the installing
+    interactive shell's own ``$PATH``, with ``~/.local/bin`` ensured
+    first — systemd never sources shell startup files, so this is the
+    one chance to carry over what ``~/.profile`` would otherwise have
+    added. Directly targets the verified root cause: PATH and the
+    OAuth token vanish together under a bare ``systemctl --user`` unit.
+    """
+    local_bin = str(Path.home() / ".local" / "bin")
+    parts = [p for p in os.environ.get("PATH", "").split(os.pathsep) if p]
+    if local_bin in parts:
+        parts.remove(local_bin)
+    return os.pathsep.join([local_bin, *parts])
+
+
 def _render_linux_unit() -> str:
-    return LINUX_UNIT_TEMPLATE.format(aipager_bin=_resolve_aipager_bin())
+    return LINUX_UNIT_TEMPLATE.format(
+        aipager_bin=_resolve_aipager_bin(),
+        resolved_path_value=_resolved_path_value(),
+    )
 
 
 def _render_macos_plist() -> str:
@@ -158,7 +197,129 @@ def _backup_existing(path: Path) -> None:
         friendly_warn(f"could not back up {path}: {e}")
 
 
-def _install_linux() -> int:
+_TOKEN_KEYS = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY")
+
+
+def _extract_token_line(path: Path) -> str | None:
+    """Best-effort scan of an env-file-shaped file for the first
+    ``CLAUDE_CODE_OAUTH_TOKEN=`` or ``ANTHROPIC_API_KEY=`` line. Returns
+    the raw ``KEY=VALUE`` line verbatim, or ``None``."""
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key = stripped.split("=", 1)[0].strip()
+        if key in _TOKEN_KEYS:
+            return stripped
+    return None
+
+
+def _write_daemon_env(content: str) -> None:
+    DAEMON_ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
+    DAEMON_ENV_PATH.write_text(content, encoding="utf-8")
+    try:
+        os.chmod(DAEMON_ENV_PATH, 0o600)
+    except OSError:
+        pass
+
+
+def _discover_token_via_login_shell() -> str | None:
+    """Run ``$SHELL -l -i -c 'printenv CLAUDE_CODE_OAUTH_TOKEN'`` once,
+    with a timeout.
+
+    Correct by construction for any rc-file shape a regex over
+    ``~/.bashrc``/``~/.zshrc`` would miss (conditional exports,
+    ``source``d fragments) or wrongly match (a commented-out stale
+    token). Never raises — ``None`` on any failure.
+    """
+    shell = os.environ.get("SHELL") or "/bin/bash"
+    try:
+        r = subprocess.run(
+            [shell, "-l", "-i", "-c", "printenv CLAUDE_CODE_OAUTH_TOKEN"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    token = r.stdout.strip()
+    return token or None
+
+
+def ensure_daemon_env() -> Path:
+    """Ensure ``daemon.env`` exists (mode 0600), even if empty.
+
+    ``LoadCredential=`` has no soft-fail prefix, so a missing
+    ``daemon.env`` would fail the unit to start — violating "never
+    refuse to launch". This must therefore run before every unit
+    install, unconditionally. Idempotent: a no-op once the file already
+    exists, empty or not.
+
+    Precedence: (a) copy a token line forward from a legacy
+    ``config.env`` / the newest ``config.env.retired.*``; else (b) a
+    one-shot login-shell probe; else (c) a zero-byte file.
+    """
+    if DAEMON_ENV_PATH.exists():
+        return DAEMON_ENV_PATH
+
+    from aipager.config import _XDG_CONFIG
+
+    candidates: list[Path] = []
+    if _XDG_CONFIG.exists():
+        candidates.append(_XDG_CONFIG)
+    candidates.extend(sorted(
+        _XDG_CONFIG.parent.glob("config.env.retired.*"),
+        key=lambda p: p.name, reverse=True,
+    ))
+    for candidate in candidates:
+        line = _extract_token_line(candidate)
+        if line:
+            _write_daemon_env(line + "\n")
+            ok(f"copied a token forward from {candidate.name} → daemon.env")
+            return DAEMON_ENV_PATH
+
+    token = _discover_token_via_login_shell()
+    if token:
+        _write_daemon_env(f"CLAUDE_CODE_OAUTH_TOKEN={token}\n")
+        ok("discovered CLAUDE_CODE_OAUTH_TOKEN from your login shell → daemon.env")
+        return DAEMON_ENV_PATH
+
+    _write_daemon_env("")
+    friendly_warn(
+        "No Claude credential found — wrote an empty daemon.env.",
+        "  If sessions can't authenticate once the service starts, add a",
+        "  CLAUDE_CODE_OAUTH_TOKEN=... or ANTHROPIC_API_KEY=... line to",
+        f"  {DAEMON_ENV_PATH}, or run `aipager doctor --fix`.",
+    )
+    return DAEMON_ENV_PATH
+
+
+_ENVIRONMENT_FILE_RE = re.compile(r"^EnvironmentFile=-?(?P<path>.+)$", re.MULTILINE)
+
+
+def _migrate_token_from_old_unit(existing_unit_text: str) -> None:
+    """Best-effort: if the unit being replaced points at an old-style
+    ``EnvironmentFile=`` holding a token, and ``daemon.env`` doesn't
+    exist yet, copy the token forward. Never touches the old file —
+    that is exactly how a daemon on the old unit migrates to
+    ``LoadCredential=``.
+    """
+    if DAEMON_ENV_PATH.exists():
+        return
+    m = _ENVIRONMENT_FILE_RE.search(existing_unit_text)
+    if not m:
+        return
+    raw_path = m.group("path").strip().replace("%h", str(Path.home()))
+    line = _extract_token_line(Path(raw_path))
+    if line:
+        _write_daemon_env(line + "\n")
+        ok(f"copied a token forward from the previous unit's "
+           f"EnvironmentFile= ({Path(raw_path).name}) → daemon.env")
+
+
+def _install_linux(*, yes: bool = False) -> int:
     available, reason = _systemd_user_available()
     if not available:
         friendly_error(
@@ -174,10 +335,36 @@ def _install_linux() -> int:
 
     step("Installing aipager.service (systemd-user)")
 
-    LINUX_UNIT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _backup_existing(LINUX_UNIT_PATH)
-    LINUX_UNIT_PATH.write_text(_render_linux_unit())
-    ok(f"wrote [path]{LINUX_UNIT_PATH}[/path]")
+    existing_text = LINUX_UNIT_PATH.read_text() if LINUX_UNIT_PATH.exists() else None
+    if existing_text is not None:
+        _migrate_token_from_old_unit(existing_text)
+    ensure_daemon_env()
+
+    rendered = _render_linux_unit()
+    if existing_text is None:
+        LINUX_UNIT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        LINUX_UNIT_PATH.write_text(rendered)
+        ok(f"wrote [path]{LINUX_UNIT_PATH}[/path]")
+    elif existing_text == rendered:
+        ok(f"{LINUX_UNIT_PATH} already up to date")
+    else:
+        if not yes:
+            diff = "\n".join(difflib.unified_diff(
+                existing_text.splitlines(), rendered.splitlines(),
+                fromfile=str(LINUX_UNIT_PATH), tofile="(new)", lineterm="",
+            ))
+            console.print(diff)
+            answer = input(
+                f"Overwrite {LINUX_UNIT_PATH} with the changes above? [y/N]: "
+            ).strip().lower()
+            if answer not in ("y", "yes"):
+                console.print(
+                    "  [muted]left the existing unit unchanged[/muted]"
+                )
+                return 0
+        _backup_existing(LINUX_UNIT_PATH)
+        LINUX_UNIT_PATH.write_text(rendered)
+        ok(f"wrote [path]{LINUX_UNIT_PATH}[/path]")
 
     rc, _out, err = _run(["systemctl", "--user", "daemon-reload"])
     if rc != 0:
@@ -235,7 +422,7 @@ def _post_install_probe() -> None:
         )
 
 
-def _install_macos() -> int:
+def _install_macos(*, yes: bool = False) -> int:
     if shutil.which("launchctl") is None:
         friendly_error(
             "launchctl not on PATH — this doesn't look like macOS.",
@@ -244,6 +431,14 @@ def _install_macos() -> int:
         return 2
 
     step("Installing aipager (launchd)")
+    # launchd has no LoadCredential= equivalent — the daemon reads
+    # daemon.env directly (aipager.daemon_secrets), so there's no hard
+    # "must exist" requirement here the way there is on Linux. Still
+    # seeded for consistency: a plist install gets the same
+    # discover-or-empty behaviour as a unit install. `yes` is accepted
+    # for a uniform cmd_service() call signature; macOS has no
+    # diff-and-ask prompt to skip.
+    ensure_daemon_env()
     MACOS_PLIST_PATH.parent.mkdir(parents=True, exist_ok=True)
     MACOS_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     _backup_existing(MACOS_PLIST_PATH)
@@ -461,4 +656,5 @@ def cmd_service(args: argparse.Namespace) -> int:
     if sub == "install":
         from aipager.preflight import require_config
         require_config()
+        return handler(yes=getattr(args, "yes", False))
     return handler()

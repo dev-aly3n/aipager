@@ -183,6 +183,7 @@ def test_install_linux_success(monkeypatch, tmp_path):
                         lambda *a, **k: (0, "", ""))
     monkeypatch.setattr(service, "_check_linger", lambda: None)
     monkeypatch.setattr(service, "_post_install_probe", lambda: None)
+    monkeypatch.setattr(service, "ensure_daemon_env", lambda: None)
     rc = service._install_linux()
     assert rc == 0
 
@@ -194,6 +195,7 @@ def test_install_linux_enable_fails(monkeypatch, tmp_path, capsys):
                         tmp_path / "aipager.service")
     monkeypatch.setattr(service, "_resolve_aipager_bin",
                         lambda: "/usr/bin/aipager")
+    monkeypatch.setattr(service, "ensure_daemon_env", lambda: None)
     calls = []
     def _run(cmd, **k):
         calls.append(cmd)
@@ -212,6 +214,7 @@ def test_install_linux_daemon_reload_failure_warns_then_continues(monkeypatch, t
                         tmp_path / "aipager.service")
     monkeypatch.setattr(service, "_resolve_aipager_bin",
                         lambda: "/usr/bin/aipager")
+    monkeypatch.setattr(service, "ensure_daemon_env", lambda: None)
     def _run(cmd, **k):
         if "daemon-reload" in cmd:
             return (1, "", "reload failed")
@@ -295,6 +298,7 @@ def test_install_macos_success(monkeypatch, tmp_path):
     monkeypatch.setattr(service, "MACOS_LOG_PATH", tmp_path / "aipager.log")
     monkeypatch.setattr(service, "_resolve_aipager_bin",
                         lambda: "/usr/bin/aipager")
+    monkeypatch.setattr(service, "ensure_daemon_env", lambda: None)
     monkeypatch.setattr(service, "_run", lambda *a, **k: (0, "", ""))
     monkeypatch.setattr(service, "_post_install_probe", lambda: None)
     rc = service._install_macos()
@@ -308,6 +312,7 @@ def test_install_macos_bootstrap_fails(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(service, "MACOS_LOG_PATH", tmp_path / "aipager.log")
     monkeypatch.setattr(service, "_resolve_aipager_bin",
                         lambda: "/usr/bin/aipager")
+    monkeypatch.setattr(service, "ensure_daemon_env", lambda: None)
     def _run(cmd, **k):
         if "bootstrap" in cmd:
             return (5, "", "permission denied")
@@ -487,7 +492,7 @@ def test_cmd_service_unknown_subcommand(monkeypatch, capsys):
 def test_cmd_service_install_calls_require_config(monkeypatch):
     monkeypatch.setattr(service, "_platform", lambda: "linux")
     # _DISPATCH was built at module-import time; patch the bound function
-    monkeypatch.setitem(service._DISPATCH["linux"], "install", lambda: 0)
+    monkeypatch.setitem(service._DISPATCH["linux"], "install", lambda *, yes=False: 0)
     called = []
     monkeypatch.setattr("aipager.preflight.require_config",
                         lambda: called.append(1))

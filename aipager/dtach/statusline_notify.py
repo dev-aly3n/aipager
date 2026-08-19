@@ -20,7 +20,14 @@ import socket
 import sys
 from pathlib import Path
 
-SOCKET_PATH = "/tmp/aipager.sock"
+# Same precedence as aipager.config._default_socket_path() — kept
+# inlined and stdlib-only, see notify_hook.py's identical comment for why.
+SOCKET_PATH = (
+    os.environ.get("AIPAGER_SOCKET_PATH", "").strip()
+    or (os.path.join(os.environ["XDG_RUNTIME_DIR"], "aipager.sock")
+        if os.environ.get("XDG_RUNTIME_DIR", "").strip() else "")
+    or "/tmp/aipager.sock"
+)
 
 # Address-space cap for the statusline subprocess. Mirrors notify_hook:
 # baseline ~34 MB, 1 GB gives ~30× headroom over realistic legitimate

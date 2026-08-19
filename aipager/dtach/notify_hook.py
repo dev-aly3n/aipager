@@ -16,7 +16,17 @@ import socket
 import sys
 from pathlib import Path
 
-SOCKET_PATH = "/tmp/aipager.sock"
+# Same precedence as aipager.config._default_socket_path() (kept
+# inlined, stdlib-only here rather than importing aipager.config — this
+# hook must stay <5ms and importing config transitively pulls in yaml,
+# team.py, policy.py, and does I/O). If that function's precedence ever
+# changes, mirror the change here and in statusline_notify.py.
+SOCKET_PATH = (
+    os.environ.get("AIPAGER_SOCKET_PATH", "").strip()
+    or (os.path.join(os.environ["XDG_RUNTIME_DIR"], "aipager.sock")
+        if os.environ.get("XDG_RUNTIME_DIR", "").strip() else "")
+    or "/tmp/aipager.sock"
+)
 
 # Address-space cap for the hook subprocess. Baseline is ~34 MB VmSize
 # and realistic post-streaming-rewrite max is ~100 MB (recent-transcript
