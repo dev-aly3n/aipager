@@ -61,16 +61,21 @@ def read_daemon_credential() -> dict[str, str]:
     systemd's ``LoadCredential=``), then ``daemon.env`` directly.
     ``{}`` on any failure — never raises.
     """
+    # UnicodeDecodeError is NOT an OSError, so catching OSError alone left
+    # the "never raises" promise unmet: a credential file that is truncated
+    # mid-write, or written by another tool in another encoding, raised out
+    # of here — and this runs on the session-launch path, so it would have
+    # taken down every launch rather than degrading to "no credential".
     creds_dir = os.environ.get("CREDENTIALS_DIRECTORY")
     if creds_dir:
         candidate = Path(creds_dir) / "claude_oauth"
         try:
             return _parse_env_file(candidate.read_text(encoding="utf-8"))
-        except OSError:
+        except (OSError, UnicodeDecodeError):
             pass
     try:
         return _parse_env_file(DAEMON_ENV_PATH.read_text(encoding="utf-8"))
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         return {}
 
 

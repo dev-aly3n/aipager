@@ -170,9 +170,25 @@ def _remove_path(path: Path) -> bool:
 
 
 def _remove_tmp_sockets() -> None:
-    """Remove /tmp/aipager.sock, /tmp/claude-dtach-*.sock,
-    /tmp/claude-status-*.json — best-effort."""
-    Path("/tmp/aipager.sock").unlink(missing_ok=True)
+    """Remove the daemon control socket, /tmp/claude-dtach-*.sock and
+    /tmp/claude-status-*.json — best-effort.
+
+    The control socket moved off /tmp to $XDG_RUNTIME_DIR, so this reads
+    ``config.SOCKET_PATH`` rather than hardcoding a path that uninstall
+    would clean while the real socket survived. The literal
+    ``/tmp/aipager.sock`` is still removed afterwards: an install that
+    predates the move leaves one there, and uninstall is exactly when it
+    should go. Both are ``missing_ok`` so neither case is an error.
+
+    Imported locally — ``config`` reads the environment at import time,
+    and updater is reachable from cold CLI paths that must not pay that
+    cost just to print a help string.
+    """
+    from aipager.config import SOCKET_PATH
+
+    Path(SOCKET_PATH).unlink(missing_ok=True)
+    if str(SOCKET_PATH) != "/tmp/aipager.sock":
+        Path("/tmp/aipager.sock").unlink(missing_ok=True)   # pre-move leftover
     for p in Path("/tmp").glob("claude-dtach-*.sock"):
         try:
             p.unlink()
@@ -213,7 +229,7 @@ def cmd_uninstall(args=None) -> int:
     console.print(f"  • aipager binary ({installer or 'no installer detected'})")
     for p in _USER_PATHS_TO_REMOVE:
         console.print(f"  • [path]{p}[/path]")
-    console.print("  • /tmp/aipager.sock, /tmp/claude-dtach-*.sock, "
+    console.print("  • the daemon control socket, /tmp/claude-dtach-*.sock, "
                   "/tmp/claude-status-*.json")
     if is_macos:
         for p in _MACOS_PATHS_TO_REMOVE:
