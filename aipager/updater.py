@@ -139,13 +139,25 @@ _MACOS_PATHS_TO_REMOVE = [
 
 def _stop_daemon() -> None:
     """Best-effort: stop a running daemon before uninstalling."""
-    # Try `aipager service uninstall` first (no-op if not installed).
+    # Remove the service unit FIRST, in-process.
+    #
+    # This used to shell out to `sys.executable -m aipager.cli service
+    # uninstall`, which cannot work: `aipager.cli` is a package with no
+    # __main__.py, so the interpreter exits with "cannot be directly
+    # executed" every single time. With capture_output=True and
+    # check=False that failure was invisible, so every Linux uninstall
+    # silently left an enabled Restart=always unit behind pointing at a
+    # binary that was about to be deleted. systemd then retried it every
+    # RestartSec seconds forever — the unit sets StartLimitIntervalSec=0,
+    # which disables the start limiter that would otherwise give up.
+    # Calling the handler directly also drops the assumption that
+    # sys.executable can even import aipager.
     try:
-        subprocess.run(
-            [sys.executable, "-m", "aipager.cli", "service", "uninstall"],
-            capture_output=True, timeout=15, check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired):
+        import argparse
+
+        from aipager.service import cmd_service
+        cmd_service(argparse.Namespace(service_cmd="uninstall"))
+    except Exception:
         pass
     # Belt and braces: also kill any foreground daemon.
     if _has_binary("pkill"):

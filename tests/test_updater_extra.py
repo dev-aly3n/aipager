@@ -162,29 +162,64 @@ def test_cmd_update_nonzero_returncode_propagates(monkeypatch):
 
 # ---- _stop_daemon -------------------------------------------------------
 
-def test_stop_daemon_runs_service_uninstall(monkeypatch):
-    runs = []
-    monkeypatch.setattr(subprocess, "run",
-                        lambda *a, **k: runs.append(a) or MagicMock(returncode=0))
-    monkeypatch.setattr(updater, "_has_binary", lambda n: False)  # no pkill
+def _isolate_pkill(monkeypatch, available=False):
+    """Never let _stop_daemon reach the real `pkill -f "aipager start"`."""
+    monkeypatch.setattr(updater, "_has_binary", lambda n: available)
+
+
+def test_stop_daemon_removes_the_service_unit(monkeypatch, tmp_path):
+    """Asserts the EFFECT, not the invocation.
+
+    The previous version of this test mocked ``subprocess.run`` and
+    asserted only that an argv containing "service"/"uninstall" had been
+    passed to it. That assertion held on every run while the real command
+    failed on every run: ``_stop_daemon`` shelled out to
+    ``python -m aipager.cli``, and ``aipager.cli`` is a package with no
+    ``__main__.py``, so the interpreter refused to execute it. The mock
+    meant nothing ever ran, so the test could not see that. Real users
+    were left with an enabled Restart=always unit pointing at the binary
+    uninstall was about to delete.
+
+    So: check the unit file is actually gone.
+    """
+    from aipager import service
+
+    unit = tmp_path / "aipager.service"
+    unit.write_text("[Unit]\n")
+    monkeypatch.setattr(service, "LINUX_UNIT_PATH", unit)
+    monkeypatch.setattr(service, "_platform", lambda: "linux")
+    monkeypatch.setattr(service, "_run", lambda cmd, **k: (0, "", ""))
+    _isolate_pkill(monkeypatch)
+
     updater._stop_daemon()
-    assert any("service" in str(r) and "uninstall" in str(r) for r in runs)
+
+    assert not unit.exists(), (
+        "uninstall left the service unit on disk — systemd will keep "
+        "restarting a binary that is about to be deleted"
+    )
 
 
 def test_stop_daemon_runs_pkill_when_available(monkeypatch):
+    from aipager import service
+
+    monkeypatch.setattr(service, "cmd_service", lambda args: 0)
     runs = []
     monkeypatch.setattr(subprocess, "run",
                         lambda *a, **k: runs.append(a) or MagicMock(returncode=0))
-    monkeypatch.setattr(updater, "_has_binary", lambda n: True)
+    _isolate_pkill(monkeypatch, available=True)
     updater._stop_daemon()
     assert any("pkill" in str(r) for r in runs)
 
 
 def test_stop_daemon_swallows_errors(monkeypatch):
+    from aipager import service
+
     def _boom(*a, **k):
         raise OSError("perm")
+
+    monkeypatch.setattr(service, "cmd_service", _boom)
     monkeypatch.setattr(subprocess, "run", _boom)
-    monkeypatch.setattr(updater, "_has_binary", lambda n: False)
+    _isolate_pkill(monkeypatch)
     # MUST NOT raise
     updater._stop_daemon()
 
