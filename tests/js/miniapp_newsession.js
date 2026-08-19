@@ -23,8 +23,18 @@ class El {
   }
   get className() { return this._class; }
   set className(v) { this._class = v; }
-  get textContent() { return this._text; }
-  set textContent(v) { this._text = String(v); }
+  // Real textContent is the concatenation of ALL descendant text, and
+  // assigning it REPLACES the children. The shim used to return only the
+  // node's own text, so any element built from child spans (the notice
+  // toast, once it grew an icon) read back as "" and every assertion on
+  // its message silently saw an empty string.
+  get textContent() {
+    if (this.children.length) {
+      return this.children.map((c) => c.textContent).join("");
+    }
+    return this._text;
+  }
+  set textContent(v) { this._text = String(v); this.children = []; }
   get innerHTML() { return this._html; }
   set innerHTML(v) { this._html = v; this.children = []; }
   // Real appendChild MOVES a node that already has a parent. The page

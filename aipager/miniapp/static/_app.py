@@ -93,12 +93,33 @@ APP_JS = r"""
   // very next tap on the New-session card would have erased it, leaving
   // the operator with no explanation.
   var noticeTimer = null;
-  function showNotice(msg) {
+  // kind: "ok" (it worked), "err" (it did not), or omitted for neutral.
+  // The icon is a real DOM node, not CSS `content:` — a previous CSS emoji
+  // in this file was mangled by Python's escape handling in the non-raw
+  // stylesheet string, and building it here keeps the message itself
+  // going through textContent so server-supplied detail can never be
+  // interpreted as markup.
+  function showNotice(msg, kind) {
     var el = document.getElementById("notice");
-    el.textContent = msg;
-    // A class, not el.style.display: the toast is positioned out of flow
-    // and faded in, so toggling `display` would both kill the transition
-    // and reintroduce the layout shift this replaced.
+    kind = kind === "ok" || kind === "err" ? kind : "info";
+    el.textContent = "";
+    var icon = document.createElement("span");
+    icon.className = "toast-icon";
+    icon.textContent = kind === "ok" ? "✓" : kind === "err" ? "!" : "i";
+    var body = document.createElement("span");
+    body.className = "toast-text";
+    body.textContent = msg;
+    el.appendChild(icon);
+    el.appendChild(body);
+    // Reset the kind classes without touching is-visible, so a second
+    // notice arriving mid-fade cannot strand the toast in the wrong colour.
+    el.classList.remove("toast-ok");
+    el.classList.remove("toast-err");
+    el.classList.remove("toast-info");
+    el.classList.add("toast-" + kind);
+    // A class, not inline display: the toast is positioned out of flow
+    // and faded in, so toggling that property would both kill the
+    // transition and reintroduce the layout shift this replaced.
     el.classList.add("is-visible");
     if (noticeTimer) { clearTimeout(noticeTimer); }
     noticeTimer = setTimeout(function () {
@@ -529,7 +550,7 @@ APP_JS = r"""
       if (!data || !data.values) { return; }
       sessionSettingsData.values = data.values;
       renderSessionSettings();
-      showNotice("Saved.");
+      showNotice("Saved.", "ok");
       if (tg && tg.HapticFeedback) {
         try { tg.HapticFeedback.notificationOccurred("success"); } catch (e) { /* old client */ }
       }
@@ -541,7 +562,7 @@ APP_JS = r"""
       if (sessionSaveSeq[field] !== seq || sessionSettingsLabel !== label) { return; }
       sessionSettingsData.values[field] = previous;
       renderSessionSettings();
-      showNotice("Couldn't save — the value on screen is what's stored.");
+      showNotice("Couldn't save — the value on screen is what's stored.", "err");
     });
   }
 
@@ -587,7 +608,7 @@ APP_JS = r"""
         renderSessionSettings();
         showNotice(hadError
           ? "Some settings could not be reset — reopen to retry."
-          : "Reset to defaults.");
+          : "Reset to defaults.", hadError ? "err" : "ok");
       });
     });
   }
@@ -840,22 +861,22 @@ APP_JS = r"""
           // Kill's post-lookup race (socket already gone) reads the
           // session as gone either way — same reaction as a clean 200.
           showNotice(r.status === 404 ? "Already gone."
-            : (action === "kill" ? "Killed." : "Deleted."));
+            : (action === "kill" ? "Killed." : "Deleted."), "ok");
           showGrid();
           return;
         }
-        showNotice((r.data && r.data.detail) || "Couldn't complete that.");
+        showNotice((r.data && r.data.detail) || "Couldn't complete that.", "err");
         return;
       }
       // stop / resume / clearqueue / compact / perms / restart
       if (r.status === 200) {
-        showNotice(ACTION_SUCCESS_NOTICE[action] || "Done.");
+        showNotice(ACTION_SUCCESS_NOTICE[action] || "Done.", "ok");
         pollTick();
         return;
       }
-      showNotice((r.data && r.data.detail) || "Couldn't complete that.");
+      showNotice((r.data && r.data.detail) || "Couldn't complete that.", "err");
     }).catch(function () {
-      showNotice("Couldn't reach the server — nothing changed.");
+      showNotice("Couldn't reach the server — nothing changed.", "err");
     });
   }
 
@@ -1092,16 +1113,16 @@ APP_JS = r"""
     }).then(function (r) {
       if (r.status === 200) {
         var body = r.data || {};
-        showNotice(body.changed === false ? "No change." : "Renamed.");
+        showNotice(body.changed === false ? "No change." : "Renamed.", "ok");
         // The poll target is keyed by the now-stale OLD label and
         // would 404 — navigate to the (possibly unchanged) new one
         // instead of pollTick()ing the old page.
         openDetail(body.label || newLabel);
         return;
       }
-      showNotice((r.data && r.data.detail) || "Couldn't rename.");
+      showNotice((r.data && r.data.detail) || "Couldn't rename.", "err");
     }).catch(function () {
-      showNotice("Couldn't reach the server — nothing changed.");
+      showNotice("Couldn't reach the server — nothing changed.", "err");
     });
   }
 
@@ -1439,7 +1460,7 @@ APP_JS = r"""
       if (saveSeq[field] !== seq) { return; }   // superseded — ignore
       settingsData.values = data.values;
       renderSettings();
-      showNotice("Saved.");
+      showNotice("Saved.", "ok");
       if (tg && tg.HapticFeedback) {
         try { tg.HapticFeedback.notificationOccurred("success"); } catch (e) { /* old client */ }
       }
@@ -1453,7 +1474,7 @@ APP_JS = r"""
       if (saveSeq[field] !== seq) { return; }   // superseded — ignore
       settingsData.values[field] = previous;
       renderSettings();
-      showNotice("Couldn't save — the value on screen is what's stored.");
+      showNotice("Couldn't save — the value on screen is what's stored.", "err");
     });
   }
 
@@ -1845,7 +1866,7 @@ APP_JS = r"""
       newState.folderError = "";
       nameEl.value = "";
       showNotice(r.data.existed ? "That folder already existed — selected it."
-                                : "Folder created.");
+                                : "Folder created.", "ok");
       renderNewForm();
     }).catch(function () {
       newState.folderBusy = false;

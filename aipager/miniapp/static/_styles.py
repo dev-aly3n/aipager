@@ -174,6 +174,47 @@ CSS = """\
     opacity: 1;
     transform: translateX(-50%) translateY(0);
   }
+
+  /* Toast card: an icon disc plus the message, on a coloured accent so the
+     outcome reads before the words do. Literal characters throughout — a
+     CSS `content:` escape in this same non-raw Python string was once
+     mangled into the text "F480" on screen, so icons live in the DOM. */
+  #notice {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+    border-left: 4px solid var(--tg-theme-hint-color, #8e8e93);
+  }
+  .toast-icon {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    line-height: 1;
+    /* Hardcoded background paired with hardcoded text, deliberately. A
+       theme-derived background here would be unreadable against #ffffff
+       on any theme with a light accent — the exact fault
+       test_no_theme_background_is_paired_with_hardcoded_white_text
+       exists to catch, and which this rule tripped on first writing. */
+    color: #ffffff;
+    background: #8e8e93;
+  }
+  .toast-text { flex: 1 1 auto; }
+
+  #notice.toast-ok { border-left-color: #16a34a; }
+  #notice.toast-ok .toast-icon { background: #16a34a; }
+  #notice.toast-err { border-left-color: #dc2626; }
+  #notice.toast-err .toast-icon { background: #dc2626; }
+  #notice.toast-info {
+    border-left-color: var(--tg-theme-link-color, #3390ec);
+  }
+  #notice.toast-info .toast-icon { background: #3390ec; }
   /* Nothing below it moves — the whole point — but it must also not sit
      under the sticky header it now overlaps. */
   #notice { pointer-events: none; }

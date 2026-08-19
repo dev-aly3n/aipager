@@ -120,9 +120,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than the one picked with nothing on screen to say so.
 
 ### Fixed
-- **Mini App notices no longer shove the page around.** "Session resumed",
-  "Folder created" and friends now float as a small toast near the bottom
-  instead of appearing as a banner in the layout — previously each one pushed
+- **Mini App notices are now a floating toast card.** "Session resumed",
+  "Folder created" and friends appear as a small card pinned to the top with
+  a tick or an exclamation and a colour matching the outcome, instead of a
+  banner in the layout — previously each one pushed
   everything below it down for 3.5 seconds and then yanked it back, so the
   list jumped under your finger just as you were reading the result. Fatal
   errors still stay put in the page, where they can't be missed.

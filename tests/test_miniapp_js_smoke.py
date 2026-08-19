@@ -937,8 +937,9 @@ def test_the_harness_detects_a_dropped_server_detail_on_rename_failure(node_bin,
     rename was refused (which label is already taken, etc.)."""
     from aipager.miniapp.static import INDEX_HTML
 
-    old = '      showNotice((r.data && r.data.detail) || "Couldn\'t rename.");\n'
-    new = '      showNotice("Couldn\'t rename.");\n'
+    old = ('      showNotice((r.data && r.data.detail) || "Couldn\'t rename.", '
+           '"err");\n')
+    new = '      showNotice("Couldn\'t rename.", "err");\n'
     assert old in INDEX_HTML, "rename failure-notice line not found — page changed shape"
     broken = INDEX_HTML.replace(old, new, 1)
     assert broken != INDEX_HTML, "mutation was a no-op"
@@ -1022,7 +1023,10 @@ def test_showNotice_toggles_a_class_rather_than_inline_display():
     from aipager.miniapp.static import INDEX_HTML
 
     start = INDEX_HTML.index("function showNotice(")
-    body = INDEX_HTML[start:start + 900]
+    # Slice to the end of the function, not a fixed byte count: a fixed
+    # 900 broke the moment showNotice grew a `kind` parameter, and a test
+    # that silently stops covering the line it names is worse than none.
+    body = INDEX_HTML[start:INDEX_HTML.index("function apiFetch(", start)]
     assert 'classList.add("is-visible")' in body
     # Match the ASSIGNMENT, not the words: the function's own comment
     # explains why `el.style.display` is not used, and a substring check
@@ -1030,3 +1034,42 @@ def test_showNotice_toggles_a_class_rather_than_inline_display():
     # before — a CSS comment warning about an escape contained the escape.)
     assert "style.display =" not in body, "showNotice sets inline display again"
     assert "style.display=" not in body
+
+
+def test_the_toast_carries_an_outcome_icon_and_colour():
+    """A toast should read as success or failure before the words do.
+
+    The icon is built in the DOM rather than via CSS `content:` on purpose:
+    a CSS escape in this same non-raw Python stylesheet string was once
+    mangled and rendered as the literal text "F480" on screen.
+    """
+    from aipager.miniapp.static import INDEX_HTML
+
+    start = INDEX_HTML.index("function showNotice(")
+    body = INDEX_HTML[start:INDEX_HTML.index("function apiFetch(", start)]
+    assert 'createElement("span")' in body, "icon is not a DOM node"
+    assert "✓" in body and "!" in body, "no success/failure glyphs"
+    # The message itself must never be interpolated as markup — server
+    # `detail` strings reach this function verbatim.
+    assert "innerHTML" not in body, "server detail could be treated as markup"
+
+    for cls in ("#notice.toast-ok", "#notice.toast-err", "#notice.toast-info"):
+        assert cls in INDEX_HTML, f"{cls} has no styling"
+
+
+def test_every_notice_states_whether_it_worked():
+    """A toast with no kind falls back to neutral, which is right for a
+    genuinely neutral message but wrong for an outcome. Pin that the
+    outcome-bearing call sites actually say which they are, so a new one
+    added later without a kind stands out here rather than shipping as a
+    grey 'i' after a failed action."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    for phrase, kind in [
+        ('"Saved."', "ok"),
+        ('"Couldn\'t reach the server — nothing changed."', "err"),
+        ('"Couldn\'t rename."', "err"),
+    ]:
+        idx = INDEX_HTML.index(phrase)
+        tail = INDEX_HTML[idx:idx + 120]
+        assert f'"{kind}"' in tail, f"{phrase} is not classified as {kind}"
