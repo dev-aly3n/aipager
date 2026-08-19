@@ -136,6 +136,25 @@ def _no_login_shell_token_discovery_by_default(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _stub_resolve_aipager_bin(monkeypatch):
+    """``_install_linux()`` renders ExecStart from
+    ``service._resolve_aipager_bin()``, which is ``shutil.which("aipager")``
+    and raises ``FileNotFoundError`` when aipager is not on ``$PATH``.
+
+    That made every install test in this package silently depend on the
+    machine running the suite having aipager *installed* -- they passed
+    on the developer box and would fail on CI, in a fresh checkout, or
+    (as actually happened) the moment someone uninstalled aipager to
+    test the from-scratch install flow. No test here asserts on the
+    resolved value, only on the unit's structure, so a fixed stand-in
+    removes the host dependency without weakening anything. A test that
+    cares about resolution overrides this locally.
+    """
+    monkeypatch.setattr(
+        "aipager.service._resolve_aipager_bin", lambda: "/usr/bin/aipager")
+
+
+@pytest.fixture(autouse=True)
 def fake_service_run(monkeypatch):
     """See module docstring point 3. Returns the recorder so a test that
     cares about exactly which systemctl invocations happened can assert
