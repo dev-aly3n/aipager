@@ -16,6 +16,12 @@ import os
 import pytest
 
 from aipager import claude_resolve
+# Bound at import time, before the autouse `_no_real_claude_candidates`
+# fixture (tests/conftest.py) patches `claude_resolve._candidate_paths`
+# to a no-candidates stub for every OTHER test in the suite. The tests
+# exercising the real implementation below call this name directly,
+# bypassing the patched module attribute entirely.
+from aipager.claude_resolve import _candidate_paths as _real_candidate_paths
 
 
 def _write_fixture_claude(
@@ -163,6 +169,59 @@ def test_stale_tier1_override_falls_through_with_warning(tmp_path, monkeypatch, 
         resolved = claude_resolve.resolve_claude_binary()
     assert resolved.chosen.path == str(working)
     assert any("claude_path" in r.message for r in caplog.records)
+
+
+# ---- _candidate_paths (the REAL function, not a caller's stub) -----------
+#
+# Every test above bypasses _candidate_paths() entirely by monkeypatching
+# it to a lambda. These exercise the real implementation end-to-end,
+# specifically to pin the tier-1 (claude_path config) source: it must
+# read `aipager.scope.CONFIG_PATH` fresh at call time, not the module's
+# `path: Path = CONFIG_PATH` default bound once at scope.py's import —
+# an earlier version of this call sat on that default and, under a test
+# that repoints `_scope.CONFIG_PATH` (every test in this suite does, via
+# conftest's autouse `_isolate_wizard_config`), silently read and wrote
+# the OPERATOR'S REAL ~/.config/aipager/aipager.yaml instead of the
+# test's tmp file.
+
+def test_candidate_paths_tier1_reads_the_current_config_path_not_a_stale_default(
+        tmp_path, monkeypatch):
+    from aipager import scope as _scope
+
+    cfg = tmp_path / "aipager.yaml"
+    cfg.write_text("schema_version: 3\nbot_token: TOK\nscopes: []\n"
+                   "claude_path: /configured/claude\n")
+    monkeypatch.setattr(_scope, "CONFIG_PATH", cfg)
+
+    candidates = _real_candidate_paths()
+    assert ("/configured/claude", 1) in candidates
+
+
+def test_candidate_paths_tier1_absent_when_config_has_no_claude_path(
+        tmp_path, monkeypatch):
+    from aipager import scope as _scope
+
+    cfg = tmp_path / "aipager.yaml"
+    cfg.write_text("schema_version: 3\nbot_token: TOK\nscopes: []\n")
+    monkeypatch.setattr(_scope, "CONFIG_PATH", cfg)
+
+    candidates = _real_candidate_paths()
+    assert not any(tier == 1 for _path, tier in candidates)
+
+
+def test_candidate_paths_never_touches_a_real_home_config(tmp_path, monkeypatch):
+    """Belt-and-braces: even with NO CONFIG_PATH redirect at all in this
+    specific test, _candidate_paths() must not blow up or reach outside
+    tmp — the autouse `_isolate_wizard_config` fixture (conftest.py)
+    already redirects `aipager.scope.CONFIG_PATH` for every test, so
+    this just confirms _candidate_paths() actually honours that."""
+    from aipager import scope as _scope
+    # Whatever conftest already redirected CONFIG_PATH to — assert it's
+    # NOT the real path, then call the real function.
+    assert _scope.CONFIG_PATH != _scope.CONFIG_PATH.__class__(
+        "~/.config/aipager/aipager.yaml"
+    ).expanduser()
+    _real_candidate_paths()  # must not raise
 
 
 # ---- criteria 5 & 6: provenance formatting --------------------------------

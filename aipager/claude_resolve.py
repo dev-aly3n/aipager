@@ -148,7 +148,14 @@ def _candidate_paths() -> list[tuple[str, int]]:
             candidates.append((path, tier))
 
     try:
-        configured = _scope.load_claude_path()
+        # `path=` passed explicitly, read from the module at call time —
+        # `load_claude_path`'s `path: Path = CONFIG_PATH` default is
+        # bound once at aipager.scope's import time, so relying on it
+        # would silently ignore a later `_scope.CONFIG_PATH` repoint
+        # (every test in this suite does this via the autouse
+        # `_isolate_wizard_config` fixture) and read the operator's real
+        # config instead. Same trap `config._load_miniapp()` documents.
+        configured = _scope.load_claude_path(path=_scope.CONFIG_PATH)
     except Exception:
         configured = ""
     if configured:

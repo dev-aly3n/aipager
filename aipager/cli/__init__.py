@@ -125,6 +125,11 @@ def main() -> None:
         "--safety-check", dest="safety_check", action="store_true",
         help="print the active safety policy (paths, bash patterns, roles)",
     )
+    doctor_p.add_argument(
+        "--fix", dest="fix", action="store_true",
+        help="interactively offer to discover a daemon credential and "
+             "pin claude_path on a multi-install ambiguity",
+    )
     doctor_p.set_defaults(fn=_cmd_doctor)
 
     status_p = sub.add_parser(
