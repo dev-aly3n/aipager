@@ -147,8 +147,15 @@ CSS = """\
   #notice {
     position: fixed;
     left: 50%;
-    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-    transform: translateX(-50%) translateY(8px);
+    /* TOP, not bottom. A bottom-anchored fixed element is not reliably
+       visible in a Telegram Mini App: the webview's layout viewport can
+       extend BELOW the visible sheet when the app is not fully expanded,
+       so the toast renders past the fold and the operator sees nothing at
+       all — which is exactly what happened with `bottom: 16px`. Telegram
+       exposes viewportStableHeight for this reason. The top edge is always
+       on screen, whatever height the sheet is at. */
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    transform: translateX(-50%) translateY(-8px);
     z-index: 70;
     max-width: min(92vw, 26rem);
     padding: 10px 14px;
@@ -167,6 +174,9 @@ CSS = """\
     opacity: 1;
     transform: translateX(-50%) translateY(0);
   }
+  /* Nothing below it moves — the whole point — but it must also not sit
+     under the sticky header it now overlaps. */
+  #notice { pointer-events: none; }
   @media (prefers-reduced-motion: reduce) {
     #notice { transition: none; }
   }
