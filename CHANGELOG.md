@@ -165,6 +165,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than the one picked with nothing on screen to say so.
 
 ### Fixed
+- **`aipager service install` now restarts a daemon that was already
+  running.** It used `systemctl enable --now`, which starts a stopped unit
+  but leaves a running one untouched — so upgrading left the *previous*
+  process serving under the newly written unit. Combined with the control
+  socket moving to `$XDG_RUNTIME_DIR`, that stranded daemon kept the old
+  `/tmp` socket while the freshly installed hooks addressed the new one:
+  hook events went nowhere, and every session sat BUSY with no error in
+  any log. macOS was unaffected (its install boots the job out and back
+  in). Found by live-testing an upgrade, not by the test suite.
 - **The resolved `claude` binary path is now shell-quoted before it reaches
   the session's launch command.** It was the one unquoted value on that
   line — safe only while it could only ever come from a plain PATH lookup.
