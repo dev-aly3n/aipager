@@ -52,7 +52,14 @@ def test_export_prefix_is_not_special(tmp_path, monkeypatch):
     _seed(tmp_path, monkeypatch, "export A=1\nB=2\n")
     got = daemon_secrets.read_daemon_credential()
     assert "B" in got and got["B"] == "2"
-    assert "A" not in got or got.get("A") != "1" or "export A" not in got
+    # Both spellings must be absent. An `or`-chain here would be vacuous:
+    # a parser that stripped `export ` and stored A=1 — the more dangerous
+    # regression, since it would make daemon.env quietly accept shell
+    # syntax the module's contract says it does not — satisfies
+    # `"export A" not in got` and slips through.
+    assert "A" not in got and "export A" not in got, (
+        f"`export A=1` must be dropped whole, got {got!r}"
+    )
 
 
 def test_value_containing_equals_keeps_everything_after_the_first(tmp_path, monkeypatch):
@@ -81,6 +88,22 @@ def test_non_utf8_bytes_yield_empty_and_do_not_raise(tmp_path, monkeypatch):
     different tool, or truncated mid-write, can be undecodable."""
     (tmp_path / "claude_oauth").write_bytes(b"TOK=\xff\xfe\x00binary\n")
     monkeypatch.setenv("CREDENTIALS_DIRECTORY", str(tmp_path))
+    assert isinstance(daemon_secrets.read_daemon_credential(), dict)
+
+
+def test_non_utf8_daemon_env_fallback_does_not_raise(tmp_path, monkeypatch):
+    """Same guarantee on the *other* read path.
+
+    read_daemon_credential() has two textually identical try/except blocks:
+    the $CREDENTIALS_DIRECTORY branch (covered above) and this
+    DAEMON_ENV_PATH fallback, which is the only one macOS and plain-Docker
+    installs ever take. Without its own test, an edit that narrowed just
+    this clause back to `except OSError` would go uncaught.
+    """
+    monkeypatch.delenv("CREDENTIALS_DIRECTORY", raising=False)
+    env_file = tmp_path / "daemon.env"
+    env_file.write_bytes(b"TOK=\xff\xfe\x00binary\n")
+    monkeypatch.setattr(daemon_secrets, "DAEMON_ENV_PATH", env_file)
     assert isinstance(daemon_secrets.read_daemon_credential(), dict)
 
 
