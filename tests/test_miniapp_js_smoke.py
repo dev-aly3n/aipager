@@ -989,3 +989,44 @@ def test_the_harness_detects_a_missing_menu_divider(node_bin, tmp_path):
     assert proc.returncode != 0, (
         "harness passed a page with no divider between the menu groups"
     )
+
+
+def test_the_notice_is_a_floating_toast_not_an_in_flow_banner():
+    """Notices must not shift the page.
+
+    As an in-flow element the notice appeared and vanished 3.5s later,
+    pushing everything below it down and then yanking it back — so tapping
+    Kill made the list jump under your finger just as you read the result.
+    Pinned here because the fix is entirely CSS: a future edit that drops
+    `position: fixed` would silently reintroduce the shift with every test
+    still green.
+    """
+    from aipager.miniapp.static import INDEX_HTML
+
+    start = INDEX_HTML.index("#notice {")
+    block = INDEX_HTML[start:INDEX_HTML.index("}", start)]
+    assert "position: fixed" in block, "notice is back in normal flow"
+    assert "display: none" not in block, (
+        "display toggling defeats both the transition and the fixed layout"
+    )
+    # The toast has to sit above the confirm dialog (60) and its backdrop
+    # (50): 'Session killed.' answers an action taken inside that dialog.
+    zline = [ln for ln in block.splitlines() if "z-index" in ln]
+    assert zline, "notice has no z-index — it can render behind the dialog"
+    assert int(zline[0].split(":")[1].strip().rstrip(";")) > 60
+
+
+def test_showNotice_toggles_a_class_rather_than_inline_display():
+    """The JS half of the same guarantee — setting style.display would
+    override the stylesheet and put the toast back in flow."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    start = INDEX_HTML.index("function showNotice(")
+    body = INDEX_HTML[start:start + 900]
+    assert 'classList.add("is-visible")' in body
+    # Match the ASSIGNMENT, not the words: the function's own comment
+    # explains why `el.style.display` is not used, and a substring check
+    # trips over that explanation. (This project has done exactly this
+    # before — a CSS comment warning about an escape contained the escape.)
+    assert "style.display =" not in body, "showNotice sets inline display again"
+    assert "style.display=" not in body

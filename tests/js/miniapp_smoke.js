@@ -9,12 +9,16 @@ class El {
     this.children = []; this.listeners = {}; this.attrs = {};
     this._class = ""; this._text = ""; this._html = "";
     this.hidden = false; this.disabled = false; this.style = {};
+    // These are ARROW functions, so `this` is the El instance itself, not
+    // the classList object — an earlier version read `this._el._class`,
+    // which is undefined here and made add/remove/contains throw. Nothing
+    // exercised them until the notice toast started using classList, so
+    // the shim had been quietly broken the whole time.
     this.classList = {
-      _el: this,
-      add: (c) => { if (!this._el._class.split(" ").includes(c)) this._el._class += " " + c; },
-      remove: (c) => { this._el._class = this._el._class.split(" ").filter(x => x !== c).join(" "); },
+      add: (c) => { if (!this._class.split(" ").includes(c)) this._class += " " + c; },
+      remove: (c) => { this._class = this._class.split(" ").filter(x => x !== c).join(" "); },
       toggle: (c, on) => { on ? this.classList.add(c) : this.classList.remove(c); },
-      contains: (c) => this._el._class.split(" ").includes(c),
+      contains: (c) => this._class.split(" ").includes(c),
     };
   }
   get className() { return this._class; }

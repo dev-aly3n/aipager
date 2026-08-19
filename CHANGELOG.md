@@ -120,6 +120,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than the one picked with nothing on screen to say so.
 
 ### Fixed
+- **Mini App notices no longer shove the page around.** "Session resumed",
+  "Folder created" and friends now float as a small toast near the bottom
+  instead of appearing as a banner in the layout — previously each one pushed
+  everything below it down for 3.5 seconds and then yanked it back, so the
+  list jumped under your finger just as you were reading the result. Fatal
+  errors still stay put in the page, where they can't be missed.
 - **Telegram flood control no longer mutes the bot for hours.** Outbound
   messages now go through a rate limiter that honours Telegram's own
   "retry after N seconds" instead of hammering the API and failing. Before

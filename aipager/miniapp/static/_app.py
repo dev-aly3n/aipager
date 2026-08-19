@@ -96,12 +96,19 @@ APP_JS = r"""
   function showNotice(msg) {
     var el = document.getElementById("notice");
     el.textContent = msg;
-    el.style.display = "block";
+    // A class, not el.style.display: the toast is positioned out of flow
+    // and faded in, so toggling `display` would both kill the transition
+    // and reintroduce the layout shift this replaced.
+    el.classList.add("is-visible");
     if (noticeTimer) { clearTimeout(noticeTimer); }
     noticeTimer = setTimeout(function () {
-      el.textContent = "";
-      el.style.display = "none";
+      el.classList.remove("is-visible");
       noticeTimer = null;
+      // Text is cleared only after the fade-out, so the message does not
+      // blank out mid-animation.
+      setTimeout(function () {
+        if (!el.classList.contains("is-visible")) { el.textContent = ""; }
+      }, 200);
     }, 3500);
   }
 

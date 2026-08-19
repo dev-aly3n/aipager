@@ -129,14 +129,46 @@ CSS = """\
   }
 
   /* Transient notices sit apart from #error so a self-clearing note can
-     never wipe a fatal message that must stay on screen. */
+     never wipe a fatal message that must stay on screen.
+
+     A floating toast, NOT an in-flow banner: as an in-flow element it
+     appeared and vanished 3.5s later, shoving the whole page down and
+     then yanking it back up — so tapping "Kill" made the list jump under
+     the finger just as you were reading the result. Fixed positioning
+     takes it out of flow entirely, so nothing below it ever moves.
+
+     z-index 70 puts it above the confirm dialog (60) and its backdrop
+     (50): "Session killed." is the answer to an action taken IN that
+     dialog, so it has to be readable while the dialog is still closing.
+
+     Toggled by opacity rather than `display`, so it can transition, and
+     so role="status" keeps announcing to screen readers instead of the
+     element popping in and out of the a11y tree. */
   #notice {
-    margin-top: 12px;
-    padding: 8px 10px;
-    border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
-    border-radius: 8px;
+    position: fixed;
+    left: 50%;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%) translateY(8px);
+    z-index: 70;
+    max-width: min(92vw, 26rem);
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: var(--tg-theme-section-bg-color, #ffffff);
+    color: var(--tg-theme-text-color, #000000);
+    border: 1px solid var(--tg-theme-section-separator-color, #e0e0e0);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
     font-size: 0.9rem;
-    display: none;
+    text-align: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+  }
+  #notice.is-visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #notice { transition: none; }
   }
 
   /* Settings groups: one screen, every option visible, no nested menus —
