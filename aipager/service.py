@@ -373,6 +373,20 @@ def _install_linux(*, yes: bool = False) -> int:
     else:
         ok("systemctl daemon-reload")
 
+    # `enable --now` only *starts* an inactive unit; it will not restart
+    # one that is already running. On an upgrade that leaves the previous
+    # process — old code, and under this feature the old /tmp socket path
+    # — still serving while the freshly installed hook scripts resolve
+    # $XDG_RUNTIME_DIR. Nothing errors: hook datagrams go to a socket
+    # nobody holds, so every session hangs BUSY with no message anywhere,
+    # which is precisely the failure this feature exists to remove.
+    # Checked before enabling, since enabling is what would otherwise
+    # mask it. macOS needs no equivalent: _install_macos boots the job
+    # out and back in, genuinely replacing the process.
+    _rc, active_out, _err = _run(["systemctl", "--user", "is-active",
+                                  "aipager.service"])
+    was_active = active_out.strip() == "active"
+
     rc, _out, err = _run(["systemctl", "--user", "enable", "--now",
                           "aipager.service"])
     if rc != 0:
@@ -382,7 +396,25 @@ def _install_linux(*, yes: bool = False) -> int:
             f"  {err.strip()}" if err.strip() else "  (no stderr captured)",
         )
         return rc
-    ok("enabled and started")
+
+    if was_active:
+        rc, _out, err = _run(["systemctl", "--user", "restart",
+                              "aipager.service"])
+        if rc != 0:
+            friendly_error(
+                f"systemctl --user restart aipager.service failed "
+                f"(exit {rc}).",
+                f"  {err.strip()}" if err.strip() else "  (no stderr captured)",
+                "",
+                "  The new unit is on disk but the OLD daemon is still "
+                "running.",
+                "  Restart it before using aipager:",
+                "      systemctl --user restart aipager.service",
+            )
+            return rc
+        ok("restarted to pick up the new unit")
+    else:
+        ok("enabled and started")
     _check_linger()
     _post_install_probe()
     console.print()
