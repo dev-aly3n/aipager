@@ -85,6 +85,13 @@ def _isolate_home_paths(tmp_path, monkeypatch):
         # to recover Mini App settings — without a redirect it would read
         # the operator's real config.env.
         "aipager.config._XDG_CONFIG": config_env,
+        # daemon_secrets.build_session_env() reads this on every
+        # launch_session() call. Without a redirect, any test reaching
+        # that path (directly or via launch_session) would read the
+        # operator's real Claude credential off disk into a test's env
+        # dict — never written or printed here, but still a real-file
+        # read this suite must never do.
+        "aipager.daemon_secrets.DAEMON_ENV_PATH": cfg / "daemon.env",
         "aipager.preferences._PREFERENCES_PATH": cfg / "preferences.json",
         "aipager.session_store.SESSIONS_ROOT":
             home / ".local" / "share" / "aipager" / "sessions",
@@ -201,6 +208,46 @@ def _guard_real_home():
               "tests/conftest.py. (If you edited Claude Code settings "
               "while the suite ran, this is a false positive.)"
         )
+
+
+@pytest.fixture(autouse=True)
+def _no_real_claude_candidates(request, monkeypatch):
+    """Make claude_resolve discovery return zero candidates by default.
+
+    Before claude_resolve existed, every one of the six resolution call
+    sites called ``shutil.which("claude")`` once — free, and harmless to
+    leave unmocked, which is why most of the suite did. Once resolution
+    instead walks real ``$PATH`` entries and verifies each with
+    ``--version``, any test exercising a call site (launch_session,
+    require_claude, check_claude, _claude_version_diag, the wizard deps
+    table, …) without an explicit mock would probe whatever `claude`
+    binaries actually exist on THIS machine — including the live
+    daemon's real installed binary. That is a hard-constraint violation
+    (see spec.md), not just noise.
+
+    Safe-by-default, mirroring ``_block_real_telegram_http``'s shape: a
+    test that wants real candidates monkeypatches
+    ``aipager.claude_resolve._candidate_paths`` (or a fixture-binary
+    seam built on it) itself, inside the test body — that patch runs
+    after this fixture's setup and wins.
+
+    The process-level memo is also reset before and after every test —
+    otherwise one test's successful resolution would leak into the
+    next, defeating both this fixture and any per-test override.
+
+    Exempted: ``tests/e2e/``, the one caller allowed to touch a real
+    installed claude (see entrypoints.md's fixture-binary contract) —
+    those tests are opt-in only (``-m e2e``) and skip themselves when no
+    real, authenticated claude is available.
+    """
+    import aipager.claude_resolve as _cr
+    _cr._memo = None
+    _cr._memo_error = None
+    if "e2e" not in request.keywords:
+        monkeypatch.setattr(_cr, "_candidate_paths", lambda: [])
+    yield
+    _cr._memo = None
+    _cr._memo_error = None
 
 
 @pytest.fixture(autouse=True)

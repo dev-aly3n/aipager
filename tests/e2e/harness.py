@@ -32,7 +32,16 @@ MARKER = "[via Telegram · @e2e]"
 # ---- discovery -----------------------------------------------------------
 
 def claude_bin() -> str | None:
-    return shutil.which("claude")
+    """The claude binary the daemon would actually launch.
+
+    The one caller allowed to touch a real installed claude — this
+    module backs the opt-in `-m e2e` suite, not the default run, and is
+    exempted from the safe-by-default `_no_real_claude_candidates`
+    fixture in tests/conftest.py.
+    """
+    from aipager import claude_resolve
+    resolved = claude_resolve.try_resolve_claude_binary()
+    return resolved.chosen.path if resolved else None
 
 
 def aipager_hook_bin() -> str | None:

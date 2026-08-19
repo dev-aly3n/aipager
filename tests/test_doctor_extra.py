@@ -109,27 +109,64 @@ def test_check_dtach_v_fails_but_h_works(monkeypatch):
 
 
 # ---- check_claude -------------------------------------------------------
+#
+# check_claude() now delegates entirely to aipager.claude_resolve — the
+# same precedence chain and --version verification every other call
+# site uses. The autouse `_no_real_claude_candidates` fixture already
+# makes discovery return zero candidates by default; individual tests
+# opt into a resolved install by patching `claude_resolve._candidate_paths`
+# / `_verify_candidate` directly.
 
 def test_check_claude_not_on_path(monkeypatch):
-    monkeypatch.setattr(doctor.shutil, "which", lambda n: None)
     r = doctor.check_claude()
     assert r.status == doctor.FAIL
 
 
 def test_check_claude_version_fails(monkeypatch):
-    monkeypatch.setattr(doctor.shutil, "which", lambda n: "/usr/bin/claude")
-    monkeypatch.setattr(doctor, "_probe_binary",
-                        lambda p, *a, **k: (False, "exit 1"))
+    """A candidate exists but --version doesn't verify → still FAIL
+    (never a real binary silently reported as OK)."""
+    from aipager import claude_resolve
+    monkeypatch.setattr(claude_resolve, "_candidate_paths",
+                        lambda: [("/usr/bin/claude", 4)])
+    monkeypatch.setattr(claude_resolve, "_verify_candidate",
+                        lambda p: (None, "exit 1"))
     r = doctor.check_claude()
-    assert r.status == doctor.WARN
+    assert r.status == doctor.FAIL
+    assert "exit 1" in " ".join(r.detail)
 
 
 def test_check_claude_happy(monkeypatch):
-    monkeypatch.setattr(doctor.shutil, "which", lambda n: "/usr/bin/claude")
-    monkeypatch.setattr(doctor, "_probe_binary",
-                        lambda p, *a, **k: (True, "claude 1.0"))
+    from aipager import claude_resolve
+    monkeypatch.setattr(claude_resolve, "_candidate_paths",
+                        lambda: [("/usr/bin/claude", 4)])
+    monkeypatch.setattr(
+        claude_resolve, "_verify_candidate",
+        lambda p: (claude_resolve.ClaudeInstall(
+            path=p, realpath=p, version="2.1.235"), ""),
+    )
     r = doctor.check_claude()
     assert r.status == doctor.OK
+    assert "/usr/bin/claude" in " ".join(r.detail)
+    assert "2.1.235" in " ".join(r.detail)
+
+
+def test_check_claude_lists_other_installs(monkeypatch):
+    from aipager import claude_resolve
+    monkeypatch.setattr(
+        claude_resolve, "_candidate_paths",
+        lambda: [("/home/x/.local/bin/claude", 3), ("/usr/bin/claude", 4)],
+    )
+
+    def _verify(p):
+        version = "2.1.235" if "local" in p else "2.1.143"
+        return claude_resolve.ClaudeInstall(path=p, realpath=p, version=version), ""
+
+    monkeypatch.setattr(claude_resolve, "_verify_candidate", _verify)
+    r = doctor.check_claude()
+    assert r.status == doctor.OK
+    joined = " ".join(r.detail)
+    assert "/home/x/.local/bin/claude" in joined
+    assert "also: /usr/bin/claude" in joined
 
 
 # ---- check_daemon -------------------------------------------------------

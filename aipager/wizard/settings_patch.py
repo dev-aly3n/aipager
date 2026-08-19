@@ -31,7 +31,11 @@ def _step_deps(step_label: str = "[3/5]") -> bool:
     except (ImportError, FileNotFoundError):
         dtach_p = shutil.which("dtach")
 
-    claude_p = shutil.which("claude")
+    # The resolver, not a bare shutil.which("claude") — so this table
+    # shows the exact binary the daemon will actually launch.
+    from aipager import claude_resolve
+    _resolved = claude_resolve.try_resolve_claude_binary()
+    claude_p = _resolved.chosen.path if _resolved else None
     hook_p = shutil.which(HOOK_CMD)
     statusline_p = shutil.which(STATUSLINE_CMD)
 

@@ -86,10 +86,10 @@ def test_launch_session_quotes_claude_bin_with_metacharacters(
     execute injected content — inject.py:567's quoting fix.
 
     Every sibling value on the bash_cmd line (resume, model, sys_prompt)
-    was already shlex.quote()d; _CLAUDE_BIN was the lone exception,
-    safe only while it came verbatim from shutil.which(). Once it can
-    come from config or AIPAGER_CLAUDE_BIN, an unquoted value is a
-    shell-injection sink.
+    was already shlex.quote()d; the binary was the lone exception, safe
+    only while it came verbatim from shutil.which(). Once it can come
+    from config (claude_path) or AIPAGER_CLAUDE_BIN — i.e. whatever the
+    resolver hands back — an unquoted value is a shell-injection sink.
     """
     captured = {}
 
@@ -109,7 +109,12 @@ def test_launch_session_quotes_claude_bin_with_metacharacters(
     # config value could plausibly contain: a shell metacharacter sequence
     # that would run a second command if concatenated unquoted.
     malicious = "/tmp/claude; touch /tmp/pwned"
-    monkeypatch.setattr(dtach_inject, "_CLAUDE_BIN", malicious)
+    from aipager.claude_resolve import ClaudeInstall, ResolvedClaude
+    fake_resolved = ResolvedClaude(
+        chosen=ClaudeInstall(path=malicious, realpath=malicious, version="2.1.235"),
+    )
+    monkeypatch.setattr(dtach_inject.claude_resolve, "try_resolve_claude_binary",
+                        lambda **kw: fake_resolved)
 
     ok, _ = run_async(dtach_inject.launch_session("jim"))
     assert ok

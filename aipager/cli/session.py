@@ -19,10 +19,11 @@ def _cmd_session(args: argparse.Namespace) -> int:
         return _session_kill(args)
     from aipager.preflight import require_claude, require_config, require_daemon
     require_config()
-    require_claude()
+    claude_path = require_claude()
     require_daemon()
     from aipager.dtach.launcher import launch
-    return launch(name=args.name, claude_args=args.claude_args or [])
+    return launch(name=args.name, claude_args=args.claude_args or [],
+                 claude_bin=claude_path)
 
 
 def _session_ls(args: argparse.Namespace) -> int:

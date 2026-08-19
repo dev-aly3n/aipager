@@ -165,9 +165,21 @@ def test_step_settings_skips_backup_if_unchanged(monkeypatch, tmp_path, capsys):
 
 # ----- _step_deps blocking behaviour -----
 
+def _fake_resolved_claude():
+    from aipager import claude_resolve
+    return claude_resolve.ResolvedClaude(
+        chosen=claude_resolve.ClaudeInstall(
+            path="/usr/bin/claude", realpath="/usr/bin/claude", version="2.1.235",
+        ),
+    )
+
+
 def test_step_deps_returns_true_when_all_present(monkeypatch, capsys):
     monkeypatch.setattr(settings_patch.shutil, "which",
                         lambda name: f"/usr/bin/{name}")
+    from aipager import claude_resolve
+    monkeypatch.setattr(claude_resolve, "try_resolve_claude_binary",
+                        lambda **kw: _fake_resolved_claude())
     # dtach_bin import path
     import sys as _sys
 
@@ -182,6 +194,25 @@ def test_step_deps_returns_true_when_all_present(monkeypatch, capsys):
 def test_step_deps_returns_false_when_hook_missing(monkeypatch):
     monkeypatch.setattr(settings_patch.shutil, "which",
                         lambda name: None if "hook" in name or "status" in name else "/usr/bin/x")
+    from aipager import claude_resolve
+    monkeypatch.setattr(claude_resolve, "try_resolve_claude_binary",
+                        lambda **kw: _fake_resolved_claude())
+    import sys as _sys
+
+    class _FakeDtachBin:
+        @staticmethod
+        def path():
+            return "/usr/bin/dtach"
+    monkeypatch.setitem(_sys.modules, "dtach_bin", _FakeDtachBin)
+    assert settings_patch._step_deps() is False
+
+
+def test_step_deps_returns_false_when_claude_missing(monkeypatch):
+    """No claude_resolve mock at all — the autouse no-candidates fixture
+    means claude never resolves, so the deps table must report False
+    even though every OTHER dep is present."""
+    monkeypatch.setattr(settings_patch.shutil, "which",
+                        lambda name: f"/usr/bin/{name}")
     import sys as _sys
 
     class _FakeDtachBin:

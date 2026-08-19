@@ -2,7 +2,7 @@
 
 import pytest
 
-from aipager import preflight
+from aipager import claude_resolve, preflight
 
 
 def test_require_config_missing_both(monkeypatch, capsys):
@@ -57,7 +57,9 @@ def test_require_config_v2_scopes_but_no_token_fails(monkeypatch, capsys):
 
 
 def test_require_claude_missing(monkeypatch, capsys):
-    monkeypatch.setattr(preflight.shutil, "which", lambda name: None)
+    # claude_resolve's discovery is patched to no-candidates by the
+    # autouse `_no_real_claude_candidates` fixture — require_claude()
+    # must therefore already exit(2) with no further mocking needed.
     with pytest.raises(SystemExit) as exc:
         preflight.require_claude()
     assert exc.value.code == 2
@@ -66,7 +68,17 @@ def test_require_claude_missing(monkeypatch, capsys):
 
 
 def test_require_claude_present(monkeypatch):
-    monkeypatch.setattr(preflight.shutil, "which", lambda name: "/usr/bin/claude")
+    def _fake_candidates():
+        return [("/usr/bin/claude", 4)]
+
+    def _fake_verify(path):
+        return (
+            claude_resolve.ClaudeInstall(path=path, realpath=path, version="2.1.235"),
+            "",
+        )
+
+    monkeypatch.setattr(claude_resolve, "_candidate_paths", _fake_candidates)
+    monkeypatch.setattr(claude_resolve, "_verify_candidate", _fake_verify)
     assert preflight.require_claude() == "/usr/bin/claude"
 
 

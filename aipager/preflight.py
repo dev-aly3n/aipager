@@ -10,7 +10,6 @@ The exit code matters: a wrapper script can check ``$? == 2`` and know
 
 from __future__ import annotations
 
-import shutil
 import sys
 from pathlib import Path
 
@@ -70,20 +69,31 @@ def require_config() -> None:
 
 
 def require_claude() -> str:
-    """Exit with code 2 if the `claude` binary isn't on PATH. Returns the path."""
-    p = shutil.which("claude")
-    if p:
-        return p
-    friendly_error(
-        "Claude Code CLI not found on PATH.",
-        "",
-        "  aipager wraps the `claude` command — install it from:",
-        "      https://docs.anthropic.com/claude/docs/claude-code",
-        "",
-        "  After install, verify with: `claude --version`",
-        "",
-    )
-    sys.exit(2)
+    """Exit with code 2 if no working `claude` binary resolves.
+
+    Delegates to :mod:`aipager.claude_resolve` — same precedence chain
+    every other call site uses. On success returns the resolved
+    absolute path (unlike the old bare ``shutil.which`` check, whose
+    return value most callers discarded).
+    """
+    from aipager import claude_resolve
+
+    try:
+        resolved = claude_resolve.resolve_claude_binary()
+    except claude_resolve.ClaudeNotFoundError as e:
+        friendly_error(
+            "Claude Code CLI not found.",
+            "",
+            *(f"  {line}" for line in str(e).splitlines()),
+            "",
+            "  aipager wraps the `claude` command — install it from:",
+            "      https://docs.anthropic.com/claude/docs/claude-code",
+            "",
+            "  After install, verify with: `claude --version`",
+            "",
+        )
+        sys.exit(2)
+    return resolved.chosen.path
 
 
 def require_daemon() -> None:

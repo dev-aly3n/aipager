@@ -193,19 +193,26 @@ def check_dtach() -> CheckResult:
 
 
 def check_claude() -> CheckResult:
-    p = shutil.which("claude")
-    if not p:
+    """Resolve fresh (doctor is one-shot) and show every distinct install.
+
+    Delegates entirely to :mod:`aipager.claude_resolve` — the same
+    precedence chain and verification every other call site uses, so
+    this reports exactly what a session launch would get.
+    """
+    from aipager import claude_resolve
+
+    try:
+        resolved = claude_resolve.resolve_claude_binary(force=True)
+    except claude_resolve.ClaudeNotFoundError as e:
         return CheckResult(
             FAIL, "claude CLI",
-            detail=["not on PATH"],
+            detail=str(e).splitlines(),
             fix="install Claude Code: https://docs.anthropic.com/claude/docs/claude-code",
         )
-    ok, info = _probe_binary(p, "--version")
-    if not ok:
-        return CheckResult(WARN, "claude CLI",
-                           detail=[f"{p} fails --version: {info}"],
-                           fix="run `claude --version` to debug")
-    return CheckResult(OK, "claude CLI", detail=[f"{p} ({info})"])
+    detail = [f"{resolved.chosen.path} ({resolved.chosen.version})"]
+    for other in resolved.others:
+        detail.append(f"also: {other.path} ({other.version}) — set claude_path to override")
+    return CheckResult(OK, "claude CLI", detail=detail)
 
 
 def check_settings_json() -> CheckResult:

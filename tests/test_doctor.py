@@ -89,10 +89,11 @@ def test_check_dtach_missing(monkeypatch):
 
 
 def test_check_claude_missing(monkeypatch):
-    monkeypatch.setattr(doctor.shutil, "which", lambda name: None)
+    # The autouse `_no_real_claude_candidates` fixture already makes
+    # discovery return zero candidates — no further mocking needed.
     r = doctor.check_claude()
     assert r.status == doctor.FAIL
-    assert "PATH" in " ".join(r.detail)
+    assert "no working `claude` binary found" in " ".join(r.detail)
 
 
 def test_check_hook_scripts_missing(monkeypatch):

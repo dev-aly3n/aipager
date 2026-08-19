@@ -16,6 +16,8 @@ import signal
 import time
 from pathlib import Path
 
+from aipager import claude_resolve, daemon_secrets
+
 log = logging.getLogger(__name__)
 
 # How long a signalled dtach gets to exit before the signal is escalated,
@@ -425,7 +427,10 @@ async def is_alive(session: str) -> bool:
 _VALID_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
 _RESERVED = {"status", "stop", "kill", "new", "help", "start", "settings"}
 _PROJECT_DIR = os.environ.get("AIPAGER_WORK_DIR", os.getcwd())
-_CLAUDE_BIN = shutil.which("claude") or "claude"
+# Resolved lazily inside launch_session() — NOT at import time. Import-time
+# resolution would spawn a `--version` subprocess for every unrelated CLI
+# that transitively imports this module, and would be unmockable before
+# import. See aipager.claude_resolve for the shared six-call-site resolver.
 
 
 def _conversation_exists(session_id: str) -> bool:
@@ -560,6 +565,12 @@ async def launch_session(
         "stripping" if unset_token else "keeping",
         "fresh" if unset_token else "missing/expired",
     )
+    # Lazy resolution — see the comment above _PROJECT_DIR. On no
+    # candidate resolving, fall back to the literal "claude", exactly
+    # preserving today's `shutil.which("claude") or "claude"` behaviour:
+    # launch has never been gated on resolution and stays that way.
+    resolved = claude_resolve.try_resolve_claude_binary()
+    claude_bin = resolved.chosen.path if resolved else "claude"
     bash_cmd = (
         f"unset CLAUDECODE; "
         f"{unset_token}"
@@ -569,7 +580,7 @@ async def launch_session(
         # shutil.which(). Once it can come from config (claude_path) or
         # AIPAGER_CLAUDE_BIN, an unquoted value is a shell-injection sink
         # into this `bash -c` string.
-        f"{shlex.quote(_CLAUDE_BIN)} {perms} {resume} {model_flag} "
+        f"{shlex.quote(claude_bin)} {perms} {resume} {model_flag} "
         f"--append-system-prompt {shlex.quote(sys_prompt)}"
     )
 
@@ -577,6 +588,7 @@ async def launch_session(
         proc = await asyncio.create_subprocess_exec(
             _DTACH, "-n", sock, "-Ez", "bash", "-c", bash_cmd,
             cwd=launch_cwd,
+            env=daemon_secrets.build_session_env(),
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
         )

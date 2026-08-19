@@ -20,6 +20,7 @@ import threading
 import time
 from pathlib import Path
 
+from aipager import daemon_secrets
 from aipager.dtach import redraw as _dtach_redraw
 from aipager.errors import friendly_error, friendly_warn
 from aipager.ui import console, ok
@@ -109,12 +110,18 @@ def _validate_name(name: str) -> str | None:
     return None
 
 
-def launch(name: str, claude_args: list[str] | None = None) -> int:
+def launch(name: str, claude_args: list[str] | None = None,
+          *, claude_bin: str | None = None) -> int:
     """Create or reattach a Claude Code session inside dtach.
 
     All extra args in ``claude_args`` are passed through to claude
     verbatim. To start with permission checks bypassed, pass
     ``--dangerously-skip-permissions`` like you would to claude itself.
+
+    ``claude_bin`` is the resolved absolute path the caller wants used
+    (``cli/session.py`` passes ``require_claude()``'s return value).
+    Defaults to the literal ``"claude"`` — today's behaviour — when not
+    given, so this function stays usable on its own.
     """
     err = _validate_name(name)
     if err:
@@ -200,10 +207,11 @@ def launch(name: str, claude_args: list[str] | None = None) -> int:
         spawn = subprocess.run(
             [dtach, "-n", sock, "-Ez",
              "env", f"CLAUDE_DTACH_SESSION={session}",
-             "claude",
+             claude_bin or "claude",
              "--append-system-prompt", sys_prompt,
              *claude_args],
             capture_output=True, text=True, check=False,
+            env=daemon_secrets.build_session_env(),
         )
     finally:
         if spawn_status:
@@ -264,16 +272,15 @@ def launch(name: str, claude_args: list[str] | None = None) -> int:
 
 
 def _claude_version_diag() -> str:
-    """Run ``claude --version`` and return a one-line summary, or "" on success."""
-    claude = shutil.which("claude")
-    if not claude:
-        return "claude not on PATH"
+    """Return "" if a working claude resolves, else why it doesn't.
+
+    Resolution itself already runs (and verifies) `--version` on every
+    candidate, so a successful resolve here means claude is fine and
+    the dtach-socket-never-appeared failure lies elsewhere.
+    """
+    from aipager import claude_resolve
     try:
-        r = subprocess.run([claude, "--version"],
-                           capture_output=True, text=True, timeout=5)
-    except (OSError, subprocess.TimeoutExpired) as e:
-        return f"claude --version failed: {e}"
-    if r.returncode != 0:
-        first_line = (r.stderr or r.stdout).splitlines()[:1]
-        return f"claude --version exit {r.returncode}: {first_line[0] if first_line else ''}"
-    return ""  # claude is fine, the crash is elsewhere
+        claude_resolve.resolve_claude_binary()
+    except claude_resolve.ClaudeNotFoundError as e:
+        return str(e)
+    return ""
