@@ -310,10 +310,11 @@ async def _run_daemon(bot_username: str) -> None:
     await session_monitor.start()
 
     # Mini App server — newest and highest-risk component, so it starts
-    # last and (below) stops first. Behind a lazy import so a base
-    # install with no `miniapp` extra never imports aiohttp; a
-    # MiniAppUnavailable (extra not installed) logs a friendly one-liner
-    # instead of taking the whole daemon down.
+    # last and (below) stops first. Behind a lazy import to keep
+    # aiohttp (the largest dependency in the tree) off cold start-up
+    # paths; aiohttp itself ships with aipager. A MiniAppUnavailable —
+    # which now means an incomplete install, not a missing extra — logs
+    # a friendly one-liner instead of taking the whole daemon down.
     miniapp_server = None
     if MINIAPP_ENABLED:
         from aipager.miniapp.server import MiniAppServer, MiniAppUnavailable

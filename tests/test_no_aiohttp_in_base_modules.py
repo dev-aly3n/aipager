@@ -1,14 +1,23 @@
-"""Regression test for "the base install (no `[miniapp]` extra) never
-imports aiohttp" — rev-iter1-004.
+"""Regression test for "boot-path modules never import aiohttp at import
+time" — originally rev-iter1-004.
 
-The property held at review time (verified by code inspection: grep
-found no module-level ``import aiohttp`` outside ``aipager/miniapp/``),
-but nothing protected it going forward. A future module-level ``import
-aiohttp`` added to any daemon-boot-path module — most plausibly
-``handlers.py`` or ``cli/daemon.py``, the two modules that reach into
-``aipager.miniapp`` at all — would silently make a base install (no
-``aiohttp`` present) crash at import time instead of degrading via
-``MiniAppUnavailable``.
+**The reason changed, the test did not.** It was written when aiohttp
+was an opt-in extra, so a stray module-level ``import aiohttp`` would
+make a base install crash outright. aiohttp is a base dependency now, so
+that specific crash is gone — but the property is still worth holding,
+for two reasons that outlive the packaging decision:
+
+1. **Import cost.** aiohttp is the single largest dependency in the
+   tree (~7.6 MB, plus multidict/yarl/frozenlist/attrs). ``aipager
+   status``, ``aipager-hook`` and ``aipager-statusline`` run cold on
+   every invocation — the hook scripts on *every Claude Code event*,
+   against a <5 ms budget. Paying an aiohttp import there to print one
+   line is exactly the kind of regression nobody notices until the
+   whole session feels sluggish.
+2. **Graceful degradation.** An install can still be missing aiohttp
+   (interrupted upgrade, hand-pruned venv). Boot-path modules importing
+   it at module level would turn that into a crash instead of the
+   ``MiniAppUnavailable`` warning path that already handles it.
 
 Uses the same ``builtins.__import__`` patch pattern already used in
 ``tests/test_miniapp_server.py::test_start_raises_unavailable_when_aiohttp_missing``,

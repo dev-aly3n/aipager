@@ -548,8 +548,8 @@ def check_miniapp() -> CheckResult:
     missing extra should stop a session from launching.
 
     This row exists because its absence hid a real one: an install whose
-    Mini App could never start (the optional ``aiohttp`` dependency was
-    not present) still reported ``13 ok · 0 warn · 0 fail``, and the
+    Mini App could never start (``aiohttp`` was not present — it was an
+    opt-in extra at the time) still reported ``13 ok · 0 warn · 0 fail``, and the
     only clue was a daemon log line nobody reads. The failure surfaced
     to the operator as ``/app`` not working, in Telegram, much later.
     """
@@ -563,8 +563,8 @@ def check_miniapp() -> CheckResult:
     if not miniapp_extra_available():
         return CheckResult(
             WARN, "Mini App",
-            detail=["enabled in config, but the Mini App isn't installed — "
-                    "the server cannot start"],
+            detail=["enabled in config, but aiohttp is missing — the "
+                    "server cannot start (incomplete install)"],
             fix=reinstall_with_miniapp_hint(),
         )
     return CheckResult(OK, "Mini App", detail=[f"enabled · port {MINIAPP_PORT}"])

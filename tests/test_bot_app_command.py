@@ -73,11 +73,16 @@ def test_app_dm_enabled_no_public_url_says_wait_and_never_instructs(
     assert kwargs.get("reply_markup") is None
 
 
-def test_app_says_so_plainly_when_the_miniapp_extra_is_missing(
+def test_app_says_so_plainly_when_the_miniapp_cannot_start(
     mk_bot, mk_update, run_async, monkeypatch,
 ):
     """A different cause deserves a different sentence — and still no
-    command for the user to run."""
+    command for the user to run.
+
+    Reworded when aiohttp became a base dependency: reaching this branch
+    no longer means "you skipped an extra", it means the install is
+    incomplete, and blaming the user for a missing option they were
+    never told about would be wrong."""
     monkeypatch.setattr("aipager.config.MINIAPP_ENABLED", True)
     monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", "")
     monkeypatch.setattr("aipager.miniapp.tunnel.detect_public_url", lambda: None)
@@ -89,7 +94,8 @@ def test_app_says_so_plainly_when_the_miniapp_extra_is_missing(
     run_async(bot._handle_app_cmd(update, MagicMock()))
 
     text = update.message.reply_text.await_args.args[0].lower()
-    assert "isn't available" in text
+    assert "can't start" in text
+    assert "incomplete" in text
     for bad in FORBIDDEN_IN_APP_REPLY:
         assert bad not in text, f"leaked an instruction: {text!r}"
 

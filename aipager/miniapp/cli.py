@@ -172,9 +172,11 @@ def _cmd_miniapp_enable(args: argparse.Namespace) -> int:
     )
     if not miniapp_extra_available():
         friendly_warn(
-            "Mini App settings saved, but the Mini App itself is NOT "
-            "installed — the server cannot start.",
-            f"  Install it with:  {reinstall_with_miniapp_hint()}",
+            "Mini App settings saved, but this install is missing the "
+            "Mini App server's own dependency — it cannot start.",
+            "  aiohttp ships with aipager, so this usually means an "
+            "interrupted or partial install.",
+            f"  Repair it with:  {reinstall_with_miniapp_hint()}",
             "  Then restart the daemon.",
         )
         return 0

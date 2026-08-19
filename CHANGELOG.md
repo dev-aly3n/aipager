@@ -189,6 +189,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   It used to be dropped silently, so the session launched on a different model
   than the one picked with nothing on screen to say so.
 
+### Changed
+- **The Mini App now ships with aipager instead of being an opt-in
+  extra.** `aiohttp` moved into the base dependencies, so a plain
+  `pip install aipager` / `uv tool install aipager` gets a Mini App that
+  works. Previously you had to know to type `aipager[miniapp]`; if you
+  didn't, `aipager miniapp enable` appeared to succeed and the server
+  silently never started. **This adds about 10 MB** (aiohttp plus
+  multidict, frozenlist, yarl, attrs, propcache, aiosignal and
+  aiohappyeyeballs) to a roughly 42 MB install. For scale, the setup
+  wizard's terminal colouring accounts for about 21 MB of that base.
+  `aipager[miniapp]` still installs cleanly — the extra is kept as an
+  empty alias so existing install commands and docs keep working. The
+  Mini App itself remains **off by default**; this changes only whether
+  the dependency is present, not whether the feature is on.
+
 ### Fixed
 - **`/app` no longer tells you to install Tailscale.** When the Mini App
   link wasn't ready yet, it printed setup instructions — `curl … | sh`

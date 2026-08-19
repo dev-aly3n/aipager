@@ -384,10 +384,10 @@ class CommandHandlersMixin:
             from aipager.miniapp.server import miniapp_extra_available
             if not miniapp_extra_available():
                 await update.message.reply_text(
-                    "📱 The Mini App isn't available on this machine — "
-                    "aipager was installed without it.\n\n"
+                    "📱 The Mini App can't start on this machine — its "
+                    "install looks incomplete.\n\n"
                     "Everything else keeps working; ask whoever set this "
-                    "up to reinstall aipager with the Mini App included.",
+                    "up to reinstall aipager.",
                 )
             else:
                 await update.message.reply_text(

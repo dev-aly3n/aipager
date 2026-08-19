@@ -709,7 +709,11 @@ def test_start_raises_unavailable_when_aiohttp_missing(mk_bot, run_async, monkey
     async def _run():
         with pytest.raises(MiniAppUnavailable) as exc_info:
             await server.start()
-        assert "aipager[miniapp]" in str(exc_info.value)
+        # No longer names the old extra: aiohttp is a base dependency,
+        # so its absence means a broken install, not a missing option.
+        msg = str(exc_info.value)
+        assert "aiohttp" in msg and "incomplete" in msg
+        assert "reinstall" in msg.lower() or "install" in msg.lower()
     run_async(_run())
 
 

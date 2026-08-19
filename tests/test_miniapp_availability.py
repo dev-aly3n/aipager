@@ -1,7 +1,8 @@
 """An install whose Mini App cannot start must say so, everywhere.
 
-The optional `[miniapp]` extra pulls in aiohttp; a base install has
-none. Before these checks, all three surfaces disagreed about that:
+aiohttp ships with aipager now, so on an intact install it is always
+there. It is still checked, because "intact" is an assumption and the
+cost of being wrong is a feature that fails silently. Before these checks, all three surfaces disagreed about that:
 `aipager miniapp enable` printed a green tick regardless, `/app` blamed
 a missing tunnel and told the user to install Tailscale, and `doctor`
 had no opinion at all — so an install whose Mini App could never start

@@ -170,7 +170,7 @@ async def _probe_once(url: str) -> bool:
         return False
     try:
         import aiohttp
-    except ImportError:      # miniapp extra not installed — nothing to probe
+    except ImportError:      # incomplete install — nothing to probe with
         return False
     try:
         timeout = aiohttp.ClientTimeout(total=PROBE_TIMEOUT_SECONDS)

@@ -46,7 +46,14 @@ _MODEL_HINTS = {
 }
 
 def reinstall_with_miniapp_hint() -> str:
-    """The single command that installs the optional Mini App extra.
+    """The command that repairs an install missing the Mini App.
+
+    aiohttp is a **base** dependency now, so reaching this hint no longer
+    means "you forgot an extra" — it means the install is broken or
+    partial (an interrupted upgrade, a hand-pruned venv, a distro package
+    that unbundled it). A plain reinstall is therefore the fix; naming
+    the old ``[miniapp]`` extra here would imply the user did something
+    wrong when they did not.
 
     Matched to whichever installer actually owns this aipager, so the
     line can be pasted as-is instead of making the reader work out which
@@ -63,20 +70,22 @@ def reinstall_with_miniapp_hint() -> str:
     except Exception:
         installer = None
     if installer == "uv":
-        return "uv tool install --reinstall 'aipager[miniapp]'"
+        return "uv tool install --reinstall aipager"
     if installer == "pipx":
-        return "pipx install --force 'aipager[miniapp]'"
+        return "pipx install --force aipager"
     if installer == "brew":
         return "brew reinstall aipager"
-    return "pip install 'aipager[miniapp]'"
+    return "pip install --force-reinstall aipager"
 
 
 def miniapp_extra_available() -> bool:
-    """Is the optional ``[miniapp]`` dependency set importable?
+    """Is ``aiohttp`` importable, i.e. can the Mini App actually serve?
 
-    The Mini App server needs ``aiohttp``, which a base install does not
-    pull in. Checked by import machinery rather than by importing, so
-    calling this is cheap and has no side effects on the hot path.
+    ``aiohttp`` is a base dependency, so on any intact install this is
+    simply true. It is still checked — cheaply, via import machinery
+    rather than by importing — because "intact" is an assumption, and
+    the cost of being wrong about it is a feature that fails silently.
+    An interrupted upgrade or a hand-pruned venv lands here.
 
     Exists because three surfaces need the same answer and used to
     disagree: ``aipager miniapp enable`` printed a green tick without
@@ -247,10 +256,10 @@ class MiniAppServer:
             from aiohttp import web
         except ImportError as e:
             raise MiniAppUnavailable(
-                "aiohttp is not installed. Run:\n"
-                "    uv tool install --reinstall 'aipager[miniapp]'\n"
-                "or:\n"
-                "    pip install 'aipager[miniapp]'"
+                "aiohttp is missing, so the Mini App server cannot start. "
+                "It ships with aipager, so this means the install is "
+                "incomplete. Repair it with:\n"
+                f"    {reinstall_with_miniapp_hint()}"
             ) from e
 
         app = self._build_app()

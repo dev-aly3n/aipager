@@ -1,11 +1,13 @@
 """Download, verify and cache the ``cloudflared`` binary aipager uses to
 run the managed Mini App tunnel.
 
-Stdlib only, on purpose — a base install (no ``aipager[miniapp]``
-extra) must still be able to import this module cleanly (see
+Stdlib only, on purpose. ``aiohttp`` ships with aipager now, so this is
+no longer about a base install lacking it — it is about **import cost**:
+cold CLI paths and the per-event hook scripts must not pay aiohttp's
+import just to reach this module (see
 ``tests/test_no_aiohttp_in_base_modules.py``, which does not cover this
-file directly today, but the discipline is the same one that test
-enforces elsewhere in ``aipager.miniapp``).
+file directly today, but enforces the same discipline elsewhere in
+``aipager.miniapp``).
 
 **A system ``cloudflared`` on ``PATH`` is never trusted** — unlike
 ``aipager.dtach.inject._resolve_dtach``'s fallback to ``shutil.which``.
