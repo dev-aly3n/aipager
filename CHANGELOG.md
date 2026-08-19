@@ -165,6 +165,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than the one picked with nothing on screen to say so.
 
 ### Fixed
+- **`aipager uninstall` now actually removes the systemd unit.** It tried
+  to, via `python -m aipager.cli service uninstall` — but `aipager.cli` is
+  a package with no `__main__.py`, so that command failed every time it
+  ran, and the failure was swallowed (`capture_output`, `check=False`).
+  Every Linux uninstall therefore left an **enabled `Restart=always` unit**
+  pointing at the binary it had just deleted, and since the unit sets
+  `StartLimitIntervalSec=0` there is no start limiter to give up: systemd
+  retried every 5s indefinitely. The unit is now removed in-process. If a
+  previous uninstall left one behind, clear it with
+  `systemctl --user disable --now aipager.service` and delete
+  `~/.config/systemd/user/aipager.service`.
 - **`aipager service install` now restarts a daemon that was already
   running.** It used `systemctl enable --now`, which starts a stopped unit
   but leaves a running one untouched — so upgrading left the *previous*
