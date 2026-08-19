@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import argparse
 
-from aipager.errors import friendly_error
+from aipager.errors import friendly_error, friendly_warn
 from aipager.ui import console
 
 _DEFAULT_PORT = 8765
@@ -162,6 +162,23 @@ def _cmd_miniapp_enable(args: argparse.Namespace) -> int:
         )
         return 2
 
+    # Check BEFORE claiming success. This printed a green tick while
+    # `aiohttp` was missing, so the daemon logged "Mini App server not
+    # started" where nobody saw it and the operator believed a feature
+    # was on that could never start. A tick for something that cannot
+    # run is worse than an error.
+    from aipager.miniapp.server import (
+        miniapp_extra_available, reinstall_with_miniapp_hint,
+    )
+    if not miniapp_extra_available():
+        friendly_warn(
+            "Mini App settings saved, but the Mini App itself is NOT "
+            "installed — the server cannot start.",
+            f"  Install it with:  {reinstall_with_miniapp_hint()}",
+            "  Then restart the daemon.",
+        )
+        return 0
+
     console.print(f"[ok]✓[/ok]  Mini App enabled — port {port}")
     if settings["public_url"]:
         console.print(f"    public URL override: {settings['public_url']}")
@@ -205,6 +222,7 @@ def _cmd_miniapp_disable(args: argparse.Namespace) -> int:
 
 
 def _cmd_miniapp_status(args: argparse.Namespace) -> int:
+    from aipager.miniapp.server import miniapp_extra_available
     from aipager.miniapp.tunnel import detect_public_url
 
     cfg = _current_miniapp_config()
@@ -213,8 +231,12 @@ def _cmd_miniapp_status(args: argparse.Namespace) -> int:
     console.print(f"port:           {cfg['port']}")
     console.print(f"manual url:     {cfg['public_url'] or '(not set)'}")
     detected = detect_public_url()
+    # Labelled "fallback url" rather than "tailscale": the managed
+    # Cloudflare tunnel is the normal ingress now, and an absent
+    # Tailscale is not something the user is expected to go fix.
+    console.print(f"fallback url:   {detected or '(none)'}")
     console.print(
-        f"tailscale:      {detected or '(none — install/enable Tailscale Funnel)'}"
+        f"mini app deps:  {'installed' if miniapp_extra_available() else 'MISSING — server cannot start'}"
     )
     if cfg["public_url"]:
         managed_note = "disabled — a manual url override is set"

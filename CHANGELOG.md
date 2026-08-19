@@ -190,6 +190,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than the one picked with nothing on screen to say so.
 
 ### Fixed
+- **`/app` no longer tells you to install Tailscale.** When the Mini App
+  link wasn't ready yet, it printed setup instructions — `curl … | sh`
+  and two `sudo tailscale` lines — from a Telegram message. That text
+  predated the managed Cloudflare tunnel and was both a violation of the
+  "you install aipager and run nothing else" contract and simply wrong:
+  the tunnel is automatic, and the only reason there's no link yet on a
+  healthy install is that it's still coming up. It now says exactly that,
+  and names no command. A separate, honest message covers the case where
+  aipager was installed without the Mini App at all.
+- **`aipager miniapp enable` no longer claims success it can't deliver.**
+  It printed `✓ Mini App enabled` even when the optional `[miniapp]`
+  dependency was absent, so the server could never start; the daemon
+  logged the real reason where nobody saw it. It now checks first and,
+  if the component is missing, says so and gives the one install command
+  matched to your installer.
+- **`aipager doctor` gained a Mini App row.** An install whose Mini App
+  could never start still reported `13 ok · 0 warn · 0 fail`. It now
+  warns (never fails — the Mini App is optional) when it's switched on
+  in config but not installed.
 - **`aipager uninstall` now actually removes the systemd unit.** It tried
   to, via `python -m aipager.cli service uninstall` — but `aipager.cli` is
   a package with no `__main__.py`, so that command failed every time it

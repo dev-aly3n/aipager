@@ -539,6 +539,37 @@ def check_team() -> CheckResult:
     )
 
 
+def check_miniapp() -> CheckResult:
+    """Can the Mini App actually start, if it is switched on?
+
+    **Never FAILs** — same fail-open discipline as
+    :func:`check_claude_auth`. The Mini App is optional; a base install
+    without it is a perfectly healthy aipager, and nothing about a
+    missing extra should stop a session from launching.
+
+    This row exists because its absence hid a real one: an install whose
+    Mini App could never start (the optional ``aiohttp`` dependency was
+    not present) still reported ``13 ok · 0 warn · 0 fail``, and the
+    only clue was a daemon log line nobody reads. The failure surfaced
+    to the operator as ``/app`` not working, in Telegram, much later.
+    """
+    from aipager.config import MINIAPP_ENABLED, MINIAPP_PORT
+    from aipager.miniapp.server import (
+        miniapp_extra_available, reinstall_with_miniapp_hint,
+    )
+
+    if not MINIAPP_ENABLED:
+        return CheckResult(OK, "Mini App", detail=["disabled"])
+    if not miniapp_extra_available():
+        return CheckResult(
+            WARN, "Mini App",
+            detail=["enabled in config, but the Mini App isn't installed — "
+                    "the server cannot start"],
+            fix=reinstall_with_miniapp_hint(),
+        )
+    return CheckResult(OK, "Mini App", detail=[f"enabled · port {MINIAPP_PORT}"])
+
+
 CHECKS: list[Callable[[], CheckResult]] = [
     check_config_parses,
     check_config,
@@ -553,6 +584,7 @@ CHECKS: list[Callable[[], CheckResult]] = [
     check_daemon,
     check_service_installed,
     check_service_unit_path,
+    check_miniapp,
 ]
 
 
