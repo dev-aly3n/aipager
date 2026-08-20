@@ -462,11 +462,25 @@ class CommandHandlersMixin:
             # unstamped (scope_chat_id=0) sessions that leak into every
             # scope, so an empty scope just says so.
             if self.scopes is not None:
-                await update.message.reply_text("No sessions in this chat.")
+                # Empty state is exactly when someone wants the
+                # richer view — offer it here too, not only when
+                # there are sessions to list.
+                _app = self._app_button_row(update)
+                await update.message.reply_text(
+                    "No sessions in this chat.",
+                    reply_markup=InlineKeyboardMarkup(_app) if _app else None,
+                )
                 return
             discovered = await inject.list_sessions()
             if not discovered:
-                await update.message.reply_text("No sessions found.")
+                # Empty state is exactly when someone wants the
+                # richer view — offer it here too, not only when
+                # there are sessions to list.
+                _app = self._app_button_row(update)
+                await update.message.reply_text(
+                    "No sessions found.",
+                    reply_markup=InlineKeyboardMarkup(_app) if _app else None,
+                )
                 return
             for name in discovered:
                 self.registry.get_or_create(name)
@@ -528,8 +542,11 @@ class CommandHandlersMixin:
         # unchanged for anyone used to it.
         rows_kb = [
             [InlineKeyboardButton(
-                f"⋮ {label}", callback_data=f"{name}:menu")]
+                f"⋮ {label}",
+                callback_data=session_parity.session_cb(
+                    self, chat_id or 0, self.registry.get(name), "menu"))]
             for name, label in shown
+            if self.registry.get(name) is not None
         ]
         if has_gone:
             rows_kb.append([

@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import html as html_mod
 import io
+import logging
 from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -46,6 +47,8 @@ from aipager.bot import settings_menu
 from aipager.bot.transport import calling_chat_id
 from aipager.preferences import get_preferences, is_valid_value, resolve_preferences
 from aipager.state import PREFERENCE_OVERRIDE_FIELDS, Status, TrackedSession
+
+log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from aipager.bot.core import TelegramBot
@@ -211,26 +214,28 @@ def _render_session_menu(
     names = _register_pref_index(bot, chat_id, [sess.name])
     pref_cb = f"_:spref:{names.index(sess.name)}"
     rows = [
-        [InlineKeyboardButton("🔄 Restart", callback_data=f"{sess.name}:restart")],
-        [InlineKeyboardButton("✏️ Rename", callback_data=f"{sess.name}:rename")],
+        [InlineKeyboardButton("🔄 Restart", callback_data=session_cb(bot, chat_id, sess, "restart"))],
+        [InlineKeyboardButton("✏️ Rename", callback_data=session_cb(bot, chat_id, sess, "rename"))],
         [InlineKeyboardButton("👤 Preferences", callback_data=pref_cb)],
-        [InlineKeyboardButton("📝 Diff", callback_data=f"{sess.name}:diff")],
+        [InlineKeyboardButton("📝 Diff", callback_data=session_cb(bot, chat_id, sess, "diff"))],
     ]
     if sess.status == Status.GONE:
         rows.append([InlineKeyboardButton(
-            "🗑️ Delete", callback_data=f"{sess.name}:delete")])
+            "🗑️ Delete", callback_data=session_cb(bot, chat_id, sess, "delete"))])
     rows.append([InlineKeyboardButton(
-        "✖️ Close", callback_data=f"{sess.name}:menu-close")])
+        "✖️ Close", callback_data=session_cb(bot, chat_id, sess, "menu-close"))])
     text = f"⋮ <b>{html_mod.escape(sess.label)}</b> — choose an action:"
     return text, InlineKeyboardMarkup(rows)
 
 
 # ---- restart ---------------------------------------------------------
 
-def _render_restart_confirm(sess: TrackedSession) -> tuple[str, InlineKeyboardMarkup]:
+def _render_restart_confirm(
+    bot: "TelegramBot", chat_id: int, sess: TrackedSession,
+) -> tuple[str, InlineKeyboardMarkup]:
     kb = InlineKeyboardMarkup([[
-        InlineKeyboardButton("🔄 Restart", callback_data=f"{sess.name}:restart-confirm"),
-        InlineKeyboardButton("Cancel", callback_data=f"{sess.name}:restart-cancel"),
+        InlineKeyboardButton("🔄 Restart", callback_data=session_cb(bot, chat_id, sess, "restart-confirm")),
+        InlineKeyboardButton("Cancel", callback_data=session_cb(bot, chat_id, sess, "restart-cancel")),
     ]])
     text = (
         f"🔄 Restart session [<b>{html_mod.escape(sess.label)}</b>]? "
@@ -261,7 +266,7 @@ async def handle_restart_cmd(
             await update.message.reply_text("No live sessions to restart.")
             return
         buttons = [
-            [InlineKeyboardButton(f"🔄 {sess.label}", callback_data=f"{sess.name}:restart")]
+            [InlineKeyboardButton(f"🔄 {sess.label}", callback_data=session_cb(bot, chat_id, sess, "restart"))]
             for sess in sessions
         ]
         await update.message.reply_text(
@@ -277,7 +282,7 @@ async def handle_restart_cmd(
             parse_mode="HTML",
         )
         return
-    reply_text, kb = _render_restart_confirm(sess)
+    reply_text, kb = _render_restart_confirm(bot, chat_id, sess)
     await update.message.reply_text(reply_text, reply_markup=kb, parse_mode="HTML")
 
 
@@ -362,7 +367,7 @@ async def handle_rename_cmd(
         await update.message.reply_text("No sessions to rename.")
         return
     buttons = [
-        [InlineKeyboardButton(sess.label, callback_data=f"{sess.name}:rename")]
+        [InlineKeyboardButton(sess.label, callback_data=session_cb(bot, chat_id, sess, "rename"))]
         for sess in sessions
     ]
     await update.message.reply_text(
@@ -372,10 +377,12 @@ async def handle_rename_cmd(
 
 # ---- delete --------------------------------------------------------------
 
-def _render_delete_confirm(sess: TrackedSession) -> tuple[str, InlineKeyboardMarkup]:
+def _render_delete_confirm(
+    bot: "TelegramBot", chat_id: int, sess: TrackedSession,
+) -> tuple[str, InlineKeyboardMarkup]:
     kb = InlineKeyboardMarkup([[
-        InlineKeyboardButton("🗑️ Delete", callback_data=f"{sess.name}:delete-confirm"),
-        InlineKeyboardButton("Cancel", callback_data=f"{sess.name}:delete-cancel"),
+        InlineKeyboardButton("🗑️ Delete", callback_data=session_cb(bot, chat_id, sess, "delete-confirm")),
+        InlineKeyboardButton("Cancel", callback_data=session_cb(bot, chat_id, sess, "delete-cancel")),
     ]])
     text = (
         f"🗑️ Remove [<b>{html_mod.escape(sess.label)}</b>] from the session list? "
@@ -405,7 +412,7 @@ async def handle_delete_cmd(
             await update.message.reply_text("No finished sessions to delete.")
             return
         buttons = [
-            [InlineKeyboardButton(f"🗑️ {sess.label}", callback_data=f"{sess.name}:delete")]
+            [InlineKeyboardButton(f"🗑️ {sess.label}", callback_data=session_cb(bot, chat_id, sess, "delete"))]
             for sess in sessions
         ]
         await update.message.reply_text(
@@ -427,7 +434,7 @@ async def handle_delete_cmd(
             parse_mode="HTML",
         )
         return
-    reply_text, kb = _render_delete_confirm(sess)
+    reply_text, kb = _render_delete_confirm(bot, chat_id, sess)
     await update.message.reply_text(reply_text, reply_markup=kb, parse_mode="HTML")
 
 
@@ -464,7 +471,14 @@ async def _run_diff(bot: "TelegramBot", sess: TrackedSession, *, target_message)
     entry points."""
     from aipager.miniapp.diff import collect_diff
 
-    result = await collect_diff(sess.cwd)
+    try:
+        result = await collect_diff(sess.cwd)
+    except Exception:
+        # collect_diff documents "never raises", but a promise is not a
+        # guarantee — and a stack trace rendered into a chat message is
+        # the worst possible way to find out it was broken.
+        log.warning("collect_diff raised for %s", sess.label, exc_info=True)
+        result = {"available": False, "reason": "git_error"}
 
     if not result.get("available"):
         reason = result.get("reason", "git_error")
@@ -765,6 +779,25 @@ async def maybe_handle_text(
 
 # ---- callback dispatch -------------------------------------------------
 
+def session_cb(bot: "TelegramBot", chat_id: int, sess: TrackedSession,
+               verb: str) -> str:
+    """Build a session-scoped callback that always fits Telegram's cap.
+
+    ``callback_data`` is limited to **64 bytes**. Embedding the internal
+    session name blows that: names are themselves capped at 64 bytes by
+    ``inject.launch_session``, so ``{name}:restart-confirm`` reached 68
+    bytes for a realistic label plus its scope suffix — Telegram rejects
+    the whole keyboard, so one long-named session would break every
+    button in the message, not just its own.
+
+    Indices come from the same stable per-chat table the preferences
+    picker uses, so a button keeps working for as long as its session
+    exists and fails closed afterwards.
+    """
+    table = _register_pref_index(bot, chat_id, [sess.name])
+    return f"_:sx:{table.index(sess.name)}:{verb}"
+
+
 async def handle_callback(
     bot: "TelegramBot", update: Update, query, session_name: str, action: str,
 ) -> bool:
@@ -782,6 +815,20 @@ async def handle_callback(
 
     if session_name == "_" and action.startswith("spref"):
         return await _handle_spref_callback(bot, query, chat_id, action)
+
+    # Short index form, `_:sx:<idx>:<verb>` — what every button emits now.
+    # Resolved back to a real session here so everything below is
+    # identical whichever form arrived; the long `{name}:<verb>` form is
+    # still accepted so buttons sent before this change keep working.
+    if session_name == "_" and action.startswith("sx:"):
+        parts = action.split(":", 2)
+        if len(parts) != 3:
+            return False
+        resolved = _resolve_pref_index(bot, chat_id, parts[1])
+        if resolved is None:
+            await bot._safe_answer(query, "That session is no longer available")
+            return True
+        session_name, action = resolved.name, parts[2]
 
     # Sentinel namespaces are not sessions. `__voice__:restart` collides
     # with our own "restart" action verb, and claiming it broke the
@@ -814,7 +861,7 @@ async def handle_callback(
         if not bot._can_prompt_user(user_id, chat_id):
             await bot._safe_answer(query, "You can't restart this session.")
             return True
-        text, kb = _render_restart_confirm(sess)
+        text, kb = _render_restart_confirm(bot, chat_id, sess)
         await _edit(query, text, kb)
         return True
 
@@ -840,7 +887,7 @@ async def handle_callback(
         _start_rename_capture(bot, chat_id, sess)
         text = f"✏️ New name for [<b>{html_mod.escape(sess.label)}</b>]? Send it as a message."
         kb = InlineKeyboardMarkup([[InlineKeyboardButton(
-            "Cancel", callback_data=f"{sess.name}:rename-cancel")]])
+            "Cancel", callback_data=session_cb(bot, chat_id, sess, "rename-cancel"))]])
         await _edit(query, text, kb)
         return True
 
@@ -858,7 +905,7 @@ async def handle_callback(
                 query, "Session is still running. Use Kill to stop it first.",
             )
             return True
-        text, kb = _render_delete_confirm(sess)
+        text, kb = _render_delete_confirm(bot, chat_id, sess)
         await _edit(query, text, kb)
         return True
 

@@ -31,6 +31,12 @@ USER = 2
 
 
 def _scoped_bot_with_role(mk_bot, helpers, role):
+    """``role`` is a BUILTIN policy role name (``aipager.safety.
+    BUILTIN_ROLE_DEFAULTS``). Note "admin" is NOT the admin here:
+    ``_is_admin_user`` gates on ``bypass_safety``, and only ``owner``
+    carries it by default — a demotion test built on "admin" would
+    never have had Auto to lose, and would pass for the wrong reason.
+    """
     return helpers.make_scoped_bot(
         mk_bot, chat_id=CHAT, kind="group",
         members=[(USER, "bob", role)],
@@ -65,7 +71,7 @@ def test_admin_demoted_before_confirm_does_not_get_auto_session(mk_bot, helpers)
     ``skip_perms=True`` for the now-non-admin caller — no privilege
     escalation, regardless of exactly how the wizard reacts to the
     demotion (see the next test for that UX-contract question)."""
-    bot = _scoped_bot_with_role(mk_bot, helpers, "admin")
+    bot = _scoped_bot_with_role(mk_bot, helpers, "owner")
     message_id = _advance_to_summary(
         helpers, bot, mode_cb="_:nw:mode:auto")
 
@@ -95,7 +101,7 @@ def test_admin_demoted_before_confirm_reopens_mode_step(mk_bot, helpers):
     (which holds regardless): per the documented contract, Confirm must
     refuse and return to the mode step, not quietly create an Ask-mode
     session behind the caller's back."""
-    bot = _scoped_bot_with_role(mk_bot, helpers, "admin")
+    bot = _scoped_bot_with_role(mk_bot, helpers, "owner")
     message_id = _advance_to_summary(
         helpers, bot, mode_cb="_:nw:mode:auto")
 
@@ -160,3 +166,34 @@ def test_non_admin_confirming_ask_mode_still_succeeds(mk_bot, helpers):
         )))
 
     assert bot.registry.find_by_label("authwiz1", CHAT) is not None
+
+
+def test_confirm_without_a_chosen_mode_reopens_the_mode_step(mk_bot, helpers):
+    """A non-admin's Auto tap is refused with an alert and the wizard
+    stays on the mode step — but the Confirm callback is still live on
+    any summary keyboard the chat is carrying (a superseded `/new`, a
+    scrolled-back message). ``skip_perms`` is ``None`` until a mode is
+    picked, and ``bool(None)`` is ``False``, so an unguarded Confirm
+    would create an Ask session the caller never chose — the same
+    silent-downgrade the demotion path is written to prevent, reached
+    without any demotion at all.
+    """
+    bot = _scoped_bot_with_role(mk_bot, helpers, "user")
+    # Auto is refused (role "user" has no bypass_safety): the wizard is
+    # still on `mode`, and pending["skip_perms"] is still None.
+    message_id = _advance_to_summary(helpers, bot, mode_cb="_:nw:mode:auto")
+
+    with patch("aipager.dtach.inject.launch_session",
+               side_effect=_launch_ok) as launch:
+        _run(bot._handle_callback(*helpers.make_callback_update(
+            "_:nw:confirm", chat_id=CHAT, chat_type="group",
+            user_id=USER, message_id=message_id,
+        )))
+
+    assert bot.registry.find_by_label("authwiz1", CHAT) is None, (
+        "Confirm created a session before any mode was chosen")
+    launch.assert_not_awaited()
+    _, markup, *_ = helpers.latest_edit(bot)
+    cbs = helpers.callback_data_in(markup)
+    assert "_:nw:mode:auto" in cbs and "_:nw:mode:ask" in cbs, (
+        f"expected the mode step to re-open, got callback_data={cbs}")

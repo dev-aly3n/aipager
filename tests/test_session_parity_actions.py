@@ -207,6 +207,27 @@ def test_handle_callback_returns_false_for_unrelated_action(mk_bot, run_async, m
     query.edit_message_text.assert_not_awaited()
 
 
+def _destinations(bot, chat_id, cbs):
+    """Resolve each button's ``callback_data`` to ``(session_name, verb)``.
+
+    The buttons carry an opaque per-chat index rather than the session
+    name — no ``{name}:<verb>`` form can fit Telegram's 64-byte
+    ``callback_data`` cap, because internal names are themselves capped
+    at 64. Asserting the literal string would pin the encoding instead
+    of the destination, and the destination is the thing that must not
+    drift: a button that resolves to the wrong session restarts or
+    deletes something the user was not looking at.
+    """
+    out = []
+    for cb in cbs:
+        sentinel, rest = cb.split(":", 1)
+        kind, idx, verb = rest.split(":", 2)
+        assert (sentinel, kind) == ("_", "sx"), f"unexpected callback form: {cb!r}"
+        sess = session_parity._resolve_pref_index(bot, chat_id, idx)
+        out.append((sess.name if sess is not None else None, verb))
+    return out
+
+
 # ---- /restart ----------------------------------------------------------
 
 def test_restart_cmd_no_label_shows_picker_of_live_sessions(mk_bot, mk_update, run_async):
@@ -221,7 +242,8 @@ def test_restart_cmd_no_label_shows_picker_of_live_sessions(mk_bot, mk_update, r
 
     kwargs = update.message.reply_text.await_args.kwargs
     cbs = [b.callback_data for row in kwargs["reply_markup"].inline_keyboard for b in row]
-    assert cbs == ["claude-live:restart"]
+    dests = _destinations(bot, update.effective_chat.id, cbs)
+    assert dests == [("claude-live", "restart")]
 
 
 def test_restart_cmd_with_label_shows_confirm_directly(mk_bot, mk_update, run_async):
@@ -234,8 +256,9 @@ def test_restart_cmd_with_label_shows_confirm_directly(mk_bot, mk_update, run_as
 
     kwargs = update.message.reply_text.await_args.kwargs
     cbs = [b.callback_data for row in kwargs["reply_markup"].inline_keyboard for b in row]
-    assert f"{sess.name}:restart-confirm" in cbs
-    assert f"{sess.name}:restart-cancel" in cbs
+    dests = _destinations(bot, update.effective_chat.id, cbs)
+    assert (sess.name, "restart-confirm") in dests
+    assert (sess.name, "restart-cancel") in dests
 
 
 def test_restart_cmd_unknown_label(mk_bot, mk_update, run_async):
@@ -404,7 +427,8 @@ def test_rename_cmd_no_args_shows_picker(mk_bot, mk_update, run_async):
 
     kwargs = update.message.reply_text.await_args.kwargs
     cbs = [b.callback_data for row in kwargs["reply_markup"].inline_keyboard for b in row]
-    assert cbs == [f"{sess.name}:rename"]
+    dests = _destinations(bot, update.effective_chat.id, cbs)
+    assert dests == [(sess.name, "rename")]
 
 
 def test_rename_cmd_one_arg_also_shows_picker(mk_bot, mk_update, run_async):
@@ -546,7 +570,8 @@ def test_delete_cmd_no_label_shows_picker_of_gone_sessions(mk_bot, mk_update, ru
 
     kwargs = update.message.reply_text.await_args.kwargs
     cbs = [b.callback_data for row in kwargs["reply_markup"].inline_keyboard for b in row]
-    assert cbs == ["claude-gone:delete"]
+    dests = _destinations(bot, update.effective_chat.id, cbs)
+    assert dests == [("claude-gone", "delete")]
 
 
 def test_delete_cmd_label_not_gone_refused(mk_bot, mk_update, run_async):

@@ -59,8 +59,9 @@ def test_restart_command_draws_a_confirm_with_confirm_and_cancel(mk_bot, helpers
     upd.message.reply_text.assert_awaited_once()
     kb = upd.message.reply_text.await_args.kwargs.get("reply_markup")
     cbs = helpers.callback_data_in(kb)
-    assert f"{sess.name}:restart-confirm" in cbs
-    assert f"{sess.name}:restart-cancel" in cbs
+    dests = helpers.destinations(bot, CHAT, cbs)
+    assert (sess.name, "restart-confirm") in dests
+    assert (sess.name, "restart-cancel") in dests
 
 
 def test_restart_confirm_tap_demoted_between_command_and_tap_is_refused(mk_bot, helpers):
@@ -181,8 +182,9 @@ def test_delete_command_on_gone_session_draws_a_confirm(mk_bot, helpers):
     upd.message.reply_text.assert_awaited_once()
     kb = upd.message.reply_text.await_args.kwargs.get("reply_markup")
     cbs = helpers.callback_data_in(kb)
-    assert f"{sess.name}:delete-confirm" in cbs
-    assert f"{sess.name}:delete-cancel" in cbs
+    dests = helpers.destinations(bot, CHAT, cbs)
+    assert (sess.name, "delete-confirm") in dests
+    assert (sess.name, "delete-cancel") in dests
 
 
 def test_delete_confirm_tap_demoted_between_command_and_tap_is_refused(mk_bot, helpers):

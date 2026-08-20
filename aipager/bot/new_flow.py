@@ -749,6 +749,14 @@ async def _confirm(
         )
         return
 
+    if pending["skip_perms"] is None:
+        # Confirm arrived without a mode ever being chosen — a stale
+        # keyboard from a superseded flow, or an Auto tap that was
+        # refused. `bool(None)` below would quietly mean "Ask", so send
+        # the caller back to pick rather than choosing for them.
+        await _goto_mode(bot, chat_id, pending, note="Pick a permission mode first.")
+        return
+
     if pending["skip_perms"] and not bot._is_admin_user(user_id, chat_id):
         # Demoted between choosing Auto and confirming — reopen `mode`
         # rather than silently downgrading to Ask.

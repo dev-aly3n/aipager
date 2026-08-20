@@ -38,12 +38,24 @@ def test_status_offers_a_menu_row_per_session_in_render_order(
 
     run_async(bot._handle_status(update, MagicMock()))
 
+    from aipager.bot import session_parity as sp
+
     kb = update.message.reply_text.await_args.kwargs["reply_markup"]
     data = _cb(kb)
-    assert "claude-alpha:menu" in data
-    assert "claude-beta:menu" in data
-    assert data.index("claude-alpha:menu") < data.index("claude-beta:menu"), (
-        "menu rows must follow the same order as the status blocks")
+    menu_cbs = [d for d in data if d.endswith(":menu")]
+    assert len(menu_cbs) == 2, f"expected one ⋮ row per session, got {data}"
+
+    # Assert on where each button LEADS, not on its literal encoding —
+    # the callbacks carry an index now (they must, to fit 64 bytes), so a
+    # string match would pin the encoding rather than the behaviour.
+    resolved = []
+    for cb in menu_cbs:
+        idx = cb.split(":")[2]
+        sess = sp._resolve_pref_index(bot, update.effective_chat.id, idx)
+        assert sess is not None, f"{cb} resolves to nothing"
+        resolved.append(sess.name)
+    assert resolved == ["claude-alpha", "claude-beta"], (
+        f"menu rows must follow the status block order, got {resolved}")
     assert all(t.startswith("⋮ ") for t in _texts(kb) if "⋮" in t)
 
 
@@ -173,3 +185,49 @@ def test_the_voice_restart_button_is_not_swallowed(mk_bot, run_async):
 
     assert claimed is False, "session_parity swallowed a __voice__ callback"
     bot._safe_answer.assert_not_awaited()
+
+
+# ---- callback_data must fit Telegram's 64-byte cap ----------------------
+
+def test_every_session_callback_fits_the_64_byte_cap(mk_bot, run_async):
+    """Telegram rejects the ENTIRE keyboard when any callback_data exceeds
+    64 bytes — so one long-named session would break every button in the
+    message, not just its own.
+
+    `{name}:restart-confirm` reached 68 bytes for a realistic label plus
+    its scope suffix. Internal names are themselves capped at 64, so no
+    `{name}:<verb>` form can ever be safe; the buttons carry an index
+    instead.
+    """
+    from aipager.bot import session_parity as sp
+
+    bot = mk_bot()
+    # A label at the practical maximum, plus the scope suffix a DM adds.
+    name = "claude-" + ("w" * 40) + "__d256113222"
+    sess = bot.registry.get_or_create(name)
+    sess.label = "w" * 40
+
+    for verb in ("menu", "restart", "restart-confirm", "restart-cancel",
+                 "rename", "rename-cancel", "delete", "delete-confirm",
+                 "delete-cancel", "diff", "menu-close"):
+        cb = sp.session_cb(bot, 256113222, sess, verb)
+        assert len(cb.encode()) <= 64, (
+            f"{verb} produced {len(cb.encode())} bytes: {cb!r}")
+
+
+def test_the_short_callback_form_resolves_back_to_the_session(
+        mk_bot, run_async):
+    """An index is only safe if it round-trips to the same session."""
+    from aipager.bot import session_parity as sp
+
+    bot = mk_bot()
+    sess = bot.registry.get_or_create("claude-roundtrip")
+    sess.label = "roundtrip"
+    cb = sp.session_cb(bot, 777, sess, "restart-confirm")
+
+    _sentinel, rest = cb.split(":", 1)          # "_", "sx:<idx>:<verb>"
+    parts = rest.split(":", 2)
+    resolved = sp._resolve_pref_index(bot, 777, parts[1])
+
+    assert resolved is not None and resolved.name == "claude-roundtrip"
+    assert parts[2] == "restart-confirm", "the verb must survive intact"

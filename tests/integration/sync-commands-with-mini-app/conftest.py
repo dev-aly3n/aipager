@@ -224,6 +224,31 @@ def callback_data_in(markup):
     ]
 
 
+
+def destinations(bot, chat_id, cbs):
+    """Resolve each session button's ``callback_data`` to
+    ``(session_name, verb)``.
+
+    Session buttons carry an opaque per-chat index, not the session
+    name: no ``{name}:<verb>`` form can fit Telegram's 64-byte
+    ``callback_data`` cap, because internal session names are
+    themselves capped at 64. A test that asserts the literal string
+    pins the encoding; what must actually hold is the DESTINATION — a
+    button resolving to the wrong session restarts or deletes something
+    the caller was not looking at.
+    """
+    from aipager.bot import session_parity
+
+    out = []
+    for cb in cbs:
+        sentinel, rest = cb.split(":", 1)
+        kind, idx, verb = rest.split(":", 2)
+        assert (sentinel, kind) == ("_", "sx"), f"unexpected callback form: {cb!r}"
+        sess = session_parity._resolve_pref_index(bot, chat_id, idx)
+        out.append((sess.name if sess is not None else None, verb))
+    return out
+
+
 # --------------------------------------------------------------------------- #
 # Bundled fixture — this directory's name isn't a valid Python identifier
 # (hyphens), so sibling test files can't `from .conftest import x` (pytest
@@ -246,4 +271,5 @@ def helpers():
         latest_edit=latest_edit,
         all_edits=all_edits,
         callback_data_in=callback_data_in,
+        destinations=destinations,
     )
