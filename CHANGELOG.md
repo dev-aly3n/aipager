@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   red on every CI runner. They now pin the clock through a `steady_clock`
   fixture. No production change — real `time.monotonic()` is never
   negative.
+- **The Python 3.10 CI job could not collect the suite at all.**
+  `tests/test_packaging_deps.py` imported `tomllib`, which is stdlib only
+  from 3.11, while the project supports 3.10 — so the bare import failed
+  the whole job before a single test ran. Skipped there; the assertions
+  are properties of `pyproject.toml` and cannot vary by interpreter, so
+  the 3.11+ jobs cover them.
 
 ## [0.7.0] - 2026-08-20
 

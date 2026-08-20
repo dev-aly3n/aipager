@@ -10,8 +10,23 @@ pyproject.toml is the source of truth for what a fresh install resolves.
 """
 from __future__ import annotations
 
-import tomllib
+import sys
 from pathlib import Path
+
+import pytest
+
+if sys.version_info < (3, 11):          # pragma: no cover - 3.10 CI job only
+    # `tomllib` is stdlib only from 3.11, and this project supports 3.10
+    # (`requires-python = ">=3.10"`), so on the 3.10 matrix job the bare
+    # import below is a COLLECTION error — it fails the whole job before
+    # any test runs, not just this file. Everything asserted here is a
+    # property of pyproject.toml and cannot vary by interpreter, so the
+    # 3.11+ jobs cover it fully. Adding `tomli` as a dev dependency just
+    # to read a static file on one interpreter is not worth the pin.
+    pytest.skip("tomllib requires Python 3.11+; covered by the 3.11+ jobs",
+                allow_module_level=True)
+
+import tomllib
 
 PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
 
