@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **New sessions are named in lowercase, so they all get a `/shortcut`.**
+  `UiOp` becomes `uiop` and `my-session` becomes `my_session`, at every entry
+  point: `/new !name`, the interactive `/new` wizard, the Mini App's create and
+  rename forms, chat `/rename`, and `aipager session <name>` on the command
+  line. A Telegram command may only contain `[a-z0-9_]`, so a name with a
+  capital or a hyphen could never have one — this makes the two rules agree
+  instead of leaving the mismatch to be worked around. Sessions created before
+  this keep their names and still have no shortcut; rename one to give it one.
+  `aipager session <name>` still reattaches to an existing session by its exact
+  name, so older sessions stay reachable from the CLI.
 - **One session named with a capital letter broke the Telegram command
   menu.** Telegram requires a bot command to match `[a-z0-9_]{1,32}` and
   rejects the *entire* `setMyCommands` payload if any single entry breaks

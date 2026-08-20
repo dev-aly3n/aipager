@@ -26,7 +26,7 @@ import re
 # `launch_session` will reject anything these don't allow anyway. A
 # second regex here could only ever disagree with the one that matters.
 from aipager.dtach import inject
-from aipager.dtach.inject import _RESERVED, _VALID_NAME
+from aipager.dtach.inject import _RESERVED, _VALID_NAME, normalize_session_name
 
 # A label longer than this is not a real workstream name; it is someone
 # probing for a buffer to overflow or a filename to blow up.
@@ -66,7 +66,10 @@ def validate_session_name(name: object) -> tuple[str, str]:
     """
     if not isinstance(name, str):
         return "", "Session name must be text."
-    clean = name.strip()
+    # Normalised BEFORE every check below, so the reserved-word and
+    # duplicate rules see the name the session will really have — and so
+    # the caller is handed that name rather than the one typed.
+    clean = normalize_session_name(name)
     if not clean:
         return "", "Session name can't be empty."
     if len(clean) > MAX_NAME_LENGTH:

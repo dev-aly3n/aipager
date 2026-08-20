@@ -714,7 +714,9 @@ class CommandHandlersMixin:
 
         raw_name = parts[1].strip()
         skip_perms = raw_name.startswith("!")
-        name = raw_name.lstrip("!").strip()
+        # `!` selects Auto mode and is stripped BEFORE normalising, so it
+        # never becomes part of the name.
+        name = inject.normalize_session_name(raw_name.lstrip("!"))
         prompt = parts[2].strip() if len(parts) > 2 else ""
 
         if not name:

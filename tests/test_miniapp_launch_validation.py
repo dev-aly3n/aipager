@@ -26,11 +26,29 @@ from aipager.miniapp.launch import (
 
 # ===== session names ======================================================
 
-@pytest.mark.parametrize("name", ["dev", "api-work", "test_2", "a", "A1"])
-def test_reasonable_names_accepted(name):
+@pytest.mark.parametrize("name", ["dev", "test_2", "a", "abc123"])
+def test_reasonable_names_accepted_unchanged(name):
+    """Already-canonical names pass through untouched."""
     clean, err = validate_session_name(name)
     assert err == ""
     assert clean == name
+
+
+@pytest.mark.parametrize("name,expected", [
+    ("api-work", "api_work"),
+    ("A1", "a1"),
+    ("My-Session", "my_session"),
+])
+def test_reasonable_names_accepted_after_normalisation(name, expected):
+    """Accepted, but normalised — uppercase and hyphens are legal in a
+    session name and illegal in a Telegram command, so the name is
+    canonicalised on the way in rather than left to break the command
+    menu later. The validator returns the name the session will really
+    have; this used to assert `clean == name`, which is now deliberately
+    untrue for these inputs."""
+    clean, err = validate_session_name(name)
+    assert err == ""
+    assert clean == expected
 
 
 def test_surrounding_whitespace_is_trimmed_not_rejected():

@@ -22,6 +22,7 @@ from pathlib import Path
 
 from aipager import daemon_secrets
 from aipager.dtach import redraw as _dtach_redraw
+from aipager.dtach.inject import normalize_session_name
 from aipager.errors import friendly_error, friendly_warn
 from aipager.ui import console, ok
 
@@ -110,6 +111,35 @@ def _validate_name(name: str) -> str | None:
     return None
 
 
+def _resolve_launch_name(name: str) -> str:
+    """The name this invocation should actually use.
+
+    ``aipager session <name>`` both CREATES and REATTACHES, so it cannot
+    simply normalise: sessions made before that rule keep their original
+    spelling, and normalising past a live ``HjIo`` would strand it and
+    start a second session called ``hjio`` alongside. So an exact-name
+    match on a LIVE socket wins; everything else — a new session, or a
+    dead socket about to be cleaned up — gets the canonical spelling.
+    """
+    raw = name.strip()
+    sock = f"/tmp/claude-dtach-{raw}.sock"
+    if Path(sock).exists():
+        if _socket_alive(sock):
+            return raw
+        # Dead socket under the old spelling. Say so: we are about to
+        # create a session under a DIFFERENT name, and silently leaving
+        # `HjIo.sock` behind while starting `hjio` is the kind of thing
+        # someone finds months later and cannot explain.
+        canonical = normalize_session_name(raw)
+        if canonical != raw:
+            console.print(
+                f"  [muted](session {raw!r} is no longer running; "
+                f"starting {canonical!r} — its stale socket remains at "
+                f"{sock})[/muted]")
+        return canonical
+    return normalize_session_name(raw)
+
+
 def launch(name: str, claude_args: list[str] | None = None,
           *, claude_bin: str | None = None) -> int:
     """Create or reattach a Claude Code session inside dtach.
@@ -123,8 +153,24 @@ def launch(name: str, claude_args: list[str] | None = None,
     Defaults to the literal ``"claude"`` — today's behaviour — when not
     given, so this function stays usable on its own.
     """
+    # Validate the RAW name first: _resolve_launch_name stats a path built
+    # from it, and Path.exists() does NOT swallow ENAMETOOLONG — a 300-char
+    # argument raised OSError out of the CLI as an "unexpected error" bug
+    # prompt instead of the clean "1-50 chars" message. Normalisation can
+    # never turn an invalid name valid (it only lowercases and maps `-` to
+    # `_`, both already inside _NAME_RE, and leaves length untouched), so
+    # checking before costs nothing.
+    err = _validate_name(name.strip())
+    if err:
+        friendly_error(err)
+        return 2
+
+    name = _resolve_launch_name(name)
     err = _validate_name(name)
     if err:
+        # Reachable: `_RESERVED_NAMES` holds lowercase literals, so `LS`
+        # passes the check above and only becomes reserved once
+        # normalised. Not dead code — do not delete.
         friendly_error(err)
         return 2
 

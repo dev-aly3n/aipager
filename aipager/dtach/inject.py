@@ -429,6 +429,37 @@ _RESERVED = {
     "status", "stop", "kill", "new", "help", "start", "settings",
     "restart", "rename", "delete", "diff",
 }
+
+
+def normalize_session_name(name: str) -> str:
+    """The canonical spelling of a session name the user just typed.
+
+    Lowercased, with ``-`` mapped to ``_``. Both changes exist for one
+    reason: a Telegram bot command must match ``[a-z0-9_]{1,32}``, while
+    ``_VALID_NAME`` below deliberately allows uppercase, hyphens and up
+    to 64 characters. That mismatch meant a perfectly legal session name
+    could be an illegal command — which, before the ``_label_command``
+    filter, took a whole chat's command menu down with it. Normalising on
+    the way in removes the mismatch at source instead of compensating for
+    it afterwards.
+
+    Applied at the INPUT layer only — where a human's typing enters the
+    system — never inside :func:`launch_session`. By the time a name
+    reaches the launcher it is the internal, scope-suffixed one, and its
+    caller has already recorded ``sess.label`` separately; rewriting it
+    there would leave the socket path and the registry entry disagreeing
+    about what the session is called. The launcher also has to stay
+    permissive so sessions created before this rule, and anything
+    ``cli/resume.py`` re-launches, still start.
+
+    Length is deliberately NOT clamped. Commands cap at 32 characters and
+    names at 64, but truncating would make two different long names
+    collide; an over-long name keeps working and simply gets no
+    ``/shortcut`` (see ``lifecycle._label_command``).
+    """
+    return name.strip().lower().replace("-", "_")
+
+
 _PROJECT_DIR = os.environ.get("AIPAGER_WORK_DIR", os.getcwd())
 # Resolved lazily inside launch_session() — NOT at import time. Import-time
 # resolution would spawn a `--version` subprocess for every unrelated CLI
