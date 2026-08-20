@@ -144,6 +144,52 @@ def test_diff_unexpected_exception_from_collect_diff_never_becomes_a_stack_trace
             )
 
 
+def test_diff_unexpected_exception_degrades_to_the_documented_git_error_text():
+    """Stronger than the "doesn't crash" test above: entrypoints.md maps
+    ``reason: "git_error"`` to the specific fallback text "Couldn't read
+    the diff right now — try again." An unhandled exception from
+    collect_diff is exactly the scenario that text exists for (a git
+    shell-out gone wrong), so a caught exception must produce THAT text
+    — not a generic/different error, and not silence (no reply at all)."""
+    bot = _make_bot()
+    sess = TrackedSession(name="claude-foo", label="foo", status=Status.IDLE,
+                           cwd="/tmp/x")
+    bot.registry._sessions[sess.name] = sess
+    update = _make_update()
+
+    async def _boom(cwd):
+        raise RuntimeError("boom")
+
+    with patch("aipager.miniapp.diff.collect_diff", side_effect=_boom):
+        _run(session_parity.handle_diff_cmd(bot, update, MagicMock()))
+
+    update.message.reply_text.assert_awaited_once()
+    text = update.message.reply_text.await_args[0][0]
+    assert "try again" in text.lower(), text
+    assert "traceback" not in text.lower()
+    update.message.reply_document.assert_not_awaited()
+
+
+def test_diff_exception_from_collect_diff_does_not_touch_the_registry():
+    """The exception path must be purely a rendering fallback — it must
+    never mutate session/registry state as a side effect of handling
+    the failure."""
+    bot = _make_bot()
+    sess = TrackedSession(name="claude-foo", label="foo", status=Status.IDLE,
+                           cwd="/tmp/x")
+    bot.registry._sessions[sess.name] = sess
+    update = _make_update()
+
+    async def _boom(cwd):
+        raise OSError("disk exploded")
+
+    with patch("aipager.miniapp.diff.collect_diff", side_effect=_boom):
+        _run(session_parity.handle_diff_cmd(bot, update, MagicMock()))
+
+    assert bot.registry._sessions[sess.name] is sess
+    assert sess.status == Status.IDLE
+
+
 # --------------------------------------------------------------------------- #
 # Inline vs. attachment threshold (boundary-value analysis).                #
 # --------------------------------------------------------------------------- #
