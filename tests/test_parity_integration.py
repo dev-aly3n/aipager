@@ -115,3 +115,61 @@ def test_settings_root_reaches_per_session_preferences():
     _text, kb = render_settings_root(1)
     assert "_:spref" in _cb(kb), (
         "the per-session renderer is unreachable from /settings")
+
+
+# ---- regressions found in review ----------------------------------------
+
+def test_a_stale_menu_button_never_opens_another_session(
+        mk_bot, mk_update, run_async):
+    """Open session A's ⋮ menu, then B's, then tap A's still-visible
+    Preferences button. It must reach A.
+
+    The index table used to be overwritten per render, so A's button
+    (encoded `_:spref:0`) resolved to whichever session was rendered
+    last — a silent write to a session the user was not looking at.
+    """
+    from aipager.bot import session_parity as sp
+
+    bot = mk_bot()
+    for label in ("alpha", "beta"):
+        s = bot.registry.get_or_create(f"claude-{label}")
+        s.label = label
+
+    a = bot.registry.get("claude-alpha")
+    b = bot.registry.get("claude-beta")
+    _t, kb_a = sp._render_session_menu(bot, 555, a)
+    a_pref_cb = [x.callback_data for row in kb_a.inline_keyboard for x in row
+                 if x.callback_data.startswith("_:spref:")][0]
+    sp._render_session_menu(bot, 555, b)          # B renders second
+
+    idx = a_pref_cb.rsplit(":", 1)[1]
+    resolved = sp._resolve_pref_index(bot, 555, idx)
+
+    assert resolved is not None, "A's own button stopped resolving"
+    assert resolved.name == "claude-alpha", (
+        f"A's Preferences button resolved to {resolved.name} — a stale "
+        "index wrote to the wrong session")
+
+
+def test_the_voice_restart_button_is_not_swallowed(mk_bot, run_async):
+    """`__voice__:restart` collides with our own "restart" verb.
+
+    Claiming it broke the "Restart daemon now" button shown after
+    installing the voice extra — it answered "Session not found". The
+    existing test for that button set up a mock but never asserted on
+    it, so nothing caught the regression.
+    """
+    from unittest.mock import AsyncMock, MagicMock
+
+    from aipager.bot import session_parity as sp
+
+    bot = mk_bot()
+    query = MagicMock()
+    query.from_user = MagicMock(id=1)
+    bot._safe_answer = AsyncMock()
+
+    claimed = run_async(
+        sp.handle_callback(bot, MagicMock(), query, "__voice__", "restart"))
+
+    assert claimed is False, "session_parity swallowed a __voice__ callback"
+    bot._safe_answer.assert_not_awaited()

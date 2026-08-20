@@ -701,6 +701,23 @@ class CommandHandlersMixin:
             )
             return
 
+        # Reserved-word protection has to happen HERE, on the label, not
+        # in launch_session — by the time the name reaches dtach it has
+        # been scope-suffixed (`restart` -> `restart__g100`) and no longer
+        # matches `_RESERVED` at all, so the check there silently passed
+        # for every scoped chat. The Mini App's own launch layer
+        # (miniapp/launch.py) has always validated the bare label; chat
+        # did not, which is exactly the sort of divergence this ship
+        # exists to remove.
+        if name.lower() in inject._RESERVED:
+            await update.message.reply_text(
+                f"⚠️ <code>{html_mod.escape(name)}</code> is a command name — "
+                "pick something else, or it would shadow /"
+                f"{html_mod.escape(name.lower())}.",
+                parse_mode="HTML",
+            )
+            return
+
         # Admin gate: Auto mode (--dangerously-skip-permissions) requires admin.
         if skip_perms and not self._is_admin(update):
             await update.message.reply_text(
@@ -774,6 +791,11 @@ class CommandHandlersMixin:
             "\n\n💡 Use /perms to switch between Ask and Auto mode."
             if not skip_perms else ""
         )
+        # design.md's Shared-file integration lists the App button here —
+        # a just-created session is the moment someone is most likely to
+        # want the richer view. Empty in groups and when no Mini App URL
+        # is known, so this degrades to exactly the old reply.
+        app_row = self._app_button_row(update)
         await status_msg.edit_text(
             f"✅ <b>{html_mod.escape(name)}</b> created\n"
             f"{mode_icon2} {mode_label2} mode"
@@ -781,6 +803,7 @@ class CommandHandlersMixin:
             + ("\n📝 Prompt queued" if prompt else "")
             + perms_nudge,
             parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(app_row) if app_row else None,
         )
         log.info("Launched session %s (prompt=%s)", name, bool(prompt))
 

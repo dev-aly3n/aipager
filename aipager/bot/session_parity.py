@@ -97,14 +97,27 @@ def _pref_index_map(bot: "TelegramBot") -> dict[int, list[str]]:
 
 
 def _register_pref_index(bot: "TelegramBot", chat_id: int, names) -> list[str]:
-    """Overwrite this chat's session→preferences index with a fresh
-    snapshot. Called every time a picker or a single session's ⋮ menu
-    "Preferences" row is rendered — never reused across renders, so a
-    session that disappears between render and tap fails closed rather
-    than resolving to whatever now occupies that slot."""
-    names = list(names)
-    _pref_index_map(bot)[chat_id] = names
-    return names
+    """Give every name a STABLE index in this chat's table, appending any
+    it has not seen before. Returns the whole table.
+
+    This used to overwrite the table with just the names being rendered,
+    which was wrong in the one case that matters: the ⋮ menu registers a
+    single session, so opening session A's menu and then session B's left
+    the table holding only B — and A's still-visible "Preferences" button
+    (encoded `_:spref:0`) then resolved to B. A silent write to a session
+    the user was not looking at.
+
+    Indices are stable and per-chat, bounded by the number of sessions
+    that chat has ever shown, so the table cannot grow unboundedly in any
+    realistic use. Fail-closed is unaffected: :func:`_resolve_pref_index`
+    re-checks the registry, so a session that disappears after render
+    still resolves to ``None`` rather than to its neighbour.
+    """
+    table = _pref_index_map(bot).setdefault(chat_id, [])
+    for name in names:
+        if name not in table:
+            table.append(name)
+    return table
 
 
 def _resolve_pref_index(
@@ -534,10 +547,14 @@ def _render_session_pref_picker(
         (s for s in bot.registry.all_sessions(chat_id).values() if s.label),
         key=lambda s: s.label.lower(),
     )
-    _register_pref_index(bot, chat_id, [s.name for s in sessions])
+    table = _register_pref_index(bot, chat_id, [s.name for s in sessions])
+    # Index comes from the shared table, never from this list's own
+    # position — the table is append-only and stable, so the two orders
+    # are not the same once a ⋮ menu has registered a session first.
     rows = [
-        [InlineKeyboardButton(sess.label, callback_data=f"_:spref:{i}")]
-        for i, sess in enumerate(sessions)
+        [InlineKeyboardButton(
+            sess.label, callback_data=f"_:spref:{table.index(sess.name)}")]
+        for sess in sessions
     ]
     rows.append([InlineKeyboardButton("✖️ Close", callback_data="_:spref:close")])
     if sessions:
@@ -765,6 +782,14 @@ async def handle_callback(
 
     if session_name == "_" and action.startswith("spref"):
         return await _handle_spref_callback(bot, query, chat_id, action)
+
+    # Sentinel namespaces are not sessions. `__voice__:restart` collides
+    # with our own "restart" action verb, and claiming it broke the
+    # "Restart daemon now" button that appears after installing the voice
+    # extra — it answered "Session not found" instead. Decline anything
+    # dunder-wrapped so a future sentinel cannot be swallowed either.
+    if session_name.startswith("__") and session_name.endswith("__"):
+        return False
 
     if action not in _SESSION_ACTIONS:
         return False
