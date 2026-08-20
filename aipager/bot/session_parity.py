@@ -32,13 +32,12 @@ Design constraints this module is written to (see design.md Alternatives
   integrator's job, applied after all three streams land; see
   ``implementation-parity.md``).
 
-Landed so far: per-session preferences — the single-renderer piece
-design.md's decision #3 asks for (``render_session_preferences_root`` /
-``render_session_preferences_field``) plus the ``_:spref...`` callback
-family that reaches it — and the session ⋮ menu itself. Restart, rename,
-delete, and diff land in their own follow-up commits (the menu's rows
-for them are inert — ``handle_callback`` falls through to "Invalid
-callback" — until each one's commit lands).
+Landed so far: per-session preferences (design.md decision #3's single
+renderer, ``render_session_preferences_root`` /
+``render_session_preferences_field``, plus the ``_:spref...`` callback
+family), the session ⋮ menu, and ``/restart``. Rename, delete, and diff
+land in their own follow-up commits (the menu's rows for them are inert
+— ``handle_callback`` falls through — until each one's commit lands).
 """
 
 from __future__ import annotations
@@ -62,8 +61,18 @@ if TYPE_CHECKING:
 # recompute it on every render. Keyed by section for O(1) lookup.
 _SCHEMA = {entry["section"]: entry for entry in settings_menu.settings_schema()}
 
-# Populated further by later commits (restart/rename/delete/diff).
-_SESSION_ACTIONS: frozenset[str] = frozenset({"menu", "menu-close"})
+# Populated further by later commits (rename/delete/diff).
+_SESSION_ACTIONS: frozenset[str] = frozenset({
+    "menu", "menu-close",
+    "restart", "restart-confirm", "restart-cancel",
+})
+
+_RESTART_REASON_TEXT = {
+    "not_live": "[{label}] isn't running.",
+    "already_restarting": "[{label}] is already restarting.",
+    "still_stopping": "[{label}] didn't stop in time — try again shortly.",
+    "launch_failed": "Restart failed for [{label}]: {err}",
+}
 
 
 # ---- lazily-initialised TelegramBot instance state -----------------------
@@ -173,6 +182,71 @@ def _render_session_menu(
         "✖️ Close", callback_data=f"{sess.name}:menu-close")])
     text = f"⋮ <b>{html_mod.escape(sess.label)}</b> — choose an action:"
     return text, InlineKeyboardMarkup(rows)
+
+
+# ---- restart ---------------------------------------------------------
+
+def _render_restart_confirm(sess: TrackedSession) -> tuple[str, InlineKeyboardMarkup]:
+    kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton("🔄 Restart", callback_data=f"{sess.name}:restart-confirm"),
+        InlineKeyboardButton("Cancel", callback_data=f"{sess.name}:restart-cancel"),
+    ]])
+    text = (
+        f"🔄 Restart session [<b>{html_mod.escape(sess.label)}</b>]? "
+        "This will kill and relaunch the running claude process."
+    )
+    return text, kb
+
+
+async def handle_restart_cmd(
+    bot: "TelegramBot", update: Update, ctx: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    """``/restart [label]``. No label → picker of live sessions (each
+    row itself opens the same confirm ``{name}:restart`` would). With a
+    label → resolves it and shows the confirm directly. Either way,
+    execution only happens on ``{name}:restart-confirm``."""
+    if not await bot._authorize(update):
+        return
+    text = update.message.text.strip()
+    parts = text.split(maxsplit=1)
+    chat_id = calling_chat_id(update)
+
+    if len(parts) < 2:
+        sessions = [
+            sess for sess in bot.registry.all_sessions(chat_id).values()
+            if sess.status != Status.GONE and sess.label
+        ]
+        if not sessions:
+            await update.message.reply_text("No live sessions to restart.")
+            return
+        buttons = [
+            [InlineKeyboardButton(f"🔄 {sess.label}", callback_data=f"{sess.name}:restart")]
+            for sess in sessions
+        ]
+        await update.message.reply_text(
+            "Which session to restart?", reply_markup=InlineKeyboardMarkup(buttons),
+        )
+        return
+
+    label = parts[1].strip()
+    sess = bot.registry.find_by_label(label, chat_id)
+    if sess is None:
+        await update.message.reply_text(
+            f"⚠️ Unknown or already-gone session: {html_mod.escape(label)}",
+            parse_mode="HTML",
+        )
+        return
+    reply_text, kb = _render_restart_confirm(sess)
+    await update.message.reply_text(reply_text, reply_markup=kb, parse_mode="HTML")
+
+
+def _restart_outcome_text(outcome) -> str:
+    if outcome.ok:
+        return f"🔄 [<b>{html_mod.escape(outcome.label)}</b>] restarted."
+    template = _RESTART_REASON_TEXT.get(outcome.reason, "Restart failed for [{label}].")
+    return template.format(
+        label=html_mod.escape(outcome.label), err=html_mod.escape(outcome.err),
+    )
 
 
 # ---- per-session preferences ----------------------------------------
@@ -392,8 +466,8 @@ async def handle_callback(
     - ``_:spref...`` (session_name == "_") — per-session preferences,
       dispatched to :func:`_handle_spref_callback`.
     - ``{name}:<action>`` for every action in :data:`_SESSION_ACTIONS`
-      (only "menu"/"menu-close" until the restart/rename/delete/diff
-      commits land).
+      (rename/delete/diff still fall through until their own commits
+      land).
     """
     chat_id = calling_chat_id(update)
 
@@ -408,6 +482,8 @@ async def handle_callback(
         await bot._safe_answer(query, "Session not found")
         return True
 
+    user_id = query.from_user.id if getattr(query, "from_user", None) else None
+
     if action == "menu":
         text, kb = _render_session_menu(bot, chat_id, sess)
         await _edit(query, text, kb)
@@ -417,11 +493,35 @@ async def handle_callback(
         await _edit(query, f"Closed menu for [<b>{html_mod.escape(sess.label)}</b>].", None)
         return True
 
+    if action == "restart":
+        if not bot._can_prompt_user(user_id, chat_id):
+            await bot._safe_answer(query, "You can't restart this session.")
+            return True
+        text, kb = _render_restart_confirm(sess)
+        await _edit(query, text, kb)
+        return True
+
+    if action == "restart-confirm":
+        if not bot._can_prompt_user(user_id, chat_id):
+            await bot._safe_answer(query, "You can't restart this session.")
+            return True
+        await bot._safe_answer(query, f"Restarting {sess.label}...")
+        outcome = await bot._restart_session_core(sess)
+        await _edit(query, _restart_outcome_text(outcome), None)
+        return True
+
+    if action == "restart-cancel":
+        await _edit(
+            query, f"Restart cancelled for [<b>{html_mod.escape(sess.label)}</b>].", None,
+        )
+        return True
+
     return False
 
 
 __all__ = [
     "handle_callback",
+    "handle_restart_cmd",
     "maybe_handle_text",
     "render_session_preferences_field",
     "render_session_preferences_root",
