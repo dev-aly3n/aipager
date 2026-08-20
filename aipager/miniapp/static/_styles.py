@@ -82,10 +82,9 @@ CSS = """\
   /* Real tokens. color-mix landed in Chrome 111 (Mar 2023) and Safari
      16.2 (Dec 2022) — every Telegram client shipped since mid-2023 —
      and this file already bet on it twice before this change (the
-     .setopt.is-active-style fallback-then-upgrade pairs at what are now
-     .choice.is-active and #notice's border pairing were the same bet in
-     a plain-property form; this is that bet extended to custom
-     properties). */
+     rgba-then-color-mix fallback pair at .choice.is-active's `background`
+     was the same bet in a plain-property form; this is that bet extended
+     to custom properties). */
   @supports (color: color-mix(in srgb, red 50%, transparent)) {
     :root {
       --glass-bg: color-mix(in srgb,
