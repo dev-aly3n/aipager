@@ -283,6 +283,13 @@ def test_the_first_keyboard_of_the_run_already_offers_the_app_button(
     """
     b = mk_bot()
     monkeypatch.setattr("aipager.bot.lifecycle.CHAT_ID", "555")
+    # keyboards.py binds its own CHAT_ID from config at import time and
+    # uses it to decide `is_private` (a web_app button is private-chat
+    # only). Patching only lifecycle's copy left this test reading the
+    # REAL machine's configured chat id, so it passed on a configured
+    # box and failed anywhere aipager.yaml was absent — including a
+    # fresh checkout and CI.
+    monkeypatch.setattr("aipager.bot.keyboards.CHAT_ID", "555")
 
     b.prime_miniapp_url("https://tunnel.example/")
     run_async(b._update_bot_commands())      # what start() ends with

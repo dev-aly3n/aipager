@@ -20,12 +20,17 @@ def _all_texts(kb):
 
 # ---- render_settings_root -------------------------------------------------
 
-def test_root_has_four_sections_plus_close():
+def test_root_has_four_sections_then_per_session_then_close():
+    """Order is asserted, not just membership: Close stays last, and the
+    per-session row sits directly above it. The four chat-level sections
+    keep their existing order and callback data untouched — adding the
+    per-session entry point must not disturb what was already there.
+    """
     _text, kb = sm.render_settings_root(1)
     data = _all_callback_data(kb)
     assert data == [
         "_:set:layout", "_:set:formatting", "_:set:length",
-        "_:set:level", "_:set:close",
+        "_:set:level", "_:spref", "_:set:close",
     ]
 
 

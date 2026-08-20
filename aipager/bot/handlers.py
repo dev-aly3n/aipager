@@ -34,6 +34,7 @@ from telegram.ext import (
 
 from aipager.dtach import inject
 
+from aipager.bot import new_flow, session_parity
 from aipager.bot.settings_menu import render_settings_root
 from aipager.config import (
     APP_BUTTON, BACK_BUTTON, COMMANDS_BUTTON,
@@ -226,7 +227,7 @@ class CommandHandlersMixin:
 
         # No service unit — spawn a detached replacement and self-kill.
         # The shell wrapper polls our PID via `kill -0`; once we die
-        # (HookReceiver.stop unlinks /tmp/aipager.sock as part of
+        # (HookReceiver.stop unlinks the control socket as part of
         # cli.py's SIGTERM handler) the wrapper execs aipager start.
         parent_pid = os.getpid()
         log_path = "/tmp/aipager.log"
@@ -307,13 +308,19 @@ class CommandHandlersMixin:
             "  • Tap a session name on the keyboard below to switch to it.\n"
             "  • Send a plain message — it goes to the active session.\n"
             "  • Reply to a session's message to pin your prompt to that session.\n\n"
-            "<b>Open a new session on your computer</b>\n"
-            "  <code>aipager session &lt;name&gt;</code>\n\n"
+            "<b>Open a new session</b>\n"
+            "  /new — pick a name, mode, model and folder here\n"
+            "  <code>aipager session &lt;name&gt;</code> — or from your computer\n\n"
             "<b>Commands</b>\n"
             "  /status — per-session dashboard\n"
             "  /stop — interrupt the active session\n"
+            "  /restart — restart a session with its history\n"
+            "  /rename — give a session a new name\n"
+            "  /diff — show a session's working-directory diff\n"
             "  /kill — terminate a session\n"
-            "  /new — launch a new session (alias for `aipager session`)\n"
+            "  /delete — drop a finished session from the list\n"
+            "  /settings — message layout, formatting and language\n"
+            "  /perms — switch a session between Ask and Auto\n"
         )
         try:
             await self._app.bot.send_message(
@@ -323,6 +330,30 @@ class CommandHandlersMixin:
             log.warning("Failed to send /start welcome", exc_info=True)
         # Make sure the persistent keyboard is showing.
         await self._send_keyboard(level="main", chat_id=calling_chat_id(update))
+
+    def _app_button_row(self, update: Update) -> list:
+        """One inline row linking to the Mini App, or [] when it doesn't belong.
+
+        Returned as a list so callers can splice it into an existing
+        keyboard with ``+`` and get nothing when the Mini App isn't
+        reachable.
+
+        Private chats only: Telegram rejects an ENTIRE keyboard that
+        carries a ``web_app`` button in a group, so one misplaced button
+        costs every other button in the message.
+
+        Deliberately NOT used on ``/start``: that handler ends by sending
+        the persistent keyboard, which already carries the App button, and
+        design.md's own rule is to never offer a competing entry point in
+        the same turn.
+        """
+        chat = update.effective_chat
+        if chat is None or chat.type != "private":
+            return []
+        url = getattr(self, "_miniapp_url", "")
+        if not url:
+            return []
+        return [[InlineKeyboardButton(APP_BUTTON, web_app=WebAppInfo(url=url))]]
 
     async def _handle_settings_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /settings — open the root preferences menu.
@@ -336,6 +367,9 @@ class CommandHandlersMixin:
             return
         chat_id = calling_chat_id(update)
         text, kb = render_settings_root(chat_id or 0)
+        app_row = self._app_button_row(update)
+        if app_row:
+            kb = InlineKeyboardMarkup(list(kb.inline_keyboard) + app_row)
         await update.message.reply_text(text, parse_mode="HTML", reply_markup=kb)
 
     async def _handle_app_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -357,7 +391,7 @@ class CommandHandlersMixin:
             )
             return
 
-        from aipager.config import MINIAPP_ENABLED, MINIAPP_PORT
+        from aipager.config import MINIAPP_ENABLED
         if not MINIAPP_ENABLED:
             await update.message.reply_text(
                 "The Mini App server isn't enabled on this machine.\n"
@@ -373,16 +407,27 @@ class CommandHandlersMixin:
         from aipager.miniapp.tunnel import resolve_public_url
         url = await resolve_public_url()
         if not url:
-            await update.message.reply_text(
-                "No public URL is configured or auto-detectable yet.\n\n"
-                "Set up Tailscale Funnel on the machine running aipager:\n"
-                "<code>curl -fsSL https://tailscale.com/install.sh | sh\n"
-                "sudo tailscale up\n"
-                f"sudo tailscale funnel {MINIAPP_PORT} on</code>\n\n"
-                "…or set a manual URL: "
-                "<code>aipager miniapp enable --url https://your-tunnel</code>",
-                parse_mode="HTML",
-            )
+            # This used to print Tailscale install instructions, including
+            # `curl | sh` and two `sudo` lines. That predates the managed
+            # Cloudflare tunnel and is now both a contract violation — the
+            # user installs aipager and runs nothing else — and simply
+            # false: on a healthy install the only reason there is no URL
+            # yet is that the tunnel has not finished coming up
+            # (cloudflared needs ~10-30s, and the first DNS probe often
+            # fails and succeeds on the retry).
+            from aipager.miniapp.server import miniapp_extra_available
+            if not miniapp_extra_available():
+                await update.message.reply_text(
+                    "📱 The Mini App can't start on this machine — its "
+                    "install looks incomplete.\n\n"
+                    "Everything else keeps working; ask whoever set this "
+                    "up to reinstall aipager.",
+                )
+            else:
+                await update.message.reply_text(
+                    "📱 The Mini App link is still being set up — "
+                    "try /app again in a few seconds.",
+                )
             return
 
         # Personal mode only (scope/team mode already gated above via
@@ -423,17 +468,32 @@ class CommandHandlersMixin:
             # unstamped (scope_chat_id=0) sessions that leak into every
             # scope, so an empty scope just says so.
             if self.scopes is not None:
-                await update.message.reply_text("No sessions in this chat.")
+                # Empty state is exactly when someone wants the
+                # richer view — offer it here too, not only when
+                # there are sessions to list.
+                _app = self._app_button_row(update)
+                await update.message.reply_text(
+                    "No sessions in this chat.",
+                    reply_markup=InlineKeyboardMarkup(_app) if _app else None,
+                )
                 return
             discovered = await inject.list_sessions()
             if not discovered:
-                await update.message.reply_text("No sessions found.")
+                # Empty state is exactly when someone wants the
+                # richer view — offer it here too, not only when
+                # there are sessions to list.
+                _app = self._app_button_row(update)
+                await update.message.reply_text(
+                    "No sessions found.",
+                    reply_markup=InlineKeyboardMarkup(_app) if _app else None,
+                )
                 return
             for name in discovered:
                 self.registry.get_or_create(name)
             sessions = self.registry.all_sessions(chat_id)
 
         blocks = []
+        shown: list[tuple[str, str]] = []
         has_gone = False
         for name, sess in sessions.items():
             alive = await inject.is_alive(name)
@@ -479,12 +539,27 @@ class CommandHandlersMixin:
             header = f"{icon} <b>{html_mod.escape(sess.label)}</b> · {status_str}"
             table = "\n".join(rows)
             blocks.append(f"{header}\n<code>{table}</code>")
+            shown.append((name, sess.label))
 
-        keyboard = None
+        # One ⋮ row per session actually rendered, in the same order as
+        # the blocks above — this is what makes restart/rename/delete/
+        # diff/preferences reachable without memorising four command
+        # names. "Clear gone sessions" stays last so its position is
+        # unchanged for anyone used to it.
+        rows_kb = [
+            [InlineKeyboardButton(
+                f"⋮ {label}",
+                callback_data=session_parity.session_cb(
+                    self, chat_id or 0, self.registry.get(name), "menu"))]
+            for name, label in shown
+            if self.registry.get(name) is not None
+        ]
         if has_gone:
-            keyboard = InlineKeyboardMarkup([[
+            rows_kb.append([
                 InlineKeyboardButton("Clear gone sessions", callback_data="_:clear_gone"),
-            ]])
+            ])
+        rows_kb += self._app_button_row(update)
+        keyboard = InlineKeyboardMarkup(rows_kb) if rows_kb else None
         await update.message.reply_text(
             "\n\n".join(blocks), parse_mode="HTML", reply_markup=keyboard,
         )
@@ -631,15 +706,10 @@ class CommandHandlersMixin:
         text = update.message.text.strip()
         parts = text.split(maxsplit=2)  # /new <name> [prompt...]
         if len(parts) < 2:
-            await update.message.reply_text(
-                "Usage: /new &lt;name&gt; [initial prompt]\n"
-                "Prefix the name with <code>!</code> to launch in "
-                "🤖 Auto mode (Claude runs tools without prompting; "
-                "<code>--dangerously-skip-permissions</code>).\n"
-                "Example: /new dev fix the auth bug\n"
-                "Example: /new !dev fix the auth bug",
-                parse_mode="HTML",
-            )
+            # No arguments: hand over to the interactive wizard rather
+            # than printing usage text. `/new !name` and `/new name`
+            # fall through below, byte-for-byte unchanged.
+            await new_flow.start_wizard(self, update, ctx)
             return
 
         raw_name = parts[1].strip()
@@ -650,6 +720,23 @@ class CommandHandlersMixin:
         if not name:
             await update.message.reply_text(
                 "⚠️ Session name is empty after stripping <code>!</code>.",
+                parse_mode="HTML",
+            )
+            return
+
+        # Reserved-word protection has to happen HERE, on the label, not
+        # in launch_session — by the time the name reaches dtach it has
+        # been scope-suffixed (`restart` -> `restart__g100`) and no longer
+        # matches `_RESERVED` at all, so the check there silently passed
+        # for every scoped chat. The Mini App's own launch layer
+        # (miniapp/launch.py) has always validated the bare label; chat
+        # did not, which is exactly the sort of divergence this ship
+        # exists to remove.
+        if name.lower() in inject._RESERVED:
+            await update.message.reply_text(
+                f"⚠️ <code>{html_mod.escape(name)}</code> is a command name — "
+                "pick something else, or it would shadow /"
+                f"{html_mod.escape(name.lower())}.",
                 parse_mode="HTML",
             )
             return
@@ -727,6 +814,11 @@ class CommandHandlersMixin:
             "\n\n💡 Use /perms to switch between Ask and Auto mode."
             if not skip_perms else ""
         )
+        # design.md's Shared-file integration lists the App button here —
+        # a just-created session is the moment someone is most likely to
+        # want the richer view. Empty in groups and when no Mini App URL
+        # is known, so this degrades to exactly the old reply.
+        app_row = self._app_button_row(update)
         await status_msg.edit_text(
             f"✅ <b>{html_mod.escape(name)}</b> created\n"
             f"{mode_icon2} {mode_label2} mode"
@@ -734,6 +826,7 @@ class CommandHandlersMixin:
             + ("\n📝 Prompt queued" if prompt else "")
             + perms_nudge,
             parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(app_row) if app_row else None,
         )
         log.info("Launched session %s (prompt=%s)", name, bool(prompt))
 
@@ -973,6 +1066,14 @@ class CommandHandlersMixin:
             return
         text = update.message.text.strip()
         if not text:
+            return
+        # Multi-step flows get first refusal on free text. Each returns
+        # False unless it is genuinely mid-capture for THIS chat, so
+        # ordinary session routing below is untouched outside those
+        # narrow windows.
+        if await new_flow.maybe_handle_text(self, update, ctx, text):
+            return
+        if await session_parity.maybe_handle_text(self, update, ctx, text):
             return
 
         # Keyboard navigation + button matching — MUST stay above /<label> handlers

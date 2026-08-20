@@ -37,7 +37,13 @@ _KINDS = ("dm", "group")
 # aipager.yaml is authoritative — a setting written there survives exactly
 # one restart. aipager.yaml is never retired.
 _MINIAPP_KEY = "miniapp"
-_MINIAPP_DEFAULTS: dict = {"enabled": False, "port": 8765, "public_url": ""}
+_MINIAPP_DEFAULTS: dict = {"enabled": True, "port": 8765, "public_url": ""}
+
+# claude_path override — see claude_resolve.py's precedence chain (tier 1).
+# Same rebuild-vs-surgical-write split as miniapp: dump_claude_path() is the
+# surgical read-modify-write, and this key must ALSO join dump_scopes()'s
+# preservation list below, or the next `aipager config` silently wipes it.
+_CLAUDE_PATH_KEY = "claude_path"
 
 
 def scope_suffix(chat_id: int, kind: str) -> str:
@@ -273,8 +279,21 @@ def load_miniapp(path: Path = CONFIG_PATH) -> dict:
     """Return the Mini App block: ``{enabled: bool, port: int, public_url: str}``.
 
     Missing file, missing key, or a malformed value each fall back to the
-    built-in default for that field — off, 8765, no override — so a
-    damaged config can never turn the listener ON by accident.
+    built-in default for that field — **on**, 8765, no override.
+
+    That default used to be *off*, and this docstring used to say a
+    damaged config "can never turn the listener ON by accident". That is
+    no longer true and pretending otherwise would be worse than the
+    change itself: a missing or unreadable config now starts the Mini App
+    and, with it, a public tunnel. The trade was made deliberately — an
+    opt-in nobody discovers is a feature that does not exist — but it is
+    a real widening of what a broken config can do.
+
+    What is preserved is the strictness for **explicit** values: the
+    ``is True`` test below means a hand-edited ``enabled: "no"`` (or
+    ``"false"``, or ``"off"``) is still a string, still not ``True``, and
+    still reads as OFF. Anyone who has deliberately turned this off keeps
+    it off; only the absent-or-corrupt case flipped.
     """
     block = _raw_yaml(path).get(_MINIAPP_KEY)
     out = dict(_MINIAPP_DEFAULTS)
@@ -316,6 +335,34 @@ def dump_miniapp(settings: dict, path: Path = CONFIG_PATH) -> None:
     }
     # Writing through this path also lands the current SCHEMA_VERSION, so a
     # v2 file becomes a v3 file the first time the Mini App is configured.
+    raw["schema_version"] = SCHEMA_VERSION
+    _atomic_write_yaml(raw, path)
+
+
+def load_claude_path(path: Path = CONFIG_PATH) -> str:
+    """Return the configured ``claude_path`` override, or ``""`` if unset
+    or the file is absent/unreadable. Never raises."""
+    val = _raw_yaml(path).get(_CLAUDE_PATH_KEY)
+    return val.strip() if isinstance(val, str) and val.strip() else ""
+
+
+def dump_claude_path(value: str, path: Path = CONFIG_PATH) -> None:
+    """Persist (or clear, with ``value=""``) the ``claude_path`` override.
+
+    Surgical read-modify-write, following :func:`dump_miniapp`'s pattern
+    rather than :func:`dump_scopes`'s rebuild-from-scratch — this never
+    touches ``scopes``/``bot_token``/anything else in the document.
+    """
+    raw = _raw_yaml(path)
+    if not raw:
+        raise ScopeConfigError(
+            "aipager.yaml is missing or unreadable — run `aipager config` first"
+        )
+    value = value.strip()
+    if value:
+        raw[_CLAUDE_PATH_KEY] = value
+    else:
+        raw.pop(_CLAUDE_PATH_KEY, None)
     raw["schema_version"] = SCHEMA_VERSION
     _atomic_write_yaml(raw, path)
 
@@ -394,6 +441,12 @@ def dump_scopes(
     # Mini App settings — the exact silent-loss bug that moving them out of
     # config.env exists to fix.
     existing_miniapp = _raw_yaml(path).get(_MINIAPP_KEY)
+    # Same reasoning for claude_path: dump_claude_path() writes it
+    # surgically, but this function rebuilds the whole document, so a
+    # value it doesn't re-emit is silently dropped on the next
+    # `aipager config` run — the exact bug this preservation list exists
+    # to prevent (see the miniapp precedent above).
+    existing_claude_path = _raw_yaml(path).get(_CLAUDE_PATH_KEY)
     data: dict = {
         "schema_version": SCHEMA_VERSION,
         "bot_token": bot_token,
@@ -420,5 +473,8 @@ def dump_scopes(
 
     if isinstance(existing_miniapp, dict):
         data[_MINIAPP_KEY] = existing_miniapp
+
+    if isinstance(existing_claude_path, str) and existing_claude_path.strip():
+        data[_CLAUDE_PATH_KEY] = existing_claude_path
 
     _atomic_write_yaml(data, path)

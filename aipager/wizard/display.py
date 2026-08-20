@@ -12,7 +12,15 @@ from aipager.wizard.daemon_io import (
 
 
 def _ask(prompt) -> object:
-    """Run a questionary prompt; raise KeyboardInterrupt on Ctrl-C."""
+    """Run a questionary prompt; raise KeyboardInterrupt on Ctrl-C.
+
+    Guarded here rather than at command entry because this is the one
+    place every wizard prompt passes through — first_run, team_setup,
+    edit_menu and scope_flows all funnel in — so a new prompt anywhere
+    in the wizard inherits the check for free.
+    """
+    from aipager.errors import require_interactive
+    require_interactive()
     answer = prompt.ask()
     if answer is None:
         raise KeyboardInterrupt

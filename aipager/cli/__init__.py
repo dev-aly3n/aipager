@@ -125,6 +125,11 @@ def main() -> None:
         "--safety-check", dest="safety_check", action="store_true",
         help="print the active safety policy (paths, bash patterns, roles)",
     )
+    doctor_p.add_argument(
+        "--fix", dest="fix", action="store_true",
+        help="interactively offer to discover a daemon credential and "
+             "pin claude_path on a multi-install ambiguity",
+    )
     doctor_p.set_defaults(fn=_cmd_doctor)
 
     status_p = sub.add_parser(
@@ -204,7 +209,14 @@ def main() -> None:
         ("logs",      "tail service logs (Ctrl-C to exit)"),
         ("uninstall", "stop the service and remove the unit"),
     ]:
-        service_sub.add_parser(name, help=summary)
+        sub_p = service_sub.add_parser(name, help=summary)
+        if name == "install":
+            sub_p.add_argument(
+                "--yes", action="store_true",
+                help="skip the confirmation prompt when overwriting a "
+                     "differing existing unit (for CI/Docker); still backs "
+                     "up the old unit first",
+            )
 
     policy_p = sub.add_parser(
         "policy",
@@ -234,7 +246,7 @@ def main() -> None:
     miniapp_enable_p.add_argument(
         "--url",
         help="manual public URL override (must start with https://); "
-             "omit to rely on Tailscale auto-detect",
+             "omit and aipager runs its own tunnel for you",
     )
     miniapp_sub.add_parser(
         "disable", help="turn the Mini App server off (requires a daemon restart)",

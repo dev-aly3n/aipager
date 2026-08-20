@@ -12,7 +12,9 @@ from aipager.scope import (
     Scope,
     ScopeConfigError,
     disambiguated_name,
+    dump_claude_path,
     dump_scopes,
+    load_claude_path,
     load_scopes,
     scope_suffix,
     strip_scope_suffix,
@@ -97,6 +99,79 @@ def test_bad_schema_version(tmp_path: Path):
     f.write_text("schema_version: 1\nbot_token: x\nscopes: []\n")
     with pytest.raises(ScopeConfigError, match="schema_version"):
         load_scopes(f)
+
+
+# ----- claude_path: load/dump + the dump_scopes preservation bug ----------
+
+def _basic_scopes():
+    return [
+        Scope(
+            chat_id=1, kind="dm", label="me",
+            members=(Member(id=1, label="me", role="owner"),),
+        ),
+    ]
+
+
+def test_load_claude_path_missing_file_returns_empty(tmp_path: Path):
+    assert load_claude_path(tmp_path / "nope.yaml") == ""
+
+
+def test_load_claude_path_absent_key_returns_empty(tmp_path: Path):
+    f = tmp_path / "aipager.yaml"
+    dump_scopes(_basic_scopes(), "TOK", f)
+    assert load_claude_path(f) == ""
+
+
+def test_dump_claude_path_requires_existing_file(tmp_path: Path):
+    with pytest.raises(ScopeConfigError):
+        dump_claude_path("/usr/bin/claude", tmp_path / "nope.yaml")
+
+
+def test_dump_claude_path_surgical_write_round_trips(tmp_path: Path):
+    """dump_claude_path is a read-modify-write like dump_miniapp — it
+    must not touch scopes/bot_token."""
+    f = tmp_path / "aipager.yaml"
+    dump_scopes(_basic_scopes(), "TOK", f)
+
+    dump_claude_path("/home/x/.local/bin/claude", f)
+
+    assert load_claude_path(f) == "/home/x/.local/bin/claude"
+    scopes, token = load_scopes(f)
+    assert token == "TOK"
+    assert len(scopes) == 1
+
+
+def test_dump_claude_path_empty_string_clears_it(tmp_path: Path):
+    f = tmp_path / "aipager.yaml"
+    dump_scopes(_basic_scopes(), "TOK", f)
+    dump_claude_path("/some/path/claude", f)
+    assert load_claude_path(f) == "/some/path/claude"
+
+    dump_claude_path("", f)
+    assert load_claude_path(f) == ""
+
+
+def test_dump_scopes_preserves_claude_path(tmp_path: Path):
+    """criterion 11 / the contract's named regression: `aipager config`
+    calling dump_scopes() (which rebuilds the whole document) must not
+    silently wipe a claude_path set via `aipager doctor --fix`.
+
+    Exactly the dump_miniapp precedent (test_dump_scopes_preserves_the_
+    miniapp_block in test_miniapp_config_v3.py) applied to claude_path —
+    same bug shape, same fix shape: doing the surgical writer without
+    also adding the preservation entry to dump_scopes() is the bug this
+    test exists to catch.
+    """
+    f = tmp_path / "aipager.yaml"
+    dump_scopes(_basic_scopes(), "TOK", f)
+    dump_claude_path("/home/x/.local/bin/claude", f)
+
+    scopes, token = load_scopes(f)
+    # Simulate `aipager config` adding/editing a scope, which rebuilds
+    # the whole document via dump_scopes().
+    dump_scopes(scopes, token, f)
+
+    assert load_claude_path(f) == "/home/x/.local/bin/claude"
 
 
 def test_missing_bot_token(tmp_path: Path):

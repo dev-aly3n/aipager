@@ -85,3 +85,23 @@ def test_stale_busy_timeout_below_inflight_caps():
     """
     assert cfg.STALE_BUSY_TIMEOUT < cfg.TOOL_INFLIGHT_MAX_SECONDS
     assert cfg.STALE_BUSY_TIMEOUT < cfg.COMPACT_INFLIGHT_MAX_SECONDS
+
+
+# ----- _default_socket_path -----
+
+def test_socket_path_env_override_wins(monkeypatch):
+    monkeypatch.setenv("AIPAGER_SOCKET_PATH", "/custom/aipager.sock")
+    monkeypatch.setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+    assert cfg._default_socket_path() == "/custom/aipager.sock"
+
+
+def test_socket_path_uses_xdg_runtime_dir_when_set(monkeypatch):
+    monkeypatch.delenv("AIPAGER_SOCKET_PATH", raising=False)
+    monkeypatch.setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+    assert cfg._default_socket_path() == "/run/user/1000/aipager.sock"
+
+
+def test_socket_path_falls_back_to_tmp_when_unset(monkeypatch):
+    monkeypatch.delenv("AIPAGER_SOCKET_PATH", raising=False)
+    monkeypatch.delenv("XDG_RUNTIME_DIR", raising=False)
+    assert cfg._default_socket_path() == "/tmp/aipager.sock"

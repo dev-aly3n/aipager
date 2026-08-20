@@ -157,46 +157,47 @@ def test_launch_stale_socket_cleaned_up(monkeypatch, tmp_path, capsys):
 
 
 # ---- _claude_version_diag ----------------------------------------------
+#
+# _claude_version_diag() now delegates to the shared
+# aipager.claude_resolve.resolve_claude_binary() — resolution itself
+# already runs `--version` on every candidate, so a successful resolve
+# means claude is fine and the diag returns "". Distinct failure shapes
+# (nonzero exit, OSError, timeout) are exercised at the resolver layer
+# in tests/test_claude_resolve.py; here we only need "resolution failed
+# → the message surfaces" and "resolution succeeded → empty string".
 
 def test_claude_version_diag_no_claude(monkeypatch):
-    monkeypatch.setattr(launcher.shutil, "which", lambda n: None)
-    assert "not on PATH" in launcher._claude_version_diag()
+    # The autouse `_no_real_claude_candidates` fixture already makes
+    # discovery return zero candidates — no further mocking needed for
+    # the "nothing resolves" case.
+    out = launcher._claude_version_diag()
+    assert "no working `claude` binary found" in out
 
 
 def test_claude_version_diag_success(monkeypatch):
-    monkeypatch.setattr(launcher.shutil, "which", lambda n: "/usr/bin/claude")
-    monkeypatch.setattr(launcher.subprocess, "run",
-                        lambda *a, **k: MagicMock(returncode=0))
+    from aipager import claude_resolve
+
+    resolved = claude_resolve.ResolvedClaude(
+        chosen=claude_resolve.ClaudeInstall(
+            path="/usr/bin/claude", realpath="/usr/bin/claude", version="2.1.235",
+        ),
+    )
+    monkeypatch.setattr(claude_resolve, "resolve_claude_binary", lambda **kw: resolved)
     assert launcher._claude_version_diag() == ""
 
 
-def test_claude_version_diag_failure(monkeypatch):
-    monkeypatch.setattr(launcher.shutil, "which", lambda n: "/usr/bin/claude")
-    monkeypatch.setattr(launcher.subprocess, "run",
-                        lambda *a, **k: MagicMock(returncode=1,
-                                                   stderr="something bad",
-                                                   stdout=""))
+def test_claude_version_diag_failure_surfaces_message(monkeypatch):
+    from aipager import claude_resolve
+
+    def _raise(**kw):
+        raise claude_resolve.ClaudeNotFoundError(
+            "no working `claude` binary found. Tried:\n"
+            "  - /usr/bin/claude: --version exited 1"
+        )
+
+    monkeypatch.setattr(claude_resolve, "resolve_claude_binary", _raise)
     out = launcher._claude_version_diag()
-    assert "exit 1" in out
-
-
-def test_claude_version_diag_oserror(monkeypatch):
-    monkeypatch.setattr(launcher.shutil, "which", lambda n: "/usr/bin/claude")
-    def _boom(*a, **k):
-        raise OSError("can't exec")
-    monkeypatch.setattr(launcher.subprocess, "run", _boom)
-    out = launcher._claude_version_diag()
-    assert "failed" in out
-
-
-def test_claude_version_diag_timeout(monkeypatch):
-    import subprocess as _subprocess
-    monkeypatch.setattr(launcher.shutil, "which", lambda n: "/usr/bin/claude")
-    def _boom(*a, **k):
-        raise _subprocess.TimeoutExpired(cmd=a[0] if a else "x", timeout=5)
-    monkeypatch.setattr(launcher.subprocess, "run", _boom)
-    out = launcher._claude_version_diag()
-    assert "failed" in out
+    assert "exited 1" in out
 
 
 # ---- launch() — invalid name -------------------------------------------

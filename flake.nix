@@ -37,6 +37,7 @@
             rich
             questionary
             pyyaml
+            aiohttp
           ];
 
           # Put dtach on PATH at runtime so dtach_inject's
@@ -82,6 +83,7 @@
             rich
             questionary
             pyyaml
+            aiohttp
             hatchling
             build
           ]);

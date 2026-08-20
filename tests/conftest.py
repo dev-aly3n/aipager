@@ -85,6 +85,18 @@ def _isolate_home_paths(tmp_path, monkeypatch):
         # to recover Mini App settings — without a redirect it would read
         # the operator's real config.env.
         "aipager.config._XDG_CONFIG": config_env,
+        # daemon_secrets.build_session_env() reads this on every
+        # launch_session() call. Without a redirect, any test reaching
+        # that path (directly or via launch_session) would read the
+        # operator's real Claude credential off disk into a test's env
+        # dict — never written or printed here, but still a real-file
+        # read this suite must never do.
+        "aipager.daemon_secrets.DAEMON_ENV_PATH": cfg / "daemon.env",
+        # service.py re-imports the same constant BY VALUE
+        # (`from aipager.daemon_secrets import DAEMON_ENV_PATH`), so it
+        # needs its own entry — see the by-value-import note above.
+        # `ensure_daemon_env()` writes here at `service install` time.
+        "aipager.service.DAEMON_ENV_PATH": cfg / "daemon.env",
         "aipager.preferences._PREFERENCES_PATH": cfg / "preferences.json",
         "aipager.session_store.SESSIONS_ROOT":
             home / ".local" / "share" / "aipager" / "sessions",
@@ -204,6 +216,202 @@ def _guard_real_home():
 
 
 @pytest.fixture(autouse=True)
+def _no_real_claude_candidates(request, monkeypatch):
+    """Make claude_resolve discovery return zero candidates by default.
+
+    Before claude_resolve existed, every one of the six resolution call
+    sites called ``shutil.which("claude")`` once — free, and harmless to
+    leave unmocked, which is why most of the suite did. Once resolution
+    instead walks real ``$PATH`` entries and verifies each with
+    ``--version``, any test exercising a call site (launch_session,
+    require_claude, check_claude, _claude_version_diag, the wizard deps
+    table, …) without an explicit mock would probe whatever `claude`
+    binaries actually exist on THIS machine — including the live
+    daemon's real installed binary. That is a hard-constraint violation
+    (see spec.md), not just noise.
+
+    Safe-by-default, mirroring ``_block_real_telegram_http``'s shape: a
+    test that wants real candidates monkeypatches
+    ``aipager.claude_resolve._candidate_paths`` (or a fixture-binary
+    seam built on it) itself, inside the test body — that patch runs
+    after this fixture's setup and wins.
+
+    The process-level memo is also reset before and after every test —
+    otherwise one test's successful resolution would leak into the
+    next, defeating both this fixture and any per-test override.
+
+    Exempted: ``tests/e2e/``, the one caller allowed to touch a real
+    installed claude (see entrypoints.md's fixture-binary contract) —
+    those tests are opt-in only (``-m e2e``) and skip themselves when no
+    real, authenticated claude is available.
+    """
+    import aipager.claude_resolve as _cr
+    _cr._memo = None
+    _cr._memo_error = None
+    if "e2e" not in request.keywords:
+        monkeypatch.setattr(_cr, "_candidate_paths", lambda: [])
+    yield
+    _cr._memo = None
+    _cr._memo_error = None
+
+
+@pytest.fixture(autouse=True)
+def _no_real_login_shell_probe(request, monkeypatch):
+    """Refuse to spawn a real login shell by default.
+
+    ``service.ensure_daemon_env()`` falls back to
+    ``$SHELL -l -i -c 'printenv CLAUDE_CODE_OAUTH_TOKEN'`` when no
+    legacy config.env token is found — a real subprocess that sources
+    the OPERATOR'S OWN shell rc files and could read their real token.
+    Any test reaching ``service.ensure_daemon_env()`` (directly or via
+    ``_install_linux``/``_install_macos``) without mocking this raises
+    loudly instead of silently spawning a real shell — the same
+    "execute a real binary beyond --version on a fixture" constraint
+    that motivates the claude-candidates fixture above. Tests exercising
+    the discovery path itself patch
+    ``aipager.service._discover_token_via_login_shell`` explicitly.
+    """
+    def _refuse():
+        raise AssertionError(
+            "test reached service._discover_token_via_login_shell() "
+            "without mocking it — this would spawn a real login shell "
+            "against the operator's own rc files. Monkeypatch "
+            "aipager.service._discover_token_via_login_shell instead."
+        )
+
+    if "e2e" not in request.keywords:
+        monkeypatch.setattr("aipager.service._discover_token_via_login_shell",
+                            _refuse)
+
+
+# Captured at import time, before any fixture can stub it — the same
+# pattern this suite uses for claude_resolve._candidate_paths. Tests that
+# exercise the TTY guard itself use this reference so the autouse stub
+# below cannot make them vacuous.
+from aipager import errors as _errors  # noqa: E402
+
+REAL_REQUIRE_INTERACTIVE = _errors.require_interactive
+
+
+@pytest.fixture(autouse=True)
+def _prompts_may_run_without_a_terminal(monkeypatch):
+    """Neutralise ``errors.require_interactive`` for the whole suite.
+
+    pytest replaces ``sys.stdin`` with a non-TTY object, so the guard
+    fires in every test that reaches a prompt — but those tests mock the
+    prompt itself and are not about the guard at all. Stubbing it here
+    keeps them testing what their names say.
+
+    The guard's own behaviour is covered in
+    ``tests/test_tty_guard.py``, which calls ``REAL_REQUIRE_INTERACTIVE``
+    above rather than the stubbed attribute.
+    """
+    monkeypatch.setattr(_errors, "require_interactive", lambda command=None: None)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_tunnel_probe(monkeypatch):
+    """Refuse to make a real HTTPS request to a tunnel URL.
+
+    ``publish_miniapp_button`` probes the URL before publishing, and
+    ``tunnel.probe_public_url`` retries with delays — a test that reaches
+    it unmocked makes real network calls and takes over a minute. Found
+    the hard way: a test written for this very change sat there for 84
+    seconds resolving ``tunnel.example``.
+
+    Defaults to "reachable" because that is what almost every caller
+    wants to assume; a test about unreachability overrides it.
+    """
+    async def _reachable(url, *a, **k):
+        return True
+
+    monkeypatch.setattr("aipager.miniapp.tunnel.probe_public_url", _reachable)
+
+
+# Captured before the fixture above can stub it, so tests OF the probe
+# itself can restore the real implementation.
+from aipager.miniapp import tunnel as _tunnel  # noqa: E402
+
+REAL_PROBE_PUBLIC_URL = _tunnel.probe_public_url
+
+
+@pytest.fixture
+def real_probe_public_url(monkeypatch):
+    """Restore the genuine probe for tests that exercise it directly."""
+    monkeypatch.setattr(_tunnel, "probe_public_url", REAL_PROBE_PUBLIC_URL)
+    return REAL_PROBE_PUBLIC_URL
+
+
+@pytest.fixture(autouse=True)
+def _no_real_credential_probe(monkeypatch):
+    """Refuse to actually run ``claude -p`` from the test suite.
+
+    ``claude_resolve.validate_credential`` spends a real API call on the
+    operator's account every time it runs. One unmocked test is a few
+    cents; one unmocked test in CI, on every push, is a standing charge —
+    and it would also hit the network from a sandbox that is supposed to
+    have none. ``_run_probe`` exists as a separate function purely to be
+    this seam: a test that wants a particular probe outcome patches
+    ``validate_credential`` (or ``_run_probe``) explicitly.
+    """
+    def _refuse(claude_path, env, cwd, timeout):
+        raise AssertionError(
+            "test tried to run the real `claude -p` credential probe "
+            f"({claude_path!r}) — this costs money and hits the network. "
+            "Patch aipager.claude_resolve.validate_credential (or "
+            "._run_probe) in your test instead."
+        )
+
+    monkeypatch.setattr("aipager.claude_resolve._run_probe", _refuse)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_service_manager(request, monkeypatch):
+    """Refuse to drive the real systemd/launchd session by default.
+
+    ``service._install_linux()`` ends with
+    ``systemctl --user enable --now aipager.service`` — the SAME unit name
+    the operator's live daemon runs under on this machine. A test reaching
+    it unmocked would enable, start or restart their actual daemon, and
+    ``_post_install_probe()`` would then poke the live control socket.
+
+    The sibling ``_no_real_login_shell_probe`` above already guards the
+    other real-subprocess path in this module; this closes the pair. The
+    log readers (``_logs_linux`` shelling to ``journalctl``,
+    ``_logs_macos`` to ``tail``) are blocked too — they are read-only so
+    they cannot corrupt anything, but ``journalctl --follow`` would hang
+    a future unmocked test rather than fail it. Both guards exist because
+    this suite has a history of reaching past its sandbox —
+    ``tests/conftest.py``'s own ``/tmp``-socket guard documents a run that
+    unlinked the live daemon's hook socket and left hooks silently dead.
+
+    Commands that are not a service manager (``_run(["x"])`` in the tests
+    of ``_run`` itself) pass through untouched.
+    """
+
+    from aipager import service as _service
+
+    real_run = _service._run          # delegate, do not replace
+
+    def _guarded(cmd, *a, **kw):
+        head = str(cmd[0]) if cmd else ""
+        if head.rsplit("/", 1)[-1] in ("systemctl", "launchctl", "journalctl", "tail"):
+            raise AssertionError(
+                f"test invoked the real service manager: {cmd!r}. This can "
+                "enable/restart the operator's live aipager.service, and "
+                "`journalctl --follow` would hang the run. "
+                "Monkeypatch aipager.service._run in your test instead."
+            )
+        # Everything else runs for real — the tests OF _run pass fake argv
+        # like ["x"] and assert on its genuine exit codes, so replacing it
+        # wholesale would break the thing this guard is meant to protect.
+        return real_run(cmd, *a, **kw)
+
+    if "e2e" not in request.keywords:
+        monkeypatch.setattr("aipager.service._run", _guarded)
+
+
+@pytest.fixture(autouse=True)
 def _block_real_telegram_http(monkeypatch):
     """Fail loudly rather than POST to api.telegram.org.
 
@@ -221,12 +429,33 @@ def _block_real_telegram_http(monkeypatch):
     monkeypatch.setattr("aipager.bot.rich_message._post", _refuse)
 
 
-def _snapshot_live_sockets() -> set[str]:
+def _control_socket_path() -> Path:
+    """Resolve the daemon's control socket once, for the whole session.
+
+    The caller must resolve this a single time and reuse the result for
+    both the before and after snapshot. Re-deriving it per call would
+    read whatever ``config.SOCKET_PATH`` happens to be at that moment, so
+    a test that reloads ``aipager.config`` under a different
+    ``$XDG_RUNTIME_DIR`` and fails to restore it would make the two
+    snapshots describe two different files — reporting a socket as
+    "unlinked" that nothing ever touched.
+    """
+    from aipager import config
+
+    return Path(config.SOCKET_PATH)
+
+
+def _snapshot_live_sockets(control_sock: Path) -> set[str]:
     tmp = Path("/tmp")
     socks = {str(p) for p in tmp.glob("claude-dtach-*.sock")}
-    aipager_sock = tmp / "aipager.sock"
-    if aipager_sock.exists():
-        socks.add(str(aipager_sock))
+    # The control socket moved to $XDG_RUNTIME_DIR, so the hardcoded /tmp
+    # path no longer describes where the live daemon binds. Snapshot the
+    # resolved location too, or this guard silently stops covering the
+    # very socket it was written to protect on any host with
+    # $XDG_RUNTIME_DIR set.
+    for sock in (tmp / "aipager.sock", control_sock):
+        if sock.exists():
+            socks.add(str(sock))
     return socks
 
 
@@ -235,11 +464,13 @@ def _guard_live_sockets():
     """Fail the run if the suite unlinked a live daemon or session socket.
 
     The sibling ``_guard_real_home`` covers ``$HOME`` only, which is why
-    this hole stayed open: ``updater._remove_tmp_sockets`` deletes
-    ``/tmp/aipager.sock`` and every ``/tmp/claude-dtach-*.sock``, so a
-    test invoking it without redirecting ``updater.Path`` runs it
-    against the real /tmp. That happened — the host daemon's hook socket
-    was unlinked mid-suite and hooks then stayed silently dead, because
+    this hole stayed open: ``updater._remove_tmp_sockets`` deletes the
+    resolved ``config.SOCKET_PATH``, ``/tmp/aipager.sock`` and every
+    ``/tmp/claude-dtach-*.sock``, so a test invoking it without
+    redirecting both ``updater.Path`` **and** ``config.SOCKET_PATH``
+    runs it against the real paths. That happened — the host daemon's
+    hook socket was unlinked mid-suite and hooks then stayed silently
+    dead, because
     the daemon goes on serving the now-unreachable bound socket. The
     dtach sockets are worse: their sessions keep running but can never
     be reattached.
@@ -249,12 +480,14 @@ def _guard_live_sockets():
     one. ``/tmp/claude-status-*.json`` is deliberately excluded — live
     sessions rewrite it every few seconds, so it would false-positive.
     """
-    before = _snapshot_live_sockets()
+    # Resolved once, deliberately — see _control_socket_path.
+    control_sock = _control_socket_path()
+    before = _snapshot_live_sockets(control_sock)
     yield
-    gone = sorted(before - _snapshot_live_sockets())
+    gone = sorted(before - _snapshot_live_sockets(control_sock))
     if gone:
         pytest.fail(
-            "tests unlinked live sockets under /tmp:\n  "
+            "tests unlinked live sockets:\n  "
             + "\n  ".join(gone)
             + "\n\nSandbox the responsible test by redirecting that "
               "module's Path to tmp_path. (If you stopped the daemon or "

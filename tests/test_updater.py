@@ -233,6 +233,15 @@ def test_remove_tmp_sockets_handles_missing(monkeypatch, tmp_path):
     # Should not raise even when no matching files exist.
     real_path = updater.Path
 
+    # _remove_tmp_sockets also unlinks the *resolved* config.SOCKET_PATH,
+    # which on any host with $XDG_RUNTIME_DIR set is NOT under /tmp and so
+    # falls straight through _fake_path's `return real_path(p)` to the
+    # live daemon's real control socket. Redirect it into tmp_path too.
+    runtime_sock = tmp_path / "runtime" / "aipager.sock"
+    runtime_sock.parent.mkdir(parents=True, exist_ok=True)
+    runtime_sock.write_text("")
+    monkeypatch.setattr("aipager.config.SOCKET_PATH", str(runtime_sock))
+
     def _fake_path(p):
         if p == "/tmp":
             return tmp_path
@@ -258,5 +267,9 @@ def test_remove_tmp_sockets_handles_missing(monkeypatch, tmp_path):
         monkeypatch.setattr(updater, "Path", _fake_path)
         updater._remove_tmp_sockets()  # smoke: no exception, tmp_path is empty
         assert decoy.exists(), "sandbox leaked — the real /tmp was reached"
+        # Positive proof the SOCKET_PATH branch actually ran (and ran
+        # inside the sandbox): a test that merely redirected it would
+        # still pass if the branch were deleted outright.
+        assert not runtime_sock.exists(), "config.SOCKET_PATH was not unlinked"
     finally:
         decoy.unlink(missing_ok=True)

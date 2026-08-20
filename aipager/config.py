@@ -241,8 +241,27 @@ TUNNEL_KILL_TIMEOUT_SECONDS: float = float(
     os.environ.get("TUNNEL_KILL_TIMEOUT_SECONDS", "3.0")
 )
 
+def _default_socket_path() -> str:
+    """Resolve the control socket path.
+
+    ``$AIPAGER_SOCKET_PATH`` wins outright; else
+    ``$XDG_RUNTIME_DIR/aipager.sock`` (what the systemd unit's ``%t/``
+    expands to); else ``/tmp/aipager.sock`` (containers, WSL1, minimal
+    distros, and every platform without a runtime dir). Only the
+    daemon's control socket moves this way — per-session dtach sockets
+    stay under ``/tmp``.
+    """
+    override = os.environ.get("AIPAGER_SOCKET_PATH", "").strip()
+    if override:
+        return override
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR", "").strip()
+    if runtime_dir:
+        return str(Path(runtime_dir) / "aipager.sock")
+    return "/tmp/aipager.sock"
+
+
 # Unix datagram socket for hook → daemon communication
-SOCKET_PATH: str = "/tmp/aipager.sock"
+SOCKET_PATH: str = _default_socket_path()
 
 # Pane monitor interval (seconds)
 PANE_POLL_INTERVAL: float = 2.0

@@ -31,6 +31,16 @@ dependencies = [
     "rich>=14.0,<16",
     "questionary>=2.0,<3",
     "PyYAML>=6.0,<7",
+    # Powers the Mini App server. NOT optional: it used to be an extra,
+    # and the result was that anyone who ran a plain `pip install
+    # aipager` and then `aipager miniapp enable` got a Mini App that
+    # could never start, with the real reason buried in a daemon log.
+    # It costs ~10 MB (aiohttp + multidict, frozenlist, yarl, attrs,
+    # propcache, aiosignal, aiohappyeyeballs) on a ~42 MB base — for
+    # comparison, the setup wizard's terminal colours cost ~21 MB, twice
+    # as much, and pygments alone is 9.4 MB. Optimising this away while
+    # keeping a syntax highlighter was the wrong trade.
+    "aiohttp>=3.9,<4",
 ]
 
 [project.optional-dependencies]
@@ -40,15 +50,23 @@ dev = ["pytest>=7", "ruff>=0.5", "build", "twine"]
 # ctranslate2 (~60 MB), onnxruntime (~55 MB), av, numpy and tokenizers,
 # so the on-disk install bumps by ~200 MB. Plus a ~74 MB model download
 # on first voice message (cached under ~/.cache/huggingface/hub).
-# Default install stays at its current ~3 MB.
+# Kept optional because ~200 MB is a genuinely different order of
+# cost from aiohttp's ~10 MB on a ~42 MB base. (An older version of
+# this comment claimed the base install was ~3 MB. It never was —
+# that figure was wrong by 14x and is most likely why the Mini App
+# was made optional in the first place.)
 voice = ["faster-whisper>=1.0"]
-# Self-hosted Telegram Mini App server — install with
-# `pip install 'aipager[miniapp]'` / `uv tool install 'aipager[miniapp]'`.
-# Opt-in, off by default (see aipager.config.MINIAPP_ENABLED); a base
-# install never imports aiohttp at all. aiohttp's own dependency tree
-# (multidict, yarl, attrs, frozenlist, aiosignal — no separate ASGI/h11
-# stack) adds a few MB. Default install stays at its current ~3 MB.
-miniapp = ["aiohttp>=3.9,<4"]
+# Compatibility alias, deliberately empty. aiohttp moved into the base
+# dependencies above, but `aipager[miniapp]` appears in this repo's docs
+# and CHANGELOG, in released error messages, and in users' notes and
+# shell history. Removing the extra outright would make every one of
+# those fail with "unknown extra"; an empty extra keeps them all working
+# and installs exactly the same thing. Do not delete.
+#
+# (The Mini App server itself is still OFF by default — see
+# aipager.config.MINIAPP_ENABLED. This is about the dependency being
+# present, not the feature being on.)
+miniapp = []
 
 [project.scripts]
 aipager            = "aipager.cli:main"

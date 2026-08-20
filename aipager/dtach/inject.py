@@ -16,6 +16,8 @@ import signal
 import time
 from pathlib import Path
 
+from aipager import claude_resolve, daemon_secrets
+
 log = logging.getLogger(__name__)
 
 # How long a signalled dtach gets to exit before the signal is escalated,
@@ -423,9 +425,15 @@ async def is_alive(session: str) -> bool:
 
 
 _VALID_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
-_RESERVED = {"status", "stop", "kill", "new", "help", "start", "settings"}
+_RESERVED = {
+    "status", "stop", "kill", "new", "help", "start", "settings",
+    "restart", "rename", "delete", "diff",
+}
 _PROJECT_DIR = os.environ.get("AIPAGER_WORK_DIR", os.getcwd())
-_CLAUDE_BIN = shutil.which("claude") or "claude"
+# Resolved lazily inside launch_session() — NOT at import time. Import-time
+# resolution would spawn a `--version` subprocess for every unrelated CLI
+# that transitively imports this module, and would be unmockable before
+# import. See aipager.claude_resolve for the shared six-call-site resolver.
 
 
 def _conversation_exists(session_id: str) -> bool:
@@ -496,7 +504,14 @@ async def launch_session(
 
     launch_cwd = cwd or _PROJECT_DIR
     if cwd and not Path(cwd).is_dir():
-        return False, f"original project dir is gone: {cwd}"
+        # The path goes to the journal, not into the returned string:
+        # this string is rendered straight into a Telegram message, and
+        # in a group scope every member of that group would see the
+        # operator's absolute project path — hence their home directory
+        # and OS username. Same rule as the startup auth notice.
+        log.warning("launch refused for %s: original project dir is gone: %s",
+                    name, cwd)
+        return False, "original project dir is gone"
 
     # Build the bash -c command — wraps claude with env vars and prompt
     perms = "--dangerously-skip-permissions" if skip_perms else ""
@@ -560,11 +575,22 @@ async def launch_session(
         "stripping" if unset_token else "keeping",
         "fresh" if unset_token else "missing/expired",
     )
+    # Lazy resolution — see the comment above _PROJECT_DIR. On no
+    # candidate resolving, fall back to the literal "claude", exactly
+    # preserving today's `shutil.which("claude") or "claude"` behaviour:
+    # launch has never been gated on resolution and stays that way.
+    resolved = claude_resolve.try_resolve_claude_binary()
+    claude_bin = resolved.chosen.path if resolved else "claude"
     bash_cmd = (
         f"unset CLAUDECODE; "
         f"{unset_token}"
         f"export CLAUDE_DTACH_SESSION=claude-{name}; "
-        f"{_CLAUDE_BIN} {perms} {resume} {model_flag} "
+        # Every sibling value on this line is shlex.quote()d; the binary
+        # was the lone exception, safe only because it came verbatim from
+        # shutil.which(). Once it can come from config (claude_path) or
+        # AIPAGER_CLAUDE_BIN, an unquoted value is a shell-injection sink
+        # into this `bash -c` string.
+        f"{shlex.quote(claude_bin)} {perms} {resume} {model_flag} "
         f"--append-system-prompt {shlex.quote(sys_prompt)}"
     )
 
@@ -572,6 +598,7 @@ async def launch_session(
         proc = await asyncio.create_subprocess_exec(
             _DTACH, "-n", sock, "-Ez", "bash", "-c", bash_cmd,
             cwd=launch_cwd,
+            env=daemon_secrets.build_session_env(),
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
         )

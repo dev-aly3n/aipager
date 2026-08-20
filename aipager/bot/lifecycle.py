@@ -10,6 +10,7 @@ Single owner of all Telegram communication. Handles:
 from __future__ import annotations
 
 import asyncio
+import functools
 import html as html_mod
 import logging
 from typing import TYPE_CHECKING
@@ -30,6 +31,7 @@ from telegram.error import BadRequest, Forbidden, RetryAfter
 
 from aipager.dtach import inject
 
+from aipager.bot import session_parity
 from aipager.config import (
     APP_BUTTON, BOT_TOKEN, CHAT_ID,
 )
@@ -223,6 +225,17 @@ class LifecycleMixin:
         self._app.add_handler(CommandHandler("perms", self._handle_perms_cmd))
         self._app.add_handler(CommandHandler("settings", self._handle_settings_cmd))
         self._app.add_handler(CommandHandler("app", self._handle_app_cmd))
+        # Chat parity with the Mini App — each of these mirrors a route
+        # the Mini App already exposes. Handlers live in session_parity
+        # so this file stays a registration table.
+        for _name, _fn in (
+            ("restart", session_parity.handle_restart_cmd),
+            ("rename", session_parity.handle_rename_cmd),
+            ("delete", session_parity.handle_delete_cmd),
+            ("diff", session_parity.handle_diff_cmd),
+        ):
+            self._app.add_handler(
+                CommandHandler(_name, functools.partial(_fn, self)))
         # Chat gate for message handlers. Multi-scope: accept every
         # configured scope's chat. Legacy: the single CHAT_ID. (Command
         # handlers above are not chat-filtered; _authorize gates them.)
@@ -399,6 +412,10 @@ class LifecycleMixin:
         # target here, so the keyboard renders per-chat on interaction
         # (handlers pass chat_id); a global broadcast would leak labels.
         if self.scopes is None:
+            if self._keyboard_deferred:
+                # Held until the Mini App URL lands, so the first
+                # keyboard the user sees already carries the App button.
+                return
             await self._send_keyboard(level="main")
 
     @staticmethod
@@ -414,6 +431,10 @@ class LifecycleMixin:
             BotCommand("settings", "Configure message layout, formatting, and language"),
             BotCommand("clearqueue", "Drop pending queued prompts"),
             BotCommand("whoami", "Show your role + permissions"),
+            BotCommand("restart", "Restart a session"),
+            BotCommand("rename", "Rename a session"),
+            BotCommand("delete", "Remove a finished session from the list"),
+            BotCommand("diff", "Show a session's working-directory diff"),
         ]
         # Read late (not module-level) so a live `aipager miniapp enable`
         # + restart is reflected without re-importing this module.
@@ -474,6 +495,43 @@ class LifecycleMixin:
             return []
         # A negative id is a group: no menu button exists there.
         return [chat_id] if chat_id > 0 else []
+
+    def defer_first_keyboard(self) -> None:
+        """Hold the startup keyboard until the Mini App URL is known.
+
+        The managed tunnel does not exist yet when ``start()`` runs, so
+        the URL is empty at that point and the first keyboard would go
+        out without its App button. It would then stay buttonless until
+        some unrelated event refreshed it, which is how the Mini App
+        ended up feeling like something you had to discover by typing
+        ``/app``.
+
+        Holding it keeps this to **one** keyboard message per start. The
+        obvious alternative — send a buttonless one now, a second one
+        when the tunnel lands — puts an extra message in the chat on
+        every single restart.
+
+        Released by :meth:`publish_miniapp_button` (with or without a
+        URL) or by :meth:`release_deferred_keyboard`'s timeout, so a
+        tunnel that never comes up cannot cost the user their keyboard.
+        """
+        self._keyboard_deferred = True
+
+    async def release_deferred_keyboard(self) -> None:
+        """Send the held keyboard, if one is still held. Idempotent.
+
+        Never raises: it runs from a fire-and-forget timeout task and
+        from the publish path, and neither may take the daemon down.
+        """
+        if not self._keyboard_deferred:
+            return
+        self._keyboard_deferred = False
+        if self.scopes is not None or not self._app:
+            return
+        try:
+            await self._send_keyboard(level="main")
+        except Exception:
+            log.warning("Could not send the deferred keyboard", exc_info=True)
 
     def prime_miniapp_url(self, url: str) -> None:
         """Record the launch URL before the first keyboard goes out.
@@ -554,6 +612,14 @@ class LifecycleMixin:
             log.warning("Could not build the Mini App menu button", exc_info=True)
             return
 
+        # Released only on a REAL url. The daemon calls this once with
+        # "" immediately after starting the tunnel manager — before any
+        # tunnel exists — and releasing there would send exactly the
+        # buttonless keyboard this deferral exists to avoid. The timeout
+        # in cli/daemon.py is what covers a tunnel that never arrives.
+        if url:
+            await self.release_deferred_keyboard()
+
         for chat_id in chats:
             try:
                 # chat_id is passed ALWAYS and BY KEYWORD — see
@@ -571,6 +637,54 @@ class LifecycleMixin:
             "Mini App menu button %s for %d chat(s)",
             "published" if url else "cleared", len(chats),
         )
+
+    def _all_notify_chat_ids(self) -> list[int]:
+        """Every chat that gets the one-time startup auth warning.
+
+        Note the breadth: in a team setup this is every member of every
+        configured group, which is exactly why the text they receive is
+        machine-free (see ``claude_resolve.format_auth_notice``).
+
+        Multi-scope: every configured scope's chat_id. Legacy: the
+        single CHAT_ID, parsed the same defensively as
+        :meth:`_miniapp_button_chats` does at its personal-mode branch.
+        Empty (never raises) when nothing is configured.
+        """
+        if self.scopes is not None:
+            return [s.chat_id for s in self.scopes]
+        try:
+            return [int(CHAT_ID)]
+        except (TypeError, ValueError):
+            return []
+
+    async def send_startup_notice(self, text: str) -> None:
+        """Send the one-time startup auth warning to every chat.
+
+        Called only when Claude is genuinely unauthenticated and the
+        recovery sweep found nothing that works — a healthy start sends
+        nothing. *text* must never contain machine detail; the caller
+        builds it with ``claude_resolve.format_auth_notice``, not from
+        ``format_provenance``'s journal lines.
+
+        Fire-and-forget from ``_run_daemon()`` — called once, after
+        :meth:`start` has already begun polling, so a slow or failing
+        send can never delay ``recover_sessions()`` or the session
+        monitor. Sent via ``transport._send_with_retry`` (not a bare
+        ``send_message``) so it honours the same flood-control backoff
+        every other outbound message does. Failures are logged per chat
+        and never raised — same discipline as
+        :meth:`publish_miniapp_button`.
+        """
+        if not self._app:
+            return
+        for chat_id in self._all_notify_chat_ids():
+            try:
+                await _send_with_retry(self._app.bot, chat_id=chat_id, text=text)
+            except Exception:
+                log.warning(
+                    "Failed to send startup notice to chat %s", chat_id,
+                    exc_info=True,
+                )
 
     async def _update_bot_commands_per_scope(self) -> None:
         """Per-chat `/menu` via ``BotCommandScopeChat`` so each scope's

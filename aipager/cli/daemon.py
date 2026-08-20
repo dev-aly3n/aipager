@@ -46,7 +46,7 @@ _daemon_lock_fd: int | None = None
 
 
 def _check_existing_daemon() -> None:
-    """If /tmp/aipager.sock exists, decide whether to abort or clean up.
+    """If the control socket exists, decide whether to abort or clean up.
 
     - Live daemon (sendto succeeds) → exit 1 with friendly "already running".
     - Stale socket (ConnectionRefusedError) → leave for HookReceiver to unlink.
@@ -214,6 +214,78 @@ def _telegram_preflight() -> str:
     return username
 
 
+# Comfortably past the observed 10-30s cold-tunnel window (cloudflared
+# start + DNS propagation + the probe's own retry), while still short
+# enough that a broken tunnel does not leave someone staring at a
+# keyboardless chat wondering if the daemon is up.
+KEYBOARD_HOLD_SECONDS: float = 45.0
+
+
+def _is_private_target() -> bool:
+    """Could the configured chat ever show a web_app keyboard button?
+
+    A positive Telegram chat id is a user (private chat); groups and
+    channels are negative, and Telegram rejects an entire keyboard that
+    carries a ``web_app`` button in one. Mirrors
+    ``bot/keyboards.py``'s own ``is_private`` test.
+
+    Single-``CHAT_ID`` by construction, which is not a meaningful notion
+    in multi-scope mode where the real targets live in ``scopes``. That
+    is latent rather than live: the hold is independently gated off in
+    multi-scope mode (``_update_bot_commands`` only sends the startup
+    keyboard when ``self.scopes is None``, and ``release_deferred_keyboard``
+    returns early for the same reason). If the hold ever grows to cover
+    multi-scope, this helper has to grow with it.
+    """
+    from aipager.config import CHAT_ID
+
+    try:
+        return int(CHAT_ID) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+async def _release_keyboard_after(bot, delay: float) -> None:
+    """Send the held keyboard once *delay* has passed, if still held.
+
+    Fire-and-forget, so it swallows everything: an escape here would
+    surface only as "Task exception was never retrieved".
+    """
+    try:
+        await asyncio.sleep(delay)
+        await bot.release_deferred_keyboard()
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.debug("deferred-keyboard release failed", exc_info=True)
+
+
+async def _finish_auth_check(bot, provenance) -> None:
+    """Resolve and deliver the startup auth warning, off the hot path.
+
+    When ``provenance.pending`` is set, Claude reported itself logged
+    out and the recovery sweep has NOT run yet — it is deferred to here
+    because it can spend ~20s in blocking subprocesses, and doing that
+    before ``bot.start()`` would delay remote control coming up in
+    exactly the situation where the operator needs it most. Run in a
+    worker thread so the event loop keeps serving Telegram meanwhile.
+
+    Never raises: this is a fire-and-forget task, and an unhandled
+    exception here would be swallowed by the loop and reported as a
+    "Task exception was never retrieved" warning rather than anything
+    actionable.
+    """
+    from aipager import claude_bootstrap
+
+    try:
+        text = await asyncio.to_thread(
+            claude_bootstrap.recover_auth_or_notice, provenance.pending)
+        if text:
+            await bot.send_startup_notice(text)
+    except Exception:
+        log.debug("startup auth check failed", exc_info=True)
+
+
 async def _run_daemon(bot_username: str) -> None:
     """Boot the daemon and run until SIGINT/SIGTERM."""
     from aipager.config import (
@@ -232,8 +304,12 @@ async def _run_daemon(bot_username: str) -> None:
         sys.exit(1)
 
     # Write claude-code's first-run acceptance flags so dtach-launched
-    # sessions never block on dialogs a Telegram-only user can't dismiss.
-    bootstrap_claude_settings()
+    # sessions never block on dialogs a Telegram-only user can't dismiss,
+    # and resolve the claude binary + auth shape for the startup
+    # provenance line. Runs BEFORE bot.start() so it cannot send Telegram
+    # itself — the notice is fired below, after the bot is up, so a slow
+    # send never delays recover_sessions() or the session monitor.
+    provenance = bootstrap_claude_settings()
 
     log.info("connected as @%s, will message chat %s", bot_username, CHAT_ID)
 
@@ -250,8 +326,36 @@ async def _run_daemon(bot_username: str) -> None:
     from aipager.miniapp.tunnel import resolve_public_url
     miniapp_url = await resolve_public_url() if MINIAPP_ENABLED else ""
     bot.prime_miniapp_url(miniapp_url)
+    # `_is_private_target` because a `web_app` keyboard button is
+    # private-chat-only (Telegram rejects the whole keyboard in a group),
+    # so holding a group's keyboard buys nothing and costs up to 45s of
+    # having no keyboard at all.
+    if MINIAPP_ENABLED and not miniapp_url and _is_private_target():
+        # A managed tunnel is about to start and will hand us a URL in
+        # ~10-30s. Hold the first keyboard until then so the App button
+        # is there at first glance instead of appearing on some later
+        # unrelated refresh. Released by publish_miniapp_button, or by
+        # the timeout below if no tunnel ever arrives.
+        bot.defer_first_keyboard()
 
     await bot.start()
+    if provenance is not None:
+        # Always scheduled once a binary resolved — ProvenanceInfo's own
+        # invariant guarantees `pending` is set, because the cheap auth
+        # check cannot see an expired token and so must never be the
+        # last word. Whether anything is actually SENT is decided inside
+        # _finish_auth_check, and only an unusable credential says
+        # anything: the provenance detail (absolute paths, versions,
+        # every install found) goes to the journal, never to a chat
+        # stored on Telegram's servers and, in a team scope, read by
+        # every member of every configured group.
+        #
+        # Fire-and-forget, mirroring TunnelManager.start()'s precedent —
+        # a slow or failing send must never delay recover_sessions() or
+        # the session monitor. Once per process lifetime; nothing
+        # re-sends on team-reload, Mini App reconnect, or any session
+        # event.
+        asyncio.create_task(_finish_auth_check(bot, provenance))
     observers = None
     if OBSERVER_BOTS:
         observers = ObserverBroadcaster(OBSERVER_BOTS)
@@ -263,10 +367,11 @@ async def _run_daemon(bot_username: str) -> None:
     await session_monitor.start()
 
     # Mini App server — newest and highest-risk component, so it starts
-    # last and (below) stops first. Behind a lazy import so a base
-    # install with no `miniapp` extra never imports aiohttp; a
-    # MiniAppUnavailable (extra not installed) logs a friendly one-liner
-    # instead of taking the whole daemon down.
+    # last and (below) stops first. Behind a lazy import to keep
+    # aiohttp (the largest dependency in the tree) off cold start-up
+    # paths; aiohttp itself ships with aipager. A MiniAppUnavailable —
+    # which now means an incomplete install, not a missing extra — logs
+    # a friendly one-liner instead of taking the whole daemon down.
     miniapp_server = None
     if MINIAPP_ENABLED:
         from aipager.miniapp.server import MiniAppServer, MiniAppUnavailable
@@ -313,6 +418,12 @@ async def _run_daemon(bot_username: str) -> None:
         miniapp_url if miniapp_server is not None else "",
     )
 
+    # Backstop for the held keyboard: if no tunnel URL has arrived by
+    # now, send it anyway. A Mini App that never comes up must cost the
+    # operator a button, never their whole keyboard.
+    keyboard_release_task = asyncio.create_task(
+        _release_keyboard_after(bot, KEYBOARD_HOLD_SECONDS))
+
     log.info("AIPager running — all components started")
 
     stop = asyncio.Event()
@@ -336,6 +447,13 @@ async def _run_daemon(bot_username: str) -> None:
     await stop.wait()
 
     log.info("Shutting down...")
+    # Cancel the deferred-keyboard timer before anything else: it is a
+    # long sleep (KEYBOARD_HOLD_SECONDS) and leaving it pending keeps a
+    # task alive well past the daemon it belongs to. Harmless in
+    # production, but it also made every daemon test that drains pending
+    # tasks sit for the full 45s — the suite went from 100s to 413s
+    # before this was tracked and cancelled.
+    keyboard_release_task.cancel()
     registry.save()
     if manager is not None:
         # Before miniapp_server.stop(): stop accepting the world's

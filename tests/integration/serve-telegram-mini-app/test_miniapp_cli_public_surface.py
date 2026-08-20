@@ -29,24 +29,50 @@ def _run_cli(monkeypatch, argv):
     return exc.value.code
 
 
+@pytest.fixture
+def _daemon_detected_running(monkeypatch):
+    """_restart_hint() only prints its reminder when a daemon is
+    detected — pin that detection to a fixed PID rather than letting it
+    fall through to a real socket probe. Without this, "restart" only
+    appeared in `enable`'s output by accident (unrelated public-URL
+    copy that happens to contain the word "restart"), which made that
+    assertion pass for the wrong reason regardless of `_restart_hint`."""
+    monkeypatch.setattr("aipager.wizard.daemon_io._detect_daemon_running",
+                        lambda: 12345)
+
+
 def test_enable_exits_zero_and_prints_restart_reminder(
-    monkeypatch, capsys, _isolate_home_paths,
+    monkeypatch, capsys, _isolate_home_paths, _daemon_detected_running,
 ):
     code = _run_cli(monkeypatch, ["miniapp", "enable"])
     out = capsys.readouterr().out.lower()
     assert code == 0
-    assert "restart" in out
+    assert "restart the daemon" in out
 
 
 def test_disable_exits_zero_and_prints_restart_reminder(
-    monkeypatch, capsys, _isolate_home_paths,
+    monkeypatch, capsys, _isolate_home_paths, _daemon_detected_running,
 ):
     _run_cli(monkeypatch, ["miniapp", "enable"])
     capsys.readouterr()
     code = _run_cli(monkeypatch, ["miniapp", "disable"])
     out = capsys.readouterr().out.lower()
     assert code == 0
-    assert "restart" in out
+    assert "restart the daemon" in out
+
+
+def test_enable_prints_no_restart_reminder_when_daemon_not_running(
+    monkeypatch, capsys, _isolate_home_paths,
+):
+    """The flip side: no daemon detected → no reminder. Pinned
+    separately from the "restart" substring check above, which the
+    public-URL copy can satisfy on its own."""
+    monkeypatch.setattr("aipager.wizard.daemon_io._detect_daemon_running",
+                        lambda: None)
+    code = _run_cli(monkeypatch, ["miniapp", "enable"])
+    out = capsys.readouterr().out.lower()
+    assert code == 0
+    assert "restart the daemon" not in out
 
 
 def test_status_exits_zero_before_any_enable(monkeypatch, capsys, _isolate_home_paths):

@@ -40,6 +40,72 @@ If you suspect the token is compromised, revoke it from
 [@BotFather](https://t.me/BotFather) (`/revoke`), generate a new
 one, and re-run `aipager config`.
 
+## The Claude credential — what actually protects it
+
+**aipager runs an autonomous agent with Bash access as your UNIX
+user. Therefore any secret aipager can read, the agent it launches
+can read too.** This is worth stating plainly, because it is easy to
+reach for the wrong kind of control.
+
+`~/.config/aipager/` is on `safety.py`'s deny-list, which stops a
+Telegram-driven session from reading files under it. That is a
+**path** control, and it does nothing here: the Claude credential
+(`CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`) is not reached by
+path — it is inherited into every spawned session's own **process
+environment**. Inside a session, `echo $CLAUDE_CODE_OAUTH_TOKEN`
+prints it, deny-list or not. A file-path rule is the wrong shape of
+control for an environment variable.
+
+### Where the credential lives
+
+| Deployment | Source | Mode |
+|---|---|---|
+| systemd-user service | `LoadCredential=claude_oauth:%h/.config/aipager/daemon.env`, read from `$CREDENTIALS_DIRECTORY/claude_oauth` | 600 (daemon.env); systemd keeps the credential out of the unit's own environ |
+| macOS / Docker / no systemd | `~/.config/aipager/daemon.env`, read directly | 600 |
+
+Both paths are parsed by the same code (`aipager/daemon_secrets.py`)
+and handed to the launched session via the subprocess `env=` table —
+never interpolated into the `bash -c` command string. `/proc/PID/cmdline`
+is world-readable (0444); `/proc/PID/environ` is 0400 (owner-only).
+
+What `LoadCredential=` + 0600 genuinely buys: other UNIX users on the
+same machine cannot read the credential, it never appears in
+`systemctl show`, in a unit-file backup, or in a screenshot of
+`journalctl` output an operator pastes into a bug report. **It does
+not create a boundary between aipager and the agent aipager
+launches** — that boundary does not exist, and no amount of file-
+permission engineering can create it, because the agent's whole job
+is to act as the operator inside that same environment.
+
+### The one control that actually works
+
+**Scope the credential itself.** Run the daemon on a separate
+Anthropic account, or with an API key that carries a spend limit —
+not the same token you use for your own interactive `claude` login.
+Revoking the daemon's credential must never log the human out; if it
+would, the two are the same credential and neither is scoped.
+`aipager doctor --fix` can discover an existing token to seed
+`daemon.env`, but choosing *which* token to hand it is the operator's
+call, and it is the one decision in this document that matters more
+than the file permissions around it.
+
+### Diagnosing auth without guessing
+
+`aipager doctor` (and the one-line notice sent once per daemon start)
+report auth via Claude Code's own `claude auth status` — never a
+hand-rolled file check. Three states are kept textually distinct
+everywhere they appear:
+
+- `auth: <method> (<source>)` — confirmed logged in.
+- `auth: none (not logged in)` — confirmed *not* logged in.
+- `auth: unknown (...)` — the probe itself failed (timeout, missing
+  binary, unparseable output) or the binary predates the version that
+  added JSON output. This is **never** reported as "not logged in":
+  aipager does not refuse to launch a session on an auth check it
+  isn't sure about. macOS Keychain-based auth, refresh-token-only
+  credentials, and Max-plan non-file auth are all invisible to any
+  file check and would otherwise look identical to "logged out".
+
 ## claude code's own permission system
 
 aipager is **not** the permission gate for tool calls. Claude Code's
@@ -122,9 +188,10 @@ aipager listens on **zero TCP ports**. Outbound:
 
 Inbound:
 
-- Unix datagram socket at `/tmp/aipager.sock`. Bound and chmod'd
-  by the daemon at startup
-  (`aipager/hook_receiver.py:192-197`). Mode `0o666` so any local
+- Unix datagram socket at `$XDG_RUNTIME_DIR/aipager.sock` (falling back to
+  `/tmp/aipager.sock` when `$XDG_RUNTIME_DIR` is unset). Bound and
+  chmod'd by the daemon at startup
+  (`aipager/dtach/hook_receiver.py`). Mode `0o666` so any local
   process can send hook events to it — same trust as
   `~/.claude/settings.json`, which already controls what runs
   hooks.
@@ -134,8 +201,16 @@ level attacker cannot reach it without a foothold on the host.
 
 ## Mini App tunnel
 
-Enabling the Mini App (`aipager miniapp enable`, with no `--url`
-override) spawns a managed [Cloudflare quick
+**The Mini App is on by default**, so on a stock install aipager opens
+this tunnel without being asked. That is a deliberate trade — an opt-in
+nobody discovered was a feature that did not exist — but it means a
+fresh install reaches the internet. Turn it off with `aipager miniapp
+disable`, or set `enabled: false` under `miniapp:` in `aipager.yaml`;
+an explicit `false` is always respected. Note that a **missing or
+corrupt** `miniapp:` block now falls back to ON rather than OFF.
+
+The Mini App (unless a `--url` override is set) spawns a managed
+[Cloudflare quick
 tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/)
 pointed at the daemon's own loopback server, and publishes whatever
 public `https://*.trycloudflare.com` address it is assigned as the
@@ -205,6 +280,7 @@ per-project `~/.claude/settings.json` overrides or a container
 | Network attacker | No inbound port, not directly reachable |
 | Local privilege escalation | No sudo / setuid; daemon stays in user space |
 | Voice audio leaking to cloud | Transcription is local |
+| Agent reads the daemon's own Claude credential | Expected, not a bug — see [The Claude credential](#the-claude-credential--what-actually-protects-it). Scope the credential itself, not the file it's stored in |
 
 ## See also
 

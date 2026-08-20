@@ -7,7 +7,10 @@ verdict for each, then summarizes failing checks with concrete fixes.
 
 Doctor is **idempotent**: it never sends a Telegram message, never
 mutates configuration, never starts/stops the daemon. It only reads
-state.
+state. ``aipager doctor --fix`` (``cmd_doctor_fix``) is the one
+deliberate exception — interactive, and the only place that writes
+``daemon.env`` or ``claude_path`` outside of ``aipager config`` /
+``aipager service install``.
 """
 
 from __future__ import annotations
@@ -193,19 +196,138 @@ def check_dtach() -> CheckResult:
 
 
 def check_claude() -> CheckResult:
-    p = shutil.which("claude")
-    if not p:
+    """Resolve fresh (doctor is one-shot) and show every distinct install.
+
+    Delegates entirely to :mod:`aipager.claude_resolve` — the same
+    precedence chain and verification every other call site uses, so
+    this reports exactly what a session launch would get.
+    """
+    from aipager import claude_resolve
+
+    try:
+        resolved = claude_resolve.resolve_claude_binary(force=True)
+    except claude_resolve.ClaudeNotFoundError as e:
         return CheckResult(
             FAIL, "claude CLI",
-            detail=["not on PATH"],
+            detail=str(e).splitlines(),
             fix="install Claude Code: https://docs.anthropic.com/claude/docs/claude-code",
         )
-    ok, info = _probe_binary(p, "--version")
-    if not ok:
-        return CheckResult(WARN, "claude CLI",
-                           detail=[f"{p} fails --version: {info}"],
-                           fix="run `claude --version` to debug")
-    return CheckResult(OK, "claude CLI", detail=[f"{p} ({info})"])
+    detail = [f"{resolved.chosen.path} ({resolved.chosen.version})"]
+    for other in resolved.others:
+        detail.append(f"also: {other.path} ({other.version}) — set claude_path to override")
+    return CheckResult(OK, "claude CLI", detail=detail)
+
+
+def check_claude_auth() -> CheckResult:
+    """Probe `claude auth status` against the SAME environment a real
+    session launch gets — never the daemon's own bare ``os.environ``.
+
+    **Never FAILs.** Auth here is diagnostic only: the daemon and every
+    session launch regardless of what this reports — see the
+    non-negotiable "never refuse to launch on no auth" and
+    :mod:`aipager.claude_resolve`'s module docstring for why a probe
+    failure must never be conflated with "not logged in" (that's
+    reported as a WARN with a distinct message, not treated as FAIL).
+    """
+    from aipager import claude_resolve, daemon_secrets
+
+    try:
+        resolved = claude_resolve.resolve_claude_binary(force=True)
+    except claude_resolve.ClaudeNotFoundError as e:
+        return CheckResult(WARN, "claude auth", detail=[f"can't probe — {e}"])
+
+    env = daemon_secrets.build_session_env()
+    auth = claude_resolve.detect_auth(
+        resolved.chosen.path, resolved.chosen.version, env,
+    )
+    line = claude_resolve.format_provenance(resolved, auth)[0]
+    # Strip the leading "claude: <path> (<version>) · " — check_claude()
+    # above already shows the path/version; this row is auth-only.
+    detail_line = line.split("· ", 1)[-1] if "· " in line else line
+
+    if auth.source in ("probe-failed", "version-gated"):
+        return CheckResult(WARN, "claude auth", detail=[detail_line])
+    if not auth.logged_in:
+        return CheckResult(
+            WARN, "claude auth", detail=[detail_line],
+            fix="claude auth login  # or set an API key / CLAUDE_CODE_OAUTH_TOKEN",
+        )
+
+    # `auth status` says we have a credential — but it only checks that
+    # one EXISTS. A revoked or expired token still answers
+    # `{"loggedIn": true}`, and the operator would see a green row here
+    # while every session silently parks on the login screen. So spend
+    # one small round-trip and report what actually happens.
+    check = claude_resolve.validate_credential(resolved.chosen.path, env)
+    if check.state == "rejected":
+        return CheckResult(
+            WARN, "claude auth",
+            detail=[f"{detail_line} — but the API rejected it "
+                    "(expired or revoked)"],
+            fix="claude auth login  # the stored credential is no longer valid",
+        )
+    if check.state == "absent":
+        return CheckResult(
+            WARN, "claude auth",
+            detail=[f"{detail_line} — but claude reports no usable credential"],
+            fix="claude auth login",
+        )
+    if check.state == "unknown":
+        # Offline, or a probe we could not interpret. Report the cheap
+        # check's answer rather than inventing a verdict.
+        return CheckResult(
+            OK, "claude auth",
+            detail=[f"{detail_line} (not re-verified: {check.detail})"],
+        )
+    return CheckResult(OK, "claude auth", detail=[f"{detail_line} — verified"])
+
+
+def check_service_unit_path() -> CheckResult:
+    """Compare the INSTALLED unit's ``Environment=PATH=`` against the
+    resolved binary's directory, parsed as TEXT.
+
+    Doctor runs in the operator's own interactive shell, which cannot
+    see systemd's PATH for the unit it manages — the exact gap that let
+    a hand-written unit with the wrong PATH report OK before this check
+    existed (``check_service_installed`` only stats the file). Non-Linux
+    and not-installed are both OK — not applicable, not a problem.
+    """
+    if platform.system().lower() != "linux":
+        return CheckResult(OK, "service unit PATH", detail=["not applicable on this OS"])
+
+    from aipager.service import LINUX_UNIT_PATH
+    if not LINUX_UNIT_PATH.exists():
+        return CheckResult(OK, "service unit PATH", detail=["service not installed"])
+
+    try:
+        text = LINUX_UNIT_PATH.read_text()
+    except OSError as e:
+        return CheckResult(WARN, "service unit PATH", detail=[str(e)])
+
+    import re
+    m = re.search(r"^Environment=PATH=(?P<value>.*)$", text, re.MULTILINE)
+    if not m:
+        return CheckResult(
+            FAIL, "service unit PATH",
+            detail=["installed unit has no Environment=PATH="],
+            fix="aipager service install --yes  # re-render the unit",
+        )
+    unit_path_dirs = m.group("value").split(os.pathsep)
+
+    from aipager import claude_resolve
+    try:
+        resolved = claude_resolve.resolve_claude_binary(force=True)
+    except claude_resolve.ClaudeNotFoundError:
+        return CheckResult(WARN, "service unit PATH",
+                           detail=["can't verify — no claude binary resolves"])
+    claude_dir = str(Path(resolved.chosen.path).parent)
+    if claude_dir in unit_path_dirs:
+        return CheckResult(OK, "service unit PATH", detail=[claude_dir])
+    return CheckResult(
+        FAIL, "service unit PATH",
+        detail=[f"unit's PATH does not include {claude_dir}"],
+        fix="aipager service install --yes  # re-render with the current PATH",
+    )
 
 
 def check_settings_json() -> CheckResult:
@@ -281,7 +403,7 @@ def check_daemon() -> CheckResult:
         return CheckResult(
             FAIL, "aipager daemon",
             detail=[f"socket {SOCKET_PATH} exists but no daemon is listening"],
-            fix="rm -f /tmp/aipager.sock && aipager start",
+            fix=f"rm -f {SOCKET_PATH} && aipager start",
         )
     except OSError as e:
         return CheckResult(WARN, "aipager daemon", detail=[str(e)])
@@ -417,6 +539,37 @@ def check_team() -> CheckResult:
     )
 
 
+def check_miniapp() -> CheckResult:
+    """Can the Mini App actually start, if it is switched on?
+
+    **Never FAILs** — same fail-open discipline as
+    :func:`check_claude_auth`. The Mini App is optional; a base install
+    without it is a perfectly healthy aipager, and nothing about a
+    missing extra should stop a session from launching.
+
+    This row exists because its absence hid a real one: an install whose
+    Mini App could never start (``aiohttp`` was not present — it was an
+    opt-in extra at the time) still reported ``13 ok · 0 warn · 0 fail``, and the
+    only clue was a daemon log line nobody reads. The failure surfaced
+    to the operator as ``/app`` not working, in Telegram, much later.
+    """
+    from aipager.config import MINIAPP_ENABLED, MINIAPP_PORT
+    from aipager.miniapp.server import (
+        miniapp_extra_available, reinstall_with_miniapp_hint,
+    )
+
+    if not MINIAPP_ENABLED:
+        return CheckResult(OK, "Mini App", detail=["disabled"])
+    if not miniapp_extra_available():
+        return CheckResult(
+            WARN, "Mini App",
+            detail=["enabled in config, but aiohttp is missing — the "
+                    "server cannot start (incomplete install)"],
+            fix=reinstall_with_miniapp_hint(),
+        )
+    return CheckResult(OK, "Mini App", detail=[f"enabled · port {MINIAPP_PORT}"])
+
+
 CHECKS: list[Callable[[], CheckResult]] = [
     check_config_parses,
     check_config,
@@ -424,11 +577,14 @@ CHECKS: list[Callable[[], CheckResult]] = [
     check_chat_reachable,
     check_team,
     check_claude,
+    check_claude_auth,
     check_dtach,
     check_hook_scripts,
     check_settings_json,
     check_daemon,
     check_service_installed,
+    check_service_unit_path,
+    check_miniapp,
 ]
 
 
@@ -529,6 +685,100 @@ def _print_safety_policy() -> None:
     )
 
 
+def _fix_daemon_credential() -> None:
+    """`--fix` step (a): offer to discover/copy a credential into
+    daemon.env when nothing is there yet. Interactive — the CLI-only
+    home for this class of question (see the contract's non-negotiable:
+    a Telegram-side credential-copy question was dropped from scope)."""
+    from aipager.daemon_secrets import DAEMON_ENV_PATH
+    from aipager import service as _service
+    from aipager.ui import console
+
+    has_content = DAEMON_ENV_PATH.exists() and DAEMON_ENV_PATH.stat().st_size > 0
+    if has_content:
+        console.print(f"  [ok]✓[/ok]  {DAEMON_ENV_PATH} already has content — leaving it alone")
+        return
+    console.print(f"  No credential found at {DAEMON_ENV_PATH}.")
+    from aipager.errors import require_interactive
+    require_interactive()
+    answer = input("  Try to discover one automatically? [y/N]: ").strip().lower()
+    if answer not in ("y", "yes"):
+        console.print("  [muted]skipped[/muted]")
+        return
+    _service.ensure_daemon_env()
+
+
+def _fix_claude_path() -> None:
+    """`--fix` step (b): offer to pin `claude_path` when multiple
+    installs are ambiguous, following `dump_miniapp`'s surgical
+    read-modify-write via `scope.dump_claude_path`."""
+    from aipager import claude_resolve
+    from aipager import scope as _scope
+    from aipager.ui import console
+
+    console.print()
+    try:
+        resolved = claude_resolve.resolve_claude_binary(force=True)
+    except claude_resolve.ClaudeNotFoundError as e:
+        console.print(f"  [warn]⚠[/warn]  no claude binary resolves — {e}")
+        return
+    if not resolved.others:
+        console.print("  [ok]✓[/ok]  one claude install found — nothing to disambiguate")
+        return
+
+    installs = [resolved.chosen, *resolved.others]
+    console.print("  Multiple claude installs found:")
+    console.print(f"    0) {installs[0].path} ({installs[0].version}) — current pick")
+    for i, install in enumerate(installs[1:], start=1):
+        console.print(f"    {i}) {install.path} ({install.version})")
+    from aipager.errors import require_interactive
+    require_interactive()
+    answer = input(
+        "  Pin one via claude_path in aipager.yaml? "
+        "Enter a number, or blank to skip: "
+    ).strip()
+    if not answer:
+        console.print("  [muted]skipped[/muted]")
+        return
+    try:
+        idx = int(answer)
+    except ValueError:
+        console.print("  [warn]⚠[/warn]  not a number — skipped")
+        return
+    if not (0 <= idx < len(installs)):
+        console.print("  [warn]⚠[/warn]  out of range — skipped")
+        return
+    try:
+        # `path=` passed explicitly and read from the module at call
+        # time — dump_claude_path's `path: Path = CONFIG_PATH` default
+        # is bound once, at aipager.scope's IMPORT time. Relying on the
+        # default here would silently target whatever CONFIG_PATH was
+        # at import (the operator's real ~/.config/aipager/aipager.yaml)
+        # even when a caller has since repointed `_scope.CONFIG_PATH`
+        # (as every test in this suite does) — the same late-binding
+        # trap `config._load_miniapp()` documents avoiding.
+        _scope.dump_claude_path(installs[idx].path, path=_scope.CONFIG_PATH)
+        console.print(f"  [ok]✓[/ok]  claude_path set to {installs[idx].path}")
+    except _scope.ScopeConfigError as e:
+        console.print(f"  [warn]⚠[/warn]  could not write claude_path: {e}")
+
+
+def cmd_doctor_fix() -> int:
+    """`aipager doctor --fix` — interactive, the CLI-only home for the
+    two questions the contract keeps out of Telegram entirely:
+    (a) discovering/copying a Claude credential into ``daemon.env``,
+    (b) pinning ``claude_path`` on a multi-install ambiguity or a
+    unit/PATH mismatch. Never runs automatically — every step asks
+    first."""
+    from aipager.ui import console
+
+    console.print("[title]aipager doctor --fix[/title]")
+    console.print()
+    _fix_daemon_credential()
+    _fix_claude_path()
+    return 0
+
+
 def cmd_doctor(args: argparse.Namespace | None = None) -> int:
     from aipager import __version__
     from aipager.config import SCOPES
@@ -537,6 +787,9 @@ def cmd_doctor(args: argparse.Namespace | None = None) -> int:
     if getattr(args, "safety_check", False):
         _print_safety_policy()
         return 0
+
+    if getattr(args, "fix", False):
+        return cmd_doctor_fix()
 
     if console.is_terminal:
         rule(f"aipager {__version__} · {platform.system().lower()} · "
@@ -568,10 +821,13 @@ def cmd_doctor(args: argparse.Namespace | None = None) -> int:
 
 __all__ = [
     "OK", "WARN", "FAIL", "CheckResult", "run_all", "cmd_doctor",
+    "cmd_doctor_fix",
     "check_config", "check_token_valid", "check_chat_reachable",
     "check_team",
-    "check_dtach", "check_claude", "check_settings_json",
+    "check_dtach", "check_claude", "check_claude_auth",
+    "check_settings_json",
     "check_hook_scripts", "check_daemon", "check_service_installed",
+    "check_service_unit_path",
     "CHECKS",
 ]
 

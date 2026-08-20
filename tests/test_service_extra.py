@@ -183,6 +183,7 @@ def test_install_linux_success(monkeypatch, tmp_path):
                         lambda *a, **k: (0, "", ""))
     monkeypatch.setattr(service, "_check_linger", lambda: None)
     monkeypatch.setattr(service, "_post_install_probe", lambda: None)
+    monkeypatch.setattr(service, "ensure_daemon_env", lambda: None)
     rc = service._install_linux()
     assert rc == 0
 
@@ -194,6 +195,7 @@ def test_install_linux_enable_fails(monkeypatch, tmp_path, capsys):
                         tmp_path / "aipager.service")
     monkeypatch.setattr(service, "_resolve_aipager_bin",
                         lambda: "/usr/bin/aipager")
+    monkeypatch.setattr(service, "ensure_daemon_env", lambda: None)
     calls = []
     def _run(cmd, **k):
         calls.append(cmd)
@@ -212,6 +214,7 @@ def test_install_linux_daemon_reload_failure_warns_then_continues(monkeypatch, t
                         tmp_path / "aipager.service")
     monkeypatch.setattr(service, "_resolve_aipager_bin",
                         lambda: "/usr/bin/aipager")
+    monkeypatch.setattr(service, "ensure_daemon_env", lambda: None)
     def _run(cmd, **k):
         if "daemon-reload" in cmd:
             return (1, "", "reload failed")
@@ -295,6 +298,7 @@ def test_install_macos_success(monkeypatch, tmp_path):
     monkeypatch.setattr(service, "MACOS_LOG_PATH", tmp_path / "aipager.log")
     monkeypatch.setattr(service, "_resolve_aipager_bin",
                         lambda: "/usr/bin/aipager")
+    monkeypatch.setattr(service, "ensure_daemon_env", lambda: None)
     monkeypatch.setattr(service, "_run", lambda *a, **k: (0, "", ""))
     monkeypatch.setattr(service, "_post_install_probe", lambda: None)
     rc = service._install_macos()
@@ -308,6 +312,7 @@ def test_install_macos_bootstrap_fails(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(service, "MACOS_LOG_PATH", tmp_path / "aipager.log")
     monkeypatch.setattr(service, "_resolve_aipager_bin",
                         lambda: "/usr/bin/aipager")
+    monkeypatch.setattr(service, "ensure_daemon_env", lambda: None)
     def _run(cmd, **k):
         if "bootstrap" in cmd:
             return (5, "", "permission denied")
@@ -487,7 +492,7 @@ def test_cmd_service_unknown_subcommand(monkeypatch, capsys):
 def test_cmd_service_install_calls_require_config(monkeypatch):
     monkeypatch.setattr(service, "_platform", lambda: "linux")
     # _DISPATCH was built at module-import time; patch the bound function
-    monkeypatch.setitem(service._DISPATCH["linux"], "install", lambda: 0)
+    monkeypatch.setitem(service._DISPATCH["linux"], "install", lambda *, yes=False: 0)
     called = []
     monkeypatch.setattr("aipager.preflight.require_config",
                         lambda: called.append(1))
@@ -505,3 +510,74 @@ def test_cmd_service_start_skips_require_config(monkeypatch):
     rc = service.cmd_service(argparse.Namespace(service_cmd="start"))
     assert rc == 0
     assert called == []  # NOT called for start
+
+
+# ---- install must restart an already-running daemon ---------------------
+#
+# `systemctl enable --now` starts an inactive unit but leaves a running one
+# alone. On upgrade that stranded the old process — old code, old socket
+# path — under the new unit, so hooks talked to a socket nobody held and
+# every session hung BUSY silently. Found by live-testing the install, not
+# by the suite, which is why these pin the exact argv.
+
+def _install_harness(monkeypatch, tmp_path, is_active_out, restart_rc=0):
+    monkeypatch.setattr(service, "_systemd_user_available",
+                        lambda: (True, "running"))
+    monkeypatch.setattr(service, "LINUX_UNIT_PATH",
+                        tmp_path / "aipager.service")
+    monkeypatch.setattr(service, "_resolve_aipager_bin",
+                        lambda: "/usr/bin/aipager")
+    monkeypatch.setattr(service, "_check_linger", lambda: None)
+    monkeypatch.setattr(service, "_post_install_probe", lambda: None)
+    monkeypatch.setattr(service, "ensure_daemon_env", lambda: None)
+    calls = []
+
+    def _run(cmd, **k):
+        calls.append(list(cmd))
+        if "is-active" in cmd:
+            return (0, is_active_out, "")
+        if "restart" in cmd:
+            return (restart_rc, "", "unit failed" if restart_rc else "")
+        return (0, "", "")
+
+    monkeypatch.setattr(service, "_run", _run)
+    return calls
+
+
+def _restart_calls(calls):
+    return [c for c in calls if "restart" in c]
+
+
+def test_install_linux_restarts_a_daemon_that_was_already_running(
+        monkeypatch, tmp_path):
+    calls = _install_harness(monkeypatch, tmp_path, "active\n")
+    rc = service._install_linux()
+    assert rc == 0
+    assert _restart_calls(calls) == [
+        ["systemctl", "--user", "restart", "aipager.service"]
+    ], (
+        "an already-active daemon was not restarted, so it would keep "
+        f"running the old code under the new unit; calls were {calls!r}"
+    )
+
+
+def test_install_linux_does_not_restart_when_daemon_was_not_running(
+        monkeypatch, tmp_path):
+    calls = _install_harness(monkeypatch, tmp_path, "inactive\n")
+    rc = service._install_linux()
+    assert rc == 0
+    assert _restart_calls(calls) == [], (
+        f"`enable --now` already starts a stopped unit; calls were {calls!r}"
+    )
+
+
+def test_install_linux_reports_a_failed_restart_and_names_the_old_daemon(
+        monkeypatch, tmp_path, capsys):
+    _install_harness(monkeypatch, tmp_path, "active\n", restart_rc=1)
+    rc = service._install_linux()
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "OLD daemon is still" in err, (
+        "a failed restart must say the old process is still serving — "
+        f"got: {err!r}"
+    )

@@ -80,18 +80,112 @@ def test_launch_session_no_resume_flag_when_id_missing(tmp_path, monkeypatch, ru
     assert "--resume" not in bash_cmd
 
 
-def test_launch_session_rejects_when_cwd_missing(tmp_path, monkeypatch, run_async):
+def test_launch_session_passes_explicit_env_with_daemon_credential(
+        tmp_path, monkeypatch, run_async):
+    """criterion 15: the subprocess call includes an explicit `env=`
+    containing the token when the credential file provides one — never
+    solely ambient inheritance (today's `create_subprocess_exec` passed
+    no `env=` at all)."""
+    captured = {}
+
+    async def _fake_exec(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return _make_proc(returncode=0)
+
+    monkeypatch.setattr(dtach_inject.asyncio, "create_subprocess_exec", _fake_exec)
+    calls = {"n": 0}
+
+    def _is_socket(self):
+        calls["n"] += 1
+        return calls["n"] > 1
+
+    monkeypatch.setattr(dtach_inject.Path, "is_socket", _is_socket)
+
+    daemon_env = tmp_path / "daemon.env"
+    daemon_env.write_text("CLAUDE_CODE_OAUTH_TOKEN=sk-from-daemon-env\n")
+    monkeypatch.setattr(dtach_inject.daemon_secrets, "DAEMON_ENV_PATH", daemon_env)
+    monkeypatch.delenv("CREDENTIALS_DIRECTORY", raising=False)
+    # Ambient inheritance must NOT be what carries the token — clear it
+    # from the calling process's own environ.
+    monkeypatch.delenv("CLAUDE_CODE_OAUTH_TOKEN", raising=False)
+
+    ok, _ = run_async(dtach_inject.launch_session("jim"))
+    assert ok
+    assert "env" in captured["kwargs"]
+    assert captured["kwargs"]["env"]["CLAUDE_CODE_OAUTH_TOKEN"] == "sk-from-daemon-env"
+
+
+def test_launch_session_quotes_claude_bin_with_metacharacters(
+        tmp_path, monkeypatch, run_async):
+    """A claude binary path containing shell metacharacters must not
+    execute injected content — inject.py:567's quoting fix.
+
+    Every sibling value on the bash_cmd line (resume, model, sys_prompt)
+    was already shlex.quote()d; the binary was the lone exception, safe
+    only while it came verbatim from shutil.which(). Once it can come
+    from config (claude_path) or AIPAGER_CLAUDE_BIN — i.e. whatever the
+    resolver hands back — an unquoted value is a shell-injection sink.
+    """
+    captured = {}
+
+    async def _fake_exec(*args, **kwargs):
+        captured["args"] = args
+        return _make_proc(returncode=0)
+
+    monkeypatch.setattr(dtach_inject.asyncio, "create_subprocess_exec", _fake_exec)
+    calls = {"n": 0}
+
+    def _is_socket(self):
+        calls["n"] += 1
+        return calls["n"] > 1
+
+    monkeypatch.setattr(dtach_inject.Path, "is_socket", _is_socket)
+    # Simulate a resolved (or overridden) binary path an attacker-controlled
+    # config value could plausibly contain: a shell metacharacter sequence
+    # that would run a second command if concatenated unquoted.
+    malicious = "/tmp/claude; touch /tmp/pwned"
+    from aipager.claude_resolve import ClaudeInstall, ResolvedClaude
+    fake_resolved = ResolvedClaude(
+        chosen=ClaudeInstall(path=malicious, realpath=malicious, version="2.1.235"),
+    )
+    monkeypatch.setattr(dtach_inject.claude_resolve, "try_resolve_claude_binary",
+                        lambda **kw: fake_resolved)
+
+    ok, _ = run_async(dtach_inject.launch_session("jim"))
+    assert ok
+    bash_cmd = captured["args"][-1]
+    # The whole malicious string must appear as a single shlex-quoted
+    # token, so bash's own parser (not string interpolation) decides
+    # where the token ends.
+    import shlex as _shlex
+    quoted = _shlex.quote(malicious)
+    assert quoted in bash_cmd
+    # If it were interpolated unquoted (the pre-fix bug), the raw path
+    # would be immediately followed by a space (the separator before
+    # `perms`); quoted, it is immediately followed by a closing quote
+    # character instead.
+    assert f"{malicious} " not in bash_cmd
+
+
+def test_launch_session_rejects_when_cwd_missing(tmp_path, monkeypatch, run_async, caplog):
     """If the persisted cwd has been deleted, fail loudly before exec."""
     monkeypatch.setattr(dtach_inject.Path, "is_socket", lambda self: False)
     bogus = tmp_path / "nope"  # doesn't exist
-    ok, err = run_async(dtach_inject.launch_session(
-        "jim",
-        resume_id="abc",
-        cwd=str(bogus),
-    ))
+    with caplog.at_level("WARNING", logger="aipager.dtach.inject"):
+        ok, err = run_async(dtach_inject.launch_session(
+            "jim",
+            resume_id="abc",
+            cwd=str(bogus),
+        ))
     assert ok is False
     assert "original project dir is gone" in err
-    assert str(bogus) in err
+    # ...but NOT which directory. This string is rendered into a Telegram
+    # message; in a group scope the absolute path would show every member
+    # the operator's home directory and OS username.
+    assert str(bogus) not in err
+    # The operator still needs to know which one, so it goes to the journal.
+    assert str(bogus) in caplog.text
 
 
 def test_launch_session_strips_inherited_oauth_token(tmp_path, monkeypatch, run_async):

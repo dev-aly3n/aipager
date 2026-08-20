@@ -144,6 +144,111 @@ def test_run_daemon_happy_path_personal_mode(monkeypatch):
     registry.save.assert_called_once()
 
 
+def test_run_daemon_fires_startup_notice_after_bot_start(monkeypatch):
+    """The provenance notice is fire-and-forget, scheduled only AFTER
+    bot.start() — bootstrap_claude_settings() itself runs before
+    bot.start() and must never send Telegram on its own."""
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
+    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
+    bot, hook, monitor, registry, _, _ = _patch_components(monkeypatch)
+
+    from aipager.claude_bootstrap import PendingAuthCheck, ProvenanceInfo
+    # Only an unusable-auth start speaks at all now, so the ordering this
+    # test pins is only reachable with a notice present.
+    provenance = ProvenanceInfo(
+        lines=["claude: /x/claude (2.1.235) · auth: none (not logged in)"],
+        auth_ok=False,
+        pending=PendingAuthCheck("/x/claude", "2.1.235", {}),
+    )
+    monkeypatch.setattr("aipager.claude_bootstrap.bootstrap_claude_settings",
+                        lambda: provenance)
+    monkeypatch.setattr("aipager.claude_bootstrap.recover_auth_or_notice",
+                        lambda p: "\u26a0\ufe0f needs login")
+
+    order = []
+    real_bot_start = bot.start
+
+    async def _tracked_start():
+        order.append("bot.start")
+        await real_bot_start()
+
+    async def _tracked_notice(text):
+        order.append("send_startup_notice")
+        # The sanitized notice is what goes out — never provenance.lines.
+        assert text == "\u26a0\ufe0f needs login"
+
+    bot.start = _tracked_start
+    bot.send_startup_notice = _tracked_notice
+
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(daemon._run_daemon("bot_username"))
+    # Drain the fire-and-forget auth-check task properly. A bare
+    # `sleep(0)` used to be enough, but that task now hands the sweep to
+    # a real OS thread via asyncio.to_thread, so a single loop tick races
+    # it — and losing that race would silently drop "send_startup_notice"
+    # from `order`, i.e. pass or fail for reasons unrelated to the
+    # ordering this test is about.
+    pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
+    if pending:
+        loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+
+    assert order == ["bot.start", "send_startup_notice"]
+
+
+def test_run_daemon_never_refuses_to_launch_when_auth_is_absent(monkeypatch):
+    """criterion 10 / the non-negotiable: `logged_in=False` must never
+    stop the daemon from completing startup."""
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
+    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
+    bot, hook, monitor, registry, _, _ = _patch_components(monkeypatch)
+    bot.send_startup_notice = AsyncMock()
+
+    from aipager.claude_bootstrap import PendingAuthCheck, ProvenanceInfo
+    # Spelled out in full: `lines` saying "not logged in" while the auth
+    # fields defaulted to "healthy, stay silent" was a self-contradiction
+    # waiting to become a false pass, so those fields now have no
+    # defaults at all.
+    monkeypatch.setattr(
+        "aipager.claude_bootstrap.bootstrap_claude_settings",
+        lambda: ProvenanceInfo(
+            lines=["claude: /x/claude (2.1.235) · auth: none (not logged in)"],
+            auth_ok=False,
+            pending=PendingAuthCheck("/x/claude", "2.1.235", {}),
+        ),
+    )
+    monkeypatch.setattr(
+        "aipager.claude_bootstrap.recover_auth_or_notice", lambda p: None)
+
+    loop = asyncio.new_event_loop()
+    # Must not raise SystemExit or any other exception.
+    loop.run_until_complete(daemon._run_daemon("bot_username"))
+
+    bot.start.assert_awaited_once()
+    monitor.start.assert_awaited_once()
+    registry.save.assert_called_once()
+
+
+def test_run_daemon_no_notice_task_when_provenance_is_none(monkeypatch):
+    """Resolution failure (no claude binary at all) must not crash
+    startup or schedule a notice with nothing to say."""
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
+    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
+    bot, hook, monitor, registry, _, _ = _patch_components(monkeypatch)
+    monkeypatch.setattr("aipager.claude_bootstrap.bootstrap_claude_settings",
+                        lambda: None)
+    # If send_startup_notice were (wrongly) called, a bare MagicMock
+    # attribute access would still succeed but produce a non-awaitable —
+    # leaving this unset makes any accidental call fail loudly instead
+    # of silently no-op-ing.
+
+    loop = asyncio.new_event_loop()
+    loop.run_until_complete(daemon._run_daemon("bot_username"))
+    bot.start.assert_awaited_once()
+
+
 def test_run_daemon_with_observers_starts_and_stops_them(monkeypatch):
     monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")

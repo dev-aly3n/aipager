@@ -24,7 +24,7 @@ flowchart LR
 
   subgraph Host["Local host"]
     direction TB
-    Sock["/tmp/aipager.sock<br>(unix datagram)"]
+    Sock["$XDG_RUNTIME_DIR/aipager.sock<br>(unix datagram)"]
     Dtach["dtach session<br>claude-NAME"]
     Claude["claude code CLI"]
     Hooks["~/.claude/<br>settings.json"]
@@ -59,8 +59,8 @@ show. Inside that:
   `python-telegram-bot` `Application`. Polls for updates, dispatches
   to message / callback / voice handlers, emits message edits for
   busy-state animations.
-- **`HookReceiver`** (`aipager/hook_receiver.py`) — opens a unix
-  datagram socket at `/tmp/aipager.sock`, decodes JSON payloads from
+- **`HookReceiver`** (`aipager/dtach/hook_receiver.py`) — opens a unix
+  datagram socket at `$XDG_RUNTIME_DIR/aipager.sock`, decodes JSON payloads from
   the `aipager-hook` helper, dispatches by `"event"` field.
 - **`SessionMonitor`** (`aipager/session_monitor.py`) — wakes every
   2 s to scan `/tmp/claude-dtach-*.sock`, reconcile against the
@@ -88,7 +88,7 @@ From `aipager/cli.py:159-184`:
 2. `TelegramBot.__init__` + `bot.start()` — verifies token / chat,
    starts the polling loop.
 3. `ObserverBroadcaster.start()` — only when configured.
-4. `HookReceiver.start()` — unlinks any stale `/tmp/aipager.sock`,
+4. `HookReceiver.start()` — unlinks any stale `$XDG_RUNTIME_DIR/aipager.sock`,
    binds fresh, listens.
 5. `bot.recover_sessions()` — for every `BUSY` session whose
    `busy_msg_id` exists, edit the Telegram message to reflect the
@@ -105,7 +105,7 @@ From `aipager/cli.py:186-193`:
 2. `registry.save()` — persist state.
 3. `session_monitor.stop()` — cancel the tick task.
 4. `hook_receiver.stop()` — close the datagram transport and
-   `os.unlink(/tmp/aipager.sock)`.
+   `os.unlink(config.SOCKET_PATH)`.
 5. `observers.stop()` if running.
 6. `bot.stop()` — cancel per-session animation tasks, stop the
    `Application` (which flushes pending edits).
@@ -121,7 +121,7 @@ behaviour.
 
 | Path | Purpose | Owner |
 |---|---|---|
-| `/tmp/aipager.sock` | Unix datagram for hook events | aipager daemon (binds) |
+| `$XDG_RUNTIME_DIR/aipager.sock` | Unix datagram for hook events (falls back to `/tmp/aipager.sock`) | aipager daemon (binds) |
 | `/tmp/claude-dtach-<name>.sock` | dtach control socket per session | dtach |
 | `/tmp/claude-status-<name>.json` | Statusline data per session | `aipager-statusline` hook |
 | `~/.claude/aipager-sessions.json` | Durable registry state | aipager daemon |
@@ -132,7 +132,7 @@ behaviour.
 | `~/.config/aipager/keyboard.json` | Optional keyboard overrides | user |
 
 The daemon writes nothing outside `~/.config/aipager`, `~/.claude/`,
-and `/tmp/aipager.sock`. It never elevates — see
+and its control socket. It never elevates — see
 [security](security.md#privilege-boundary).
 
 ## Why dtach
@@ -150,7 +150,7 @@ on each 2 s monitor tick.
 
 ## See also
 
-- [Hook events](hooks.md) — what flows in over `/tmp/aipager.sock`.
+- [Hook events](hooks.md) — what flows in over the control socket.
 - [Bot commands](commands.md) — what flows in from Telegram.
 - [Security model](security.md) — privilege boundary, secrets, audit.
 - [Troubleshooting](troubleshooting.md) — `aipager doctor` reference.

@@ -300,3 +300,80 @@ def test_new_events_patched_into_existing_settings(tmp_path, monkeypatch):
         count = sum(1 for c in cmds if "aipager-hook" in c)
         assert count == 1, f"{event} has {count} aipager-hook entries after patch"
 
+
+
+# ----- provenance: bootstrap_claude_settings() -> ProvenanceInfo | None ---
+
+def test_bootstrap_returns_none_when_claude_does_not_resolve(tmp_path, monkeypatch):
+    """The autouse no-real-claude fixture means discovery yields nothing —
+    bootstrap must still complete (its other file-patching work) and
+    simply report no provenance."""
+    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", tmp_path / "settings.json")
+    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+
+    result = claude_bootstrap.bootstrap_claude_settings("/workspace")
+
+    assert result is None
+    # The unrelated file-patching work still happened.
+    data = json.loads((tmp_path / "settings.json").read_text())
+    assert data["skipDangerousModePermissionPrompt"] is True
+
+
+def test_bootstrap_returns_provenance_lines_matching_format_provenance(
+        tmp_path, monkeypatch):
+    from aipager import claude_resolve
+
+    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", tmp_path / "settings.json")
+    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+
+    resolved = claude_resolve.ResolvedClaude(
+        chosen=claude_resolve.ClaudeInstall(
+            path="/home/x/.local/bin/claude", realpath="/home/x/.local/bin/claude",
+            version="2.1.235",
+        ),
+    )
+    monkeypatch.setattr(claude_resolve, "resolve_claude_binary", lambda **kw: resolved)
+    auth = claude_resolve.AuthStatus(logged_in=True, auth_method="oauth_token", source="env")
+    monkeypatch.setattr(claude_resolve, "detect_auth", lambda *a, **k: auth)
+
+    result = claude_bootstrap.bootstrap_claude_settings("/workspace")
+
+    assert result is not None
+    expected = claude_resolve.format_provenance(resolved, auth)
+    assert result.lines == expected
+    assert result.lines == [
+        "claude: /home/x/.local/bin/claude (2.1.235) · auth: oauth_token (env)",
+    ]
+
+
+def test_bootstrap_probes_auth_through_build_session_env_not_bare_environ(
+        tmp_path, monkeypatch):
+    """Risk #2: the probe MUST use daemon_secrets.build_session_env(),
+    never the daemon's own bare os.environ — under LoadCredential= the
+    token never enters the latter."""
+    from aipager import claude_resolve, daemon_secrets
+
+    monkeypatch.setattr(claude_bootstrap, "_SETTINGS", tmp_path / "settings.json")
+    monkeypatch.setattr(claude_bootstrap, "_CLAUDE_JSON", tmp_path / ".claude.json")
+
+    resolved = claude_resolve.ResolvedClaude(
+        chosen=claude_resolve.ClaudeInstall(
+            path="/x/claude", realpath="/x/claude", version="2.1.235",
+        ),
+    )
+    monkeypatch.setattr(claude_resolve, "resolve_claude_binary", lambda **kw: resolved)
+
+    sentinel_env = {"CLAUDE_CODE_OAUTH_TOKEN": "sk-from-credential-file"}
+    monkeypatch.setattr(daemon_secrets, "build_session_env", lambda **kw: sentinel_env)
+
+    captured = {}
+
+    def _fake_detect_auth(path, version, env, **kw):
+        captured["env"] = env
+        return claude_resolve.AuthStatus(True, "oauth_token", "env")
+
+    monkeypatch.setattr(claude_resolve, "detect_auth", _fake_detect_auth)
+
+    claude_bootstrap.bootstrap_claude_settings("/workspace")
+
+    assert captured["env"] is sentinel_env

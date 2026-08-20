@@ -136,3 +136,28 @@ def test_session_kill_user_cancels(monkeypatch, capsys):
 
 def pytest_fail_called_input():
     raise AssertionError("input() should not be called when -y is passed")
+
+
+# ----- plain launch dispatch: require_claude()'s return value must reach launch() -----
+
+def test_session_launch_threads_resolved_claude_path(monkeypatch):
+    """cli/session.py:20-22's discarded-return-value bug: require_claude()'s
+    resolved path must reach dtach.launcher.launch(claude_bin=...), not be
+    silently dropped in favour of launcher's own bare "claude" default."""
+    monkeypatch.setattr("aipager.preflight.require_config", lambda: None)
+    monkeypatch.setattr("aipager.preflight.require_daemon", lambda: None)
+    monkeypatch.setattr("aipager.preflight.require_claude",
+                        lambda: "/home/x/.local/bin/claude")
+
+    captured = {}
+
+    def _fake_launch(name, claude_args=None, *, claude_bin=None):
+        captured["name"] = name
+        captured["claude_bin"] = claude_bin
+        return 0
+
+    monkeypatch.setattr("aipager.dtach.launcher.launch", _fake_launch)
+    rc = cli._cmd_session(_ns("jim"))
+    assert rc == 0
+    assert captured["name"] == "jim"
+    assert captured["claude_bin"] == "/home/x/.local/bin/claude"

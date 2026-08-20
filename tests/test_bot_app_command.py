@@ -38,13 +38,26 @@ def test_app_dm_disabled_replies_not_enabled_no_button(mk_bot, mk_update, run_as
     assert kwargs.get("reply_markup") is None
 
 
-def test_app_dm_enabled_no_public_url_sends_instructions_no_button(
+# Anything that would have the user run a command on the host. The
+# tunnel is managed by aipager itself now, so there is nothing for them
+# to install, and the previous version of this message asked for two
+# `sudo` lines and a `curl | sh` — from a chat message.
+FORBIDDEN_IN_APP_REPLY = (
+    "tailscale", "sudo", "curl", "apt-get", "brew install", "| sh",
+)
+
+
+def test_app_dm_enabled_no_public_url_says_wait_and_never_instructs(
     mk_bot, mk_update, run_async, monkeypatch,
 ):
+    """This test used to assert the OPPOSITE — `"tailscale" in text` — and
+    so pinned the contract violation in place. Inverted deliberately."""
     monkeypatch.setattr("aipager.config.MINIAPP_ENABLED", True)
     monkeypatch.setattr("aipager.config.MINIAPP_PORT", 8765)
     monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", "")
     monkeypatch.setattr("aipager.miniapp.tunnel.detect_public_url", lambda: None)
+    monkeypatch.setattr(
+        "aipager.miniapp.server.miniapp_extra_available", lambda: True)
     bot = mk_bot()
     update = _dm_update(mk_update)
 
@@ -53,8 +66,38 @@ def test_app_dm_enabled_no_public_url_sends_instructions_no_button(
 
     update.message.reply_text.assert_awaited_once()
     args, kwargs = update.message.reply_text.await_args
-    assert "tailscale" in args[0].lower()
+    text = args[0].lower()
+    for bad in FORBIDDEN_IN_APP_REPLY:
+        assert bad not in text, f"/app told the user to run {bad!r}: {text!r}"
+    assert "still being set up" in text
     assert kwargs.get("reply_markup") is None
+
+
+def test_app_says_so_plainly_when_the_miniapp_cannot_start(
+    mk_bot, mk_update, run_async, monkeypatch,
+):
+    """A different cause deserves a different sentence — and still no
+    command for the user to run.
+
+    Reworded when aiohttp became a base dependency: reaching this branch
+    no longer means "you skipped an extra", it means the install is
+    incomplete, and blaming the user for a missing option they were
+    never told about would be wrong."""
+    monkeypatch.setattr("aipager.config.MINIAPP_ENABLED", True)
+    monkeypatch.setattr("aipager.config.MINIAPP_PUBLIC_URL", "")
+    monkeypatch.setattr("aipager.miniapp.tunnel.detect_public_url", lambda: None)
+    monkeypatch.setattr(
+        "aipager.miniapp.server.miniapp_extra_available", lambda: False)
+    bot = mk_bot()
+    update = _dm_update(mk_update)
+
+    run_async(bot._handle_app_cmd(update, MagicMock()))
+
+    text = update.message.reply_text.await_args.args[0].lower()
+    assert "can't start" in text
+    assert "incomplete" in text
+    for bad in FORBIDDEN_IN_APP_REPLY:
+        assert bad not in text, f"leaked an instruction: {text!r}"
 
 
 def test_app_dm_enabled_with_url_sends_button(mk_bot, mk_update, run_async, monkeypatch):

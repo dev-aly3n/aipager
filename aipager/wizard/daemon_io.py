@@ -48,11 +48,17 @@ def _write_env_file(token: str, chat_id: int | str) -> None:
 
 
 def _detect_daemon_running() -> int | None:
-    """Probe ``/tmp/aipager.sock`` and return the daemon's PID if
-    we can find one, ``None`` otherwise. Used for the post-edit hint
-    ("daemon needs a restart")."""
+    """Probe the daemon's control socket and return its PID if we can
+    find one, ``None`` otherwise. Used for the post-edit hint ("daemon
+    needs a restart").
+
+    Uses ``aipager.config.SOCKET_PATH`` rather than a hardcoded
+    ``/tmp/aipager.sock`` — under the systemd unit that socket lives at
+    ``$XDG_RUNTIME_DIR/aipager.sock``, and probing the wrong path would
+    always report "not running" even while the daemon is up.
+    """
     import socket as _socket
-    p = "/tmp/aipager.sock"
+    from aipager.config import SOCKET_PATH as p
     try:
         s = _socket.socket(_socket.AF_UNIX, _socket.SOCK_DGRAM)
         s.settimeout(0.3)

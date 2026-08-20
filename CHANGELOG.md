@@ -8,6 +8,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **aipager now owns its runtime environment instead of inheriting an
+  accidental one.** Moving the daemon into a `systemctl --user` service
+  used to silently break two things at once: PATH and the Claude OAuth
+  token, both normally set by shell startup files systemd never sources.
+  A session would launch with whatever `claude` happened to be on the
+  daemon's bare PATH and no credentials, then sit stuck with no visible
+  error. Fixed at the root:
+  - **One shared resolver** now picks the `claude` binary everywhere
+    (`aipager session`, `aipager resume`, the daemon, doctor, the setup
+    wizard) — `claude_path` in `aipager.yaml` → `$AIPAGER_CLAUDE_BIN` →
+    `~/.local/bin` → `$PATH` → the usual Homebrew locations, each
+    candidate verified with `--version` and de-duplicated by real path.
+    Previously six independent lookups could each resolve a different
+    binary on the same machine.
+  - **Auth is checked twice: cheaply, then for real.** Claude Code's own
+    `claude auth status` (JSON, no network call) replaces the
+    hand-rolled credentials-file check — the old check was blind to macOS Keychain auth,
+    refresh-token-only credentials, and Max-plan logins, all of which
+    work fine but look "logged out" to a file check. **A session is
+    never refused for looking unauthenticated** — aipager warns and
+    launches anyway, letting Claude's own error be the ground truth.
+    **`auth status` alone is not enough**: it reports that a credential
+    *exists*, not that it *works*. A revoked or expired token still
+    answers `{"loggedIn": true}`, so an expired token used to show a
+    green `aipager doctor` row while every session silently parked on
+    the login screen and hung forever. Once the daemon is up, aipager
+    now spends one tiny `claude -p` round-trip (the `haiku` model, a few
+    tokens) to confirm the credential really works — **a real network
+    call and a real, if negligible, charge on your account, once per
+    daemon start — and once more per `aipager doctor` run, which
+    performs the same check so its auth row cannot show green for a
+    credential that no longer works.** If it comes back rejected, aipager looks for another
+    credential that works before saying anything; if the check is
+    inconclusive (offline, a timeout, anything unrecognised) it stays
+    silent rather than cry wolf.
+    The resolved binary, its version and every other install found are
+    written to the daemon log and shown by `aipager doctor`, both of
+    which stay on your own machine. **Telegram is told nothing on a
+    healthy start.** If Claude reports itself logged out, aipager first
+    looks for a credential that does work — the service credential,
+    `daemon.env`, the environment, a stored login, and your login shell
+    — and uses it silently if it finds one. Only when nothing works does
+    it send a single message, and that message names just the *kind* of
+    credential it found ("a setup token, but Claude rejected it") plus
+    how to fix it. It never names a path, a version, or a filename:
+    that message reaches every configured scope, so in a team setup an
+    absolute path would show every group member the owner's home
+    directory and OS username.
+  - **The service unit ships with `LoadCredential=`** instead of
+    inlining the token into the daemon's own environment — it now stays
+    out of `systemctl show`, unit backups, and pasted-in log output. The
+    unit is created (or diffed and re-confirmed before overwriting an
+    existing one — `--yes` skips the prompt for scripted installs) with
+    the installing shell's PATH baked in, `Restart=always`, and no
+    longer references a `config.env` the daemon itself renames away on
+    first boot. `~/.config/aipager/daemon.env` — a plain `KEY=VALUE`
+    file, 0600 — is created automatically the first time you install the
+    service (copied from a legacy config, discovered from your login
+    shell, or left empty with a warning) so the unit never fails to
+    start for want of a credential file.
+  - The daemon's control socket moves to `$XDG_RUNTIME_DIR/aipager.sock`
+    under systemd (falls back to `/tmp` when unset); `aipager doctor`
+    gained a `claude auth` row (never fails the overall check) and a
+    `service unit PATH` row that reads the *installed* unit rather than
+    just checking it exists; `aipager doctor --fix` is new, and
+    interactively offers to discover a credential or pin `claude_path`
+    when more than one install is found. See `docs/security.md` for what
+    file permissions on the credential do and don't protect against —
+    the short version: scope the credential itself, since anything
+    aipager can read, the agent it launches can read too.
 - **The Mini App now gets a public URL with zero manual setup.** With the
   Mini App enabled and no `MINIAPP_PUBLIC_URL` override configured, aipager
   starts and supervises its own Cloudflare quick tunnel alongside the
@@ -119,7 +189,133 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   It used to be dropped silently, so the session launched on a different model
   than the one picked with nothing on screen to say so.
 
+### Added
+- **Everything the Mini App can do is now reachable from chat.** New
+  `/restart`, `/rename`, `/delete` and `/diff` commands, plus a "⋮" button
+  on every session in `/status` that opens the same actions without having
+  to remember command names. `/diff` shows a stat summary inline and
+  attaches the full patch as a `.diff` file when it's large.
+- **Per-session preferences in chat.** The Mini App could already override
+  layout, formatting, answer length and language level *per session*; chat
+  could only set them for the whole conversation. Now reachable from
+  `/settings → 👤 Per-session preferences` and from any session's ⋮ menu —
+  both routes render from one shared function, so they cannot drift apart.
+- **`/new` is now interactive.** `/new` with no arguments asks for a name,
+  then Auto or Ask mode, then offers Confirm or Optional — where Optional
+  exposes model, working directory (including creating a new folder), and
+  the four preference fields. `/new !name` is unchanged: same reply, same
+  speed, no extra step.
+- **A glass design system for the Mini App** — theme-derived translucent
+  surfaces with an ambient backdrop, consistent pressed/focus states, and a
+  contrast gate in the test suite so it stays legible in both Telegram
+  light and dark themes. Falls back to solid surfaces where
+  `backdrop-filter` is unsupported, and honours `prefers-reduced-motion`.
+
+### Security
+- **The interactive `/new` wizard now checks who is *tapping*, not who
+  started it.** Its pending state is per chat, but every step authorized
+  against the user who ran `/new` — so in a group, any other member could
+  drive someone else's open wizard from the buttons on screen. A member
+  with no permission to create sessions at all could tap Confirm and get
+  one created, in Auto mode if that is what the original caller had
+  chosen; a plain chat message from a bystander could name that session,
+  or create a folder on the host through the "new folder" step (and was
+  swallowed instead of reaching the session it was meant for). Every step
+  now refuses anyone but the caller who opened the wizard, and
+  authorizes the acting user at each capability check.
+
+### Changed
+- **`/start` lists the commands that actually exist.** Its welcome text
+  still advertised only `/status`, `/stop`, `/kill` and `/new`, and
+  described `/new` as an alias for `aipager session` — so the commands
+  added since were discoverable only from Telegram's `/` menu. It now
+  covers the session-management set and says `/new` asks for the details
+  itself.
+- **The Mini App is now ON by default, which means aipager opens a public
+  tunnel unless you tell it not to.** Previously you had to run `aipager
+  miniapp enable`; almost nobody did, so the feature effectively did not
+  exist. Enabling it starts a Cloudflare quick tunnel that puts a public
+  HTTPS address in front of a small server on your machine. Every request
+  is verified against Telegram's `initData` signature — the URL is not a
+  secret and is not treated as one — but this **is** an internet-facing
+  listener that now starts without being asked for. Turn it off with
+  `aipager miniapp disable`, and an explicit `enabled: false` in
+  `aipager.yaml` is always respected. Note the fallback changed too: a
+  missing, empty or corrupt `miniapp:` block now reads as ON rather than
+  OFF.
+- **The Mini App button is there when you open the chat**, instead of
+  appearing only after you send `/app` or trigger some unrelated
+  refresh. The first keyboard is held for up to 45s while the tunnel
+  comes up so it can carry the button; if the tunnel never arrives the
+  keyboard is sent anyway, without it.
+- **The Mini App now ships with aipager instead of being an opt-in
+  extra.** `aiohttp` moved into the base dependencies, so a plain
+  `pip install aipager` / `uv tool install aipager` gets a Mini App that
+  works. Previously you had to know to type `aipager[miniapp]`; if you
+  didn't, `aipager miniapp enable` appeared to succeed and the server
+  silently never started. **This adds about 10 MB** (aiohttp plus
+  multidict, frozenlist, yarl, attrs, propcache, aiosignal and
+  aiohappyeyeballs) to a roughly 42 MB install. For scale, the setup
+  wizard's terminal colouring accounts for about 21 MB of that base.
+  `aipager[miniapp]` still installs cleanly — the extra is kept as an
+  empty alias so existing install commands and docs keep working. The
+  Mini App itself remains **off by default**; this changes only whether
+  the dependency is present, not whether the feature is on.
+
 ### Fixed
+- **Interactive commands now say they need a terminal instead of
+  crashing.** `aipager config` in a pipe, a script or CI printed a
+  "not a terminal" warning, then raised a bare `EOFError`, then rendered
+  that as "aipager hit an unexpected error" with a link inviting you to
+  file a bug — against your own shell redirect. It now prints one line
+  naming the command and exits 2, with no traceback and no issue link.
+  The non-interactive paths are untouched: `uninstall -y`,
+  `service install --yes` and `resume <name>` still work headless,
+  because the check sits at the prompt rather than at the command.
+- **`/app` no longer tells you to install Tailscale.** When the Mini App
+  link wasn't ready yet, it printed setup instructions — `curl … | sh`
+  and two `sudo tailscale` lines — from a Telegram message. That text
+  predated the managed Cloudflare tunnel and was both a violation of the
+  "you install aipager and run nothing else" contract and simply wrong:
+  the tunnel is automatic, and the only reason there's no link yet on a
+  healthy install is that it's still coming up. It now says exactly that,
+  and names no command. A separate, honest message covers the case where
+  aipager was installed without the Mini App at all.
+- **`aipager miniapp enable` no longer claims success it can't deliver.**
+  It printed `✓ Mini App enabled` even when the optional `[miniapp]`
+  dependency was absent, so the server could never start; the daemon
+  logged the real reason where nobody saw it. It now checks first and,
+  if the component is missing, says so and gives the one install command
+  matched to your installer.
+- **`aipager doctor` gained a Mini App row.** An install whose Mini App
+  could never start still reported `13 ok · 0 warn · 0 fail`. It now
+  warns (never fails — the Mini App is optional) when it's switched on
+  in config but not installed.
+- **`aipager uninstall` now actually removes the systemd unit.** It tried
+  to, via `python -m aipager.cli service uninstall` — but `aipager.cli` is
+  a package with no `__main__.py`, so that command failed every time it
+  ran, and the failure was swallowed (`capture_output`, `check=False`).
+  Every Linux uninstall therefore left an **enabled `Restart=always` unit**
+  pointing at the binary it had just deleted, and since the unit sets
+  `StartLimitIntervalSec=0` there is no start limiter to give up: systemd
+  retried every 5s indefinitely. The unit is now removed in-process. If a
+  previous uninstall left one behind, clear it with
+  `systemctl --user disable --now aipager.service` and delete
+  `~/.config/systemd/user/aipager.service`.
+- **`aipager service install` now restarts a daemon that was already
+  running.** It used `systemctl enable --now`, which starts a stopped unit
+  but leaves a running one untouched — so upgrading left the *previous*
+  process serving under the newly written unit. Combined with the control
+  socket moving to `$XDG_RUNTIME_DIR`, that stranded daemon kept the old
+  `/tmp` socket while the freshly installed hooks addressed the new one:
+  hook events went nowhere, and every session sat BUSY with no error in
+  any log. macOS was unaffected (its install boots the job out and back
+  in). Found by live-testing an upgrade, not by the test suite.
+- **The resolved `claude` binary path is now shell-quoted before it reaches
+  the session's launch command.** It was the one unquoted value on that
+  line — safe only while it could only ever come from a plain PATH lookup.
+  Now that it can come from `claude_path` in config or `$AIPAGER_CLAUDE_BIN`,
+  an unquoted value would have been a shell-injection sink.
 - **Mini App notices are now a floating toast card.** "Session resumed",
   "Folder created" and friends appear as a small card pinned to the top with
   a tick or an exclamation and a colour matching the outcome, instead of a
