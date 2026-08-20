@@ -34,6 +34,7 @@ from telegram.ext import (
 
 from aipager.dtach import inject
 
+from aipager.bot import new_flow, session_parity
 from aipager.bot.settings_menu import render_settings_root
 from aipager.config import (
     APP_BUTTON, BACK_BUTTON, COMMANDS_BUTTON,
@@ -324,6 +325,30 @@ class CommandHandlersMixin:
         # Make sure the persistent keyboard is showing.
         await self._send_keyboard(level="main", chat_id=calling_chat_id(update))
 
+    def _app_button_row(self, update: Update) -> list:
+        """One inline row linking to the Mini App, or [] when it doesn't belong.
+
+        Returned as a list so callers can splice it into an existing
+        keyboard with ``+`` and get nothing when the Mini App isn't
+        reachable.
+
+        Private chats only: Telegram rejects an ENTIRE keyboard that
+        carries a ``web_app`` button in a group, so one misplaced button
+        costs every other button in the message.
+
+        Deliberately NOT used on ``/start``: that handler ends by sending
+        the persistent keyboard, which already carries the App button, and
+        design.md's own rule is to never offer a competing entry point in
+        the same turn.
+        """
+        chat = update.effective_chat
+        if chat is None or chat.type != "private":
+            return []
+        url = getattr(self, "_miniapp_url", "")
+        if not url:
+            return []
+        return [[InlineKeyboardButton(APP_BUTTON, web_app=WebAppInfo(url=url))]]
+
     async def _handle_settings_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /settings — open the root preferences menu.
 
@@ -336,6 +361,9 @@ class CommandHandlersMixin:
             return
         chat_id = calling_chat_id(update)
         text, kb = render_settings_root(chat_id or 0)
+        app_row = self._app_button_row(update)
+        if app_row:
+            kb = InlineKeyboardMarkup(list(kb.inline_keyboard) + app_row)
         await update.message.reply_text(text, parse_mode="HTML", reply_markup=kb)
 
     async def _handle_app_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -445,6 +473,7 @@ class CommandHandlersMixin:
             sessions = self.registry.all_sessions(chat_id)
 
         blocks = []
+        shown: list[tuple[str, str]] = []
         has_gone = False
         for name, sess in sessions.items():
             alive = await inject.is_alive(name)
@@ -490,12 +519,24 @@ class CommandHandlersMixin:
             header = f"{icon} <b>{html_mod.escape(sess.label)}</b> · {status_str}"
             table = "\n".join(rows)
             blocks.append(f"{header}\n<code>{table}</code>")
+            shown.append((name, sess.label))
 
-        keyboard = None
+        # One ⋮ row per session actually rendered, in the same order as
+        # the blocks above — this is what makes restart/rename/delete/
+        # diff/preferences reachable without memorising four command
+        # names. "Clear gone sessions" stays last so its position is
+        # unchanged for anyone used to it.
+        rows_kb = [
+            [InlineKeyboardButton(
+                f"⋮ {label}", callback_data=f"{name}:menu")]
+            for name, label in shown
+        ]
         if has_gone:
-            keyboard = InlineKeyboardMarkup([[
+            rows_kb.append([
                 InlineKeyboardButton("Clear gone sessions", callback_data="_:clear_gone"),
-            ]])
+            ])
+        rows_kb += self._app_button_row(update)
+        keyboard = InlineKeyboardMarkup(rows_kb) if rows_kb else None
         await update.message.reply_text(
             "\n\n".join(blocks), parse_mode="HTML", reply_markup=keyboard,
         )
@@ -642,15 +683,10 @@ class CommandHandlersMixin:
         text = update.message.text.strip()
         parts = text.split(maxsplit=2)  # /new <name> [prompt...]
         if len(parts) < 2:
-            await update.message.reply_text(
-                "Usage: /new &lt;name&gt; [initial prompt]\n"
-                "Prefix the name with <code>!</code> to launch in "
-                "🤖 Auto mode (Claude runs tools without prompting; "
-                "<code>--dangerously-skip-permissions</code>).\n"
-                "Example: /new dev fix the auth bug\n"
-                "Example: /new !dev fix the auth bug",
-                parse_mode="HTML",
-            )
+            # No arguments: hand over to the interactive wizard rather
+            # than printing usage text. `/new !name` and `/new name`
+            # fall through below, byte-for-byte unchanged.
+            await new_flow.start_wizard(self, update, ctx)
             return
 
         raw_name = parts[1].strip()
@@ -984,6 +1020,14 @@ class CommandHandlersMixin:
             return
         text = update.message.text.strip()
         if not text:
+            return
+        # Multi-step flows get first refusal on free text. Each returns
+        # False unless it is genuinely mid-capture for THIS chat, so
+        # ordinary session routing below is untouched outside those
+        # narrow windows.
+        if await new_flow.maybe_handle_text(self, update, ctx, text):
+            return
+        if await session_parity.maybe_handle_text(self, update, ctx, text):
             return
 
         # Keyboard navigation + button matching — MUST stay above /<label> handlers

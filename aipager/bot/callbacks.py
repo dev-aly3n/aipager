@@ -30,6 +30,7 @@ from telegram.ext import (
     ContextTypes,
 )
 
+from aipager.bot import new_flow, session_parity
 from aipager.dtach import inject
 
 from aipager import preferences
@@ -316,6 +317,12 @@ class CallbackDispatchMixin:
             return
 
         session_name, action = cb_data.split(":", 1)
+        # Both return False unless the callback belongs to their own
+        # namespace, so every pre-existing callback below is unaffected.
+        if await new_flow.handle_callback(self, update, query, session_name, action):
+            return
+        if await session_parity.handle_callback(self, update, query, session_name, action):
+            return
 
         if action == "stop":
             sess = self.registry.get(session_name)

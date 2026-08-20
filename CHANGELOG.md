@@ -189,6 +189,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   It used to be dropped silently, so the session launched on a different model
   than the one picked with nothing on screen to say so.
 
+### Added
+- **Everything the Mini App can do is now reachable from chat.** New
+  `/restart`, `/rename`, `/delete` and `/diff` commands, plus a "⋮" button
+  on every session in `/status` that opens the same actions without having
+  to remember command names. `/diff` shows a stat summary inline and
+  attaches the full patch as a `.diff` file when it's large.
+- **Per-session preferences in chat.** The Mini App could already override
+  layout, formatting, answer length and language level *per session*; chat
+  could only set them for the whole conversation. Now reachable from
+  `/settings → 👤 Per-session preferences` and from any session's ⋮ menu —
+  both routes render from one shared function, so they cannot drift apart.
+- **`/new` is now interactive.** `/new` with no arguments asks for a name,
+  then Auto or Ask mode, then offers Confirm or Optional — where Optional
+  exposes model, working directory (including creating a new folder), and
+  the four preference fields. `/new !name` is unchanged: same reply, same
+  speed, no extra step.
+- **A glass design system for the Mini App** — theme-derived translucent
+  surfaces with an ambient backdrop, consistent pressed/focus states, and a
+  contrast gate in the test suite so it stays legible in both Telegram
+  light and dark themes. Falls back to solid surfaces where
+  `backdrop-filter` is unsupported, and honours `prefers-reduced-motion`.
+
 ### Changed
 - **The Mini App is now ON by default, which means aipager opens a public
   tunnel unless you tell it not to.** Previously you had to run `aipager

@@ -73,12 +73,26 @@ def test_handle_kill_unknown_label(mk_bot, mk_update, run_async):
 
 # ===== /new error paths =================================================
 
-def test_handle_new_no_name_shows_usage(mk_bot, mk_update, run_async):
+def test_handle_new_no_name_starts_the_wizard(mk_bot, mk_update, run_async):
+    """`/new` with no arguments used to print usage text. It now opens the
+    interactive wizard — that is the whole point of the second entry
+    point, so this test was inverted deliberately rather than deleted.
+
+    `/new !name` and `/new name` are unaffected; the tests below still
+    pin them.
+    """
     bot = mk_bot()
     update = mk_update("/new")
     run_async(bot._handle_new_cmd(update, MagicMock()))
     text = update.message.reply_text.await_args.args[0]
-    assert "Usage" in text
+    assert "Usage" not in text, "still printing the old usage text"
+    # The wizard's first step asks what to call the session and offers a
+    # way out. Asserted on intent, not on exact wording — copy is allowed
+    # to improve without breaking this.
+    assert "new session" in text.lower()
+    assert "called" in text.lower() or "name" in text.lower()
+    kb = update.message.reply_text.await_args.kwargs.get("reply_markup")
+    assert kb is not None, "the wizard must offer buttons (at least Cancel)"
 
 
 def test_handle_new_empty_after_bang_warns(mk_bot, mk_update, run_async):
