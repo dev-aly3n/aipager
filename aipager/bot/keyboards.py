@@ -83,6 +83,13 @@ class KeyboardMixin:
     ) -> None:
         """Send a message with the persistent keyboard.
 
+        Clears any deferred-keyboard hold as a side effect: once a
+        keyboard has actually gone out, the hold has nothing left to
+        protect, and releasing it later would send a second one. This
+        matters for the paths that reach here WITHOUT going through
+        ``_update_bot_commands``'s hold check — ``/start`` most of all,
+        which a user can send at any point during the up-to-45s window.
+
         Args:
             level: Which keyboard to show — "main", "templates", "commands",
                    or "models".  Defaults to current ``_keyboard_level``.
@@ -154,6 +161,21 @@ class KeyboardMixin:
             rows,
             resize_keyboard=True,
         )
+
+        # Only the MAIN keyboard satisfies the hold. Tapping a stale
+        # Templates/Commands/Models button after a restart also lands
+        # here, and clearing on those levels would consume the hold
+        # without the user ever receiving a main keyboard carrying the
+        # App button — silently recreating the "buttonless until some
+        # unrelated later event" bug this whole feature exists to fix.
+        # `« Back` passes its parent level, so a Back-to-main does count.
+        #
+        # Cleared before the send, not after: the send's exceptions are
+        # swallowed below, and a failed attempt should still count as
+        # this keyboard having been attempted rather than leaving a hold
+        # that fires a second one later.
+        if level == "main":
+            self._keyboard_deferred = False
 
         try:
             await self._app.bot.send_message(

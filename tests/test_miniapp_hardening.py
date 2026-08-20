@@ -217,7 +217,7 @@ def test_diff_refuses_a_concurrent_second_caller(hardening_server, run_async, mo
 
 # ===== 4. never advertise an unverified URL ===============================
 
-def test_probe_reports_dead_url_as_unreachable(run_async, monkeypatch):
+def test_probe_reports_dead_url_as_unreachable(run_async, monkeypatch, real_probe_public_url):
     """A hostname that does not resolve — the dead-ephemeral-tunnel case
     that started all of this — must come back False, not raise."""
     from aipager.miniapp import tunnel as _tun
@@ -282,7 +282,7 @@ def test_reachable_url_still_publishes_the_button(mk_bot, run_async, monkeypatch
 
 # ===== a fresh tunnel answers 530 before it answers 200 ===================
 
-def test_probe_retries_until_a_new_tunnel_becomes_reachable(run_async, monkeypatch):
+def test_probe_retries_until_a_new_tunnel_becomes_reachable(run_async, monkeypatch, real_probe_public_url):
     """Observed live: cloudflared reported its URL, the probe fired
     immediately, Cloudflare's edge returned 530 ("tunnel not ready"), the
     button was cleared — and the identical URL served 200 a minute later.
@@ -309,7 +309,7 @@ def test_probe_retries_until_a_new_tunnel_becomes_reachable(run_async, monkeypat
     assert len(calls) == 3, f"gave up after {len(calls)} attempts"
 
 
-def test_probe_still_gives_up_on_a_genuinely_dead_url(run_async, monkeypatch):
+def test_probe_still_gives_up_on_a_genuinely_dead_url(run_async, monkeypatch, real_probe_public_url):
     """Retrying must not turn 'dead' into 'wait forever' — a dead URL still
     has to clear the button, which is the guard's whole purpose."""
     from aipager.miniapp import tunnel as tun

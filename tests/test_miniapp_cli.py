@@ -68,8 +68,11 @@ def test_enable_rejects_non_https_url(_isolate_home_paths):
     _seed_config()
     rc = _cmd_miniapp_enable(_ns(port=None, url="http://insecure.example/"))
     assert rc != 0
-    # Nothing should have been written on a rejected URL.
-    assert _current_miniapp_config()["enabled"] is False
+    # Nothing should have been written on a rejected URL. Checked via
+    # public_url, not `enabled`: the latter read False only because that
+    # was the old default, so asserting it now tests the default rather
+    # than the rejection.
+    assert _current_miniapp_config()["public_url"] == ""
 
 
 def test_enable_preserves_other_config_keys(_isolate_home_paths):

@@ -190,6 +190,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   than the one picked with nothing on screen to say so.
 
 ### Changed
+- **The Mini App is now ON by default, which means aipager opens a public
+  tunnel unless you tell it not to.** Previously you had to run `aipager
+  miniapp enable`; almost nobody did, so the feature effectively did not
+  exist. Enabling it starts a Cloudflare quick tunnel that puts a public
+  HTTPS address in front of a small server on your machine. Every request
+  is verified against Telegram's `initData` signature — the URL is not a
+  secret and is not treated as one — but this **is** an internet-facing
+  listener that now starts without being asked for. Turn it off with
+  `aipager miniapp disable`, and an explicit `enabled: false` in
+  `aipager.yaml` is always respected. Note the fallback changed too: a
+  missing, empty or corrupt `miniapp:` block now reads as ON rather than
+  OFF.
+- **The Mini App button is there when you open the chat**, instead of
+  appearing only after you send `/app` or trigger some unrelated
+  refresh. The first keyboard is held for up to 45s while the tunnel
+  comes up so it can carry the button; if the tunnel never arrives the
+  keyboard is sent anyway, without it.
 - **The Mini App now ships with aipager instead of being an opt-in
   extra.** `aiohttp` moved into the base dependencies, so a plain
   `pip install aipager` / `uv tool install aipager` gets a Mini App that

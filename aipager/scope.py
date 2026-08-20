@@ -37,7 +37,7 @@ _KINDS = ("dm", "group")
 # aipager.yaml is authoritative — a setting written there survives exactly
 # one restart. aipager.yaml is never retired.
 _MINIAPP_KEY = "miniapp"
-_MINIAPP_DEFAULTS: dict = {"enabled": False, "port": 8765, "public_url": ""}
+_MINIAPP_DEFAULTS: dict = {"enabled": True, "port": 8765, "public_url": ""}
 
 # claude_path override — see claude_resolve.py's precedence chain (tier 1).
 # Same rebuild-vs-surgical-write split as miniapp: dump_claude_path() is the
@@ -279,8 +279,21 @@ def load_miniapp(path: Path = CONFIG_PATH) -> dict:
     """Return the Mini App block: ``{enabled: bool, port: int, public_url: str}``.
 
     Missing file, missing key, or a malformed value each fall back to the
-    built-in default for that field — off, 8765, no override — so a
-    damaged config can never turn the listener ON by accident.
+    built-in default for that field — **on**, 8765, no override.
+
+    That default used to be *off*, and this docstring used to say a
+    damaged config "can never turn the listener ON by accident". That is
+    no longer true and pretending otherwise would be worse than the
+    change itself: a missing or unreadable config now starts the Mini App
+    and, with it, a public tunnel. The trade was made deliberately — an
+    opt-in nobody discovers is a feature that does not exist — but it is
+    a real widening of what a broken config can do.
+
+    What is preserved is the strictness for **explicit** values: the
+    ``is True`` test below means a hand-edited ``enabled: "no"`` (or
+    ``"false"``, or ``"off"``) is still a string, still not ``True``, and
+    still reads as OFF. Anyone who has deliberately turned this off keeps
+    it off; only the absent-or-corrupt case flipped.
     """
     block = _raw_yaml(path).get(_MINIAPP_KEY)
     out = dict(_MINIAPP_DEFAULTS)

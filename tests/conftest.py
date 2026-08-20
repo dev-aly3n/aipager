@@ -310,6 +310,39 @@ def _prompts_may_run_without_a_terminal(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_real_tunnel_probe(monkeypatch):
+    """Refuse to make a real HTTPS request to a tunnel URL.
+
+    ``publish_miniapp_button`` probes the URL before publishing, and
+    ``tunnel.probe_public_url`` retries with delays — a test that reaches
+    it unmocked makes real network calls and takes over a minute. Found
+    the hard way: a test written for this very change sat there for 84
+    seconds resolving ``tunnel.example``.
+
+    Defaults to "reachable" because that is what almost every caller
+    wants to assume; a test about unreachability overrides it.
+    """
+    async def _reachable(url, *a, **k):
+        return True
+
+    monkeypatch.setattr("aipager.miniapp.tunnel.probe_public_url", _reachable)
+
+
+# Captured before the fixture above can stub it, so tests OF the probe
+# itself can restore the real implementation.
+from aipager.miniapp import tunnel as _tunnel  # noqa: E402
+
+REAL_PROBE_PUBLIC_URL = _tunnel.probe_public_url
+
+
+@pytest.fixture
+def real_probe_public_url(monkeypatch):
+    """Restore the genuine probe for tests that exercise it directly."""
+    monkeypatch.setattr(_tunnel, "probe_public_url", REAL_PROBE_PUBLIC_URL)
+    return REAL_PROBE_PUBLIC_URL
+
+
+@pytest.fixture(autouse=True)
 def _no_real_credential_probe(monkeypatch):
     """Refuse to actually run ``claude -p`` from the test suite.
 

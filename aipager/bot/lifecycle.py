@@ -399,6 +399,10 @@ class LifecycleMixin:
         # target here, so the keyboard renders per-chat on interaction
         # (handlers pass chat_id); a global broadcast would leak labels.
         if self.scopes is None:
+            if self._keyboard_deferred:
+                # Held until the Mini App URL lands, so the first
+                # keyboard the user sees already carries the App button.
+                return
             await self._send_keyboard(level="main")
 
     @staticmethod
@@ -474,6 +478,43 @@ class LifecycleMixin:
             return []
         # A negative id is a group: no menu button exists there.
         return [chat_id] if chat_id > 0 else []
+
+    def defer_first_keyboard(self) -> None:
+        """Hold the startup keyboard until the Mini App URL is known.
+
+        The managed tunnel does not exist yet when ``start()`` runs, so
+        the URL is empty at that point and the first keyboard would go
+        out without its App button. It would then stay buttonless until
+        some unrelated event refreshed it, which is how the Mini App
+        ended up feeling like something you had to discover by typing
+        ``/app``.
+
+        Holding it keeps this to **one** keyboard message per start. The
+        obvious alternative — send a buttonless one now, a second one
+        when the tunnel lands — puts an extra message in the chat on
+        every single restart.
+
+        Released by :meth:`publish_miniapp_button` (with or without a
+        URL) or by :meth:`release_deferred_keyboard`'s timeout, so a
+        tunnel that never comes up cannot cost the user their keyboard.
+        """
+        self._keyboard_deferred = True
+
+    async def release_deferred_keyboard(self) -> None:
+        """Send the held keyboard, if one is still held. Idempotent.
+
+        Never raises: it runs from a fire-and-forget timeout task and
+        from the publish path, and neither may take the daemon down.
+        """
+        if not self._keyboard_deferred:
+            return
+        self._keyboard_deferred = False
+        if self.scopes is not None or not self._app:
+            return
+        try:
+            await self._send_keyboard(level="main")
+        except Exception:
+            log.warning("Could not send the deferred keyboard", exc_info=True)
 
     def prime_miniapp_url(self, url: str) -> None:
         """Record the launch URL before the first keyboard goes out.
@@ -553,6 +594,14 @@ class LifecycleMixin:
             self._miniapp_url = ""
             log.warning("Could not build the Mini App menu button", exc_info=True)
             return
+
+        # Released only on a REAL url. The daemon calls this once with
+        # "" immediately after starting the tunnel manager — before any
+        # tunnel exists — and releasing there would send exactly the
+        # buttonless keyboard this deferral exists to avoid. The timeout
+        # in cli/daemon.py is what covers a tunnel that never arrives.
+        if url:
+            await self.release_deferred_keyboard()
 
         for chat_id in chats:
             try:

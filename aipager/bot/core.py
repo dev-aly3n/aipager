@@ -60,6 +60,9 @@ class TelegramBot(
         # once the Mini App server is confirmed listening — which
         # re-clears this if it turned out not to be.
         self._miniapp_url: str = ""
+        # Hold the very first keyboard until the Mini App URL is known —
+        # see lifecycle.defer_first_keyboard.
+        self._keyboard_deferred: bool = False
         self._template_map: dict[str, str] = {label: prompt for label, prompt in QUICK_TEMPLATES}
         self._command_map: dict[str, str] = {label: cmd for label, cmd in QUICK_COMMANDS}
         self._model_map: dict[str, str] = {label: cmd for label, cmd in MODEL_CHOICES}

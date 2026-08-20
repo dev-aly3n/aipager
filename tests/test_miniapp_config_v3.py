@@ -214,7 +214,10 @@ def test_enable_rejects_non_https_url(tmp_path):
     assert miniapp_cli._cmd_miniapp_enable(
         _Args(port=None, url="http://insecure.test"),
     ) == 2
-    assert scope.load_miniapp(scope.CONFIG_PATH)["enabled"] is False
+    # Checked via public_url, not `enabled`: the latter read False only
+    # because that was the old default, so asserting it now would test
+    # the default rather than the rejection.
+    assert scope.load_miniapp(scope.CONFIG_PATH)["public_url"] == ""
 
 
 def test_enable_on_a_v1_install_still_works_and_migrates_later(tmp_path):
@@ -241,9 +244,6 @@ def test_enable_on_a_v1_install_still_works_and_migrates_later(tmp_path):
 # ===== defaults are fail-closed ===========================================
 
 @pytest.mark.parametrize("block", [
-    None,
-    "not-a-dict",
-    {},
     {"enabled": "yes-ish", "port": "abc"},
     # The ones that matter most: a hand-edited config that plainly says
     # "off". bool("no") is True, so a bare bool() coercion would open a
@@ -255,8 +255,19 @@ def test_enable_on_a_v1_install_still_works_and_migrates_later(tmp_path):
     {"enabled": None, "port": 8765},
 ])
 def test_malformed_miniapp_block_never_enables(tmp_path, block):
-    """Fail-closed without exception: nothing short of a real YAML
-    boolean true may enable the server."""
+    """An explicit non-true value never enables the server.
+
+    Narrowed deliberately when the Mini App became on-by-default. This
+    used to cover the absent/unparseable cases too, on the old contract
+    that "nothing short of a real YAML boolean true may enable the
+    server". That contract is gone: a missing or malformed block now
+    falls back to the default, which is ON. What survives — and is what
+    actually protects an operator who turned this off — is that an
+    explicit ``enabled:`` value of anything other than boolean true
+    still reads as OFF. The absent-and-unparseable cases have their own
+    test below, asserting the new behaviour openly rather than by
+    omission.
+    """
     _write_v2_config(scope.CONFIG_PATH)
     raw = yaml.safe_load(scope.CONFIG_PATH.read_text(encoding="utf-8"))
     raw["miniapp"] = block
@@ -265,6 +276,33 @@ def test_malformed_miniapp_block_never_enables(tmp_path, block):
     cfg = scope.load_miniapp(scope.CONFIG_PATH)
     assert isinstance(cfg["port"], int)
     assert cfg["enabled"] is False
+
+
+@pytest.mark.parametrize("block", [None, "not-a-dict", {}, {"port": 8765}])
+def test_absent_or_unparseable_block_falls_back_to_the_default(tmp_path, block):
+    """...which is now ON. Stated outright, because it is a real
+    widening: a config that is missing, empty or corrupt starts the Mini
+    App and with it a public tunnel. That was the deliberate trade for
+    an opt-in nobody discovered — but it should be visible in a test,
+    not inferred from the absence of one."""
+    _write_v2_config(scope.CONFIG_PATH)
+    raw = yaml.safe_load(scope.CONFIG_PATH.read_text(encoding="utf-8"))
+    raw["miniapp"] = block
+    scope.CONFIG_PATH.write_text(yaml.safe_dump(raw), encoding="utf-8")
+
+    assert scope.load_miniapp(scope.CONFIG_PATH)["enabled"] is True
+
+
+def test_an_explicit_false_survives_the_default_flip(tmp_path):
+    """The one that matters most: anyone who deliberately turned this
+    off must stay off. A default flip that ignores an explicit opt-out
+    would be far worse than the problem it solves."""
+    _write_v2_config(scope.CONFIG_PATH)
+    raw = yaml.safe_load(scope.CONFIG_PATH.read_text(encoding="utf-8"))
+    raw["miniapp"] = {"enabled": False, "port": 8765}
+    scope.CONFIG_PATH.write_text(yaml.safe_dump(raw), encoding="utf-8")
+
+    assert scope.load_miniapp(scope.CONFIG_PATH)["enabled"] is False
 
 
 @pytest.mark.parametrize("value", [True, "yes", "on"])

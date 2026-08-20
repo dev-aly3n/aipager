@@ -201,8 +201,16 @@ level attacker cannot reach it without a foothold on the host.
 
 ## Mini App tunnel
 
-Enabling the Mini App (`aipager miniapp enable`, with no `--url`
-override) spawns a managed [Cloudflare quick
+**The Mini App is on by default**, so on a stock install aipager opens
+this tunnel without being asked. That is a deliberate trade — an opt-in
+nobody discovered was a feature that did not exist — but it means a
+fresh install reaches the internet. Turn it off with `aipager miniapp
+disable`, or set `enabled: false` under `miniapp:` in `aipager.yaml`;
+an explicit `false` is always respected. Note that a **missing or
+corrupt** `miniapp:` block now falls back to ON rather than OFF.
+
+The Mini App (unless a `--url` override is set) spawns a managed
+[Cloudflare quick
 tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/)
 pointed at the daemon's own loopback server, and publishes whatever
 public `https://*.trycloudflare.com` address it is assigned as the

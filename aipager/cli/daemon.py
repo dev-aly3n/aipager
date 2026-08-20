@@ -214,6 +214,52 @@ def _telegram_preflight() -> str:
     return username
 
 
+# Comfortably past the observed 10-30s cold-tunnel window (cloudflared
+# start + DNS propagation + the probe's own retry), while still short
+# enough that a broken tunnel does not leave someone staring at a
+# keyboardless chat wondering if the daemon is up.
+KEYBOARD_HOLD_SECONDS: float = 45.0
+
+
+def _is_private_target() -> bool:
+    """Could the configured chat ever show a web_app keyboard button?
+
+    A positive Telegram chat id is a user (private chat); groups and
+    channels are negative, and Telegram rejects an entire keyboard that
+    carries a ``web_app`` button in one. Mirrors
+    ``bot/keyboards.py``'s own ``is_private`` test.
+
+    Single-``CHAT_ID`` by construction, which is not a meaningful notion
+    in multi-scope mode where the real targets live in ``scopes``. That
+    is latent rather than live: the hold is independently gated off in
+    multi-scope mode (``_update_bot_commands`` only sends the startup
+    keyboard when ``self.scopes is None``, and ``release_deferred_keyboard``
+    returns early for the same reason). If the hold ever grows to cover
+    multi-scope, this helper has to grow with it.
+    """
+    from aipager.config import CHAT_ID
+
+    try:
+        return int(CHAT_ID) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+async def _release_keyboard_after(bot, delay: float) -> None:
+    """Send the held keyboard once *delay* has passed, if still held.
+
+    Fire-and-forget, so it swallows everything: an escape here would
+    surface only as "Task exception was never retrieved".
+    """
+    try:
+        await asyncio.sleep(delay)
+        await bot.release_deferred_keyboard()
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.debug("deferred-keyboard release failed", exc_info=True)
+
+
 async def _finish_auth_check(bot, provenance) -> None:
     """Resolve and deliver the startup auth warning, off the hot path.
 
@@ -280,6 +326,17 @@ async def _run_daemon(bot_username: str) -> None:
     from aipager.miniapp.tunnel import resolve_public_url
     miniapp_url = await resolve_public_url() if MINIAPP_ENABLED else ""
     bot.prime_miniapp_url(miniapp_url)
+    # `_is_private_target` because a `web_app` keyboard button is
+    # private-chat-only (Telegram rejects the whole keyboard in a group),
+    # so holding a group's keyboard buys nothing and costs up to 45s of
+    # having no keyboard at all.
+    if MINIAPP_ENABLED and not miniapp_url and _is_private_target():
+        # A managed tunnel is about to start and will hand us a URL in
+        # ~10-30s. Hold the first keyboard until then so the App button
+        # is there at first glance instead of appearing on some later
+        # unrelated refresh. Released by publish_miniapp_button, or by
+        # the timeout below if no tunnel ever arrives.
+        bot.defer_first_keyboard()
 
     await bot.start()
     if provenance is not None:
@@ -361,6 +418,12 @@ async def _run_daemon(bot_username: str) -> None:
         miniapp_url if miniapp_server is not None else "",
     )
 
+    # Backstop for the held keyboard: if no tunnel URL has arrived by
+    # now, send it anyway. A Mini App that never comes up must cost the
+    # operator a button, never their whole keyboard.
+    keyboard_release_task = asyncio.create_task(
+        _release_keyboard_after(bot, KEYBOARD_HOLD_SECONDS))
+
     log.info("AIPager running — all components started")
 
     stop = asyncio.Event()
@@ -384,6 +447,13 @@ async def _run_daemon(bot_username: str) -> None:
     await stop.wait()
 
     log.info("Shutting down...")
+    # Cancel the deferred-keyboard timer before anything else: it is a
+    # long sleep (KEYBOARD_HOLD_SECONDS) and leaving it pending keeps a
+    # task alive well past the daemon it belongs to. Harmless in
+    # production, but it also made every daemon test that drains pending
+    # tasks sit for the full 45s — the suite went from 100s to 413s
+    # before this was tracked and cancelled.
+    keyboard_release_task.cancel()
     registry.save()
     if manager is not None:
         # Before miniapp_server.stop(): stop accepting the world's
