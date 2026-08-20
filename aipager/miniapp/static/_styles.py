@@ -222,54 +222,6 @@ CSS = """\
     #notice { transition: none; }
   }
 
-  /* Settings groups: one screen, every option visible, no nested menus —
-     the whole point of doing this here instead of in chat. */
-  .setgroup { margin-top: 20px; }
-  .setgroup-title { font-weight: 700; margin-bottom: 8px; }
-  .setopt {
-    display: block;
-    width: 100%;
-    text-align: left;
-    margin-top: 6px;
-    padding: 9px 12px;
-    font: inherit;
-    color: var(--tg-theme-text-color, #000000);
-    background: transparent;
-    border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
-    border-radius: 8px;
-    cursor: pointer;
-  }
-  .setopt.is-active {
-    border-color: var(--tg-theme-button-color, #2481cc);
-    background: rgba(36, 129, 204, 0.12);
-    background: color-mix(in srgb, var(--tg-theme-button-color, #2481cc) 14%, transparent);
-    color: var(--tg-theme-text-color, #000000);
-    font-weight: 600;
-  }
-  .setopt[disabled] { opacity: 0.5; cursor: default; }
-  .setopt-help { display: block; font-size: 0.78rem; opacity: 0.75; margin-top: 2px; }
-  .setopt.is-saving { opacity: 0.6; }
-  /* The "default" tag (design §4): marks the SCOPE's value, independent of
-     which option is filled/selected. Deliberately understated relative to
-     .is-active's solid fill — it is a note about where an override
-     diverged from, not the thing currently in effect. */
-  .setopt-default-tag {
-    display: inline-block;
-    margin-left: 6px;
-    padding: 1px 7px;
-    font-size: 0.7rem;
-    font-weight: 600;
-    color: var(--tg-theme-hint-color, #888888);
-    border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
-    border-radius: 999px;
-    vertical-align: middle;
-  }
-  .setopt.is-active .setopt-default-tag {
-    color: currentColor;
-    opacity: 0.85;
-    border-color: currentColor;
-  }
-
   /* "Reset to default" (design §4) — a one-way door without it, so it
      gets its own always-visible control rather than living inside the
      collapsed sections below. */
