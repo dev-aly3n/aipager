@@ -31,18 +31,12 @@ Design constraints this module is written to (see design.md Alternatives
   never imported by any shared file in this worktree (that wiring is the
   integrator's job, applied after all three streams land; see
   ``implementation-parity.md``).
-
-Landed so far: per-session preferences (design.md decision #3's single
-renderer, ``render_session_preferences_root`` /
-``render_session_preferences_field``, plus the ``_:spref...`` callback
-family), the session ⋮ menu, ``/restart``, ``/rename``, and ``/delete``.
-``/diff`` lands in its own follow-up commit (the menu's Diff row is
-inert — ``handle_callback`` falls through — until it does).
 """
 
 from __future__ import annotations
 
 import html as html_mod
+import io
 from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -61,13 +55,23 @@ if TYPE_CHECKING:
 # recompute it on every render. Keyed by section for O(1) lookup.
 _SCHEMA = {entry["section"]: entry for entry in settings_menu.settings_schema()}
 
-# Populated further by the next commit (diff).
-_SESSION_ACTIONS: frozenset[str] = frozenset({
+_SESSION_ACTIONS = frozenset({
     "menu", "menu-close",
     "restart", "restart-confirm", "restart-cancel",
     "rename", "rename-cancel",
     "delete", "delete-confirm", "delete-cancel",
+    "diff",
 })
+
+_DIFF_INLINE_THRESHOLD = 3500  # chars — entrypoints.md's "~3500" cutoff
+
+_DIFF_REASON_TEXT = {
+    "cwd_missing": "[{label}]'s working directory is no longer there.",
+    "git_not_installed": "git isn't available on this machine.",
+    "not_a_git_repo": "[{label}]'s directory isn't a git repo.",
+    "no_commits_yet": "[{label}]'s repo has no commits yet.",
+    "git_error": "Couldn't read the diff right now — try again.",
+}
 
 _RESTART_REASON_TEXT = {
     "not_live": "[{label}] isn't running.",
@@ -414,6 +418,110 @@ async def handle_delete_cmd(
     await update.message.reply_text(reply_text, reply_markup=kb, parse_mode="HTML")
 
 
+# ---- diff ------------------------------------------------------------
+
+def _diff_stats(files: list[dict]) -> tuple[int, int, int]:
+    """``(files_changed, lines_added, lines_removed)`` — added/removed
+    counted from lines starting with ``+``/``-`` in each file's patch,
+    excluding the ``+++``/``---`` header lines (entrypoints.md's exact
+    counting rule)."""
+    added = removed = 0
+    for f in files:
+        patch = f.get("patch")
+        if not patch:
+            continue
+        for line in patch.split("\n"):
+            if line.startswith("+++") or line.startswith("---"):
+                continue
+            if line.startswith("+"):
+                added += 1
+            elif line.startswith("-"):
+                removed += 1
+    return len(files), added, removed
+
+
+def _concat_patch(files: list[dict]) -> str:
+    return "\n".join(f["patch"] for f in files if f.get("patch"))
+
+
+async def _run_diff(bot: "TelegramBot", sess: TrackedSession, *, target_message) -> None:
+    """Shared by ``/diff`` and ``{name}:diff`` — ``target_message`` is
+    either ``Update.message`` or ``CallbackQuery.message``; both expose
+    ``reply_text``/``reply_document``, so one implementation serves both
+    entry points."""
+    from aipager.miniapp.diff import collect_diff
+
+    result = await collect_diff(sess.cwd)
+
+    if not result.get("available"):
+        reason = result.get("reason", "git_error")
+        template = _DIFF_REASON_TEXT.get(reason, _DIFF_REASON_TEXT["git_error"])
+        await target_message.reply_text(
+            template.format(label=html_mod.escape(sess.label)),
+            parse_mode="HTML",
+        )
+        return
+
+    files = result.get("files") or []
+    if not files:
+        await target_message.reply_text(
+            f"No changes in [<b>{html_mod.escape(sess.label)}</b>]'s working directory.",
+            parse_mode="HTML",
+        )
+        return
+
+    n_files, added, removed = _diff_stats(files)
+    stat_line = (
+        f"📝 [<b>{html_mod.escape(sess.label)}</b>] "
+        f"{n_files} files changed, +{added}/-{removed}"
+    )
+    any_unusable = any(f.get("truncated") or f.get("binary") for f in files)
+    patch_text = _concat_patch(files)
+
+    if not any_unusable and len(patch_text) < _DIFF_INLINE_THRESHOLD:
+        await target_message.reply_text(
+            f"{stat_line}\n<pre>{html_mod.escape(patch_text)}</pre>",
+            parse_mode="HTML",
+        )
+        return
+
+    await target_message.reply_text(stat_line, parse_mode="HTML")
+    filename = f"{sess.label}.diff"
+    doc = io.BytesIO(patch_text.encode("utf-8"))
+    doc.name = filename  # never written to disk — built and sent in memory
+    await target_message.reply_document(document=doc, filename=filename)
+
+
+async def handle_diff_cmd(
+    bot: "TelegramBot", update: Update, ctx: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    """``/diff [label]``. No label → ``registry.last_active_session``.
+    With a label → resolves via ``find_by_label``. Read-only, no
+    confirm — gated with ``allow_read_only=True``."""
+    if not await bot._authorize(update, allow_read_only=True):
+        return
+    text = update.message.text.strip()
+    parts = text.split(maxsplit=1)
+    chat_id = calling_chat_id(update)
+
+    if len(parts) < 2:
+        name = bot.registry.last_active_session
+        sess = bot.registry.get(name) if name else None
+        if sess is None:
+            await update.message.reply_text("No active session to diff.")
+            return
+    else:
+        label = parts[1].strip()
+        sess = bot.registry.find_by_label(label, chat_id, include_gone=True)
+        if sess is None:
+            await update.message.reply_text(
+                f"⚠️ Unknown session: {html_mod.escape(label)}", parse_mode="HTML",
+            )
+            return
+
+    await _run_diff(bot, sess, target_message=update.message)
+
+
 # ---- per-session preferences ----------------------------------------
 
 def _render_session_pref_picker(
@@ -651,9 +759,7 @@ async def handle_callback(
     Two disjoint families:
     - ``_:spref...`` (session_name == "_") — per-session preferences,
       dispatched to :func:`_handle_spref_callback`.
-    - ``{name}:<action>`` for every action in :data:`_SESSION_ACTIONS`
-      (rename/delete/diff still fall through until their own commits
-      land).
+    - ``{name}:<action>`` for every action in :data:`_SESSION_ACTIONS`.
     """
     chat_id = calling_chat_id(update)
 
@@ -754,12 +860,17 @@ async def handle_callback(
         )
         return True
 
+    if action == "diff":
+        await _run_diff(bot, sess, target_message=query.message)
+        return True
+
     return False
 
 
 __all__ = [
     "handle_callback",
     "handle_delete_cmd",
+    "handle_diff_cmd",
     "handle_rename_cmd",
     "handle_restart_cmd",
     "maybe_handle_text",
