@@ -284,6 +284,31 @@ def _no_real_login_shell_probe(request, monkeypatch):
                             _refuse)
 
 
+# Captured at import time, before any fixture can stub it — the same
+# pattern this suite uses for claude_resolve._candidate_paths. Tests that
+# exercise the TTY guard itself use this reference so the autouse stub
+# below cannot make them vacuous.
+from aipager import errors as _errors  # noqa: E402
+
+REAL_REQUIRE_INTERACTIVE = _errors.require_interactive
+
+
+@pytest.fixture(autouse=True)
+def _prompts_may_run_without_a_terminal(monkeypatch):
+    """Neutralise ``errors.require_interactive`` for the whole suite.
+
+    pytest replaces ``sys.stdin`` with a non-TTY object, so the guard
+    fires in every test that reaches a prompt — but those tests mock the
+    prompt itself and are not about the guard at all. Stubbing it here
+    keeps them testing what their names say.
+
+    The guard's own behaviour is covered in
+    ``tests/test_tty_guard.py``, which calls ``REAL_REQUIRE_INTERACTIVE``
+    above rather than the stubbed attribute.
+    """
+    monkeypatch.setattr(_errors, "require_interactive", lambda command=None: None)
+
+
 @pytest.fixture(autouse=True)
 def _no_real_credential_probe(monkeypatch):
     """Refuse to actually run ``claude -p`` from the test suite.

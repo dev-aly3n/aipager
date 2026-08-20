@@ -349,6 +349,10 @@ def _install_linux(*, yes: bool = False) -> int:
         ok(f"{LINUX_UNIT_PATH} already up to date")
     else:
         if not yes:
+            # Same reasoning as uninstall: `service install --yes` is the
+            # scripted path and never reaches this prompt.
+            from aipager.errors import require_interactive
+            require_interactive()
             diff = "\n".join(difflib.unified_diff(
                 existing_text.splitlines(), rendered.splitlines(),
                 fromfile=str(LINUX_UNIT_PATH), tofile="(new)", lineterm="",

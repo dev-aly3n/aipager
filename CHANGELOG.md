@@ -205,6 +205,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the dependency is present, not whether the feature is on.
 
 ### Fixed
+- **Interactive commands now say they need a terminal instead of
+  crashing.** `aipager config` in a pipe, a script or CI printed a
+  "not a terminal" warning, then raised a bare `EOFError`, then rendered
+  that as "aipager hit an unexpected error" with a link inviting you to
+  file a bug — against your own shell redirect. It now prints one line
+  naming the command and exits 2, with no traceback and no issue link.
+  The non-interactive paths are untouched: `uninstall -y`,
+  `service install --yes` and `resume <name>` still work headless,
+  because the check sits at the prompt rather than at the command.
 - **`/app` no longer tells you to install Tailscale.** When the Mini App
   link wasn't ready yet, it printed setup instructions — `curl … | sh`
   and two `sudo tailscale` lines — from a Telegram message. That text

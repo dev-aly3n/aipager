@@ -699,6 +699,8 @@ def _fix_daemon_credential() -> None:
         console.print(f"  [ok]✓[/ok]  {DAEMON_ENV_PATH} already has content — leaving it alone")
         return
     console.print(f"  No credential found at {DAEMON_ENV_PATH}.")
+    from aipager.errors import require_interactive
+    require_interactive()
     answer = input("  Try to discover one automatically? [y/N]: ").strip().lower()
     if answer not in ("y", "yes"):
         console.print("  [muted]skipped[/muted]")
@@ -729,6 +731,8 @@ def _fix_claude_path() -> None:
     console.print(f"    0) {installs[0].path} ({installs[0].version}) — current pick")
     for i, install in enumerate(installs[1:], start=1):
         console.print(f"    {i}) {install.path} ({install.version})")
+    from aipager.errors import require_interactive
+    require_interactive()
     answer = input(
         "  Pin one via claude_path in aipager.yaml? "
         "Enter a number, or blank to skip: "

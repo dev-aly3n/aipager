@@ -278,6 +278,10 @@ def cmd_uninstall(args=None) -> int:
     console.print()
 
     if not force:
+        # Only when actually prompting — `uninstall -y` must keep working
+        # from a script, which is the whole point of that flag.
+        from aipager.errors import require_interactive
+        require_interactive()
         answer = input("Continue? [y/N]: ").strip().lower()
         if answer not in ("y", "yes"):
             return 0

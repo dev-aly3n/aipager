@@ -85,6 +85,10 @@ def _session_kill(args: argparse.Namespace) -> int:
         return 1
 
     if not force:
+        # Same shape as uninstall/service-install: `-y` is the scripted
+        # path and never reaches this prompt.
+        from aipager.errors import require_interactive
+        require_interactive()
         answer = input(f"Kill session {name!r}? This will terminate the running "
                        f"claude process. [y/N]: ").strip().lower()
         if answer not in ("y", "yes"):
