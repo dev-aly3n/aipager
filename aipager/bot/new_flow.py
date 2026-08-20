@@ -175,6 +175,9 @@ def _name_prompt_text(error: str = "") -> str:
 def _render_mode(
     bot: TelegramBot, pending: dict, chat_id: int, *, note: str = "",
 ) -> tuple[str, InlineKeyboardMarkup]:
+    # The wizard's own caller: every reachable path here has already
+    # refused anyone else, and this renders THEIR capability — the label
+    # says whether the person this message belongs to may pick Auto.
     is_admin = bot._is_admin_user(pending["user_id"], chat_id)
     auto_label = "🤖 Auto" if is_admin else "🤖 Auto (requires admin)"
     text = f"🆕 <b>{html_mod.escape(pending['name'])}</b>\n\n"
