@@ -47,6 +47,13 @@ def mk_cb():
         query.answer = AsyncMock()
         query.message = MagicMock()
         query.message.message_id = message_id
+        # Real callback queries always carry `from_user`, and it is the
+        # authoritative "who tapped this" — `update.effective_user` is
+        # derived from it. Leaving it an auto-MagicMock made the tapping
+        # user unidentifiable, which is precisely what the wizard now has
+        # to check.
+        query.from_user = MagicMock()
+        query.from_user.id = user_id
         update = MagicMock()
         update.callback_query = query
         update.effective_user = MagicMock()
@@ -817,7 +824,12 @@ def test_confirm_adds_miniapp_button_only_in_private_chat_with_url(
 
     kb = bot._app.bot.edit_message_text.await_args.kwargs["reply_markup"]
     assert kb is not None
-    assert any("Mini App" in b.text for row in kb.inline_keyboard for b in row)
+    # Asserted against the shared constant, not a literal: the wizard's
+    # success reply builds this row with the same `_app_button_row`
+    # helper every other surface uses, so the label is whatever chat
+    # calls the Mini App everywhere else.
+    from aipager.config import APP_BUTTON
+    assert any(APP_BUTTON == b.text for row in kb.inline_keyboard for b in row)
 
 
 def test_confirm_no_miniapp_button_in_group_chat(

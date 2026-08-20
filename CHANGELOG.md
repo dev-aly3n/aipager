@@ -211,6 +211,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   light and dark themes. Falls back to solid surfaces where
   `backdrop-filter` is unsupported, and honours `prefers-reduced-motion`.
 
+### Security
+- **The interactive `/new` wizard now checks who is *tapping*, not who
+  started it.** Its pending state is per chat, but every step authorized
+  against the user who ran `/new` — so in a group, any other member could
+  drive someone else's open wizard from the buttons on screen. A member
+  with no permission to create sessions at all could tap Confirm and get
+  one created, in Auto mode if that is what the original caller had
+  chosen; a plain chat message from a bystander could name that session,
+  or create a folder on the host through the "new folder" step (and was
+  swallowed instead of reaching the session it was meant for). Every step
+  now refuses anyone but the caller who opened the wizard, and
+  authorizes the acting user at each capability check.
+
 ### Changed
 - **`/start` lists the commands that actually exist.** Its welcome text
   still advertised only `/status`, `/stop`, `/kill` and `/new`, and

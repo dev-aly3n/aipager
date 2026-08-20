@@ -76,7 +76,7 @@ import logging
 import time
 from typing import TYPE_CHECKING
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from aipager.bot.settings_menu import settings_schema
 from aipager.bot.transport import calling_chat_id
@@ -487,6 +487,29 @@ async def start_wizard(
 
 # ---- free-text capture -----------------------------------------------
 
+def _actor_id(update: Update, query: CallbackQuery | None = None) -> int | None:
+    """The user who is acting RIGHT NOW — not the one who started the wizard.
+
+    The wizard spans many messages, and its pending state lives per CHAT,
+    not per user. Every step used to authorize against
+    ``pending["user_id"]``, the id captured once at ``/new`` time, so in a
+    group any member could drive someone else's open wizard: a read_only
+    member — one who cannot pass ``_authorize`` to run ``/new`` at all —
+    could tap Confirm on another user's summary and get a session created,
+    in Auto mode (``--dangerously-skip-permissions``) if that is what the
+    original caller had picked. The text steps were worse still: they run
+    ``launch.create_directory``, so a stranger's message could create a
+    folder on the operator's disk.
+
+    ``session_parity`` already re-derives the acting user at every
+    mutating moment; this is the same rule, applied here.
+    """
+    user = getattr(query, "from_user", None) if query is not None else None
+    if user is None:
+        user = update.effective_user
+    return user.id if user is not None else None
+
+
 async def maybe_handle_text(
     bot: TelegramBot, update: Update, ctx: ContextTypes.DEFAULT_TYPE, text: str,
 ) -> bool:
@@ -502,6 +525,11 @@ async def maybe_handle_text(
     if pending is None:
         return False
     if pending["step"] not in _TEXT_CAPTURE_STEPS:
+        return False
+    if _actor_id(update) != pending["user_id"]:
+        # Someone else talking in the same chat. Their message is theirs:
+        # fall through to normal routing instead of consuming it as this
+        # wizard's session name / model / new-folder name.
         return False
 
     if _is_expired(pending):
@@ -579,6 +607,15 @@ async def handle_callback(
         await _edit_stale(bot, chat_id, getattr(msg, "message_id", None))
         return True
 
+    actor = _actor_id(update, query)
+    if actor != pending["user_id"]:
+        # Checked before the expiry branch and before _touch(): a
+        # stranger's tap must not keep someone else's wizard alive
+        # either.
+        await bot._safe_answer(
+            query, "This isn't your session setup.", show_alert=True)
+        return True
+
     if _is_expired(pending):
         store.pop(chat_id, None)
         await bot._safe_answer(query, "This wizard expired.")
@@ -593,7 +630,7 @@ async def handle_callback(
         return True
 
     if sub == ["mode", "auto"]:
-        if not bot._is_admin_user(pending["user_id"], chat_id):
+        if not bot._is_admin_user(actor, chat_id):
             await bot._safe_answer(query, "Auto mode requires admin.", show_alert=True)
             return True
         pending["skip_perms"] = True
@@ -640,7 +677,7 @@ async def handle_callback(
         return True
 
     if sub == ["confirm"]:
-        await _confirm(bot, update, query, chat_id, pending, store)
+        await _confirm(bot, update, query, chat_id, pending, store, actor)
         return True
 
     await bot._safe_answer(query, "Invalid callback")
@@ -731,13 +768,17 @@ async def _handle_pref_token(
 
 async def _confirm(
     bot: TelegramBot, update: Update, query: CallbackQuery, chat_id: int,
-    pending: dict, store: dict[int, dict],
+    pending: dict, store: dict[int, dict], actor: int | None = None,
 ) -> None:
     if not pending.get("name"):
         await bot._safe_answer(query, "Invalid callback")
         return
 
-    user_id = pending["user_id"]
+    # The dispatcher has already refused a mismatch, so `actor` and the
+    # stored id agree by the time we get here — authorize the acting
+    # user anyway rather than a value captured minutes ago in another
+    # message.
+    user_id = pending["user_id"] if actor is None else actor
 
     # Re-authorize here, not only at /new — the flow spans messages and
     # minutes (design.md hard rule).
@@ -808,11 +849,11 @@ async def _confirm(
         + perms_nudge
     )
 
-    kb = None
-    chat = update.effective_chat
-    if chat is not None and getattr(chat, "type", "") == "private" and bot._miniapp_url:
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton(
-            "🧠 Open Mini App", web_app=WebAppInfo(url=bot._miniapp_url))]])
+    # Via the shared helper, not a second inline copy of the same gate:
+    # a `web_app` button in a group makes Telegram reject the ENTIRE
+    # keyboard, so that rule must live in exactly one place.
+    app_row = bot._app_button_row(update)
+    kb = InlineKeyboardMarkup(app_row) if app_row else None
 
     await _edit_wizard(bot, chat_id, pending, text, kb)
     log.info("Launched session %s via wizard", pending["name"])
