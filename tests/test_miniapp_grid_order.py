@@ -384,15 +384,25 @@ def test_no_theme_background_is_paired_with_hardcoded_white_text():
     A hardcoded background paired with hardcoded text is fine (the two are
     chosen together and no theme can pull them apart); only mixing the two
     is the mistake.
+
+    The glass system (`--glass-bg`, `--glass-bg-raised`, …) paints surfaces
+    through a SECOND family of custom properties that itself resolves to
+    `--tg-theme-secondary-bg-color` (see `_styles.py`'s GLASS TOKENS block) —
+    it is exactly as theme-derived as a bare `--tg-theme-*` background, just
+    one indirection away. A trigger that only looks for the literal string
+    `--tg-theme` goes blind to it: `background-color: var(--glass-bg); color:
+    #ffffff;` would slip straight past the original check while being the
+    same mistake this test exists to catch. Widened to trigger on either
+    family.
     """
     import re
 
     offenders = []
     for selector, body in _rule_blocks(_css()):
         low = body.lower()
-        if "--tg-theme" not in low:
+        if "--tg-theme" not in low and "--glass-" not in low:
             continue
-        bg = "background" in low and "--tg-theme" in low
+        bg = "background" in low and ("--tg-theme" in low or "--glass-" in low)
         # Tolerate spacing/casing variants and the named/rgb forms — a
         # literal "color: #ffffff" match is trivially stepped around.
         white_text = bool(re.search(
