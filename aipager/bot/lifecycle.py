@@ -10,6 +10,7 @@ Single owner of all Telegram communication. Handles:
 from __future__ import annotations
 
 import asyncio
+import functools
 import html as html_mod
 import logging
 from typing import TYPE_CHECKING
@@ -30,6 +31,7 @@ from telegram.error import BadRequest, Forbidden, RetryAfter
 
 from aipager.dtach import inject
 
+from aipager.bot import session_parity
 from aipager.config import (
     APP_BUTTON, BOT_TOKEN, CHAT_ID,
 )
@@ -223,6 +225,17 @@ class LifecycleMixin:
         self._app.add_handler(CommandHandler("perms", self._handle_perms_cmd))
         self._app.add_handler(CommandHandler("settings", self._handle_settings_cmd))
         self._app.add_handler(CommandHandler("app", self._handle_app_cmd))
+        # Chat parity with the Mini App — each of these mirrors a route
+        # the Mini App already exposes. Handlers live in session_parity
+        # so this file stays a registration table.
+        for _name, _fn in (
+            ("restart", session_parity.handle_restart_cmd),
+            ("rename", session_parity.handle_rename_cmd),
+            ("delete", session_parity.handle_delete_cmd),
+            ("diff", session_parity.handle_diff_cmd),
+        ):
+            self._app.add_handler(
+                CommandHandler(_name, functools.partial(_fn, self)))
         # Chat gate for message handlers. Multi-scope: accept every
         # configured scope's chat. Legacy: the single CHAT_ID. (Command
         # handlers above are not chat-filtered; _authorize gates them.)
@@ -418,6 +431,10 @@ class LifecycleMixin:
             BotCommand("settings", "Configure message layout, formatting, and language"),
             BotCommand("clearqueue", "Drop pending queued prompts"),
             BotCommand("whoami", "Show your role + permissions"),
+            BotCommand("restart", "Restart a session"),
+            BotCommand("rename", "Rename a session"),
+            BotCommand("delete", "Remove a finished session from the list"),
+            BotCommand("diff", "Show a session's working-directory diff"),
         ]
         # Read late (not module-level) so a live `aipager miniapp enable`
         # + restart is reflected without re-importing this module.

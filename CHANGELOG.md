@@ -189,7 +189,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   It used to be dropped silently, so the session launched on a different model
   than the one picked with nothing on screen to say so.
 
+### Added
+- **Everything the Mini App can do is now reachable from chat.** New
+  `/restart`, `/rename`, `/delete` and `/diff` commands, plus a "⋮" button
+  on every session in `/status` that opens the same actions without having
+  to remember command names. `/diff` shows a stat summary inline and
+  attaches the full patch as a `.diff` file when it's large.
+- **Per-session preferences in chat.** The Mini App could already override
+  layout, formatting, answer length and language level *per session*; chat
+  could only set them for the whole conversation. Now reachable from
+  `/settings → 👤 Per-session preferences` and from any session's ⋮ menu —
+  both routes render from one shared function, so they cannot drift apart.
+- **`/new` is now interactive.** `/new` with no arguments asks for a name,
+  then Auto or Ask mode, then offers Confirm or Optional — where Optional
+  exposes model, working directory (including creating a new folder), and
+  the four preference fields. `/new !name` is unchanged: same reply, same
+  speed, no extra step.
+- **A glass design system for the Mini App** — theme-derived translucent
+  surfaces with an ambient backdrop, consistent pressed/focus states, and a
+  contrast gate in the test suite so it stays legible in both Telegram
+  light and dark themes. Falls back to solid surfaces where
+  `backdrop-filter` is unsupported, and honours `prefers-reduced-motion`.
+
+### Security
+- **The interactive `/new` wizard now checks who is *tapping*, not who
+  started it.** Its pending state is per chat, but every step authorized
+  against the user who ran `/new` — so in a group, any other member could
+  drive someone else's open wizard from the buttons on screen. A member
+  with no permission to create sessions at all could tap Confirm and get
+  one created, in Auto mode if that is what the original caller had
+  chosen; a plain chat message from a bystander could name that session,
+  or create a folder on the host through the "new folder" step (and was
+  swallowed instead of reaching the session it was meant for). Every step
+  now refuses anyone but the caller who opened the wizard, and
+  authorizes the acting user at each capability check.
+
 ### Changed
+- **`/start` lists the commands that actually exist.** Its welcome text
+  still advertised only `/status`, `/stop`, `/kill` and `/new`, and
+  described `/new` as an alias for `aipager session` — so the commands
+  added since were discoverable only from Telegram's `/` menu. It now
+  covers the session-management set and says `/new` asks for the details
+  itself.
 - **The Mini App is now ON by default, which means aipager opens a public
   tunnel unless you tell it not to.** Previously you had to run `aipager
   miniapp enable`; almost nobody did, so the feature effectively did not

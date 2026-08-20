@@ -425,7 +425,10 @@ async def is_alive(session: str) -> bool:
 
 
 _VALID_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
-_RESERVED = {"status", "stop", "kill", "new", "help", "start", "settings"}
+_RESERVED = {
+    "status", "stop", "kill", "new", "help", "start", "settings",
+    "restart", "rename", "delete", "diff",
+}
 _PROJECT_DIR = os.environ.get("AIPAGER_WORK_DIR", os.getcwd())
 # Resolved lazily inside launch_session() — NOT at import time. Import-time
 # resolution would spawn a `--version` subprocess for every unrelated CLI
