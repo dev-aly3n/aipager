@@ -35,9 +35,10 @@ Design constraints this module is written to (see design.md Alternatives
 Landed so far: per-session preferences (design.md decision #3's single
 renderer, ``render_session_preferences_root`` /
 ``render_session_preferences_field``, plus the ``_:spref...`` callback
-family), the session ⋮ menu, and ``/restart``. Rename, delete, and diff
-land in their own follow-up commits (the menu's rows for them are inert
-— ``handle_callback`` falls through — until each one's commit lands).
+family), the session ⋮ menu, ``/restart``, and ``/rename``. Delete and
+diff land in their own follow-up commits (the menu's rows for them are
+inert — ``handle_callback`` falls through — until each one's commit
+lands).
 """
 
 from __future__ import annotations
@@ -61,10 +62,11 @@ if TYPE_CHECKING:
 # recompute it on every render. Keyed by section for O(1) lookup.
 _SCHEMA = {entry["section"]: entry for entry in settings_menu.settings_schema()}
 
-# Populated further by later commits (rename/delete/diff).
+# Populated further by later commits (delete/diff).
 _SESSION_ACTIONS: frozenset[str] = frozenset({
     "menu", "menu-close",
     "restart", "restart-confirm", "restart-cancel",
+    "rename", "rename-cancel",
 })
 
 _RESTART_REASON_TEXT = {
@@ -117,6 +119,28 @@ def _resolve_pref_index(
     if idx < 0 or idx >= len(names):
         return None
     return bot.registry.get(names[idx])
+
+
+def _rename_pending_map(bot: "TelegramBot") -> dict[int, dict]:
+    """``bot._rename_pending`` — literal attribute name from
+    entrypoints.md's session-scoped callback table (``{name}:rename``'s
+    "Meaning" column). Keyed by chat id, same shape as the pre-existing
+    ``_new_conflict_pending`` / ``_perms_pending`` dicts this mirrors —
+    lazily created here rather than in ``core.py.__init__`` for the same
+    leak-across-tests reason as ``_pref_index_map``."""
+    pending = getattr(bot, "_rename_pending", None)
+    if pending is None:
+        pending = {}
+        bot._rename_pending = pending
+    return pending
+
+
+def _start_rename_capture(
+    bot: "TelegramBot", chat_id: int, sess: TrackedSession,
+) -> None:
+    _rename_pending_map(bot)[chat_id] = {
+        "session_name": sess.name, "label": sess.label,
+    }
 
 
 # ---- small pure helpers ---------------------------------------------------
@@ -246,6 +270,86 @@ def _restart_outcome_text(outcome) -> str:
     template = _RESTART_REASON_TEXT.get(outcome.reason, "Restart failed for [{label}].")
     return template.format(
         label=html_mod.escape(outcome.label), err=html_mod.escape(outcome.err),
+    )
+
+
+# ---- rename ------------------------------------------------------------
+
+async def _apply_rename(
+    bot: "TelegramBot", sess: TrackedSession, new_label: str, chat_id: int, *,
+    reply_target,
+) -> None:
+    """Validate + collision-check + apply — the direct-rename path both
+    ``/rename old new`` and the free-text capture step converge on.
+    Mirrors ``server.py:_handle_session_rename``'s own validation
+    exactly (same import, same collision rule) so a name chat accepts
+    is always one the Mini App would accept too."""
+    from aipager.miniapp.launch import validate_session_name
+
+    clean, err = validate_session_name(new_label)
+    if err:
+        await reply_target.reply_text(f"⚠️ {html_mod.escape(err)}", parse_mode="HTML")
+        return
+
+    if clean != sess.label:
+        existing = bot.registry.find_by_label(clean, chat_id, include_gone=True)
+        if existing is not None and (
+            existing.status != Status.GONE or existing.claude_session_id
+        ):
+            await reply_target.reply_text(
+                f"⚠️ A session named {html_mod.escape(clean)} already exists in this chat.",
+                parse_mode="HTML",
+            )
+            return
+
+    outcome = await bot._rename_session_core(sess, clean)
+    if outcome.changed:
+        await reply_target.reply_text(
+            f"✏️ [<b>{html_mod.escape(outcome.previous_label)}</b>] renamed to "
+            f"[<b>{html_mod.escape(outcome.new_label)}</b>].",
+            parse_mode="HTML",
+        )
+    else:
+        await reply_target.reply_text(
+            f"[<b>{html_mod.escape(sess.label)}</b>] name unchanged.",
+            parse_mode="HTML",
+        )
+
+
+async def handle_rename_cmd(
+    bot: "TelegramBot", update: Update, ctx: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    """``/rename [old] [new]``. Two args → direct rename, no confirm
+    (matches the Mini App, which has none either). Fewer args → picker
+    of every labelled session, then a free-text prompt for the new
+    name (entrypoints.md)."""
+    if not await bot._authorize(update):
+        return
+    text = update.message.text.strip()
+    parts = text.split(maxsplit=2)
+    chat_id = calling_chat_id(update)
+
+    if len(parts) >= 3:
+        old_label, new_label = parts[1].strip(), parts[2].strip()
+        sess = bot.registry.find_by_label(old_label, chat_id, include_gone=True)
+        if sess is None:
+            await update.message.reply_text(
+                f"⚠️ Unknown session: {html_mod.escape(old_label)}", parse_mode="HTML",
+            )
+            return
+        await _apply_rename(bot, sess, new_label, chat_id, reply_target=update.message)
+        return
+
+    sessions = [s for s in bot.registry.all_sessions(chat_id).values() if s.label]
+    if not sessions:
+        await update.message.reply_text("No sessions to rename.")
+        return
+    buttons = [
+        [InlineKeyboardButton(sess.label, callback_data=f"{sess.name}:rename")]
+        for sess in sessions
+    ]
+    await update.message.reply_text(
+        "Which session to rename?", reply_markup=InlineKeyboardMarkup(buttons),
     )
 
 
@@ -445,11 +549,32 @@ async def _handle_spref_callback(
 async def maybe_handle_text(
     bot: "TelegramBot", update: Update, ctx: ContextTypes.DEFAULT_TYPE, text: str,
 ) -> bool:
-    """Always ``False`` until the rename commit lands — placeholder so
-    the shared-file integration snippet (which calls this unconditionally
-    from ``_handle_message``) has a stable target from the first commit
-    onward."""
-    return False
+    """``True`` iff this text was consumed as a pending rename's new
+    name. Called from ``_handle_message`` before every other branch —
+    while a rename is pending in this chat, any text sent is treated as
+    the candidate new name (Cancel is always one tap away via
+    ``{name}:rename-cancel``)."""
+    chat_id = calling_chat_id(update)
+    if chat_id is None:
+        return False
+    pending = _rename_pending_map(bot).pop(chat_id, None)
+    if pending is None:
+        return False
+
+    sess = bot.registry.get(pending["session_name"])
+    if sess is None:
+        await update.message.reply_text(
+            "⚠️ That session is no longer available — run /rename again.",
+        )
+        return True
+
+    user_id = update.effective_user.id if update.effective_user else None
+    if not bot._can_prompt_user(user_id, chat_id):
+        await update.message.reply_text("🚫 You can't rename this session.")
+        return True
+
+    await _apply_rename(bot, sess, text.strip(), chat_id, reply_target=update.message)
+    return True
 
 
 # ---- callback dispatch -------------------------------------------------
@@ -516,11 +641,28 @@ async def handle_callback(
         )
         return True
 
+    if action == "rename":
+        if not bot._can_prompt_user(user_id, chat_id):
+            await bot._safe_answer(query, "You can't rename this session.")
+            return True
+        _start_rename_capture(bot, chat_id, sess)
+        text = f"✏️ New name for [<b>{html_mod.escape(sess.label)}</b>]? Send it as a message."
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton(
+            "Cancel", callback_data=f"{sess.name}:rename-cancel")]])
+        await _edit(query, text, kb)
+        return True
+
+    if action == "rename-cancel":
+        _rename_pending_map(bot).pop(chat_id, None)
+        await _edit(query, "Rename cancelled.", None)
+        return True
+
     return False
 
 
 __all__ = [
     "handle_callback",
+    "handle_rename_cmd",
     "handle_restart_cmd",
     "maybe_handle_text",
     "render_session_preferences_field",
