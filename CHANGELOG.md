@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-20
+
 ### Added
 - **aipager now owns its runtime environment instead of inheriting an
   accidental one.** Moving the daemon into a `systemctl --user` service
