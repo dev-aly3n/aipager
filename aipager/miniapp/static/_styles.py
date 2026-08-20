@@ -14,7 +14,146 @@ class is gone: the new UI never renders the raw ``"interactive"`` name.
 from __future__ import annotations
 
 CSS = """\
-  :root { color-scheme: light dark; }
+  /* ==========================================================
+     GLASS TOKENS
+     There is no hardcoded glass palette and no prefers-color-scheme
+     branch anywhere in this file. Every --glass-* property below
+     resolves through a --tg-theme-* variable Telegram itself sets, so
+     the whole system re-tints for whatever palette (or one of the ~40
+     custom themes) the client hands us. The literal hex fallbacks are
+     the NO-TELEGRAM case (page opened in a plain browser) only, never
+     a design decision.
+
+     Built from --tg-theme-secondary-bg-color, not white or black:
+     --tg-theme-bg-color and --tg-theme-section-bg-color are IDENTICAL
+     in Telegram's default light theme, so glass derived from either of
+     those would be invisible. secondary-bg is the one variable that
+     differs from the page background in both shipped themes. */
+  :root {
+    color-scheme: light dark;
+
+    /* Opacity of the glass fill. The two @supports blocks below (one
+       for missing color-mix, one for missing backdrop-filter) flip
+       these to 100% so every surface in the system goes opaque from
+       this one place. */
+    --glass-alpha: 78%;
+    --glass-alpha-raised: 88%;
+
+    /* Non-color-mix baseline. A custom property whose value fails at
+       SUBSTITUTION time makes the consuming declaration `unset`
+       (background-color -> transparent); it does NOT fall back to an
+       earlier declaration of the same property. So the plain value has
+       to be the base and color-mix has to be the @supports upgrade,
+       never the other way round. */
+    --glass-bg:           rgba(127, 127, 127, 0.10);
+    --glass-bg-raised:    rgba(127, 127, 127, 0.16);
+    --glass-edge:         rgba(127, 127, 127, 0.46);
+    --glass-hairline:     rgba(127, 127, 127, 0.16);
+    --glass-scrim-hover:  rgba(127, 127, 127, 0.07);
+    --glass-scrim-press:  rgba(127, 127, 127, 0.14);
+    --glass-accent:       rgba(36, 129, 204, 0.16);
+    --glass-danger:       rgba(220, 38, 38, 0.14);
+    --glass-dim:          var(--tg-theme-hint-color, #888888);
+    --glass-bloom-a:      transparent;
+    --glass-bloom-b:      transparent;
+
+    /* Blur, used by exactly four selectors: .menu, .modal, #notice,
+       .overlay. Every scrolling or repeating surface (the grid, the
+       kebab, form controls, …) gets flat glass instead — see the
+       ADOPTION block below for why. */
+    --glass-blur:         22px;
+    --glass-blur-scrim:   10px;
+    --glass-sat:          150%;
+
+    /* One radius scale, replacing seven ad-hoc values. */
+    --r-sm:   9px;
+    --r-md:  12px;
+    --r-lg:  16px;
+    --r-pill: 999px;
+
+    /* One elevation scale, replacing three unrelated shadows. */
+    --el-1: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 14px rgba(0, 0, 0, 0.10);
+    --el-2: 0 2px 8px rgba(0, 0, 0, 0.16), 0 12px 34px rgba(0, 0, 0, 0.30);
+    --el-press: 0 1px 2px rgba(0, 0, 0, 0.10);
+
+    --glass-motion: 0.16s cubic-bezier(0.2, 0, 0.2, 1);
+  }
+
+  /* Real tokens. color-mix landed in Chrome 111 (Mar 2023) and Safari
+     16.2 (Dec 2022) — every Telegram client shipped since mid-2023 —
+     and this file already bet on it twice before this change (the
+     .setopt.is-active-style fallback-then-upgrade pairs at what are now
+     .choice.is-active and #notice's border pairing were the same bet in
+     a plain-property form; this is that bet extended to custom
+     properties). */
+  @supports (color: color-mix(in srgb, red 50%, transparent)) {
+    :root {
+      --glass-bg: color-mix(in srgb,
+        var(--tg-theme-secondary-bg-color, rgba(127, 127, 127, 0.14))
+        var(--glass-alpha), transparent);
+      --glass-bg-raised: color-mix(in srgb,
+        var(--tg-theme-secondary-bg-color, rgba(127, 127, 127, 0.20))
+        var(--glass-alpha-raised), transparent);
+      /* 46%: the lowest alpha whose composite clears 3:1 against the
+         page AND against the glass interior, in BOTH default themes.
+         42% lands exactly on 3.00:1 against the light glass interior —
+         tests/test_miniapp_styles.py encodes this arithmetic as a hard
+         gate, not a comment. */
+      --glass-edge:        color-mix(in srgb, var(--tg-theme-text-color, #000000) 46%, transparent);
+      --glass-hairline:    color-mix(in srgb, var(--tg-theme-text-color, #000000) 16%, transparent);
+      --glass-scrim-hover: color-mix(in srgb, var(--tg-theme-text-color, #000000)  7%, transparent);
+      --glass-scrim-press: color-mix(in srgb, var(--tg-theme-text-color, #000000) 14%, transparent);
+      --glass-accent:      color-mix(in srgb, var(--tg-theme-button-color, #2481cc) 16%, transparent);
+      --glass-danger:      color-mix(in srgb, var(--tg-theme-destructive-text-color, #dc2626) 16%, transparent);
+      /* Secondary text. --tg-theme-hint-color measures 2.85:1 on
+         Telegram light and 4.23:1 on Telegram dark against the page —
+         it fails AA for body-sized text in light. 62% of the theme's
+         own text colour measures 6.01:1 / 6.45:1 on glass instead.
+         hint-color stays correct for BORDERS and large text; it was
+         wrong for 0.78rem help copy. */
+      --glass-dim:         color-mix(in srgb, var(--tg-theme-text-color, #000000) 62%, transparent);
+      --glass-bloom-a:     color-mix(in srgb, var(--tg-theme-button-color, #2481cc) 8%, transparent);
+      --glass-bloom-b:     color-mix(in srgb, var(--tg-theme-link-color,   #3390ec) 6%, transparent);
+    }
+  }
+
+  /* Must be tested with BOTH the prefixed and unprefixed form: iOS
+     15/16 WKWebView, which a large share of Telegram iOS users are on,
+     supports only -webkit-backdrop-filter, and an unprefixed-only
+     @supports test would wrongly send those clients down this fallback
+     too. Source order matters: this comes AFTER the color-mix upgrade
+     above, so a browser with color-mix but no backdrop-filter still
+     lands on real theme-derived (opaque) surfaces here, not the plain
+     rgba baseline. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    :root {
+      --glass-alpha: 100%;
+      --glass-alpha-raised: 100%;
+      --glass-bg:        var(--tg-theme-secondary-bg-color, #f1f1f1);
+      --glass-bg-raised: var(--tg-theme-section-bg-color, var(--tg-theme-bg-color, #ffffff));
+    }
+    .overlay { background: rgba(0, 0, 0, 0.55); }
+  }
+
+  /* iOS "Reduce Transparency" / Android "Remove animations and
+     transparency". One block turns the whole system opaque, because
+     every surface reads its alpha from these two tokens. */
+  @media (prefers-reduced-transparency: reduce) {
+    :root {
+      --glass-alpha: 100%;
+      --glass-alpha-raised: 100%;
+    }
+    .menu, .modal, #notice, .overlay {
+      -webkit-backdrop-filter: none;
+              backdrop-filter: none;
+    }
+    .overlay { background: rgba(0, 0, 0, 0.62); }
+    /* `background: none`, not `display: none` — this file has exactly
+       one `display: … !important` and it stays that way
+       (test_no_id_rule_can_outrank_the_hidden_guard). */
+    body::before { background: none; }
+  }
+
   * { box-sizing: border-box; }
   /* The browser's own `[hidden] { display: none }` is a USER-AGENT rule, so
      any author `display:` beats it. Every element the script hides carries a
@@ -32,6 +171,132 @@ CSS = """\
     background: var(--tg-theme-bg-color, #ffffff);
     color: var(--tg-theme-text-color, #000000);
   }
+  /* The page is one flat colour, and backdrop-filter: blur() over a flat
+     colour is a visual no-op — blurring a solid #ffffff returns solid
+     #ffffff. Two very soft accent blooms give the glass something behind
+     it, at the cost of one paint, once.
+
+     Deliberately on body::before and NOT on body or html: an ancestor
+     carrying filter / backdrop-filter / transform becomes the containing
+     block for position: fixed descendants, which would silently
+     reposition #notice (z-index 70) and .overlay (z-index 50) relative to
+     body instead of the viewport — the exact "toast below the fold" bug
+     the comment further down this file was written to fix. A fixed
+     PSEUDO-element does not do that to its own parent, so body keeps
+     nothing that would trap its fixed children.
+
+     body must keep its own `background:` above: with html background-less,
+     body's background is what paints the canvas, and this layer sits above
+     it at z-index -1. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: -20vmax;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(38vmax 38vmax at 12% -4%, var(--glass-bloom-a), transparent 70%),
+      radial-gradient(46vmax 46vmax at 96% 20%, var(--glass-bloom-b), transparent 72%);
+  }
+
+  /* ==========================================================
+     GLASS SURFACES — the reusable system.
+     .glass / .glass-btn / .glass-raised are the general-purpose classes
+     any future control can opt into directly. The sixteen selectors this
+     stylesheet already ships (.card, .kebab, .modal-btn, …) get the SAME
+     declarations applied to their own existing selectors in the ADOPTION
+     block near the end of this file instead of gaining a class here — that
+     keeps this a zero-markup-churn change (no _app.py / _shell.py edit),
+     while still leaving one designed vocabulary for the next surface that
+     is added straight into the markup.
+     ========================================================== */
+  .glass {
+    background-color: var(--glass-bg);
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--r-md);
+    box-shadow: var(--el-1);
+    color: var(--tg-theme-text-color, #000000);
+  }
+
+  /* The press/hover wash is a background-IMAGE layer so it stacks on top
+     of the translucent background-COLOR instead of replacing it. Every
+     rule in this system therefore sets `background-color:`, never the
+     `background:` shorthand, which would reset the image layer. */
+  .glass-btn {
+    background-color: var(--glass-bg);
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--r-md);
+    box-shadow: var(--el-1);
+    color: var(--tg-theme-text-color, #000000);
+    font: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      background-color var(--glass-motion),
+      border-color     var(--glass-motion),
+      box-shadow       var(--glass-motion),
+      transform        var(--glass-motion);
+  }
+
+  /* Hover only where a pointer exists — on a phone :hover sticks after a
+     tap and leaves the last-tapped control lit. */
+  @media (hover: hover) {
+    .glass-btn:hover {
+      background-image: linear-gradient(var(--glass-scrim-hover), var(--glass-scrim-hover));
+      border-color: var(--glass-edge);
+    }
+  }
+
+  .glass-btn:active,
+  .glass-btn[aria-expanded="true"] {
+    background-image: linear-gradient(var(--glass-scrim-press), var(--glass-scrim-press));
+    box-shadow: var(--el-press);
+    transform: translateY(1px);
+  }
+
+  /* The first focus indicator this stylesheet has ever had:
+     grep -c ':focus' was 0 before this change, and .prefix-input actively
+     removed the user-agent ring with no replacement. :focus-visible, so a
+     tap never draws a ring but a keyboard / switch / Telegram-Desktop user
+     always gets one. `outline` rather than `box-shadow` because `outline`
+     is not clipped by an ancestor's `overflow: hidden` — .grp, .prefix-field,
+     .diff-file and .menu all clip, and a box-shadow ring would vanish on
+     exactly the controls that most need it. */
+  .glass-btn:focus-visible,
+  .field-input:focus-visible,
+  .prefix-input:focus-visible,
+  .card:focus-visible {
+    outline: 2px solid var(--tg-theme-button-color, #2481cc);
+    outline-offset: 2px;
+  }
+
+  .glass-btn[disabled],
+  .glass-btn[aria-disabled="true"] {
+    opacity: 0.45;
+    box-shadow: none;
+    transform: none;
+    background-image: none;
+    cursor: default;
+  }
+
+  .glass-btn.is-active,
+  .glass.is-active {
+    background-image: linear-gradient(var(--glass-accent), var(--glass-accent));
+    border-color: var(--tg-theme-button-color, #2481cc);
+  }
+
+  /* The only tier of this system that blurs — see the ADOPTION block for
+     why just four selectors (.menu, .modal, #notice, .overlay) use this
+     and everything else stays flat. */
+  .glass-raised {
+    background-color: var(--glass-bg-raised);
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--r-lg);
+    box-shadow: var(--el-2);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+            backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  }
+
   header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
   h1 { font-size: 1.1rem; margin: 0 0 4px; }
   .muted { color: var(--tg-theme-hint-color, #888888); font-size: 0.85rem; }
@@ -276,7 +541,16 @@ CSS = """\
      subtitle-text for secondary lines. Hardcoding a red here would look
      wrong in half the themes Telegram ships. */
   /* Positioning context for the menu, so the menu hangs off the BUTTON
-     and follows it when the page scrolls. */
+     and follows it when the page scrolls.
+
+     Deliberately no backdrop-filter (and none on `body` either): this
+     element is `position: relative` with no z-index, so it creates no
+     stacking context today and .menu's `z-index: 60` competes directly
+     with .overlay's `z-index: 50` in the ROOT stacking context. Giving
+     .kebab-wrap a stacking context (which backdrop-filter, like filter
+     and transform, always does) would trap .menu inside it at the
+     wrapper's own z-index: auto — the menu would render BEHIND its own
+     backdrop, a silent total break of the (open) session menu. */
   .kebab-wrap { position: relative; flex: 0 0 auto; margin-left: auto; display: flex; }
   .kebab {
     flex: 0 0 auto;
@@ -796,6 +1070,252 @@ CSS = """\
     padding: 8px 10px;
     color: var(--tg-theme-hint-color, #888888);
     font-size: 0.85rem;
+  }
+
+  /* ==========================================================
+     GLASS ADOPTION
+     Must stay at the END of this stylesheet: every rule below is the
+     SAME specificity as the rule it supersedes, so it is source order
+     alone that makes it win. Applying the glass system this way — to
+     the selectors that already exist, rather than adding a class at
+     each of the ~30 `className =` sites in _app.py — is what keeps this
+     a CSS-only change: zero markup or JS edits, and zero chances to
+     miss one of those sites.
+     ========================================================== */
+
+  /* tier 1: flat glass, no blur. See "why only four elements blur"
+     below tier 2 — a 24-session grid that scrolls, plus two elements
+     that animate forever (.status-waiting, .skel), make a per-card
+     backdrop-filter a guaranteed jank source for near-zero visual
+     payoff on an already-smooth ambient gradient. */
+  .card,
+  .gone-toggle,
+  .sect-toggle,
+  .session-settings-reset,
+  .grp,
+  .choice,
+  .modal-btn,
+  .kebab,
+  .field-input,
+  .prefix-field,
+  .new-summary,
+  .preview,
+  .diff-file,
+  .diff-file-header,
+  .waiting-note,
+  #error {
+    background-color: var(--glass-bg);
+    border: 1px solid var(--glass-edge);
+    box-shadow: var(--el-1);
+    transition:
+      background-color var(--glass-motion),
+      border-color     var(--glass-motion),
+      box-shadow       var(--glass-motion),
+      transform        var(--glass-motion);
+  }
+
+  /* one radius scale, replacing seven ad-hoc values */
+  .choice, .tag                                { border-radius: var(--r-sm); }
+  .card, .gone-toggle, .sect-toggle,
+  .session-settings-reset, .grp, .modal-btn,
+  .field-input, .prefix-field, .new-summary,
+  .diff-file, .waiting-note, #error            { border-radius: var(--r-md); }
+  .menu, .modal, #notice                       { border-radius: var(--r-lg); }
+  .kebab, .badge, .conn, .status-waiting        { border-radius: var(--r-pill); }
+  /* the only asymmetric radius in the file: .preview has a 3px quote bar
+     on the left (border-left, above), so its right corners round and its
+     left corners stay square. */
+  .preview                                     { border-radius: 0 var(--r-md) var(--r-md) 0; }
+
+  /* press feedback for the controls that had none before this change */
+  .card:active,
+  .gone-toggle:active,
+  .sect-toggle:active,
+  .session-settings-reset:active,
+  .choice:not([disabled]):active,
+  .modal-btn:not([disabled]):active,
+  .primary:not([disabled]):active,
+  .prefix-go:not([disabled]):active,
+  .diff-file-header:active,
+  .tabbar-btn:active,
+  .kebab:active,
+  .kebab[aria-expanded="true"] {
+    background-image: linear-gradient(var(--glass-scrim-press), var(--glass-scrim-press));
+    box-shadow: var(--el-press);
+    transform: translateY(1px);
+    /* kills the earlier `.card:active { opacity: 0.7 }` — fading an
+       element fades its border and shadow too, and creates a stacking
+       context that would fight backdrop-filter elsewhere on the page. */
+    opacity: 1;
+  }
+
+  @media (hover: hover) {
+    .card:hover, .gone-toggle:hover, .sect-toggle:hover,
+    .session-settings-reset:hover, .choice:not([disabled]):hover,
+    .modal-btn:not([disabled]):hover, .menu-item:not([disabled]):hover,
+    .diff-file-header:hover, .kebab:hover {
+      background-image: linear-gradient(var(--glass-scrim-hover), var(--glass-scrim-hover));
+    }
+  }
+
+  /* one disabled alpha, replacing four different values (0.40 / 0.45 /
+     0.50 / 0.55) that all meant the same thing */
+  .choice[disabled], .menu-item[disabled], .modal-btn[disabled],
+  .primary[disabled], .prefix-go[disabled],
+  .session-settings-reset[disabled] {
+    opacity: 0.45;
+    box-shadow: none;
+    background-image: none;
+    transform: none;
+    cursor: default;
+  }
+
+  /* secondary text: --tg-theme-hint-color fails AA at these sizes in
+     both default themes (2.85:1 light / 4.23:1 dark). --glass-dim is
+     the theme's own text colour at 62%, which clears AA in both. */
+  .muted, .card-age, .grp-value, .grp-caret, .menu-note,
+  .modal-body, .choice-help, .reveal-note,
+  .diff-binary, .diff-truncated, .facts dt, .sect-note,
+  .preview.is-empty, .prefix-text, .reveal-label {
+    color: var(--glass-dim);
+  }
+
+  /* internal dividers stay hairline — they are decorative, the rows are
+     identified by their own text and tap target, not by the rule
+     between them. */
+  .menu-item + .menu-item,
+  .menu-note + .menu-item,
+  .menu-divider          { box-shadow: inset 0 1px 0 var(--glass-hairline); }
+  .grp-body              { border-top: 1px solid var(--glass-hairline); }
+  .timeline-row          { border-bottom: 1px solid var(--glass-hairline); }
+
+  /* selected state, unified — one tint recipe instead of two */
+  .choice.is-active {
+    background-color: var(--glass-bg);
+    background-image: linear-gradient(var(--glass-accent), var(--glass-accent));
+    border-color: var(--tg-theme-button-color, #2481cc);
+  }
+
+  /* "create new" affordance, now the same stroke weight everywhere
+     (was 2px on .card-new, 1px on .choice-new, despite a comment
+     claiming they already matched) */
+  .card-new, .choice-new {
+    background-color: transparent;
+    border: 1.5px dashed var(--tg-theme-link-color, #2481cc);
+    box-shadow: none;
+  }
+
+  /* the one solid control in the app stays solid: it is the single
+     high-emphasis action, and Telegram guarantees the button-color /
+     button-text-color pair is readable. It takes the glass SHAPE
+     (elevation, larger text) but not the glass fill. 1.2rem bold =
+     19.2px, which is WCAG "large text" (>=18.66px bold) — so the
+     4.13:1 (light) / 3.72:1 (dark) of white-on-accent is judged
+     against 3:1 and passes; at the previous 1rem it was judged against
+     4.5:1 and failed in both themes. */
+  .primary, .prefix-go {
+    box-shadow: var(--el-1);
+    font-size: 1.2rem;
+  }
+
+  /* the danger wash, theme-derived instead of a hardcoded red */
+  .modal-btn.is-danger, .waiting-note {
+    background-image: linear-gradient(var(--glass-danger), var(--glass-danger));
+    border-color: var(--tg-theme-destructive-text-color, #dc2626);
+  }
+  #error, .field-error, .reveal-note.is-error {
+    color: var(--tg-theme-destructive-text-color, #dc2626);
+  }
+
+  /* the two classes the markup renders with no CSS rule at all:
+     #panel-diff / #panel-timeline (_shell.py) and .diff-body
+     (_app.py). */
+  .panel { margin-top: 10px; }
+  .diff-body { border-top: 1px solid var(--glass-hairline); }
+
+  /* tier 2: the only other blurred surfaces. Bounded at <=2 on screen
+     at once, and the page is not scrolling while either is open — the
+     conditions under which backdrop-filter is cheap. */
+  .menu, .modal {
+    background-color: var(--glass-bg-raised);
+    border: 1px solid var(--glass-edge);
+    box-shadow: var(--el-2);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+            backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  }
+
+  /* tier 3: the scrim. One full-viewport blur, only while a layer is
+     open, at a smaller radius than tier 2 because it covers the whole
+     screen. Safe here specifically because .overlay is not an ancestor
+     of .menu (which hangs off .kebab-wrap instead, a sibling structure —
+     see .kebab-wrap's own comment above for the placement that WOULD
+     break the menu). .modal IS inside .overlay, but .modal has no
+     descendant with its own fixed/absolute z-index, so nothing is
+     trapped there either. */
+  .overlay {
+    -webkit-backdrop-filter: blur(var(--glass-blur-scrim)) saturate(120%);
+            backdrop-filter: blur(var(--glass-blur-scrim)) saturate(120%);
+  }
+
+  /* Glass on the toast — PAINT ONLY, appended (never prepended) after
+     every rule already targeting #notice above. The very first #notice
+     block still owns position / top / transform / z-index / opacity /
+     transition / pointer-events untouched, which is what
+     test_the_notice_is_a_floating_toast_not_an_in_flow_banner in
+     tests/test_miniapp_js_smoke.py pins by slicing from the FIRST
+     `#notice {` to the first matching `}`. Nothing here may move
+     earlier in the file. */
+  #notice {
+    background-color: var(--glass-bg-raised);
+    /* NOT `border-color:` — that shorthand repaints border-LEFT too and
+       would wipe the 4px accent bar set earlier in this file. The
+       .toast-ok / .toast-err / .toast-info rules are more specific
+       (0,1,1,0 via the .toast-* class) and would survive a shorthand
+       here regardless, but the neutral default border-left would not. */
+    border-top-color: var(--glass-edge);
+    border-right-color: var(--glass-edge);
+    border-bottom-color: var(--glass-edge);
+    box-shadow: var(--el-2);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+            backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  }
+  /* The coloured discs keep their hardcoded fill+glyph pair — that
+     pairing is deliberate and enforced by
+     test_no_theme_background_is_paired_with_hardcoded_white_text. They
+     gain only a ring: on a translucent ground the disc's own boundary
+     drops below 3:1 in one theme each (measured: #dc2626 on dark glass
+     is 2.91:1, #16a34a / #3390ec on light glass are 2.96:1 / 2.98:1).
+     The ring restores each to >=3.4:1 without touching the disc's
+     colour. */
+  .toast-icon { box-shadow: 0 0 0 1px var(--glass-edge); }
+
+  /* backdrop-filter is not motion and carries no vestibular risk, so it
+     is deliberately NOT disabled here — prefers-reduced-transparency
+     (near the top of this file) is the channel for opting out of it.
+     This block only flattens the transitions and press displacements
+     the glass system itself introduced, extending the two
+     prefers-reduced-motion blocks already in this file rather than
+     replacing them. */
+  @media (prefers-reduced-motion: reduce) {
+    .glass-btn, .card, .gone-toggle, .sect-toggle, .session-settings-reset,
+    .grp, .choice, .modal-btn, .kebab, .field-input, .prefix-field,
+    .new-summary, .preview, .diff-file, .diff-file-header, .waiting-note,
+    .primary, .prefix-go, .tabbar-btn, .menu-item, #error {
+      transition: none;
+    }
+    .glass-btn:active, .card:active, .gone-toggle:active, .sect-toggle:active,
+    .session-settings-reset:active, .choice:active, .modal-btn:active,
+    .primary:active, .prefix-go:active, .diff-file-header:active,
+    .tabbar-btn:active, .kebab:active, .kebab[aria-expanded="true"] {
+      transform: none;
+    }
+    /* The toast's slide, flattened WITHOUT losing the centring: its
+       `transform` carries both translateX(-50%) (centring) and the
+       translateY animation. Setting `transform: none` here would throw
+       the toast to the left edge of the screen, so the centring is
+       restated rather than dropped. */
+    #notice,
+    #notice.is-visible { transform: translateX(-50%); }
   }
 """
 
