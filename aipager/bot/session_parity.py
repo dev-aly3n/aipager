@@ -32,11 +32,13 @@ Design constraints this module is written to (see design.md Alternatives
   integrator's job, applied after all three streams land; see
   ``implementation-parity.md``).
 
-This commit lands per-session preferences only — the single-renderer
-piece design.md's decision #3 asks for
-(``render_session_preferences_root`` / ``render_session_preferences_field``)
-plus the ``_:spref...`` callback family that reaches it. Restart, rename,
-delete, diff, and the ⋮ menu land in their own follow-up commits.
+Landed so far: per-session preferences — the single-renderer piece
+design.md's decision #3 asks for (``render_session_preferences_root`` /
+``render_session_preferences_field``) plus the ``_:spref...`` callback
+family that reaches it — and the session ⋮ menu itself. Restart, rename,
+delete, and diff land in their own follow-up commits (the menu's rows
+for them are inert — ``handle_callback`` falls through to "Invalid
+callback" — until each one's commit lands).
 """
 
 from __future__ import annotations
@@ -50,7 +52,7 @@ from telegram.ext import ContextTypes
 from aipager.bot import settings_menu
 from aipager.bot.transport import calling_chat_id
 from aipager.preferences import get_preferences, is_valid_value, resolve_preferences
-from aipager.state import PREFERENCE_OVERRIDE_FIELDS, TrackedSession
+from aipager.state import PREFERENCE_OVERRIDE_FIELDS, Status, TrackedSession
 
 if TYPE_CHECKING:
     from aipager.bot.core import TelegramBot
@@ -60,10 +62,8 @@ if TYPE_CHECKING:
 # recompute it on every render. Keyed by section for O(1) lookup.
 _SCHEMA = {entry["section"]: entry for entry in settings_menu.settings_schema()}
 
-# Populated by later commits (restart/rename/delete/diff/menu). Empty for
-# now, so handle_callback's `{name}:<action>` family always falls through
-# (returns False) until those land.
-_SESSION_ACTIONS: frozenset[str] = frozenset()
+# Populated further by later commits (restart/rename/delete/diff).
+_SESSION_ACTIONS: frozenset[str] = frozenset({"menu", "menu-close"})
 
 
 # ---- lazily-initialised TelegramBot instance state -----------------------
@@ -146,6 +146,33 @@ async def _edit(query, text: str, kb: InlineKeyboardMarkup | None) -> None:
         await query.edit_message_text(text, parse_mode="HTML", reply_markup=kb)
     except Exception:
         pass
+
+
+# ---- ⋮ session menu --------------------------------------------------
+
+def _render_session_menu(
+    bot: "TelegramBot", chat_id: int, sess: TrackedSession,
+) -> tuple[str, InlineKeyboardMarkup]:
+    """Restart, Rename, Preferences, Diff, and — only when GONE —
+    Delete, in that order (entrypoints.md's "⋮ session menu" section).
+    Every row reuses the exact same callback the standalone command's
+    own picker/confirm flow uses, so there is one code path per action
+    regardless of which surface reached it."""
+    names = _register_pref_index(bot, chat_id, [sess.name])
+    pref_cb = f"_:spref:{names.index(sess.name)}"
+    rows = [
+        [InlineKeyboardButton("🔄 Restart", callback_data=f"{sess.name}:restart")],
+        [InlineKeyboardButton("✏️ Rename", callback_data=f"{sess.name}:rename")],
+        [InlineKeyboardButton("👤 Preferences", callback_data=pref_cb)],
+        [InlineKeyboardButton("📝 Diff", callback_data=f"{sess.name}:diff")],
+    ]
+    if sess.status == Status.GONE:
+        rows.append([InlineKeyboardButton(
+            "🗑️ Delete", callback_data=f"{sess.name}:delete")])
+    rows.append([InlineKeyboardButton(
+        "✖️ Close", callback_data=f"{sess.name}:menu-close")])
+    text = f"⋮ <b>{html_mod.escape(sess.label)}</b> — choose an action:"
+    return text, InlineKeyboardMarkup(rows)
 
 
 # ---- per-session preferences ----------------------------------------
@@ -365,7 +392,8 @@ async def handle_callback(
     - ``_:spref...`` (session_name == "_") — per-session preferences,
       dispatched to :func:`_handle_spref_callback`.
     - ``{name}:<action>`` for every action in :data:`_SESSION_ACTIONS`
-      (empty until the restart/rename/delete/diff/menu commits land).
+      (only "menu"/"menu-close" until the restart/rename/delete/diff
+      commits land).
     """
     chat_id = calling_chat_id(update)
 
@@ -374,6 +402,20 @@ async def handle_callback(
 
     if action not in _SESSION_ACTIONS:
         return False
+
+    sess = bot.registry.get(session_name)
+    if sess is None:
+        await bot._safe_answer(query, "Session not found")
+        return True
+
+    if action == "menu":
+        text, kb = _render_session_menu(bot, chat_id, sess)
+        await _edit(query, text, kb)
+        return True
+
+    if action == "menu-close":
+        await _edit(query, f"Closed menu for [<b>{html_mod.escape(sess.label)}</b>].", None)
+        return True
 
     return False
 
