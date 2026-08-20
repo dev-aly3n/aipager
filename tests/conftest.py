@@ -5,6 +5,8 @@ from importlib import import_module
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
+import time
+
 import pytest
 
 
@@ -516,6 +518,49 @@ def run_async():
         return asyncio.new_event_loop().run_until_complete(coro)
     return _run
 
+
+
+@pytest.fixture
+def steady_clock(monkeypatch):
+    """A monotonic clock pinned far from zero, for tests that fabricate
+    "N seconds ago" stamps.
+
+    ``time.monotonic()`` is seconds since boot. A test that writes
+    ``time.monotonic() - 180`` is correct on a workstation with days of
+    uptime and silently broken on a freshly booted CI runner, where the
+    result is NEGATIVE. Negative is not merely ugly here: it loses
+    ``session_monitor._quiet_since``'s ``max(last_hook_at,
+    busy_started_at)`` to whichever field still holds its ``0.0``
+    default, and that ``or None`` then skips the branch under test
+    entirely — the assertion fails for a reason unrelated to the logic
+    it names.
+
+    Ten tests failed on all four CI Pythons for exactly this reason
+    while passing here, because this machine had six days of uptime.
+    Production is unaffected: real ``time.monotonic()`` is never
+    negative.
+
+    Only the target modules' own ``time`` reference is rebound, never the
+    global module — asyncio's event loop reads ``time.monotonic()`` for
+    every timer, and shifting that under a running loop would break
+    sleeps and timeouts across the suite.
+    """
+    import importlib
+    import types
+
+    real = time.monotonic
+    origin = real()
+    base = 1_000_000.0
+
+    def now():
+        return base + (real() - origin)
+
+    fake = types.SimpleNamespace(
+        monotonic=now, time=time.time, sleep=time.sleep,
+    )
+    for modname in ("aipager.session_monitor", "aipager.bot.animation"):
+        monkeypatch.setattr(importlib.import_module(modname), "time", fake)
+    return now
 
 @pytest.fixture
 def mk_bot():

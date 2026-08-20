@@ -107,11 +107,11 @@ def test_scan_recovers_gone_session_clears_gone_at(monkeypatch, run_async):
 
 # ---- _scan: stale_busy notify failure swallowed ------------------------
 
-def test_scan_stale_busy_notify_failure_swallowed(monkeypatch, run_async):
+def test_scan_stale_busy_notify_failure_swallowed(steady_clock, monkeypatch, run_async):
     from aipager.session_monitor import STALE_BUSY_TIMEOUT
     registry = SessionRegistry()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
-    sess.last_hook_at = time.monotonic() - STALE_BUSY_TIMEOUT - 60
+    sess.last_hook_at = steady_clock() - STALE_BUSY_TIMEOUT - 60
     registry._sessions["claude-jim"] = sess
 
     async def _failing_notify(*a, **k):
@@ -179,7 +179,7 @@ def test_scan_stale_busy_suppressed_during_tool_in_flight(monkeypatch, run_async
     assert sess.stale_warned is False  # re-armed for post-tool
 
 
-def test_scan_stale_busy_fires_when_tool_exceeds_inflight_cap(monkeypatch,
+def test_scan_stale_busy_fires_when_tool_exceeds_inflight_cap(steady_clock, monkeypatch,
                                                               run_async):
     """A tool that has been in flight beyond TOOL_INFLIGHT_MAX_SECONDS is
     treated as genuinely wedged — the warning must fire."""
@@ -189,10 +189,10 @@ def test_scan_stale_busy_fires_when_tool_exceeds_inflight_cap(monkeypatch,
     )
     registry = SessionRegistry()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
-    sess.last_hook_at = time.monotonic() - STALE_BUSY_TIMEOUT - 60
+    sess.last_hook_at = steady_clock() - STALE_BUSY_TIMEOUT - 60
     # Tool started 16 min ago — over the 15 min cap.
     sess.pending_tool_started_at = (
-        time.monotonic() - TOOL_INFLIGHT_MAX_SECONDS - 60
+        steady_clock() - TOOL_INFLIGHT_MAX_SECONDS - 60
     )
     registry._sessions["claude-jim"] = sess
 
@@ -207,13 +207,13 @@ def test_scan_stale_busy_fires_when_tool_exceeds_inflight_cap(monkeypatch,
     assert sess.stale_warned is True
 
 
-def test_scan_stale_busy_fires_when_no_tool_in_flight(monkeypatch, run_async):
+def test_scan_stale_busy_fires_when_no_tool_in_flight(steady_clock, monkeypatch, run_async):
     """Preserve existing behavior: no tool in flight, 2+ min of quiet →
     warning fires. Regression guard for the plain 'stuck' path."""
     from aipager.session_monitor import STALE_BUSY_TIMEOUT
     registry = SessionRegistry()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
-    sess.last_hook_at = time.monotonic() - STALE_BUSY_TIMEOUT - 60
+    sess.last_hook_at = steady_clock() - STALE_BUSY_TIMEOUT - 60
     sess.pending_tool_started_at = None  # nothing in flight
     registry._sessions["claude-jim"] = sess
 
@@ -252,7 +252,7 @@ def test_scan_stale_busy_suppressed_during_compact_in_flight(monkeypatch,
     assert sess.stale_warned is False
 
 
-def test_scan_stale_busy_fires_when_compact_exceeds_inflight_cap(monkeypatch,
+def test_scan_stale_busy_fires_when_compact_exceeds_inflight_cap(steady_clock, monkeypatch,
                                                                  run_async):
     """A compact that has been running longer than
     COMPACT_INFLIGHT_MAX_SECONDS is treated as genuinely wedged."""
@@ -262,9 +262,9 @@ def test_scan_stale_busy_fires_when_compact_exceeds_inflight_cap(monkeypatch,
     )
     registry = SessionRegistry()
     sess = TrackedSession(name="claude-cmp2", label="cmp2", status=Status.BUSY)
-    sess.last_hook_at = time.monotonic() - STALE_BUSY_TIMEOUT - 60
+    sess.last_hook_at = steady_clock() - STALE_BUSY_TIMEOUT - 60
     sess.compact_started_at = (
-        time.monotonic() - COMPACT_INFLIGHT_MAX_SECONDS - 60
+        steady_clock() - COMPACT_INFLIGHT_MAX_SECONDS - 60
     )
     registry._sessions["claude-cmp2"] = sess
 
@@ -313,7 +313,7 @@ def test_scan_stale_busy_suppressed_by_recent_statusline(monkeypatch,
         p.unlink(missing_ok=True)
 
 
-def test_scan_stale_busy_fires_when_statusline_stale(monkeypatch, run_async):
+def test_scan_stale_busy_fires_when_statusline_stale(steady_clock, monkeypatch, run_async):
     """A statusLine file older than STATUSLINE_ALIVE_SECONDS is NOT a
     heartbeat — the warning must fire normally."""
     import os
@@ -329,7 +329,7 @@ def test_scan_stale_busy_fires_when_statusline_stale(monkeypatch, run_async):
     try:
         registry = SessionRegistry()
         sess = TrackedSession(name=NAME, label="sl2", status=Status.BUSY)
-        sess.last_hook_at = time.monotonic() - STALE_BUSY_TIMEOUT - 60
+        sess.last_hook_at = steady_clock() - STALE_BUSY_TIMEOUT - 60
         registry._sessions[NAME] = sess
 
         notify = AsyncMock()
@@ -382,7 +382,7 @@ def test_scan_no_stale_warning_when_only_the_PREVIOUS_turn_was_old(
     assert STALE_BUSY_TIMEOUT  # referenced so the import is not decorative
 
 
-def test_scan_still_warns_when_THIS_turn_has_genuinely_stalled(
+def test_scan_still_warns_when_THIS_turn_has_genuinely_stalled(steady_clock, 
     monkeypatch, run_async,
 ):
     """The other direction, and the one that matters most: the fix must
@@ -392,7 +392,7 @@ def test_scan_still_warns_when_THIS_turn_has_genuinely_stalled(
     from aipager.session_monitor import STALE_BUSY_TIMEOUT
     registry = SessionRegistry()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
-    sess.busy_started_at = time.monotonic() - STALE_BUSY_TIMEOUT - 60
+    sess.busy_started_at = steady_clock() - STALE_BUSY_TIMEOUT - 60
     sess.last_hook_at = 0.0          # no hook has ever fired for this turn
     registry._sessions["claude-jim"] = sess
 

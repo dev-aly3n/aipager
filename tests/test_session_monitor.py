@@ -22,11 +22,11 @@ def _mk_monitor(registry: SessionRegistry, notify=None) -> SessionMonitor:
 
 # ----- 2.2 INTERACTIVE watchdog -----
 
-def test_interactive_session_demoted_after_timeout(monkeypatch, run_async):
+def test_interactive_session_demoted_after_timeout(steady_clock, monkeypatch, run_async):
     registry = SessionRegistry()
     sess = TrackedSession(name="claude-jim", label="jim",
                           status=Status.INTERACTIVE)
-    sess.last_hook_at = time.monotonic() - INTERACTIVE_TIMEOUT_SECONDS - 60
+    sess.last_hook_at = steady_clock() - INTERACTIVE_TIMEOUT_SECONDS - 60
     sess.pending_permission = {"tool": "Bash"}
     registry._sessions["claude-jim"] = sess
     monitor = _mk_monitor(registry)

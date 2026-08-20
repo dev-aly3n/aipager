@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Ten tests only passed on a machine with days of uptime.** They
+  fabricated "N seconds ago" as `time.monotonic() - N`, which goes
+  negative on a freshly booted host — and a negative stamp loses
+  `_quiet_since`'s `max(last_hook_at, busy_started_at)` to whichever
+  field still held its `0.0` default, so the stale-BUSY and
+  compacting-reclaim branches under test never ran at all. Green here,
+  red on every CI runner. They now pin the clock through a `steady_clock`
+  fixture. No production change — real `time.monotonic()` is never
+  negative.
+
 ## [0.7.0] - 2026-08-20
 
 ### Added

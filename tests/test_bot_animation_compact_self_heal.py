@@ -21,14 +21,15 @@ from unittest.mock import AsyncMock, MagicMock
 from aipager.state import Status, TrackedSession
 
 
-def test_compacting_top_with_live_task_still_gets_a_fresh_busy_card(mk_bot, run_async):
+def test_compacting_top_with_live_task_still_gets_a_fresh_busy_card(steady_clock, mk_bot, run_async):
     """The critical case: the compacting card's animate task is ALIVE
     (not dead), yet a fresh busy card must still be sent — proving the
     fix is a genuinely new branch keyed on kind, not merely a repeat of
     the dead-task stale-reset."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
-    sess.push_compacting(msg_id=3218, now=0.0, deadline_seconds=180.0)  # long overdue
+    sess.push_compacting(msg_id=3218, now=steady_clock() - 10_000.0,   # long overdue on any host
+                         deadline_seconds=180.0)
 
     loop = asyncio.new_event_loop()
 
@@ -51,12 +52,13 @@ def test_compacting_top_with_live_task_still_gets_a_fresh_busy_card(mk_bot, run_
     loop.close()
 
 
-def test_compacting_top_with_dead_task_also_gets_a_fresh_busy_card(mk_bot, run_async):
+def test_compacting_top_with_dead_task_also_gets_a_fresh_busy_card(steady_clock, mk_bot, run_async):
     """Decision 8's "regardless of task liveness" — the dead-task case
     self-heals identically to the live-task case above."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
-    sess.push_compacting(msg_id=3218, now=0.0, deadline_seconds=180.0)  # long overdue
+    sess.push_compacting(msg_id=3218, now=steady_clock() - 10_000.0,   # long overdue on any host
+                         deadline_seconds=180.0)
 
     loop = asyncio.new_event_loop()
 
@@ -78,7 +80,7 @@ def test_compacting_top_with_dead_task_also_gets_a_fresh_busy_card(mk_bot, run_a
     loop.close()
 
 
-def test_compacting_top_reclaim_does_not_disturb_a_busy_layer_underneath_kind(
+def test_compacting_top_reclaim_does_not_disturb_a_busy_layer_underneath_kind(steady_clock, 
     mk_bot, run_async,
 ):
     """The reclaimed compacting entry is popped, not the busy layer that
@@ -87,7 +89,8 @@ def test_compacting_top_reclaim_does_not_disturb_a_busy_layer_underneath_kind(
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
     sess.busy_msg_id = 42  # stale busy layer from a previous, unrelated cycle
-    sess.push_compacting(msg_id=42, now=0.0, deadline_seconds=180.0)  # long overdue
+    sess.push_compacting(msg_id=42, now=steady_clock() - 10_000.0,   # long overdue on any host
+                         deadline_seconds=180.0)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._app.bot.send_chat_action = AsyncMock()
     bot._start_animation = MagicMock()
