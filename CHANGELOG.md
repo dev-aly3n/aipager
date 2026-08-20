@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **One session named with a capital letter broke the Telegram command
+  menu.** Telegram requires a bot command to match `[a-z0-9_]{1,32}` and
+  rejects the *entire* `setMyCommands` payload if any single entry breaks
+  that rule — it does not skip the bad one. Session names are deliberately
+  looser (uppercase, hyphens, up to 64 characters), so a session called
+  `Helle` took `/status`, `/new`, `/restart` and every other command down
+  with it. The failure was swallowed, so the only symptom was the `/` list
+  going wrong with no explanation: **frozen** at its previous contents if the
+  chat had a menu already, or **empty** if the chat's first registration was
+  the one that included the bad label. Either way it did not recover on its
+  own, because the menu is only rebuilt when the set of live session labels
+  changes. Labels Telegram cannot accept are now left out of the menu; those
+  sessions stay reachable by their keyboard button and by typing `/Name` in
+  full.
 - **Ten tests only passed on a machine with days of uptime.** They
   fabricated "N seconds ago" as `time.monotonic() - N`, which goes
   negative on a freshly booted host — and a negative stamp loses

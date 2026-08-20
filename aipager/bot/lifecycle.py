@@ -13,6 +13,7 @@ import asyncio
 import functools
 import html as html_mod
 import logging
+import re
 from typing import TYPE_CHECKING
 
 from telegram import (
@@ -73,6 +74,38 @@ log = logging.getLogger(__name__)
 
 
 
+
+
+
+# Telegram's rule for ``BotCommand.command``: lowercase latin letters,
+# digits and underscores, 1-32 characters.
+_TELEGRAM_COMMAND = re.compile(r"^[a-z0-9_]{1,32}$")
+
+
+def _label_command(label: str) -> str | None:
+    """The ``/label`` shortcut for a session, or ``None`` if Telegram
+    would refuse it.
+
+    Session labels are validated by a LOOSER rule than Telegram's:
+    ``inject._VALID_NAME`` (``^[a-zA-Z0-9][a-zA-Z0-9_-]*$``, up to 64
+    characters) permits uppercase, hyphens and over-long names, none of
+    which are legal in a bot command. That mismatch is not cosmetic:
+    ``setMyCommands`` rejects the **entire payload** on one bad entry
+    rather than dropping it, so a single session named ``Helle`` used to
+    leave its chat with no command menu at all — no ``/status``, no
+    ``/new``, nothing — and the call site's ``except Exception`` made the
+    only symptom an empty ``/`` list. Same shape as the 64-byte
+    ``callback_data`` cap in ``session_parity``: one oversized item
+    poisons the whole batch.
+
+    Skipped rather than lowercased on purpose. ``_switch_session``
+    resolves through ``registry.find_by_label``, which compares
+    ``sess.label`` exactly, so a ``/helle`` entry would autocomplete and
+    then resolve to nothing. The session stays reachable by its keyboard
+    button (plain text) and by typing ``/Helle`` in full; only the
+    autocomplete entry is missing, which is the cheapest thing to lose.
+    """
+    return label if _TELEGRAM_COMMAND.match(label) else None
 
 
 class LifecycleMixin:
@@ -442,7 +475,16 @@ class LifecycleMixin:
         if MINIAPP_ENABLED:
             commands.append(BotCommand("app", "Open the Mini App dashboard"))
         for label in sorted(labels):
-            commands.append(BotCommand(label, f"Send to [{label}]"))
+            command = _label_command(label)
+            if command is None:
+                # Debug, not warning: a capitalised session name is a
+                # perfectly reasonable thing for a user to pick, and this
+                # fires on every menu refresh for as long as it lives.
+                log.debug("No /shortcut for %r — not a valid Telegram "
+                          "command; the session is still reachable by "
+                          "keyboard button and by typing it in full", label)
+                continue
+            commands.append(BotCommand(command, f"Send to [{label}]"))
         return commands
 
     async def _update_bot_commands_global(self) -> None:

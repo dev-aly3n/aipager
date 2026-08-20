@@ -44,9 +44,13 @@ def _sess(name, label, scope_chat_id, status=Status.IDLE):
 def _registry_with_shared_label(status=Status.IDLE):
     """One 'build' session per scope + a unique session each."""
     r = SessionRegistry()
-    for chat, suffix, uniq in ((A, "d100", "ana-only"),
-                               (B, "d200", "ben-only"),
-                               (G, "g300", "team-only")):
+    # Underscores, not hyphens: a hyphen is legal in a session name but
+    # NOT in a Telegram bot command, so a hyphenated label is filtered
+    # out of the autocomplete menu (see _label_command). This test is
+    # about per-scope ISOLATION, so it uses labels that reach the menu.
+    for chat, suffix, uniq in ((A, "d100", "ana_only"),
+                               (B, "d200", "ben_only"),
+                               (G, "g300", "team_only")):
         r._sessions[f"claude-build__{suffix}"] = _sess(
             f"claude-build__{suffix}", "build", chat, status)
         r._sessions[f"claude-{uniq}__{suffix}"] = _sess(
@@ -58,9 +62,9 @@ def _registry_with_shared_label(status=Status.IDLE):
 
 def test_all_sessions_isolated_per_scope():
     r = _registry_with_shared_label()
-    assert {s.label for s in r.all_sessions(A).values()} == {"build", "ana-only"}
-    assert {s.label for s in r.all_sessions(B).values()} == {"build", "ben-only"}
-    assert {s.label for s in r.all_sessions(G).values()} == {"build", "team-only"}
+    assert {s.label for s in r.all_sessions(A).values()} == {"build", "ana_only"}
+    assert {s.label for s in r.all_sessions(B).values()} == {"build", "ben_only"}
+    assert {s.label for s in r.all_sessions(G).values()} == {"build", "team_only"}
 
 
 def test_find_by_label_cannot_cross_scopes():
@@ -71,7 +75,7 @@ def test_find_by_label_cannot_cross_scopes():
     assert in_b.name == "claude-build__d200"
     assert in_a is not in_b
     # A's chat can never resolve B's unique session.
-    assert r.find_by_label("ben-only", A) is None
+    assert r.find_by_label("ben_only", A) is None
 
 
 # ---- /status ------------------------------------------------------------
@@ -86,9 +90,9 @@ def test_status_isolated_per_scope(mk_bot, mk_update, run_async, monkeypatch):
     update = mk_update("/status", chat_id=A)
     run_async(bot._handle_status(update, MagicMock()))
     body = update.message.reply_text.await_args.args[0]
-    assert "ana-only" in body
-    assert "ben-only" not in body
-    assert "team-only" not in body
+    assert "ana_only" in body
+    assert "ben_only" not in body
+    assert "team_only" not in body
 
 
 # ---- /resume picker -----------------------------------------------------
@@ -100,8 +104,8 @@ def test_resume_picker_isolated_per_scope(mk_bot):
     cb = [btn.callback_data for row in kb_b.inline_keyboard for btn in row]
     assert "claude-build__d200:resume" in cb
     assert "claude-build__d100:resume" not in cb
-    assert "ben-only" in text_b
-    assert "ana-only" not in text_b and "team-only" not in text_b
+    assert "ben_only" in text_b
+    assert "ana_only" not in text_b and "team_only" not in text_b
 
 
 # ---- per-scope command autocomplete -------------------------------------
@@ -116,9 +120,9 @@ def test_autocomplete_isolated_per_scope(mk_bot, run_async):
         scope_obj = call.kwargs["scope"]
         assert isinstance(scope_obj, BotCommandScopeChat)
         per_chat[scope_obj.chat_id] = {c.command for c in call.args[0]}
-    assert "ana-only" in per_chat[A] and "ben-only" not in per_chat[A]
-    assert "ben-only" in per_chat[B] and "team-only" not in per_chat[B]
-    assert "team-only" in per_chat[G] and "ana-only" not in per_chat[G]
+    assert "ana_only" in per_chat[A] and "ben_only" not in per_chat[A]
+    assert "ben_only" in per_chat[B] and "team_only" not in per_chat[B]
+    assert "team_only" in per_chat[G] and "ana_only" not in per_chat[G]
     # The shared "build" label appears in every scope (it's a real
     # session in each), but each maps to that scope's own session.
     assert all("build" in cmds for cmds in per_chat.values())
