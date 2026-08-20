@@ -35,10 +35,9 @@ Design constraints this module is written to (see design.md Alternatives
 Landed so far: per-session preferences (design.md decision #3's single
 renderer, ``render_session_preferences_root`` /
 ``render_session_preferences_field``, plus the ``_:spref...`` callback
-family), the session ⋮ menu, ``/restart``, and ``/rename``. Delete and
-diff land in their own follow-up commits (the menu's rows for them are
-inert — ``handle_callback`` falls through — until each one's commit
-lands).
+family), the session ⋮ menu, ``/restart``, ``/rename``, and ``/delete``.
+``/diff`` lands in its own follow-up commit (the menu's Diff row is
+inert — ``handle_callback`` falls through — until it does).
 """
 
 from __future__ import annotations
@@ -62,11 +61,12 @@ if TYPE_CHECKING:
 # recompute it on every render. Keyed by section for O(1) lookup.
 _SCHEMA = {entry["section"]: entry for entry in settings_menu.settings_schema()}
 
-# Populated further by later commits (delete/diff).
+# Populated further by the next commit (diff).
 _SESSION_ACTIONS: frozenset[str] = frozenset({
     "menu", "menu-close",
     "restart", "restart-confirm", "restart-cancel",
     "rename", "rename-cancel",
+    "delete", "delete-confirm", "delete-cancel",
 })
 
 _RESTART_REASON_TEXT = {
@@ -351,6 +351,67 @@ async def handle_rename_cmd(
     await update.message.reply_text(
         "Which session to rename?", reply_markup=InlineKeyboardMarkup(buttons),
     )
+
+
+# ---- delete --------------------------------------------------------------
+
+def _render_delete_confirm(sess: TrackedSession) -> tuple[str, InlineKeyboardMarkup]:
+    kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton("🗑️ Delete", callback_data=f"{sess.name}:delete-confirm"),
+        InlineKeyboardButton("Cancel", callback_data=f"{sess.name}:delete-cancel"),
+    ]])
+    text = (
+        f"🗑️ Remove [<b>{html_mod.escape(sess.label)}</b>] from the session list? "
+        "This cannot be undone."
+    )
+    return text, kb
+
+
+async def handle_delete_cmd(
+    bot: "TelegramBot", update: Update, ctx: ContextTypes.DEFAULT_TYPE,
+) -> None:
+    """``/delete [label]``. No label → picker of GONE sessions. With a
+    label → must resolve to a GONE session, else the same 409-style
+    refusal the Mini App gives. Either way ends at confirm/cancel."""
+    if not await bot._authorize(update):
+        return
+    text = update.message.text.strip()
+    parts = text.split(maxsplit=1)
+    chat_id = calling_chat_id(update)
+
+    if len(parts) < 2:
+        sessions = [
+            sess for sess in bot.registry.all_sessions(chat_id).values()
+            if sess.status == Status.GONE and sess.label
+        ]
+        if not sessions:
+            await update.message.reply_text("No finished sessions to delete.")
+            return
+        buttons = [
+            [InlineKeyboardButton(f"🗑️ {sess.label}", callback_data=f"{sess.name}:delete")]
+            for sess in sessions
+        ]
+        await update.message.reply_text(
+            "Which finished session to remove?", reply_markup=InlineKeyboardMarkup(buttons),
+        )
+        return
+
+    label = parts[1].strip()
+    sess = bot.registry.find_by_label(label, chat_id, include_gone=True)
+    if sess is None:
+        await update.message.reply_text(
+            f"⚠️ Unknown session: {html_mod.escape(label)}", parse_mode="HTML",
+        )
+        return
+    if sess.status != Status.GONE:
+        await update.message.reply_text(
+            f"⚠️ [<b>{html_mod.escape(sess.label)}</b>] is still running. "
+            "Use /kill to stop it first.",
+            parse_mode="HTML",
+        )
+        return
+    reply_text, kb = _render_delete_confirm(sess)
+    await update.message.reply_text(reply_text, reply_markup=kb, parse_mode="HTML")
 
 
 # ---- per-session preferences ----------------------------------------
@@ -657,11 +718,48 @@ async def handle_callback(
         await _edit(query, "Rename cancelled.", None)
         return True
 
+    if action == "delete":
+        if not bot._can_prompt_user(user_id, chat_id):
+            await bot._safe_answer(query, "You can't delete this session.")
+            return True
+        if sess.status != Status.GONE:
+            await bot._safe_answer(
+                query, "Session is still running. Use Kill to stop it first.",
+            )
+            return True
+        text, kb = _render_delete_confirm(sess)
+        await _edit(query, text, kb)
+        return True
+
+    if action == "delete-confirm":
+        if not bot._can_prompt_user(user_id, chat_id):
+            await bot._safe_answer(query, "You can't delete this session.")
+            return True
+        if sess.status != Status.GONE:
+            await bot._safe_answer(
+                query, "Session is still running. Use Kill to stop it first.",
+            )
+            return True
+        label = sess.label
+        # registry.remove() does NOT call mark_dirty() itself — must be
+        # called explicitly, same footgun server.py:1233-1238 flags.
+        bot.registry.remove(sess.name)
+        bot.registry.mark_dirty()
+        await _edit(query, f"🗑️ Deleted [<b>{html_mod.escape(label)}</b>].", None)
+        return True
+
+    if action == "delete-cancel":
+        await _edit(
+            query, f"Delete cancelled for [<b>{html_mod.escape(sess.label)}</b>].", None,
+        )
+        return True
+
     return False
 
 
 __all__ = [
     "handle_callback",
+    "handle_delete_cmd",
     "handle_rename_cmd",
     "handle_restart_cmd",
     "maybe_handle_text",
