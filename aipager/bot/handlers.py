@@ -308,13 +308,19 @@ class CommandHandlersMixin:
             "  • Tap a session name on the keyboard below to switch to it.\n"
             "  • Send a plain message — it goes to the active session.\n"
             "  • Reply to a session's message to pin your prompt to that session.\n\n"
-            "<b>Open a new session on your computer</b>\n"
-            "  <code>aipager session &lt;name&gt;</code>\n\n"
+            "<b>Open a new session</b>\n"
+            "  /new — pick a name, mode, model and folder here\n"
+            "  <code>aipager session &lt;name&gt;</code> — or from your computer\n\n"
             "<b>Commands</b>\n"
             "  /status — per-session dashboard\n"
             "  /stop — interrupt the active session\n"
+            "  /restart — restart a session with its history\n"
+            "  /rename — give a session a new name\n"
+            "  /diff — show a session's working-directory diff\n"
             "  /kill — terminate a session\n"
-            "  /new — launch a new session (alias for `aipager session`)\n"
+            "  /delete — drop a finished session from the list\n"
+            "  /settings — message layout, formatting and language\n"
+            "  /perms — switch a session between Ask and Auto\n"
         )
         try:
             await self._app.bot.send_message(

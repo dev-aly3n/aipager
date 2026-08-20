@@ -231,3 +231,56 @@ def test_the_short_callback_form_resolves_back_to_the_session(
 
     assert resolved is not None and resolved.name == "claude-roundtrip"
     assert parts[2] == "restart-confirm", "the verb must survive intact"
+
+
+def _welcome_text(bot):
+    """`/start` sends the welcome and THEN the persistent keyboard, so
+    `await_args` holds the keyboard's "⌨️" — not the text under test."""
+    for call in bot._app.bot.send_message.await_args_list:
+        if len(call.args) > 1 and "aipager" in str(call.args[1]):
+            return call.args[1]
+    raise AssertionError("/start sent no welcome message")
+
+
+# ---- /start's help text and the registered command menu must agree ------
+
+def test_start_help_mentions_the_session_management_commands(
+        mk_bot, mk_update, run_async):
+    """`/start` is the first thing a new user sees, and its command list
+    was written before `/restart`, `/rename`, `/delete` and `/diff`
+    existed. A command reachable only from the Mini App (or only from
+    Telegram's `/` menu, which is a separate surface) is exactly the
+    parity gap this feature exists to close.
+    """
+    bot = mk_bot()
+    update = mk_update("/start", chat_id=555)
+
+    run_async(bot._handle_start_cmd(update, MagicMock()))
+
+    text = _welcome_text(bot)
+    for cmd in ("/status", "/stop", "/restart", "/rename", "/diff",
+                "/kill", "/delete", "/settings", "/perms", "/new"):
+        assert cmd in text, f"{cmd} is missing from the /start help"
+
+
+def test_start_help_never_advertises_an_unregistered_command(mk_bot, mk_update,
+                                                             run_async):
+    """The inverse drift: a command named in the welcome text that no
+    handler is registered for. Telegram renders it as a tappable link,
+    so it looks live and answers with nothing at all.
+    """
+    import re
+
+    bot = mk_bot()
+    update = mk_update("/start", chat_id=555)
+    run_async(bot._handle_start_cmd(update, MagicMock()))
+    text = _welcome_text(bot)
+
+    registered = {c.command for c in type(bot)._command_list(set())}
+    # Strip the HTML first: the welcome is parse_mode="HTML", and a
+    # closing </b> looks exactly like a "/b" command to the scanner.
+    plain = re.sub(r"<[^>]+>", "", text)
+    mentioned = set(re.findall(r"(?<![\w/])/([a-z]+)", plain))
+    unknown = mentioned - registered
+    assert not unknown, (
+        f"/start advertises command(s) with no registration: {sorted(unknown)}")

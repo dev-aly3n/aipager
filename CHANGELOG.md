@@ -212,6 +212,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `backdrop-filter` is unsupported, and honours `prefers-reduced-motion`.
 
 ### Changed
+- **`/start` lists the commands that actually exist.** Its welcome text
+  still advertised only `/status`, `/stop`, `/kill` and `/new`, and
+  described `/new` as an alias for `aipager session` — so the commands
+  added since were discoverable only from Telegram's `/` menu. It now
+  covers the session-management set and says `/new` asks for the details
+  itself.
 - **The Mini App is now ON by default, which means aipager opens a public
   tunnel unless you tell it not to.** Previously you had to run `aipager
   miniapp enable`; almost nobody did, so the feature effectively did not
