@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-08-21
+
 ### Security
 - **`aipager config` no longer echoes your bot token.** It was read with a
   plain text prompt, so the token stayed on screen — in scrollback, in screen
