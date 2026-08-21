@@ -588,8 +588,21 @@ def _never_spawn_real_dtach(monkeypatch):
     the failure mode is a stray process on someone's machine rather than
     a red test.
     """
+    # BOTH resolvers. `dtach/launcher.py` and `dtach/inject.py` each define
+    # their own `_resolve_dtach`, and they spawn independently: the launcher
+    # is the `aipager session` CLI path, `inject.launch_session` is the
+    # daemon's. Patching only the launcher left the inject path wide open,
+    # and it really did fire — test sessions `r1`, `jim`, `perms` and
+    # `newName__d…` were spawned for real, discovered by the live daemon's
+    # socket scan, and adopted into the operator's own session list.
     monkeypatch.setattr("aipager.dtach.launcher._resolve_dtach",
                         lambda: None, raising=False)
+    # `_DTACH`, not `_resolve_dtach`: inject resolves the binary ONCE at
+    # import time into a module constant (`inject.py:198`), so patching the
+    # resolver has no effect at all — verified by watching a probe spawn a
+    # real session regardless. The constant is what `launch_session` execs.
+    monkeypatch.setattr("aipager.dtach.inject._DTACH",
+                        "/nonexistent/dtach-blocked-in-tests", raising=False)
 
 @pytest.fixture
 def mk_bot():
