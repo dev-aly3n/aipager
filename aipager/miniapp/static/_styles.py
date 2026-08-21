@@ -53,6 +53,7 @@ CSS = """\
     --glass-scrim-press:  rgba(127, 127, 127, 0.14);
     --glass-accent:       rgba(36, 129, 204, 0.16);
     --glass-danger:       rgba(220, 38, 38, 0.14);
+    --glass-danger-text:  var(--tg-theme-destructive-text-color, #dc2626);
     --glass-dim:          var(--tg-theme-hint-color, #888888);
     --glass-bloom-a:      transparent;
     --glass-bloom-b:      transparent;
@@ -104,6 +105,16 @@ CSS = """\
       --glass-scrim-press: color-mix(in srgb, var(--tg-theme-text-color, #000000) 14%, transparent);
       --glass-accent:      color-mix(in srgb, var(--tg-theme-button-color, #2481cc) 16%, transparent);
       --glass-danger:      color-mix(in srgb, var(--tg-theme-destructive-text-color, #dc2626) 16%, transparent);
+      /* Danger TEXT, as opposed to --glass-danger's background wash.
+         The theme's own destructive colour is not legible enough on
+         glass at body size: 3.23:1 on Telegram light, and 2.96:1 on dark
+         for clients that never set the variable and fall back to
+         #dc2626 — against AA's 4.5:1. Mixing 60% of it with the theme's
+         own text colour lifts every combination to 4.79:1 or better
+         while keeping the hue unmistakably red. Same technique
+         --glass-dim uses, and tests/test_miniapp_styles.py reads this
+         percentage back out of the stylesheet as a hard gate. */
+      --glass-danger-text: color-mix(in srgb, var(--tg-theme-destructive-text-color, #dc2626) 60%, var(--tg-theme-text-color, #000000));
       /* Secondary text. --tg-theme-hint-color measures 2.85:1 on
          Telegram light and 4.23:1 on Telegram dark against the page —
          it fails AA for body-sized text in light. 62% of the theme's
@@ -473,7 +484,7 @@ CSS = """\
 
   #notice.toast-ok { border-left-color: #16a34a; }
   #notice.toast-ok .toast-icon { background: #16a34a; }
-  #notice.toast-err { border-left-color: #dc2626; }
+  #notice.toast-err { border-left-color: var(--glass-danger-text); }
   #notice.toast-err .toast-icon { background: #dc2626; }
   #notice.toast-info {
     border-left-color: var(--tg-theme-link-color, #3390ec);
@@ -653,7 +664,7 @@ CSS = """\
   .menu-item.act-perms::before { content: "🔐"; }
   .menu-item.act-restart::before { content: "🔁"; }
   .menu-item.act-rename::before { content: "✏️"; }
-  .menu-item.is-danger { color: var(--tg-theme-destructive-text-color, #dc2626); }
+  .menu-item.is-danger { color: var(--glass-danger-text); }
   .menu-note {
     padding: 0 16px 12px;
     font-size: 0.82rem;
@@ -712,7 +723,7 @@ CSS = """\
   /* Danger as the theme's own destructive colour on a tinted ground —
      never white-on-accent, per .choice.is-active's note. */
   .modal-btn.is-danger {
-    color: var(--tg-theme-destructive-text-color, #dc2626);
+    color: var(--glass-danger-text);
     background: rgba(220, 38, 38, 0.12);
     font-weight: 700;
   }
@@ -756,7 +767,7 @@ CSS = """\
     border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
     border-radius: 8px;
   }
-  .field-error { margin-top: 6px; font-size: 0.85rem; color: #dc2626; }
+  .field-error { margin-top: 6px; font-size: 0.85rem; color: var(--glass-danger-text); }
   /* Settings groups: collapsed to heading + current value, expanding to
      the choices. Four groups x five options all on screen at once is what
      made the page feel like a wall of pills. */
@@ -891,7 +902,7 @@ CSS = """\
     line-height: 1.4;
     color: var(--tg-theme-hint-color, #888888);
   }
-  .reveal-note.is-error { color: #dc2626; }
+  .reveal-note.is-error { color: var(--glass-danger-text); }
 
   /* Material's prefix pattern: the parent path is "input given in
      advance", shown inside the field, so where the folder lands needs no
@@ -1003,10 +1014,10 @@ CSS = """\
   }
 
   #error {
-    color: #dc2626;
+    color: var(--glass-danger-text);
     margin-top: 12px;
     padding: 8px 10px;
-    border: 1px solid #dc2626;
+    border: 1px solid var(--glass-danger-text);
     border-radius: 8px;
     display: none;
   }
@@ -1020,7 +1031,7 @@ CSS = """\
   }
   .conn-live { color: #16a34a; }
   .conn-reconnecting { color: #d97706; }
-  .conn-offline { color: #dc2626; }
+  .conn-offline { color: var(--glass-danger-text); }
 
 
   .detail-label { font-weight: 700; font-size: 1.05rem; margin-right: 8px; }
@@ -1062,7 +1073,7 @@ CSS = """\
     padding: 0 10px;
   }
   .diff-add { background: rgba(22, 163, 74, 0.14); color: #16a34a; }
-  .diff-del { background: rgba(220, 38, 38, 0.14); color: #dc2626; }
+  .diff-del { background: rgba(220, 38, 38, 0.14); color: var(--glass-danger-text); }
   .diff-hunk { color: var(--tg-theme-link-color, #2563eb); background: rgba(37, 99, 235, 0.08); }
   .diff-context { color: var(--tg-theme-text-color, #000000); }
   .diff-binary, .diff-truncated {
@@ -1220,10 +1231,10 @@ CSS = """\
   /* the danger wash, theme-derived instead of a hardcoded red */
   .modal-btn.is-danger, .waiting-note {
     background-image: linear-gradient(var(--glass-danger), var(--glass-danger));
-    border-color: var(--tg-theme-destructive-text-color, #dc2626);
+    border-color: var(--glass-danger-text);
   }
   #error, .field-error, .reveal-note.is-error {
-    color: var(--tg-theme-destructive-text-color, #dc2626);
+    color: var(--glass-danger-text);
   }
 
   /* the two classes the markup renders with no CSS rule at all:

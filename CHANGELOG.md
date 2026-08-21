@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Destructive actions in the Mini App are readable again.** "Delete",
+  error messages and the danger buttons were drawn in the theme's raw
+  destructive red on a translucent surface, which measured as low as 2.7:1
+  against WCAG's 4.5:1 minimum for text that size — worst on clients that
+  don't set a destructive colour at all and fell back to a dark red on a dark
+  background. The red is now blended toward the theme's own text colour,
+  lifting every combination to at least 4.79:1 while staying clearly red.
 - **A voice message can now answer the `/new` wizard and a rename prompt.**
   Speaking the session name did not just fail to reach the wizard — the
   transcript was sent to the active session as a prompt, so Claude was asked

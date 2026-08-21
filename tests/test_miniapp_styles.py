@@ -184,7 +184,8 @@ def test_the_css_actually_encodes_46_percent_for_glass_edge():
 _GLASS_TOKENS = (
     "--glass-alpha", "--glass-alpha-raised", "--glass-bg", "--glass-bg-raised",
     "--glass-edge", "--glass-hairline", "--glass-scrim-hover", "--glass-scrim-press",
-    "--glass-accent", "--glass-danger", "--glass-dim", "--glass-bloom-a",
+    "--glass-accent", "--glass-danger", "--glass-danger-text",
+    "--glass-dim", "--glass-bloom-a",
     "--glass-bloom-b", "--glass-blur", "--glass-blur-scrim", "--glass-sat",
     "--r-sm", "--r-md", "--r-lg", "--r-pill", "--el-1", "--el-2", "--el-press",
     "--glass-motion",
@@ -213,7 +214,8 @@ def test_color_mix_upgrade_derives_every_dynamic_token_from_tg_theme():
     for token in (
         "--glass-bg", "--glass-bg-raised", "--glass-edge", "--glass-hairline",
         "--glass-scrim-hover", "--glass-scrim-press", "--glass-accent",
-        "--glass-danger", "--glass-dim", "--glass-bloom-a", "--glass-bloom-b",
+        "--glass-danger", "--glass-danger-text", "--glass-dim",
+        "--glass-bloom-a", "--glass-bloom-b",
     ):
         decl = re.search(re.escape(token) + r":\s*color-mix\(in srgb,\s*var\(--tg-theme-", upgrade)
         assert decl, f"{token} is not derived from a --tg-theme-* variable via color-mix"
@@ -507,3 +509,186 @@ def test_no_stray_control_characters_introduced():
         if (ord(ch) < 0x20 or ord(ch) == 0x7F) and ch not in allowed
     })
     assert not bad, [hex(ord(c)) for c in bad]
+
+
+# ===========================================================================
+# Danger TEXT contrast. Distinct from --glass-danger, which is the 14-16%
+# BACKGROUND wash and is fine; this is the red the words are drawn in.
+#
+# Measured before the fix, against Telegram's shipped palettes:
+#     light  #ff3b30 (telegram)  3.23:1   FAIL
+#     light  #dc2626 (fallback)  4.39:1   FAIL
+#     dark   #ff595a (telegram)  4.65:1   pass
+#     dark   #dc2626 (fallback)  2.96:1   FAIL
+# `.menu-item` is 16px body text, so AA demands 4.5:1 — three of four failed.
+# The worst case is the FALLBACK on dark, which is what a client that never
+# sets --tg-theme-destructive-text-color gets.
+# ===========================================================================
+
+# Telegram's shipped destructive colours, and the stylesheet's own fallback
+# for clients that do not set the variable at all.
+_DESTRUCTIVE = {"light": _hex("#ff3b30"), "dark": _hex("#ff595a")}
+_DESTRUCTIVE_FALLBACK = _hex("#dc2626")
+
+_DANGER_TEXT_MIX = 0.60      # what the stylesheet SHOULD encode
+
+
+def _danger_mix_from_css() -> float:
+    """The danger-text mix the stylesheet actually encodes, or 1.0 if it
+    does not mix at all.
+
+    Read from the CSS on purpose. An earlier version of this gate applied
+    `_DANGER_TEXT_MIX` itself, so it measured the arithmetic rather than
+    the stylesheet and passed identically against the unfixed code — the
+    exact "passes for a reason unrelated to its name" failure this file
+    exists to prevent.
+    """
+    css = _strip_comments(_css())
+    m = re.search(
+        r"--glass-danger-text:\s*color-mix\(in srgb,\s*"
+        r"var\(--tg-theme-destructive-text-color[^)]*\)\s*(\d+)%",
+        css)
+    return int(m.group(1)) / 100.0 if m else 1.0
+
+
+def _danger_text(pal, source):
+    """The colour the stylesheet actually paints danger words in."""
+    return _composite(source, _danger_mix_from_css(), pal["text"])
+
+
+def _modal_danger_surface(pal):
+    """`.modal-btn.is-danger`'s rgba(220,38,38,0.12) tint, over the modal's
+    OPAQUE section background — not over translucent glass.
+
+    The first version composited over `_glass_bg()`, which was the wrong
+    ground: the button's `background` shorthand paints onto `.modal`'s own
+    opaque `--tg-theme-section-bg-color`. It did not flip any verdict, but
+    it made the reported ratio unfaithful, and a gate that models the wrong
+    surface is only accidentally right.
+    """
+    # `--tg-theme-section-bg-color` equals `--tg-theme-bg-color` in both
+    # Telegram default themes (researches/.../glass-audit.md), NOT
+    # secondary_bg — an earlier draft used secondary_bg, which happened to
+    # be conservative rather than correct.
+    return _composite(_hex("#dc2626"), 0.12, pal["bg"])
+
+
+def _diff_del_surface(pal):
+    """`.diff-del`'s own rgba(220,38,38,0.14) wash over the glass panel."""
+    return _composite(_hex("#dc2626"), 0.14, _glass_bg(pal))
+
+
+@pytest.mark.parametrize("pal_name,pal", [("light", _LIGHT), ("dark", _DARK)])
+@pytest.mark.parametrize("src_name", ["telegram", "fallback"])
+@pytest.mark.parametrize(
+    "surface_name", ["glass", "modal-btn", "diff-del", "page"])
+def test_danger_text_clears_aa_everywhere(pal_name, pal, src_name, surface_name):
+    """All eight combinations: two themes x two colour sources x two
+    surfaces. Body-sized text, so the bar is 4.5:1."""
+    source = (_DESTRUCTIVE[pal_name] if src_name == "telegram"
+              else _DESTRUCTIVE_FALLBACK)
+    surface = {
+        "glass": _glass_bg(pal),
+        "modal-btn": _modal_danger_surface(pal),
+        # `.diff-del` (a deleted line in the diff viewer) and
+        # `.conn-offline` (the connection pill) both painted raw #dc2626
+        # and were missed by the first sweep — 2.76:1 and 3.37:1 on dark.
+        "diff-del": _diff_del_surface(pal),
+        "page": pal["bg"],
+    }[surface_name]
+
+    ratio = _contrast(_danger_text(pal, source), surface)
+
+    assert ratio >= 4.5, (
+        f"{pal_name}/{src_name} on {surface_name}: {ratio:.2f}:1 fails AA")
+
+
+@pytest.mark.parametrize("pal_name,pal", [("light", _LIGHT), ("dark", _DARK)])
+def test_danger_text_still_reads_as_danger(pal_name, pal):
+    """Contrast alone is not the goal — a token that resolved to the plain
+    text colour would score perfectly and be useless. The danger colour has
+    to stay visibly distinct from ordinary text."""
+    for src in (_DESTRUCTIVE[pal_name], _DESTRUCTIVE_FALLBACK):
+        danger = _danger_text(pal, src)
+        assert _contrast(danger, pal["text"]) >= 1.35, (
+            f"{pal_name}: danger text is indistinguishable from body text")
+
+
+def test_the_css_encodes_the_danger_text_mix_and_uses_it():
+    """The arithmetic above is only a gate if the stylesheet matches it."""
+    css = _strip_comments(_css())
+
+    assert "--glass-danger-text" in css, "no danger-text token declared"
+    pct = int(_DANGER_TEXT_MIX * 100)
+    assert f"{pct}%" in css, f"stylesheet does not encode {pct}%"
+    for sel in (".menu-item.is-danger", ".modal-btn.is-danger"):
+        assert sel in css
+
+
+def test_the_danger_background_wash_is_not_merged_with_the_text_colour():
+    """`--glass-danger` (the 14-16% wash) and `--glass-danger-text` are
+    different things; collapsing them would either wash out the background
+    or ruin the text contrast this gate exists to protect."""
+    css = _strip_comments(_css())
+
+    assert "--glass-danger:" in css, "the background wash token vanished"
+    assert "--glass-danger-text:" in css
+
+
+def test_no_selector_paints_danger_text_in_a_raw_red():
+    """The sweep guard.
+
+    Three separate passes over this stylesheet each missed sites: the
+    first fixed three selectors, a reviewer found `.diff-del` and
+    `.conn-offline` still on a hardcoded `#dc2626`. Enumerating by hand
+    is evidently unreliable, so assert the property instead — no rule may
+    paint TEXT in a raw red or in the bare destructive var.
+    """
+    css = _strip_comments(_css())
+
+    # Strip at-rule PRELUDES (`@media ... {`, `@supports ... {`) rather than
+    # trying to match balanced braces. The earlier version matched
+    # `selector { body }` pairs, so a rule that was the FIRST child inside
+    # an at-rule block had its selector swallowed by the block's own
+    # prelude and escaped entirely — a reviewer reproduced that against a
+    # file with eight at-rule blocks.
+    flat = re.sub(r"@[a-z-]+[^{]*\{", " ", css)
+
+    offenders = []
+    for m in re.finditer(r"([^{}]+)\{([^{}]*)\}", flat):
+        selector, body = m.group(1).strip(), m.group(2)
+        for decl in body.split(";"):
+            decl = decl.strip()
+            if not decl.startswith("color:"):
+                continue
+            value = decl[len("color:"):].strip()
+            if "#dc2626" in value or "--tg-theme-destructive-text-color" in value:
+                offenders.append(f"{selector[-60:]} -> {value}")
+
+    assert not offenders, (
+        "these paint danger TEXT without the contrast-checked token:\n  "
+        + "\n  ".join(offenders))
+
+
+def test_no_selector_draws_a_danger_border_in_a_raw_red():
+    """Borders fall under WCAG 1.4.11's 3:1 non-text bar, and the raw red
+    measured 2.94-2.96:1 in the worst themes — under it. The same token
+    that fixed the text clears them everywhere, so there is no reason to
+    leave a second, weaker rule for the same colour.
+    """
+    css = _strip_comments(_css())
+    flat = re.sub(r"@[a-z-]+[^{]*\{", " ", css)
+
+    offenders = []
+    for m in re.finditer(r"([^{}]+)\{([^{}]*)\}", flat):
+        selector, body = m.group(1).strip(), m.group(2)
+        for decl in body.split(";"):
+            decl = decl.strip()
+            if not re.match(r"border(-[a-z]+)*(-color)?\s*:", decl):
+                continue
+            if "#dc2626" in decl or "--tg-theme-destructive-text-color" in decl:
+                offenders.append(f"{selector[-60:]} -> {decl}")
+
+    assert not offenders, (
+        "these draw a danger border without the contrast-checked token:\n  "
+        + "\n  ".join(offenders))
