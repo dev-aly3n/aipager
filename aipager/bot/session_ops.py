@@ -725,7 +725,7 @@ class SessionOpsMixin:
         sys_extra = self._session_system_prompt(sess.scope_chat_id, label)
         ok, err = await inject.launch_session(
             short_name, resume_id=resume_id, cwd=cwd,
-            skip_perms=effective_skip_perms,
+            skip_perms=effective_skip_perms, is_relaunch=True,
             system_prompt_extra=sys_extra,
         )
         if not ok:
@@ -1015,7 +1015,7 @@ class SessionOpsMixin:
         sys_extra = self._session_system_prompt(sess.scope_chat_id, label)
         ok, err = await inject.launch_session(
             short_name, skip_perms=target_skip_perms,
-            resume_id=resume_id or None, cwd=cwd,
+            resume_id=resume_id or None, cwd=cwd, is_relaunch=True,
             system_prompt_extra=sys_extra,
         )
         if not ok:

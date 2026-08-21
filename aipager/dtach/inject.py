@@ -425,9 +425,28 @@ async def is_alive(session: str) -> bool:
 
 
 _VALID_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
+# Names a session may not take, because something else already answers to
+# them. ONE canonical set, deliberately: there used to be a second list in
+# `dtach/launcher.py` covering only the CLI's own verbs, and the two drifted
+# apart twice — `app`/`clearqueue`/`perms`/`resume`/`whoami` shipped as bot
+# commands without ever being reserved, while `ls`/`list` were reserved by the
+# CLI and not by chat. Either way round the result is the same: a session
+# named after a command shadows it on one surface, or is unreachable on the
+# other.
+#
+# Lives HERE, in the low-level module, so `dtach/launcher.py` and
+# `miniapp/launch.py` can both import it — `dtach` must never import from
+# `bot`. `tests/test_reserved_name_reconciliation.py` fails if a bot command
+# is ever registered without appearing below, which is what stops this from
+# drifting a third time; adding a command means adding it here too.
 _RESERVED = {
+    # Telegram bot commands (see bot/lifecycle.py::_command_list)
     "status", "stop", "kill", "new", "help", "start", "settings",
     "restart", "rename", "delete", "diff",
+    "app", "clearqueue", "perms", "resume", "whoami",
+    # `aipager session` subcommand verbs (see cli/session.py) — these are
+    # matched before the name is treated as a session at all.
+    "ls", "list",
 }
 
 
@@ -496,6 +515,7 @@ async def launch_session(
     cwd: str | None = None,
     system_prompt_extra: str | None = None,
     model: str | None = None,
+    is_relaunch: bool = False,
 ) -> tuple[bool, str]:
     """Launch a new Claude Code session inside dtach.
 
@@ -512,7 +532,16 @@ async def launch_session(
     """
     if not name or not _VALID_NAME.match(name):
         return False, "Invalid name (use letters, numbers, hyphens)"
-    if name.lower() in _RESERVED:
+    # Creation only. Every relaunch of an ALREADY-EXISTING session comes
+    # through here too — /restart, /perms, /resume, and the replace-on-name-
+    # conflict flow all kill and re-launch under the session's own name — so
+    # gating them on the reserved set would retroactively strand any session
+    # created before a word joined it. That is not hypothetical: `ls` became
+    # reserved after a live `claude-ls` session already existed, and its next
+    # /restart would have failed. Names are validated where a human types
+    # them (bot/handlers.py, miniapp/launch.py, dtach/launcher.py); this stays
+    # as the creation-time backstop for a caller that forgets.
+    if not is_relaunch and name.lower() in _RESERVED:
         return False, f"'{name}' is a reserved command name"
     # The internal name may carry a scope disambiguator suffix
     # (e.g. "jim__d256113222"), so the cap is generous; the

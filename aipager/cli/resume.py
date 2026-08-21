@@ -162,7 +162,7 @@ def _resume_one(label: str, *, force_auto: bool = False) -> int:
     skip_perms = force_auto or bool(sd.get("skip_perms", False))
     ok, err = _asyncio.run(dtach_inject.launch_session(
         full_label, resume_id=resume_id, cwd=cwd or None,
-        skip_perms=skip_perms,
+        skip_perms=skip_perms, is_relaunch=True,
     ))
     if not ok:
         friendly_error(f"couldn't resume {full_label!r}: {err}")

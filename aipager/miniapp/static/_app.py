@@ -1035,10 +1035,16 @@ APP_JS = r"""
   // not a reserved command word. Purely a UX nicety — the server call
   // is the only gate that actually matters.
   var RENAME_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
-  // Mirrors aipager.dtach.inject._RESERVED verbatim.
+  // Mirrors aipager.dtach.inject._RESERVED. Kept in sync by
+  // tests/test_reserved_name_reconciliation.py, which fails if the two
+  // drift — this list went stale once already, missing every command
+  // added after it was written.
   var RENAME_RESERVED = {
-    status: true, stop: true, kill: true, "new": true,
-    help: true, start: true, settings: true
+    "app": true, "clearqueue": true, "delete": true, "diff": true,
+    "help": true, "kill": true, "list": true, "ls": true, "new": true,
+    "perms": true, "rename": true, "restart": true, "resume": true,
+    "settings": true, "start": true, "status": true, "stop": true,
+    "whoami": true
   };
 
   function renameValidationError(value) {

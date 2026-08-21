@@ -722,7 +722,8 @@ class CallbackDispatchMixin:
                 except Exception:
                     pass
 
-                ok, err = await inject.launch_session(label, skip_perms=skip_perms)
+                ok, err = await inject.launch_session(
+                    label, skip_perms=skip_perms, is_relaunch=True)
                 if not ok:
                     try:
                         await self._app.bot.send_message(

@@ -22,13 +22,19 @@ from pathlib import Path
 
 from aipager import daemon_secrets
 from aipager.dtach import redraw as _dtach_redraw
-from aipager.dtach.inject import normalize_session_name
+from aipager.dtach.inject import _RESERVED, normalize_session_name
 from aipager.errors import friendly_error, friendly_warn
 from aipager.ui import console, ok
 
 _NAME_RE = re.compile(r"[A-Za-z0-9_-]{1,50}")
 # Reserved because they are subcommand verbs under `aipager session`.
-_RESERVED_NAMES = frozenset({"ls", "list", "kill"})
+# The positional verbs `aipager session` matches before treating its
+# argument as a session name (see cli/session.py). PURELY COSMETIC:
+# it selects the wording of the rejection and carries no validation
+# authority of its own — names are checked against inject._RESERVED,
+# which contains these three as well. Do not re-widen this into a
+# second reserved list; that split is the bug this file just fixed.
+_SUBCOMMAND_VERBS = frozenset({"ls", "list", "kill"})
 
 
 def _resolve_dtach() -> str | None:
@@ -105,9 +111,15 @@ def _validate_name(name: str) -> str | None:
     if not _NAME_RE.fullmatch(name):
         return ("session name must be 1-50 chars of [A-Za-z0-9_-]; "
                 f"got {name!r}")
-    if name in _RESERVED_NAMES:
-        return (f"{name!r} is reserved as an `aipager session` subcommand "
-                "(ls / list / kill); pick a different name")
+    # The canonical set from `inject`, not a second list of our own: the
+    # two used to disagree, so a name this layer accepted could shadow a
+    # Telegram command, and vice versa.
+    if name in _RESERVED:
+        if name in _SUBCOMMAND_VERBS:
+            return (f"{name!r} is reserved as an `aipager session` subcommand "
+                    "(ls / list / kill); pick a different name")
+        return (f"{name!r} is reserved as an aipager command name — a session "
+                f"called that would shadow /{name} in Telegram")
     return None
 
 
@@ -168,7 +180,7 @@ def launch(name: str, claude_args: list[str] | None = None,
     name = _resolve_launch_name(name)
     err = _validate_name(name)
     if err:
-        # Reachable: `_RESERVED_NAMES` holds lowercase literals, so `LS`
+        # Reachable: `inject._RESERVED` holds lowercase literals, so `LS`
         # passes the check above and only becomes reserved once
         # normalised. Not dead code — do not delete.
         friendly_error(err)

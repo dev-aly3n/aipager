@@ -11,8 +11,11 @@ def _cmd_session(args: argparse.Namespace) -> int:
     #   aipager session ls / list                       → list all sessions
     #   aipager session kill <name>                     → terminate session
     #   aipager session <name> [claude args...]         → launch / attach
-    # The verbs `ls`, `list`, `kill` are reserved as session names by
-    # `dtach.launcher._validate_name`, so no collision is possible.
+    # These verbs are reserved as session names by `inject._RESERVED`, so a
+    # session created TODAY cannot collide with them. Sessions created before
+    # that reservation still can: `ls` was reservable from Telegram until
+    # then, and such a session is matched as a verb here and is therefore
+    # unreachable from this command. Rename it from chat to reach it here.
     if args.name in ("ls", "list"):
         return _session_ls(args)
     if args.name == "kill":

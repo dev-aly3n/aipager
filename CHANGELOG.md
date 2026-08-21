@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **A session could be named after a command and shadow it.** aipager kept
+  two separate lists of names a session may not take — one for Telegram and the
+  Mini App, one for `aipager session` — and they had drifted apart in both
+  directions. `/app`, `/clearqueue`, `/perms`, `/resume` and `/whoami` shipped
+  without ever being reserved, so `/new perms` created a session that shadowed
+  `/perms`; meanwhile `aipager session status` was accepted from the terminal
+  and shadowed `/status` in chat, and a session named `ls` created from
+  Telegram was unreachable via `aipager session ls`. There is now one list,
+  shared by both, and a test that fails if a future command is added without
+  reserving its name. **You can no longer name a session** `app`,
+  `clearqueue`, `perms`, `resume`, `whoami`, `ls` or `list` (in addition to
+  the names already refused). Sessions that already carry one of those names
+  keep working in full: the reserved check applies when a session is CREATED,
+  never when an existing one is relaunched, so `/restart`, `/perms`, `/resume`
+  and replace-on-name-conflict still work for them. (The first cut of this
+  change got that wrong and would have stranded them.)
 - **New sessions are named in lowercase, so they all get a `/shortcut`.**
   `UiOp` becomes `uiop` and `my-session` becomes `my_session`, at every entry
   point: `/new !name`, the interactive `/new` wizard, the Mini App's create and
