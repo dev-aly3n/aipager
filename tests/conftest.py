@@ -562,6 +562,35 @@ def steady_clock(monkeypatch):
         monkeypatch.setattr(importlib.import_module(modname), "time", fake)
     return now
 
+
+@pytest.fixture(autouse=True)
+def _never_spawn_real_dtach(monkeypatch):
+    """Make it impossible for a test to fork a real dtach + claude.
+
+    `dtach/launcher.launch()` validates its argument and then, if the
+    name passed, resolves dtach and spawns. Several tests call it purely
+    to assert a REJECTION — and are therefore kept from spawning only by
+    the very check they are testing. Weaken that check (as mutation
+    testing routinely does) and the suite forks a real
+    `dtach -n /tmp/claude-dtach-<name>.sock -Ez env … claude …` against
+    the operator's own machine. That happened three times during review
+    of this suite, twice leaving live `claude` processes behind.
+
+    `dtach-bin` ships a real dtach binary, so `_resolve_dtach()` succeeds
+    on a normal dev box and on CI alike; returning None here makes
+    `launch()` fail fast with "dtach not installed" instead. Tests that
+    genuinely exercise the spawn path override this with their own
+    `monkeypatch.setattr` — a later monkeypatch wins — so nothing that
+    needs the real seam loses it.
+
+    Autouse rather than opt-in for the same reason as the config
+    isolation fixtures above: one forgotten stub is all it takes, and
+    the failure mode is a stray process on someone's machine rather than
+    a red test.
+    """
+    monkeypatch.setattr("aipager.dtach.launcher._resolve_dtach",
+                        lambda: None, raising=False)
+
 @pytest.fixture
 def mk_bot():
     """Build a TelegramBot with mocked `_app` and `team=None` by default.

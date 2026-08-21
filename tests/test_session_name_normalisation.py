@@ -218,12 +218,25 @@ def test_a_dead_socket_under_the_old_spelling_is_reported_not_silent(
         f"the rename went unmentioned: {out!r}")
 
 
-def test_cli_rejects_a_reserved_subcommand_reached_only_by_normalising():
-    """`_RESERVED_NAMES` holds lowercase literals, so `LS` passes the
+def test_cli_rejects_a_reserved_subcommand_reached_only_by_normalising(
+        monkeypatch):
+    """`inject._RESERVED` holds lowercase literals, so `LS` passes the
     first (raw) validation and is caught only by the second, on the
     normalised name. This is what makes that second check live code
-    rather than the dead branch its comment once claimed."""
+    rather than the dead branch its comment once claimed.
+
+    `_resolve_dtach` is stubbed because the ONLY thing stopping
+    `launch()` from spawning a real dtach + claude here is the very
+    check under test. A reviewer proved that by dropping `ls`/`kill`
+    from the reserved set: this test reached a fully-formed
+    `dtach -n /tmp/claude-dtach-ls.sock -Ez env … claude …` before being
+    aborted. `dtach` is a real binary on any box with `dtach-bin`, so a
+    weakened guard would have left live processes behind on CI instead
+    of failing.
+    """
     from aipager.dtach import launcher
+
+    monkeypatch.setattr(launcher, "_resolve_dtach", lambda: None)
 
     assert launcher.launch("LS") == 2
     assert launcher.launch("Kill") == 2
