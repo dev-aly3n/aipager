@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **A voice message can now answer the `/new` wizard and a rename prompt.**
+  Speaking the session name did not just fail to reach the wizard — the
+  transcript was sent to the active session as a prompt, so Claude was asked
+  "my project two" as a question while the wizard sat waiting for a name.
+  Voice now goes through the same two capture steps typed text does.
+
 ## [0.7.2] - 2026-08-21
 
 ### Security

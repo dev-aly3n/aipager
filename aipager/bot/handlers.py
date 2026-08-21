@@ -1322,10 +1322,11 @@ class CommandHandlersMixin:
         # lightweight shim Update so we don't duplicate routing code.
         # Simpler: write the text into the existing message and dispatch.
         # Cleanest: invoke the same logic inline.
-        await self._dispatch_voice_transcript(update, text)
+        await self._dispatch_voice_transcript(update, text, ctx)
 
     async def _dispatch_voice_transcript(
         self, update: Update, transcript: str,
+        ctx: ContextTypes.DEFAULT_TYPE | None = None,
     ) -> None:
         """Inject a voice-transcript into the active session as a prompt.
 
@@ -1333,6 +1334,18 @@ class CommandHandlersMixin:
         target → last_active_session) so the user's voice behaves like
         their typed text would.
         """
+        # The same two capture hooks `_handle_message` runs before any
+        # session routing, in the same order. Without them a spoken answer
+        # to "what should this session be called?" did not merely fail to
+        # reach the wizard — it was injected into the active session as a
+        # prompt, so Claude got asked "my project two" while the wizard sat
+        # waiting. Both hooks take the text as an argument (neither reads
+        # `update.message.text`), so a transcript serves them unchanged.
+        if await new_flow.maybe_handle_text(self, update, ctx, transcript):
+            return
+        if await session_parity.maybe_handle_text(self, update, ctx, transcript):
+            return
+
         reply_to = update.message.reply_to_message
         chat_id = calling_chat_id(update)
         sess = self._resolve_reply_target(reply_to, chat_id)
