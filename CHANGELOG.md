@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-08-21
+
 ### Fixed
 - **A finished session now offers Resume instead of a Restart that could
   never work.** Tapping ⋮ on a session in `/status` always offered Restart,
