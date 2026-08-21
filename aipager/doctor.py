@@ -50,19 +50,23 @@ class CheckResult:
 
 def _http_json(url: str, timeout: float = 10.0) -> tuple[dict | None, str]:
     """Return ``(json_body, error_string)`` — exactly one will be empty."""
+    from aipager.errors import redact_token
     try:
         with urllib.request.urlopen(url, timeout=timeout) as r:
             return json.load(r), ""
+    # Redacted like the wizard's copy: this URL carries the bot token, and
+    # `aipager doctor` prints these strings straight to the terminal.
     except urllib.error.HTTPError as e:
         try:
             body = json.loads(e.read())
-            return None, f"HTTP {e.code}: {body.get('description', '?')}"
+            return None, redact_token(
+                f"HTTP {e.code}: {body.get('description', '?')}")
         except Exception:
             return None, f"HTTP {e.code}"
     except urllib.error.URLError as e:
-        return None, f"network: {e.reason}"
+        return None, redact_token(f"network: {e.reason}")
     except (OSError, json.JSONDecodeError) as e:
-        return None, str(e)
+        return None, redact_token(str(e))
 
 
 def check_config_parses() -> CheckResult:

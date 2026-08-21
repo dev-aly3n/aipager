@@ -30,7 +30,9 @@ def _step_token(step_label: str = "[1/5]") -> tuple[str, str]:
     step(f"{step_label}  Telegram bot")
     hint("Get a token from @BotFather (https://t.me/BotFather)")
     while True:
-        raw = _ask(questionary.text(
+        # `password`, not `text`: `text` echoes the credential and leaves
+        # it in scrollback, screen recordings and tmux capture-pane output.
+        raw = _ask(questionary.password(
             "Paste your bot token:",
             qmark="?",
             style=_PROMPT_STYLE,

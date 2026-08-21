@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import errno
 import functools
+import re
 import sys
 from typing import Callable, TypeVar
 
@@ -166,3 +167,27 @@ def with_friendly_errors(fn: Callable[..., T]) -> Callable[..., T]:
                 friendly_error(f"{type(e).__name__}: {e}", bug=True)
             sys.exit(1)
     return wrapper
+
+
+_TOKEN_IN_URL = re.compile(r"bot(\d+):[A-Za-z0-9_-]{20,}")
+
+
+def redact_token(text: str) -> str:
+    """Strip any bot token out of text on its way to the screen.
+
+    Every Telegram API URL embeds the credential
+    (``https://api.telegram.org/bot<TOKEN>/getMe``), and the error paths
+    that report failures interpolate strings urllib produced. ``str(e)``
+    happens not to include the URL today — but ``HTTPError.filename``
+    holds it in full, and ``URLError.reason`` is whatever the underlying
+    error chose to say. A leak would be silent and would land in the
+    operator's terminal.
+
+    Lives here, in the shared error-formatting module, because the same
+    try/except shape exists three times: the setup wizard
+    (``wizard/telegram_api.py``), ``aipager doctor``, and ``aipager
+    start``'s Telegram preflight. Patching one and leaving two is how a
+    credential leak survives a security fix.
+    """
+    return _TOKEN_IN_URL.sub(r"bot\1:<redacted>", text)
+

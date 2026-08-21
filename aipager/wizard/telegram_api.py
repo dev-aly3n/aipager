@@ -7,7 +7,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-
+from aipager.errors import redact_token
 from aipager.ui import err_console
 from aipager.wizard._constants import (
     _TOKEN_RE,
@@ -35,11 +35,11 @@ def _http_json(url: str) -> tuple[dict | None, int | None, str]:
             body = json.loads(e.read())
             return body, e.code, body.get("description", "")
         except Exception:
-            return None, e.code, str(e)
+            return None, e.code, redact_token(str(e))
     except urllib.error.URLError as e:
-        return None, None, f"network: {e.reason}"
+        return None, None, redact_token(f"network: {e.reason}")
     except (OSError, json.JSONDecodeError) as e:
-        return None, None, str(e)
+        return None, None, redact_token(str(e))
 
 
 def _explain_http_error(code: int | None, err: str) -> str:
@@ -81,13 +81,14 @@ def _test_send(token: str, chat_id: int) -> tuple[bool, str]:
         with urllib.request.urlopen(req, timeout=30) as r:
             result = json.load(r)
     except urllib.error.HTTPError as e:
+        # Same redaction as _http_json: this URL carries the token too.
         try:
             body = json.loads(e.read())
-            return False, body.get("description", str(e))
+            return False, redact_token(body.get("description", str(e)))
         except Exception:
-            return False, str(e)
+            return False, redact_token(str(e))
     except (urllib.error.URLError, OSError, json.JSONDecodeError) as e:
-        return False, str(e)
+        return False, redact_token(str(e))
     if not result.get("ok"):
         return False, result.get("description", "unknown error")
     return True, ""

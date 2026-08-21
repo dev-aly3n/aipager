@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **`aipager config` no longer echoes your bot token.** It was read with a
+  plain text prompt, so the token stayed on screen — in scrollback, in screen
+  recordings, and in anything that captures a terminal. It is now typed
+  blind, like a password. The settings screen also showed the first 10
+  characters, which happens to stop exactly at the colon for a 10-digit bot
+  id but exposed part of the secret for shorter ids; it now shows the bot id
+  and masks the secret entirely, whatever its length. Error messages are
+  scrubbed too — every Telegram API URL embeds the token, and the same
+  reporting shape appears in three places: the wizard, `aipager doctor`, and
+  the preflight `aipager start` runs. All three are covered. Nothing about
+  how the token is stored changed.
+
 ## [0.7.1] - 2026-08-21
 
 ### Fixed

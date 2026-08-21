@@ -237,7 +237,9 @@ def _refresh_token(scopes) -> str | None:
     new token iff it changed."""
     step("[~]  Refresh bot token")
     while True:
-        raw = _ask(questionary.text(
+        # `password`, not `text`: `text` echoes the credential and leaves
+        # it in scrollback, screen recordings and tmux capture-pane output.
+        raw = _ask(questionary.password(
             "Paste your bot token:", qmark="?", style=_PROMPT_STYLE,
         ))
         token = _normalize_token(raw)

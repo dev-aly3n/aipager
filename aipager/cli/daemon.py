@@ -143,22 +143,24 @@ def _telegram_preflight() -> str:
     so wrappers can distinguish setup problems from crashes.
     """
     from aipager.config import BOT_TOKEN, CHAT_ID
-    from aipager.errors import friendly_error
+    from aipager.errors import friendly_error, redact_token
 
     def _call(url: str) -> tuple[dict | None, int | None, str]:
         try:
             with urllib.request.urlopen(url, timeout=15) as r:
                 return json.load(r), r.status, ""
+        # Redacted: the preflight URL embeds the bot token and these
+        # strings reach the terminal through `friendly_error`.
         except urllib.error.HTTPError as e:
             try:
                 body = json.loads(e.read())
             except Exception:
-                body = {"description": str(e)}
-            return body, e.code, body.get("description", "")
+                body = {"description": redact_token(str(e))}
+            return body, e.code, redact_token(body.get("description", ""))
         except urllib.error.URLError as e:
-            return None, None, f"network: {e.reason}"
+            return None, None, redact_token(f"network: {e.reason}")
         except (OSError, json.JSONDecodeError) as e:
-            return None, None, str(e)
+            return None, None, redact_token(str(e))
 
     body, code, err = _call(f"https://api.telegram.org/bot{BOT_TOKEN}/getMe")
     if code == 401:

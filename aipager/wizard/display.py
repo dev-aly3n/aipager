@@ -43,6 +43,31 @@ class _NullCtx:
         return False
 
 
+def mask_token(token: str | None) -> str:
+    """A bot token rendered so the secret half cannot be read.
+
+    A Telegram token is ``<bot_id>:<35-char secret>``. The bot id is the
+    bot's public identifier — it appears in API responses and is how you
+    tell which bot is configured — while everything after the colon is the
+    credential itself.
+
+    This replaced ``token[:10]``, a fixed slice that was safe only by
+    coincidence: a 10-digit bot id lands the cut exactly on the colon, but
+    an 8-digit id (common on older bots) put two secret characters on
+    screen. Splitting on the separator makes the rule independent of id
+    length.
+
+    Anything without a colon is masked in full — a malformed value has no
+    identifiable public half, so nothing in it is known to be safe.
+    """
+    if not token:
+        return "missing"
+    bot_id, sep, secret = token.partition(":")
+    if not sep or not secret:
+        return "<malformed>"
+    return f"{bot_id}:{'•' * 8}"
+
+
 def _show_current_config() -> None:
     """Print a panel summarizing the scopes in aipager.yaml + daemon state."""
     from rich.panel import Panel
@@ -76,7 +101,7 @@ def _show_current_config() -> None:
                 lines.append(f"   • [path]{m.label}[/path] — {m.role}")
 
     if token:
-        lines.append(f"[title]Token:[/title]  {token[:10]}…")
+        lines.append(f"[title]Token:[/title]  {mask_token(token)}")
     else:
         lines.append("[title]Token:[/title]  [err]missing[/err]")
 
