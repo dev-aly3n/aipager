@@ -594,27 +594,17 @@ class CallbackDispatchMixin:
             return
 
         # ---- /resume picker callbacks ---------------------------------
-        if action == "resume" and session_name and session_name != "_":
-            # Resolve the user-facing label from the registry: suffixed
-            # names (label__d<chat_id>) don't round-trip through a plain
-            # prefix strip, and _do_resume matches on sess.label.
-            sess = self.registry.get(session_name)
-            label = sess.label if sess else session_name.removeprefix("claude-")
-            # Store pending label for the mode-picker callbacks.
-            self._resume_mode_pending[session_name] = label
-            # Edit the picker message to show the mode-picker keyboard.
-            persisted_skip_perms = sess.skip_perms if sess else False
-            kb = self._build_resume_mode_keyboard(session_name, persisted_skip_perms)
-            try:
-                await query.edit_message_text(
-                    f"Resume <b>{html_mod.escape(label)}</b> as:",
-                    parse_mode="HTML",
-                    reply_markup=kb,
-                )
-            except Exception:
-                pass
-            return
-
+        # The `{name}:resume` branch that used to live here is gone: every
+        # resume button now carries the short indexed form and is claimed
+        # by `session_parity.handle_callback` at the top of this method,
+        # which also answers "Session not found" for an unknown session —
+        # so this branch could never run again. Dead code that reads as
+        # live is how the wrong thing gets maintained.
+        #
+        # `resume_mode_*` below is NOT dead: buttons rendered before that
+        # change still carry it, and `session_parity` does not claim those
+        # verbs (its own are hyphenated: `resume-ask` / `resume-auto` /
+        # `resume-cancel`).
         if action.startswith("resume_page:"):
             try:
                 page = int(action.split(":", 1)[1])

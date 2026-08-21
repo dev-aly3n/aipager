@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **A finished session now offers Resume instead of a Restart that could
+  never work.** Tapping ⋮ on a session in `/status` always offered Restart,
+  but restarting kills and relaunches a RUNNING process — on a session that
+  had already ended it could only answer "isn't running", so it took two taps
+  to be told nothing happened. A live session is offered Restart; a finished
+  one is offered Resume, which picks up its conversation where it left off.
+- **`/resume` no longer lists sessions it cannot resume.** A session that
+  ended before saving a transcript has nothing to resume from and was refused
+  after being offered; those are now left out, with a note saying how many.
+  A finished session in that state also says so in its ⋮ menu rather than
+  quietly showing fewer buttons.
+- **A long session name could break the whole `/resume` list.** Its buttons
+  embedded the full internal session name, which reached 71 bytes for a
+  long-named session — past Telegram's 64-byte limit, and Telegram rejects the
+  entire keyboard rather than the one row, so a single such session made the
+  list unusable. The buttons now carry a short reference instead.
 - **A session could be named after a command and shadow it.** aipager kept
   two separate lists of names a session may not take — one for Telegram and the
   Mini App, one for `aipager session` — and they had drifted apart in both

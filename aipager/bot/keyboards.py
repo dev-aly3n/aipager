@@ -326,20 +326,35 @@ class KeyboardMixin:
 
     def _build_resume_mode_keyboard(
         self, session_name: str, persisted_skip_perms: bool,
+        *, chat_id: int = 0,
     ) -> InlineKeyboardMarkup:
-        """Mode-picker keyboard shown after session selection in /resume picker."""
+        """Mode-picker keyboard shown after a session is chosen to resume.
+
+        Callbacks carry the short per-chat index, not the session name.
+        ``_make_cb`` embeds the name and ASSERTS on overflow, and
+        ``{name}:resume_mode_cancel`` measures 83 bytes for a
+        maximum-length name — so this keyboard used to raise rather than
+        render for exactly the sessions the 64-byte work was about.
+        """
+        from aipager.bot import session_parity
+
+        sess = self.registry.get(session_name)
         ask_label = "💬 Ask" + (" (default)" if not persisted_skip_perms else "")
         auto_label = "🤖 Auto" + (" (default)" if persisted_skip_perms else "")
+
+        def cb(verb: str) -> str:
+            # The fallback is defensive only: the sole caller resolves the
+            # session first and passes its own `sess.name`, so `sess is
+            # None` is not reachable from production today. Kept because
+            # it fails safe, not because anything relies on it.
+            if sess is None:                    # unknown session: legacy form
+                return self._make_cb(session_name, f"resume_mode_{verb}")
+            return session_parity.session_cb(self, chat_id, sess, f"resume-{verb}")
+
         return InlineKeyboardMarkup([
-            [InlineKeyboardButton(
-                ask_label,
-                callback_data=self._make_cb(session_name, "resume_mode_ask")),
-             InlineKeyboardButton(
-                auto_label,
-                callback_data=self._make_cb(session_name, "resume_mode_auto"))],
-            [InlineKeyboardButton(
-                "↩️ Cancel",
-                callback_data=self._make_cb(session_name, "resume_mode_cancel"))],
+            [InlineKeyboardButton(ask_label, callback_data=cb("ask")),
+             InlineKeyboardButton(auto_label, callback_data=cb("auto"))],
+            [InlineKeyboardButton("↩️ Cancel", callback_data=cb("cancel"))],
         ])
 
     def _build_inline_ask_keyboard(self, session_name: str, options: list,

@@ -64,6 +64,9 @@ _SESSION_ACTIONS = frozenset({
     "rename", "rename-cancel",
     "delete", "delete-confirm", "delete-cancel",
     "diff",
+    # Gone-session counterpart to "restart" — the ⋮ menu offers exactly
+    # one of the two, never both, since each fails where the other works.
+    "resume", "resume-ask", "resume-auto", "resume-cancel",
 })
 
 _DIFF_INLINE_THRESHOLD = 3500  # chars — entrypoints.md's "~3500" cutoff
@@ -213,18 +216,37 @@ def _render_session_menu(
     regardless of which surface reached it."""
     names = _register_pref_index(bot, chat_id, [sess.name])
     pref_cb = f"_:spref:{names.index(sess.name)}"
-    rows = [
-        [InlineKeyboardButton("🔄 Restart", callback_data=session_cb(bot, chat_id, sess, "restart"))],
+    gone = sess.status == Status.GONE
+    # Restart kills and relaunches a RUNNING process; on a gone session
+    # `_kill_and_relaunch_core` can only answer `not_live`, so the button
+    # cost two taps to be told nothing happened. Resume is the gone-session
+    # equivalent — and it needs a transcript id to resume FROM, without
+    # which `_do_resume_core` refuses with `no_transcript`. Offering
+    # either one where it cannot work is the defect being fixed here, so
+    # neither is offered speculatively.
+    rows = []
+    if not gone:
+        rows.append([InlineKeyboardButton(
+            "🔄 Restart", callback_data=session_cb(bot, chat_id, sess, "restart"))])
+    elif sess.claude_session_id:
+        rows.append([InlineKeyboardButton(
+            "▶️ Resume", callback_data=session_cb(bot, chat_id, sess, "resume"))])
+    rows += [
         [InlineKeyboardButton("✏️ Rename", callback_data=session_cb(bot, chat_id, sess, "rename"))],
         [InlineKeyboardButton("👤 Preferences", callback_data=pref_cb)],
         [InlineKeyboardButton("📝 Diff", callback_data=session_cb(bot, chat_id, sess, "diff"))],
     ]
-    if sess.status == Status.GONE:
+    if gone:
         rows.append([InlineKeyboardButton(
             "🗑️ Delete", callback_data=session_cb(bot, chat_id, sess, "delete"))])
     rows.append([InlineKeyboardButton(
         "✖️ Close", callback_data=session_cb(bot, chat_id, sess, "menu-close"))])
     text = f"⋮ <b>{html_mod.escape(sess.label)}</b> — choose an action:"
+    if gone and not sess.claude_session_id:
+        # Say why, rather than quietly showing a shorter menu — "where did
+        # Resume go" is a worse question than a one-line answer.
+        text += ("\n\n<i>This session ended before it saved a transcript, "
+                 "so it can't be resumed.</i>")
     return text, InlineKeyboardMarkup(rows)
 
 
@@ -855,6 +877,50 @@ async def handle_callback(
 
     if action == "menu-close":
         await _edit(query, f"Closed menu for [<b>{html_mod.escape(sess.label)}</b>].", None)
+        return True
+
+    if action == "resume":
+        # Authorization re-checked at TAP time, like every other verb here:
+        # a gone session's menu can sit on screen for days.
+        if not bot._can_prompt_user(user_id, chat_id):
+            await bot._safe_answer(query, "You can't resume this session.")
+            return True
+        if sess.status != Status.GONE or not sess.claude_session_id:
+            # State moved under the button — it was resumed elsewhere, or
+            # came back to life. Re-render rather than fail into
+            # `_do_resume_core`'s `not_gone`/`no_transcript`.
+            text, kb = _render_session_menu(bot, chat_id, sess)
+            await _edit(query, text, kb)
+            await bot._safe_answer(query, "That session can't be resumed now.")
+            return True
+        # Same Ask/Auto step `/resume` uses, and the same keyboard builder
+        # — one resume flow, reached from two places.
+        bot._resume_mode_pending[sess.name] = sess.label
+        await _edit(
+            query, f"Resume <b>{html_mod.escape(sess.label)}</b> as:",
+            bot._build_resume_mode_keyboard(
+                sess.name, sess.skip_perms, chat_id=chat_id),
+        )
+        return True
+
+    if action in ("resume-ask", "resume-auto", "resume-cancel"):
+        if not bot._can_prompt_user(user_id, chat_id):
+            await bot._safe_answer(query, "You can't resume this session.")
+            return True
+        bot._resume_mode_pending.pop(sess.name, None)
+        if action == "resume-cancel":
+            await _edit(query, "↩️ Cancelled.", None)
+            return True
+
+        async def _reply(text, **kw):
+            await _edit(query, text, kw.pop("reply_markup", None))
+
+        # `_do_resume` is the wrapper `/resume`'s own mode buttons call —
+        # not a second resume implementation.
+        await bot._do_resume(
+            label=sess.label, reply_fn=_reply,
+            skip_perms_override=(action == "resume-auto"),
+        )
         return True
 
     if action == "restart":

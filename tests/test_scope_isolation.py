@@ -101,9 +101,17 @@ def test_resume_picker_isolated_per_scope(mk_bot):
     bot = mk_bot(_registry_with_shared_label(status=Status.GONE),
                  scopes=_scopes())
     text_b, kb_b = bot._render_resume_picker(page=0, scope_chat_id=B)
-    cb = [btn.callback_data for row in kb_b.inline_keyboard for btn in row]
-    assert "claude-build__d200:resume" in cb
-    assert "claude-build__d100:resume" not in cb
+    from aipager.bot import session_parity
+    dests = []
+    for row in kb_b.inline_keyboard:
+        for btn in row:
+            if btn.callback_data.startswith("_:sx:"):
+                idx = btn.callback_data.split(":")[2]
+                sess = session_parity._resolve_pref_index(bot, B, idx)
+                dests.append(sess.name if sess else None)
+    # Destination, not encoding — the rows carry a short index now.
+    assert "claude-build__d200" in dests
+    assert "claude-build__d100" not in dests
     assert "ben_only" in text_b
     assert "ana_only" not in text_b and "team_only" not in text_b
 

@@ -111,9 +111,37 @@ def test_resume_mode_keyboard_default_label_auto(bot):
     assert "(default)" in auto_label
 
 
-def test_resume_mode_keyboard_callbacks(bot):
-    kb = bot._build_resume_mode_keyboard("claude-dev", False)
+def test_resume_mode_keyboard_callbacks_for_a_known_session(bot):
+    """The normal path: a session in the registry gets the short indexed
+    form, because `{name}:resume_mode_cancel` reaches 83 bytes for a
+    long name and `_make_cb` asserts rather than truncating."""
+    from aipager.state import Status
+
+    sess = bot.registry.get_or_create("claude-dev")
+    sess.label = "dev"
+    bot.registry.transition("claude-dev", Status.GONE)
+
+    kb = bot._build_resume_mode_keyboard("claude-dev", False, chat_id=555)
     cbs = [btn.callback_data for row in kb.inline_keyboard for btn in row]
+
+    assert {c.rsplit(":", 1)[-1] for c in cbs} == {
+        "resume-ask", "resume-auto", "resume-cancel"}, cbs
+    for c in cbs:
+        assert len(c.encode()) <= 64, c
+
+
+def test_resume_mode_keyboard_falls_back_for_an_unknown_session(bot):
+    """No registry entry means no index to encode, so it falls back to
+    the legacy name-embedding form.
+
+    This test used to be `test_resume_mode_keyboard_callbacks` and
+    asserted the legacy verbs for a session it never registered — so
+    after the switch to indexed callbacks it silently covered only this
+    fallback while appearing to cover the main path. Split in two.
+    """
+    kb = bot._build_resume_mode_keyboard("claude-nosuch", False)
+    cbs = [btn.callback_data for row in kb.inline_keyboard for btn in row]
+
     assert any("resume_mode_ask" in c for c in cbs), cbs
     assert any("resume_mode_auto" in c for c in cbs), cbs
     assert any("resume_mode_cancel" in c for c in cbs), cbs

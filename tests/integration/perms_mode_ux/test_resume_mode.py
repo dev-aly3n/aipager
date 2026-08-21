@@ -134,6 +134,10 @@ def test_telegram_resume_picker_tap_shows_mode_picker():
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.GONE)
     sess.skip_perms = False
+    # A GONE session with no `claude_session_id` has nothing to resume FROM,
+    # and is now refused before the mode picker rather than after it. This
+    # test is about the picker appearing, so give it a resumable session.
+    sess.claude_session_id = "uuid-mode-1"
     bot.registry._sessions["claude-ben"] = sess
 
     update, query = _make_query("claude-ben:resume")
@@ -148,11 +152,11 @@ def test_telegram_resume_picker_tap_shows_mode_picker():
     )
     kb = edit_kwargs["reply_markup"]
     all_cbs = [btn.callback_data for row in kb.inline_keyboard for btn in row]
-    assert any("resume_mode_ask" in cb for cb in all_cbs), (
-        f"Mode picker must have resume_mode_ask; got {all_cbs}"
+    assert any(cb.endswith("resume-ask") for cb in all_cbs), (
+        f"Mode picker must offer Ask; got {all_cbs}"
     )
-    assert any("resume_mode_auto" in cb for cb in all_cbs), (
-        f"Mode picker must have resume_mode_auto; got {all_cbs}"
+    assert any(cb.endswith("resume-auto") for cb in all_cbs), (
+        f"Mode picker must offer Auto; got {all_cbs}"
     )
 
 
@@ -163,6 +167,7 @@ def test_telegram_resume_mode_picker_shows_default_label():
     # Session with skip_perms=True (Auto is the default for this session)
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.GONE)
     sess.skip_perms = True
+    sess.claude_session_id = "uuid-mode-2"
     bot.registry._sessions["claude-ben"] = sess
 
     update, query = _make_query("claude-ben:resume")

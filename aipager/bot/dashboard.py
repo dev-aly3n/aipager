@@ -23,6 +23,7 @@ from telegram import (
 from aipager.config import (
     CHAT_ID,
 )
+from aipager.bot import session_parity
 from aipager.state import Status, TrackedSession
 from aipager.transcript import last_assistant_preview as _read_preview
 
@@ -349,9 +350,20 @@ class DashboardMixin:
 
         ``scope_chat_id`` scopes the listing to the calling chat.
         """
-        gone = self._gone_sessions_sorted(scope_chat_id)
+        all_gone = self._gone_sessions_sorted(scope_chat_id)
+        # A session with no `claude_session_id` has nothing to resume FROM —
+        # `_do_resume_core` refuses it with `no_transcript` — so listing it
+        # promises something that cannot happen. Hidden rather than shown
+        # greyed out, because Telegram has no disabled button; the count
+        # below keeps the omission honest.
+        gone = [s for s in all_gone if s.claude_session_id]
+        hidden = len(all_gone) - len(gone)
         if not gone:
-            return "📭 No previous sessions to resume.", None
+            text = "📭 No previous sessions to resume."
+            if hidden:
+                text += (f"\n\n<i>{hidden} ended before saving a transcript, "
+                         "so cannot be resumed.</i>")
+            return text, None
 
         page_size = self._RESUME_PAGE_SIZE
         total_pages = (len(gone) + page_size - 1) // page_size
@@ -363,7 +375,8 @@ class DashboardMixin:
         for s in chunk:
             label = f"{s.label} — {self._fmt_gone_ago(s.gone_at)}"
             rows.append([InlineKeyboardButton(
-                label, callback_data=f"{s.name}:resume",
+                label, callback_data=session_parity.session_cb(
+                    self, scope_chat_id or 0, s, "resume"),
             )])
 
         # Pagination row only when there's more than one page
@@ -408,5 +421,13 @@ class DashboardMixin:
                     f"<i>(no preview)</i>"
                 )
         lines.append("Tap a button below to resume.")
+        if hidden:
+            # The empty-list branch above says this too. It has to be said
+            # HERE as well — the common case is a mix of resumable and
+            # not, and dropping a session from the list without a word is
+            # its own small mystery.
+            lines.append(
+                f"<i>{hidden} more ended before saving a transcript, "
+                "so cannot be resumed.</i>")
         text = "\n\n".join(lines)
         return text, InlineKeyboardMarkup(rows)

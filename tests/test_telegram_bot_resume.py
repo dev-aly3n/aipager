@@ -21,6 +21,30 @@ def _gone_session(label="jim", *, claude_session_id="abc-def-uuid",
     return sess
 
 
+
+def _resume_destinations(bot, chat_id, kb):
+    """Resolve each picker row to the session it reaches.
+
+    The rows used to carry `f"{s.name}:resume"`, which measured 71 bytes
+    for a maximum-length name — past Telegram's 64-byte cap, which
+    rejects the WHOLE keyboard. They now carry the same short index the
+    ⋮ menu uses, so asserting the literal string would pin an encoding
+    rather than the destination that actually matters.
+    """
+    from aipager.bot import session_parity
+
+    out = []
+    for row in kb.inline_keyboard:
+        for btn in row:
+            cb = btn.callback_data
+            if not cb.startswith("_:sx:"):
+                continue
+            _s, _k, idx, verb = cb.split(":", 3)
+            sess = session_parity._resolve_pref_index(bot, chat_id, idx)
+            out.append((sess.name if sess else None, verb))
+    return out
+
+
 # ---- /resume command ----------------------------------------------------
 
 def test_resume_no_arg_with_empty_history_replies_empty(mk_bot, mk_update, run_async):
@@ -180,8 +204,7 @@ def test_picker_scopes_to_calling_chat(mk_bot, mk_update, run_async):
     assert "1 total" in text
     assert "mine" in text
     assert "theirs" not in text
-    cb = [btn.callback_data for row in kb.inline_keyboard for btn in row]
-    assert cb == ["claude-mine__d100:resume"]
+    assert _resume_destinations(bot, 100, kb) == [("claude-mine__d100", "resume")]
 
 
 def test_picker_no_scope_arg_lists_everything(mk_bot, mk_update, run_async):
@@ -197,13 +220,20 @@ def test_picker_no_scope_arg_lists_everything(mk_bot, mk_update, run_async):
     assert "2 total" in text
 
 
-def test_picker_callback_format_is_session_name_resume(mk_bot, mk_update, run_async):
+def test_picker_callback_resolves_to_the_session_and_fits_the_cap(
+        mk_bot, mk_update, run_async):
+    """Renamed from ...format_is_session_name_resume: the format changed
+    deliberately (the old one overflowed 64 bytes for a long name and
+    took the whole keyboard down with it). What must hold is the
+    destination, and that the encoding fits."""
     registry = SessionRegistry()
     s = _gone_session(label="jim")
     registry._sessions[s.name] = s
     bot = mk_bot(registry)
     _, kb = bot._render_resume_picker(page=0)
-    assert kb.inline_keyboard[0][0].callback_data == "claude-jim:resume"
+    cb = kb.inline_keyboard[0][0].callback_data
+    assert len(cb.encode()) <= 64
+    assert _resume_destinations(bot, 0, kb) == [("claude-jim", "resume")]
 
 
 def test_picker_sorts_newest_first(mk_bot, mk_update, run_async):
@@ -216,8 +246,10 @@ def test_picker_sorts_newest_first(mk_bot, mk_update, run_async):
     bot = mk_bot(registry)
     _, kb = bot._render_resume_picker(page=0)
     # First button should be the newer entry
-    assert kb.inline_keyboard[0][0].callback_data == "claude-newer:resume"
-    assert kb.inline_keyboard[1][0].callback_data == "claude-older:resume"
+    # Order is the claim here, so assert the resolved destination of the
+    # FIRST row rather than its encoding.
+    assert _resume_destinations(bot, 0, kb)[0] == ("claude-newer", "resume")
+    assert _resume_destinations(bot, 0, kb)[1] == ("claude-older", "resume")
 
 
 # ---- fmt_gone_ago -------------------------------------------------------
@@ -251,9 +283,9 @@ def test_hidden_session_still_in_resume_picker(mk_bot, mk_update, run_async):
     bot = mk_bot(registry)
     text, kb = bot._render_resume_picker(page=0)
     assert "2 total" in text
-    cb = [row[0].callback_data for row in kb.inline_keyboard]
-    assert "claude-visible:resume" in cb
-    assert "claude-hidden:resume" in cb
+    dests = _resume_destinations(bot, 0, kb)
+    assert ("claude-visible", "resume") in dests
+    assert ("claude-hidden", "resume") in dests
 
 
 # ---- /resume preview: post-resume confirmation + picker snippets -------
