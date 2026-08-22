@@ -351,16 +351,27 @@ class CallbackDispatchMixin:
 
         if action == "kill":
             sess = self.registry.get(session_name)
-            label = sess.label if sess else session_name
-            await self._safe_answer(query, f"Killing {label}...")
-            await self._kill_session_by_label(query, label)
+            if sess is None:
+                # Stale long-form tap (or a resolved index whose session
+                # vanished between render and tap) — fail closed rather
+                # than falling through to _kill_session_by_label, which
+                # would otherwise synthesize a `claude-<label>` name and
+                # call inject.kill_session against a name that was never
+                # actually tracked. design.md: "A long-form tap for a
+                # missing session answers 'Session not found'."
+                await self._safe_answer(query, "Session not found")
+                return
+            await self._safe_answer(query, f"Killing {sess.label}...")
+            await self._kill_session_by_label(query, sess.label)
             return
 
         if action == "kill-confirm":
             sess = self.registry.get(session_name)
-            label = sess.label if sess else session_name.removeprefix("claude-")
-            await self._safe_answer(query, f"Killing {label}...")
-            await self._kill_session_by_label(query, label)
+            if sess is None:
+                await self._safe_answer(query, "Session not found")
+                return
+            await self._safe_answer(query, f"Killing {sess.label}...")
+            await self._kill_session_by_label(query, sess.label)
             return
 
         if action == "kill-cancel":
@@ -653,6 +664,20 @@ class CallbackDispatchMixin:
                     )
                 except Exception:
                     pass
+                return
+
+            if sess is None:
+                # A genuine /new conflict prompt always names a session
+                # that is (or was) in the registry — _send_new_conflict_prompt
+                # only fires for an `existing` session resolved via
+                # registry.find_by_label. A stale long-form tap for a
+                # name that is no longer tracked at all has nothing to
+                # switch to (new_resume) or kill-and-relaunch (new_replace);
+                # failing closed here is what stops new_replace from
+                # calling inject.launch_session for an arbitrary tapped
+                # name (the severe case design.md's success criteria and
+                # the "Old buttons" section both promise against).
+                await self._safe_answer(query, "Session not found")
                 return
 
             prompt = (pending or {}).get("prompt", "")
