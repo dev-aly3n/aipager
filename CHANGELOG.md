@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-08-22
+
 ### Fixed
 - **Opening a session by name now labels it with the name you typed.**
   Typing `/<name>` — or `/<name> <prompt>` — for a session aipager isn't
