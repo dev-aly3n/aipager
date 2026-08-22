@@ -130,7 +130,7 @@ def test_the_picker_does_not_offer_sessions_that_cannot_be_resumed(mk_bot):
     assert "nope" not in shown, "offered a session that cannot be resumed"
     # NOT `assert "1" in text`: that passed on the broken code because the
     # pre-existing "(1 total)" header contains a "1". Assert the sentence.
-    assert "cannot be resumed" in text and "1 more" in text, (
+    assert "no saved transcript" in text and "1 more" in text, (
         "hiding a session silently is its own confusion — say how many "
         f"were left out: {text!r}")
 
@@ -143,6 +143,7 @@ def test_a_picker_with_nothing_resumable_says_so(mk_bot):
 
     assert kb is None
     assert "resume" in text.lower()
+    assert "no saved transcript" in text
 
 
 # ---- tapping Resume -----------------------------------------------------
@@ -221,3 +222,21 @@ def test_resume_on_a_session_that_came_back_to_life_re_renders(mk_bot, run_async
     assert kb is not None and any("Restart" in b.text
                                   for row in kb.inline_keyboard for b in row), (
         "a session that is running again should be offered Restart")
+
+
+def test_the_menu_note_does_not_assert_how_the_session_ended(mk_bot):
+    """`_do_resume_core` clears `claude_session_id` BEFORE launching, so a
+    session mid-resume also reads as GONE-with-no-id for up to a few
+    seconds. The note used to say the session "ended before it saved a
+    transcript" — false in that window. It must state the present fact
+    without claiming a history it cannot know.
+    """
+    bot = mk_bot()
+    sess = _sess(bot, "claude-midflight", "midflight", status=Status.GONE)
+
+    text, _kb = sp._render_session_menu(bot, 555, sess)
+
+    assert "no saved transcript" in text.lower()
+    assert "ended before" not in text.lower(), (
+        "the note asserts how the session ended, which is wrong for a "
+        "session being resumed right now")

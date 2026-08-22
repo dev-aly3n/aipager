@@ -252,8 +252,19 @@ def _render_session_menu(
     if gone and not sess.claude_session_id:
         # Say why, rather than quietly showing a shorter menu — "where did
         # Resume go" is a worse question than a one-line answer.
-        text += ("\n\n<i>This session ended before it saved a transcript, "
-                 "so it can't be resumed.</i>")
+        #
+        # Worded as a statement about NOW, not about how the session ended.
+        # `_do_resume_core` clears `claude_session_id` before launching (so a
+        # resume that dies right after the socket appears cannot loop
+        # forever), which means a session being resumed at this instant also
+        # reads as GONE-with-no-id. That window is typically under a second
+        # and at worst ~8s — a 5s spawn timeout plus ten 0.3s socket polls —
+        # and it closes by itself either way: a failed launch restores the
+        # id, a successful one flips the status to IDLE. Threading a
+        # transitional status through the state machine and its persistence
+        # costs far more than it buys; saying something that stays TRUE in
+        # both states costs nothing.
+        text += ("\n\n<i>No saved transcript to resume from.</i>")
     return text, InlineKeyboardMarkup(rows)
 
 

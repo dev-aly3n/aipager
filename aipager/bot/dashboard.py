@@ -361,8 +361,8 @@ class DashboardMixin:
         if not gone:
             text = "📭 No previous sessions to resume."
             if hidden:
-                text += (f"\n\n<i>{hidden} ended before saving a transcript, "
-                         "so cannot be resumed.</i>")
+                text += (f"\n\n<i>{hidden} with no saved transcript to "
+                         "resume from.</i>")
             return text, None
 
         page_size = self._RESUME_PAGE_SIZE
@@ -427,7 +427,7 @@ class DashboardMixin:
             # not, and dropping a session from the list without a word is
             # its own small mystery.
             lines.append(
-                f"<i>{hidden} more ended before saving a transcript, "
-                "so cannot be resumed.</i>")
+                f"<i>{hidden} more with no saved transcript to "
+                "resume from.</i>")
         text = "\n\n".join(lines)
         return text, InlineKeyboardMarkup(rows)
