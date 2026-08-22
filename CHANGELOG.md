@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Messages sent while a session is busy now reach Claude immediately,
+  instead of sitting in aipager's own queue until the current turn
+  finishes.** Claude Code already keeps its own not-yet-picked-up queue and
+  types straight into a running session's terminal, so aipager now does the
+  same — matching "type while it thinks, Claude picks it up at a boundary."
+  Three messages sent back to back while busy all reach the terminal right
+  away; none of them wait. A message is still held while a permission or
+  question prompt is open (unchanged), and new: a message from a different
+  Telegram user than whoever is already waiting on an answer is held too,
+  rather than silently combining two people's permissions into one turn.
+  The interface now shows a 👍 on the specific message Claude has actually
+  started working on, distinct from the 👀 every sent message already got.
+  Stop's confirmation and `/clearqueue` now report a combined count that
+  includes what Claude itself is holding, not only aipager's own queue, and
+  both make sure nothing from an interrupted turn is left sitting in the
+  input box for the next message to run into.
+
 ### Fixed
 - **An old Stop button no longer stops whatever you are doing now.** Stop
   buttons normally come off a card when its task ends, but that edit can
