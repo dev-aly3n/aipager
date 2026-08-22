@@ -841,6 +841,32 @@ def session_cb(bot: "TelegramBot", chat_id: int, sess: TrackedSession,
     Indices come from the same stable per-chat table the preferences
     picker uses, so a button keeps working for as long as its session
     exists and fails closed afterwards.
+
+    ``chat_id`` derivation asymmetry (review-1.md rev-iter1-003): every
+    caller of this function computes ``chat_id`` as
+    ``transport.resolve_chat_id_int(sess) or 0`` (the session's OWN
+    stamped ``scope_chat_id``, since a keyboard builder is only ever
+    handed ``sess`` — design.md rejected threading a new ``Update``
+    parameter through nine signatures). Resolution
+    (:func:`resolve_short_cb`, called from ``callbacks.py`` with the
+    REAL inbound Update) instead uses ``transport.calling_chat_id(update)
+    or 0`` — the chat the tap physically arrived from. These are two
+    different functions computing what must be the same per-chat table
+    key, and they are safe to differ only because they can never
+    disagree in the one case that would matter: a genuine tap always
+    arrives in the same chat the message (and therefore the button) was
+    sent to, so ``calling_chat_id(update)`` at tap time equals whatever
+    chat_id was live when this function registered the index at render
+    time. The only way the two derivations could diverge is
+    ``resolve_chat_id_int(sess)`` returning ``None`` -> ``0`` for an
+    unstamped session — but that is also the case where
+    ``bot.send_message(resolve_chat_id(sess), ...)`` would already fail
+    to deliver the message the button lives in, so the mismatched-bucket
+    case fails closed ("no longer available"), not open into another
+    chat's table. Keep it this way (don't quietly make them the same
+    function) unless you also thread a real ``Update``/chat id into
+    every builder call site — see design.md's own reasoning for why that
+    was rejected.
     """
     table = _register_pref_index(bot, chat_id, [sess.name])
     return f"_:sx:{table.index(sess.name)}:{verb}"

@@ -325,6 +325,13 @@ class CallbackDispatchMixin:
         # existed. Not the short form → pair returned unchanged. Stale
         # or malformed → None, and we stop here rather than falling
         # through to a wrong or dead session.
+        #
+        # chat_id here is calling_chat_id(update) — the real chat this
+        # tap arrived from — while every builder registered its index
+        # under resolve_chat_id_int(sess) or 0 instead (a session-
+        # derived value, not update-derived). See session_cb's
+        # docstring in session_parity.py for why that asymmetry is safe
+        # (review-1.md rev-iter1-003).
         resolved = session_parity.resolve_short_cb(
             self, calling_chat_id(update) or 0, session_name, action)
         if resolved is None:
