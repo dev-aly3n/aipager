@@ -75,7 +75,13 @@ def test_inject_slash_command_no_marker(mk_bot, run_async, monkeypatch):
 def test_inject_writes_policy_snapshot(mk_bot, run_async, monkeypatch):
     """``_inject_prompt`` writes a per-message note now (design.md "queue
     handoff"), not the one-slot snapshot directly — same resolved role/
-    scope/member/style_text inputs, just carried on ``write_note``."""
+    scope/member/style_text inputs, just carried on ``write_note``.
+
+    Passes ``driver_user_id`` explicitly (as every real live-``Update``
+    caller does) — permission attribution requires it since review
+    rev-iter1-001; see
+    ``test_inject_prompt_role_resolution_requires_an_explicit_driver_user_id``
+    for the fail-closed case."""
     from aipager import policy_snapshot
     bot = _bot(mk_bot)
     monkeypatch.setattr(inject, "send_text_and_enter", AsyncMock(return_value=True))
@@ -88,10 +94,42 @@ def test_inject_writes_policy_snapshot(mk_bot, run_async, monkeypatch):
                         style_text=style_text)
         return None
     monkeypatch.setattr(policy_snapshot, "write_note", _fake_write_note)
-    run_async(bot._inject_prompt(_sess(), "do the thing"))
+    run_async(bot._inject_prompt(_sess(), "do the thing", driver_user_id=2))
     assert captured["name"] == "claude-x__g100"
     assert captured["member"].label == "bob"        # driver resolved
     assert captured["role"].name == "user"
+
+
+def test_inject_prompt_role_resolution_requires_an_explicit_driver_user_id(
+    mk_bot, run_async, monkeypatch,
+):
+    """review rev-iter1-001: permission attribution (member/role) must
+    come from the id the CALLER explicitly supplied, never from
+    ``sess.last_driver_user_id`` alone. A caller with no live identity
+    for this specific message (Retry, a literal /compact, the
+    queue-drain site) gets ``member=None``/``role=None`` — floor
+    permissions — even though ``sess.last_driver_user_id`` is set to a
+    real, resolvable member. Fail closed rather than silently inherit
+    whoever the mutable session field happens to name."""
+    from aipager import policy_snapshot
+    bot = _bot(mk_bot)
+    monkeypatch.setattr(inject, "send_text_and_enter", AsyncMock(return_value=True))
+    captured = {}
+
+    def _fake_write_note(name, role, scope, member, *, msg_id=None,
+                         chat_id=None, sender_key=None, body="",
+                         raw_text="", style_text="", reply_context=""):
+        captured.update(role=role, member=member)
+        return None
+    monkeypatch.setattr(policy_snapshot, "write_note", _fake_write_note)
+
+    sess = _sess()
+    assert sess.last_driver_user_id == 2  # a resolvable member is set
+
+    run_async(bot._inject_prompt(sess, "do the thing"))  # no driver_user_id
+
+    assert captured["member"] is None
+    assert captured["role"] is None
 
 
 def test_inject_prompt_style_text_reflects_session_override(mk_bot, run_async, monkeypatch):
