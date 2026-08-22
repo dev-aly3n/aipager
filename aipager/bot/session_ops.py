@@ -354,7 +354,27 @@ class SessionOpsMixin:
         queue-drain site, Retry, a literal ``/compact``) fall back to
         ``sess.last_driver_user_id`` — the best available approximation
         when there is no live sender to read.
+
+        That fallback is only good enough for bookkeeping (grouping
+        "same sender" runs for the mixed-sender hold), never for
+        *permission attribution*. ``sess.last_driver_user_id`` is
+        mutable and can move on to a different person between a message
+        failing and a later Retry, or between a message being queued and
+        the daemon draining it — review rev-iter1-001/002. Role/member
+        resolution below therefore reads only the id the CALLER
+        explicitly supplied (before the fallback assigned below), never
+        the fallback value: a caller with no live identity for this
+        specific message (Retry, a literal ``/compact``, the queue-drain
+        site) gets a note resolved with ``member=None``/``role=None`` —
+        floor permissions, ``bypass_safety=False`` — rather than
+        silently inheriting whoever ``sess.last_driver_user_id`` happens
+        to name right now. Fail closed: an under-attributed note can
+        only make a future merged turn *more* restrictive (design.md's
+        merge invariant), never less, so this trades away Retry's
+        permission elevation in the common single-user case rather than
+        risk lending an unrelated sender's ``bypass_safety`` to it.
         """
+        explicit_driver_user_id = driver_user_id
         if driver_user_id is None:
             driver_user_id = sess.last_driver_user_id
         sess.last_prompt_origin = "telegram"
@@ -384,7 +404,12 @@ class SessionOpsMixin:
             from aipager.policy_snapshot import write_note
             member = role = scope = None
             if self.scopes is not None:
-                member = self._driver_user(sess)
+                # See the docstring above: permission attribution uses
+                # ONLY the explicitly-passed id, never the fallback used
+                # for sender_key below. scope is unaffected — it can
+                # only add restrictions, never grant them, so it is safe
+                # to resolve regardless of whether the sender is known.
+                member = self._driver_user_by_id(explicit_driver_user_id)
                 role = (self.policy.get_role(member.role)
                         if member is not None else None)
                 scope = self._scope_for(sess.scope_chat_id)
