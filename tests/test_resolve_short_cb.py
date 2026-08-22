@@ -69,6 +69,40 @@ def test_resolve_short_cb_returns_none_for_a_malformed_index(mk_bot):
     assert session_parity.resolve_short_cb(bot, 0, "_", "sx:not-a-number:allow") is None
 
 
+def test_resolve_short_cb_rejects_a_leading_space_index(mk_bot):
+    """entrypoints.md's grammar: <idx> is a "non-negative decimal
+    integer, no leading zeros" — Python's int() is more lenient than
+    that (int(" 0") == 0), which used to let a hand-crafted, non-
+    canonical token resolve as if it were index 0 (rev-iter1-warning-7).
+    A real rendered button never carries a leading space; only a
+    hand-crafted callback string can, so this is reachable only by
+    someone crafting the string directly."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    bot.registry._sessions[sess.name] = sess
+    session_parity.session_cb(bot, 0, sess, "allow")  # registers index 0
+    assert session_parity.resolve_short_cb(bot, 0, "_", "sx: 0:allow") is None
+
+
+@pytest.mark.parametrize("bad_idx", [
+    "007",   # leading zero — explicitly forbidden by entrypoints.md's grammar
+    "0 ",    # trailing space
+    " 0",    # leading space
+    "+0",    # leading plus
+    "0\n",   # trailing newline (int() tolerates this too)
+    "0x0",   # hex-looking, never valid decimal
+    "0_0",   # Python's int() accepts underscore-grouped digits; the
+             # grammar does not
+])
+def test_resolve_short_cb_rejects_every_int_leniency_int_would_otherwise_accept(
+        mk_bot, bad_idx):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    bot.registry._sessions[sess.name] = sess
+    session_parity.session_cb(bot, 0, sess, "allow")  # registers index 0
+    assert session_parity.resolve_short_cb(bot, 0, "_", f"sx:{bad_idx}:allow") is None
+
+
 def test_resolve_short_cb_returns_none_for_a_truncated_token(mk_bot):
     bot = mk_bot()
     # Missing the `:<verb>` segment entirely.

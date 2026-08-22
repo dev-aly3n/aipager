@@ -38,6 +38,7 @@ from __future__ import annotations
 import html as html_mod
 import io
 import logging
+import re
 from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -133,6 +134,14 @@ def _register_pref_index(bot: "TelegramBot", chat_id: int, names) -> list[str]:
     return table
 
 
+# entrypoints.md's grammar: "<idx> — non-negative decimal integer, no
+# leading zeros". Matched strictly BEFORE parsing — int()'s own leniency
+# (it happily accepts leading/trailing whitespace, a leading "+", etc.,
+# e.g. int(" 0") == 0) would otherwise let a hand-crafted, non-canonical
+# token resolve as if it were a real rendered index.
+_STRICT_IDX_RE = re.compile(r"(?:0|[1-9][0-9]*)")
+
+
 def _resolve_pref_index(
     bot: "TelegramBot", chat_id: int, idx_token: str,
 ) -> TrackedSession | None:
@@ -141,10 +150,9 @@ def _resolve_pref_index(
     all three identically ("no longer available"), never distinguishing
     them to the user and never writing to a different session than the
     one that was actually shown."""
-    try:
-        idx = int(idx_token)
-    except (TypeError, ValueError):
+    if not isinstance(idx_token, str) or not _STRICT_IDX_RE.fullmatch(idx_token):
         return None
+    idx = int(idx_token)
     names = _pref_index_map(bot).get(chat_id) or []
     if idx < 0 or idx >= len(names):
         return None
