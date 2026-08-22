@@ -77,7 +77,13 @@ def _read_statusline_tokens(session: str) -> dict | None:
 
 def _note_wire(note: dict) -> dict:
     """Minimal, JSON-safe shape of a note for the ``queue_pickup``
-    datagram — only what the daemon side (hook_receiver.py) needs."""
+    datagram — only what the daemon side (hook_receiver.py) needs.
+
+    Deliberately an allow-list, not a passthrough of ``note``: a future
+    field added to the note shape (e.g. a permission field, or
+    ``sender_key``) must not be forwarded here by accident just because
+    it exists on the dict. Add new keys explicitly, one at a time.
+    """
     return {
         "msg_id": note.get("msg_id"),
         "chat_id": note.get("chat_id"),
