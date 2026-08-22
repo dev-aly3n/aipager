@@ -694,7 +694,22 @@ class SessionOpsMixin:
             except Exception:
                 pass
         elif update:
+            # The ✅ reaction stays — it's the same instant, low-effort
+            # acknowledgement every other command-driven action gets, and
+            # is gone as soon as the operator looks away. The count itself
+            # needs a durable, chat-visible message: tester-iter1-001
+            # found /stop discarding Claude's own held-but-not-picked-up
+            # queue (this feature's whole point) with the count nowhere
+            # the operator could see it — a reaction alone is closer to a
+            # vanishing toast than the "chat acknowledgement" entrypoints.md
+            # promises (see intent.md's own open question #1).
             await self._react(update, "✅")
+            if getattr(update, "message", None) is not None:
+                try:
+                    await update.message.reply_text(ack)
+                except Exception:
+                    log.debug("[%s] stop acknowledgement reply failed",
+                              sess.label, exc_info=True)
 
         return outcome
 
