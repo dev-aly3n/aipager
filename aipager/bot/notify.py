@@ -208,6 +208,52 @@ class NotifyMixin:
                 log.debug("hook_memory_cap_hit notify failed", exc_info=True)
             return
 
+        if event == "queue_pickup":
+            # The UserPromptSubmit hook matched some of this session's
+            # outstanding notes (design.md "queue handoff"). 👍 is the
+            # signal that distinguishes "sent" (👀, at send time) from
+            # "Claude actually started on this one" — set on every
+            # consumed message, never just the last. Expired notes keep
+            # their 👀 (no reaction change — Claude may still process a
+            # TTL-lapsed one after aipager stops watching) and get one
+            # best-effort notice instead of per-message noise.
+            consumed = context.get("consumed") or []
+            expired = context.get("expired") or []
+            default_chat_id = resolve_chat_id(sess)
+            for note in consumed:
+                note_msg_id = note.get("msg_id")
+                if note_msg_id is None:
+                    continue
+                note_chat_id = note.get("chat_id") or default_chat_id
+                try:
+                    self.registry.track_message(
+                        note_msg_id, sess.name, note_chat_id or 0,
+                    )
+                except Exception:
+                    log.debug("queue_pickup track_message failed",
+                              exc_info=True)
+                try:
+                    await bot.set_message_reaction(
+                        note_chat_id, note_msg_id, "👍",
+                    )
+                except Exception:
+                    log.debug("queue_pickup reaction failed", exc_info=True)
+            if expired:
+                try:
+                    preview = (expired[0].get("raw_text") or "")[:80]
+                    suffix = f': "{html_mod.escape(preview)}"' if preview else ""
+                    await bot.send_message(
+                        default_chat_id,
+                        f"⏳ <b>{html_mod.escape(label)}</b> · a queued "
+                        f"message wasn't confirmed picked up in time"
+                        f"{suffix} — Claude may still process it.",
+                        parse_mode="HTML",
+                    )
+                except Exception:
+                    log.debug("queue_pickup expiry notice failed",
+                              exc_info=True)
+            return
+
         if event == "safety_blocked":
             tool = context.get("tool", "?")
             reason = context.get("reason", "")
@@ -996,7 +1042,10 @@ class NotifyMixin:
                         queued_trigger, sess.name, resolve_chat_id_int(sess) or 0,
                     )
                 self.registry.mark_dirty()
-                ok = await self._inject_prompt(sess, queued_text, queued_reply_context)
+                ok = await self._inject_prompt(
+                    sess, queued_text, queued_reply_context,
+                    msg_id=queued_trigger, chat_id=resolve_chat_id_int(sess),
+                )
                 if ok:
                     self.registry.transition(sess.name, Status.BUSY)
                     await self._send_busy_and_animate(sess)
