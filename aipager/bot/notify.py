@@ -436,7 +436,7 @@ class NotifyMixin:
             warn_text = (f"⚠️ <b>{html_mod.escape(label)}</b> · Context at "
                          f"{ctx_pct}% — auto-compact soon")
             try:
-                keyboard = self._build_compact_keyboard(sess.name)
+                keyboard = self._build_compact_keyboard(sess)
                 await bot.send_message(resolve_chat_id(sess), warn_text, parse_mode="HTML",
                                        reply_markup=keyboard)
             except Exception:
@@ -474,7 +474,7 @@ class NotifyMixin:
                 "  • Network wedge or claude crash</blockquote>"
             )
             try:
-                keyboard = self._build_stop_keyboard(sess.name)
+                keyboard = self._build_stop_keyboard(sess)
                 await bot.send_message(resolve_chat_id(sess), stale_text, parse_mode="HTML",
                                        reply_markup=keyboard)
             except Exception:
@@ -716,7 +716,7 @@ class NotifyMixin:
                     sess.busy_msg_id = None
                 friendly_error, _retry_after = error_detection
                 text = (f"⚠️ <b>{html_mod.escape(label)}</b> · {friendly_error}")
-                keyboard = (self._build_retry_keyboard(sess.name)
+                keyboard = (self._build_retry_keyboard(sess)
                             if sess.last_prompt else None)
                 try:
                     msg = await bot.send_message(
@@ -1057,7 +1057,7 @@ class NotifyMixin:
                             "wait_started_at": time.monotonic(),
                         }
                         keyboard = self._build_inline_ask_keyboard(
-                            sess.name, options,
+                            sess, options,
                             multi_select=is_multi)
                     else:
                         # AskUserQuestion detected but no questions data (transcript
@@ -1067,7 +1067,7 @@ class NotifyMixin:
                             "tool_info": tool_info,
                             "wait_started_at": time.monotonic(),
                         }
-                        keyboard = self._build_permission_keyboard(sess.name)
+                        keyboard = self._build_permission_keyboard(sess)
                 else:
                     tool_summary = tool_info["summary"] if tool_info else "Permission needed"
                     sess.pending_permission = {
@@ -1075,7 +1075,7 @@ class NotifyMixin:
                         "tool_info": tool_info,
                         "wait_started_at": time.monotonic(),
                     }
-                    keyboard = self._build_permission_keyboard(sess.name)
+                    keyboard = self._build_permission_keyboard(sess)
 
                 text = self._build_busy_text(label, "Waiting", sess)
                 result = await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard, chat_id=resolve_chat_id(sess))
@@ -1090,18 +1090,29 @@ class NotifyMixin:
                 sess.pending_permission = None  # ensure clean state
 
                 if tool_info and tool_info["name"] == "AskUserQuestion":
-                    text, keyboard = self._build_ask_keyboard(sess.name, label, tool_info["input"])
+                    text, keyboard = self._build_ask_keyboard(sess, label, tool_info["input"])
                 elif selector_options:
-                    text, keyboard = self._build_selector_keyboard(sess.name, label,
+                    text, keyboard = self._build_selector_keyboard(sess, label,
                                                                     selector_text, selector_options)
                 else:
                     tool_summary = tool_info["summary"] if tool_info else ""
                     text = f"🔐 <b>{html_mod.escape(label)}</b> · Permission needed"
                     if tool_summary:
                         text += f"\n<code>{html_mod.escape(tool_summary)}</code>"
+                    # Local import, not top-level — avoids an import cycle
+                    # with session_parity; mirrors keyboards.py's own
+                    # local-import precedent (see
+                    # keyboards.py:_build_resume_mode_keyboard).
+                    from aipager.bot import session_parity
+
+                    chat_id = resolve_chat_id_int(sess) or 0
                     keyboard = InlineKeyboardMarkup([[
-                        InlineKeyboardButton("✅ Allow", callback_data=f"{sess.name}:allow"),
-                        InlineKeyboardButton("❌ Deny", callback_data=f"{sess.name}:deny"),
+                        InlineKeyboardButton(
+                            "✅ Allow",
+                            callback_data=session_parity.session_cb(self, chat_id, sess, "allow")),
+                        InlineKeyboardButton(
+                            "❌ Deny",
+                            callback_data=session_parity.session_cb(self, chat_id, sess, "deny")),
                     ]])
 
                 msg = await bot.send_message(

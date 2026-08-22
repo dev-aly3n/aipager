@@ -317,6 +317,21 @@ class CallbackDispatchMixin:
             return
 
         session_name, action = cb_data.split(":", 1)
+
+        # Resolve the indexed short form ONCE, centrally, right here —
+        # before new_flow or session_parity see the pair — so every
+        # branch below (and inside both of those) keeps operating on a
+        # real session name exactly as it did before `_:sx:<idx>:<verb>`
+        # existed. Not the short form → pair returned unchanged. Stale
+        # or malformed → None, and we stop here rather than falling
+        # through to a wrong or dead session.
+        resolved = session_parity.resolve_short_cb(
+            self, calling_chat_id(update) or 0, session_name, action)
+        if resolved is None:
+            await self._safe_answer(query, "That session is no longer available")
+            return
+        session_name, action = resolved
+
         # Both return False unless the callback belongs to their own
         # namespace, so every pre-existing callback below is unaffected.
         if await new_flow.handle_callback(self, update, query, session_name, action):
@@ -806,7 +821,7 @@ class CallbackDispatchMixin:
 
                 # Rebuild keyboard with updated checkmarks
                 keyboard = self._build_inline_ask_keyboard(
-                    session_name, perm["options"],
+                    sess, perm["options"],
                     multi_select=True, selected=selected)
                 text = self._build_busy_text(sess.label, "Waiting", sess)
                 await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
@@ -898,7 +913,7 @@ class CallbackDispatchMixin:
                     }
                     await asyncio.sleep(0.3)
                     keyboard = self._build_inline_ask_keyboard(
-                        session_name, next_options,
+                        sess, next_options,
                         multi_select=next_multi)
                     text = self._build_busy_text(sess.label, "Waiting", sess)
                     await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
@@ -911,7 +926,7 @@ class CallbackDispatchMixin:
                         sess.busy_started_at += time.monotonic() - wait_start
                     sess.pending_permission = None
                     self.registry.transition(session_name, Status.BUSY)
-                    keyboard = self._build_stop_keyboard(session_name)
+                    keyboard = self._build_stop_keyboard(sess)
                     text = self._build_busy_text(sess.label, "Working", sess)
                     await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
                     self._start_animation(sess)
@@ -1040,7 +1055,7 @@ class CallbackDispatchMixin:
                     }
                     await asyncio.sleep(0.3)  # let TUI process and auto-advance
                     keyboard = self._build_inline_ask_keyboard(
-                        session_name, next_options,
+                        sess, next_options,
                         multi_select=next_multi)
                     text = self._build_busy_text(sess.label, "Waiting", sess)
                     await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
@@ -1060,7 +1075,7 @@ class CallbackDispatchMixin:
                     sess.pending_permission = None
                     # Transition back to BUSY and restart animation
                     self.registry.transition(session_name, Status.BUSY)
-                    keyboard = self._build_stop_keyboard(session_name)
+                    keyboard = self._build_stop_keyboard(sess)
                     text = self._build_busy_text(sess.label, "Working", sess)
                     await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
                     self._start_animation(sess)

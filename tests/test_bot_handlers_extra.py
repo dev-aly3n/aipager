@@ -52,15 +52,27 @@ def test_handle_kill_no_arg_no_sessions(mk_bot, mk_update, run_async):
 
 
 def test_handle_kill_no_arg_lists_sessions(mk_bot, mk_update, run_async):
+    """The picker's buttons carry the short indexed form, not
+    `{name}:kill` — no `{name}:<verb>` form can fit Telegram's 64-byte
+    callback_data cap (design.md), so what must hold is the DESTINATION
+    (which session a button reaches), not the literal encoded string."""
+    from aipager.bot import session_parity
+
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
     bot.registry._sessions["claude-jim"] = sess
-    update = mk_update("/kill")
+    update = mk_update("/kill")  # default chat_id=-1001
     run_async(bot._handle_kill_cmd(update, MagicMock()))
     kb = update.message.reply_text.await_args.kwargs.get("reply_markup")
     assert kb is not None
-    cb = [b.callback_data for row in kb.inline_keyboard for b in row]
-    assert "claude-jim:kill" in cb
+    cbs = [b.callback_data for row in kb.inline_keyboard for b in row]
+    dests = []
+    for cb in cbs:
+        _sentinel, kind, idx, verb = cb.split(":", 3)
+        assert (_sentinel, kind) == ("_", "sx"), f"unexpected callback form: {cb!r}"
+        resolved = session_parity._resolve_pref_index(bot, -1001, idx)
+        dests.append((resolved.name if resolved is not None else None, verb))
+    assert (sess.name, "kill") in dests
 
 
 def test_handle_kill_unknown_label(mk_bot, mk_update, run_async):
@@ -121,18 +133,32 @@ def test_handle_new_launch_failure(mk_bot, mk_update, run_async, monkeypatch):
 # ===== _send_new_conflict_prompt =======================================
 
 def test_send_new_conflict_prompt_alive_session(mk_bot, mk_update, run_async):
+    """The Resume/Replace/Cancel buttons carry the short indexed form,
+    not `{name}:<verb>` — no `{name}:<verb>` form can fit Telegram's
+    64-byte callback_data cap (design.md), so what must hold is the
+    DESTINATION (which session a button reaches), not the literal
+    encoded string."""
+    from aipager.bot import session_parity
+
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
-    update = mk_update("")
+    bot.registry._sessions[sess.name] = sess
+    update = mk_update("")  # default chat_id=-1001
     run_async(bot._send_new_conflict_prompt(
         update=update, existing=sess, prompt="", skip_perms=False,
     ))
     text = update.message.reply_text.await_args.args[0]
     assert "already running" in text
     kb = update.message.reply_text.await_args.kwargs["reply_markup"]
-    cb = [b.callback_data for row in kb.inline_keyboard for b in row]
-    assert "claude-jim:new_resume" in cb
-    assert "claude-jim:new_replace" in cb
+    cbs = [b.callback_data for row in kb.inline_keyboard for b in row]
+    dests = []
+    for cb in cbs:
+        _sentinel, kind, idx, verb = cb.split(":", 3)
+        assert (_sentinel, kind) == ("_", "sx"), f"unexpected callback form: {cb!r}"
+        resolved = session_parity._resolve_pref_index(bot, -1001, idx)
+        dests.append((resolved.name if resolved is not None else None, verb))
+    assert (sess.name, "new_resume") in dests
+    assert (sess.name, "new_replace") in dests
 
 
 def test_send_new_conflict_prompt_gone_with_preview(mk_bot, mk_update, run_async):

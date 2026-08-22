@@ -30,11 +30,18 @@ def test_new_fresh_name_takes_happy_path(monkeypatch, mk_bot, mk_update, run_asy
 
 
 def test_new_alive_collision_prompts_buttons(mk_bot, mk_update, run_async):
+    """The Resume/Replace/Cancel buttons carry the short indexed form,
+    not `{name}:<verb>` — no `{name}:<verb>` form can fit Telegram's
+    64-byte callback_data cap (design.md), so what must hold is the
+    DESTINATION (which session a button reaches), not the literal
+    encoded string."""
+    from aipager.bot import session_parity
+
     registry = SessionRegistry()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
     registry._sessions["claude-jim"] = sess
     bot = mk_bot(registry)
-    update = mk_update("/new jim do something")
+    update = mk_update("/new jim do something")  # default chat_id=-1001
     run_async(bot._handle_new_cmd(update, MagicMock()))
 
     update.message.reply_text.assert_awaited_once()
@@ -44,10 +51,16 @@ def test_new_alive_collision_prompts_buttons(mk_bot, mk_update, run_async):
     assert "already running" in text
     assert kb is not None
 
-    cb_data = [b.callback_data for row in kb.inline_keyboard for b in row]
-    assert "claude-jim:new_resume" in cb_data
-    assert "claude-jim:new_replace" in cb_data
-    assert "claude-jim:new_cancel" in cb_data
+    cbs = [b.callback_data for row in kb.inline_keyboard for b in row]
+    dests = []
+    for cb in cbs:
+        _sentinel, kind, idx, verb = cb.split(":", 3)
+        assert (_sentinel, kind) == ("_", "sx"), f"unexpected callback form: {cb!r}"
+        resolved = session_parity._resolve_pref_index(bot, -1001, idx)
+        dests.append((resolved.name if resolved is not None else None, verb))
+    assert (sess.name, "new_resume") in dests
+    assert (sess.name, "new_replace") in dests
+    assert (sess.name, "new_cancel") in dests
 
     # Prompt + skip_perms stashed for the callback to consume
     assert bot._new_conflict_pending["claude-jim"]["prompt"] == "do something"

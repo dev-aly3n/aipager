@@ -838,6 +838,39 @@ def session_cb(bot: "TelegramBot", chat_id: int, sess: TrackedSession,
     return f"_:sx:{table.index(sess.name)}:{verb}"
 
 
+def resolve_short_cb(
+    bot: "TelegramBot", chat_id: int, session_name: str, action: str,
+) -> tuple[str, str] | None:
+    """Resolve the indexed short form back to a real session, ONCE,
+    centrally — ``callbacks.py._handle_callback`` calls this
+    immediately after splitting ``cb_data``, before ``new_flow`` or
+    :func:`handle_callback` see the pair, so every downstream branch
+    (this module's own, and every ``callbacks.py`` branch below it)
+    keeps working on an already-resolved ``(session_name, verb)`` pair
+    exactly as it did before the short form existed.
+
+    - not the short form (anything except ``session_name == "_"`` with
+      ``action`` starting ``"sx:"``) → returns the pair UNCHANGED, so
+      every other namespace (the long form, ``_:spref``, ``_:nw:...``,
+      ``_:set...``, the ⋮-menu's own long-form verbs) passes through
+      untouched.
+    - short form, resolves → ``(resolved.name, verb)``.
+    - short form, stale/malformed (out-of-range index, session gone,
+      a truncated ``sx:`` token) → ``None``. The caller answers "That
+      session is no longer available" and stops — it must never fall
+      through to a stale or wrong session.
+    """
+    if session_name != "_" or not action.startswith("sx:"):
+        return session_name, action
+    parts = action.split(":", 2)
+    if len(parts) != 3:
+        return None
+    resolved = _resolve_pref_index(bot, chat_id, parts[1])
+    if resolved is None:
+        return None
+    return resolved.name, parts[2]
+
+
 async def handle_callback(
     bot: "TelegramBot", update: Update, query, session_name: str, action: str,
 ) -> bool:
@@ -845,6 +878,16 @@ async def handle_callback(
     (``callbacks.py``'s ``_handle_callback``) returns immediately in
     that case; ``False`` lets it fall through to its own existing
     branches (kill/stop/settings/etc.) or new_flow's wizard.
+
+    PRECONDITION: ``session_name``/``action`` have already been through
+    :func:`resolve_short_cb` by the time they reach here —
+    ``callbacks.py._handle_callback`` does that ONCE, centrally, right
+    after splitting ``cb_data`` and before either this function or
+    ``new_flow.handle_callback`` is consulted. This function no longer
+    decodes ``_:sx:<idx>:<verb>`` itself; a caller that skips the
+    central resolution and hands this function a raw short-form pair
+    will fall through to "Session not found" like any other unknown
+    name, not silently misbehave.
 
     Two disjoint families:
     - ``_:spref...`` (session_name == "_") — per-session preferences,
@@ -855,20 +898,6 @@ async def handle_callback(
 
     if session_name == "_" and action.startswith("spref"):
         return await _handle_spref_callback(bot, query, chat_id, action)
-
-    # Short index form, `_:sx:<idx>:<verb>` — what every button emits now.
-    # Resolved back to a real session here so everything below is
-    # identical whichever form arrived; the long `{name}:<verb>` form is
-    # still accepted so buttons sent before this change keep working.
-    if session_name == "_" and action.startswith("sx:"):
-        parts = action.split(":", 2)
-        if len(parts) != 3:
-            return False
-        resolved = _resolve_pref_index(bot, chat_id, parts[1])
-        if resolved is None:
-            await bot._safe_answer(query, "That session is no longer available")
-            return True
-        session_name, action = resolved.name, parts[2]
 
     # Sentinel namespaces are not sessions. `__voice__:restart` collides
     # with our own "restart" action verb, and claiming it broke the
@@ -917,7 +946,7 @@ async def handle_callback(
         await _edit(
             query, f"Resume <b>{html_mod.escape(sess.label)}</b> as:",
             bot._build_resume_mode_keyboard(
-                sess.name, sess.skip_perms, chat_id=chat_id),
+                sess, sess.skip_perms, chat_id=chat_id),
         )
         return True
 
