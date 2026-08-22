@@ -5,22 +5,54 @@ from __future__ import annotations
 import pytest
 from telegram import InlineKeyboardMarkup
 
+from aipager.state import Status, TrackedSession
+
 
 @pytest.fixture
 def bot(mk_bot):
     return mk_bot()
 
 
+# Fixed, not the TrackedSession default of 0: `_build_permission_keyboard`
+# and friends derive chat_id via `resolve_chat_id_int(sess) or 0`, which
+# falls back to `config.CHAT_ID` for an unstamped (0) session — and that
+# module global is baked at import time from whatever
+# `~/.config/aipager/aipager.yaml` happens to exist on THIS machine, not
+# from a hermetic test default. Pinning `scope_chat_id` decouples these
+# tests from that ambient state.
+_TEST_CHAT_ID = 100
+
+
+def _sess(bot, name="claude-dev", label="dev", status=Status.IDLE):
+    sess = TrackedSession(name=name, label=label, status=status,
+                          scope_chat_id=_TEST_CHAT_ID)
+    bot.registry._sessions[sess.name] = sess
+    return sess
+
+
+def _destination(bot, cb, *, chat_id=_TEST_CHAT_ID):
+    """Resolve one `_:sx:<idx>:<verb>` callback_data string to
+    `(session_name, verb)` — asserts the DESTINATION a button reaches,
+    not the encoding, since no `{name}:<verb>` form can fit Telegram's
+    64-byte cap (design.md)."""
+    from aipager.bot import session_parity
+
+    sentinel, kind, idx, verb = cb.split(":", 3)
+    assert (sentinel, kind) == ("_", "sx"), f"unexpected callback form: {cb!r}"
+    sess = session_parity._resolve_pref_index(bot, chat_id, idx)
+    return (sess.name if sess is not None else None), verb
+
+
 # ---- _build_permission_keyboard: 2×2 grid ----------------------------------
 
 def test_permission_keyboard_has_two_rows(bot):
-    kb = bot._build_permission_keyboard("claude-dev")
+    kb = bot._build_permission_keyboard(_sess(bot))
     assert isinstance(kb, InlineKeyboardMarkup)
     assert len(kb.inline_keyboard) == 2
 
 
 def test_permission_keyboard_row0_allow_deny(bot):
-    kb = bot._build_permission_keyboard("claude-dev")
+    kb = bot._build_permission_keyboard(_sess(bot))
     row0 = kb.inline_keyboard[0]
     assert len(row0) == 2
     labels = [btn.text for btn in row0]
@@ -29,7 +61,7 @@ def test_permission_keyboard_row0_allow_deny(bot):
 
 
 def test_permission_keyboard_row1_allow_always_stop(bot):
-    kb = bot._build_permission_keyboard("claude-dev")
+    kb = bot._build_permission_keyboard(_sess(bot))
     row1 = kb.inline_keyboard[1]
     assert len(row1) == 2
     labels = [btn.text for btn in row1]
@@ -38,60 +70,64 @@ def test_permission_keyboard_row1_allow_always_stop(bot):
 
 
 def test_permission_keyboard_callback_data(bot):
-    kb = bot._build_permission_keyboard("claude-dev")
-    cbs = [btn.callback_data for row in kb.inline_keyboard for btn in row]
-    assert "claude-dev:allow" in cbs
-    assert "claude-dev:deny" in cbs
-    assert "claude-dev:allow_always" in cbs
-    assert "claude-dev:stop" in cbs
+    sess = _sess(bot)
+    kb = bot._build_permission_keyboard(sess)
+    dests = [_destination(bot, btn.callback_data)
+             for row in kb.inline_keyboard for btn in row]
+    assert (sess.name, "allow") in dests
+    assert (sess.name, "deny") in dests
+    assert (sess.name, "allow_always") in dests
+    assert (sess.name, "stop") in dests
 
 
 # ---- _build_perms_confirm_keyboard -----------------------------------------
 
 def test_perms_confirm_keyboard_has_one_row(bot):
-    kb = bot._build_perms_confirm_keyboard("claude-dev")
+    kb = bot._build_perms_confirm_keyboard(_sess(bot))
     assert len(kb.inline_keyboard) == 1
 
 
 def test_perms_confirm_keyboard_buttons(bot):
-    kb = bot._build_perms_confirm_keyboard("claude-dev")
+    sess = _sess(bot)
+    kb = bot._build_perms_confirm_keyboard(sess)
     row = kb.inline_keyboard[0]
     labels = [btn.text for btn in row]
-    cbs = [btn.callback_data for btn in row]
+    dests = [_destination(bot, btn.callback_data) for btn in row]
     assert any("Yes" in lbl or "switch" in lbl.lower() for lbl in labels), labels
     assert any("Cancel" in lbl for lbl in labels), labels
-    assert any("perms_confirm" in c for c in cbs), cbs
-    assert any("perms_cancel" in c for c in cbs), cbs
+    assert (sess.name, "perms_confirm") in dests
+    assert (sess.name, "perms_cancel") in dests
 
 
 # ---- _build_perms_busy_keyboard --------------------------------------------
 
 def test_perms_busy_keyboard_has_one_row(bot):
-    kb = bot._build_perms_busy_keyboard("claude-dev")
+    kb = bot._build_perms_busy_keyboard(_sess(bot))
     assert len(kb.inline_keyboard) == 1
 
 
 def test_perms_busy_keyboard_buttons(bot):
-    kb = bot._build_perms_busy_keyboard("claude-dev")
+    sess = _sess(bot)
+    kb = bot._build_perms_busy_keyboard(sess)
     row = kb.inline_keyboard[0]
     labels = [btn.text for btn in row]
-    cbs = [btn.callback_data for btn in row]
+    dests = [_destination(bot, btn.callback_data) for btn in row]
     assert any("Stop" in lbl or "switch" in lbl.lower() for lbl in labels), labels
     assert any("Not now" in lbl or "now" in lbl.lower() for lbl in labels), labels
-    assert any("perms_stop_switch" in c for c in cbs), cbs
-    assert any("perms_wait" in c for c in cbs), cbs
+    assert (sess.name, "perms_stop_switch") in dests
+    assert (sess.name, "perms_wait") in dests
 
 
 # ---- _build_resume_mode_keyboard -------------------------------------------
 
 def test_resume_mode_keyboard_has_two_rows(bot):
-    kb = bot._build_resume_mode_keyboard("claude-dev", False)
+    kb = bot._build_resume_mode_keyboard(_sess(bot), False)
     assert len(kb.inline_keyboard) == 2
 
 
 def test_resume_mode_keyboard_default_label_ask(bot):
     """When persisted_skip_perms=False, Ask button should have (default) suffix."""
-    kb = bot._build_resume_mode_keyboard("claude-dev", persisted_skip_perms=False)
+    kb = bot._build_resume_mode_keyboard(_sess(bot), persisted_skip_perms=False)
     row0 = kb.inline_keyboard[0]
     labels = [btn.text for btn in row0]
     ask_label = next(lbl for lbl in labels if "Ask" in lbl)
@@ -102,7 +138,7 @@ def test_resume_mode_keyboard_default_label_ask(bot):
 
 def test_resume_mode_keyboard_default_label_auto(bot):
     """When persisted_skip_perms=True, Auto button should have (default) suffix."""
-    kb = bot._build_resume_mode_keyboard("claude-dev", persisted_skip_perms=True)
+    kb = bot._build_resume_mode_keyboard(_sess(bot), persisted_skip_perms=True)
     row0 = kb.inline_keyboard[0]
     labels = [btn.text for btn in row0]
     ask_label = next(lbl for lbl in labels if "Ask" in lbl)
@@ -112,60 +148,37 @@ def test_resume_mode_keyboard_default_label_auto(bot):
 
 
 def test_resume_mode_keyboard_callbacks_for_a_known_session(bot):
-    """The normal path: a session in the registry gets the short indexed
-    form, because `{name}:resume_mode_cancel` reaches 83 bytes for a
-    long name and `_make_cb` asserts rather than truncating."""
-    from aipager.state import Status
+    """A session's resume-mode picker gets the short indexed form,
+    because `{name}:resume_mode_cancel` reaches 83 bytes for a
+    maximum-length name — well past Telegram's 64-byte cap."""
+    sess = _sess(bot, status=Status.GONE)
 
-    sess = bot.registry.get_or_create("claude-dev")
-    sess.label = "dev"
-    bot.registry.transition("claude-dev", Status.GONE)
-
-    kb = bot._build_resume_mode_keyboard("claude-dev", False, chat_id=555)
+    kb = bot._build_resume_mode_keyboard(sess, False, chat_id=555)
     cbs = [btn.callback_data for row in kb.inline_keyboard for btn in row]
+    dests = [_destination(bot, c, chat_id=555) for c in cbs]
 
-    assert {c.rsplit(":", 1)[-1] for c in cbs} == {
-        "resume-ask", "resume-auto", "resume-cancel"}, cbs
+    assert {v for _, v in dests} == {
+        "resume-ask", "resume-auto", "resume-cancel"}, dests
+    assert {n for n, _ in dests} == {sess.name}, dests
     for c in cbs:
         assert len(c.encode()) <= 64, c
 
 
-def test_resume_mode_keyboard_falls_back_for_an_unknown_session(bot):
-    """No registry entry means no index to encode, so it falls back to
-    the legacy name-embedding form.
-
-    This test used to be `test_resume_mode_keyboard_callbacks` and
-    asserted the legacy verbs for a session it never registered — so
-    after the switch to indexed callbacks it silently covered only this
-    fallback while appearing to cover the main path. Split in two.
-    """
-    kb = bot._build_resume_mode_keyboard("claude-nosuch", False)
-    cbs = [btn.callback_data for row in kb.inline_keyboard for btn in row]
-
-    assert any("resume_mode_ask" in c for c in cbs), cbs
-    assert any("resume_mode_auto" in c for c in cbs), cbs
-    assert any("resume_mode_cancel" in c for c in cbs), cbs
-
-
 def test_resume_mode_keyboard_cancel_in_row1(bot):
-    kb = bot._build_resume_mode_keyboard("claude-dev", False)
+    sess = _sess(bot)
+    kb = bot._build_resume_mode_keyboard(sess, False)  # chat_id defaults to 0
     row1 = kb.inline_keyboard[1]
-    cbs = [btn.callback_data for btn in row1]
-    assert any("resume_mode_cancel" in c for c in cbs), cbs
+    dests = [_destination(bot, btn.callback_data, chat_id=0) for btn in row1]
+    assert (sess.name, "resume-cancel") in dests
 
 
-# ---- _make_cb: 64-byte limit -----------------------------------------------
+# ---- _make_cb: deleted by this ship -----------------------------------
 
-def test_make_cb_normal_within_limit(bot):
-    cb = bot._make_cb("claude-dev", "perms_confirm")
-    assert len(cb.encode()) <= 64
-    assert cb == "claude-dev:perms_confirm"
-
-
-def test_make_cb_asserts_on_overflow(bot):
-    # _make_cb now raises AssertionError instead of silently truncating,
-    # so operators get a clear error rather than a broken dispatch lookup.
-    long_name = "claude-" + "x" * 60
-    action = "perms_stop_switch"
-    with pytest.raises(AssertionError, match="callback_data overflow"):
-        bot._make_cb(long_name, action)
+def test_make_cb_no_longer_exists(bot):
+    """`_make_cb` and its overflow assertion are gone — after the switch
+    to `session_cb`'s indexed form, nothing can overflow, so the guard
+    that could never fire was dead code (design.md). A missing-attribute
+    error is the whole point here, not an `AssertionError` from calling
+    it — entrypoints.md is explicit that Testers must not rely on
+    `AssertionError` from this name."""
+    assert not hasattr(bot, "_make_cb")

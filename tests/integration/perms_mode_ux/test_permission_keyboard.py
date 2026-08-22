@@ -53,6 +53,35 @@ def _make_bot(*, registry=None):
     return bot
 
 
+# Fixed, not the TrackedSession default of 0: `_build_permission_keyboard`
+# derives chat_id via `resolve_chat_id_int(sess) or 0`, which falls back to
+# `config.CHAT_ID` for an unstamped (0) session — a module global baked at
+# import time from whatever `~/.config/aipager/aipager.yaml` happens to
+# exist on THIS machine. Pinning `scope_chat_id` decouples this test from
+# that ambient state.
+_TEST_CHAT_ID = 100
+
+
+def _sess(bot, name="claude-ben", label="ben", status=Status.INTERACTIVE):
+    sess = TrackedSession(name=name, label=label, status=status,
+                          scope_chat_id=_TEST_CHAT_ID)
+    bot.registry._sessions[sess.name] = sess
+    return sess
+
+
+def _destination(bot, cb, *, chat_id=_TEST_CHAT_ID):
+    """Resolve one `_:sx:<idx>:<verb>` callback_data string to
+    `(session_name, verb)` — asserts the DESTINATION a button reaches,
+    not the encoding, since no `{name}:<verb>` form can fit Telegram's
+    64-byte cap (design.md)."""
+    from aipager.bot import session_parity
+
+    sentinel, kind, idx, verb = cb.split(":", 3)
+    assert (sentinel, kind) == ("_", "sx"), f"unexpected callback form: {cb!r}"
+    sess = session_parity._resolve_pref_index(bot, chat_id, idx)
+    return (sess.name if sess is not None else None), verb
+
+
 # --------------------------------------------------------------------------- #
 # SC16 — Permission keyboard: 2 rows, correct buttons                         #
 # --------------------------------------------------------------------------- #
@@ -61,7 +90,7 @@ def test_sc16_permission_keyboard_has_exactly_two_rows():
     """SC16: _build_permission_keyboard must return InlineKeyboardMarkup with
     exactly 2 rows."""
     bot = _make_bot()
-    kb = bot._build_permission_keyboard("claude-ben")
+    kb = bot._build_permission_keyboard(_sess(bot))
     assert len(kb.inline_keyboard) == 2, (
         f"Permission keyboard must have 2 rows; got {len(kb.inline_keyboard)}"
     )
@@ -70,13 +99,14 @@ def test_sc16_permission_keyboard_has_exactly_two_rows():
 def test_sc16_permission_keyboard_row0_is_allow_and_deny():
     """SC16: Row 0 must have exactly 2 buttons: Allow (not always) and Deny."""
     bot = _make_bot()
-    kb = bot._build_permission_keyboard("claude-ben")
+    sess = _sess(bot)
+    kb = bot._build_permission_keyboard(sess)
     row0 = kb.inline_keyboard[0]
 
     assert len(row0) == 2, f"Row 0 must have 2 buttons; got {len(row0)}"
 
     labels = [btn.text for btn in row0]
-    cbs = [btn.callback_data for btn in row0]
+    dests = [_destination(bot, btn.callback_data) for btn in row0]
 
     # Must have Allow (but NOT Allow always)
     assert any("Allow" in lbl and "always" not in lbl.lower() for lbl in labels), (
@@ -86,21 +116,24 @@ def test_sc16_permission_keyboard_row0_is_allow_and_deny():
     assert any("Deny" in lbl for lbl in labels), (
         f"Row 0 must have Deny; labels: {labels}"
     )
-    # Callback data
-    assert "claude-ben:allow" in cbs, f"Row 0 must have :allow callback; cbs: {cbs}"
-    assert "claude-ben:deny" in cbs, f"Row 0 must have :deny callback; cbs: {cbs}"
+    # Destinations — the SESSION and VERB a button reaches, not the
+    # literal encoded string (design.md: no `{name}:<verb>` form can fit
+    # Telegram's 64-byte cap, so nothing embeds the name directly anymore).
+    assert (sess.name, "allow") in dests, f"Row 0 must reach :allow; dests: {dests}"
+    assert (sess.name, "deny") in dests, f"Row 0 must reach :deny; dests: {dests}"
 
 
 def test_sc16_permission_keyboard_row1_is_allow_always_and_stop():
     """SC16: Row 1 must have exactly 2 buttons: Allow always and Stop."""
     bot = _make_bot()
-    kb = bot._build_permission_keyboard("claude-ben")
+    sess = _sess(bot)
+    kb = bot._build_permission_keyboard(sess)
     row1 = kb.inline_keyboard[1]
 
     assert len(row1) == 2, f"Row 1 must have 2 buttons; got {len(row1)}"
 
     labels = [btn.text for btn in row1]
-    cbs = [btn.callback_data for btn in row1]
+    dests = [_destination(bot, btn.callback_data) for btn in row1]
 
     # Must have Allow always
     assert any("Allow always" in lbl or "always" in lbl.lower() for lbl in labels), (
@@ -110,19 +143,17 @@ def test_sc16_permission_keyboard_row1_is_allow_always_and_stop():
     assert any("Stop" in lbl for lbl in labels), (
         f"Row 1 must have Stop; labels: {labels}"
     )
-    # Callback data
-    assert "claude-ben:allow_always" in cbs, (
-        f"Row 1 must have :allow_always callback; cbs: {cbs}"
+    # Destinations
+    assert (sess.name, "allow_always") in dests, (
+        f"Row 1 must reach :allow_always; dests: {dests}"
     )
-    assert "claude-ben:stop" in cbs, (
-        f"Row 1 must have :stop callback; cbs: {cbs}"
-    )
+    assert (sess.name, "stop") in dests, f"Row 1 must reach :stop; dests: {dests}"
 
 
 def test_sc16_permission_keyboard_row1_col0_is_allow_always():
     """SC16: First button of row 1 must be Allow always (🟢), not Stop."""
     bot = _make_bot()
-    kb = bot._build_permission_keyboard("claude-ben")
+    kb = bot._build_permission_keyboard(_sess(bot))
     row1 = kb.inline_keyboard[1]
 
     first_label = row1[0].text
@@ -134,10 +165,12 @@ def test_sc16_permission_keyboard_row1_col0_is_allow_always():
 def test_sc16_permission_keyboard_allow_always_icon():
     """SC16: Allow always button must have 🟢 icon (visually distinct from ✅ Allow)."""
     bot = _make_bot()
-    kb = bot._build_permission_keyboard("claude-ben")
+    sess = _sess(bot)
+    kb = bot._build_permission_keyboard(sess)
     all_buttons = [btn for row in kb.inline_keyboard for btn in row]
     allow_always_btn = next(
-        (b for b in all_buttons if "allow_always" in (b.callback_data or "")), None
+        (b for b in all_buttons
+         if _destination(bot, b.callback_data) == (sess.name, "allow_always")), None,
     )
     assert allow_always_btn is not None, "Must have allow_always button"
     assert "🟢" in allow_always_btn.text, (

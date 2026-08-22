@@ -14,6 +14,51 @@ from telegram import InlineKeyboardMarkup
 from aipager.state import Status, TrackedSession
 
 
+_TEST_CHAT_ID = 100  # arbitrary, fixed — see _sess()'s docstring
+
+
+def _sess(bot, name="claude-jim", label="jim"):
+    """A `TrackedSession` for the `_build_*_keyboard` builders, which
+    take `sess: TrackedSession` (not the bare name) — registered on
+    `bot.registry` too, since `_destination` below resolves the index
+    the same way the real dispatcher would (a name the registry
+    doesn't know resolves to `None`, same as a stale/deleted session).
+
+    `scope_chat_id` is pinned to a fixed constant rather than left at
+    the default 0: the builders derive their chat_id via
+    ``resolve_chat_id_int(sess) or 0``, which falls back to
+    ``config.CHAT_ID`` for an unstamped (0) session — and that module
+    global is computed once at import time from whatever
+    ``~/.config/aipager/aipager.yaml`` exists on THIS machine (loaded
+    before any per-test redirect fixture runs), not from a hermetic
+    test default. Pinning here decouples the test from that ambient
+    state.
+    """
+    sess = TrackedSession(name=name, label=label, status=Status.IDLE,
+                          scope_chat_id=_TEST_CHAT_ID)
+    bot.registry._sessions[sess.name] = sess
+    return sess
+
+
+def _destination(bot, cb):
+    """Resolve one `_:sx:<idx>:<verb>` callback_data string to
+    `(session_name, verb)`.
+
+    Every session-scoped button now carries the short indexed form, not
+    `{name}:<verb>` — no `{name}:<verb>` form can fit Telegram's 64-byte
+    callback_data cap, since internal session names are themselves
+    capped at 64 bytes (design.md). Asserting the literal string would
+    pin an encoding rather than the DESTINATION that actually matters:
+    which session and verb a button reaches.
+    """
+    from aipager.bot import session_parity
+
+    _sentinel, kind, idx, verb = cb.split(":", 3)
+    assert (_sentinel, kind) == ("_", "sx"), f"unexpected callback form: {cb!r}"
+    sess = session_parity._resolve_pref_index(bot, _TEST_CHAT_ID, idx)
+    return (sess.name if sess is not None else None), verb
+
+
 # ===== keyboards.py =====================================================
 
 def test_build_button_rows_chunks_at_per_row(mk_bot):
@@ -41,14 +86,15 @@ def test_build_button_rows_default_per_row(mk_bot):
 
 def test_build_ask_keyboard_no_questions_returns_no_buttons(mk_bot):
     bot = mk_bot()
-    text, kb = bot._build_ask_keyboard("claude-jim", "jim", {"questions": []})
+    text, kb = bot._build_ask_keyboard(_sess(bot), "jim", {"questions": []})
     assert "No questions" in text
     assert kb is None
 
 
 def test_build_ask_keyboard_with_options(mk_bot):
     bot = mk_bot()
-    text, kb = bot._build_ask_keyboard("claude-jim", "jim", {
+    sess = _sess(bot)
+    text, kb = bot._build_ask_keyboard(sess, "jim", {
         "questions": [{"question": "Pick", "options": [
             {"label": "A"}, {"label": "B"},
         ]}],
@@ -56,12 +102,12 @@ def test_build_ask_keyboard_with_options(mk_bot):
     assert "Pick" in text
     assert "A" in text
     assert kb is not None
-    assert kb.inline_keyboard[0][0].callback_data == "claude-jim:opt0"
+    assert _destination(bot, kb.inline_keyboard[0][0].callback_data) == (sess.name, "opt0")
 
 
 def test_build_ask_keyboard_no_options_returns_no_buttons(mk_bot):
     bot = mk_bot()
-    text, kb = bot._build_ask_keyboard("claude-jim", "jim", {
+    text, kb = bot._build_ask_keyboard(_sess(bot), "jim", {
         "questions": [{"question": "Pick", "options": []}],
     })
     assert "Pick" in text
@@ -72,7 +118,7 @@ def test_build_ask_keyboard_caps_at_4_options(mk_bot):
     """Telegram inline keyboards work best with ≤4 buttons in a row."""
     bot = mk_bot()
     options = [{"label": f"opt{i}"} for i in range(8)]
-    _, kb = bot._build_ask_keyboard("claude-jim", "jim", {
+    _, kb = bot._build_ask_keyboard(_sess(bot), "jim", {
         "questions": [{"question": "?", "options": options}],
     })
     # Only first 4 options become buttons
@@ -82,7 +128,7 @@ def test_build_ask_keyboard_caps_at_4_options(mk_bot):
 def test_build_ask_keyboard_truncates_long_descriptions(mk_bot):
     bot = mk_bot()
     long_desc = "x" * 200
-    text, _ = bot._build_ask_keyboard("claude-jim", "jim", {
+    text, _ = bot._build_ask_keyboard(_sess(bot), "jim", {
         "questions": [{"question": "?", "options": [
             {"label": "A", "description": long_desc},
         ]}],
@@ -96,7 +142,7 @@ def test_build_ask_keyboard_truncates_long_descriptions(mk_bot):
 def test_build_selector_keyboard_with_question_and_options(mk_bot):
     bot = mk_bot()
     text, kb = bot._build_selector_keyboard(
-        "claude-jim", "jim", "Confirm?", [(1, "Yes"), (2, "No")],
+        _sess(bot), "jim", "Confirm?", [(1, "Yes"), (2, "No")],
     )
     assert "Confirm?" in text
     assert "Yes" in text
@@ -108,7 +154,7 @@ def test_build_selector_keyboard_with_question_and_options(mk_bot):
 def test_build_selector_keyboard_no_question_falls_back(mk_bot):
     bot = mk_bot()
     text, _ = bot._build_selector_keyboard(
-        "claude-jim", "jim", "", [(1, "Yes")],
+        _sess(bot), "jim", "", [(1, "Yes")],
     )
     assert "Needs input" in text
 
@@ -116,7 +162,7 @@ def test_build_selector_keyboard_no_question_falls_back(mk_bot):
 def test_build_selector_keyboard_no_options_returns_no_kb(mk_bot):
     bot = mk_bot()
     text, kb = bot._build_selector_keyboard(
-        "claude-jim", "jim", "Pick", [],
+        _sess(bot), "jim", "Pick", [],
     )
     assert kb is None
 
@@ -125,49 +171,56 @@ def test_build_selector_keyboard_no_options_returns_no_kb(mk_bot):
 
 def test_build_stop_keyboard(mk_bot):
     bot = mk_bot()
-    kb = bot._build_stop_keyboard("claude-jim")
+    sess = _sess(bot)
+    kb = bot._build_stop_keyboard(sess)
     assert isinstance(kb, InlineKeyboardMarkup)
-    assert kb.inline_keyboard[0][0].callback_data == "claude-jim:stop"
+    assert _destination(bot, kb.inline_keyboard[0][0].callback_data) == (sess.name, "stop")
 
 
 def test_build_retry_keyboard(mk_bot):
     bot = mk_bot()
-    kb = bot._build_retry_keyboard("claude-jim")
-    assert kb.inline_keyboard[0][0].callback_data == "claude-jim:retry"
+    sess = _sess(bot)
+    kb = bot._build_retry_keyboard(sess)
+    assert _destination(bot, kb.inline_keyboard[0][0].callback_data) == (sess.name, "retry")
 
 
 def test_build_compact_keyboard(mk_bot):
     bot = mk_bot()
-    kb = bot._build_compact_keyboard("claude-jim")
-    assert kb.inline_keyboard[0][0].callback_data == "claude-jim:compact"
+    sess = _sess(bot)
+    kb = bot._build_compact_keyboard(sess)
+    assert _destination(bot, kb.inline_keyboard[0][0].callback_data) == (sess.name, "compact")
 
 
 def test_build_permission_keyboard(mk_bot):
     bot = mk_bot()
-    kb = bot._build_permission_keyboard("claude-jim")
-    cb_data = [b.callback_data for row in kb.inline_keyboard for b in row]
-    assert "claude-jim:allow" in cb_data
-    assert "claude-jim:deny" in cb_data
-    assert "claude-jim:stop" in cb_data
+    sess = _sess(bot)
+    kb = bot._build_permission_keyboard(sess)
+    dests = [_destination(bot, b.callback_data)
+             for row in kb.inline_keyboard for b in row]
+    assert (sess.name, "allow") in dests
+    assert (sess.name, "deny") in dests
+    assert (sess.name, "stop") in dests
 
 
 # ---- _build_inline_ask_keyboard ----------------------------------------
 
 def test_build_inline_ask_keyboard_single_select(mk_bot):
     bot = mk_bot()
+    sess = _sess(bot)
     kb = bot._build_inline_ask_keyboard(
-        "claude-jim", [{"label": "A"}, {"label": "B"}],
+        sess, [{"label": "A"}, {"label": "B"}],
         multi_select=False,
     )
-    cb = [b.callback_data for row in kb.inline_keyboard for b in row]
-    assert "claude-jim:opt0" in cb
-    assert "claude-jim:opt1" in cb
+    dests = [_destination(bot, b.callback_data)
+             for row in kb.inline_keyboard for b in row]
+    assert (sess.name, "opt0") in dests
+    assert (sess.name, "opt1") in dests
 
 
 def test_build_inline_ask_keyboard_multi_select_shows_checkmarks(mk_bot):
     bot = mk_bot()
     kb = bot._build_inline_ask_keyboard(
-        "claude-jim", [{"label": "A"}, {"label": "B"}, {"label": "C"}],
+        _sess(bot), [{"label": "A"}, {"label": "B"}, {"label": "C"}],
         multi_select=True, selected={0, 2},
     )
     button_texts = [b.text for row in kb.inline_keyboard for b in row]

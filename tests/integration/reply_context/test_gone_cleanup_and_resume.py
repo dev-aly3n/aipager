@@ -104,6 +104,12 @@ def test_explicit_kill_removes_both_real_artifacts_produced_by_a_live_turn(
 def test_reply_to_gone_session_shows_not_found_verbatim_with_resume_button(
     mk_bot, mk_update, run_async, monkeypatch,
 ):
+    """The Resume button carries the short indexed form, not
+    `{name}:resume` — no `{name}:<verb>` form can fit Telegram's 64-byte
+    callback_data cap (design.md), so what must hold is the DESTINATION
+    (which session the button reaches), not the literal encoded string."""
+    from aipager.bot import session_parity
+
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
     sess.scope_chat_id = CHAT_ID
@@ -120,5 +126,11 @@ def test_reply_to_gone_session_shows_not_found_verbatim_with_resume_button(
 
     kb = update.message.reply_text.await_args.kwargs.get("reply_markup")
     assert kb is not None
-    callbacks = [b.callback_data for row in kb.inline_keyboard for b in row]
-    assert f"{sess.name}:resume" in callbacks
+    cbs = [b.callback_data for row in kb.inline_keyboard for b in row]
+    dests = []
+    for cb in cbs:
+        _sentinel, kind, idx, verb = cb.split(":", 3)
+        assert (_sentinel, kind) == ("_", "sx"), f"unexpected callback form: {cb!r}"
+        resolved = session_parity._resolve_pref_index(bot, CHAT_ID, idx)
+        dests.append((resolved.name if resolved is not None else None, verb))
+    assert (sess.name, "resume") in dests

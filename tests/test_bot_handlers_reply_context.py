@@ -187,13 +187,19 @@ def test_absent_reply_to_message_and_no_quote_is_not_a_reply(
 def test_gone_target_shows_not_found_with_a_resume_button(
     mk_bot, mk_update, run_async, monkeypatch,
 ):
+    """The Resume button carries the short indexed form, not
+    `{name}:resume` — no `{name}:<verb>` form can fit Telegram's 64-byte
+    callback_data cap (design.md), so what must hold is the DESTINATION
+    (which session the button reaches), not the literal encoded string."""
+    from aipager.bot import session_parity
+
     bot = mk_bot()
     monkeypatch.setattr("aipager.dtach.inject.is_alive", AsyncMock(return_value=False))
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
     sess.last_msg_id = 300
     bot.registry._sessions["claude-jim"] = sess
 
-    update = mk_update("bring it back")
+    update = mk_update("bring it back")  # default chat_id=-1001
     update.message.reply_to_message = MagicMock(
         message_id=300, text="(old)", caption=None, from_user=None,
     )
@@ -202,5 +208,11 @@ def test_gone_target_shows_not_found_with_a_resume_button(
     args, kwargs = update.message.reply_text.await_args
     assert args[0] == "⚠️ Session 'claude-jim' not found"
     kb = kwargs["reply_markup"]
-    callbacks = [b.callback_data for row in kb.inline_keyboard for b in row]
-    assert "claude-jim:resume" in callbacks
+    cbs = [b.callback_data for row in kb.inline_keyboard for b in row]
+    dests = []
+    for cb in cbs:
+        _sentinel, kind, idx, verb = cb.split(":", 3)
+        assert (_sentinel, kind) == ("_", "sx"), f"unexpected callback form: {cb!r}"
+        resolved = session_parity._resolve_pref_index(bot, -1001, idx)
+        dests.append((resolved.name if resolved is not None else None, verb))
+    assert (sess.name, "resume") in dests

@@ -317,6 +317,28 @@ class CallbackDispatchMixin:
             return
 
         session_name, action = cb_data.split(":", 1)
+
+        # Resolve the indexed short form ONCE, centrally, right here —
+        # before new_flow or session_parity see the pair — so every
+        # branch below (and inside both of those) keeps operating on a
+        # real session name exactly as it did before `_:sx:<idx>:<verb>`
+        # existed. Not the short form → pair returned unchanged. Stale
+        # or malformed → None, and we stop here rather than falling
+        # through to a wrong or dead session.
+        #
+        # chat_id here is calling_chat_id(update) — the real chat this
+        # tap arrived from — while every builder registered its index
+        # under resolve_chat_id_int(sess) or 0 instead (a session-
+        # derived value, not update-derived). See session_cb's
+        # docstring in session_parity.py for why that asymmetry is safe
+        # (review-1.md rev-iter1-003).
+        resolved = session_parity.resolve_short_cb(
+            self, calling_chat_id(update) or 0, session_name, action)
+        if resolved is None:
+            await self._safe_answer(query, "That session is no longer available")
+            return
+        session_name, action = resolved
+
         # Both return False unless the callback belongs to their own
         # namespace, so every pre-existing callback below is unaffected.
         if await new_flow.handle_callback(self, update, query, session_name, action):
@@ -336,16 +358,27 @@ class CallbackDispatchMixin:
 
         if action == "kill":
             sess = self.registry.get(session_name)
-            label = sess.label if sess else session_name
-            await self._safe_answer(query, f"Killing {label}...")
-            await self._kill_session_by_label(query, label)
+            if sess is None:
+                # Stale long-form tap (or a resolved index whose session
+                # vanished between render and tap) — fail closed rather
+                # than falling through to _kill_session_by_label, which
+                # would otherwise synthesize a `claude-<label>` name and
+                # call inject.kill_session against a name that was never
+                # actually tracked. design.md: "A long-form tap for a
+                # missing session answers 'Session not found'."
+                await self._safe_answer(query, "Session not found")
+                return
+            await self._safe_answer(query, f"Killing {sess.label}...")
+            await self._kill_session_by_label(query, sess.label)
             return
 
         if action == "kill-confirm":
             sess = self.registry.get(session_name)
-            label = sess.label if sess else session_name.removeprefix("claude-")
-            await self._safe_answer(query, f"Killing {label}...")
-            await self._kill_session_by_label(query, label)
+            if sess is None:
+                await self._safe_answer(query, "Session not found")
+                return
+            await self._safe_answer(query, f"Killing {sess.label}...")
+            await self._kill_session_by_label(query, sess.label)
             return
 
         if action == "kill-cancel":
@@ -640,6 +673,20 @@ class CallbackDispatchMixin:
                     pass
                 return
 
+            if sess is None:
+                # A genuine /new conflict prompt always names a session
+                # that is (or was) in the registry — _send_new_conflict_prompt
+                # only fires for an `existing` session resolved via
+                # registry.find_by_label. A stale long-form tap for a
+                # name that is no longer tracked at all has nothing to
+                # switch to (new_resume) or kill-and-relaunch (new_replace);
+                # failing closed here is what stops new_replace from
+                # calling inject.launch_session for an arbitrary tapped
+                # name (the severe case design.md's success criteria and
+                # the "Old buttons" section both promise against).
+                await self._safe_answer(query, "Session not found")
+                return
+
             prompt = (pending or {}).get("prompt", "")
             skip_perms = (pending or {}).get("skip_perms", False)
 
@@ -806,7 +853,7 @@ class CallbackDispatchMixin:
 
                 # Rebuild keyboard with updated checkmarks
                 keyboard = self._build_inline_ask_keyboard(
-                    session_name, perm["options"],
+                    sess, perm["options"],
                     multi_select=True, selected=selected)
                 text = self._build_busy_text(sess.label, "Waiting", sess)
                 await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
@@ -898,7 +945,7 @@ class CallbackDispatchMixin:
                     }
                     await asyncio.sleep(0.3)
                     keyboard = self._build_inline_ask_keyboard(
-                        session_name, next_options,
+                        sess, next_options,
                         multi_select=next_multi)
                     text = self._build_busy_text(sess.label, "Waiting", sess)
                     await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
@@ -911,7 +958,7 @@ class CallbackDispatchMixin:
                         sess.busy_started_at += time.monotonic() - wait_start
                     sess.pending_permission = None
                     self.registry.transition(session_name, Status.BUSY)
-                    keyboard = self._build_stop_keyboard(session_name)
+                    keyboard = self._build_stop_keyboard(sess)
                     text = self._build_busy_text(sess.label, "Working", sess)
                     await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
                     self._start_animation(sess)
@@ -1040,7 +1087,7 @@ class CallbackDispatchMixin:
                     }
                     await asyncio.sleep(0.3)  # let TUI process and auto-advance
                     keyboard = self._build_inline_ask_keyboard(
-                        session_name, next_options,
+                        sess, next_options,
                         multi_select=next_multi)
                     text = self._build_busy_text(sess.label, "Waiting", sess)
                     await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
@@ -1060,7 +1107,7 @@ class CallbackDispatchMixin:
                     sess.pending_permission = None
                     # Transition back to BUSY and restart animation
                     self.registry.transition(session_name, Status.BUSY)
-                    keyboard = self._build_stop_keyboard(session_name)
+                    keyboard = self._build_stop_keyboard(sess)
                     text = self._build_busy_text(sess.label, "Working", sess)
                     await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
                     self._start_animation(sess)

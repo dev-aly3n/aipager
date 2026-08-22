@@ -82,6 +82,12 @@ def resolve_chat_id_int(sess) -> int | None:
     handled by the caller's own fallback) instead of raising a
     ``ValueError`` that aborts whatever's left of the caller — up to and
     including the rest of a turn's answer never being delivered.
+
+    Also the ``chat_id`` every session-scoped keyboard builder passes to
+    ``session_parity.session_cb`` (as ``resolve_chat_id_int(sess) or
+    0``) — see that function's docstring for why deriving it from
+    ``sess`` here, rather than from ``calling_chat_id(update)`` the way
+    :func:`resolve_short_cb` does at tap time, is safe.
     """
     raw = resolve_chat_id(sess)
     try:

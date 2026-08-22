@@ -38,6 +38,7 @@ from __future__ import annotations
 import html as html_mod
 import io
 import logging
+import re
 from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -133,6 +134,14 @@ def _register_pref_index(bot: "TelegramBot", chat_id: int, names) -> list[str]:
     return table
 
 
+# entrypoints.md's grammar: "<idx> — non-negative decimal integer, no
+# leading zeros". Matched strictly BEFORE parsing — int()'s own leniency
+# (it happily accepts leading/trailing whitespace, a leading "+", etc.,
+# e.g. int(" 0") == 0) would otherwise let a hand-crafted, non-canonical
+# token resolve as if it were a real rendered index.
+_STRICT_IDX_RE = re.compile(r"(?:0|[1-9][0-9]*)")
+
+
 def _resolve_pref_index(
     bot: "TelegramBot", chat_id: int, idx_token: str,
 ) -> TrackedSession | None:
@@ -141,10 +150,9 @@ def _resolve_pref_index(
     all three identically ("no longer available"), never distinguishing
     them to the user and never writing to a different session than the
     one that was actually shown."""
-    try:
-        idx = int(idx_token)
-    except (TypeError, ValueError):
+    if not isinstance(idx_token, str) or not _STRICT_IDX_RE.fullmatch(idx_token):
         return None
+    idx = int(idx_token)
     names = _pref_index_map(bot).get(chat_id) or []
     if idx < 0 or idx >= len(names):
         return None
@@ -833,9 +841,68 @@ def session_cb(bot: "TelegramBot", chat_id: int, sess: TrackedSession,
     Indices come from the same stable per-chat table the preferences
     picker uses, so a button keeps working for as long as its session
     exists and fails closed afterwards.
+
+    ``chat_id`` derivation asymmetry (review-1.md rev-iter1-003): every
+    caller of this function computes ``chat_id`` as
+    ``transport.resolve_chat_id_int(sess) or 0`` (the session's OWN
+    stamped ``scope_chat_id``, since a keyboard builder is only ever
+    handed ``sess`` — design.md rejected threading a new ``Update``
+    parameter through nine signatures). Resolution
+    (:func:`resolve_short_cb`, called from ``callbacks.py`` with the
+    REAL inbound Update) instead uses ``transport.calling_chat_id(update)
+    or 0`` — the chat the tap physically arrived from. These are two
+    different functions computing what must be the same per-chat table
+    key, and they are safe to differ only because they can never
+    disagree in the one case that would matter: a genuine tap always
+    arrives in the same chat the message (and therefore the button) was
+    sent to, so ``calling_chat_id(update)`` at tap time equals whatever
+    chat_id was live when this function registered the index at render
+    time. The only way the two derivations could diverge is
+    ``resolve_chat_id_int(sess)`` returning ``None`` -> ``0`` for an
+    unstamped session — but that is also the case where
+    ``bot.send_message(resolve_chat_id(sess), ...)`` would already fail
+    to deliver the message the button lives in, so the mismatched-bucket
+    case fails closed ("no longer available"), not open into another
+    chat's table. Keep it this way (don't quietly make them the same
+    function) unless you also thread a real ``Update``/chat id into
+    every builder call site — see design.md's own reasoning for why that
+    was rejected.
     """
     table = _register_pref_index(bot, chat_id, [sess.name])
     return f"_:sx:{table.index(sess.name)}:{verb}"
+
+
+def resolve_short_cb(
+    bot: "TelegramBot", chat_id: int, session_name: str, action: str,
+) -> tuple[str, str] | None:
+    """Resolve the indexed short form back to a real session, ONCE,
+    centrally — ``callbacks.py._handle_callback`` calls this
+    immediately after splitting ``cb_data``, before ``new_flow`` or
+    :func:`handle_callback` see the pair, so every downstream branch
+    (this module's own, and every ``callbacks.py`` branch below it)
+    keeps working on an already-resolved ``(session_name, verb)`` pair
+    exactly as it did before the short form existed.
+
+    - not the short form (anything except ``session_name == "_"`` with
+      ``action`` starting ``"sx:"``) → returns the pair UNCHANGED, so
+      every other namespace (the long form, ``_:spref``, ``_:nw:...``,
+      ``_:set...``, the ⋮-menu's own long-form verbs) passes through
+      untouched.
+    - short form, resolves → ``(resolved.name, verb)``.
+    - short form, stale/malformed (out-of-range index, session gone,
+      a truncated ``sx:`` token) → ``None``. The caller answers "That
+      session is no longer available" and stops — it must never fall
+      through to a stale or wrong session.
+    """
+    if session_name != "_" or not action.startswith("sx:"):
+        return session_name, action
+    parts = action.split(":", 2)
+    if len(parts) != 3:
+        return None
+    resolved = _resolve_pref_index(bot, chat_id, parts[1])
+    if resolved is None:
+        return None
+    return resolved.name, parts[2]
 
 
 async def handle_callback(
@@ -846,6 +913,16 @@ async def handle_callback(
     that case; ``False`` lets it fall through to its own existing
     branches (kill/stop/settings/etc.) or new_flow's wizard.
 
+    PRECONDITION: ``session_name``/``action`` have already been through
+    :func:`resolve_short_cb` by the time they reach here —
+    ``callbacks.py._handle_callback`` does that ONCE, centrally, right
+    after splitting ``cb_data`` and before either this function or
+    ``new_flow.handle_callback`` is consulted. This function no longer
+    decodes ``_:sx:<idx>:<verb>`` itself; a caller that skips the
+    central resolution and hands this function a raw short-form pair
+    will fall through to "Session not found" like any other unknown
+    name, not silently misbehave.
+
     Two disjoint families:
     - ``_:spref...`` (session_name == "_") — per-session preferences,
       dispatched to :func:`_handle_spref_callback`.
@@ -855,20 +932,6 @@ async def handle_callback(
 
     if session_name == "_" and action.startswith("spref"):
         return await _handle_spref_callback(bot, query, chat_id, action)
-
-    # Short index form, `_:sx:<idx>:<verb>` — what every button emits now.
-    # Resolved back to a real session here so everything below is
-    # identical whichever form arrived; the long `{name}:<verb>` form is
-    # still accepted so buttons sent before this change keep working.
-    if session_name == "_" and action.startswith("sx:"):
-        parts = action.split(":", 2)
-        if len(parts) != 3:
-            return False
-        resolved = _resolve_pref_index(bot, chat_id, parts[1])
-        if resolved is None:
-            await bot._safe_answer(query, "That session is no longer available")
-            return True
-        session_name, action = resolved.name, parts[2]
 
     # Sentinel namespaces are not sessions. `__voice__:restart` collides
     # with our own "restart" action verb, and claiming it broke the
@@ -917,7 +980,7 @@ async def handle_callback(
         await _edit(
             query, f"Resume <b>{html_mod.escape(sess.label)}</b> as:",
             bot._build_resume_mode_keyboard(
-                sess.name, sess.skip_perms, chat_id=chat_id),
+                sess, sess.skip_perms, chat_id=chat_id),
         )
         return True
 

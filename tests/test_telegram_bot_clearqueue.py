@@ -66,11 +66,17 @@ def test_clearqueue_singular_message(mk_bot, mk_update, run_async):
 # ----- /kill confirmation flow -----
 
 def test_kill_with_label_shows_confirmation(monkeypatch, mk_bot, mk_update, run_async):
+    """The Kill/Cancel buttons carry the short indexed form, not
+    `{name}:<verb>` — no `{name}:<verb>` form can fit Telegram's 64-byte
+    callback_data cap (design.md), so what must hold is the DESTINATION
+    (which session a button reaches), not the literal encoded string."""
+    from aipager.bot import session_parity
+
     registry = SessionRegistry()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
     registry._sessions["claude-jim"] = sess
     bot = mk_bot(registry)
-    update = mk_update("/kill jim")
+    update = mk_update("/kill jim")  # default chat_id=-1001
     run_async(bot._handle_kill_cmd(update, MagicMock()))
     update.message.reply_text.assert_awaited_once()
     call = update.message.reply_text.await_args
@@ -81,9 +87,14 @@ def test_kill_with_label_shows_confirmation(monkeypatch, mk_bot, mk_update, run_
     assert keyboard is not None
     # Inspect the inline keyboard buttons
     buttons = keyboard.inline_keyboard[0]
-    cb_data = [b.callback_data for b in buttons]
-    assert "claude-jim:kill-confirm" in cb_data
-    assert "claude-jim:kill-cancel" in cb_data
+    dests = []
+    for b in buttons:
+        _sentinel, kind, idx, verb = b.callback_data.split(":", 3)
+        assert (_sentinel, kind) == ("_", "sx"), f"unexpected callback form: {b.callback_data!r}"
+        resolved = session_parity._resolve_pref_index(bot, -1001, idx)
+        dests.append((resolved.name if resolved is not None else None, verb))
+    assert (sess.name, "kill-confirm") in dests
+    assert (sess.name, "kill-cancel") in dests
 
 
 def test_kill_unknown_session_friendly_error(monkeypatch, mk_bot, mk_update, run_async):

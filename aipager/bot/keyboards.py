@@ -56,10 +56,11 @@ from aipager.bot.transport import (  # noqa: F401
     _send_with_retry,
     _TRUNC_SUFFIX,
     _truncate_diff,
+    resolve_chat_id_int,
 )
 
 if TYPE_CHECKING:
-    pass
+    from aipager.state import TrackedSession
 
 log = logging.getLogger(__name__)
 
@@ -202,7 +203,7 @@ class KeyboardMixin:
             else:
                 log.warning("Failed to send keyboard", exc_info=True)
 
-    def _build_ask_keyboard(self, session_name: str, label: str,
+    def _build_ask_keyboard(self, sess: TrackedSession, label: str,
                             tool_input: dict) -> tuple[str, InlineKeyboardMarkup | None]:
         """Build message and buttons for AskUserQuestion."""
         questions = tool_input.get("questions", [])
@@ -224,16 +225,24 @@ class KeyboardMixin:
             if desc:
                 text += f" — {html_mod.escape(desc[:60])}"
 
+        # Local import, not top-level — avoids an import cycle with
+        # session_parity (which itself imports from this package).
+        # Mirrors the precedent below at _build_resume_mode_keyboard;
+        # do not "tidy" this into a module-level import.
+        from aipager.bot import session_parity
+
+        chat_id = resolve_chat_id_int(sess) or 0
         buttons = []
         for i, opt in enumerate(options[:4]):
             opt_label = opt.get("label", f"Option {i+1}")
             buttons.append(InlineKeyboardButton(
-                opt_label, callback_data=f"{session_name}:opt{i}",
+                opt_label,
+                callback_data=session_parity.session_cb(self, chat_id, sess, f"opt{i}"),
             ))
 
         return text, InlineKeyboardMarkup([buttons])
 
-    def _build_selector_keyboard(self, session_name: str, label: str,
+    def _build_selector_keyboard(self, sess: TrackedSession, label: str,
                                   question: str,
                                   options: list[tuple[int, str]]) -> tuple[str, InlineKeyboardMarkup | None]:
         """Build message and buttons from pane-scraped selector."""
@@ -245,119 +254,155 @@ class KeyboardMixin:
         for num, opt_label in options:
             text += f"\n  {num}. {html_mod.escape(opt_label)}"
 
+        # Local import — see the precedent + rationale at
+        # _build_resume_mode_keyboard below; do not hoist to module top.
+        from aipager.bot import session_parity
+
+        chat_id = resolve_chat_id_int(sess) or 0
         buttons = []
         for num, opt_label in options[:4]:
             buttons.append(InlineKeyboardButton(
-                opt_label[:20], callback_data=f"{session_name}:opt{num - 1}",
+                opt_label[:20],
+                callback_data=session_parity.session_cb(self, chat_id, sess, f"opt{num - 1}"),
             ))
 
         keyboard = InlineKeyboardMarkup([buttons]) if buttons else None
         return text, keyboard
 
-    def _build_stop_keyboard(self, session_name: str) -> InlineKeyboardMarkup:
+    def _build_stop_keyboard(self, sess: TrackedSession) -> InlineKeyboardMarkup:
+        # Local import — see the precedent + rationale at
+        # _build_resume_mode_keyboard below; do not hoist to module top.
+        from aipager.bot import session_parity
+
+        chat_id = resolve_chat_id_int(sess) or 0
         return InlineKeyboardMarkup([[
-            InlineKeyboardButton("Stop", callback_data=f"{session_name}:stop"),
+            InlineKeyboardButton(
+                "Stop", callback_data=session_parity.session_cb(self, chat_id, sess, "stop")),
         ]])
 
-    def _build_retry_keyboard(self, session_name: str) -> InlineKeyboardMarkup:
+    def _build_retry_keyboard(self, sess: TrackedSession) -> InlineKeyboardMarkup:
+        # Local import — see the precedent + rationale at
+        # _build_resume_mode_keyboard below; do not hoist to module top.
+        from aipager.bot import session_parity
+
+        chat_id = resolve_chat_id_int(sess) or 0
         return InlineKeyboardMarkup([[
-            InlineKeyboardButton("🔄 Retry", callback_data=f"{session_name}:retry"),
+            InlineKeyboardButton(
+                "🔄 Retry", callback_data=session_parity.session_cb(self, chat_id, sess, "retry")),
         ]])
 
-    def _build_compact_keyboard(self, session_name: str) -> InlineKeyboardMarkup:
+    def _build_compact_keyboard(self, sess: TrackedSession) -> InlineKeyboardMarkup:
+        # Local import — see the precedent + rationale at
+        # _build_resume_mode_keyboard below; do not hoist to module top.
+        from aipager.bot import session_parity
+
+        chat_id = resolve_chat_id_int(sess) or 0
         return InlineKeyboardMarkup([[
-            InlineKeyboardButton("📦 Compact Now", callback_data=f"{session_name}:compact"),
+            InlineKeyboardButton(
+                "📦 Compact Now",
+                callback_data=session_parity.session_cb(self, chat_id, sess, "compact")),
         ]])
 
-    def _build_permission_keyboard(self, session_name: str) -> InlineKeyboardMarkup:
+    def _build_permission_keyboard(self, sess: TrackedSession) -> InlineKeyboardMarkup:
         """Permission buttons + Allow always + Stop for inline permission.
 
         2×2 grid: row 0 = Allow / Deny, row 1 = Allow always / Stop.
         """
+        # Local import — see the precedent + rationale at
+        # _build_resume_mode_keyboard below; do not hoist to module top.
+        from aipager.bot import session_parity
+
+        chat_id = resolve_chat_id_int(sess) or 0
         return InlineKeyboardMarkup([
-            [InlineKeyboardButton("✅ Allow", callback_data=f"{session_name}:allow"),
-             InlineKeyboardButton("❌ Deny", callback_data=f"{session_name}:deny")],
-            [InlineKeyboardButton("🟢 Allow always",
-                                  callback_data=f"{session_name}:allow_always"),
-             InlineKeyboardButton("⏹ Stop", callback_data=f"{session_name}:stop")],
+            [InlineKeyboardButton(
+                "✅ Allow", callback_data=session_parity.session_cb(self, chat_id, sess, "allow")),
+             InlineKeyboardButton(
+                "❌ Deny", callback_data=session_parity.session_cb(self, chat_id, sess, "deny"))],
+            [InlineKeyboardButton(
+                "🟢 Allow always",
+                callback_data=session_parity.session_cb(self, chat_id, sess, "allow_always")),
+             InlineKeyboardButton(
+                "⏹ Stop", callback_data=session_parity.session_cb(self, chat_id, sess, "stop"))],
         ])
 
-    @staticmethod
-    def _make_cb(session_name: str, action: str) -> str:
-        """Build a callback_data string within Telegram's 64-byte limit.
-
-        Realistic session names are well under 20 chars, so max callback_data
-        is ~61 bytes (43-char name + ':' + 'perms_stop_switch' = 61). An
-        assertion fires early at keyboard-construction time — before any
-        Telegram API call — so the operator sees a clear error with the
-        offending name rather than silent misbehavior at dispatch time.
-        """
-        raw = f"{session_name}:{action}"
-        assert len(raw.encode()) <= 64, (
-            f"callback_data overflow ({len(raw.encode())} bytes): {raw!r}"
-        )
-        return raw
-
     def _build_perms_confirm_keyboard(
-        self, session_name: str,
+        self, sess: TrackedSession,
     ) -> InlineKeyboardMarkup:
         """Confirmation keyboard for /perms IDLE Ask→Auto switch."""
+        # Local import — see the precedent + rationale at
+        # _build_resume_mode_keyboard below; do not hoist to module top.
+        from aipager.bot import session_parity
+
+        chat_id = resolve_chat_id_int(sess) or 0
         return InlineKeyboardMarkup([
             [InlineKeyboardButton(
                 "✅ Yes, switch",
-                callback_data=self._make_cb(session_name, "perms_confirm")),
+                callback_data=session_parity.session_cb(self, chat_id, sess, "perms_confirm")),
              InlineKeyboardButton(
                 "↩️ Cancel",
-                callback_data=self._make_cb(session_name, "perms_cancel"))],
+                callback_data=session_parity.session_cb(self, chat_id, sess, "perms_cancel"))],
         ])
 
     def _build_perms_busy_keyboard(
-        self, session_name: str,
+        self, sess: TrackedSession,
     ) -> InlineKeyboardMarkup:
         """Keyboard for /perms on a BUSY session."""
+        # Local import — see the precedent + rationale at
+        # _build_resume_mode_keyboard below; do not hoist to module top.
+        from aipager.bot import session_parity
+
+        chat_id = resolve_chat_id_int(sess) or 0
         return InlineKeyboardMarkup([
             [InlineKeyboardButton(
                 "🛑 Stop task & switch",
-                callback_data=self._make_cb(session_name, "perms_stop_switch")),
+                callback_data=session_parity.session_cb(self, chat_id, sess, "perms_stop_switch")),
              InlineKeyboardButton(
                 "⏳ Not now",
-                callback_data=self._make_cb(session_name, "perms_wait"))],
+                callback_data=session_parity.session_cb(self, chat_id, sess, "perms_wait"))],
         ])
 
     def _build_resume_mode_keyboard(
-        self, session_name: str, persisted_skip_perms: bool,
+        self, sess: TrackedSession, persisted_skip_perms: bool,
         *, chat_id: int = 0,
     ) -> InlineKeyboardMarkup:
         """Mode-picker keyboard shown after a session is chosen to resume.
 
-        Callbacks carry the short per-chat index, not the session name.
-        ``_make_cb`` embeds the name and ASSERTS on overflow, and
-        ``{name}:resume_mode_cancel`` measures 83 bytes for a
-        maximum-length name — so this keyboard used to raise rather than
-        render for exactly the sessions the 64-byte work was about.
+        Callbacks carry the short per-chat index, not the session name:
+        ``{name}:resume_mode_cancel`` measured 83 bytes for a
+        maximum-length name — past Telegram's 64-byte cap, which used to
+        make this keyboard un-renderable for exactly the sessions the
+        64-byte work was about. The caller (session_parity.handle_callback,
+        currently the only production caller) already resolves the
+        session before calling this, so there is no "unknown session"
+        case left to fall back for.
+
+        Local import, not top-level: session_parity imports from this
+        package (settings_menu → keyboards' own module tree), so a
+        module-level ``import session_parity`` here risks a cycle that
+        is not exercised by today's import order but would be the
+        moment some other module's import graph shifts. Every other
+        builder in this class that needs session_parity mirrors this
+        same local-import shape — this is the original precedent the
+        comments above point back to.
         """
         from aipager.bot import session_parity
 
-        sess = self.registry.get(session_name)
         ask_label = "💬 Ask" + (" (default)" if not persisted_skip_perms else "")
         auto_label = "🤖 Auto" + (" (default)" if persisted_skip_perms else "")
 
-        def cb(verb: str) -> str:
-            # The fallback is defensive only: the sole caller resolves the
-            # session first and passes its own `sess.name`, so `sess is
-            # None` is not reachable from production today. Kept because
-            # it fails safe, not because anything relies on it.
-            if sess is None:                    # unknown session: legacy form
-                return self._make_cb(session_name, f"resume_mode_{verb}")
-            return session_parity.session_cb(self, chat_id, sess, f"resume-{verb}")
-
         return InlineKeyboardMarkup([
-            [InlineKeyboardButton(ask_label, callback_data=cb("ask")),
-             InlineKeyboardButton(auto_label, callback_data=cb("auto"))],
-            [InlineKeyboardButton("↩️ Cancel", callback_data=cb("cancel"))],
+            [InlineKeyboardButton(
+                ask_label,
+                callback_data=session_parity.session_cb(self, chat_id, sess, "resume-ask")),
+             InlineKeyboardButton(
+                auto_label,
+                callback_data=session_parity.session_cb(self, chat_id, sess, "resume-auto"))],
+            [InlineKeyboardButton(
+                "↩️ Cancel",
+                callback_data=session_parity.session_cb(self, chat_id, sess, "resume-cancel"))],
         ])
 
-    def _build_inline_ask_keyboard(self, session_name: str, options: list,
+    def _build_inline_ask_keyboard(self, sess: TrackedSession, options: list,
                                     multi_select: bool = False,
                                     selected: set | None = None) -> InlineKeyboardMarkup:
         """AskUserQuestion option buttons + Stop for inline display.
@@ -365,6 +410,11 @@ class KeyboardMixin:
         For multi_select: each option on its own row with ☑/⬜ prefix,
         plus a "✅ Submit" button row at the bottom.
         """
+        # Local import — see the precedent + rationale at
+        # _build_resume_mode_keyboard above; do not hoist to module top.
+        from aipager.bot import session_parity
+
+        chat_id = resolve_chat_id_int(sess) or 0
         sel = selected or set()
         rows = []
         if multi_select:
@@ -373,17 +423,20 @@ class KeyboardMixin:
                 prefix = "☑" if i in sel else "⬜"
                 rows.append([InlineKeyboardButton(
                     f"{prefix} {label}",
-                    callback_data=f"{session_name}:opt{i}")])
+                    callback_data=session_parity.session_cb(self, chat_id, sess, f"opt{i}"))])
             rows.append([InlineKeyboardButton(
-                "✅ Submit", callback_data=f"{session_name}:submit")])
+                "✅ Submit",
+                callback_data=session_parity.session_cb(self, chat_id, sess, "submit"))])
         else:
             buttons = []
             for i, opt in enumerate(options[:4]):
                 opt_label = opt.get("label", f"Option {i+1}")
                 buttons.append(InlineKeyboardButton(
-                    opt_label, callback_data=f"{session_name}:opt{i}",
+                    opt_label,
+                    callback_data=session_parity.session_cb(self, chat_id, sess, f"opt{i}"),
                 ))
             if buttons:
                 rows.append(buttons)
-        rows.append([InlineKeyboardButton("⏹ Stop", callback_data=f"{session_name}:stop")])
+        rows.append([InlineKeyboardButton(
+            "⏹ Stop", callback_data=session_parity.session_cb(self, chat_id, sess, "stop"))])
         return InlineKeyboardMarkup(rows)

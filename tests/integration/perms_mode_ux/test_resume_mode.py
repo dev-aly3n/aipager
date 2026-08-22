@@ -10,8 +10,6 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from aipager.state import SessionRegistry, Status, TrackedSession
 
 
@@ -237,25 +235,34 @@ def test_telegram_resume_mode_cancel_edits_to_cancelled():
 
 
 # --------------------------------------------------------------------------- #
-# Boundary: 30-char session label — callback_data must stay within 64 bytes  #
+# Boundary: a maximum-length session name — callback_data must stay          #
+# within 64 bytes. `_make_cb` (the old assert-on-overflow builder) is gone   #
+# entirely (design.md) — nothing can overflow after the switch to           #
+# `session_cb`'s indexed form, so there is no overflow case left to assert. #
 # --------------------------------------------------------------------------- #
 
-def test_callback_data_within_64_bytes_for_long_label():
-    """Callback data for a session with a 20-char label must stay ≤ 64 bytes."""
+def test_make_cb_no_longer_exists():
+    """entrypoints.md: `_make_cb` is deleted by this ship. A
+    missing-attribute test is the contract — not an `AssertionError`
+    from calling it."""
     bot = _make_bot()
-    # 20-char label is the stated maximum
-    twenty_char_name = "claude-" + "x" * 13  # "claude-" (7) + 13 = 20 chars label portion
-    cb = bot._make_cb(twenty_char_name, "perms_stop_switch")
-    assert len(cb.encode("utf-8")) <= 64, (
-        f"Callback data must be ≤ 64 bytes; got {len(cb.encode())} bytes: {cb!r}"
-    )
+    assert not hasattr(bot, "_make_cb")
 
 
-def test_callback_data_overflow_raises_assertion():
-    """_make_cb raises AssertionError (not silent truncation) when the
-    callback_data would exceed 64 bytes. This gives a clear operator error
-    rather than a silent broken dispatch lookup."""
+def test_perms_stop_switch_stays_within_64_bytes_for_a_maximum_length_name():
+    """`perms_stop_switch` is the tightest verb in the codebase — it used
+    to break at a 28-character label (spec.md's SECOND CORRECTION). A
+    64-byte internal name (`inject.launch_session`'s own cap) must still
+    produce a callback_data that fits, however large the per-chat index
+    gets."""
     bot = _make_bot()
-    very_long = "claude-" + "x" * 60
-    with pytest.raises(AssertionError, match="callback_data overflow"):
-        bot._make_cb(very_long, "perms_stop_switch")
+    max_name = "claude-" + "x" * 45 + "__d256113222"  # 64 bytes, per spec.md
+    assert len(max_name.encode()) == 64
+    sess = TrackedSession(name=max_name, label="x" * 45, status=Status.BUSY)
+    bot.registry._sessions[sess.name] = sess
+
+    kb = bot._build_perms_busy_keyboard(sess)
+    cbs = [btn.callback_data for row in kb.inline_keyboard for btn in row]
+    assert any(cb.endswith(":perms_stop_switch") for cb in cbs), cbs
+    for cb in cbs:
+        assert len(cb.encode()) <= 64, cb

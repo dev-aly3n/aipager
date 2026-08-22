@@ -660,8 +660,12 @@ class CommandHandlersMixin:
             if not alive:
                 await update.message.reply_text("No sessions to kill.")
                 return
+            kill_chat_id = calling_chat_id(update) or 0
             buttons = [
-                [InlineKeyboardButton(f"💀 {sess.label}", callback_data=f"{sess.name}:kill")]
+                [InlineKeyboardButton(
+                    f"💀 {sess.label}",
+                    callback_data=session_parity.session_cb(
+                        self, kill_chat_id, sess, "kill"))]
                 for sess in alive
             ]
             await update.message.reply_text(
@@ -675,17 +679,21 @@ class CommandHandlersMixin:
         # destroying immediately. One mistype on a phone shouldn't wipe a
         # session; the user explicitly confirms here.
         sess = self.registry.find_by_label(target_label, calling_chat_id(update))
-        target_name = sess.name if sess is not None else None
-        if target_name is None:
+        if sess is None:
             await update.message.reply_text(
                 f"⚠️ Unknown or already-gone session: {target_label}",
             )
             return
+        confirm_chat_id = calling_chat_id(update) or 0
         keyboard = InlineKeyboardMarkup([[
             InlineKeyboardButton(
-                "💀 Kill", callback_data=f"{target_name}:kill-confirm"),
+                "💀 Kill",
+                callback_data=session_parity.session_cb(
+                    self, confirm_chat_id, sess, "kill-confirm")),
             InlineKeyboardButton(
-                "Cancel", callback_data=f"{target_name}:kill-cancel"),
+                "Cancel",
+                callback_data=session_parity.session_cb(
+                    self, confirm_chat_id, sess, "kill-cancel")),
         ]])
         await update.message.reply_text(
             f"⚠️ Kill session [<b>{html_mod.escape(target_label)}</b>]? "
@@ -875,16 +883,23 @@ class CommandHandlersMixin:
             header += "What would you like to do?"
             resume_label = "♻️ Resume"
 
+        conflict_chat_id = calling_chat_id(update) or 0
         keyboard = InlineKeyboardMarkup([
             [
-                InlineKeyboardButton(resume_label,
-                                     callback_data=f"{existing.name}:new_resume"),
-                InlineKeyboardButton("🆕 Replace (fresh)",
-                                     callback_data=f"{existing.name}:new_replace"),
+                InlineKeyboardButton(
+                    resume_label,
+                    callback_data=session_parity.session_cb(
+                        self, conflict_chat_id, existing, "new_resume")),
+                InlineKeyboardButton(
+                    "🆕 Replace (fresh)",
+                    callback_data=session_parity.session_cb(
+                        self, conflict_chat_id, existing, "new_replace")),
             ],
             [
-                InlineKeyboardButton("↩️ Cancel",
-                                     callback_data=f"{existing.name}:new_cancel"),
+                InlineKeyboardButton(
+                    "↩️ Cancel",
+                    callback_data=session_parity.session_cb(
+                        self, conflict_chat_id, existing, "new_cancel")),
             ],
         ])
         await update.message.reply_text(
@@ -960,7 +975,7 @@ class CommandHandlersMixin:
 
         if sess.status == Status.BUSY:
             # BUSY flow: show Stop & switch / Not now keyboard.
-            kb = self._build_perms_busy_keyboard(sess.name)
+            kb = self._build_perms_busy_keyboard(sess)
             mode_label = "Auto" if target_skip_perms else "Ask"
             sent = await update.message.reply_text(
                 f"⚙️ <b>{html_mod.escape(sess.label)}</b> is busy.\n"
@@ -978,7 +993,7 @@ class CommandHandlersMixin:
         # IDLE flow.
         if target_skip_perms:
             # Ask→Auto: require confirmation.
-            kb = self._build_perms_confirm_keyboard(sess.name)
+            kb = self._build_perms_confirm_keyboard(sess)
             sent = await update.message.reply_text(
                 f"⚙️ Switch <b>{html_mod.escape(sess.label)}</b> to "
                 f"🤖 Auto mode?\n"
@@ -1196,7 +1211,9 @@ class CommandHandlersMixin:
             await update.message.reply_text(
                 f"⚠️ Session '{sess.name}' not found",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(
-                    "🔁 Resume", callback_data=f"{sess.name}:resume")]]),
+                    "🔁 Resume",
+                    callback_data=session_parity.session_cb(
+                        self, chat_id or 0, sess, "resume"))]]),
             )
             return
 
@@ -1366,7 +1383,9 @@ class CommandHandlersMixin:
             await update.message.reply_text(
                 f"⚠️ Session '{sess.name}' not found",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(
-                    "🔁 Resume", callback_data=f"{sess.name}:resume")]]),
+                    "🔁 Resume",
+                    callback_data=session_parity.session_cb(
+                        self, chat_id or 0, sess, "resume"))]]),
             )
             return
 
@@ -1484,7 +1503,9 @@ class CommandHandlersMixin:
             await msg.reply_text(
                 f"⚠️ Session '{sess.name}' not found",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(
-                    "🔁 Resume", callback_data=f"{sess.name}:resume")]]),
+                    "🔁 Resume",
+                    callback_data=session_parity.session_cb(
+                        self, chat_id or 0, sess, "resume"))]]),
             )
             return
 

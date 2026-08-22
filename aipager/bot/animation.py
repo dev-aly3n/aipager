@@ -454,7 +454,7 @@ class AnimationMixin:
             msg = await self._app.bot.send_message(
                 resolve_chat_id(sess), text, parse_mode="HTML",
                 reply_to_message_id=sess.trigger_msg_id,
-                reply_markup=self._build_stop_keyboard(sess.name),
+                reply_markup=self._build_stop_keyboard(sess),
             )
             return msg.message_id
         except Exception:
@@ -612,7 +612,7 @@ class AnimationMixin:
             # Omitting reply_markup on editMessageText clears the keyboard,
             # which is how the Stop button comes off the finished card.
             reply_markup = (
-                None if final else self._build_stop_keyboard(sess.name).to_dict()
+                None if final else self._build_stop_keyboard(sess).to_dict()
             )
             try:
                 result = await edit_message_text_rich(
