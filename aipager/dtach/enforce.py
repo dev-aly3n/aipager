@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Iterator
 
 from aipager import safety
-from aipager.policy_snapshot import read_snapshot
+from aipager.policy_snapshot import FLOOR_SNAPSHOT, read_snapshot
 
 # Marker our deny reasons carry (see deny_decision_json). Once it appears
 # in a tool_result this turn, every later tool call is sticky-blocked.
@@ -101,14 +101,24 @@ def _is_tool_result(entry: dict) -> bool:
 
 
 def _origin_from_transcript(path: str | None) -> str:
-    """`"telegram"` if the governing user prompt carries the marker, else
-    `"terminal"`. Fail-closed to `"telegram"` when unreadable.
+    """`"telegram"` if the governing user prompt carries the marker on
+    ANY line of its (possibly multi-block) text, else `"terminal"`.
+    Fail-closed to `"telegram"` when unreadable.
 
     Streams the transcript from EOF backwards and short-circuits on the
     last genuine user *prompt* — tool-result entries (also
     ``type:"user"``) are skipped. Without that skip, every tool call
     after the first in a turn would see a marker-less tool_result as the
     "last user message" and be misread as terminal → a safety bypass.
+
+    Checking every line (not just the first) matters once Claude can
+    batch several queued Telegram messages into one prompt (design.md
+    "queue handoff"): the marker line ``_inject_prompt`` prepends is only
+    guaranteed to be the first line of THAT message's own text, which
+    can land anywhere in the concatenated ``_user_text`` once several
+    messages' bodies are joined — checking only line 1 would misread a
+    Telegram-originated batch as terminal (a safety bypass) whenever the
+    marker isn't in the very first block.
     """
     if not path:
         return "telegram"
@@ -126,8 +136,12 @@ def _origin_from_transcript(path: str | None) -> str:
             if _is_tool_result(entry):
                 continue  # tool-results are type:"user" but aren't prompts
             text = _user_text(entry)
-            first = text.split("\n", 1)[0].lstrip() if text else ""
-            return "telegram" if first.startswith("[via Telegram") else "terminal"
+            if not text:
+                return "terminal"
+            for block_line in text.split("\n"):
+                if block_line.lstrip().startswith("[via Telegram"):
+                    return "telegram"
+            return "terminal"
     except OSError:
         return "telegram"
     return "telegram"
@@ -166,17 +180,31 @@ def _turn_already_blocked(path: str | None) -> bool:
 
 
 def _user_text(entry: dict) -> str:
-    """Extract the user message text from a transcript entry."""
+    """Extract the user message text from a transcript entry.
+
+    Concatenates EVERY text block, not just the first. When Claude
+    batches several queued messages into one prompt (design.md "queue
+    handoff" — the actual batching format is a confirmed unknown, see
+    intent.md), the resulting ``content`` can carry multiple text blocks
+    — one per original message — rather than a single one. Returning
+    only the first would silently drop the marker line whenever it
+    isn't in that first block, misreading a Telegram-originated turn as
+    terminal (a safety bypass). Blocks are joined with ``"\\n"`` so
+    ``_origin_from_transcript``'s per-line scan still finds a marker
+    that started a block, wherever in the batch it landed.
+    """
     msg = entry.get("message", entry)
     content = msg.get("content", "")
     if isinstance(content, str):
         return content
     if isinstance(content, list):
+        parts = []
         for block in content:
             if isinstance(block, dict) and block.get("type") == "text":
-                return block.get("text", "")
-            if isinstance(block, str):
-                return block
+                parts.append(block.get("text", ""))
+            elif isinstance(block, str):
+                parts.append(block)
+        return "\n".join(parts)
     return ""
 
 
@@ -195,14 +223,9 @@ def decide(data: dict) -> dict | None:
     snap = read_snapshot(session)
     if snap is None:
         # Fail-closed: no snapshot → apply the built-in floor, no bypass.
-        snap = {
-            "bypass_safety": False,
-            "deny_tools": [],
-            "allow_tools": [],
-            "deny_paths_no_access": list(safety.DENY_PATHS_NO_ACCESS),
-            "deny_paths_no_write": list(safety.DENY_PATHS_NO_WRITE),
-            "deny_bash_patterns": list(safety.DENY_BASH_PATTERNS),
-        }
+        # Same object policy_snapshot.merge_snapshots([]) returns for the
+        # "no outstanding notes" case — one constant, two fallback sites.
+        snap = dict(FLOOR_SNAPSHOT)
     if snap.get("bypass_safety"):
         return None  # owner
 
