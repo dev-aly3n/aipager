@@ -63,6 +63,38 @@ def test_clearqueue_singular_message(mk_bot, mk_update, run_async):
     assert "Cleared 1 queued message " in msg  # singular, no trailing "s"
 
 
+def test_clearqueue_also_clears_outstanding_notes_combined_count(
+    mk_bot, mk_update, run_async, monkeypatch,
+):
+    """design.md "queue handoff": /clearqueue's count includes what
+    Claude itself is holding, not just aipager's own pending_queue —
+    the same combined-count primitive Stop uses."""
+    from aipager import policy_snapshot as ps
+
+    registry = SessionRegistry()
+    sess = TrackedSession(name="claude-jim", label="jim")
+    sess.queue_prompt("a", 100)
+    registry._sessions["claude-jim"] = sess
+    registry.last_active_session = "claude-jim"
+    ps.write_note("claude-jim", None, None, None, msg_id=9, chat_id=1,
+                  sender_key=(1, 1), body="note text", raw_text="note text")
+    bot = mk_bot(registry)
+    keys = []
+    async def _send_keys(name, k):
+        keys.append(k)
+        return True
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", _send_keys)
+
+    update = mk_update("/clearqueue")
+    run_async(bot._handle_clearqueue_cmd(update, MagicMock()))
+
+    msg = update.message.reply_text.await_args.args[0]
+    assert "Cleared 2" in msg  # 1 queued + 1 note
+    assert sess.pending_queue == []
+    assert ps.list_outstanding_notes("claude-jim") == []
+    assert keys == ["Escape", "KillLine"]  # never a second/interrupt Escape
+
+
 # ----- /kill confirmation flow -----
 
 def test_kill_with_label_shows_confirmation(monkeypatch, mk_bot, mk_update, run_async):

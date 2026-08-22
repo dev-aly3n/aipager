@@ -22,6 +22,8 @@ import pytest
 from aipager import policy_snapshot as ps
 from aipager.state import Status, TrackedSession
 
+from .conftest import latest_note_reply_context
+
 CHAT_ID = -1001
 BOT_ID = 87654321
 
@@ -75,9 +77,9 @@ def test_plain_message_immediately_after_a_reply_clears_stale_reply_context(
     turn1.message.reply_to_message = _reply_target(message_id=1, text="the old thing")
     run_async(bot._handle_message(turn1, _ctx()))
 
-    snap1 = ps.read_snapshot(sess.name)
-    assert snap1 is not None
-    assert snap1["reply_context"] != "", "precondition failed: turn 1 produced no pointer"
+    ctx1 = latest_note_reply_context(sess.name)
+    assert ctx1 is not None
+    assert ctx1 != "", "precondition failed: turn 1 produced no pointer"
 
     # Simulate the turn completing (the daemon transitions the session
     # back to IDLE once Claude finishes and is ready for the next prompt).
@@ -88,9 +90,9 @@ def test_plain_message_immediately_after_a_reply_clears_stale_reply_context(
     assert turn2.message.reply_to_message is None
     run_async(bot._handle_message(turn2, _ctx()))
 
-    snap2 = ps.read_snapshot(sess.name)
-    assert snap2 is not None
-    assert snap2["reply_context"] == "", (
+    ctx2 = latest_note_reply_context(sess.name)
+    assert ctx2 is not None
+    assert ctx2 == "", (
         "a plain message immediately after a reply left a stale "
         "reply_context in the snapshot -- Claude would keep believing "
         "the user is pointing at the old message on this and every "
@@ -117,13 +119,14 @@ def test_staleness_guard_holds_across_repeated_reply_then_plain_cycles(
                                  message_id=3000 + cycle * 2)
         reply_update.message.reply_to_message = _reply_target(message_id=1, text="old")
         run_async(bot._handle_message(reply_update, _ctx()))
-        assert ps.read_snapshot(sess.name)["reply_context"] != "", f"cycle {cycle} setup failed"
+        assert latest_note_reply_context(sess.name) != "", (
+            f"cycle {cycle} setup failed")
         sess.status = Status.IDLE
 
         plain_update = mk_update(f"cycle {cycle} plain", chat_id=CHAT_ID,
                                  message_id=3001 + cycle * 2)
         run_async(bot._handle_message(plain_update, _ctx()))
-        assert ps.read_snapshot(sess.name)["reply_context"] == "", (
+        assert latest_note_reply_context(sess.name) == "", (
             f"cycle {cycle}: stale reply_context survived a plain message"
         )
         sess.status = Status.IDLE

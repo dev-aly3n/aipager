@@ -32,18 +32,36 @@ def _isolate_snapshot_path(monkeypatch, tmp_path):
     return policy_snapshot
 
 
+def _seed_matching_note(policy_snapshot, session, body, *, style_text="",
+                        reply_context=""):
+    """Write a per-message note whose ``body`` a submitted prompt of the
+    same text will match (queue handoff) — the canonical snapshot this
+    hook reads is now populated by ITS OWN pick-up match, not by a
+    pre-written file, so seeding a note (and echoing its text back as
+    the submitted prompt) is what stands in for the old direct
+    ``write_snapshot`` seed."""
+    policy_snapshot.write_note(
+        session, None, None, None,
+        msg_id=1, chat_id=1, sender_key=(1, 1),
+        body=body, raw_text=body,
+        style_text=style_text, reply_context=reply_context,
+    )
+
+
 # ---- stdout is strictly the JSON envelope, nothing else --------------------
 
 def test_stdout_is_exactly_one_json_line_no_extra_output(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(notify_hook, "SOCKET_PATH", str(tmp_path / "nope.sock"))
     policy_snapshot = _isolate_snapshot_path(monkeypatch, tmp_path)
-    policy_snapshot.write_snapshot("claude-oneline", None, None, None,
-                                   style_text="Apply this reply-style guidance"
-                                              " to your next answer; do not"
-                                              " mention or quote it:\n"
-                                              "- Keep the answer short —"
-                                              " a few sentences.")
-    _set_stdin(monkeypatch, '{"hook_event_name":"UserPromptSubmit"}')
+    _seed_matching_note(
+        policy_snapshot, "claude-oneline", "do the thing",
+        style_text="Apply this reply-style guidance"
+                   " to your next answer; do not"
+                   " mention or quote it:\n"
+                   "- Keep the answer short —"
+                   " a few sentences.")
+    _set_stdin(monkeypatch,
+              '{"hook_event_name":"UserPromptSubmit","prompt":"do the thing"}')
     monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-oneline")
     notify_hook.main()
     out = capsys.readouterr().out
@@ -99,8 +117,10 @@ def test_style_text_with_quotes_and_backslashes_produces_valid_json(monkeypatch,
     monkeypatch.setattr(notify_hook, "SOCKET_PATH", str(tmp_path / "nope.sock"))
     policy_snapshot = _isolate_snapshot_path(monkeypatch, tmp_path)
     tricky = 'Use "quotes" and a backslash \\ and a newline\ncorrectly.'
-    policy_snapshot.write_snapshot("claude-tricky", None, None, None, style_text=tricky)
-    _set_stdin(monkeypatch, '{"hook_event_name":"UserPromptSubmit"}')
+    _seed_matching_note(policy_snapshot, "claude-tricky", "do the thing",
+                        style_text=tricky)
+    _set_stdin(monkeypatch,
+              '{"hook_event_name":"UserPromptSubmit","prompt":"do the thing"}')
     monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-tricky")
     notify_hook.main()
     out = capsys.readouterr().out.strip()
@@ -113,16 +133,18 @@ def test_style_text_with_quotes_and_backslashes_produces_valid_json(monkeypatch,
 def test_two_sessions_do_not_leak_style_text_into_each_other(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(notify_hook, "SOCKET_PATH", str(tmp_path / "nope.sock"))
     policy_snapshot = _isolate_snapshot_path(monkeypatch, tmp_path)
-    policy_snapshot.write_snapshot("claude-a", None, None, None,
-                                   style_text="Keep the answer short — a few sentences.")
-    policy_snapshot.write_snapshot("claude-b", None, None, None, style_text="")
+    _seed_matching_note(policy_snapshot, "claude-a", "do the thing",
+                        style_text="Keep the answer short — a few sentences.")
+    _seed_matching_note(policy_snapshot, "claude-b", "do the thing", style_text="")
 
-    _set_stdin(monkeypatch, '{"hook_event_name":"UserPromptSubmit"}')
+    _set_stdin(monkeypatch,
+              '{"hook_event_name":"UserPromptSubmit","prompt":"do the thing"}')
     monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-b")
     notify_hook.main()
     assert capsys.readouterr().out == "", "session B (empty style_text) must stay silent"
 
-    _set_stdin(monkeypatch, '{"hook_event_name":"UserPromptSubmit"}')
+    _set_stdin(monkeypatch,
+              '{"hook_event_name":"UserPromptSubmit","prompt":"do the thing"}')
     monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-a")
     notify_hook.main()
     out_a = capsys.readouterr().out.strip()

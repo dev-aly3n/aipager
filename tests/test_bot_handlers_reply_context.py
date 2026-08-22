@@ -40,6 +40,18 @@ def _wire_common(monkeypatch, bot):
     bot._maybe_update_bot_name = AsyncMock()
 
 
+def _latest_note_reply_context(session_name: str) -> str | None:
+    """The reply_context carried by the most recently written,
+    still-outstanding note for a session (queue handoff, design.md) —
+    ``_inject_prompt`` no longer writes the canonical policy snapshot at
+    send time, so this replaces ``ps.read_snapshot(name)["reply_context"]``
+    as "what this send resolved reply_context to"."""
+    notes = ps.list_outstanding_notes(session_name)
+    if not notes:
+        return None
+    return notes[-1].get("reply_context", "")
+
+
 # ---- criterion 6 / staleness guard -----------------------------------------
 
 def test_plain_message_after_a_reply_clears_the_stale_reply_context(
@@ -64,9 +76,9 @@ def test_plain_message_after_a_reply_clears_the_stale_reply_context(
         message_id=2, text="an older message", caption=None, from_user=None,
     )
     run_async(bot._handle_message(update1, _ctx()))
-    snap1 = ps.read_snapshot("claude-jim")
-    assert snap1 is not None
-    assert snap1["reply_context"] != ""
+    ctx1 = _latest_note_reply_context("claude-jim")
+    assert ctx1 is not None
+    assert ctx1 != ""
 
     # Simulate the session finishing that turn and going back to IDLE —
     # otherwise the second update would just queue behind the first
@@ -76,9 +88,9 @@ def test_plain_message_after_a_reply_clears_the_stale_reply_context(
 
     update2 = mk_update("just a normal follow-up")  # reply_to_message=None (default)
     run_async(bot._handle_message(update2, _ctx()))
-    snap2 = ps.read_snapshot("claude-jim")
-    assert snap2 is not None
-    assert snap2["reply_context"] == ""
+    ctx2 = _latest_note_reply_context("claude-jim")
+    assert ctx2 is not None
+    assert ctx2 == ""
 
 
 # ---- criterion 1 -------------------------------------------------------
@@ -98,9 +110,9 @@ def test_reply_to_latest_message_produces_no_context(
         message_id=300, text="(latest)", caption=None, from_user=None,
     )
     run_async(bot._handle_message(update, _ctx()))
-    snap = ps.read_snapshot("claude-jim")
-    assert snap is not None
-    assert snap["reply_context"] == ""
+    ctx = _latest_note_reply_context("claude-jim")
+    assert ctx is not None
+    assert ctx == ""
 
 
 # ---- criterion 7 --------------------------------------------------------
@@ -177,9 +189,9 @@ def test_absent_reply_to_message_and_no_quote_is_not_a_reply(
     update = mk_update("just a plain message")  # reply_to_message=None, quote=None
     run_async(bot._handle_message(update, _ctx()))
     assert sess.status == Status.BUSY  # routed via last_active, exactly as a plain message
-    snap = ps.read_snapshot("claude-jim")
-    assert snap is not None
-    assert snap["reply_context"] == ""
+    ctx = _latest_note_reply_context("claude-jim")
+    assert ctx is not None
+    assert ctx == ""
 
 
 # ---- criterion 14 -----------------------------------------------------

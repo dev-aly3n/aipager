@@ -44,6 +44,18 @@ def _isolate_snapshot(monkeypatch, tmp_path):
     monkeypatch.setattr(ps, "reply_context_path", lambda n: tmp_path / f"{n}.txt")
 
 
+def _latest_note_reply_context(session_name: str) -> str | None:
+    """The reply_context carried by the drain's own note (queue handoff,
+    design.md) — the drain still calls ``_inject_prompt``, which now
+    writes a per-message note instead of the canonical snapshot
+    directly, so this replaces ``ps.read_snapshot(name)["reply_context"]``
+    as "what this drained turn resolved reply_context to"."""
+    notes = ps.list_outstanding_notes(session_name)
+    if not notes:
+        return None
+    return notes[-1].get("reply_context", "")
+
+
 def _drive_idle_drain(bot, sess, run_async, monkeypatch):
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._maybe_update_bot_name = AsyncMock()
@@ -68,9 +80,9 @@ def test_queued_reply_context_reaches_the_drained_turns_snapshot(
     )
     _drive_idle_drain(bot, sess, run_async, monkeypatch)
 
-    snap = ps.read_snapshot(sess.name)
-    assert snap is not None
-    assert snap["reply_context"] == (
+    ctx = _latest_note_reply_context(sess.name)
+    assert ctx is not None
+    assert ctx == (
         "The user's message is a reply to an earlier message in this "
         "session (sent 21:40, by you)..."
     )
@@ -85,9 +97,9 @@ def test_queued_non_reply_prompt_drains_with_empty_reply_context(
     sess.queue_prompt("just a normal queued message", 100)  # reply_context="" default
     _drive_idle_drain(bot, sess, run_async, monkeypatch)
 
-    snap = ps.read_snapshot(sess.name)
-    assert snap is not None
-    assert snap["reply_context"] == ""
+    ctx = _latest_note_reply_context(sess.name)
+    assert ctx is not None
+    assert ctx == ""
 
 
 def test_queued_trigger_gets_tracked_at_drain_time(
@@ -135,6 +147,6 @@ def test_queue_drain_widens_a_pre_part4_3_tuple_entry_without_crashing(
     sess = _sess()
     sess.pending_queue.append(("legacy queued text", 100, time.time(), ""))
     _drive_idle_drain(bot, sess, run_async, monkeypatch)
-    snap = ps.read_snapshot(sess.name)
-    assert snap is not None
-    assert snap["reply_context"] == ""
+    ctx = _latest_note_reply_context(sess.name)
+    assert ctx is not None
+    assert ctx == ""

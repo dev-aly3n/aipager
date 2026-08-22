@@ -259,6 +259,24 @@ def test_session_detail_includes_skip_perms_and_queue_depth():
     assert detail["queue_depth"] == 2
 
 
+def test_session_detail_queue_depth_includes_outstanding_notes(monkeypatch, tmp_path):
+    """design.md "queue handoff": queue_depth uses the same
+    combined-count helper chat's own Stop/`/clearqueue` use, so the Mini
+    App and chat can never disagree about how many prompts sit behind a
+    session's turn."""
+    from aipager import policy_snapshot as ps
+
+    monkeypatch.setattr(ps, "notes_dir", lambda n: tmp_path / f"notes-{n}")
+    sess = _sess(status=Status.BUSY)
+    sess.queue_prompt("a", 1)
+    ps.write_note(sess.name, None, None, None, msg_id=9, chat_id=1,
+                  sender_key=(1, 1), body="note text", raw_text="note text")
+
+    detail = session_detail(sess, time.monotonic())
+
+    assert detail["queue_depth"] == 2  # 1 queued + 1 note
+
+
 def test_session_detail_passes_is_admin_into_perms_action():
     sess = _sess(status=Status.IDLE)
     sess.skip_perms = False  # target is Auto -> needs admin

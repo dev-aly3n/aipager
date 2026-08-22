@@ -404,3 +404,109 @@ def test_origin_from_transcript_missing_file(tmp_path):
 
 def test_turn_already_blocked_missing_file(tmp_path):
     assert enforce._turn_already_blocked(str(tmp_path / "nope.jsonl")) is False
+
+
+# ---- queue handoff: multi-block / multi-line origin (design.md) ---------
+#
+# When Claude batches several queued Telegram messages into one prompt
+# (design.md "queue handoff"; intent.md's confirmed unknown is exactly
+# HOW), the resulting user entry's `content` can carry multiple text
+# blocks — one per original message — or a single block whose text
+# spans several lines with the marker on any of them. `_user_text` must
+# concatenate every block, and `_origin_from_transcript` must check
+# every line of that concatenation, not just the very first line of the
+# very first block — otherwise a Telegram-originated batch whose marker
+# landed anywhere but line 1 misreads as terminal (a safety bypass).
+
+def _multi_block_transcript(tmp_path, *, marker_block_index: int, name: str):
+    """A user entry whose `content` is a LIST of text blocks — one per
+    originally-queued message — with the marker line in the block at
+    `marker_block_index` (0 = first block, i.e. the ordinary case)."""
+    p = tmp_path / name
+    blocks = [
+        {"type": "text", "text": "first queued message, no marker of its own"},
+        {"type": "text", "text": "second queued message, no marker of its own"},
+        {"type": "text", "text": "third queued message, no marker of its own"},
+    ]
+    blocks[marker_block_index] = {
+        "type": "text",
+        "text": "[via Telegram · @bob · role:user]\n" + blocks[marker_block_index]["text"],
+    }
+    lines = [{"type": "user", "message": {"content": blocks}}]
+    p.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+    return str(p)
+
+
+def test_user_text_concatenates_every_block():
+    entry = {
+        "type": "user",
+        "message": {"content": [
+            {"type": "text", "text": "block one"},
+            {"type": "text", "text": "block two"},
+        ]},
+    }
+    assert enforce._user_text(entry) == "block one\nblock two"
+
+
+def test_origin_marker_in_the_first_block_of_a_batch(tmp_path):
+    path = _multi_block_transcript(tmp_path, marker_block_index=0, name="mb0.jsonl")
+    assert enforce._origin_from_transcript(path) == "telegram"
+
+
+def test_origin_marker_in_a_middle_block_of_a_batch(tmp_path):
+    """The case a first-line-only check would misread as terminal."""
+    path = _multi_block_transcript(tmp_path, marker_block_index=1, name="mb1.jsonl")
+    assert enforce._origin_from_transcript(path) == "telegram"
+
+
+def test_origin_marker_in_the_last_block_of_a_batch(tmp_path):
+    path = _multi_block_transcript(tmp_path, marker_block_index=2, name="mb2.jsonl")
+    assert enforce._origin_from_transcript(path) == "telegram"
+
+
+def test_origin_no_marker_anywhere_in_a_multi_block_batch_is_terminal(tmp_path):
+    p = tmp_path / "mb_none.jsonl"
+    blocks = [
+        {"type": "text", "text": "queued message one, no marker"},
+        {"type": "text", "text": "queued message two, no marker"},
+    ]
+    p.write_text(json.dumps({"type": "user", "message": {"content": blocks}}) + "\n")
+    assert enforce._origin_from_transcript(str(p)) == "terminal"
+
+
+def test_decide_never_allows_a_batch_whose_marker_is_not_in_the_first_block(
+    tmp_path, monkeypatch,
+):
+    """The end-to-end guarantee design.md states directly: decide() must
+    never return None (unrestricted) for a prompt whose transcript
+    carries the marker on ANY line of the concatenated user text."""
+    _patch_snap(tmp_path, monkeypatch)
+    _snap(tmp_path, "claude-x__g100")
+    transcript_path = _multi_block_transcript(
+        tmp_path, marker_block_index=2, name="mb_decide.jsonl",
+    )
+    d = _data(tmp_path, transcript_path=transcript_path)
+    block = decide(d)
+    assert block is not None, (
+        "a batch whose marker landed in a later block was allowed through "
+        "as if terminal-originated — a safety bypass"
+    )
+
+
+def _multi_line_single_block_transcript(tmp_path, *, marker_line: int, name: str):
+    """A user entry whose `content` is a single text block, but that
+    block's OWN text spans several lines with the marker on
+    `marker_line` (0 = the first line)."""
+    p = tmp_path / name
+    lines_of_text = ["queued text line A", "queued text line B", "queued text line C"]
+    lines_of_text[marker_line] = "[via Telegram · @bob · role:user]\n" + lines_of_text[marker_line]
+    text = "\n".join(lines_of_text)
+    p.write_text(json.dumps({"type": "user", "message": {"content": text}}) + "\n")
+    return str(p)
+
+
+def test_origin_marker_on_a_non_first_line_within_a_single_block(tmp_path):
+    path = _multi_line_single_block_transcript(
+        tmp_path, marker_line=2, name="ml2.jsonl",
+    )
+    assert enforce._origin_from_transcript(path) == "telegram"

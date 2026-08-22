@@ -229,6 +229,64 @@ def test_user_prompt_submit_transitions_to_busy(receiver, run_async):
     assert event == "user_prompt_submit"
 
 
+# ---- queue_pickup (design.md "queue handoff") ---------------------------
+
+def test_queue_pickup_sets_trigger_and_last_prompt_from_the_last_consumed(
+    receiver, run_async,
+):
+    registry, recv, notify_fn = receiver
+    _send(recv, run_async,
+          hook_event_name="queue_pickup",
+          session="claude-jim",
+          consumed=[
+              {"msg_id": 10, "chat_id": -100, "raw_text": "first"},
+              {"msg_id": 11, "chat_id": -100, "raw_text": "second"},
+          ],
+          expired=[])
+    sess = registry.get("claude-jim")
+    assert sess.trigger_msg_id == 11  # the LAST consumed, not the first
+    assert sess.last_prompt == "second"
+
+
+def test_queue_pickup_forwards_consumed_and_expired_to_notify(receiver, run_async):
+    registry, recv, notify_fn = receiver
+    _send(recv, run_async,
+          hook_event_name="queue_pickup",
+          session="claude-jim",
+          consumed=[{"msg_id": 10, "chat_id": -100, "raw_text": "hi"}],
+          expired=[{"msg_id": 5, "chat_id": -100, "raw_text": "stale"}])
+    notify_fn.assert_awaited_once()
+    sess, event, ctx = notify_fn.await_args.args
+    assert event == "queue_pickup"
+    assert ctx["consumed"] == [{"msg_id": 10, "chat_id": -100, "raw_text": "hi"}]
+    assert ctx["expired"] == [{"msg_id": 5, "chat_id": -100, "raw_text": "stale"}]
+
+
+def test_queue_pickup_expired_only_still_notifies(receiver, run_async):
+    """Expired-only (no match at all) must still surface — the
+    best-effort notice depends on it."""
+    registry, recv, notify_fn = receiver
+    _send(recv, run_async,
+          hook_event_name="queue_pickup",
+          session="claude-jim",
+          consumed=[],
+          expired=[{"msg_id": 5, "chat_id": -100, "raw_text": "stale"}])
+    notify_fn.assert_awaited_once()
+    sess = registry.get("claude-jim")
+    assert sess.trigger_msg_id is None  # nothing consumed → unchanged
+    assert sess.last_prompt == ""
+
+
+def test_queue_pickup_with_neither_consumed_nor_expired_is_a_noop(receiver, run_async):
+    registry, recv, notify_fn = receiver
+    _send(recv, run_async,
+          hook_event_name="queue_pickup",
+          session="claude-jim",
+          consumed=[],
+          expired=[])
+    notify_fn.assert_not_awaited()
+
+
 def test_pre_tool_use_ask_user_question_goes_interactive(receiver, run_async):
     registry, recv, notify_fn = receiver
     _send(recv, run_async,

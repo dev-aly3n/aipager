@@ -385,24 +385,38 @@ def test_handle_message_routes_to_last_active(mk_bot, mk_update, run_async, monk
     bot._send_busy_and_animate.assert_awaited_once()
 
 
-def test_handle_message_queues_when_session_busy(mk_bot, mk_update, run_async, monkeypatch):
+def test_handle_message_injects_immediately_when_session_busy(mk_bot, mk_update, run_async, monkeypatch):
+    """Queue handoff (design.md): BUSY is no longer a hold condition —
+    a message sent while BUSY injects immediately, exactly like a
+    Status.IDLE session, instead of sitting in aipager's own
+    pending_queue."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
     bot.registry._sessions["claude-jim"] = sess
     bot.registry.last_active_session = "claude-jim"
     monkeypatch.setattr("aipager.dtach.inject.is_alive",
                         AsyncMock(return_value=True))
+    sent = AsyncMock(return_value=True)
+    monkeypatch.setattr("aipager.dtach.inject.send_text_and_enter", sent)
     bot._react = AsyncMock()
-    update = mk_update("queue me")
+    bot._send_busy_and_animate = AsyncMock()
+    update = mk_update("send me now")
     run_async(bot._handle_message(update, MagicMock()))
-    assert any(t == "queue me" for t, *_ in sess.pending_queue)
+    assert sess.pending_queue == []
+    sent.assert_awaited_once()
+    assert "send me now" in sent.await_args.args[1]
     bot._react.assert_awaited_once()
 
 
-def test_handle_message_warns_when_queue_full(mk_bot, mk_update, run_async, monkeypatch):
+def test_handle_message_warns_when_queue_full_while_dialog_open(
+    mk_bot, mk_update, run_async, monkeypatch,
+):
+    """QUEUE_CAP still applies to the hold path — INTERACTIVE (an open
+    permission/question dialog) is the one condition left that queues
+    rather than injects."""
     from aipager.state import QUEUE_CAP
     bot = mk_bot()
-    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
     # Fill the queue
     for i in range(QUEUE_CAP):
         sess.queue_prompt(f"existing{i}", i)
@@ -476,17 +490,24 @@ def test_send_template_with_no_active_session(mk_bot, mk_update, run_async):
     assert "No active session" in text
 
 
-def test_send_template_with_busy_session_queues(mk_bot, mk_update, run_async, monkeypatch):
+def test_send_template_with_busy_session_injects_immediately(mk_bot, mk_update, run_async, monkeypatch):
+    """Queue handoff (design.md): BUSY no longer holds a template send
+    either — same immediate-inject rule as _handle_message."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
     bot.registry._sessions["claude-jim"] = sess
     bot.registry.last_active_session = "claude-jim"
     bot._react = AsyncMock()
+    bot._send_busy_and_animate = AsyncMock()
     monkeypatch.setattr("aipager.dtach.inject.is_alive",
                         AsyncMock(return_value=True))
+    sent = AsyncMock(return_value=True)
+    monkeypatch.setattr("aipager.dtach.inject.send_text_and_enter", sent)
     update = mk_update("Continue")
     run_async(bot._send_template(update, "Continue"))
-    assert any(t == "Continue" for t, *_ in sess.pending_queue)
+    assert sess.pending_queue == []
+    sent.assert_awaited_once()
+    assert sent.await_args.args[1] == "Continue"
 
 
 def test_send_command_with_dead_session_warns(mk_bot, mk_update, run_async, monkeypatch):
