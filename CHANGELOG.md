@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **A descriptively-named session's permission prompt is no longer
+  unsendable.** Telegram caps `callback_data` at 64 bytes and drops the
+  ENTIRE keyboard — not just the offending button — when any one button
+  exceeds it. Every session-scoped button (Allow/Deny/Allow-always/Stop,
+  Retry, Compact, Kill, `/new`'s name-conflict prompt, and the
+  AskUserQuestion options) used to embed the session's full internal name,
+  which silently broke the whole keyboard once a label got long enough —
+  33+ characters made the permission prompt itself unsendable, so the
+  operator couldn't approve or deny a tool call at all. All of them now use
+  the same short per-chat-indexed form the ⋮ menu already proved out, which
+  fits regardless of name length. Buttons already sitting in chat history
+  keep working exactly as before; a stale or since-deleted session now
+  answers "That session is no longer available" instead of failing
+  silently. A property-based test walks every `callback_data=` construction
+  under `aipager/` and fails if any of them could exceed the limit, so this
+  can't quietly regress one call site at a time again.
 - **Destructive actions in the Mini App are readable again.** "Delete",
   error messages and the danger buttons were drawn in the theme's raw
   destructive red on a translucent surface, which measured as low as 2.7:1
