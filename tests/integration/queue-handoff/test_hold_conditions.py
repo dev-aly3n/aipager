@@ -18,8 +18,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from aipager.state import Status
 
 CHAT_ID = -1001
