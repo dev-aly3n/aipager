@@ -284,3 +284,89 @@ def test_start_help_never_advertises_an_unregistered_command(mk_bot, mk_update,
     unknown = mentioned - registered
     assert not unknown, (
         f"/start advertises command(s) with no registration: {sorted(unknown)}")
+
+
+# ---- the per-chat index table's growth and failure mode -----------------
+
+def test_the_index_table_grows_only_with_distinct_rendered_sessions(mk_bot):
+    """`_register_pref_index`'s docstring claims the table is "bounded by
+    the number of sessions that chat has ever shown". Nothing tested that.
+
+    It matters because the table is never pruned: eviction would be worse
+    than growth, since indices are POSITIONAL and dropping an old entry
+    would shift every live button onto a different session — the precise
+    bug the stable table was introduced to fix. So the bound has to come
+    from the input, and this pins that it does.
+    """
+    from aipager.bot import session_parity as sp
+
+    bot = mk_bot()
+    names = [f"claude-s{i}" for i in range(50)]
+    for n in names:
+        s = bot.registry.get_or_create(n)
+        s.label = n.removeprefix("claude-")
+
+    # Render the same 50 sessions ten times over.
+    for _ in range(10):
+        for n in names:
+            sp._register_pref_index(bot, 555, [n])
+
+    table = sp._pref_index_map(bot)[555]
+    assert len(table) == 50, (
+        f"re-rendering the same sessions grew the table to {len(table)}")
+
+
+def test_an_index_survives_re_registration_of_everything_else(mk_bot):
+    """Stability is the property the table exists for: a button rendered
+    early must still resolve to its own session after arbitrary churn."""
+    from aipager.bot import session_parity as sp
+
+    bot = mk_bot()
+    first = bot.registry.get_or_create("claude-first")
+    first.label = "first"
+    sp._register_pref_index(bot, 555, ["claude-first"])
+    idx = sp._pref_index_map(bot)[555].index("claude-first")
+
+    for i in range(200):
+        n = f"claude-churn{i}"
+        s = bot.registry.get_or_create(n)
+        s.label = f"churn{i}"
+        sp._register_pref_index(bot, 555, [n])
+
+    resolved = sp._resolve_pref_index(bot, 555, str(idx))
+    assert resolved is not None and resolved.name == "claude-first", (
+        "an early button stopped resolving to its own session after churn")
+
+
+def test_a_deleted_session_resolves_to_nothing_not_to_a_neighbour(mk_bot):
+    """The fail-closed half of the same claim. The table keeps the name
+    of a session that is gone; resolution must re-check the registry and
+    return None rather than handing back whatever now sits at that index.
+    """
+    from aipager.bot import session_parity as sp
+
+    bot = mk_bot()
+    for n in ("claude-doomed", "claude-bystander"):
+        s = bot.registry.get_or_create(n)
+        s.label = n.removeprefix("claude-")
+    sp._register_pref_index(bot, 555, ["claude-doomed", "claude-bystander"])
+    idx = sp._pref_index_map(bot)[555].index("claude-doomed")
+
+    bot.registry.remove("claude-doomed")
+
+    assert sp._resolve_pref_index(bot, 555, str(idx)) is None, (
+        "a deleted session's index resolved to something")
+
+
+def test_a_large_index_still_fits_the_callback_budget(mk_bot):
+    """Indices climb forever, so the encoding must stay inside Telegram's
+    64-byte cap even at an absurd table size."""
+    from aipager.bot import session_parity as sp
+
+    bot = mk_bot()
+    sess = bot.registry.get_or_create("claude-late")
+    sess.label = "late"
+    sp._pref_index_map(bot)[555] = [f"claude-filler{i}" for i in range(100_000)]
+
+    cb = sp.session_cb(bot, 555, sess, "restart-confirm")
+    assert len(cb.encode()) <= 64, f"{len(cb.encode())} bytes: {cb!r}"

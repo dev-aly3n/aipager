@@ -113,11 +113,18 @@ def _register_pref_index(bot: "TelegramBot", chat_id: int, names) -> list[str]:
     (encoded `_:spref:0`) then resolved to B. A silent write to a session
     the user was not looking at.
 
-    Indices are stable and per-chat, bounded by the number of sessions
-    that chat has ever shown, so the table cannot grow unboundedly in any
-    realistic use. Fail-closed is unaffected: :func:`_resolve_pref_index`
-    re-checks the registry, so a session that disappears after render
-    still resolves to ``None`` rather than to its neighbour.
+    The table is never pruned, and deliberately so: indices are
+    POSITIONAL, so evicting an old entry would shift every still-visible
+    button onto a different session — exactly the bug the stable table
+    exists to prevent. Growth is bounded by the number of DISTINCT
+    sessions a chat has rendered since the daemon started, at roughly 80
+    bytes each: a chat that showed ten thousand different sessions
+    between restarts would hold about 780 KiB. Both halves of that claim
+    are pinned by tests rather than asserted here — see
+    ``tests/test_parity_integration.py``: re-rendering the same sessions
+    does not grow the table, an early index survives arbitrary churn, and
+    a deleted session resolves to ``None`` rather than to its neighbour
+    because :func:`_resolve_pref_index` re-checks the registry.
     """
     table = _pref_index_map(bot).setdefault(chat_id, [])
     for name in names:
