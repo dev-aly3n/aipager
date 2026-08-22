@@ -41,6 +41,24 @@ either convert the site to `session_cb(...)` or add a justified
 allow-list entry. This is deliberately default-fail: the guard does not
 need a complete list of unsafe patterns (that list has failed three
 times); it only needs a short list of known-safe ones.
+
+A call being SPELLED `session_cb(...)` (or `x.session_cb(...)`) is not
+by itself proof of anything — a same-named impostor function, defined
+or imported under that name anywhere in the tree, would sail through a
+guard that only pattern-matches the identifier (review-1.md rev-iter1-
+001; reproduced with a planted `_decoy_probe.py` defining its own
+`def session_cb(...)` that returns a raw `f"{sess.name}:{verb}"`). So
+this guard also resolves the call against the file's OWN import
+bindings (`_import_bindings` below) and accepts it only if that
+resolution actually lands on `aipager.bot.session_parity.session_cb` —
+a bare name, an aliased name (`import ... as`), or an attribute access
+on a name bound to the `session_parity` module all resolve; a locally
+defined, differently-imported, or unresolvable `session_cb` does not,
+and is a violation regardless of spelling. `test_session_cb_is_defined_
+exactly_once_under_aipager` below is a second, independent belt-and-
+braces check: even if resolution logic itself had a bug, a second
+`def session_cb` appearing anywhere outside `session_parity.py` fails
+on its own.
 """
 
 from __future__ import annotations
@@ -129,6 +147,102 @@ ALLOWED_VERB_JOINEDSTR_SIGNATURES = frozenset({
 })
 
 
+# ---- import resolution: verify session_cb() calls actually resolve --
+#
+# rev-iter1-001: classifying a call as "the legitimate session_cb" by
+# bare SPELLING (a Name/Attribute literally named `session_cb`) is not
+# enough — a same-named impostor defined or imported elsewhere under
+# that name sails through undetected. Everything below resolves a
+# callee against the FILE'S OWN import statements and accepts it only
+# if it demonstrably targets `aipager.bot.session_parity.session_cb`.
+# Nothing is accepted on spelling alone; an unresolvable name is a
+# violation, not a pass.
+
+CANONICAL_MODULE = "aipager.bot.session_parity"
+CANONICAL_TARGET = f"{CANONICAL_MODULE}.{SESSION_CB_ATTR}"
+
+
+def _module_dotted_name(path: Path) -> str:
+    """The dotted module name a file under AIPAGER_ROOT.parent would be
+    imported as — e.g. aipager/bot/session_parity.py ->
+    "aipager.bot.session_parity"."""
+    rel = path.relative_to(AIPAGER_ROOT.parent)
+    parts = list(rel.with_suffix("").parts)
+    if parts and parts[-1] == "__init__":
+        parts = parts[:-1]
+    return ".".join(parts)
+
+
+def _relative_import_base(current_dotted: str, level: int) -> str:
+    """Resolve the base package for a `from .[...] import ...` relative
+    import, given the dotted module name of the file it appears in."""
+    package_parts = current_dotted.split(".")[:-1]  # containing package
+    if level > 1:
+        package_parts = package_parts[: len(package_parts) - (level - 1)]
+    return ".".join(package_parts)
+
+
+def _import_bindings(tree: ast.AST, current_dotted: str) -> dict[str, str]:
+    """Map every local name this file's imports bind to the fully
+    dotted path it refers to.
+
+    Only ``Import``/``ImportFrom`` nodes are consulted, at ANY nesting
+    level (this codebase's own convention is local, in-function
+    imports of session_parity — design.md — so module-level-only
+    tracking would miss the real pattern). A plain assignment
+    (``sp = session_parity``) or a locally defined function is
+    deliberately NOT tracked here: either fails resolution below and is
+    treated as a violation. That is the fail-closed behaviour this
+    guard exists for.
+    """
+    bindings: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            if node.level == 0:
+                base = node.module or ""
+            else:
+                base = _relative_import_base(current_dotted, node.level)
+                if node.module:
+                    base = f"{base}.{node.module}" if base else node.module
+            for alias in node.names:
+                if alias.name == "*":
+                    continue  # wildcard imports are not resolved — conservative
+                bound = alias.asname or alias.name
+                target = f"{base}.{alias.name}" if base else alias.name
+                bindings[bound] = target
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.asname:
+                    bindings[alias.asname] = alias.name
+                else:
+                    # `import a.b.c` binds only the top name `a` in the
+                    # namespace; `a.b.c` remains reachable off it via
+                    # attribute traversal. Self-map so chain resolution
+                    # below (base + trailing attrs) reproduces exactly
+                    # the dotted path the caller wrote.
+                    top = alias.name.split(".")[0]
+                    bindings[top] = top
+    return bindings
+
+
+def _callee_dotted(func: ast.AST, bindings: dict[str, str]) -> str | None:
+    """The fully-resolved dotted path a Name/Attribute callee refers
+    to, per this file's own import bindings — or ``None`` if nothing
+    in this file's imports resolves it."""
+    trailing: list[str] = []
+    cur = func
+    while isinstance(cur, ast.Attribute):
+        trailing.append(cur.attr)
+        cur = cur.value
+    if not isinstance(cur, ast.Name):
+        return None
+    base = bindings.get(cur.id)
+    if base is None:
+        return None
+    trailing.reverse()
+    return ".".join([base, *trailing]) if trailing else base
+
+
 def _joinedstr_signature(node: ast.JoinedStr) -> str:
     parts = []
     for value in node.values:
@@ -141,15 +255,29 @@ def _joinedstr_signature(node: ast.JoinedStr) -> str:
     return "".join(parts)
 
 
-def _is_session_cb_call(node: ast.AST) -> bool:
+def _is_session_cb_call(
+    node: ast.AST, *, bindings: dict[str, str], current_dotted: str,
+) -> bool:
+    """True iff ``node`` is a call that actually RESOLVES to
+    ``aipager.bot.session_parity.session_cb`` — spelling alone is never
+    enough (rev-iter1-001)."""
     if not isinstance(node, ast.Call):
         return False
     func = node.func
-    if isinstance(func, ast.Attribute):
-        return func.attr == SESSION_CB_ATTR
-    if isinstance(func, ast.Name):
-        return func.id == SESSION_CB_ATTR
-    return False
+    if not isinstance(func, (ast.Name, ast.Attribute)):
+        return False
+    if _callee_dotted(func, bindings) == CANONICAL_TARGET:
+        return True
+    # Self-reference: session_parity.py itself calls its own
+    # module-level session_cb bare, with no import — that's the
+    # canonical definition, not an impostor. Nowhere else can this be
+    # true, since CANONICAL_MODULE names exactly one file.
+    return (
+        current_dotted == CANONICAL_MODULE
+        and isinstance(func, ast.Name)
+        and func.id == SESSION_CB_ATTR
+        and func.id not in bindings
+    )
 
 
 def _verb_arg(call: ast.Call) -> ast.AST | None:
@@ -194,7 +322,10 @@ def _verb_violation(call: ast.Call, filename: str, lineno: int) -> str | None:
     )
 
 
-def _value_violation(value: ast.AST, filename: str, lineno: int) -> str | None:
+def _value_violation(
+    value: ast.AST, filename: str, lineno: int,
+    *, bindings: dict[str, str], current_dotted: str,
+) -> str | None:
     """``None`` if ``value`` (the callback_data= keyword's value) is
     provably safe; otherwise a violation message."""
     if isinstance(value, ast.Constant) and isinstance(value.value, str):
@@ -205,8 +336,29 @@ def _value_violation(value: ast.AST, filename: str, lineno: int) -> str | None:
             )
         return None
 
-    if _is_session_cb_call(value):
-        return _verb_violation(value, filename, lineno)
+    if isinstance(value, ast.Call):
+        if _is_session_cb_call(value, bindings=bindings, current_dotted=current_dotted):
+            return _verb_violation(value, filename, lineno)
+        func = value.func
+        named_session_cb = (
+            (isinstance(func, ast.Attribute) and func.attr == SESSION_CB_ATTR)
+            or (isinstance(func, ast.Name) and func.id == SESSION_CB_ATTR)
+        )
+        if named_session_cb:
+            resolved = _callee_dotted(func, bindings) if isinstance(
+                func, (ast.Name, ast.Attribute)) else None
+            return (
+                f"{filename}:{lineno}: callback_data= calls something spelled "
+                f"{SESSION_CB_ATTR!r} but it does not resolve (via this file's "
+                f"own imports) to {CANONICAL_TARGET} — resolved to {resolved!r}. "
+                f"Only the real session_parity.session_cb may embed a session; "
+                f"import it explicitly (`from aipager.bot import session_parity` "
+                f"+ `session_parity.session_cb(...)`, or `from "
+                f"aipager.bot.session_parity import session_cb`) rather than "
+                f"defining, aliasing, or re-exporting a same-named function"
+            )
+        # not session_cb-shaped at all — falls through to the generic
+        # "not a literal, not session_cb, not on any allow-list" message.
 
     if isinstance(value, ast.Name):
         if value.id in ALLOWED_NAME_SIGNATURES:
@@ -239,15 +391,20 @@ def _value_violation(value: ast.AST, filename: str, lineno: int) -> str | None:
 
 def _find_violations(path: Path) -> list[str]:
     tree = ast.parse(path.read_text(), filename=str(path))
-    violations = []
     rel = path.relative_to(AIPAGER_ROOT.parent)
+    current_dotted = _module_dotted_name(path)
+    bindings = _import_bindings(tree, current_dotted)
+    violations = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
         for kw in node.keywords:
             if kw.arg != "callback_data":
                 continue
-            problem = _value_violation(kw.value, str(rel), node.lineno)
+            problem = _value_violation(
+                kw.value, str(rel), node.lineno,
+                bindings=bindings, current_dotted=current_dotted,
+            )
             if problem is not None:
                 violations.append(problem)
     return violations
@@ -276,6 +433,34 @@ def test_make_cb_does_not_exist_anywhere_under_aipager():
     assert not hits, f"_make_cb still referenced in: {hits}"
 
 
+def test_session_cb_is_defined_exactly_once_under_aipager():
+    """rev-iter1-001, second independent layer: regardless of how any
+    call resolves, `session_cb` must be DEFINED exactly once anywhere
+    under aipager/, in session_parity.py. A second definition — the
+    exact `_decoy_probe.py` shape used to verify the import-resolution
+    fix above — is itself the violation, whether or not anything ends
+    up calling it. If the import-resolution logic above ever regresses,
+    this independent grep-style AST check (same pattern as
+    `test_make_cb_does_not_exist_anywhere_under_aipager`) still catches
+    the decoy."""
+    defs = []
+    for path in _all_python_files():
+        tree = ast.parse(path.read_text(), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and \
+                    node.name == SESSION_CB_ATTR:
+                rel = path.relative_to(AIPAGER_ROOT.parent)
+                defs.append(f"{rel}:{node.lineno}")
+    assert len(defs) == 1, (
+        f"session_cb must be defined exactly once anywhere under aipager/ "
+        f"(in session_parity.py) — found {len(defs)}: {defs}"
+    )
+    assert defs[0].startswith("aipager/bot/session_parity.py:"), (
+        f"session_cb's one definition must live in session_parity.py, "
+        f"found at {defs[0]} instead"
+    )
+
+
 # ---- guard-is-load-bearing self-tests ---------------------------------
 #
 # The 31+ documented "tests passing for reasons unrelated to their name"
@@ -285,8 +470,14 @@ def test_make_cb_does_not_exist_anywhere_under_aipager():
 # regression in the guard's own logic (not the production tree) fails
 # loudly here instead of silently passing everything.
 
-def _violations_in_source(source: str) -> list[str]:
+def _violations_in_source(source: str, *, dotted: str = "<synthetic>") -> list[str]:
+    """``dotted`` lets a self-test simulate living inside a specific
+    module (e.g. ``CANONICAL_MODULE`` itself, to exercise the
+    self-reference case) — defaults to a value that can never equal
+    ``CANONICAL_MODULE``, so ordinary self-tests get no special
+    treatment."""
     tree = ast.parse(source, filename="<synthetic>")
+    bindings = _import_bindings(tree, dotted)
     violations = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -294,7 +485,10 @@ def _violations_in_source(source: str) -> list[str]:
         for kw in node.keywords:
             if kw.arg != "callback_data":
                 continue
-            problem = _value_violation(kw.value, "<synthetic>", node.lineno)
+            problem = _value_violation(
+                kw.value, "<synthetic>", node.lineno,
+                bindings=bindings, current_dotted=dotted,
+            )
             if problem is not None:
                 violations.append(problem)
     return violations
@@ -331,19 +525,33 @@ def test_guard_catches_an_oversized_literal():
 
 def test_guard_catches_a_session_cb_call_with_an_overflowing_literal_verb():
     src = (
+        'from aipager.bot.session_parity import session_cb\n'
         'InlineKeyboardButton("x", callback_data=session_cb('
         f'bot, chat_id, sess, {"a" * 60!r}))'
     )
-    assert _violations_in_source(src), (
+    violations = _violations_in_source(src)
+    assert violations, (
         "guard failed to flag a session_cb(...) verb long enough to overflow "
         "at a plausible index"
+    )
+    assert "overflow" in violations[0], (
+        f"expected an overflow violation (the call resolves fine — the verb "
+        f"is the problem), got: {violations[0]!r}"
     )
 
 
 def test_guard_catches_an_unreviewed_session_cb_verb_fstring():
-    src = 'InlineKeyboardButton("x", callback_data=session_cb(bot, chat_id, sess, f"note-{sess.label}"))'
-    assert _violations_in_source(src), (
+    src = (
+        'from aipager.bot.session_parity import session_cb\n'
+        'InlineKeyboardButton("x", callback_data=session_cb(bot, chat_id, sess, f"note-{sess.label}"))'
+    )
+    violations = _violations_in_source(src)
+    assert violations, (
         "guard failed to flag an unreviewed dynamic verb on session_cb(...)"
+    )
+    assert "allow-list" in violations[0], (
+        f"expected an unreviewed-verb violation (the call resolves fine), "
+        f"got: {violations[0]!r}"
     )
 
 
@@ -354,6 +562,7 @@ def test_guard_accepts_a_literal_within_budget():
 
 def test_guard_accepts_a_qualified_session_cb_call():
     src = (
+        'from aipager.bot import session_parity\n'
         'InlineKeyboardButton("x", callback_data='
         'session_parity.session_cb(self, chat_id, sess, "allow"))'
     )
@@ -361,13 +570,17 @@ def test_guard_accepts_a_qualified_session_cb_call():
 
 
 def test_guard_accepts_a_bare_session_cb_call():
-    src = 'InlineKeyboardButton("x", callback_data=session_cb(bot, chat_id, sess, "restart"))'
+    src = (
+        'from aipager.bot.session_parity import session_cb\n'
+        'InlineKeyboardButton("x", callback_data=session_cb(bot, chat_id, sess, "restart"))'
+    )
     assert not _violations_in_source(src)
 
 
 def test_guard_accepts_the_reviewed_opt_verb_fstrings():
-    src_i = 'InlineKeyboardButton("x", callback_data=session_cb(self, chat_id, sess, f"opt{i}"))'
-    src_num = 'InlineKeyboardButton("x", callback_data=session_cb(self, chat_id, sess, f"opt{num - 1}"))'
+    prelude = 'from aipager.bot.session_parity import session_cb\n'
+    src_i = prelude + 'InlineKeyboardButton("x", callback_data=session_cb(self, chat_id, sess, f"opt{i}"))'
+    src_num = prelude + 'InlineKeyboardButton("x", callback_data=session_cb(self, chat_id, sess, f"opt{num - 1}"))'
     assert not _violations_in_source(src_i)
     assert not _violations_in_source(src_num)
 
@@ -375,3 +588,104 @@ def test_guard_accepts_the_reviewed_opt_verb_fstrings():
 def test_guard_rejects_an_unreviewed_name_not_on_the_allowlist():
     src = 'InlineKeyboardButton("x", callback_data=some_new_unreviewed_var)'
     assert _violations_in_source(src), "guard failed to flag an unreviewed bare name"
+
+
+# ---- rev-iter1-001: the guard must resolve session_cb, not just match its
+# ---- spelling — these are the fix's own load-bearing self-tests ----------
+
+def test_guard_rejects_a_bare_session_cb_call_with_no_import_at_all():
+    """No import, no local definition — a plain NameError waiting to
+    happen at runtime, but the guard must not need to run the code to
+    know it can't prove this call is the real session_cb. This is also
+    what `test_guard_accepts_a_bare_session_cb_call` used to look like
+    before this fix, when the guard accepted ANY bare name spelled
+    session_cb — that was the hole rev-iter1-001 found."""
+    src = 'InlineKeyboardButton("x", callback_data=session_cb(bot, chat_id, sess, "restart"))'
+    violations = _violations_in_source(src)
+    assert violations, "guard failed to flag an unresolved bare session_cb with no import"
+    assert "does not resolve" in violations[0]
+
+
+def test_guard_rejects_a_locally_defined_impostor_session_cb():
+    """The exact attack rev-iter1-001 verified against this ship: a
+    function spelled `session_cb`, defined in the SAME file (mirroring
+    the planted `_decoy_probe.py`), returning the raw unsafe
+    `f"{sess.name}:{verb}"` pattern this whole ship exists to remove.
+    Called bare, with no import — must not be treated as the real
+    thing just because it's spelled the same."""
+    src = (
+        'def session_cb(bot, chat_id, sess, verb):\n'
+        '    return f"{sess.name}:{verb}"\n'
+        'InlineKeyboardButton("x", callback_data=session_cb(bot, chat_id, sess, "perms_stop_switch"))\n'
+    )
+    violations = _violations_in_source(src)
+    assert violations, "guard failed to flag a same-named impostor session_cb with no import"
+    assert "does not resolve" in violations[0]
+
+
+def test_guard_rejects_an_impostor_session_cb_imported_from_elsewhere():
+    """Same attack, but the impostor is imported under the exact name
+    `session_cb` from a module that is NOT session_parity — spelling
+    alone still must not be enough to pass."""
+    src = (
+        'from aipager.bot._decoy_probe import session_cb\n'
+        'InlineKeyboardButton("x", callback_data=session_cb(bot, chat_id, sess, "kill"))\n'
+    )
+    violations = _violations_in_source(src)
+    assert violations, "guard failed to flag session_cb imported from a non-canonical module"
+    assert "does not resolve" in violations[0]
+
+
+def test_guard_rejects_an_attribute_call_on_a_non_session_parity_module():
+    """Same attack again, this time as `<module>.session_cb(...)` where
+    `<module>` is imported from somewhere other than
+    aipager.bot.session_parity."""
+    src = (
+        'from aipager.bot import _decoy_probe\n'
+        'InlineKeyboardButton("x", callback_data=_decoy_probe.session_cb(bot, chat_id, sess, "kill"))\n'
+    )
+    violations = _violations_in_source(src)
+    assert violations, (
+        "guard failed to flag session_cb accessed off a non-session_parity "
+        "module alias"
+    )
+    assert "does not resolve" in violations[0]
+
+
+def test_guard_accepts_an_aliased_import_of_the_real_session_cb():
+    """`import ... as` must still resolve — aliasing the REAL function
+    is not itself suspicious; only aliasing/defining an IMPOSTOR is."""
+    src = (
+        'from aipager.bot.session_parity import session_cb as scb\n'
+        'InlineKeyboardButton("x", callback_data=scb(bot, chat_id, sess, "restart"))\n'
+    )
+    assert not _violations_in_source(src)
+
+
+def test_guard_accepts_an_aliased_module_import_of_session_parity():
+    src = (
+        'from aipager.bot import session_parity as sp\n'
+        'InlineKeyboardButton("x", callback_data=sp.session_cb(bot, chat_id, sess, "restart"))\n'
+    )
+    assert not _violations_in_source(src)
+
+
+def test_guard_accepts_the_real_session_cb_self_reference_inside_its_own_module():
+    """session_parity.py's own body calls its module-level session_cb
+    bare, with no import (it can't import itself) — that IS the
+    canonical definition, not an impostor, and must resolve."""
+    src = 'InlineKeyboardButton("x", callback_data=session_cb(bot, chat_id, sess, "rename"))\n'
+    assert not _violations_in_source(src, dotted=CANONICAL_MODULE)
+
+
+def test_guard_still_rejects_an_impostor_even_inside_a_file_named_like_session_parity():
+    """The self-reference carve-out is keyed on the exact dotted module
+    path, not on "any file that happens to define session_cb" — a
+    same-named impostor sitting in some OTHER file must not benefit
+    from it, even if that file were (hypothetically) misidentified."""
+    src = (
+        'def session_cb(bot, chat_id, sess, verb):\n'
+        '    return f"{sess.name}:{verb}"\n'
+        'InlineKeyboardButton("x", callback_data=session_cb(bot, chat_id, sess, "kill"))\n'
+    )
+    assert _violations_in_source(src, dotted="aipager.bot.not_session_parity")
