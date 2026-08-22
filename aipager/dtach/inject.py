@@ -206,6 +206,10 @@ KEYS = {
     "Left": "\x1b[D",
     "Tab": "\t",
     "Escape": "\x1b",
+    # readline's kill-whole-line (Ctrl-U). Used by discard_queued_input
+    # below to wipe text an Escape surfaced into the input box without
+    # submitting it.
+    "KillLine": "\x15",
 }
 
 
@@ -273,6 +277,36 @@ async def send_text_and_enter(session: str, text: str) -> bool:
     if ok:
         log.info("Sent text %r + Enter → %s", text[:50], session)
     return ok
+
+
+async def discard_queued_input(session: str) -> bool:
+    """Wipe text Claude's own not-yet-picked-up queue surfaced into the
+    input box, without touching whatever turn is (or isn't) currently
+    running.
+
+    Upstream Claude Code (2.1.0+) moves queued-but-not-yet-picked-up
+    prompts into the visible input box on Escape rather than discarding
+    them — proven interrupt behaviour this project does not change (see
+    design.md "Stop and /clearqueue on the same primitive"). Left alone,
+    that surfaced text would concatenate onto the next prompt sent. One
+    more Escape (in case a fresh dialog opened underneath in the
+    meantime) then ``KillLine`` (``\\x15``, readline's kill-whole-line)
+    clears whatever landed in the input box.
+
+    The one function the version-fragile choreography above is isolated
+    behind — every caller (Stop, ``/clearqueue``, the Mini App's
+    clearqueue route) goes through this rather than reproducing the key
+    sequence itself, so a future Claude Code release that changes the
+    mechanism only needs one call site fixed. Sends exactly two key
+    events (``Escape`` then ``KillLine``) — callers that also need the
+    two-Escape interrupt pair send those themselves, first (Stop), or
+    not at all (``/clearqueue`` — it must never send a second Escape,
+    which would risk interrupting the running turn it explicitly leaves
+    alone).
+    """
+    await send_keys(session, "Escape")
+    await asyncio.sleep(0.15)
+    return await send_keys(session, "KillLine")
 
 
 def _proc_socket_pids(sock: str) -> list[int]:
