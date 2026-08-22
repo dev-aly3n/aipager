@@ -59,6 +59,7 @@ from aipager.bot.transport import (  # noqa: F401
     TruncationFailed,
     _build_diff_block,
     calling_chat_id,
+    mixed_sender_note_outstanding,
     _detect_api_error,
     _DIFF_MAX_CHARS,
     _DIFF_MAX_LINES,
@@ -454,13 +455,16 @@ class CallbackDispatchMixin:
             if not await inject.is_alive(session_name):
                 await self._safe_answer(query, f"Session '{session_name}' not alive")
                 return
-            if sess.dialog_is_open():
+            if sess.dialog_is_open() or mixed_sender_note_outstanding(sess, update):
                 # Retry buttons outlive the error they were attached to, so
                 # this one can be tapped long after the session has moved on
-                # into a permission or question prompt. Re-injecting there
-                # would type the old prompt into that dialog. Refuse rather
-                # than queue: the operator is looking at the prompt, and
-                # tapping Retry again after answering is one tap.
+                # into a permission or question prompt — OR after a
+                # different Telegram user's message is already outstanding
+                # (design.md "queue handoff"'s mixed-sender rule, applied
+                # here beside the dialog check). Re-injecting either would
+                # be typing the old prompt somewhere it doesn't belong.
+                # Refuse rather than queue: the operator is looking at the
+                # prompt, and tapping Retry again after answering is one tap.
                 await self._safe_answer(
                     query, "Answer the open prompt first, then retry")
                 # A toast is gone the moment the operator looks away, and
@@ -480,7 +484,8 @@ class CallbackDispatchMixin:
                 return
             # Re-inject the last prompt (last_prompt stays set for retry-of-retry)
             prompt = sess.last_prompt
-            ok = await self._inject_prompt(sess, prompt)
+            ok = await self._inject_prompt(
+                sess, prompt, msg_id=sess.trigger_msg_id, chat_id=CHAT_ID)
             if ok:
                 await self._safe_answer(query, f"Retrying [{sess.label}]")
                 # Delete the error message — busy animation replaces it
