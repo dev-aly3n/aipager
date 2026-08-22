@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Killing a renamed session no longer throws the new name away.** Rename a
+  session, kill it, and it came back in the gone list under its ORIGINAL name
+  — and resuming it by the name you chose answered "not found" while the old
+  name worked. Killing removes the session's record, but its socket outlives
+  the kill signal by a moment, so the next scan re-created the record from the
+  socket and re-derived a name from it. The name you picked is now kept across
+  that hand-off.
 - **A descriptively-named session's permission prompt is no longer
   unsendable.** Telegram caps `callback_data` at 64 bytes and drops the
   ENTIRE keyboard — not just the offending button — when any one button

@@ -641,7 +641,11 @@ class SessionOpsMixin:
         # Kill the dtach process
         killed = await inject.kill_session(session_name)
         if killed:
-            self.registry.remove(session_name)
+            # remember_label: the entry is about to be re-created by the
+            # monitor's next scan (the socket outlives SIGTERM briefly), and
+            # without this the re-creation derives the label from the
+            # internal name and silently undoes a /rename.
+            self.registry.remove(session_name, remember_label=True)
             self.registry.mark_dirty()
             asyncio.create_task(self._update_bot_commands())
             return KillOutcome(result="killed", label=label, session_name=session_name)

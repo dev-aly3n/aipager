@@ -43,6 +43,19 @@ TOOL_HISTORY_CAP: int = 200
 # /clear_gone still gives users a manual "forget everything" lever.
 MAX_GONE_HISTORY: int = 50
 
+# Labels kept for sessions a /kill removed, so a re-creation racing the
+# kill can recover the name the user chose. Bounded because nothing prunes
+# it by time: 50 is far more than the handful of kills that can be in
+# flight at once, and each entry is a short string.
+_MAX_REMEMBERED_LABELS: int = 50
+
+# How long a killed session's label stays recoverable. It only has to
+# outlive the gap between `kill_session` unlinking the socket and the
+# monitor's next 2s scan; a minute is generous. Past that the session is
+# genuinely forgotten, so the name must not resurface on a different
+# session that happens to reuse the internal dtach name.
+REMEMBERED_LABEL_TTL_SECONDS: float = 60.0
+
 
 def _default_scope() -> tuple[int, str] | None:
     """Resolve the single configured chat for backfilling legacy sessions.
@@ -555,18 +568,35 @@ class TrackedSession:
         return new_idx
 
 
+def _derive_label(name: str) -> str:
+    """The label a session gets when nothing better is known — its internal
+    name with the ``claude-`` prefix and any scope disambiguator stripped."""
+    core = name.removeprefix("claude-") if name.startswith("claude-") else name
+    return strip_scope_suffix(core)
+
+
 class SessionRegistry:
     """Single source of truth for all tracked Claude sessions."""
 
     def __init__(self):
         self._sessions: dict[str, TrackedSession] = {}  # keyed by session name
         self._msg_map: dict[tuple[int, int], str] = {}  # (chat_id, msg_id) → session name
+        # name → the label it carried when a /kill removed it. See
+        # `remove(remember_label=True)`.
+        self._remembered_labels: dict[str, str] = {}
         self.last_active_session: str = ""  # last session that sent a notification
         self.pinned_msg_id: int = 0  # pinned status message in Telegram
         self._dirty: bool = False
 
     def get(self, name: str) -> TrackedSession | None:
         return self._sessions.get(name)
+
+    def _prune_remembered_labels(self) -> None:
+        """Drop remembered labels past their TTL."""
+        cutoff = time.monotonic() - REMEMBERED_LABEL_TTL_SECONDS
+        for key in [k for k, (_, at) in self._remembered_labels.items()
+                    if at < cutoff]:
+            del self._remembered_labels[key]
 
     def get_or_create(self, name: str) -> TrackedSession:
         if name not in self._sessions:
@@ -575,8 +605,12 @@ class SessionRegistry:
             # name everywhere the label is shown (grid, gone list,
             # /status, keyboard) — "Jkhk__d256113222" for a session
             # the operator named "Jkhk".
-            core = name.removeprefix("claude-") if name.startswith("claude-") else name
-            label = strip_scope_suffix(core)
+            # A label remembered from a kill wins over re-derivation: the
+            # user picked it, the derivation is only a fallback for a
+            # session we have genuinely never seen.
+            self._prune_remembered_labels()
+            remembered = self._remembered_labels.pop(name, None)
+            label = (remembered[0] if remembered else None) or _derive_label(name)
             self._sessions[name] = TrackedSession(name=name, label=label)
             log.info("Tracking new session: %s [%s]", name, label)
             self._evict_gone_overflow()
@@ -769,8 +803,39 @@ class SessionRegistry:
             out.add(sess.label)
         return out
 
-    def remove(self, name: str) -> None:
+    def remove(self, name: str, *, remember_label: bool = False) -> None:
+        """Drop a session. ``remember_label`` keeps its user-facing label
+        on a small side table so a re-created entry can recover it.
+
+        Only ``/kill`` passes it. `inject.kill_session` leaves a window
+        between SIGTERM and unlinking the socket, and a monitor scan that
+        lands in it re-creates the entry from the socket NAME — deriving
+        the label afresh and silently discarding a `/rename`. Observed
+        live: a session renamed to `shortname` returned to the gone list
+        as `livetest_payment_pipeline_refactor_v2_xyz`, and resume by the
+        new name 404'd.
+
+        `delete` deliberately does NOT remember: it is the explicit
+        "forget this session" action, and a remembered label would then
+        attach itself to a future session that happened to reuse the
+        internal name.
+        """
         sess = self._sessions.pop(name, None)
+        if sess and remember_label and sess.label:
+            # Only worth remembering a label derivation would NOT reproduce:
+            # for an unrenamed session the two are identical, so storing it
+            # buys nothing and only widens the window below.
+            if sess.label != _derive_label(name):
+                self._remembered_labels[name] = (sess.label, time.monotonic())
+            # Bounded by size AND by time. Size, because nothing prunes this
+            # on a quiet daemon. Time, because the entry exists only to
+            # bridge the seconds between a kill and the monitor scan that
+            # re-creates the record — kept longer, it would attach the dead
+            # session's name to a genuinely different session that later
+            # reused the same internal name.
+            self._prune_remembered_labels()
+            while len(self._remembered_labels) > _MAX_REMEMBERED_LABELS:
+                self._remembered_labels.pop(next(iter(self._remembered_labels)))
         if sess:
             # Clean up message mappings
             to_remove = [key for key, sn in self._msg_map.items() if sn == name]
