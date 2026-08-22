@@ -1016,6 +1016,17 @@ async def handle_callback(
         if not bot._can_prompt_user(user_id, chat_id):
             await bot._safe_answer(query, "You can't restart this session.")
             return True
+        if not sess.tap_is_for_this_turn(
+                getattr(query.message, "message_id", None)):
+            # This menu's own docstring notes a card "can sit on screen for
+            # days", and restart hard-kills without even the Ctrl-C courtesy
+            # the perms path gives. Until now the only re-check between
+            # offering the card and acting on it was authorization — never
+            # whether the task being destroyed is the one the operator was
+            # looking at.
+            await bot._safe_answer(
+                query, "That task already finished — reopen the menu")
+            return True
         await bot._safe_answer(query, f"Restarting {sess.label}...")
         outcome = await bot._restart_session_core(sess)
         await _edit(query, _restart_outcome_text(outcome), None)

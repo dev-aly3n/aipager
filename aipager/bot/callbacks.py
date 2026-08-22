@@ -139,7 +139,9 @@ class CallbackDispatchMixin:
         except Exception:
             pass
 
-    async def _do_perms_switch_via_fn(self, sess, target_skip_perms: bool, edit_fn) -> None:
+    async def _do_perms_switch_via_fn(self, sess, target_skip_perms: bool,
+                                      edit_fn, *,
+                                      tapped_msg_id: int | None = None) -> None:
         """Kill + poll + relaunch with toggled skip_perms.
 
         Thin wrapper around :meth:`SessionOpsMixin._perms_switch_core` —
@@ -151,6 +153,14 @@ class CallbackDispatchMixin:
         the call site).
         """
         label = sess.label
+        if not sess.tap_is_for_this_turn(tapped_msg_id):
+            # A /perms card offered while the session was idle can be
+            # tapped much later, by which time a different turn is
+            # running — and this path kills and relaunches it.
+            # `tapped_msg_id=None` (the /perms command path) fails
+            # open, as does an idle session with no busy card.
+            await edit_fn("⚠️ That task already finished — run /perms again")
+            return
         outcome = await self._perms_switch_core(sess, target_skip_perms)
 
         if outcome.reason == "still_stopping":
@@ -351,8 +361,14 @@ class CallbackDispatchMixin:
             if not sess:
                 await self._safe_answer(query, "Session not found")
                 return
+            # Staleness is checked inside `_stop_session` (the seam every
+            # caller shares), not here — a Stop button outlives its turn
+            # whenever the edit that strips its keyboard fails, and gating
+            # per-caller is how the perms and restart paths were missed.
             outcome = await self._stop_session(sess, query=query)
-            if not outcome.ok:
+            if not outcome.ok and outcome.reason != "stale":
+                # A stale tap already explained itself at the seam; adding
+                # "is not busy" on top would be both wrong and louder.
                 await self._safe_answer(query, f"[{sess.label}] is not busy.")
             return
 
@@ -368,6 +384,14 @@ class CallbackDispatchMixin:
                 # missing session answers 'Session not found'."
                 await self._safe_answer(query, "Session not found")
                 return
+            if not sess.tap_is_for_this_turn(
+                    getattr(query.message, "message_id", None)):
+                # /kill's confirm card has no expiry logic anywhere — nothing
+                # ever strips its keyboard, unlike the busy card. So an old
+                # one destroys whatever is running when it is finally tapped.
+                await self._safe_answer(
+                    query, "That task already finished — run /kill again")
+                return
             await self._safe_answer(query, f"Killing {sess.label}...")
             await self._kill_session_by_label(query, sess.label)
             return
@@ -376,6 +400,14 @@ class CallbackDispatchMixin:
             sess = self.registry.get(session_name)
             if sess is None:
                 await self._safe_answer(query, "Session not found")
+                return
+            if not sess.tap_is_for_this_turn(
+                    getattr(query.message, "message_id", None)):
+                # /kill's confirm card has no expiry logic anywhere — nothing
+                # ever strips its keyboard, unlike the busy card. So an old
+                # one destroys whatever is running when it is finally tapped.
+                await self._safe_answer(
+                    query, "That task already finished — run /kill again")
                 return
             await self._safe_answer(query, f"Killing {sess.label}...")
             await self._kill_session_by_label(query, sess.label)
@@ -421,6 +453,30 @@ class CallbackDispatchMixin:
                 return
             if not await inject.is_alive(session_name):
                 await self._safe_answer(query, f"Session '{session_name}' not alive")
+                return
+            if sess.dialog_is_open():
+                # Retry buttons outlive the error they were attached to, so
+                # this one can be tapped long after the session has moved on
+                # into a permission or question prompt. Re-injecting there
+                # would type the old prompt into that dialog. Refuse rather
+                # than queue: the operator is looking at the prompt, and
+                # tapping Retry again after answering is one tap.
+                await self._safe_answer(
+                    query, "Answer the open prompt first, then retry")
+                # A toast is gone the moment the operator looks away, and
+                # tapping Retry is exactly the sort of thing done on the way
+                # out. Leave the reason on the card itself, keeping the
+                # button so it can be tapped again once the prompt is
+                # answered. `last_prompt` is untouched, so nothing is lost.
+                try:
+                    await query.message.edit_text(
+                        f"{original_text}\n\n⏸ Not retried — a prompt is "
+                        "open. Answer it, then tap Retry again.",
+                        reply_markup=query.message.reply_markup,
+                    )
+                except Exception:
+                    log.debug("[%s] could not annotate the retry card",
+                              sess.label, exc_info=True)
                 return
             # Re-inject the last prompt (last_prompt stays set for retry-of-retry)
             prompt = sess.last_prompt
@@ -544,10 +600,24 @@ class CallbackDispatchMixin:
 
             if action == "perms_confirm":
                 # IDLE Ask→Auto confirmed.
-                await self._do_perms_switch_via_fn(sess, target_skip_perms, _edit)
+                await self._do_perms_switch_via_fn(
+                    sess, target_skip_perms, _edit,
+                    tapped_msg_id=getattr(query.message, "message_id", None))
                 return
 
             if action == "perms_stop_switch":
+                if not sess.tap_is_for_this_turn(
+                        getattr(query.message, "message_id", None)):
+                    # Same defect as a stale Stop, with a worse payload:
+                    # this Ctrl-Cs AND hard-kills+relaunches the session.
+                    # `_perms_pending` is never cleared when a turn ends, so
+                    # an ignored /perms card keeps a live-looking button
+                    # indefinitely, and the branch above proceeds even when
+                    # `pending` is None.
+                    await self._safe_answer(
+                        query,
+                        "That task already finished — run /perms again")
+                    return
                 # BUSY: send Ctrl-C, then poll for socket disappearance.
                 # Same deliberate outage as the IDLE path — the session is
                 # meant to exit here, so its exit is not news. Thin
@@ -731,6 +801,15 @@ class CallbackDispatchMixin:
                 return
 
             if action == "new_replace":
+                if sess and not sess.tap_is_for_this_turn(
+                        getattr(query.message, "message_id", None)):
+                    # The most severe of the seven: this kills the socket
+                    # directly and relaunches with resume_id deliberately
+                    # dropped, so a stale tap destroys a live session with
+                    # no path back to it.
+                    await self._safe_answer(
+                        query, "That task already finished — run /new again")
+                    return
                 # Kill alive socket first, then launch fresh (no resume_id).
                 if sess and sess.status != Status.GONE:
                     await inject.kill_session(session_name)

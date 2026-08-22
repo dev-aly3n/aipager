@@ -79,6 +79,7 @@ class StopOutcome:
     ok: bool
     label: str
     dropped: int = 0
+    reason: str = ""     # "stale" when the tap came from an earlier turn
 
 
 @dataclass
@@ -588,6 +589,14 @@ class SessionOpsMixin:
         acknowledgement (edit the busy message / react to the command),
         the core's behaviour lives in the core.
         """
+        if query is not None and not sess.tap_is_for_this_turn(
+                getattr(getattr(query, "message", None), "message_id", None)):
+            # Button taps are checked HERE rather than at the call site, so a
+            # future caller cannot forget. `update`-driven callers (the /stop
+            # command, `/<label> stop`) pass no query and are always current.
+            await self._safe_answer(
+                query, "That task already finished — use the current card")
+            return StopOutcome(ok=False, label=sess.label, reason="stale")
         outcome = await self._stop_session_core(sess)
         if not outcome.ok:
             return outcome

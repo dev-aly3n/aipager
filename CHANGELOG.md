@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **An old Stop button no longer stops whatever you are doing now.** Stop
+  buttons normally come off a card when its task ends, but that edit can
+  fail — a rate limit, or a message Telegram will no longer edit — leaving
+  a live-looking button on an old card. Tapping one interrupted the task
+  running at that moment and threw away everything queued behind it,
+  mentioning the discard only in a toast that is easy to miss. A tap on a
+  card older than the current task now answers "that task already finished"
+  and changes nothing. The current card's button, and the Stop on a
+  permission or question prompt, work exactly as before. The same applies
+  to every other button that can destroy a running session: `/perms`'
+  "Stop task & switch", the ⋮ menu's Restart, `/kill`'s confirmation, and
+  `/new`'s Replace. Those are worse than Stop — they interrupt *and*
+  restart, or kill outright — and none of their cards ever expired, so an
+  old one could destroy a task you started hours later. `/new`'s Replace
+  was the worst: it relaunches with no way back to the session it killed.
+- **A message sent while a permission prompt is open no longer goes into
+  that prompt.** When Claude asks to approve a tool — or asks a question —
+  the terminal is showing a dialog, and anything typed there is read as an
+  answer to it. aipager only held messages back while a session was
+  *working*, so a message sent during the prompt itself was typed straight
+  into it, Enter included. Every path that carries a prompt now holds it
+  instead: normal text, voice transcripts, file captions, templates,
+  `/<session> <prompt>`, and slash commands. Held messages are delivered as
+  soon as you answer the prompt, and `/clearqueue` still drops them. The
+  Retry button is covered too — it outlives the error it was attached to,
+  so tapping it later would have replayed your earlier prompt into whatever
+  prompt was open by then; it now asks you to answer that one first.
+
 ## [0.7.3] - 2026-08-22
 
 ### Fixed

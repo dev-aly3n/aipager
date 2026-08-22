@@ -502,6 +502,38 @@ class TrackedSession:
         self.pending_queue.append((text, msg_id, time.time(), reply_context))
         return True
 
+    def dialog_is_open(self) -> bool:
+        """True while the terminal is showing a permission/question prompt.
+
+        An inbound prompt must be queued rather than injected while this
+        holds: keystrokes sent to a session displaying a modal dialog are
+        read as input to that dialog, not as a new turn. The Mini App
+        already withholds ``/compact`` for the same reason (see
+        ``miniapp.sessions._STATUS_ACTION_KEYS``); this is the same rule
+        for every inbound prompt path.
+        """
+        return self.status is Status.INTERACTIVE
+
+    def tap_is_for_this_turn(self, tapped_msg_id: int | None) -> bool:
+        """True if a button tap belongs to the turn currently running.
+
+        Ordering, not identity. Telegram message ids increase within a
+        chat, and every card that can carry a destructive button for the
+        live turn — the busy card, plus any permission or question card
+        raised during it — is sent at or after the busy card. So a tap on
+        a message older than the busy card came from an earlier turn.
+
+        Fails OPEN when there is nothing to compare against: no busy card,
+        the ``-1`` sentinel while one is being created, or a tap with no
+        message id. A refusal that cannot be justified is worse than an
+        action the operator asked for, and silence is what the project's
+        long-form-button contract forbids outright.
+        """
+        current = self.busy_msg_id
+        if not current or current < 0 or not tapped_msg_id:
+            return True
+        return tapped_msg_id >= current
+
     def is_restarting(self) -> bool:
         """True while a deliberate kill-and-relaunch is still in flight."""
         return time.monotonic() < self.restarting_until

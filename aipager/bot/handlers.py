@@ -85,6 +85,45 @@ log = logging.getLogger(__name__)
 class CommandHandlersMixin:
     """Mixin for TelegramBot — see :mod:`aipager.bot` overview."""
 
+    async def _hold_for_open_dialog(self, update: Update, sess, text: str,
+                                    reply_context: str = "") -> bool:
+        """Queue `text` instead of injecting it while a dialog is open.
+
+        The single gate every inbound prompt path consults. Returns True
+        when the message was held, in which case the caller must return
+        without injecting.
+
+        Held messages go into ``pending_queue`` rather than a structure of
+        their own: an unanswered permission prompt can sit indefinitely, so
+        the hold needs the cap, the 24h expiry, the persistence and the
+        ``/clearqueue`` lever that queue already has. No new release path is
+        needed either. Ten sites clear ``pending_permission``; every one of
+        them either transitions to BUSY (the answer handlers, the auto-deny
+        path, the INTERACTIVE watchdog), is itself the turn-end handler that
+        drains the queue, or belongs to stop/kill — which clear the queue
+        deliberately, as they already did for busy-queued messages.
+
+        The reaction is the same 👀 a busy-queued message gets, deliberately:
+        the state really is the same one (queued for delivery), Telegram only
+        permits a fixed set of reaction emoji, and the sent-versus-picked-up
+        distinction that would justify a second signal is the subject of a
+        later change rather than something to half-introduce here.
+        """
+        if not sess.dialog_is_open():
+            return False
+        if not sess.queue_prompt(text, update.message.message_id, reply_context):
+            await update.message.reply_text(
+                f"⚠️ Queue is full ({QUEUE_CAP} pending) for "
+                f"[{html_mod.escape(sess.label)}]. Answer the prompt or "
+                "clear the queue.",
+                parse_mode="HTML",
+            )
+            return True
+        self.registry.mark_dirty()
+        await self._react(update, "👀")
+        log.info("[%s] Held (prompt open): %s", sess.label, text[:80])
+        return True
+
     async def _react(self, update: Update, emoji: str) -> None:
         """React to the user's message with an emoji."""
         try:
@@ -1222,6 +1261,9 @@ class CommandHandlersMixin:
             allow_file=sess.status != Status.BUSY,
         )
 
+        if await self._hold_for_open_dialog(update, sess, text, reply_context):
+            return
+
         # Queue if session is busy — inject when it goes IDLE
         if sess.status == Status.BUSY:
             if not sess.queue_prompt(text, update.message.message_id, reply_context):
@@ -1394,6 +1436,9 @@ class CommandHandlersMixin:
             allow_file=sess.status != Status.BUSY,
         )
 
+        if await self._hold_for_open_dialog(update, sess, transcript, reply_context):
+            return
+
         # Queue if busy
         if sess.status == Status.BUSY:
             if not sess.queue_prompt(transcript, update.message.message_id, reply_context):
@@ -1514,6 +1559,9 @@ class CommandHandlersMixin:
             allow_file=sess.status != Status.BUSY,
         )
 
+        if await self._hold_for_open_dialog(update, sess, prompt, reply_context):
+            return
+
         # Queue if busy
         if sess.status == Status.BUSY:
             if not sess.queue_prompt(prompt, msg.message_id, reply_context):
@@ -1553,6 +1601,9 @@ class CommandHandlersMixin:
 
         if not await inject.is_alive(sess.name):
             await update.message.reply_text(f"⚠️ Session '{sess.name}' not found")
+            return
+
+        if await self._hold_for_open_dialog(update, sess, prompt_text):
             return
 
         # Queue if session is busy
@@ -1607,6 +1658,9 @@ class CommandHandlersMixin:
             await update.message.reply_text("⚠️ Can't clear while session is busy")
             return
 
+        if await self._hold_for_open_dialog(update, sess, command_text):
+            return
+
         ok = await self._inject_prompt(sess, command_text)
         if ok:
             await self._react(update, "✅")
@@ -1630,6 +1684,11 @@ class CommandHandlersMixin:
             if not await inject.is_alive(name):
                 await update.message.reply_text(f"⚠️ [{target_label}] session not alive")
                 return
+            # Targeting is the operator's explicit choice and applies even
+            # when the message itself is held, so it is recorded first.
+            self.registry.last_active_session = name
+            if await self._hold_for_open_dialog(update, sess, prompt_text):
+                return
             sess.trigger_msg_id = update.message.message_id
             sess.last_prompt = prompt_text
             self.registry.track_message(update.message.message_id, name,
@@ -1651,6 +1710,9 @@ class CommandHandlersMixin:
         session_name = f"claude-{target_label}"
         if await inject.is_alive(session_name):
             new_sess = self._adopt_by_typed_name(session_name, target_label)
+            self.registry.last_active_session = session_name
+            if await self._hold_for_open_dialog(update, new_sess, prompt_text):
+                return
             new_sess.trigger_msg_id = update.message.message_id
             new_sess.last_prompt = prompt_text
             self.registry.track_message(update.message.message_id, session_name,
