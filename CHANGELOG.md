@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Opening a session by name now labels it with the name you typed.**
+  Typing `/<name>` — or `/<name> <prompt>` — for a session aipager isn't
+  tracking yet adopts whatever session is running under that name, but it
+  kept the name it worked out for itself rather than the one you had just
+  typed. That shows up right after the fix above: rename a session, kill
+  it, start one of the original name again within the minute, and typing
+  `/<original>` handed back a session still wearing the renamed label. It
+  also stuck, because that session then no longer answered to the name you
+  typed, sending every later `/<original>` down the same slow rediscovery
+  path.
 - **Killing a renamed session no longer throws the new name away.** Rename a
   session, kill it, and it came back in the gone list under its ORIGINAL name
   — and resuming it by the name you chose answered "not found" while the old

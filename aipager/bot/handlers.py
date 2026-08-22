@@ -1650,7 +1650,7 @@ class CommandHandlersMixin:
         # Not found in registry — try session discovery
         session_name = f"claude-{target_label}"
         if await inject.is_alive(session_name):
-            new_sess = self.registry.get_or_create(session_name)
+            new_sess = self._adopt_by_typed_name(session_name, target_label)
             new_sess.trigger_msg_id = update.message.message_id
             new_sess.last_prompt = prompt_text
             self.registry.track_message(update.message.message_id, session_name,

@@ -266,6 +266,35 @@ def _external_quote_context(fragment: str) -> str:
 class SessionOpsMixin:
     """Mixin for TelegramBot — see :mod:`aipager.bot` overview."""
 
+    def _adopt_by_typed_name(self, session_name: str,
+                             target_label: str) -> TrackedSession:
+        """Adopt the session `session_name`, which was rebuilt from what
+        the operator typed.
+
+        `/<label>` falls back to reconstructing `claude-{label}` and
+        adopting whatever is alive under it. A session adopted that way
+        should answer to the label that produced its name, rather than
+        keeping whatever `get_or_create` derived from the internal name
+        or revived from a recent kill.
+
+        That only holds for a name the registry did not already know.
+        A tracked session's label is authoritative: `/rename` moves the
+        label while the internal name stays put, so the pre-rename name
+        goes on resolving to a live socket indefinitely, and re-labelling
+        an already-tracked entry here would silently undo the rename.
+
+        `known` is not scope-aware, because `registry.get` keys on the
+        internal name alone. In a multi-scope install an unscoped legacy
+        name reached through this fallback is therefore not filtered by
+        scope — unchanged by this method, which reproduces exactly what
+        the direct `get_or_create` call here did before.
+        """
+        known = self.registry.get(session_name) is not None
+        sess = self.registry.get_or_create(session_name)
+        if not known:
+            sess.label = target_label
+        return sess
+
     def _prompt_marker(self, sess) -> str:
         """Identity/origin marker prepended to Telegram free-text prompts.
 
@@ -936,7 +965,7 @@ class SessionOpsMixin:
         # Try auto-discover
         session_name = f"claude-{target_label}"
         if await inject.is_alive(session_name):
-            sess = self.registry.get_or_create(session_name)
+            sess = self._adopt_by_typed_name(session_name, target_label)
             self.registry.last_active_session = session_name
             self.registry.mark_dirty()
             asyncio.create_task(self._maybe_update_bot_name(session_name))
