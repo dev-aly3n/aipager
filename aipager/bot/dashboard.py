@@ -24,6 +24,7 @@ from aipager.config import (
     CHAT_ID,
 )
 from aipager.bot import session_parity
+from aipager.policy_snapshot import combined_queue_depth
 from aipager.state import Status, TrackedSession
 from aipager.transcript import last_assistant_preview as _read_preview
 
@@ -270,9 +271,36 @@ class DashboardMixin:
                 parts.append(f"-{sess.last_lines_removed}")
             rows.append(f"  Lines   {' '.join(parts)}")
 
-        # Queue depth — only if non-empty
-        if sess.pending_queue:
-            rows.append(f"  Queue   {len(sess.pending_queue)} pending")
+        # Live subagents — only if any are running right now. This is the
+        # current population (capped), not the busy message's per-turn
+        # cumulative count; a dashboard answers "what is happening now".
+        if sess.active_subagents:
+            # `type` arrives from the hook payload unvalidated: coerce to
+            # str so an odd payload (None, int) cannot break the sort or
+            # the dict key — one bad session must not fail the whole
+            # render — and escape it like every other hook-derived string
+            # in this function (label, model, tool summaries), because the
+            # dashboard is sent with parse_mode="HTML".
+            types: dict[str, int] = {}
+            for info in sess.active_subagents.values():
+                t = str(info.get("type") or "unknown")
+                types[t] = types.get(t, 0) + 1
+            if len(types) <= 3:
+                breakdown = ", ".join(
+                    f"{html_mod.escape(t)} ×{n}" if n > 1
+                    else html_mod.escape(t)
+                    for t, n in sorted(types.items()))
+                rows.append(
+                    f"  Agents  {len(sess.active_subagents)} ({breakdown})")
+            else:
+                rows.append(f"  Agents  {len(sess.active_subagents)}")
+
+        # Queue depth — only if non-empty. Combined: held messages plus
+        # ones already sent to Claude and awaiting pick-up. Same seam the
+        # Mini App and /clearqueue use, so the surfaces cannot disagree.
+        depth = combined_queue_depth(sess)
+        if depth:
+            rows.append(f"  Queue   {depth} pending")
 
         # Last activity — from last_hook_at (monotonic)
         if sess.last_hook_at > 0:

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `/status` and the session dashboard now show a live `Agents` row while
+  subagents are running — the chat half of the subagent visibility the
+  busy message already had. The dashboard adds a type breakdown when
+  there are few kinds; `/status`, a multi-session overview, keeps a bare
+  count.
+
+### Fixed
+- Their `Queue` rows now count every message actually waiting — including
+  ones already handed to Claude and awaiting pick-up — using the same
+  count the Mini App and `/clearqueue` read, instead of showing 0 while
+  work was queued.
+
 ### Fixed
 - A single long turn spawning many subagents can no longer grow the
   per-session agent table without bound: it is now held to the newest 100

@@ -41,6 +41,7 @@ from aipager.config import (
     FILE_DOWNLOAD_DIR, KEYBOARD_PARENTS, MODELS_BUTTON,
     TEMPLATES_BUTTON,
 )
+from aipager.policy_snapshot import combined_queue_depth
 from aipager.state import QUEUE_CAP, Status, TrackedSession
 
 # Pure-function helpers and constants live in aipager.bot.transport
@@ -583,12 +584,20 @@ class CommandHandlersMixin:
             model = (sl.get("model") if sl else None) or sess.model_name or "—"
             ctx_pct = sl["ctx_pct"] if sl else (sess.last_token_pct or 0)
             cost = f"${sl['cost']:.2f}" if sl and sl["cost"] >= 0.01 else "—"
-            queue = str(len(sess.pending_queue)) if sess.pending_queue else "0"
             rows.append(f"  Model  {html_mod.escape(model)}")
             rows.append(f"  Ctx    {ctx_pct}%")
             rows.append(f"  Cost   {cost}")
-            if sess.pending_queue:
-                rows.append(f"  Queue  {queue}")
+            if sess.active_subagents:
+                rows.append(f"  Agents {len(sess.active_subagents)}")
+            # Combined depth (held + inside Claude) — the same seam the
+            # Mini App and /clearqueue read, so no surface disagrees.
+            # This does a small synchronous directory listing per session
+            # (the notes dir); accepted knowingly, as the Mini App already
+            # did for its single-session view — /status multiplies it by
+            # session count, which at this project's scale is microseconds.
+            depth = combined_queue_depth(sess)
+            if depth:
+                rows.append(f"  Queue  {depth}")
             # Last tool for BUSY sessions
             if sess.status == Status.BUSY and sess.tool_history:
                 last_summary, last_done = sess.tool_history[-1]
