@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- A single long turn spawning many subagents can no longer grow the
+  per-session agent table without bound: it is now held to the newest 100
+  entries (the worst fan-out ever recorded here is 18), with the oldest
+  evicted the way the hourly sweep already ages them out. The busy
+  message's agent count is unaffected — it never read that table.
 - The test suite no longer depends on the invoker's color environment: a
   `FORCE_COLOR`/`CLICOLOR_FORCE` export made two CLI-output tests fail
   locally while CI stayed green. `conftest` now scrubs the color

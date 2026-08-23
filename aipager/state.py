@@ -37,6 +37,13 @@ QUEUE_CAP: int = 50
 QUEUE_MAX_AGE_SECONDS: float = 86400.0  # 24h
 # `tool_history` is trimmed to the most recent N entries on each append.
 TOOL_HISTORY_CAP: int = 200
+# `active_subagents` is held to this many entries at insertion; the oldest
+# (by `started_at`, the same age the TTL sweep uses) is evicted when a new
+# start would exceed it. The TTL sweep and SubagentStop pops are TIME and
+# EVENT bounds — a single fan-out turn can outrun both inside the hour.
+# 100 is >5x the worst fan-out ever recorded here (4 agents -> 18), so a
+# legitimate run never hits it; a runaway one stops growing.
+ACTIVE_SUBAGENTS_CAP: int = 100
 # Max GONE entries retained for `/resume` history. When a new session is
 # created and the GONE count exceeds this, the oldest-by-`gone_at` entry
 # is evicted. Lives on disk in aipager-sessions.json — kept here so
@@ -520,6 +527,29 @@ class TrackedSession:
             (text, msg_id, time.time(), reply_context, driver_user_id)
         )
         return True
+
+    def add_subagent(self, agent_id: str, info: dict) -> list[tuple[str, dict]]:
+        """Record a subagent start, holding the table to
+        :data:`ACTIVE_SUBAGENTS_CAP` entries.
+
+        The cap is enforced HERE, not at the call site, for the same
+        reason ``record_tool`` enforces ``TOOL_HISTORY_CAP`` itself: a
+        second caller added later cannot forget it. Returns the evicted
+        ``(agent_id, info)`` pairs (oldest by ``started_at``, the same age
+        the TTL sweep uses) so the caller can log them with its own
+        session context. The just-inserted entry can never evict itself:
+        it always carries the newest ``started_at``, and on a tie dict
+        insertion order makes the older entry the ``min``.
+        """
+        self.active_subagents[agent_id] = info
+        evicted: list[tuple[str, dict]] = []
+        while len(self.active_subagents) > ACTIVE_SUBAGENTS_CAP:
+            oldest = min(
+                self.active_subagents,
+                key=lambda a: self.active_subagents[a].get("started_at") or 0.0,
+            )
+            evicted.append((oldest, self.active_subagents.pop(oldest)))
+        return evicted
 
     def dialog_is_open(self) -> bool:
         """True while the terminal is showing a permission/question prompt.

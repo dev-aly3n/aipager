@@ -993,3 +993,95 @@ def test_identical_repeated_chunk_is_still_deduped(receiver, run_async):
               hook_event_name="MessageDisplay", delta="same",
               message_id="m1", index=0, final=True)
     assert notify_fn.await_count == 1
+
+
+# ---- active_subagents size cap ------------------------------------------
+#
+# `tool_history` has been size-capped at its insertion site since roadmap
+# item 2.4; `active_subagents` was only bounded by the 1 h TTL sweep and
+# by SubagentStop events actually arriving — TIME and EVENT bounds. A
+# single fan-out turn can outrun both: probed on 2026-08-22, the dict
+# accepted 5,000 entries and retained all 5,000. These pin the size bound
+# and the safety of the eviction it introduces.
+
+def test_active_subagents_never_exceeds_the_cap(receiver, run_async):
+    """The reproduce-first test: cap+50 starts through the real datagram
+    path must retain exactly the cap. Fails on pre-cap code with 150."""
+    from aipager.state import ACTIVE_SUBAGENTS_CAP
+
+    registry, recv, _notify = receiver
+    for i in range(ACTIVE_SUBAGENTS_CAP + 50):
+        _send(recv, run_async,
+              hook_event_name="SubagentStart",
+              session="claude-jim",
+              agent_id=f"agent-{i}",
+              agent_type="explore")
+    sess = registry.get("claude-jim")
+    assert len(sess.active_subagents) == ACTIVE_SUBAGENTS_CAP
+
+
+def test_eviction_drops_the_oldest_and_keeps_the_newest(receiver, run_async):
+    """Oldest-by-started_at goes first — the same notion of age the TTL
+    sweep uses, so the two bounds never disagree about which entry is
+    expendable."""
+    from aipager.state import ACTIVE_SUBAGENTS_CAP
+
+    registry, recv, _notify = receiver
+    total = ACTIVE_SUBAGENTS_CAP + 10
+    for i in range(total):
+        _send(recv, run_async,
+              hook_event_name="SubagentStart",
+              session="claude-jim",
+              agent_id=f"agent-{i}",
+              agent_type="explore")
+    sess = registry.get("claude-jim")
+    assert f"agent-{total - 1}" in sess.active_subagents, "newest was evicted"
+    assert "agent-0" not in sess.active_subagents, "oldest survived"
+    assert f"agent-{ACTIVE_SUBAGENTS_CAP}" in sess.active_subagents
+
+
+def test_late_stop_for_an_evicted_agent_is_a_safe_no_op(receiver, run_async):
+    """A SubagentStop whose start was evicted must not raise, must not
+    resurrect the entry, and must still fire the notify with
+    history_idx=None — the same contract as a stop with no start at all."""
+    from aipager.state import ACTIVE_SUBAGENTS_CAP
+
+    registry, recv, notify_fn = receiver
+    for i in range(ACTIVE_SUBAGENTS_CAP + 5):
+        _send(recv, run_async,
+              hook_event_name="SubagentStart",
+              session="claude-jim",
+              agent_id=f"agent-{i}",
+              agent_type="explore")
+    _send(recv, run_async,
+          hook_event_name="SubagentStop",
+          session="claude-jim",
+          agent_id="agent-0",           # evicted
+          agent_type="explore")
+    sess = registry.get("claude-jim")
+    assert "agent-0" not in sess.active_subagents, "the stop resurrected it"
+    assert len(sess.active_subagents) == ACTIVE_SUBAGENTS_CAP
+    _, event, ctx = notify_fn.await_args.args
+    assert event == "subagent_stop"
+    assert ctx["history_idx"] is None
+
+
+def test_populations_under_the_cap_are_untouched(receiver, run_async):
+    """The ordinary case must not move: start/stop pairing below the cap
+    behaves exactly as before the cap existed."""
+    registry, recv, _notify = receiver
+    for i in range(18):                  # the worst fan-out ever recorded here
+        _send(recv, run_async,
+              hook_event_name="SubagentStart",
+              session="claude-jim",
+              agent_id=f"agent-{i}",
+              agent_type="explore")
+    sess = registry.get("claude-jim")
+    assert len(sess.active_subagents) == 18
+    _send(recv, run_async,
+          hook_event_name="SubagentStop",
+          session="claude-jim",
+          agent_id="agent-3",
+          agent_type="explore")
+    assert len(sess.active_subagents) == 17
+    assert "agent-3" not in sess.active_subagents

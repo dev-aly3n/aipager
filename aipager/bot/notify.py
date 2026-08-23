@@ -427,7 +427,8 @@ class NotifyMixin:
             if history_idx is not None and 0 <= history_idx < len(sess.tool_history):
                 sess.tool_history[history_idx] = (done_summary, True)
             else:
-                # No matching start (daemon restart?) — append as done entry
+                # No matching start — daemon restart, or the start was
+                # evicted by the active_subagents cap — append as done entry
                 sess.record_tool(done_summary, True)
             # Edit busy message if ready (debounced)
             if sess.busy_msg_id and sess.busy_msg_id > 0:

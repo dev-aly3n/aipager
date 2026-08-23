@@ -24,7 +24,7 @@ from aipager.config import (
     SOCKET_PATH,
 )
 from aipager.md_to_tg import markdown_to_telegram_html
-from aipager.state import SessionRegistry, Status
+from aipager.state import ACTIVE_SUBAGENTS_CAP, SessionRegistry, Status
 from aipager.transcript import (
     _strip_leaked_tool_xml,
     extract_last_response,
@@ -462,11 +462,25 @@ class HookReceiver:
             agent_type = msg.get("agent_type", "unknown")
             if agent_id:
                 sess = self.registry.get_or_create(session_name)
-                sess.active_subagents[agent_id] = {
+                # The cap lives inside add_subagent (state.py), enforced
+                # by the data structure itself so a future second caller
+                # cannot bypass it. Eviction keeps the newest agents; the
+                # busy message's "(N agents)" reads
+                # `subagent_count_this_turn`, not this dict, so the count
+                # stays truthful. A late SubagentStop for an evicted id is
+                # a safe no-op at this layer (`pop(agent_id, None)` below);
+                # one layer up, notify's "no matching start" branch then
+                # records the stop as a fresh done row in tool_history.
+                for evicted_id, dropped in sess.add_subagent(agent_id, {
                     "type": agent_type,
                     "started_at": time.monotonic(),
                     "history_idx": None,  # set by telegram_bot notify
-                }
+                }):
+                    log.info(
+                        "[%s] active_subagents at cap (%d); evicted oldest "
+                        "%s (%s)", sess.label, ACTIVE_SUBAGENTS_CAP,
+                        evicted_id, dropped.get("type", "unknown"),
+                    )
                 log.info("[%s] SubagentStart: %s (%s)", sess.label, agent_type, agent_id)
                 await self.notify_fn(sess, "subagent_start", {
                     "agent_id": agent_id,
