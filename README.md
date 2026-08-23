@@ -9,7 +9,7 @@ CLI sessions. Run Claude inside a detached terminal (`dtach`), drive it
 from your phone — read responses, send prompts, approve permission
 requests, switch sessions — without an SSH session staying open.
 
-[Docs](docs/) · [Changelog](CHANGELOG.md) · [Issues](https://github.com/dev-aly3n/aipager/issues)
+[aipager.run](https://aipager.run) · [Docs](docs/) · [Changelog](CHANGELOG.md) · [Issues](https://github.com/dev-aly3n/aipager/issues)
 
 ## Install
 
@@ -138,7 +138,7 @@ aipager runs by default as a 1:1 DM bot. To run it in a Telegram
 group with multiple devs (mention `@aipagerbot deploy`,
 `@aipagerbot /jim run the tests`), re-run `aipager config` and
 pick **Team** at the mode prompt. You'll set up an allow-list of
-Telegram user IDs and roles (`admin` / `developer` / `read_only`)
+Telegram user IDs and roles (`owner` / `admin` / `user` / `read_only`)
 plus optional `deny_tools` rules that auto-block restricted tool
 calls. **Adding a user grants them code-execution rights on the
 host** — see [docs/groups.md](docs/groups.md) for the full trust
@@ -225,19 +225,39 @@ and bootstraps it. Subcommands: `start`, `stop`, `status`, `logs`,
 
 - Mirrors Claude Code session state to Telegram: busy/idle, tool calls,
   context %, cost, line counts
-- Lets you reply to messages to inject prompts back into the session
+- Sends your messages to Claude **immediately**, even mid-turn — send
+  several and Claude queues them itself, exactly like typing in the
+  terminal. 👀 means sent, 👍 means Claude picked it up
+- Holds a message while a permission or question prompt is open, so it
+  can never be swallowed as an answer to that dialog — then delivers it
+  once you respond
 - Surfaces permission prompts and `AskUserQuestion` dialogs as Telegram
-  inline keyboards
+  inline keyboards; buttons from an already-finished task refuse
+  instead of acting on your current work
+- Creates sessions from chat: `/new` walks name → mode → model → folder
 - Notifies on context warnings, compaction, session end, and stalls
-- Supports multiple concurrent sessions with one bot
+- Supports multiple concurrent sessions with one bot; optional
+  multi-user team mode with roles and per-tool rules
+  ([docs/groups.md](docs/groups.md))
 - Optional read-only observer bots
+
+### Mini App
+
+`/app` opens a dashboard inside Telegram — live session list with
+stop / kill / restart / rename / permission controls, a diff viewer
+for `Write`/`Edit` changes, and settings. It is served by the daemon
+itself and is **on by default**; every request is verified against
+Telegram's `initData` signature. Manage it with
+`aipager miniapp enable|disable|status`, or point it at your own URL
+instead of the managed tunnel — see
+[docs/security.md](docs/security.md#mini-app-tunnel).
 
 ### Note on model buttons (Bedrock / Vertex users)
 
 The persistent keyboard's **Model** submenu sends `/model sonnet`,
 `/model opus`, `/model haiku`, and `/model opusplan` — Claude Code's
-aliases. On the Anthropic API these resolve to the latest in each
-family (currently Opus 4.7, Sonnet 4.6, Haiku 4.5). On **Bedrock** and
+aliases. On the Anthropic API these resolve to the latest model in
+each family. On **Bedrock** and
 **Vertex** the same aliases may resolve to older snapshots depending on
 your provider's available versions. If you target those backends and
 want a specific model, tap the alias as a starting point, then `/model

@@ -49,17 +49,14 @@ The dtach process for that session exited (machine reboot,
 Recreate from scratch — its `~/.claude/projects/...` directory still
 has the conversation:
 
-```sh
-aipager session <label>            # new dtach + claude
-# or via Telegram:
-/new <label>
-```
-
-To recover the prior conversation, attach interactively once with
-`--resume`:
+The easiest path is `/resume <label>` in Telegram (or bare
+`/resume` for a picker) — it relaunches the session and picks the
+conversation back up. From the CLI:
 
 ```sh
-aipager session <label> --resume
+aipager resume <label>             # same thing from the terminal
+aipager session <label>            # or a fresh session, no history
+aipager session <label> --resume   # fresh dtach, resumed conversation
 ```
 
 ## Permission prompt stuck on INTERACTIVE
@@ -142,7 +139,7 @@ The order matters — each later check assumes earlier ones passed.
 
 | Check | What it verifies | Fix hint |
 |---|---|---|
-| `check_config` | `~/.config/aipager/config.env` exists and has token + chat ID | `aipager config` |
+| `check_config` | `~/.config/aipager/aipager.yaml` exists and has token + chat ID | `aipager config` |
 | `check_token_valid` | Token works against Telegram `getMe` | re-run `aipager config` |
 | `check_chat_reachable` | Bot can send to the configured chat | open bot, tap Start |
 | `check_dtach` | `dtach` binary on PATH | `uv tool install --reinstall aipager` |

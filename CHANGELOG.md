@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+- Brought every end-user document back in line with the code: the full
+  16-command reference and per-session dynamic commands, the Mini App,
+  the immediate message handoff (👀 sent / 👍 picked up), stale-button
+  behaviour, the current team setup (`aipager.yaml` + `policy.yaml`,
+  owner/admin/user/read_only roles, live reload), the real one-way hook
+  channels, and the per-message permission notes in the security model.
+
 ## [0.7.4] - 2026-08-23
 
 ### Changed

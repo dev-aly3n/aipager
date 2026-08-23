@@ -2,8 +2,8 @@
 
 aipager runs by default as a 1:1 DM bot — you and the bot, no one
 else. **Team mode** opens it up to a Telegram group with multiple
-developers, the way teams use `@gitbot` or `@deploybot`: anyone in
-the group can mention `@aipagerbot` to inject prompts, approve
+developers, the way teams use `@gitbot` or `@deploybot`: anyone on
+the allow-list can mention `@aipagerbot` to inject prompts, approve
 permission requests, or check status.
 
 Team mode is opt-in. Personal-mode installs are unaffected.
@@ -16,8 +16,8 @@ rights on the host running the daemon**. They can:
 - Inject prompts that claude turns into shell commands, file
   edits, network calls.
 - Approve / deny tool calls — your `~/.claude/settings.json` still
-  decides which tools claude asks about, but anyone with `admin`
-  or `developer` role can hit Allow.
+  decides which tools claude asks about, but anyone whose role can
+  approve can hit Allow.
 - Create / kill / switch sessions.
 
 Treat the allow-list the same way you treat SSH access to the
@@ -30,67 +30,38 @@ who did what so you can review later, but it's after-the-fact.
 Run `aipager config`. The wizard adapts:
 
 - **No config yet** → first-run wizard. Picks mode upfront, then
-  walks token → mode → chat (group or DM) → team users + rules (if
+  walks token → mode → chat (group or DM) → members + roles (if
   team) → deps → settings → write.
 - **Config exists** → edit menu. Opens a current-state panel and
   offers focused actions: add a user, remove a user, change a
   user's role, edit deny rules, switch mode, refresh the bot token,
   or run the full setup again.
 
-The first-run team flow:
+The wizard writes everything to `~/.config/aipager/aipager.yaml`
+(mode 0600): the bot token, the chat(s) the bot serves, and each
+chat's members with their roles. What each *role may do* lives in
+the user-owned `~/.config/aipager/policy.yaml` — see
+[Rules](#how-rules-work) below. Installs configured with the older
+`team.yaml` format keep working and are migrated automatically —
+by the daemon at startup, or by the wizard on its next run.
 
-1. After token verification, pick **Team** at the mode prompt.
-2. Wizard shows a hard-stop warning panel about the trust expansion
-   (allow-listed users can run shell commands on the host) and
-   asks you to confirm.
-3. **Group chat ID** — paste it manually, or pick "Auto-detect"
-   and let the wizard watch `getUpdates` for a `/start` in the
-   group. Add the bot first.
-4. Walks you through adding **users** — label, Telegram user ID
-   (with manual-paste or auto-detect-via-mention), role.
-5. Optionally enables a default **deny rule** (`Write` + `Edit`),
-   which the next section explains.
-6. Writes `~/.config/aipager/team.yaml` (mode 0600).
-
-Edit operations (when a config already exists):
-
-- **Add a user** — same prompts as first-run, validates against the
-  current list so you can't dup a label or user id.
-- **Remove a user** — picker over the current list. Refuses to
-  remove the last admin (promote someone first).
-- **Change a user's role** — picker → new role. Same single-admin
-  guard applies.
-- **Edit deny_tools rules** — checkbox over the common Claude
-  tools (`Bash`, `Write`, `Edit`, `WebFetch`, `Read`, `Glob`,
-  `Grep`, `Task`) with current selections pre-checked, plus a
-  free-form "other tools" line for custom names.
-- **Switch to Personal mode** — archives `team.yaml` to
-  `team.yaml.bak.<unix-ts>` and offers to re-collect a DM chat id
-  for `config.env`.
-- **Switch to Team mode** (when currently personal) — reuses the
-  token, walks the team setup, and updates `config.env`'s
-  `CHAT_ID` to the group id.
-- **Refresh bot token** — re-prompt for a new token after
-  `/revoke` in `@BotFather`.
+For the group chat ID you can paste it manually, or pick
+"Auto-detect" and let the wizard watch for a `/start` in the group
+(add the bot first). The same auto-detect works for member user IDs
+— the wizard captures the next message's sender id and suggests
+their Telegram username as the label.
 
 ### Live reload
 
 The wizard signals the running daemon via **SIGUSR1** after every
-team.yaml change, so add-user / remove-user / change-role / edit-
-rules / switch-to-personal apply **without** a daemon restart.
-You'll see:
+config change, so add-user / remove-user / change-role / edit-rules
+/ switch-mode apply **without** a daemon restart. The reload covers
+`aipager.yaml`, `policy.yaml`, and legacy `team.yaml` alike.
 
-```
-✓ Team config reloaded live (no daemon restart needed)
-```
-
-Restart is still required when changes affect:
-
-- **Bot token** (Refresh bot token)
-- **`CLAUDE_TG_CHAT_ID`** (Switch to Team writes a new group id)
-
-The wizard distinguishes between hot-reloadable and restart-needed
-changes and prints the appropriate hint.
+Restart is still required when changes affect the **bot token** or
+the **chat id** the bot polls. The wizard distinguishes between
+hot-reloadable and restart-needed changes and prints the appropriate
+hint.
 
 To trigger a reload manually (e.g. after a hand-edit):
 
@@ -98,21 +69,9 @@ To trigger a reload manually (e.g. after a hand-edit):
 kill -USR1 $(pgrep -f 'aipager start')
 ```
 
-If `team.yaml` is malformed at reload time, the daemon logs a
-WARN and keeps the previous in-memory team — so you can't lock
+If a config file is malformed at reload time, the daemon logs a
+WARN and keeps the previous in-memory config — so you can't lock
 yourself out by typo'ing a hand-edit.
-
-### Auto-detect Telegram user IDs
-
-When adding a user via the wizard you can pick **Auto-detect**
-instead of pasting a numeric id. The wizard polls
-`getUpdates` for the next message and captures the sender's id +
-Telegram username, then suggests the username as the default
-label. Removes the "ask your teammate to dig out their user id"
-step.
-
-You can still hand-edit `team.yaml` directly — the wizard just
-gives you a cleaner UX.
 
 Also, on `@BotFather`, leave **privacy mode ON** (the default).
 That way the bot only sees messages that mention it or reply to
@@ -120,122 +79,143 @@ its messages — not every chat in the group.
 
 ## Roles
 
-| Role | Send prompts | Approve | Bypass `deny_tools` | Use `/status` |
+Four built-in roles (see `aipager/safety.py`):
+
+| Role | Send prompts | Approve | Bypass deny rules | Bypass the safety floor |
 |---|---|---|---|---|
-| `admin` | ✅ | ✅ | ✅ | ✅ |
-| `developer` | ✅ | ✅ | ❌ | ✅ |
-| `read_only` | ❌ | ❌ | ❌ | ✅ |
+| `owner` | ✅ | ✅ | ✅ | ✅ |
+| `admin` | ✅ | ✅ | ✅ | ❌ |
+| `user` | ✅ | ✅ | ❌ | ❌ |
+| `read_only` | ❌ | ❌ | ❌ | ❌ |
 
-- **admin** — full control. Bypasses `deny_tools` rules so they can
-  manually approve restricted tool calls when needed.
-- **developer** — full control except `deny_tools` rules apply.
-  Their Allow tap on a denied tool gets auto-rejected.
-- **read_only** — observers. They see every message, can call
+- **owner** — full control, including the built-in safety floor.
+  There should be exactly one: the person who runs the machine.
+- **admin** — bypasses role deny rules (their Allow tap works on a
+  restricted tool), but the safety floor still applies.
+- **user** — deny rules apply; an Allow tap on a rule-denied tool is
+  auto-rejected.
+- **read_only** — observers. They see every message and can call
   `/status`, but their text / voice / file messages are ignored.
-  Useful for stakeholders who want visibility without action.
 
-## `team.yaml` schema
+Custom roles can be defined in `policy.yaml`; the four above are the
+defaults it layers on top of.
+
+## `aipager.yaml` schema (team parts)
 
 ```yaml
-mode: team
-group_id: -100123456789
+schema_version: 3
+bot_token: "…"
 
-users:
-  - id: 12345          # Telegram user ID (NOT a label, NOT a chat ID)
-    label: alice       # how the user is referenced in chat (@alice)
-    role: admin
-  - id: 67890
-    label: bob
-    role: developer
-  - id: 11111
-    label: charlie
-    role: read_only
-
-rules:
-  deny_tools:          # auto-deny these tool calls without prompting
-    - Write
-    - Edit
+scopes:
+  - kind: group
+    chat_id: -100123456789
+    members:
+      - id: 12345        # Telegram user ID (NOT a label, NOT a chat ID)
+        label: alice     # how the user is referenced in chat (@alice)
+        role: owner
+      - id: 67890
+        label: bob
+        role: user
+      - id: 11111
+        label: charlie
+        role: read_only
 ```
 
-Missing sections take safe defaults: no `rules` block means no
-auto-deny. An empty `users` list rejects every message and the
-daemon refuses to start.
+A DM scope (`kind: dm`) and a group scope can coexist — the bot then
+serves both chats, with sessions namespaced per chat.
 
 ## How rules work
 
-The single rule type in v1 is **`deny_tools`** — a list of Claude
-Code tool names (e.g. `Write`, `Edit`, `Bash`, `WebFetch`). When
-claude asks for permission to use a denied tool **and** the
-session's last driver isn't an admin:
+`~/.config/aipager/policy.yaml` defines per-role rules. Validate it
+with `aipager policy validate`. Supported fields per role:
+
+- `deny_tools` — tool names auto-denied without prompting
+  (e.g. `Write`, `Edit`, `Bash`, `WebFetch`).
+- `allow_tools` — if non-empty, an allow-list: everything else is
+  denied for that role.
+- `deny_bash_patterns` — patterns matched against `Bash` inputs.
+- `deny_paths_no_access` / `deny_paths_no_write` — path rules.
+
+Underneath all roles sits a built-in **safety floor** (protected
+paths and command patterns) that only `owner` bypasses.
+
+When claude asks for permission to use a rule-denied tool and the
+driver's role does not bypass rules:
 
 - The bot **does not show the permission prompt**.
-- It writes a deny back to claude (via the same key-injection path
-  the `[❌ Deny]` button uses).
-- It posts a one-line notice in the chat:
-  `⛔ [jim] · Auto-denied · Write · per rules.deny_tools (triggered by @bob)`
-- It writes an audit record with `action: "Auto-denied"`.
+- It writes a deny back to claude.
+- It posts a one-line notice in the chat, e.g.
+  `⛔ [jim] · Auto-denied · Write · (triggered by @bob)`.
+- It writes an audit record with `denied: true`.
 
-Admins can manually approve denied tools because they bypass rules —
-if alice is an admin and asks claude to write a file, claude's
-normal prompt still appears for her tap. If bob (developer) asks
-the same thing, it's auto-denied.
+## Who a message runs as
 
-Future rule types are out of scope for v1 but the schema is
-forward-compatible. Likely additions:
+Enforcement keys off **who sent each message**, not whose turn it
+happens to interrupt:
 
-- `require_n_approvers: 2` — 2-of-N for tool approval
-- `deny_bash_patterns: ["rm -rf"]` — pattern-match `Bash` inputs
-- `business_hours_only: true` — no deploys overnight
+- Every Telegram message carries its sender's identity and rules
+  into the session (see
+  [security → team-mode enforcement](security.md#team-mode-enforcement)).
+  A message held back — because a permission prompt was open, or
+  because someone else's message was still waiting — is delivered
+  later **with the original sender's permissions**, not whoever
+  drove the session most recently.
+- Messages from different users are never merged into one turn:
+  while one user's message is still waiting to be picked up, another
+  user's message is held until it clears. If a mixed turn happens
+  anyway, it runs under the *most restrictive* combination of the
+  contributors — privileges never widen.
+- Buttons that act on a running turn (Stop, Kill, Restart, Replace,
+  perms-switch) refuse when tapped from a card belonging to an
+  earlier task — `That task already finished — …` — so a stale tap in a
+  busy group can't destroy someone else's current work.
 
 ## What everyone sees
 
-**Permission audits.** Every Allow / Deny / Continue is replied to
-in chat:
+**Permission audits.** Every Allow / Deny is replied to in chat:
 
 ```
 ✅ [jim] · Allowed by @alice · Bash: ls -la /tmp
 🚫 [jim] · Denied by @bob · WebFetch: https://example.com
-⛔ [jim] · Auto-denied · Edit · per rules.deny_tools (triggered by @bob)
+⛔ [jim] · Auto-denied · Edit · (triggered by @bob)
 ```
 
 So even if you weren't watching live, scrolling back tells you
 exactly who decided what.
 
-**Driver attribution.** Inside the daemon's view of each session,
-`last_driver_user_id` tracks who most recently injected a prompt.
-Used to attribute auto-deny rules and (in future) for the pinned
-dashboard's "🚗 @driver" line.
+**Message states.** 👀 on a message means it was sent to the
+session; 👍 means Claude picked it up. `/whoami` shows your own id
+and role.
 
 **On-disk audit.** `~/.claude/aipager-audit.jsonl` records every
-decision with `user_id`, `username`, `display_name` fields so
-admins can post-hoc reconstruct what each user did.
+decision with `user_id`, `username` and scope fields so admins can
+post-hoc reconstruct what each user did.
 
 ## Privacy considerations
 
-- The chat-id filter still applies. Even with team mode, the bot
-  only listens to **the configured group**. Adding the bot to a
-  second group doesn't activate it there.
+- The chat filter still applies. Even with team mode, the bot only
+  listens to **the configured chat(s)**. Adding the bot to a second
+  group doesn't activate it there.
 - Read-only users **can read** prompts and tool inputs. They can't
   act, but they see everything. If you need to hide some
   conversations from an observer, that observer doesn't belong in
   the group.
-- `team.yaml` is mode 0600 (owner-only). Bot token + chat ID stay
-  in `config.env`, also 0600.
+- `aipager.yaml` and `policy.yaml` are mode 0600 (owner-only).
 - The audit log is owner-only (`~/.claude/aipager-audit.jsonl`).
 
 ## Revoking a user
 
-1. Edit `~/.config/aipager/team.yaml` and delete the user's entry.
-2. Restart the daemon:
+1. Run `aipager config` → Remove a user (or hand-edit
+   `aipager.yaml` and delete their member entry).
+2. The wizard reloads the daemon live (SIGUSR1) — no restart needed.
+   After a hand-edit, send the signal yourself:
    ```sh
-   aipager service restart        # if running as a service
-   # or
-   pkill -f 'aipager start' && aipager start
+   kill -USR1 $(pgrep -f 'aipager start')
    ```
 3. Optionally also kick them from the Telegram group.
 
-Step 2 is the security-critical one — the daemon caches the
-allow-list at startup; until you restart, they can still act.
+Step 2 is the security-critical one — until the reload lands, the
+previous allow-list is still in memory.
 
 ## Related docs
 

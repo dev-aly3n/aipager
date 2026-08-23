@@ -34,16 +34,23 @@ events carry `agent_id` and `agent_type`.
 
 ## Event reference
 
-The handlers are in `aipager/hook_receiver.py:222-438`.
+The handlers are in `aipager/dtach/hook_receiver.py`.
 
 ### `UserPromptSubmit`
 
-Fires the instant the user submits a prompt in claude — whether they
-typed it in the dtach terminal or aipager injected it from Telegram.
+Fires the instant claude picks a prompt up — whether it was typed in
+the dtach terminal or injected from Telegram. This is also where
+Telegram-originated permissions are installed: the hook matches the
+prompt against the session's per-message permission notes
+(`/tmp/claude-notes-<session>/`, written when each message was sent),
+merges what it accounts for, and writes the result to the snapshot
+the `PreToolUse` check reads — see
+[security → team-mode enforcement](security.md#team-mode-enforcement).
+It then tells the daemon which messages were consumed.
 
 | Aipager does | User sees |
 |---|---|
-| Marks the session BUSY. Sends or edits the "🟡 Working…" busy message with cost + agent count. | A live "Working…" pinned reply in Telegram. |
+| Marks the session BUSY; sends the busy message if one isn't already up (Telegram-injected prompts get theirs at send time). Reacts 👍 on each Telegram message the prompt accounted for. | The 👀 on their message flips to 👍; a live "Working…" reply. |
 
 ### `PreToolUse`
 
@@ -54,8 +61,9 @@ drives the **permission flow**: claude's settings tell it `Allow`,
 - `Allow` (auto-approved): aipager logs the tool to `tool_history` and
   posts a diff preview if the tool is `Write` or `Edit`. No prompt.
 - `Ask` (requires confirmation): aipager edits the busy message into
-  a permission prompt with inline `[✅ Allow] [❌ Deny] [➡️ Continue]`
-  buttons (see [commands → permission prompts](commands.md#permission-prompts)).
+  a permission prompt with inline `[✅ Allow] [❌ Deny]
+  [🟢 Allow always] [⏹ Stop]` buttons (see
+  [commands → permission prompts](commands.md#permission-prompts)).
 - `Deny`: claude blocks the call itself; aipager just records it.
 
 The decision lives in claude's `~/.claude/settings.json`. aipager
@@ -83,7 +91,7 @@ Claude spawned a Task subagent (or it returned). aipager increments
 
 `SubagentStop` decrements the counter. Subagents whose `Stop` never
 arrives are garbage-collected after 1 h
-(`AIPAGER_SUBAGENT_TTL`).
+(`AIPAGER_SUBAGENT_TTL`, seconds).
 
 ### `SessionStart` / `SessionEnd`
 
@@ -94,11 +102,20 @@ Session lifecycle.
 - `SessionEnd` marks it GONE in the pinned status. The user can
   recreate via `aipager session <name>` or `/new <name>`.
 
-### `PreCompact`
+### `PreCompact` / `PostCompact`
 
 Claude is about to compact its context window. aipager flushes a
 "💬 Compacting context…" message threaded under the busy message so
 users see the pause isn't a crash. `trigger` is `auto` or `user`.
+`PostCompact` closes the in-flight marker; the "Compacted: X% → Y%"
+summary arrives via the post-compact session start or the statusline.
+
+### `MessageDisplay`
+
+Claude's own prose as it reaches the screen, in paragraph-sized
+chunks. This is the only *current* source of what claude is saying —
+the transcript file lags until each tool round finishes — and is what
+streams commentary into the busy message live.
 
 ### `statusline`
 
@@ -120,22 +137,29 @@ claude               aipager daemon                 Telegram
   |  PreToolUse (Ask)     |                            |
   |---------------------->|                            |
   |                       | edit busy msg → prompt     |
-  |                       | with Allow/Deny/Continue   |
+  |                       | with Allow / Deny buttons  |
   |                       |--------------------------->|
   |                       |                            |
   |                       |   user taps [✅ Allow]     |
   |                       |<---------------------------|
-  |                       | audit.append(action="allow")
-  |                       | write hookSpecificOutput=approve
-  |                       | to stdout (claude reads it)
+  |                       | audit.append(...)
+  |                       | inject keystrokes into the
+  |                       | session's pty (dtach) to
+  |                       | select Yes / No in claude's
+  |                       | own dialog
   |  resume tool call     |                            |
   |<----------------------|                            |
 ```
 
-The hookSpecificOutput JSON goes back to claude via the
-`aipager-hook` helper's stdout — the daemon writes it back to the
-helper over the same datagram socket, the helper relays it to claude.
-See `aipager/notify_hook.py` for the bidirectional protocol.
+Two channels, each one-way. The datagram socket only ever carries
+events **from** the hook **to** the daemon — it is fire-and-forget,
+with no reply path. Your tap travels back to claude as keystrokes
+injected into the session's pty, answering the same dialog you would
+see in the terminal. When the `aipager-hook` helper does answer
+claude directly on stdout (a rule-based deny from
+`aipager/dtach/enforce.py`, or per-message context on
+`UserPromptSubmit`), it computes that answer itself from local files
+— it never waits on the daemon.
 
 ## See also
 

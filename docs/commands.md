@@ -1,52 +1,80 @@
 # Bot commands and interface
 
-How you drive aipager from Telegram. Three input channels: slash
-commands, inline-keyboard buttons, and free messages (text / files /
-voice).
+How you drive aipager from Telegram. Four input channels: slash
+commands, keyboard buttons, the Mini App dashboard, and free
+messages (text / files / voice).
 
-The bot only accepts input from the chat ID configured in
-`~/.config/aipager/config.env`. See [security](security.md) for the
-trust boundary.
+The bot only accepts input from the configured chat(s) — see
+[security](security.md) for the trust boundary.
 
 ## Slash commands
 
-Registered in `aipager/telegram_bot.py:400-406`. Telegram autocomplete
+Registered in `aipager/bot/lifecycle.py`. Telegram autocomplete
 shows these in its slash-command menu, refreshed at daemon startup
 and on every session change.
 
 | Command | Args | What it does |
 |---|---|---|
 | `/start`, `/help` | — | Print the welcome panel and persistent keyboard. |
+| `/app` | — | Open the Mini App dashboard (sessions, diff viewer, settings). |
 | `/status` | — | One-message snapshot of every live session: model, context %, cost, queue depth. |
-| `/stop` | — | Send SIGINT to the active session's current claude turn (does not destroy the session). |
-| `/kill [label]` | optional session label | Destroy a session. With no arg, opens a picker. Always two-tap: shows `[💀 Kill] [Cancel]`. |
-| `/new <label> [prompt]` | label (required), optional first prompt | Create a new dtach + claude session named `claude-<label>`. If a prompt follows, it's injected as the first message. |
-| `/clearqueue` | — | Drop every queued prompt for the active session without interrupting the running turn (unlike `/stop`). Replies with the count cleared. |
-| `/<label>` | optional message text | Switch the active session to `<label>`. If text follows the command, also inject it as the next prompt. Registered dynamically — one per live session. |
+| `/stop` | — | Interrupt the active session's current turn. Also discards queued messages and replies with how many were discarded. |
+| `/new [label] [prompt]` | all optional | Create a session. With no args, an interactive wizard walks name → mode → model → folder. With a label (and optional first prompt), creates `claude-<label>` directly. |
+| `/resume [label]` | optional | Resume a previously-gone session by name, or open a picker. |
+| `/kill [label]` | optional | Destroy a session. With no arg, opens a picker. Always two-tap: shows `[💀 Kill] [Cancel]`. |
+| `/restart [label]` | optional | Kill and relaunch a session, keeping its conversation. |
+| `/rename [label]` | optional | Give a session a new name. |
+| `/delete [label]` | optional | Drop a finished (GONE) session from the list. |
+| `/diff [label]` | optional | Show the session's working-directory git diff. |
+| `/clearqueue` | — | Drop every not-yet-picked-up message for the active session — both messages aipager is holding and messages already queued inside Claude — without interrupting the running turn. Replies with the count cleared. |
+| `/perms [label]` | optional | Switch a session between Ask and Auto permission modes. On a busy session, offers `Stop task & switch` / `Not now`. |
+| `/settings` | — | Message layout, formatting and language preferences. |
+| `/whoami` | — | Show your Telegram id and (in team mode) your role. |
+
+### Per-session dynamic commands
+
+One command per live session, registered from its label:
+
+| Form | What it does |
+|---|---|
+| `/<label>` | Switch the active session to `<label>` and show its dashboard. |
+| `/<label> <prompt>` | Send `<prompt>` straight to that session without switching. |
+| `/<label> stop` | Interrupt that session's current turn. |
 
 `/status` results come from the same data `aipager status` shows on
 the CLI; no Telegram round-trip for the session list itself.
 
-## Inline keyboard
+## The Mini App
 
-A persistent four-row keyboard sits below the chat input. Rows from
-top to bottom: shortcuts, submenus, action bar, kill bar.
+`/app` (and the Telegram menu button) opens a dashboard served by the
+daemon itself: live session list with per-session actions (stop,
+kill, restart, rename, perms, clear queue), a diff viewer for
+`Write`/`Edit` changes, and settings. It is on by default; manage it
+with `aipager miniapp enable|disable|status`. Every request is
+verified against Telegram's `initData` signature — see
+[security → Mini App tunnel](security.md#mini-app-tunnel).
 
-| Row | Buttons | Customizable? |
+Everything in the Mini App is also reachable from chat: the ⋮ menu on
+a session's dashboard carries the same actions.
+
+## Persistent keyboard
+
+A persistent keyboard sits below the chat input. Rows, top to bottom:
+
+| Row | Buttons | Notes |
 |---|---|---|
-| Shortcuts | `📋 Templates`, `🎛 Commands`, `🤖 Models` | Yes — see below |
-| Sessions | one button per live session, plus `➕ New` | No (auto-built from registry) |
-| Actions | `📊 Status`, `⏹ Stop` | No |
-| Kill | `💀 Kill` | No |
+| Sessions | one button per live session label | auto-built from the registry |
+| Actions | `status`, `stop`, `kill` | plain-text shortcuts |
+| Nav | `Templates`, `Commands`, `📱 App` | App appears in private chats while the Mini App is up, and opens it directly |
 
-Tapping `📋 Templates`, `🎛 Commands`, or `🤖 Models` opens a submenu
-keyboard. Each entry sends a canned prompt or slash command:
+`Model ›` lives inside the Commands submenu. Tapping a submenu
+entry sends a canned prompt or slash command:
 
 - **Templates** — bulk prompts you find yourself typing repeatedly,
   e.g. `Write tests for the changes`, `Explain your plan before
   making changes`, `Update CLAUDE.md with what you learned`.
 - **Commands** — slash commands claude code natively handles
-  (`/init`, `/security-review`, `/compact`, etc.).
+  (`/compact`, `/clear`, etc.), injected instantly.
 - **Models** — quick model switches (`/model sonnet`, `/model opus`,
   `/model haiku`, `/model opusplan`).
 
@@ -73,23 +101,36 @@ Most bot replies carry context-specific buttons:
 ### Permission prompts
 
 When claude asks to run a tool that needs approval, the busy message
-becomes:
+becomes a permission prompt:
 
 ```
 🔐 [jim] Bash
   command: ls -la /tmp
 
-  [✅ Allow]  [❌ Deny]  [➡️ Continue]
+  [✅ Allow]  [❌ Deny]
+  [🟢 Allow always]  [⏹ Stop]
 ```
 
-- **Allow** — write `approve` back to claude, log to audit, resume.
-- **Deny** — write `deny`, log, claude blocks the tool call.
-- **Continue** — write `approve` AND tell claude to keep going past
-  any pending pauses (e.g. plan-mode confirmations).
+- **Allow** — approve this one call.
+- **Deny** — refuse it; claude blocks the tool call.
+- **Allow always** — approve and widen the standing rule where claude
+  offers one.
+- **Stop** — interrupt the turn instead of answering.
 
 Every tap is recorded in `~/.claude/aipager-audit.jsonl` and mirrored
 as a one-line reply threaded under the busy message:
 `✅ [jim] · Allowed · Bash: ls -la /tmp`.
+
+`AskUserQuestion` dialogs render the same way, with one button per
+option (and checkbox-style multi-select where the question allows it).
+
+### Stale buttons
+
+Buttons that act on a running turn — Stop, Kill, Restart, `/new`'s
+Replace, `/perms`' Stop-and-switch — are tied to the task they were
+shown for. Tapping one left over from an earlier task answers
+`That task already finished — …` (with a hint to re-run the command)
+and changes nothing, instead of acting on whatever is running now.
 
 ### Idle responses
 
@@ -145,9 +186,25 @@ No SSH required.
 ### Text
 
 Treated as the next prompt for the **active session** (the one whose
-slash command you last sent). If a session is BUSY, the text joins
-its pending queue. Queue is capped at 50 — the 51st message replies
-with a friendly `⚠️ Queue is full`.
+slash command you last sent). Messages reach Claude **immediately**,
+even while a turn is running — exactly like typing into the terminal.
+Send several and they queue inside Claude itself, which picks each up
+at a natural boundary:
+
+- 👀 on your message — sent to the session.
+- 👍 — Claude has picked it up and started on it.
+
+Two cases are held back instead of sent, and delivered automatically
+once resolved:
+
+- A permission or question prompt is open — your text would otherwise
+  be read as an answer to that dialog.
+- (Team mode) a different user's message is still waiting to be
+  picked up — messages from different people are never merged into
+  one turn.
+
+Held messages are capped at 50 per session and expire after 24 h;
+`/clearqueue` drops them along with anything Claude is holding.
 
 ### Files
 
@@ -160,8 +217,10 @@ rejection before any download attempt.
 
 Voice messages route through `faster-whisper` (the `aipager[voice]`
 extra). The audio is transcribed locally and the transcript is
-injected as if you had typed it. See [hooks → UserPromptSubmit](hooks.md#userpromptsubmit)
-for what happens next.
+injected as if you had typed it — including as an answer to the
+`/new` wizard or a pending rename. See
+[hooks → UserPromptSubmit](hooks.md#userpromptsubmit) for what
+happens next.
 
 ## See also
 

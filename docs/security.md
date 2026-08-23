@@ -9,10 +9,12 @@ Two questions follow:
 ## Trust boundary
 
 Every handler the bot exposes — message, file, voice, callback —
-is gated by `python-telegram-bot`'s `filters.Chat(int(CHAT_ID))`.
-The chat ID is read from `~/.config/aipager/config.env`. **Only the
-configured chat can interact with the bot.** Messages from any
-other chat are silently ignored at the framework layer.
+is gated by `python-telegram-bot`'s chat filter, built from the
+chat(s) configured in `~/.config/aipager/aipager.yaml`. **Only the
+configured chat(s) can interact with the bot.** Messages from any
+other chat are silently ignored at the framework layer. In team
+mode a per-user allow-list with roles is layered on top — see
+[groups](groups.md).
 
 This means the surface to "outside the world" is:
 
@@ -29,11 +31,12 @@ at all.
 
 | Secret | Location | Mode |
 |---|---|---|
-| Bot token | `~/.config/aipager/config.env` (`AIPAGER_BOT_TOKEN=`) | 600 by default |
-| Chat ID | same file (`AIPAGER_CHAT_ID=`) | 600 by default |
+| Bot token | `~/.config/aipager/aipager.yaml` | 600 by default |
+| Chat ID(s) | same file | 600 by default |
 
-Neither value is ever logged. Neither is committed — `config.env`
-is in the user's `~/.config`, not the repo. The Trusted Publisher
+Neither value is ever logged — error messages and the wizard redact
+the token wherever it could appear. Neither is committed — the
+config lives in the user's `~/.config`, not the repo. The Trusted Publisher
 PyPI release flow never touches secrets either; OIDC handles auth.
 
 If you suspect the token is compromised, revoke it from
@@ -129,9 +132,33 @@ It can only relay prompts claude code chose to surface. If you want
 to lock down further (e.g. forbid `Bash: rm`), edit
 `~/.claude/settings.json`; aipager will respect it.
 
+### Team-mode enforcement
+
+In team mode aipager adds its own layer *underneath* the taps: every
+Telegram-originated message carries a permission note — who sent it
+and what their role allows — written to
+`/tmp/claude-notes-<session>/`, one file per message. When Claude
+picks a prompt up, the `aipager-hook` helper matches it against those
+notes and installs the sender's rules where the `PreToolUse` check
+reads them. Two properties are load-bearing:
+
+- **Strictest wins.** If Claude picks up messages from more than one
+  contributor as a single turn (aipager holds messages to prevent
+  this, but fails safe if it happens anyway), the turn runs under the
+  *most restrictive* combination — an owner's message can never lend
+  its privileges to someone else's.
+- **Unknown means restricted.** A prompt that cannot be attributed
+  runs under the built-in floor — no bypass, all deny rules active —
+  never as an unrestricted terminal prompt. Prompts you type directly
+  into the terminal remain unrestricted; anything carrying the
+  Telegram marker on any line is enforced.
+
+See [groups → how rules work](groups.md#how-rules-work) for the
+user-facing rules these notes carry.
+
 ## Audit log
 
-Every Allow / Deny / Continue tap, plus every `AskUserQuestion`
+Every Allow / Deny tap, plus every `AskUserQuestion`
 answer, appends one JSON line to `~/.claude/aipager-audit.jsonl`:
 
 ```json
@@ -139,21 +166,26 @@ answer, appends one JSON line to `~/.claude/aipager-audit.jsonl`:
   "ts": "2026-05-18T15:42:11+00:00",
   "session": "claude-jim",
   "label": "jim",
-  "action": "allow",
+  "action": "Allowed",
   "tool": "Bash",
-  "summary": "ls -la /tmp"
+  "summary": "ls -la /tmp",
+  "user_id": 12345,
+  "username": "alice",
+  "denied": false
 }
 ```
 
-Fields:
+Fields (see `aipager/audit.py` for the full set):
 
 - `ts` — ISO 8601 UTC timestamp, second precision.
-- `session` — internal Claude session id (`claude-<label>`).
-- `label` — the friendly session label.
-- `action` — `allow`, `deny`, `continue`, or `answer`.
-- `tool` — empty for `answer`; otherwise the tool name.
-- `summary` — first 500 chars of the tool input or the question
-  body.
+- `session` / `label` — internal name and friendly label.
+- `action` — what happened (`Allowed`, `Denied`, `Allowed always`,
+  an `AskUserQuestion` answer, an auto-deny, …).
+- `tool` / `summary` — the tool name and a truncated input or
+  question body.
+- `user_id` / `username` — who tapped, for team-mode attribution;
+  `scope_label` / `scope_chat_id` where multiple chats are configured.
+- `denied` — true for any refusal, tap-driven or rule-driven.
 
 Write is best-effort. If the disk fills up or `~/.claude/` becomes
 unwritable, the daemon logs a `WARNING` and keeps running — no
@@ -180,9 +212,13 @@ escalation.
 
 ## Network surface
 
-aipager listens on **zero TCP ports**. Outbound:
+aipager listens on **no non-loopback TCP port**. The Mini App server
+binds `127.0.0.1` only (hardcoded — there is deliberately no host
+option) and is reachable from outside solely through the managed
+tunnel described below. Outbound:
 
 - HTTPS long-poll to `api.telegram.org` (Telegram bot polling).
+- The Mini App tunnel to Cloudflare, while enabled (the default).
 - HTTPS to `pypi.org` and friends, only when the user taps the
   voice install button.
 
@@ -227,8 +263,8 @@ unlisted-but-not-secret URL: fine to leave running, not something to
 paste into a public channel for no reason.
 
 The hostname changes on every daemon restart and is held only in
-memory — it is never written to `aipager.yaml`, `config.env`, or
-anywhere under `~/.config/aipager/`. If the tunnel dies mid-run,
+memory — it is never written to `aipager.yaml` or anywhere under
+`~/.config/aipager/`. If the tunnel dies mid-run,
 aipager restarts it with backoff and republishes the new address; if
 it cannot come back up after several attempts, the button is removed
 rather than left pointing at a dead port (see [Network

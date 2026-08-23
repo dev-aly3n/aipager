@@ -7,10 +7,12 @@ Read-only Telegram bots that mirror notifications from the primary bot. They rec
 1. Create a bot via [@BotFather](https://t.me/BotFather)
 2. Start a chat with the bot and send `/start`
 3. Get your chat ID (send a message, then check `https://api.telegram.org/bot<TOKEN>/getUpdates`)
-4. Add to `.env`:
+4. Set `OBSERVER_BOTS` in the daemon's environment. For a foreground
+   daemon, export it before `aipager start`; for the systemd service:
 
-```
-OBSERVER_BOTS=<bot_token>:<chat_id>
+```sh
+systemctl --user edit aipager    # add under [Service]:
+# Environment=OBSERVER_BOTS=<bot_token>:<chat_id>
 ```
 
 Multiple observers (comma-separated):
