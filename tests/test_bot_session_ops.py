@@ -970,7 +970,9 @@ def test_compact_session_core_busy_queues_the_slash_command(mk_bot, run_async):
     outcome = run_async(bot._compact_session_core(sess))
     assert outcome.ok is True
     assert outcome.reason == "queued"
-    assert sess.pending_queue == [("/compact", None, sess.pending_queue[0][2], "")]
+    assert sess.pending_queue == [
+        ("/compact", None, sess.pending_queue[0][2], "", None)
+    ]
 
 
 def test_compact_session_core_busy_refuses_when_queue_is_full(mk_bot, run_async):

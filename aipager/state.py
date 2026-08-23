@@ -472,15 +472,18 @@ class TrackedSession:
         return top.created_at if top.kind == "compacting" else None
 
     def queue_prompt(self, text: str, msg_id: int | None,
-                     reply_context: str = "", cap: int = QUEUE_CAP) -> bool:
+                     reply_context: str = "",
+                     driver_user_id: int | None = None,
+                     cap: int = QUEUE_CAP) -> bool:
         """Append a queued prompt with a current wall-clock timestamp.
 
         Returns False (without modifying the queue) if the queue is
         already at ``cap`` entries — the caller is expected to surface
         the rejection to the user. Entries are stored as
-        ``(text, msg_id, queued_at, reply_context)`` 4-tuples; existing
-        2-/3-tuples loaded from older state files are upgraded to this
-        shape (see ``load`` for the compatibility shim).
+        ``(text, msg_id, queued_at, reply_context, driver_user_id)``
+        5-tuples; existing 2-/3-/4-tuples loaded from older state files
+        are upgraded to this shape (see ``load`` for the compatibility
+        shim).
 
         ``msg_id`` is ``None`` for a prompt with no originating Telegram
         message to attribute a reply to (the Mini App's Compact route) —
@@ -494,12 +497,28 @@ class TrackedSession:
         when the queued prompt wasn't a reply. Inserted before ``cap`` so
         every pre-existing 2-positional-arg call site keeps working
         unchanged.
+
+        ``driver_user_id`` is the raw Telegram user id of whoever sent
+        this specific message (``transport.driver_id_from_update(update)``
+        at every call site with a live ``Update``), captured NOW because
+        it will not still be available when this entry is eventually
+        drained (review-2#rev-iter2-001). ``None`` when there is no live
+        sender to capture (e.g. the hook-triggered ``/compact`` queued by
+        ``_compact_session_core``) — the drain then falls back to floor
+        permissions, exactly as design.md's merge invariant requires,
+        rather than guessing. Never resolved from
+        ``sess.last_driver_user_id`` here — that mutable field is the
+        exact leak rev-iter1-001/rev-iter2-001 both closed elsewhere;
+        this parameter only ever carries an id the caller can vouch for
+        as belonging to THIS message.
         """
         if len(self.pending_queue) >= cap:
             log.warning("[%s] queue full (cap=%d); rejecting prompt: %r",
                         self.label, cap, text[:60])
             return False
-        self.pending_queue.append((text, msg_id, time.time(), reply_context))
+        self.pending_queue.append(
+            (text, msg_id, time.time(), reply_context, driver_user_id)
+        )
         return True
 
     def dialog_is_open(self) -> bool:
@@ -918,19 +937,30 @@ class SessionRegistry:
             for f in self._PERSIST_FIELDS:
                 val = getattr(sess, f)
                 if f == "pending_queue":
-                    # tuples → lists for JSON. Always persist as 4-tuples
-                    # (text, msg_id, queued_at, reply_context) so future
-                    # loads can apply the TTL / reply pointer even if the
-                    # queue contained legacy 2- or 3-tuples (upgraded in
-                    # load()).
+                    # tuples → lists for JSON. Always persist as 5-tuples
+                    # (text, msg_id, queued_at, reply_context,
+                    # driver_user_id) so future loads can apply the TTL /
+                    # reply pointer / sender attribution even if the queue
+                    # contained legacy 2-, 3-, or 4-tuples (upgraded in
+                    # load()). Legacy shapes have no sender id to widen
+                    # with — None, not a guess (see queue_prompt's
+                    # docstring).
                     normalized = []
                     for item in val:
-                        if len(item) == 4:
+                        if len(item) == 5:
                             normalized.append(list(item))
+                        elif len(item) == 4:
+                            normalized.append(
+                                [item[0], item[1], item[2], item[3], None]
+                            )
                         elif len(item) == 3:
-                            normalized.append([item[0], item[1], item[2], ""])
+                            normalized.append(
+                                [item[0], item[1], item[2], "", None]
+                            )
                         elif len(item) == 2:
-                            normalized.append([item[0], item[1], time.time(), ""])
+                            normalized.append(
+                                [item[0], item[1], time.time(), "", None]
+                            )
                     val = normalized
                 elif f == "busy_msg_id":
                     # Never persist sentinel (-1) or None
@@ -1061,10 +1091,11 @@ class SessionRegistry:
             if sess.scope_chat_id == 0 and _default is not None:
                 sess.scope_chat_id, sess.scope_kind = _default
                 backfilled = True
-            # pending_queue: accept old 2-tuples, 3-tuples, and new 4-tuples
-            # (text, msg_id, queued_at). Drop entries older than the
-            # TTL so a daemon that was down for days doesn't flush
-            # stale prompts the moment a session goes IDLE.
+            # pending_queue: accept old 2-tuples, 3-tuples, 4-tuples, and
+            # new 5-tuples (text, msg_id, queued_at, reply_context,
+            # driver_user_id). Drop entries older than the TTL so a
+            # daemon that was down for days doesn't flush stale prompts
+            # the moment a session goes IDLE.
             now = time.time()
             ttl_cutoff = now - QUEUE_MAX_AGE_SECONDS
             dropped = 0
@@ -1072,20 +1103,31 @@ class SessionRegistry:
                 if not isinstance(item, list):
                     continue
                 if len(item) == 2:
-                    # Legacy: no timestamp, no reply_context — treat as
-                    # fresh with no reply pointer.
+                    # Legacy: no timestamp, no reply_context, no sender
+                    # id — treat as fresh with no reply pointer and an
+                    # unknown (never guessed) sender.
                     sess.pending_queue.append(
-                        (item[0], item[1], now, "")
+                        (item[0], item[1], now, "", None)
                     )
-                elif len(item) in (3, 4):
+                elif len(item) in (3, 4, 5):
                     text, msg_id, queued_at = item[0], item[1], item[2]
                     # reply_context: fail-safe pattern already used for
                     # override_layout above — a hand-edited or
                     # since-invalidated value degrades to "no reply
                     # pointer" rather than crashing the load.
-                    reply_context = item[3] if len(item) == 4 else ""
+                    reply_context = item[3] if len(item) >= 4 else ""
                     if not isinstance(reply_context, str):
                         reply_context = ""
+                    # driver_user_id: same fail-safe pattern. A 4-tuple
+                    # from a pre-this-change build, or a hand-edited
+                    # non-int value, degrades to None (unknown sender —
+                    # floors permissions on drain) rather than crashing
+                    # or, worse, being misread as a real id.
+                    driver_user_id = item[4] if len(item) == 5 else None
+                    if driver_user_id is not None and not isinstance(
+                        driver_user_id, int
+                    ):
+                        driver_user_id = None
                     try:
                         queued_at_f = float(queued_at)
                     except (TypeError, ValueError):
@@ -1094,7 +1136,8 @@ class SessionRegistry:
                         dropped += 1
                         continue
                     sess.pending_queue.append(
-                        (text, msg_id, queued_at_f, reply_context)
+                        (text, msg_id, queued_at_f, reply_context,
+                         driver_user_id)
                     )
             if dropped:
                 log.warning(

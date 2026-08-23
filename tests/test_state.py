@@ -104,11 +104,12 @@ def test_queue_prompt_appends_with_timestamp():
     sess = TrackedSession(name="claude-jim", label="jim")
     assert sess.queue_prompt("hello", 100) is True
     assert len(sess.pending_queue) == 1
-    text, msg_id, ts, reply_context = sess.pending_queue[0]
+    text, msg_id, ts, reply_context, driver_user_id = sess.pending_queue[0]
     assert text == "hello"
     assert msg_id == 100
     assert ts > 0
     assert reply_context == ""
+    assert driver_user_id is None
 
 
 def test_queue_prompt_rejects_when_at_cap():
@@ -185,11 +186,12 @@ def test_load_upgrades_legacy_2tuple_queue_entries(tmp_state_file):
     r.load()
     sess = r.get("claude-jim")
     assert len(sess.pending_queue) == 1
-    text, msg_id, ts, reply_context = sess.pending_queue[0]
+    text, msg_id, ts, reply_context, driver_user_id = sess.pending_queue[0]
     assert text == "legacy"
     assert msg_id == 200
     assert ts > 0  # auto-timestamped to "now"
     assert reply_context == ""
+    assert driver_user_id is None
 
 
 # ----- 2.4 record_tool cap + history_idx adjustment -----
