@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The test suite no longer depends on the invoker's color environment: a
+  `FORCE_COLOR`/`CLICOLOR_FORCE` export made two CLI-output tests fail
+  locally while CI stayed green. `conftest` now scrubs the color
+  variables before anything imports the console module.
+
 ### Documentation
 - Brought every end-user document back in line with the code: the full
   16-command reference and per-session dynamic commands, the Mini App,

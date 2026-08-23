@@ -1,6 +1,7 @@
 """Shared pytest fixtures."""
 
 import asyncio
+import os
 from importlib import import_module
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -8,6 +9,33 @@ from unittest.mock import AsyncMock, MagicMock
 import time
 
 import pytest
+
+# ── color-environment scrub — MUST run before any aipager import ──────
+#
+# ``aipager/ui.py`` builds its rich ``Console`` objects at module import
+# time (this file's own ``from aipager import errors`` below triggers it,
+# so construction happens during collection). The variables reach
+# ``is_terminal`` by two different routes, verified against rich 15.0.0:
+# ``CLICOLOR_FORCE`` is baked permanently at construction, because
+# ``ui._resolve_color_kwargs()`` passes ``force_terminal=True`` as a
+# constructor kwarg; ``NO_COLOR``/``CLICOLOR=0`` likewise bake into
+# ``no_color``. ``FORCE_COLOR`` alone is re-read live by rich's
+# ``is_terminal`` property on every access — it is scrubbed here anyway so
+# all four behave uniformly rather than three-baked-one-live.
+#
+# On a machine exporting any forcing variable, ``warn_block()`` renders
+# panels instead of its plain off-TTY branch and tests asserting on plain
+# output fail — while CI, with a clean environment, stays green. Same
+# disease ``steady_clock`` exists for: a test outcome decided by the
+# invoker's machine, not the code. A per-test ``monkeypatch.delenv`` is
+# too late for the baked three; this runs at conftest import, which pytest
+# guarantees precedes every other conftest and test module (verified for
+# subset invocations too). Everything imported above this line is stdlib
+# or pytest, none of which import aipager. ``COLORTERM``/``TERM`` are
+# deliberately left alone: they affect only color depth, never
+# ``is_terminal``.
+for _var in ("FORCE_COLOR", "CLICOLOR_FORCE", "CLICOLOR", "NO_COLOR"):
+    os.environ.pop(_var, None)
 
 
 @pytest.fixture(autouse=True)
