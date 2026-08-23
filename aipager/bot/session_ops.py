@@ -350,29 +350,40 @@ class SessionOpsMixin:
         ``update.effective_user.id``) compares against the real id,
         turning one operator's own back-to-back messages into a
         "mixed sender" false positive. Callers with a live ``Update``
-        pass ``update.effective_user.id``; callers with none (the
-        queue-drain site, Retry, a literal ``/compact``) fall back to
+        pass ``update.effective_user.id``; callers with none of their
+        own (Retry, a literal ``/compact``) fall back to
         ``sess.last_driver_user_id`` — the best available approximation
-        when there is no live sender to read.
+        when there is no live sender to read. The queue-drain site
+        (``notify.py``) is NOT in that group since review-2#rev-iter2-001:
+        ``TrackedSession.queue_prompt`` now captures the sender's id at
+        hold/queue time (from the same ``driver_id_from_update(update)``
+        every immediate-inject caller already uses) and carries it on the
+        queue entry, so the drain passes that captured id here — a real
+        identity, not a fallback — whenever one was captured. Only an
+        entry with no captured id (a pre-upgrade 4-tuple, or a call site
+        with no live ``Update`` when it queued) drains with
+        ``driver_user_id=None``, which still falls back to
+        ``sess.last_driver_user_id`` for ``sender_key`` bookkeeping below.
 
         That fallback is only good enough for bookkeeping (grouping
         "same sender" runs for the mixed-sender hold), never for
         *permission attribution*. ``sess.last_driver_user_id`` is
         mutable and can move on to a different person between a message
         failing and a later Retry, or between a message being queued and
-        the daemon draining it — review rev-iter1-001/002. Role/member
-        resolution below therefore reads only the id the CALLER
-        explicitly supplied (before the fallback assigned below), never
-        the fallback value: a caller with no live identity for this
-        specific message (Retry, a literal ``/compact``, the queue-drain
-        site) gets a note resolved with ``member=None``/``role=None`` —
-        floor permissions, ``bypass_safety=False`` — rather than
-        silently inheriting whoever ``sess.last_driver_user_id`` happens
-        to name right now. Fail closed: an under-attributed note can
-        only make a future merged turn *more* restrictive (design.md's
-        merge invariant), never less, so this trades away Retry's
-        permission elevation in the common single-user case rather than
-        risk lending an unrelated sender's ``bypass_safety`` to it.
+        the daemon draining it — review rev-iter1-001/002/rev-iter2-001.
+        Role/member resolution below therefore reads only the id the
+        CALLER explicitly supplied (before the fallback assigned below),
+        never the fallback value: a caller with no live identity for this
+        specific message (Retry, a literal ``/compact``, or a
+        drained message with no captured sender) gets a note resolved
+        with ``member=None``/``role=None`` — floor permissions,
+        ``bypass_safety=False`` — rather than silently inheriting
+        whoever ``sess.last_driver_user_id`` happens to name right now.
+        Fail closed: an under-attributed note can only make a future
+        merged turn *more* restrictive (design.md's merge invariant),
+        never less, so this trades away Retry's permission elevation in
+        the common single-user case rather than risk lending an
+        unrelated sender's ``bypass_safety`` to it.
         """
         explicit_driver_user_id = driver_user_id
         if driver_user_id is None:

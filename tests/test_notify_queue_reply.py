@@ -140,12 +140,20 @@ def test_queue_drain_widens_a_pre_part4_3_tuple_entry_without_crashing(
     mk_bot, run_async, monkeypatch, tmp_path,
 ):
     """A queue entry that predates this feature (loaded from an older
-    state file as a 3-tuple, upgraded to a 4-tuple with reply_context=""
-    by state.load()) must drain cleanly."""
+    state file as a 3-tuple, upgraded to a 5-tuple with reply_context=""
+    and driver_user_id=None by state.load()) must drain cleanly.
+
+    See test_queue_drain_attribution.py for the driver_user_id half of
+    this coverage (review-2#rev-iter2-001) — this test only re-confirms
+    the pre-existing reply_context widening still drains without error
+    now that the tuple has grown a 5th slot.
+    """
     _isolate_snapshot(monkeypatch, tmp_path)
     bot = mk_bot()
     sess = _sess()
-    sess.pending_queue.append(("legacy queued text", 100, time.time(), ""))
+    sess.pending_queue.append(
+        ("legacy queued text", 100, time.time(), "", None)
+    )
     _drive_idle_drain(bot, sess, run_async, monkeypatch)
     ctx = _latest_note_reply_context(sess.name)
     assert ctx is not None

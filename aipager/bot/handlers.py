@@ -129,7 +129,8 @@ class CommandHandlersMixin:
 
         if not held_reason:
             return False
-        if not sess.queue_prompt(text, update.message.message_id, reply_context):
+        if not sess.queue_prompt(text, update.message.message_id, reply_context,
+                                 driver_id_from_update(update)):
             await update.message.reply_text(
                 f"⚠️ Queue is full ({QUEUE_CAP} pending) for "
                 f"[{html_mod.escape(sess.label)}]. Answer the prompt or "
@@ -867,7 +868,8 @@ class CommandHandlersMixin:
         if prompt:
             # Flatten newlines (lesson: newlines cause premature Enter)
             prompt = prompt.replace("\n", " — ")
-            if sess.queue_prompt(prompt, update.message.message_id):
+            if sess.queue_prompt(prompt, update.message.message_id, "",
+                                 driver_id_from_update(update)):
                 self.registry.mark_dirty()
 
         # Enriched reply: icon + mode + cwd + optional model + /perms nudge.

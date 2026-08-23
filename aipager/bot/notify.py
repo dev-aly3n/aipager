@@ -1026,9 +1026,10 @@ class NotifyMixin:
 
             # Flush next queued message (one at a time, rest flush on next IDLE)
             if sess.pending_queue:
-                queued_text, queued_trigger, _queued_at, queued_reply_context = (
-                    sess.pending_queue.pop(0)
-                )
+                (
+                    queued_text, queued_trigger, _queued_at,
+                    queued_reply_context, queued_driver_user_id,
+                ) = sess.pending_queue.pop(0)
                 sess.trigger_msg_id = queued_trigger
                 sess.last_prompt = queued_text
                 if queued_trigger is not None:
@@ -1045,6 +1046,7 @@ class NotifyMixin:
                 ok = await self._inject_prompt(
                     sess, queued_text, queued_reply_context,
                     msg_id=queued_trigger, chat_id=resolve_chat_id_int(sess),
+                    driver_user_id=queued_driver_user_id,
                 )
                 if ok:
                     self.registry.transition(sess.name, Status.BUSY)

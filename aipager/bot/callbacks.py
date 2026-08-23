@@ -59,6 +59,7 @@ from aipager.bot.transport import (  # noqa: F401
     TruncationFailed,
     _build_diff_block,
     calling_chat_id,
+    driver_id_from_update,
     mixed_sender_note_outstanding,
     _detect_api_error,
     _DIFF_MAX_CHARS,
@@ -773,8 +774,10 @@ class CallbackDispatchMixin:
                     asyncio.create_task(
                         self._maybe_update_bot_name(session_name)
                     )
-                    if prompt and sess.queue_prompt(prompt,
-                                                    pending.get("msg_id", 0)):
+                    if prompt and sess.queue_prompt(
+                        prompt, pending.get("msg_id", 0), "",
+                        driver_id_from_update(update),
+                    ):
                         self.registry.mark_dirty()
                     try:
                         await query.edit_message_text(
@@ -800,7 +803,8 @@ class CallbackDispatchMixin:
                 if prompt:
                     resumed = self.registry.get(session_name)
                     if resumed and resumed.queue_prompt(
-                        prompt, pending.get("msg_id", 0),
+                        prompt, pending.get("msg_id", 0), "",
+                        driver_id_from_update(update),
                     ):
                         self.registry.mark_dirty()
                 return
@@ -864,7 +868,8 @@ class CallbackDispatchMixin:
                 asyncio.create_task(self._maybe_update_bot_name(session_name))
                 asyncio.create_task(self._update_bot_commands())
                 if prompt and new_sess.queue_prompt(
-                    prompt, pending.get("msg_id", 0),
+                    prompt, pending.get("msg_id", 0), "",
+                    driver_id_from_update(update),
                 ):
                     self.registry.mark_dirty()
 
