@@ -18,6 +18,8 @@ import pytest
 from aipager import policy_snapshot as ps
 from aipager.state import Status, TrackedSession
 
+from .conftest import latest_note_reply_context
+
 CHAT_ID = -1001
 BOT_ID = 87654321
 
@@ -90,9 +92,8 @@ def test_reply_to_older_message_produces_locator_capped_excerpt_and_file(
     update.message.reply_to_message = _reply_target(message_id=1, text=full_text)
     run_async(bot._handle_message(update, _ctx()))
 
-    snap = ps.read_snapshot(sess.name)
-    assert snap is not None
-    ctx = snap["reply_context"]
+    ctx = latest_note_reply_context(sess.name)
+    assert ctx is not None
     assert ctx != ""
     # Excerpt capped at 80 chars -- the 81st char of the run must not appear.
     assert ("a" * 81) not in ctx
@@ -143,8 +144,8 @@ def test_oversized_highlight_truncated_with_marker_and_fallback_file(
     update.message.quote = MagicMock(text=long_fragment, is_manual=True)
     run_async(bot._handle_message(update, _ctx()))
 
-    snap = ps.read_snapshot(sess.name)
-    ctx = snap["reply_context"]
+    ctx = latest_note_reply_context(sess.name)
+    assert ctx is not None
     assert "…(truncated)" in ctx
     assert ("z" * 1001) not in ctx  # never leaks past the cap inline
 
@@ -182,7 +183,8 @@ def test_quote_is_manual_false_never_says_highlighted(
     update.message.quote = MagicMock(text="a fragment", is_manual=False)
     run_async(bot._handle_message(update, _ctx()))
 
-    ctx = ps.read_snapshot(sess.name)["reply_context"]
+    ctx = latest_note_reply_context(sess.name)
+    assert ctx is not None
     assert ctx != ""
     assert "highlighted" not in ctx
     assert "highlighting" not in ctx
@@ -204,7 +206,8 @@ def test_quote_is_manual_true_says_highlighting(
     update.message.quote = MagicMock(text="a fragment", is_manual=True)
     run_async(bot._handle_message(update, _ctx()))
 
-    ctx = ps.read_snapshot(sess.name)["reply_context"]
+    ctx = latest_note_reply_context(sess.name)
+    assert ctx is not None
     assert "highlighting" in ctx
 
 
@@ -225,10 +228,10 @@ def test_dispatch_voice_transcript_carries_reply_context_too(
     update.message.reply_to_message = _reply_target(message_id=1, text="the old voice target")
     run_async(bot._dispatch_voice_transcript(update, "a transcribed voice reply"))
 
-    snap = ps.read_snapshot(sess.name)
-    assert snap is not None
-    assert snap["reply_context"] != ""
-    assert "the old voice target" in snap["reply_context"]
+    ctx = latest_note_reply_context(sess.name)
+    assert ctx is not None
+    assert ctx != ""
+    assert "the old voice target" in ctx
 
 
 def test_handle_file_carries_reply_context_too(
@@ -255,7 +258,7 @@ def test_handle_file_carries_reply_context_too(
     update.message.caption = "see attached"
     run_async(bot._handle_file(update, _ctx()))
 
-    snap = ps.read_snapshot(sess.name)
-    assert snap is not None
-    assert snap["reply_context"] != ""
-    assert "the old file target" in snap["reply_context"]
+    ctx = latest_note_reply_context(sess.name)
+    assert ctx is not None
+    assert ctx != ""
+    assert "the old file target" in ctx

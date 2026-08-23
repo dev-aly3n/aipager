@@ -149,17 +149,24 @@ def test_dispatch_voice_dead_session_warns(mk_bot, mk_update, run_async, monkeyp
     assert "not found" in text
 
 
-def test_dispatch_voice_queued_when_busy(mk_bot, mk_update, run_async, monkeypatch):
+def test_dispatch_voice_injects_immediately_when_busy(mk_bot, mk_update, run_async, monkeypatch):
+    """Queue handoff (design.md): BUSY no longer holds a voice transcript
+    either — same immediate-inject rule as every other inbound path."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
     bot.registry._sessions["claude-jim"] = sess
     bot.registry.last_active_session = "claude-jim"
     monkeypatch.setattr("aipager.dtach.inject.is_alive",
                         AsyncMock(return_value=True))
+    sent = AsyncMock(return_value=True)
+    monkeypatch.setattr("aipager.dtach.inject.send_text_and_enter", sent)
+    bot._send_busy_and_animate = AsyncMock()
     bot._react = AsyncMock()
     update = mk_update("")
     run_async(bot._dispatch_voice_transcript(update, "hello"))
-    assert any(t == "hello" for t, *_ in sess.pending_queue)
+    assert sess.pending_queue == []
+    sent.assert_awaited_once()
+    assert "hello" in sent.await_args.args[1]
 
 
 def test_dispatch_voice_injects_when_idle(mk_bot, mk_update, run_async, monkeypatch):
@@ -318,7 +325,9 @@ def test_handle_file_no_active_session_warns(mk_bot, mk_update, run_async, monke
     assert "don't know which session" in text
 
 
-def test_handle_file_queues_when_busy(mk_bot, mk_update, run_async, monkeypatch, tmp_path):
+def test_handle_file_injects_immediately_when_busy(mk_bot, mk_update, run_async, monkeypatch, tmp_path):
+    """Queue handoff (design.md): BUSY no longer holds a file send
+    either — same immediate-inject rule as every other inbound path."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
     bot.registry._sessions["claude-jim"] = sess
@@ -326,6 +335,9 @@ def test_handle_file_queues_when_busy(mk_bot, mk_update, run_async, monkeypatch,
     monkeypatch.setattr("aipager.dtach.inject.is_alive",
                         AsyncMock(return_value=True))
     monkeypatch.setattr("aipager.bot.handlers.FILE_DOWNLOAD_DIR", tmp_path)
+    sent = AsyncMock(return_value=True)
+    monkeypatch.setattr("aipager.dtach.inject.send_text_and_enter", sent)
+    bot._send_busy_and_animate = AsyncMock()
     bot._react = AsyncMock()
     update = mk_update("")
     update.message.photo = []
@@ -338,7 +350,9 @@ def test_handle_file_queues_when_busy(mk_bot, mk_update, run_async, monkeypatch,
     update.message.document = doc
     update.message.caption = "look at this"
     run_async(bot._handle_file(update, MagicMock()))
-    assert any("look at this" in t for t, *_ in sess.pending_queue)
+    assert sess.pending_queue == []
+    sent.assert_awaited_once()
+    assert "look at this" in sent.await_args.args[1]
 
 
 # ===== _install_voice_extra =============================================

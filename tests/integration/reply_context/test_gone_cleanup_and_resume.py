@@ -66,7 +66,12 @@ def _produce_real_artifacts(mk_bot, mk_update, run_async, monkeypatch):
     update.message.reply_to_message = _reply_target(message_id=1, text="the target text " * 5)
     run_async(bot._handle_message(update, _ctx()))
 
-    assert ps.snapshot_path(sess.name).exists()
+    # Queue handoff (design.md): `_inject_prompt` no longer writes the
+    # canonical policy snapshot at send time — it writes a per-message
+    # note instead, and ONLY the UserPromptSubmit hook's pick-up merge
+    # (not exercised by this handler-only test) writes the canonical
+    # file. The note directory is the real artifact this turn produces.
+    assert ps.list_outstanding_notes(sess.name), "no note was written"
     assert ps.reply_context_path(sess.name).exists()
     sess.status = Status.IDLE
     return bot, sess
@@ -83,6 +88,7 @@ def test_gone_transition_removes_both_real_artifacts_produced_by_a_live_turn(
 
     assert not ps.snapshot_path(sess.name).exists()
     assert not ps.reply_context_path(sess.name).exists()
+    assert ps.list_outstanding_notes(sess.name) == []
 
 
 # ===== Criterion 13: explicit kill (disjoint path, skips GONE entirely) ====
@@ -96,6 +102,7 @@ def test_explicit_kill_removes_both_real_artifacts_produced_by_a_live_turn(
 
     assert not ps.snapshot_path(sess.name).exists()
     assert not ps.reply_context_path(sess.name).exists()
+    assert ps.list_outstanding_notes(sess.name) == []
     assert bot.registry.get(sess.name) is None  # kill deletes the record outright
 
 

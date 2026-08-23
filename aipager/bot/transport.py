@@ -98,6 +98,47 @@ def resolve_chat_id_int(sess) -> int | None:
         return None
 
 
+def driver_id_from_update(update) -> int | None:
+    """The raw Telegram user id of whoever sent ``update``, or ``None``.
+
+    THE single source both the note-writer (``session_ops._inject_prompt``,
+    via its ``driver_user_id`` parameter) and the mixed-sender hold-check
+    below read the "who is this" identity from — never
+    ``sess.last_driver_user_id``, which is only set by
+    ``AuthMixin._mark_driver`` in team/scope mode and stays ``None`` for
+    the whole lifetime of a personal-mode session. Using two different
+    sources for the same question was a real bug found in review: one
+    operator's own back-to-back messages read as two different
+    "senders" because the write side and the check side disagreed.
+    """
+    tg_user = getattr(update, "effective_user", None)
+    return tg_user.id if tg_user is not None else None
+
+
+def _sender_key(sess, update) -> tuple[int, int]:
+    """``(scope_chat_id, driver_user_id)`` for the human who sent
+    ``update`` — design.md "queue handoff"'s ``sender_key``."""
+    return (sess.scope_chat_id or 0, driver_id_from_update(update) or 0)
+
+
+def mixed_sender_note_outstanding(sess, update) -> bool:
+    """True when an outstanding queue-handoff note belongs to a Telegram
+    user OTHER than whoever sent ``update``.
+
+    The mixed-sender half of "who does a merged turn's permissions apply
+    to": two different humans' messages must never silently combine into
+    one merged turn without at least holding for a human to notice first
+    (design.md "queue handoff", entrypoints.md's held-messages contract).
+    Consulted by both ``_hold_for_open_dialog`` (handlers.py) and Retry
+    (callbacks.py) — the same rule wherever a prompt could be injected.
+    """
+    from aipager.policy_snapshot import outstanding_sender_keys
+
+    current = _sender_key(sess, update)
+    others = outstanding_sender_keys(sess.name)
+    return any(key != current for key in others)
+
+
 # Sentinel returned by ``_authorize_callback`` in personal mode so
 # callers can distinguish "auth passed in personal mode" from "auth
 # passed in team mode and here is the TeamUser." Not exported.

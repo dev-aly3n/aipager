@@ -378,6 +378,64 @@ def test_stop_session_core_ok_true_with_dropped_count(mk_bot, run_async, monkeyp
     assert sess.status == Status.IDLE
 
 
+def test_stop_session_core_discards_input_and_counts_notes_when_outstanding(
+    mk_bot, run_async, monkeypatch,
+):
+    """design.md "Stop and /clearqueue on the same primitive": with an
+    outstanding note, Stop's dropped count includes it AND
+    discard_queued_input fires (Escape, KillLine) after the interrupt
+    pair — extending the pinned ["Escape", "Escape"] assertion (see
+    tests/test_stale_stop_button.py's docstring) for exactly this case."""
+    from aipager import policy_snapshot as ps
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.queue_prompt("a", 1)
+    bot.registry._sessions["claude-jim"] = sess
+    ps.write_note("claude-jim", None, None, None, msg_id=9, chat_id=1,
+                  sender_key=(1, 1), body="note text", raw_text="note text")
+
+    keys = []
+    async def _send_keys(name, k):
+        keys.append(k)
+        return True
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", _send_keys)
+    async def _no_sleep(_): pass
+    monkeypatch.setattr("aipager.bot.session_ops.asyncio.sleep", _no_sleep)
+    bot._stop_animation = MagicMock()
+    bot._edit_busy_raw = AsyncMock()
+
+    outcome = run_async(bot._stop_session_core(sess))
+
+    assert outcome.dropped == 2  # 1 queued + 1 note
+    assert keys == ["Escape", "Escape", "Escape", "KillLine"]
+    assert ps.list_outstanding_notes("claude-jim") == []
+
+
+def test_stop_session_core_omits_discard_when_no_notes_outstanding(
+    mk_bot, run_async, monkeypatch,
+):
+    """The reverse of the test above — no outstanding notes means no
+    extra Escape/KillLine, matching the pinned two-Escape assertions in
+    tests/test_stale_stop_button.py."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    bot.registry._sessions["claude-jim"] = sess
+
+    keys = []
+    async def _send_keys(name, k):
+        keys.append(k)
+        return True
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", _send_keys)
+    async def _no_sleep(_): pass
+    monkeypatch.setattr("aipager.bot.session_ops.asyncio.sleep", _no_sleep)
+    bot._stop_animation = MagicMock()
+    bot._edit_busy_raw = AsyncMock()
+
+    run_async(bot._stop_session_core(sess))
+
+    assert keys == ["Escape", "Escape"]
+
+
 def test_kill_session_core_returns_killed(mk_bot, run_async, monkeypatch):
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
@@ -825,6 +883,70 @@ def test_clear_queue_core_clears_and_reports_dropped_count(mk_bot, run_async):
     assert sess.pending_queue == []
 
 
+def test_clear_queue_core_sends_no_keys_when_only_pending_queue(mk_bot, run_async, monkeypatch):
+    """pending_queue holds are aipager-side only — never injected into
+    the pty — so there is nothing in the input box to wipe. Confirms
+    /clearqueue does not send a stray Escape/KillLine for a hold that
+    never touched dtach."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.queue_prompt("a", 1)
+    bot.registry._sessions["claude-jim"] = sess
+
+    async def _boom(*a, **k):
+        raise AssertionError("no dtach keys should be sent for a pending_queue-only clear")
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", _boom)
+
+    outcome = run_async(bot._clear_queue_core(sess))
+    assert outcome.ok is True
+    assert outcome.dropped == 1
+
+
+def test_clear_queue_core_discards_notes_and_counts_them_combined(mk_bot, run_async, monkeypatch):
+    """design.md "Stop and /clearqueue on the same primitive": ONE call
+    to discard_queued_input, never preceded by an interrupt Escape — and
+    the combined count includes outstanding notes even with an empty
+    pending_queue."""
+    from aipager import policy_snapshot as ps
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    bot.registry._sessions["claude-jim"] = sess
+    ps.write_note("claude-jim", None, None, None, msg_id=9, chat_id=1,
+                  sender_key=(1, 1), body="note text", raw_text="note text")
+
+    keys = []
+    async def _send_keys(name, k):
+        keys.append(k)
+        return True
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", _send_keys)
+
+    outcome = run_async(bot._clear_queue_core(sess))
+
+    assert outcome.ok is True
+    assert outcome.dropped == 1
+    assert keys == ["Escape", "KillLine"]  # never a second/interrupt Escape
+    assert ps.list_outstanding_notes("claude-jim") == []
+
+
+def test_clear_queue_core_combined_count_with_both_queue_and_notes(mk_bot, run_async, monkeypatch):
+    from aipager import policy_snapshot as ps
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.queue_prompt("a", 1)
+    sess.queue_prompt("b", 2)
+    bot.registry._sessions["claude-jim"] = sess
+    ps.write_note("claude-jim", None, None, None, msg_id=9, chat_id=1,
+                  sender_key=(1, 1), body="note text", raw_text="note text")
+    monkeypatch.setattr("aipager.dtach.inject.send_keys",
+                        AsyncMock(return_value=True))
+
+    outcome = run_async(bot._clear_queue_core(sess))
+
+    assert outcome.dropped == 3  # 2 queued + 1 note
+    assert sess.pending_queue == []
+    assert ps.list_outstanding_notes("claude-jim") == []
+
+
 # ---- _compact_session_core -------------------------------------------------
 
 def test_compact_session_core_refuses_when_not_live(mk_bot, run_async, monkeypatch):
@@ -848,7 +970,9 @@ def test_compact_session_core_busy_queues_the_slash_command(mk_bot, run_async):
     outcome = run_async(bot._compact_session_core(sess))
     assert outcome.ok is True
     assert outcome.reason == "queued"
-    assert sess.pending_queue == [("/compact", None, sess.pending_queue[0][2], "")]
+    assert sess.pending_queue == [
+        ("/compact", None, sess.pending_queue[0][2], "", None)
+    ]
 
 
 def test_compact_session_core_busy_refuses_when_queue_is_full(mk_bot, run_async):

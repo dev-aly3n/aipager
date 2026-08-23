@@ -554,3 +554,41 @@ def test_launch_keeps_resume_when_the_conversation_exists(
                                     cwd=str(tmp_path)))
     joined = " ".join(str(a) for a in captured.get("argv", ()))
     assert "--resume" in joined and "real-id" in joined
+
+
+# ---- discard_queued_input / KEYS["KillLine"] (design.md "queue handoff") --
+
+def test_kill_line_key_is_ctrl_u():
+    assert inject.KEYS["KillLine"] == "\x15"
+
+
+def test_discard_queued_input_sends_escape_then_kill_line(monkeypatch, run_async):
+    keys = []
+
+    async def _fake_send_keys(session, k):
+        keys.append(k)
+        return True
+
+    monkeypatch.setattr(inject, "send_keys", _fake_send_keys)
+    assert run_async(inject.discard_queued_input("claude-jim")) is True
+    assert keys == ["Escape", "KillLine"]
+
+
+def test_discard_queued_input_returns_false_if_kill_line_send_fails(monkeypatch, run_async):
+    async def _fake_send_keys(session, k):
+        return k != "KillLine"
+
+    monkeypatch.setattr(inject, "send_keys", _fake_send_keys)
+    assert run_async(inject.discard_queued_input("claude-jim")) is False
+
+
+def test_discard_queued_input_sends_to_the_named_session(monkeypatch, run_async):
+    seen_sessions = []
+
+    async def _fake_send_keys(session, k):
+        seen_sessions.append(session)
+        return True
+
+    monkeypatch.setattr(inject, "send_keys", _fake_send_keys)
+    run_async(inject.discard_queued_input("claude-target"))
+    assert seen_sessions == ["claude-target", "claude-target"]

@@ -361,6 +361,92 @@ def test_stale_busy_swallows_failure(mk_bot, run_async):
     run_async(bot.notify(sess, "stale_busy", {"minutes": 2}))
 
 
+# ---- queue_pickup (design.md "queue handoff") ---------------------------
+
+def test_queue_pickup_reacts_thumbs_up_on_every_consumed_message(mk_bot, run_async):
+    from aipager.state import SessionRegistry
+
+    bot = mk_bot(registry=SessionRegistry())
+    sess = _sess()
+    sess.scope_chat_id = -1001
+    bot.registry._sessions[sess.name] = sess
+    bot._app.bot.set_message_reaction = AsyncMock()
+
+    run_async(bot.notify(sess, "queue_pickup", {
+        "consumed": [
+            {"msg_id": 10, "chat_id": -1001, "raw_text": "a"},
+            {"msg_id": 11, "chat_id": -1001, "raw_text": "b"},
+        ],
+        "expired": [],
+    }))
+
+    calls = bot._app.bot.set_message_reaction.await_args_list
+    assert len(calls) == 2
+    assert calls[0].args == (-1001, 10, "👍")
+    assert calls[1].args == (-1001, 11, "👍")
+
+
+def test_queue_pickup_tracks_every_consumed_message(mk_bot, run_async):
+    from aipager.state import SessionRegistry
+
+    bot = mk_bot(registry=SessionRegistry())
+    sess = _sess()
+    sess.scope_chat_id = -1001
+    bot.registry._sessions[sess.name] = sess
+    bot._app.bot.set_message_reaction = AsyncMock()
+
+    run_async(bot.notify(sess, "queue_pickup", {
+        "consumed": [
+            {"msg_id": 10, "chat_id": -1001, "raw_text": "a"},
+            {"msg_id": 11, "chat_id": -1001, "raw_text": "b"},
+        ],
+        "expired": [],
+    }))
+
+    assert bot.registry.get_session_by_msg(10, -1001) is sess
+    assert bot.registry.get_session_by_msg(11, -1001) is sess
+
+
+def test_queue_pickup_expired_gets_no_reaction_only_a_notice(mk_bot, run_async):
+    bot = mk_bot()
+    sess = _sess()
+    sess.scope_chat_id = -1001
+    bot._app.bot.set_message_reaction = AsyncMock()
+
+    run_async(bot.notify(sess, "queue_pickup", {
+        "consumed": [],
+        "expired": [{"msg_id": 5, "chat_id": -1001, "raw_text": "stale one"}],
+    }))
+
+    bot._app.bot.set_message_reaction.assert_not_awaited()
+    bot._app.bot.send_message.assert_awaited_once()
+    text = bot._app.bot.send_message.await_args.args[1]
+    assert "wasn't confirmed" in text or "picked up" in text
+
+
+def test_queue_pickup_no_consumed_no_expired_sends_nothing(mk_bot, run_async):
+    bot = mk_bot()
+    sess = _sess()
+    bot._app.bot.set_message_reaction = AsyncMock()
+
+    run_async(bot.notify(sess, "queue_pickup", {"consumed": [], "expired": []}))
+
+    bot._app.bot.set_message_reaction.assert_not_awaited()
+    bot._app.bot.send_message.assert_not_awaited()
+
+
+def test_queue_pickup_swallows_reaction_failure(mk_bot, run_async):
+    from telegram.error import BadRequest
+    bot = mk_bot()
+    sess = _sess()
+    bot._app.bot.set_message_reaction = AsyncMock(side_effect=BadRequest("nope"))
+    # MUST NOT raise even if the reaction API call fails.
+    run_async(bot.notify(sess, "queue_pickup", {
+        "consumed": [{"msg_id": 10, "chat_id": -1001, "raw_text": "a"}],
+        "expired": [],
+    }))
+
+
 # ---- hook_memory_cap_hit ------------------------------------------------
 
 def test_hook_memory_cap_hit_sends_message(mk_bot, run_async):

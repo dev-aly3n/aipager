@@ -71,6 +71,8 @@ from aipager.bot.transport import (  # noqa: F401
     _TRUNC_SUFFIX,
     _truncate_diff,
     calling_chat_id,
+    driver_id_from_update,
+    mixed_sender_note_outstanding,
 )
 
 if TYPE_CHECKING:
@@ -87,11 +89,15 @@ class CommandHandlersMixin:
 
     async def _hold_for_open_dialog(self, update: Update, sess, text: str,
                                     reply_context: str = "") -> bool:
-        """Queue `text` instead of injecting it while a dialog is open.
+        """Queue `text` instead of injecting it while a dialog is open, OR
+        while a different Telegram user's note is still outstanding.
 
         The single gate every inbound prompt path consults. Returns True
         when the message was held, in which case the caller must return
-        without injecting.
+        without injecting. Same name, same 8-call-site seam as before
+        (design.md "queue handoff") — a second hold condition was added
+        to the existing gate rather than threading a new one through
+        every call site.
 
         Held messages go into ``pending_queue`` rather than a structure of
         their own: an unanswered permission prompt can sit indefinitely, so
@@ -103,15 +109,28 @@ class CommandHandlersMixin:
         drains the queue, or belongs to stop/kill — which clear the queue
         deliberately, as they already did for busy-queued messages.
 
+        The mixed-sender condition reads ``update.effective_user.id``
+        directly rather than ``sess.last_driver_user_id`` — at the point
+        every one of these call sites runs, ``_mark_driver`` (which sets
+        that field) has not necessarily fired yet for THIS message, so
+        the session-level field can still describe the PREVIOUS sender.
+
         The reaction is the same 👀 a busy-queued message gets, deliberately:
         the state really is the same one (queued for delivery), Telegram only
         permits a fixed set of reaction emoji, and the sent-versus-picked-up
-        distinction that would justify a second signal is the subject of a
-        later change rather than something to half-introduce here.
+        distinction that would justify a second signal is the 👍 this same
+        change adds at pick-up time, not here.
         """
-        if not sess.dialog_is_open():
+        held_reason = ""
+        if sess.dialog_is_open():
+            held_reason = "prompt open"
+        elif mixed_sender_note_outstanding(sess, update):
+            held_reason = "different sender outstanding"
+
+        if not held_reason:
             return False
-        if not sess.queue_prompt(text, update.message.message_id, reply_context):
+        if not sess.queue_prompt(text, update.message.message_id, reply_context,
+                                 driver_id_from_update(update)):
             await update.message.reply_text(
                 f"⚠️ Queue is full ({QUEUE_CAP} pending) for "
                 f"[{html_mod.escape(sess.label)}]. Answer the prompt or "
@@ -121,7 +140,7 @@ class CommandHandlersMixin:
             return True
         self.registry.mark_dirty()
         await self._react(update, "👀")
-        log.info("[%s] Held (prompt open): %s", sess.label, text[:80])
+        log.info("[%s] Held (%s): %s", sess.label, held_reason, text[:80])
         return True
 
     async def _react(self, update: Update, emoji: str) -> None:
@@ -647,12 +666,18 @@ class CommandHandlersMixin:
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
     ) -> None:
         """Handle /clearqueue — drop pending queued prompts for the last
-        active session without interrupting the running task.
+        active session, AND anything Claude itself is holding but hasn't
+        confirmed picking up yet, without interrupting the running task.
 
-        `/stop` already drains the queue, but at the cost of interrupting
-        the current work. `/clearqueue` is the "just stop QUEUING for
-        the next thing" surgical tool: the current prompt keeps running,
-        the queue empties.
+        `/stop` already drains both, but at the cost of interrupting the
+        current work. `/clearqueue` is the "just stop QUEUING for the
+        next thing" surgical tool: the current prompt keeps running, the
+        queue and Claude's own not-yet-picked-up notes both empty.
+
+        Thin wrapper around :meth:`_clear_queue_core` (design.md "Stop
+        and /clearqueue on the same primitive") — the Mini App's own
+        clearqueue route calls the same core, so the two surfaces report
+        the same combined count and can never drift.
         """
         if not await self._authorize(update):
             return
@@ -666,22 +691,20 @@ class CommandHandlersMixin:
         if not sess:
             await update.message.reply_text(f"Session '{name}' not found.")
             return
-        dropped = len(sess.pending_queue)
-        if dropped == 0:
+        outcome = await self._clear_queue_core(sess)
+        if not outcome.ok:
             await update.message.reply_text(
                 f"Nothing to clear in [{html_mod.escape(sess.label)}].",
                 parse_mode="HTML",
             )
             return
-        sess.pending_queue.clear()
-        self.registry.mark_dirty()
-        plural = "s" if dropped > 1 else ""
+        plural = "s" if outcome.dropped > 1 else ""
         await update.message.reply_text(
-            f"🗑️ Cleared {dropped} queued message{plural} for "
+            f"🗑️ Cleared {outcome.dropped} queued message{plural} for "
             f"[<b>{html_mod.escape(sess.label)}</b>].",
             parse_mode="HTML",
         )
-        log.info("[%s] /clearqueue cleared %d entries", sess.label, dropped)
+        log.info("[%s] /clearqueue cleared %d entries", sess.label, outcome.dropped)
 
     async def _handle_kill_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /kill <label> — destroy a session entirely."""
@@ -845,7 +868,8 @@ class CommandHandlersMixin:
         if prompt:
             # Flatten newlines (lesson: newlines cause premature Enter)
             prompt = prompt.replace("\n", " — ")
-            if sess.queue_prompt(prompt, update.message.message_id):
+            if sess.queue_prompt(prompt, update.message.message_id, "",
+                                 driver_id_from_update(update)):
                 self.registry.mark_dirty()
 
         # Enriched reply: icon + mode + cwd + optional model + /perms nudge.
@@ -1264,27 +1288,21 @@ class CommandHandlersMixin:
         if await self._hold_for_open_dialog(update, sess, text, reply_context):
             return
 
-        # Queue if session is busy — inject when it goes IDLE
-        if sess.status == Status.BUSY:
-            if not sess.queue_prompt(text, update.message.message_id, reply_context):
-                await update.message.reply_text(
-                    f"⚠️ Queue is full ({QUEUE_CAP} pending) for "
-                    f"[{html_mod.escape(sess.label)}]. Tap stop or wait "
-                    "for the current task to finish.",
-                    parse_mode="HTML",
-                )
-                return
-            self.registry.mark_dirty()
-            await self._react(update, "👀")
-            log.info("[%s] Queued (busy): %s", sess.label, text[:80])
-            return
-
+        # Every inbound message injects immediately now, regardless of
+        # Status.BUSY (design.md "queue handoff") — Claude keeps its own
+        # not-yet-picked-up queue, matched by the UserPromptSubmit hook
+        # at pick-up. `_direct_send`/`_send_command` have injected into a
+        # BUSY session's pty all along; this is that same behaviour.
         sess.trigger_msg_id = update.message.message_id
         sess.last_prompt = text
         self._mark_driver(sess, update)
         self.registry.track_message(update.message.message_id, sess.name, chat_id or 0)
         self.registry.mark_dirty()
-        ok = await self._inject_prompt(sess, text, reply_context)
+        ok = await self._inject_prompt(
+            sess, text, reply_context,
+            msg_id=update.message.message_id, chat_id=chat_id,
+            driver_user_id=driver_id_from_update(update),
+        )
         if ok:
             await self._react(update, "👀")
             self.registry.transition(sess.name, Status.BUSY)
@@ -1439,25 +1457,18 @@ class CommandHandlersMixin:
         if await self._hold_for_open_dialog(update, sess, transcript, reply_context):
             return
 
-        # Queue if busy
-        if sess.status == Status.BUSY:
-            if not sess.queue_prompt(transcript, update.message.message_id, reply_context):
-                await update.message.reply_text(
-                    f"⚠️ Queue full for [{html_mod.escape(sess.label)}].",
-                    parse_mode="HTML",
-                )
-                return
-            self.registry.mark_dirty()
-            await self._react(update, "👀")
-            log.info("[%s] Voice queued (busy): %r", sess.label, transcript[:80])
-            return
-
+        # Injects immediately regardless of Status.BUSY — see the same
+        # comment in _handle_message (design.md "queue handoff").
         sess.trigger_msg_id = update.message.message_id
         sess.last_prompt = transcript
         self._mark_driver(sess, update)
         self.registry.track_message(update.message.message_id, sess.name, chat_id or 0)
         self.registry.mark_dirty()
-        ok = await self._inject_prompt(sess, transcript, reply_context)
+        ok = await self._inject_prompt(
+            sess, transcript, reply_context,
+            msg_id=update.message.message_id, chat_id=chat_id,
+            driver_user_id=driver_id_from_update(update),
+        )
         if ok:
             await self._react(update, "🎙️")
             self.registry.transition(sess.name, Status.BUSY)
@@ -1562,26 +1573,18 @@ class CommandHandlersMixin:
         if await self._hold_for_open_dialog(update, sess, prompt, reply_context):
             return
 
-        # Queue if busy
-        if sess.status == Status.BUSY:
-            if not sess.queue_prompt(prompt, msg.message_id, reply_context):
-                await msg.reply_text(
-                    f"⚠️ Queue is full ({QUEUE_CAP} pending) for "
-                    f"[{html_mod.escape(sess.label)}]. File not queued.",
-                    parse_mode="HTML",
-                )
-                return
-            self.registry.mark_dirty()
-            await self._react(update, "👀")
-            log.info("[%s] File queued (busy): %s", sess.label, filename)
-            return
-
+        # Injects immediately regardless of Status.BUSY — see the same
+        # comment in _handle_message (design.md "queue handoff").
         sess.trigger_msg_id = msg.message_id
         sess.last_prompt = prompt
         self._mark_driver(sess, update)
         self.registry.track_message(msg.message_id, sess.name, chat_id or 0)
         self.registry.mark_dirty()
-        ok = await self._inject_prompt(sess, prompt, reply_context)
+        ok = await self._inject_prompt(
+            sess, prompt, reply_context,
+            msg_id=msg.message_id, chat_id=chat_id,
+            driver_user_id=driver_id_from_update(update),
+        )
         if ok:
             await self._react(update, "👀")
             self.registry.transition(sess.name, Status.BUSY)
@@ -1606,27 +1609,19 @@ class CommandHandlersMixin:
         if await self._hold_for_open_dialog(update, sess, prompt_text):
             return
 
-        # Queue if session is busy
-        if sess.status == Status.BUSY:
-            if not sess.queue_prompt(prompt_text, update.message.message_id):
-                await update.message.reply_text(
-                    f"⚠️ Queue is full ({QUEUE_CAP} pending) for "
-                    f"[{html_mod.escape(sess.label)}]. Tap stop or wait "
-                    "for the current task to finish.",
-                    parse_mode="HTML",
-                )
-                return
-            self.registry.mark_dirty()
-            await self._react(update, "👀")
-            log.info("[%s] Template queued (busy): %s", sess.label, prompt_text[:80])
-            return
-
+        # Injects immediately regardless of Status.BUSY — see the same
+        # comment in _handle_message (design.md "queue handoff").
+        template_chat_id = calling_chat_id(update)
         sess.trigger_msg_id = update.message.message_id
         sess.last_prompt = prompt_text
         self.registry.track_message(update.message.message_id, sess.name,
-                                    calling_chat_id(update) or 0)
+                                    template_chat_id or 0)
         self.registry.mark_dirty()
-        ok = await self._inject_prompt(sess, prompt_text)
+        ok = await self._inject_prompt(
+            sess, prompt_text,
+            msg_id=update.message.message_id, chat_id=template_chat_id,
+            driver_user_id=driver_id_from_update(update),
+        )
         if ok:
             await self._react(update, "👀")
             self.registry.transition(sess.name, Status.BUSY)
@@ -1661,7 +1656,11 @@ class CommandHandlersMixin:
         if await self._hold_for_open_dialog(update, sess, command_text):
             return
 
-        ok = await self._inject_prompt(sess, command_text)
+        ok = await self._inject_prompt(
+            sess, command_text,
+            msg_id=update.message.message_id, chat_id=calling_chat_id(update),
+            driver_user_id=driver_id_from_update(update),
+        )
         if ok:
             await self._react(update, "✅")
             # Explicit feedback for model changes
@@ -1696,7 +1695,11 @@ class CommandHandlersMixin:
             self.registry.mark_dirty()
             self.registry.last_active_session = name  # user explicitly targeted this session
             asyncio.create_task(self._maybe_update_bot_name(name))
-            ok = await self._inject_prompt(sess, prompt_text)
+            ok = await self._inject_prompt(
+                sess, prompt_text,
+                msg_id=update.message.message_id, chat_id=calling_chat_id(update),
+                driver_user_id=driver_id_from_update(update),
+            )
             if ok:
                 await self._react(update, "👀")
                 self.registry.transition(name, Status.BUSY)
@@ -1720,7 +1723,11 @@ class CommandHandlersMixin:
             self.registry.mark_dirty()
             self.registry.last_active_session = session_name
             asyncio.create_task(self._maybe_update_bot_name(session_name))
-            ok = await self._inject_prompt(new_sess, prompt_text)
+            ok = await self._inject_prompt(
+                new_sess, prompt_text,
+                msg_id=update.message.message_id, chat_id=calling_chat_id(update),
+                driver_user_id=driver_id_from_update(update),
+            )
             if ok:
                 await self._react(update, "👀")
                 self.registry.transition(session_name, Status.BUSY)

@@ -208,6 +208,9 @@ def test_max_msg_map_raised_to_2000(tmp_state_file):
 
 
 # ---- Part 4: queue_prompt 4-tuple + save/load widening ---------------------
+# (widened again to a 5-tuple by review-2#rev-iter2-001 — see
+# test_queue_drain_attribution.py for the drain-path attribution coverage;
+# the tests below only cover state.py's save/load compat shim.)
 
 def test_queue_prompt_default_reply_context_is_empty_string():
     sess = TrackedSession(name="claude-jim", label="jim")
@@ -219,23 +222,25 @@ def test_queue_prompt_stores_reply_context_when_given():
     sess = TrackedSession(name="claude-jim", label="jim")
     sess.queue_prompt("hi", 1, "pointing at an older message")
     assert sess.pending_queue[0] == ("hi", 1, sess.pending_queue[0][2],
-                                     "pointing at an older message")
+                                     "pointing at an older message", None)
 
 
-def test_save_widens_legacy_2_and_3_tuple_queue_entries_to_4(tmp_state_file):
+def test_save_widens_legacy_2_3_and_4_tuple_queue_entries_to_5(tmp_state_file):
     r = SessionRegistry()
     r.transition("claude-jim", Status.IDLE)
     sess = r.get("claude-jim")
     now = time.time()
     sess.pending_queue.append(("legacy2", 1))          # 2-tuple
     sess.pending_queue.append(("legacy3", 2, now))       # 3-tuple
-    sess.pending_queue.append(("current", 3, now, "ctx"))  # 4-tuple
+    sess.pending_queue.append(("legacy4", 3, now, "ctx"))  # pre-rev-iter2-001 4-tuple
+    sess.pending_queue.append(("current", 4, now, "ctx", 555))  # 5-tuple
     r.save()
     raw = json.loads(tmp_state_file.read_text())
     pq = raw["sessions"]["claude-jim"]["pending_queue"]
-    assert pq[0] == ["legacy2", 1, pq[0][2], ""]
-    assert pq[1] == ["legacy3", 2, now, ""]
-    assert pq[2] == ["current", 3, now, "ctx"]
+    assert pq[0] == ["legacy2", 1, pq[0][2], "", None]
+    assert pq[1] == ["legacy3", 2, now, "", None]
+    assert pq[2] == ["legacy4", 3, now, "ctx", None]
+    assert pq[3] == ["current", 4, now, "ctx", 555]
 
 
 def test_load_upgrades_legacy_3tuple_queue_entries_with_empty_reply_context(
@@ -256,7 +261,7 @@ def test_load_upgrades_legacy_3tuple_queue_entries_with_empty_reply_context(
     r = SessionRegistry()
     r.load()
     sess = r.get("claude-jim")
-    assert sess.pending_queue == [("hi", 100, now, "")]
+    assert sess.pending_queue == [("hi", 100, now, "", None)]
 
 
 def test_load_guards_non_string_reply_context_fails_safe_to_empty(tmp_state_file):
@@ -275,7 +280,49 @@ def test_load_guards_non_string_reply_context_fails_safe_to_empty(tmp_state_file
     r = SessionRegistry()
     r.load()  # must not raise
     sess = r.get("claude-jim")
-    assert sess.pending_queue == [("hi", 100, now, "")]
+    assert sess.pending_queue == [("hi", 100, now, "", None)]
+
+
+def test_load_guards_non_int_driver_user_id_fails_safe_to_none(tmp_state_file):
+    """The 5th slot gets the same fail-safe pattern as reply_context
+    above (review-2#rev-iter2-001): a hand-edited or otherwise-invalid
+    value degrades to "unknown sender" (floors on drain) rather than
+    crashing the load or being misread as a real Telegram user id."""
+    now = time.time()
+    state = {
+        "version": 1, "last_active_session": "", "pinned_msg_id": 0,
+        "msg_map": {},
+        "sessions": {
+            "claude-jim": {
+                **_bare_session("claude-jim", "jim"),
+                "pending_queue": [["hi", 100, now, "", "not-an-id"]],
+            },
+        },
+    }
+    tmp_state_file.write_text(json.dumps(state))
+    r = SessionRegistry()
+    r.load()  # must not raise
+    sess = r.get("claude-jim")
+    assert sess.pending_queue == [("hi", 100, now, "", None)]
+
+
+def test_load_round_trips_a_real_driver_user_id(tmp_state_file):
+    now = time.time()
+    state = {
+        "version": 1, "last_active_session": "", "pinned_msg_id": 0,
+        "msg_map": {},
+        "sessions": {
+            "claude-jim": {
+                **_bare_session("claude-jim", "jim"),
+                "pending_queue": [["hi", 100, now, "", 777]],
+            },
+        },
+    }
+    tmp_state_file.write_text(json.dumps(state))
+    r = SessionRegistry()
+    r.load()
+    sess = r.get("claude-jim")
+    assert sess.pending_queue == [("hi", 100, now, "", 777)]
 
 
 # ---- Part 5: GONE / kill cleanup -------------------------------------------

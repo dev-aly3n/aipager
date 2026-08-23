@@ -28,6 +28,8 @@ import pytest
 from aipager import policy_snapshot as ps
 from aipager.state import Status, TrackedSession
 
+from .conftest import latest_note_reply_context
+
 CHAT_ID = -1001  # matches mk_update's default chat_id
 BOT_ID = 87654321
 
@@ -85,9 +87,9 @@ def test_reply_to_latest_message_no_highlight_snapshot_reply_context_empty(
     run_async(bot._handle_message(update, _ctx()))
 
     assert sess.status == Status.BUSY  # routing still happened
-    snap = ps.read_snapshot(sess.name)
-    assert snap is not None
-    assert snap["reply_context"] == ""
+    ctx = latest_note_reply_context(sess.name)
+    assert ctx is not None
+    assert ctx == ""
 
 
 # ===== Criterion 3: highlight produces context EVEN on the latest message ==
@@ -106,10 +108,10 @@ def test_highlight_on_latest_message_still_produces_context(
     update.message.quote = MagicMock(text="the exact fragment", is_manual=True)
     run_async(bot._handle_message(update, _ctx()))
 
-    snap = ps.read_snapshot(sess.name)
-    assert snap is not None
-    assert snap["reply_context"] != ""
-    assert "the exact fragment" in snap["reply_context"]
+    ctx = latest_note_reply_context(sess.name)
+    assert ctx is not None
+    assert ctx != ""
+    assert "the exact fragment" in ctx
     # No fallback file for a small, non-oversized highlight.
     assert not ps.reply_context_path(sess.name).exists()
 
@@ -132,9 +134,9 @@ def test_plain_message_no_reply_no_quote_produces_no_context_block(
 
     # Routes exactly as a plain message: to last_active_session, injected.
     assert sess.status == Status.BUSY
-    snap = ps.read_snapshot(sess.name)
-    assert snap is not None
-    assert snap["reply_context"] == ""
+    ctx = latest_note_reply_context(sess.name)
+    assert ctx is not None
+    assert ctx == ""
 
 
 # ===== Criterion 7: reply to your own earlier message routes to that =======
@@ -202,9 +204,9 @@ def test_busy_msg_id_sentinel_never_false_positives_the_latest_test(
     )
     run_async(bot._handle_message(update, _ctx()))
 
-    snap = ps.read_snapshot(sess.name)
-    assert snap is not None
-    assert snap["reply_context"] != "", (
+    ctx = latest_note_reply_context(sess.name)
+    assert ctx is not None
+    assert ctx != "", (
         f"a reply_to.message_id == sentinel {sentinel_value} was wrongly "
         "treated as 'the latest message' and suppressed"
     )
@@ -228,6 +230,6 @@ def test_reply_to_a_genuine_positive_busy_msg_id_is_treated_as_latest(
     update.message.reply_to_message = _reply_target(message_id=555, text="the busy prompt")
     run_async(bot._handle_message(update, _ctx()))
 
-    snap = ps.read_snapshot(sess.name)
-    assert snap is not None
-    assert snap["reply_context"] == ""
+    ctx = latest_note_reply_context(sess.name)
+    assert ctx is not None
+    assert ctx == ""

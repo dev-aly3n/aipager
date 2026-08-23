@@ -506,6 +506,37 @@ def tmp_state_file(tmp_path, monkeypatch):
     return target
 
 
+@pytest.fixture(autouse=True)
+def _isolate_notes_dir(tmp_path, monkeypatch):
+    """Redirect ``policy_snapshot.notes_dir`` to ``tmp_path`` for every test.
+
+    Unlike the single-slot policy snapshot (one file per session,
+    idempotently overwritten on every write), a queue-handoff note is a
+    NEW file per message, never overwritten — so two tests that reuse
+    the same session name (most fixtures use ``"claude-x"``/``"claude-
+    jim"``) would silently accumulate each other's notes in real
+    ``/tmp/claude-notes-<session>/`` across the whole run, well beyond
+    the single test that wrote them. That is both a "must never write to
+    real /tmp" violation and a source of cross-test pollution: a note
+    left behind by one test's ``_inject_prompt`` call became "an
+    outstanding note from a different sender" in the very next test that
+    happened to reuse the same session name, holding a message that test
+    expected to inject immediately.
+
+    A per-test ``tmp_path`` closes both problems at once. Tests that
+    want to observe note behaviour directly (e.g.
+    ``tests/test_note_merge_invariant.py``,
+    ``tests/test_queue_pickup_matching.py``) can still read/write
+    through ``aipager.policy_snapshot.notes_dir(name)`` themselves — it
+    resolves to the same redirected path.
+    """
+    base = tmp_path / "notes"
+    monkeypatch.setattr(
+        "aipager.policy_snapshot.notes_dir",
+        lambda session_name: base / f"claude-notes-{session_name}",
+    )
+
+
 @pytest.fixture
 def run_async():
     """Run a coroutine to completion in a fresh event loop.

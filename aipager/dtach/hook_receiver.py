@@ -334,6 +334,34 @@ class HookReceiver:
             if transitioned:
                 await self.notify_fn(transitioned, "user_prompt_submit", {})
 
+        elif event == "queue_pickup":
+            # The UserPromptSubmit hook matched (or fell back on) some of
+            # this session's outstanding per-message notes (design.md
+            # "queue handoff"). Attribute the turn to the LAST consumed
+            # message — mirrors how a single immediate-inject already
+            # sets trigger_msg_id/last_prompt — and mark every consumed
+            # message routable via track_message, so a reply to any of
+            # them resolves back to this session. Reactions and any
+            # best-effort expiry notice are chat-surface concerns, left
+            # to notify.py.
+            consumed = msg.get("consumed") or []
+            expired = msg.get("expired") or []
+            if not consumed and not expired:
+                return
+            sess = self.registry.get_or_create(session_name)
+            if consumed:
+                last = consumed[-1]
+                last_trigger = last.get("msg_id")
+                if last_trigger is not None:
+                    sess.trigger_msg_id = last_trigger
+                last_text = last.get("raw_text")
+                if last_text:
+                    sess.last_prompt = last_text
+                self.registry.mark_dirty()
+            await self.notify_fn(sess, "queue_pickup", {
+                "consumed": consumed, "expired": expired,
+            })
+
         elif event == "PreToolUse":
             tool_name = msg.get("tool_name", "")
             tool_input = msg.get("tool_input", {})

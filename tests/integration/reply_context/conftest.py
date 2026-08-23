@@ -24,3 +24,26 @@ from aipager import policy_snapshot as ps
 def _isolate_claude_tmp_paths(monkeypatch, tmp_path):
     monkeypatch.setattr(ps, "snapshot_path", lambda n: tmp_path / f"{n}.json")
     monkeypatch.setattr(ps, "reply_context_path", lambda n: tmp_path / f"{n}.txt")
+    # `notes_dir` is already redirected to `tmp_path` by the suite-wide
+    # autouse fixture in tests/conftest.py (`_isolate_notes_dir`) — no
+    # separate redirect needed here.
+
+
+def latest_note_reply_context(session_name: str) -> str | None:
+    """The ``reply_context`` carried by the most recently written,
+    still-outstanding note for a session — or ``None`` if there isn't
+    one.
+
+    Queue handoff (design.md) moved reply_context off the canonical,
+    daemon-written snapshot (``ps.read_snapshot`` — now populated only
+    by the ``UserPromptSubmit`` hook's pick-up merge, not at send time)
+    onto the per-message note ``_inject_prompt`` writes instead. Every
+    test in this package that used to assert
+    ``ps.read_snapshot(name)["reply_context"]`` right after an inject
+    reads it here instead — the note IS "what this send resolved
+    reply_context to", which is exactly what those assertions meant.
+    """
+    notes = ps.list_outstanding_notes(session_name)
+    if not notes:
+        return None
+    return notes[-1].get("reply_context", "")

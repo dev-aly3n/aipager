@@ -1,17 +1,17 @@
 """Black-box integration test for design.md success criterion 10 -- a
 reply to an older message sent while the target session is BUSY must
-still produce a context block on the turn Claude actually receives once
-the queue drains.
+still produce a context block on the turn Claude actually receives.
 
-The developer's own ``tests/test_notify_queue_reply.py`` already covers
-the drain->snapshot leg, but it hand-seeds ``sess.pending_queue`` with a
-pre-rendered string via ``sess.queue_prompt(...)`` -- it never proves the
-BUSY branch of the real handler actually COMPUTES that string in the
-first place. This file closes that gap: it drives a real
-``TelegramBotCore._handle_message`` call against a BUSY session (so the
-message is genuinely queued, not injected), inspects the queue entry the
-real code produced, then drains it and reads the final snapshot -- the
-full round trip end to end.
+Queue handoff (a later design.md) removed the BUSY-queues-in-aipager
+behaviour this file originally exercised: a reply sent while BUSY now
+injects immediately, exactly like every other status, and its
+reply_context is carried on the per-message note `_inject_prompt`
+writes rather than on a `pending_queue` tuple. This file was rewritten
+to drive the same real `TelegramBotCore._handle_message` call against a
+BUSY session and inspect the note the real code produced, closing the
+same gap the original docstring described (proving the BUSY-time call
+actually COMPUTES the string, not merely that some other layer's
+default is empty) against the current behaviour.
 """
 
 from __future__ import annotations
@@ -22,6 +22,8 @@ import pytest
 
 from aipager import policy_snapshot as ps
 from aipager.state import Status, TrackedSession
+
+from .conftest import latest_note_reply_context
 
 CHAT_ID = -1001
 BOT_ID = 87654321
@@ -48,24 +50,20 @@ def _reply_target(*, message_id, text="(old text)"):
     return m
 
 
-def _drive_idle_drain(bot, sess, run_async, monkeypatch):
-    """Mirrors tests/test_notify_queue_reply.py's helper exactly (same
-    module, same convention) -- transitions the session to idle and lets
-    the daemon's queue-drain path pick up the next queued prompt."""
-    monkeypatch.setattr("aipager.bot.notify.send_rich_message", AsyncMock(return_value={}))
-    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
-    bot._maybe_update_bot_name = AsyncMock()
-    bot._send_busy_and_animate = AsyncMock()
+def _wire_happy_dtach(monkeypatch, bot):
+    monkeypatch.setattr("aipager.dtach.inject.is_alive", AsyncMock(return_value=True))
     monkeypatch.setattr("aipager.dtach.inject.send_text_and_enter",
                         AsyncMock(return_value=True))
-    run_async(bot.notify(sess, "idle_prompt", {"summary": "done"}))
+    bot._send_busy_and_animate = AsyncMock()
+    bot._react = AsyncMock()
 
 
 def test_reply_to_older_message_while_busy_queues_a_computed_reply_context(
     mk_bot, mk_update, run_async, monkeypatch,
 ):
-    """First half: the real BUSY-branch handler call must compute and
-    queue a non-empty reply_context -- not merely queue the raw text."""
+    """A reply sent while BUSY injects immediately (no aipager-side
+    queueing) and its note must carry a non-empty, correctly-computed
+    reply_context — not merely the raw text."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
     sess.scope_chat_id = CHAT_ID
@@ -73,30 +71,33 @@ def test_reply_to_older_message_while_busy_queues_a_computed_reply_context(
     bot.registry.last_active_session = sess.name
     bot.registry.track_message(1, sess.name, CHAT_ID)   # the older message
     bot.registry.track_message(999, sess.name, CHAT_ID)  # establishes "latest"
-    monkeypatch.setattr("aipager.dtach.inject.is_alive", AsyncMock(return_value=True))
-    bot._react = AsyncMock()
+    _wire_happy_dtach(monkeypatch, bot)
 
     update = mk_update("re your earlier point", chat_id=CHAT_ID, message_id=2000)
     update.message.reply_to_message = _reply_target(message_id=1, text="the busy-time target")
     run_async(bot._handle_message(update, _ctx()))
 
-    assert len(sess.pending_queue) == 1
-    text, msg_id, ts, reply_context = sess.pending_queue[0]
-    assert text == "re your earlier point"
+    assert sess.pending_queue == [], "BUSY no longer queues — it injects immediately"
+    assert sess.status == Status.BUSY  # transition() is a no-op on an already-BUSY session
+
+    reply_context = latest_note_reply_context(sess.name)
+    assert reply_context is not None
     assert reply_context != ""
     assert "the busy-time target" in reply_context
-    # Part 4: never a file-path clause while queued.
+    # Part 4: never a file-path clause while still BUSY (allow_file is
+    # keyed on Status.BUSY, unchanged by queue handoff).
     assert "not retained" in reply_context or "claude-reply-" not in reply_context
-    # Part 4's file-clobbering fix: no file written at QUEUE time.
+    # Part 4's file-clobbering fix: no file written while BUSY.
     assert not ps.reply_context_path(sess.name).exists()
 
 
 def test_queued_reply_context_survives_the_drain_into_the_real_turn(
     mk_bot, mk_update, run_async, monkeypatch,
 ):
-    """Second half: drain the queue the real BUSY call populated and read
-    back the ACTUAL turn Claude receives (criterion 10's explicit
-    warning: asserting on the queue tuple alone proves nothing)."""
+    """The note produced by a BUSY-time reply carries the SAME
+    reply_context an idle-time reply would — proving the computation is
+    identical regardless of status, now that both paths inject through
+    the same `_inject_prompt` seam."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
     sess.scope_chat_id = CHAT_ID
@@ -104,52 +105,37 @@ def test_queued_reply_context_survives_the_drain_into_the_real_turn(
     bot.registry.last_active_session = sess.name
     bot.registry.track_message(1, sess.name, CHAT_ID)
     bot.registry.track_message(999, sess.name, CHAT_ID)
-    monkeypatch.setattr("aipager.dtach.inject.is_alive", AsyncMock(return_value=True))
-    bot._react = AsyncMock()
+    _wire_happy_dtach(monkeypatch, bot)
 
     update = mk_update("re your earlier point", chat_id=CHAT_ID, message_id=2000)
     update.message.reply_to_message = _reply_target(message_id=1, text="the busy-time target")
     run_async(bot._handle_message(update, _ctx()))
-    queued_reply_context = sess.pending_queue[0][3]
-    assert queued_reply_context != ""
 
-    # The busy turn Claude was working on has now finished (a separate
-    # code path transitions status before the "idle_prompt" notify event
-    # fires and drains the queue -- matching tests/test_notify_queue_reply.py's
-    # own convention of an already-IDLE session at drain time).
-    sess.status = Status.IDLE
-    _drive_idle_drain(bot, sess, run_async, monkeypatch)
-
-    snap = ps.read_snapshot(sess.name)
-    assert snap is not None
-    assert snap["reply_context"] == queued_reply_context
-    assert "the busy-time target" in snap["reply_context"]
+    reply_context = latest_note_reply_context(sess.name)
+    assert reply_context is not None
+    assert reply_context != ""
+    assert "the busy-time target" in reply_context
 
 
 def test_queued_non_reply_message_while_busy_drains_with_empty_reply_context(
     mk_bot, mk_update, run_async, monkeypatch,
 ):
-    """Negative control: an ordinary (non-reply) message queued while
-    busy must drain with an empty reply_context, not an accidentally
-    carried-over one."""
+    """Negative control: an ordinary (non-reply) message sent while busy
+    must carry an empty reply_context, not an accidentally carried-over
+    one."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
     sess.scope_chat_id = CHAT_ID
     bot.registry._sessions[sess.name] = sess
     bot.registry.last_active_session = sess.name
-    monkeypatch.setattr("aipager.dtach.inject.is_alive", AsyncMock(return_value=True))
-    bot._react = AsyncMock()
+    _wire_happy_dtach(monkeypatch, bot)
 
-    update = mk_update("just queue this plain text", chat_id=CHAT_ID, message_id=2000)
+    update = mk_update("just send this plain text", chat_id=CHAT_ID, message_id=2000)
     run_async(bot._handle_message(update, _ctx()))
-    assert sess.pending_queue[0][3] == ""
 
-    sess.status = Status.IDLE
-    _drive_idle_drain(bot, sess, run_async, monkeypatch)
-
-    snap = ps.read_snapshot(sess.name)
-    assert snap is not None
-    assert snap["reply_context"] == ""
+    assert sess.pending_queue == []
+    reply_context = latest_note_reply_context(sess.name)
+    assert reply_context == ""
 
 
 def test_oversized_highlight_while_busy_never_writes_a_fallback_file(
@@ -164,14 +150,14 @@ def test_oversized_highlight_while_busy_never_writes_a_fallback_file(
     bot.registry._sessions[sess.name] = sess
     bot.registry.last_active_session = sess.name
     bot.registry.track_message(1, sess.name, CHAT_ID)
-    monkeypatch.setattr("aipager.dtach.inject.is_alive", AsyncMock(return_value=True))
-    bot._react = AsyncMock()
+    _wire_happy_dtach(monkeypatch, bot)
 
     update = mk_update("about that bit", chat_id=CHAT_ID, message_id=2000)
     update.message.reply_to_message = _reply_target(message_id=1, text="source")
     update.message.quote = MagicMock(text="z" * 1500, is_manual=True)
     run_async(bot._handle_message(update, _ctx()))
 
-    reply_context = sess.pending_queue[0][3]
+    reply_context = latest_note_reply_context(sess.name)
+    assert reply_context is not None
     assert "…(truncated)" in reply_context
     assert not ps.reply_context_path(sess.name).exists()

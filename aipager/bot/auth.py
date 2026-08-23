@@ -623,6 +623,31 @@ class AuthMixin:
             return None
         return self.team.get(sess.last_driver_user_id)
 
+    def _driver_user_by_id(self, user_id: int | None) -> TeamUser | None:
+        """Resolve an explicit Telegram user id to a ``TeamUser``.
+
+        Same lookup as :meth:`_driver_user`, but against a caller-supplied
+        id instead of the session's mutable ``last_driver_user_id`` field.
+
+        Permission attribution (``session_ops._inject_prompt``'s
+        ``member``/``role`` resolution) must use THIS, not
+        :meth:`_driver_user`, and must be called only with an id the
+        caller can vouch for as belonging to the specific message being
+        attributed (design.md "queue handoff" fix for rev-iter1-001): the
+        session's ``last_driver_user_id`` can move on to a different
+        person's tap or message between a prompt being queued and it
+        being written, which would otherwise let a later, unrelated
+        sender's role — including ``bypass_safety`` — attach to this
+        note's content.
+        """
+        if user_id is None:
+            return None
+        if self.scopes is not None:
+            return self._member_anywhere(user_id)
+        if self.team is None:
+            return None
+        return self.team.get(user_id)
+
     async def _authorize_callback(self, query) -> TeamUser | None:
         """Allow-list check for inline-keyboard taps.
 

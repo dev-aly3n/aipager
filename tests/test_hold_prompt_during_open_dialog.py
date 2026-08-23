@@ -151,18 +151,59 @@ def test_an_idle_session_still_injects_immediately(
 
 @PATHS
 def test_busy_behaviour_is_unchanged(wired, mk_update, run_async, path):
-    """BUSY is explicitly out of scope for this change. Each path keeps
-    whatever it did before: the queue-capable paths queue, and the two
-    that inject straight through still inject."""
+    """BUSY is no longer a hold condition at all (design.md "queue
+    handoff") — every inbound path injects immediately regardless of
+    Status.BUSY, exactly like `direct`/`command` already did before this
+    change. Only Status.INTERACTIVE (open dialog) and a mixed-sender
+    outstanding note still hold — both covered by the other tests in
+    this file."""
     bot, sess, injected = wired
     _in_state(bot, sess, Status.BUSY)
 
     _drive(bot, path, _text_update(mk_update), run_async)
 
-    if path == "text":
-        assert injected == [] and len(sess.pending_queue) == 1
-    else:
-        assert len(injected) == 1 and sess.pending_queue == []
+    assert len(injected) == 1 and sess.pending_queue == []
+
+
+# ── mixed sender (design.md "queue handoff") ────────────────────────────
+
+@PATHS
+def test_a_message_from_a_different_sender_is_held(
+        wired, mk_update, run_async, monkeypatch, path):
+    """The second hold condition `_hold_for_open_dialog` gained: an
+    outstanding note from a Telegram user OTHER than whoever sent this
+    message is held, even with no dialog open at all."""
+    from aipager.policy_snapshot import write_note
+
+    bot, sess, injected = wired
+    _in_state(bot, sess, Status.IDLE)
+    write_note(NAME, None, None, None, msg_id=1, chat_id=CHAT_ID,
+              sender_key=(sess.scope_chat_id or 0, 999999),  # a DIFFERENT user
+              body="someone else's message", raw_text="someone else's message")
+
+    _drive(bot, path, _text_update(mk_update), run_async)  # mk_update's default user_id=12345
+
+    assert injected == [], "a mixed-sender message was injected instead of held"
+    assert len(sess.pending_queue) == 1
+
+
+@PATHS
+def test_a_message_from_the_same_sender_is_not_held(
+        wired, mk_update, run_async, monkeypatch, path):
+    """Positive control: an outstanding note from the SAME sender must
+    not trip the mixed-sender hold."""
+    from aipager.policy_snapshot import write_note
+
+    bot, sess, injected = wired
+    _in_state(bot, sess, Status.IDLE)
+    write_note(NAME, None, None, None, msg_id=1, chat_id=CHAT_ID,
+              sender_key=(sess.scope_chat_id or 0, 12345),  # SAME user as the update below
+              body="my own earlier message", raw_text="my own earlier message")
+
+    _drive(bot, path, _text_update(mk_update), run_async)
+
+    assert len(injected) == 1
+    assert sess.pending_queue == []
 
 
 # ── structural guard ───────────────────────────────────────────────────
@@ -346,3 +387,40 @@ def test_the_retry_button_refuses_while_a_dialog_is_open(
     assert edits and "Not retried" in edits[-1], (
         f"refusal left no durable trace on the card; edits={edits}")
     assert "error" in edits[-1], "the card's original text was discarded"
+
+
+def test_the_retry_button_also_refuses_on_a_mixed_sender_note(
+        wired, run_async, monkeypatch):
+    """Design.md: "Retry gains the same mixed-sender check beside its
+    dialog_is_open() check." — a dialog need not be open at all; an
+    outstanding note from a different Telegram user is enough."""
+    from aipager.policy_snapshot import write_note
+
+    bot, sess, injected = wired
+    sess.last_prompt = "the earlier prompt"
+    _in_state(bot, sess, Status.IDLE)  # no dialog open
+    bot.team = None
+    bot.scopes = None
+    write_note(NAME, None, None, None, msg_id=1, chat_id=CHAT_ID,
+              sender_key=(sess.scope_chat_id or 0, 999999),  # a DIFFERENT user
+              body="someone else's message", raw_text="someone else's message")
+    answers: list[str] = []
+    bot._safe_answer = AsyncMock(
+        side_effect=lambda q, text="", **kw: answers.append(text))
+
+    query = MagicMock()
+    query.data = f"{NAME}:retry"
+    query.message = MagicMock(text="error", message_id=700)
+    query.message.edit_text = AsyncMock()
+    query.message.chat = MagicMock(id=CHAT_ID)
+    query.from_user = MagicMock(id=1)
+    query.answer = AsyncMock()
+    update = MagicMock()
+    update.callback_query = query
+    update.effective_chat = MagicMock(id=CHAT_ID)
+    update.effective_user = MagicMock(id=1)  # the tapper — not the note's sender
+
+    run_async(bot._handle_callback(update, MagicMock()))
+
+    assert injected == [], "Retry typed the old prompt despite a mixed-sender note"
+    assert answers, "no explanation offered to the operator"

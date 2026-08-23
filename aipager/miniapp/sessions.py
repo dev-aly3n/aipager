@@ -7,6 +7,14 @@ keeps it trivially unit-testable and keeps ``server.py``'s handlers thin:
 auth + scope resolution + registry lookup live in ``server.py``; shaping
 the JSON lives here.
 
+One deliberate exception: ``session_detail``'s ``queue_depth`` reads
+``policy_snapshot.combined_queue_depth``, a best-effort local ``/tmp``
+directory listing (design.md "queue handoff") — the SAME helper chat's
+own Stop/`/clearqueue` use, so the two surfaces can never disagree about
+how many prompts sit behind a session's turn. No registry, subprocess or
+network access is added; the file-shaping contract above still holds for
+everything else in this module.
+
 See design.md Decision 1 for why "waiting on permission" is derived here
 rather than becoming a new ``Status`` enum member, and Decision 3 for why
 the timeline is a new, simpler function rather than a reuse of
@@ -20,6 +28,7 @@ import time
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
+from aipager.policy_snapshot import combined_queue_depth
 from aipager.state import QUEUE_CAP, Status
 
 if TYPE_CHECKING:
@@ -262,7 +271,7 @@ def session_detail(
     busy_elapsed = None
     if sess.busy_started_at and sess.status in (Status.BUSY, Status.INTERACTIVE):
         busy_elapsed = round(now - sess.busy_started_at)
-    queue_depth = len(sess.pending_queue)
+    queue_depth = combined_queue_depth(sess)
     detail = {
         "label": sess.label,
         "status": status,

@@ -311,7 +311,10 @@ class SessionOpsMixin:
             return f"[via Telegram · @{member.label} · role:{member.role}]"
         return f"[via Telegram · @{member.label}]"
 
-    async def _inject_prompt(self, sess, text: str, reply_context: str = "") -> bool:
+    async def _inject_prompt(self, sess, text: str, reply_context: str = "",
+                             *, msg_id: int | None = None,
+                             chat_id: int | None = None,
+                             driver_user_id: int | None = None) -> bool:
         """Send a Telegram-originated prompt into the session.
 
         Marks the session origin = "telegram" (the safety boundary keys
@@ -324,30 +327,100 @@ class SessionOpsMixin:
         this one (design.md's staleness guard). Only the three
         immediate-inject reply handlers and the queue-drain site pass a
         real value.
+
+        ``msg_id``/``chat_id`` identify the originating Telegram message
+        (design.md "queue handoff") — carried on the per-message note so
+        the ``UserPromptSubmit`` hook's pick-up matcher can report which
+        specific message a turn consumed (``track_message`` + a 👍
+        reaction), and so ``discard_queued_input`` has something to have
+        cleared on Stop. ``None`` for callers with no single originating
+        message (e.g. a literal ``/compact`` triggered by a hook event
+        rather than operator input).
+
+        ``driver_user_id`` is the raw Telegram user id of whoever sent
+        THIS message — the note's ``sender_key`` half that
+        ``transport.mixed_sender_note_outstanding`` compares against.
+        Deliberately NOT read from ``sess.last_driver_user_id`` here:
+        that field is only set by ``AuthMixin._mark_driver`` in
+        team/scope mode, stays ``None`` for the entire lifetime of a
+        personal-mode session, and — even in team mode — may not yet
+        reflect THIS message at every call site. Falling back to it
+        would write every personal-mode note under the same ``0``
+        sender_key while the hold-check (which always reads the live
+        ``update.effective_user.id``) compares against the real id,
+        turning one operator's own back-to-back messages into a
+        "mixed sender" false positive. Callers with a live ``Update``
+        pass ``update.effective_user.id``; callers with none of their
+        own (Retry, a literal ``/compact``) fall back to
+        ``sess.last_driver_user_id`` — the best available approximation
+        when there is no live sender to read. The queue-drain site
+        (``notify.py``) is NOT in that group since review-2#rev-iter2-001:
+        ``TrackedSession.queue_prompt`` now captures the sender's id at
+        hold/queue time (from the same ``driver_id_from_update(update)``
+        every immediate-inject caller already uses) and carries it on the
+        queue entry, so the drain passes that captured id here — a real
+        identity, not a fallback — whenever one was captured. Only an
+        entry with no captured id (a pre-upgrade 4-tuple, or a call site
+        with no live ``Update`` when it queued) drains with
+        ``driver_user_id=None``, which still falls back to
+        ``sess.last_driver_user_id`` for ``sender_key`` bookkeeping below.
+
+        That fallback is only good enough for bookkeeping (grouping
+        "same sender" runs for the mixed-sender hold), never for
+        *permission attribution*. ``sess.last_driver_user_id`` is
+        mutable and can move on to a different person between a message
+        failing and a later Retry, or between a message being queued and
+        the daemon draining it — review rev-iter1-001/002/rev-iter2-001.
+        Role/member resolution below therefore reads only the id the
+        CALLER explicitly supplied (before the fallback assigned below),
+        never the fallback value: a caller with no live identity for this
+        specific message (Retry, a literal ``/compact``, or a
+        drained message with no captured sender) gets a note resolved
+        with ``member=None``/``role=None`` — floor permissions,
+        ``bypass_safety=False`` — rather than silently inheriting
+        whoever ``sess.last_driver_user_id`` happens to name right now.
+        Fail closed: an under-attributed note can only make a future
+        merged turn *more* restrictive (design.md's merge invariant),
+        never less, so this trades away Retry's permission elevation in
+        the common single-user case rather than risk lending an
+        unrelated sender's ``bypass_safety`` to it.
         """
+        explicit_driver_user_id = driver_user_id
+        if driver_user_id is None:
+            driver_user_id = sess.last_driver_user_id
         sess.last_prompt_origin = "telegram"
-        # Write the policy snapshot for this turn. The safety-relevant
-        # fields (role/scope/member, Phase E) only matter in v2 scope
-        # mode — the marker line that flips a hook's origin check to
-        # "telegram" is only ever prepended there (see _prompt_marker
-        # above), so writing a snapshot in legacy/personal mode cannot
+        body = text
+        if not text.lstrip().startswith("/"):
+            marker = self._prompt_marker(sess)
+            if marker:
+                body = f"{marker}\n{text}"
+        # Write a per-message policy note for this turn (design.md "queue
+        # handoff") — replaces the old one-slot write_snapshot() call at
+        # send time. Every message gets its own note now; the
+        # UserPromptSubmit hook merges whichever ones a turn actually
+        # picks up into the canonical snapshot at pick-up, not here. The
+        # safety-relevant fields (role/scope/member, Phase E) only matter
+        # in v2 scope mode — the marker line that flips a hook's origin
+        # check to "telegram" is only ever prepended there (see
+        # _prompt_marker above), so a note in legacy/personal mode cannot
         # change PreToolUse enforcement. style_text is different: it's
         # keyed by the scope's real Telegram chat id, not by aipager.yaml
-        # scope config, so it's meaningful in every mode. This is the one
-        # place a session's UserPromptSubmit-hook style guidance gets
-        # refreshed, and it must run on every Telegram-originated prompt
-        # so a /settings change — OR a per-session override set from the
-        # Mini App — reaches the very next reply, no restart. Goes through
+        # scope config, so it's meaningful in every mode. Goes through
         # resolve_preferences (never get_preferences directly): this is
         # THE critical path per design.md — a caller here that bypassed
         # it would make the per-session settings feature do nothing.
         # Best-effort.
         try:
             from aipager import preferences as prefs_mod
-            from aipager.policy_snapshot import write_snapshot
+            from aipager.policy_snapshot import write_note
             member = role = scope = None
             if self.scopes is not None:
-                member = self._driver_user(sess)
+                # See the docstring above: permission attribution uses
+                # ONLY the explicitly-passed id, never the fallback used
+                # for sender_key below. scope is unaffected — it can
+                # only add restrictions, never grant them, so it is safe
+                # to resolve regardless of whether the sender is known.
+                member = self._driver_user_by_id(explicit_driver_user_id)
                 role = (self.policy.get_role(member.role)
                         if member is not None else None)
                 scope = self._scope_for(sess.scope_chat_id)
@@ -356,15 +429,15 @@ class SessionOpsMixin:
                     sess.scope_chat_id or 0, sess.preference_overrides(),
                 )
             )
-            write_snapshot(sess.name, role, scope, member,
-                          style_text=style, reply_context=reply_context)
+            sender_key = (sess.scope_chat_id or 0, driver_user_id or 0)
+            write_note(
+                sess.name, role, scope, member,
+                msg_id=msg_id, chat_id=chat_id, sender_key=sender_key,
+                body=body, raw_text=text,
+                style_text=style, reply_context=reply_context,
+            )
         except Exception:
-            log.debug("policy snapshot write failed", exc_info=True)
-        body = text
-        if not text.lstrip().startswith("/"):
-            marker = self._prompt_marker(sess)
-            if marker:
-                body = f"{marker}\n{text}"
+            log.debug("policy note write failed", exc_info=True)
         return await inject.send_text_and_enter(sess.name, body)
 
     def _build_reply_context(
@@ -552,10 +625,23 @@ class SessionOpsMixin:
         if sess.status not in (Status.BUSY, Status.INTERACTIVE):
             return StopOutcome(ok=False, label=sess.label)
 
-        # 1. Send Escape twice to Claude Code
+        # 1. Send Escape twice to Claude Code — proven interrupt
+        # behaviour this change does not touch.
         await inject.send_keys(sess.name, "Escape")
         await asyncio.sleep(0.15)
         await inject.send_keys(sess.name, "Escape")
+
+        # 1b. Wipe whatever Claude's own not-yet-picked-up queue
+        # surfaced into the input box (design.md "Stop and /clearqueue
+        # on the same primitive") — the Escapes above can move it there
+        # without cancelling the running task, and left alone it would
+        # concatenate onto the next prompt. Read once, up front, so the
+        # "was anything actually outstanding" check and the combined
+        # drop count below agree on the same snapshot.
+        from aipager.policy_snapshot import clear_notes_dir, list_outstanding_notes
+        outstanding_notes = list_outstanding_notes(sess.name)
+        if outstanding_notes:
+            await inject.discard_queued_input(sess.name)
 
         # 2. Cancel animation
         self._stop_animation(sess)
@@ -569,8 +655,9 @@ class SessionOpsMixin:
         sess.busy_msg_id = None
 
         # 4. Transition to IDLE directly (skip notify — we handle UI here)
-        dropped = len(sess.pending_queue)
+        dropped = len(sess.pending_queue) + len(outstanding_notes)
         sess.pending_queue.clear()
+        clear_notes_dir(sess.name)
         sess.pending_permission = None
         sess.status = Status.IDLE
         sess.trigger_msg_id = None
@@ -618,7 +705,22 @@ class SessionOpsMixin:
             except Exception:
                 pass
         elif update:
+            # The ✅ reaction stays — it's the same instant, low-effort
+            # acknowledgement every other command-driven action gets, and
+            # is gone as soon as the operator looks away. The count itself
+            # needs a durable, chat-visible message: tester-iter1-001
+            # found /stop discarding Claude's own held-but-not-picked-up
+            # queue (this feature's whole point) with the count nowhere
+            # the operator could see it — a reaction alone is closer to a
+            # vanishing toast than the "chat acknowledgement" entrypoints.md
+            # promises (see intent.md's own open question #1).
             await self._react(update, "✅")
+            if getattr(update, "message", None) is not None:
+                try:
+                    await update.message.reply_text(ack)
+                except Exception:
+                    log.debug("[%s] stop acknowledgement reply failed",
+                              sess.label, exc_info=True)
 
         return outcome
 
@@ -1119,20 +1221,35 @@ class SessionOpsMixin:
 
     async def _clear_queue_core(self, sess: TrackedSession) -> ClearQueueOutcome:
         """Discard every prompt queued behind the session's in-progress
-        turn. The turn itself is untouched — only Stop interrupts it.
+        turn AND everything Claude itself is holding but hasn't
+        confirmed picking up yet. The turn itself is untouched — only
+        Stop interrupts it.
 
-        No awaits: refuses immediately, with no side effects, when
-        there is nothing to clear — the same "no-op refusal" shape
+        Refuses immediately, with no side effects, when there is
+        nothing to clear — the same "no-op refusal" shape
         :meth:`_stop_session_core` already uses, so the refusal is
-        pytest-testable with zero dtach mocking.
+        pytest-testable with zero dtach mocking. The shared seam both
+        chat's ``/clearqueue`` and the Mini App's clearqueue route call
+        (design.md "Stop and /clearqueue on the same primitive") — ONE
+        call to :func:`inject.discard_queued_input`, never preceded by
+        the interrupt pair :meth:`_stop_session_core` sends, so this can
+        never cancel the running turn. Sends no keys at all when only
+        ``pending_queue`` (never-injected, aipager-side-only holds) is
+        being cleared — there is nothing in the pty's input box to wipe
+        unless a note had actually reached it.
         """
-        if not sess.pending_queue:
+        from aipager.policy_snapshot import clear_notes_dir, list_outstanding_notes
+
+        outstanding_notes = list_outstanding_notes(sess.name)
+        dropped = len(sess.pending_queue) + len(outstanding_notes)
+        if not dropped:
             return ClearQueueOutcome(ok=False, label=sess.label, dropped=0)
-        dropped = len(sess.pending_queue)
         sess.pending_queue.clear()
+        clear_notes_dir(sess.name)
+        if outstanding_notes:
+            await inject.discard_queued_input(sess.name)
         self.registry.mark_dirty()
-        log.info("[%s] queue cleared from Mini App (dropped %d)",
-                 sess.label, dropped)
+        log.info("[%s] queue cleared (dropped %d)", sess.label, dropped)
         return ClearQueueOutcome(ok=True, label=sess.label, dropped=dropped)
 
     async def _compact_session_core(self, sess: TrackedSession) -> CompactOutcome:

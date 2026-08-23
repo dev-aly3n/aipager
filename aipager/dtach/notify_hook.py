@@ -75,6 +75,90 @@ def _read_statusline_tokens(session: str) -> dict | None:
     }
 
 
+def _note_wire(note: dict) -> dict:
+    """Minimal, JSON-safe shape of a note for the ``queue_pickup``
+    datagram — only what the daemon side (hook_receiver.py) needs.
+
+    Deliberately an allow-list, not a passthrough of ``note``: a future
+    field added to the note shape (e.g. a permission field, or
+    ``sender_key``) must not be forwarded here by accident just because
+    it exists on the dict. Add new keys explicitly, one at a time.
+    """
+    return {
+        "msg_id": note.get("msg_id"),
+        "chat_id": note.get("chat_id"),
+        "raw_text": note.get("raw_text", ""),
+    }
+
+
+def _match_and_promote(session: str, prompt_text: str) -> tuple[list[dict], list[dict]]:
+    """Consume the longest PREFIX run of outstanding notes matching
+    ``prompt_text``, always leaving the canonical policy snapshot
+    correctly overwritten before returning.
+
+    Lists the session's outstanding notes oldest-first and walks them in
+    order, searching for each note's ``body`` as a substring of
+    ``prompt_text`` starting where the previous match left off — so a
+    match requires every consumed note's text to appear, in order, as
+    the batching format is deliberately NOT assumed (intent.md's
+    confirmed unknown: whether/how Claude concatenates several queued
+    messages into one prompt). The first note whose body can't be found
+    stops the run; everything before it is "consumed", everything from
+    it onward stays outstanding.
+
+    Whatever happens — a full match, a partial run, or no match at all —
+    this ALWAYS computes a merged snapshot and overwrites the canonical
+    ``/tmp/claude-policy-<session>.json`` before returning (design.md):
+
+    - Matched (``consumed`` non-empty): merge from ONLY the consumed
+      notes — this turn is attributable, so only its actual contributors
+      restrict it — and delete them (confirmed picked up).
+    - Unmatched but notes exist (the "all-outstanding fallback"): merge
+      from EVERY outstanding note. This turn's origin can't be
+      attributed to any subset, so the safe answer is "as restrictive as
+      the most restrictive thing still waiting" — nothing is deleted, so
+      an unmatched note keeps feeding future merges too, never widening
+      anything (design.md "Why the fallback is safe").
+    - No notes outstanding at all: merges to :data:`FLOOR_SNAPSHOT`
+      exactly (the "empty floor" path) — never assumed unrestricted,
+      and never labelled terminal origin (that would be
+      ``enforce.decide()`` returning ``None``, which this never does).
+
+    Returns ``(consumed, expired)`` — the notes matched (in order) and
+    any notes dropped for exceeding the pick-up TTL as a side effect of
+    listing, for the caller's daemon-side reactions/notice.
+    """
+    from aipager.policy_snapshot import (
+        delete_notes,
+        list_outstanding_notes,
+        merge_snapshots,
+        write_merged_snapshot,
+    )
+
+    expired: list[dict] = []
+    outstanding = list_outstanding_notes(session, expired_out=expired)
+
+    consumed: list[dict] = []
+    cursor = 0
+    for note in outstanding:
+        body = note.get("body") or ""
+        if not body:
+            break
+        idx = prompt_text.find(body, cursor)
+        if idx == -1:
+            break
+        consumed.append(note)
+        cursor = idx + len(body)
+
+    if consumed:
+        delete_notes(session, consumed)
+        merged = merge_snapshots(consumed)
+    else:
+        merged = merge_snapshots(outstanding)  # all-outstanding fallback, or floor
+    write_merged_snapshot(session, merged)
+    return consumed, expired
+
+
 def _prepare_cap_notifier(session: str) -> tuple[socket.socket | None, bytes]:
     """Pre-open the daemon socket + pre-serialize the cap-hit payload.
 
@@ -227,6 +311,41 @@ def _run(session: str, cap_slot: list[bytes]) -> None:
     # and prints nothing at all — not even an empty line — when there's
     # nothing to say, matching every other event's existing silence.
     elif data.get("hook_event_name") == "UserPromptSubmit":
+        # Queue-handoff (design.md): match this pick-up against the
+        # session's outstanding per-message notes and rewrite the
+        # canonical policy snapshot from the merge BEFORE the style/
+        # reply-context read below — that read must see THIS turn's
+        # merged snapshot, not a stale one from whenever `_inject_prompt`
+        # last wrote it (it no longer writes it at all).
+        submit_session = data.get("session", "")
+        if submit_session:
+            try:
+                consumed, expired = _match_and_promote(
+                    submit_session, data.get("prompt", "") or "",
+                )
+                if consumed or expired:
+                    _udp({
+                        "hook_event_name": "queue_pickup",
+                        "session": submit_session,
+                        "consumed": [_note_wire(n) for n in consumed],
+                        "expired": [_note_wire(n) for n in expired],
+                    })
+            except MemoryError:
+                raise
+            except Exception as e:
+                # Never leave a stale (possibly broader) snapshot in
+                # place on an unexpected failure — fail closed to the
+                # floor rather than fail open to whatever was written
+                # for some earlier turn.
+                _debug(f"queue pickup matching error (falling back to "
+                       f"floor): {e}")
+                try:
+                    from aipager.policy_snapshot import (
+                        merge_snapshots, write_merged_snapshot,
+                    )
+                    write_merged_snapshot(submit_session, merge_snapshots([]))
+                except Exception:
+                    pass
         try:
             from aipager.policy_snapshot import read_snapshot
             snap = read_snapshot(data.get("session", "")) or {}

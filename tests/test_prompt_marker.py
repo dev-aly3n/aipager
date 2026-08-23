@@ -73,18 +73,63 @@ def test_inject_slash_command_no_marker(mk_bot, run_async, monkeypatch):
 
 
 def test_inject_writes_policy_snapshot(mk_bot, run_async, monkeypatch):
+    """``_inject_prompt`` writes a per-message note now (design.md "queue
+    handoff"), not the one-slot snapshot directly — same resolved role/
+    scope/member/style_text inputs, just carried on ``write_note``.
+
+    Passes ``driver_user_id`` explicitly (as every real live-``Update``
+    caller does) — permission attribution requires it since review
+    rev-iter1-001; see
+    ``test_inject_prompt_role_resolution_requires_an_explicit_driver_user_id``
+    for the fail-closed case."""
     from aipager import policy_snapshot
     bot = _bot(mk_bot)
     monkeypatch.setattr(inject, "send_text_and_enter", AsyncMock(return_value=True))
     captured = {}
-    monkeypatch.setattr(
-        policy_snapshot, "write_snapshot",
-        lambda name, role, scope, member, style_text="", reply_context="": captured.update(
-            name=name, role=role, member=member, style_text=style_text))
-    run_async(bot._inject_prompt(_sess(), "do the thing"))
+
+    def _fake_write_note(name, role, scope, member, *, msg_id=None,
+                         chat_id=None, sender_key=None, body="",
+                         raw_text="", style_text="", reply_context=""):
+        captured.update(name=name, role=role, member=member,
+                        style_text=style_text)
+        return None
+    monkeypatch.setattr(policy_snapshot, "write_note", _fake_write_note)
+    run_async(bot._inject_prompt(_sess(), "do the thing", driver_user_id=2))
     assert captured["name"] == "claude-x__g100"
     assert captured["member"].label == "bob"        # driver resolved
     assert captured["role"].name == "user"
+
+
+def test_inject_prompt_role_resolution_requires_an_explicit_driver_user_id(
+    mk_bot, run_async, monkeypatch,
+):
+    """review rev-iter1-001: permission attribution (member/role) must
+    come from the id the CALLER explicitly supplied, never from
+    ``sess.last_driver_user_id`` alone. A caller with no live identity
+    for this specific message (Retry, a literal /compact, the
+    queue-drain site) gets ``member=None``/``role=None`` — floor
+    permissions — even though ``sess.last_driver_user_id`` is set to a
+    real, resolvable member. Fail closed rather than silently inherit
+    whoever the mutable session field happens to name."""
+    from aipager import policy_snapshot
+    bot = _bot(mk_bot)
+    monkeypatch.setattr(inject, "send_text_and_enter", AsyncMock(return_value=True))
+    captured = {}
+
+    def _fake_write_note(name, role, scope, member, *, msg_id=None,
+                         chat_id=None, sender_key=None, body="",
+                         raw_text="", style_text="", reply_context=""):
+        captured.update(role=role, member=member)
+        return None
+    monkeypatch.setattr(policy_snapshot, "write_note", _fake_write_note)
+
+    sess = _sess()
+    assert sess.last_driver_user_id == 2  # a resolvable member is set
+
+    run_async(bot._inject_prompt(sess, "do the thing"))  # no driver_user_id
+
+    assert captured["member"] is None
+    assert captured["role"] is None
 
 
 def test_inject_prompt_style_text_reflects_session_override(mk_bot, run_async, monkeypatch):
@@ -99,10 +144,13 @@ def test_inject_prompt_style_text_reflects_session_override(mk_bot, run_async, m
     bot = _bot(mk_bot)
     monkeypatch.setattr(inject, "send_text_and_enter", AsyncMock(return_value=True))
     captured = {}
-    monkeypatch.setattr(
-        policy_snapshot, "write_snapshot",
-        lambda name, role, scope, member, style_text="", reply_context="": captured.update(
-            style_text=style_text))
+
+    def _fake_write_note(name, role, scope, member, *, msg_id=None,
+                         chat_id=None, sender_key=None, body="",
+                         raw_text="", style_text="", reply_context=""):
+        captured.update(style_text=style_text)
+        return None
+    monkeypatch.setattr(policy_snapshot, "write_note", _fake_write_note)
 
     sess = _sess()
     # Scope default: no style guidance at all.
@@ -123,3 +171,82 @@ def test_inject_legacy_no_marker_but_sets_origin(mk_bot, run_async, monkeypatch)
     sess = _sess()
     run_async(bot._inject_prompt(sess, "hello"))
     assert sess.last_prompt_origin == "telegram"
+
+
+# ---- queue handoff: the note itself (design.md) ----------------------------
+
+def test_inject_prompt_writes_a_note_with_msg_id_chat_id_and_body(mk_bot, run_async, monkeypatch):
+    from aipager import policy_snapshot as ps
+    bot = _bot(mk_bot)
+    monkeypatch.setattr(inject, "send_text_and_enter", AsyncMock(return_value=True))
+    sess = _sess()
+
+    run_async(bot._inject_prompt(sess, "fix the bug", msg_id=555, chat_id=-100))
+
+    notes = ps.list_outstanding_notes(sess.name)
+    assert len(notes) == 1
+    note = notes[0]
+    assert note["msg_id"] == 555
+    assert note["chat_id"] == -100
+    assert note["body"] == "[via Telegram · @bob · role:user]\nfix the bug"
+    assert note["raw_text"] == "fix the bug"  # never the marker-prefixed body
+
+
+def test_inject_prompt_sender_key_uses_the_explicit_driver_user_id(mk_bot, run_async, monkeypatch):
+    """The bug found in review: sender_key must come from the SAME
+    source the mixed-sender hold-check reads (the live Update's sender),
+    not from sess.last_driver_user_id — which stays stale/unset for
+    exactly the callers (personal mode; any call site before
+    _mark_driver runs) where this matters most."""
+    from aipager import policy_snapshot as ps
+    bot = _bot(mk_bot)
+    monkeypatch.setattr(inject, "send_text_and_enter", AsyncMock(return_value=True))
+    sess = _sess()
+    sess.last_driver_user_id = None  # deliberately stale/unset
+
+    run_async(bot._inject_prompt(sess, "hi", driver_user_id=99999))
+
+    note = ps.list_outstanding_notes(sess.name)[0]
+    assert note["sender_key"] == [sess.scope_chat_id, 99999]
+
+
+def test_inject_prompt_sender_key_falls_back_to_last_driver_user_id_when_omitted(
+    mk_bot, run_async, monkeypatch,
+):
+    """Callers with no live Update (the queue-drain site, Retry, a
+    literal /compact) fall back to sess.last_driver_user_id — the best
+    available approximation."""
+    from aipager import policy_snapshot as ps
+    bot = _bot(mk_bot)
+    monkeypatch.setattr(inject, "send_text_and_enter", AsyncMock(return_value=True))
+    sess = _sess()
+    sess.last_driver_user_id = 42
+
+    run_async(bot._inject_prompt(sess, "hi"))  # no driver_user_id passed
+
+    note = ps.list_outstanding_notes(sess.name)[0]
+    assert note["sender_key"] == [sess.scope_chat_id, 42]
+
+
+def test_inject_prompt_two_calls_with_the_same_driver_id_are_not_mixed_sender(
+    mk_bot, run_async, monkeypatch,
+):
+    """Regression for the review-found bug directly: the SAME human
+    sending two messages in a row must never be flagged as a mixed
+    sender because the note-writer and the hold-check disagreed about
+    where "who sent this" comes from."""
+    from aipager.bot import transport
+
+    bot = _bot(mk_bot)
+    monkeypatch.setattr(inject, "send_text_and_enter", AsyncMock(return_value=True))
+    sess = _sess()
+
+    run_async(bot._inject_prompt(sess, "first", driver_user_id=12345))
+
+    class _User:
+        id = 12345
+
+    class _Update:
+        effective_user = _User()
+
+    assert transport.mixed_sender_note_outstanding(sess, _Update()) is False

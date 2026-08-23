@@ -157,13 +157,23 @@ def test_user_prompt_submit_empty_style_text_no_stdout(monkeypatch, tmp_path, ca
 
 
 def test_user_prompt_submit_non_empty_style_prints_exact_json(monkeypatch, tmp_path, capsys):
+    """The style-text envelope, sourced from a per-message note (queue
+    handoff): the canonical snapshot is now written by THIS hook's own
+    pick-up match, not pre-seeded — so the note's ``body`` must appear
+    in the submitted prompt for the match to promote its style_text
+    into the merged snapshot this same call reads back."""
     monkeypatch.setattr(notify_hook, "SOCKET_PATH", str(tmp_path / "nope.sock"))
     from aipager import policy_snapshot
     monkeypatch.setattr(policy_snapshot, "snapshot_path",
                         lambda n: tmp_path / f"{n}.json")
     style = "Apply this reply-style guidance to your next answer; do not mention or quote it:\n- Keep the answer short — a few sentences."
-    policy_snapshot.write_snapshot("claude-styled", None, None, None, style_text=style)
-    _set_stdin(monkeypatch, '{"hook_event_name":"UserPromptSubmit"}')
+    policy_snapshot.write_note(
+        "claude-styled", None, None, None,
+        msg_id=1, chat_id=1, sender_key=(1, 1),
+        body="do the thing", raw_text="do the thing", style_text=style,
+    )
+    _set_stdin(monkeypatch,
+              '{"hook_event_name":"UserPromptSubmit","prompt":"do the thing"}')
     monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-styled")
     notify_hook.main()
     out = capsys.readouterr().out.strip()

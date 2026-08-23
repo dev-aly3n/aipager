@@ -9,6 +9,13 @@ from aipager import safety
 from aipager.policy import load_policy
 from aipager.scope import Member, Scope
 
+# Captured at import time, before the suite-wide autouse
+# `_isolate_notes_dir` fixture (tests/conftest.py) can monkeypatch it —
+# the one test in this file that checks the REAL production path needs
+# the genuine function, not the tmp_path-redirected one every other
+# test in the suite relies on.
+_REAL_NOTES_DIR = ps.notes_dir
+
 
 def _policy():
     return load_policy()
@@ -190,3 +197,186 @@ def test_clear_session_files_removes_both_policy_and_reply_context_files(
 
     assert not (tmp_path / "claude-x.policy.json").exists()
     assert not (tmp_path / "claude-x.reply.txt").exists()
+
+
+def test_clear_session_files_also_clears_the_notes_dir(tmp_path, monkeypatch):
+    """design.md's file plan: clear_session_files also clears the notes
+    dir, so nothing lingers to restrict an unrelated future turn."""
+    monkeypatch.setattr(ps, "snapshot_path", lambda n: tmp_path / f"{n}.policy.json")
+    monkeypatch.setattr(ps, "reply_context_path", lambda n: tmp_path / f"{n}.reply.txt")
+    ps.write_note(
+        "claude-x", None, None, None,
+        msg_id=1, chat_id=1, sender_key=(1, 1),
+        body="hi", raw_text="hi",
+    )
+    assert ps.list_outstanding_notes("claude-x") != []
+
+    ps.clear_session_files("claude-x")
+
+    assert ps.list_outstanding_notes("claude-x") == []
+    assert not ps.notes_dir("claude-x").exists()
+
+
+# ---- queue handoff: notes (design.md) --------------------------------------
+
+def test_notes_dir_naming():
+    assert _REAL_NOTES_DIR("claude-jim") == __import__("pathlib").Path(
+        "/tmp/claude-notes-claude-jim")
+
+
+def test_write_note_carries_resolved_permissions_plus_note_fields(tmp_path, monkeypatch):
+    monkeypatch.setattr(ps, "notes_dir", lambda n: tmp_path / f"notes-{n}")
+    pol = _policy()
+    scope = Scope(chat_id=-1, kind="group", label="g", members=(),
+                  deny_tools=("Bash",))
+    member = Member(id=2, label="bob", role="user")
+    path = ps.write_note(
+        "claude-x", pol.get_role("user"), scope, member,
+        msg_id=42, chat_id=-1001, sender_key=(-1001, 2),
+        body="[via Telegram]\nfix it", raw_text="fix it",
+        style_text="Keep it short.", reply_context="pointing at msg 1",
+    )
+    assert path is not None
+    assert path.exists()
+    assert oct(path.stat().st_mode)[-3:] == "600"
+    data = json.loads(path.read_text())
+    assert data["msg_id"] == 42
+    assert data["chat_id"] == -1001
+    assert data["sender_key"] == [-1001, 2]
+    assert data["body"] == "[via Telegram]\nfix it"
+    assert data["raw_text"] == "fix it"
+    assert data["style_text"] == "Keep it short."
+    assert data["reply_context"] == "pointing at msg 1"
+    assert "Bash" in data["deny_tools"]  # resolved permission fields present
+    assert "queued_at" in data
+
+
+def test_write_note_returns_none_on_directory_creation_failure(tmp_path, monkeypatch):
+    # Point notes_dir at a path that can't be a directory (a file already
+    # occupies it) — write_note must degrade to None, not raise.
+    blocker = tmp_path / "blocked"
+    blocker.write_text("occupied")
+    monkeypatch.setattr(ps, "notes_dir", lambda n: blocker)
+    result = ps.write_note(
+        "claude-x", None, None, None,
+        msg_id=1, chat_id=1, sender_key=(1, 1), body="x", raw_text="x",
+    )
+    assert result is None
+
+
+def test_list_outstanding_notes_oldest_first(tmp_path, monkeypatch):
+    import time
+    monkeypatch.setattr(ps, "notes_dir", lambda n: tmp_path / f"notes-{n}")
+    base = time.time()
+    for i, body in enumerate(("first", "second", "third")):
+        p = ps.write_note(
+            "claude-x", None, None, None,
+            msg_id=i, chat_id=1, sender_key=(1, 1), body=body, raw_text=body,
+        )
+        data = json.loads(p.read_text())
+        data["queued_at"] = base + i  # explicit, deterministic order
+        p.write_text(json.dumps(data))
+    notes = ps.list_outstanding_notes("claude-x")
+    assert [n["body"] for n in notes] == ["first", "second", "third"]
+
+
+def test_list_outstanding_notes_empty_dir_returns_empty_list(tmp_path, monkeypatch):
+    monkeypatch.setattr(ps, "notes_dir", lambda n: tmp_path / "does-not-exist")
+    assert ps.list_outstanding_notes("claude-x") == []
+
+
+def test_list_outstanding_notes_skips_corrupt_files(tmp_path, monkeypatch):
+    import time
+    d = tmp_path / "notes-claude-x"
+    d.mkdir()
+    (d / "1-aaaa.json").write_text("{ not json")
+    (d / "2-bbbb.json").write_text(
+        json.dumps({"body": "ok", "queued_at": time.time()}))
+    monkeypatch.setattr(ps, "notes_dir", lambda n: d)
+    notes = ps.list_outstanding_notes("claude-x")
+    assert [n["body"] for n in notes] == ["ok"]
+
+
+def test_list_outstanding_notes_prunes_ttl_expired_and_reports_them(tmp_path, monkeypatch):
+    from aipager.state import QUEUE_MAX_AGE_SECONDS
+    d = tmp_path / "notes-claude-x"
+    d.mkdir()
+    now = 2_000_000.0
+    (d / "old.json").write_text(json.dumps(
+        {"body": "ancient", "queued_at": now - QUEUE_MAX_AGE_SECONDS - 1}))
+    (d / "new.json").write_text(json.dumps({"body": "fresh", "queued_at": now}))
+    monkeypatch.setattr(ps, "notes_dir", lambda n: d)
+
+    expired: list = []
+    notes = ps.list_outstanding_notes("claude-x", now=now, expired_out=expired)
+
+    assert [n["body"] for n in notes] == ["fresh"]
+    assert [n["body"] for n in expired] == ["ancient"]
+    assert not (d / "old.json").exists()  # actually unlinked, not just excluded
+    assert (d / "new.json").exists()
+
+
+def test_delete_notes_only_removes_the_given_notes(tmp_path, monkeypatch):
+    monkeypatch.setattr(ps, "notes_dir", lambda n: tmp_path / f"notes-{n}")
+    ps.write_note("claude-x", None, None, None, msg_id=1, chat_id=1,
+                  sender_key=(1, 1), body="keep", raw_text="keep")
+    ps.write_note("claude-x", None, None, None, msg_id=2, chat_id=1,
+                  sender_key=(1, 1), body="drop", raw_text="drop")
+    notes = ps.list_outstanding_notes("claude-x")
+    to_delete = [n for n in notes if n["body"] == "drop"]
+
+    ps.delete_notes("claude-x", to_delete)
+
+    remaining = ps.list_outstanding_notes("claude-x")
+    assert [n["body"] for n in remaining] == ["keep"]
+
+
+def test_clear_notes_dir_removes_everything_and_returns_the_count(tmp_path, monkeypatch):
+    monkeypatch.setattr(ps, "notes_dir", lambda n: tmp_path / f"notes-{n}")
+    for i in range(3):
+        ps.write_note("claude-x", None, None, None, msg_id=i, chat_id=1,
+                      sender_key=(1, 1), body=f"m{i}", raw_text=f"m{i}")
+    removed = ps.clear_notes_dir("claude-x")
+    assert removed == 3
+    assert ps.list_outstanding_notes("claude-x") == []
+
+
+def test_clear_notes_dir_on_empty_or_missing_dir_returns_zero(tmp_path, monkeypatch):
+    monkeypatch.setattr(ps, "notes_dir", lambda n: tmp_path / "never-existed")
+    assert ps.clear_notes_dir("claude-x") == 0
+
+
+def test_outstanding_sender_keys_collects_distinct_keys(tmp_path, monkeypatch):
+    monkeypatch.setattr(ps, "notes_dir", lambda n: tmp_path / f"notes-{n}")
+    ps.write_note("claude-x", None, None, None, msg_id=1, chat_id=1,
+                  sender_key=(100, 1), body="a", raw_text="a")
+    ps.write_note("claude-x", None, None, None, msg_id=2, chat_id=1,
+                  sender_key=(100, 2), body="b", raw_text="b")
+    ps.write_note("claude-x", None, None, None, msg_id=3, chat_id=1,
+                  sender_key=(100, 1), body="c", raw_text="c")  # dup key
+    keys = ps.outstanding_sender_keys("claude-x")
+    assert keys == {(100, 1), (100, 2)}
+
+
+def test_outstanding_sender_keys_empty_when_no_notes(tmp_path, monkeypatch):
+    monkeypatch.setattr(ps, "notes_dir", lambda n: tmp_path / "empty")
+    assert ps.outstanding_sender_keys("claude-x") == set()
+
+
+def test_combined_queue_depth_sums_pending_queue_and_outstanding_notes(
+    tmp_path, monkeypatch,
+):
+    class _Sess:
+        name = "claude-x"
+        pending_queue = [("a", 1, 0.0, ""), ("b", 2, 0.0, "")]
+
+    monkeypatch.setattr(ps, "notes_dir", lambda n: tmp_path / f"notes-{n}")
+    ps.write_note("claude-x", None, None, None, msg_id=1, chat_id=1,
+                  sender_key=(1, 1), body="note1", raw_text="note1")
+    assert ps.combined_queue_depth(_Sess()) == 3  # 2 queued + 1 note
+
+
+def test_write_merged_snapshot_round_trips_through_read_snapshot(tmp_path, monkeypatch):
+    monkeypatch.setattr(ps, "snapshot_path", lambda n: tmp_path / f"{n}.json")
+    ps.write_merged_snapshot("claude-x", ps.merge_snapshots([]))
+    assert ps.read_snapshot("claude-x") == ps.FLOOR_SNAPSHOT
