@@ -394,6 +394,13 @@ class TrackedSession:
     # this, which is exactly the mid-continuation case that must be
     # swallowed). Transient, never persisted.
     job_reclaim_pending: bool = False
+    # Interim answers produced while this job's background work was still
+    # open, held for the job's SINGLE final message ("one response per
+    # background job"): the interim never goes out standalone — it lives
+    # in the card's timeline and in here, delivered once at close joined
+    # with the final answer. Transient, never persisted. Bounded by the
+    # append site (notify._record_job_interim).
+    job_interim_buffer: list = field(default_factory=list, repr=False)
 
     # -- Live message stack (design.md "Live Message Stack") ---------------
 
@@ -845,6 +852,11 @@ class SessionRegistry:
                 sess.job_continuation_active = False
                 sess.job_grace_until = 0.0
                 sess.job_reclaim_pending = True
+                # Cleared WITHOUT a flush on supersede, deliberately: the
+                # superseded card's last rendered state stays in the chat
+                # scrollback, and the operator chose to move on ("one
+                # response per background job" requirement 4).
+                sess.job_interim_buffer.clear()
 
         old = sess.status
         sess.status = new_status

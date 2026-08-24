@@ -673,6 +673,15 @@ class SessionOpsMixin:
         # background-agent jobs") rather than leaving job_background_open()
         # true underneath the now-"Stopped" card — the operator asked for
         # this to be over, background agents included.
+        # An operator stopping a waiting job still receives what it
+        # produced — the buffer is the only full copy ("one response per
+        # background job" requirement 4). Best-effort: a failed flush must
+        # never block the stop itself.
+        try:
+            await self._flush_job_buffer(sess)
+        except Exception:
+            log.debug("[%s] job buffer flush on stop failed", sess.label,
+                      exc_info=True)
         sess.active_subagents.clear()
         sess.job_interim_seen = False
         sess.job_continuation_active = False

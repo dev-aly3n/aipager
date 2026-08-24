@@ -379,6 +379,31 @@ def _waiting_header(sess: TrackedSession) -> str:
     return header
 
 
+def _waiting_footer(sess: TrackedSession) -> str:
+    """The waiting card's LAST line — the one position Telegram always
+    shows when the card is the newest message ("one response per
+    background job"): a long message renders fully expanded and the
+    viewport at the latest position shows its END, so a status at the top
+    scrolls away with the timeline while this line stays on screen.
+    Never shed: appended after row assembly, and head-drop truncation
+    keeps the body's tail."""
+    n = len(sess.active_subagents)
+    plural = "" if n == 1 else "s"
+    line = f"⏳ {n} agent{plural}"
+    types = sorted({info.get("type", "") for info in sess.active_subagents.values()
+                    if info.get("type")})
+    if 1 <= len(types) <= 3:
+        line += f" ({', '.join(_md_escape(t) for t in types)})"
+    line += " still working"
+    if sess.busy_started_at:
+        elapsed_s = max(0, int(time.monotonic() - sess.busy_started_at))
+        if elapsed_s >= 60:
+            line += f" · {elapsed_s // 60}m {elapsed_s % 60}s"
+        else:
+            line += f" · {elapsed_s}s"
+    return line
+
+
 def build_stream_card(
     sess: TrackedSession, verb: str, *, final: bool = False,
     waiting: bool = False,
@@ -442,6 +467,14 @@ def build_stream_card(
     if final:
         rows = _shed_tool_rows(rows, header)
     body = _ROW_SEP.join(rows)
+
+    if waiting and not final:
+        # Pinned as the body's LAST element: the head-drop truncation
+        # below keeps the tail, so this line survives every render and
+        # stays the card's final visible line ("one response per
+        # background job" requirement 2).
+        footer = _waiting_footer(sess)
+        body = f"{body}{_ROW_SEP}{footer}" if body else footer
 
     raw = _assemble_card(header, body)
 
@@ -940,6 +973,7 @@ class AnimationMixin:
             sess.job_continuation_active = False
             sess.job_grace_until = 0.0
             sess.job_reclaim_pending = False
+            sess.job_interim_buffer.clear()
             sess.busy_started_at = time.monotonic()
             # Seed streaming state for this turn.  stream_offset is set to
             # the current transcript size so the previous turn's text is

@@ -648,29 +648,27 @@ def _job_sess(label="hiva", *, status=Status.IDLE):
     return s
 
 
-def test_job_interim_delivers_content_once(mk_bot, run_async, monkeypatch):
+def test_job_interim_never_sends_standalone(mk_bot, run_async, monkeypatch):
+    """Contract change ("one response per background job" requirement 1):
+    an interim idle sends NOTHING — the content is recorded in the job
+    buffer for the single final message, and the prose is already live in
+    the card's own timeline."""
     bot = mk_bot()
     sess = _job_sess()
-    sess.trigger_msg_id = 3420  # the job's original prompt message
+    sess.trigger_msg_id = 3420
     sent = []
-    calls = []
     async def _send_rich(chat_id, content, **kw):
         sent.append(content)
-        calls.append(kw)
         return {}
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
     bot._edit_busy_rich = AsyncMock(return_value=True)
     run_async(bot.notify(sess, "idle_prompt", {"summary": "interim answer"}))
-    assert sent == ["interim answer"]
-    assert sess.last_idle_summary_hash != ""
-    # Reply-threaded to the job's ORIGINAL trigger message — not None,
-    # and unaffected by trigger_msg_id staying pinned through the job.
-    assert calls[0]["reply_to_message_id"] == 3420
+    assert sent == []
+    assert sess.job_interim_buffer == ["interim answer"]
 
 
-def test_job_interim_dedup_skips_identical_content(mk_bot, run_async, monkeypatch):
-    """requirement 2: the SAME content, delivered twice while the job
-    stays open, is only ever sent once."""
+def test_job_interim_buffer_dedups_identical_content(mk_bot, run_async, monkeypatch):
+    """Identical stray content while the job stays open is recorded once."""
     bot = mk_bot()
     sess = _job_sess()
     sent = []
@@ -679,12 +677,14 @@ def test_job_interim_dedup_skips_identical_content(mk_bot, run_async, monkeypatc
         return {}
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
     bot._edit_busy_rich = AsyncMock(return_value=True)
-    run_async(bot.notify(sess, "idle_prompt", {"summary": "same text"}))
-    run_async(bot.notify(sess, "idle_prompt", {"summary": "same text"}))
-    assert sent == ["same text"]  # only once
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "interim answer"}))
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "interim answer"}))
+    assert sent == []
+    assert sess.job_interim_buffer == ["interim answer"]
 
 
-def test_job_interim_delivers_new_content_after_dedup_skip(mk_bot, run_async, monkeypatch):
+def test_job_interim_buffer_keeps_distinct_content_in_order(mk_bot, run_async, monkeypatch):
+    """Genuinely different interim answers are all held, oldest first."""
     bot = mk_bot()
     sess = _job_sess()
     sent = []
@@ -694,10 +694,9 @@ def test_job_interim_delivers_new_content_after_dedup_skip(mk_bot, run_async, mo
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
     bot._edit_busy_rich = AsyncMock(return_value=True)
     run_async(bot.notify(sess, "idle_prompt", {"summary": "first"}))
-    run_async(bot.notify(sess, "idle_prompt", {"summary": "first"}))  # dup, skipped
-    run_async(bot.notify(sess, "idle_prompt", {"summary": "second"}))  # new
-    assert sent == ["first", "second"]
-
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "second"}))
+    assert sent == []
+    assert sess.job_interim_buffer == ["first", "second"]
 
 def test_job_interim_renders_waiting_card_not_finished(mk_bot, run_async, monkeypatch):
     bot = mk_bot()

@@ -110,51 +110,48 @@ def test_idle_once_agents_close_finished_is_produced(
 
 # ---- content-dedup: identical vs different content ------------------------
 
-def test_identical_interim_content_delivered_only_once(
+def test_identical_interim_content_recorded_only_once(
         mk_bot, run_async, mk_job_session, all_sent_texts):
+    """Contract change ("one response per background job" requirement 1):
+    interim content is never sent standalone — it is recorded once in the
+    job buffer for the single final message; identical strays dedup by
+    membership."""
     bot = mk_bot()
     sess = _job_open_sess(mk_job_session)
     content = "the exact same 2122-char interim answer"
 
     async def _twice():
         await bot.notify(sess, "idle_prompt", {"summary": content})
-        h1 = sess.last_idle_summary_hash
         await bot.notify(sess, "idle_prompt", {"summary": content})
-        return h1
 
-    first_hash = run_async(_twice())
+    run_async(_twice())
 
     texts = all_sent_texts(bot)
-    occurrences = sum(1 for t in texts if content in t)
-    assert occurrences == 1, (
-        f"identical interim content was delivered {occurrences} times, "
-        f"expected exactly 1: {texts!r}")
-    assert sess.last_idle_summary_hash == first_hash, (
-        "the dedup hash changed even though the content did not")
+    assert not any(content in t for t in texts), (
+        f"interim content must never go out standalone: {texts!r}")
+    assert sess.job_interim_buffer == [content]
 
 
-def test_different_interim_content_delivers_both(
+def test_different_interim_content_recorded_both_in_order(
         mk_bot, run_async, mk_job_session, all_sent_texts):
-    """The complement of the dedup test: two DIFFERENT interim payloads
-    while the same job stays open must BOTH be delivered — dedup must be
-    content-keyed, not a blanket 'only one interim ever' rule."""
+    """The complement of the dedup test under the one-response contract:
+    two DIFFERENT interim payloads while the same job stays open are BOTH
+    held for the final message, oldest first — dedup is content-keyed,
+    not a blanket 'only one interim ever' rule."""
     bot = mk_bot()
     sess = _job_open_sess(mk_job_session)
 
     async def _twice():
         await bot.notify(sess, "idle_prompt", {"summary": "first interim answer"})
-        h1 = sess.last_idle_summary_hash
         await bot.notify(sess, "idle_prompt", {"summary": "second, different answer"})
-        h2 = sess.last_idle_summary_hash
-        return h1, h2
 
-    first_hash, second_hash = run_async(_twice())
+    run_async(_twice())
 
     texts = all_sent_texts(bot)
-    assert any("first interim answer" in t for t in texts)
-    assert any("second, different answer" in t for t in texts)
-    assert first_hash != second_hash, (
-        "the dedup hash did not change for genuinely different content")
+    assert not any("interim answer" in t for t in texts)
+    assert sess.job_interim_buffer == [
+        "first interim answer", "second, different answer",
+    ]
 
 
 def test_empty_interim_summary_does_not_crash_and_still_renders_waiting(

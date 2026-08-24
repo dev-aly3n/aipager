@@ -209,28 +209,41 @@ class NotifyMixin:
             return False
         return result is not None
 
-    async def _deliver_job_interim_content(
+    def _record_job_interim(
         self, sess: TrackedSession, content: str,
     ) -> None:
-        """Deliver Claude's interim message exactly once per NEW content
-        (design.md "model Claude Code background-agent jobs", requirement
-        2's content-dedup).
-
-        Hashes the EXACT text ``notify()``'s existing content-selection
-        rule already computes (``raw_md or summary``, with the
-        ``sess.summary`` fallback already applied by the caller) — this
-        reuses that logic rather than inventing a second one, so "what
-        gets hashed" and "what gets sent" can never drift apart. No
-        header, reply-threaded to the job's original ``trigger_msg_id`` —
-        never ``None``'d out here, unlike the real Finished path, because
-        the job (and its reply thread) is not over yet.
+        """Hold an interim answer for the job's SINGLE final message ("one
+        response per background job" requirement 1/3) instead of sending
+        it standalone — a standalone interim pushed the card (and its
+        waiting status) off-screen and made the chat bottom read as
+        finished. The prose still reaches the operator live via the
+        card's own timeline; this buffer exists so the content is also
+        delivered in full, once, at close. Byte-identical strays are
+        deduped by membership; the buffer is bounded (drop-oldest) so a
+        pathological stray-idle storm cannot grow it without limit.
         """
+        if not content or content in sess.job_interim_buffer:
+            return
+        sess.job_interim_buffer.append(content)
+        while len(sess.job_interim_buffer) > 20:
+            sess.job_interim_buffer.pop(0)
+
+    async def _flush_job_buffer(self, sess: TrackedSession) -> None:
+        """Deliver the accumulated interim content as the job's final
+        message on the close paths that never reach the Finished
+        composition (grace expiry, agents lost, Stop during the wait) —
+        the buffer is the only full copy of those answers, so silently
+        dropping it would lose work the operator paid for ("one response
+        per background job" requirement 4). No-op on an empty buffer;
+        dedup against the last DELIVERED content so a stray double-close
+        cannot double-send.
+        """
+        if not sess.job_interim_buffer:
+            return
+        content = "\n\n———\n\n".join(sess.job_interim_buffer)
+        sess.job_interim_buffer.clear()
         digest = hashlib.md5(content.encode("utf-8")).hexdigest()
         if digest == sess.last_idle_summary_hash:
-            log.debug(
-                "[%s] job interim summary unchanged since the last delivery "
-                "(hash match) — skipping", sess.label,
-            )
             return
         sess.last_idle_summary_hash = digest
         is_rtl = detect_rtl(content)
@@ -250,7 +263,7 @@ class NotifyMixin:
             _log_blocked_once(Exception("sendRichMessage 403"))
         except (RichMessageFallbackRequired, Exception):
             log.warning(
-                "[%s] job interim sendRichMessage failed — falling back to "
+                "[%s] job buffer sendRichMessage failed — falling back to "
                 "plain text", sess.label, exc_info=True,
             )
             for chunk in _plain_text_chunks(content):
@@ -265,7 +278,7 @@ class NotifyMixin:
                     )
                 except Exception:
                     log.warning(
-                        "[%s] job interim plain-text fallback chunk send "
+                        "[%s] job buffer plain-text fallback chunk send "
                         "failed", sess.label, exc_info=True,
                     )
 
@@ -277,11 +290,13 @@ class NotifyMixin:
         agent this job launched is still running (design.md "model Claude
         Code background-agent jobs", requirement 1).
 
-        Never produces a "Finished" card: delivers Claude's message once
-        (if it is new — see :meth:`_deliver_job_interim_content`),
-        re-renders the live card to the waiting frame in place (rather
-        than waiting for the animator's next natural tick), and drains one
-        queued prompt if any is waiting — the exact same
+        Never produces a "Finished" card and never sends a standalone
+        message: records Claude's interim answer for the job's single
+        final message (see :meth:`_record_job_interim` — the prose is
+        already live in the card's own timeline), re-renders the live
+        card to the waiting frame in place (rather than waiting for the
+        animator's next natural tick), and drains one queued prompt if
+        any is waiting — the exact same
         :meth:`_drain_next_queued` the real Finished path uses, so a
         message queued during the wait is not stranded until the job's
         eventual real end.
@@ -292,7 +307,7 @@ class NotifyMixin:
         if not content and not context.get("no_response"):
             content = sess.summary or ""
         if content:
-            await self._deliver_job_interim_content(sess, content)
+            self._record_job_interim(sess, content)
         if sess.busy_msg_id and sess.busy_msg_id > 0:
             sess.stream_dirty = True
             if await self._edit_busy_rich(
@@ -514,6 +529,10 @@ class NotifyMixin:
                     elapsed_str = f"{elapsed_s}s"
             suffix = f" ({elapsed_str})" if elapsed_str else ""
             text = f"✅ <b>{html_mod.escape(label)}</b> · Finished{suffix}"
+            # The accumulated interim is the only full copy of what this
+            # job produced — deliver it before the card resolves ("one
+            # response per background job" requirement 4).
+            await self._flush_job_buffer(sess)
             target_msg_id = sess.busy_msg_id
             if target_msg_id and target_msg_id > 0:
                 await self._edit_busy_raw(
@@ -558,6 +577,10 @@ class NotifyMixin:
             suffix = f" after {elapsed_str}" if elapsed_str else ""
             text = (f"⚠️ <b>{html_mod.escape(label)}</b> · Finished "
                     f"(background agent lost{suffix})")
+            # Whatever the job produced before the agent vanished is only
+            # in the buffer — deliver it ("one response per background
+            # job" requirement 4).
+            await self._flush_job_buffer(sess)
             target_msg_id = sess.busy_msg_id
             if target_msg_id and target_msg_id > 0:
                 await self._edit_busy_raw(
@@ -1042,6 +1065,20 @@ class NotifyMixin:
             content = raw_md or context.get("summary", "")
             if not content and not context.get("no_response"):
                 content = sess.summary or ""
+
+            # The job's single response carries everything undelivered
+            # ("one response per background job" requirement 3): interim
+            # answers accumulated during the background window join the
+            # final answer, oldest first, separated clearly. An interim
+            # byte-identical to the final is skipped. Cleared here — and
+            # only here on this path — so a stray re-entry cannot resend.
+            if sess.job_interim_buffer:
+                _parts = [b for b in sess.job_interim_buffer
+                          if b and b != content]
+                sess.job_interim_buffer.clear()
+                if _parts:
+                    _tail = [content] if content else []
+                    content = "\n\n———\n\n".join(_parts + _tail)
 
             # Content-dedup covers the FINAL delivery too ("close the
             # background-job endgame" requirement 3): a stray idle event

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Background jobs now send exactly ONE response — the final result. Interim
+  answers no longer go out as standalone messages (a long interim pushed
+  the busy card and its waiting status off-screen, making the chat bottom
+  read as finished); they stay visible in the card's live timeline and are
+  delivered in full inside the single final message, joined ahead of the
+  briefing. Every close path flushes the held content — the continuation's
+  Finished, grace expiry, agent-lost, and a Stop tapped during the wait —
+  so nothing the job produced is ever silently dropped.
+- The waiting card pins its status to the BOTTOM: the last line always
+  reads "⏳ N agent(s) (types) still working · elapsed" and survives every
+  render and truncation — Telegram shows the end of the newest message, so
+  the bottom is the only always-visible position.
+
 ### Fixed
 - Background jobs now close honestly: the moment the last background agent
   stopped, a stray idle event could run the full Finished path before the

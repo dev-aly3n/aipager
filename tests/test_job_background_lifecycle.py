@@ -157,7 +157,11 @@ def test_hiva_sequence_replayed_end_to_end(mk_bot, run_async, tmp_path, monkeypa
           last_assistant_message=INTERIM_ANSWER, transcript_path=str(tp))
     assert sess.status == Status.IDLE
     assert sess.job_background_open() is True
-    assert rich_sends == [INTERIM_ANSWER]  # delivered once so far
+    # Contract change ("one response per background job"): the interim is
+    # RECORDED, never sent standalone — the card's timeline is its live
+    # surface and the single final message its delivery.
+    assert rich_sends == []
+    assert sess.job_interim_buffer == [INTERIM_ANSWER]
 
     # ---- step 4: five phantom SubagentStops ----
     tool_history_len_before = len(sess.tool_history)
@@ -184,8 +188,9 @@ def test_hiva_sequence_replayed_end_to_end(mk_bot, run_async, tmp_path, monkeypa
           last_assistant_message=INTERIM_ANSWER, transcript_path=str(tp))
     assert sess.status == Status.IDLE
     assert sess.job_background_open() is True
-    # SKIPPED — hash match. Still exactly one delivered so far.
-    assert rich_sends == [INTERIM_ANSWER]
+    # Identical stray content: recorded once, still nothing sent.
+    assert rich_sends == []
+    assert sess.job_interim_buffer == [INTERIM_ANSWER]
 
     # ---- step 8: PreToolUse again → BUSY ----
     _send(recv, run_async, hook_event_name="PreToolUse",
@@ -224,12 +229,14 @@ def test_hiva_sequence_replayed_end_to_end(mk_bot, run_async, tmp_path, monkeypa
     assert sess.status == Status.IDLE
     assert sess.job_background_open() is False
 
-    # ── Assertions the black-box test makes on this sequence ──
-    #  exactly one interim message delivered (step 3, suppressed at step 7),
-    #  and the real briefing delivered once at the true end.
-    assert rich_sends.count(INTERIM_ANSWER) == 1
-    assert rich_sends.count(REAL_BRIEFING) == 1
-    assert rich_sends == [INTERIM_ANSWER, REAL_BRIEFING]
+    # ── Assertions on this sequence ("one response per background job") ──
+    #  exactly ONE standalone message for the whole job, carrying the
+    #  interim material and the briefing together, interim first.
+    assert len(rich_sends) == 1
+    combined = rich_sends[0]
+    assert INTERIM_ANSWER in combined
+    assert REAL_BRIEFING in combined
+    assert combined.index(INTERIM_ANSWER) < combined.index(REAL_BRIEFING)
 
     #  zero "Finished" headers before step 11; exactly one Finished (final)
     #  card render, and it is the LAST edit in the whole sequence.
@@ -362,7 +369,10 @@ def test_ishaq_endgame_job_stays_open_through_continuation(
           agent_id=AGENT_ID, agent_type="Explore")
     _send(recv, run_async, hook_event_name="Stop",
           last_assistant_message=INTERIM_ANSWER, transcript_path=str(tp))
-    assert rich_sends == [INTERIM_ANSWER]
+    # Contract change ("one response per background job"): nothing goes
+    # out standalone during the job-open window.
+    assert rich_sends == []
+    assert sess.job_interim_buffer == [INTERIM_ANSWER]
     assert sess.job_background_open() is True
 
     # step 4: the real SubagentStop empties the table — but an interim
@@ -378,7 +388,8 @@ def test_ishaq_endgame_job_stays_open_through_continuation(
     _send(recv, run_async, hook_event_name="Stop",
           last_assistant_message=INTERIM_ANSWER, transcript_path=str(tp))
     assert [c for c in edit_calls if c["final"]] == []
-    assert rich_sends == [INTERIM_ANSWER]  # hash match — no re-delivery
+    assert rich_sends == []  # still nothing standalone
+    assert sess.job_interim_buffer == [INTERIM_ANSWER]
 
     # step 6: the continuation turn arrives and takes over from the grace.
     _write_transcript(tp, with_continuation=True)
@@ -397,7 +408,12 @@ def test_ishaq_endgame_job_stays_open_through_continuation(
     assert sess.status == Status.IDLE
     assert sess.job_continuation_active is False
     assert sess.job_background_open() is False
-    assert rich_sends == [INTERIM_ANSWER, REAL_BRIEFING]
+    # ONE message for the whole job: interim + briefing, interim first.
+    assert len(rich_sends) == 1
+    assert INTERIM_ANSWER in rich_sends[0]
+    assert REAL_BRIEFING in rich_sends[0]
+    assert rich_sends[0].index(INTERIM_ANSWER) < rich_sends[0].index(REAL_BRIEFING)
+    assert sess.job_interim_buffer == []
     finals = [c for c in edit_calls if c["final"]]
     assert len(finals) == 1
     assert edit_calls[-1]["final"] is True
@@ -443,8 +459,9 @@ def test_final_path_dedup_suppresses_stale_redelivery(
           last_assistant_message=REAL_BRIEFING, transcript_path=str(tp))
     assert rich_sends.count(REAL_BRIEFING) == 1
 
-    # A continuation whose briefing is byte-identical to the interim:
-    # the final delivery is suppressed (requirement 3's reachable case).
+    # A background job whose briefing is byte-identical to the interim:
+    # the interim is never pre-sent ("one response per background job"),
+    # so the close delivers that content exactly once, un-duplicated.
     _send(recv, run_async, hook_event_name="UserPromptSubmit",
           prompt="[via Telegram msg=1b]\ndo a background thing",
           transcript_path=str(tp))
@@ -452,7 +469,7 @@ def test_final_path_dedup_suppresses_stale_redelivery(
           agent_id=AGENT_ID, agent_type="Explore")
     _send(recv, run_async, hook_event_name="Stop",
           last_assistant_message=INTERIM_ANSWER, transcript_path=str(tp))
-    assert rich_sends.count(INTERIM_ANSWER) == 1
+    assert rich_sends.count(INTERIM_ANSWER) == 0  # buffered, not sent
     _send(recv, run_async, hook_event_name="SubagentStop",
           agent_id=AGENT_ID, agent_type="Explore")
     _send(recv, run_async, hook_event_name="UserPromptSubmit",
@@ -460,7 +477,7 @@ def test_final_path_dedup_suppresses_stale_redelivery(
                   "done."), transcript_path=str(tp))
     _send(recv, run_async, hook_event_name="Stop",
           last_assistant_message=INTERIM_ANSWER, transcript_path=str(tp))
-    assert rich_sends.count(INTERIM_ANSWER) == 1  # final == interim: no re-post
+    assert rich_sends.count(INTERIM_ANSWER) == 1  # once, at close, no dup
 
     # A turn started by a PreToolUse after a LOST UserPromptSubmit
     # datagram is a genuine new turn (review rev-iter1-002): the
@@ -582,7 +599,11 @@ def test_double_hop_continuation_spawning_new_agents(
           transcript_path=str(tp))
     assert sess.status == Status.IDLE
     assert sess.job_background_open() is False
-    assert rich_sends == ["interim one", "interim two", "the real final answer"]
+    # One message for the whole double-hop job, all three parts in order.
+    assert len(rich_sends) == 1
+    combined = rich_sends[0]
+    assert combined.index("interim one") < combined.index("interim two")
+    assert combined.index("interim two") < combined.index("the real final answer")
     finals = [c for c in edit_calls if c["final"]]
     assert len(finals) == 1
 
@@ -659,3 +680,90 @@ def test_real_prompt_during_grace_supersedes_and_late_continuation_closes(
     assert sess.job_continuation_active is False
     assert rich_sends[-1] == "new answer"
     assert [c for c in edit_calls if c["final"]] != []
+
+
+def _buffered_sess(bot, msg_id=888):
+    sess = bot.registry.get_or_create(SESSION)
+    sess.status = Status.IDLE
+    sess.label = SESSION
+    sess.busy_msg_id = msg_id
+    sess.busy_started_at = 1.0
+    sess.trigger_msg_id = TRIGGER_MSG_ID
+    sess.scope_chat_id = -1001
+    sess.job_interim_seen = True
+    sess.job_interim_buffer.append("buffered interim work")
+    return sess
+
+
+def test_grace_expired_flushes_the_buffer(mk_bot, run_async, monkeypatch):
+    """"one response per background job" requirement 4: the buffer is the
+    only full copy of the job's output when no continuation ever arrives —
+    job_grace_expired must deliver it."""
+    bot = mk_bot()
+    sess = _buffered_sess(bot)
+    rich_sends = []
+    async def _send_rich(chat_id, content, **kw):
+        rich_sends.append(content)
+        return {"message_id": 9001}
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
+    async def _edit_raw(msg_id, text, chat_id=None):
+        return True
+    bot._edit_busy_raw = _edit_raw
+
+    run_async(bot.notify(sess, "job_grace_expired", {}))
+
+    assert rich_sends == ["buffered interim work"]
+    assert sess.job_interim_buffer == []
+
+
+def test_agents_lost_flushes_the_buffer(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    sess = _buffered_sess(bot)
+    rich_sends = []
+    async def _send_rich(chat_id, content, **kw):
+        rich_sends.append(content)
+        return {"message_id": 9002}
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
+    async def _edit_raw(msg_id, text, chat_id=None):
+        return True
+    bot._edit_busy_raw = _edit_raw
+
+    run_async(bot.notify(sess, "job_agents_lost", {}))
+
+    assert rich_sends == ["buffered interim work"]
+    assert sess.job_interim_buffer == []
+
+
+def test_stop_during_wait_flushes_the_buffer(mk_bot, run_async, monkeypatch):
+    """An operator stopping a waiting job still receives what it
+    produced."""
+    bot = mk_bot()
+    sess = _buffered_sess(bot)
+    sess.active_subagents["a1"] = {"type": "Explore", "started_at": 1.0}
+    rich_sends = []
+    async def _send_rich(chat_id, content, **kw):
+        rich_sends.append(content)
+        return {"message_id": 9003}
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", AsyncMock(return_value=True))
+    monkeypatch.setattr("aipager.dtach.inject.discard_queued_input",
+                        AsyncMock(return_value=True))
+    bot._edit_busy_raw = AsyncMock(return_value=True)
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=9004))
+
+    run_async(bot._stop_session_core(sess))
+
+    assert rich_sends == ["buffered interim work"]
+    assert sess.job_interim_buffer == []
+    assert sess.active_subagents == {}
+
+
+def test_supersede_clears_buffer_without_flush(mk_bot, run_async):
+    """A genuine new prompt superseding the job clears the buffer WITHOUT
+    delivering it (documented tradeoff: the superseded card's last render
+    stays in scrollback; the operator chose to move on)."""
+    bot = mk_bot()
+    sess = _buffered_sess(bot)
+    got = bot.registry.transition(sess.name, Status.BUSY)
+    assert got is not None
+    assert sess.job_interim_buffer == []

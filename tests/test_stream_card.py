@@ -1393,15 +1393,46 @@ def test_waiting_header_omits_elapsed_when_busy_started_at_falsy():
     assert header == "🔄 **hiva** · waiting on background work · 1 agent (Explore)"
 
 
-def test_waiting_body_reuses_the_unchanged_timeline_rows():
-    """The body is the SAME _build_timeline_rows(sess, final=False) as a
-    non-waiting render — only the header swaps."""
+def test_waiting_body_is_timeline_rows_plus_pinned_footer():
+    """Contract change ("one response per background job" requirement 2):
+    the waiting body is the SAME timeline rows as a non-waiting render
+    PLUS the status footer pinned as the card's LAST line — Telegram
+    shows the END of the newest message, so the bottom is the only
+    always-visible position."""
     sess = _sess("hiva")
     sess.active_subagents["a1"] = {"type": "Explore"}
     sess.tool_history = [("Bash: ls", True)]
     waiting_card = build_stream_card(sess, "Working", waiting=True)
     normal_card = build_stream_card(sess, "Whatever", waiting=False)
-    assert _body(waiting_card) == _body(normal_card)
+    footer = waiting_card.splitlines()[-1]
+    assert footer.startswith("⏳")
+    assert "still working" in footer
+    assert "1 agent (Explore)" in footer
+    assert _body(waiting_card)[:-1] == _body(normal_card)
+
+
+def test_waiting_footer_survives_truncation():
+    """The head-drop truncation keeps the body tail, so the footer stays
+    the last line even when the timeline is over the byte ceiling."""
+    sess = _sess("hiva")
+    sess.active_subagents["a1"] = {"type": "Explore"}
+    sess.stream_commentary = [(0, "x" * 8000)]
+    sess.tool_history = [(f"Bash: cmd-{i}", True) for i in range(400)]
+    card = build_stream_card(sess, "Working", waiting=True)
+    assert len(card.encode("utf-8")) <= 32768
+    footer = card.splitlines()[-1]
+    assert footer.startswith("⏳")
+    assert "still working" in footer
+
+
+def test_no_footer_on_normal_and_final_frames():
+    """The footer belongs to the waiting frame only."""
+    sess = _sess("hiva")
+    sess.active_subagents["a1"] = {"type": "Explore"}
+    sess.tool_history = [("Bash: ls", True)]
+    for kwargs in ({"waiting": False}, {"final": True, "waiting": True}):
+        card = build_stream_card(sess, "Working", **kwargs)
+        assert "still working" not in card
 
 
 def test_waiting_ignored_when_final_also_true():
