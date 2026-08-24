@@ -47,20 +47,20 @@ def _sess(label="dev", *, elapsed_s=10.0):
 # ── SC-CARD-1: Shape with body text: body between header and divider ──────────
 
 def test_card_full_shape_with_body():
-    """entrypoints.md: the status header on top, the timeline below it."""
+    """Contract change ("status-line-at-card-bottom"): the timeline on top,
+    the status line as the card's LAST element — Telegram parks the
+    viewport at a message's END, so that is the only always-visible spot."""
     sess = _sess()
     sess.stream_commentary = [(0, "Let me look at the project structure.")]
     card = build_stream_card(sess, "Reading files")
 
-    header, sep, body = card.partition("\n\n")
-    assert sep, "Card has no body below the header"
-    # Everything the old footer carried now rides on the top line.
-    assert "Reading files" in header
-    assert "⏳" in header
+    body, sep, status = card.rpartition("\n\n")
+    assert sep, "Card has no timeline above the status line"
+    assert "Reading files" in status
+    assert "⏳" in status
     assert "Let me look at the project structure." in body
 
 
-# ── SC-CARD-2: No empty body line before divider when the timeline is empty ───
 
 def test_card_no_empty_body_line_when_no_text():
     """entrypoints.md: shape with no body text → header and footer only."""
@@ -205,9 +205,10 @@ def test_card_purity_same_output_on_second_call():
 
 # ── SC-CARD-12: Truncation — head dropped, footer preserved, valid UTF-8 ──────
 
-def test_card_truncation_head_dropped_header_preserved():
+def test_card_truncation_head_dropped_status_preserved():
     """entrypoints.md: body large enough to exceed 32 768 bytes →
-    the HEAD of the body is dropped; header still present; output is valid UTF-8."""
+    the HEAD of the body is dropped; the status line still closes the card; output is valid UTF-8
+    ("status-line-at-card-bottom")."""
     sess = _sess()
     # First marker at the head, last marker near the tail
     # No markdown metacharacters in the markers: _md_escape would backslash
@@ -226,14 +227,16 @@ def test_card_truncation_head_dropped_header_preserved():
     assert len(card.encode("utf-8")) <= 32_768, "Card exceeds 32 768 UTF-8 bytes"
     assert head_marker not in card, "Head of body was kept instead of being dropped"
     assert tail_marker in card, "Tail of body was dropped; head should have been dropped instead"
-    assert card.startswith("⏳ "), "Status header missing after truncation"
+    assert card.rstrip().splitlines()[-1].startswith("⏳ "), (
+        "status line missing after truncation")
 
     # Must be valid UTF-8
     try:
         card.encode("utf-8").decode("utf-8")
     except UnicodeDecodeError as e:
         pytest.fail(f"Card contains invalid UTF-8 after truncation: {e}")
-
+    status = card.rstrip().splitlines()[-1]
+    assert status.startswith("⏳")
 
 def test_card_truncation_multibyte_valid_utf8():
     """entrypoints.md: output is valid UTF-8 even when the body contains

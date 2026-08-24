@@ -69,28 +69,33 @@ def test_card_with_body_contains_body():
     assert "Here is some prose." in card
 
 
-def test_card_body_appears_below_the_header():
+def test_card_body_appears_above_the_status_line():
+    """Contract change ("status-line-at-card-bottom"): the status line is
+    the card's LAST element — Telegram parks the viewport at a message's
+    END, so a top header scrolls away exactly when a long turn needs it."""
     sess = _sess()
     sess.stream_commentary = [(0, "body text")]
     card = build_stream_card(sess, "Working")
-    header, _, body = card.partition("\n\n")
-    assert "⏳" in header
+    body, _, status = card.rpartition("\n\n")
+    assert "⏳" in status
     assert "body text" in body
 
 
-def test_card_status_rides_on_the_header_line():
-    """Elapsed, cost and tally sit on the top line — not in a footer below."""
+def test_card_status_rides_on_the_last_line():
+    """Elapsed, cost and tally sit on the card's LAST line
+    ("status-line-at-card-bottom") — not in a header above the timeline."""
     sess = _sess()
     sess.busy_started_at = time.monotonic() - 7
     sess.cost_baseline = 0.0
     sess.last_cost_usd = 0.25
     sess.tool_history = [("Bash: ls", True)]
     sess.stream_commentary = [(0, "body text")]
-    header = build_stream_card(sess, "Working").partition("\n\n")[0]
-    assert header == "⏳ **dev** · Working · 7s · $0.25 · Bash ×1"
+    status = build_stream_card(sess, "Working").rpartition("\n\n")[2]
+    assert status == "⏳ **dev** · Working · 7s · $0.25 · Bash ×1"
 
 
-# ── build_stream_card: header segments ───────────────────────────────────────
+# ── build_stream_card: status-line segments ─────────────────────────────────
+
 
 def test_card_elapsed_shown_when_ge_2s():
     sess = _sess()
@@ -231,11 +236,17 @@ def test_card_truncation_output_within_limit():
     assert len(card.encode("utf-8")) <= 32_768
 
 
-def test_card_truncation_header_preserved():
+def test_card_truncation_status_line_preserved():
+    """Even when one giant row forces the byte backstop, the status line
+    is appended after truncation and stays the last line
+    ("status-line-at-card-bottom")."""
     sess = _sess()
     sess.tool_history = [("Bash: " + "y" * 40_000, True)]
     card = build_stream_card(sess, "Working")
-    assert card.startswith("⏳ **dev** · Working ·")
+    assert len(card.encode("utf-8")) <= 32768
+    status = card.rstrip().splitlines()[-1]
+    assert status.startswith("⏳ **dev** · Working ·")
+    assert status.endswith("Bash ×1")
 
 
 def test_card_truncation_head_dropped():
@@ -348,8 +359,13 @@ def test_read_stream_text_advances_offset(tmp_path):
 # ── build_stream_card: chronological interleaving ────────────────────────────
 
 def _body(card: str) -> list[str]:
-    """The timeline rows, in order, without the header line."""
-    _head, _, body = card.partition("\n\n")
+    """The timeline rows, in order, without the status line.
+
+    Contract change ("status-line-at-card-bottom"): the status line is the
+    card's LAST element, not its first — a top header scrolled out of
+    sight exactly when a turn grew long enough to need it.
+    """
+    body, _, _status = card.rpartition("\n\n")
     return body.split("\n\n") if body else []
 
 
@@ -828,8 +844,12 @@ def test_concurrent_edits_are_serialised(run_async, monkeypatch):
 # ── The finished card (final=True) ────────────────────────────────────────────
 
 def _rows(card: str) -> list[str]:
-    """The timeline rows, in order, without the header line."""
-    _header, _, body = card.partition("\n\n")
+    """The timeline rows, in order, without the status line.
+
+    Contract change ("status-line-at-card-bottom"): the status line is the
+    card's LAST element, so it is stripped from the end, not the front.
+    """
+    body, _, _status = card.rpartition("\n\n")
     return body.split("\n\n") if body else []
 
 
@@ -1365,7 +1385,9 @@ def test_trimming_the_history_shifts_the_card_anchors():
 
 
 def _header(card: str) -> str:
-    return card.split("\n\n", 1)[0]
+    """The status line — now the card's LAST element
+    ("status-line-at-card-bottom")."""
+    return card.rsplit("\n\n", 1)[-1]
 
 
 def test_waiting_header_single_agent_no_types_over_three():
@@ -1374,7 +1396,7 @@ def test_waiting_header_single_agent_no_types_over_three():
     sess.active_subagents["a1"] = {"type": "Explore"}
     header = _header(build_stream_card(sess, "Working", waiting=True))
     assert header == (
-        "🔄 **hiva** · waiting on background work · 1 agent (Explore) · 4m 20s"
+        "🔄 **hiva** · 1 agent (Explore) still working · 4m 20s"
     )
 
 
@@ -1403,44 +1425,42 @@ def test_waiting_header_omits_types_over_three_distinct():
     assert "4 agents" in header
 
 
-def test_waiting_header_omits_elapsed_when_busy_started_at_falsy():
+def test_waiting_status_omits_elapsed_when_busy_started_at_falsy():
     sess = _sess("hiva")
     sess.busy_started_at = 0.0
     sess.active_subagents["a1"] = {"type": "Explore"}
-    header = _header(build_stream_card(sess, "Working", waiting=True))
-    assert header == "🔄 **hiva** · waiting on background work · 1 agent (Explore)"
+    status = _header(build_stream_card(sess, "Working", waiting=True))
+    assert status == "🔄 **hiva** · 1 agent (Explore) still working"
 
 
-def test_waiting_body_is_timeline_rows_plus_pinned_footer():
-    """Contract change ("one response per background job" requirement 2):
-    the waiting body is the SAME timeline rows as a non-waiting render
-    PLUS the status footer pinned as the card's LAST line — Telegram
-    shows the END of the newest message, so the bottom is the only
-    always-visible position."""
+def test_waiting_body_is_the_same_timeline_with_a_waiting_status_line():
+    """The waiting frame swaps ONLY the status line; the timeline above it
+    is byte-identical to an ordinary busy render."""
     sess = _sess("hiva")
     sess.active_subagents["a1"] = {"type": "Explore"}
     sess.tool_history = [("Bash: ls", True)]
     waiting_card = build_stream_card(sess, "Working", waiting=True)
     normal_card = build_stream_card(sess, "Whatever", waiting=False)
-    footer = waiting_card.splitlines()[-1]
-    assert footer.startswith("⏳")
-    assert "still working" in footer
-    assert "1 agent (Explore)" in footer
-    assert _body(waiting_card)[:-1] == _body(normal_card)
+    status = waiting_card.splitlines()[-1]
+    assert status.startswith("🔄")
+    assert "still working" in status
+    assert "1 agent (Explore)" in status
+    assert _body(waiting_card) == _body(normal_card)
 
 
-def test_waiting_footer_survives_truncation():
-    """The head-drop truncation keeps the body tail, so the footer stays
-    the last line even when the timeline is over the byte ceiling."""
+def test_waiting_status_line_survives_truncation():
+    """The status line is appended after the fitter and after the byte
+    backstop, so it stays the last line even when the timeline is far
+    over the ceiling."""
     sess = _sess("hiva")
     sess.active_subagents["a1"] = {"type": "Explore"}
     sess.stream_commentary = [(0, "x" * 8000)]
     sess.tool_history = [(f"Bash: cmd-{i}", True) for i in range(400)]
     card = build_stream_card(sess, "Working", waiting=True)
     assert len(card.encode("utf-8")) <= 32768
-    footer = card.splitlines()[-1]
-    assert footer.startswith("⏳")
-    assert "still working" in footer
+    status = card.splitlines()[-1]
+    assert status.startswith("🔄")
+    assert "still working" in status
 
 
 def test_no_footer_on_normal_and_final_frames():
@@ -1464,21 +1484,22 @@ def test_waiting_ignored_when_final_also_true():
     assert "✅" in header
 
 
-def test_waiting_footer_during_grace_says_finishing_up():
+def test_waiting_status_during_grace_says_finishing_up():
     """Review rev-iter1-004: with the agent table empty (the continuation
-    grace window — an ordinary part of every job's lifecycle) the footer
-    must not say "0 agents still working"."""
+    grace window — an ordinary part of every job's lifecycle) the status
+    line must not say "0 agents still working"."""
     sess = _sess("hiva")
     sess.job_grace_until = 10**12  # far future; table empty
     sess.tool_history = [("Bash: ls", True)]
     card = build_stream_card(sess, "Working", waiting=True)
-    footer = card.splitlines()[-1]
-    assert footer.startswith("⏳")
-    assert "finishing up" in footer
+    status = card.splitlines()[-1]
+    assert status.startswith("🔄")
+    assert "finishing up" in status
     assert "0 agent" not in card
 
 
 # ---- layered shedding ("layered-card-shedding" /deliver) -------------------
+
 
 def _many_tools_sess(n_tools=30, commentary=None):
     sess = _sess("hiva")
@@ -1528,10 +1549,11 @@ def test_phase1_placeholders_sit_between_their_commentaries():
     assert "tool call" in between
 
 
-def test_phase2_marker_under_header_when_prose_alone_overflows():
+def test_phase2_marker_sits_at_the_top_of_the_timeline():
     """Phase 2: when even all-collapsed runs + commentary exceed the
-    ceiling, whole oldest sections fold into ONE marker line right under
-    the header, and the NEWEST commentary always survives."""
+    ceiling, whole oldest sections fold into ONE marker line at the TOP of
+    the timeline ("status-line-at-card-bottom" moved the status away from
+    there), and the NEWEST commentary always survives."""
     n = 60
     blocks = [(i, f"PROSE-{i:03d} " + "z" * 1200) for i in range(0, n)]
     sess = _many_tools_sess(n, blocks)
@@ -1539,10 +1561,7 @@ def test_phase2_marker_under_header_when_prose_alone_overflows():
     assert len(card.encode("utf-8")) <= 32768
     assert "hidden" in card  # the aggregate marker
     assert f"PROSE-{n-1:03d}" in card  # newest narrative survives
-    # marker is at the top, right after the header line
-    header_end = card.index("\n\n")
-    after_header = card[header_end:header_end + 200]
-    assert "hidden" in after_header
+    assert card.startswith("▸")  # marker is the card's first line
 
 
 def test_layered_render_is_deterministic():
@@ -1597,3 +1616,72 @@ def test_phase2_marker_counts_blocks_not_sections():
     import re as _re
     m = _re.search(r"(\d+) commentar", card)
     assert m and int(m.group(1)) == 2
+
+
+# ---- status line at the bottom ("status-line-at-card-bottom") --------------
+
+def test_status_line_is_last_on_every_frame():
+    """Busy, waiting and final frames all end with their status line —
+    the one position Telegram keeps on screen."""
+    sess = _sess("omni")
+    sess.busy_started_at = time.monotonic() - 12
+    sess.tool_history = [("Bash: ls", True)]
+    sess.stream_commentary = [(0, "opening prose")]
+    busy = build_stream_card(sess, "Working")
+    final = build_stream_card(sess, "Done", final=True)
+    sess.active_subagents["a1"] = {"type": "Explore", "started_at": 1.0}
+    waiting = build_stream_card(sess, "Working", waiting=True)
+    assert busy.splitlines()[-1].startswith("⏳ **omni** ·")
+    assert final.splitlines()[-1].startswith("✅ **omni** ·")
+    assert waiting.splitlines()[-1].startswith("🔄 **omni** ·")
+    # ...and nothing status-shaped at the top: the story leads.
+    for card in (busy, final, waiting):
+        assert card.startswith("> opening prose")
+
+
+def test_status_line_survives_every_shedding_phase():
+    """Phase 1 (run collapse), phase 2 (section folding) and the byte
+    backstop all leave the status line as the card's last line."""
+    sess = _sess("omni")
+    sess.busy_started_at = time.monotonic() - 90
+    # phase 1: many fat runs, prose between them
+    sess.tool_history = [(f"Bash: {'p' * 300}-{i}", True) for i in range(200)]
+    sess.stream_commentary = [(i * 40, f"PROSE-{i}") for i in range(5)]
+    phase1 = build_stream_card(sess, "Working")
+    # phase 2: prose so heavy that collapsed runs cannot save it
+    sess.stream_commentary = [(i, f"BIG-{i:02d} " + "q" * 1500)
+                              for i in range(40)]
+    phase2 = build_stream_card(sess, "Working")
+    # byte backstop: one row that alone blows the ceiling
+    sess.tool_history = [("Bash: " + "z" * 60000, True)]
+    sess.stream_commentary = []
+    backstop = build_stream_card(sess, "Working")
+    for card in (phase1, phase2, backstop):
+        assert len(card.encode("utf-8")) <= 32768
+        assert card.splitlines()[-1].startswith("⏳ **omni** ·")
+    assert "tool call" in phase1        # phase 1 really engaged
+    assert "hidden" in phase2           # phase 2 really engaged
+    assert backstop.startswith("…")     # backstop really engaged
+
+
+def test_reserve_keeps_the_card_clean_across_the_ceiling_boundary():
+    """The fitter's reserve is sized from the status line itself, so a card
+    crossing the ceiling sheds one more row rather than letting the byte
+    backstop clip its head ("status-line-at-card-bottom").
+
+    Geometry chosen so the shortfall is observable: SMALL tool rows (fine
+    shedding granularity, so the fitter converges to within a few bytes of
+    its budget) and MANY distinct tool names (a fat status line, so an
+    unreserved status is what tips the card over). Without the reserve
+    these sizes clip; with it they render clean.
+    """
+    for n in range(810, 875, 7):
+        sess = _sess("omni")
+        sess.busy_started_at = time.monotonic() - 12
+        sess.tool_history = [
+            (f"Tool{i % 40}: {'k' * 20}-{i}", True) for i in range(n)
+        ]
+        card = build_stream_card(sess, "Working")
+        assert len(card.encode("utf-8")) <= 32768, n
+        assert not card.startswith("…"), f"head clipped at n={n}"
+        assert card.splitlines()[-1].startswith("⏳ **omni** ·"), n

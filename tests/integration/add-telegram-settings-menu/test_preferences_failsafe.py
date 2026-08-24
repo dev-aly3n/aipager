@@ -31,6 +31,22 @@ def _prefs_file(tmp_path):
 
 # ---- defaults are load-bearing ------------------------------------------
 
+
+def _style_bullets(text: str) -> list[str]:
+    """The /settings-driven bullets only.
+
+    Contract change ("status-line-at-card-bottom"): style_text now always
+    carries one unconditional delivery-rule bullet (a fact about how
+    aipager delivers messages, not a style preference), so "no style set"
+    means "no bullets besides that one" rather than an empty string.
+    """
+    from aipager.preferences import _DELIVERY_LINE
+    return [
+        ln[2:] for ln in text.splitlines()
+        if ln.startswith("- ") and ln[2:] != _DELIVERY_LINE
+    ]
+
+
 def test_unseen_chat_id_never_raises_and_returns_defaults():
     prefs = get_preferences(1234567890)
     assert prefs.simple_formatting is False
@@ -50,13 +66,13 @@ def test_unseen_chat_id_layout_seeds_to_replace_when_keep_finished_card_off(monk
 
 def test_style_text_empty_when_everything_default():
     prefs = get_preferences(999003)
-    assert style_text(prefs) == ""
+    assert _style_bullets(style_text(prefs)) == []
 
 
 def test_style_text_none_answer_length_injects_nothing():
     prefs = Preferences(layout="card", simple_formatting=False,
                         answer_length="none", language_level="none")
-    assert style_text(prefs) == ""
+    assert _style_bullets(style_text(prefs)) == []
 
 
 def test_style_text_language_none_and_normal_are_distinct():
@@ -68,8 +84,11 @@ def test_style_text_language_none_and_normal_are_distinct():
                                answer_length="none", language_level="normal")
     none_text = style_text(none_prefs)
     normal_text = style_text(normal_prefs)
-    assert none_text == ""
-    assert normal_text != ""
+    # Contract change ("status-line-at-card-bottom"): both carry the
+    # unconditional delivery rule, so the distinction is in the STYLE
+    # bullets, not in emptiness.
+    assert _style_bullets(none_text) == []
+    assert _style_bullets(normal_text) != []
     assert none_text != normal_text
     assert "Use plain, professional language" in normal_text
 
@@ -79,9 +98,9 @@ def test_style_text_answer_length_none_and_short_are_distinct():
                              answer_length="none", language_level="none")
     short_prefs = Preferences(layout="card", simple_formatting=False,
                               answer_length="short", language_level="none")
-    assert style_text(none_prefs) == ""
+    assert _style_bullets(style_text(none_prefs)) == []
     short_text = style_text(short_prefs)
-    assert short_text != ""
+    assert _style_bullets(short_text) != []
     assert "Keep the answer short" in short_text
 
 

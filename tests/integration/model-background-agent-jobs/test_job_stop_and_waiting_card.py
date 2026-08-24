@@ -43,11 +43,16 @@ def test_waiting_header_plural_agent_count():
     assert "2 agents" in out
 
 
-def test_waiting_header_never_says_finished():
+def test_waiting_status_never_says_finished():
+    """Contract change ("status-line-at-card-bottom"): the waiting frame's
+    status line reads "N agent(s) … still working" — the old header's
+    "waiting on background work" phrasing folded into it when the header
+    and footer were unified into one bottom line."""
     sess = _waiting_sess()
     out = animation.build_stream_card(sess, "Verb", waiting=True)
     assert "Finished" not in out
-    assert "waiting on background work" in out
+    assert "still working" in out
+    assert out.rstrip().splitlines()[-1].startswith("🔄")
 
 
 def test_waiting_header_shows_types_for_one_to_three_distinct():
@@ -84,11 +89,11 @@ def test_waiting_header_elapsed_just_under_60s_boundary_stays_seconds_form():
     assert re.search(r"\b59s\b", out), out
 
 
-def test_waiting_header_omits_elapsed_when_busy_started_at_falsy():
+def test_waiting_status_omits_elapsed_when_busy_started_at_falsy():
     sess = _waiting_sess()
     sess.busy_started_at = 0.0
     out = animation.build_stream_card(sess, "Verb", waiting=True)
-    assert "waiting on background work" in out
+    assert "still working" in out
 
 
 def test_non_waiting_render_has_no_waiting_text():

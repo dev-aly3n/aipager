@@ -292,7 +292,7 @@ def _fit_sections(
       count; it is never fully collapsed (it is the live tail, and for a
       single giant row the byte backstop is the honest tool).
     - Phase 2: whole oldest sections are removed one at a time, replaced
-      by a single aggregate marker directly under the header, so what was
+      by a single aggregate marker at the TOP of the timeline, so what was
       removed always leaves a visible trace. The newest prose section and
       the NEWEST RUN are never removed here — guarded by their indices
       (review rev-iter1-001: a trailing prose section after the newest
@@ -398,10 +398,20 @@ def _phase2_marker(sections_n: int, prose_n: int, tools_n: int) -> str:
             f"commentar{c_pl} · {tools_n} tool call{t_pl}_")
 
 
-def _assemble_card(header: str, body: str) -> str:
-    """Join the card's parts. A blank line between them: Telegram's rich
-    markdown collapses a single newline into a space."""
-    return f"{header}\n\n{body}" if body else header
+def _assemble_card(body: str, status: str) -> str:
+    """Join the card's parts, status LAST ("status-line-at-card-bottom").
+    A blank line between them: Telegram's rich markdown collapses a single
+    newline into a space."""
+    return f"{body}\n\n{status}" if body else status
+
+
+def _elapsed_str(started_at: float) -> str:
+    """``"45s"`` under a minute, else ``"2m 5s"``. One formatter so every
+    card surface agrees on how elapsed time reads."""
+    elapsed_s = max(0, int(time.monotonic() - started_at))
+    if elapsed_s >= 60:
+        return f"{elapsed_s // 60}m {elapsed_s % 60}s"
+    return f"{elapsed_s}s"
 
 
 def _agent_phrase(sess: TrackedSession) -> str:
@@ -423,37 +433,63 @@ def _agent_phrase(sess: TrackedSession) -> str:
     return phrase
 
 
-def _waiting_header(sess: TrackedSession) -> str:
-    """The header for a job with background work still open (design.md
-    "model Claude Code background-agent jobs")."""
-    header = (f"🔄 **{_md_escape(sess.label)}** · waiting on background work "
-              f"· {_agent_phrase(sess)}")
-    if sess.busy_started_at:
-        elapsed_s = max(0, int(time.monotonic() - sess.busy_started_at))
-        if elapsed_s >= 60:
-            elapsed = f"{elapsed_s // 60}m {elapsed_s % 60}s"
-        else:
-            elapsed = f"{elapsed_s}s"
-        header += f" · {elapsed}"
-    return header
+def _status_line(
+    sess: TrackedSession, verb: str, *, final: bool = False,
+    waiting: bool = False,
+) -> str:
+    """The card's LAST line — its only always-visible position.
 
+    Telegram renders a long message fully expanded and parks the viewport
+    at its END, so a status at the TOP scrolls out of sight exactly when a
+    turn grows long enough to need it ("status-line-at-card-bottom"). One
+    helper for all three frames — ordinary busy, background-waiting, and
+    the settled final card — so the waiting variant and the busy variant
+    can never drift apart the way a separate header and footer did.
 
-def _waiting_footer(sess: TrackedSession) -> str:
-    """The waiting card's LAST line — the one position Telegram always
-    shows when the card is the newest message ("one response per
-    background job"): a long message renders fully expanded and the
-    viewport at the latest position shows its END, so a status at the top
-    scrolls away with the timeline while this line stays on screen.
-    Never shed: appended after row assembly, and head-drop truncation
-    keeps the body's tail."""
-    phrase = _agent_phrase(sess)
-    line = f"⏳ {phrase}" if phrase == "finishing up" else f"⏳ {phrase} still working"
+    Never shed: the caller appends it after :func:`_fit_sections` has
+    already fitted the timeline around a reserve computed from this exact
+    string, and the byte backstop truncates the body's HEAD, keeping the
+    tail this line sits at the end of.
+    """
+    label = _md_escape(sess.label)
+    if waiting and not final:
+        phrase = _agent_phrase(sess)
+        line = (f"🔄 **{label}** · {phrase}" if phrase == "finishing up"
+                else f"🔄 **{label}** · {phrase} still working")
+        if sess.busy_started_at:
+            line += f" · {_elapsed_str(sess.busy_started_at)}"
+        return line
+
+    # ── Segments: state, label, verb, then the turn's live stats ──
+    parts: list[str] = []
     if sess.busy_started_at:
-        elapsed_s = max(0, int(time.monotonic() - sess.busy_started_at))
-        if elapsed_s >= 60:
-            line += f" · {elapsed_s // 60}m {elapsed_s % 60}s"
-        else:
-            line += f" · {elapsed_s}s"
+        # Shown from the first second. Hiding it below 2s left the card
+        # reading "⏳" with no number, then jumping straight to "5s".
+        parts.append(_elapsed_str(sess.busy_started_at))
+
+    if sess.cost_baseline is not None and sess.last_cost_usd > 0:
+        delta = sess.last_cost_usd - sess.cost_baseline
+        if delta > 0.001:
+            parts.append(f"${delta:.2f}")
+
+    if sess.tool_history:
+        tally: dict[str, int] = {}
+        for summary, _done in sess.tool_history:
+            # Summaries are "Read: /path", "Grep: pat in dir" or "🤖 agent-type".
+            # Everything before the colon is the tool name; without one, the
+            # first word stands in.
+            head = summary.split(":", 1)[0] if ":" in summary else summary
+            words = head.split()
+            name = words[0][:20] if words else ""
+            if not name:
+                continue
+            tally[name] = tally.get(name, 0) + 1
+        parts.extend(f"{n} ×{c}" for n, c in tally.items())
+
+    mark = "✅" if final else "⏳"
+    line = f"{mark} **{label}** · {verb}"
+    if parts:
+        line += " · " + " · ".join(parts)
     return line
 
 
@@ -467,13 +503,16 @@ def build_stream_card_ex(
     rows, a settled ✅ in the header, and tool rows shed oldest-first if the
     card is somehow still over the ceiling.
 
-    ``waiting`` (design.md "model Claude Code background-agent jobs") swaps
-    ONLY the header — mark, verb, and stats replaced by the background-job
-    waiting presentation (agent count/type(s), elapsed) — while reusing the
-    unchanged timeline-row assembly below. Mutually exclusive with
+    ``waiting`` (design.md "model Claude Code background-agent jobs")
+    swaps ONLY the status line — mark, verb and stats replaced by the
+    background-job waiting presentation (agent count/type(s), elapsed) —
+    while reusing the unchanged timeline assembly. Mutually exclusive with
     ``final`` in practice (a waiting job is never the settled finished
     card); ``final`` wins if both are somehow passed, since the settled
     card is the more truthful state once composed together.
+
+    The card reads: [hidden-steps marker] → timeline → blank line →
+    status line ("status-line-at-card-bottom").
 
     Returns ``(card, hid_something)`` — the card string (always ≤ 32 768
     UTF-8 bytes) and whether ANY collapse, removal, or byte truncation was
@@ -482,72 +521,24 @@ def build_stream_card_ex(
     :func:`build_stream_card` wrapper keeps the historical str-only
     signature for every existing call site and test.
     """
-    if waiting and not final:
-        header = _waiting_header(sess)
-    else:
-        # ── Header segments: state, label, verb, then the turn's live stats ──
-        parts: list[str] = []
-        if sess.busy_started_at:
-            # Shown from the first second. Hiding it below 2s left the card
-            # reading "⏳" with no number, then jumping straight to "5s".
-            elapsed_s = max(0, int(time.monotonic() - sess.busy_started_at))
-            if elapsed_s >= 60:
-                parts.append(f"{elapsed_s // 60}m {elapsed_s % 60}s")
-            else:
-                parts.append(f"{elapsed_s}s")
+    status = _status_line(sess, verb, final=final, waiting=waiting)
 
-        if (sess.cost_baseline is not None
-                and sess.last_cost_usd > 0):
-            delta = sess.last_cost_usd - sess.cost_baseline
-            if delta > 0.001:
-                parts.append(f"${delta:.2f}")
-
-        if sess.tool_history:
-            tally: dict[str, int] = {}
-            for summary, _done in sess.tool_history:
-                # Summaries are "Read: /path", "Grep: pat in dir" or "🤖 agent-type".
-                # Everything before the colon is the tool name; without one, the
-                # first word stands in.
-                head = summary.split(":", 1)[0] if ":" in summary else summary
-                words = head.split()
-                name = words[0][:20] if words else ""
-                if not name:
-                    continue
-                tally[name] = tally.get(name, 0) + 1
-            parts.extend(f"{n} ×{c}" for n, c in tally.items())
-
-        mark = "✅" if final else "⏳"
-        header = f"{mark} **{_md_escape(sess.label)}** · {verb}"
-        if parts:
-            header += " · " + " · ".join(parts)
-
-    footer = _waiting_footer(sess) if (waiting and not final) else ""
-
-    # Reserve: header + the "\n\n" joins around body and footer, so the
-    # fitter's budget is what the BODY may actually use.
-    reserve = len(header.encode("utf-8")) + len(_ROW_SEP.encode("utf-8"))
-    if footer:
-        reserve += len(footer.encode("utf-8")) + len(_ROW_SEP.encode("utf-8"))
+    # Reserve: the status line plus the "\n\n" join above it, so the
+    # fitter's budget is exactly what the BODY may use.
+    reserve = len(status.encode("utf-8")) + len(_ROW_SEP.encode("utf-8"))
 
     sections = _build_sections(sess, final=final)
     rows, hid_something = _fit_sections(sections, reserve)
     body = _ROW_SEP.join(rows)
 
-    if footer:
-        # Pinned as the body's LAST element: the head-drop truncation
-        # below keeps the tail, so this line survives every render and
-        # stays the card's final visible line ("one response per
-        # background job" requirement 2).
-        body = f"{body}{_ROW_SEP}{footer}" if body else footer
-
-    raw = _assemble_card(header, body)
+    raw = _assemble_card(body, status)
 
     # ── Byte backstop: drop the head of the body if somehow still over ──
-    encoded = raw.encode("utf-8")
-    if len(encoded) > _RICH_LIMIT and body:
+    # The status line is appended after this truncation, never inside it,
+    # so it survives as the card's last line no matter what.
+    if len(raw.encode("utf-8")) > _RICH_LIMIT and body:
         hid_something = True
-        skeleton = _assemble_card(header, "…")
-        skeleton_bytes = len(skeleton.encode("utf-8"))
+        skeleton_bytes = len(_assemble_card("…", status).encode("utf-8"))
         body_budget = _RICH_LIMIT - skeleton_bytes
         if body_budget > 0:
             body_bytes = body.encode("utf-8")
@@ -555,10 +546,10 @@ def build_stream_card_ex(
                 # Drop from the head (oldest text).
                 kept_tail = body_bytes[-body_budget:].decode("utf-8", errors="ignore")
                 body = "…" + kept_tail
-            raw = _assemble_card(header, body)
+            raw = _assemble_card(body, status)
         else:
-            # Header alone exceeds the limit — drop the body entirely.
-            raw = header
+            # The status line alone fills the ceiling — drop the body.
+            raw = status
     return raw, hid_something
 
 

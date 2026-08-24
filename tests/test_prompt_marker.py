@@ -156,7 +156,14 @@ def test_inject_prompt_style_text_reflects_session_override(mk_bot, run_async, m
     # Scope default: no style guidance at all.
     prefs_mod.set_preference(sess.scope_chat_id, "answer_length", "none")
     run_async(bot._inject_prompt(sess, "hello"))
-    assert captured["style_text"] == ""  # nothing to inject at the scope default
+    # Contract change ("status-line-at-card-bottom"): the injected block
+    # always carries the delivery rule; at the scope default it carries
+    # NOTHING ELSE — that is what "no style guidance" means now.
+    from aipager.preferences import _DELIVERY_LINE
+    _default_block = captured["style_text"]
+    assert _DELIVERY_LINE in _default_block
+    assert [ln for ln in _default_block.splitlines()
+            if ln.startswith("- ") and ln[2:] != _DELIVERY_LINE] == []
 
     # This session overrides answer_length; the scope itself is untouched.
     sess.override_answer_length = "xshort"

@@ -11,6 +11,22 @@ from aipager import preferences as prefs
 
 # ---- defaults ------------------------------------------------------------
 
+
+def _style_bullets(text: str) -> list[str]:
+    """The /settings-driven bullets only.
+
+    Contract change ("status-line-at-card-bottom"): style_text now always
+    carries one unconditional delivery-rule bullet (a fact about how
+    aipager delivers messages, not a style preference), so "no style set"
+    means "no bullets besides that one" rather than an empty string.
+    """
+    from aipager.preferences import _DELIVERY_LINE
+    return [
+        ln[2:] for ln in text.splitlines()
+        if ln.startswith("- ") and ln[2:] != _DELIVERY_LINE
+    ]
+
+
 def test_unknown_scope_returns_defaults():
     p = prefs.get_preferences(999)
     assert p.simple_formatting is False
@@ -183,19 +199,25 @@ def test_next_write_overwrites_a_corrupt_file(tmp_path, monkeypatch):
 
 # ---- style_text ------------------------------------------------------------
 
-def test_style_text_empty_when_all_default():
+def test_style_text_has_only_the_delivery_rule_when_all_default():
+    # Contract change ("status-line-at-card-bottom"): style_text always
+    # carries the unconditional delivery-rule bullet, so "nothing injected"
+    # now means "no /settings bullets", not an empty string.
     p = prefs.Preferences(layout="card", simple_formatting=False,
                           answer_length="none", language_level="none")
-    assert prefs.style_text(p) == ""
+    text = prefs.style_text(p)
+    assert _style_bullets(text) == []
+    assert prefs._DELIVERY_LINE in text
 
 
 def test_style_text_formatting_only():
     p = prefs.Preferences(layout="card", simple_formatting=True,
                           answer_length="none", language_level="none")
     text = prefs.style_text(p)
-    assert text.startswith("Apply this reply-style guidance")
+    assert text.startswith("Apply this reply guidance")
     assert "No tables" in text
-    assert text.count("\n- ") == 1
+    # one style bullet + the unconditional delivery rule
+    assert _style_bullets(text) == [prefs._FORMATTING_LINE]
 
 
 def test_style_text_order_is_formatting_length_level():
@@ -219,10 +241,13 @@ def test_style_text_length_and_level_variants():
         assert phrase in prefs.style_text(p)
 
 
-def test_style_text_none_values_inject_nothing():
+def test_style_text_none_values_inject_no_style_bullets():
+    # Contract change ("status-line-at-card-bottom"): style_text always
+    # carries the unconditional delivery-rule bullet, so "nothing injected"
+    # now means "no /settings bullets", not an empty string.
     p = prefs.Preferences(layout="card", simple_formatting=False,
                           answer_length="none", language_level="none")
-    assert prefs.style_text(p) == ""
+    assert _style_bullets(prefs.style_text(p)) == []
 
 
 def test_extra_short_is_a_valid_length_with_its_own_line():

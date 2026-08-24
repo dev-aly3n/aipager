@@ -998,3 +998,54 @@ def test_merged_layout_truncated_final_still_attaches_log(
           last_assistant_message="tiny answer", transcript_path=str(tp))
     assert len(docs) == 1
     assert "tiny answer" in docs[0]["content"]
+
+
+# ---- orphaned delivery promises ("status-line-at-card-bottom") ------------
+
+def _promise_bot(mk_bot):
+    return mk_bot()
+
+
+def test_composed_final_drops_the_orphaned_promise(mk_bot):
+    """The observed line — mid-message, not trailing — is stripped when an
+    interim is composed into the job's single final message."""
+    bot = mk_bot()
+    interim = (
+        "📁 aipager — folder & file structure\n"
+        "The repo has 446 tracked files.\n"
+        "The full code briefing (architecture, message flow, safety "
+        "mechanisms, gaps) is being compiled by a background analysis "
+        "agent — I'll send it the moment it lands.\n"
+        "🏝️ Canary Islands\n"
+        "A Spanish autonomous community in the Atlantic."
+    )
+    out = bot._strip_promise_lines(interim, "omni")
+    assert "I'll send it the moment it lands" not in out
+    assert "446 tracked files" in out
+    assert "Canary Islands" in out
+
+
+def test_promise_strip_leaves_ordinary_prose_alone(mk_bot):
+    bot = mk_bot()
+    text = ("I'll refactor the agent registry next week.\n"
+            "The Canary Islands are volcanic.")
+    assert bot._strip_promise_lines(text, "omni") == text
+
+
+def test_promise_strip_never_empties_the_interim(mk_bot):
+    """A lone promise line is kept: stripping it would deliver nothing."""
+    bot = mk_bot()
+    only = "The briefing will follow once the analysis agent finishes."
+    assert bot._strip_promise_lines(only, "omni") == only
+
+
+def test_style_text_carries_the_delivery_rule():
+    """The prevention half: every Telegram prompt tells Claude its interim
+    and final replies arrive as one message."""
+    from aipager import preferences as prefs
+    text = prefs.style_text(prefs.Preferences(
+        layout="card", simple_formatting=False,
+        answer_length="none", language_level="none",
+    ))
+    assert "ONE message" in text
+    assert "never promise to send results separately" in text

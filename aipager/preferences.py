@@ -265,8 +265,18 @@ def set_preference(chat_id: int, field: str, value: object) -> Preferences:
 
 
 _STYLE_LEAD_IN = (
-    "Apply this reply-style guidance to your next answer; "
+    "Apply this reply guidance to your next answer; "
     "do not mention or quote it:"
+)
+
+# Always injected, independent of /settings ("status-line-at-card-bottom"):
+# aipager delivers a background job's interim answer and its final answer
+# as ONE combined Telegram message, so a promise to send the rest later
+# ends up sitting directly above the thing it promised.
+_DELIVERY_LINE = (
+    "If you start background agents, your interim reply and your final "
+    "reply reach the user as ONE message — never promise to send results "
+    "separately, and never say a briefing or report will follow."
 )
 
 _FORMATTING_LINE = (
@@ -292,13 +302,14 @@ _LEVEL_LINES = {
 
 
 def style_text(prefs: Preferences) -> str:
-    """Pure. The `UserPromptSubmit`-hook instruction block for ``prefs``,
-    or ``""`` when every style option is at its default (formatting off,
-    length/level both "none") — the common case for any scope that has
-    never touched `/settings`, and the hook's cue to print nothing at all.
+    """Pure. The `UserPromptSubmit`-hook instruction block for ``prefs``.
 
     Fixed bullet order: formatting, length, level — matching design.md's
-    "Exact injected text" section verbatim.
+    "Exact injected text" section verbatim — followed by the unconditional
+    delivery rule (:data:`_DELIVERY_LINE`), which is why this never
+    returns ``""`` any more: every Telegram-originated prompt carries it,
+    since the model cannot know up front whether it will background an
+    agent ("status-line-at-card-bottom").
     """
     bullets: list[str] = []
     if prefs.simple_formatting:
@@ -309,6 +320,8 @@ def style_text(prefs: Preferences) -> str:
     level_line = _LEVEL_LINES.get(prefs.language_level)
     if level_line:
         bullets.append(level_line)
-    if not bullets:
-        return ""
+    # The delivery rule is unconditional: it is not a /settings option but
+    # a fact about how aipager delivers this session's messages, and the
+    # model cannot know in advance whether it will background an agent.
+    bullets.append(_DELIVERY_LINE)
     return _STYLE_LEAD_IN + "\n" + "\n".join(f"- {b}" for b in bullets)

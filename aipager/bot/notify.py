@@ -13,6 +13,7 @@ import asyncio
 import hashlib
 import html as html_mod
 import logging
+import re
 import tempfile
 import time
 from pathlib import Path
@@ -82,6 +83,22 @@ if TYPE_CHECKING:
     pass
 
 log = logging.getLogger(__name__)
+
+# "I'll send it the moment it lands" — a promise to deliver separately,
+# which the single-response job model makes false (see
+# NotifyMixin._strip_promise_lines). Both patterns must hit for a line to
+# be dropped: the future-delivery phrase AND the work it defers to.
+_PROMISE_FUTURE_RE = re.compile(
+    r"(\b(i'?ll|i will|we'?ll|we will)\b[^.]{0,80}?"
+    r"\b(send|share|post|deliver|follow|drop)\b)"
+    r"|\b(will follow|coming next|follows? (below|next|shortly))\b",
+    re.IGNORECASE,
+)
+_PROMISE_SUBJECT_RE = re.compile(
+    r"\b(agent|analys\w*|briefing|report|background|results?|breakdown|"
+    r"summary)\b",
+    re.IGNORECASE,
+)
 
 # Separator row between the finished timeline and the answer in `merged`
 # layout — a literal row, not a second "✅ Finished" header (that would be
@@ -215,6 +232,41 @@ class NotifyMixin:
             sess.busy_msg_id = 0
             return False
         return result is not None
+
+    def _strip_promise_lines(self, text: str, label: str) -> str:
+        """Drop "I'll send the briefing when it lands"-style lines from an
+        interim answer being composed into the job's SINGLE final message
+        ("status-line-at-card-bottom"): the thing they promise sits a few
+        lines below them in the same message, so they read as broken.
+
+        Line-based, not tail-only: the observed instance sat in the MIDDLE
+        of the interim (between the folder-structure section and the
+        Canary Islands section), not at its end. Conservative by
+        construction — a line must be short AND carry a first-person
+        future-delivery phrase AND name the work it defers to. Never
+        empties the text: if every line matched, the original is returned
+        untouched. Only ever called at composition time, and never on the
+        final answer or on a flush that has no final answer to follow it
+        (there the promise is simply true).
+        """
+        lines = text.split("\n")
+        kept = [
+            ln for ln in lines
+            if not (len(ln) <= 240
+                    and _PROMISE_FUTURE_RE.search(ln)
+                    and _PROMISE_SUBJECT_RE.search(ln))
+        ]
+        if len(kept) == len(lines):
+            return text
+        if not any(ln.strip() for ln in kept):
+            return text
+        dropped = len(lines) - len(kept)
+        log.info(
+            "[%s] stripped %d orphaned delivery-promise line(s) (%d chars) "
+            "from an interim answer", label, dropped,
+            sum(len(ln) for ln in lines) - sum(len(ln) for ln in kept),
+        )
+        return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
 
     def _record_job_interim(
         self, sess: TrackedSession, content: str,
@@ -1188,8 +1240,11 @@ class NotifyMixin:
             # here so a stray re-entry cannot resend.
             composed_with_interim = False
             if sess.job_interim_buffer:
-                _parts = [b for b in sess.job_interim_buffer
-                          if b and b != content]
+                _parts = [
+                    self._strip_promise_lines(b, label)
+                    for b in sess.job_interim_buffer if b and b != content
+                ]
+                _parts = [b for b in _parts if b]
                 sess.job_interim_buffer.clear()
                 if _parts:
                     _tail = [content] if content else []

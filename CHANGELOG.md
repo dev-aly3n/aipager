@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- The card's status line (label · verb · elapsed · cost · tool tallies)
+  moved from the TOP to the BOTTOM, and the background-waiting header and
+  footer merged into that one line. Telegram parks the viewport at a
+  message's end, so a top header scrolled out of sight exactly when a long
+  turn needed it; the bottom line is now always on screen, and is never
+  shed — the fitter reserves its bytes and the truncation backstop appends
+  it after clipping.
+- Claude is told, on every Telegram-originated prompt, that a background
+  job's interim and final replies reach the user as ONE message, so it
+  should not promise to send results separately; if it says so anyway, the
+  orphaned "I'll send it when it lands" line is stripped when the interim
+  is composed into that single message (conservatively: short lines only,
+  needing both a first-person delivery phrase and the work it defers to,
+  and never emptying the text).
 - The busy card now sheds in layers instead of a fixed window: everything
   renders until the byte ceiling; over it, tool runs collapse oldest-first
   into in-place "▸ N tool calls" lines between the commentary they sat

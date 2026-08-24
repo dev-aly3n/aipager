@@ -69,7 +69,9 @@ def _run_tool(path, sess, name: str, summary: str, done=True):
 
 def _rows(card: str) -> list[str]:
     """The timeline rows, in order, without the header line."""
-    _header, _, body = card.partition("\n\n")
+    # Contract change ("status-line-at-card-bottom"): the status line is
+    # the card's LAST element, so strip it from the END.
+    body, _, _status = card.rpartition("\n\n")
     return body.split("\n\n") if body else []
 
 
