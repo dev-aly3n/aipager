@@ -358,6 +358,14 @@ class TrackedSession:
     stream_hook_live: bool = False
     stream_dirty: bool = False
     stream_last_rendered: str = ""
+    # MD5 hex digest of the last DELIVERED job-open interim summary's raw
+    # (pre-HTML) text — design.md "model Claude Code background-agent
+    # jobs", requirement 2. Transient (never in _PERSIST_FIELDS): a job
+    # never spans a daemon restart (Decision 2/6), so there is nothing to
+    # persist. Cleared only where a genuinely NEW job starts
+    # (_send_busy_and_animate's existing per-turn reset) so a duplicate
+    # answer in the NEXT job is never mistaken for a repeat of this one.
+    last_idle_summary_hash: str = ""
 
     # -- Live message stack (design.md "Live Message Stack") ---------------
 
@@ -551,6 +559,23 @@ class TrackedSession:
             evicted.append((oldest, self.active_subagents.pop(oldest)))
         return evicted
 
+    def job_background_open(self) -> bool:
+        """True while a background agent launched by this job is still
+        running (design.md "model Claude Code background-agent jobs").
+
+        A **job** is a derived condition, not a new ``Status`` value: it is
+        ``True`` iff the session is genuinely in the middle of a turn
+        (``BUSY``) or has produced an interim Stop while a subagent it
+        launched is still going (``IDLE`` with ``active_subagents``
+        non-empty). Any other status (``INTERACTIVE``, ``GONE``,
+        ``UNKNOWN``) is never "job open" even with stale entries still in
+        the table — those statuses mean the session itself isn't mid-turn
+        in any sense a card can honestly represent as "waiting".
+        """
+        return self.status in (Status.IDLE, Status.BUSY) and bool(
+            self.active_subagents
+        )
+
     def dialog_is_open(self) -> bool:
         """True while the terminal is showing a permission/question prompt.
 
@@ -718,12 +743,22 @@ class SessionRegistry:
             self._dirty = True
 
     def transition(self, name: str, new_status: Status,
-                   summary: str = "") -> TrackedSession | None:
+                   summary: str = "", *,
+                   preserve_job_state: bool = False) -> TrackedSession | None:
         """Attempt a state transition. Returns session only if state actually changed.
 
         Idempotency: same-state calls return None (no duplicate notification).
         Debounce: IDLE transitions within IDLE_DEBOUNCE seconds of the last
         IDLE notification are suppressed (prevents spam from quick responses).
+
+        ``preserve_job_state`` (design.md "model Claude Code background-agent
+        jobs"): when True and the entry is a re-entry into BUSY on behalf of
+        the SAME job (a background agent's own PreToolUse, or a
+        ``<task-notification>`` continuation prompt), the ``busy_started_wall``
+        stamp below is skipped so the job's original turn-start anchor
+        survives every re-entry in between. Both call sites that pass it are
+        re-entries INTO BUSY specifically — the parameter has no effect on
+        any other transition.
         """
         sess = self.get_or_create(name)
         if sess.status == new_status:
@@ -757,7 +792,12 @@ class SessionRegistry:
             # start — re-stamping there would move the marker past writes
             # this turn already made and blind the guard for the rest of
             # it. (BUSY→BUSY can't reach here; same-state returns above.)
-            if sess.status != Status.INTERACTIVE:
+            # A background-job re-entry (``preserve_job_state=True``) is the
+            # same rule for a different reason: the turn this stamp anchors
+            # started at the job's ORIGINAL prompt, not at this background
+            # agent's own tool call or the self-triggered continuation
+            # prompt that woke the session back up.
+            if sess.status != Status.INTERACTIVE and not preserve_job_state:
                 sess.busy_started_wall = time.time()
 
         old = sess.status
