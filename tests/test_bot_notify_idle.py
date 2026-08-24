@@ -637,3 +637,158 @@ def test_the_restart_window_expires_on_its_own(mk_bot, run_async):
     bot._stop_animation = MagicMock()
     run_async(bot.notify(sess, "session_end", {"source": "disappeared"}))
     bot._app.bot.send_message.assert_awaited_once()
+
+
+# ---- design.md "model Claude Code background-agent jobs" ----------------
+
+def _job_sess(label="hiva", *, status=Status.IDLE):
+    s = _sess(label, status=status)
+    s.active_subagents["a1"] = {"type": "Explore", "started_at": time.monotonic()}
+    s.busy_msg_id = 42
+    return s
+
+
+def test_job_interim_delivers_content_once(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    sess = _job_sess()
+    sent = []
+    async def _send_rich(chat_id, content, **kw):
+        sent.append(content)
+        return {}
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
+    bot._edit_busy_rich = AsyncMock(return_value=True)
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "interim answer"}))
+    assert sent == ["interim answer"]
+    assert sess.last_idle_summary_hash != ""
+
+
+def test_job_interim_dedup_skips_identical_content(mk_bot, run_async, monkeypatch):
+    """requirement 2: the SAME content, delivered twice while the job
+    stays open, is only ever sent once."""
+    bot = mk_bot()
+    sess = _job_sess()
+    sent = []
+    async def _send_rich(chat_id, content, **kw):
+        sent.append(content)
+        return {}
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
+    bot._edit_busy_rich = AsyncMock(return_value=True)
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "same text"}))
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "same text"}))
+    assert sent == ["same text"]  # only once
+
+
+def test_job_interim_delivers_new_content_after_dedup_skip(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    sess = _job_sess()
+    sent = []
+    async def _send_rich(chat_id, content, **kw):
+        sent.append(content)
+        return {}
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
+    bot._edit_busy_rich = AsyncMock(return_value=True)
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "first"}))
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "first"}))  # dup, skipped
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "second"}))  # new
+    assert sent == ["first", "second"]
+
+
+def test_job_interim_renders_waiting_card_not_finished(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    sess = _job_sess()
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message",
+                        AsyncMock(return_value={}))
+    bot._edit_busy_rich = AsyncMock(return_value=True)
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=1))
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "interim"}))
+    bot._edit_busy_rich.assert_awaited_once()
+    assert bot._edit_busy_rich.await_args.kwargs.get("waiting") is True
+    for call in bot._app.bot.send_message.await_args_list:
+        assert "Finished" not in call.args[1]
+
+
+def test_job_interim_drains_queued_prompt(mk_bot, run_async, monkeypatch):
+    """_drain_next_queued is shared with the Finished path — a message
+    queued while the job is open drains on the very next idle moment."""
+    bot = mk_bot()
+    sess = _job_sess()
+    sess.queue_prompt("next prompt", 55)
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message",
+                        AsyncMock(return_value={}))
+    bot._edit_busy_rich = AsyncMock(return_value=True)
+    bot._inject_prompt = AsyncMock(return_value=True)
+    bot._send_busy_and_animate = AsyncMock()
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "interim"}))
+    bot._inject_prompt.assert_awaited_once()
+    assert sess.pending_queue == []
+    assert sess.trigger_msg_id == 55
+    bot._send_busy_and_animate.assert_awaited_once()
+
+
+def test_job_continuation_does_not_reset_turn_state(mk_bot, run_async):
+    bot = mk_bot()
+    sess = _job_sess(status=Status.BUSY)
+    sess.tool_history = [("Bash: ls", True)]
+    sess.subagent_count_this_turn = 3
+    sess.output_baseline = 500
+    sess.cost_baseline = 1.5
+    original_busy_started_at = sess.busy_started_at
+    bot._edit_busy_rich = AsyncMock(return_value=True)
+    run_async(bot.notify(sess, "job_continuation", {}))
+    assert sess.tool_history == [("Bash: ls", True)]
+    assert sess.subagent_count_this_turn == 3
+    assert sess.output_baseline == 500
+    assert sess.cost_baseline == 1.5
+    assert sess.busy_started_at == original_busy_started_at
+    assert sess.active_subagents == {"a1": {"type": "Explore",
+                                             "started_at": sess.active_subagents["a1"]["started_at"]}}
+
+
+def test_job_continuation_re_renders_the_card(mk_bot, run_async):
+    bot = mk_bot()
+    sess = _job_sess(status=Status.BUSY)
+    bot._edit_busy_rich = AsyncMock(return_value=True)
+    run_async(bot.notify(sess, "job_continuation", {}))
+    bot._edit_busy_rich.assert_awaited_once()
+
+
+def test_job_agents_lost_edits_card_to_terminal_state(mk_bot, run_async):
+    bot = mk_bot()
+    sess = _job_sess(status=Status.IDLE)
+    sess.active_subagents.clear()  # TTL sweep already emptied it
+    sess.busy_started_at = time.monotonic() - 5  # so elapsed_s > 0
+    bot._edit_busy_raw = AsyncMock(return_value=True)
+    bot._stop_animation = MagicMock()
+    run_async(bot.notify(sess, "job_agents_lost", {}))
+    bot._edit_busy_raw.assert_awaited_once()
+    text = bot._edit_busy_raw.await_args.args[1]
+    assert "background agent lost" in text
+    assert "after" in text  # busy_started_at was set
+    assert sess.busy_msg_id is None
+
+
+def test_job_agents_lost_omits_after_when_no_busy_started_at(mk_bot, run_async):
+    bot = mk_bot()
+    sess = _job_sess(status=Status.IDLE)
+    sess.active_subagents.clear()
+    sess.busy_started_at = 0.0
+    bot._edit_busy_raw = AsyncMock(return_value=True)
+    bot._stop_animation = MagicMock()
+    run_async(bot.notify(sess, "job_agents_lost", {}))
+    text = bot._edit_busy_raw.await_args.args[1]
+    assert text.endswith("background agent lost)")
+
+
+def test_job_agents_lost_does_not_drain_the_queue(mk_bot, run_async):
+    """design.md Risks: job_agents_lost is an accepted, documented gap —
+    a queued message drains on the next real idle-transition instead."""
+    bot = mk_bot()
+    sess = _job_sess(status=Status.IDLE)
+    sess.active_subagents.clear()
+    sess.queue_prompt("later", 77)
+    bot._edit_busy_raw = AsyncMock(return_value=True)
+    bot._stop_animation = MagicMock()
+    bot._inject_prompt = AsyncMock(return_value=True)
+    run_async(bot.notify(sess, "job_agents_lost", {}))
+    bot._inject_prompt.assert_not_awaited()
+    assert len(sess.pending_queue) == 1
