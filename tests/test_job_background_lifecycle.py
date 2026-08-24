@@ -585,3 +585,77 @@ def test_double_hop_continuation_spawning_new_agents(
     assert rich_sends == ["interim one", "interim two", "the real final answer"]
     finals = [c for c in edit_calls if c["final"]]
     assert len(finals) == 1
+
+
+def test_real_prompt_during_grace_supersedes_and_late_continuation_closes(
+    mk_bot, run_async, tmp_path, monkeypatch,
+):
+    """Reviewer walk (review-2): a REAL prompt arriving during the grace
+    window supersedes the job (transition's genuine-new-turn branch clears
+    the endgame state and arms the reclaim), and the superseded job's late
+    <task-notification> — arriving mid-new-turn — must not produce a rogue
+    Finished or a stuck waiting card: the new turn's Stop closes normally,
+    exactly once."""
+    bot = mk_bot()
+    registry = bot.registry
+    recv = hr.HookReceiver(registry, bot.notify)
+    tp = tmp_path / "sup.jsonl"
+    _write_transcript(tp, with_continuation=False)
+
+    next_id = [5000]
+    async def _send_message(chat_id, text, **kwargs):
+        next_id[0] += 1
+        return MagicMock(message_id=next_id[0])
+    bot._app.bot.send_message = AsyncMock(side_effect=_send_message)
+    bot._app.bot.send_chat_action = AsyncMock(return_value=None)
+    bot._app.bot.delete_message = AsyncMock(return_value=None)
+    rich_sends: list[str] = []
+    async def _send_rich(chat_id, content, **kwargs):
+        rich_sends.append(content)
+        return {"message_id": next_id[0]}
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
+    edit_calls: list[dict] = []
+    real_edit = bot._edit_busy_rich
+    async def _spy(sess_, verb, *, final=False, waiting=False):
+        edit_calls.append({"final": final, "waiting": waiting})
+        return await real_edit(sess_, verb, final=final, waiting=waiting)
+    bot._edit_busy_rich = _spy
+    async def _edit_rich_transport(chat_id, msg_id, markdown, **kwargs):
+        return {}
+    monkeypatch.setattr("aipager.bot.animation.edit_message_text_rich",
+                        _edit_rich_transport)
+    monkeypatch.setattr("aipager.preferences.KEEP_FINISHED_CARD", True)
+
+    # job with an interim + armed grace
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          prompt="[via Telegram msg=1]\ngo", transcript_path=str(tp))
+    sess = registry.get(SESSION)
+    sess.scope_chat_id = -1001
+    _send(recv, run_async, hook_event_name="SubagentStart",
+          agent_id="agent-1", agent_type="Explore")
+    _send(recv, run_async, hook_event_name="Stop",
+          last_assistant_message="interim", transcript_path=str(tp))
+    _send(recv, run_async, hook_event_name="SubagentStop",
+          agent_id="agent-1", agent_type="Explore")
+    assert sess.job_background_open() is True  # grace armed
+
+    # a REAL prompt supersedes the job
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          prompt="[via Telegram msg=2]\nnew business",
+          transcript_path=str(tp))
+    assert sess.status == Status.BUSY
+    assert sess.job_grace_until == 0.0
+    assert sess.job_interim_seen is False
+
+    # the old job's late task-notification lands mid-new-turn
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          prompt="<task-notification>\n<task-id>agent-1</task-id>\ndone.",
+          transcript_path=str(tp))
+    # the next Stop closes cleanly — one Finished, no stuck waiting card
+    _send(recv, run_async, hook_event_name="Stop",
+          last_assistant_message="new answer", transcript_path=str(tp))
+    assert sess.status == Status.IDLE
+    assert sess.job_background_open() is False
+    assert sess.job_continuation_active is False
+    assert rich_sends[-1] == "new answer"
+    assert [c for c in edit_calls if c["final"]] != []

@@ -362,27 +362,22 @@ def test_send_busy_and_animate_send_failure_clears_sentinel(mk_bot, run_async):
 
 
 def test_send_busy_and_animate_reclaims_when_job_background_open(mk_bot, run_async):
-    """design.md "model Claude Code background-agent jobs", Decision 9: a
-    genuinely new prompt arriving while a PREVIOUS job's background
-    agents are still open must NOT be swallowed by the "already showing
-    busy" race guard — job_background_open() is checked FIRST and
-    reclaims the waiting card (clears busy_msg_id, falls into the normal
-    fresh-send reset) instead of early-returning."""
+    """design.md "model Claude Code background-agent jobs", Decision 9,
+    driven through the REAL production path (review rev-iter2: the
+    isolated-unit version bypassed transition() and hid a dead gate): a
+    genuinely new prompt arriving over a live waiting card enters BUSY via
+    registry.transition() — which sets job_reclaim_pending because the
+    prior state was IDLE — and _send_busy_and_animate then reclaims the
+    card instead of letting the still-alive animate task swallow it."""
     bot = mk_bot()
-    # IDLE is the realistic reclaim moment: the waiting card is up between
-    # turns (interim idle / grace window) when the new prompt arrives. A
-    # BUSY session never reclaims — see
-    # test_send_busy_and_animate_no_reclaim_mid_continuation (review
-    # rev-iter1-001).
-    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    sess = bot.registry.get_or_create("claude-jim")
+    sess.label = "jim"
+    sess.status = Status.IDLE  # waiting card up between turns
     sess.busy_msg_id = 99
+    sess.job_interim_seen = True
     sess.active_subagents["a1"] = {
         "type": "Explore", "started_at": time.monotonic(),
     }
-    # Live animate_task — the SAME task that would still be ticking
-    # through the waiting window (its own loop condition also holds on
-    # job_background_open()), constructed but never run so it reads as
-    # "alive, not done" exactly like test_..._skips_when_already_busy above.
     loop = asyncio.new_event_loop()
     async def _long(): await asyncio.sleep(100)
     original_task = loop.create_task(_long())
@@ -391,11 +386,15 @@ def test_send_busy_and_animate_reclaims_when_job_background_open(mk_bot, run_asy
     bot._app.bot.send_chat_action = AsyncMock()
     bot._start_animation = MagicMock()
 
+    # the real handler order: transition first, card second
+    assert bot.registry.transition("claude-jim", Status.BUSY) is not None
+    assert sess.job_reclaim_pending is True
     run_async(bot._send_busy_and_animate(sess))
 
     # Reclaimed — a fresh busy card WAS sent, not swallowed.
     assert sess.busy_msg_id == 42
     bot._app.bot.send_message.assert_called_once()
+    assert sess.job_reclaim_pending is False
     if not original_task.done():
         original_task.cancel()
     loop.close()
@@ -497,14 +496,15 @@ def test_animate_busy_tick_computes_waiting_frame_when_not_busy(mk_bot, run_asyn
 
 
 def test_send_busy_and_animate_no_reclaim_mid_continuation(mk_bot, run_async):
-    """Review rev-iter1-001 ("close the background-job endgame"): an
-    ordinary Telegram message arriving while the continuation turn is
-    RUNNING (status BUSY, job_continuation_active) must get the same
-    treatment any busy turn gives it — the "already showing busy" no-op —
-    never a reclaim that wipes the continuation state the job's
-    one-true-Finished close depends on."""
+    """Review rev-iter1-001 / rev-iter2: an ordinary Telegram message
+    arriving while the continuation turn is RUNNING is a same-state
+    BUSY→BUSY transition no-op — job_reclaim_pending is never set — so the
+    card path gives it the "already showing busy" no-op any busy turn
+    gets, never a reclaim that wipes the continuation state."""
     bot = mk_bot()
-    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess = bot.registry.get_or_create("claude-jim")
+    sess.label = "jim"
+    sess.status = Status.BUSY
     sess.busy_msg_id = 99
     sess.job_continuation_active = True
     sess.job_interim_seen = True
@@ -516,6 +516,9 @@ def test_send_busy_and_animate_no_reclaim_mid_continuation(mk_bot, run_async):
     bot._app.bot.send_chat_action = AsyncMock()
     bot._start_animation = MagicMock()
 
+    # the real handler order: transition (same-state no-op), card second
+    assert bot.registry.transition("claude-jim", Status.BUSY) is None
+    assert sess.job_reclaim_pending is False
     run_async(bot._send_busy_and_animate(sess))
 
     # Swallowed by the race guard — no fresh card, continuation state intact.

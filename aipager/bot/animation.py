@@ -836,7 +836,7 @@ class AnimationMixin:
             # every later busy card on this session forever".
             top_kind = sess.stack_top_kind()
             if top_kind == "busy":
-                if sess.job_background_open() and sess.status != Status.BUSY:
+                if sess.job_reclaim_pending:
                     # A genuinely new prompt is starting while a PREVIOUS
                     # job's background agents are still open (design.md
                     # "model Claude Code background-agent jobs", Decision
@@ -853,14 +853,17 @@ class AnimationMixin:
                     # lost here (design.md Risks: its eventual SubagentStop
                     # or TTL expiry lands in the already-tolerated "no
                     # matching start" / phantom path).
-                    # Only reclaim while the session is NOT mid-turn
-                    # (status gate above, review rev-iter1-001): during an
-                    # in-flight continuation turn (BUSY,
-                    # job_continuation_active) an inbound Telegram message
-                    # must get the same treatment any ordinary busy turn
-                    # gives it — the "already showing busy" no-op below —
-                    # not a reclaim that wipes the very continuation state
-                    # the job's one-true-Finished close depends on.
+                    # The flag is set only by transition()'s genuine-new-
+                    # turn branch — the one place the BEFORE-state is
+                    # visible (review rev-iter2). A message arriving
+                    # mid-continuation is a same-state BUSY→BUSY no-op
+                    # there, never sets the flag, and falls into the
+                    # "already showing busy" no-op below — the same
+                    # treatment any ordinary busy turn gives it. A message
+                    # arriving over a live waiting card (interim idle or
+                    # grace window) DID transition IDLE→BUSY, set the
+                    # flag, and reclaims here.
+                    sess.job_reclaim_pending = False
                     log.warning(
                         "[%s] new turn starting while a previous job is "
                         "still open (%d agents, continuation=%s, grace=%s) "
@@ -936,6 +939,7 @@ class AnimationMixin:
             sess.job_interim_seen = False
             sess.job_continuation_active = False
             sess.job_grace_until = 0.0
+            sess.job_reclaim_pending = False
             sess.busy_started_at = time.monotonic()
             # Seed streaming state for this turn.  stream_offset is set to
             # the current transcript size so the previous turn's text is

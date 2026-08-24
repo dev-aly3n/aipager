@@ -384,6 +384,16 @@ class TrackedSession:
     job_interim_seen: bool = False
     job_continuation_active: bool = False
     job_grace_until: float = 0.0
+    # One-shot marker set by ``SessionRegistry.transition()`` when a
+    # GENUINE new turn enters BUSY (prior state not BUSY/INTERACTIVE, no
+    # preserve_job_state) — the only place the before-state is visible.
+    # ``_send_busy_and_animate`` consumes it to decide "reclaim the live
+    # waiting card" vs "same turn already running, no-op" (review
+    # rev-iter2: a status check there is always too late, every caller
+    # transitions to BUSY first; a same-state BUSY→BUSY no-op never sets
+    # this, which is exactly the mid-continuation case that must be
+    # swallowed). Transient, never persisted.
+    job_reclaim_pending: bool = False
 
     # -- Live message stack (design.md "Live Message Stack") ---------------
 
@@ -834,6 +844,7 @@ class SessionRegistry:
                 sess.job_interim_seen = False
                 sess.job_continuation_active = False
                 sess.job_grace_until = 0.0
+                sess.job_reclaim_pending = True
 
         old = sess.status
         sess.status = new_status
