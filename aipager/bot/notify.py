@@ -42,7 +42,10 @@ from aipager.config import (
     STREAM_EDIT_INTERVAL,
 )
 from aipager.state import Status, TrackedSession
-from aipager.bot.animation import FINAL_VERB, _RICH_LIMIT, _expire_tool_batch, build_stream_card
+from aipager.bot.animation import (
+    FINAL_VERB, _RICH_LIMIT, _expire_tool_batch, build_full_log,
+    build_stream_card,
+)
 
 # Pure-function helpers and constants live in aipager.bot.transport
 # now. Re-export the names this module uses internally so the
@@ -1108,6 +1111,12 @@ class NotifyMixin:
                 else:
                     sess.last_idle_summary_hash = _digest
 
+            # Snapshot the play-by-play BEFORE the reset below wipes the
+            # commentary — the full-log attachment builder needs it
+            # ("layered-card-shedding" requirement 2).
+            log_tools = list(sess.tool_history)
+            log_commentary = list(sess.stream_commentary)
+
             # Reset streaming state — the turn is over.
             sess.stream_commentary = []
             sess.stream_tool_cursor = 0
@@ -1372,9 +1381,19 @@ class NotifyMixin:
                 self.registry.track_message(msg_id, sess.name, resolve_chat_id_int(sess) or 0)
             await self._maybe_update_bot_name(sess.name)
 
-            # ── Send full response as .txt attachment for overflow ─────────
-            file_content = content if send_file else ""
-            if send_file and file_content:
+            # ── Full-log .txt attachment ("layered-card-shedding") ────────
+            # Sent when the FINAL card render had to hide anything (the
+            # renderer reported it via sess.last_card_truncated) OR the
+            # answer body was truncated by the overflow logic above. One
+            # file per close, superseding the old answer-only
+            # response.txt: complete chronological play-by-play plus the
+            # full answer, so hidden history is always recoverable.
+            attach_log = send_file or sess.last_card_truncated
+            file_content = (
+                build_full_log(label, log_tools, log_commentary, content)
+                if attach_log else ""
+            )
+            if attach_log and file_content:
                 content_bytes = file_content.encode("utf-8")
                 if len(content_bytes) > TELEGRAM_MAX_DOC_BYTES:
                     mb = len(content_bytes) / (1024 * 1024)
@@ -1389,7 +1408,8 @@ class NotifyMixin:
                         tmp.write_text(file_content, encoding="utf-8")
                         with open(tmp, "rb") as f:
                             await bot.send_document(
-                                resolve_chat_id(sess), document=f, filename=f"{label}_response.txt",
+                                resolve_chat_id(sess), document=f,
+                                filename=f"{label}_full_log.txt",
                                 reply_to_message_id=msg_id or None,
                             )
                         tmp.unlink(missing_ok=True)
@@ -1402,7 +1422,7 @@ class NotifyMixin:
             # observable via the same channel; send the header as summary).
             if self.observers:
                 obs_text = header_text
-                if send_file and file_content:
+                if attach_log and file_content:
                     doc_bytes = file_content.encode("utf-8")
                     asyncio.create_task(self.observers.broadcast_document(
                         obs_text, doc_bytes, f"{label}_response.txt"))

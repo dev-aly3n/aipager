@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 from aipager.config import (
     BUSY_EDIT_INTERVAL, CHAT_ID, COMPACT_ANIMATE_INTERVAL_SECONDS,
     COMPACT_ANIMATE_MAX_TICKS, SPINNER_VERBS,
-    STREAM_BODY_CHARS, STREAM_EDIT_INTERVAL,
+    STREAM_EDIT_INTERVAL,
 )
 from aipager.bot.rich_message import (
     detect_rtl,
@@ -207,72 +207,35 @@ def _read_stream_text(sess: TrackedSession) -> bool:
     return added
 
 
-def _build_timeline_rows(sess: TrackedSession, *, final: bool = False) -> list[str]:
-    """Merge commentary and tool rows into one chronological list.
+def _build_sections(
+    sess: TrackedSession, *, final: bool = False,
+) -> list[tuple[str, list[str]]]:
+    """The timeline as chronological SECTIONS: ("prose", [quote rows]) and
+    ("run", [tool rows]) alternating ("layered-card-shedding"). Sections —
+    not a flat row list — because the shedding policy treats them
+    differently: commentary is the narrative and outlives tool rows.
 
-    Each commentary block carries the tool count observed when it was read, so
-    a block that arrived between two tools renders between them.
-
-    ``final`` renders the finished card that stays in the chat: it keeps every
-    tool row and every commentary block. The live card's caps exist to keep a
-    running turn glanceable, but the finished card is the turn's record and is
-    read at leisure, so nothing is hidden until the byte ceiling forces it.
+    Keeps the batch-hold (a run whose introducing sentence hasn't arrived
+    yet is withheld) and the answer-filter (a hook-streamed block with no
+    tool row at or after its anchor is the final answer, which belongs in
+    the answer message) exactly as before. The fixed visible-tools window
+    and the commentary character budget are gone: what fits is decided by
+    the byte ceiling in :func:`_fit_sections`, per the operator's policy
+    ("show all toolcall and commentry untill we reach to the cap").
     """
     history = sess.tool_history
     if (not final and sess.stream_hook_live
             and sess.stream_batch_since is not None
             and time.monotonic() - sess.stream_batch_since < _BATCH_HOLD_SECS):
-        # This batch's introducing sentence has not arrived yet. Drawing the
-        # rows now and inserting the quote above them a moment later is the
-        # jump the card kept showing, so the batch waits. Released the instant
-        # the prose lands — a fraction of a second — or by _expire_tool_batch
-        # when the message turns out to have said nothing at all.
         history = history[:sess.stream_anchor_floor]
-    if final or len(history) <= _MAX_VISIBLE_TOOLS:
-        visible = history
-        hidden_done = 0
-    else:
-        hidden = history[:-_MAX_VISIBLE_TOOLS]
-        hidden_done = sum(1 for _, d in hidden if d)
-        visible = history[-_MAX_VISIBLE_TOOLS:]
-    vis_offset = len(history) - len(visible)
 
     commentary = sess.stream_commentary
     if sess.stream_hook_live:
-        # The hook streams every assistant message, the final answer among
-        # them. A block with no tool row at or after its anchor has not been
-        # shown to introduce anything: either it is that answer — which
-        # belongs in the answer message, not quoted directly above it — or
-        # its tools simply have not fired yet, and it appears on the next
-        # render. Without this the answer's prose ate the whole commentary
-        # budget below, evicting the real commentary from the live card, and
-        # then reappeared when the finished card lifted the cap.
-        # The transcript fallback keeps its own semantics: there an anchor
-        # past the end means the prose was read before its row landed.
         commentary = [(a, t) for a, t in commentary if a < len(history)]
 
-    # Keep the most recent commentary within the character budget, dropping
-    # whole blocks oldest-first so a long turn can't grow the card without
-    # bound. The newest block always survives, truncated if it alone is huge.
-    kept: list[tuple[int, str]] = []
-    if final:
-        kept = list(commentary)
-    else:
-        used = 0
-        for anchor, text in reversed(commentary):
-            if kept and used + len(text) > STREAM_BODY_CHARS:
-                break
-            if not kept and len(text) > STREAM_BODY_CHARS:
-                text = text[:STREAM_BODY_CHARS] + "…"
-            kept.append((anchor, text))
-            used += len(text)
-        kept.reverse()
-
-    # Re-anchor into the visible window rather than dropping: when old tool
-    # rows scroll off, their commentary moves to the top of what is shown.
     by_anchor: dict[int, list[str]] = {}
-    for anchor, text in kept:
-        slot = min(max(anchor, vis_offset), len(history))
+    for anchor, text in commentary:
+        slot = min(max(anchor, 0), len(history))
         by_anchor.setdefault(slot, []).append(text)
 
     subagent_started: dict[int, float] = {}
@@ -281,97 +244,144 @@ def _build_timeline_rows(sess: TrackedSession, *, final: bool = False) -> list[s
         if idx is not None:
             subagent_started[idx] = info["started_at"]
 
-    rows: list[str] = []
-    if hidden_done:
-        plural = "s" if hidden_done != 1 else ""
-        rows.append(f"✅ _{hidden_done} earlier tool{plural}_")
-    for i, (summary, done) in enumerate(visible):
-        idx = vis_offset + i
-        # Commentary keeps its own markdown — it is Claude's prose and meant to
-        # render — inside a blockquote. Tool summaries carry globs and paths, so
-        # they go in a code span where none of it can reformat the card.
-        rows.extend(_quote(text) for text in by_anchor.pop(idx, ()))
+    sections: list[tuple[str, list[str]]] = []
+
+    def _push(kind: str, row: str) -> None:
+        if sections and sections[-1][0] == kind:
+            sections[-1][1].append(row)
+        else:
+            sections.append((kind, [row]))
+
+    for i, (summary, done) in enumerate(history):
+        for text in by_anchor.pop(i, ()):
+            _push("prose", _quote(text))
         if done == "failed":
-            rows.append(f"❌ {_mono(summary)}")
+            _push("run", f"❌ {_mono(summary)}")
         elif done:
-            rows.append(f"✅ {_mono(summary)}")
+            _push("run", f"✅ {_mono(summary)}")
         else:
             display = summary
-            started_at = subagent_started.get(idx)
+            started_at = subagent_started.get(i)
             if started_at:
                 secs = int(time.monotonic() - started_at)
                 if secs >= 60:
                     display = f"{summary} ({secs // 60}m {secs % 60}s)"
                 elif secs >= 2:
                     display = f"{summary} ({secs}s)"
-            rows.append(f"⏳ {_mono(display)}")
-    # Commentary that arrived after the last tool row — the usual place for a
-    # turn's opening line, and for whatever Claude says before finishing.
+            _push("run", f"⏳ {_mono(display)}")
     for slot in sorted(by_anchor):
-        rows.extend(_quote(text) for text in by_anchor[slot])
-    return rows
+        for text in by_anchor[slot]:
+            _push("prose", _quote(text))
+    return sections
+
+
+def _run_placeholder(n: int) -> str:
+    plural = "s" if n != 1 else ""
+    return f"▸ _{n} tool call{plural}_"
+
+
+def _fit_sections(
+    sections: list[tuple[str, list[str]]], reserve_bytes: int,
+) -> tuple[list[str], bool]:
+    """Collapse the timeline until it fits under ``_RICH_LIMIT`` minus
+    ``reserve_bytes`` (header + footer + separators), per the operator's
+    layered policy ("layered-card-shedding"):
+
+    - Fits → everything renders, untouched.
+    - Phase 1: tool RUNS collapse to one-line in-place placeholders,
+      oldest run first, newest (live tail) last — commentary stays.
+    - Phase 2: whole oldest sections are removed one at a time, replaced
+      by a single aggregate marker directly under the header, so what was
+      removed always leaves a visible trace. The newest prose section and
+      the newest run are never removed here — the caller's byte-level
+      tail-keep truncation is the backstop for that pathological case.
+
+    Pure and deterministic: the collapse level derives from content size
+    on every call; nothing is remembered between renders. Returns
+    ``(rows, truncated)`` — ``truncated`` True iff anything was collapsed
+    or removed.
+    """
+    budget = _RICH_LIMIT - reserve_bytes
+
+    def _measure(parts: list[list[str]]) -> int:
+        return len(_ROW_SEP.join(
+            r for rows in parts for r in rows).encode("utf-8"))
+
+    parts = [list(rows) for _, rows in sections]
+    kinds = [k for k, _ in sections]
+    sizes = [len(rows) for _, rows in sections]  # original row counts
+
+    if _measure(parts) <= budget:
+        return [r for rows in parts for r in rows], False
+
+    truncated = True
+    # Phase 1 — collapse runs oldest-first. The NEWEST run is never
+    # collapsed here: it is the live tail the operator is watching, and
+    # for the degenerate single-giant-row case a collapse would vaporize
+    # the only content — the caller's byte-level tail-keep truncation is
+    # the honest tool for that, keeping the newest text visible.
+    all_runs = [i for i, k in enumerate(kinds) if k == "run"]
+    for idx in all_runs[:-1]:
+        parts[idx] = [_run_placeholder(sizes[idx])]
+        if _measure(parts) <= budget:
+            return [r for rows in parts for r in rows], truncated
+
+    # Phase 1b — the newest run is never fully collapsed (it is the live
+    # tail), but it CAN shed its own oldest rows into an in-place count,
+    # exactly the operator's "hide tool calls from above" applied within
+    # one run. At least one real row always stays; a single row too big
+    # even alone falls through to the byte backstop.
+    if all_runs:
+        lr = all_runs[-1]
+        original = parts[lr]
+        for k in range(1, len(original)):
+            parts[lr] = [_run_placeholder(k)] + original[k:]
+            if _measure(parts) <= budget:
+                return [r for rows in parts for r in rows], truncated
+        parts[lr] = original if len(original) == 1 else (
+            [_run_placeholder(len(original) - 1), original[-1]]
+        )
+
+    # Phase 2 — remove whole sections oldest-first behind one marker.
+    hidden_prose = 0
+    hidden_tools = 0
+    hidden_sections = 0
+    start = 0
+    last_prose = max((i for i, k in enumerate(kinds) if k == "prose"),
+                     default=-1)
+    while start < len(parts):
+        # Never remove the newest prose section or the final (live) run.
+        if start == last_prose or start >= len(parts) - 1:
+            break
+        if kinds[start] == "prose":
+            hidden_prose += 1
+        else:
+            hidden_tools += sizes[start]
+        hidden_sections += 1
+        start += 1
+        marker = _phase2_marker(hidden_sections, hidden_prose, hidden_tools)
+        if _measure([[marker]] + parts[start:]) <= budget:
+            return ([marker] + [r for rows in parts[start:] for r in rows],
+                    truncated)
+    marker_rows = ([[_phase2_marker(hidden_sections, hidden_prose,
+                                    hidden_tools)]]
+                   if hidden_sections else [])
+    return ([r for rows in marker_rows + parts[start:] for r in rows],
+            truncated)
+
+
+def _phase2_marker(sections_n: int, prose_n: int, tools_n: int) -> str:
+    s_pl = "s" if sections_n != 1 else ""
+    c_pl = "ies" if prose_n != 1 else "y"
+    t_pl = "s" if tools_n != 1 else ""
+    return (f"▸ _{sections_n} earlier step{s_pl} hidden — {prose_n} "
+            f"commentar{c_pl} · {tools_n} tool call{t_pl}_")
 
 
 def _assemble_card(header: str, body: str) -> str:
     """Join the card's parts. A blank line between them: Telegram's rich
     markdown collapses a single newline into a space."""
     return f"{header}\n\n{body}" if body else header
-
-
-def _shed_tool_rows(rows: list[str], header: str) -> list[str]:
-    """Drop the oldest tool rows until the card fits the byte ceiling.
-
-    Only for the finished card. Commentary is never shed: the prose is the part
-    worth re-reading, while tool rows are the part that grows without bound.
-    Returns the rows unchanged when they already fit, and returns whatever is
-    left when only commentary remains — the caller's byte-level truncation is
-    the backstop for that case.
-    """
-    kept = list(rows)
-    shed = 0
-    while True:
-        # Only tool rows are ever shed, so they all came from at or after the
-        # first tool row. Putting the marker there keeps the opening prose
-        # above it, where it happened.
-        idx = next(
-            (i for i, r in enumerate(kept) if not r.startswith(_QUOTE_MARK)),
-            len(kept),
-        )
-        out = list(kept)
-        if shed:
-            plural = "s" if shed != 1 else ""
-            out.insert(idx, f"✅ _{shed} earlier tool{plural}_")
-        body = _ROW_SEP.join(out)
-        if len(_assemble_card(header, body).encode("utf-8")) <= _RICH_LIMIT:
-            return out
-        if idx == len(kept):
-            return out  # nothing but commentary left
-        kept.pop(idx)
-        shed += 1
-
-
-def _waiting_header(sess: TrackedSession) -> str:
-    """The header for a job with background work still open (design.md
-    "model Claude Code background-agent jobs").
-
-    Exact format (entrypoints.md): ``"🔄 **{label}** · waiting on
-    background work · {N} agent{s}[ ({types})][ · {elapsed}]"``. ``{N}`` is
-    ``len(sess.active_subagents)``; the parenthetical type list is present
-    only for 1-3 distinct types, each markdown-escaped, comma-joined,
-    sorted; ``{elapsed}`` is computed from ``sess.busy_started_at`` — the
-    job's ORIGINAL anchor, never re-stamped by a background re-entry — and
-    omitted only when that anchor is falsy (should not occur in practice).
-    """
-    header = (f"🔄 **{_md_escape(sess.label)}** · waiting on background work "
-              f"· {_agent_phrase(sess)}")
-    if sess.busy_started_at:
-        elapsed_s = max(0, int(time.monotonic() - sess.busy_started_at))
-        if elapsed_s >= 60:
-            elapsed = f"{elapsed_s // 60}m {elapsed_s % 60}s"
-        else:
-            elapsed = f"{elapsed_s}s"
-        header += f" · {elapsed}"
-    return header
 
 
 def _agent_phrase(sess: TrackedSession) -> str:
@@ -393,6 +403,21 @@ def _agent_phrase(sess: TrackedSession) -> str:
     return phrase
 
 
+def _waiting_header(sess: TrackedSession) -> str:
+    """The header for a job with background work still open (design.md
+    "model Claude Code background-agent jobs")."""
+    header = (f"🔄 **{_md_escape(sess.label)}** · waiting on background work "
+              f"· {_agent_phrase(sess)}")
+    if sess.busy_started_at:
+        elapsed_s = max(0, int(time.monotonic() - sess.busy_started_at))
+        if elapsed_s >= 60:
+            elapsed = f"{elapsed_s // 60}m {elapsed_s % 60}s"
+        else:
+            elapsed = f"{elapsed_s}s"
+        header += f" · {elapsed}"
+    return header
+
+
 def _waiting_footer(sess: TrackedSession) -> str:
     """The waiting card's LAST line — the one position Telegram always
     shows when the card is the newest message ("one response per
@@ -412,10 +437,10 @@ def _waiting_footer(sess: TrackedSession) -> str:
     return line
 
 
-def build_stream_card(
+def build_stream_card_ex(
     sess: TrackedSession, verb: str, *, final: bool = False,
     waiting: bool = False,
-) -> str:
+) -> tuple[str, bool]:
     """Build the streaming busy-card markdown. Pure: no I/O, no mutation.
 
     ``final`` builds the finished card left behind after the turn: uncapped
@@ -430,7 +455,12 @@ def build_stream_card(
     card); ``final`` wins if both are somehow passed, since the settled
     card is the more truthful state once composed together.
 
-    Returns a string that is always ≤ 32 768 UTF-8 bytes.
+    Returns ``(card, hid_something)`` — the card string (always ≤ 32 768
+    UTF-8 bytes) and whether ANY collapse, removal, or byte truncation was
+    applied ("layered-card-shedding" requirement 2: the renderer reports
+    truncation; callers never re-derive it). The plain
+    :func:`build_stream_card` wrapper keeps the historical str-only
+    signature for every existing call site and test.
     """
     if waiting and not final:
         header = _waiting_header(sess)
@@ -471,28 +501,31 @@ def build_stream_card(
         if parts:
             header += " · " + " · ".join(parts)
 
-    rows = _build_timeline_rows(sess, final=final)
-    if final:
-        rows = _shed_tool_rows(rows, header)
+    footer = _waiting_footer(sess) if (waiting and not final) else ""
+
+    # Reserve: header + the "\n\n" joins around body and footer, so the
+    # fitter's budget is what the BODY may actually use.
+    reserve = len(header.encode("utf-8")) + len(_ROW_SEP.encode("utf-8"))
+    if footer:
+        reserve += len(footer.encode("utf-8")) + len(_ROW_SEP.encode("utf-8"))
+
+    sections = _build_sections(sess, final=final)
+    rows, hid_something = _fit_sections(sections, reserve)
     body = _ROW_SEP.join(rows)
 
-    if waiting and not final:
+    if footer:
         # Pinned as the body's LAST element: the head-drop truncation
         # below keeps the tail, so this line survives every render and
         # stays the card's final visible line ("one response per
         # background job" requirement 2).
-        footer = _waiting_footer(sess)
         body = f"{body}{_ROW_SEP}{footer}" if body else footer
 
     raw = _assemble_card(header, body)
 
-    # ── Truncation: drop the head of the body if over the byte ceiling ──
+    # ── Byte backstop: drop the head of the body if somehow still over ──
     encoded = raw.encode("utf-8")
-    if len(encoded) <= _RICH_LIMIT:
-        return raw
-
-    if body:
-        # Compute how many bytes we can spare for the body.
+    if len(encoded) > _RICH_LIMIT and body:
+        hid_something = True
         skeleton = _assemble_card(header, "…")
         skeleton_bytes = len(skeleton.encode("utf-8"))
         body_budget = _RICH_LIMIT - skeleton_bytes
@@ -500,14 +533,60 @@ def build_stream_card(
             body_bytes = body.encode("utf-8")
             if len(body_bytes) > body_budget:
                 # Drop from the head (oldest text).
-                truncated = body_bytes[-body_budget:].decode("utf-8", errors="ignore")
-                body = "…" + truncated
+                kept_tail = body_bytes[-body_budget:].decode("utf-8", errors="ignore")
+                body = "…" + kept_tail
             raw = _assemble_card(header, body)
         else:
             # Header alone exceeds the limit — drop the body entirely.
             raw = header
-    return raw
+    return raw, hid_something
 
+
+
+def build_stream_card(
+    sess: TrackedSession, verb: str, *, final: bool = False,
+    waiting: bool = False,
+) -> str:
+    """Historical str-returning wrapper over :func:`build_stream_card_ex`."""
+    card, _ = build_stream_card_ex(sess, verb, final=final, waiting=waiting)
+    return card
+
+
+def build_full_log(
+    label: str,
+    tool_history: list,
+    commentary: list,
+    answer: str,
+) -> str:
+    """The complete plain-text play-by-play for the full-log attachment
+    ("layered-card-shedding" requirement 2): every commentary block and
+    every tool row still held in memory, chronological, then the full
+    answer. Pure — operates on snapshots the caller captured BEFORE the
+    close path reset the streaming state."""
+    by_anchor: dict[int, list[str]] = {}
+    for anchor, text in commentary:
+        slot = min(max(anchor, 0), len(tool_history))
+        by_anchor.setdefault(slot, []).append(text)
+    lines: list[str] = [
+        f"{label} — complete play-by-play",
+        f"(memory holds the most recent {len(tool_history)} tool rows; "
+        "older rows of very long turns may already be gone)",
+        "",
+    ]
+    for i, (summary, done) in enumerate(tool_history):
+        for text in by_anchor.pop(i, ()):
+            lines.append("")
+            lines.append(f"> {text}")
+            lines.append("")
+        mark = "x" if done == "failed" else ("v" if done else "…")
+        lines.append(f"[{mark}] {summary}")
+    for slot in sorted(by_anchor):
+        for text in by_anchor[slot]:
+            lines.append("")
+            lines.append(f"> {text}")
+    if answer:
+        lines += ["", "=" * 40, "FINAL ANSWER", "=" * 40, "", answer]
+    return "\n".join(lines)
 
 
 class AnimationMixin:
@@ -692,7 +771,13 @@ class AnimationMixin:
             sess._stream_edit_lock = lock
 
         async with lock:
-            markdown = build_stream_card(sess, verb, final=final, waiting=waiting)
+            markdown, hid = build_stream_card_ex(
+                sess, verb, final=final, waiting=waiting,
+            )
+            # The close path reads this to decide the full-log attachment
+            # ("layered-card-shedding" requirement 2) — the renderer
+            # reports truncation, callers never re-derive it.
+            sess.last_card_truncated = hid
             # Dedupe: skip the POST when nothing changed since the last render.
             # Primary guard against the "message is not modified" 400. The
             # final render is exempt — it has to go out even if the text
@@ -982,6 +1067,7 @@ class AnimationMixin:
             sess.job_grace_until = 0.0
             sess.job_reclaim_pending = False
             sess.job_interim_buffer.clear()
+            sess.last_card_truncated = False
             sess.busy_started_at = time.monotonic()
             # Seed streaming state for this turn.  stream_offset is set to
             # the current transcript size so the previous turn's text is

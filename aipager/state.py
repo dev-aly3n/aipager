@@ -394,6 +394,12 @@ class TrackedSession:
     # this, which is exactly the mid-continuation case that must be
     # swallowed). Transient, never persisted.
     job_reclaim_pending: bool = False
+    # Whether the most recent card render had to hide anything (collapsed
+    # runs, folded sections, or byte truncation) — stashed by
+    # _edit_busy_rich from build_stream_card_ex's report and read by the
+    # close path to decide the full-log .txt attachment
+    # ("layered-card-shedding" requirement 2). Transient.
+    last_card_truncated: bool = False
     # Interim answers produced while this job's background work was still
     # open, held for the job's SINGLE final message ("one response per
     # background job"): the interim never goes out standalone — it lives

@@ -422,12 +422,15 @@ def test_timeline_commentary_left_unescaped():
 
 
 def test_timeline_collapses_old_tools_into_count():
+    # Contract change ("layered-card-shedding"): fit-driven, not window-
+    # or budget-driven; commentary outlives tool rows.
+    # The old fixed 15-tool visible window is gone: 25 short rows fit the
+    # byte ceiling, so all render and no counter appears.
     sess = _sess()
-    sess.tool_history = [(f"Read: f{i}.py", True) for i in range(20)]
+    sess.tool_history = [(f"Bash: t-{i}", True) for i in range(25)]
     rows = _body(build_stream_card(sess, "Working"))
-    assert rows[0] == "✅ _5 earlier tools_"
-    assert len(rows) == 16  # the note plus 15 visible rows
-    assert rows[1] == "✅ `Read: f5.py`"
+    assert not any("earlier tool" in r for r in rows)
+    assert any("t-0" in r for r in rows) and any("t-24" in r for r in rows)
 
 
 def test_timeline_hidden_commentary_reanchors_to_window_top():
@@ -461,28 +464,31 @@ def test_timeline_subagent_elapsed_suffix_preserved():
 
 
 def test_timeline_commentary_budget_drops_oldest_blocks():
+    # Contract change ("layered-card-shedding"): fit-driven, not window-
+    # or budget-driven; commentary outlives tool rows.
+    # The old per-render commentary character budget is gone: many blocks
+    # that fit the byte ceiling ALL render.
     sess = _sess()
-    sess.stream_commentary = [
-        (0, "old " * 100),   # 400 chars
-        (0, "mid " * 100),   # 400 chars
-        (0, "new block"),
-    ]
-    rows = _body(build_stream_card(sess, "Working"))
-    joined = "\n".join(rows)
-    assert "new block" in joined
-    assert "old " not in joined  # oldest dropped first
+    sess.tool_history = [(f"Bash: t-{i}", True) for i in range(6)]
+    sess.stream_commentary = [(i, f"BLOCK-{i} " + "w" * 300) for i in range(6)]
+    card = build_stream_card(sess, "Working")
+    for i in range(6):
+        assert f"BLOCK-{i}" in card
 
 
 def test_timeline_newest_block_always_survives():
+    # Contract change ("layered-card-shedding"): fit-driven, not window-
+    # or budget-driven; commentary outlives tool rows.
+    # Even in phase 2 (sections folding into the hidden marker), the
+    # newest commentary block always survives.
     sess = _sess()
-    sess.stream_commentary = [(0, "z" * 5_000)]
-    rows = _body(build_stream_card(sess, "Working"))
-    assert len(rows) == 1
-    assert rows[0].startswith("> zzz")
-    assert rows[0].endswith("…")
+    n = 50
+    sess.tool_history = [(f"Bash: t-{i}", True) for i in range(n)]
+    sess.stream_commentary = [(i, f"BLOCK-{i:02d} " + "v" * 1500) for i in range(n)]
+    card = build_stream_card(sess, "Working")
+    assert len(card.encode("utf-8")) <= 32768
+    assert f"BLOCK-{n-1:02d}" in card
 
-
-# ── _edit_busy_rich via AnimationMixin ────────────────────────────────────────
 
 def test_edit_busy_rich_skips_post_when_markdown_identical(mk_bot, run_async, monkeypatch):
     """Dedupe: identical consecutive renders produce only one HTTP call."""
@@ -758,14 +764,15 @@ def test_animate_compact_never_calls_edit_message_text_rich(
 
 
 def test_card_body_capped_to_recent_window():
-    """A long turn must not grow the card into a wall of prose."""
+    # Contract change ("layered-card-shedding"): fit-driven, not window-
+    # or budget-driven; commentary outlives tool rows.
+    # The only cap is the byte ceiling; a card over it is brought under it
+    # by the layered policy, never by a fixed recent-N window.
     sess = _sess()
-    sess.stream_commentary = [(0, "alpha " * 400)]  # 2400 chars
+    sess.tool_history = [(f"Bash: {'u' * 120}-{i}", True) for i in range(400)]
     card = build_stream_card(sess, "Working")
-    body = card.split("\n\n")[1]
-    assert len(body) < 700
-    assert body.endswith("…")
-    assert card.rstrip().endswith(card[card.index("⏳"):].rstrip())
+    assert len(card.encode("utf-8")) <= 32768
+    assert "tool call" in card  # collapsed in place, not silently gone
 
 
 def test_card_short_body_not_truncated():
@@ -836,10 +843,20 @@ def test_final_card_keeps_every_tool_row():
 
 
 def test_live_card_still_collapses_old_tool_rows():
-    """The live cap is untouched — only the finished card is uncapped."""
+    # Contract change ("layered-card-shedding"): fit-driven, not window-
+    # or budget-driven; commentary outlives tool rows.
+    # Phase 1 on the LIVE card: over the ceiling, the oldest run collapses
+    # into an in-place placeholder while the newest rows stay visible.
     sess = _sess()
-    sess.tool_history = [(f"Read: f{i}.py", True) for i in range(40)]
-    assert "earlier tools" in build_stream_card(sess, "Working")
+    n = 400
+    sess.tool_history = [(f"Bash: {'l' * 120}-{i}", True) for i in range(n)]
+    sess.stream_commentary = [(n // 2, "MIDWAY-PROSE")]
+    sess.stream_hook_live = True
+    card = build_stream_card(sess, "Working")
+    assert len(card.encode("utf-8")) <= 32768
+    assert "tool call" in card
+    assert "MIDWAY-PROSE" in card
+    assert f"-{n-1}" in card  # the newest row is visible
 
 
 def test_final_card_keeps_every_commentary_block():
@@ -852,11 +869,18 @@ def test_final_card_keeps_every_commentary_block():
 
 
 def test_live_card_still_drops_oldest_commentary():
+    # Contract change ("layered-card-shedding"): fit-driven, not window-
+    # or budget-driven; commentary outlives tool rows.
+    # Phase 2 only: oldest commentary folds into the single hidden marker
+    # once even collapsed runs cannot fit — never before.
     sess = _sess()
-    sess.stream_commentary = [(0, "block %d %s" % (i, "x" * 200)) for i in range(6)]
+    n = 60
+    sess.tool_history = [(f"Bash: t-{i}", True) for i in range(n)]
+    sess.stream_commentary = [(i, f"BLOCK-{i:02d} " + "k" * 1200) for i in range(n)]
     card = build_stream_card(sess, "Working")
-    assert "block 0 " not in card
-    assert "block 5 " in card
+    assert "hidden" in card          # the aggregate marker exists
+    assert "BLOCK-00" not in card    # oldest folded away
+    assert f"BLOCK-{n-1:02d}" in card
 
 
 def test_final_card_footer_is_settled_not_hourglass():
@@ -868,19 +892,19 @@ def test_final_card_footer_is_settled_not_hourglass():
 
 
 def test_final_card_sheds_oldest_tools_keeping_commentary():
-    """Over the ceiling, tool rows go oldest-first; prose always survives."""
+    # Contract change ("layered-card-shedding"): fit-driven, not window-
+    # or budget-driven; commentary outlives tool rows.
+    # The FINAL card uses the same layered policy: runs collapse in place,
+    # commentary stays.
     sess = _sess()
-    sess.tool_history = [(f"Bash: {i} " + "y" * 2000, True) for i in range(30)]
-    sess.stream_commentary = [(0, "OPENINGPROSE"), (30, "CLOSINGPROSE")]
-
+    n = 400
+    sess.tool_history = [(f"Bash: {'f' * 120}-{i}", True) for i in range(n)]
+    sess.stream_commentary = [(0, "OPENING-PROSE"), (n // 2, "MID-PROSE")]
     card = build_stream_card(sess, "Done", final=True)
-
-    assert len(card.encode("utf-8")) <= 32_768
-    assert "OPENINGPROSE" in card
-    assert "CLOSINGPROSE" in card
-    assert "Bash: 0 " not in card, "oldest tool row survived instead of being shed"
-    assert "Bash: 29 " in card, "newest tool row was shed"
-    assert "earlier tools" in card, "shed rows were not accounted for"
+    assert len(card.encode("utf-8")) <= 32768
+    assert "OPENING-PROSE" in card and "MID-PROSE" in card
+    assert "tool call" in card
+    assert "earlier tool" not in card
 
 
 def test_final_card_shedding_is_a_no_op_when_it_already_fits():
@@ -939,17 +963,17 @@ def test_final_edit_bypasses_the_dedupe(mk_bot, run_async, monkeypatch):
 
 
 def test_final_card_shed_marker_sits_below_the_opening_prose():
-    """Chronology holds even under shedding: prose that opened the turn stays
-    above the tools it introduced, shed or not."""
+    # Contract change ("layered-card-shedding"): fit-driven, not window-
+    # or budget-driven; commentary outlives tool rows.
+    # A collapsed run's placeholder sits at the run's own position — BELOW
+    # the prose that introduced it, never above.
     sess = _sess()
-    sess.tool_history = [(f"Bash: {i} " + "y" * 2000, True) for i in range(30)]
-    sess.stream_commentary = [(0, "OPENINGPROSE")]
-    rows = _rows(build_stream_card(sess, "Done", final=True))
-    assert rows[0] == "> OPENINGPROSE"
-    assert "earlier tools" in rows[1]
+    n = 400
+    sess.tool_history = [(f"Bash: {'m' * 120}-{i}", True) for i in range(n)]
+    sess.stream_commentary = [(0, "OPENING-PROSE")]
+    card = build_stream_card(sess, "Done", final=True)
+    assert card.index("OPENING-PROSE") < card.index("tool call")
 
-
-# ── Anchoring comes from the transcript, not from hook timing ────────────────
 
 def _write_entry(path, content: list[dict], mode="a") -> None:
     entry = {"type": "assistant",
@@ -1322,7 +1346,9 @@ def test_two_tool_introducing_messages_then_an_answer(mk_bot, run_async):
 
 def test_trimming_the_history_shifts_the_card_anchors():
     """tool_history is trimmed from the front at TOOL_HISTORY_CAP; anchors
-    index into it, so they must move with it or prose drifts upward."""
+    index into it, so they must move with it or prose drifts upward.
+    (Contract change "layered-card-shedding": no "earlier tools" counter —
+    the shifted prose simply renders first, above the visible rows.)"""
     from aipager.state import TOOL_HISTORY_CAP
     sess = _sess()
     sess.stream_commentary = [(0, "opening line")]
@@ -1334,17 +1360,9 @@ def test_trimming_the_history_shifts_the_card_anchors():
     assert len(sess.tool_history) == TOOL_HISTORY_CAP
     assert sess.stream_anchor_floor >= 0
     assert sess.stream_commentary[0][0] == 0
-    # It re-anchors to the top of the visible window, just under the
-    # "N earlier tools" note — never below the rows it opened the turn above.
     rows = _body(build_stream_card(sess, "Working"))
-    assert "earlier tools" in rows[0]
-    assert rows[1] == "> opening line"
+    assert rows[0] == "> opening line"
 
-
-# ── build_stream_card(waiting=True) — design.md "model Claude Code
-# background-agent jobs". Exact header format (entrypoints.md):
-# "🔄 **{label}** · waiting on background work · {N} agent{s}[ ({types})]
-# [ · {elapsed}]"
 
 def _header(card: str) -> str:
     return card.split("\n\n", 1)[0]
@@ -1458,3 +1476,77 @@ def test_waiting_footer_during_grace_says_finishing_up():
     assert footer.startswith("⏳")
     assert "finishing up" in footer
     assert "0 agent" not in card
+
+
+# ---- layered shedding ("layered-card-shedding" /deliver) -------------------
+
+def _many_tools_sess(n_tools=30, commentary=None):
+    sess = _sess("hiva")
+    sess.tool_history = [(f"Bash: step-{i}", True) for i in range(n_tools)]
+    sess.stream_hook_live = True
+    sess.stream_commentary = commentary or []
+    return sess
+
+
+def test_all_tools_visible_when_under_ceiling():
+    """Fit-driven, not window-driven: 30 short tool rows are far under the
+    byte ceiling, so ALL of them render — no "earlier tools" counter."""
+    sess = _many_tools_sess(30)
+    card = build_stream_card(sess, "Working")
+    assert "earlier tool" not in card
+    assert "step-0" in card and "step-29" in card
+
+
+def test_commentary_outlives_tool_rows_under_pressure():
+    """Phase 1: over the ceiling, tool runs collapse to in-place
+    placeholders OLDEST first while every commentary block stays."""
+    n = 400
+    commentary = [(100, "FIRST-NARRATIVE " + "a" * 400),
+                  (300, "SECOND-NARRATIVE " + "b" * 400)]
+    sess = _many_tools_sess(n, commentary)
+    sess.tool_history = [(f"Bash: {'x' * 100}-{i}", True) for i in range(n)]
+    card = build_stream_card(sess, "Working")
+    assert len(card.encode("utf-8")) <= 32768
+    assert "FIRST-NARRATIVE" in card
+    assert "SECOND-NARRATIVE" in card
+    assert "tool call" in card  # in-place placeholder
+    assert "earlier tool" not in card  # the old top counter is gone
+
+
+def test_phase1_placeholders_sit_between_their_commentaries():
+    """A collapsed run's placeholder stays at the run's position: the run
+    between C1 and C2 collapses into a line between C1 and C2."""
+    n = 400
+    commentary = [(0, "OPENING-PROSE"), (200, "MIDDLE-PROSE")]
+    sess = _many_tools_sess(n, commentary)
+    sess.tool_history = [(f"Bash: {'y' * 100}-{i}", True) for i in range(n)]
+    card = build_stream_card(sess, "Working")
+    i_open = card.index("OPENING-PROSE")
+    i_mid = card.index("MIDDLE-PROSE")
+    # a placeholder between the two prose blocks
+    between = card[i_open:i_mid]
+    assert "tool call" in between
+
+
+def test_phase2_marker_under_header_when_prose_alone_overflows():
+    """Phase 2: when even all-collapsed runs + commentary exceed the
+    ceiling, whole oldest sections fold into ONE marker line right under
+    the header, and the NEWEST commentary always survives."""
+    n = 60
+    blocks = [(i, f"PROSE-{i:03d} " + "z" * 1200) for i in range(0, n)]
+    sess = _many_tools_sess(n, blocks)
+    card = build_stream_card(sess, "Working")
+    assert len(card.encode("utf-8")) <= 32768
+    assert "hidden" in card  # the aggregate marker
+    assert f"PROSE-{n-1:03d}" in card  # newest narrative survives
+    # marker is at the top, right after the header line
+    header_end = card.index("\n\n")
+    after_header = card[header_end:header_end + 200]
+    assert "hidden" in after_header
+
+
+def test_layered_render_is_deterministic():
+    sess = _many_tools_sess(80, [(40, "SAME-PROSE " + "q" * 300)])
+    a = build_stream_card(sess, "Working")
+    b = build_stream_card(sess, "Working")
+    assert a == b

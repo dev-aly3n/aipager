@@ -881,3 +881,71 @@ def test_composed_overflow_keeps_the_final_answer_visible(
     assert len(visible.encode("utf-8")) <= 32768
     assert "FINAL-ANSWER-" in visible  # the answer survives in the preview
     bot._app.bot.send_document.assert_called_once()  # full text attached
+
+
+def _drive_plain_turn(bot, recv, run_async, tp, answer, n_tools=0, commentary=None):
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          prompt="[via Telegram msg=1]\ngo", transcript_path=str(tp))
+    sess = bot.registry.get(SESSION)
+    sess.scope_chat_id = -1001
+    for i in range(n_tools):
+        sess.record_tool(f"Bash: {'t' * 250}-{i}", True)
+    if commentary:
+        sess.stream_commentary = list(commentary)
+        sess.stream_hook_live = True
+    _send(recv, run_async, hook_event_name="Stop",
+          last_assistant_message=answer, transcript_path=str(tp))
+    return sess
+
+
+def _attachment_harness(mk_bot, monkeypatch):
+    bot = mk_bot()
+    recv = hr.HookReceiver(bot.registry, bot.notify)
+    docs = []
+    async def _send_document(chat_id, document=None, filename=None, **kw):
+        docs.append({"filename": filename, "content": document.read().decode()})
+        return MagicMock(message_id=9200)
+    bot._app.bot.send_document = AsyncMock(side_effect=_send_document)
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=9201))
+    bot._app.bot.send_chat_action = AsyncMock(return_value=None)
+    bot._app.bot.delete_message = AsyncMock(return_value=None)
+    async def _send_rich(chat_id, content, **kw):
+        return {"message_id": 9202}
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
+    async def _edit_rich_transport(chat_id, msg_id, markdown, **kwargs):
+        return {}
+    monkeypatch.setattr("aipager.bot.animation.edit_message_text_rich",
+                        _edit_rich_transport)
+    monkeypatch.setattr("aipager.preferences.KEEP_FINISHED_CARD", True)
+    return bot, recv, docs
+
+
+def test_full_log_attached_when_final_card_hid_rows(
+    mk_bot, run_async, tmp_path, monkeypatch,
+):
+    """"layered-card-shedding" requirement 2: a final card that had to
+    collapse or remove anything ships the complete play-by-play as ONE
+    .txt — commentary, tool rows, and the answer all inside."""
+    bot, recv, docs = _attachment_harness(mk_bot, monkeypatch)
+    tp = tmp_path / "t.jsonl"
+    _write_transcript(tp, with_continuation=False)
+    commentary = [(200, "NARRATIVE-BLOCK " + "c" * 200)]
+    _drive_plain_turn(bot, recv, run_async, tp, "short answer",
+                      n_tools=400, commentary=commentary)
+
+    assert len(docs) == 1
+    assert docs[0]["filename"] == f"{SESSION}_full_log.txt"
+    body = docs[0]["content"]
+    assert "NARRATIVE-BLOCK" in body
+    assert "-399" in body          # every tool row, even hidden ones
+    assert "short answer" in body  # and the answer
+
+
+def test_no_attachment_on_a_small_clean_turn(
+    mk_bot, run_async, tmp_path, monkeypatch,
+):
+    bot, recv, docs = _attachment_harness(mk_bot, monkeypatch)
+    tp = tmp_path / "t.jsonl"
+    _write_transcript(tp, with_continuation=False)
+    _drive_plain_turn(bot, recv, run_async, tp, "tiny answer", n_tools=3)
+    assert docs == []

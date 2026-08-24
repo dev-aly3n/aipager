@@ -190,8 +190,13 @@ def test_merged_layout_size_fallback_delivers_full_answer_via_replace(
     bot._app.bot.delete_message.assert_awaited_once()
     bot._app.bot.send_message.assert_awaited_once()  # header (overflow note)
     assert "sendRichMessage" in [m for m, _p in rich_calls]
-    # The untruncated answer went out as a .txt attachment.
-    assert captured_doc["bytes"].decode("utf-8") == big_answer
+    # The untruncated answer went out inside the full-log .txt
+    # (contract change "layered-card-shedding": the attachment is the
+    # complete play-by-play, answer included — a superset of the old
+    # answer-only file).
+    _body_txt = captured_doc["bytes"].decode("utf-8")
+    assert big_answer in _body_txt
+    assert "complete play-by-play" in _body_txt
     assert sess.busy_msg_id is None
 
 

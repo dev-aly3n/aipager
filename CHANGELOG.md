@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- The busy card now sheds in layers instead of a fixed window: everything
+  renders until the byte ceiling; over it, tool runs collapse oldest-first
+  into in-place "▸ N tool calls" lines between the commentary they sat
+  between (the newest run only sheds its own oldest rows, never vanishes);
+  only when even that cannot fit do whole oldest sections fold into a
+  single "N earlier steps hidden" marker under the header. Commentary —
+  the narrative — always outlives tool rows, and the newest commentary
+  never disappears. The old fixed 15-tool window, the commentary character
+  budget, and the "N earlier tools" top counter are gone.
+- Whenever the finished card had to hide anything, or the answer
+  overflowed, the close now attaches one {label}_full_log.txt with the
+  complete chronological play-by-play (every commentary block and every
+  tool row still in memory) plus the full answer — superseding the old
+  answer-only response.txt. Clean short turns attach nothing.
+
+### Changed
 - Background jobs now send exactly ONE response — the final result. Interim
   answers no longer go out as standalone messages (a long interim pushed
   the busy card and its waiting status off-screen, making the chat bottom
