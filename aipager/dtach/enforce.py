@@ -34,6 +34,24 @@ _BLOCK_MARKER = "aipager safety policy"
 # sticky-block scan either. A private module constant, deliberately not
 # shared via import with hook_receiver.py / notify_hook.py's own copies —
 # see entrypoints.md's "NOT exported" note.
+#
+# Scope of this guarantee (review-1#rev-iter1-002): the skip below is a
+# raw prefix match on the transcript entry's own text, with no signature
+# or session-side correlation to the real task-notification Claude Code
+# generates. In SCOPED/TEAM mode this is safe by construction —
+# `session_ops._inject_prompt` always prepends the "[via Telegram ·
+# @label ...]\n" marker before a user's own free-text body, and that
+# marker always wins the `startswith`/`lstrip().startswith()` checks here
+# and in hook_receiver.py/notify_hook.py — so a Telegram user typing a
+# message that literally starts with "<task-notification>" cannot spoof
+# a continuation. In PERSONAL mode (`_prompt_marker` returns `""` — no
+# team configured, the common default), a user-typed message starting
+# with this literal string is genuinely indistinguishable from a real
+# continuation. This is accepted, not a new hole: personal mode has no
+# role/bypass separation to leak in the first place (no snapshot merge,
+# no `bypass_safety` at stake), matching design.md's own success-criteria
+# language, which is scoped to "a session whose real prompt carried the
+# Telegram marker."
 _TASK_NOTIFICATION_PREFIX = "<task-notification>"
 
 

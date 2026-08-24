@@ -54,6 +54,16 @@ _DEBUG = os.environ.get("AIPAGER_DEBUG") == "1"
 # module constant, deliberately not imported from aipager.dtach.hook_receiver
 # / aipager.dtach.enforce's own copies — this hook stays stdlib-only to
 # hold its <5ms budget (see the SOCKET_PATH comment above).
+#
+# Scope (review-1#rev-iter1-002): this is a raw prefix match, not a
+# signed/correlated check. Safe by construction in scoped/team mode
+# (`session_ops._inject_prompt` always prepends the Telegram marker
+# first, so a spoofed user prompt can never win the match here); in
+# personal mode (no team configured) a user-typed message literally
+# starting with this string is indistinguishable from a real
+# continuation — accepted, since personal mode has no role/snapshot
+# separation to leak. See enforce.py's own copy of this note for the
+# full reasoning.
 _TASK_NOTIFICATION_PREFIX = "<task-notification>"
 
 
