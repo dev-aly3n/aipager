@@ -8,6 +8,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- A background-job "waiting" card: when a Claude Code turn ends its
+  foreground work but launched a subagent that is still running in the
+  background, the busy card now stays live, edits in place to
+  `🔄 … waiting on background work · N agent(s) (types) · elapsed`
+  (Stop still tappable, timer still ticking), and resolves to exactly one
+  `✅ Finished` card — anchored at the job's original prompt — once no
+  agents remain open. A subagent that dies without a `SubagentStop` no
+  longer waits forever: the existing 1h subagent TTL sweep now closes the
+  job with an honest `⚠️ Finished (background agent lost after …)` card.
+
+### Fixed
+- No more duplicate interim answers: a repeated idle notification with
+  byte-identical content while a background job is still open is now
+  delivered at most once (content-hash dedup), instead of posting the
+  same answer twice on a stray extra `Stop`/`Notification` event.
+- The daemon no longer declares "Finished" the moment a turn's foreground
+  work ends while a background agent it launched is still running — that
+  false-positive card (with a duration anchored at the wrong turn) is
+  replaced by the waiting card above; the real `Finished` now fires only
+  once no background agents remain open.
+- Closed a safety/attribution leak on the self-triggered
+  `<task-notification>` continuation turn Claude Code fires when a
+  background agent finishes: it no longer resets `last_prompt_origin` to
+  "terminal", no longer gets misread as the governing prompt by the
+  PreToolUse enforcement scan (which could unrestrict a Telegram-originated
+  job's continuation), and no longer triggers the hook's queue-pickup
+  matcher — so the job's pinned policy snapshot is never overwritten with
+  the unrestricted floor mid-job.
+
+### Added
 - `/status` and the session dashboard now show a live `Agents` row while
   subagents are running — the chat half of the subagent visibility the
   busy message already had. The dashboard adds a type breakdown when
