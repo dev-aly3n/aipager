@@ -436,6 +436,67 @@ def test_stop_session_core_omits_discard_when_no_notes_outstanding(
     assert keys == ["Escape", "Escape"]
 
 
+# ---- design.md "model Claude Code background-agent jobs" ----------------
+
+def test_stop_session_core_succeeds_while_job_background_open(
+    mk_bot, run_async, monkeypatch,
+):
+    """A session waiting on background work reads as IDLE, not BUSY —
+    the gate must still admit Stop (requirement 1: "Stop still tappable"),
+    where today's refusal-only-on-status check would say "is not busy"."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    sess.active_subagents["a1"] = {"type": "Explore", "started_at": time.monotonic()}
+    bot.registry._sessions["claude-jim"] = sess
+
+    monkeypatch.setattr("aipager.dtach.inject.send_keys",
+                        AsyncMock(return_value=True))
+    async def _no_sleep(_): pass
+    monkeypatch.setattr("aipager.bot.session_ops.asyncio.sleep", _no_sleep)
+    bot._stop_animation = MagicMock()
+    bot._edit_busy_raw = AsyncMock()
+
+    outcome = run_async(bot._stop_session_core(sess))
+    assert outcome.ok is True
+    assert sess.status == Status.IDLE
+
+
+def test_stop_session_core_clears_active_subagents(mk_bot, run_async, monkeypatch):
+    """Genuinely ends the job — active_subagents must not survive a
+    successful Stop, or job_background_open() would stay true underneath
+    the now-"Stopped" card."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    sess.active_subagents["a1"] = {"type": "Explore", "started_at": time.monotonic()}
+    bot.registry._sessions["claude-jim"] = sess
+
+    monkeypatch.setattr("aipager.dtach.inject.send_keys",
+                        AsyncMock(return_value=True))
+    async def _no_sleep(_): pass
+    monkeypatch.setattr("aipager.bot.session_ops.asyncio.sleep", _no_sleep)
+    bot._stop_animation = MagicMock()
+    bot._edit_busy_raw = AsyncMock()
+
+    run_async(bot._stop_session_core(sess))
+    assert sess.active_subagents == {}
+    assert sess.job_background_open() is False
+
+
+def test_stop_session_core_still_refuses_plain_idle(mk_bot, run_async, monkeypatch):
+    """Unchanged: a genuinely idle session (no background job open) is
+    still refused — the gate widened, it didn't loosen wholesale."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    bot.registry._sessions["claude-jim"] = sess
+
+    async def _boom(*args, **kwargs):
+        raise AssertionError("inject.send_keys must not run")
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", _boom)
+
+    outcome = run_async(bot._stop_session_core(sess))
+    assert outcome.ok is False
+
+
 def test_kill_session_core_returns_killed(mk_bot, run_async, monkeypatch):
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
