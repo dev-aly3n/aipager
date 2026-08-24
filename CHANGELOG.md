@@ -19,9 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   job's interim and final replies reach the user as ONE message, so it
   should not promise to send results separately; if it says so anyway, the
   orphaned "I'll send it when it lands" line is stripped when the interim
-  is composed into that single message (conservatively: short lines only,
-  needing both a first-person delivery phrase and the work it defers to,
-  and never emptying the text).
+  is composed into that single message — narrowly: only a short, ordinary
+  prose line that ends its paragraph, carries both a first-person delivery
+  phrase and the work it defers to, and is not a list item, table row,
+  heading, quote or fenced code; never emptying the text.
 - The busy card now sheds in layers instead of a fixed window: everything
   renders until the byte ceiling; over it, tool runs collapse oldest-first
   into in-place "▸ N tool calls" lines between the commentary they sat

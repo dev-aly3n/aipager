@@ -282,7 +282,7 @@ def _fit_sections(
     sections: list[tuple[str, list[str]]], reserve_bytes: int,
 ) -> tuple[list[str], bool]:
     """Collapse the timeline until it fits under ``_RICH_LIMIT`` minus
-    ``reserve_bytes`` (header + footer + separators), per the operator's
+    ``reserve_bytes`` (the status line + its separator), per the operator's
     layered policy ("layered-card-shedding"):
 
     - Fits → everything renders, untouched.
@@ -415,8 +415,7 @@ def _elapsed_str(started_at: float) -> str:
 
 
 def _agent_phrase(sess: TrackedSession) -> str:
-    """Shared "N agent(s) (types)" fragment for the waiting header and
-    footer, so the two can never drift. During the continuation-grace
+    """Shared "N agent(s) (types)" fragment of the waiting status line. During the continuation-grace
     window the table is legitimately EMPTY (the agent finished, the
     wake-up hasn't arrived) — "0 agents still working" would read as
     broken (review rev-iter1-004), so that state says "finishing up"
@@ -755,8 +754,8 @@ class AnimationMixin:
         rows and no Stop button.
 
         ``waiting`` (design.md "model Claude Code background-agent jobs")
-        forwards to :func:`build_stream_card` — the header becomes the
-        background-job waiting presentation while the Stop button and the
+        forwards to :func:`build_stream_card_ex` — the status line becomes
+        the background-job waiting presentation while the Stop button and the
         rest of the edit logic stay exactly as they are for an ordinary
         busy card, since the session genuinely can still be interrupted.
 

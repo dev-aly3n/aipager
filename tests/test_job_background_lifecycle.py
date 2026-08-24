@@ -1002,21 +1002,20 @@ def test_merged_layout_truncated_final_still_attaches_log(
 
 # ---- orphaned delivery promises ("status-line-at-card-bottom") ------------
 
-def _promise_bot(mk_bot):
-    return mk_bot()
-
-
 def test_composed_final_drops_the_orphaned_promise(mk_bot):
     """The observed line — mid-message, not trailing — is stripped when an
     interim is composed into the job's single final message."""
     bot = mk_bot()
+    # Realistic markdown: sections separated by blank lines, which is what
+    # makes the sign-off a paragraph of its own — the shape the strip
+    # requires since it was narrowed (review rev-iter1-001).
     interim = (
-        "📁 aipager — folder & file structure\n"
-        "The repo has 446 tracked files.\n"
+        "📁 aipager — folder & file structure\n\n"
+        "The repo has 446 tracked files.\n\n"
         "The full code briefing (architecture, message flow, safety "
         "mechanisms, gaps) is being compiled by a background analysis "
-        "agent — I'll send it the moment it lands.\n"
-        "🏝️ Canary Islands\n"
+        "agent — I'll send it the moment it lands.\n\n"
+        "🏝️ Canary Islands\n\n"
         "A Spanish autonomous community in the Atlantic."
     )
     out = bot._strip_promise_lines(interim, "omni")
@@ -1049,3 +1048,37 @@ def test_style_text_carries_the_delivery_rule():
     ))
     assert "ONE message" in text
     assert "never promise to send results separately" in text
+
+
+def test_promise_strip_spares_structure_and_fences(mk_bot):
+    """Review rev-iter1-001: a promise dressed as a list item, a table row,
+    a fenced code line, or a sentence buried mid-paragraph is real content
+    describing something — never a sign-off — and must survive."""
+    bot = mk_bot()
+    cases = [
+        "Plan:\n\n- I'll send you the background report when the job "
+        "completes\n- second item\n\nDone.",
+        "| Action | Note |\n|---|---|\n| ship | I'll send background report "
+        "when ready |\n\nEnd.",
+        # Inside a fence AND paragraph-final (blank line follows within the
+        # block), so the fence guard is the only thing protecting it.
+        "Example:\n\n```\nI'll send the results to the agent when analysis "
+        "finishes\n\nmore_code()\n```\n\nEnd.",
+        "The job runs async.\nI'll send the results to the endpoint once the "
+        "analysis finishes.\nThen it exits.\n\nEnd.",
+    ]
+    for text in cases:
+        assert bot._strip_promise_lines(text, "omni") == text, text[:40]
+
+
+def test_promise_strip_still_removes_the_observed_sign_off(mk_bot):
+    """...while the real, paragraph-ending sign-off still goes."""
+    bot = mk_bot()
+    text = (
+        "Structure below.\n\nThe full code briefing is being compiled by a "
+        "background analysis agent — I'll send it the moment it lands.\n\n"
+        "Canary Islands are volcanic."
+    )
+    out = bot._strip_promise_lines(text, "omni")
+    assert "the moment it lands" not in out
+    assert "Structure below." in out and "volcanic" in out

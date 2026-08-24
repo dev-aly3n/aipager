@@ -94,6 +94,10 @@ _PROMISE_FUTURE_RE = re.compile(
     r"|\b(will follow|coming next|follows? (below|next|shortly))\b",
     re.IGNORECASE,
 )
+# Markdown structure: a promise dressed as a list item, table row,
+# heading, quote or code line is far more likely to be real content
+# describing something than a sign-off (review rev-iter1-001).
+_STRUCTURAL_LINE_RE = re.compile(r"\s*([-*+>#|]|\d+[.)]|    )")
 _PROMISE_SUBJECT_RE = re.compile(
     r"\b(agent|analys\w*|briefing|report|background|results?|breakdown|"
     r"summary)\b",
@@ -199,6 +203,12 @@ class NotifyMixin:
         except Exception:
             log.debug("[%s] merged: card render failed", sess.label, exc_info=True)
             return False
+        # Order: timeline → status line → separator → answer. The status
+        # line therefore sits MID-message here, and deliberately so
+        # (review rev-iter1-002): this is the settled delivery, and what
+        # should be on screen when it lands is the ANSWER, not a status
+        # that has stopped changing. "Status last" exists for the LIVE
+        # card, where the status is the only thing still moving.
         combined = f"{card_md}\n\n{_MERGED_SEPARATOR}\n\n{answer}" if answer else card_md
         if len(combined.encode("utf-8")) > _RICH_LIMIT:
             log.info("[%s] merged: combined card+answer over the byte ceiling "
@@ -241,30 +251,57 @@ class NotifyMixin:
 
         Line-based, not tail-only: the observed instance sat in the MIDDLE
         of the interim (between the folder-structure section and the
-        Canary Islands section), not at its end. Conservative by
-        construction — a line must be short AND carry a first-person
-        future-delivery phrase AND name the work it defers to. Never
-        empties the text: if every line matched, the original is returned
-        untouched. Only ever called at composition time, and never on the
-        final answer or on a flush that has no final answer to follow it
-        (there the promise is simply true).
+        Canary Islands section), not at its end. Deliberately narrow, so
+        real content is never silently deleted (review rev-iter1-001) — a
+        line qualifies only when ALL of these hold:
+
+        * it carries a first-person future-delivery phrase AND names the
+          work it defers to (the two regexes below),
+        * it is at most 240 characters,
+        * it is ORDINARY PROSE — not a list item, table row, heading,
+          block quote or indented code line, and not inside a ``` fence,
+        * it ENDS a paragraph (the next line is blank, or it is the last
+          line), which is how a sign-off is written and is not how a
+          sentence buried in a paragraph of real content is,
+        * and stripping it does not empty the text.
+
+        Residual risk, accepted knowingly: a standalone prose paragraph
+        that genuinely promises to send a deliverable later is
+        indistinguishable from the sign-off this removes — in the interim
+        answer of a background job those are the same sentence. The
+        prompt-side instruction (:data:`aipager.preferences._DELIVERY_LINE`)
+        is the primary fix; this is the backstop for when the model says
+        it anyway. Only ever called at composition time, never on the
+        final answer and never on a flush with no final answer to follow
+        it (there the promise is simply true).
         """
         lines = text.split("\n")
-        kept = [
-            ln for ln in lines
-            if not (len(ln) <= 240
-                    and _PROMISE_FUTURE_RE.search(ln)
-                    and _PROMISE_SUBJECT_RE.search(ln))
-        ]
-        if len(kept) == len(lines):
+        in_fence = False
+        drop: set[int] = set()
+        for i, ln in enumerate(lines):
+            stripped = ln.strip()
+            if stripped.startswith("```"):
+                in_fence = not in_fence
+                continue
+            if in_fence or len(ln) > 240:
+                continue
+            if _STRUCTURAL_LINE_RE.match(ln):
+                continue
+            nxt = lines[i + 1].strip() if i + 1 < len(lines) else ""
+            if nxt:
+                continue  # mid-paragraph: real content, not a sign-off
+            if (_PROMISE_FUTURE_RE.search(ln)
+                    and _PROMISE_SUBJECT_RE.search(ln)):
+                drop.add(i)
+        if not drop:
             return text
+        kept = [ln for i, ln in enumerate(lines) if i not in drop]
         if not any(ln.strip() for ln in kept):
             return text
-        dropped = len(lines) - len(kept)
         log.info(
             "[%s] stripped %d orphaned delivery-promise line(s) (%d chars) "
-            "from an interim answer", label, dropped,
-            sum(len(ln) for ln in lines) - sum(len(ln) for ln in kept),
+            "from an interim answer", label, len(drop),
+            sum(len(lines[i]) for i in drop),
         )
         return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
 
