@@ -280,8 +280,6 @@ BUSY_EDIT_INTERVAL: float = 3.0
 # Also the minimum gap between any two busy-message edits (debounce floor).
 STREAM_EDIT_INTERVAL: float = float(os.environ.get("STREAM_EDIT_INTERVAL", "0.9"))
 
-# Maximum characters of commentary kept in the card. Whole blocks are dropped
-# oldest-first once the budget is spent, so a long turn stays glanceable
 
 # Keep the busy card in the chat when the turn ends, re-rendered once as a
 # finished timeline, instead of deleting it. The card is the only record of
