@@ -282,8 +282,6 @@ STREAM_EDIT_INTERVAL: float = float(os.environ.get("STREAM_EDIT_INTERVAL", "0.9"
 
 # Maximum characters of commentary kept in the card. Whole blocks are dropped
 # oldest-first once the budget is spent, so a long turn stays glanceable
-# instead of growing into a wall of prose.
-STREAM_BODY_CHARS: int = int(os.environ.get("STREAM_BODY_CHARS", "600"))
 
 # Keep the busy card in the chat when the turn ends, re-rendered once as a
 # finished timeline, instead of deleting it. The card is the only record of

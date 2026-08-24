@@ -23,7 +23,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tool row still in memory) plus the full answer — superseding the old
   answer-only response.txt. Clean short turns attach nothing.
 
-### Changed
 - Background jobs now send exactly ONE response — the final result. Interim
   answers no longer go out as standalone messages (a long interim pushed
   the busy card and its waiting status off-screen, making the chat bottom

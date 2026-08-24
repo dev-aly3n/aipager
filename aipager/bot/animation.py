@@ -72,8 +72,6 @@ _RICH_LIMIT = 32_768  # UTF-8 byte ceiling for rich messages
 # Rows are separated by a blank line: Telegram's rich markdown collapses a
 # single newline into a space, which would run the whole timeline together.
 _ROW_SEP = "\n\n"
-# Oldest tool rows collapse into an "N earlier tools" line beyond this.
-_MAX_VISIBLE_TOOLS = 15
 # How long a batch of tool rows waits for the sentence that introduced it.
 # The MessageDisplay hook flushes a short preamble at message end, measured
 # 20-515 ms after the batch's first PreToolUse, so this is generous. It only
@@ -288,59 +286,75 @@ def _fit_sections(
     layered policy ("layered-card-shedding"):
 
     - Fits → everything renders, untouched.
-    - Phase 1: tool RUNS collapse to one-line in-place placeholders,
-      oldest run first, newest (live tail) last — commentary stays.
+    - Phase 1: older tool RUNS collapse to one-line in-place placeholders,
+      oldest first — commentary stays.
+    - Phase 1b: the NEWEST run sheds its own oldest rows into an in-place
+      count; it is never fully collapsed (it is the live tail, and for a
+      single giant row the byte backstop is the honest tool).
     - Phase 2: whole oldest sections are removed one at a time, replaced
       by a single aggregate marker directly under the header, so what was
       removed always leaves a visible trace. The newest prose section and
-      the newest run are never removed here — the caller's byte-level
-      tail-keep truncation is the backstop for that pathological case.
+      the NEWEST RUN are never removed here — guarded by their indices
+      (review rev-iter1-001: a trailing prose section after the newest
+      run must not make the run eligible), with the caller's byte-level
+      tail-keep truncation as the backstop.
 
-    Pure and deterministic: the collapse level derives from content size
-    on every call; nothing is remembered between renders. Returns
-    ``(rows, truncated)`` — ``truncated`` True iff anything was collapsed
-    or removed.
+    Byte accounting is incremental (review rev-iter1-005): per-row sizes
+    are encoded once and totals adjusted arithmetically per step, so a
+    render tick never re-joins the whole body per collapse step.
+
+    Pure and deterministic. Returns ``(rows, truncated)``.
     """
     budget = _RICH_LIMIT - reserve_bytes
-
-    def _measure(parts: list[list[str]]) -> int:
-        return len(_ROW_SEP.join(
-            r for rows in parts for r in rows).encode("utf-8"))
+    sep = len(_ROW_SEP.encode("utf-8"))
 
     parts = [list(rows) for _, rows in sections]
     kinds = [k for k, _ in sections]
     sizes = [len(rows) for _, rows in sections]  # original row counts
+    row_bytes = [[len(r.encode("utf-8")) for r in rows] for rows in parts]
 
-    if _measure(parts) <= budget:
-        return [r for rows in parts for r in rows], False
+    def _total(active: list[int]) -> int:
+        n_rows = sum(len(parts[i]) for i in active)
+        if n_rows == 0:
+            return 0
+        return (sum(b for i in active for b in row_bytes[i])
+                + sep * (n_rows - 1))
+
+    active = list(range(len(parts)))
+    if _total(active) <= budget:
+        return [r for i in active for r in parts[i]], False
 
     truncated = True
-    # Phase 1 — collapse runs oldest-first. The NEWEST run is never
-    # collapsed here: it is the live tail the operator is watching, and
-    # for the degenerate single-giant-row case a collapse would vaporize
-    # the only content — the caller's byte-level tail-keep truncation is
-    # the honest tool for that, keeping the newest text visible.
     all_runs = [i for i, k in enumerate(kinds) if k == "run"]
-    for idx in all_runs[:-1]:
-        parts[idx] = [_run_placeholder(sizes[idx])]
-        if _measure(parts) <= budget:
-            return [r for rows in parts for r in rows], truncated
+    newest_run = all_runs[-1] if all_runs else -1
 
-    # Phase 1b — the newest run is never fully collapsed (it is the live
-    # tail), but it CAN shed its own oldest rows into an in-place count,
-    # exactly the operator's "hide tool calls from above" applied within
-    # one run. At least one real row always stays; a single row too big
-    # even alone falls through to the byte backstop.
+    # Phase 1 — fully collapse older runs, oldest first.
+    for idx in all_runs[:-1]:
+        ph = _run_placeholder(sizes[idx])
+        parts[idx] = [ph]
+        row_bytes[idx] = [len(ph.encode("utf-8"))]
+        if _total(active) <= budget:
+            return [r for i in active for r in parts[i]], truncated
+
+    # Phase 1b — the newest run sheds its own oldest rows.
     if all_runs:
-        lr = all_runs[-1]
-        original = parts[lr]
+        original = parts[newest_run]
+        original_bytes = row_bytes[newest_run]
         for k in range(1, len(original)):
-            parts[lr] = [_run_placeholder(k)] + original[k:]
-            if _measure(parts) <= budget:
-                return [r for rows in parts for r in rows], truncated
-        parts[lr] = original if len(original) == 1 else (
-            [_run_placeholder(len(original) - 1), original[-1]]
-        )
+            ph = _run_placeholder(k)
+            parts[newest_run] = [ph] + original[k:]
+            row_bytes[newest_run] = ([len(ph.encode("utf-8"))]
+                                     + original_bytes[k:])
+            if _total(active) <= budget:
+                return [r for i in active for r in parts[i]], truncated
+        if len(original) > 1:
+            ph = _run_placeholder(len(original) - 1)
+            parts[newest_run] = [ph, original[-1]]
+            row_bytes[newest_run] = [len(ph.encode("utf-8")),
+                                     original_bytes[-1]]
+        else:
+            parts[newest_run] = original
+            row_bytes[newest_run] = original_bytes
 
     # Phase 2 — remove whole sections oldest-first behind one marker.
     hidden_prose = 0
@@ -350,24 +364,30 @@ def _fit_sections(
     last_prose = max((i for i, k in enumerate(kinds) if k == "prose"),
                      default=-1)
     while start < len(parts):
-        # Never remove the newest prose section or the final (live) run.
-        if start == last_prose or start >= len(parts) - 1:
+        # Never remove the newest prose section, the NEWEST RUN, or the
+        # physically last section.
+        if (start == last_prose or start == newest_run
+                or start >= len(parts) - 1):
             break
         if kinds[start] == "prose":
-            hidden_prose += 1
+            # Count BLOCKS, not sections: several commentary blocks can
+            # share one section (review rev-iter1-004).
+            hidden_prose += sizes[start]
         else:
             hidden_tools += sizes[start]
         hidden_sections += 1
         start += 1
+        active = list(range(start, len(parts)))
         marker = _phase2_marker(hidden_sections, hidden_prose, hidden_tools)
-        if _measure([[marker]] + parts[start:]) <= budget:
-            return ([marker] + [r for rows in parts[start:] for r in rows],
+        marker_b = len(marker.encode("utf-8"))
+        if _total(active) + marker_b + (sep if active else 0) <= budget:
+            return ([marker] + [r for i in active for r in parts[i]],
                     truncated)
-    marker_rows = ([[_phase2_marker(hidden_sections, hidden_prose,
-                                    hidden_tools)]]
+    active = list(range(start, len(parts)))
+    marker_rows = ([_phase2_marker(hidden_sections, hidden_prose,
+                                   hidden_tools)]
                    if hidden_sections else [])
-    return ([r for rows in marker_rows + parts[start:] for r in rows],
-            truncated)
+    return (marker_rows + [r for i in active for r in parts[i]], truncated)
 
 
 def _phase2_marker(sections_n: int, prose_n: int, tools_n: int) -> str:

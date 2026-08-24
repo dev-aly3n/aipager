@@ -44,7 +44,7 @@ from aipager.config import (
 from aipager.state import Status, TrackedSession
 from aipager.bot.animation import (
     FINAL_VERB, _RICH_LIMIT, _expire_tool_batch, build_full_log,
-    build_stream_card,
+    build_stream_card_ex,
 )
 
 # Pure-function helpers and constants live in aipager.bot.transport
@@ -174,7 +174,11 @@ class NotifyMixin:
         edit itself failed for any reason. Never raises.
         """
         try:
-            card_md = build_stream_card(sess, FINAL_VERB, final=True)
+            card_md, hid = build_stream_card_ex(sess, FINAL_VERB, final=True)
+            # This IS the merged layout's final render — the attach_log
+            # decision must see ITS truncation state, not a stale interim
+            # tick's (review rev-iter1-002).
+            sess.last_card_truncated = hid
         except Exception:
             log.debug("[%s] merged: card render failed", sess.label, exc_info=True)
             return False
@@ -1010,6 +1014,14 @@ class NotifyMixin:
                     sess.job_continuation_active = False
                 await self._handle_job_interim(sess, context)
                 return
+            # Snapshot the play-by-play FIRST — before the done-marking
+            # below coerces every row to True (which would misreport
+            # failed rows as successes in the full-log attachment, review
+            # rev-iter1-003) and before the streaming reset wipes the
+            # commentary.
+            log_tools = list(sess.tool_history)
+            log_commentary = list(sess.stream_commentary)
+
             # Mark all tools as done
             sess.tool_history = [(s, True) for s, _ in sess.tool_history]
             # Stop animation and clean up busy message
@@ -1110,12 +1122,6 @@ class NotifyMixin:
                     content = ""
                 else:
                     sess.last_idle_summary_hash = _digest
-
-            # Snapshot the play-by-play BEFORE the reset below wipes the
-            # commentary — the full-log attachment builder needs it
-            # ("layered-card-shedding" requirement 2).
-            log_tools = list(sess.tool_history)
-            log_commentary = list(sess.stream_commentary)
 
             # Reset streaming state — the turn is over.
             sess.stream_commentary = []
@@ -1388,6 +1394,14 @@ class NotifyMixin:
             # file per close, superseding the old answer-only
             # response.txt: complete chronological play-by-play plus the
             # full answer, so hidden history is always recoverable.
+            # For layout=card and layout=merged this flag comes from the
+            # FINAL render (stashed by _edit_busy_rich / _send_merged_final
+            # respectively). For layout=replace no final card is ever
+            # rendered — the busy card is deleted outright — so the flag
+            # reflects the last interim tick: a deliberate proxy (review
+            # rev-iter1-006), since replace leaves no finished card whose
+            # hidden rows an attachment would need to compensate for
+            # beyond what the interim state already showed.
             attach_log = send_file or sess.last_card_truncated
             file_content = (
                 build_full_log(label, log_tools, log_commentary, content)

@@ -949,3 +949,52 @@ def test_no_attachment_on_a_small_clean_turn(
     _write_transcript(tp, with_continuation=False)
     _drive_plain_turn(bot, recv, run_async, tp, "tiny answer", n_tools=3)
     assert docs == []
+
+
+def test_full_log_preserves_failed_tool_rows(
+    mk_bot, run_async, tmp_path, monkeypatch,
+):
+    """Review rev-iter1-003: the play-by-play snapshot is taken BEFORE the
+    close marks every row done, so a failed tool row reads [x] in the
+    file, not [v]."""
+    bot, recv, docs = _attachment_harness(mk_bot, monkeypatch)
+    tp = tmp_path / "t.jsonl"
+    _write_transcript(tp, with_continuation=False)
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          prompt="[via Telegram msg=1]\ngo", transcript_path=str(tp))
+    sess = bot.registry.get(SESSION)
+    sess.scope_chat_id = -1001
+    for i in range(200):
+        sess.record_tool(f"Bash: {'q' * 250}-{i}", True)
+    sess.record_tool("Bash: THE-FAILING-ONE", "failed")
+    _send(recv, run_async, hook_event_name="Stop",
+          last_assistant_message="ans", transcript_path=str(tp))
+    assert len(docs) == 1
+    body = docs[0]["content"]
+    assert "[x] Bash: THE-FAILING-ONE" in body
+
+
+def test_merged_layout_truncated_final_still_attaches_log(
+    mk_bot, run_async, tmp_path, monkeypatch,
+):
+    """Review rev-iter1-002: the merged layout's own final render reports
+    truncation, so a merged close whose card had to hide rows still ships
+    the full-log attachment."""
+    bot, recv, docs = _attachment_harness(mk_bot, monkeypatch)
+    tp = tmp_path / "t.jsonl"
+    _write_transcript(tp, with_continuation=False)
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          prompt="[via Telegram msg=1]\ngo", transcript_path=str(tp))
+    sess = bot.registry.get(SESSION)
+    sess.scope_chat_id = -1001
+    sess.override_layout = "merged"
+    for i in range(200):
+        sess.record_tool(f"Bash: {'w' * 250}-{i}", True)
+    async def _edit_rich_ok(chat_id, msg_id, markdown, **kwargs):
+        return {"message_id": msg_id}
+    monkeypatch.setattr("aipager.bot.notify.edit_message_text_rich",
+                        _edit_rich_ok)
+    _send(recv, run_async, hook_event_name="Stop",
+          last_assistant_message="tiny answer", transcript_path=str(tp))
+    assert len(docs) == 1
+    assert "tiny answer" in docs[0]["content"]

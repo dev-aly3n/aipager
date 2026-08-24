@@ -215,7 +215,7 @@ def test_card_truncation_head_dropped_header_preserved():
     head_marker = "HEADMARKERTHATMUSTBEDROPPED"
     tail_content = "y" * 35_000
     tail_marker = "TAILMARKERTHATMUSTSTAY"
-    # Commentary is capped by STREAM_BODY_CHARS, so only a pathological tool
+    # Commentary is capped by the byte ceiling (the old STREAM_BODY_CHARS budget is gone), so only a pathological tool
     # summary can still reach the byte ceiling.
     sess.tool_history = [
         ("Bash: " + head_marker + tail_content + tail_marker, True),

@@ -225,7 +225,7 @@ def test_card_does_not_mutate_sess():
 def test_card_truncation_output_within_limit():
     sess = _sess()
     # One pathological tool summary is the only way past the byte ceiling now
-    # that commentary is capped by STREAM_BODY_CHARS.
+    # that commentary is capped by the byte ceiling (the old STREAM_BODY_CHARS budget is gone).
     sess.tool_history = [("Bash: " + "x" * 40_000, True)]
     card = build_stream_card(sess, "Working")
     assert len(card.encode("utf-8")) <= 32_768
@@ -1550,3 +1550,50 @@ def test_layered_render_is_deterministic():
     a = build_stream_card(sess, "Working")
     b = build_stream_card(sess, "Working")
     assert a == b
+
+
+def test_newest_run_survives_phase2_with_trailing_prose():
+    """Review rev-iter1-001: a trailing prose section AFTER the newest run
+    must not make that run eligible for phase-2 removal. Geometry: phase 2
+    must march past two huge prose sections and the older run and arrive
+    AT the newest run while still over budget — without the index guard
+    the run (already 1b-collapsed to placeholder + newest row) would be
+    removed wholesale; with it, the newest row survives."""
+    sess = _sess()
+    tools = [(f"Bash: old-{i}", True) for i in range(10)]
+    tools += [(f"Bash: {'r' * 300}-{i}", True) for i in range(90)]
+    # The run's newest row is itself huge, sentinel at its END: after
+    # phase 1b the remainder [marker, placeholder, this row, trailing]
+    # still exceeds the budget, so phase 2 arrives AT the newest run —
+    # the exact moment the index guard decides between "break and let the
+    # tail-keep backstop preserve the newest text" (correct) and "remove
+    # the live tail wholesale" (the rev-iter1-001 bug).
+    tools.append(("Bash: " + "z" * 33000 + "NEWEST-ROW-END", True))
+    sess.tool_history = tools
+    sess.stream_commentary = [
+        (0, "EARLY-BIG " + "e" * 34000),
+        (10, "MID-BIG " + "f" * 33000),
+        (len(tools), "tiny trailing note"),
+    ]
+    card = build_stream_card(sess, "Working")
+    assert len(card.encode("utf-8")) <= 32768
+    assert "NEWEST-ROW-END" in card
+    assert "tiny trailing note" in card
+
+def test_phase2_marker_counts_blocks_not_sections():
+    """Review rev-iter1-004: several commentary blocks sharing one hidden
+    section are counted individually in the marker."""
+    sess = _sess()
+    sess.tool_history = [(f"Bash: t-{i}", True) for i in range(12)]
+    sess.stream_commentary = [
+        (0, "A-BLOCK " + "a" * 2000),
+        (0, "B-BLOCK " + "b" * 2000),
+        (6, "KEEP-ME " + "k" * 29000),
+    ]
+    card = build_stream_card(sess, "Working")
+    assert len(card.encode("utf-8")) <= 32768
+    assert "A-BLOCK" not in card and "B-BLOCK" not in card
+    assert "KEEP-ME" in card
+    import re as _re
+    m = _re.search(r"(\d+) commentar", card)
+    assert m and int(m.group(1)) == 2
