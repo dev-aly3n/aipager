@@ -253,6 +253,12 @@ class SessionMonitor:
 
             # Subagent TTL (item 2.4)
             if sess.active_subagents:
+                # Captured BEFORE popping (design.md "model Claude Code
+                # background-agent jobs" requirement 6) — job_background_open()
+                # would read the now-empty table otherwise, and this
+                # sweep's own eviction below is exactly what needs to be
+                # observed as "was this job open a moment ago".
+                was_job_open = sess.job_background_open()
                 stale_ids = [
                     aid for aid, info in sess.active_subagents.items()
                     if info.get("started_at")
@@ -263,6 +269,21 @@ class SessionMonitor:
                              "%d min)", sess.label, aid,
                              int(SUBAGENT_TTL_SECONDS / 60))
                     sess.active_subagents.pop(aid, None)
+                # A job cannot wait forever: once the TTL sweep empties the
+                # table for a session sitting IDLE with a job open, produce
+                # the terminal "background agent lost" card rather than
+                # leaving the waiting card ticking indefinitely. Gated on
+                # IDLE specifically — a session that flipped back to BUSY
+                # (the background agent's own tool call re-entered before
+                # this scan) is still genuinely working, not orphaned.
+                if (was_job_open and sess.status == Status.IDLE
+                        and not sess.active_subagents):
+                    try:
+                        await self.notify_fn(sess, "job_agents_lost", {})
+                    except Exception:
+                        log.warning(
+                            "Failed to notify job_agents_lost for %s", name,
+                        )
 
             # Idle-recovery fallback: a missed Stop hook can strand a session
             # in BUSY, animating forever. If the transcript shows the turn

@@ -622,7 +622,16 @@ class SessionOpsMixin:
         no side effects, when the session is not actually busy — this
         makes the refusal pytest-testable with zero dtach mocking.
         """
-        if sess.status not in (Status.BUSY, Status.INTERACTIVE):
+        if (sess.status not in (Status.BUSY, Status.INTERACTIVE)
+                and not sess.job_background_open()):
+            # A session waiting on background work (design.md "model
+            # Claude Code background-agent jobs") reads as IDLE, not BUSY
+            # — the shared gate above widens to still recognise it as
+            # stoppable. "Stop still tappable" (requirement 1) would be
+            # meaningless if the button worked right up until the
+            # foreground turn's own Stop hook fired and then refused
+            # "is not busy" for however long the background agent kept
+            # running afterward.
             return StopOutcome(ok=False, label=sess.label)
 
         # 1. Send Escape twice to Claude Code — proven interrupt
@@ -660,6 +669,11 @@ class SessionOpsMixin:
         clear_notes_dir(sess.name)
         sess.pending_permission = None
         sess.status = Status.IDLE
+        # Genuinely end the job (design.md "model Claude Code
+        # background-agent jobs") rather than leaving job_background_open()
+        # true underneath the now-"Stopped" card — the operator asked for
+        # this to be over, background agents included.
+        sess.active_subagents.clear()
         sess.trigger_msg_id = None
         sess.last_idle_at = time.monotonic()  # prevent debounce of next real IDLE
         self.registry.mark_dirty()
