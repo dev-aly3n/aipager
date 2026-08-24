@@ -535,8 +535,12 @@ class NotifyMixin:
             text = f"✅ <b>{html_mod.escape(label)}</b> · Finished{suffix}"
             # The accumulated interim is the only full copy of what this
             # job produced — deliver it before the card resolves ("one
-            # response per background job" requirement 4).
-            await self._flush_job_buffer(sess)
+            # response per background job" requirement 4). Best-effort.
+            try:
+                await self._flush_job_buffer(sess)
+            except Exception:
+                log.debug("[%s] buffer flush on grace expiry failed",
+                          label, exc_info=True)
             target_msg_id = sess.busy_msg_id
             if target_msg_id and target_msg_id > 0:
                 await self._edit_busy_raw(
@@ -583,8 +587,12 @@ class NotifyMixin:
                     f"(background agent lost{suffix})")
             # Whatever the job produced before the agent vanished is only
             # in the buffer — deliver it ("one response per background
-            # job" requirement 4).
-            await self._flush_job_buffer(sess)
+            # job" requirement 4). Best-effort.
+            try:
+                await self._flush_job_buffer(sess)
+            except Exception:
+                log.debug("[%s] buffer flush on agents-lost failed",
+                          label, exc_info=True)
             target_msg_id = sess.busy_msg_id
             if target_msg_id and target_msg_id > 0:
                 await self._edit_busy_raw(

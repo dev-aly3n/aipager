@@ -13,9 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the busy card and its waiting status off-screen, making the chat bottom
   read as finished); they stay visible in the card's live timeline and are
   delivered in full inside the single final message, joined ahead of the
-  briefing. Every close path flushes the held content — the continuation's
-  Finished, grace expiry, agent-lost, and a Stop tapped during the wait —
-  so nothing the job produced is ever silently dropped.
+  briefing. Every ending path flushes the held content — the
+  continuation's Finished, grace expiry, agent-lost, a Stop tapped during
+  the wait, /kill, an API-error final, and the session exiting — with one
+  deliberate exception: a new prompt superseding the job clears the
+  buffer without a flush (the superseded card's last render remains in
+  the scrollback).
 - The waiting card pins its status to the BOTTOM: the last line always
   reads "⏳ N agent(s) (types) still working · elapsed" and survives every
   render and truncation — Telegram shows the end of the newest message, so
