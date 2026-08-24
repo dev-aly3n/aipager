@@ -651,15 +651,21 @@ def _job_sess(label="hiva", *, status=Status.IDLE):
 def test_job_interim_delivers_content_once(mk_bot, run_async, monkeypatch):
     bot = mk_bot()
     sess = _job_sess()
+    sess.trigger_msg_id = 3420  # the job's original prompt message
     sent = []
+    calls = []
     async def _send_rich(chat_id, content, **kw):
         sent.append(content)
+        calls.append(kw)
         return {}
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
     bot._edit_busy_rich = AsyncMock(return_value=True)
     run_async(bot.notify(sess, "idle_prompt", {"summary": "interim answer"}))
     assert sent == ["interim answer"]
     assert sess.last_idle_summary_hash != ""
+    # Reply-threaded to the job's ORIGINAL trigger message — not None,
+    # and unaffected by trigger_msg_id staying pinned through the job.
+    assert calls[0]["reply_to_message_id"] == 3420
 
 
 def test_job_interim_dedup_skips_identical_content(mk_bot, run_async, monkeypatch):
