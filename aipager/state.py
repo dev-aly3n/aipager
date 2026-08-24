@@ -398,8 +398,11 @@ class TrackedSession:
     # open, held for the job's SINGLE final message ("one response per
     # background job"): the interim never goes out standalone — it lives
     # in the card's timeline and in here, delivered once at close joined
-    # with the final answer. Transient, never persisted. Bounded by the
-    # append site (notify._record_job_interim).
+    # with the final answer. Transient, never persisted — a daemon
+    # restart mid-job drops it; the card's last rendered state in the
+    # chat scrollback is then the only surviving surface (accepted, same
+    # degrade-to-today rule as the rest of the job state). Bounded by
+    # the append site (notify._record_job_interim).
     job_interim_buffer: list = field(default_factory=list, repr=False)
 
     # -- Live message stack (design.md "Live Message Stack") ---------------

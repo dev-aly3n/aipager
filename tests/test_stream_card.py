@@ -1444,3 +1444,17 @@ def test_waiting_ignored_when_final_also_true():
     header = _header(card)
     assert "waiting on background work" not in header
     assert "✅" in header
+
+
+def test_waiting_footer_during_grace_says_finishing_up():
+    """Review rev-iter1-004: with the agent table empty (the continuation
+    grace window — an ordinary part of every job's lifecycle) the footer
+    must not say "0 agents still working"."""
+    sess = _sess("hiva")
+    sess.job_grace_until = 10**12  # far future; table empty
+    sess.tool_history = [("Bash: ls", True)]
+    card = build_stream_card(sess, "Working", waiting=True)
+    footer = card.splitlines()[-1]
+    assert footer.startswith("⏳")
+    assert "finishing up" in footer
+    assert "0 agent" not in card

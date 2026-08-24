@@ -362,13 +362,8 @@ def _waiting_header(sess: TrackedSession) -> str:
     job's ORIGINAL anchor, never re-stamped by a background re-entry — and
     omitted only when that anchor is falsy (should not occur in practice).
     """
-    n = len(sess.active_subagents)
-    plural = "" if n == 1 else "s"
-    header = f"🔄 **{_md_escape(sess.label)}** · waiting on background work · {n} agent{plural}"
-    types = sorted({info.get("type", "") for info in sess.active_subagents.values()
-                    if info.get("type")})
-    if 1 <= len(types) <= 3:
-        header += f" ({', '.join(_md_escape(t) for t in types)})"
+    header = (f"🔄 **{_md_escape(sess.label)}** · waiting on background work "
+              f"· {_agent_phrase(sess)}")
     if sess.busy_started_at:
         elapsed_s = max(0, int(time.monotonic() - sess.busy_started_at))
         if elapsed_s >= 60:
@@ -379,6 +374,25 @@ def _waiting_header(sess: TrackedSession) -> str:
     return header
 
 
+def _agent_phrase(sess: TrackedSession) -> str:
+    """Shared "N agent(s) (types)" fragment for the waiting header and
+    footer, so the two can never drift. During the continuation-grace
+    window the table is legitimately EMPTY (the agent finished, the
+    wake-up hasn't arrived) — "0 agents still working" would read as
+    broken (review rev-iter1-004), so that state says "finishing up"
+    instead."""
+    n = len(sess.active_subagents)
+    if n == 0:
+        return "finishing up"
+    plural = "" if n == 1 else "s"
+    phrase = f"{n} agent{plural}"
+    types = sorted({info.get("type", "") for info in sess.active_subagents.values()
+                    if info.get("type")})
+    if 1 <= len(types) <= 3:
+        phrase += f" ({', '.join(_md_escape(t) for t in types)})"
+    return phrase
+
+
 def _waiting_footer(sess: TrackedSession) -> str:
     """The waiting card's LAST line — the one position Telegram always
     shows when the card is the newest message ("one response per
@@ -387,14 +401,8 @@ def _waiting_footer(sess: TrackedSession) -> str:
     scrolls away with the timeline while this line stays on screen.
     Never shed: appended after row assembly, and head-drop truncation
     keeps the body's tail."""
-    n = len(sess.active_subagents)
-    plural = "" if n == 1 else "s"
-    line = f"⏳ {n} agent{plural}"
-    types = sorted({info.get("type", "") for info in sess.active_subagents.values()
-                    if info.get("type")})
-    if 1 <= len(types) <= 3:
-        line += f" ({', '.join(_md_escape(t) for t in types)})"
-    line += " still working"
+    phrase = _agent_phrase(sess)
+    line = f"⏳ {phrase}" if phrase == "finishing up" else f"⏳ {phrase} still working"
     if sess.busy_started_at:
         elapsed_s = max(0, int(time.monotonic() - sess.busy_started_at))
         if elapsed_s >= 60:

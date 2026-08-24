@@ -226,7 +226,11 @@ class NotifyMixin:
             return
         sess.job_interim_buffer.append(content)
         while len(sess.job_interim_buffer) > 20:
-            sess.job_interim_buffer.pop(0)
+            dropped = sess.job_interim_buffer.pop(0)
+            log.warning(
+                "[%s] job interim buffer over cap — dropping oldest "
+                "entry (%d chars)", sess.label, len(dropped),
+            )
 
     async def _flush_job_buffer(self, sess: TrackedSession) -> None:
         """Deliver the accumulated interim content as the job's final
@@ -924,7 +928,16 @@ class NotifyMixin:
             return
 
         if event == "session_end":
-            # Session exited — clean up busy state and alert user
+            # Session exited — clean up busy state and alert user. A job's
+            # buffered interim answers are the only full copy of its
+            # output — deliver them even when the session died out from
+            # under the job (review rev-iter1-002). Best-effort: a failed
+            # flush must never block the exit handling.
+            try:
+                await self._flush_job_buffer(sess)
+            except Exception:
+                log.debug("[%s] buffer flush on session_end failed",
+                          sess.label, exc_info=True)
             self._stop_animation(sess)
             if sess.busy_msg_id and sess.busy_msg_id > 0:
                 try:
@@ -1066,20 +1079,6 @@ class NotifyMixin:
             if not content and not context.get("no_response"):
                 content = sess.summary or ""
 
-            # The job's single response carries everything undelivered
-            # ("one response per background job" requirement 3): interim
-            # answers accumulated during the background window join the
-            # final answer, oldest first, separated clearly. An interim
-            # byte-identical to the final is skipped. Cleared here — and
-            # only here on this path — so a stray re-entry cannot resend.
-            if sess.job_interim_buffer:
-                _parts = [b for b in sess.job_interim_buffer
-                          if b and b != content]
-                sess.job_interim_buffer.clear()
-                if _parts:
-                    _tail = [content] if content else []
-                    content = "\n\n———\n\n".join(_parts + _tail)
-
             # Content-dedup covers the FINAL delivery too ("close the
             # background-job endgame" requirement 3): a stray idle event
             # re-running this path with content identical to the last
@@ -1144,9 +1143,35 @@ class NotifyMixin:
                     log.warning("Failed to send error notification", exc_info=True)
                 if self.observers:
                     asyncio.create_task(self.observers.broadcast(text))
+                # The buffered interim answers are real, completed work —
+                # an API error on the FINAL turn must not eat them
+                # (review rev-iter1-001).
+                try:
+                    await self._flush_job_buffer(sess)
+                except Exception:
+                    log.debug("[%s] buffer flush on api-error failed",
+                              label, exc_info=True)
                 # Don't clear trigger_msg_id — retry needs it
                 # Don't flush pending queue — nothing was processed
                 return
+
+            # The job's single response carries everything undelivered
+            # ("one response per background job" requirement 3): interim
+            # answers accumulated during the background window join the
+            # final answer, oldest first, separated clearly. An interim
+            # byte-identical to the final is skipped. Composed AFTER the
+            # API-error branch above (review rev-iter1-001) so an error
+            # return path can still flush the untouched buffer. Cleared
+            # here so a stray re-entry cannot resend.
+            composed_with_interim = False
+            if sess.job_interim_buffer:
+                _parts = [b for b in sess.job_interim_buffer
+                          if b and b != content]
+                sess.job_interim_buffer.clear()
+                if _parts:
+                    _tail = [content] if content else []
+                    content = "\n\n———\n\n".join(_parts + _tail)
+                    composed_with_interim = True
 
             # Compute elapsed time since BUSY started
             elapsed_str = ""
@@ -1222,8 +1247,20 @@ class NotifyMixin:
             if not merged_delivered and content:
                 content_utf8 = content.encode("utf-8")
                 if len(content_utf8) > 32768:
+                    if composed_with_interim:
+                        # A composed message puts old interim text FIRST
+                        # and the actual answer LAST — head-keeping
+                        # truncation would show stale interim and hide
+                        # the answer (review rev-iter1-003). Keep the
+                        # TAIL instead; the .txt attachment below still
+                        # carries the full chronological text.
+                        # 32 768 total INCLUDING the 3-byte ellipsis.
+                        body_content = ("…" + content_utf8[-(32768 - 3):]
+                                        .decode("utf-8", errors="ignore"))
+                        send_file = True
+                        content_utf8 = b""  # handled; skip the head path
                     # Truncate at the last markdown-safe boundary under 32768.
-                    bounds = _md_safe_boundaries(content)
+                    bounds = _md_safe_boundaries(content) if content_utf8 else []
                     cut = 0
                     for b in bounds:
                         b_bytes = len(content[:b].encode("utf-8"))
@@ -1231,7 +1268,7 @@ class NotifyMixin:
                             cut = b
                     if cut:
                         body_content = content[:cut]
-                    else:
+                    elif content_utf8:
                         # No safe boundary found — truncate at byte limit.
                         body_content = content_utf8[:32768].decode("utf-8", errors="ignore")
                     send_file = True

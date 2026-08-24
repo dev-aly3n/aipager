@@ -802,6 +802,14 @@ class SessionOpsMixin:
         # Stop animation if running
         sess = self.registry.get(session_name)
         if sess:
+            # Deliver any buffered interim answers before the session (and
+            # its card) is destroyed — the buffer is the only full copy
+            # (review rev-iter1-002). Best-effort, never blocks the kill.
+            try:
+                await self._flush_job_buffer(sess)
+            except Exception:
+                log.debug("[%s] buffer flush on kill failed", sess.label,
+                          exc_info=True)
             self._stop_animation(sess)
 
         # Kill the dtach process

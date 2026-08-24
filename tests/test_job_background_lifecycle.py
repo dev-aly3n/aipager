@@ -767,3 +767,117 @@ def test_supersede_clears_buffer_without_flush(mk_bot, run_async):
     got = bot.registry.transition(sess.name, Status.BUSY)
     assert got is not None
     assert sess.job_interim_buffer == []
+
+
+def test_api_error_final_still_flushes_the_buffer(mk_bot, run_async, monkeypatch):
+    """Review rev-iter1-001: an API-error-shaped final turn must not eat
+    the buffered interim answers — they flush in the error branch."""
+    bot = mk_bot()
+    sess = _buffered_sess(bot)
+    sess.status = Status.IDLE
+    rich_sends = []
+    async def _send_rich(chat_id, content, **kw):
+        rich_sends.append(content)
+        return {"message_id": 9101}
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=9102))
+    bot._app.bot.delete_message = AsyncMock(return_value=None)
+    bot._edit_busy_rich = AsyncMock(return_value=True)
+    sess.last_prompt = "go"
+
+    run_async(bot.notify(sess, "idle_prompt",
+                         {"summary": "API Error: 529 overloaded"}))
+
+    assert rich_sends == ["buffered interim work"]
+    assert sess.job_interim_buffer == []
+
+
+def test_session_end_flushes_the_buffer(mk_bot, run_async, monkeypatch):
+    """Review rev-iter1-002: a session dying out from under a job still
+    delivers what the job produced."""
+    bot = mk_bot()
+    sess = _buffered_sess(bot)
+    rich_sends = []
+    async def _send_rich(chat_id, content, **kw):
+        rich_sends.append(content)
+        return {"message_id": 9103}
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=9104))
+    bot._app.bot.delete_message = AsyncMock(return_value=None)
+
+    run_async(bot.notify(sess, "session_end", {"source": "disappeared"}))
+
+    assert rich_sends == ["buffered interim work"]
+    assert sess.job_interim_buffer == []
+
+
+def test_kill_flushes_the_buffer(mk_bot, run_async, monkeypatch):
+    """Review rev-iter1-002: /kill delivers buffered work before the
+    session record is destroyed."""
+    bot = mk_bot()
+    sess = _buffered_sess(bot)
+    rich_sends = []
+    async def _send_rich(chat_id, content, **kw):
+        rich_sends.append(content)
+        return {"message_id": 9105}
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
+    monkeypatch.setattr("aipager.dtach.inject.kill_session",
+                        AsyncMock(return_value=True))
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=9106))
+    bot._app.bot.delete_message = AsyncMock(return_value=None)
+
+    run_async(bot._kill_session_core(sess.name, sess.label))
+
+    assert rich_sends == ["buffered interim work"]
+
+
+def test_composed_overflow_keeps_the_final_answer_visible(
+    mk_bot, run_async, tmp_path, monkeypatch,
+):
+    """Review rev-iter1-003: when interim + final overflow the 32 KB
+    message ceiling, the VISIBLE message keeps the tail (the actual final
+    answer); the .txt attachment carries the full chronological text."""
+    bot = mk_bot()
+    registry = bot.registry
+    recv = hr.HookReceiver(registry, bot.notify)
+    tp = tmp_path / "big.jsonl"
+    _write_transcript(tp, with_continuation=False)
+
+    rich_sends = []
+    async def _send_rich(chat_id, content, **kw):
+        rich_sends.append(content)
+        return {"message_id": 9107}
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=9108))
+    bot._app.bot.send_document = AsyncMock(return_value=MagicMock(message_id=9109))
+    bot._app.bot.send_chat_action = AsyncMock(return_value=None)
+    bot._app.bot.delete_message = AsyncMock(return_value=None)
+    async def _edit_rich_transport(chat_id, msg_id, markdown, **kwargs):
+        return {}
+    monkeypatch.setattr("aipager.bot.animation.edit_message_text_rich",
+                        _edit_rich_transport)
+    monkeypatch.setattr("aipager.preferences.KEEP_FINISHED_CARD", True)
+
+    big_interim = "INTERIM-" + ("x" * 30000)
+    final_answer = "FINAL-ANSWER-" + ("y" * 8000)
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          prompt="[via Telegram msg=1]\ngo", transcript_path=str(tp))
+    sess = registry.get(SESSION)
+    sess.scope_chat_id = -1001
+    _send(recv, run_async, hook_event_name="SubagentStart",
+          agent_id="agent-1", agent_type="Explore")
+    _send(recv, run_async, hook_event_name="Stop",
+          last_assistant_message=big_interim, transcript_path=str(tp))
+    _send(recv, run_async, hook_event_name="SubagentStop",
+          agent_id="agent-1", agent_type="Explore")
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          prompt="<task-notification>\n<task-id>agent-1</task-id>\ndone.",
+          transcript_path=str(tp))
+    _send(recv, run_async, hook_event_name="Stop",
+          last_assistant_message=final_answer, transcript_path=str(tp))
+
+    assert len(rich_sends) == 1
+    visible = rich_sends[0]
+    assert len(visible.encode("utf-8")) <= 32768
+    assert "FINAL-ANSWER-" in visible  # the answer survives in the preview
+    bot._app.bot.send_document.assert_called_once()  # full text attached
