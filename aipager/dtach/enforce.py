@@ -24,6 +24,36 @@ from aipager.policy_snapshot import FLOOR_SNAPSHOT, read_snapshot
 # in a tool_result this turn, every later tool call is sticky-blocked.
 _BLOCK_MARKER = "aipager safety policy"
 
+# A self-triggered continuation turn's prompt (design.md "model Claude
+# Code background-agent jobs") — Claude Code wakes a session back up when a
+# background agent it launched finishes, with a synthetic UserPromptSubmit
+# whose prompt carries this prefix instead of any human-typed text. Both
+# scan functions below must skip a transcript entry carrying it, exactly
+# the way they already skip tool-result carriers: it is not the prompt
+# that governs origin, and it is not the prior-turn boundary for the
+# sticky-block scan either. A private module constant, deliberately not
+# shared via import with hook_receiver.py / notify_hook.py's own copies —
+# see entrypoints.md's "NOT exported" note.
+#
+# Scope of this guarantee (review-1#rev-iter1-002): the skip below is a
+# raw prefix match on the transcript entry's own text, with no signature
+# or session-side correlation to the real task-notification Claude Code
+# generates. In SCOPED/TEAM mode this is safe by construction —
+# `session_ops._inject_prompt` always prepends the "[via Telegram ·
+# @label ...]\n" marker before a user's own free-text body, and that
+# marker always wins the `startswith`/`lstrip().startswith()` checks here
+# and in hook_receiver.py/notify_hook.py — so a Telegram user typing a
+# message that literally starts with "<task-notification>" cannot spoof
+# a continuation. In PERSONAL mode (`_prompt_marker` returns `""` — no
+# team configured, the common default), a user-typed message starting
+# with this literal string is genuinely indistinguishable from a real
+# continuation. This is accepted, not a new hole: personal mode has no
+# role/bypass separation to leak in the first place (no snapshot merge,
+# no `bypass_safety` at stake), matching design.md's own success-criteria
+# language, which is scoped to "a session whose real prompt carried the
+# Telegram marker."
+_TASK_NOTIFICATION_PREFIX = "<task-notification>"
+
 
 def _iter_lines_reversed(
     path: str | Path, chunk_bytes: int = 65536,
@@ -136,6 +166,16 @@ def _origin_from_transcript(path: str | None) -> str:
             if _is_tool_result(entry):
                 continue  # tool-results are type:"user" but aren't prompts
             text = _user_text(entry)
+            if text.lstrip().startswith(_TASK_NOTIFICATION_PREFIX):
+                # A self-triggered continuation, not a governing prompt —
+                # keep scanning backward for the real one (design.md "model
+                # Claude Code background-agent jobs"). Without this skip,
+                # every continuation turn would be misread as the LAST
+                # prompt, its markerless text returning "terminal" and
+                # running the continuation unrestricted regardless of the
+                # original prompt's own origin — spec.md's documented
+                # safety leak.
+                continue
             if not text:
                 return "terminal"
             for block_line in text.split("\n"):
@@ -173,6 +213,14 @@ def _turn_already_blocked(path: str | None) -> bool:
             if _BLOCK_MARKER in _tool_result_text(entry):
                 return True
             if entry.get("type") == "user" and not _is_tool_result(entry):
+                if _user_text(entry).lstrip().startswith(
+                    _TASK_NOTIFICATION_PREFIX,
+                ):
+                    # A continuation entry is not the prior-turn boundary —
+                    # the sticky block (if any) survives across it, exactly
+                    # as it survives a PreToolUse/PostToolUse pair within
+                    # the same turn. Keep scanning backward.
+                    continue
                 return False  # crossed into the prior turn; stop scanning
     except OSError:
         return False

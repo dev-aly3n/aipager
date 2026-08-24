@@ -510,3 +510,92 @@ def test_origin_marker_on_a_non_first_line_within_a_single_block(tmp_path):
         tmp_path, marker_line=2, name="ml2.jsonl",
     )
     assert enforce._origin_from_transcript(path) == "telegram"
+
+
+# ---- design.md "model Claude Code background-agent jobs" — the
+# <task-notification> continuation must be transparent to both scan
+# functions, not treated as a governing prompt or a prior-turn boundary.
+
+_TASK_NOTIFICATION_ENTRY = {
+    "type": "user",
+    "message": {"role": "user", "content":
+        "<task-notification>\n<task-id>abc123</task-id>\n"
+        "Background agent finished."},
+}
+
+
+def _job_transcript(tmp_path, *, marker: bool, name="t_job.jsonl"):
+    """[real prompt] → [tool_result entries] → [task-notification entry]
+    → [more tool_result entries] (entrypoints.md's fixture case)."""
+    p = tmp_path / name
+    prompt = ("[via Telegram · @bob · role:user]\nanalyze X"
+              if marker else "analyze X")
+    lines = [
+        {"type": "user", "message": {"content": prompt}},
+        {"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "name": "Task", "input": {}}]}},
+        {"type": "user", "message": {"content": [
+            {"type": "tool_result", "content": "async_launched"}]}},
+        _TASK_NOTIFICATION_ENTRY,
+        {"type": "assistant", "message": {"content": [
+            {"type": "text", "text": "briefing"}]}},
+        {"type": "user", "message": {"content": [
+            {"type": "tool_result", "content": "ok"}]}},
+    ]
+    p.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+    return str(p)
+
+
+def test_origin_skips_task_notification_entry_telegram(tmp_path):
+    """The task-notification entry must be transparent — the real
+    Telegram-marked prompt below it governs."""
+    path = _job_transcript(tmp_path, marker=True, name="t_job_tg.jsonl")
+    assert enforce._origin_from_transcript(path) == "telegram"
+
+
+def test_origin_skips_task_notification_entry_terminal(tmp_path):
+    """Same skip, but a markerless original prompt stays terminal — the
+    continuation must not flip a genuinely terminal turn into telegram
+    either."""
+    path = _job_transcript(tmp_path, marker=False, name="t_job_term.jsonl")
+    assert enforce._origin_from_transcript(path) == "terminal"
+
+
+def _blocked_job_transcript(tmp_path, *, cross_turn: bool, name: str):
+    """A denial marker BEFORE a task-notification entry — the sticky
+    block should survive the continuation. ``cross_turn`` appends a REAL
+    new user prompt after the task-notification entry, which must reset
+    it (the scan crosses a genuine prior-turn boundary)."""
+    p = tmp_path / name
+    lines = [
+        {"type": "user", "message": {"content":
+            "[via Telegram · @bob · role:user]\ncheck claude version"}},
+        {"type": "assistant", "message": {"content": [
+            {"type": "tool_use", "name": "Bash",
+             "input": {"command": "claude --version"}}]}},
+        {"type": "user", "message": {"content": [
+            {"type": "tool_result", "content": "aipager safety policy: "
+             "Bash command blocked by safety policy"}]}},
+        _TASK_NOTIFICATION_ENTRY,
+    ]
+    if cross_turn:
+        lines.append({"type": "user", "message": {"content":
+            "[via Telegram · @bob · role:user]\nnow list files"}})
+    p.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+    return str(p)
+
+
+def test_turn_already_blocked_survives_task_notification(tmp_path):
+    path = _blocked_job_transcript(
+        tmp_path, cross_turn=False, name="t_blocked_job.jsonl",
+    )
+    assert enforce._turn_already_blocked(path) is True
+
+
+def test_turn_already_blocked_resets_at_real_prior_turn_below_notification(
+    tmp_path,
+):
+    path = _blocked_job_transcript(
+        tmp_path, cross_turn=True, name="t_blocked_job_reset.jsonl",
+    )
+    assert enforce._turn_already_blocked(path) is False

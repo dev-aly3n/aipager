@@ -36,6 +36,26 @@ log = logging.getLogger(__name__)
 
 _CTX_WINDOW_SIZE = 200_000  # all current Claude models use 200k context
 
+# A self-triggered continuation turn (design.md "model Claude Code
+# background-agent jobs") — Claude Code wakes a session back up when a
+# background agent it launched finishes, with a synthetic UserPromptSubmit
+# whose prompt carries this prefix instead of any human-typed text. It must
+# attach to the SAME job (same attribution, same safety policy, same card)
+# rather than be treated as a fresh, unrestricted turn. Deliberately a
+# private module constant, not shared via import with
+# aipager.dtach.notify_hook / aipager.dtach.enforce's own copies — see
+# entrypoints.md's "NOT exported" note (notify_hook.py in particular must
+# not pull in anything beyond stdlib to stay under its 5ms budget).
+#
+# Scope (review-1#rev-iter1-002): a raw prefix match, not a signed check.
+# Scoped/team mode is spoof-safe (`session_ops._inject_prompt` always
+# prepends the Telegram marker first, so it always wins this check);
+# personal mode (no team configured) cannot distinguish a user-typed
+# message starting with this string from a real continuation — accepted,
+# since personal mode has no role/snapshot separation to leak. See
+# enforce.py's own copy of this note for the full reasoning.
+_TASK_NOTIFICATION_PREFIX = "<task-notification>"
+
 
 def _read_statusline(session_name: str) -> dict | None:
     """Read real-time token data from the statusLine JSON file.
@@ -318,6 +338,27 @@ class HookReceiver:
                 await self.notify_fn(sess, event, context)
 
         elif event == "UserPromptSubmit":
+            prompt = msg.get("prompt", "")
+            if prompt.startswith(_TASK_NOTIFICATION_PREFIX):
+                # Continuation turn: the SAME job waking itself up, not a
+                # new human prompt. Origin-tagging is skipped entirely — the
+                # ORIGINAL prompt's origin (read from the transcript by
+                # enforce.py, the sole source of truth for that decision)
+                # still governs, and flipping last_prompt_origin here would
+                # be the exact safety leak spec.md documents. The re-entry
+                # into BUSY is frequently a same-state no-op — the
+                # background agent's own PreToolUse (step 5/8 of the hiva
+                # sequence) already re-entered BUSY before this prompt
+                # arrives — so the notify fires unconditionally rather than
+                # being gated on transition() reporting a real change; the
+                # card still needs to know a continuation happened even
+                # when status itself didn't move.
+                cont_sess = self.registry.get_or_create(session_name)
+                self.registry.transition(
+                    session_name, Status.BUSY, preserve_job_state=True,
+                )
+                await self.notify_fn(cont_sess, "job_continuation", {})
+                return
             transitioned = self.registry.transition(session_name, Status.BUSY)
             # Origin tagging (Phase D): the daemon prefixes Telegram prompts
             # with "[via Telegram …]" on line 1. A markerless prompt was
@@ -325,7 +366,6 @@ class HookReceiver:
             # unchanged (the fail-closed "telegram" default holds).
             tag_sess = transitioned or self.registry.get(session_name)
             if tag_sess is not None:
-                prompt = msg.get("prompt", "")
                 first = prompt.split("\n", 1)[0] if prompt else ""
                 if first.startswith("[via Telegram"):
                     tag_sess.last_prompt_origin = "telegram"
@@ -388,9 +428,32 @@ class HookReceiver:
                 # between PreToolUse and PostToolUse, so a long tool
                 # otherwise looks like a wedged session.
                 sess.pending_tool_started_at = time.monotonic()
-                # Ensure we're in BUSY state
+                # Ensure we're in BUSY state. A PreToolUse arriving while
+                # NOT already BUSY is background activity ONLY when there
+                # is actual evidence of an open background job —
+                # sess.active_subagents non-empty (design.md "model Claude
+                # Code background-agent jobs"). `status != Status.BUSY`
+                # alone is not sufficient: the transport is a fire-and-
+                # forget Unix datagram socket (notify_hook.py's own `_udp`
+                # tolerates send failures — "daemon not running —
+                # session_monitor catches it"), so a genuinely fresh
+                # terminal turn's UserPromptSubmit datagram can be lost
+                # (lossy UDP, daemon restart) and its first PreToolUse can
+                # arrive while sess.status is still stale-IDLE. Preserving
+                # busy_started_wall in THAT case would defeat
+                # session_monitor.py's idle-recovery `written_this_turn`
+                # guard, whose whole purpose is telling apart a turn that
+                # never reached claude from one that finished and went
+                # quiet (review-1#rev-iter1-001). With real background
+                # evidence, the re-entry preserves the job's original
+                # anchor instead of restamping it; without it, this is a
+                # genuine new turn and restamps exactly as before this
+                # feature existed.
                 if sess.status != Status.BUSY:
-                    self.registry.transition(session_name, Status.BUSY)
+                    self.registry.transition(
+                        session_name, Status.BUSY,
+                        preserve_job_state=bool(sess.active_subagents),
+                    )
                 # Item 4.4: forward the raw tool_input for Write/Edit so
                 # the bot can render a diff. We don't forward EVERY
                 # tool_input because they can be huge (Read content,

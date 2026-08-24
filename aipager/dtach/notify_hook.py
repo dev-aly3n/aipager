@@ -44,6 +44,28 @@ _MEMORY_CAP_BYTES = 1024 * 1024 * 1024
 
 _DEBUG = os.environ.get("AIPAGER_DEBUG") == "1"
 
+# A self-triggered continuation turn's prompt (design.md "model Claude
+# Code background-agent jobs") — Claude Code wakes a session back up when a
+# background agent it launched finishes, with a synthetic UserPromptSubmit
+# whose prompt carries this prefix instead of any human-typed text. This
+# hook must not consume notes or overwrite the pinned policy snapshot for
+# it (spec.md's documented safety leak: the all-outstanding fallback would
+# otherwise widen the job's restrictions to the floor mid-job). A private
+# module constant, deliberately not imported from aipager.dtach.hook_receiver
+# / aipager.dtach.enforce's own copies — this hook stays stdlib-only to
+# hold its <5ms budget (see the SOCKET_PATH comment above).
+#
+# Scope (review-1#rev-iter1-002): this is a raw prefix match, not a
+# signed/correlated check. Safe by construction in scoped/team mode
+# (`session_ops._inject_prompt` always prepends the Telegram marker
+# first, so a spoofed user prompt can never win the match here); in
+# personal mode (no team configured) a user-typed message literally
+# starting with this string is indistinguishable from a real
+# continuation — accepted, since personal mode has no role/snapshot
+# separation to leak. See enforce.py's own copy of this note for the
+# full reasoning.
+_TASK_NOTIFICATION_PREFIX = "<task-notification>"
+
 
 def _debug(msg: str) -> None:
     """Print a diagnostic line to stderr when AIPAGER_DEBUG=1.
@@ -311,6 +333,19 @@ def _run(session: str, cap_slot: list[bytes]) -> None:
     # and prints nothing at all — not even an empty line — when there's
     # nothing to say, matching every other event's existing silence.
     elif data.get("hook_event_name") == "UserPromptSubmit":
+        prompt_text = data.get("prompt", "") or ""
+        if prompt_text.startswith(_TASK_NOTIFICATION_PREFIX):
+            # Continuation turn: the SAME job waking itself up, not a new
+            # human prompt (design.md "model Claude Code background-agent
+            # jobs"). Skip BOTH the queue-handoff match (which would
+            # consume notes that were never meant for this synthetic
+            # prompt) and the style/reply-context additionalContext print
+            # (already injected on the real prompt that started this job)
+            # entirely — most importantly, this means `_match_and_promote`
+            # never runs, so its unconditional "always rewrite the
+            # snapshot" contract never fires here and the job's existing
+            # merged policy snapshot stays pinned exactly as it was.
+            return
         # Queue-handoff (design.md): match this pick-up against the
         # session's outstanding per-message notes and rewrite the
         # canonical policy snapshot from the merge BEFORE the style/

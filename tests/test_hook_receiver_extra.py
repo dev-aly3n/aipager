@@ -293,3 +293,121 @@ def test_session_start_compact_post_pct_stale_defers(receiver, run_async):
     # No compact_done event
     events = [c.args[1] for c in notify_fn.await_args_list]
     assert "compact_done" not in events
+
+
+# ---- design.md "model Claude Code background-agent jobs" ---------------
+
+def test_pretooluse_rebusy_preserves_wall_stamp_when_agents_open(receiver, run_async):
+    """A PreToolUse arriving while NOT already BUSY, WITH real background
+    evidence (an open active_subagents entry — a background agent's own
+    tool call re-entering after an interim Stop), must not restamp
+    busy_started_wall — it passes preserve_job_state=True."""
+    registry, recv, _ = receiver
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          session="claude-hiva",
+          prompt="[via Telegram msg=1]\nanalyze X")
+    sess = registry.get("claude-hiva")
+    original_wall = sess.busy_started_wall
+    assert original_wall > 0
+    registry.transition("claude-hiva", Status.IDLE)
+    sess.active_subagents["a1"] = {"type": "Explore", "started_at": 0.0}
+    _send(recv, run_async, hook_event_name="PreToolUse",
+          session="claude-hiva", tool_name="Bash",
+          tool_input={"command": "ls"})
+    assert sess.status == Status.BUSY
+    assert sess.busy_started_wall == original_wall  # NOT restamped
+
+
+def test_pretooluse_rebusy_restamps_wall_when_no_agents_open(receiver, run_async):
+    """Contrast case (review-1#rev-iter1-001): a PreToolUse arriving while
+    NOT already BUSY, with NO active_subagents evidence, is a genuinely
+    fresh terminal turn whose UserPromptSubmit datagram may simply have
+    been dropped (lossy UDP, daemon restart) — this must restamp
+    busy_started_wall exactly as it did before this feature existed, or
+    session_monitor's idle-recovery written_this_turn guard is defeated."""
+    registry, recv, _ = receiver
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          session="claude-hiva",
+          prompt="[via Telegram msg=1]\nanalyze X")
+    sess = registry.get("claude-hiva")
+    original_wall = sess.busy_started_wall
+    assert original_wall > 0
+    registry.transition("claude-hiva", Status.IDLE)
+    sess.busy_started_wall = 111.0  # sentinel, distinguishable from "now"
+    assert sess.active_subagents == {}  # no background evidence
+    _send(recv, run_async, hook_event_name="PreToolUse",
+          session="claude-hiva", tool_name="Bash",
+          tool_input={"command": "ls"})
+    assert sess.status == Status.BUSY
+    assert sess.busy_started_wall != 111.0  # RESTAMPED fresh
+    assert sess.busy_started_wall != original_wall
+
+
+def test_pretooluse_rebusy_notifies_tool_use(receiver, run_async):
+    registry, recv, notify_fn = receiver
+    sess = registry.get_or_create("claude-hiva")
+    sess.status = Status.IDLE
+    notify_fn.reset_mock()
+    _send(recv, run_async, hook_event_name="PreToolUse",
+          session="claude-hiva", tool_name="Bash",
+          tool_input={"command": "ls"})
+    _, event, _ = notify_fn.await_args.args
+    assert event == "tool_use"
+
+
+def test_continuation_user_prompt_submit_fires_job_continuation(receiver, run_async):
+    """A <task-notification> UserPromptSubmit dispatches "job_continuation"
+    (NOT "user_prompt_submit"), even when the session is already BUSY (the
+    background agent's own PreToolUse having re-entered BUSY first — the
+    common case per the hiva sequence, entrypoints.md step 10)."""
+    registry, recv, notify_fn = receiver
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          session="claude-hiva",
+          prompt="[via Telegram msg=1]\nanalyze X")
+    sess = registry.get("claude-hiva")
+    assert sess.status == Status.BUSY
+    notify_fn.reset_mock()
+    _send(recv, run_async, hook_event_name="PreToolUse",
+          session="claude-hiva", tool_name="Bash",
+          tool_input={"command": "ls"})  # no-op transition, already BUSY
+    notify_fn.reset_mock()
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          session="claude-hiva",
+          prompt="<task-notification>\n<task-id>abc</task-id>\ndone.")
+    notify_fn.assert_awaited_once()
+    fired_sess, event, ctx = notify_fn.await_args.args
+    assert event == "job_continuation"
+    assert ctx == {}
+    assert fired_sess.name == "claude-hiva"
+    assert sess.status == Status.BUSY
+
+
+def test_continuation_user_prompt_submit_does_not_tag_origin(receiver, run_async):
+    """The continuation prompt carries no Telegram marker of its own —
+    the ORIGINAL prompt's origin must survive, never flipped to
+    "terminal" (spec.md's documented safety leak)."""
+    registry, recv, _ = receiver
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          session="claude-hiva",
+          prompt="[via Telegram msg=1]\nanalyze X")
+    sess = registry.get("claude-hiva")
+    assert sess.last_prompt_origin == "telegram"
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          session="claude-hiva",
+          prompt="<task-notification>\n<task-id>abc</task-id>\ndone.")
+    assert sess.last_prompt_origin == "telegram"  # unchanged
+
+
+def test_continuation_user_prompt_submit_preserves_busy_started_wall(receiver, run_async):
+    registry, recv, _ = receiver
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          session="claude-hiva",
+          prompt="[via Telegram msg=1]\nanalyze X")
+    sess = registry.get("claude-hiva")
+    original_wall = sess.busy_started_wall
+    registry.transition("claude-hiva", Status.IDLE)
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          session="claude-hiva",
+          prompt="<task-notification>\n<task-id>abc</task-id>\ndone.")
+    assert sess.status == Status.BUSY
+    assert sess.busy_started_wall == original_wall

@@ -360,3 +360,132 @@ def test_send_busy_and_animate_send_failure_clears_sentinel(mk_bot, run_async):
     # Sentinel cleared back to None on failure
     assert sess.busy_msg_id is None
 
+
+def test_send_busy_and_animate_reclaims_when_job_background_open(mk_bot, run_async):
+    """design.md "model Claude Code background-agent jobs", Decision 9: a
+    genuinely new prompt arriving while a PREVIOUS job's background
+    agents are still open must NOT be swallowed by the "already showing
+    busy" race guard — job_background_open() is checked FIRST and
+    reclaims the waiting card (clears busy_msg_id, falls into the normal
+    fresh-send reset) instead of early-returning."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.busy_msg_id = 99
+    sess.active_subagents["a1"] = {
+        "type": "Explore", "started_at": time.monotonic(),
+    }
+    # Live animate_task — the SAME task that would still be ticking
+    # through the waiting window (its own loop condition also holds on
+    # job_background_open()), constructed but never run so it reads as
+    # "alive, not done" exactly like test_..._skips_when_already_busy above.
+    loop = asyncio.new_event_loop()
+    async def _long(): await asyncio.sleep(100)
+    original_task = loop.create_task(_long())
+    sess.animate_task = original_task
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=42))
+    bot._app.bot.send_chat_action = AsyncMock()
+    bot._start_animation = MagicMock()
+
+    run_async(bot._send_busy_and_animate(sess))
+
+    # Reclaimed — a fresh busy card WAS sent, not swallowed.
+    assert sess.busy_msg_id == 42
+    bot._app.bot.send_message.assert_called_once()
+    if not original_task.done():
+        original_task.cancel()
+    loop.close()
+
+
+def test_send_busy_and_animate_still_skips_when_no_job_open(mk_bot, run_async):
+    """Unchanged behaviour: with no background job open, the original
+    "already showing busy" race guard still applies."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.busy_msg_id = 99
+    loop = asyncio.new_event_loop()
+    async def _long(): await asyncio.sleep(100)
+    sess.animate_task = loop.create_task(_long())
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=42))
+    run_async(bot._send_busy_and_animate(sess))
+    assert sess.busy_msg_id == 99
+    bot._app.bot.send_message.assert_not_called()
+    sess.animate_task.cancel()
+    loop.close()
+
+
+# ===== _animate_busy ======================================================
+
+def test_animate_busy_keeps_ticking_while_job_background_open(mk_bot, run_async):
+    """The loop condition widens from status == BUSY to status == BUSY or
+    job_background_open() (design.md "model Claude Code background-agent
+    jobs") — proven by observing the task is STILL RUNNING (blocked in its
+    sleep, not returned) shortly after being scheduled, while status is
+    IDLE but a background agent is still open.
+
+    Not implemented via ``asyncio.wait_for(..., timeout=...)`` expecting
+    ``TimeoutError``: ``_animate_busy`` catches ``asyncio.CancelledError``
+    itself (``except asyncio.CancelledError: pass``), which swallows
+    ``wait_for``'s own cancellation-on-timeout signal and makes it return
+    normally instead of raising — unrelated to whether the loop condition
+    even holds. Scheduling the coroutine as a bare ``Task`` and checking
+    ``.done()`` directly sidesteps that. No ``asyncio.sleep`` patching
+    (forbidden by spec.md).
+    """
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    sess.busy_msg_id = 42
+    sess.active_subagents["a1"] = {
+        "type": "Explore", "started_at": time.monotonic(),
+    }
+
+    async def _run() -> bool:
+        task = asyncio.ensure_future(bot._animate_busy(sess))
+        await asyncio.sleep(0.05)
+        still_running = not task.done()
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        return still_running
+
+    assert run_async(_run()) is True
+
+
+def test_animate_busy_returns_immediately_when_idle_and_no_job_open(mk_bot, run_async):
+    """Unchanged behaviour: with no background job open, the loop
+    condition is False on entry and the coroutine returns right away."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    sess.busy_msg_id = 42
+
+    async def _run():
+        # Must NOT raise TimeoutError — the coroutine returns instantly.
+        await asyncio.wait_for(bot._animate_busy(sess), timeout=0.05)
+
+    run_async(_run())
+
+
+def test_animate_busy_tick_computes_waiting_frame_when_not_busy(mk_bot, run_async):
+    """Each tick computes waiting = status != BUSY, forwarded to
+    _edit_busy_rich, and skips the typing indicator while genuinely idle.
+    Real-time bounded to the animator's fixed ~1.5s first-tick delay
+    rather than patching asyncio.sleep (forbidden by spec.md)."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    sess.busy_msg_id = 42
+    sess.active_subagents["a1"] = {
+        "type": "Explore", "started_at": time.monotonic(),
+    }
+    # None → "permanent failure" → the loop breaks after exactly one tick.
+    bot._edit_busy_rich = AsyncMock(return_value=None)
+    bot._app.bot.send_chat_action = AsyncMock()
+
+    async def _run():
+        await asyncio.wait_for(bot._animate_busy(sess), timeout=3.0)
+
+    run_async(_run())
+    bot._edit_busy_rich.assert_awaited_once()
+    assert bot._edit_busy_rich.await_args.kwargs.get("waiting") is True
+    bot._app.bot.send_chat_action.assert_not_called()  # no typing while idle
+

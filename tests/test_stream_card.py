@@ -1339,3 +1339,77 @@ def test_trimming_the_history_shifts_the_card_anchors():
     rows = _body(build_stream_card(sess, "Working"))
     assert "earlier tools" in rows[0]
     assert rows[1] == "> opening line"
+
+
+# ── build_stream_card(waiting=True) — design.md "model Claude Code
+# background-agent jobs". Exact header format (entrypoints.md):
+# "🔄 **{label}** · waiting on background work · {N} agent{s}[ ({types})]
+# [ · {elapsed}]"
+
+def _header(card: str) -> str:
+    return card.split("\n\n", 1)[0]
+
+
+def test_waiting_header_single_agent_no_types_over_three():
+    sess = _sess("hiva")
+    sess.busy_started_at = time.monotonic() - 260  # 4m 20s
+    sess.active_subagents["a1"] = {"type": "Explore"}
+    header = _header(build_stream_card(sess, "Working", waiting=True))
+    assert header == (
+        "🔄 **hiva** · waiting on background work · 1 agent (Explore) · 4m 20s"
+    )
+
+
+def test_waiting_header_plural_agents():
+    sess = _sess("hiva")
+    sess.active_subagents["a1"] = {"type": "Explore"}
+    sess.active_subagents["a2"] = {"type": "Plan"}
+    header = _header(build_stream_card(sess, "Working", waiting=True))
+    assert "2 agents" in header
+
+
+def test_waiting_header_types_sorted_and_comma_joined():
+    sess = _sess("hiva")
+    sess.active_subagents["a1"] = {"type": "Zebra"}
+    sess.active_subagents["a2"] = {"type": "Alpha"}
+    header = _header(build_stream_card(sess, "Working", waiting=True))
+    assert "(Alpha, Zebra)" in header
+
+
+def test_waiting_header_omits_types_over_three_distinct():
+    sess = _sess("hiva")
+    for i, t in enumerate(["A", "B", "C", "D"]):
+        sess.active_subagents[f"a{i}"] = {"type": t}
+    header = _header(build_stream_card(sess, "Working", waiting=True))
+    assert "(" not in header  # no parenthetical type list
+    assert "4 agents" in header
+
+
+def test_waiting_header_omits_elapsed_when_busy_started_at_falsy():
+    sess = _sess("hiva")
+    sess.busy_started_at = 0.0
+    sess.active_subagents["a1"] = {"type": "Explore"}
+    header = _header(build_stream_card(sess, "Working", waiting=True))
+    assert header == "🔄 **hiva** · waiting on background work · 1 agent (Explore)"
+
+
+def test_waiting_body_reuses_the_unchanged_timeline_rows():
+    """The body is the SAME _build_timeline_rows(sess, final=False) as a
+    non-waiting render — only the header swaps."""
+    sess = _sess("hiva")
+    sess.active_subagents["a1"] = {"type": "Explore"}
+    sess.tool_history = [("Bash: ls", True)]
+    waiting_card = build_stream_card(sess, "Working", waiting=True)
+    normal_card = build_stream_card(sess, "Whatever", waiting=False)
+    assert _body(waiting_card) == _body(normal_card)
+
+
+def test_waiting_ignored_when_final_also_true():
+    """final wins over waiting — a settled card is never shown as still
+    waiting."""
+    sess = _sess("hiva")
+    sess.active_subagents["a1"] = {"type": "Explore"}
+    card = build_stream_card(sess, "Done", final=True, waiting=True)
+    header = _header(card)
+    assert "waiting on background work" not in header
+    assert "✅" in header

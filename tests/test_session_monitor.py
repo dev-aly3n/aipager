@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -103,6 +104,81 @@ def test_subagent_dropped_after_ttl(monkeypatch, run_async):
     run_async(monitor._scan())
     assert "agent-stale" not in sess.active_subagents
     assert "agent-fresh" in sess.active_subagents
+
+
+# ---- design.md "model Claude Code background-agent jobs" — TTL sweep
+# firing job_agents_lost only when the session was IDLE-with-job-open and
+# the table is now empty.
+
+def test_ttl_sweep_fires_job_agents_lost_when_idle_and_now_empty(
+    monkeypatch, run_async,
+):
+    registry = SessionRegistry()
+    sess = TrackedSession(name="claude-hiva", label="hiva", status=Status.IDLE)
+    sess.active_subagents["a1"] = {
+        "type": "explore",
+        "started_at": time.monotonic() - SUBAGENT_TTL_SECONDS - 60,
+    }
+    registry._sessions["claude-hiva"] = sess
+    notify_fn = AsyncMock()
+    monitor = _mk_monitor(registry, notify_fn)
+    monkeypatch.setattr(
+        "aipager.dtach.inject.list_sessions",
+        lambda: _coroutine_returning(["claude-hiva"]),
+    )
+    run_async(monitor._scan())
+    assert sess.active_subagents == {}
+    notify_fn.assert_awaited_once()
+    fired_sess, event, ctx = notify_fn.await_args.args
+    assert event == "job_agents_lost"
+    assert fired_sess is sess
+    assert ctx == {}
+
+
+def test_ttl_sweep_does_not_fire_job_agents_lost_when_busy(monkeypatch, run_async):
+    """A session that flipped back to BUSY (the background agent's own
+    tool call re-entered before this scan) is still genuinely working,
+    not orphaned — no job_agents_lost."""
+    registry = SessionRegistry()
+    sess = TrackedSession(name="claude-hiva", label="hiva", status=Status.BUSY)
+    sess.active_subagents["a1"] = {
+        "type": "explore",
+        "started_at": time.monotonic() - SUBAGENT_TTL_SECONDS - 60,
+    }
+    registry._sessions["claude-hiva"] = sess
+    notify_fn = AsyncMock()
+    monitor = _mk_monitor(registry, notify_fn)
+    monkeypatch.setattr(
+        "aipager.dtach.inject.list_sessions",
+        lambda: _coroutine_returning(["claude-hiva"]),
+    )
+    run_async(monitor._scan())
+    assert sess.active_subagents == {}  # still dropped by the TTL sweep
+    notify_fn.assert_not_awaited()  # but no job_agents_lost
+
+
+def test_ttl_sweep_does_not_fire_when_a_fresh_agent_remains(monkeypatch, run_async):
+    """The table is not YET empty (a fresh agent is still tracked) — the
+    job is still genuinely open, not orphaned."""
+    registry = SessionRegistry()
+    sess = TrackedSession(name="claude-hiva", label="hiva", status=Status.IDLE)
+    sess.active_subagents["stale"] = {
+        "type": "explore",
+        "started_at": time.monotonic() - SUBAGENT_TTL_SECONDS - 60,
+    }
+    sess.active_subagents["fresh"] = {
+        "type": "plan", "started_at": time.monotonic() - 60,
+    }
+    registry._sessions["claude-hiva"] = sess
+    notify_fn = AsyncMock()
+    monitor = _mk_monitor(registry, notify_fn)
+    monkeypatch.setattr(
+        "aipager.dtach.inject.list_sessions",
+        lambda: _coroutine_returning(["claude-hiva"]),
+    )
+    run_async(monitor._scan())
+    assert "fresh" in sess.active_subagents
+    notify_fn.assert_not_awaited()
 
 
 def test_subagent_without_started_at_kept(run_async):
