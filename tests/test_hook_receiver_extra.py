@@ -297,9 +297,10 @@ def test_session_start_compact_post_pct_stale_defers(receiver, run_async):
 
 # ---- design.md "model Claude Code background-agent jobs" ---------------
 
-def test_pretooluse_rebusy_preserves_wall_stamp_when_not_busy(receiver, run_async):
-    """A PreToolUse arriving while NOT already BUSY (a background agent's
-    own tool call re-entering after an interim Stop) must not restamp
+def test_pretooluse_rebusy_preserves_wall_stamp_when_agents_open(receiver, run_async):
+    """A PreToolUse arriving while NOT already BUSY, WITH real background
+    evidence (an open active_subagents entry — a background agent's own
+    tool call re-entering after an interim Stop), must not restamp
     busy_started_wall — it passes preserve_job_state=True."""
     registry, recv, _ = receiver
     _send(recv, run_async, hook_event_name="UserPromptSubmit",
@@ -309,11 +310,37 @@ def test_pretooluse_rebusy_preserves_wall_stamp_when_not_busy(receiver, run_asyn
     original_wall = sess.busy_started_wall
     assert original_wall > 0
     registry.transition("claude-hiva", Status.IDLE)
+    sess.active_subagents["a1"] = {"type": "Explore", "started_at": 0.0}
     _send(recv, run_async, hook_event_name="PreToolUse",
           session="claude-hiva", tool_name="Bash",
           tool_input={"command": "ls"})
     assert sess.status == Status.BUSY
     assert sess.busy_started_wall == original_wall  # NOT restamped
+
+
+def test_pretooluse_rebusy_restamps_wall_when_no_agents_open(receiver, run_async):
+    """Contrast case (review-1#rev-iter1-001): a PreToolUse arriving while
+    NOT already BUSY, with NO active_subagents evidence, is a genuinely
+    fresh terminal turn whose UserPromptSubmit datagram may simply have
+    been dropped (lossy UDP, daemon restart) — this must restamp
+    busy_started_wall exactly as it did before this feature existed, or
+    session_monitor's idle-recovery written_this_turn guard is defeated."""
+    registry, recv, _ = receiver
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          session="claude-hiva",
+          prompt="[via Telegram msg=1]\nanalyze X")
+    sess = registry.get("claude-hiva")
+    original_wall = sess.busy_started_wall
+    assert original_wall > 0
+    registry.transition("claude-hiva", Status.IDLE)
+    sess.busy_started_wall = 111.0  # sentinel, distinguishable from "now"
+    assert sess.active_subagents == {}  # no background evidence
+    _send(recv, run_async, hook_event_name="PreToolUse",
+          session="claude-hiva", tool_name="Bash",
+          tool_input={"command": "ls"})
+    assert sess.status == Status.BUSY
+    assert sess.busy_started_wall != 111.0  # RESTAMPED fresh
+    assert sess.busy_started_wall != original_wall
 
 
 def test_pretooluse_rebusy_notifies_tool_use(receiver, run_async):

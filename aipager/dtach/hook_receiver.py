@@ -46,6 +46,14 @@ _CTX_WINDOW_SIZE = 200_000  # all current Claude models use 200k context
 # aipager.dtach.notify_hook / aipager.dtach.enforce's own copies — see
 # entrypoints.md's "NOT exported" note (notify_hook.py in particular must
 # not pull in anything beyond stdlib to stay under its 5ms budget).
+#
+# Scope (review-1#rev-iter1-002): a raw prefix match, not a signed check.
+# Scoped/team mode is spoof-safe (`session_ops._inject_prompt` always
+# prepends the Telegram marker first, so it always wins this check);
+# personal mode (no team configured) cannot distinguish a user-typed
+# message starting with this string from a real continuation — accepted,
+# since personal mode has no role/snapshot separation to leak. See
+# enforce.py's own copy of this note for the full reasoning.
 _TASK_NOTIFICATION_PREFIX = "<task-notification>"
 
 
@@ -421,15 +429,30 @@ class HookReceiver:
                 # otherwise looks like a wedged session.
                 sess.pending_tool_started_at = time.monotonic()
                 # Ensure we're in BUSY state. A PreToolUse arriving while
-                # NOT already BUSY can only be a background agent's own
-                # tool call (design.md "model Claude Code background-agent
-                # jobs") — a genuine new turn always fires UserPromptSubmit
-                # before any tool call reaches the transcript — so this
-                # re-entry preserves the job's original busy_started_wall
-                # anchor rather than restamping it.
+                # NOT already BUSY is background activity ONLY when there
+                # is actual evidence of an open background job —
+                # sess.active_subagents non-empty (design.md "model Claude
+                # Code background-agent jobs"). `status != Status.BUSY`
+                # alone is not sufficient: the transport is a fire-and-
+                # forget Unix datagram socket (notify_hook.py's own `_udp`
+                # tolerates send failures — "daemon not running —
+                # session_monitor catches it"), so a genuinely fresh
+                # terminal turn's UserPromptSubmit datagram can be lost
+                # (lossy UDP, daemon restart) and its first PreToolUse can
+                # arrive while sess.status is still stale-IDLE. Preserving
+                # busy_started_wall in THAT case would defeat
+                # session_monitor.py's idle-recovery `written_this_turn`
+                # guard, whose whole purpose is telling apart a turn that
+                # never reached claude from one that finished and went
+                # quiet (review-1#rev-iter1-001). With real background
+                # evidence, the re-entry preserves the job's original
+                # anchor instead of restamping it; without it, this is a
+                # genuine new turn and restamps exactly as before this
+                # feature existed.
                 if sess.status != Status.BUSY:
                     self.registry.transition(
-                        session_name, Status.BUSY, preserve_job_state=True,
+                        session_name, Status.BUSY,
+                        preserve_job_state=bool(sess.active_subagents),
                     )
                 # Item 4.4: forward the raw tool_input for Write/Edit so
                 # the bot can render a diff. We don't forward EVERY
