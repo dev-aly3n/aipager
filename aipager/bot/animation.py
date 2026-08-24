@@ -836,7 +836,7 @@ class AnimationMixin:
             # every later busy card on this session forever".
             top_kind = sess.stack_top_kind()
             if top_kind == "busy":
-                if sess.job_background_open():
+                if sess.job_background_open() and sess.status != Status.BUSY:
                     # A genuinely new prompt is starting while a PREVIOUS
                     # job's background agents are still open (design.md
                     # "model Claude Code background-agent jobs", Decision
@@ -853,11 +853,21 @@ class AnimationMixin:
                     # lost here (design.md Risks: its eventual SubagentStop
                     # or TTL expiry lands in the already-tolerated "no
                     # matching start" / phantom path).
+                    # Only reclaim while the session is NOT mid-turn
+                    # (status gate above, review rev-iter1-001): during an
+                    # in-flight continuation turn (BUSY,
+                    # job_continuation_active) an inbound Telegram message
+                    # must get the same treatment any ordinary busy turn
+                    # gives it — the "already showing busy" no-op below —
+                    # not a reclaim that wipes the very continuation state
+                    # the job's one-true-Finished close depends on.
                     log.warning(
-                        "[%s] new turn starting while a previous job's "
-                        "background agents are still open (%d) — "
-                        "reclaiming the waiting card",
+                        "[%s] new turn starting while a previous job is "
+                        "still open (%d agents, continuation=%s, grace=%s) "
+                        "— reclaiming the waiting card",
                         sess.label, len(sess.active_subagents),
+                        sess.job_continuation_active,
+                        bool(sess.job_grace_until),
                     )
                     sess.busy_msg_id = None
                 elif sess.animate_task and not sess.animate_task.done():

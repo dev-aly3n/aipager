@@ -443,23 +443,43 @@ def test_final_path_dedup_suppresses_stale_redelivery(
           last_assistant_message=REAL_BRIEFING, transcript_path=str(tp))
     assert rich_sends.count(REAL_BRIEFING) == 1
 
-    # A stray re-BUSY (no UserPromptSubmit — e.g. a lost datagram followed
-    # by a duplicate Stop) re-runs the final path with IDENTICAL content:
-    # suppressed.
+    # A continuation whose briefing is byte-identical to the interim:
+    # the final delivery is suppressed (requirement 3's reachable case).
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          prompt="[via Telegram msg=1b]\ndo a background thing",
+          transcript_path=str(tp))
+    _send(recv, run_async, hook_event_name="SubagentStart",
+          agent_id=AGENT_ID, agent_type="Explore")
+    _send(recv, run_async, hook_event_name="Stop",
+          last_assistant_message=INTERIM_ANSWER, transcript_path=str(tp))
+    assert rich_sends.count(INTERIM_ANSWER) == 1
+    _send(recv, run_async, hook_event_name="SubagentStop",
+          agent_id=AGENT_ID, agent_type="Explore")
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          prompt=(f"<task-notification>\n<task-id>{AGENT_ID}</task-id>\n"
+                  "done."), transcript_path=str(tp))
+    _send(recv, run_async, hook_event_name="Stop",
+          last_assistant_message=INTERIM_ANSWER, transcript_path=str(tp))
+    assert rich_sends.count(INTERIM_ANSWER) == 1  # final == interim: no re-post
+
+    # A turn started by a PreToolUse after a LOST UserPromptSubmit
+    # datagram is a genuine new turn (review rev-iter1-002): the
+    # transition-level reset clears the hash, so an answer legitimately
+    # identical to the previous turn's still delivers.
     _send(recv, run_async, hook_event_name="PreToolUse",
           tool_name="Bash", tool_input={"command": "ls"})
     _send(recv, run_async, hook_event_name="Stop",
-          last_assistant_message=REAL_BRIEFING, transcript_path=str(tp))
-    assert rich_sends.count(REAL_BRIEFING) == 1
+          last_assistant_message=INTERIM_ANSWER, transcript_path=str(tp))
+    assert rich_sends.count(INTERIM_ANSWER) == 2
 
-    # A genuine new prompt resets the hash — the same answer to a repeated
-    # question still delivers.
+    # A genuine new prompt resets the hash too — the same answer to a
+    # repeated question still delivers.
     _send(recv, run_async, hook_event_name="UserPromptSubmit",
           prompt="[via Telegram msg=2]\ndo the thing again",
           transcript_path=str(tp))
     _send(recv, run_async, hook_event_name="Stop",
-          last_assistant_message=REAL_BRIEFING, transcript_path=str(tp))
-    assert rich_sends.count(REAL_BRIEFING) == 2
+          last_assistant_message=INTERIM_ANSWER, transcript_path=str(tp))
+    assert rich_sends.count(INTERIM_ANSWER) == 3
 
 
 def test_job_grace_expired_finalizes_card_as_plain_finished(
@@ -489,3 +509,79 @@ def test_job_grace_expired_finalizes_card_as_plain_finished(
     assert "lost" not in edits[0]
     assert sess.busy_msg_id is None
     assert sess.trigger_msg_id is None
+
+
+def test_double_hop_continuation_spawning_new_agents(
+    mk_bot, run_async, tmp_path, monkeypatch,
+):
+    """Reviewer coverage gap: a continuation turn that spawns NEW
+    background agents and then stops demotes to plain interim (waiting
+    again), and the SECOND continuation cycle closes the job normally."""
+    bot = mk_bot()
+    registry = bot.registry
+    recv = hr.HookReceiver(registry, bot.notify)
+    tp = tmp_path / "hop.jsonl"
+    _write_transcript(tp, with_continuation=False)
+
+    next_id = [4000]
+    async def _send_message(chat_id, text, **kwargs):
+        next_id[0] += 1
+        return MagicMock(message_id=next_id[0])
+    bot._app.bot.send_message = AsyncMock(side_effect=_send_message)
+    bot._app.bot.send_chat_action = AsyncMock(return_value=None)
+    bot._app.bot.delete_message = AsyncMock(return_value=None)
+    rich_sends: list[str] = []
+    async def _send_rich(chat_id, content, **kwargs):
+        rich_sends.append(content)
+        return {"message_id": next_id[0]}
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
+    edit_calls: list[dict] = []
+    real_edit = bot._edit_busy_rich
+    async def _spy(sess_, verb, *, final=False, waiting=False):
+        edit_calls.append({"final": final, "waiting": waiting})
+        return await real_edit(sess_, verb, final=final, waiting=waiting)
+    bot._edit_busy_rich = _spy
+    async def _edit_rich_transport(chat_id, msg_id, markdown, **kwargs):
+        return {}
+    monkeypatch.setattr("aipager.bot.animation.edit_message_text_rich",
+                        _edit_rich_transport)
+    monkeypatch.setattr("aipager.preferences.KEEP_FINISHED_CARD", True)
+
+    # hop 1
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          prompt="[via Telegram msg=1]\ngo", transcript_path=str(tp))
+    sess = registry.get(SESSION)
+    sess.scope_chat_id = -1001
+    _send(recv, run_async, hook_event_name="SubagentStart",
+          agent_id="agent-1", agent_type="Explore")
+    _send(recv, run_async, hook_event_name="Stop",
+          last_assistant_message="interim one", transcript_path=str(tp))
+    _send(recv, run_async, hook_event_name="SubagentStop",
+          agent_id="agent-1", agent_type="Explore")
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          prompt="<task-notification>\n<task-id>agent-1</task-id>\ndone.",
+          transcript_path=str(tp))
+    assert sess.job_continuation_active is True
+    # the continuation spawns a NEW background agent, then stops
+    _send(recv, run_async, hook_event_name="SubagentStart",
+          agent_id="agent-2", agent_type="Explore")
+    _send(recv, run_async, hook_event_name="Stop",
+          last_assistant_message="interim two", transcript_path=str(tp))
+    # demoted to plain waiting: continuation flag cleared, no Finished yet
+    assert sess.job_continuation_active is False
+    assert sess.job_background_open() is True
+    assert [c for c in edit_calls if c["final"]] == []
+    # hop 2 closes normally
+    _send(recv, run_async, hook_event_name="SubagentStop",
+          agent_id="agent-2", agent_type="Explore")
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          prompt="<task-notification>\n<task-id>agent-2</task-id>\ndone.",
+          transcript_path=str(tp))
+    _send(recv, run_async, hook_event_name="Stop",
+          last_assistant_message="the real final answer",
+          transcript_path=str(tp))
+    assert sess.status == Status.IDLE
+    assert sess.job_background_open() is False
+    assert rich_sends == ["interim one", "interim two", "the real final answer"]
+    finals = [c for c in edit_calls if c["final"]]
+    assert len(finals) == 1

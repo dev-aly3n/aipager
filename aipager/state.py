@@ -822,6 +822,18 @@ class SessionRegistry:
             # prompt that woke the session back up.
             if sess.status != Status.INTERACTIVE and not preserve_job_state:
                 sess.busy_started_wall = time.time()
+                # A genuinely new turn also supersedes any previous job's
+                # endgame state and its delivered-summary hash (review
+                # rev-iter1-002): resetting HERE — the one gate every
+                # BUSY entry passes through — rather than only in
+                # _send_busy_and_animate covers turns that begin with a
+                # PreToolUse after a lost UserPromptSubmit datagram too.
+                # Continuation/background re-entries pass
+                # preserve_job_state=True and never reach this branch.
+                sess.last_idle_summary_hash = ""
+                sess.job_interim_seen = False
+                sess.job_continuation_active = False
+                sess.job_grace_until = 0.0
 
         old = sess.status
         sess.status = new_status
