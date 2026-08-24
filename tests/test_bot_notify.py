@@ -241,6 +241,22 @@ def test_subagent_stop_with_no_match_appends_done(mk_bot, run_async):
     assert sess.tool_history[0][1] is True
 
 
+def test_phantom_subagent_stop_empty_type_adds_no_row(mk_bot, run_async):
+    """design.md "model Claude Code background-agent jobs" requirement 5:
+    an unknown-id, empty-agent_type SubagentStop (hook_receiver's phantom
+    events, e.g. steps 4 of the hiva sequence) must not pollute the
+    timeline with a meaningless "🤖 " row — unlike a real "no matching
+    start" stop (agent_type non-empty), which still appends one."""
+    bot = mk_bot()
+    sess = _sess(busy_msg_id=None)
+    sess.tool_history = []
+    run_async(bot.notify(sess, "subagent_stop", {
+        "agent_id": "unknown-1", "agent_type": "",
+        "elapsed": 0.0, "history_idx": None,
+    }))
+    assert sess.tool_history == []
+
+
 # ---- compacting ---------------------------------------------------------
 
 def test_compacting_edits_busy_when_present(mk_bot, run_async):

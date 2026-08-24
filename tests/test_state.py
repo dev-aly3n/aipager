@@ -780,3 +780,95 @@ def test_all_sessions_includes_unstamped_legacy_session():
     _mk_scoped(r, "claude-legacy", 0)  # not yet stamped → matches any scope
     assert set(r.all_sessions(100)) == {"claude-a", "claude-legacy"}
     assert set(r.all_sessions(-200)) == {"claude-legacy"}
+
+
+# ---- job_background_open() — design.md "model Claude Code
+# background-agent jobs". Four quadrants: {IDLE, BUSY} x
+# {active_subagents empty, non-empty}, plus the two other statuses that
+# must never read as job-open even with stale entries.
+
+def test_job_background_open_idle_with_agents_is_true():
+    r = SessionRegistry()
+    sess = r.get_or_create("claude-hiva")
+    sess.status = Status.IDLE
+    sess.active_subagents["a1"] = {"type": "Explore"}
+    assert sess.job_background_open() is True
+
+
+def test_job_background_open_busy_with_agents_is_true():
+    r = SessionRegistry()
+    sess = r.get_or_create("claude-hiva")
+    sess.status = Status.BUSY
+    sess.active_subagents["a1"] = {"type": "Explore"}
+    assert sess.job_background_open() is True
+
+
+def test_job_background_open_idle_no_agents_is_false():
+    r = SessionRegistry()
+    sess = r.get_or_create("claude-hiva")
+    sess.status = Status.IDLE
+    assert sess.active_subagents == {}
+    assert sess.job_background_open() is False
+
+
+def test_job_background_open_busy_no_agents_is_false():
+    r = SessionRegistry()
+    sess = r.get_or_create("claude-hiva")
+    sess.status = Status.BUSY
+    assert sess.job_background_open() is False
+
+
+def test_job_background_open_interactive_with_agents_is_false():
+    """Even a stale active_subagents entry does not read as job-open for
+    a status the predicate doesn't cover — INTERACTIVE/GONE/UNKNOWN are
+    never a "waiting on background work" state."""
+    r = SessionRegistry()
+    sess = r.get_or_create("claude-hiva")
+    sess.status = Status.INTERACTIVE
+    sess.active_subagents["a1"] = {"type": "Explore"}
+    assert sess.job_background_open() is False
+
+
+def test_job_background_open_gone_with_agents_is_false():
+    r = SessionRegistry()
+    sess = r.get_or_create("claude-hiva")
+    sess.status = Status.GONE
+    sess.active_subagents["a1"] = {"type": "Explore"}
+    assert sess.job_background_open() is False
+
+
+# ---- transition(..., preserve_job_state=True) ----------------------------
+
+def test_preserve_job_state_skips_busy_started_wall_stamp(tmp_state_file):
+    r = SessionRegistry()
+    r.transition("claude-hiva", Status.BUSY)
+    sess = r.get("claude-hiva")
+    original_wall = sess.busy_started_wall
+    assert original_wall > 0
+    r.transition("claude-hiva", Status.IDLE)
+    r.transition("claude-hiva", Status.BUSY, preserve_job_state=True)
+    assert sess.busy_started_wall == original_wall  # NOT restamped
+
+
+def test_preserve_job_state_false_restamps_busy_started_wall(tmp_state_file):
+    """The default (omitted / False) behaviour is unchanged — a genuinely
+    new BUSY entry still restamps busy_started_wall."""
+    r = SessionRegistry()
+    r.transition("claude-hiva", Status.BUSY)
+    sess = r.get("claude-hiva")
+    original_wall = sess.busy_started_wall
+    r.transition("claude-hiva", Status.IDLE)
+    sess.busy_started_wall = 111.0  # sentinel, distinguishable from "now"
+    r.transition("claude-hiva", Status.BUSY)  # preserve_job_state omitted
+    assert sess.busy_started_wall != 111.0
+    assert sess.busy_started_wall != original_wall
+
+
+def test_preserve_job_state_true_still_skips_stamp_explicitly(tmp_state_file):
+    r = SessionRegistry()
+    r.transition("claude-hiva", Status.BUSY)
+    sess = r.get("claude-hiva")
+    r.transition("claude-hiva", Status.IDLE)
+    sess.busy_started_wall = 222.0  # sentinel
+    r.transition("claude-hiva", Status.BUSY, preserve_job_state=True)
+    assert sess.busy_started_wall == 222.0  # untouched
