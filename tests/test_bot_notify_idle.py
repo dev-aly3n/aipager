@@ -175,17 +175,49 @@ def test_idle_session_override_wins_over_scope_layout(mk_bot, run_async, monkeyp
     assert preferences.get_preferences(sess.scope_chat_id).layout == "replace"
 
 
-def test_idle_marks_tools_done_clears_subagents(mk_bot, run_async):
+def test_idle_marks_tools_done_when_no_agents_open(mk_bot, run_async):
+    """A genuinely finished turn (no active_subagents) marks tool_history
+    done, same as always."""
     bot = mk_bot()
     sess = _sess(status=Status.IDLE)
     sess.tool_history = [("Bash: ls", False), ("Read: /x", False)]
-    sess.active_subagents = {"a1": {"type": "x"}}
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._maybe_update_bot_name = AsyncMock()
     run_async(bot.notify(sess, "idle_prompt", {"summary": "done"}))
     # All tools marked done
     assert all(done is True for _, done in sess.tool_history)
-    assert sess.active_subagents == {}
+
+
+def test_idle_with_open_agents_does_not_clear_or_finish(mk_bot, run_async):
+    """design.md "model Claude Code background-agent jobs": an idle
+    transition while active_subagents is non-empty means a background job
+    is still open — job_background_open() is now True — so this must NOT
+    take the Finished-card path at all (no tool_history mutation, no
+    active_subagents.clear(), no "Finished" header). This is the exact bug
+    the feature fixes: the OLD unconditional active_subagents.clear() at
+    the top of the IDLE branch is what silently erased the very state a
+    waiting card needs to render correctly.
+    """
+    bot = mk_bot()
+    sess = _sess(status=Status.IDLE)
+    sess.tool_history = [("Bash: ls", False), ("Read: /x", False)]
+    sess.active_subagents = {"a1": {"type": "x", "started_at": time.monotonic()}}
+    sess.busy_msg_id = 42
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
+    bot._maybe_update_bot_name = AsyncMock()
+    bot._edit_busy_rich = AsyncMock(return_value=True)
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "done"}))
+    # Nothing marked done — the turn isn't over.
+    assert all(done is False for _, done in sess.tool_history)
+    # active_subagents survives — job_background_open() must keep working.
+    assert sess.active_subagents == {"a1": {"type": "x",
+                                             "started_at": sess.active_subagents["a1"]["started_at"]}}
+    # No "Finished" header sent.
+    for call in bot._app.bot.send_message.await_args_list:
+        assert "Finished" not in call.args[1]
+    # The waiting card was rendered instead.
+    bot._edit_busy_rich.assert_awaited()
+    assert bot._edit_busy_rich.await_args.kwargs.get("waiting") is True
 
 
 def test_idle_with_short_summary_includes_blockquote(mk_bot, run_async):

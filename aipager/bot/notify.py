@@ -10,6 +10,7 @@ Single owner of all Telegram communication. Handles:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import html as html_mod
 import logging
 import tempfile
@@ -111,6 +112,48 @@ def _drop_answer_tail(sess: TrackedSession, answer: str) -> None:
         sess.stream_commentary.pop()
 
 
+def _plain_text_chunks(body_content: str) -> list[str]:
+    """Split *body_content* into ≤4096-byte chunks at markdown-safe
+    boundaries, for a plain-text (no ``parse_mode``) send that Telegram
+    cannot fail to parse.
+
+    Shared by the finished-turn fallback and the job-interim delivery path
+    (design.md "model Claude Code background-agent jobs") so the two paths
+    can never disagree about how an oversized answer gets split. Always
+    returns at least one chunk (truncated to 4096 bytes) even for input
+    with no markdown-safe boundary at all.
+    """
+    bounds = _md_safe_boundaries(body_content)
+    chunks: list[str] = []
+    prev = 0
+    for b in bounds:
+        chunk = body_content[prev:b]
+        if len(chunk.encode("utf-8")) > 4096:
+            # Safety: hard-cut at 4096 bytes if a single segment
+            # exceeds the limit (very long paragraph, no breaks).
+            encoded = chunk.encode("utf-8")
+            pos = 0
+            while pos < len(encoded):
+                piece = encoded[pos:pos + 4096].decode("utf-8", errors="ignore")
+                if piece:
+                    chunks.append(piece)
+                pos += 4096
+        elif chunk:
+            chunks.append(chunk)
+        prev = b
+    tail = body_content[prev:]
+    if tail:
+        encoded = tail.encode("utf-8")
+        pos = 0
+        while pos < len(encoded):
+            piece = encoded[pos:pos + 4096].decode("utf-8", errors="ignore")
+            if piece:
+                chunks.append(piece)
+            pos += 4096
+    if not chunks:
+        chunks = [body_content[:4096]]
+    return chunks
+
 
 class NotifyMixin:
     """Mixin for TelegramBot — see :mod:`aipager.bot` overview."""
@@ -165,6 +208,137 @@ class NotifyMixin:
             sess.busy_msg_id = 0
             return False
         return result is not None
+
+    async def _deliver_job_interim_content(
+        self, sess: TrackedSession, content: str,
+    ) -> None:
+        """Deliver Claude's interim message exactly once per NEW content
+        (design.md "model Claude Code background-agent jobs", requirement
+        2's content-dedup).
+
+        Hashes the EXACT text ``notify()``'s existing content-selection
+        rule already computes (``raw_md or summary``, with the
+        ``sess.summary`` fallback already applied by the caller) — this
+        reuses that logic rather than inventing a second one, so "what
+        gets hashed" and "what gets sent" can never drift apart. No
+        header, reply-threaded to the job's original ``trigger_msg_id`` —
+        never ``None``'d out here, unlike the real Finished path, because
+        the job (and its reply thread) is not over yet.
+        """
+        digest = hashlib.md5(content.encode("utf-8")).hexdigest()
+        if digest == sess.last_idle_summary_hash:
+            log.debug(
+                "[%s] job interim summary unchanged since the last delivery "
+                "(hash match) — skipping", sess.label,
+            )
+            return
+        sess.last_idle_summary_hash = digest
+        is_rtl = detect_rtl(content)
+        chat_id = resolve_chat_id_int(sess)
+        try:
+            if chat_id is None:
+                raise RichMessageFallbackRequired("no numeric chat id resolved")
+            sent = await send_rich_message(
+                chat_id, content, is_rtl=is_rtl,
+                reply_to_message_id=sess.trigger_msg_id,
+            )
+            if isinstance(sent, dict) and sent.get("message_id"):
+                self.registry.track_message(
+                    sent["message_id"], sess.name, chat_id or 0,
+                )
+        except RichMessageBlocked:
+            _log_blocked_once(Exception("sendRichMessage 403"))
+        except (RichMessageFallbackRequired, Exception):
+            log.warning(
+                "[%s] job interim sendRichMessage failed — falling back to "
+                "plain text", sess.label, exc_info=True,
+            )
+            for chunk in _plain_text_chunks(content):
+                try:
+                    fallback = await self._app.bot.send_message(
+                        resolve_chat_id(sess), chunk,
+                        reply_to_message_id=sess.trigger_msg_id,
+                    )
+                    self.registry.track_message(
+                        fallback.message_id, sess.name,
+                        resolve_chat_id_int(sess) or 0,
+                    )
+                except Exception:
+                    log.warning(
+                        "[%s] job interim plain-text fallback chunk send "
+                        "failed", sess.label, exc_info=True,
+                    )
+
+    async def _handle_job_interim(
+        self, sess: TrackedSession, context: dict,
+    ) -> None:
+        """The ``idle_prompt`` path when ``sess.job_background_open()`` is
+        True — an interim Stop/Notification/StopFailure while a background
+        agent this job launched is still running (design.md "model Claude
+        Code background-agent jobs", requirement 1).
+
+        Never produces a "Finished" card: delivers Claude's message once
+        (if it is new — see :meth:`_deliver_job_interim_content`),
+        re-renders the live card to the waiting frame in place (rather
+        than waiting for the animator's next natural tick), and drains one
+        queued prompt if any is waiting — the exact same
+        :meth:`_drain_next_queued` the real Finished path uses, so a
+        message queued during the wait is not stranded until the job's
+        eventual real end.
+        """
+        raw_md = context.get("raw_md", "")
+        content = raw_md or context.get("summary", "")
+        if not content and not context.get("no_response"):
+            content = sess.summary or ""
+        if content:
+            await self._deliver_job_interim_content(sess, content)
+        if sess.busy_msg_id and sess.busy_msg_id > 0:
+            sess.stream_dirty = True
+            if await self._edit_busy_rich(
+                sess, "Working", waiting=True,
+            ) is None:
+                self._stop_animation(sess)
+        await self._drain_next_queued(sess)
+
+    async def _drain_next_queued(self, sess: TrackedSession) -> None:
+        """Pop and inject the next queued prompt, one at a time.
+
+        Extracted from its original inline spot at the end of the
+        Finished-card path (design.md "model Claude Code background-agent
+        jobs") so that path and :meth:`_handle_job_interim` share one
+        implementation — a message queued while a job's background work is
+        still open drains on the very next idle moment (interim OR real)
+        rather than waiting specifically for the real Finished. A no-op
+        when the queue is empty.
+        """
+        if not sess.pending_queue:
+            return
+        (
+            queued_text, queued_trigger, _queued_at,
+            queued_reply_context, queued_driver_user_id,
+        ) = sess.pending_queue.pop(0)
+        sess.trigger_msg_id = queued_trigger
+        sess.last_prompt = queued_text
+        if queued_trigger is not None:
+            # Queued messages are never tracked at queue time
+            # (Part 1 only covers the immediate-inject branches)
+            # — track now so a reply to a queued-then-drained
+            # message is routable via levels 1/2 right away,
+            # not only once the next bot message re-tracks the
+            # session by coincidence (design.md Part 4).
+            self.registry.track_message(
+                queued_trigger, sess.name, resolve_chat_id_int(sess) or 0,
+            )
+        self.registry.mark_dirty()
+        ok = await self._inject_prompt(
+            sess, queued_text, queued_reply_context,
+            msg_id=queued_trigger, chat_id=resolve_chat_id_int(sess),
+            driver_user_id=queued_driver_user_id,
+        )
+        if ok:
+            self.registry.transition(sess.name, Status.BUSY)
+            await self._send_busy_and_animate(sess)
+            log.info("[%s] Flushed queued: %s", sess.label, queued_text[:80])
 
     async def notify(self, sess: TrackedSession, event: str, context: dict) -> None:
         """Send appropriate Telegram notification for a state change."""
@@ -299,6 +473,72 @@ class NotifyMixin:
             await self._send_busy_and_animate(sess)
             return
 
+        if event == "job_continuation":
+            # A self-triggered <task-notification> continuation — the SAME
+            # job waking itself back up, not a new turn (design.md "model
+            # Claude Code background-agent jobs"). Deliberately does NOT
+            # call _send_busy_and_animate: that resets busy_started_at,
+            # tool_history, active_subagents, subagent_count_this_turn,
+            # output_baseline and cost_baseline, which is exactly what a
+            # continuation of the SAME job must not do — the whole reason
+            # this is a distinct event name rather than "user_prompt_submit".
+            # The animator (already ticking through this transition — its
+            # loop condition holds on job_background_open() too) settles
+            # the header frame on its own next tick regardless; this just
+            # nudges it immediately so the card doesn't sit showing a stale
+            # waiting frame for a full animation interval after the job has
+            # actually resumed.
+            if sess.busy_msg_id and sess.busy_msg_id > 0:
+                sess.stream_dirty = True
+                waiting = sess.status != Status.BUSY
+                if await self._edit_busy_rich(
+                    sess, "Working", waiting=waiting,
+                ) is None:
+                    self._stop_animation(sess)
+            return
+
+        if event == "job_agents_lost":
+            # The subagent TTL sweep emptied the last open agent for a
+            # session sitting IDLE with a job open (design.md "model Claude
+            # Code background-agent jobs" requirement 6) — a job cannot
+            # wait forever. Produces the terminal "background agent lost"
+            # card rather than a normal Finished: nothing new happened,
+            # the agent just disappeared without ever reporting back, so
+            # there is no answer to deliver. Deliberately does not drain
+            # the pending queue (design.md Risks) — a message queued
+            # during the wait drains on the next real idle-transition.
+            self._stop_animation(sess)
+            elapsed_str = ""
+            if sess.busy_started_at:
+                elapsed_s = int(time.monotonic() - sess.busy_started_at)
+                if elapsed_s >= 60:
+                    elapsed_str = f"{elapsed_s // 60}m {elapsed_s % 60}s"
+                elif elapsed_s > 0:
+                    elapsed_str = f"{elapsed_s}s"
+            suffix = f" after {elapsed_str}" if elapsed_str else ""
+            text = (f"⚠️ <b>{html_mod.escape(label)}</b> · Finished "
+                    f"(background agent lost{suffix})")
+            target_msg_id = sess.busy_msg_id
+            if target_msg_id and target_msg_id > 0:
+                await self._edit_busy_raw(
+                    target_msg_id, text, chat_id=resolve_chat_id(sess),
+                )
+                sess.busy_msg_id = None
+            else:
+                try:
+                    await bot.send_message(
+                        resolve_chat_id(sess), text, parse_mode="HTML",
+                        reply_to_message_id=sess.trigger_msg_id,
+                    )
+                except Exception:
+                    log.warning("Failed to send job_agents_lost notification",
+                                exc_info=True)
+            sess.trigger_msg_id = None
+            self.registry.mark_dirty()
+            if self.observers:
+                asyncio.create_task(self.observers.broadcast(text))
+            return
+
         if event == "tool_use":
             tool_summary = context.get("tool_summary", "")
             tool_name = context.get("tool_name", "")
@@ -426,9 +666,14 @@ class NotifyMixin:
             # Mark the matching tool_history entry as done SYNCHRONOUSLY
             if history_idx is not None and 0 <= history_idx < len(sess.tool_history):
                 sess.tool_history[history_idx] = (done_summary, True)
-            else:
+            elif agent_type:
                 # No matching start — daemon restart, or the start was
-                # evicted by the active_subagents cap — append as done entry
+                # evicted by the active_subagents cap — append as done
+                # entry. A phantom SubagentStop (unknown id AND empty
+                # agent_type — design.md "model Claude Code background-agent
+                # jobs" requirement 5) carries no real information to show,
+                # so it must not pollute the timeline with a meaningless
+                # "🤖 " row.
                 sess.record_tool(done_summary, True)
             # Edit busy message if ready (debounced)
             if sess.busy_msg_id and sess.busy_msg_id > 0:
@@ -653,9 +898,20 @@ class NotifyMixin:
             return
 
         if sess.status == Status.IDLE:
+            if sess.job_background_open():
+                # A background agent this job launched is still running —
+                # this idle-transition is an INTERIM Stop, not the job's
+                # true end (design.md "model Claude Code background-agent
+                # jobs", requirement 1). Never falls through to the
+                # Finished-card disposal logic below: that logic's
+                # unconditional active_subagents.clear() (removed just
+                # below) was itself the bug this feature fixes — it erased
+                # the very state job_background_open() needs to keep
+                # working.
+                await self._handle_job_interim(sess, context)
+                return
             # Mark all tools as done
             sess.tool_history = [(s, True) for s, _ in sess.tool_history]
-            sess.active_subagents.clear()
             # Stop animation and clean up busy message
             self._stop_animation(sess)
             sess.pending_permission = None  # clear stale inline permission if any
@@ -935,35 +1191,7 @@ class NotifyMixin:
                     # markdown-safe boundaries so the send cannot fail to parse.
                     log.warning("[%s] sendRichMessage failed — falling back to plain text",
                                 label, exc_info=True)
-                    bounds = _md_safe_boundaries(body_content)
-                    chunks: list[str] = []
-                    prev = 0
-                    for b in bounds:
-                        chunk = body_content[prev:b]
-                        if len(chunk.encode("utf-8")) > 4096:
-                            # Safety: hard-cut at 4096 bytes if a single segment
-                            # exceeds the limit (very long paragraph, no breaks).
-                            encoded = chunk.encode("utf-8")
-                            pos = 0
-                            while pos < len(encoded):
-                                piece = encoded[pos:pos + 4096].decode("utf-8", errors="ignore")
-                                if piece:
-                                    chunks.append(piece)
-                                pos += 4096
-                        elif chunk:
-                            chunks.append(chunk)
-                        prev = b
-                    tail = body_content[prev:]
-                    if tail:
-                        encoded = tail.encode("utf-8")
-                        pos = 0
-                        while pos < len(encoded):
-                            piece = encoded[pos:pos + 4096].decode("utf-8", errors="ignore")
-                            if piece:
-                                chunks.append(piece)
-                            pos += 4096
-                    if not chunks:
-                        chunks = [body_content[:4096]]
+                    chunks = _plain_text_chunks(body_content)
                     for chunk in chunks:
                         try:
                             fallback = await bot.send_message(
@@ -1026,33 +1254,7 @@ class NotifyMixin:
                     asyncio.create_task(self.observers.broadcast(obs_text))
 
             # Flush next queued message (one at a time, rest flush on next IDLE)
-            if sess.pending_queue:
-                (
-                    queued_text, queued_trigger, _queued_at,
-                    queued_reply_context, queued_driver_user_id,
-                ) = sess.pending_queue.pop(0)
-                sess.trigger_msg_id = queued_trigger
-                sess.last_prompt = queued_text
-                if queued_trigger is not None:
-                    # Queued messages are never tracked at queue time
-                    # (Part 1 only covers the immediate-inject branches)
-                    # — track now so a reply to a queued-then-drained
-                    # message is routable via levels 1/2 right away,
-                    # not only once the next bot message re-tracks the
-                    # session by coincidence (design.md Part 4).
-                    self.registry.track_message(
-                        queued_trigger, sess.name, resolve_chat_id_int(sess) or 0,
-                    )
-                self.registry.mark_dirty()
-                ok = await self._inject_prompt(
-                    sess, queued_text, queued_reply_context,
-                    msg_id=queued_trigger, chat_id=resolve_chat_id_int(sess),
-                    driver_user_id=queued_driver_user_id,
-                )
-                if ok:
-                    self.registry.transition(sess.name, Status.BUSY)
-                    await self._send_busy_and_animate(sess)
-                    log.info("[%s] Flushed queued: %s", sess.label, queued_text[:80])
+            await self._drain_next_queued(sess)
 
         elif sess.status == Status.INTERACTIVE:
             self._stop_animation(sess)

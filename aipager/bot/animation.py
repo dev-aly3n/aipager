@@ -350,50 +350,93 @@ def _shed_tool_rows(rows: list[str], header: str) -> list[str]:
         shed += 1
 
 
-def build_stream_card(sess: TrackedSession, verb: str, *, final: bool = False) -> str:
+def _waiting_header(sess: TrackedSession) -> str:
+    """The header for a job with background work still open (design.md
+    "model Claude Code background-agent jobs").
+
+    Exact format (entrypoints.md): ``"🔄 **{label}** · waiting on
+    background work · {N} agent{s}[ ({types})][ · {elapsed}]"``. ``{N}`` is
+    ``len(sess.active_subagents)``; the parenthetical type list is present
+    only for 1-3 distinct types, each markdown-escaped, comma-joined,
+    sorted; ``{elapsed}`` is computed from ``sess.busy_started_at`` — the
+    job's ORIGINAL anchor, never re-stamped by a background re-entry — and
+    omitted only when that anchor is falsy (should not occur in practice).
+    """
+    n = len(sess.active_subagents)
+    plural = "" if n == 1 else "s"
+    header = f"🔄 **{_md_escape(sess.label)}** · waiting on background work · {n} agent{plural}"
+    types = sorted({info.get("type", "") for info in sess.active_subagents.values()
+                    if info.get("type")})
+    if 1 <= len(types) <= 3:
+        header += f" ({', '.join(_md_escape(t) for t in types)})"
+    if sess.busy_started_at:
+        elapsed_s = max(0, int(time.monotonic() - sess.busy_started_at))
+        if elapsed_s >= 60:
+            elapsed = f"{elapsed_s // 60}m {elapsed_s % 60}s"
+        else:
+            elapsed = f"{elapsed_s}s"
+        header += f" · {elapsed}"
+    return header
+
+
+def build_stream_card(
+    sess: TrackedSession, verb: str, *, final: bool = False,
+    waiting: bool = False,
+) -> str:
     """Build the streaming busy-card markdown. Pure: no I/O, no mutation.
 
     ``final`` builds the finished card left behind after the turn: uncapped
     rows, a settled ✅ in the header, and tool rows shed oldest-first if the
     card is somehow still over the ceiling.
 
+    ``waiting`` (design.md "model Claude Code background-agent jobs") swaps
+    ONLY the header — mark, verb, and stats replaced by the background-job
+    waiting presentation (agent count/type(s), elapsed) — while reusing the
+    unchanged timeline-row assembly below. Mutually exclusive with
+    ``final`` in practice (a waiting job is never the settled finished
+    card); ``final`` wins if both are somehow passed, since the settled
+    card is the more truthful state once composed together.
+
     Returns a string that is always ≤ 32 768 UTF-8 bytes.
     """
-    # ── Header segments: state, label, verb, then the turn's live stats ──
-    parts: list[str] = []
-    if sess.busy_started_at:
-        # Shown from the first second. Hiding it below 2s left the card
-        # reading "⏳" with no number, then jumping straight to "5s".
-        elapsed_s = max(0, int(time.monotonic() - sess.busy_started_at))
-        if elapsed_s >= 60:
-            parts.append(f"{elapsed_s // 60}m {elapsed_s % 60}s")
-        else:
-            parts.append(f"{elapsed_s}s")
+    if waiting and not final:
+        header = _waiting_header(sess)
+    else:
+        # ── Header segments: state, label, verb, then the turn's live stats ──
+        parts: list[str] = []
+        if sess.busy_started_at:
+            # Shown from the first second. Hiding it below 2s left the card
+            # reading "⏳" with no number, then jumping straight to "5s".
+            elapsed_s = max(0, int(time.monotonic() - sess.busy_started_at))
+            if elapsed_s >= 60:
+                parts.append(f"{elapsed_s // 60}m {elapsed_s % 60}s")
+            else:
+                parts.append(f"{elapsed_s}s")
 
-    if (sess.cost_baseline is not None
-            and sess.last_cost_usd > 0):
-        delta = sess.last_cost_usd - sess.cost_baseline
-        if delta > 0.001:
-            parts.append(f"${delta:.2f}")
+        if (sess.cost_baseline is not None
+                and sess.last_cost_usd > 0):
+            delta = sess.last_cost_usd - sess.cost_baseline
+            if delta > 0.001:
+                parts.append(f"${delta:.2f}")
 
-    if sess.tool_history:
-        tally: dict[str, int] = {}
-        for summary, _done in sess.tool_history:
-            # Summaries are "Read: /path", "Grep: pat in dir" or "🤖 agent-type".
-            # Everything before the colon is the tool name; without one, the
-            # first word stands in.
-            head = summary.split(":", 1)[0] if ":" in summary else summary
-            words = head.split()
-            name = words[0][:20] if words else ""
-            if not name:
-                continue
-            tally[name] = tally.get(name, 0) + 1
-        parts.extend(f"{n} ×{c}" for n, c in tally.items())
+        if sess.tool_history:
+            tally: dict[str, int] = {}
+            for summary, _done in sess.tool_history:
+                # Summaries are "Read: /path", "Grep: pat in dir" or "🤖 agent-type".
+                # Everything before the colon is the tool name; without one, the
+                # first word stands in.
+                head = summary.split(":", 1)[0] if ":" in summary else summary
+                words = head.split()
+                name = words[0][:20] if words else ""
+                if not name:
+                    continue
+                tally[name] = tally.get(name, 0) + 1
+            parts.extend(f"{n} ×{c}" for n, c in tally.items())
 
-    mark = "✅" if final else "⏳"
-    header = f"{mark} **{_md_escape(sess.label)}** · {verb}"
-    if parts:
-        header += " · " + " · ".join(parts)
+        mark = "✅" if final else "⏳"
+        header = f"{mark} **{_md_escape(sess.label)}** · {verb}"
+        if parts:
+            header += " · " + " · ".join(parts)
 
     rows = _build_timeline_rows(sess, final=final)
     if final:
@@ -573,11 +616,18 @@ class AnimationMixin:
 
     async def _edit_busy_rich(
         self, sess: TrackedSession, verb: str, *, final: bool = False,
+        waiting: bool = False,
     ) -> bool | None:
         """Edit the busy message with the streaming card.
 
         ``final`` renders the settled card the turn leaves behind: uncapped
         rows and no Stop button.
+
+        ``waiting`` (design.md "model Claude Code background-agent jobs")
+        forwards to :func:`build_stream_card` — the header becomes the
+        background-job waiting presentation while the Stop button and the
+        rest of the edit logic stay exactly as they are for an ordinary
+        busy card, since the session genuinely can still be interrupted.
 
         Returns
         -------
@@ -601,7 +651,7 @@ class AnimationMixin:
             sess._stream_edit_lock = lock
 
         async with lock:
-            markdown = build_stream_card(sess, verb, final=final)
+            markdown = build_stream_card(sess, verb, final=final, waiting=waiting)
             # Dedupe: skip the POST when nothing changed since the last render.
             # Primary guard against the "message is not modified" 400. The
             # final render is exempt — it has to go out even if the text
@@ -640,49 +690,77 @@ class AnimationMixin:
             return True
 
     async def _animate_busy(self, sess: TrackedSession) -> None:
-        """Background task: stream transcript text while session is BUSY."""
+        """Background task: stream transcript text while session is BUSY.
+
+        The loop condition widens from ``status == BUSY`` to ``status ==
+        BUSY or job_background_open()`` (design.md "model Claude Code
+        background-agent jobs"): the SAME task that has been ticking since
+        the original prompt keeps ticking straight through the interim
+        Stop, through however many phantom/PreToolUse blips land, through
+        the ``<task-notification>`` continuation, until the real final
+        Stop. Nothing new is started or stopped in between — this is what
+        makes the duration anchoring and the Stop-button continuity fall
+        out for free rather than needing bespoke bookkeeping.
+
+        Each tick computes ``waiting = status != BUSY`` to pick the render
+        frame and to skip the transcript-prose read / typing indicator
+        while genuinely idle — a session sitting on an open background job
+        isn't generating anything right now, so there is no new prose to
+        stream and no "typing" to signal.
+        """
         verbs = list(SPINNER_VERBS)
         random.shuffle(verbs)
         idx = 0
         first_tick = True
+
+        def _alive() -> bool:
+            return bool(sess.busy_msg_id) and (
+                sess.status == Status.BUSY or sess.job_background_open()
+            )
+
         try:
-            while sess.busy_msg_id and sess.status == Status.BUSY:
+            while _alive():
                 # First tick at 1.5 s for a quick initial render, then stream cadence.
                 await asyncio.sleep(1.5 if first_tick else STREAM_EDIT_INTERVAL)
                 first_tick = False
-                if not sess.busy_msg_id or sess.status != Status.BUSY:
+                if not _alive():
                     break
-                # A batch whose message said nothing settles here, so the
-                # card stops holding it and the next prose lands below it.
-                _expire_tool_batch(sess)
-                # Read transcript on every tick regardless of debounce. New
-                # prose is a real change, so it earns the fast cadence.
-                if _read_stream_text(sess):
-                    sess.stream_dirty = True
+                waiting = sess.status != Status.BUSY
+                if not waiting:
+                    # A batch whose message said nothing settles here, so the
+                    # card stops holding it and the next prose lands below it.
+                    _expire_tool_batch(sess)
+                    # Read transcript on every tick regardless of debounce. New
+                    # prose is a real change, so it earns the fast cadence.
+                    if _read_stream_text(sess):
+                        sess.stream_dirty = True
                 # Choose the required minimum gap.
                 gap = STREAM_EDIT_INTERVAL if sess.stream_dirty else BUSY_EDIT_INTERVAL
                 now = time.monotonic()
                 if now - sess.last_tool_edit_at < gap:
-                    # Debounced — still send typing indicator.
+                    # Debounced — still send typing indicator (skipped while
+                    # waiting: nothing is being generated to signal).
+                    if not waiting:
+                        try:
+                            await self._app.bot.send_chat_action(
+                                int(resolve_chat_id(sess)), "typing",
+                            )
+                        except Exception:
+                            pass
+                    continue
+                verb = verbs[idx % len(verbs)]
+                idx += 1
+                result = await self._edit_busy_rich(sess, verb, waiting=waiting)
+                if result is None:
+                    break  # permanent failure
+                if not waiting:
+                    # Send typing AFTER edit (edit cancels the typing indicator).
                     try:
                         await self._app.bot.send_chat_action(
                             int(resolve_chat_id(sess)), "typing",
                         )
                     except Exception:
                         pass
-                    continue
-                verb = verbs[idx % len(verbs)]
-                idx += 1
-                result = await self._edit_busy_rich(sess, verb)
-                if result is None:
-                    break  # permanent failure
-                # Send typing AFTER edit (edit cancels the typing indicator).
-                try:
-                    await self._app.bot.send_chat_action(
-                        int(resolve_chat_id(sess)), "typing",
-                    )
-                except Exception:
-                    pass
         except asyncio.CancelledError:
             pass
 
@@ -758,14 +836,39 @@ class AnimationMixin:
             # every later busy card on this session forever".
             top_kind = sess.stack_top_kind()
             if top_kind == "busy":
-                if sess.animate_task and not sess.animate_task.done():
+                if sess.job_background_open():
+                    # A genuinely new prompt is starting while a PREVIOUS
+                    # job's background agents are still open (design.md
+                    # "model Claude Code background-agent jobs", Decision
+                    # 9). Checked BEFORE the "already showing busy" race
+                    # guard below on purpose: that guard's animate task is
+                    # the same one still ticking the waiting card (its loop
+                    # condition now also holds on job_background_open()),
+                    # so without this check it would look "already showing
+                    # busy" and swallow this genuinely new prompt entirely
+                    # — exactly what requirement 3 forbids. Reclaim instead:
+                    # clear busy_msg_id and fall into the normal fresh-send
+                    # reset below, same as the stale-animation branch. The
+                    # old job's active_subagents tracking is intentionally
+                    # lost here (design.md Risks: its eventual SubagentStop
+                    # or TTL expiry lands in the already-tolerated "no
+                    # matching start" / phantom path).
+                    log.warning(
+                        "[%s] new turn starting while a previous job's "
+                        "background agents are still open (%d) — "
+                        "reclaiming the waiting card",
+                        sess.label, len(sess.active_subagents),
+                    )
+                    sess.busy_msg_id = None
+                elif sess.animate_task and not sess.animate_task.done():
                     return  # already showing busy — original race guard, unchanged
-                # Clear stale busy state from a previous lifecycle (e.g.
-                # GONE → BUSY). The task is dead, so the previous cycle
-                # ended abnormally — reset so we can send a fresh card.
-                log.debug("[%s] Clearing stale busy_msg_id=%s (animation dead)",
-                          sess.label, sess.busy_msg_id)
-                sess.busy_msg_id = None
+                else:
+                    # Clear stale busy state from a previous lifecycle (e.g.
+                    # GONE → BUSY). The task is dead, so the previous cycle
+                    # ended abnormally — reset so we can send a fresh card.
+                    log.debug("[%s] Clearing stale busy_msg_id=%s (animation dead)",
+                              sess.label, sess.busy_msg_id)
+                    sess.busy_msg_id = None
             elif top_kind == "compacting":
                 # A compacting card is reclaimed ONLY once its deadline has
                 # passed. An earlier version of this branch reclaimed any
@@ -815,6 +918,11 @@ class AnimationMixin:
             # busy-message numbers reflect THIS turn, not lifetime.
             sess.cost_baseline = None
             sess.subagent_count_this_turn = 0
+            # A genuinely NEW job starts here (design.md "model Claude Code
+            # background-agent jobs") — the dedup hash from any PREVIOUS
+            # job must not suppress this one's first interim/final answer
+            # just because the two happen to share text.
+            sess.last_idle_summary_hash = ""
             sess.busy_started_at = time.monotonic()
             # Seed streaming state for this turn.  stream_offset is set to
             # the current transcript size so the previous turn's text is
