@@ -278,12 +278,42 @@ class SessionMonitor:
                 # this scan) is still genuinely working, not orphaned.
                 if (was_job_open and sess.status == Status.IDLE
                         and not sess.active_subagents):
+                    sess.job_interim_seen = False
+                    sess.job_continuation_active = False
+                    sess.job_grace_until = 0.0
                     try:
                         await self.notify_fn(sess, "job_agents_lost", {})
                     except Exception:
                         log.warning(
                             "Failed to notify job_agents_lost for %s", name,
                         )
+
+            # Continuation-grace expiry ("close the background-job endgame"
+            # requirement 2's fallback): the last background agent stopped
+            # and an interim was delivered, but no <task-notification>
+            # continuation arrived within the grace window. Close the job
+            # honestly — the interim answer stands as the result. Gated on
+            # IDLE: a BUSY session is genuinely working (the continuation
+            # itself, or a new real turn), not orphaned.
+            if (sess.status == Status.IDLE and sess.job_interim_seen
+                    and not sess.active_subagents
+                    and not sess.job_continuation_active
+                    and sess.job_grace_until
+                    and now >= sess.job_grace_until):
+                sess.job_grace_until = 0.0
+                sess.job_interim_seen = False
+                log.info(
+                    "[%s] background job's continuation never arrived "
+                    "within the grace window — closing the job",
+                    sess.label,
+                )
+                try:
+                    await self.notify_fn(sess, "job_grace_expired", {})
+                except Exception:
+                    log.warning(
+                        "Failed to notify job_grace_expired for %s", name,
+                    )
+                self.registry.mark_dirty()
 
             # Idle-recovery fallback: a missed Stop hook can strand a session
             # in BUSY, animating forever. If the transcript shows the turn
@@ -294,7 +324,14 @@ class SessionMonitor:
             # Only the hook-stamped path is trusted. A session with no stamped
             # path recovers nothing and falls through to STALE_BUSY_TIMEOUT —
             # guessing here once published another session's answer.
-            if sess.status == Status.BUSY:
+            if sess.status == Status.BUSY and not sess.job_background_open():
+                # The job-open guard ("close the background-job endgame"
+                # requirement 1): while a background agent is running (or a
+                # continuation turn is), the transcript on disk lags —
+                # Claude Code 2.1.x flushes it lazily (observed 72-minute
+                # lag live) — so "transcript finished + quiet" describes
+                # the INTERIM turn, not the session. Recovering here
+                # ping-ponged BUSY→IDLE eight times in one live run.
                 tp = sess.transcript_path
                 busy_for = (now - sess.busy_started_at) if sess.busy_started_at else 0.0
                 quiet_for = 0.0

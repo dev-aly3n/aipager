@@ -504,3 +504,88 @@ def test_a_genuinely_missing_session_is_still_marked_gone(monkeypatch, run_async
     run_async(monitor._scan())
     assert sess.status == Status.GONE
     assert "session_end" in notified
+
+
+def test_busy_not_recovered_while_job_background_open(
+    monkeypatch, run_async, tmp_path,
+):
+    """Requirement 1 of "close the background-job endgame": the missed-Stop
+    idle-recovery must stand down while a background job is open — the
+    transcript is lazily flushed (observed 72-minute lag live), so
+    "finished + quiet" is meaningless for the whole background window.
+    Without the stand-down this recovery fired 8+ times in one live run,
+    ping-ponging BUSY→IDLE."""
+    tp = _write_transcript(tmp_path, _COMPLETE, age_seconds=IDLE_RECOVERY_GRACE + 5)
+    sess = _busy_session(tp, busy_age=IDLE_RECOVERY_GRACE + 20)
+    sess.active_subagents["agent-1"] = {
+        "type": "Explore", "started_at": time.monotonic(), "history_idx": None,
+    }
+    registry = SessionRegistry()
+    registry._sessions["claude-jim"] = sess
+
+    calls = []
+    async def _notify(s, event, ctx):
+        calls.append((event, ctx))
+    monitor = _mk_monitor(registry, _notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        lambda: _coroutine_returning(["claude-jim"]))
+
+    run_async(monitor._scan())
+
+    assert sess.status == Status.BUSY  # NOT recovered
+    assert not any(e == "idle_prompt" for e, _ in calls)
+
+
+def test_grace_expiry_closes_orphaned_job(monkeypatch, run_async, tmp_path):
+    """A job whose <task-notification> continuation never arrives may not
+    tick forever: once the grace deadline passes with the session IDLE,
+    the monitor closes the job via job_grace_expired and clears the
+    endgame state ("close the background-job endgame" requirement 2's
+    fallback)."""
+    tp = _write_transcript(tmp_path, _COMPLETE, age_seconds=5)
+    sess = _busy_session(tp, busy_age=30)
+    sess.status = Status.IDLE
+    sess.job_interim_seen = True
+    sess.job_grace_until = time.monotonic() - 1  # already expired
+
+    registry = SessionRegistry()
+    registry._sessions["claude-jim"] = sess
+
+    calls = []
+    async def _notify(s, event, ctx):
+        calls.append(event)
+    monitor = _mk_monitor(registry, _notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        lambda: _coroutine_returning(["claude-jim"]))
+
+    run_async(monitor._scan())
+
+    assert "job_grace_expired" in calls
+    assert sess.job_interim_seen is False
+    assert sess.job_grace_until == 0.0
+
+
+def test_grace_not_expired_while_continuation_running(
+    monkeypatch, run_async, tmp_path,
+):
+    """A BUSY session (the continuation turn itself, or a new real turn)
+    is genuinely working — the grace-expiry close must not fire."""
+    tp = _write_transcript(tmp_path, _COMPLETE, age_seconds=5)
+    sess = _busy_session(tp, busy_age=5)
+    sess.job_interim_seen = True
+    sess.job_continuation_active = True
+    sess.job_grace_until = time.monotonic() - 1
+
+    registry = SessionRegistry()
+    registry._sessions["claude-jim"] = sess
+
+    calls = []
+    async def _notify(s, event, ctx):
+        calls.append(event)
+    monitor = _mk_monitor(registry, _notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        lambda: _coroutine_returning(["claude-jim"]))
+
+    run_async(monitor._scan())
+
+    assert "job_grace_expired" not in calls

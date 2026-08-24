@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Background jobs now close honestly: the moment the last background agent
+  stopped, a stray idle event could run the full Finished path before the
+  continuation turn delivered its result — a premature "Done" card with the
+  wrong duration, the interim answer re-posted, and the real briefing
+  arriving headerless. The job now stays open across the agent-stop →
+  continuation gap (a 60s grace window, armed only after an interim was
+  delivered) and through the continuation turn itself; that turn's own Stop
+  is the one true Finished.
+- The missed-Stop idle-recovery no longer fires while a background job is
+  open. Claude Code 2.1.x flushes the transcript lazily (observed lagging
+  over an hour), so "transcript finished + quiet" describes the interim
+  turn, not the session — the recovery was ping-ponging BUSY→IDLE every few
+  seconds through the whole background window.
+- Idle-summary dedup now covers the final delivery path too: content
+  identical to the last delivered summary is never re-posted, whichever
+  stray event re-runs the path. A genuinely repeated answer across two real
+  turns still delivers (the hash resets when a new turn starts).
+- A job whose continuation never arrives is closed by the monitor once the
+  grace window expires — the card resolves to a plain Finished with the
+  interim answer standing as the result, instead of ticking forever.
+
 ### Added
 - A background-job "waiting" card: when a Claude Code turn ends its
   foreground work but launched a subagent that is still running in the

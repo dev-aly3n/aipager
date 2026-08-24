@@ -674,6 +674,9 @@ class SessionOpsMixin:
         # true underneath the now-"Stopped" card — the operator asked for
         # this to be over, background agents included.
         sess.active_subagents.clear()
+        sess.job_interim_seen = False
+        sess.job_continuation_active = False
+        sess.job_grace_until = 0.0
         sess.trigger_msg_id = None
         sess.last_idle_at = time.monotonic()  # prevent debounce of next real IDLE
         self.registry.mark_dirty()

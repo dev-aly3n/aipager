@@ -198,7 +198,12 @@ def test_hiva_sequence_replayed_end_to_end(mk_bot, run_async, tmp_path, monkeypa
     _send(recv, run_async, hook_event_name="SubagentStop",
           agent_id=AGENT_ID, agent_type="Explore")
     assert AGENT_ID not in sess.active_subagents
-    assert sess.job_background_open() is False
+    # The table is empty but the job stays OPEN: an interim idle already
+    # happened, so the <task-notification> continuation is imminent and
+    # the grace window keeps a stray idle from closing the job here
+    # ("close the background-job endgame" requirement 2 — the ishaq
+    # endgame test covers the stray-idle case itself).
+    assert sess.job_background_open() is True
 
     # ---- step 10: continuation UserPromptSubmit ----
     _write_transcript(tp, with_continuation=True)
@@ -296,3 +301,191 @@ def test_hiva_continuation_never_touches_policy_snapshot(
     after_content = snap_path.read_text()
     assert after_mtime == before_mtime
     assert after_content == before_content
+
+
+def test_ishaq_endgame_job_stays_open_through_continuation(
+    mk_bot, run_async, tmp_path, monkeypatch,
+):
+    """The observed ishaq endgame (2026-08-24, live): the real SubagentStop
+    empties the table BEFORE the continuation turn runs, and today the very
+    next idle takes the Finished path — premature "Done" card, stale
+    re-delivery, headerless briefing. After the fix the job stays open
+    across the gap (grace) and through the continuation turn
+    (job_continuation_active); the continuation's own Stop is the one true
+    Finished."""
+    bot = mk_bot()
+    registry = bot.registry
+    recv = hr.HookReceiver(registry, bot.notify)
+
+    tp = tmp_path / "ishaq.jsonl"
+    _write_transcript(tp, with_continuation=False)
+
+    sent_messages: list[dict] = []
+    next_id = [2000]
+
+    async def _send_message(chat_id, text, **kwargs):
+        next_id[0] += 1
+        sent_messages.append({"chat_id": chat_id, "text": text, **kwargs})
+        return MagicMock(message_id=next_id[0])
+    bot._app.bot.send_message = AsyncMock(side_effect=_send_message)
+    bot._app.bot.send_chat_action = AsyncMock(return_value=None)
+    bot._app.bot.delete_message = AsyncMock(return_value=None)
+
+    rich_sends: list[str] = []
+    async def _send_rich(chat_id, content, **kwargs):
+        rich_sends.append(content)
+        return {"message_id": next_id[0]}
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
+
+    edit_calls: list[dict] = []
+    real_edit_busy_rich = bot._edit_busy_rich
+    async def _spy_edit_busy_rich(sess_, verb, *, final=False, waiting=False):
+        edit_calls.append({"verb": verb, "final": final, "waiting": waiting})
+        return await real_edit_busy_rich(sess_, verb, final=final, waiting=waiting)
+    bot._edit_busy_rich = _spy_edit_busy_rich
+
+    async def _edit_rich_transport(chat_id, msg_id, markdown, **kwargs):
+        return {}
+    monkeypatch.setattr("aipager.bot.animation.edit_message_text_rich",
+                        _edit_rich_transport)
+    monkeypatch.setattr("aipager.preferences.KEEP_FINISHED_CARD", True)
+
+    # steps 1-3: prompt → agent → interim Stop (agents open)
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          prompt="[via Telegram msg=123]\nanalyze X and web-search Y",
+          transcript_path=str(tp))
+    sess = registry.get(SESSION)
+    sess.trigger_msg_id = TRIGGER_MSG_ID
+    sess.scope_chat_id = -1001
+    busy_started_at_0 = sess.busy_started_at
+    _send(recv, run_async, hook_event_name="SubagentStart",
+          agent_id=AGENT_ID, agent_type="Explore")
+    _send(recv, run_async, hook_event_name="Stop",
+          last_assistant_message=INTERIM_ANSWER, transcript_path=str(tp))
+    assert rich_sends == [INTERIM_ANSWER]
+    assert sess.job_background_open() is True
+
+    # step 4: the real SubagentStop empties the table — but an interim
+    # idle has already happened, so the continuation is imminent and the
+    # job must STAY open (grace window), not close.
+    _send(recv, run_async, hook_event_name="SubagentStop",
+          agent_id=AGENT_ID, agent_type="Explore")
+    assert AGENT_ID not in sess.active_subagents
+    assert sess.job_background_open() is True
+
+    # step 5: a stray idle event in the gap (the monitor-recovery /
+    # duplicate-Stop class) must take the interim path, not finish.
+    _send(recv, run_async, hook_event_name="Stop",
+          last_assistant_message=INTERIM_ANSWER, transcript_path=str(tp))
+    assert [c for c in edit_calls if c["final"]] == []
+    assert rich_sends == [INTERIM_ANSWER]  # hash match — no re-delivery
+
+    # step 6: the continuation turn arrives and takes over from the grace.
+    _write_transcript(tp, with_continuation=True)
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          prompt=(f"<task-notification>\n<task-id>{AGENT_ID}</task-id>\n"
+                  "Background agent finished."),
+          transcript_path=str(tp))
+    assert sess.status == Status.BUSY
+    assert sess.job_continuation_active is True
+    assert sess.job_background_open() is True
+    assert sess.busy_started_at == busy_started_at_0
+
+    # step 7: the continuation's own Stop = the one true Finished.
+    _send(recv, run_async, hook_event_name="Stop",
+          last_assistant_message=REAL_BRIEFING, transcript_path=str(tp))
+    assert sess.status == Status.IDLE
+    assert sess.job_continuation_active is False
+    assert sess.job_background_open() is False
+    assert rich_sends == [INTERIM_ANSWER, REAL_BRIEFING]
+    finals = [c for c in edit_calls if c["final"]]
+    assert len(finals) == 1
+    assert edit_calls[-1]["final"] is True
+
+
+def test_final_path_dedup_suppresses_stale_redelivery(
+    mk_bot, run_async, tmp_path, monkeypatch,
+):
+    """Requirement 3: content identical to the last delivered summary is
+    never re-posted, even on the FINAL (job-closed) path — and the hash
+    resets at a genuine new turn, so a legitimately repeated answer across
+    two real turns still delivers."""
+    bot = mk_bot()
+    registry = bot.registry
+    recv = hr.HookReceiver(registry, bot.notify)
+    tp = tmp_path / "ishaq.jsonl"
+    _write_transcript(tp, with_continuation=False)
+
+    next_id = [3000]
+    async def _send_message(chat_id, text, **kwargs):
+        next_id[0] += 1
+        return MagicMock(message_id=next_id[0])
+    bot._app.bot.send_message = AsyncMock(side_effect=_send_message)
+    bot._app.bot.send_chat_action = AsyncMock(return_value=None)
+    bot._app.bot.delete_message = AsyncMock(return_value=None)
+    rich_sends: list[str] = []
+    async def _send_rich(chat_id, content, **kwargs):
+        rich_sends.append(content)
+        return {"message_id": next_id[0]}
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
+    async def _edit_rich_transport(chat_id, msg_id, markdown, **kwargs):
+        return {}
+    monkeypatch.setattr("aipager.bot.animation.edit_message_text_rich",
+                        _edit_rich_transport)
+    monkeypatch.setattr("aipager.preferences.KEEP_FINISHED_CARD", True)
+
+    # A plain finished turn delivers the answer once.
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          prompt="[via Telegram msg=1]\ndo the thing", transcript_path=str(tp))
+    sess = registry.get(SESSION)
+    sess.scope_chat_id = -1001
+    _send(recv, run_async, hook_event_name="Stop",
+          last_assistant_message=REAL_BRIEFING, transcript_path=str(tp))
+    assert rich_sends.count(REAL_BRIEFING) == 1
+
+    # A stray re-BUSY (no UserPromptSubmit — e.g. a lost datagram followed
+    # by a duplicate Stop) re-runs the final path with IDENTICAL content:
+    # suppressed.
+    _send(recv, run_async, hook_event_name="PreToolUse",
+          tool_name="Bash", tool_input={"command": "ls"})
+    _send(recv, run_async, hook_event_name="Stop",
+          last_assistant_message=REAL_BRIEFING, transcript_path=str(tp))
+    assert rich_sends.count(REAL_BRIEFING) == 1
+
+    # A genuine new prompt resets the hash — the same answer to a repeated
+    # question still delivers.
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          prompt="[via Telegram msg=2]\ndo the thing again",
+          transcript_path=str(tp))
+    _send(recv, run_async, hook_event_name="Stop",
+          last_assistant_message=REAL_BRIEFING, transcript_path=str(tp))
+    assert rich_sends.count(REAL_BRIEFING) == 2
+
+
+def test_job_grace_expired_finalizes_card_as_plain_finished(
+    mk_bot, run_async, monkeypatch,
+):
+    """The job_grace_expired handler closes the card as an honest plain
+    Finished (the interim answer stands as the result) — not the
+    "background agent lost" wording, which is for agents that vanished
+    without reporting."""
+    bot = mk_bot()
+    sess = bot.registry.get_or_create(SESSION)
+    sess.status = Status.IDLE
+    sess.label = SESSION
+    sess.busy_msg_id = 777
+    sess.busy_started_at = 1.0
+
+    edits: list[str] = []
+    async def _edit_raw(msg_id, text, chat_id=None):
+        edits.append(text)
+        return True
+    bot._edit_busy_raw = _edit_raw
+
+    run_async(bot.notify(sess, "job_grace_expired", {}))
+
+    assert len(edits) == 1
+    assert "Finished" in edits[0]
+    assert "lost" not in edits[0]
+    assert sess.busy_msg_id is None
+    assert sess.trigger_msg_id is None

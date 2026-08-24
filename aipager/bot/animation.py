@@ -923,6 +923,9 @@ class AnimationMixin:
             # job must not suppress this one's first interim/final answer
             # just because the two happen to share text.
             sess.last_idle_summary_hash = ""
+            sess.job_interim_seen = False
+            sess.job_continuation_active = False
+            sess.job_grace_until = 0.0
             sess.busy_started_at = time.monotonic()
             # Seed streaming state for this turn.  stream_offset is set to
             # the current transcript size so the previous turn's text is

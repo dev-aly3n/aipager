@@ -286,6 +286,7 @@ class NotifyMixin:
         message queued during the wait is not stranded until the job's
         eventual real end.
         """
+        sess.job_interim_seen = True
         raw_md = context.get("raw_md", "")
         content = raw_md or context.get("summary", "")
         if not content and not context.get("no_response"):
@@ -495,6 +496,45 @@ class NotifyMixin:
                     sess, "Working", waiting=waiting,
                 ) is None:
                     self._stop_animation(sess)
+            return
+
+        if event == "job_grace_expired":
+            # The last background agent stopped, an interim was delivered,
+            # but no <task-notification> continuation arrived within the
+            # grace window ("close the background-job endgame" requirement
+            # 2's fallback) — close the job honestly: the interim answer
+            # stands as the result.
+            self._stop_animation(sess)
+            elapsed_str = ""
+            if sess.busy_started_at:
+                elapsed_s = int(time.monotonic() - sess.busy_started_at)
+                if elapsed_s >= 60:
+                    elapsed_str = f"{elapsed_s // 60}m {elapsed_s % 60}s"
+                elif elapsed_s > 0:
+                    elapsed_str = f"{elapsed_s}s"
+            suffix = f" ({elapsed_str})" if elapsed_str else ""
+            text = f"✅ <b>{html_mod.escape(label)}</b> · Finished{suffix}"
+            target_msg_id = sess.busy_msg_id
+            if target_msg_id and target_msg_id > 0:
+                await self._edit_busy_raw(
+                    target_msg_id, text, chat_id=resolve_chat_id(sess),
+                )
+                sess.busy_msg_id = None
+            else:
+                try:
+                    await bot.send_message(
+                        resolve_chat_id(sess), text, parse_mode="HTML",
+                        reply_to_message_id=sess.trigger_msg_id,
+                    )
+                except Exception:
+                    log.warning(
+                        "Failed to send job_grace_expired notification",
+                        exc_info=True,
+                    )
+            sess.trigger_msg_id = None
+            self.registry.mark_dirty()
+            if self.observers:
+                asyncio.create_task(self.observers.broadcast(text))
             return
 
         if event == "job_agents_lost":
@@ -898,16 +938,29 @@ class NotifyMixin:
             return
 
         if sess.status == Status.IDLE:
-            if sess.job_background_open():
-                # A background agent this job launched is still running —
-                # this idle-transition is an INTERIM Stop, not the job's
-                # true end (design.md "model Claude Code background-agent
-                # jobs", requirement 1). Never falls through to the
-                # Finished-card disposal logic below: that logic's
-                # unconditional active_subagents.clear() (removed just
-                # below) was itself the bug this feature fixes — it erased
-                # the very state job_background_open() needs to keep
-                # working.
+            if sess.job_continuation_active and not sess.active_subagents:
+                # The <task-notification> continuation turn's own Stop —
+                # the job's one true Finished ("close the background-job
+                # endgame" requirement 2). Clear the endgame state FIRST so
+                # the Finished path below runs exactly as a normal close.
+                sess.job_continuation_active = False
+                sess.job_grace_until = 0.0
+                sess.job_interim_seen = False
+            elif sess.job_background_open():
+                # A background agent this job launched is still running (or
+                # the continuation grace window is open) — this
+                # idle-transition is an INTERIM Stop, not the job's true
+                # end (design.md "model Claude Code background-agent jobs",
+                # requirement 1). Never falls through to the Finished-card
+                # disposal logic below: that logic's unconditional
+                # active_subagents.clear() (removed just below) was itself
+                # the bug this feature fixes — it erased the very state
+                # job_background_open() needs to keep working.
+                if sess.active_subagents:
+                    # A continuation turn that spawned NEW background
+                    # agents has ended — back to plain waiting; the next
+                    # continuation cycle re-arms via SubagentStop + grace.
+                    sess.job_continuation_active = False
                 await self._handle_job_interim(sess, context)
                 return
             # Mark all tools as done
@@ -989,6 +1042,27 @@ class NotifyMixin:
             content = raw_md or context.get("summary", "")
             if not content and not context.get("no_response"):
                 content = sess.summary or ""
+
+            # Content-dedup covers the FINAL delivery too ("close the
+            # background-job endgame" requirement 3): a stray idle event
+            # re-running this path with content identical to the last
+            # delivered summary (interim or final) must not re-post it.
+            # The card disposal below still runs — the header/card is
+            # idempotent to finalize; only the body re-send is the spam.
+            # The hash resets where a genuine new turn starts
+            # (_send_busy_and_animate), so a legitimately repeated answer
+            # across two real turns still delivers.
+            if content:
+                _digest = hashlib.md5(content.encode("utf-8")).hexdigest()
+                if _digest == sess.last_idle_summary_hash:
+                    log.info(
+                        "[%s] final summary unchanged since the last "
+                        "delivery (hash match) — suppressing re-send",
+                        label,
+                    )
+                    content = ""
+                else:
+                    sess.last_idle_summary_hash = _digest
 
             # Reset streaming state — the turn is over.
             sess.stream_commentary = []

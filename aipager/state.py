@@ -44,6 +44,13 @@ TOOL_HISTORY_CAP: int = 200
 # 100 is >5x the worst fan-out ever recorded here (4 agents -> 18), so a
 # legitimate run never hits it; a runaway one stops growing.
 ACTIVE_SUBAGENTS_CAP: int = 100
+# How long a job stays open after its last background agent stops, waiting
+# for the <task-notification> continuation turn Claude enqueues on agent
+# completion (observed arriving within ~1s live; 60s is a generous bound).
+# Armed only when an interim idle has already happened — a blocking
+# subagent stopping mid-turn never arms it, so ordinary turns close
+# exactly as before.
+JOB_CONTINUATION_GRACE_SECONDS: float = 60.0
 # Max GONE entries retained for `/resume` history. When a new session is
 # created and the GONE count exceeds this, the oldest-by-`gone_at` entry
 # is evicted. Lives on disk in aipager-sessions.json — kept here so
@@ -366,6 +373,17 @@ class TrackedSession:
     # (_send_busy_and_animate's existing per-turn reset) so a duplicate
     # answer in the NEXT job is never mistaken for a repeat of this one.
     last_idle_summary_hash: str = ""
+    # Background-job endgame state (all transient, never persisted):
+    # `job_interim_seen` — an idle-transition happened while this job's
+    # background agents were open (the waiting card went up); the signal
+    # that a continuation is expected when the table later empties.
+    # `job_continuation_active` — a <task-notification> continuation turn
+    # is running; its own Stop is the job's one true Finished.
+    # `job_grace_until` — monotonic deadline keeping the job open across
+    # the SubagentStop→continuation gap (see JOB_CONTINUATION_GRACE_SECONDS).
+    job_interim_seen: bool = False
+    job_continuation_active: bool = False
+    job_grace_until: float = 0.0
 
     # -- Live message stack (design.md "Live Message Stack") ---------------
 
@@ -572,8 +590,13 @@ class TrackedSession:
         the table — those statuses mean the session itself isn't mid-turn
         in any sense a card can honestly represent as "waiting".
         """
-        return self.status in (Status.IDLE, Status.BUSY) and bool(
+        if self.status not in (Status.IDLE, Status.BUSY):
+            return False
+        return bool(
             self.active_subagents
+            or self.job_continuation_active
+            or (self.job_grace_until
+                and time.monotonic() < self.job_grace_until)
         )
 
     def dialog_is_open(self) -> bool:

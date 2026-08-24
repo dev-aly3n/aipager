@@ -167,10 +167,16 @@ def test_hiva_sequence_bookkeeping(run_async):
     sess = registry._sessions["hiva"]
     events = [c.args[1] for c in notify_fn.await_args_list]
 
-    # Final state: job closed, IDLE, origin never flipped.
+    # Final state: IDLE, agents drained, origin never flipped. Closing
+    # the job (clearing job_continuation_active) is TelegramBot.notify's
+    # decision — its ordered idle branch, not HookReceiver — so with a
+    # bare AsyncMock notify_fn the flag legitimately remains set here;
+    # the real close is pinned by the end-to-end card-lifecycle test
+    # below and by test_ishaq_endgame_job_stays_open_through_continuation
+    # ("close the background-job endgame").
     assert sess.status == Status.IDLE
-    assert sess.job_background_open() is False
     assert sess.active_subagents == {}
+    assert sess.job_continuation_active is True
     assert sess.last_prompt_origin == "telegram", (
         "origin was re-tagged away from 'telegram' somewhere in the "
         "sequence — the safety gap spec.md documents")

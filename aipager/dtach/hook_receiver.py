@@ -24,7 +24,12 @@ from aipager.config import (
     SOCKET_PATH,
 )
 from aipager.md_to_tg import markdown_to_telegram_html
-from aipager.state import ACTIVE_SUBAGENTS_CAP, SessionRegistry, Status
+from aipager.state import (
+    ACTIVE_SUBAGENTS_CAP,
+    JOB_CONTINUATION_GRACE_SECONDS,
+    SessionRegistry,
+    Status,
+)
 from aipager.transcript import (
     _strip_leaked_tool_xml,
     extract_last_response,
@@ -354,6 +359,12 @@ class HookReceiver:
                 # card still needs to know a continuation happened even
                 # when status itself didn't move.
                 cont_sess = self.registry.get_or_create(session_name)
+                # The continuation turn takes over from the grace window:
+                # from here the job closes only at THIS turn's own Stop
+                # (notify.py's idle branch, "close the background-job
+                # endgame" requirement 2).
+                cont_sess.job_continuation_active = True
+                cont_sess.job_grace_until = 0.0
                 self.registry.transition(
                     session_name, Status.BUSY, preserve_job_state=True,
                 )
@@ -560,6 +571,20 @@ class HookReceiver:
                 info = sess.active_subagents.pop(agent_id, None)
                 if info:
                     elapsed = time.monotonic() - info["started_at"]
+                    if not sess.active_subagents and sess.job_interim_seen:
+                        # The last real background agent just stopped after
+                        # an interim idle — Claude will enqueue the
+                        # <task-notification> continuation next (observed
+                        # within ~1s live). Keep the job open across the
+                        # gap so a stray idle event cannot close it
+                        # prematurely ("close the background-job endgame"
+                        # requirement 2). A blocking agent stopping
+                        # mid-turn never reaches here with
+                        # job_interim_seen set, so ordinary turns are
+                        # untouched.
+                        sess.job_grace_until = (
+                            time.monotonic() + JOB_CONTINUATION_GRACE_SECONDS
+                        )
                 log.info("[%s] SubagentStop: %s (%s, %.1fs)", sess.label, agent_type, agent_id, elapsed)
                 await self.notify_fn(sess, "subagent_stop", {
                     "agent_id": agent_id,
