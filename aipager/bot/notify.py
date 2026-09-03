@@ -749,6 +749,22 @@ class NotifyMixin:
             if now - sess.last_tool_edit_at >= STREAM_EDIT_INTERVAL:
                 if await self._edit_busy_rich(sess, "Working") is None:
                     self._stop_animation(sess)
+                    return
+            # A permission answered in the terminal reaches BUSY through
+            # this event (hook_receiver's PreToolUse transition), with the
+            # animation still stopped from the prompt. Bring it back so the
+            # card keeps ticking between hooks rather than only on them.
+            self._resume_animation_if_dead(sess, reason="tool_use while BUSY")
+            return
+
+        if event == "busy_card_watchdog":
+            # The session monitor found the live card frozen (no animate
+            # task, or no successful edit in CARD_STALE_SECONDS) — see
+            # session_monitor.busy_card_watchdog_action.
+            await self._watchdog_busy_card(
+                sess, str(context.get("action", "")),
+                float(context.get("since", 0.0)),
+            )
             return
 
         if event == "assistant_text":

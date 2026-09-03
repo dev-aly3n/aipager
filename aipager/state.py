@@ -241,6 +241,12 @@ class TrackedSession:
     # which would otherwise trip the stale-busy detector. Not persisted
     # (same reason as pending_tool_started_at above).
     compact_started_at: float | None = None
+    # Monotonic timestamp of the busy-card watchdog's last action on this
+    # session (session_monitor.busy_card_watchdog_action). Throttles the
+    # watchdog to one restart / forced refresh per CARD_STALE_SECONDS, so
+    # a card whose edits fail permanently (bot blocked) is retried at that
+    # cadence rather than on every 2s scan. Not persisted (monotonic).
+    card_watchdog_at: float = 0.0
     # Monotonic deadline until which this session is being deliberately
     # restarted (``/perms`` kills and relaunches to change the permission
     # flag). The old process's SessionEnd hook and the monitor noticing its
@@ -627,6 +633,33 @@ class TrackedSession:
             or (self.job_grace_until
                 and time.monotonic() < self.job_grace_until)
         )
+
+    def busy_card_should_animate(self) -> bool:
+        """True when this session has a live busy card that ought to be
+        ticking: a real (positive) message id whose live-stack top is the
+        busy card itself, on a session that is BUSY or has a background
+        job open — the same liveness rule ``_animate_busy`` loops on.
+
+        The two exclusions are the states whose card is NOT the animator's
+        to touch: INTERACTIVE (the card is the permission prompt — its
+        keyboard would be repainted away) and a ``compacting`` top (the
+        card is the compaction dots, driven by ``_animate_compact`` in the
+        same ``animate_task`` slot). Shared by the session monitor's
+        watchdog and the bot's resume path so the two cannot disagree.
+        """
+        msg_id = self.busy_msg_id
+        if not msg_id or msg_id < 0:
+            return False
+        if self.status == Status.INTERACTIVE:
+            return False
+        if self.stack_top_kind() != "busy":
+            return False
+        return self.status == Status.BUSY or self.job_background_open()
+
+    def animation_running(self) -> bool:
+        """True while an animate task exists and has not finished."""
+        task = self.animate_task
+        return task is not None and not task.done()
 
     def dialog_is_open(self) -> bool:
         """True while the terminal is showing a permission/question prompt.
