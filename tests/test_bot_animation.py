@@ -673,26 +673,26 @@ def test_build_sections_agent_row_shows_activity_and_elapsed_when_active():
 
 
 def test_fit_sections_phase1_never_collapses_a_run_containing_an_active_agent_row():
-    """Mutation target: tagging the live-agent row kind="run" instead of
-    "agent-run" would let Phase 1 replace it with a "▸ N tool calls"
-    placeholder under forced truncation."""
-    old_run = ("run", [f"⏳ `Bash: old-{i} " + "x" * 300 + "`" for i in range(5)])
-    agent_run = ("agent-run", ["⏳ `\U0001f916 explore · Bash: ls · 5s`"])
-    newest_run = ("run", ["⏳ `Bash: newest`"])
-    sections = [old_run, agent_run, newest_run]
-    total_bytes = sum(
-        len(r.encode("utf-8")) for _, rows in sections for r in rows
-    )
-    # Budget small enough that the full timeline cannot fit, but large
-    # enough that Phase 1's single collapse of the OLDER run resolves it —
-    # Phase 2 (which COULD fold the agent-run section) never engages.
-    reserve = 32_768 - 400
-    rows, truncated = _fit_sections(sections, reserve)
-    assert total_bytes > 400  # sanity: the un-truncated timeline overflows
+    """Mutation target: including "agent-run" in _fit_sections's own
+    all_runs filter (instead of "run" only) lets Phase 1 collapse a LONE
+    active-agent section directly into an individual "▸ _1 tool call_"
+    placeholder — exactly the string a single-row "run" section collapses
+    to. Tuned so the byte budget forces the agent-run section's bytes to
+    be reduced one way or another; the only LEGITIMATE way that can
+    happen is Phase 2's aggregate "N earlier steps hidden" marker (an
+    accepted last resort — design.md's own documented risk), never an
+    individual Phase-1-style placeholder naming just the agent's own row.
+    """
+    def _sections():
+        old_run = ("run", [f"⏳ `Bash: old-{i} " + "x" * 30 + "`" for i in range(3)])
+        agent_run = ("agent-run", ["⏳ `\U0001f916 explore · Bash: ls · 5s`"])
+        newest_run = ("run", ["⏳ `Bash: newest`"])
+        return [old_run, agent_run, newest_run]
+
+    budget = 75
+    rows, truncated = _fit_sections(_sections(), 32_768 - budget)
     assert truncated is True
-    assert any("\U0001f916 explore · Bash: ls · 5s" in r for r in rows), rows
-    assert any("tool call" in r for r in rows)  # the older run got collapsed
-    assert not any("old-" in r for r in rows)  # ...and its rows are gone
+    assert "▸ _1 tool call_" not in rows, rows
 
 
 def test_build_stream_card_ex_keeps_active_agent_row_visible_under_byte_pressure():
