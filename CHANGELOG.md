@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.5] - 2026-08-30
+
 ### Changed
 - Per-edit diff previews (a separate message for every `Write`/`Edit`)
   are now a `/settings` toggle, **off by default** — settable per scope,
