@@ -203,6 +203,33 @@ def _summarize_tool(name: str, inp: dict) -> str:
     return name
 
 
+def _outside_working_dir(path: object, cwd: str) -> bool:
+    """True when a file ``path`` is NOT under the session's working
+    directory — lexically (no symlink resolution: Claude compares the
+    path it was given), a relative path counting as inside, and an
+    unknown cwd or path counting as outside (the conservative answer for
+    what this gates).
+
+    Why it matters: Claude Code 2.1.259 asks a one-time question on the
+    FIRST read-only file access outside the working directories whose
+    dialog is ``Yes, keep allowing … / No, BLOCK reads outside the working
+    directories from now on / No, ask again next time`` — the standing
+    "don't ask again" row is suppressed, and slot 2 is a persistent,
+    every-project setting change. The hook payload does not say which
+    dialog was drawn, but the trigger is computable here.
+    """
+    if not isinstance(path, str) or not path or not cwd:
+        return True
+    if not os.path.isabs(path):
+        return False
+    cwd_n = os.path.normpath(cwd)
+    path_n = os.path.normpath(path)
+    try:
+        return os.path.commonpath([cwd_n, path_n]) != cwd_n
+    except ValueError:  # different drives / mixed absolute-relative
+        return True
+
+
 def _tool_detail(name: str, inp: dict) -> str:
     """The thing the user is actually approving — the real shell command
     or file path — for the permission card ONLY (the timeline rows keep
@@ -346,6 +373,15 @@ class HookReceiver:
                 if tool_name == "Bash" and not isinstance(
                         tool_input.get("command") if isinstance(tool_input, dict) else None,
                         str):
+                    always = False
+                # A read outside the working directory may be drawing the
+                # one-time "block outside reads?" dialog instead of the
+                # ordinary one (see _outside_working_dir) — its slot 2 is
+                # a persistent BLOCK, and the hook cannot tell the two
+                # dialogs apart. Never offer Allow-always for it.
+                if tool_name == "Read" and _outside_working_dir(
+                        tool_input.get("file_path") if isinstance(tool_input, dict) else None,
+                        sess_ref.cwd):
                     always = False
                 tool_info = {
                     "name": tool_name, "input": tool_input,

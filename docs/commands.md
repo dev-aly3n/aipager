@@ -119,10 +119,12 @@ run, under its own description of it — approve what you can read.
 - **Allow always** — approve and add the standing rule claude offers
   ("don't ask again for …"). The button appears **only when claude
   offers such a rule**; for a command it cannot derive one for (most
-  compound commands) the card carries Allow / Deny / Stop instead.
+  compound commands) the card carries Allow / Deny / Stop instead — as
+  it does for a `Read` outside the session's working directory.
   Claude Code 2.1.259+ puts a "switch to auto mode" row in that slot of
-  its own dialog — aipager never selects it; change the mode
-  deliberately with `/perms`.
+  its own Bash dialog, and a "block reads outside the working
+  directories from now on" row in the outside-read one — aipager never
+  selects either; change modes deliberately with `/perms`.
 - **Stop** — interrupt the turn instead of answering.
 
 Every tap is recorded in `~/.claude/aipager-audit.jsonl` and mirrored

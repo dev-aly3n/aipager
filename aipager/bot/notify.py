@@ -1649,7 +1649,8 @@ class NotifyMixin:
                     text = f"🔐 <b>{html_mod.escape(label)}</b> · Permission needed"
                     if tool_summary:
                         text += f"\n<code>{html_mod.escape(tool_summary)}</code>"
-                        pass
+                        text += _format_perm_detail(
+                            tool_summary, (tool_info or {}).get("detail") or "")
                     # This separate-message prompt keeps its Allow/Deny-only
                     # keyboard on purpose (review rev-iter1-004): with no
                     # ``pending_permission`` on this path there is no

@@ -479,3 +479,63 @@ def test_bash_with_non_string_command_is_never_always_available(receiver, run_as
           permission_suggestions=[{"type": "addRules"}])
     _, _, ctx = notify_fn.await_args.args
     assert ctx["tool_info"]["always_available"] is False
+
+
+# ---- reads outside the working directory (2.1.259 "block outside reads?") --
+
+def _read_request(recv, run_async, path, *, cwd="/work", suggestions=None):
+    _send(recv, run_async, hook_event_name="PermissionRequest", session="claude-jim",
+          cwd=cwd, tool_name="Read", tool_input={"file_path": path},
+          permission_suggestions=[{"type": "addDirectories"}] if suggestions is None else suggestions)
+
+
+def test_read_outside_cwd_never_offers_allow_always(receiver, run_async):
+    """Slot 2 of that dialog is "No, BLOCK reads outside the working
+    directories from now on" — a persistent, every-project setting — and
+    the hook cannot tell it from an ordinary Read prompt. Suggestions
+    present or not, the flag must be False."""
+    registry, recv, notify_fn = receiver
+    _read_request(recv, run_async, "/tmp/aipager-files/shot.png")
+    _, _, ctx = notify_fn.await_args.args
+    assert ctx["tool_info"]["always_available"] is False
+    assert ctx["tool_info"]["detail"] == "/tmp/aipager-files/shot.png"
+
+
+def test_read_inside_cwd_keeps_allow_always(receiver, run_async):
+    registry, recv, notify_fn = receiver
+    _read_request(recv, run_async, "/work/src/app.py")
+    _, _, ctx = notify_fn.await_args.args
+    assert ctx["tool_info"]["always_available"] is True
+
+
+def test_edit_outside_cwd_is_not_affected(receiver, run_async):
+    """Only read-only file access draws the block dialog; an Edit outside
+    cwd gets the ordinary rule row and keeps Allow-always."""
+    registry, recv, notify_fn = receiver
+    _send(recv, run_async, hook_event_name="PermissionRequest", session="claude-jim",
+          cwd="/work", tool_name="Edit",
+          tool_input={"file_path": "/tmp/x.py", "old_string": "a", "new_string": "b"},
+          permission_suggestions=[{"type": "addDirectories"}])
+    _, _, ctx = notify_fn.await_args.args
+    assert ctx["tool_info"]["always_available"] is True
+
+
+def test_read_with_unknown_cwd_is_treated_as_outside(receiver, run_async):
+    registry, recv, notify_fn = receiver
+    _read_request(recv, run_async, "/work/src/app.py", cwd="")
+    _, _, ctx = notify_fn.await_args.args
+    assert ctx["tool_info"]["always_available"] is False
+
+
+@pytest.mark.parametrize("path,cwd,outside", [
+    ("/work/a.py", "/work", False),
+    ("/work/sub/../a.py", "/work/", False),
+    ("/work2/a.py", "/work", True),          # sibling with a shared prefix
+    ("/tmp/a.py", "/work", True),
+    ("src/a.py", "/work", False),            # relative → inside
+    ("", "/work", True),
+    (None, "/work", True),
+    ("/work/a.py", "", True),
+])
+def test_outside_working_dir_edges(path, cwd, outside):
+    assert hr._outside_working_dir(path, cwd) is outside
