@@ -529,3 +529,46 @@ def test_send_busy_and_animate_no_reclaim_mid_continuation(mk_bot, run_async):
     if not original_task.done():
         original_task.cancel()
     loop.close()
+
+
+# ---- permission card shows the real command ("allow-always-auto-mode-guard")
+
+def _perm_sess(pending):
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
+    sess.pending_permission = pending
+    return sess
+
+
+def test_permission_display_shows_the_real_command(mk_bot):
+    bot = mk_bot()
+    sess = _perm_sess({"tool_summary": "Bash: List tmp",
+                       "tool_info": {"name": "Bash", "detail": "ls -la /tmp && echo <x>"}})
+    text = bot._build_busy_text("jim", "Waiting", sess)
+    assert "🔐 <code>Bash: List tmp</code>" in text
+    assert "<pre>ls -la /tmp &amp;&amp; echo &lt;x&gt;</pre>" in text
+
+
+def test_permission_display_truncates_a_long_command(mk_bot):
+    from aipager.bot.animation import _PERM_DETAIL_CHARS
+    bot = mk_bot()
+    sess = _perm_sess({"tool_summary": "Bash: big",
+                       "tool_info": {"name": "Bash", "detail": "x" * 2000}})
+    text = bot._build_busy_text("jim", "Waiting", sess)
+    assert "<pre>" + "x" * (_PERM_DETAIL_CHARS - 1) + "…</pre>" in text
+    assert "x" * _PERM_DETAIL_CHARS not in text
+
+
+def test_permission_display_skips_detail_the_summary_already_shows(mk_bot):
+    bot = mk_bot()
+    # a bare file path is already the summary
+    sess = _perm_sess({"tool_summary": "Edit: /a/b.py",
+                       "tool_info": {"name": "Edit", "detail": "/a/b.py"}})
+    assert "<pre>" not in bot._build_busy_text("jim", "Waiting", sess)
+    # a short command with no description, likewise
+    sess = _perm_sess({"tool_summary": "Bash: ls -la",
+                       "tool_info": {"name": "Bash", "detail": "ls -la"}})
+    assert "<pre>" not in bot._build_busy_text("jim", "Waiting", sess)
+    # an older/fallback prompt with no detail renders exactly as before
+    sess = _perm_sess({"tool_summary": "Bash: ls"})
+    text = bot._build_busy_text("jim", "Waiting", sess)
+    assert "🔐 <code>Bash: ls</code>" in text and "<pre>" not in text

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Allow always could switch a session into auto mode** on Claude Code
+  2.1.259+, which added a "Yes, and switch to auto mode" row to Bash
+  permission prompts. aipager answers the dialog with keystrokes, and
+  Allow-always blindly picked the second row — the "don't ask again" rule
+  when claude offers one, but that new row when it does not (most compound
+  commands). The hook's `permission_suggestions` now decides: the
+  Allow-always button is shown only when a standing rule exists, and a
+  stale or unknown tap confirms a single Allow instead of navigating —
+  never auto mode. Deny is unaffected (it still overshoots onto "No").
+
+### Changed
+- The permission card shows the real Bash command (or the file path for
+  Read/Write/Edit) under claude's description of it, HTML-escaped and
+  capped at 300 characters, so you approve what you can read rather than
+  the model's own summary.
+
 ## [0.7.5] - 2026-08-30
 
 ### Changed

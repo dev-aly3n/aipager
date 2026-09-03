@@ -108,6 +108,9 @@ log = logging.getLogger(__name__)
 # tool the operator had just refused AND widened permissions for the rest
 # of the session, while reporting "Denied" to the user and to the audit
 # log. Overshooting can only ever land on a refusal, so it fails safe.
+# Claude Code 2.1.259 added "Yes, and switch to auto mode" as the row just
+# above "No" on Bash prompts (Yes / [don't ask again] / [switch to auto] /
+# No), so the menu can be four rows deep; five Downs still clamp onto "No".
 _DENY_OVERSHOOT = 5
 
 
@@ -907,6 +910,7 @@ class CallbackDispatchMixin:
         # Inject keystrokes
         ok = True
         perm = sess.pending_permission or {}
+        answer_text = None  # a branch may override the "<verb> [label]" toast
         if is_option or action == "submit":
             log.info("[%s] Callback: action=%s, multi_select=%s, has_perm=%s",
                      sess.label, action, perm.get("multi_select"), bool(perm))
@@ -1071,14 +1075,31 @@ class CallbackDispatchMixin:
             verb = ACTION_VERBS[action]
             ok = await inject.send_keys(session_name, "Enter")
         elif action == "allow_always":
-            verb = ACTION_VERBS[action]
-            # One Down → "Yes, and always allow …", the second item when the
-            # tool has a scope to widen. When it has none the menu is only
-            # Yes/No, so this lands on "No" and refuses — the harmless
-            # direction to be wrong in.
-            ok = await inject.send_keys(session_name, "Down")
-            if ok:
-                await asyncio.sleep(0.1)
+            perm_info = perm.get("tool_info") or {}
+            if perm_info.get("always_available") is True:
+                verb = ACTION_VERBS[action]
+                # One Down → "Yes, and don't ask again for …", the second
+                # row — present exactly when the hook carried permission
+                # suggestions (hook_receiver's PermissionRequest branch).
+                ok = await inject.send_keys(session_name, "Down")
+                if ok:
+                    await asyncio.sleep(0.1)
+                    ok = await inject.send_keys(session_name, "Enter")
+            else:
+                # No standing rule on offer, or unknown (a button from
+                # before this guard, the Notification-fallback prompt, a
+                # race). Since Claude Code 2.1.259 the second row of a Bash
+                # prompt is then "Yes, and switch to auto mode": navigating
+                # blind would drop the session into auto mode while
+                # reporting "Allowed always". Never navigate — confirm the
+                # pre-selected "Yes" and say so.
+                verb = ACTION_VERBS["allow"]
+                answer_text = (
+                    f"No always-rule for this command — allowed once [{sess.label}]"
+                )
+                log.info("[%s] allow_always degraded to a single allow "
+                         "(always_available=%r)", sess.label,
+                         perm_info.get("always_available"))
                 ok = await inject.send_keys(session_name, "Enter")
         elif action == "deny":
             verb = ACTION_VERBS[action]
@@ -1097,7 +1118,7 @@ class CallbackDispatchMixin:
             verb = action
 
         if ok:
-            await self._safe_answer(query, f"{verb} [{sess.label}]")
+            await self._safe_answer(query, answer_text or f"{verb} [{sess.label}]")
 
             if sess.pending_permission:
                 # Collapse current question into tool_history

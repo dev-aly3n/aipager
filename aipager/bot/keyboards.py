@@ -302,27 +302,47 @@ class KeyboardMixin:
                 callback_data=session_parity.session_cb(self, chat_id, sess, "compact")),
         ]])
 
-    def _build_permission_keyboard(self, sess: TrackedSession) -> InlineKeyboardMarkup:
-        """Permission buttons + Allow always + Stop for inline permission.
+    def _build_permission_keyboard(
+        self, sess: TrackedSession, *, always_available: bool | None = None,
+    ) -> InlineKeyboardMarkup:
+        """Permission buttons for an inline permission prompt.
 
-        2×2 grid: row 0 = Allow / Deny, row 1 = Allow always / Stop.
+        Row 0 = Allow / Deny. Row 1 = Allow always / Stop — but **Allow
+        always exists only when the prompt carries a standing rule to
+        widen** (``always_available is True``, from the hook's
+        ``permission_suggestions``); otherwise row 1 is Stop alone. Since
+        Claude Code 2.1.259 the dialog's second row without such a rule is
+        "Yes, and switch to auto mode", which is what a blind Allow-always
+        would select. ``None`` (the default) reads the flag from
+        ``sess.pending_permission``; ``None``/unknown is treated as absent.
         """
         # Local import — see the precedent + rationale at
         # _build_resume_mode_keyboard below; do not hoist to module top.
         from aipager.bot import session_parity
 
+        if always_available is None:
+            always_available = (
+                (sess.pending_permission or {}).get("tool_info") or {}
+            ).get("always_available")
         chat_id = resolve_chat_id_int(sess) or 0
-        return InlineKeyboardMarkup([
+        stop = InlineKeyboardButton(
+            "⏹ Stop", callback_data=session_parity.session_cb(self, chat_id, sess, "stop"))
+        rows = [
             [InlineKeyboardButton(
                 "✅ Allow", callback_data=session_parity.session_cb(self, chat_id, sess, "allow")),
              InlineKeyboardButton(
                 "❌ Deny", callback_data=session_parity.session_cb(self, chat_id, sess, "deny"))],
-            [InlineKeyboardButton(
-                "🟢 Allow always",
-                callback_data=session_parity.session_cb(self, chat_id, sess, "allow_always")),
-             InlineKeyboardButton(
-                "⏹ Stop", callback_data=session_parity.session_cb(self, chat_id, sess, "stop"))],
-        ])
+        ]
+        if always_available is True:
+            rows.append([
+                InlineKeyboardButton(
+                    "🟢 Allow always",
+                    callback_data=session_parity.session_cb(self, chat_id, sess, "allow_always")),
+                stop,
+            ])
+        else:
+            rows.append([stop])
+        return InlineKeyboardMarkup(rows)
 
     def _build_perms_confirm_keyboard(
         self, sess: TrackedSession,

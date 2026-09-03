@@ -104,17 +104,25 @@ When claude asks to run a tool that needs approval, the busy message
 becomes a permission prompt:
 
 ```
-🔐 [jim] Bash
-  command: ls -la /tmp
+🔐 Bash: List the temp directory
+ls -la /tmp
 
   [✅ Allow]  [❌ Deny]
   [🟢 Allow always]  [⏹ Stop]
 ```
 
+The card shows the real command (or file path) claude is asking to
+run, under its own description of it — approve what you can read.
+
 - **Allow** — approve this one call.
 - **Deny** — refuse it; claude blocks the tool call.
-- **Allow always** — approve and widen the standing rule where claude
-  offers one.
+- **Allow always** — approve and add the standing rule claude offers
+  ("don't ask again for …"). The button appears **only when claude
+  offers such a rule**; for a command it cannot derive one for (most
+  compound commands) the card carries Allow / Deny / Stop instead.
+  Claude Code 2.1.259+ puts a "switch to auto mode" row in that slot of
+  its own dialog — aipager never selects it; change the mode
+  deliberately with `/perms`.
 - **Stop** — interrupt the turn instead of answering.
 
 Every tap is recorded in `~/.claude/aipager-audit.jsonl` and mirrored

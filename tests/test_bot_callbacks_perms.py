@@ -43,9 +43,14 @@ def mk_query():
 # sending one Down used to select "Yes, and always allow", which ran the
 # refused tool and widened permissions while reporting "Denied".
 
-def _keys_for(bot, mk_query, run_async, action):
-    """Run a permission callback and return the keys it injected."""
+def _keys_for(bot, mk_query, run_async, action, *, pending=None):
+    """Run a permission callback and return the keys it injected.
+
+    ``pending`` is the session's ``pending_permission`` — what the hook
+    said about the prompt (notably ``tool_info["always_available"]``).
+    """
     sess = TrackedSession(name="claude-dev", label="dev", status=Status.INTERACTIVE)
+    sess.pending_permission = pending
     bot.registry._sessions["claude-dev"] = sess
     update, _query = mk_query(f"claude-dev:{action}")
 
@@ -69,15 +74,50 @@ def test_allow_sends_only_enter(mk_bot, mk_query, run_async):
     assert _keys_for(mk_bot(), mk_query, run_async, "allow") == ["Enter"]
 
 
-def test_allow_always_sends_one_down_then_enter(mk_bot, mk_query, run_async):
-    """Allow-always picks item 2, "Yes, and always allow …".
+_WITH_RULE = {"tool_summary": "Bash: x",
+              "tool_info": {"name": "Bash", "always_available": True}}
 
-    On a menu without that option this lands on "No" and refuses, which is
-    the safe direction to be wrong in.
-    """
-    assert _keys_for(mk_bot(), mk_query, run_async, "allow_always") == [
-        "Down", "Enter",
-    ]
+
+def test_allow_always_sends_one_down_then_enter_when_a_rule_exists(mk_bot, mk_query, run_async):
+    """Allow-always picks item 2, "Yes, and don't ask again for …" — which
+    exists exactly when the hook carried permission suggestions."""
+    assert _keys_for(mk_bot(), mk_query, run_async, "allow_always",
+                     pending=_WITH_RULE) == ["Down", "Enter"]
+
+
+@pytest.mark.parametrize("pending", [
+    {"tool_summary": "Bash: x", "tool_info": {"name": "Bash", "always_available": False}},
+    {"tool_summary": "Bash: x", "tool_info": {"name": "Bash"}},
+    {"tool_summary": "Bash: x"},
+    None,
+])
+def test_allow_always_without_a_rule_only_confirms_yes(mk_bot, mk_query, run_async, pending):
+    """Claude Code 2.1.259: on a Bash prompt with no rule to widen, item 2
+    is "Yes, and switch to auto mode". A blind Down+Enter would flip the
+    session into auto mode while reporting "Allowed always" — so with the
+    flag False or unknown the tap must confirm the pre-selected "Yes"
+    and nothing else."""
+    assert _keys_for(mk_bot(), mk_query, run_async, "allow_always",
+                     pending=pending) == ["Enter"], pending
+
+
+def test_allow_always_degraded_tap_says_so(mk_bot, mk_query, run_async):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-dev", label="dev", status=Status.INTERACTIVE)
+    sess.pending_permission = {"tool_summary": "Bash: x",
+                               "tool_info": {"name": "Bash", "always_available": False}}
+    bot.registry._sessions["claude-dev"] = sess
+    update, query = mk_query("claude-dev:allow_always")
+    with patch("aipager.dtach.inject.send_keys", AsyncMock(return_value=True)), \
+         patch("aipager.dtach.inject.is_alive", AsyncMock(return_value=True)):
+        run_async(bot._handle_callback(update, MagicMock()))
+    toasts = [c.args[0] for c in query.answer.await_args_list
+              if c.args and isinstance(c.args[0], str)]
+    assert any("allowed once" in t for t in toasts), toasts
+    assert not any("Allowed always" in t for t in toasts), toasts
+    # and the record reads as a single allow, not a widened rule
+    assert any("→ Allowed" in summary and "always" not in summary.lower()
+               for summary, _done in sess.tool_history), sess.tool_history
 
 
 def test_deny_overshoots_to_the_last_option(mk_bot, mk_query, run_async):
@@ -93,9 +133,12 @@ def test_deny_overshoots_to_the_last_option(mk_bot, mk_query, run_async):
     assert keys[-1] == "Enter", f"deny must confirm a selection; got {keys}"
     downs = keys[:-1]
     assert set(downs) == {"Down"}, f"deny must only move down; got {keys}"
-    assert len(downs) >= 3, (
+    # 2.1.259 menus are up to four rows (Yes / don't-ask-again / switch to
+    # auto mode / No): fewer than four Downs from the top can stop ON the
+    # auto-mode row, which is far worse than an affirmative.
+    assert len(downs) >= 4, (
         f"deny sent {len(downs)} Down(s) — too few to clamp past a "
-        f"three-item menu, so it selects an affirmative option instead of "
+        f"four-row menu, so it can select 'switch to auto mode' instead of "
         f"the refusal; got {keys}"
     )
 

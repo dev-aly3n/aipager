@@ -411,3 +411,59 @@ def test_continuation_user_prompt_submit_preserves_busy_started_wall(receiver, r
           prompt="<task-notification>\n<task-id>abc</task-id>\ndone.")
     assert sess.status == Status.BUSY
     assert sess.busy_started_wall == original_wall
+
+
+# ---- PermissionRequest: always_available + detail (2.1.259 dialog) ---------
+
+def _perm_request(recv, run_async, **extra):
+    _send(recv, run_async, hook_event_name="PermissionRequest", session="claude-jim",
+          tool_name="Bash",
+          tool_input={"command": "ls -la /tmp && echo hi", "description": "List tmp"},
+          **extra)
+
+
+def test_permission_request_with_suggestions_marks_always_available(receiver, run_async):
+    """The dialog's "don't ask again" row exists exactly when the hook
+    carries permission_suggestions — the flag mirrors that."""
+    registry, recv, notify_fn = receiver
+    _perm_request(recv, run_async,
+                  permission_suggestions=[{"type": "addRules"}, {"type": "addDirectories"}])
+    _, _, ctx = notify_fn.await_args.args
+    assert ctx["tool_info"]["always_available"] is True
+    assert ctx["tool_info"]["detail"] == "ls -la /tmp && echo hi"
+    # the timeline row keeps Claude's description; only the card gains detail
+    assert ctx["tool_info"]["summary"] == "Bash: List tmp"
+    assert registry.get("claude-jim").status == Status.INTERACTIVE
+
+
+@pytest.mark.parametrize("payload", [
+    {"permission_suggestions": []},
+    {},
+    {"permission_suggestions": "nope"},
+    {"permission_suggestions": None},
+])
+def test_permission_request_without_suggestions_is_not_always_available(
+        receiver, run_async, payload):
+    """Empty, missing or malformed suggestions → False, never truthy: on
+    2.1.259 the second row is then "switch to auto mode"."""
+    registry, recv, notify_fn = receiver
+    _perm_request(recv, run_async, **payload)
+    _, _, ctx = notify_fn.await_args.args
+    assert ctx["tool_info"]["always_available"] is False
+
+
+def test_notification_fallback_leaves_always_available_unknown(receiver, run_async):
+    registry, recv, notify_fn = receiver
+    _send(recv, run_async, notification_type="permission_prompt", session="claude-jim",
+          message="Claude needs permission to use Bash")
+    _, _, ctx = notify_fn.await_args.args
+    assert ctx["tool_info"].get("always_available") is None
+
+
+def test_tool_detail_is_the_command_or_path_only():
+    assert hr._tool_detail("Bash", {"command": "  ls -la  ", "description": "x"}) == "ls -la"
+    assert hr._tool_detail("Edit", {"file_path": "/a/b.py", "old_string": "x"}) == "/a/b.py"
+    assert hr._tool_detail("Read", {"file_path": "/a/b.py"}) == "/a/b.py"
+    assert hr._tool_detail("NotebookEdit", {"notebook_path": "/n.ipynb"}) == "/n.ipynb"
+    assert hr._tool_detail("WebSearch", {"query": "x"}) == ""
+    assert hr._tool_detail("Bash", {"command": 12}) == ""

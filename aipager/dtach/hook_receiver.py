@@ -203,6 +203,24 @@ def _summarize_tool(name: str, inp: dict) -> str:
     return name
 
 
+def _tool_detail(name: str, inp: dict) -> str:
+    """The thing the user is actually approving — the real shell command
+    or file path — for the permission card ONLY (the timeline rows keep
+    :func:`_summarize_tool`, which prefers Claude's own description).
+    Empty when the tool has no single such fact.
+    """
+    if name == "Bash":
+        cmd = inp.get("command", "")
+        return cmd.strip() if isinstance(cmd, str) else ""
+    if name in ("Read", "Write", "Edit"):
+        path = inp.get("file_path", "")
+        return path if isinstance(path, str) else ""
+    if name == "NotebookEdit":
+        path = inp.get("notebook_path", "")
+        return path if isinstance(path, str) else ""
+    return ""
+
+
 class HookReceiver:
     """Receives UDP datagrams from notify_hook.py and drives state transitions.
 
@@ -303,8 +321,22 @@ class HookReceiver:
             tool_name = msg.get("tool_name", "")
             tool_input = msg.get("tool_input", {})
             if tool_name:
-                tool_info = {"name": tool_name, "input": tool_input,
-                             "summary": _summarize_tool(tool_name, tool_input)}
+                # Claude Code's dialog carries a "Yes, and don't ask again
+                # for …" row exactly when it could derive a standing rule,
+                # and the hook mirrors that as ``permission_suggestions``.
+                # Since 2.1.259 a Bash prompt WITHOUT one puts "Yes, and
+                # switch to auto mode" in that slot instead, so this flag
+                # is what decides whether Allow-always may exist at all
+                # (keyboards._build_permission_keyboard) and whether the
+                # callback may ever press Down (callbacks allow_always).
+                suggestions = msg.get("permission_suggestions")
+                tool_info = {
+                    "name": tool_name, "input": tool_input,
+                    "summary": _summarize_tool(tool_name, tool_input),
+                    "always_available": (isinstance(suggestions, list)
+                                         and len(suggestions) > 0),
+                    "detail": _tool_detail(tool_name, tool_input),
+                }
                 context = {"tool_info": tool_info, "transcript_path": transcript_path}
                 sess = self.registry.transition(session_name, Status.INTERACTIVE)
                 if sess:
@@ -335,6 +367,9 @@ class HookReceiver:
                     tool_info = {"name": hook_tool_name, "input": {},
                                  "summary": hook_tool_name}
 
+            # This path never sees permission_suggestions, so tool_info
+            # carries no "always_available" key: unknown. The keyboard then
+            # offers no Allow-always and the callback never navigates.
             new_status = Status.INTERACTIVE
             context = {"tool_info": tool_info, "transcript_path": transcript_path}
 

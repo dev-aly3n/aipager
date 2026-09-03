@@ -61,7 +61,8 @@ def test_permission_keyboard_row0_allow_deny(bot):
 
 
 def test_permission_keyboard_row1_allow_always_stop(bot):
-    kb = bot._build_permission_keyboard(_sess(bot))
+    # Allow always exists only with a standing rule to widen (2.1.259 guard).
+    kb = bot._build_permission_keyboard(_sess(bot), always_available=True)
     row1 = kb.inline_keyboard[1]
     assert len(row1) == 2
     labels = [btn.text for btn in row1]
@@ -71,7 +72,7 @@ def test_permission_keyboard_row1_allow_always_stop(bot):
 
 def test_permission_keyboard_callback_data(bot):
     sess = _sess(bot)
-    kb = bot._build_permission_keyboard(sess)
+    kb = bot._build_permission_keyboard(sess, always_available=True)
     dests = [_destination(bot, btn.callback_data)
              for row in kb.inline_keyboard for btn in row]
     assert (sess.name, "allow") in dests
@@ -182,3 +183,38 @@ def test_make_cb_no_longer_exists(bot):
     it — entrypoints.md is explicit that Testers must not rely on
     `AssertionError` from this name."""
     assert not hasattr(bot, "_make_cb")
+
+
+# ---- Allow always only with a standing rule (2.1.259 guard) ----------------
+
+def _labels(kb):
+    return [b.text for row in kb.inline_keyboard for b in row]
+
+
+def test_permission_keyboard_offers_allow_always_only_with_a_rule(bot):
+    """Since Claude Code 2.1.259 the dialog's second row without a rule is
+    "Yes, and switch to auto mode" — the button that would select it must
+    not exist. Allow / Deny / Stop are always there."""
+    sess = _sess(bot)
+    assert any("Allow always" in lbl for lbl in _labels(
+        bot._build_permission_keyboard(sess, always_available=True)))
+    for flag in (False, None):
+        labels = _labels(bot._build_permission_keyboard(sess, always_available=flag))
+        assert not any("Allow always" in lbl for lbl in labels), (flag, labels)
+        assert any(lbl.endswith("Allow") for lbl in labels), labels
+        assert any("Deny" in lbl for lbl in labels), labels
+        assert any("Stop" in lbl for lbl in labels), labels
+
+
+def test_permission_keyboard_reads_the_flag_from_pending_permission(bot):
+    sess = _sess(bot)
+    sess.pending_permission = {"tool_summary": "Bash: x",
+                               "tool_info": {"name": "Bash", "always_available": True}}
+    assert any("Allow always" in lbl for lbl in _labels(bot._build_permission_keyboard(sess)))
+    sess.pending_permission = {"tool_summary": "Bash: x",
+                               "tool_info": {"name": "Bash", "always_available": False}}
+    assert not any("Allow always" in lbl for lbl in _labels(bot._build_permission_keyboard(sess)))
+    sess.pending_permission = {"tool_summary": "Bash: x", "tool_info": {"name": "Bash"}}
+    assert not any("Allow always" in lbl for lbl in _labels(bot._build_permission_keyboard(sess)))
+    sess.pending_permission = None
+    assert not any("Allow always" in lbl for lbl in _labels(bot._build_permission_keyboard(sess)))
