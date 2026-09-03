@@ -570,3 +570,32 @@ def test_grep_glob_inside_cwd_keep_allow_always(receiver, run_async, tool, tool_
           permission_suggestions=[{"type": "addRules"}])
     _, _, ctx = notify_fn.await_args.args
     assert ctx["tool_info"]["always_available"] is True
+
+
+# ---- finished_subagents cap ("agent activity rows on the busy card") ----
+
+def test_subagent_stop_caps_finished_subagents_list(receiver, run_async):
+    """archive_finished_subagent's own cap enforcement (state.py, same
+    idiom as add_subagent's ACTIVE_SUBAGENTS_CAP), pinned end-to-end
+    through the real SubagentStart/SubagentStop datagram path."""
+    from aipager.state import FINISHED_SUBAGENTS_CAP
+
+    registry, recv, _notify = receiver
+    total = FINISHED_SUBAGENTS_CAP + 20
+    for i in range(total):
+        _send(recv, run_async,
+              hook_event_name="SubagentStart",
+              session="claude-jim",
+              agent_id=f"agent-{i}",
+              agent_type="explore")
+        _send(recv, run_async,
+              hook_event_name="SubagentStop",
+              session="claude-jim",
+              agent_id=f"agent-{i}",
+              agent_type="explore")
+    sess = registry.get("claude-jim")
+    assert len(sess.finished_subagents) == FINISHED_SUBAGENTS_CAP
+    # Newest kept, oldest dropped from the front — same age-ordering as
+    # every other cap in this module.
+    assert sess.finished_subagents[-1]["type"] == "explore"
+    assert len(sess.active_subagents) == 0
