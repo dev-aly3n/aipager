@@ -24,6 +24,7 @@ from aipager.config import (
     SOCKET_PATH,
 )
 from aipager.md_to_tg import markdown_to_telegram_html
+from aipager.policy_snapshot import expire_notes_after_turn_end, list_outstanding_notes
 from aipager.state import (
     ACTIVE_SUBAGENTS_CAP,
     JOB_CONTINUATION_GRACE_SECONDS,
@@ -966,6 +967,14 @@ class HookReceiver:
             # finalize: call transition() and fall back to get() if the
             # session was already IDLE (race or duplicate). This is the
             # exact stranding bug being fixed — do not gate on debounce.
+            #
+            # Snapshot outstanding notes BEFORE anything below (notably
+            # notify_fn's queue drain) can write a new one — see
+            # expire_notes_after_turn_end's docstring for why the
+            # ordering matters (a note absorbed mid-turn must be swept;
+            # a note some LATER turn writes must never be touched by
+            # this one's sweep).
+            pre_notes = list_outstanding_notes(session_name)
             _sf = self.registry.get(session_name)
             if _sf is not None:
                 _sf.last_prompt_origin = "telegram"  # fail-closed
@@ -1005,10 +1014,15 @@ class HookReceiver:
                              session_name)
             log.info("[%s] StopFailure: transitioned to IDLE", sess.label)
             await self.notify_fn(sess, "idle_prompt", notify_ctx)
+            await expire_notes_after_turn_end(session_name, pre_notes)
 
         elif event.lower() in ("idle_prompt", "idle", "stop", "notification"):
             # Turn finished — reset origin fail-closed (Phase D §3.7a) so the
             # window before the next prompt is treated as restricted.
+            #
+            # Same pre-notify snapshot as the StopFailure branch above —
+            # see expire_notes_after_turn_end's docstring.
+            pre_notes = list_outstanding_notes(session_name)
             _idle = self.registry.get(session_name)
             if _idle is not None:
                 _idle.last_prompt_origin = "telegram"
@@ -1087,6 +1101,7 @@ class HookReceiver:
                 notify_ctx["no_response"] = True
 
             await self.notify_fn(sess, "idle_prompt", notify_ctx)
+            await expire_notes_after_turn_end(session_name, pre_notes)
 
         else:
             # auth_success, etc. — just ensure session is tracked

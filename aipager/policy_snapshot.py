@@ -10,6 +10,7 @@ carries the resolved rule sets + the owner bypass flag.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -18,7 +19,7 @@ import time
 from pathlib import Path
 
 from aipager import safety
-from aipager.state import QUEUE_MAX_AGE_SECONDS
+from aipager.state import MIXED_SENDER_HOLD_WINDOW_SECONDS, QUEUE_MAX_AGE_SECONDS
 
 log = logging.getLogger(__name__)
 
@@ -330,6 +331,80 @@ def delete_notes(session_name: str, notes: list[dict]) -> None:
             pass
 
 
+# Grace window for the Stop-triggered sweep below. A message injected
+# into an already-BUSY session goes straight into Claude Code's own
+# input handling; whether it becomes a fresh UserPromptSubmit (the
+# normal `_match_and_promote` pick-up path deletes its note right
+# then) or gets silently folded into the turn that was already running
+# (no fresh UserPromptSubmit ever fires for it — the leak this fixes)
+# is Claude Code's call, not ours, and both outcomes look identical
+# from here until one of them happens. A genuine pick-up — including
+# Claude Code auto-resubmitting queued input the instant a turn's Stop
+# fires — completes within low single-digit milliseconds in practice
+# (a hook round-trip plus one UDP datagram); 5s is generously larger
+# than that while being negligible next to how long a real turn runs,
+# so the sweep below essentially never races a legitimate pick-up.
+MID_TURN_NOTE_GRACE_SECONDS: float = 5.0
+
+
+async def expire_notes_after_turn_end(
+    session_name: str, pre_notes: list[dict] | None = None, *,
+    grace: float | None = None,
+) -> int:
+    """Sweep away notes that were outstanding when a session's turn
+    ended and are STILL outstanding after a short grace period.
+
+    Call once per Stop/StopFailure (turn end) event, with ``pre_notes``
+    captured (:func:`list_outstanding_notes`) BEFORE any turn-end
+    side effect (notably ``_drain_next_queued``, which may inject a
+    brand-new prompt and write a brand-new note) has had a chance to
+    run — that ordering is what keeps this sweep from ever touching a
+    note some LATER turn wrote, even if that note happens to still be
+    outstanding when the grace period elapses. If ``pre_notes`` is
+    omitted, it's captured right here instead (fine for direct/test
+    callers that don't need that ordering guarantee).
+
+    After ``grace`` seconds (:data:`MID_TURN_NOTE_GRACE_SECONDS` by
+    default), any of ``pre_notes`` still present on disk is deleted —
+    the turn they belonged to has already ended, so if the normal
+    pick-up path (a fresh ``UserPromptSubmit`` matching and deleting
+    the note) hasn't happened by now, it isn't going to: the message
+    was silently absorbed into the turn that just finished. Deleting
+    the note makes a LATER merge AT LEAST as restrictive in the common
+    case (the same soundness argument :func:`list_outstanding_notes`'s
+    TTL prune relies on) — with one narrow, deliberately-accepted
+    exception: if a genuine (not absorbed) resubmit takes longer than
+    ``grace`` and the swept note was the note's session's ONLY
+    outstanding one, the next merge falls back to
+    :data:`FLOOR_SNAPSHOT` instead of that note's own resolved rules.
+    For the common ``bypass_safety`` case this is still safe (the floor
+    denies more, never less); for a team/scope-mode member whose ROLE
+    adds ``deny_tools``/``deny_paths`` beyond the hardcoded floor, that
+    turn would then run under fewer restrictions than the role
+    configures until the next note re-establishes them. Review
+    rev-iter1-001: accepted because it requires the intersection of
+    team/scope mode + a role with extra denies + a resubmit slower than
+    ``MID_TURN_NOTE_GRACE_SECONDS`` + no other outstanding note — far
+    narrower than the 24h-TTL status quo this replaces for the common
+    case. Notes written AFTER this snapshot (e.g. by a queued message
+    the same turn-end drains into a fresh BUSY turn) are never touched,
+    matched or not.
+
+    Best-effort and safe to call with nothing outstanding (returns 0
+    immediately, no sleep). Returns the number of notes removed.
+    """
+    if pre_notes is None:
+        pre_notes = list_outstanding_notes(session_name)
+    if not pre_notes:
+        return 0
+    await asyncio.sleep(MID_TURN_NOTE_GRACE_SECONDS if grace is None else grace)
+    still_paths = {n.get("_path") for n in list_outstanding_notes(session_name)}
+    survivors = [n for n in pre_notes if n.get("_path") in still_paths]
+    if survivors:
+        delete_notes(session_name, survivors)
+    return len(survivors)
+
+
 def clear_notes_dir(session_name: str) -> int:
     """Delete every outstanding note for a session (best-effort).
 
@@ -357,20 +432,52 @@ def clear_notes_dir(session_name: str) -> int:
     return removed
 
 
-def outstanding_sender_keys(session_name: str) -> set[tuple[int, int]]:
-    """``{sender_key, ...}`` for every currently outstanding note.
+def outstanding_sender_keys(
+    session_name: str, *, max_age: float | None = None, now: float | None = None,
+) -> set[tuple[int, int]]:
+    """``{sender_key, ...}`` for outstanding notes younger than ``max_age``.
 
     Used by the mixed-sender hold (design.md): an inbound prompt from a
     Telegram user different from whoever already has a note outstanding
     must be held rather than merged in blind — this is what keeps two
     different humans' permissions from silently combining into one turn.
+
+    ``max_age`` defaults to :data:`aipager.state.MIXED_SENDER_HOLD_WINDOW_SECONDS`
+    — deliberately much shorter than :func:`list_outstanding_notes`'s own
+    (24h) TTL. That longer TTL bounds a note's contribution to
+    ``merge_snapshots``' safety-floor computation and must stay generous;
+    THIS bound only decides how long a note may keep holding a
+    different-looking sender's messages, which is a much narrower
+    window in practice (see the constant's own comment). ``now`` is
+    injectable for tests, exactly like :func:`list_outstanding_notes`.
     """
+    now = now if now is not None else time.time()
+    cutoff_age = MIXED_SENDER_HOLD_WINDOW_SECONDS if max_age is None else max_age
     out: set[tuple[int, int]] = set()
-    for note in list_outstanding_notes(session_name):
+    for note in list_outstanding_notes(session_name, now=now):
+        try:
+            age = now - float(note.get("queued_at"))
+        except (TypeError, ValueError):
+            age = 0.0  # malformed/missing timestamp: treat as fresh, don't hide it
+        if age > cutoff_age:
+            continue
         key = note.get("sender_key")
         if isinstance(key, list) and len(key) == 2:
             out.add((key[0], key[1]))
     return out
+
+
+def queue_depth_parts(sess) -> tuple[int, int]:
+    """``(queued, outstanding)`` — the two components summed by
+    :func:`combined_queue_depth`.
+
+    Split out so a display surface can show BOTH counts instead of one
+    opaque total: a pile of stale/orphaned notes and a real held
+    message are indistinguishable in a bare integer (the live incident
+    this fixes: "Queue 16 pending" was 15 stale notes and one real
+    message — intent.md).
+    """
+    return len(sess.pending_queue), len(list_outstanding_notes(sess.name))
 
 
 def combined_queue_depth(sess) -> int:
@@ -384,7 +491,8 @@ def combined_queue_depth(sess) -> int:
     ``.pending_queue``) rather than a bare name, mirroring
     :func:`clear_session_files`'s shape.
     """
-    return len(sess.pending_queue) + len(list_outstanding_notes(sess.name))
+    queued, outstanding = queue_depth_parts(sess)
+    return queued + outstanding
 
 
 def merge_snapshots(notes: list[dict]) -> dict:

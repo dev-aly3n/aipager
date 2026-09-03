@@ -43,7 +43,7 @@ from aipager.config import (
     FILE_DOWNLOAD_DIR, KEYBOARD_PARENTS, MODELS_BUTTON,
     TEMPLATES_BUTTON,
 )
-from aipager.policy_snapshot import combined_queue_depth
+from aipager.policy_snapshot import queue_depth_parts
 from aipager.state import QUEUE_CAP, Status, TrackedSession
 
 # Pure-function helpers and constants live in aipager.bot.transport
@@ -698,9 +698,13 @@ class CommandHandlersMixin:
             # (the notes dir); accepted knowingly, as the Mini App already
             # did for its single-session view — /status multiplies it by
             # session count, which at this project's scale is microseconds.
-            depth = combined_queue_depth(sess)
+            queued, notes = queue_depth_parts(sess)
+            depth = queued + notes
             if depth:
-                rows.append(f"  Queue  {depth}")
+                # Split so "16 pending" can never mean 15 ghost notes and
+                # one real message — the exact confusion that hid the
+                # live incident this breakdown fixes (intent.md).
+                rows.append(f"  Queue  {depth} ({queued} queued, {notes} notes)")
             # Last tool for BUSY sessions
             if sess.status == Status.BUSY and sess.tool_history:
                 last_summary, last_done = sess.tool_history[-1]

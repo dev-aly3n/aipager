@@ -24,7 +24,7 @@ from aipager.config import (
     CHAT_ID,
 )
 from aipager.bot import session_parity
-from aipager.policy_snapshot import combined_queue_depth
+from aipager.policy_snapshot import queue_depth_parts
 from aipager.state import Status, TrackedSession
 from aipager.transcript import last_assistant_preview as _read_preview
 
@@ -297,9 +297,14 @@ class DashboardMixin:
         # Queue depth — only if non-empty. Combined: held messages plus
         # ones already sent to Claude and awaiting pick-up. Same seam the
         # Mini App and /clearqueue use, so the surfaces cannot disagree.
-        depth = combined_queue_depth(sess)
+        queued, notes = queue_depth_parts(sess)
+        depth = queued + notes
         if depth:
-            rows.append(f"  Queue   {depth} pending")
+            # Broken out so a pile of stale/orphaned notes never reads
+            # as "N real pending messages" — see handlers.py's /status
+            # overview for the same breakdown.
+            rows.append(
+                f"  Queue   {depth} pending ({queued} queued, {notes} notes)")
 
         # Last activity — from last_hook_at (monotonic)
         if sess.last_hook_at > 0:

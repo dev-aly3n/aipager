@@ -380,3 +380,147 @@ def test_write_merged_snapshot_round_trips_through_read_snapshot(tmp_path, monke
     monkeypatch.setattr(ps, "snapshot_path", lambda n: tmp_path / f"{n}.json")
     ps.write_merged_snapshot("claude-x", ps.merge_snapshots([]))
     assert ps.read_snapshot("claude-x") == ps.FLOOR_SNAPSHOT
+
+
+def test_queue_depth_parts_reports_the_two_components_separately(
+    tmp_path, monkeypatch,
+):
+    """intent.md requirement 4: a display surface must be able to show
+    "N queued, M notes" instead of one opaque total — this is the
+    function both /status and the dashboard call for that breakdown."""
+    class _Sess:
+        name = "claude-x"
+        pending_queue = [("a", 1, 0.0, "")]
+
+    monkeypatch.setattr(ps, "notes_dir", lambda n: tmp_path / f"notes-{n}")
+    ps.write_note("claude-x", None, None, None, msg_id=1, chat_id=1,
+                  sender_key=(1, 1), body="note1", raw_text="note1")
+    ps.write_note("claude-x", None, None, None, msg_id=2, chat_id=1,
+                  sender_key=(1, 1), body="note2", raw_text="note2")
+
+    queued, notes = ps.queue_depth_parts(_Sess())
+
+    assert (queued, notes) == (1, 2)
+    assert queued + notes == ps.combined_queue_depth(_Sess())
+
+
+# ---- requirement 3: the mixed-sender hold only consults recent notes -----
+
+def test_outstanding_sender_keys_excludes_notes_past_the_hold_window(
+    tmp_path, monkeypatch,
+):
+    from aipager.state import MIXED_SENDER_HOLD_WINDOW_SECONDS
+
+    d = tmp_path / "notes-claude-x"
+    d.mkdir()
+    now = 2_000_000.0
+    (d / "old.json").write_text(json.dumps({
+        "sender_key": [1, 1],
+        "queued_at": now - MIXED_SENDER_HOLD_WINDOW_SECONDS - 1,
+    }))
+    (d / "fresh.json").write_text(json.dumps({
+        "sender_key": [1, 2],
+        "queued_at": now,
+    }))
+    monkeypatch.setattr(ps, "notes_dir", lambda n: d)
+
+    keys = ps.outstanding_sender_keys("claude-x", now=now)
+
+    assert keys == {(1, 2)}, (
+        "a note older than the hold window still counted toward the "
+        f"mixed-sender hold: {keys}")
+
+
+def test_outstanding_sender_keys_still_full_TTL_reach_with_explicit_max_age(
+    tmp_path, monkeypatch,
+):
+    """The narrower default is opt-out: a caller that explicitly wants
+    the full (list_outstanding_notes-length) window can still get it."""
+    from aipager.state import MIXED_SENDER_HOLD_WINDOW_SECONDS, QUEUE_MAX_AGE_SECONDS
+
+    d = tmp_path / "notes-claude-x"
+    d.mkdir()
+    now = 2_000_000.0
+    (d / "old.json").write_text(json.dumps({
+        "sender_key": [1, 1],
+        "queued_at": now - MIXED_SENDER_HOLD_WINDOW_SECONDS - 1,
+    }))
+    monkeypatch.setattr(ps, "notes_dir", lambda n: d)
+
+    keys = ps.outstanding_sender_keys(
+        "claude-x", now=now, max_age=QUEUE_MAX_AGE_SECONDS)
+
+    assert keys == {(1, 1)}
+
+
+# ---- requirement 2: absorbed mid-turn notes must not outlive their turn --
+
+def test_expire_notes_after_turn_end_removes_snapshotted_survivors(
+    tmp_path, monkeypatch, run_async,
+):
+    monkeypatch.setattr(ps, "notes_dir", lambda n: tmp_path / f"notes-{n}")
+    ps.write_note("claude-x", None, None, None, msg_id=1, chat_id=1,
+                  sender_key=(0, 1), body="absorbed", raw_text="absorbed")
+    pre_notes = ps.list_outstanding_notes("claude-x")
+    assert len(pre_notes) == 1, "setup assumption broke"
+
+    removed = run_async(
+        ps.expire_notes_after_turn_end("claude-x", pre_notes, grace=0))
+
+    assert removed == 1
+    assert ps.list_outstanding_notes("claude-x") == []
+
+
+def test_expire_notes_after_turn_end_leaves_an_already_picked_up_note_alone(
+    tmp_path, monkeypatch, run_async,
+):
+    """If the normal pick-up path (a real UserPromptSubmit match) already
+    deleted the note before the grace period elapses, the sweep must
+    not error or otherwise misbehave — there's simply nothing left to
+    remove."""
+    monkeypatch.setattr(ps, "notes_dir", lambda n: tmp_path / f"notes-{n}")
+    ps.write_note("claude-x", None, None, None, msg_id=1, chat_id=1,
+                  sender_key=(0, 1), body="picked-up", raw_text="picked-up")
+    pre_notes = ps.list_outstanding_notes("claude-x")
+    assert len(pre_notes) == 1
+
+    ps.delete_notes("claude-x", pre_notes)  # simulates a normal pick-up
+
+    removed = run_async(
+        ps.expire_notes_after_turn_end("claude-x", pre_notes, grace=0))
+
+    assert removed == 0
+    assert ps.list_outstanding_notes("claude-x") == []
+
+
+def test_expire_notes_after_turn_end_never_touches_a_note_written_after_the_snapshot(
+    tmp_path, monkeypatch, run_async,
+):
+    """A note a LATER turn writes (e.g. the held-and-queued drain firing
+    on the same turn-end) must survive a sweep armed by an EARLIER
+    turn's snapshot, even if it happens to still be outstanding when
+    that earlier sweep's grace period elapses."""
+    monkeypatch.setattr(ps, "notes_dir", lambda n: tmp_path / f"notes-{n}")
+    ps.write_note("claude-x", None, None, None, msg_id=1, chat_id=1,
+                  sender_key=(0, 1), body="old-turn", raw_text="old-turn")
+    pre_notes = ps.list_outstanding_notes("claude-x")
+
+    # A later turn's own injection writes a brand-new note AFTER the
+    # snapshot was taken.
+    ps.write_note("claude-x", None, None, None, msg_id=2, chat_id=1,
+                  sender_key=(0, 1), body="new-turn", raw_text="new-turn")
+
+    removed = run_async(
+        ps.expire_notes_after_turn_end("claude-x", pre_notes, grace=0))
+
+    assert removed == 1
+    remaining = ps.list_outstanding_notes("claude-x")
+    assert [n["body"] for n in remaining] == ["new-turn"]
+
+
+def test_expire_notes_after_turn_end_is_a_cheap_noop_with_nothing_outstanding(
+    tmp_path, monkeypatch, run_async,
+):
+    monkeypatch.setattr(ps, "notes_dir", lambda n: tmp_path / "empty")
+    removed = run_async(ps.expire_notes_after_turn_end("claude-x", grace=999))
+    assert removed == 0  # returns immediately — never actually sleeps 999s

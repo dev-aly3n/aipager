@@ -164,3 +164,27 @@ def test_mixed_sender_hold_also_applies_while_busy(wired, mk_update, run_async):
 
     assert injected == ["from A"]
     assert len(sess.pending_queue) == 1
+
+
+# ---- requirement 4: the hold must be diagnosable from the journal alone --
+
+def test_mixed_sender_hold_logs_the_sender_keys_at_info(
+    wired, mk_update, run_async, caplog,
+):
+    """intent.md requirement 4: when the hold fires, log the outstanding
+    and current sender keys at INFO — the live incident took manual
+    ``/tmp`` inspection to even see, because nothing was logged beyond
+    the generic "different sender outstanding" line."""
+    import logging
+
+    bot, sess, injected, keys = wired
+    _in_state(bot, sess, Status.IDLE)
+    run_async(_send_text(bot, _update(mk_update, "from A", 1, USER_A)))
+
+    with caplog.at_level(logging.INFO, logger="aipager.bot.transport"):
+        run_async(_send_text(bot, _update(mk_update, "from B", 2, USER_B)))
+
+    records = [r.message for r in caplog.records
+               if r.name == "aipager.bot.transport"]
+    assert any(str(USER_A) in m and str(USER_B) in m for m in records), (
+        f"mixed-sender hold did not log both sender ids at INFO: {records}")
