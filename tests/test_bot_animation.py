@@ -549,13 +549,14 @@ def test_permission_display_shows_the_real_command(mk_bot):
 
 
 def test_permission_display_truncates_a_long_command(mk_bot):
-    from aipager.bot.animation import _PERM_DETAIL_CHARS
+    from aipager.bot.transport import _PERM_DETAIL_CHARS
     bot = mk_bot()
     sess = _perm_sess({"tool_summary": "Bash: big",
                        "tool_info": {"name": "Bash", "detail": "x" * 2000}})
     text = bot._build_busy_text("jim", "Waiting", sess)
-    assert "<pre>" + "x" * (_PERM_DETAIL_CHARS - 1) + "…</pre>" in text
-    assert "x" * _PERM_DETAIL_CHARS not in text
+    # the cap keeps _PERM_DETAIL_CHARS raw characters and marks the cut
+    assert "<pre>" + "x" * _PERM_DETAIL_CHARS + "…</pre>" in text
+    assert "x" * (_PERM_DETAIL_CHARS + 1) not in text
 
 
 def test_permission_display_skips_detail_the_summary_already_shows(mk_bot):
@@ -572,3 +573,17 @@ def test_permission_display_skips_detail_the_summary_already_shows(mk_bot):
     sess = _perm_sess({"tool_summary": "Bash: ls"})
     text = bot._build_busy_text("jim", "Waiting", sess)
     assert "🔐 <code>Bash: ls</code>" in text and "<pre>" not in text
+
+
+def test_permission_display_bounds_escape_heavy_commands(mk_bot):
+    """The cap holds in rendered HTML too (rev-iter1-003): a command made
+    of `&` grows 5× on escaping, so 300 raw chars would be 1500 rendered."""
+    from aipager.bot.transport import _PERM_DETAIL_HTML_MAX
+    bot = mk_bot()
+    sess = _perm_sess({"tool_summary": "Bash: amp",
+                       "tool_info": {"name": "Bash", "detail": "&" * 2000}})
+    text = bot._build_busy_text("jim", "Waiting", sess)
+    block = text.split("<pre>", 1)[1].split("</pre>", 1)[0]
+    assert block.endswith("…")
+    assert len(block) <= _PERM_DETAIL_HTML_MAX + 1
+    assert "&amp;" in block and "&" * 2 not in block.replace("&amp;", "")

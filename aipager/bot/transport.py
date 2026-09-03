@@ -198,6 +198,36 @@ def _is_bot_blocked(e: Exception) -> bool:
 _DIFF_MAX_LINES = 30
 _DIFF_MAX_CHARS = 2000
 
+# The real command / path shown under a permission prompt (hook_receiver's
+# ``_tool_detail``): capped in raw characters AND in rendered HTML, since
+# escaping can grow a shell command up to ~6× (``&`` → ``&amp;``), and the
+# busy message has no other truncation between here and Telegram's edit
+# limit (review rev-iter1-003).
+_PERM_DETAIL_CHARS = 300
+_PERM_DETAIL_HTML_MAX = 900
+
+
+def _format_perm_detail(tool_summary: str, detail: str) -> str:
+    """HTML fragment (``"\n<pre>…</pre>"``) showing ``detail`` under a
+    permission prompt, or ``""`` when there is nothing to add: no detail,
+    or the summary already spells it out (a short command with no
+    description, a bare file path). Bounded on both axes — see the
+    constants above."""
+    detail = (detail or "").strip()
+    if not detail or detail in tool_summary:
+        return ""
+    cut = len(detail) > _PERM_DETAIL_CHARS
+    raw = detail[:_PERM_DETAIL_CHARS]
+    escaped = html_mod.escape(raw)
+    if len(escaped) > _PERM_DETAIL_HTML_MAX:
+        # Escape-heavy text: shrink the raw slice proportionally, then
+        # re-escape (never cut the escaped string — that could split an
+        # entity like ``&amp;`` and corrupt the HTML).
+        raw = raw[: max(1, int(len(raw) * _PERM_DETAIL_HTML_MAX / len(escaped)))]
+        escaped = html_mod.escape(raw)
+        cut = True
+    return f"\n<pre>{escaped}{'…' if cut else ''}</pre>"
+
 
 def _truncate_diff(lines: list[str]) -> tuple[str, int]:
     """Truncate a list of diff lines to the per-message limits.

@@ -467,3 +467,15 @@ def test_tool_detail_is_the_command_or_path_only():
     assert hr._tool_detail("NotebookEdit", {"notebook_path": "/n.ipynb"}) == "/n.ipynb"
     assert hr._tool_detail("WebSearch", {"query": "x"}) == ""
     assert hr._tool_detail("Bash", {"command": 12}) == ""
+
+
+def test_bash_with_non_string_command_is_never_always_available(receiver, run_async):
+    """The one suppression case the hook CAN see (rev-iter1-002): Claude
+    hides both extra rows when the command is withheld/not a string, so
+    suggestions alone must not make Allow-always navigate."""
+    registry, recv, notify_fn = receiver
+    _send(recv, run_async, hook_event_name="PermissionRequest", session="claude-jim",
+          tool_name="Bash", tool_input={"command": None, "description": "x"},
+          permission_suggestions=[{"type": "addRules"}])
+    _, _, ctx = notify_fn.await_args.args
+    assert ctx["tool_info"]["always_available"] is False

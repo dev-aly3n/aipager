@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Allow-always button is shown only when a standing rule exists, and a
   stale or unknown tap confirms a single Allow instead of navigating —
   never auto mode. Deny is unaffected (it still overshoots onto "No").
+  Known limit: for a classifier-blocked, org-capped or remote-sourced ask
+  Claude hides the rule row as well, which the hook cannot see; an
+  Allow-always there lands on "No" (logged as allowed always, but never
+  auto mode). Retiring keystrokes for a hook-returned decision is the
+  durable fix.
 
 ### Changed
 - The permission card shows the real Bash command (or the file path for

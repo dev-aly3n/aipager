@@ -641,3 +641,21 @@ def test_busy_status_swallows_edit_failure(mk_bot, run_async):
     bot._app.bot.edit_message_text = AsyncMock(side_effect=BadRequest("old"))
     # Must not raise
     run_async(bot.notify(sess, "unrecognized_event", {}))
+
+
+def test_separate_message_permission_prompt_shows_the_real_command(mk_bot, run_async):
+    """With no busy message to edit, the prompt goes out as its own message
+    — it carries the real command too (rev-iter1-004), and only Allow/Deny."""
+    bot = mk_bot()
+    sess = _sess(status=Status.INTERACTIVE, busy_msg_id=None)
+    run_async(bot.notify(sess, "permission_prompt", {
+        "tool_info": {"name": "Bash", "input": {"command": "rm -rf /tmp/x && ls"},
+                      "summary": "Bash: Clean up", "always_available": True,
+                      "detail": "rm -rf /tmp/x && ls"},
+    }))
+    call = bot._app.bot.send_message.await_args
+    text = call.args[1] if len(call.args) > 1 else call.kwargs["text"]
+    assert "<pre>rm -rf /tmp/x &amp;&amp; ls</pre>" in text
+    kb = call.kwargs["reply_markup"]
+    labels = [b.text for row in kb.inline_keyboard for b in row]
+    assert not any("Allow always" in lbl for lbl in labels), labels

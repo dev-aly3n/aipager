@@ -134,8 +134,8 @@ def test_deny_overshoots_to_the_last_option(mk_bot, mk_query, run_async):
     downs = keys[:-1]
     assert set(downs) == {"Down"}, f"deny must only move down; got {keys}"
     # 2.1.259 menus are up to four rows (Yes / don't-ask-again / switch to
-    # auto mode / No): fewer than four Downs from the top can stop ON the
-    # auto-mode row, which is far worse than an affirmative.
+    # auto mode / No): two Downs from the top stop ON the auto-mode row,
+    # which is far worse than an affirmative; four is the margin we pin.
     assert len(downs) >= 4, (
         f"deny sent {len(downs)} Down(s) — too few to clamp past a "
         f"four-row menu, so it can select 'switch to auto mode' instead of "

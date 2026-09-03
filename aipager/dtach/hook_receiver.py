@@ -322,19 +322,35 @@ class HookReceiver:
             tool_input = msg.get("tool_input", {})
             if tool_name:
                 # Claude Code's dialog carries a "Yes, and don't ask again
-                # for …" row exactly when it could derive a standing rule,
-                # and the hook mirrors that as ``permission_suggestions``.
-                # Since 2.1.259 a Bash prompt WITHOUT one puts "Yes, and
-                # switch to auto mode" in that slot instead, so this flag
-                # is what decides whether Allow-always may exist at all
+                # for …" row when it could derive a standing rule, and the
+                # hook mirrors that as ``permission_suggestions``. Since
+                # 2.1.259 a Bash prompt WITHOUT one puts "Yes, and switch
+                # to auto mode" in that slot instead, so this flag decides
+                # whether Allow-always may exist at all
                 # (keyboards._build_permission_keyboard) and whether the
                 # callback may ever press Down (callbacks allow_always).
+                #
+                # Known limit (review rev-iter1-002, verified in the 2.1.259
+                # dialog builder): Claude also suppresses BOTH extra rows —
+                # the rule row and the auto-mode row together — for a
+                # withheld/non-string command, a classifier-blocked ask, an
+                # org ask-cap, or a remote request source. The hook payload
+                # exposes only the first of those (the command's type), so
+                # in the others the flag can read True while the dialog is
+                # Yes/No only; Down+Enter then lands on "No" (a refusal
+                # reported as "Allowed always" — wrong in the audit log, but
+                # never auto mode). Closing that needs a hook-returned
+                # decision instead of keystrokes.
                 suggestions = msg.get("permission_suggestions")
+                always = isinstance(suggestions, list) and len(suggestions) > 0
+                if tool_name == "Bash" and not isinstance(
+                        tool_input.get("command") if isinstance(tool_input, dict) else None,
+                        str):
+                    always = False
                 tool_info = {
                     "name": tool_name, "input": tool_input,
                     "summary": _summarize_tool(tool_name, tool_input),
-                    "always_available": (isinstance(suggestions, list)
-                                         and len(suggestions) > 0),
+                    "always_available": always,
                     "detail": _tool_detail(tool_name, tool_input),
                 }
                 context = {"tool_info": tool_info, "transcript_path": transcript_path}

@@ -110,7 +110,8 @@ log = logging.getLogger(__name__)
 # log. Overshooting can only ever land on a refusal, so it fails safe.
 # Claude Code 2.1.259 added "Yes, and switch to auto mode" as the row just
 # above "No" on Bash prompts (Yes / [don't ask again] / [switch to auto] /
-# No), so the menu can be four rows deep; five Downs still clamp onto "No".
+# No), so the menu can be four rows deep: two Downs from the top would stop
+# ON the auto-mode row; five clamp onto "No" whatever the length.
 _DENY_OVERSHOOT = 5
 
 
@@ -1153,6 +1154,7 @@ class CallbackDispatchMixin:
                 # the scrollback reads as a conversation.
                 audit_icon = {
                     "Allowed": "✅",
+                    "Allowed always": "🟢",
                     "Denied": "🚫",
                     "Continue": "▶️",
                 }.get(verb, "·")

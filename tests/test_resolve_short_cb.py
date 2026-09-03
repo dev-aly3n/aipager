@@ -290,6 +290,16 @@ def test_forty_char_label_permission_prompt_allow_deny_allow_always_stop_all_fir
     assert len(sess.name.encode()) == 64  # the exact boundary case
     bot.registry._sessions[sess.name] = sess
 
+    # The with-rule case, so Allow-always is on the keyboard and navigates
+
+    # ("allow-always-auto-mode-guard"): without the hook's flag the button
+
+    # is absent and this loop would silently skip the verb it claims to cover.
+
+    sess.pending_permission = {"tool_summary": "Bash: x",
+
+                                "tool_info": {"name": "Bash", "always_available": True}}
+
     kb = bot._build_permission_keyboard(sess)
     for row in kb.inline_keyboard:
         for btn in row:

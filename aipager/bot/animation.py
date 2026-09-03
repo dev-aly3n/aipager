@@ -47,6 +47,8 @@ from aipager.bot.transport import (  # noqa: F401
     _DIFF_MAX_CHARS,
     _DIFF_MAX_LINES,
     _ERROR_PATTERNS,
+    _format_perm_detail,
+    _PERM_DETAIL_CHARS,
     _extract_retry_after,
     _is_bot_blocked,
     _log_blocked_once,
@@ -66,10 +68,6 @@ if TYPE_CHECKING:
     pass
 
 log = logging.getLogger(__name__)
-
-# Cap for the real command / path shown under a permission prompt
-# (``_tool_detail``); the timeline row above it carries the summary.
-_PERM_DETAIL_CHARS = 300
 
 _RICH_LIMIT = 32_768  # UTF-8 byte ceiling for rich messages
 # Rows are separated by a blank line: Telegram's rich markdown collapses a
@@ -721,11 +719,8 @@ class AnimationMixin:
                 # command on the model's summary of itself is a weak check.
                 # Skipped when the summary already spells it out (a short
                 # command with no description, a bare file path).
-                detail = (perm.get("tool_info") or {}).get("detail") or ""
-                if detail and detail not in tool_summary:
-                    if len(detail) > _PERM_DETAIL_CHARS:
-                        detail = detail[:_PERM_DETAIL_CHARS - 1] + "…"
-                    text += f"\n<pre>{html_mod.escape(detail)}</pre>"
+                text += _format_perm_detail(
+                    tool_summary, (perm.get("tool_info") or {}).get("detail") or "")
         return text
 
     async def _edit_busy_raw(self, msg_id: int, text: str,

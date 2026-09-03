@@ -63,6 +63,7 @@ from aipager.bot.transport import (  # noqa: F401
     _DIFF_MAX_CHARS,
     _DIFF_MAX_LINES,
     _ERROR_PATTERNS,
+    _format_perm_detail,
     _extract_retry_after,
     _is_bot_blocked,
     _log_blocked_once,
@@ -1648,6 +1649,14 @@ class NotifyMixin:
                     text = f"🔐 <b>{html_mod.escape(label)}</b> · Permission needed"
                     if tool_summary:
                         text += f"\n<code>{html_mod.escape(tool_summary)}</code>"
+                        pass
+                    # This separate-message prompt keeps its Allow/Deny-only
+                    # keyboard on purpose (review rev-iter1-004): with no
+                    # ``pending_permission`` on this path there is no
+                    # always_available flag, so Allow-always must not be
+                    # offered — and it never was here. Stop stays absent as
+                    # before; unifying with _build_permission_keyboard would
+                    # change this surface's behaviour beyond the fix.
                     # Local import, not top-level — avoids an import cycle
                     # with session_parity; mirrors keyboards.py's own
                     # local-import precedent (see
