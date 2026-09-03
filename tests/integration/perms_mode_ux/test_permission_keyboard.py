@@ -16,6 +16,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from aipager.state import SessionRegistry, Status, TrackedSession
 
 
+# Contract change ("allow-always-auto-mode-guard"): Allow-always exists —
+# as a button and as a Down+Enter — only when the hook reported a standing
+# rule to widen (Claude Code 2.1.259 otherwise puts "switch to auto mode"
+# in that row). These pins describe the with-rule case explicitly.
+_WITH_RULE = {"tool_summary": "Bash: x",
+              "tool_info": {"name": "Bash", "always_available": True}}
+
 def _run(coro):
     return asyncio.new_event_loop().run_until_complete(coro)
 
@@ -90,7 +97,7 @@ def test_sc16_permission_keyboard_has_exactly_two_rows():
     """SC16: _build_permission_keyboard must return InlineKeyboardMarkup with
     exactly 2 rows."""
     bot = _make_bot()
-    kb = bot._build_permission_keyboard(_sess(bot))
+    kb = bot._build_permission_keyboard(_sess(bot), always_available=True)
     assert len(kb.inline_keyboard) == 2, (
         f"Permission keyboard must have 2 rows; got {len(kb.inline_keyboard)}"
     )
@@ -100,7 +107,7 @@ def test_sc16_permission_keyboard_row0_is_allow_and_deny():
     """SC16: Row 0 must have exactly 2 buttons: Allow (not always) and Deny."""
     bot = _make_bot()
     sess = _sess(bot)
-    kb = bot._build_permission_keyboard(sess)
+    kb = bot._build_permission_keyboard(sess, always_available=True)
     row0 = kb.inline_keyboard[0]
 
     assert len(row0) == 2, f"Row 0 must have 2 buttons; got {len(row0)}"
@@ -127,7 +134,7 @@ def test_sc16_permission_keyboard_row1_is_allow_always_and_stop():
     """SC16: Row 1 must have exactly 2 buttons: Allow always and Stop."""
     bot = _make_bot()
     sess = _sess(bot)
-    kb = bot._build_permission_keyboard(sess)
+    kb = bot._build_permission_keyboard(sess, always_available=True)
     row1 = kb.inline_keyboard[1]
 
     assert len(row1) == 2, f"Row 1 must have 2 buttons; got {len(row1)}"
@@ -153,7 +160,7 @@ def test_sc16_permission_keyboard_row1_is_allow_always_and_stop():
 def test_sc16_permission_keyboard_row1_col0_is_allow_always():
     """SC16: First button of row 1 must be Allow always (🟢), not Stop."""
     bot = _make_bot()
-    kb = bot._build_permission_keyboard(_sess(bot))
+    kb = bot._build_permission_keyboard(_sess(bot), always_available=True)
     row1 = kb.inline_keyboard[1]
 
     first_label = row1[0].text
@@ -166,7 +173,7 @@ def test_sc16_permission_keyboard_allow_always_icon():
     """SC16: Allow always button must have 🟢 icon (visually distinct from ✅ Allow)."""
     bot = _make_bot()
     sess = _sess(bot)
-    kb = bot._build_permission_keyboard(sess)
+    kb = bot._build_permission_keyboard(sess, always_available=True)
     all_buttons = [btn for row in kb.inline_keyboard for btn in row]
     allow_always_btn = next(
         (b for b in all_buttons
@@ -190,6 +197,7 @@ def test_sc17_allow_always_sends_exactly_down_enter():
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.INTERACTIVE)
     bot.registry._sessions["claude-ben"] = sess
+    sess.pending_permission = _WITH_RULE
 
     key_calls = []
 
@@ -219,6 +227,7 @@ def test_sc17_allow_always_sends_two_keys_not_one_not_three():
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.INTERACTIVE)
     bot.registry._sessions["claude-ben"] = sess
+    sess.pending_permission = _WITH_RULE
 
     key_calls = []
 
@@ -244,6 +253,7 @@ def test_sc17_allow_always_uses_sleep_between_keystrokes():
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.INTERACTIVE)
     bot.registry._sessions["claude-ben"] = sess
+    sess.pending_permission = _WITH_RULE
 
     sleep_calls = []
     key_calls = []
@@ -282,6 +292,7 @@ def test_allow_sends_only_enter():
     bot = _make_bot()
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.INTERACTIVE)
     bot.registry._sessions["claude-ben"] = sess
+    sess.pending_permission = _WITH_RULE
 
     key_calls = []
 
@@ -320,6 +331,7 @@ def test_deny_has_more_down_presses_than_allow_always():
     # Deny key calls
     sess = TrackedSession(name="claude-ben", label="ben", status=Status.INTERACTIVE)
     bot.registry._sessions["claude-ben"] = sess
+    sess.pending_permission = _WITH_RULE
     deny_keys = []
 
     async def mock_send_deny(session_name, key):

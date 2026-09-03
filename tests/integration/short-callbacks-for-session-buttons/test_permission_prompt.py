@@ -42,6 +42,10 @@ def prompt(scb_bot, monkeypatch):
     sess = TrackedSession(name=f"claude-{LABEL_40}__d123456789012", label=LABEL_40,
                            status=Status.BUSY, scope_chat_id=CHAT_ID)
     bot.registry._sessions[sess.name] = sess
+    # The with-rule case: Allow-always is offered (and navigates) only when
+    # the hook reported permission suggestions ("allow-always-auto-mode-guard").
+    sess.pending_permission = {"tool_summary": "Bash: x",
+                               "tool_info": {"name": "Bash", "always_available": True}}
     kb = bot._build_permission_keyboard(sess)
     return bot, sess, kb, sent
 

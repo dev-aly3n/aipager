@@ -56,7 +56,8 @@ def sess(scb_bot):
 
 def test_permission_keyboard_reaches_allow_deny_allow_always_stop(sess):
     bot, s = sess
-    kb = bot._build_permission_keyboard(s)
+    # with a standing rule on offer, so allow_always is part of the keyboard
+    kb = bot._build_permission_keyboard(s, always_available=True)
     verbs = _short_form_verbs([b.callback_data for row in kb.inline_keyboard
                                 for b in row])
     assert set(verbs) == {"allow", "deny", "allow_always", "stop"}
