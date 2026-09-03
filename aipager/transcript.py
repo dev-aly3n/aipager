@@ -16,6 +16,7 @@ which then reached Telegram. When no stamped path exists, callers fail closed.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 import logging
 import re
 from collections import deque
@@ -123,7 +124,44 @@ def _strip_leaked_tool_xml(text: str) -> str:
     return cleaned.strip()
 
 
-def extract_last_response(transcript_path: str) -> str | None:
+# Transcript timestamps are millisecond ISO-8601 (``2026-09-03T10:59:17.897Z``);
+# the turn-start stamp is ``time.time()`` taken when the hook datagram
+# landed. Same machine, same clock — the slack only absorbs the hook's own
+# delivery latency, so text written the instant a turn began is never
+# mistaken for the previous turn's.
+TIMESTAMP_SLACK_SECONDS: float = 2.0
+
+
+def _entry_timestamp(entry: dict) -> float | None:
+    """Epoch seconds of a transcript entry's ``timestamp``, or None when
+    the field is absent or unparseable."""
+    raw = entry.get("timestamp")
+    if not isinstance(raw, str) or not raw:
+        return None
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"  # fromisoformat accepts "Z" only on 3.11+
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.timestamp()
+
+
+def _entry_predates(entry: dict, since: float) -> bool:
+    """True when the entry carries a timestamp older than ``since`` (less
+    the slack). An entry with no usable timestamp is NOT treated as old:
+    the file-level mtime guard in session_monitor already stands in front
+    of this one, and refusing every timestamp-less transcript would blind
+    the recovery path on any format change."""
+    ts = _entry_timestamp(entry)
+    return ts is not None and ts < since - TIMESTAMP_SLACK_SECONDS
+
+
+def extract_last_response(
+    transcript_path: str, *, since: float | None = None,
+) -> str | None:
     """Return the raw markdown of the last assistant text response.
 
     Reads only the last 20 lines of the JSONL file (efficient for large
@@ -133,6 +171,15 @@ def extract_last_response(transcript_path: str) -> str | None:
     Returns ``""`` when the newest assistant entry is Claude Code's
     no-response placeholder — the turn is over and produced nothing.
     Returns None on any error or if no assistant text is found.
+
+    ``since`` (wall-clock epoch seconds) is the current turn's start. When
+    given, the text found is accepted only if its own entry is not older
+    than that; otherwise ``""`` is returned, exactly as for the
+    placeholder. The scan skips assistant entries with no text (a turn
+    that ended on tool calls, a background-job re-entry that produced
+    nothing), so without this guard the newest text in the file is the
+    PREVIOUS turn's answer — and the caller would publish it as the reply
+    to the current prompt.
 
     The placeholder deliberately STOPS the scan rather than being skipped
     over. Continuing would find the newest *real* assistant text, which by
@@ -173,6 +220,13 @@ def extract_last_response(transcript_path: str) -> str | None:
                 texts.append(block)
 
         if texts:
+            if since is not None and _entry_predates(entry, since):
+                log.info(
+                    "transcript's newest text (%s) predates the current "
+                    "turn — treating the turn as having produced none",
+                    entry.get("timestamp"),
+                )
+                return ""
             return _strip_leaked_tool_xml("\n\n".join(texts))
 
     return None

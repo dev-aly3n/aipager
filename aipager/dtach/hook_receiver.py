@@ -475,16 +475,39 @@ class HookReceiver:
                 # card still needs to know a continuation happened even
                 # when status itself didn't move.
                 cont_sess = self.registry.get_or_create(session_name)
-                # The continuation turn takes over from the grace window:
-                # from here the job closes only at THIS turn's own Stop
-                # (notify.py's idle branch, "close the background-job
-                # endgame" requirement 2).
-                cont_sess.job_continuation_active = True
-                cont_sess.job_grace_until = 0.0
-                self.registry.transition(
-                    session_name, Status.BUSY, preserve_job_state=True,
+                if (cont_sess.status in (Status.BUSY, Status.INTERACTIVE)
+                        or cont_sess.job_background_open()):
+                    # The continuation turn takes over from the grace
+                    # window: from here the job closes only at THIS turn's
+                    # own Stop (notify.py's idle branch, "close the
+                    # background-job endgame" requirement 2).
+                    cont_sess.job_continuation_active = True
+                    cont_sess.job_grace_until = 0.0
+                    self.registry.transition(
+                        session_name, Status.BUSY, preserve_job_state=True,
+                    )
+                    await self.notify_fn(cont_sess, "job_continuation", {})
+                    return
+                # Nothing to continue. The daemon has no turn or job open
+                # for this session — the job state (active_subagents, the
+                # waiting card's animator) did not survive a restart, or the
+                # job already closed (grace expiry, agents lost). The
+                # continuation path assumes a live card to re-render and
+                # deliberately never sends one, so taking it here produced
+                # card-less turns whose answers arrived as a bare header
+                # plus a body, with no elapsed time. Treat the prompt as
+                # the fresh turn it is from the daemon's point of view: a
+                # genuine BUSY entry (turn-start stamps, per-turn resets)
+                # and the ordinary card send, which also settles any stale
+                # card restored from disk. Origin tagging is still skipped
+                # — this is not a human prompt.
+                log.info(
+                    "[%s] <task-notification> with no open job — starting "
+                    "a fresh turn", cont_sess.label,
                 )
-                await self.notify_fn(cont_sess, "job_continuation", {})
+                fresh = self.registry.transition(session_name, Status.BUSY)
+                if fresh:
+                    await self.notify_fn(fresh, "user_prompt_submit", {})
                 return
             transitioned = self.registry.transition(session_name, Status.BUSY)
             # Origin tagging (Phase D): the daemon prefixes Telegram prompts
@@ -941,7 +964,9 @@ class HookReceiver:
             tp = transcript_path or (tracked.transcript_path if tracked else "")
             if tp:
                 try:
-                    md = extract_last_response(tp)
+                    md = extract_last_response(
+                        tp, since=sess.turn_entered_wall or None,
+                    )
                     if md and RICH_SUMMARIES and "```" in md:
                         html_summary = markdown_to_telegram_html(md)
                         notify_ctx = {
@@ -1016,7 +1041,12 @@ class HookReceiver:
                 tp = transcript_path or (tracked.transcript_path if tracked else "")
                 if tp:
                     try:
-                        md = extract_last_response(tp)
+                        # The turn-start guard: a turn that ended on tool
+                        # calls has no text of its own, and the newest
+                        # text in the file is then the previous answer.
+                        md = extract_last_response(
+                            tp, since=sess.turn_entered_wall or None,
+                        )
                         if md and RICH_SUMMARIES and "```" in md:
                             html_summary = markdown_to_telegram_html(md)
                             notify_ctx = {

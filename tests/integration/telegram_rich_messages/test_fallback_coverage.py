@@ -50,7 +50,10 @@ def _bot(mk_bot, monkeypatch, *, rich_side_effect):
 # ── SC1 — body sent via sendRichMessage with verbatim content ────────────────
 
 def test_sc1_body_content_passed_verbatim_to_rich_message(mk_bot, run_async, monkeypatch):
-    """The markdown passed to sendRichMessage must equal `raw_md` verbatim."""
+    """The markdown passed to sendRichMessage must carry `raw_md` verbatim.
+
+    No card exists here, so the composed header line rides ahead of it
+    (requirement 4: one message, not two) — the body itself is untouched."""
     captured = {}
 
     async def _capture(chat_id, markdown, **kw):
@@ -65,7 +68,9 @@ def test_sc1_body_content_passed_verbatim_to_rich_message(mk_bot, run_async, mon
     sess = _sess()
     run_async(bot.notify(sess, "idle_prompt", {"raw_md": "# Heading\n\nSome **bold** text"}))
 
-    assert captured.get("markdown") == "# Heading\n\nSome **bold** text"
+    markdown = captured.get("markdown", "")
+    assert markdown.startswith("✅ **alice** · Finished")
+    assert markdown.split("\n\n", 1)[1] == "# Heading\n\nSome **bold** text"
 
 
 def test_sc1_no_blockquote_in_body_call(mk_bot, run_async, monkeypatch):
@@ -275,7 +280,8 @@ def test_sc6_403_blocked_no_fallback(mk_bot, run_async, monkeypatch):
 
 
 def test_sc6_403_exactly_one_send_message(mk_bot, run_async, monkeypatch):
-    """403 must result in exactly one send_message call (the header only)."""
+    """403 must never fall back — with no card, the header lives only
+    inside the blocked rich message, so nothing reaches PTB at all."""
     send_count = 0
 
     async def _count_send(*a, **kw):
@@ -294,7 +300,7 @@ def test_sc6_403_exactly_one_send_message(mk_bot, run_async, monkeypatch):
     sess = _sess()
     run_async(bot.notify(sess, "idle_prompt", {"raw_md": "blocked content"}))
 
-    assert send_count == 1
+    assert send_count == 0
 
 
 # ── Fallback chunking at 4096 ────────────────────────────────────────────────

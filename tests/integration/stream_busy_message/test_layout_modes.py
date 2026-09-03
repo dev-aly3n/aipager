@@ -100,7 +100,9 @@ def test_replace_layout_keeps_header_when_card_delete_fails(
     mk_bot, run_async, rich_calls,
 ):
     """If the busy card couldn't actually be removed, nothing else in the
-    chat identifies the turn — the header must still go out."""
+    chat identifies the turn — the header must still go out, composed
+    into the one answer message rather than a separate send_message
+    (requirement 4: one message, not two, when there's no card)."""
     bot = _wire_bot(mk_bot)
     bot._app.bot.delete_message = AsyncMock(side_effect=Exception("gone already"))
     sess = _sess()
@@ -108,9 +110,12 @@ def test_replace_layout_keeps_header_when_card_delete_fails(
     run_async(bot.notify(sess, "idle_prompt", {"summary": "the answer"}))
 
     bot._app.bot.delete_message.assert_awaited_once()
-    bot._app.bot.send_message.assert_awaited_once()  # header kept
+    bot._app.bot.send_message.assert_not_awaited()  # header composed in, not standalone
     methods = [m for m, _p in rich_calls]
     assert methods == ["sendRichMessage"]
+    markdown = rich_calls[0][1]["rich_message"]["markdown"]
+    assert markdown.startswith("✅ **dev** · Finished")
+    assert markdown.endswith("\n\nthe answer")
 
 
 def test_no_stored_pref_with_keep_finished_card_off_matches_replace(

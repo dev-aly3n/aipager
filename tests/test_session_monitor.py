@@ -368,6 +368,118 @@ def test_busy_recovered_when_interrupt_marker_written_during_turn(
     assert any(e == "idle_prompt" for e, _ in calls)
 
 
+def _iso(epoch: float) -> str:
+    """Millisecond ISO-8601 with a ``Z`` suffix, matching transcript
+    timestamps (``2026-09-03T10:59:17.897Z``)."""
+    from datetime import datetime, timezone
+    return (datetime.fromtimestamp(epoch, tz=timezone.utc)
+            .isoformat(timespec="milliseconds").replace("+00:00", "Z"))
+
+
+def test_recovery_rejects_stale_text_from_a_preserved_earlier_reentry(
+        monkeypatch, run_async, tmp_path):
+    """Live regression (intent.md "Mechanism"): a background-job re-entry
+    (``preserve_job_state=True``) leaves ``busy_started_wall`` pinned at
+    the ORIGINAL job's turn start, so the file-mtime guard above — which
+    reads busy_started_wall — is satisfied by ANY write since that
+    original start, including one from an EARLIER re-entry whose answer
+    already went out (10:59:17, for a turn that actually began at
+    11:00:32). ``turn_entered_wall`` is stamped on every entry, preserved
+    re-entries included, and is what ``extract_last_response``'s own
+    ``since=`` guard reads — it must reject that earlier entry's text
+    even though the outer mtime guard let recovery proceed."""
+    now = time.time()
+    earlier_reentry_ts = now - 300     # the 10:59:17-equivalent stale text
+    original_job_start = now - 600     # busy_started_wall: pinned way back
+    latest_turn_start = now - 120      # turn_entered_wall: the CURRENT turn
+
+    lines = [
+        {"type": "user", "message": {"role": "user", "content": "hello"}},
+        {"type": "assistant", "message": {
+            "role": "assistant",
+            "content": [{"type": "text",
+                        "text": "Stale answer from an earlier re-entry."}],
+            "stop_reason": "end_turn"},
+         "timestamp": _iso(earlier_reentry_ts)},
+    ]
+    tp = tmp_path / "rec2.jsonl"
+    tp.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+    # File mtime must clear IDLE_RECOVERY_GRACE / written_this_turn (both
+    # anchored on busy_started_wall) — the entry's OWN embedded timestamp
+    # above is what the new, stricter guard checks instead.
+    fresh = now - (IDLE_RECOVERY_GRACE + 5)
+    os.utime(tp, (fresh, fresh))
+
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.busy_started_at = time.monotonic() - (IDLE_RECOVERY_GRACE + 20)
+    sess.busy_started_wall = original_job_start
+    sess.turn_entered_wall = latest_turn_start
+    sess.transcript_path = str(tp)
+    registry = SessionRegistry()
+    registry._sessions["claude-jim"] = sess
+
+    calls = []
+    async def _notify(s, event, ctx):
+        calls.append((event, ctx))
+    monitor = _mk_monitor(registry, _notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        lambda: _coroutine_returning(["claude-jim"]))
+
+    run_async(monitor._scan())
+
+    # The outer (mtime) guard is satisfied, so recovery still proceeds —
+    # but the entry-level guard must have rejected the stale text.
+    assert sess.status == Status.IDLE
+    assert calls and calls[-1][0] == "idle_prompt"
+    assert calls[-1][1].get("summary") == ""
+    assert calls[-1][1].get("no_response") is True
+
+
+def test_recovery_delivers_text_written_after_the_current_turn_began(
+        monkeypatch, run_async, tmp_path):
+    """Same preserved-``busy_started_wall`` shape as above, but the
+    transcript's text was genuinely written during the CURRENT turn
+    (after ``turn_entered_wall``) — recovery must still deliver it."""
+    now = time.time()
+    original_job_start = now - 600
+    latest_turn_start = now - 120
+    genuine_answer_ts = now - 15   # written well after turn_entered_wall
+
+    lines = [
+        {"type": "user", "message": {"role": "user", "content": "hello"}},
+        {"type": "assistant", "message": {
+            "role": "assistant",
+            "content": [{"type": "text", "text": "Genuine current-turn answer."}],
+            "stop_reason": "end_turn"},
+         "timestamp": _iso(genuine_answer_ts)},
+    ]
+    tp = tmp_path / "rec3.jsonl"
+    tp.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+    fresh = now - (IDLE_RECOVERY_GRACE + 5)
+    os.utime(tp, (fresh, fresh))
+
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.busy_started_at = time.monotonic() - (IDLE_RECOVERY_GRACE + 20)
+    sess.busy_started_wall = original_job_start
+    sess.turn_entered_wall = latest_turn_start
+    sess.transcript_path = str(tp)
+    registry = SessionRegistry()
+    registry._sessions["claude-jim"] = sess
+
+    calls = []
+    async def _notify(s, event, ctx):
+        calls.append((event, ctx))
+    monitor = _mk_monitor(registry, _notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        lambda: _coroutine_returning(["claude-jim"]))
+
+    run_async(monitor._scan())
+
+    assert sess.status == Status.IDLE
+    assert calls and calls[-1][0] == "idle_prompt"
+    assert calls[-1][1].get("summary") == "Genuine current-turn answer."
+
+
 def test_turn_start_stamped_on_every_new_turn_path():
     # The guard reads busy_started_wall, so a path that begins a turn
     # without stamping it would disable idle-recovery for that session

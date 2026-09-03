@@ -28,6 +28,7 @@ from __future__ import annotations
 import io
 import json
 import sys
+import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -37,7 +38,7 @@ from aipager.dtach import enforce
 from aipager.dtach import hook_receiver as hr
 from aipager.dtach import notify_hook as nh
 from aipager import policy_snapshot as ps
-from aipager.state import Status
+from aipager.state import SessionRegistry, Status
 
 SESSION = "hiva"
 AGENT_ID = "ab2ae82400fc97e4c"
@@ -423,9 +424,12 @@ def test_final_path_dedup_suppresses_stale_redelivery(
     mk_bot, run_async, tmp_path, monkeypatch,
 ):
     """Requirement 3: content identical to the last delivered summary is
-    never re-posted, even on the FINAL (job-closed) path — and the hash
-    resets at a genuine new turn, so a legitimately repeated answer across
-    two real turns still delivers."""
+    never re-posted, even on the FINAL (job-closed) path. The single hash
+    still resets at a genuine new turn, but the delivered-digest ring does
+    not: a body that already went out this session is never re-posted
+    across turns either — the live triple delivery was exactly a text-less
+    turn whose transcript still ended on the previous answer. A genuinely
+    different answer delivers as before."""
     bot = mk_bot()
     registry = bot.registry
     recv = hr.HookReceiver(registry, bot.notify)
@@ -481,22 +485,108 @@ def test_final_path_dedup_suppresses_stale_redelivery(
 
     # A turn started by a PreToolUse after a LOST UserPromptSubmit
     # datagram is a genuine new turn (review rev-iter1-002): the
-    # transition-level reset clears the hash, so an answer legitimately
-    # identical to the previous turn's still delivers.
+    # transition-level reset clears the single hash — but the ring of
+    # delivered digests survives it, so an answer byte-identical to one
+    # already posted this session stays suppressed.
     _send(recv, run_async, hook_event_name="PreToolUse",
           tool_name="Bash", tool_input={"command": "ls"})
+    assert sess.last_idle_summary_hash == ""
     _send(recv, run_async, hook_event_name="Stop",
           last_assistant_message=INTERIM_ANSWER, transcript_path=str(tp))
-    assert rich_sends.count(INTERIM_ANSWER) == 2
+    assert rich_sends.count(INTERIM_ANSWER) == 1
 
-    # A genuine new prompt resets the hash too — the same answer to a
-    # repeated question still delivers.
+    # A genuine new prompt: same rule — the repeat stays suppressed …
     _send(recv, run_async, hook_event_name="UserPromptSubmit",
           prompt="[via Telegram msg=2]\ndo the thing again",
           transcript_path=str(tp))
     _send(recv, run_async, hook_event_name="Stop",
           last_assistant_message=INTERIM_ANSWER, transcript_path=str(tp))
-    assert rich_sends.count(INTERIM_ANSWER) == 3
+    assert rich_sends.count(INTERIM_ANSWER) == 1
+
+    # … while a genuinely different answer still delivers.
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          prompt="[via Telegram msg=3]\nsomething else entirely",
+          transcript_path=str(tp))
+    _send(recv, run_async, hook_event_name="Stop",
+          last_assistant_message="z" * 300, transcript_path=str(tp))
+    assert rich_sends.count("z" * 300) == 1
+
+
+def test_task_notification_after_restart_still_sends_a_busy_card(
+    mk_bot, run_async, tmp_state_file,
+):
+    """Root cause of "no busy card after restart" (intent.md Mechanism,
+    last bullet): a daemon restart persists ``busy_msg_id`` (it's in
+    ``_PERSIST_FIELDS``) but never ``status`` or ``active_subagents`` —
+    ``SessionRegistry.load()`` always reconstructs GONE/UNKNOWN, and the
+    session monitor's socket-reappear scan recovers that straight to
+    IDLE. The stale, pre-crash card (msg_id restored from disk) sits on
+    the reloaded session's live-message stack the whole time.
+
+    The turns observed live right after the 12:00 restart were BOTH a
+    self-triggered ``<task-notification>`` continuation, not a fresh
+    human prompt — and the OLD dispatch treated every task-notification
+    as "the same job waking itself up" unconditionally, entering BUSY
+    with ``preserve_job_state=True`` and dispatching ``job_continuation``,
+    which deliberately never calls ``_send_busy_and_animate`` (it expects
+    a live card to re-render). With no job state surviving the restart,
+    that produced a card-less BUSY turn whose eventual answer then split
+    into a bare header plus a body (requirement 2's other symptom).
+
+    The fix (hook_receiver.py's UserPromptSubmit branch) only takes the
+    continuation path when the daemon actually has something to
+    continue (BUSY/INTERACTIVE, or a background job still open); with
+    neither, it starts a genuine fresh turn — dispatching
+    ``user_prompt_submit`` — so a real busy card goes out and settles the
+    stale one restored from disk."""
+    # ---- pre-crash: a session mid-turn with a live busy card ----
+    pre = SessionRegistry()
+    pre_sess = pre.get_or_create(SESSION)
+    pre_sess.label = SESSION
+    pre_sess.status = Status.BUSY
+    pre_sess.busy_msg_id = 3515  # the pre-restart card
+    pre_sess.gone_at = time.time() - 3600  # unrelated earlier disconnect
+    pre.save()
+
+    # ---- daemon restarts: a fresh registry loads the saved file ----
+    bot = mk_bot()
+    registry = bot.registry
+    registry.load()
+    sess = registry.get(SESSION)
+    assert sess is not None
+    assert sess.busy_msg_id == 3515  # stale card survived the restart
+    assert sess.status in (Status.GONE, Status.UNKNOWN)
+    assert sess.active_subagents == {}  # job state did NOT survive
+
+    # ---- session monitor's socket-reappear recovery ("GONE → IDLE") ----
+    if sess.status == Status.GONE:
+        sess.gone_at = None
+    registry.transition(SESSION, Status.IDLE)
+    assert sess.status == Status.IDLE
+    assert sess.busy_msg_id == 3515  # untouched by the IDLE recovery itself
+
+    # ---- mock the Telegram transport only ----
+    sent: list[str] = []
+
+    async def _send_message(chat_id, text, **kwargs):
+        sent.append(text)
+        return MagicMock(message_id=9999)
+    bot._app.bot.send_message = AsyncMock(side_effect=_send_message)
+    bot._app.bot.send_chat_action = AsyncMock()
+    bot._maybe_update_bot_name = AsyncMock()
+
+    recv = hr.HookReceiver(registry, bot.notify)
+
+    # ---- the self-triggered <task-notification> continuation arrives ----
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          prompt=f"<task-notification>\n<task-id>{AGENT_ID}</task-id>\n"
+                 "Background agent finished.",
+          transcript_path="")
+
+    assert sess.status == Status.BUSY
+    assert sess.job_continuation_active is False  # a fresh turn, not a continuation
+    assert any("Thinking" in t for t in sent)  # a real busy card went out
+    assert sess.busy_msg_id == 9999  # superseded the stale, pre-restart one
 
 
 def test_job_grace_expired_finalizes_card_as_plain_finished(

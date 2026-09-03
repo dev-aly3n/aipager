@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
@@ -70,6 +71,13 @@ JOB_CONTINUATION_GRACE_SECONDS: float = 60.0
 # is evicted. Lives on disk in aipager-sessions.json — kept here so
 # /clear_gone still gives users a manual "forget everything" lever.
 MAX_GONE_HISTORY: int = 50
+
+# How many delivered answer digests a session remembers
+# (``TrackedSession.delivered_digests``). Small on purpose: it exists to
+# stop the SAME body coming back around a turn or two later, not to dedup
+# a session's whole history — a legitimately repeated answer this many
+# turns later still goes out.
+DELIVERED_DIGEST_RING: int = 8
 
 # Labels kept for sessions a /kill removed, so a re-creation racing the
 # kill can recover the name the user chose. Bounded because nothing prunes
@@ -223,6 +231,17 @@ class TrackedSession:
     # "thought Xs" display excludes that wait — shifting this one would
     # let the idle-recovery guard accept a pre-turn transcript again.
     busy_started_wall: float = 0.0
+    # Wall-clock stamp of the most recent entry into BUSY from any status
+    # other than INTERACTIVE — INCLUDING the background-job re-entries
+    # (``preserve_job_state=True``) that deliberately leave
+    # ``busy_started_wall`` anchored at the job's original prompt. Read by
+    # exactly one consumer: the transcript-summary age guard
+    # (``transcript.extract_last_response(since=...)``), which needs to
+    # know when the CURRENT turn began so an assistant message written
+    # before it — the previous turn's answer, still the newest text in the
+    # file whenever this turn produced none — is never published as this
+    # turn's. Not a substitute for ``busy_started_wall`` anywhere else.
+    turn_entered_wall: float = 0.0
     # Queued messages (sent one-at-a-time when session becomes IDLE)
     pending_queue: list = field(default_factory=list)  # list of (text, trigger_msg_id)
     # Reply threading — Telegram message_id of the user's prompt that started this work
@@ -410,6 +429,19 @@ class TrackedSession:
     # (_send_busy_and_animate's existing per-turn reset) so a duplicate
     # answer in the NEXT job is never mistaken for a repeat of this one.
     last_idle_summary_hash: str = ""
+    # Digests of the last few bodies actually sent to the chat as a turn's
+    # answer (a Finished body, or a flushed interim buffer). Unlike the
+    # single hash above, this ring is never cleared by a new turn: it is
+    # for exactly the case the per-turn reset cannot see — the newest text
+    # in the transcript belonging to an EARLIER turn (this one ended on
+    # tool calls, or was a missed-Stop recovery) and coming back around as
+    # "this turn's answer". An identical body is therefore never re-posted
+    # within the session's lifetime in this daemon. Bounded by
+    # DELIVERED_DIGEST_RING. Transient, never persisted.
+    delivered_digests: deque = field(
+        default_factory=lambda: deque(maxlen=DELIVERED_DIGEST_RING),
+        repr=False,
+    )
     # Background-job endgame state (all transient, never persisted):
     # `job_interim_seen` — an idle-transition happened while this job's
     # background agents were open (the waiting card went up); the signal
@@ -742,6 +774,18 @@ class TrackedSession:
         task = self.animate_task
         return task is not None and not task.done()
 
+    def was_delivered(self, digest: str) -> bool:
+        """True if a body with this digest already went out to the chat
+        during this session's lifetime (see ``delivered_digests``)."""
+        return bool(digest) and digest in self.delivered_digests
+
+    def remember_delivered(self, digest: str) -> None:
+        """Record a body as delivered so ``was_delivered`` can refuse a
+        later identical re-send. A repeat is not re-appended, so one body
+        cannot push the others out of the ring by being sent twice."""
+        if digest and digest not in self.delivered_digests:
+            self.delivered_digests.append(digest)
+
     def dialog_is_open(self) -> bool:
         """True while the terminal is showing a permission/question prompt.
 
@@ -963,6 +1007,10 @@ class SessionRegistry:
             # started at the job's ORIGINAL prompt, not at this background
             # agent's own tool call or the self-triggered continuation
             # prompt that woke the session back up.
+            if sess.status != Status.INTERACTIVE:
+                # Stamped on EVERY turn entry, preserved re-entries
+                # included — see the field's comment for its one consumer.
+                sess.turn_entered_wall = time.time()
             if sess.status != Status.INTERACTIVE and not preserve_job_state:
                 sess.busy_started_wall = time.time()
                 # A genuinely new turn also supersedes any previous job's

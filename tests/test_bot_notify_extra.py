@@ -60,8 +60,11 @@ def test_idle_under_limit_no_attachment(mk_bot, run_async):
 
 def test_idle_truncation_failed_no_longer_applies(mk_bot, run_async, monkeypatch):
     """The new IDLE path does not use _send_with_retry, so TruncationFailed
-    from that call site is never raised. The header goes via send_message
-    and the body via sendRichMessage (both independently)."""
+    from that call site is never raised. With no card, the header and
+    body compose into the ONE sendRichMessage call — send_message never
+    fires for a header of its own."""
+    rich_mock = AsyncMock(return_value={})
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message", rich_mock)
     bot = mk_bot()
     sess = _sess()
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
@@ -71,10 +74,11 @@ def test_idle_truncation_failed_no_longer_applies(mk_bot, run_async, monkeypatch
         "summary": "Short content",
         "raw_md": "Short content",
     }))
-    # Only the header send_message fires; no fallback "attachment" notice.
-    first_call = bot._app.bot.send_message.await_args_list[0]
-    text = first_call.args[1]
-    assert "Finished" in text
+    bot._app.bot.send_message.assert_not_awaited()  # no standalone header
+    rich_mock.assert_awaited_once()
+    text = rich_mock.await_args.args[1]
+    assert text.startswith("✅ **jim** · Finished")
+    assert text.endswith("\n\nShort content")
     assert "attachment" not in text
 
 

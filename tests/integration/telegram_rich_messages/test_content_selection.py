@@ -1,13 +1,14 @@
 """Integration: content-selection rule and boundary cases.
 
 Success criteria covered:
-  SC2  - raw_md → summary → sess.summary → ""
+  SC2  - raw_md → summary → "" — never sess.summary (the previous turn's
+         answer); with no card the body rides under a composed ✅ header
   SC3  - {"summary": ...} with no raw_md key (idle-recovery path) sends "text"
   SC4  - all empty → header only, zero body sends of any kind
 
 Also covers error-guessing scenarios:
   - raw_md present but empty string (treated as falsy, falls through to summary)
-  - summary present but empty string (falls through to sess.summary)
+  - summary present but empty string (no body — sess.summary is never used)
   - sess.summary present but empty (falls through to "", no body send)
   - KeyError must never be raised when raw_md key is absent
 """
@@ -37,6 +38,14 @@ def rich_mock(monkeypatch):
     return mock
 
 
+def _body(rich_mock) -> str:
+    """The answer under the composed ✅ header line (no card in these
+    tests, so the header is the rich message's first line)."""
+    text = rich_mock.await_args.args[1]
+    assert text.startswith("✅ **bob** · Finished")
+    return text.split("\n\n", 1)[1]
+
+
 # ── SC2 — raw_md preferred over summary ──────────────────────────────────────
 
 def test_sc2_raw_md_wins_over_summary(mk_bot, run_async, rich_mock):
@@ -52,7 +61,7 @@ def test_sc2_raw_md_wins_over_summary(mk_bot, run_async, rich_mock):
         "summary": "summary that should be ignored",
     }))
 
-    assert rich_mock.await_args.args[1] == "live raw markdown"
+    assert _body(rich_mock) == "live raw markdown"
 
 
 def test_sc2_summary_used_when_raw_md_absent(mk_bot, run_async, rich_mock):
@@ -65,11 +74,15 @@ def test_sc2_summary_used_when_raw_md_absent(mk_bot, run_async, rich_mock):
 
     run_async(bot.notify(sess, "idle_prompt", {"summary": "context summary text"}))
 
-    assert rich_mock.await_args.args[1] == "context summary text"
+    assert _body(rich_mock) == "context summary text"
 
 
-def test_sc2_sess_summary_fallback_when_context_empty(mk_bot, run_async, rich_mock):
-    """raw_md absent, summary absent ⇒ content == sess.summary."""
+def test_sc2_sess_summary_is_never_the_body_when_context_empty(
+    mk_bot, run_async, rich_mock,
+):
+    """raw_md absent, summary absent ⇒ no body. sess.summary is the
+    PREVIOUS turn's answer; a text-less turn (no card here) sends one
+    header saying it ended, nothing more."""
     bot = mk_bot()
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=1))
     bot._maybe_update_bot_name = AsyncMock()
@@ -78,7 +91,9 @@ def test_sc2_sess_summary_fallback_when_context_empty(mk_bot, run_async, rich_mo
 
     run_async(bot.notify(sess, "idle_prompt", {}))
 
-    assert rich_mock.await_args.args[1] == "session-level summary text"
+    rich_mock.assert_not_awaited()
+    bot._app.bot.send_message.assert_awaited_once()
+    assert "session-level summary text" not in bot._app.bot.send_message.await_args.args[1]
 
 
 # ── SC3 — idle-recovery path: {"summary": ...} with NO raw_md key ────────────
@@ -104,7 +119,7 @@ def test_sc3_idle_recovery_sends_summary_text(mk_bot, run_async, rich_mock):
 
     run_async(bot.notify(sess, "idle_prompt", {"summary": "recovered summary text"}))
 
-    assert rich_mock.await_args.args[1] == "recovered summary text"
+    assert _body(rich_mock) == "recovered summary text"
 
 
 # ── SC4 — all empty → header only, zero body sends ───────────────────────────
@@ -148,11 +163,14 @@ def test_sc4_empty_raw_md_string_falls_through_to_summary(mk_bot, run_async, ric
     run_async(bot.notify(sess, "idle_prompt", {"raw_md": "", "summary": "ctx summary"}))
 
     # Summary should be used, not the empty raw_md
-    assert rich_mock.await_args.args[1] == "ctx summary"
+    assert _body(rich_mock) == "ctx summary"
 
 
-def test_sc4_empty_summary_falls_through_to_sess_summary(mk_bot, run_async, rich_mock):
-    """summary='' (falsy) must fall through to sess.summary."""
+def test_sc4_empty_summary_never_falls_through_to_sess_summary(
+    mk_bot, run_async, rich_mock,
+):
+    """summary='' is a turn that produced no text: no body, and never the
+    previous turn's cached answer in its place."""
     bot = mk_bot()
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=1))
     bot._maybe_update_bot_name = AsyncMock()
@@ -161,7 +179,9 @@ def test_sc4_empty_summary_falls_through_to_sess_summary(mk_bot, run_async, rich
 
     run_async(bot.notify(sess, "idle_prompt", {"summary": ""}))
 
-    assert rich_mock.await_args.args[1] == "session fallback text"
+    rich_mock.assert_not_awaited()
+    sent = [c.args[1] for c in bot._app.bot.send_message.await_args_list]
+    assert len(sent) == 1 and "session fallback text" not in sent[0]
 
 
 def test_sc4_empty_body_must_not_send_plain_text_either(mk_bot, run_async, rich_mock, monkeypatch):

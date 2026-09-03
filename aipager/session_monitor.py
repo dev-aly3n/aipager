@@ -456,7 +456,15 @@ class SessionMonitor:
                     if recovered:
                         summary = None
                         try:
-                            summary = extract_last_response(tp)
+                            # Only text written during THIS turn: the
+                            # newest text in the file is the previous
+                            # turn's whenever this one produced none, and
+                            # busy_started_wall is the wrong anchor here —
+                            # a background-job re-entry keeps the job's
+                            # original stamp on purpose.
+                            summary = extract_last_response(
+                                tp, since=sess.turn_entered_wall or None,
+                            )
                         except Exception:
                             log.debug("[%s] idle-recovery summary failed", name,
                                       exc_info=True)
