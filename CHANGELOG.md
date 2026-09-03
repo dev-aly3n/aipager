@@ -18,8 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stale or unknown tap confirms a single Allow instead of navigating —
   never auto mode. The same guard covers 2.1.259's one-time "block reads
   outside the working directories?" dialog, whose second row is a
-  persistent block: a `Read` outside the session's working directory never
-  offers Allow-always. Deny is unaffected (it still overshoots onto "No").
+  persistent block: a read-only file access (`Read`, `Grep`, `Glob`)
+  outside the session's working directory never offers Allow-always. Deny is unaffected (it still overshoots onto "No").
   Known limit: for a classifier-blocked, org-capped or remote-sourced ask
   Claude hides the rule row as well, which the hook cannot see; an
   Allow-always there lands on "No" (logged as allowed always, but never

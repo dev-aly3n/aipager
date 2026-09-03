@@ -203,6 +203,34 @@ def _summarize_tool(name: str, inp: dict) -> str:
     return name
 
 
+# Read-only file tools that can draw Claude Code 2.1.259's one-time "block
+# reads outside the working directories?" dialog → the input field carrying
+# the path. From the binary's settings schema for
+# ``permissions.blockReadsOutsideWorkingDirectories``: "Refuse file-tool
+# reads (Read, Grep, Glob, LSP) outside the working directories" (review
+# rev-iter3-001). For Grep/Glob an absent path means the working directory
+# itself, i.e. inside; for Read/LSP an absent path is malformed → outside.
+_OUTSIDE_READ_TOOLS: dict[str, tuple[str, bool]] = {
+    "Read": ("file_path", True),
+    "LSP": ("file_path", True),
+    "Grep": ("path", False),
+    "Glob": ("path", False),
+}
+
+
+def _read_outside_working_dir(tool_name: str, tool_input: object, cwd: str) -> bool:
+    """True when ``tool_name`` is one of :data:`_OUTSIDE_READ_TOOLS` and its
+    path lies outside ``cwd`` (see :func:`_outside_working_dir`)."""
+    spec = _OUTSIDE_READ_TOOLS.get(tool_name)
+    if spec is None:
+        return False
+    key, missing_is_outside = spec
+    path = tool_input.get(key) if isinstance(tool_input, dict) else None
+    if not path and not missing_is_outside:
+        return False
+    return _outside_working_dir(path, cwd)
+
+
 def _outside_working_dir(path: object, cwd: str) -> bool:
     """True when a file ``path`` is NOT under the session's working
     directory — lexically (no symlink resolution: Claude compares the
@@ -374,14 +402,13 @@ class HookReceiver:
                         tool_input.get("command") if isinstance(tool_input, dict) else None,
                         str):
                     always = False
-                # A read outside the working directory may be drawing the
-                # one-time "block outside reads?" dialog instead of the
-                # ordinary one (see _outside_working_dir) — its slot 2 is
-                # a persistent BLOCK, and the hook cannot tell the two
+                # A read-only file access outside the working directory
+                # (Read / Grep / Glob / LSP) may be drawing the one-time
+                # "block outside reads?" dialog instead of the ordinary
+                # one (see _read_outside_working_dir) — its slot 2 is a
+                # persistent BLOCK, and the hook cannot tell the two
                 # dialogs apart. Never offer Allow-always for it.
-                if tool_name == "Read" and _outside_working_dir(
-                        tool_input.get("file_path") if isinstance(tool_input, dict) else None,
-                        sess_ref.cwd):
+                if _read_outside_working_dir(tool_name, tool_input, sess_ref.cwd):
                     always = False
                 tool_info = {
                     "name": tool_name, "input": tool_input,
