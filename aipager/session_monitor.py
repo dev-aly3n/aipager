@@ -443,10 +443,38 @@ class SessionMonitor:
                     and mtime is not None
                     and mtime >= sess.busy_started_wall - MTIME_GRANULARITY_SLACK
                 )
+                # Same false positive the stale-busy check below exists to
+                # avoid: a tool call or compaction currently in flight emits
+                # no hooks, so the transcript can look finished-and-quiet
+                # while the turn is genuinely still running.
+                # work_in_flight_reason is the ONE shared definition of that
+                # condition (TrackedSession.work_in_flight_reason) — asked
+                # here and by the stale-busy check below so the two can
+                # never drift apart on what "still working" means. Cleared
+                # here (not only inside the branch below) so a later,
+                # different stand-down episode always gets its own log line
+                # even if this tick's outer condition happens to be false.
+                in_flight = sess.work_in_flight_reason(now)
+                if in_flight is None:
+                    sess.recovery_stand_down_logged = False
                 if (tp and busy_for >= IDLE_RECOVERY_GRACE
                         and quiet_for >= IDLE_RECOVERY_GRACE
                         and written_this_turn
                         and turn_appears_complete(tp)):
+                    if in_flight is not None:
+                        kind, elapsed = in_flight
+                        if not sess.recovery_stand_down_logged:
+                            cap = (TOOL_INFLIGHT_MAX_SECONDS if kind == "tool"
+                                   else COMPACT_INFLIGHT_MAX_SECONDS)
+                            log.info(
+                                "[%s] idle-recovery stood down — %s still in "
+                                "flight (%.0fs, cap %.0fs); the transcript "
+                                "looks finished and quiet but this is not a "
+                                "missed Stop hook", sess.label, kind, elapsed,
+                                cap,
+                            )
+                            sess.recovery_stand_down_logged = True
+                        continue  # standing down — handled this scan
                     log.warning(
                         "[%s] BUSY but transcript shows the turn finished and has "
                         "been quiet %.0fs — recovering to IDLE (missed Stop hook)",
@@ -468,7 +496,13 @@ class SessionMonitor:
                         except Exception:
                             log.debug("[%s] idle-recovery summary failed", name,
                                       exc_info=True)
-                        ctx = {"summary": summary or ""}
+                        # `recovered` tells bot/notify.py's IDLE branch this
+                        # transition came from this fallback, not a real Stop
+                        # hook — it skips the standalone "Finished" header
+                        # when there's nothing new to say (empty or
+                        # already-delivered content), instead of posting a
+                        # bare notice for a turn that never actually ended.
+                        ctx = {"summary": summary or "", "recovered": True}
                         # "" (not None) means the turn ended having produced
                         # no text — say so, or notify falls back to the
                         # previous turn's cached summary.
@@ -487,24 +521,18 @@ class SessionMonitor:
                 continue
             baseline = _quiet_since(sess)
             if baseline and (now - baseline) > STALE_BUSY_TIMEOUT:
-                # A tool call is legitimately in flight — no hooks fire
-                # between PreToolUse and PostToolUse, so the session
-                # looks quiet even though it's working. Stand down
-                # until either the tool finishes (PostToolUse clears
-                # pending_tool_started_at) or the tool itself has been
-                # running long enough to count as genuinely wedged.
-                # stale_warned stays False so the check re-arms as soon
-                # as the tool completes.
-                tool_start = sess.pending_tool_started_at
-                if (tool_start is not None
-                        and (now - tool_start) < TOOL_INFLIGHT_MAX_SECONDS):
-                    continue
-                # Compaction between PreCompact and post-compact SessionStart
-                # emits no hooks — treat the same as tool-in-flight, with a
-                # longer cap since compacting a large transcript is slow.
-                compact_start = sess.compact_started_at
-                if (compact_start is not None
-                        and (now - compact_start) < COMPACT_INFLIGHT_MAX_SECONDS):
+                # A tool call or compaction is legitimately in flight — no
+                # hooks fire between PreToolUse/PostToolUse or across a
+                # compaction, so the session looks quiet even though it's
+                # working. Stand down until it finishes (PostToolUse/
+                # post-compact SessionStart clears the timestamp) or it has
+                # been running long enough to count as genuinely wedged.
+                # stale_warned stays False so the check re-arms as soon as
+                # it does. work_in_flight is the ONE shared definition of
+                # this condition (TrackedSession.work_in_flight_reason) —
+                # also asked by the idle-recovery fallback above, so the two
+                # can never drift apart on what "still working" means.
+                if sess.work_in_flight(now):
                     continue
                 # Fallback liveness signal: the Claude Code statusLine hook
                 # writes /tmp/claude-status-<session>.json on many state

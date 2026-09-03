@@ -90,6 +90,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   edits instead of Bash — and the flag treated any non-empty suggestion
   list as a standing rule. Allow-always is now offered only when the
   list actually contains an `addRules` or `addDirectories` entry.
+- **The idle-recovery fallback fired mid-turn during a long-running tool
+  call or test suite** (a multi-minute Bash command, or a compaction),
+  because it never checked whether a tool/compaction was in flight before
+  deciding a quiet, complete-looking transcript tail meant a missed Stop
+  hook — the exact false positive the sibling stale-busy check already
+  guarded against. It now stands down under the same shared condition
+  (`TrackedSession.work_in_flight`), logging one INFO line per stand-down
+  episode instead of firing every 2s scan, and a recovery that finds
+  nothing new to say (empty, or already delivered) sends no message at
+  all instead of a bare "✅ label · Finished (Nm Ns)" for a turn that
+  never actually ended.
 
 ### Changed
 - An album (several photos or documents sent as one Telegram message) is

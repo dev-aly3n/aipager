@@ -1256,6 +1256,12 @@ class NotifyMixin:
 
             summary = context.get("summary", "") or ""
             raw_md = context.get("raw_md", "")
+            # Set only by session_monitor.py's idle-recovery fallback (a
+            # missed-Stop-hook guess, never a real Stop/Notification hook).
+            # When that guess turns up nothing new to say, the standalone
+            # "Finished" header below is suppressed entirely — see its use
+            # near `standalone_header`.
+            recovered = bool(context.get("recovered"))
 
             # ── content-selection (design §1, named rule) ──────────────────
             # raw_md takes precedence, then the producer's summary, then
@@ -1508,8 +1514,17 @@ class NotifyMixin:
             #                           says the turn ended.
             # Overflow keeps the standalone header regardless: the "attached
             # below" note and the document's reply target both live on it.
+            #
+            # EXCEPT: a recovery-originated idle (session_monitor.py's
+            # missed-Stop-hook guess) with no body — content was empty, or
+            # its digest was already delivered — has nothing to report.
+            # `send_file` can't be true here (it requires non-empty
+            # `content`), so this only ever silences the "no card, no body"
+            # row above: no bare "Finished (46m 46s)" for a turn that, as
+            # far as the operator can tell, never actually ended.
             standalone_header = (
                 not merged_delivered
+                and not (recovered and not body_content)
                 and (send_file or (not card_kept and not body_content))
             )
             compose_header = (

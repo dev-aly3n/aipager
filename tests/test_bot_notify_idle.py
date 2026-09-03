@@ -63,6 +63,74 @@ def test_idle_sends_finished_message(mk_bot, run_async, rich_mock):
     assert text.endswith("\n\ndone")
 
 
+def test_idle_genuine_no_body_no_card_sends_the_header(mk_bot, run_async, rich_mock):
+    """A real (hook-driven) idle transition with nothing to say and no
+    card still has to tell the operator the turn ended — the existing,
+    correct "genuine no-op close" behaviour, unaffected by the
+    recovery-originated suppression covered below."""
+    bot = mk_bot()
+    sess = _sess(status=Status.IDLE)  # no card
+    sess.scope_chat_id = 4242
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=321))
+    bot._maybe_update_bot_name = AsyncMock()
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "", "no_response": True}))
+    bot._app.bot.send_message.assert_awaited_once()
+    text = bot._app.bot.send_message.await_args.args[1]
+    assert "Finished" in text
+    rich_mock.assert_not_awaited()
+
+
+def test_idle_recovery_with_no_new_content_sends_nothing(mk_bot, run_async, rich_mock):
+    """The reported bug's second half: session_monitor.py's idle-recovery
+    fallback firing with nothing new to say must be completely silent —
+    not even the card-less "Finished" line."""
+    bot = mk_bot()
+    sess = _sess(status=Status.IDLE)  # no card
+    sess.scope_chat_id = 4242
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=321))
+    bot._maybe_update_bot_name = AsyncMock()
+    run_async(bot.notify(sess, "idle_prompt",
+                         {"summary": "", "no_response": True, "recovered": True}))
+    bot._app.bot.send_message.assert_not_awaited()
+    rich_mock.assert_not_awaited()
+
+
+def test_idle_recovery_with_duplicate_content_sends_nothing(mk_bot, run_async, rich_mock):
+    """A recovery whose "new" text is actually a body already delivered
+    this session (delivered_digests) must also stay silent — the
+    content-selection dedup already empties `content`, and the header
+    must follow it into silence."""
+    import hashlib
+    bot = mk_bot()
+    sess = _sess(status=Status.IDLE)
+    sess.scope_chat_id = 4242
+    digest = hashlib.md5(b"already sent").hexdigest()
+    sess.remember_delivered(digest)
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=321))
+    bot._maybe_update_bot_name = AsyncMock()
+    run_async(bot.notify(sess, "idle_prompt",
+                         {"summary": "already sent", "recovered": True}))
+    bot._app.bot.send_message.assert_not_awaited()
+    rich_mock.assert_not_awaited()
+
+
+def test_idle_recovery_with_new_content_delivers_normally(mk_bot, run_async, rich_mock):
+    """A recovery that DOES find something new must deliver exactly like
+    a genuine idle — the recovered flag never suppresses real content."""
+    bot = mk_bot()
+    sess = _sess(status=Status.IDLE)
+    sess.scope_chat_id = 4242
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=321))
+    bot._maybe_update_bot_name = AsyncMock()
+    run_async(bot.notify(sess, "idle_prompt",
+                         {"summary": "a brand new answer", "recovered": True}))
+    bot._app.bot.send_message.assert_not_awaited()
+    rich_mock.assert_awaited_once()
+    text = rich_mock.await_args.args[1]
+    assert text.startswith("✅ **jim** · Finished")
+    assert text.endswith("\n\na brand new answer")
+
+
 def test_idle_renders_final_card_and_clears_busy_msg(mk_bot, run_async, monkeypatch):
     """The card stays in the chat, re-rendered once, and is no longer live."""
     monkeypatch.setattr("aipager.preferences.KEEP_FINISHED_CARD", True)
