@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Background agents now get their own activity row on the busy card**:
+  `🤖 <type> · <activity> · <elapsed>` while running, settling to `✅ 🤖
+  <type> · N tool calls · <elapsed>` when the agent stops. An agent's own
+  tool calls are folded under its row instead of flooding the parent's
+  timeline or its `Bash ×N` tallies, and the full-log `.txt` attachment
+  gains an AGENTS section listing every agent that ran the turn.
+
 ### Fixed
 - **Allow always could switch a session into auto mode** on Claude Code
   2.1.259+, which added a "Yes, and switch to auto mode" row to Bash

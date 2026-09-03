@@ -152,6 +152,17 @@ attached below ↓` footer. Buttons:
 
 - **🔄 Retry** — re-send the last prompt to the same session.
 
+While a session is busy, each background agent Claude launches (via
+`Task`) gets its own line on the busy card: `🤖 <type> · <activity> ·
+<elapsed>`, showing the agent's type and what it's currently doing,
+refreshed as its own tool calls come in. An agent's tool calls are
+folded under that row — they never appear in the parent's timeline or
+its `Bash ×N` tallies. When the agent finishes, its row settles to `✅
+🤖 <type> · N tool calls · <elapsed>` and stays that way. The full
+play-by-play `.txt` attachment above gains an AGENTS section listing
+every agent that ran the turn, its elapsed time, tool count, and the
+tools it called.
+
 ### Kill confirmation
 
 `/kill <label>` and the `💀 Kill` button always confirm:
