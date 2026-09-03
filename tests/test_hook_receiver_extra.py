@@ -545,11 +545,10 @@ def test_outside_working_dir_edges(path, cwd, outside):
 @pytest.mark.parametrize("tool,tool_input", [
     ("Grep", {"pattern": "x", "path": "/etc"}),
     ("Glob", {"pattern": "*.py", "path": "/tmp"}),
-    ("LSP", {"file_path": "/tmp/a.py"}),
 ])
-def test_grep_glob_lsp_outside_cwd_never_offer_allow_always(receiver, run_async, tool, tool_input):
-    """rev-iter3-001: Claude's settings schema names "Read, Grep, Glob,
-    LSP" as the tools the outside-reads block applies to."""
+def test_grep_glob_outside_cwd_never_offer_allow_always(receiver, run_async, tool, tool_input):
+    """rev-iter3-001: the dialog's gate in the 2.1.259 binary is the set
+    {Read, Grep, Glob}."""
     registry, recv, notify_fn = receiver
     _send(recv, run_async, hook_event_name="PermissionRequest", session="claude-jim",
           cwd="/work", tool_name=tool, tool_input=tool_input,
@@ -567,6 +566,20 @@ def test_grep_glob_inside_cwd_keep_allow_always(receiver, run_async, tool, tool_
     registry, recv, notify_fn = receiver
     _send(recv, run_async, hook_event_name="PermissionRequest", session="claude-jim",
           cwd="/work", tool_name=tool, tool_input=tool_input,
+          permission_suggestions=[{"type": "addRules"}])
+    _, _, ctx = notify_fn.await_args.args
+    assert ctx["tool_info"]["always_available"] is True
+
+
+def test_lsp_outside_cwd_keeps_allow_always(receiver, run_async):
+    """rev-iter4-001: LSP reaches the same path check but is excluded from
+    the block-dialog gate, so it keeps the ordinary rule row — and its real
+    input key is ``filePath``, which the guard must not misread as absent."""
+    registry, recv, notify_fn = receiver
+    _send(recv, run_async, hook_event_name="PermissionRequest", session="claude-jim",
+          cwd="/work", tool_name="LSP",
+          tool_input={"operation": "goToDefinition", "filePath": "/tmp/a.py",
+                      "line": 1, "character": 1},
           permission_suggestions=[{"type": "addRules"}])
     _, _, ctx = notify_fn.await_args.args
     assert ctx["tool_info"]["always_available"] is True

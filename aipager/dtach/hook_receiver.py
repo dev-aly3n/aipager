@@ -203,16 +203,18 @@ def _summarize_tool(name: str, inp: dict) -> str:
     return name
 
 
-# Read-only file tools that can draw Claude Code 2.1.259's one-time "block
-# reads outside the working directories?" dialog → the input field carrying
-# the path. From the binary's settings schema for
-# ``permissions.blockReadsOutsideWorkingDirectories``: "Refuse file-tool
-# reads (Read, Grep, Glob, LSP) outside the working directories" (review
-# rev-iter3-001). For Grep/Glob an absent path means the working directory
-# itself, i.e. inside; for Read/LSP an absent path is malformed → outside.
+# Tools that can draw Claude Code 2.1.259's one-time "block reads outside
+# the working directories?" dialog → the input field carrying the path.
+# Verified in the binary (reviews rev-iter3-001 / rev-iter4-001): the
+# dialog's gate is the set ``{Read, Grep, Glob}`` checked in the one place
+# that ever sets ``offersBlockOutsideReads`` — the LSP tool reaches the
+# same path check but is excluded from that gate, and the settings
+# schema's wider "(Read, Grep, Glob, LSP)" wording describes the
+# enforcement scope of the setting once active, not dialog eligibility.
+# For Grep/Glob an absent path means the working directory itself, i.e.
+# inside; for Read an absent path is malformed → outside.
 _OUTSIDE_READ_TOOLS: dict[str, tuple[str, bool]] = {
     "Read": ("file_path", True),
-    "LSP": ("file_path", True),
     "Grep": ("path", False),
     "Glob": ("path", False),
 }
@@ -403,7 +405,7 @@ class HookReceiver:
                         str):
                     always = False
                 # A read-only file access outside the working directory
-                # (Read / Grep / Glob / LSP) may be drawing the one-time
+                # (Read / Grep / Glob) may be drawing the one-time
                 # "block outside reads?" dialog instead of the ordinary
                 # one (see _read_outside_working_dir) — its slot 2 is a
                 # persistent BLOCK, and the hook cannot tell the two
