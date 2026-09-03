@@ -14,6 +14,8 @@ transcript at 09:14:54 vs. moments later).
 
 from __future__ import annotations
 
+import time
+
 from aipager.state import Status
 
 
@@ -83,19 +85,50 @@ def test_continuation_prompt_preserves_trigger_msg_id(
 def test_continuation_prompt_still_dispatched_when_agents_already_closed(
         receiver, send_hook, mk_job_session):
     """The real SubagentStop can race ahead of the synthetic
-    UserPromptSubmit (observed live in the hiva transcript). The
-    continuation must still be recognised and dispatched as
-    job_continuation purely from the prompt-text prefix — never inferred
-    from active_subagents' current emptiness."""
+    UserPromptSubmit (observed live in the hiva transcript). The job is
+    kept open across that gap by the grace window a SubagentStop arms
+    after an interim idle, so the continuation is still recognised and
+    dispatched as job_continuation — active_subagents' emptiness alone
+    never decides it."""
     registry, recv, notify_fn = receiver
     sess = _seed_open_job(registry, mk_job_session, active_subagents={})
-    assert sess.job_background_open() is False  # already closed
+    sess.job_interim_seen = True
+    sess.job_grace_until = time.monotonic() + 60
+    assert sess.job_background_open() is True  # grace armed
 
     send_hook(recv, hook_event_name="UserPromptSubmit", session="hiva",
              prompt=TASK_NOTIFICATION_PROMPT, transcript_path="")
 
     events = [c.args[1] for c in notify_fn.await_args_list]
     assert "job_continuation" in events
+    assert "user_prompt_submit" not in events
+    assert sess.last_prompt_origin == "telegram"
+
+
+def test_continuation_prompt_with_no_open_job_starts_a_fresh_turn(
+        receiver, send_hook, mk_job_session):
+    """A daemon restart drops the job state (active_subagents, the waiting
+    card's animator) and the monitor recovers the session as plain IDLE.
+    The <task-notification> that follows has nothing to continue: it must
+    start a fresh turn — user_prompt_submit, so a busy card goes out and
+    the turn-start stamps are set — while origin is still never re-tagged.
+    (Live: two card-less turns right after the 12:00 restart, whose
+    answers then arrived as a bare header plus a body.)"""
+    registry, recv, notify_fn = receiver
+    sess = _seed_open_job(registry, mk_job_session, active_subagents={})
+    assert sess.job_background_open() is False  # nothing to continue
+    before = sess.turn_entered_wall
+
+    send_hook(recv, hook_event_name="UserPromptSubmit", session="hiva",
+             prompt=TASK_NOTIFICATION_PROMPT, transcript_path="")
+
+    events = [c.args[1] for c in notify_fn.await_args_list]
+    assert "user_prompt_submit" in events
+    assert "job_continuation" not in events
+    assert sess.status is Status.BUSY
+    assert sess.turn_entered_wall > before
+    assert sess.busy_started_wall > 0.0
+    assert sess.job_continuation_active is False
     assert sess.last_prompt_origin == "telegram"
 
 

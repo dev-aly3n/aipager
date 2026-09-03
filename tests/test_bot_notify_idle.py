@@ -29,32 +29,38 @@ def _sess(label="jim", status=Status.IDLE, *, busy_msg_id=None):
 
 
 @pytest.fixture(autouse=True)
-def _mock_send_rich_message(monkeypatch):
+def rich_mock(monkeypatch):
     """Prevent real HTTP calls to Telegram in every test in this module.
 
-    send_rich_message is mocked to succeed (returns {}) so only the
-    PTB send_message path (header) fires. Tests that need to exercise
-    the fallback path override this fixture locally.
+    send_rich_message is mocked to succeed (returns {}); tests that want
+    to inspect the body request this fixture by name. Tests that need to
+    exercise the fallback path override it locally.
     """
-    monkeypatch.setattr(
-        "aipager.bot.notify.send_rich_message",
-        AsyncMock(return_value={}),
-    )
+    mock = AsyncMock(return_value={})
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message", mock)
+    return mock
+
+
+def _first_line(rich_mock):
+    return rich_mock.await_args.args[1].split("\n", 1)[0]
 
 
 # ---- IDLE: simple "Finished" message ------------------------------------
 
-def test_idle_sends_finished_message(mk_bot, run_async):
+def test_idle_sends_finished_message(mk_bot, run_async, rich_mock):
+    """No card: the ✅ header is the first line of the ONE rich message
+    that carries the answer — never a message of its own."""
     bot = mk_bot()
     sess = _sess(status=Status.IDLE)
+    sess.scope_chat_id = 4242
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=123))
     bot._maybe_update_bot_name = AsyncMock()
     run_async(bot.notify(sess, "idle_prompt", {"summary": "done"}))
-    # First send_message call is the header
-    first_call = bot._app.bot.send_message.await_args_list[0]
-    text = first_call.args[1]
-    assert "Finished" in text
-    assert "jim" in text
+    bot._app.bot.send_message.assert_not_awaited()
+    rich_mock.assert_awaited_once()
+    text = rich_mock.await_args.args[1]
+    assert text.startswith("✅ **jim** · Finished")
+    assert text.endswith("\n\ndone")
 
 
 def test_idle_renders_final_card_and_clears_busy_msg(mk_bot, run_async, monkeypatch):
@@ -73,18 +79,23 @@ def test_idle_renders_final_card_and_clears_busy_msg(mk_bot, run_async, monkeypa
     assert sess.busy_msg_id is None
 
 
-def test_idle_final_render_failure_never_breaks_the_turn(mk_bot, run_async, monkeypatch):
+def test_idle_final_render_failure_never_breaks_the_turn(
+    mk_bot, run_async, monkeypatch, rich_mock,
+):
     monkeypatch.setattr("aipager.preferences.KEEP_FINISHED_CARD", True)
     bot = mk_bot()
     sess = _sess(status=Status.IDLE, busy_msg_id=42)
+    sess.scope_chat_id = 4242
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._maybe_update_bot_name = AsyncMock()
     bot._stop_animation = MagicMock()
     bot._edit_busy_rich = AsyncMock(side_effect=RuntimeError("telegram exploded"))
     run_async(bot.notify(sess, "idle_prompt", {"summary": "done"}))
     assert sess.busy_msg_id is None
-    # The answer still went out.
-    bot._app.bot.send_message.assert_awaited()
+    # The answer still went out — with the header composed in, since the
+    # failed render left no card to name the turn.
+    rich_mock.assert_awaited_once()
+    assert rich_mock.await_args.args[1].startswith("✅ **jim** · Finished")
 
 
 def test_idle_deletes_busy_msg_when_knob_off(mk_bot, run_async, monkeypatch):
@@ -220,64 +231,60 @@ def test_idle_with_open_agents_does_not_clear_or_finish(mk_bot, run_async):
     assert bot._edit_busy_rich.await_args.kwargs.get("waiting") is True
 
 
-def test_idle_with_short_summary_includes_blockquote(mk_bot, run_async):
-    """The body is now sent via sendRichMessage, not inline in send_message.
-    The header still shows only the ✅ Finished line (no blockquote)."""
+def test_idle_with_short_summary_composes_one_message(mk_bot, run_async, rich_mock):
+    """No card, short reply: header line, blank line, body — one rich
+    message, and no separate send_message header."""
     bot = mk_bot()
     sess = _sess(status=Status.IDLE)
+    sess.scope_chat_id = 4242
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._maybe_update_bot_name = AsyncMock()
     run_async(bot.notify(sess, "idle_prompt", {"summary": "Short reply"}))
-    # Header is sent via send_message; body goes to sendRichMessage (mocked).
-    # The header must contain "Finished" but not the body.
-    first_call = bot._app.bot.send_message.await_args_list[0]
-    text = first_call.args[1]
-    assert "Finished" in text
+    bot._app.bot.send_message.assert_not_awaited()
+    text = rich_mock.await_args.args[1]
+    assert text.startswith("✅ **jim** · Finished")
+    assert text.endswith("\n\nShort reply")
 
 
-def test_idle_with_html_summary_preserves_html(mk_bot, run_async):
+def test_idle_with_html_summary_preserves_html(mk_bot, run_async, rich_mock):
     """html_summary flag is no longer used for the body (rich messages take
-    raw markdown). The header is still valid HTML."""
+    raw markdown); the composed header is in the rich-message dialect,
+    never HTML."""
     bot = mk_bot()
     sess = _sess(status=Status.IDLE)
+    sess.scope_chat_id = 4242
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._maybe_update_bot_name = AsyncMock()
     run_async(bot.notify(sess, "idle_prompt", {
         "summary": "print(1)", "html_summary": True,
     }))
-    # Must not raise; header contains "Finished"
-    first_call = bot._app.bot.send_message.await_args_list[0]
-    text = first_call.args[1]
-    assert "Finished" in text
+    assert _first_line(rich_mock).startswith("✅ **jim** · Finished")
+    assert "<b>" not in rich_mock.await_args.args[1]
 
 
-def test_idle_shows_elapsed_time(mk_bot, run_async):
+def test_idle_shows_elapsed_time(mk_bot, run_async, rich_mock):
     bot = mk_bot()
     sess = _sess(status=Status.IDLE)
+    sess.scope_chat_id = 4242
     sess.busy_started_at = time.monotonic() - 75  # 1m 15s
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._maybe_update_bot_name = AsyncMock()
     run_async(bot.notify(sess, "idle_prompt", {"summary": "done"}))
-    # Elapsed time is in the HEADER (first send_message call).
-    first_call = bot._app.bot.send_message.await_args_list[0]
-    text = first_call.args[1]
-    # Should include "1m" or "75s"
-    assert "m" in text or "75s" in text
+    # Elapsed time is on the header line — the first line of the one message.
+    assert "1m 15s" in _first_line(rich_mock)
 
 
-def test_idle_shows_lines_changed(mk_bot, run_async):
+def test_idle_shows_lines_changed(mk_bot, run_async, rich_mock):
     bot = mk_bot()
     sess = _sess(status=Status.IDLE)
+    sess.scope_chat_id = 4242
     sess.last_lines_added = 10
     sess.last_lines_removed = 5
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._maybe_update_bot_name = AsyncMock()
     run_async(bot.notify(sess, "idle_prompt", {"summary": "done"}))
-    # Lines-changed indicator is in the HEADER.
-    first_call = bot._app.bot.send_message.await_args_list[0]
-    text = first_call.args[1]
-    assert "+10" in text
-    assert "-5" in text
+    # Lines-changed indicator is on the header line.
+    assert "+10 -5" in _first_line(rich_mock)
 
 
 def test_idle_clears_trigger_msg_id(mk_bot, run_async):
@@ -540,25 +547,34 @@ def test_idle_answer_delivered_when_session_has_no_scope_and_no_chat_id(
     bot.registry.track_message.assert_called_once()
 
 
-def test_idle_keeps_the_header_when_the_card_was_not_kept(
-    mk_bot, run_async, monkeypatch,
+def test_idle_composes_the_header_when_the_card_was_not_kept(
+    mk_bot, run_async, monkeypatch, rich_mock,
 ):
-    """A failed final render leaves nothing above the answer to name it."""
+    """A failed final render leaves nothing above the answer to name it —
+    so the header rides inside the answer message, not as its own."""
     bot = _finished_card_bot(mk_bot, monkeypatch, card_kept=False)
     sess = _sess(status=Status.IDLE, busy_msg_id=42)
+    sess.scope_chat_id = 4242
     run_async(bot.notify(sess, "idle_prompt", {"summary": "the answer"}))
-    assert len(_headers(bot)) == 1
+    assert _headers(bot) == []
+    rich_mock.assert_awaited_once()
+    text = rich_mock.await_args.args[1]
+    assert text.startswith("✅ **jim** · Finished")
+    assert text.endswith("\n\nthe answer")
 
 
-def test_idle_keeps_the_header_when_there_is_no_body(
-    mk_bot, run_async, monkeypatch,
+def test_idle_sends_nothing_when_the_card_stays_and_there_is_no_body(
+    mk_bot, run_async, monkeypatch, rich_mock,
 ):
-    """With no answer text the header is the only message — never drop it."""
+    """The kept card's ✅ status line is the record of the turn; a bare
+    "Finished" message under it only ever repeated it."""
     bot = _finished_card_bot(mk_bot, monkeypatch)
     sess = _sess(status=Status.IDLE, busy_msg_id=42)
     run_async(bot.notify(sess, "idle_prompt",
                          {"summary": "", "no_response": True}))
-    assert len(_headers(bot)) == 1
+    bot._app.bot.send_message.assert_not_awaited()
+    rich_mock.assert_not_awaited()
+    assert bot._edit_busy_rich.await_args.kwargs.get("final") is True
 
 
 def test_idle_keeps_the_header_when_the_answer_overflows(

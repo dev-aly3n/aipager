@@ -1,8 +1,11 @@
 """Unit tests for the new rich-message IDLE send path in notify.py.
 
 Covers:
-- content-selection rule (raw_md → summary → sess.summary → "")
-- Header sent via PTB send_message (HTML, contains Finished)
+- content-selection rule (raw_md → summary → "" — never sess.summary, the
+  previous turn's answer)
+- Header: with no card it is the first line of the one rich message that
+  carries the body; with no card AND no body it goes out alone via PTB
+  send_message (HTML)
 - Body sent via sendRichMessage
 - Fallback plain-text on RichMessageFallbackRequired (no parse_mode)
 - No fallback on RichMessageBlocked (403)
@@ -30,6 +33,16 @@ def _sess(label="jim", status=Status.IDLE, *, scope_kind="dm"):
     return s
 
 
+def _header(rich_mock) -> str:
+    """The composed message's first line — the ✅ header."""
+    return rich_mock.await_args.args[1].split("\n", 1)[0]
+
+
+def _body(rich_mock) -> str:
+    """What follows the header line and its blank line."""
+    return rich_mock.await_args.args[1].split("\n\n", 1)[1]
+
+
 @pytest.fixture
 def bot_with_rich(mk_bot, monkeypatch):
     """Return (bot, send_rich_mock) — send_rich_message is mocked to succeed."""
@@ -51,8 +64,8 @@ def test_content_selection_raw_md_preferred(bot_with_rich, run_async):
         "raw_md": "raw markdown",
         "summary": "ignored summary",
     }))
-    # sendRichMessage was called with raw_md
-    assert rich_mock.await_args.args[1] == "raw markdown"
+    # sendRichMessage was called with raw_md as the body
+    assert _body(rich_mock) == "raw markdown"
 
 
 def test_content_selection_summary_when_no_raw_md(bot_with_rich, run_async):
@@ -62,16 +75,22 @@ def test_content_selection_summary_when_no_raw_md(bot_with_rich, run_async):
     run_async(bot.notify(sess, "idle_prompt", {
         "summary": "context summary",
     }))
-    assert rich_mock.await_args.args[1] == "context summary"
+    assert _body(rich_mock) == "context summary"
 
 
-def test_content_selection_sess_summary_fallback(bot_with_rich, run_async):
-    """Session's own .summary used when context has neither raw_md nor summary."""
+def test_content_selection_never_falls_back_to_sess_summary(bot_with_rich, run_async):
+    """sess.summary is the PREVIOUS turn's answer. A context with neither
+    raw_md nor summary is a turn that produced no text — it delivers no
+    body, and (with no card) one header saying the turn ended."""
     bot, rich_mock = bot_with_rich
     sess = _sess()
     sess.summary = "session-level summary"
     run_async(bot.notify(sess, "idle_prompt", {}))
-    assert rich_mock.await_args.args[1] == "session-level summary"
+    rich_mock.assert_not_awaited()
+    bot._app.bot.send_message.assert_awaited_once()
+    header = bot._app.bot.send_message.await_args.args[1]
+    assert "Finished" in header and "session-level summary" not in header
+    assert sess.summary == "session-level summary"  # kept for other readers
 
 
 def test_content_selection_empty_means_no_body_call(bot_with_rich, run_async):
@@ -118,7 +137,7 @@ def test_no_response_does_not_suppress_real_content(bot_with_rich, run_async):
     run_async(bot.notify(sess, "idle_prompt", {
         "raw_md": "a real answer", "summary": "", "no_response": True,
     }))
-    assert rich_mock.await_args.args[1] == "a real answer"
+    assert _body(rich_mock) == "a real answer"
 
 
 def test_content_selection_idle_recovery_path(bot_with_rich, run_async):
@@ -127,33 +146,40 @@ def test_content_selection_idle_recovery_path(bot_with_rich, run_async):
     sess = _sess()
     sess.summary = "stale"
     run_async(bot.notify(sess, "idle_prompt", {"summary": "recovered summary"}))
-    assert rich_mock.await_args.args[1] == "recovered summary"
+    assert _body(rich_mock) == "recovered summary"
 
 
 # ── header ────────────────────────────────────────────────────────────────────
 
 def test_idle_header_contains_finished(bot_with_rich, run_async):
-    bot, _ = bot_with_rich
+    bot, rich_mock = bot_with_rich
     sess = _sess()
     run_async(bot.notify(sess, "idle_prompt", {"raw_md": "content"}))
-    header = bot._app.bot.send_message.await_args_list[0].args[1]
+    # No card → the header is the composed message's first line, and no
+    # separate header message goes out.
+    bot._app.bot.send_message.assert_not_awaited()
+    header = _header(rich_mock)
     assert "Finished" in header
-    assert "jim" in header
+    assert "**jim**" in header
 
 
 def test_idle_header_no_blockquote(bot_with_rich, run_async):
-    """The header must not contain <blockquote> — the body is in sendRichMessage."""
-    bot, _ = bot_with_rich
+    """The header line carries no HTML — it is rich-message markdown, and
+    the body follows it after one blank line."""
+    bot, rich_mock = bot_with_rich
     sess = _sess()
     run_async(bot.notify(sess, "idle_prompt", {"raw_md": "**bold** content"}))
-    header = bot._app.bot.send_message.await_args_list[0].args[1]
-    assert "<blockquote" not in header
+    assert "<" not in _header(rich_mock)
+    assert _body(rich_mock) == "**bold** content"
 
 
-def test_idle_header_parse_mode_html(bot_with_rich, run_async):
-    bot, _ = bot_with_rich
+def test_idle_standalone_header_parse_mode_html(bot_with_rich, run_async):
+    """With no card and no body the header is a message of its own — the
+    only trace that the turn ended — sent as HTML."""
+    bot, rich_mock = bot_with_rich
     sess = _sess()
-    run_async(bot.notify(sess, "idle_prompt", {"raw_md": "hi"}))
+    run_async(bot.notify(sess, "idle_prompt", {"summary": ""}))
+    rich_mock.assert_not_awaited()
     kwargs = bot._app.bot.send_message.await_args_list[0].kwargs
     assert kwargs.get("parse_mode") == "HTML"
 
@@ -211,8 +237,9 @@ def test_no_fallback_on_rich_message_blocked(mk_bot, run_async, monkeypatch):
         AsyncMock(side_effect=RichMessageBlocked("forbidden")),
     )
     run_async(bot.notify(sess, "idle_prompt", {"raw_md": "secret"}))
-    # Only the header should have been sent (count == 1)
-    assert send_count == 1
+    # No card → header and body were one rich message; blocked means
+    # nothing at all goes through PTB, not even the header.
+    assert send_count == 0
 
 
 # ── overflow ─────────────────────────────────────────────────────────────────

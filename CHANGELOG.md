@@ -8,6 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- The idle path could re-deliver a previous turn's answer: a text-less
+  turn (ended on tool calls, or a missed-Stop recovery) fell back to the
+  session's cached summary, and the recovery path could pick up an
+  assistant message written before the current turn even started. Both
+  fallbacks are gone; the recovery path now rejects any text older than
+  the current turn, and a ring of recently-delivered digests blocks a
+  re-send even across a turn reset.
+- A finished turn with no body sent a bare "✅ label · Finished" message
+  even when the finished card above it already said the same thing; a
+  finished turn with no card sent the header and the body as two
+  separate messages instead of one. Now nothing extra goes out when a
+  card is kept, a truly card-less finish with no body still sends one
+  header message with the elapsed time, and a card-less finish with a
+  body composes the header and the answer into a single message.
+- No busy card went out for the first turns after a daemon restart — a
+  self-triggered `<task-notification>` continuation arriving with no job
+  left open for it (a restart drops all in-memory job state) silently
+  no-opped instead of starting a fresh turn. It now starts a genuine new
+  turn with its own card, which also settles any stale card restored
+  from disk.
+
 - A photo/document download that hits a transient network error
   (`TimedOut`, a dropped connection) is retried up to three times with a
   short backoff, and the download itself gets a 60s read timeout instead

@@ -398,7 +398,35 @@ def test_continuation_user_prompt_submit_does_not_tag_origin(receiver, run_async
     assert sess.last_prompt_origin == "telegram"  # unchanged
 
 
-def test_continuation_user_prompt_submit_preserves_busy_started_wall(receiver, run_async):
+def test_continuation_user_prompt_submit_preserves_busy_started_wall_when_job_open(
+        receiver, run_async):
+    """A continuation for a job that's still genuinely open (a background
+    agent still running) preserves busy_started_wall — the turn-start
+    anchor stays the ORIGINAL prompt's, not this re-entry's."""
+    registry, recv, _ = receiver
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          session="claude-hiva",
+          prompt="[via Telegram msg=1]\nanalyze X")
+    sess = registry.get("claude-hiva")
+    original_wall = sess.busy_started_wall
+    _send(recv, run_async, hook_event_name="SubagentStart",
+          session="claude-hiva", agent_id="abc", agent_type="Explore")
+    registry.transition("claude-hiva", Status.IDLE)
+    assert sess.job_background_open() is True
+    _send(recv, run_async, hook_event_name="UserPromptSubmit",
+          session="claude-hiva",
+          prompt="<task-notification>\n<task-id>abc</task-id>\ndone.")
+    assert sess.status == Status.BUSY
+    assert sess.busy_started_wall == original_wall
+
+
+def test_continuation_user_prompt_submit_restamps_wall_when_no_job_open(
+        receiver, run_async):
+    """intent.md "Mechanism"/requirement 5: a daemon restart (or a job
+    that already closed) leaves nothing for the continuation to attach
+    to. It must start a genuinely fresh turn — a NEW busy_started_wall —
+    rather than inherit the previous turn's, which is exactly what
+    produced the observed card-less turns after the 12:00 restart."""
     registry, recv, _ = receiver
     _send(recv, run_async, hook_event_name="UserPromptSubmit",
           session="claude-hiva",
@@ -406,11 +434,12 @@ def test_continuation_user_prompt_submit_preserves_busy_started_wall(receiver, r
     sess = registry.get("claude-hiva")
     original_wall = sess.busy_started_wall
     registry.transition("claude-hiva", Status.IDLE)
+    assert sess.job_background_open() is False
     _send(recv, run_async, hook_event_name="UserPromptSubmit",
           session="claude-hiva",
           prompt="<task-notification>\n<task-id>abc</task-id>\ndone.")
     assert sess.status == Status.BUSY
-    assert sess.busy_started_wall == original_wall
+    assert sess.busy_started_wall > original_wall
 
 
 # ---- PermissionRequest: always_available + detail (2.1.259 dialog) ---------

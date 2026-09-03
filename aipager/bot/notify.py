@@ -44,7 +44,7 @@ from aipager.config import (
 )
 from aipager.state import Status, TrackedSession
 from aipager.bot.animation import (
-    FINAL_VERB, _RICH_LIMIT, _expire_tool_batch, build_full_log,
+    FINAL_VERB, _RICH_LIMIT, _expire_tool_batch, _md_escape, build_full_log,
     build_stream_card_ex,
 )
 
@@ -354,9 +354,10 @@ class NotifyMixin:
         content = "\n\n———\n\n".join(sess.job_interim_buffer)
         sess.job_interim_buffer.clear()
         digest = hashlib.md5(content.encode("utf-8")).hexdigest()
-        if digest == sess.last_idle_summary_hash:
+        if digest == sess.last_idle_summary_hash or sess.was_delivered(digest):
             return
         sess.last_idle_summary_hash = digest
+        sess.remember_delivered(digest)
         is_rtl = detect_rtl(content)
         chat_id = resolve_chat_id_int(sess)
         try:
@@ -414,9 +415,9 @@ class NotifyMixin:
         """
         sess.job_interim_seen = True
         raw_md = context.get("raw_md", "")
-        content = raw_md or context.get("summary", "")
-        if not content and not context.get("no_response"):
-            content = sess.summary or ""
+        # Only what THIS interim turn produced — never sess.summary, which
+        # is the previous answer (see the idle branch's content selection).
+        content = raw_md or context.get("summary", "") or ""
         if content:
             self._record_job_interim(sess, content)
         if sess.busy_msg_id and sess.busy_msg_id > 0:
@@ -1186,24 +1187,22 @@ class NotifyMixin:
                         pass
                     sess.busy_msg_id = None
 
-            summary = context.get("summary", sess.summary)
+            summary = context.get("summary", "") or ""
             raw_md = context.get("raw_md", "")
 
             # ── content-selection (design §1, named rule) ──────────────────
-            # raw_md takes precedence; fall through to summary, then the
-            # session's cached summary, then empty string.
-            #
-            # `no_response` short-circuits the sess.summary step. It is set
-            # only when a producer positively established that the turn
-            # emitted Claude Code's no-response placeholder, i.e. produced no
-            # text at all. sess.summary holds the PREVIOUS turn's answer, so
-            # reaching for it here would publish stale text as the reply to
-            # the current prompt — plausible enough to be believed, and so
-            # worse than sending no body. An empty content sends the header
-            # alone, which is honest.
-            content = raw_md or context.get("summary", "")
-            if not content and not context.get("no_response"):
-                content = sess.summary or ""
+            # raw_md takes precedence, then the producer's summary, then
+            # nothing. Deliberately NOT sess.summary: that is the PREVIOUS
+            # turn's answer, and a turn that produced no text of its own
+            # (it ended on tool calls, or was a background-job re-entry)
+            # used to fall through to it whenever the producer had not set
+            # `no_response` — the operator then read the last answer again
+            # as the reply to the new prompt, plausible enough to be
+            # believed and so worse than no body at all (three copies of
+            # one answer were seen live). An empty content sends no body;
+            # what goes out instead depends on whether a card exists — see
+            # the header placement below.
+            content = raw_md or summary
 
             # Content-dedup covers the FINAL delivery too ("close the
             # background-job endgame" requirement 3): a stray idle event
@@ -1211,20 +1210,25 @@ class NotifyMixin:
             # delivered summary (interim or final) must not re-post it.
             # The card disposal below still runs — the header/card is
             # idempotent to finalize; only the body re-send is the spam.
-            # The hash resets where a genuine new turn starts
-            # (_send_busy_and_animate), so a legitimately repeated answer
-            # across two real turns still delivers.
+            # The single hash resets where a genuine new turn starts; the
+            # delivered-digest ring does not, so a body that already went
+            # out is never re-posted however the turns were counted — the
+            # transcript's newest text is an EARLIER turn's exactly when
+            # this one produced none, and that is the case a per-turn
+            # reset cannot see.
             if content:
                 _digest = hashlib.md5(content.encode("utf-8")).hexdigest()
-                if _digest == sess.last_idle_summary_hash:
+                if (_digest == sess.last_idle_summary_hash
+                        or sess.was_delivered(_digest)):
                     log.info(
-                        "[%s] final summary unchanged since the last "
-                        "delivery (hash match) — suppressing re-send",
+                        "[%s] final summary identical to a body already "
+                        "delivered this session — suppressing re-send",
                         label,
                     )
                     content = ""
                 else:
                     sess.last_idle_summary_hash = _digest
+                    sess.remember_delivered(_digest)
 
             # Reset streaming state — the turn is over.
             sess.stream_commentary = []
@@ -1301,15 +1305,26 @@ class NotifyMixin:
                     _tail = [content] if content else []
                     content = "\n\n———\n\n".join(_parts + _tail)
                     composed_with_interim = True
+                    # The composed text is what actually goes out — remember
+                    # it too, so a stray re-run cannot re-post the composition.
+                    sess.remember_delivered(
+                        hashlib.md5(content.encode("utf-8")).hexdigest(),
+                    )
 
             # Compute elapsed time since BUSY started
             elapsed_str = ""
+            elapsed_s = 0
             if sess.busy_started_at:
                 elapsed_s = int(time.monotonic() - sess.busy_started_at)
-                if elapsed_s >= 60:
-                    elapsed_str = f"{elapsed_s // 60}m {elapsed_s % 60}s"
-                elif elapsed_s > 0:
-                    elapsed_str = f"{elapsed_s}s"
+            elif sess.busy_started_wall:
+                # busy_started_at is stamped by the card sender; a turn
+                # that never got a card still has the transition's own
+                # stamp, so the header can report how long it ran.
+                elapsed_s = int(time.time() - sess.busy_started_wall)
+            if elapsed_s >= 60:
+                elapsed_str = f"{elapsed_s // 60}m {elapsed_s % 60}s"
+            elif elapsed_s > 0:
+                elapsed_str = f"{elapsed_s}s"
             # Lines changed this turn
             lines_str = ""
             if sess.last_lines_added or sess.last_lines_removed:
@@ -1318,6 +1333,10 @@ class NotifyMixin:
             parts = [p for p in (elapsed_str, lines_str) if p]
             suffix = f" ({', '.join(parts)})" if parts else ""
             header_text = f"✅ <b>{html_mod.escape(label)}</b> · Finished{suffix}"
+            # The same line in the rich-message dialect (bold = **) for the
+            # composed no-card send, and bare for its plain-text fallback.
+            header_md = f"✅ **{_md_escape(label)}** · Finished{suffix}"
+            header_plain = f"✅ {label} · Finished{suffix}"
 
             # ── merged layout: one combined edit, timeline + answer ────────
             # Attempted here — after the header text exists (used only by the
@@ -1402,23 +1421,36 @@ class NotifyMixin:
                         body_content = content_utf8[:32768].decode("utf-8", errors="ignore")
                     send_file = True
 
-            # ── Send the header (HTML, via PTB) ────────────────────────────
-            # Skipped whenever the busy card has already been disposed of —
-            # either kept as the finished card (`card_kept`, so the header
-            # would repeat what's already sitting right above the answer:
-            # ✅, label, elapsed) or deleted outright (`card_deleted` —
-            # `replace`, and `merged` falling back to that same one-message
-            # behaviour). Either way the body carries the reply link and the
-            # tracked message_id in the header's place.
-            # Two cases keep the header regardless: overflow (the "attached
-            # below" note and the document's reply target both live on it)
-            # and card disposal having failed (nothing else identifies the
-            # turn).
-            skip_header = (
-                (card_kept or card_deleted) and bool(body_content) and not send_file
+            # ── Header placement: one message per turn, never a bare one ──
+            # card kept + body        → body alone, threaded to the prompt.
+            #                           The card right above it already reads
+            #                           ✅ label · elapsed; a header would
+            #                           repeat it.
+            # card kept + no body     → nothing. The card's ✅ status line IS
+            #                           the record; a bare "Finished" under it
+            #                           only ever repeated it.
+            # card deleted + body     → body alone (`replace`, and `merged`
+            #                           falling back to it): one message.
+            # no card + body          → ONE rich message — header line, blank
+            #                           line, body — never a header message
+            #                           followed by a body message. "No card"
+            #                           covers a turn that never had one and a
+            #                           final render that failed.
+            # no card / deleted card, → one header message carrying the
+            #   no body                 elapsed time: nothing else in the chat
+            #                           says the turn ended.
+            # Overflow keeps the standalone header regardless: the "attached
+            # below" note and the document's reply target both live on it.
+            standalone_header = (
+                not merged_delivered
+                and (send_file or (not card_kept and not body_content))
+            )
+            compose_header = (
+                not merged_delivered and bool(body_content)
+                and not card_kept and not card_deleted and not send_file
             )
             msg_id = 0
-            if not merged_delivered and not skip_header:
+            if standalone_header:
                 if send_file:
                     header_text += "\n\n📎 <i>Full response attached below ↓</i>"
                 log.debug("[%s] Sending IDLE notification (%d chars header)",
@@ -1437,10 +1469,22 @@ class NotifyMixin:
 
             # ── Send the body via sendRichMessage ──────────────────────────
             if not merged_delivered and body_content:
+                if compose_header:
+                    rich_text = f"{header_md}\n\n{body_content}"
+                    plain_text = f"{header_plain}\n\n{body_content}"
+                else:
+                    rich_text = body_content
+                    plain_text = body_content
                 is_rtl = detect_rtl(body_content)
-                log.info("[%s] sendRichMessage: %d chars, rtl=%s, overflow=%s",
-                         label, len(body_content), is_rtl, send_file)
-                reply_to = sess.trigger_msg_id if skip_header else None
+                log.info("[%s] sendRichMessage: %d chars, rtl=%s, overflow=%s, "
+                         "header=%s",
+                         label, len(rich_text), is_rtl, send_file,
+                         "composed" if compose_header
+                         else ("standalone" if standalone_header else "card"))
+                # Without a standalone header the body IS the turn's message:
+                # it carries the reply link and becomes the tracked message.
+                body_is_the_message = not standalone_header
+                reply_to = sess.trigger_msg_id if body_is_the_message else None
                 chat_id = resolve_chat_id_int(sess)
                 try:
                     if chat_id is None:
@@ -1455,11 +1499,11 @@ class NotifyMixin:
                         )
                     sent = await send_rich_message(
                         chat_id,
-                        body_content,
+                        rich_text,
                         is_rtl=is_rtl,
                         reply_to_message_id=reply_to,
                     )
-                    if skip_header and isinstance(sent, dict):
+                    if body_is_the_message and isinstance(sent, dict):
                         msg_id = sent.get("message_id") or 0
                 except RichMessageBlocked:
                     _log_blocked_once(Exception("sendRichMessage 403"))
@@ -1468,7 +1512,7 @@ class NotifyMixin:
                     # markdown-safe boundaries so the send cannot fail to parse.
                     log.warning("[%s] sendRichMessage failed — falling back to plain text",
                                 label, exc_info=True)
-                    chunks = _plain_text_chunks(body_content)
+                    chunks = _plain_text_chunks(plain_text)
                     for chunk in chunks:
                         try:
                             fallback = await bot.send_message(
@@ -1481,7 +1525,7 @@ class NotifyMixin:
                             )
                             # With no header, the first chunk that lands takes
                             # over as the tracked message for this reply.
-                            if skip_header and not msg_id:
+                            if body_is_the_message and not msg_id:
                                 msg_id = fallback.message_id
                         except Exception:
                             log.warning("[%s] plain-text fallback chunk send failed",
