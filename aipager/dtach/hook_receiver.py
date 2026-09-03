@@ -219,6 +219,19 @@ _OUTSIDE_READ_TOOLS: dict[str, tuple[str, bool]] = {
     "Glob": ("path", False),
 }
 
+# permission_suggestions entry types that describe a standing rule Claude
+# Code would remember for future prompts — the only kind "Allow always"
+# may ever answer. Captured live from the 2.1.259 hook payload (dump
+# 2026-09-03): a Bash command with a derivable rule sends
+# ``{"type": "addRules", "rules": [...], "behavior": "allow", ...}``; a
+# Write/Edit prompt with no derivable rule instead sends
+# ``{"type": "setMode", "mode": "acceptEdits", "destination": "session"}``
+# — a session-wide permission-MODE switch, not a rule about this file.
+# Selecting it via the Allow-always keystrokes silently auto-accepts every
+# future edit for the rest of the session, so ``setMode`` (and anything
+# else not in this set) must never make ``always_available`` True.
+_STANDING_RULE_SUGGESTION_TYPES = frozenset({"addRules", "addDirectories"})
+
 
 def _read_outside_working_dir(tool_name: str, tool_input: object, cwd: str) -> bool:
     """True when ``tool_name`` is one of :data:`_OUTSIDE_READ_TOOLS` and its
@@ -387,6 +400,12 @@ class HookReceiver:
                 # (keyboards._build_permission_keyboard) and whether the
                 # callback may ever press Down (callbacks allow_always).
                 #
+                # A non-empty suggestions list is NOT enough on its own: a
+                # Write/Edit prompt with no derivable file rule sends
+                # ``{"type": "setMode", ...}`` in that same slot — Claude's
+                # own "switch to auto mode" row, just for edits instead of
+                # Bash. See ``_STANDING_RULE_SUGGESTION_TYPES``.
+                #
                 # Known limit (review rev-iter1-002, verified in the 2.1.259
                 # dialog builder): Claude also suppresses BOTH extra rows —
                 # the rule row and the auto-mode row together — for a
@@ -399,7 +418,10 @@ class HookReceiver:
                 # never auto mode). Closing that needs a hook-returned
                 # decision instead of keystrokes.
                 suggestions = msg.get("permission_suggestions")
-                always = isinstance(suggestions, list) and len(suggestions) > 0
+                always = isinstance(suggestions, list) and any(
+                    isinstance(s, dict) and s.get("type") in _STANDING_RULE_SUGGESTION_TYPES
+                    for s in suggestions
+                )
                 if tool_name == "Bash" and not isinstance(
                         tool_input.get("command") if isinstance(tool_input, dict) else None,
                         str):

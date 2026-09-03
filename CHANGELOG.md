@@ -83,6 +83,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Allow-always there lands on "No" (logged as allowed always, but never
   auto mode). Retiring keystrokes for a hook-returned decision is the
   durable fix.
+- **Allow always on a Write/Edit prompt could switch the session into
+  `acceptEdits` mode.** A file-write prompt with no derivable per-file
+  rule sends `permission_suggestions: [{"type": "setMode", "mode":
+  "acceptEdits", ...}]` — the same "auto mode" hazard as above, just for
+  edits instead of Bash — and the flag treated any non-empty suggestion
+  list as a standing rule. Allow-always is now offered only when the
+  list actually contains an `addRules` or `addDirectories` entry.
 
 ### Changed
 - An album (several photos or documents sent as one Telegram message) is

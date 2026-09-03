@@ -510,6 +510,56 @@ def test_bash_with_non_string_command_is_never_always_available(receiver, run_as
     assert ctx["tool_info"]["always_available"] is False
 
 
+# ---- setMode is a mode switch, not a standing rule (2.1.259) --------------
+
+def test_real_2_1_259_payloads_gate_always_available_correctly(receiver, run_async):
+    """Real `permission_suggestions` payloads captured live from Claude
+    Code 2.1.259 (project-local PermissionRequest hook dump, 2026-09-03):
+    a Bash command with a derivable rule sends a full ``addRules`` entry
+    (Allow-always must work); a Write with no derivable rule sends
+    ``setMode`` instead — the same "switch to auto mode" hazard, just for
+    edits — and Allow-always must NOT be offered for it."""
+    registry, recv, notify_fn = receiver
+    _perm_request(recv, run_async, permission_suggestions=[
+        {"type": "addRules",
+         "rules": [{"toolName": "Read", "ruleContent": "//tmp/**"}],
+         "behavior": "allow", "destination": "session"},
+    ])
+    _, _, ctx = notify_fn.await_args.args
+    assert ctx["tool_info"]["always_available"] is True
+
+    # A second, distinct session — the first is already INTERACTIVE, and
+    # transition() is a same-state no-op that would otherwise skip the
+    # notify_fn call and leave await_args stale on the first assertion.
+    _send(recv, run_async, hook_event_name="PermissionRequest", session="claude-jim-2",
+          tool_name="Write",
+          tool_input={"file_path": "/work/deny_probe.txt", "content": "DENIED-TEST"},
+          permission_suggestions=[
+              {"type": "setMode", "mode": "acceptEdits", "destination": "session"},
+          ])
+    _, _, ctx = notify_fn.await_args.args
+    assert ctx["tool_info"]["always_available"] is False
+
+
+@pytest.mark.parametrize("suggestions,expected", [
+    ([{"type": "addRules"}], True),
+    ([{"type": "addDirectories"}], True),
+    ([{"type": "setMode", "mode": "acceptEdits", "destination": "session"}], False),
+    ([{"type": "setMode", "mode": "acceptEdits"}, {"type": "addRules"}], True),
+    ([{"type": "somethingNew"}], False),
+    (["x"], False),
+])
+def test_suggestion_types_gate_always_available(
+        receiver, run_async, suggestions, expected):
+    """Only a standing-rule suggestion type (addRules / addDirectories)
+    makes Allow-always available — a bare setMode, an unrecognized type,
+    or a non-dict entry never does, even mixed in with a real rule."""
+    registry, recv, notify_fn = receiver
+    _perm_request(recv, run_async, permission_suggestions=suggestions)
+    _, _, ctx = notify_fn.await_args.args
+    assert ctx["tool_info"]["always_available"] is expected
+
+
 # ---- reads outside the working directory (2.1.259 "block outside reads?") --
 
 def _read_request(recv, run_async, path, *, cwd="/work", suggestions=None):
