@@ -123,9 +123,11 @@ run, under its own description of it — approve what you can read.
   it does for a read-only file access (`Read`, `Grep`, `Glob`) outside
   the session's working directory.
   Claude Code 2.1.259+ puts a "switch to auto mode" row in that slot of
-  its own Bash dialog, and a "block reads outside the working
-  directories from now on" row in the outside-read one — aipager never
-  selects either; change modes deliberately with `/perms`.
+  its own Bash dialog, a "block reads outside the working directories
+  from now on" row in the outside-read one, and — for a Write/Edit it
+  can't derive a per-file rule for — a permission-mode switch such as
+  auto-accepting all file edits (`acceptEdits`); aipager never selects
+  any of these; change modes deliberately with `/perms`.
 - **Stop** — interrupt the turn instead of answering.
 
 Every tap is recorded in `~/.claude/aipager-audit.jsonl` and mirrored
