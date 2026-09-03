@@ -640,17 +640,17 @@ class TrackedSession:
         busy card itself, on a session that is BUSY or has a background
         job open — the same liveness rule ``_animate_busy`` loops on.
 
-        The two exclusions are the states whose card is NOT the animator's
-        to touch: INTERACTIVE (the card is the permission prompt — its
-        keyboard would be repainted away) and a ``compacting`` top (the
-        card is the compaction dots, driven by ``_animate_compact`` in the
-        same ``animate_task`` slot). Shared by the session monitor's
-        watchdog and the bot's resume path so the two cannot disagree.
+        Two states own a card that is NOT the animator's to touch, and both
+        are excluded here: a ``compacting`` top (the card is the compaction
+        dots, driven by ``_animate_compact`` in the same ``animate_task``
+        slot) by the explicit check, and INTERACTIVE (the card is the
+        permission prompt — its keyboard would be repainted away) by the
+        last line, since ``job_background_open()`` is by definition never
+        true outside IDLE/BUSY. Shared by the session monitor's watchdog
+        and the bot's resume path so the two cannot disagree.
         """
         msg_id = self.busy_msg_id
         if not msg_id or msg_id < 0:
-            return False
-        if self.status == Status.INTERACTIVE:
             return False
         if self.stack_top_kind() != "busy":
             return False
