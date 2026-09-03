@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A new prompt sent while a previous job's background agent was still
+  open left that job's waiting card frozen in the chat for good — "N
+  agents still working" under a live Stop button — because the reclaim
+  only forgot the card. The superseded card is now settled in place
+  first (final ✅ status line, Stop button removed, and the
+  `{label}_full_log.txt` play-by-play threaded under it when the finished
+  card had to hide anything), then the fresh card goes out as before.
+  Nothing else is sent for the superseded job.
+
 ## [0.7.5] - 2026-08-30
 
 ### Changed

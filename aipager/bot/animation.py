@@ -954,6 +954,77 @@ class AnimationMixin:
             sess.animate_task.cancel()
         sess.animate_task = None
 
+    async def _close_superseded_card(self, sess: TrackedSession) -> None:
+        """Settle the waiting card a genuinely new prompt is reclaiming.
+
+        The reclaim branch of :meth:`_send_busy_and_animate` used to only
+        forget the old card, which left it frozen in the chat reading
+        "N agents still working" under a live Stop button — a status that
+        was false the moment the new turn began, and a button whose tap
+        would now interrupt the NEW turn. The old job's stream state (tool
+        rows, commentary, start time, cost) is still intact here — the
+        fresh-send reset runs only after the caller clears ``busy_msg_id``
+        — so the card is rendered in its final form in place, the same
+        ``FINAL_VERB, final=True`` edit the idle close makes in notify.py.
+
+        Order matters: the old animate task is stopped FIRST (a cancel
+        only — it touches none of the state rendered below). Left running,
+        it could wake during the final edit's POST, still see the old
+        ``busy_msg_id``, and re-arm the Stop button over the settled card.
+
+        Nothing else goes out for the superseded job — its interim text is
+        already inside the card (transition() clears the interim buffer
+        without a flush on supersede, deliberately) — except the full-log
+        attachment, threaded under the old card, when the final render had
+        to hide anything: the same ``last_card_truncated`` rule as the idle
+        close ("layered-card-shedding" requirement 2).
+
+        Best-effort on every step. A failed or refused edit, or a failed
+        attachment, is logged and the caller proceeds to the new turn's
+        card regardless.
+        """
+        old_msg_id = sess.busy_msg_id
+        if not old_msg_id or old_msg_id < 0:
+            return
+        self._stop_animation(sess)
+        try:
+            kept = await self._edit_busy_rich(sess, FINAL_VERB, final=True)
+        except Exception:
+            log.info("[%s] superseded card %s: final render failed",
+                     sess.label, old_msg_id, exc_info=True)
+            return
+        if kept is None:
+            # Blocked, or the message is gone — nothing left to thread an
+            # attachment under.
+            log.debug("[%s] superseded card %s: final edit refused",
+                      sess.label, old_msg_id)
+            return
+        if kept is False:
+            log.info("[%s] superseded card %s: final edit failed — left as "
+                     "last rendered", sess.label, old_msg_id)
+        if not sess.last_card_truncated or not self._app:
+            return
+        label = sess.label
+        try:
+            content_bytes = build_full_log(
+                label, list(sess.tool_history), list(sess.stream_commentary), "",
+            ).encode("utf-8")
+            if len(content_bytes) > TELEGRAM_MAX_DOC_BYTES:
+                log.warning(
+                    "[%s] superseded card %s: full log too large for Telegram "
+                    "(%.1f MB) — not attached",
+                    label, old_msg_id, len(content_bytes) / (1024 * 1024),
+                )
+                return
+            await self._app.bot.send_document(
+                resolve_chat_id(sess), document=content_bytes,
+                filename=f"{label}_full_log.txt",
+                reply_to_message_id=old_msg_id,
+            )
+        except Exception:
+            log.info("[%s] superseded card %s: full-log attachment failed",
+                     label, old_msg_id, exc_info=True)
+
     async def _send_busy_and_animate(self, sess: TrackedSession) -> None:
         """Send 'Working...' message and start spinner animation.
 
@@ -982,8 +1053,10 @@ class AnimationMixin:
                     # so without this check it would look "already showing
                     # busy" and swallow this genuinely new prompt entirely
                     # — exactly what requirement 3 forbids. Reclaim instead:
-                    # clear busy_msg_id and fall into the normal fresh-send
-                    # reset below, same as the stale-animation branch. The
+                    # settle the old card in place (final status line, Stop
+                    # button off — see _close_superseded_card), clear
+                    # busy_msg_id and fall into the normal fresh-send reset
+                    # below, same as the stale-animation branch. The
                     # old job's active_subagents tracking is intentionally
                     # lost here (design.md Risks: its eventual SubagentStop
                     # or TTL expiry lands in the already-tolerated "no
@@ -1007,6 +1080,7 @@ class AnimationMixin:
                         sess.job_continuation_active,
                         bool(sess.job_grace_until),
                     )
+                    await self._close_superseded_card(sess)
                     sess.busy_msg_id = None
                 elif sess.animate_task and not sess.animate_task.done():
                     return  # already showing busy — original race guard, unchanged
