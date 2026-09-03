@@ -638,10 +638,10 @@ def test_telegram_permission_answer_resumes_animation(
     bot._edit_busy_raw = AsyncMock(return_value=True)
     bot._start_animation = MagicMock()
 
-    async def _no_sleep(_):
-        pass
-    monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
-
+    # No asyncio.sleep patch here: patching it through a module path patches
+    # the global asyncio module for every caller in the process (see this
+    # file's module docstring). The "deny" branch's real overshoot delay
+    # (_DENY_OVERSHOOT * 0.1s ~= 0.5s) is accepted instead.
     update, _query = _mk_query(f"claude-jim:{answer}")
     run_async(bot._handle_callback(update, MagicMock()))
 
