@@ -716,6 +716,10 @@ def mk_update():
         # _build_reply_context's `quote.text[:1000]` in every test that
         # doesn't care about highlighting.
         update.message.quote = None
+        # Default to "not part of an album". A bare MagicMock here is
+        # truthy, which would route every upload test through the
+        # media-group coalescer instead of the immediate single-file path.
+        update.message.media_group_id = None
         update.effective_user = MagicMock()
         update.effective_user.id = user_id
         update.effective_chat = MagicMock()

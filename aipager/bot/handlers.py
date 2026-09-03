@@ -19,6 +19,7 @@ import signal
 import subprocess
 import sys
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -28,6 +29,7 @@ from telegram import (
     Update,
     WebAppInfo,
 )
+from telegram.error import BadRequest, NetworkError
 from telegram.ext import (
     ContextTypes,
 )
@@ -81,7 +83,109 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+# ---- File uploads: download policy ---------------------------------------
+# A photo/document download is a getFile call plus a GET of the bytes; on
+# a slow or lossy link either can time out. Bounded retries, on the
+# transient network classes only (see _download_with_retry).
+_DOWNLOAD_ATTEMPTS = 3
+# Seconds slept after the n-th failed attempt (index n-1) before the next
+# one. With three attempts only the first two entries are ever slept; the
+# third is headroom should _DOWNLOAD_ATTEMPTS grow. Tests set this to
+# (0, 0, 0) — never patch asyncio.sleep to shortcut it: the module-level
+# ``asyncio`` IS the global module, and patching it wedges the loop.
+_DOWNLOAD_BACKOFF_SECONDS: tuple[float, ...] = (1.0, 2.0, 4.0)
+# Per-call read timeout for the download. The Application default
+# (lifecycle: read_timeout(20)) is sized for API calls; a multi-MB file on
+# a slow link legitimately needs longer and should not need a retry at all.
+_DOWNLOAD_READ_TIMEOUT = 60.0
 
+# ---- File uploads: album (media group) coalescing -------------------------
+# Telegram delivers an album as one Update per item sharing a
+# media_group_id, the caption riding on only one of them. Items are
+# collected per (chat_id, media_group_id) and injected as ONE prompt once
+# no further item has arrived for this long.
+_ALBUM_SETTLE_SECONDS = 1.5
+# A group that has seen no arrival or completion for this long is dropped,
+# so a lost Update can never leak an entry for the life of the daemon.
+_ALBUM_MAX_AGE_SECONDS = 60.0
+
+
+@dataclass
+class _PendingAlbum:
+    """One in-flight Telegram media group — see ``_handle_file``."""
+
+    key: tuple[int, str]  # (chat_id, media_group_id)
+    update: Update  # first item's Update: reply-context, origin and 👀 target
+    ctx: ContextTypes.DEFAULT_TYPE
+    touched: float  # time.monotonic() of the latest arrival or completion
+    paths: list[Path] = field(default_factory=list)  # arrival order
+    failed: list[str] = field(default_factory=list)  # display names
+    caption: str = ""
+    all_photos: bool = True
+    pending: int = 0  # registered items whose download is still running
+    settle_task: asyncio.Task | None = None
+
+
+def _unique_save_path(directory: Path, filename: str) -> Path:
+    """``directory/filename``, or ``stem-2.ext``, ``stem-3.ext``… if taken.
+
+    Names are second-resolution (``{ts}_photo.jpg``) and every album
+    photo is ``photo.jpg``, so back-to-back items of one album would
+    otherwise overwrite each other and the prompt would hand claude the
+    same path N times. Unchanged for the no-collision case.
+    """
+    path = directory / filename
+    stem, suffix = Path(filename).stem, Path(filename).suffix
+    n = 2
+    while path.exists():
+        path = directory / f"{stem}-{n}{suffix}"
+        n += 1
+    return path
+
+
+def _file_prompt(caption: str, paths: list[Path], *, all_photos: bool) -> str:
+    """The prompt handed to claude for one or more uploaded files —
+    shared by the lone-file and album paths so an album reads exactly
+    like a single upload, pluralised."""
+    joined = " ".join(str(p) for p in paths)
+    if caption:
+        return f"{caption} {joined}"
+    if all_photos:
+        noun = "this image" if len(paths) == 1 else "these images"
+        return f"Describe {noun}: {joined}"
+    noun = "this file" if len(paths) == 1 else "these files"
+    return f"Read and analyze {noun}: {joined}"
+
+
+async def _download_with_retry(media, save_path: Path, *, display_name: str) -> None:
+    """``get_file()`` + ``download_to_drive()`` with bounded retries.
+
+    Retries the transient network classes only — ``NetworkError`` and
+    its ``TimedOut`` subclass. In python-telegram-bot 22 ``BadRequest``
+    ALSO subclasses ``NetworkError`` but is a 4xx (a bad file_id will not
+    come right on the next try), so it is excluded explicitly;
+    ``Forbidden`` and everything else never retry. Re-raises the last
+    error once every attempt has failed.
+    """
+    for attempt in range(1, _DOWNLOAD_ATTEMPTS + 1):
+        try:
+            tg_file = await media.get_file(read_timeout=_DOWNLOAD_READ_TIMEOUT)
+            await tg_file.download_to_drive(
+                custom_path=str(save_path), read_timeout=_DOWNLOAD_READ_TIMEOUT,
+            )
+            return
+        except NetworkError as exc:
+            if isinstance(exc, BadRequest) or attempt >= _DOWNLOAD_ATTEMPTS:
+                raise
+            delay = _DOWNLOAD_BACKOFF_SECONDS[
+                min(attempt - 1, len(_DOWNLOAD_BACKOFF_SECONDS) - 1)
+            ]
+            log.info(
+                "Download of %s: attempt %d/%d failed (%s), retrying in %.0fs",
+                display_name, attempt, _DOWNLOAD_ATTEMPTS,
+                type(exc).__name__, delay,
+            )
+            await asyncio.sleep(delay)
 
 
 class CommandHandlersMixin:
@@ -1488,7 +1592,13 @@ class CommandHandlersMixin:
             )
 
     async def _handle_file(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle photo/document messages — download file and inject prompt."""
+        """Handle photo/document messages — download file and inject prompt.
+
+        A lone file is injected right here. An album item (``media_group_id``
+        set) is parked in ``self._albums`` instead, and the whole group goes
+        out as ONE prompt from ``_flush_album`` once no further item has
+        arrived for ``_ALBUM_SETTLE_SECONDS``.
+        """
         if not await self._authorize(update):
             return
         msg = update.message
@@ -1512,38 +1622,52 @@ class CommandHandlersMixin:
             )
             return
 
-        # Download the file
+        if msg.photo:
+            media = msg.photo[-1]  # largest size is last
+            display_name = "photo.jpg"
+        elif msg.document:
+            media = msg.document
+            raw_name = msg.document.file_name or "document"
+            display_name = Path(raw_name).name or "document"
+        else:
+            return
+
+        # An album item is registered BEFORE its download so the settle
+        # timer armed by the previous item cannot fire while this one is
+        # still coming down. Its outcome is recorded in the ``finally`` so
+        # the group's in-flight counter balances even on cancellation.
+        album = self._album_register(update, ctx) if msg.media_group_id else None
+
+        save_path: Path | None = None
         try:
             FILE_DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
-            ts = int(time.time())
-
-            if msg.photo:
-                # Use largest photo size
-                tg_file = await msg.photo[-1].get_file()
-                filename = f"{ts}_photo.jpg"
-            elif msg.document:
-                tg_file = await msg.document.get_file()
-                raw_name = msg.document.file_name or "document"
-                orig = Path(raw_name).name or "document"
-                filename = f"{ts}_{orig}"
-            else:
-                return
-
-            save_path = FILE_DOWNLOAD_DIR / filename
-            await tg_file.download_to_drive(custom_path=str(save_path))
+            target = _unique_save_path(
+                FILE_DOWNLOAD_DIR, f"{int(time.time())}_{display_name}")
+            await _download_with_retry(media, target, display_name=display_name)
+            save_path = target
         except Exception:
-            log.warning("File download failed", exc_info=True)
-            await msg.reply_text("❌ Failed to download file")
+            log.warning("File download failed: %s", display_name, exc_info=True)
+        finally:
+            if album is not None:
+                self._album_record(album, msg, save_path, display_name)
+
+        if album is not None:
+            return  # _flush_album injects the whole group once it settles
+        if save_path is None:
+            await msg.reply_text(f"❌ Failed to download file: {display_name}")
             return
 
         # Construct prompt — keep it clean, let the file path do the work
-        caption = msg.caption or ""
-        if caption:
-            prompt = f"{caption} {save_path}"
-        elif msg.photo:
-            prompt = f"Describe this image: {save_path}"
-        else:
-            prompt = f"Read and analyze this file: {save_path}"
+        prompt = _file_prompt(msg.caption or "", [save_path], all_photos=bool(msg.photo))
+        await self._inject_file_prompt(update, ctx, prompt, log_name=save_path.name)
+
+    async def _inject_file_prompt(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE, prompt: str,
+        *, log_name: str,
+    ) -> None:
+        """Route an upload prompt to a session and inject it — the shared
+        tail of the lone-file and album paths."""
+        msg = update.message
 
         # Resolve target session (same routing precedence as _handle_message)
         reply_to = msg.reply_to_message
@@ -1597,9 +1721,91 @@ class CommandHandlersMixin:
             await self._react(update, "👀")
             self.registry.transition(sess.name, Status.BUSY)
             await self._send_busy_and_animate(sess)
-            log.info("[%s] File sent: %s", sess.label, filename)
+            log.info("[%s] File sent: %s", sess.label, log_name)
         else:
             await msg.reply_text(f"❌ Failed to send to [{sess.label}]")
+
+    # ---- Albums (media groups) --------------------------------------------
+
+    def _album_register(
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE,
+    ) -> _PendingAlbum:
+        """Park an arriving album item, creating its group on the first
+        one. Cancels the group's settle timer; ``_album_record`` re-arms
+        it once this item's download has finished."""
+        now = time.monotonic()
+        self._sweep_albums(now)
+        key = (calling_chat_id(update) or 0, update.message.media_group_id)
+        album = self._albums.get(key)
+        if album is None:
+            album = _PendingAlbum(key=key, update=update, ctx=ctx, touched=now)
+            self._albums[key] = album
+        album.touched = now
+        album.pending += 1
+        if album.settle_task is not None:
+            album.settle_task.cancel()
+            album.settle_task = None
+        return album
+
+    def _album_record(
+        self, album: _PendingAlbum, msg, save_path: Path | None, display_name: str,
+    ) -> None:
+        """Note one item's outcome and arm the settle timer once no
+        download of the group is still running."""
+        album.touched = time.monotonic()
+        album.pending -= 1
+        if save_path is not None:
+            album.paths.append(save_path)
+        else:
+            album.failed.append(display_name)
+        if msg.caption and not album.caption:
+            album.caption = msg.caption
+        if not msg.photo:
+            album.all_photos = False
+        if album.pending == 0:
+            album.settle_task = asyncio.create_task(self._settle_album(album))
+
+    async def _settle_album(self, album: _PendingAlbum) -> None:
+        """Wait out the settle window, then flush the group. Every later
+        arrival cancels this task and ``_album_record`` starts a new one,
+        so reaching the flush means the group has gone quiet."""
+        await asyncio.sleep(_ALBUM_SETTLE_SECONDS)
+        if album.pending:  # defensive: never flush a half-downloaded group
+            return
+        if self._albums.get(album.key) is album:
+            del self._albums[album.key]
+        try:
+            await self._flush_album(album)
+        except Exception:
+            log.exception("Album %s: flush failed", album.key[1])
+
+    async def _flush_album(self, album: _PendingAlbum) -> None:
+        """Inject the whole group as ONE prompt, with ONE reply for any
+        items that failed every download attempt — never one per item."""
+        if album.paths:
+            prompt = _file_prompt(
+                album.caption, album.paths, all_photos=album.all_photos)
+            await self._inject_file_prompt(
+                album.update, album.ctx, prompt,
+                log_name=f"album of {len(album.paths)}",
+            )
+        if album.failed:
+            noun = "file" if len(album.failed) == 1 else "files"
+            tail = " (left out of the album)" if album.paths else ""
+            await album.update.message.reply_text(
+                f"❌ Failed to download {noun}: {', '.join(album.failed)}{tail}")
+
+    def _sweep_albums(self, now: float) -> None:
+        """Drop groups idle for longer than ``_ALBUM_MAX_AGE_SECONDS``."""
+        for key, album in list(self._albums.items()):
+            if now - album.touched > _ALBUM_MAX_AGE_SECONDS:
+                if album.settle_task is not None:
+                    album.settle_task.cancel()
+                del self._albums[key]
+                log.warning(
+                    "Album %s: dropped after %.0fs idle (%d files never sent)",
+                    key[1], now - album.touched, len(album.paths),
+                )
 
     async def _send_template(self, update: Update, prompt_text: str) -> None:
         """Inject a quick-template prompt into the last active session."""

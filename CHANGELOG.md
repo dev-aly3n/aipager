@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- A photo/document download that hits a transient network error
+  (`TimedOut`, a dropped connection) is retried up to three times with a
+  short backoff, and the download itself gets a 60s read timeout instead
+  of the 20s API default, so a large photo on a slow link no longer fails
+  outright on the first hiccup. The failure message now names the file.
+
+- Two uploads landing in the same second no longer overwrite each other:
+  the download name is only ever second-resolution (`<ts>_photo.jpg`),
+  so every photo of an album used to collapse onto one path.
 - A new prompt sent while a previous job's background agent was still
   open left that job's waiting card frozen in the chat for good — "N
   agents still working" under a live Stop button — because the reclaim
@@ -36,6 +45,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   durable fix.
 
 ### Changed
+- An album (several photos or documents sent as one Telegram message) is
+  now handed to claude as ONE prompt — the caption followed by every file
+  path in arrival order — instead of one prompt per item, each of which
+  could fail on its own and only one of which carried the caption. If an
+  item cannot be downloaded the rest still go out, with a single note
+  naming the missing one.
 - The permission card shows the real Bash command (or the file path for
   Read/Write/Edit) under claude's description of it, HTML-escaped and
   capped at 300 characters, so you approve what you can read rather than

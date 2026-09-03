@@ -14,6 +14,8 @@ composition only.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from telegram.ext import Application
 
 from aipager.bot.animation import AnimationMixin
@@ -28,6 +30,9 @@ from aipager.bot.session_ops import SessionOpsMixin
 from aipager.config import MODEL_CHOICES, QUICK_COMMANDS, QUICK_TEMPLATES
 from aipager.state import SessionRegistry
 from aipager.team import Team
+
+if TYPE_CHECKING:
+    from aipager.bot.handlers import _PendingAlbum
 
 
 class TelegramBot(
@@ -78,6 +83,11 @@ class TelegramBot(
         self._perms_pending: dict[str, dict] = {}
         # `/resume` mode-picker pending state. Keyed by session_name → label.
         self._resume_mode_pending: dict[str, str] = {}
+        # In-flight Telegram albums (media groups), keyed by
+        # (chat_id, media_group_id). Items are parked here by
+        # handlers._handle_file and injected as ONE prompt once the group
+        # settles; see handlers._flush_album.
+        self._albums: dict[tuple[int, str], _PendingAlbum] = {}
         # Team / allow-list — None for personal-mode installs (no team.yaml),
         # which preserves the existing one-user-one-DM behaviour.
         from aipager.config import TEAM

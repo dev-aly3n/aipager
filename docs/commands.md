@@ -223,6 +223,13 @@ Uploaded files are downloaded into the active session's workspace
 and the path is offered to claude. The 20 MB Telegram bot file
 download cap is enforced up-front; oversized files get a clear
 rejection before any download attempt.
+A download that hits a transient network error is retried up to
+three times with a short backoff before you see an error, and that
+error names the file. An album — several photos or documents sent as
+one message — is handed to claude as a single prompt (the caption,
+then every file path in order) once its last item has landed; if one
+item cannot be downloaded the rest still go out, with one note naming
+the missing one.
 
 ### Voice
 
