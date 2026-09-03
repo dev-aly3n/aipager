@@ -19,19 +19,30 @@ MARK = "\U0001f916"
 def _oversized_sess(*, agent_position="middle"):
     """A session whose tool_history is large enough to force the fitter
     to truncate, with one still-live agent row placed among the fat
-    parent rows."""
+    parent rows.
+
+    For "middle", the OLDER run is deliberately kept short (2 rows) and
+    the NEWER run large (250 rows): collapsing the small older run alone
+    does not free enough bytes to fit the budget, forcing the fitter to
+    also decide what to do with the agent row's own section — the
+    precise condition needed to distinguish "the agent row is
+    structurally protected" from "the agent row just happened to survive
+    because an earlier collapse already sufficed".
+    """
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
     sess.busy_started_at = time.monotonic() - 600
 
-    fat_rows = [
-        (f"Bash: step-{i} " + ("z" * 120), True) for i in range(250)
-    ]
     agent_row = (f"{MARK} crawler", False)
 
     if agent_position == "middle":
-        history = fat_rows[:125] + [agent_row] + fat_rows[125:]
-        idx = 125
+        old_rows = [(f"Bash: old-{i} " + ("z" * 120), True) for i in range(2)]
+        new_rows = [(f"Bash: new-{i} " + ("z" * 120), True) for i in range(250)]
+        history = old_rows + [agent_row] + new_rows
+        idx = len(old_rows)
     elif agent_position == "newest":
+        fat_rows = [
+            (f"Bash: step-{i} " + ("z" * 120), True) for i in range(250)
+        ]
         history = fat_rows + [agent_row]
         idx = len(fat_rows)
     else:

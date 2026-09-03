@@ -106,6 +106,25 @@ def test_empty_string_agent_id_falls_back_to_a_parent_row(mk_sess, run_async, mk
     assert sess.tool_history == [("Bash: pwd", False)]
 
 
+def test_empty_agent_id_falls_back_even_if_active_subagents_has_a_falsy_key(
+    mk_sess, run_async, mk_bot,
+):
+    """The routing guard must check BOTH truthiness of agent_id AND
+    membership — not membership alone. A pathological "" key in
+    active_subagents (defensive: should never happen in production, but
+    the guard must not rely on that) must not cause an empty agent_id to
+    be wrongly attributed."""
+    bot = mk_bot()
+    sess = mk_sess()
+    sess.active_subagents[""] = _agent_entry(type="phantom-key")
+    run_async(bot.notify(sess, "tool_use", {
+        "tool_summary": "Bash: pwd", "tool_name": "Bash",
+        "tool_input_full": None, "agent_id": "",
+    }))
+    assert sess.tool_history == [("Bash: pwd", False)]
+    assert sess.active_subagents[""]["activity"] == ""  # untouched
+
+
 def test_missing_agent_id_key_entirely_falls_back_to_a_parent_row(
     mk_sess, run_async, mk_bot,
 ):
