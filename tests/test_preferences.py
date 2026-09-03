@@ -430,3 +430,42 @@ def test_changing_scope_default_after_override_moves_scope_value_only():
     # really asserting resolve_preferences never lets a stale scope read
     # leak into what should stay a session's own explicit choice.
     assert prefs.resolve_preferences(61, overrides).answer_length == "short"
+
+
+# ---- diff_preview ("diff-preview-settings-toggle") -------------------------
+
+def test_diff_preview_defaults_off_and_round_trips():
+    assert prefs.get_preferences(7).diff_preview is False
+    prefs.set_preference(7, "diff_preview", True)
+    assert prefs.get_preferences(7).diff_preview is True
+    prefs.set_preference(7, "diff_preview", False)
+    assert prefs.get_preferences(7).diff_preview is False
+
+
+def test_diff_preview_missing_from_stored_scope_resolves_false():
+    """Guard 6: a preferences.json written before the field existed keeps
+    every other field and resolves the new one to its default."""
+    prefs._PREFERENCES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    prefs._PREFERENCES_PATH.write_text(json.dumps(
+        {"9": {"layout": "merged", "answer_length": "short"}}), encoding="utf-8")
+    prefs._cache = None
+    p = prefs.get_preferences(9)
+    assert p.diff_preview is False
+    assert p.layout == "merged"
+    assert p.answer_length == "short"
+
+
+def test_diff_preview_rejects_non_bool():
+    with pytest.raises(ValueError):
+        prefs.set_preference(7, "diff_preview", "on")
+    assert prefs.is_valid_value("diff_preview", True)
+    assert not prefs.is_valid_value("diff_preview", 1)
+
+
+def test_resolve_diff_preview_session_override_both_directions():
+    prefs.set_preference(8, "diff_preview", False)
+    assert prefs.resolve_preferences(8, {"diff_preview": True}).diff_preview is True
+    prefs.set_preference(8, "diff_preview", True)
+    assert prefs.resolve_preferences(8, {"diff_preview": False}).diff_preview is False
+    # an invalid override falls back to the scope value, like every field
+    assert prefs.resolve_preferences(8, {"diff_preview": "no"}).diff_preview is True

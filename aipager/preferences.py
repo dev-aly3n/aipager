@@ -55,6 +55,7 @@ _VALID_LANGUAGE_LEVEL = ("none", "simple", "normal", "advanced")
 _FIELD_VALIDATORS = {
     "layout": lambda v: v in _VALID_LAYOUT,
     "simple_formatting": lambda v: isinstance(v, bool),
+    "diff_preview": lambda v: isinstance(v, bool),
     "answer_length": lambda v: v in _VALID_ANSWER_LENGTH,
     "language_level": lambda v: v in _VALID_LANGUAGE_LEVEL,
 }
@@ -70,6 +71,12 @@ class Preferences:
     simple_formatting: bool
     answer_length: str
     language_level: str
+    # Post each Write/Edit as its own diff message under the busy card.
+    # Off by default: the busy card already lists every edit, and the
+    # previews sit outside the background-job model (an agent's edits
+    # would land between the busy card and the job's single answer).
+    # Defaulted here so every existing keyword construction stays valid.
+    diff_preview: bool = False
 
 
 # In-memory cache: None means "not loaded yet" (distinct from a loaded-
@@ -129,6 +136,7 @@ def _default_layout() -> str:
 
 _FIELD_DEFAULTS = {
     "simple_formatting": False,
+    "diff_preview": False,
     "answer_length": "none",
     "language_level": "none",
 }
@@ -177,11 +185,14 @@ def get_preferences(chat_id: int) -> Preferences:
         language_level=_resolve_field(
             scope_raw, "language_level", _FIELD_DEFAULTS["language_level"],
         ),
+        diff_preview=_resolve_field(
+            scope_raw, "diff_preview", _FIELD_DEFAULTS["diff_preview"],
+        ),
     )
 
 
 def is_valid_value(field: str, value: object) -> bool:
-    """``True`` iff ``field`` is one of the four settable fields and
+    """``True`` iff ``field`` is one of the settable fields and
     ``value`` is one of that field's allowed options. Never raises —
     an unknown field name returns ``False`` rather than ``KeyError``,
     because this is also used to sanity-check untrusted input (a

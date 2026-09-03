@@ -28,7 +28,7 @@ and on every session change.
 | `/diff [label]` | optional | Show the session's working-directory git diff. |
 | `/clearqueue` | — | Drop every not-yet-picked-up message for the active session — both messages aipager is holding and messages already queued inside Claude — without interrupting the running turn. Replies with the count cleared. |
 | `/perms [label]` | optional | Switch a session between Ask and Auto permission modes. On a busy session, offers `Stop task & switch` / `Not now`. |
-| `/settings` | — | Message layout, formatting and language preferences. |
+| `/settings` | — | Message layout, diff previews (off by default), formatting and language preferences. |
 | `/whoami` | — | Show your Telegram id and (in team mode) your role. |
 
 ### Per-session dynamic commands

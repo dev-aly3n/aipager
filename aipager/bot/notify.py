@@ -62,7 +62,6 @@ from aipager.bot.transport import (  # noqa: F401
     _detect_api_error,
     _DIFF_MAX_CHARS,
     _DIFF_MAX_LINES,
-    _diff_view_enabled,
     _ERROR_PATTERNS,
     _extract_retry_after,
     _is_bot_blocked,
@@ -242,6 +241,17 @@ class NotifyMixin:
             sess.busy_msg_id = 0
             return False
         return result is not None
+
+    @staticmethod
+    def _diff_preview_enabled(sess) -> bool:
+        """The resolved "Diff previews" preference for ``sess``: the
+        scope's /settings value with this session's own override applied
+        (``resolve_preferences``, never ``get_preferences``, so a
+        per-session choice actually takes effect). Off by default.
+        """
+        return preferences.resolve_preferences(
+            sess.scope_chat_id or 0, sess.preference_overrides(),
+        ).diff_preview
 
     def _strip_promise_lines(self, text: str, label: str) -> str:
         """Drop "I'll send the briefing when it lands"-style lines from an
@@ -719,11 +729,14 @@ class NotifyMixin:
                 # Append new tool as in-progress (PostToolUse marks it done)
                 sess.record_tool(tool_summary, False)
                 sess.last_tool_summary = tool_summary
-            # Item 4.4: send a separate diff-preview message for Write/Edit.
-            # Best-effort and opt-out via AIPAGER_DIFF_VIEW=0. Fire-and-forget
-            # so it doesn't slow the busy-message edit cadence.
+            # Item 4.4: a separate diff-preview message for Write/Edit —
+            # OFF by default, on via the /settings "Diff previews" toggle
+            # (the scope value, or this session's own override). Resolved
+            # per event, never cached, so a toggle flipped mid-turn takes
+            # effect on the next edit. Fire-and-forget so it doesn't slow
+            # the busy-message edit cadence.
             if (tool_name in ("Write", "Edit") and tool_input_full
-                    and _diff_view_enabled()):
+                    and self._diff_preview_enabled(sess)):
                 asyncio.create_task(
                     self._send_diff_preview(sess, tool_name, tool_input_full)
                 )

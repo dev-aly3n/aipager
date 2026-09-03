@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Per-edit diff previews (a separate message for every `Write`/`Edit`)
+  are now a `/settings` toggle, **off by default** — settable per scope,
+  per session, and from the Mini App. They sat outside the background-job
+  model, so an agent's edits posted messages between the busy card and
+  the job's single answer; the busy card still lists every edit and the
+  Mini App diff viewer is unchanged. The undocumented `AIPAGER_DIFF_VIEW`
+  env var is gone — the setting replaces it.
 - The card's status line (label · verb · elapsed · cost · tool tallies)
   moved from the TOP to the BOTTOM, and the background-waiting header and
   footer merged into that one line. Telegram parks the viewport at a

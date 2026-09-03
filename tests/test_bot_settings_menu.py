@@ -22,14 +22,14 @@ def _all_texts(kb):
 
 def test_root_has_four_sections_then_per_session_then_close():
     """Order is asserted, not just membership: Close stays last, and the
-    per-session row sits directly above it. The four chat-level sections
+    per-session row sits directly above it. The chat-level sections
     keep their existing order and callback data untouched — adding the
     per-session entry point must not disturb what was already there.
     """
     _text, kb = sm.render_settings_root(1)
     data = _all_callback_data(kb)
     assert data == [
-        "_:set:layout", "_:set:formatting", "_:set:length",
+        "_:set:layout", "_:set:diffs", "_:set:formatting", "_:set:length",
         "_:set:level", "_:spref", "_:set:close",
     ]
 
@@ -39,11 +39,13 @@ def test_root_layout_button_always_marked_at_defaults():
     texts = _all_texts(kb)
     layout_text = texts[0]
     assert "✅" in layout_text
-    # The other three, untouched, carry no marker at their default value.
-    assert "✅" not in texts[1]
+    # The other four, untouched, carry no marker at their default value.
+    assert "✅" not in texts[1]  # diffs
     assert "✅" not in texts[2]
     assert "✅" not in texts[3]
-    assert "✅" not in texts[4]  # Close
+    assert "✅" not in texts[4]
+    assert "✅" not in texts[5]  # per-session
+    assert "✅" not in texts[6]  # Close
 
 
 def test_root_marks_customized_sections():
@@ -51,9 +53,10 @@ def test_root_marks_customized_sections():
     prefs.set_preference(1, "answer_length", "short")
     _text, kb = sm.render_settings_root(1)
     texts = _all_texts(kb)
-    assert "✅" in texts[1]  # formatting
-    assert "✅" in texts[2]  # length
-    assert "✅" not in texts[3]  # level still default
+    assert "✅" not in texts[1]  # diffs still default
+    assert "✅" in texts[2]  # formatting
+    assert "✅" in texts[3]  # length
+    assert "✅" not in texts[4]  # level still default
 
 
 def test_root_returns_markup_and_text():
@@ -134,3 +137,26 @@ def test_all_callback_data_under_64_bytes():
         all_data.extend(_all_callback_data(kb))
     for data in all_data:
         assert len(data.encode("utf-8")) <= 64, data
+
+
+# ---- diff previews ("diff-preview-settings-toggle") ------------------------
+
+def test_section_diffs_values_are_on_off():
+    _text, kb = sm.render_settings_section(1, "diffs")
+    assert _all_callback_data(kb) == ["_:set:diffs:off", "_:set:diffs:on", "_:set:back"]
+
+
+def test_root_marks_diffs_only_when_on():
+    _text, kb = sm.render_settings_root(1)
+    assert "Diff previews" in _all_texts(kb)[1]
+    assert "✅" not in _all_texts(kb)[1]
+    prefs.set_preference(1, "diff_preview", True)
+    _text, kb = sm.render_settings_root(1)
+    assert "✅" in _all_texts(kb)[1]
+
+
+def test_schema_carries_diff_preview_as_a_boolean_section():
+    entry = next(e for e in sm.settings_schema() if e["field"] == "diff_preview")
+    assert entry["section"] == "diffs"
+    assert [o["value"] for o in entry["options"]] == [False, True]
+    assert all(o["help"] for o in entry["options"])

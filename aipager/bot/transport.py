@@ -11,8 +11,7 @@ Sections:
   ``_md_safe_boundaries``.
 - "Bot blocked by user" detection: ``_log_blocked_once``,
   ``_is_bot_blocked``.
-- Write/Edit diff rendering: ``_diff_view_enabled``, ``_truncate_diff``,
-  ``_build_diff_block``.
+- Write/Edit diff rendering: ``_truncate_diff``, ``_build_diff_block``.
 - Claude API error pattern matching: ``_ERROR_PATTERNS``,
   ``_RETRY_AFTER_RE``, ``_extract_retry_after``, ``_detect_api_error``.
 - Constants: ``TELEGRAM_MAX_*``, ``_TRUNC_SUFFIX``, ``ACTION_VERBS``,
@@ -28,7 +27,6 @@ import asyncio
 import difflib
 import html as html_mod
 import logging
-import os
 import re
 import time
 
@@ -192,16 +190,13 @@ def _is_bot_blocked(e: Exception) -> bool:
 # unified diff and send it as a Telegram reply threaded under the busy
 # message. This gives users on-the-go review without needing to ssh in.
 #
-# Trade-off: every Write/Edit is one message. The body is capped to
-# `_DIFF_MAX_LINES` / `_DIFF_MAX_CHARS` to keep the chat readable. Users
-# who find it too noisy can set ``AIPAGER_DIFF_VIEW=0`` to disable.
+# Trade-off: every Write/Edit is one message, so this is OFF by default
+# and gated by the /settings "Diff previews" toggle (resolved per session
+# in ``NotifyMixin._diff_preview_enabled``). The body is capped to
+# `_DIFF_MAX_LINES` / `_DIFF_MAX_CHARS` to keep the chat readable.
 
 _DIFF_MAX_LINES = 30
 _DIFF_MAX_CHARS = 2000
-
-
-def _diff_view_enabled() -> bool:
-    return os.environ.get("AIPAGER_DIFF_VIEW", "1") not in ("0", "false", "no", "")
 
 
 def _truncate_diff(lines: list[str]) -> tuple[str, int]:

@@ -20,10 +20,11 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from aipager.preferences import Preferences, get_preferences
 
-SECTIONS = ("layout", "formatting", "length", "level")
+SECTIONS = ("layout", "diffs", "formatting", "length", "level")
 
 _SECTION_TITLES = {
     "layout": "🖼 Message layout",
+    "diffs": "📝 Diff previews",
     "formatting": "✏️ Simple formatting",
     "length": "📏 Answer length",
     "level": "🎓 Language level",
@@ -38,6 +39,9 @@ _LAYOUT_ORDER = ("card", "merged", "replace")
 
 _FORMATTING_LABELS = {False: "Off — default formatting", True: "On — plain prose only"}
 _FORMATTING_ORDER = (False, True)
+
+_DIFFS_LABELS = {False: "Off — busy card only", True: "On — a diff message per edit"}
+_DIFFS_ORDER = (False, True)
 
 _LENGTH_LABELS = {
     "none": "Don't apply any rule",
@@ -58,6 +62,7 @@ _LEVEL_ORDER = ("none", "simple", "normal", "advanced")
 
 _SECTION_FIELD = {
     "layout": "layout",
+    "diffs": "diff_preview",
     "formatting": "simple_formatting",
     "length": "answer_length",
     "level": "language_level",
@@ -70,6 +75,8 @@ _OPTION_HELP = {
     ("layout", "card"): "Busy card stays, the answer arrives as its own message.",
     ("layout", "merged"): "The answer replaces the busy card's body in place.",
     ("layout", "replace"): "The busy card is replaced by the answer alone.",
+    ("diffs", False): "File edits show only as rows on the busy card.",
+    ("diffs", True): "Each Write/Edit is also posted as its own diff message under the busy card.",
     ("formatting", False): "Claude formats replies however it likes.",
     ("formatting", True): "Plain prose and dashed lists only — no tables or code blocks.",
     ("length", "none"): "No length guidance at all.",
@@ -85,12 +92,14 @@ _OPTION_HELP = {
 
 _SECTION_ORDERS = {
     "layout": _LAYOUT_ORDER,
+    "diffs": _DIFFS_ORDER,
     "formatting": _FORMATTING_ORDER,
     "length": _LENGTH_ORDER,
     "level": _LEVEL_ORDER,
 }
 _SECTION_LABELS = {
     "layout": _LAYOUT_LABELS,
+    "diffs": _DIFFS_LABELS,
     "formatting": _FORMATTING_LABELS,
     "length": _LENGTH_LABELS,
     "level": _LEVEL_LABELS,
@@ -138,8 +147,9 @@ def _root_button_text(section: str, prefs: Preferences) -> str:
         # root row always carries the marker — the one field where "current
         # value" and "something is actively applied" are the same thing.
         return f"{_SECTION_TITLES[section]}: {label} ✅"
-    if section == "formatting":
-        label = _FORMATTING_LABELS[value]
+    if section in ("formatting", "diffs"):
+        # Boolean sections: the marker means "actively on".
+        label = _SECTION_LABELS[section][value]
         marker = " ✅" if value else ""
         return f"{_SECTION_TITLES[section]}: {label}{marker}"
     if section == "length":
@@ -175,6 +185,11 @@ def render_settings_root(chat_id: int) -> tuple[str, InlineKeyboardMarkup]:
 
 _SECTION_INTRO = {
     "layout": "How a finished turn appears in the chat.",
+    "diffs": (
+        "Whether each file edit is posted as a separate diff message under "
+        "the busy card. Off keeps one busy card and one answer — the card "
+        "still lists every edit, and the Mini App has a diff viewer."
+    ),
     "formatting": (
         "When ON, replies use plain prose and simple dashed lists only — "
         "no tables, code blocks, headings, or bold/italics."
@@ -194,20 +209,16 @@ def render_settings_section(
     prefs = get_preferences(chat_id)
     current = _current_value(prefs, section)
 
-    if section == "layout":
-        order, labels = _LAYOUT_ORDER, _LAYOUT_LABELS
-    elif section == "formatting":
-        order, labels = _FORMATTING_ORDER, _FORMATTING_LABELS
-    elif section == "length":
-        order, labels = _LENGTH_ORDER, _LENGTH_LABELS
-    else:  # "level"
-        order, labels = _LEVEL_ORDER, _LEVEL_LABELS
+    # One table for every section (the same one `settings_schema` reads),
+    # so a section added there cannot be forgotten here.
+    order, labels = _SECTION_ORDERS[section], _SECTION_LABELS[section]
 
     rows = []
     for value in order:
         marker = " ✅" if value == current else ""
-        # `simple_formatting` values are bools; every other field's values
-        # already double as their own callback-data tokens.
+        # Boolean fields' (simple_formatting, diff_preview) values are
+        # bools; every other field's values already double as their own
+        # callback-data tokens.
         token = "on" if value is True else "off" if value is False else value
         rows.append([InlineKeyboardButton(
             f"{labels[value]}{marker}",

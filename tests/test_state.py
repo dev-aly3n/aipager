@@ -624,11 +624,15 @@ def test_preference_overrides_empty_by_default(tmp_state_file):
     assert sess.preference_overrides() == {}
 
 
-def test_preference_override_fields_constant_covers_all_four_settable_fields():
+def test_preference_override_fields_constant_covers_every_settable_field():
+    """Derived from the settable-field allow-list rather than hand-listed,
+    so adding a preference without its per-session override (or the
+    reverse) fails here instead of silently leaving the Mini App's
+    per-session toggle a no-op ("diff-preview-settings-toggle")."""
+    from aipager.preferences import _FIELD_VALIDATORS
     from aipager.state import PREFERENCE_OVERRIDE_FIELDS
-    assert set(PREFERENCE_OVERRIDE_FIELDS) == {
-        "layout", "simple_formatting", "answer_length", "language_level",
-    }
+    assert set(PREFERENCE_OVERRIDE_FIELDS) == set(_FIELD_VALIDATORS)
+    assert "diff_preview" in PREFERENCE_OVERRIDE_FIELDS
 
 
 def test_preference_overrides_distinguishes_false_from_unset():
@@ -677,6 +681,7 @@ def test_override_fields_round_trip(tmp_state_file):
     sess.override_simple_formatting = False
     sess.override_answer_length = "none"
     sess.override_language_level = "advanced"
+    sess.override_diff_preview = True
     r1.save()
 
     r2 = SessionRegistry()
@@ -686,11 +691,13 @@ def test_override_fields_round_trip(tmp_state_file):
     assert s2.override_simple_formatting is False
     assert s2.override_answer_length == "none"
     assert s2.override_language_level == "advanced"
+    assert s2.override_diff_preview is True
     assert s2.preference_overrides() == {
         "layout": "merged",
         "simple_formatting": False,
         "answer_length": "none",
         "language_level": "advanced",
+        "diff_preview": True,
     }
 
 
@@ -709,6 +716,7 @@ def test_unset_overrides_round_trip_as_none(tmp_state_file):
     assert s2.override_simple_formatting is None
     assert s2.override_answer_length is None
     assert s2.override_language_level is None
+    assert s2.override_diff_preview is None
     assert s2.preference_overrides() == {}
 
 

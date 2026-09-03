@@ -58,8 +58,9 @@ Fires before every tool call. The most important event because it
 drives the **permission flow**: claude's settings tell it `Allow`,
 `Ask`, or `Deny` for that tool + input.
 
-- `Allow` (auto-approved): aipager logs the tool to `tool_history` and
-  posts a diff preview if the tool is `Write` or `Edit`. No prompt.
+- `Allow` (auto-approved): aipager logs the tool to `tool_history` and,
+  if the tool is `Write` or `Edit` and the `/settings` **Diff previews**
+  toggle is on (it is off by default), posts a diff preview. No prompt.
 - `Ask` (requires confirmation): aipager edits the busy message into
   a permission prompt with inline `[✅ Allow] [❌ Deny]
   [🟢 Allow always] [⏹ Stop]` buttons (see

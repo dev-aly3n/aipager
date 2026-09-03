@@ -1,4 +1,9 @@
-"""Tests for the Write/Edit diff preview helpers (item 4.4)."""
+"""Tests for the Write/Edit diff RENDERING helpers (item 4.4).
+
+Whether a preview is SENT is a /settings preference now
+("diff-preview-settings-toggle") — see test_bot_notify.py; the env-var
+switch these tests once pinned no longer exists.
+"""
 
 from __future__ import annotations
 
@@ -6,31 +11,8 @@ from aipager.bot.transport import (
     _DIFF_MAX_CHARS,
     _DIFF_MAX_LINES,
     _build_diff_block,
-    _diff_view_enabled,
     _truncate_diff,
 )
-
-
-# ----- _diff_view_enabled -----
-
-def test_diff_view_default_on(monkeypatch):
-    monkeypatch.delenv("AIPAGER_DIFF_VIEW", raising=False)
-    assert _diff_view_enabled() is True
-
-
-def test_diff_view_off_by_zero(monkeypatch):
-    monkeypatch.setenv("AIPAGER_DIFF_VIEW", "0")
-    assert _diff_view_enabled() is False
-
-
-def test_diff_view_off_by_no(monkeypatch):
-    monkeypatch.setenv("AIPAGER_DIFF_VIEW", "no")
-    assert _diff_view_enabled() is False
-
-
-def test_diff_view_on_by_explicit_1(monkeypatch):
-    monkeypatch.setenv("AIPAGER_DIFF_VIEW", "1")
-    assert _diff_view_enabled() is True
 
 
 # ----- _build_diff_block -----

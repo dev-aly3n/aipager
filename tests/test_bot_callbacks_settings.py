@@ -232,3 +232,19 @@ def test_value_tap_with_unresolvable_chat_id_fails_closed(mk_bot, run_async):
     toast_texts = [c.args[0] for c in query.answer.await_args_list if c.args and c.args[0]]
     assert any("admin" in t.lower() for t in toast_texts)
     query.edit_message_text.assert_not_awaited()
+
+
+def test_dm_diffs_value_tap_persists_both_ways(mk_bot, mk_query, run_async):
+    """Guard 4 ("diff-preview-settings-toggle"): the new section's on/off
+    tokens travel through the same dispatcher and land in the store."""
+    bot = mk_bot()
+    update, query = mk_query("_:set:diffs:on", chat_id=555)
+    run_async(bot._handle_callback(update, MagicMock()))
+    assert prefs.get_preferences(555).diff_preview is True
+    update, query = mk_query("_:set:diffs:off", chat_id=555)
+    run_async(bot._handle_callback(update, MagicMock()))
+    assert prefs.get_preferences(555).diff_preview is False
+    update, query = mk_query("_:set:diffs:sideways", chat_id=555)
+    run_async(bot._handle_callback(update, MagicMock()))
+    assert prefs.get_preferences(555).diff_preview is False
+    assert query.answer.await_args.args[0] == "Invalid value"

@@ -314,7 +314,7 @@ def test_non_object_top_level_json_body_rejected_not_500(
 
 def test_unknown_field_on_get_all_values_still_only_lists_real_fields(server, run_async):
     """GET never lets a client discover or probe unknown fields -- the
-    `values` map is always exactly the four real ones, regardless of
+    `values` map is always exactly the real ones, regardless of
     anything the client might try elsewhere."""
     async def _run():
         _mk_session(server, "dev")
@@ -325,6 +325,7 @@ def test_unknown_field_on_get_all_values_still_only_lists_real_fields(server, ru
             values = (await resp.json())["values"]
             assert set(values) == {
                 "layout", "simple_formatting", "answer_length", "language_level",
+                "diff_preview",
             }
         finally:
             await client.close()

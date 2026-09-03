@@ -42,7 +42,6 @@ from aipager.bot.transport import (  # noqa: F401
     _detect_api_error,
     _DIFF_MAX_CHARS,
     _DIFF_MAX_LINES,
-    _diff_view_enabled,
     _ERROR_PATTERNS,
     _extract_retry_after,
     _is_bot_blocked,

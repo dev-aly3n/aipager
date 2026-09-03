@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from telegram.error import BadRequest, Forbidden
 
+from aipager import preferences
 from aipager.state import Status, TrackedSession
 
 
@@ -98,33 +99,71 @@ def test_tool_use_appends_to_history(mk_bot, run_async):
     assert sess.last_tool_summary == "Read: /x"
 
 
-def test_tool_use_write_fires_diff_preview(mk_bot, run_async, monkeypatch):
+def _edit_event():
+    return {
+        "tool_summary": "Edit: /x",
+        "tool_name": "Edit",
+        "tool_input_full": {"file_path": "/x", "old_string": "a", "new_string": "b"},
+    }
+
+
+def test_tool_use_diff_preview_off_by_default(mk_bot, run_async):
+    """Guard 1 ("diff-preview-settings-toggle"): with untouched preferences
+    an Edit posts NO separate diff message — the busy-card row is its only
+    trace. This is the defect: previews used to be on unless an
+    undocumented env var said otherwise, so a background agent's edits
+    landed as extra messages between the busy card and the job's single
+    answer."""
     bot = mk_bot()
     sess = _sess(busy_msg_id=None)
     bot._send_diff_preview = AsyncMock()
-    monkeypatch.setenv("AIPAGER_DIFF_VIEW", "1")
+    run_async(bot.notify(sess, "tool_use", _edit_event()))
+    bot._send_diff_preview.assert_not_called()
+    assert ("Edit: /x", False) in sess.tool_history  # the card row still lands
+
+
+def test_tool_use_diff_preview_fires_when_toggle_on(mk_bot, run_async):
+    """Guard 2: the scope's /settings toggle on → the preview task is
+    created for this session/tool/input (`_send_diff_preview` itself
+    threads it under the busy message — pinned in
+    test_bot_keyboards_dashboard.py)."""
+    bot = mk_bot()
+    sess = _sess(busy_msg_id=None)
+    preferences.set_preference(sess.scope_chat_id or 0, "diff_preview", True)
+    bot._send_diff_preview = AsyncMock()
     run_async(bot.notify(sess, "tool_use", {
         "tool_summary": "Write: /x",
         "tool_name": "Write",
         "tool_input_full": {"file_path": "/x", "content": "y"},
     }))
-    # The diff-preview task is created (fire-and-forget)
-    # We can't assert it was awaited (asyncio.create_task), but we
-    # can assert tool_history is updated.
+    bot._send_diff_preview.assert_called_once()
+    args = bot._send_diff_preview.call_args.args
+    assert args[0] is sess
+    assert args[1] == "Write"
+    assert args[2] == {"file_path": "/x", "content": "y"}
     assert ("Write: /x", False) in sess.tool_history
 
 
-def test_tool_use_diff_preview_disabled_via_env(mk_bot, run_async, monkeypatch):
+def test_tool_use_diff_preview_session_override_wins(mk_bot, run_async):
+    """Guard 3: the gate reads the RESOLVED preference — a per-session
+    override beats the scope value in both directions. A gate that read
+    `get_preferences` (scope only) would pass every other test here and
+    silently ignore the Mini App's per-session toggle."""
+    # scope off (default), session on → fires
     bot = mk_bot()
     sess = _sess(busy_msg_id=None)
+    sess.override_diff_preview = True
     bot._send_diff_preview = AsyncMock()
-    monkeypatch.setenv("AIPAGER_DIFF_VIEW", "0")
-    run_async(bot.notify(sess, "tool_use", {
-        "tool_summary": "Write: /x",
-        "tool_name": "Write",
-        "tool_input_full": {"file_path": "/x", "content": "y"},
-    }))
-    bot._send_diff_preview.assert_not_awaited()
+    run_async(bot.notify(sess, "tool_use", _edit_event()))
+    bot._send_diff_preview.assert_called_once()
+    # scope on, session off → silent
+    bot2 = mk_bot()
+    sess2 = _sess("kim", busy_msg_id=None)
+    preferences.set_preference(sess2.scope_chat_id or 0, "diff_preview", True)
+    sess2.override_diff_preview = False
+    bot2._send_diff_preview = AsyncMock()
+    run_async(bot2.notify(sess2, "tool_use", _edit_event()))
+    bot2._send_diff_preview.assert_not_called()
 
 
 def test_tool_use_edits_busy_when_debounce_elapsed(mk_bot, run_async):

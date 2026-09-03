@@ -125,6 +125,7 @@ PREFERENCE_OVERRIDE_FIELDS: dict[str, str] = {
     "simple_formatting": "override_simple_formatting",
     "answer_length": "override_answer_length",
     "language_level": "override_language_level",
+    "diff_preview": "override_diff_preview",
 }
 
 
@@ -281,9 +282,10 @@ class TrackedSession:
     skip_perms: bool = False
     # Per-session preference overrides (batch 4's "Per session settings").
     # `None` means unset/inherit the scope's own /settings value — never a
-    # legal value for any of these four: layout/answer_length/
+    # legal value for any of these: layout/answer_length/
     # language_level are closed enumerations that never include None, and
-    # simple_formatting's own legal `False` must not be confused with
+    # the booleans' (simple_formatting, diff_preview) own legal `False`
+    # must not be confused with
     # "unset", which is exactly why `None` alone (not `False`, not a
     # missing-key sentinel) is the unset marker — it is disjoint from
     # every field's real values. Never read directly: resolve together
@@ -297,6 +299,7 @@ class TrackedSession:
     override_simple_formatting: bool | None = None
     override_answer_length: str | None = None
     override_language_level: str | None = None
+    override_diff_preview: bool | None = None
     # Multi-scope (Phase B): which Telegram chat this session belongs to.
     # All outbound notifications for the session route here instead of the
     # global CHAT_ID. `scope_chat_id == 0` means "not yet stamped" — the
@@ -1063,6 +1066,7 @@ class SessionRegistry:
         # Per-session preference overrides — see TrackedSession docstring.
         "override_layout", "override_simple_formatting",
         "override_answer_length", "override_language_level",
+        "override_diff_preview",
     )
     _MAX_MSG_MAP = 2000  # cap _msg_map entries to avoid unbounded growth (doubled — Part 1 roughly doubles density by also tracking user prompts)
 
@@ -1213,6 +1217,7 @@ class SessionRegistry:
                 override_simple_formatting=sd.get("override_simple_formatting"),
                 override_answer_length=sd.get("override_answer_length"),
                 override_language_level=sd.get("override_language_level"),
+                override_diff_preview=sd.get("override_diff_preview"),
             )
             # busy_msg_id is a @property (Decision 1) and cannot also be a
             # dataclass __init__ parameter name — set it post-construction

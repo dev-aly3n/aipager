@@ -64,7 +64,6 @@ from aipager.bot.transport import (  # noqa: F401
     _detect_api_error,
     _DIFF_MAX_CHARS,
     _DIFF_MAX_LINES,
-    _diff_view_enabled,
     _ERROR_PATTERNS,
     _extract_retry_after,
     _is_bot_blocked,
@@ -197,11 +196,12 @@ class CallbackDispatchMixin:
         log.info("[%s] perms switched to skip_perms=%s", label, target_skip_perms)
 
     # Callback-data value tokens → the field value `preferences.set_preference`
-    # expects. Only `simple_formatting` needs translation (bool ↔ on/off);
+    # expects. Only the boolean sections need translation (bool ↔ on/off);
     # every other field's values already double as their own tokens, so
     # they round-trip through this map unchanged.
     _SETTINGS_VALUE_TOKENS = {
         "formatting": {"on": True, "off": False},
+        "diffs": {"on": True, "off": False},
     }
 
     async def _dispatch_settings_action(self, update: Update, query, action: str) -> None:
@@ -274,7 +274,8 @@ class CallbackDispatchMixin:
             # (both come from settings_menu.SECTIONS), so the lookup below
             # can never raise KeyError.
             field = {
-                "layout": "layout", "formatting": "simple_formatting",
+                "layout": "layout", "diffs": "diff_preview",
+                "formatting": "simple_formatting",
                 "length": "answer_length", "level": "language_level",
             }[section]
             value_map = self._SETTINGS_VALUE_TOKENS.get(section)

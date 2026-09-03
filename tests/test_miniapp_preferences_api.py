@@ -101,6 +101,7 @@ def test_get_preferences_returns_schema_and_values(server, run_async):
             # the schema is shared, not a second hand-written list.
             assert fields == {
                 "layout", "simple_formatting", "answer_length", "language_level",
+                "diff_preview",
             }
             assert set(body["values"]) == fields
             assert body["can_edit"] is True
@@ -388,6 +389,35 @@ def test_read_routes_still_reject_writes(server, run_async, path):
                 assert resp.status == 405, (
                     f"{method.upper()} {path} returned {resp.status}, expected 405"
                 )
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_diff_preview_round_trips_through_the_api(server, run_async):
+    """Guard 5 ("diff-preview-settings-toggle"): the new field reads back
+    False by default, accepts a boolean write, and rejects a non-boolean
+    through the same allow-list chat uses."""
+    async def _run():
+        client = await _client_for(server)
+        try:
+            body = await (await client.get(
+                "/api/preferences", headers=_hdr(ADMIN_ID))).json()
+            assert body["values"]["diff_preview"] is False
+            resp = await client.put(
+                "/api/preferences/diff_preview",
+                headers=_hdr(ADMIN_ID), json={"value": True},
+            )
+            assert resp.status == 200
+            assert (await resp.json())["values"]["diff_preview"] is True
+            again = await (await client.get(
+                "/api/preferences", headers=_hdr(ADMIN_ID))).json()
+            assert again["values"]["diff_preview"] is True
+            bad = await client.put(
+                "/api/preferences/diff_preview",
+                headers=_hdr(ADMIN_ID), json={"value": "yes"},
+            )
+            assert bad.status == 400
         finally:
             await client.close()
     run_async(_run())

@@ -106,7 +106,7 @@ def _drive_form(node_bin, tmp_path, html, name="page.html", scenario=None):
 
 def test_new_session_form_applies_every_setting_it_offers(node_bin, tmp_path):
     """Drive the real form end to end: render controls for model, working
-    directory, permission mode and the four reply-style settings; type a
+    directory, permission mode and the reply-style settings; type a
     full model name; create a folder and have it selected; then submit and
     check what each request actually carried.
 
