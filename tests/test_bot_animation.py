@@ -587,3 +587,20 @@ def test_permission_display_bounds_escape_heavy_commands(mk_bot):
     assert block.endswith("…")
     assert len(block) <= _PERM_DETAIL_HTML_MAX + 1
     assert "&amp;" in block and "&" * 2 not in block.replace("&amp;", "")
+
+
+def test_permission_display_bound_holds_for_front_loaded_escapes(mk_bot):
+    """rev-iter2-002: a single proportional shrink uses the slice's average
+    escape ratio and under-shrinks when the heavy characters come first.
+    The bound must hold regardless of where they sit."""
+    from aipager.bot.transport import _PERM_DETAIL_HTML_MAX
+    bot = mk_bot()
+    # each exceeds the rendered bound after escaping; heavy characters sit
+    # at the front, the front and back, and the back respectively
+    for detail in ("&" * 250 + "a" * 250, "<" * 260 + "b" * 40, "a" * 100 + "&" * 200):
+        sess = _perm_sess({"tool_summary": "Bash: mix",
+                           "tool_info": {"name": "Bash", "detail": detail}})
+        text = bot._build_busy_text("jim", "Waiting", sess)
+        block = text.split("<pre>", 1)[1].split("</pre>", 1)[0]
+        assert len(block) <= _PERM_DETAIL_HTML_MAX + 1, (len(block), detail[:20])
+        assert block.endswith("…")

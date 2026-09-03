@@ -219,11 +219,16 @@ def _format_perm_detail(tool_summary: str, detail: str) -> str:
     cut = len(detail) > _PERM_DETAIL_CHARS
     raw = detail[:_PERM_DETAIL_CHARS]
     escaped = html_mod.escape(raw)
-    if len(escaped) > _PERM_DETAIL_HTML_MAX:
-        # Escape-heavy text: shrink the raw slice proportionally, then
-        # re-escape (never cut the escaped string — that could split an
-        # entity like ``&amp;`` and corrupt the HTML).
-        raw = raw[: max(1, int(len(raw) * _PERM_DETAIL_HTML_MAX / len(escaped)))]
+    while len(escaped) > _PERM_DETAIL_HTML_MAX and len(raw) > 1:
+        # Escape-heavy text: shrink the raw slice, then re-escape (never
+        # cut the escaped string — that could split an entity like
+        # ``&amp;`` and corrupt the HTML). The proportional step uses the
+        # slice's AVERAGE escape ratio, which under-shrinks when the
+        # heavy characters are front-loaded (review rev-iter2-002), so
+        # iterate — each pass drops at least one character, so it
+        # terminates, and the loop exits only under the bound.
+        target = int(len(raw) * _PERM_DETAIL_HTML_MAX / len(escaped))
+        raw = raw[: max(1, min(len(raw) - 1, target))]
         escaped = html_mod.escape(raw)
         cut = True
     return f"\n<pre>{escaped}{'…' if cut else ''}</pre>"
