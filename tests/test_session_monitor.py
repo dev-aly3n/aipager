@@ -648,6 +648,239 @@ def test_busy_not_recovered_while_job_background_open(
     assert not any(e == "idle_prompt" for e, _ in calls)
 
 
+# ----- Idle-recovery must stand down while a tool/compaction is in flight
+# (the reported bug: a long Bash/pytest run made the transcript look
+# finished-and-quiet, and the fallback recovered mid-turn) -----
+
+def test_busy_not_recovered_while_tool_in_flight(monkeypatch, run_async, tmp_path):
+    """This is the defect: a tool started 30s ago (well under
+    TOOL_INFLIGHT_MAX_SECONDS) must stand the recovery down exactly like
+    it already stands the stale-busy warning down."""
+    from aipager.session_monitor import TOOL_INFLIGHT_MAX_SECONDS
+    tp = _write_transcript(tmp_path, _COMPLETE, age_seconds=IDLE_RECOVERY_GRACE + 5)
+    sess = _busy_session(tp, busy_age=IDLE_RECOVERY_GRACE + 20)
+    sess.pending_tool_started_at = time.monotonic() - 30.0
+    assert 30.0 < TOOL_INFLIGHT_MAX_SECONDS
+    registry = SessionRegistry()
+    registry._sessions["claude-jim"] = sess
+
+    calls = []
+    async def _notify(s, event, ctx):
+        calls.append((event, ctx))
+    monitor = _mk_monitor(registry, _notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        lambda: _coroutine_returning(["claude-jim"]))
+
+    run_async(monitor._scan())
+
+    assert sess.status == Status.BUSY  # NOT recovered
+    assert not any(e == "idle_prompt" for e, _ in calls)
+
+
+def test_busy_not_recovered_while_compact_in_flight(monkeypatch, run_async, tmp_path):
+    """Same false positive, via a compaction in flight instead of a tool."""
+    from aipager.session_monitor import COMPACT_INFLIGHT_MAX_SECONDS
+    tp = _write_transcript(tmp_path, _COMPLETE, age_seconds=IDLE_RECOVERY_GRACE + 5)
+    sess = _busy_session(tp, busy_age=IDLE_RECOVERY_GRACE + 20)
+    sess.compact_started_at = time.monotonic() - 300.0
+    assert 300.0 < COMPACT_INFLIGHT_MAX_SECONDS
+    registry = SessionRegistry()
+    registry._sessions["claude-jim"] = sess
+
+    calls = []
+    async def _notify(s, event, ctx):
+        calls.append((event, ctx))
+    monitor = _mk_monitor(registry, _notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        lambda: _coroutine_returning(["claude-jim"]))
+
+    run_async(monitor._scan())
+
+    assert sess.status == Status.BUSY  # NOT recovered
+    assert not any(e == "idle_prompt" for e, _ in calls)
+
+
+def test_busy_recovered_when_tool_exceeds_inflight_cap(
+    steady_clock, monkeypatch, run_async, tmp_path,
+):
+    """A genuinely wedged tool must not block recovery forever."""
+    from aipager.session_monitor import TOOL_INFLIGHT_MAX_SECONDS
+    tp = _write_transcript(tmp_path, _COMPLETE, age_seconds=IDLE_RECOVERY_GRACE + 5)
+    sess = _busy_session(tp, busy_age=IDLE_RECOVERY_GRACE + 20)
+    sess.busy_started_at = steady_clock() - (IDLE_RECOVERY_GRACE + 20)
+    sess.pending_tool_started_at = steady_clock() - TOOL_INFLIGHT_MAX_SECONDS - 60
+    registry = SessionRegistry()
+    registry._sessions["claude-jim"] = sess
+
+    calls = []
+    async def _notify(s, event, ctx):
+        calls.append((event, ctx))
+    monitor = _mk_monitor(registry, _notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        lambda: _coroutine_returning(["claude-jim"]))
+
+    run_async(monitor._scan())
+
+    assert sess.status == Status.IDLE
+    assert any(e == "idle_prompt" for e, _ in calls)
+
+
+def test_busy_recovered_when_compact_exceeds_inflight_cap(
+    steady_clock, monkeypatch, run_async, tmp_path,
+):
+    """Same for a compaction that has overrun its own, much longer cap."""
+    from aipager.session_monitor import COMPACT_INFLIGHT_MAX_SECONDS
+    tp = _write_transcript(tmp_path, _COMPLETE, age_seconds=IDLE_RECOVERY_GRACE + 5)
+    sess = _busy_session(tp, busy_age=IDLE_RECOVERY_GRACE + 20)
+    sess.busy_started_at = steady_clock() - (IDLE_RECOVERY_GRACE + 20)
+    sess.compact_started_at = steady_clock() - COMPACT_INFLIGHT_MAX_SECONDS - 60
+    registry = SessionRegistry()
+    registry._sessions["claude-jim"] = sess
+
+    calls = []
+    async def _notify(s, event, ctx):
+        calls.append((event, ctx))
+    monitor = _mk_monitor(registry, _notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        lambda: _coroutine_returning(["claude-jim"]))
+
+    run_async(monitor._scan())
+
+    assert sess.status == Status.IDLE
+    assert any(e == "idle_prompt" for e, _ in calls)
+
+
+def test_idle_recovery_ctx_flags_recovered_true(monkeypatch, run_async, tmp_path):
+    """bot/notify.py needs to tell a recovery-originated idle apart from a
+    real hook-driven one to suppress a header-only "Finished" when there
+    is nothing new to say — the recovery path must thread that flag."""
+    tp = _write_transcript(tmp_path, _COMPLETE, age_seconds=IDLE_RECOVERY_GRACE + 5)
+    sess = _busy_session(tp, busy_age=IDLE_RECOVERY_GRACE + 20)
+    registry = SessionRegistry()
+    registry._sessions["claude-jim"] = sess
+
+    calls = []
+    async def _notify(s, event, ctx):
+        calls.append((event, ctx))
+    monitor = _mk_monitor(registry, _notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        lambda: _coroutine_returning(["claude-jim"]))
+
+    run_async(monitor._scan())
+
+    assert calls and calls[-1][0] == "idle_prompt"
+    assert calls[-1][1].get("recovered") is True
+
+
+def test_idle_recovery_consults_the_shared_work_in_flight_helper(
+    monkeypatch, run_async, tmp_path,
+):
+    """Proves the recovery branch ASKS TrackedSession.work_in_flight_reason
+    rather than re-deriving the condition: with no pending_tool_started_at
+    or compact_started_at set at all, patching the helper to report
+    "in flight" must still suppress recovery."""
+    from aipager.state import TrackedSession
+    tp = _write_transcript(tmp_path, _COMPLETE, age_seconds=IDLE_RECOVERY_GRACE + 5)
+    sess = _busy_session(tp, busy_age=IDLE_RECOVERY_GRACE + 20)
+    registry = SessionRegistry()
+    registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr(
+        TrackedSession, "work_in_flight_reason",
+        lambda self, now: ("tool", 1.0),
+    )
+
+    calls = []
+    async def _notify(s, event, ctx):
+        calls.append((event, ctx))
+    monitor = _mk_monitor(registry, _notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        lambda: _coroutine_returning(["claude-jim"]))
+
+    run_async(monitor._scan())
+
+    assert sess.status == Status.BUSY
+    assert not any(e == "idle_prompt" for e, _ in calls)
+
+
+def test_stale_busy_consults_the_shared_work_in_flight_helper(
+    monkeypatch, run_async,
+):
+    """Same proof for the stale-busy path: with no pending_tool_started_at
+    or compact_started_at set, patching the helper to report "in flight"
+    must still suppress the warning."""
+    from aipager.session_monitor import STALE_BUSY_TIMEOUT
+    from aipager.state import TrackedSession
+    registry = SessionRegistry()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.last_hook_at = time.monotonic() - STALE_BUSY_TIMEOUT - 60
+    registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr(
+        TrackedSession, "work_in_flight_reason",
+        lambda self, now: ("compact", 1.0),
+    )
+
+    notify = AsyncMock()
+    monitor = _mk_monitor(registry, notify)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        AsyncMock(return_value=["claude-jim"]))
+    run_async(monitor._scan())
+
+    notify.assert_not_awaited()
+    assert sess.stale_warned is False
+
+
+def test_idle_recovery_logs_stand_down_once_per_episode(
+    monkeypatch, run_async, tmp_path, caplog,
+):
+    """The stand-down must be diagnosable from the journal (one INFO line
+    naming the reason) without spamming a line per 2s scan tick for the
+    whole duration of a long tool call."""
+    import logging
+    caplog.set_level(logging.INFO, logger="aipager.session_monitor")
+    tp = _write_transcript(tmp_path, _COMPLETE, age_seconds=IDLE_RECOVERY_GRACE + 5)
+    sess = _busy_session(tp, busy_age=IDLE_RECOVERY_GRACE + 20)
+    sess.pending_tool_started_at = time.monotonic() - 30.0
+    registry = SessionRegistry()
+    registry._sessions["claude-jim"] = sess
+    monitor = _mk_monitor(registry)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        lambda: _coroutine_returning(["claude-jim"]))
+
+    run_async(monitor._scan())
+    run_async(monitor._scan())
+    run_async(monitor._scan())
+
+    standdown_logs = [
+        r for r in caplog.records
+        if r.levelno == logging.INFO and "idle-recovery stood down" in r.message
+    ]
+    assert len(standdown_logs) == 1
+    assert sess.status == Status.BUSY
+
+
+def test_recovery_stand_down_flag_resets_once_tool_clears(
+    monkeypatch, run_async, tmp_path,
+):
+    """The stand-down log gate must re-arm the moment nothing is in
+    flight any more — even on a tick where the OUTER recovery-due gate
+    itself isn't satisfied (transcript too fresh here) — otherwise a
+    later, unrelated stand-down episode would silently never get its own
+    log line."""
+    tp = _write_transcript(tmp_path, _COMPLETE, age_seconds=1)  # too fresh to recover
+    sess = _busy_session(tp, busy_age=IDLE_RECOVERY_GRACE + 20)
+    sess.recovery_stand_down_logged = True  # a prior episode already logged
+    registry = SessionRegistry()
+    registry._sessions["claude-jim"] = sess
+    monitor = _mk_monitor(registry)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        lambda: _coroutine_returning(["claude-jim"]))
+
+    run_async(monitor._scan())
+
+    assert sess.recovery_stand_down_logged is False
+    assert sess.status == Status.BUSY  # unrelated to recovery firing
+
+
 def test_grace_expiry_closes_orphaned_job(monkeypatch, run_async, tmp_path):
     """A job whose <task-notification> continuation never arrives may not
     tick forever: once the grace deadline passes with the session IDLE,

@@ -25,7 +25,11 @@ from pathlib import Path
 from typing import Any
 
 from aipager.scope import strip_scope_suffix
-from aipager.config import SESSION_STATE_FILE
+from aipager.config import (
+    COMPACT_INFLIGHT_MAX_SECONDS,
+    SESSION_STATE_FILE,
+    TOOL_INFLIGHT_MAX_SECONDS,
+)
 
 log = logging.getLogger(__name__)
 
@@ -313,6 +317,14 @@ class TrackedSession:
     # which would otherwise trip the stale-busy detector. Not persisted
     # (same reason as pending_tool_started_at above).
     compact_started_at: float | None = None
+    # Guards the idle-recovery fallback's own INFO log (session_monitor.py)
+    # so a tool/compaction that stands the recovery down for minutes logs
+    # ONE line for the whole episode rather than one per 2s scan tick.
+    # Cleared by work_in_flight_reason() returning None (the tool/compact
+    # finished or blew its cap), so the next stand-down episode logs again.
+    # Not persisted — monotonic-scan bookkeeping, meaningless across a
+    # daemon restart.
+    recovery_stand_down_logged: bool = False
     # Monotonic timestamp of the busy-card watchdog's last action on this
     # session (session_monitor.busy_card_watchdog_action). Throttles the
     # watchdog to one restart / forced refresh per CARD_STALE_SECONDS, so
@@ -772,6 +784,46 @@ class TrackedSession:
                 and time.monotonic() < self.job_grace_until)
         )
 
+    def work_in_flight_reason(self, now: float) -> tuple[str, float] | None:
+        """Why a "gone quiet" reading of this session would be a false
+        positive right now, or ``None`` if neither applies.
+
+        Returns ``(kind, elapsed_seconds)`` — ``kind`` is ``"tool"`` or
+        ``"compact"`` — while a PreToolUse/PostToolUse pair or a
+        PreCompact/post-compact-SessionStart pair is still open AND
+        younger than its own cap (``TOOL_INFLIGHT_MAX_SECONDS`` /
+        ``COMPACT_INFLIGHT_MAX_SECONDS``). No hooks fire mid-tool-call or
+        mid-compaction, so the transcript and every hook-driven timestamp
+        look quiet even though the session is genuinely working.
+
+        The single, shared definition of "still legitimately working" —
+        both the stale-busy watchdog and the idle-recovery fallback ask
+        THIS instead of re-deriving the condition, so the two checks can
+        never drift apart on what counts as a false "gone quiet" alarm
+        (the idle-recovery fallback used to skip this check entirely,
+        recovering BUSY→IDLE mid-tool-call on any quiet, complete-looking
+        transcript tail).
+
+        A tool or compaction older than its own cap returns ``None`` — a
+        genuinely wedged tool must not stand either check down forever.
+        """
+        tool_start = self.pending_tool_started_at
+        if tool_start is not None:
+            elapsed = now - tool_start
+            if elapsed < TOOL_INFLIGHT_MAX_SECONDS:
+                return "tool", elapsed
+        compact_start = self.compact_started_at
+        if compact_start is not None:
+            elapsed = now - compact_start
+            if elapsed < COMPACT_INFLIGHT_MAX_SECONDS:
+                return "compact", elapsed
+        return None
+
+    def work_in_flight(self, now: float) -> bool:
+        """True while a tool call or compaction is legitimately in flight
+        — see :meth:`work_in_flight_reason` for the shared definition."""
+        return self.work_in_flight_reason(now) is not None
+
     def busy_card_should_animate(self) -> bool:
         """True when this session has a live busy card that ought to be
         ticking: a real (positive) message id whose live-stack top is the
@@ -1016,6 +1068,13 @@ class SessionRegistry:
         if new_status == Status.BUSY:
             sess.last_idle_at = 0.0
             sess.stale_warned = False
+            # Same reason as stale_warned above: without this, a stand-down
+            # logged for one turn's tool call could survive (PostToolUse and
+            # the real Stop hook landing between two monitor ticks, so
+            # work_in_flight_reason never observably clears mid-turn) into a
+            # LATER, unrelated BUSY turn and silently swallow that turn's
+            # own first idle-recovery stand-down log line.
+            sess.recovery_stand_down_logged = False
             # Stamp the turn start here rather than at any single call
             # site: several paths enter BUSY (Telegram prompt, terminal
             # UserPromptSubmit, permission answer, the INTERACTIVE

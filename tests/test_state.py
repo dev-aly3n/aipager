@@ -3,6 +3,8 @@
 import os
 import time
 
+import pytest
+
 from aipager.state import SessionRegistry, Status
 
 
@@ -909,6 +911,85 @@ def test_job_background_open_gone_with_agents_is_false():
     sess.status = Status.GONE
     sess.active_subagents["a1"] = {"type": "Explore"}
     assert sess.job_background_open() is False
+
+
+# ---- work_in_flight_reason / work_in_flight -------------------------------
+# The single shared definition consulted by both session_monitor.py's
+# stale-busy check and its idle-recovery fallback, so the two can never
+# disagree about what "still legitimately working" means.
+
+def test_work_in_flight_none_when_nothing_pending():
+    r = SessionRegistry()
+    sess = r.get_or_create("claude-hiva")
+    assert sess.work_in_flight_reason(now=1_000.0) is None
+    assert sess.work_in_flight(now=1_000.0) is False
+
+
+def test_work_in_flight_tool_within_cap():
+    from aipager.config import TOOL_INFLIGHT_MAX_SECONDS
+    r = SessionRegistry()
+    sess = r.get_or_create("claude-hiva")
+    now = 1_000_000.0
+    sess.pending_tool_started_at = now - (TOOL_INFLIGHT_MAX_SECONDS - 1)
+    kind, elapsed = sess.work_in_flight_reason(now)
+    assert kind == "tool"
+    assert elapsed == pytest.approx(TOOL_INFLIGHT_MAX_SECONDS - 1)
+    assert sess.work_in_flight(now) is True
+
+
+def test_work_in_flight_tool_beyond_cap_is_none():
+    from aipager.config import TOOL_INFLIGHT_MAX_SECONDS
+    r = SessionRegistry()
+    sess = r.get_or_create("claude-hiva")
+    now = 1_000_000.0
+    sess.pending_tool_started_at = now - (TOOL_INFLIGHT_MAX_SECONDS + 1)
+    assert sess.work_in_flight_reason(now) is None
+    assert sess.work_in_flight(now) is False
+
+
+def test_work_in_flight_compact_within_cap():
+    from aipager.config import COMPACT_INFLIGHT_MAX_SECONDS
+    r = SessionRegistry()
+    sess = r.get_or_create("claude-hiva")
+    now = 1_000_000.0
+    sess.compact_started_at = now - (COMPACT_INFLIGHT_MAX_SECONDS - 1)
+    kind, elapsed = sess.work_in_flight_reason(now)
+    assert kind == "compact"
+    assert elapsed == pytest.approx(COMPACT_INFLIGHT_MAX_SECONDS - 1)
+
+
+def test_work_in_flight_compact_beyond_cap_is_none():
+    from aipager.config import COMPACT_INFLIGHT_MAX_SECONDS
+    r = SessionRegistry()
+    sess = r.get_or_create("claude-hiva")
+    now = 1_000_000.0
+    sess.compact_started_at = now - (COMPACT_INFLIGHT_MAX_SECONDS + 1)
+    assert sess.work_in_flight_reason(now) is None
+
+
+def test_work_in_flight_tool_takes_priority_over_compact():
+    """Both pending at once (shouldn't normally happen) — tool is checked
+    first, so it wins the reported kind."""
+    r = SessionRegistry()
+    sess = r.get_or_create("claude-hiva")
+    now = 1_000_000.0
+    sess.pending_tool_started_at = now - 10
+    sess.compact_started_at = now - 10
+    kind, _ = sess.work_in_flight_reason(now)
+    assert kind == "tool"
+
+
+def test_recovery_stand_down_logged_resets_on_new_busy_entry():
+    """A stand-down logged for one turn's tool call must not survive into
+    a LATER, unrelated turn and silently swallow ITS first idle-recovery
+    stand-down log line — same reasoning as the sibling `stale_warned`
+    reset just above it in transition()."""
+    r = SessionRegistry()
+    sess = r.get_or_create("claude-hiva")
+    sess.status = Status.IDLE
+    sess.recovery_stand_down_logged = True
+    r.transition("claude-hiva", Status.BUSY)
+    assert sess.recovery_stand_down_logged is False
 
 
 # ---- transition(..., preserve_job_state=True) ----------------------------
