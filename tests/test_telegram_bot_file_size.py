@@ -13,6 +13,7 @@ def _mk_doc_update(file_size: int):
     msg.document.file_size = file_size
     msg.document.file_name = "big.bin"
     msg.photo = None
+    msg.media_group_id = None  # not an album item
     msg.reply_text = AsyncMock()
     update.message = msg
     return update
@@ -25,6 +26,7 @@ def _mk_photo_update(file_size: int):
     photo = MagicMock()
     photo.file_size = file_size
     msg.photo = [photo]
+    msg.media_group_id = None  # not an album item
     msg.reply_text = AsyncMock()
     update.message = msg
     return update
@@ -80,6 +82,7 @@ def test_no_file_size_attribute_skips_check(mk_bot, run_async):
     msg.document.file_name = "unknown.bin"
     msg.document.get_file = AsyncMock(side_effect=RuntimeError("stubbed"))
     msg.photo = None
+    msg.media_group_id = None  # not an album item
     msg.reply_text = AsyncMock()
     update.message = msg
     run_async(bot._handle_file(update, MagicMock()))
