@@ -547,13 +547,15 @@ def test_real_2_1_259_payloads_gate_always_available_correctly(receiver, run_asy
     ([{"type": "setMode", "mode": "acceptEdits", "destination": "session"}], False),
     ([{"type": "setMode", "mode": "acceptEdits"}, {"type": "addRules"}], True),
     ([{"type": "somethingNew"}], False),
+    ([{"rules": []}], False),  # dict with no "type" key at all
     (["x"], False),
 ])
 def test_suggestion_types_gate_always_available(
         receiver, run_async, suggestions, expected):
     """Only a standing-rule suggestion type (addRules / addDirectories)
-    makes Allow-always available — a bare setMode, an unrecognized type,
-    or a non-dict entry never does, even mixed in with a real rule."""
+    makes Allow-always available — a bare setMode, an unrecognized type, a
+    dict entry with no "type" key, or a non-dict entry never does, even
+    mixed in with a real rule."""
     registry, recv, notify_fn = receiver
     _perm_request(recv, run_async, permission_suggestions=suggestions)
     _, _, ctx = notify_fn.await_args.args
