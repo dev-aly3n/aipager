@@ -119,6 +119,47 @@ def _sender_key(sess, update) -> tuple[int, int]:
     return (sess.scope_chat_id or 0, driver_id_from_update(update) or 0)
 
 
+def _same_sender(note_key: tuple[int, int], current_key: tuple[int, int]) -> bool:
+    """True when two ``sender_key`` tuples — ``(scope_chat_id,
+    driver_user_id)`` — name the same human.
+
+    The human's identity is the ``driver_user_id``; ``scope_chat_id`` is
+    session context, not identity (see ``_sender_key`` above). A
+    ``driver_user_id`` of 0 means "unknown human" (``driver_id_from_
+    update`` returned ``None``, folded to 0 by ``_sender_key``) and
+    NEVER counts as a match — not even against another unknown — so an
+    unidentified sender is always treated as potentially different from
+    whoever is live right now. That is the conservative direction: it
+    can only make the hold fire MORE, never less.
+
+    Scope participates in the comparison only when BOTH sides are
+    stamped (non-zero); a 0 on either side means "not yet stamped when
+    this key was captured" and must never be read as "a different
+    scope". This is exactly the multi-scope backfill bug this function
+    fixes: ``state.py`` stamps a session's ``scope_chat_id`` from 0 to a
+    real chat id sometime after some notes were already written with
+    scope 0, and without this carve-out every later message from that
+    SAME human reads as "a different sender" forever (the queue never
+    ages out fast enough — see ``MIXED_SENDER_HOLD_WINDOW_SECONDS``
+    for the backstop that also bounds this). In today's code a
+    session's ``scope_chat_id`` is otherwise constant for the session's
+    whole lifetime (stamped at most once), so the "both stamped but
+    different" branch below is defense-in-depth rather than a path
+    exercised in practice — kept because scope truly could distinguish
+    two sessions sharing a notes dir if that ever changed, and dropping
+    it entirely would remove a real (if currently redundant) signal.
+    """
+    note_scope, note_user = note_key
+    cur_scope, cur_user = current_key
+    if note_user == 0 or cur_user == 0:
+        return False
+    if note_user != cur_user:
+        return False
+    if note_scope == 0 or cur_scope == 0:
+        return True
+    return note_scope == cur_scope
+
+
 def mixed_sender_note_outstanding(sess, update) -> bool:
     """True when an outstanding queue-handoff note belongs to a Telegram
     user OTHER than whoever sent ``update``.
@@ -129,12 +170,23 @@ def mixed_sender_note_outstanding(sess, update) -> bool:
     (design.md "queue handoff", entrypoints.md's held-messages contract).
     Consulted by both ``_hold_for_open_dialog`` (handlers.py) and Retry
     (callbacks.py) — the same rule wherever a prompt could be injected.
+
+    Logs at INFO whenever the hold actually fires — the current and
+    outstanding sender keys are user ids and chat ids, never secrets —
+    so a recurrence is diagnosable straight from the journal (the live
+    incident this fixes took manual ``/tmp`` inspection to even see).
     """
     from aipager.policy_snapshot import outstanding_sender_keys
 
     current = _sender_key(sess, update)
     others = outstanding_sender_keys(sess.name)
-    return any(key != current for key in others)
+    mismatched = sorted(key for key in others if not _same_sender(key, current))
+    if mismatched:
+        log.info(
+            "[%s] Mixed-sender hold: current=%s outstanding=%s",
+            sess.name, current, mismatched,
+        )
+    return bool(mismatched)
 
 
 # Sentinel returned by ``_authorize_callback`` in personal mode so

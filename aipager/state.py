@@ -34,8 +34,33 @@ log = logging.getLogger(__name__)
 # `pending_queue` is capped at this many entries; the 51st `queue_prompt`
 # call returns False and the caller surfaces "queue full" feedback.
 QUEUE_CAP: int = 50
-# Persisted queue entries older than this are dropped at load time.
+# Persisted queue entries older than this are dropped at load time. This
+# ALSO bounds a queue-handoff note's own on-disk lifetime
+# (policy_snapshot.list_outstanding_notes), which in turn is how long a
+# note keeps contributing to merge_snapshots' safety-floor computation
+# (the owner-bypass flag a note carries) — 24h stays generous here
+# deliberately, so a legitimately still-outstanding note (behind a
+# long-running turn that hasn't picked it up yet) never loses its
+# bypass just because this TTL was tightened. See
+# MIXED_SENDER_HOLD_WINDOW_SECONDS below for the SEPARATE, much shorter
+# bound that governs how long a note may block a different-looking
+# sender — that one needed its own constant precisely so it could be
+# tightened without touching this one.
 QUEUE_MAX_AGE_SECONDS: float = 86400.0  # 24h
+# How long a queue-handoff note may still cause the mixed-sender hold
+# (transport.mixed_sender_note_outstanding) to fire, independent of
+# QUEUE_MAX_AGE_SECONDS above. A genuine pick-up — either the normal
+# UserPromptSubmit match, or the Stop-triggered sweep in
+# policy_snapshot.expire_notes_after_turn_end — resolves within low
+# single-digit seconds of the turn that wrote the note ending. A note
+# the hold can still see after 30 minutes is therefore essentially
+# certain to be an orphan (the live incident this fixes: 15 notes
+# roughly 11-12h old, still "outstanding" and blocking the sole human's
+# own later messages), not a legitimately in-flight one — 30 minutes is
+# comfortably larger than any observed real pick-up latency while
+# remaining far short of the 24h that let that incident block a whole
+# day's messages.
+MIXED_SENDER_HOLD_WINDOW_SECONDS: float = 1800.0  # 30 min
 # `tool_history` is trimmed to the most recent N entries on each append.
 TOOL_HISTORY_CAP: int = 200
 # `active_subagents` is held to this many entries at insertion; the oldest

@@ -82,6 +82,34 @@ def test_status_shows_agents_and_the_combined_queue(mk_bot, run_async):
     text = "\n".join(replies)
     assert "Agents 2" in text
     assert "Queue  3" in text, f"expected combined 2 notes + 1 held; got:\n{text}"
+    assert "1 queued" in text and "2 notes" in text, (
+        "intent.md requirement 4: the combined total must be broken "
+        f"down into queued vs. outstanding notes so a pile of stale "
+        f"notes can never read as real pending messages; got:\n{text}")
+
+
+def test_status_queue_breakdown_distinguishes_all_notes_from_all_queued(
+    mk_bot, run_async,
+):
+    """The exact failure mode from the live incident: a combined total
+    that is ENTIRELY stale notes (0 real queued messages) must still
+    say so explicitly, not just show a bare "15 pending" that reads as
+    15 real messages."""
+    bot = mk_bot()
+    _sess(bot, notes=3, held=0)
+    replies = []
+    update = MagicMock()
+    update.message = MagicMock()
+    update.message.reply_text = AsyncMock(
+        side_effect=lambda *a, **k: replies.append(a[0]))
+    update.effective_chat = MagicMock(id=-1001)
+    update.effective_user = MagicMock(id=1)
+    run_async(bot._handle_status(update, MagicMock()))
+
+    text = "\n".join(replies)
+    assert "0 queued" in text and "3 notes" in text, (
+        f"an all-notes queue must say '0 queued', not hide the split; "
+        f"got:\n{text}")
 
 
 # ── what must not move ─────────────────────────────────────────────────
@@ -105,6 +133,17 @@ def test_agent_type_breakdown_appears_when_types_are_few(mk_bot):
     row = text.split("Agents", 1)[1].split("\n", 1)[0]
 
     assert "explore" in row and "plan" in row
+
+
+def test_the_dashboard_breaks_down_queued_vs_outstanding_notes(mk_bot):
+    bot = mk_bot()
+    _sess(bot, notes=2, held=1)
+
+    text = _dashboard(bot)
+
+    assert "1 queued" in text and "2 notes" in text, (
+        f"dashboard queue row does not distinguish queued from "
+        f"outstanding notes; got:\n{text}")
 
 
 def test_the_dashboard_number_is_the_seams_number(mk_bot):
