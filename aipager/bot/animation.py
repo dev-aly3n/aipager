@@ -85,6 +85,15 @@ _QUOTE_MARK = "> "
 _SUBAGENT_MARK = "\U0001f916 "
 # Header verb for the one last render after the turn ends.
 FINAL_VERB = "Done"
+# Delay before the animate task's first tick: short so a fresh card gets
+# its first real render quickly, before the regular stream cadence.
+FIRST_TICK_DELAY = 1.5
+# Ceiling on the session monitor's forced stale-card refresh. The refresh
+# runs on the monitor's own loop, under the per-session edit lock; the
+# HTTP call beneath is bounded (15s httpx timeout, one 429 retry) so this
+# only matters if something upstream wedges — and then the monitor must
+# get its 2s cadence back rather than hang with the card.
+CARD_REFRESH_TIMEOUT = 20.0
 
 
 # ── Module-level pure helpers ────────────────────────────────────────────────
@@ -856,6 +865,7 @@ class AnimationMixin:
         random.shuffle(verbs)
         idx = 0
         first_tick = True
+        tick_failures = 0
 
         def _alive() -> bool:
             return bool(sess.busy_msg_id) and (
@@ -864,54 +874,169 @@ class AnimationMixin:
 
         try:
             while _alive():
-                # First tick at 1.5 s for a quick initial render, then stream cadence.
-                await asyncio.sleep(1.5 if first_tick else STREAM_EDIT_INTERVAL)
+                # First tick early for a quick initial render, then stream cadence.
+                await asyncio.sleep(
+                    FIRST_TICK_DELAY if first_tick else STREAM_EDIT_INTERVAL,
+                )
                 first_tick = False
                 if not _alive():
                     break
                 waiting = sess.status != Status.BUSY
-                if not waiting:
-                    # A batch whose message said nothing settles here, so the
-                    # card stops holding it and the next prose lands below it.
-                    _expire_tool_batch(sess)
-                    # Read transcript on every tick regardless of debounce. New
-                    # prose is a real change, so it earns the fast cadence.
-                    if _read_stream_text(sess):
-                        sess.stream_dirty = True
-                # Choose the required minimum gap.
-                gap = STREAM_EDIT_INTERVAL if sess.stream_dirty else BUSY_EDIT_INTERVAL
-                now = time.monotonic()
-                if now - sess.last_tool_edit_at < gap:
-                    # Debounced — still send typing indicator (skipped while
-                    # waiting: nothing is being generated to signal).
-                    if not waiting:
-                        try:
-                            await self._app.bot.send_chat_action(
-                                int(resolve_chat_id(sess)), "typing",
-                            )
-                        except Exception:
-                            pass
+                # One tick that raises must not end the task: the card would
+                # sit frozen with its elapsed counter stopped, indistinguishable
+                # from a wedged session. Logged with the traceback once per
+                # task, then at debug so a persistently failing tick cannot
+                # flood the log at stream cadence. CancelledError is a
+                # BaseException and passes straight through to the outer
+                # handler, so stopping the animation is unaffected.
+                try:
+                    result = await self._animate_tick(
+                        sess, verbs[idx % len(verbs)], waiting,
+                    )
+                except Exception:
+                    tick_failures += 1
+                    if tick_failures == 1:
+                        log.warning(
+                            "[%s] busy-card tick raised — animation continues",
+                            sess.label, exc_info=True,
+                        )
+                    else:
+                        log.debug(
+                            "[%s] busy-card tick raised again (%d)",
+                            sess.label, tick_failures, exc_info=True,
+                        )
                     continue
-                verb = verbs[idx % len(verbs)]
-                idx += 1
-                result = await self._edit_busy_rich(sess, verb, waiting=waiting)
                 if result is None:
                     break  # permanent failure
-                if not waiting:
-                    # Send typing AFTER edit (edit cancels the typing indicator).
-                    try:
-                        await self._app.bot.send_chat_action(
-                            int(resolve_chat_id(sess)), "typing",
-                        )
-                    except Exception:
-                        pass
+                if result:
+                    idx += 1
         except asyncio.CancelledError:
             pass
+
+    async def _animate_tick(
+        self, sess: TrackedSession, verb: str, waiting: bool,
+    ) -> bool | None:
+        """One tick of :meth:`_animate_busy`, the part that can raise.
+
+        Returns ``None`` on a permanent edit failure (the loop must stop),
+        ``True`` when an edit was attempted (the loop rotates the verb),
+        ``False`` when the tick was debounced.
+        """
+        if not waiting:
+            # A batch whose message said nothing settles here, so the
+            # card stops holding it and the next prose lands below it.
+            _expire_tool_batch(sess)
+            # Read transcript on every tick regardless of debounce. New
+            # prose is a real change, so it earns the fast cadence.
+            if _read_stream_text(sess):
+                sess.stream_dirty = True
+        # Choose the required minimum gap.
+        gap = STREAM_EDIT_INTERVAL if sess.stream_dirty else BUSY_EDIT_INTERVAL
+        now = time.monotonic()
+        if now - sess.last_tool_edit_at < gap:
+            # Debounced — still send typing indicator (skipped while
+            # waiting: nothing is being generated to signal).
+            if not waiting:
+                try:
+                    await self._app.bot.send_chat_action(
+                        int(resolve_chat_id(sess)), "typing",
+                    )
+                except Exception:
+                    pass
+            return False
+        result = await self._edit_busy_rich(sess, verb, waiting=waiting)
+        if result is None:
+            return None
+        if not waiting:
+            # Send typing AFTER edit (edit cancels the typing indicator).
+            try:
+                await self._app.bot.send_chat_action(
+                    int(resolve_chat_id(sess)), "typing",
+                )
+            except Exception:
+                pass
+        return True
 
     def _start_animation(self, sess: TrackedSession) -> None:
         """Start the spinner animation task, cancelling any existing one."""
         self._stop_animation(sess)
         sess.animate_task = asyncio.create_task(self._animate_busy(sess))
+
+    def _resume_animation_if_dead(
+        self, sess: TrackedSession, *, reason: str,
+    ) -> bool:
+        """Restart the busy-card animation when the card is live but no task
+        is ticking it. Returns True when a task was started.
+
+        The primary caller is the ``tool_use`` path in notify.py: a
+        permission answered in the terminal (rather than by a Telegram
+        button) is invisible to aipager until the next PreToolUse moves
+        the session INTERACTIVE → BUSY, and that transition used to leave
+        the animation the prompt had stopped dead for the rest of the turn
+        — the card repainted only on hook events, its elapsed counter
+        frozen in between. The session monitor's watchdog calls this too,
+        as the backstop for every other way the task can vanish.
+
+        Same gate as the watchdog (``busy_card_should_animate`` plus the
+        ``animate_lock`` check), so neither can restart a task that
+        ``_send_busy_and_animate`` is stopping on purpose mid-send, or
+        paint a busy frame over a permission prompt or a compaction card.
+        """
+        if not sess.busy_card_should_animate():
+            return False
+        if sess.animate_lock.locked() or sess.animation_running():
+            return False
+        log.info("[%s] busy-card animation not running — resuming (%s)",
+                 sess.label, reason)
+        self._start_animation(sess)
+        return True
+
+    async def _watchdog_busy_card(
+        self, sess: TrackedSession, action: str, since: float,
+    ) -> None:
+        """Carry out one session-monitor watchdog decision
+        (:func:`aipager.session_monitor.busy_card_watchdog_action`).
+
+        ``"restart"`` re-arms the animation through the ordinary start
+        path. ``"refresh"`` forces one :meth:`_edit_busy_rich` — the same
+        lock, dedupe and rate stamps as every other edit, so Telegram's
+        edit budget is respected and an unchanged card costs no POST — and
+        reports at INFO only when an edit actually landed. A refresh that
+        cannot even get through in ``CARD_REFRESH_TIMEOUT`` means the
+        task holding the edit lock is wedged: it is replaced.
+        """
+        if action == "restart":
+            self._resume_animation_if_dead(sess, reason="no animate task while BUSY")
+            return
+        if action != "refresh":
+            log.debug("[%s] unknown busy_card_watchdog action %r", sess.label, action)
+            return
+        if not sess.busy_card_should_animate() or sess.animate_lock.locked():
+            return
+        before = sess.last_tool_edit_at
+        waiting = sess.status != Status.BUSY
+        try:
+            result = await asyncio.wait_for(
+                self._edit_busy_rich(sess, "Working", waiting=waiting),
+                timeout=CARD_REFRESH_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            log.warning(
+                "[%s] forced stale-card refresh did not complete in %.0fs — "
+                "restarting the busy-card animation", sess.label,
+                CARD_REFRESH_TIMEOUT,
+            )
+            self._start_animation(sess)
+            return
+        if result is None:
+            self._stop_animation(sess)
+            return
+        if result and sess.last_tool_edit_at != before:
+            log.info("[%s] forced stale-card refresh (%.0fs since last edit)",
+                     sess.label, since)
+        else:
+            log.debug("[%s] forced stale-card refresh made no edit (result=%s, "
+                      "%.0fs since last edit)", sess.label, result, since)
 
     async def _animate_compact(self, sess: TrackedSession) -> None:
         """Dot animation while compacting: . → .. → ... → loop.

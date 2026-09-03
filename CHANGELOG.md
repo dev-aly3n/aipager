@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- The busy card could sit frozen — elapsed counter stopped, tool rows
+  still landing — while the session was BUSY. A permission answered in
+  the terminal rather than by a Telegram button left the card's animation
+  stopped for the rest of the turn (the prompt stops it; only the button
+  path restarted it), and a tick that raised ended the animation
+  silently. The `tool_use` path now resumes a stopped animation, a
+  raising tick is logged and the loop carries on, and the session monitor
+  watches every live busy card: no animate task → restart it (WARNING
+  `no animate task while BUSY`); alive but no successful edit in 20s →
+  one forced refresh through the ordinary edit path (INFO
+  `forced stale-card refresh`), at most once per 20s per session. Cards
+  showing a permission prompt or a compaction are never touched.
 - A photo/document download that hits a transient network error
   (`TimedOut`, a dropped connection) is retried up to three times with a
   short backoff, and the download itself gets a 60s read timeout instead

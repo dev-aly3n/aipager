@@ -72,6 +72,59 @@ IDLE_RECOVERY_GRACE: float = float(
 # so this cannot re-admit a transcript that is genuinely a turn behind.
 MTIME_GRANULARITY_SLACK: float = 1.0
 
+# Busy-card staleness watchdog. A live busy card is owned by one animate
+# task that repaints it every STREAM_EDIT_INTERVAL..BUSY_EDIT_INTERVAL
+# seconds while the session works. If that task is gone (stopped for a
+# permission prompt and never resumed, or ended by an exception) or is
+# alive but has not landed an edit in this long, the card sits frozen —
+# an elapsed counter that stops moving reads as a wedged session. The
+# healthy cadence is at most a few seconds, so this is a generous
+# multiple of it; it doubles as the per-session throttle on the
+# watchdog's own actions.
+CARD_STALE_SECONDS: float = 20.0
+
+
+def busy_card_watchdog_action(
+    sess: TrackedSession, now: float,
+) -> tuple[str, float] | None:
+    """What the busy-card watchdog should do for *sess* at *now*, if anything.
+
+    Pure — no I/O, no ``time.monotonic()`` inside, so it is directly
+    callable with a fabricated ``now``. Returns ``("restart", 0.0)`` when
+    the card should be ticking but no animate task is alive, ``("refresh",
+    seconds_since_last_edit)`` when a task is alive but the card has gone
+    ``CARD_STALE_SECONDS`` without a successful edit, and ``None`` otherwise.
+
+    Never acts on a session that has no card, is INTERACTIVE (the card is
+    the permission prompt), has a compacting card on top, is mid
+    ``_send_busy_and_animate`` (``animate_lock`` held — the old task is
+    stopped on purpose there, moments before the card is replaced), or
+    was acted on less than ``CARD_STALE_SECONDS`` ago. That last rule is
+    what keeps a permanently un-editable card (bot blocked) from being
+    retried on every 2s scan.
+
+    Staleness is measured from ``last_tool_edit_at`` — stamped only by a
+    successful rich-card edit — falling back to ``busy_started_at`` for a
+    card that has never been edited (``_send_busy_and_animate`` zeroes the
+    stamp on send; the first tick lands ~1.5s later). With neither stamp
+    there is no baseline and nothing is forced.
+    """
+    if not sess.busy_card_should_animate():
+        return None
+    if sess.animate_lock.locked():
+        return None
+    if now - sess.card_watchdog_at < CARD_STALE_SECONDS:
+        return None
+    if not sess.animation_running():
+        return "restart", 0.0
+    baseline = sess.last_tool_edit_at or sess.busy_started_at
+    if not baseline:
+        return None
+    since = now - baseline
+    if since < CARD_STALE_SECONDS:
+        return None
+    return "refresh", since
+
 
 def _quiet_since(sess: TrackedSession) -> float | None:
     """When this turn last showed a sign of life — or ``None`` if that is
@@ -221,12 +274,19 @@ class SessionMonitor:
         # status == Status.BUSY (see expired_compacting_sessions'
         # docstring for why that gate is what let the reported bug hide
         # from every existing watchdog).
+        #
+        # Sessions swept here are skipped by the busy-card watchdog below
+        # for the rest of this scan: resolving the compaction card resumes
+        # the busy animation itself (notify.py's compact_timeout handler),
+        # and the fresh task deserves its first tick before it is judged.
+        compact_swept: set[str] = set()
         for expired_name in expired_compacting_sessions(
             self.registry.all_sessions(), now,
         ):
             expired_sess = self.registry.get(expired_name)
             if expired_sess is None:
                 continue
+            compact_swept.add(expired_name)
             started = expired_sess.compacting_started_at()
             elapsed = (now - started) if started is not None else 0.0
             try:
@@ -250,6 +310,35 @@ class SessionMonitor:
                     self.registry.transition(name, Status.BUSY)
                     self.registry.mark_dirty()
                     # Fall through so stale-busy logic still applies.
+
+            # Busy-card staleness watchdog. Placed right after the
+            # INTERACTIVE demotion above on purpose: that transition
+            # never restarts the animation the prompt stopped, so the
+            # very same scan is what brings the card back to life. The
+            # bot performs the action (restart via _start_animation, or
+            # one forced _edit_busy_rich — lock, dedupe and rate stamps
+            # included) so Telegram's edit discipline is unchanged.
+            card_action = (
+                None if name in compact_swept
+                else busy_card_watchdog_action(sess, now)
+            )
+            if card_action is not None:
+                action_kind, since = card_action
+                sess.card_watchdog_at = now
+                if action_kind == "restart":
+                    log.warning(
+                        "[%s] no animate task while BUSY — restarting the "
+                        "busy-card animation", sess.label,
+                    )
+                try:
+                    await self.notify_fn(sess, "busy_card_watchdog", {
+                        "action": action_kind, "since": since,
+                    })
+                except Exception:
+                    log.warning(
+                        "Failed to notify busy_card_watchdog for %s", name,
+                        exc_info=True,
+                    )
 
             # Subagent TTL (item 2.4)
             if sess.active_subagents:
