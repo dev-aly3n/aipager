@@ -301,6 +301,16 @@ def test_forty_char_label_permission_prompt_allow_deny_allow_always_stop_all_fir
                                 "tool_info": {"name": "Bash", "always_available": True}}
 
     kb = bot._build_permission_keyboard(sess)
+
+    # Load-bearing: without this the loop below cannot tell a missing
+
+    # Allow-always button from a passing one (review rev-iter1-001).
+
+    assert {b.callback_data.rsplit(':', 1)[1]
+
+            for row in kb.inline_keyboard for b in row} >= {
+
+        'allow', 'deny', 'allow_always', 'stop'}
     for row in kb.inline_keyboard:
         for btn in row:
             assert len(btn.callback_data.encode()) <= 64, btn.callback_data
