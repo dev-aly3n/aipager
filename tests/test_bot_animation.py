@@ -361,20 +361,38 @@ def test_send_busy_and_animate_send_failure_clears_sentinel(mk_bot, run_async):
     assert sess.busy_msg_id is None
 
 
-def test_send_busy_and_animate_reclaims_when_job_background_open(mk_bot, run_async):
-    """design.md "model Claude Code background-agent jobs", Decision 9,
-    driven through the REAL production path (review rev-iter2: the
-    isolated-unit version bypassed transition() and hid a dead gate): a
-    genuinely new prompt arriving over a live waiting card enters BUSY via
-    registry.transition() — which sets job_reclaim_pending because the
-    prior state was IDLE — and _send_busy_and_animate then reclaims the
-    card instead of letting the still-alive animate task swallow it."""
+_INTERIM = "interim answer text"
+# A single commentary block far over the 32 768-byte card ceiling: the
+# final render clips it and reports last_card_truncated=True.
+_INTERIM_HUGE = (_INTERIM + " ") * 2500
+
+
+def _reclaim_setup(mk_bot, *, commentary=None):
+    """The exact state the reclaim branch sees, built through the REAL
+    production path (review rev-iter2: an isolated-unit version bypassed
+    transition() and hid a dead gate): a session parked on a live waiting
+    card (busy_msg_id=99, one background agent open, the old job's tool
+    rows and commentary still in memory, the animate task still alive),
+    then a genuinely new prompt entering BUSY via registry.transition() —
+    which sets job_reclaim_pending because the prior state was IDLE.
+
+    Returns ``(bot, sess, seen, original_task, loop)``. ``seen`` is the
+    ordered log of outbound calls — ("edit", msg_id, markdown, kwargs,
+    animate_task-at-edit-time, last_card_truncated-at-edit-time),
+    ("doc", kwargs) and ("send", text) — recorded by mocks the caller may
+    still replace. Callers must cancel ``original_task`` and close
+    ``loop``."""
     bot = mk_bot()
     sess = bot.registry.get_or_create("claude-jim")
     sess.label = "jim"
     sess.status = Status.IDLE  # waiting card up between turns
     sess.busy_msg_id = 99
     sess.job_interim_seen = True
+    sess.busy_started_at = time.monotonic() - 5
+    sess.tool_history = [("Read: /a", True), ("Grep: x in y", True)]
+    sess.stream_commentary = list(
+        commentary if commentary is not None else [(2, _INTERIM)],
+    )
     sess.active_subagents["a1"] = {
         "type": "Explore", "started_at": time.monotonic(),
     }
@@ -382,22 +400,230 @@ def test_send_busy_and_animate_reclaims_when_job_background_open(mk_bot, run_asy
     async def _long(): await asyncio.sleep(100)
     original_task = loop.create_task(_long())
     sess.animate_task = original_task
-    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=42))
+
+    seen: list[tuple] = []
+
+    async def _send(chat_id, text, **kw):
+        seen.append(("send", text))
+        return MagicMock(message_id=42)
+
+    async def _doc(chat_id, **kw):
+        seen.append(("doc", kw))
+        return MagicMock(message_id=43)
+
+    bot._app.bot.send_message = AsyncMock(side_effect=_send)
+    bot._app.bot.send_document = AsyncMock(side_effect=_doc)
     bot._app.bot.send_chat_action = AsyncMock()
     bot._start_animation = MagicMock()
 
     # the real handler order: transition first, card second
     assert bot.registry.transition("claude-jim", Status.BUSY) is not None
     assert sess.job_reclaim_pending is True
-    run_async(bot._send_busy_and_animate(sess))
+    return bot, sess, seen, original_task, loop
 
-    # Reclaimed — a fresh busy card WAS sent, not swallowed.
-    assert sess.busy_msg_id == 42
-    bot._app.bot.send_message.assert_called_once()
-    assert sess.job_reclaim_pending is False
+
+def _recording_edit(sess, seen, *, result=None, raises=None):
+    """A stand-in for aipager.bot.animation.edit_message_text_rich that
+    records what _edit_busy_rich sent and the session state at that
+    moment (the old animate task must already be stopped, and the
+    renderer's truncation verdict is what the attachment rule reads)."""
+    async def _edit(chat_id, msg_id, markdown, **kw):
+        seen.append((
+            "edit", msg_id, markdown, kw,
+            sess.animate_task, sess.last_card_truncated,
+        ))
+        if raises is not None:
+            raise raises
+        return {} if result is None else result
+    return _edit
+
+
+def _teardown(original_task, loop):
     if not original_task.done():
         original_task.cancel()
     loop.close()
+
+
+def test_send_busy_and_animate_reclaims_when_job_background_open(
+    mk_bot, run_async, monkeypatch,
+):
+    """design.md "model Claude Code background-agent jobs", Decision 9:
+    a genuinely new prompt arriving over a live waiting card is reclaimed
+    instead of being swallowed by the still-alive animate task — and the
+    superseded card is SETTLED in place first, not left frozen reading
+    "still working" under a live Stop button (the 2026-09-03 card 3502
+    report). The old message gets one final render — ✅ status line, no
+    keyboard, the interim prose still inside it — with the old animate
+    task already stopped, THEN the fresh card goes out. Nothing else is
+    sent for the superseded job."""
+    bot, sess, seen, original_task, loop = _reclaim_setup(mk_bot)
+    monkeypatch.setattr(
+        "aipager.bot.animation.edit_message_text_rich",
+        _recording_edit(sess, seen),
+    )
+
+    run_async(bot._send_busy_and_animate(sess))
+
+    # Settle the old card FIRST, then send the fresh one — nothing else.
+    assert [c[0] for c in seen] == ["edit", "send"]
+    _, msg_id, markdown, kw, task_at_edit, _ = seen[0]
+    assert msg_id == 99
+    assert markdown.splitlines()[-1].startswith("✅")
+    assert "still working" not in markdown
+    assert kw["reply_markup"] is None  # Stop button comes off
+    assert _INTERIM in markdown  # the interim prose stays in the card
+    # The old animate task was stopped BEFORE the final edit, so it cannot
+    # wake mid-POST and re-arm the Stop button over the settled card.
+    assert task_at_edit is None
+    # No composed answer message for the superseded job — the one send is
+    # the NEW turn's busy card.
+    bot._app.bot.send_message.assert_awaited_once()
+    assert _INTERIM not in seen[1][1]
+    bot._app.bot.send_document.assert_not_awaited()  # nothing was hidden
+    # Reclaimed — a fresh busy card WAS sent, not swallowed.
+    assert sess.busy_msg_id == 42
+    assert sess.job_reclaim_pending is False
+    _teardown(original_task, loop)
+
+
+def test_reclaim_final_edit_raising_still_sends_fresh_card(
+    mk_bot, run_async, monkeypatch,
+):
+    """Best-effort: an exception out of the final render must not block
+    the new turn's card."""
+    bot, sess, seen, original_task, loop = _reclaim_setup(mk_bot)
+    monkeypatch.setattr(
+        "aipager.bot.animation.edit_message_text_rich",
+        _recording_edit(sess, seen, raises=RuntimeError("edit exploded")),
+    )
+
+    run_async(bot._send_busy_and_animate(sess))
+
+    assert [c[0] for c in seen] == ["edit", "send"]
+    assert sess.busy_msg_id == 42
+    bot._app.bot.send_document.assert_not_awaited()
+    _teardown(original_task, loop)
+
+
+def test_reclaim_final_edit_transient_failure_still_sends_fresh_card(
+    mk_bot, run_async, monkeypatch,
+):
+    """A transient edit failure (edit_message_text_rich → None, which
+    _edit_busy_rich reports as False) is logged and skipped the same
+    way."""
+    bot, sess, seen, original_task, loop = _reclaim_setup(mk_bot)
+
+    async def _edit_none(chat_id, msg_id, markdown, **kw):
+        seen.append(("edit", msg_id, markdown, kw, None, None))
+        return None
+    monkeypatch.setattr(
+        "aipager.bot.animation.edit_message_text_rich", _edit_none,
+    )
+
+    run_async(bot._send_busy_and_animate(sess))
+
+    assert [c[0] for c in seen] == ["edit", "send"]
+    assert sess.busy_msg_id == 42
+    _teardown(original_task, loop)
+
+
+def test_reclaim_truncated_card_attaches_full_log_under_old_card(
+    mk_bot, run_async, monkeypatch,
+):
+    """When the final render had to hide anything, the complete
+    play-by-play goes out as {label}_full_log.txt threaded under the OLD
+    card (the same last_card_truncated rule as the idle close) — before
+    the fresh card, and as the only extra message."""
+    bot, sess, seen, original_task, loop = _reclaim_setup(
+        mk_bot, commentary=[(2, _INTERIM_HUGE)],
+    )
+    monkeypatch.setattr(
+        "aipager.bot.animation.edit_message_text_rich",
+        _recording_edit(sess, seen),
+    )
+
+    run_async(bot._send_busy_and_animate(sess))
+
+    assert [c[0] for c in seen] == ["edit", "doc", "send"]
+    assert seen[0][5] is True  # the renderer reported truncation
+    doc_kw = seen[1][1]
+    assert doc_kw["filename"] == "jim_full_log.txt"
+    assert doc_kw["reply_to_message_id"] == 99
+    body = doc_kw["document"].decode("utf-8")
+    assert "jim — complete play-by-play" in body
+    assert "[v] Read: /a" in body
+    assert _INTERIM_HUGE.strip() in body  # the full prose, unclipped
+    assert "FINAL ANSWER" not in body  # no composed answer exists
+    bot._app.bot.send_message.assert_awaited_once()
+    assert sess.busy_msg_id == 42
+    _teardown(original_task, loop)
+
+
+def test_reclaim_full_log_skipped_when_old_card_is_gone(
+    mk_bot, run_async, monkeypatch,
+):
+    """A permanent edit failure (message deleted) leaves nothing to
+    thread the attachment under — no document, fresh card still sent."""
+    from aipager.bot.rich_message import RichMessageGone
+
+    bot, sess, seen, original_task, loop = _reclaim_setup(
+        mk_bot, commentary=[(2, _INTERIM_HUGE)],
+    )
+    monkeypatch.setattr(
+        "aipager.bot.animation.edit_message_text_rich",
+        _recording_edit(sess, seen, raises=RichMessageGone("deleted")),
+    )
+
+    run_async(bot._send_busy_and_animate(sess))
+
+    assert [c[0] for c in seen] == ["edit", "send"]
+    bot._app.bot.send_document.assert_not_awaited()
+    assert sess.busy_msg_id == 42
+    _teardown(original_task, loop)
+
+
+def test_reclaim_full_log_over_doc_limit_not_attached(
+    mk_bot, run_async, monkeypatch,
+):
+    """Mirror of the idle close: a play-by-play over Telegram's document
+    ceiling is dropped with a warning, never sent."""
+    bot, sess, seen, original_task, loop = _reclaim_setup(
+        mk_bot, commentary=[(2, _INTERIM_HUGE)],
+    )
+    monkeypatch.setattr(
+        "aipager.bot.animation.edit_message_text_rich",
+        _recording_edit(sess, seen),
+    )
+    monkeypatch.setattr("aipager.bot.animation.TELEGRAM_MAX_DOC_BYTES", 100)
+
+    run_async(bot._send_busy_and_animate(sess))
+
+    assert [c[0] for c in seen] == ["edit", "send"]
+    bot._app.bot.send_document.assert_not_awaited()
+    assert sess.busy_msg_id == 42
+    _teardown(original_task, loop)
+
+
+def test_reclaim_full_log_send_failure_still_sends_fresh_card(
+    mk_bot, run_async, monkeypatch,
+):
+    """Best-effort: a failed attachment send must not block the new
+    turn's card."""
+    bot, sess, seen, original_task, loop = _reclaim_setup(
+        mk_bot, commentary=[(2, _INTERIM_HUGE)],
+    )
+    monkeypatch.setattr(
+        "aipager.bot.animation.edit_message_text_rich",
+        _recording_edit(sess, seen),
+    )
+    bot._app.bot.send_document = AsyncMock(side_effect=RuntimeError("io"))
+
+    run_async(bot._send_busy_and_animate(sess))
+
+    assert [c[0] for c in seen] == ["edit", "send"]
+    bot._app.bot.send_document.assert_awaited_once()
+    assert sess.busy_msg_id == 42
+    _teardown(original_task, loop)
 
 
 def test_send_busy_and_animate_still_skips_when_no_job_open(mk_bot, run_async):
