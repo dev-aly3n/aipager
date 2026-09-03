@@ -156,6 +156,12 @@ def test_tool_use_with_unknown_agent_id_falls_back_to_parent_row(mk_bot, run_asy
 def test_tool_use_with_empty_agent_id_falls_back_to_parent_row(mk_bot, run_async):
     bot = mk_bot()
     sess = _sess(busy_msg_id=None)
+    # A pathological entry keyed by "" — if the guard checked membership
+    # alone (dropped the `agent_id and` truthiness test), an empty
+    # agent_id would wrongly match it instead of falling back.
+    sess.active_subagents[""] = {
+        "type": "explore", "started_at": 0.0, "history_idx": 0,
+    }
     run_async(bot.notify(sess, "tool_use", {
         "tool_summary": "Bash: ls",
         "tool_name": "Bash",
