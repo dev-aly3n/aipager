@@ -44,6 +44,20 @@ TOOL_HISTORY_CAP: int = 200
 # 100 is >5x the worst fan-out ever recorded here (4 agents -> 18), so a
 # legitimate run never hits it; a runaway one stops growing.
 ACTIVE_SUBAGENTS_CAP: int = 100
+# Each `active_subagents` entry's own `tools` list (its attributed tool
+# summaries — "agent activity rows on the busy card") is held to this many
+# entries. 100 is comfortably above the single largest per-agent tool
+# count this feature's own worked example names (57), while bounding
+# worst-case memory for concurrently active agents to
+# ACTIVE_SUBAGENTS_CAP * AGENT_TOOLS_CAP = 10,000 short strings — the same
+# order of magnitude TOOL_HISTORY_CAP=200 already accepts as reasonable
+# for one session.
+AGENT_TOOLS_CAP: int = 100
+# `finished_subagents` — agents that have SubagentStop'd this turn — is
+# held to this many entries, same value and rationale as
+# ACTIVE_SUBAGENTS_CAP: the worst recorded fan-out is 4 agents -> 18 total
+# calls, so 100 only ever engages on a runaway loop.
+FINISHED_SUBAGENTS_CAP: int = 100
 # How long a job stays open after its last background agent stops, waiting
 # for the <task-notification> continuation turn Claude enqueues on agent
 # completion (observed arriving within ~1s live; 60s is a generous bound).
@@ -222,9 +236,23 @@ class TrackedSession:
     # Inline permission context (tool_info, question, etc.) — set when permission
     # is displayed inside the busy message instead of as a separate message
     pending_permission: dict | None = None
-    # Active subagents — keyed by agent_id
-    # Format: {agent_id: {"type": str, "started_at": float, "history_idx": int}}
+    # Active subagents — keyed by agent_id ("agent activity rows on the
+    # busy card"). Format: {agent_id: {"type": str, "started_at": float,
+    # "history_idx": int | None, "activity": str, "tool_count": int,
+    # "last_tool_at": float, "tools": list[str]}} — the last four keys are
+    # updated by `record_agent_tool` as the agent's own tool calls are
+    # attributed to it instead of the parent's `tool_history` ("activity"
+    # is the latest attributed summary, "" before the first; "tools" is
+    # capped at AGENT_TOOLS_CAP).
     active_subagents: dict = field(default_factory=dict)
+    # Agents that SubagentStop'd this turn, appended in stop order by
+    # `archive_finished_subagent`, capped at FINISHED_SUBAGENTS_CAP. Entry
+    # shape: {"type": str, "started_at": float, "elapsed": float,
+    # "tool_count": int, "tools": list[str]} — a snapshot, not a live
+    # reference into `active_subagents`. Reset every turn alongside
+    # `tool_history`/`active_subagents`; never persisted (same reason as
+    # those two — transient, per-turn state).
+    finished_subagents: list = field(default_factory=list)
     # Stale session detection
     last_hook_at: float = 0.0        # monotonic timestamp of last hook event received
     stale_warned: bool = False       # prevents re-alerting every scan cycle
@@ -605,6 +633,59 @@ class TrackedSession:
             )
             evicted.append((oldest, self.active_subagents.pop(oldest)))
         return evicted
+
+    def record_agent_tool(self, agent_id: str, summary: str) -> None:
+        """Attribute *summary* to the LIVE ``active_subagents`` entry keyed
+        by *agent_id* — updates its ``activity``, ``tool_count``,
+        ``last_tool_at``, and appends to its own capped ``tools`` list
+        instead of the parent's ``tool_history`` ("agent activity rows on
+        the busy card": fold an agent's tool calls under its own row
+        rather than flooding the parent's timeline).
+
+        A no-op when *agent_id* isn't a live entry (already stopped,
+        evicted, or unknown) — the CALLER is responsible for falling back
+        to :meth:`record_tool` in that case; this method never creates a
+        parent-row entry itself. The cap is enforced HERE, not at the call
+        site, for the same reason :meth:`add_subagent` enforces
+        ``ACTIVE_SUBAGENTS_CAP`` itself: a second caller added later
+        cannot forget it.
+        """
+        info = self.active_subagents.get(agent_id)
+        if info is None:
+            return
+        info["activity"] = summary
+        info["tool_count"] = info.get("tool_count", 0) + 1
+        info["last_tool_at"] = time.monotonic()
+        tools = info.get("tools")
+        if tools is None:
+            tools = []
+            info["tools"] = tools
+        tools.append(summary)
+        if len(tools) > AGENT_TOOLS_CAP:
+            del tools[: len(tools) - AGENT_TOOLS_CAP]
+
+    def archive_finished_subagent(
+        self, agent_type: str, info: dict, elapsed: float,
+    ) -> None:
+        """Snapshot a just-stopped agent's bookkeeping into
+        ``finished_subagents``, capped at ``FINISHED_SUBAGENTS_CAP``
+        (oldest dropped from the front — same idiom as
+        :meth:`record_tool`'s ``TOOL_HISTORY_CAP`` trim). *info* is the
+        popped ``active_subagents`` entry; *agent_type* and *elapsed* come
+        from the caller (SubagentStop's own payload), not re-derived from
+        *info*, since a hand-built *info* dict in a test may not carry a
+        ``type`` matching the event's.
+        """
+        self.finished_subagents.append({
+            "type": agent_type,
+            "started_at": info.get("started_at", 0.0),
+            "elapsed": elapsed,
+            "tool_count": info.get("tool_count", 0),
+            "tools": list(info.get("tools", [])),
+        })
+        if len(self.finished_subagents) > FINISHED_SUBAGENTS_CAP:
+            drop = len(self.finished_subagents) - FINISHED_SUBAGENTS_CAP
+            del self.finished_subagents[:drop]
 
     def job_background_open(self) -> bool:
         """True while a background agent launched by this job is still
