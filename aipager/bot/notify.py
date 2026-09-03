@@ -725,10 +725,22 @@ class NotifyMixin:
             tool_summary = context.get("tool_summary", "")
             tool_name = context.get("tool_name", "")
             tool_input_full = context.get("tool_input_full")
+            agent_id = context.get("agent_id", "")
             # Update tool history — mark previous as done, append new
             if tool_summary:
-                # Append new tool as in-progress (PostToolUse marks it done)
-                sess.record_tool(tool_summary, False)
+                # A tool call made INSIDE a subagent (agent_id matches a
+                # LIVE active_subagents entry) is attributed to that
+                # agent's own row instead of the parent's tool_history
+                # ("agent activity rows on the busy card") — folds an
+                # agent's tool calls under its row rather than flooding
+                # the parent's timeline. Empty, unknown, or a
+                # stopped/evicted agent_id falls through to exactly
+                # today's behaviour — a tool event is never dropped.
+                if agent_id and agent_id in sess.active_subagents:
+                    sess.record_agent_tool(agent_id, tool_summary)
+                else:
+                    # Append new tool as in-progress (PostToolUse marks it done)
+                    sess.record_tool(tool_summary, False)
                 sess.last_tool_summary = tool_summary
             # Item 4.4: a separate diff-preview message for Write/Edit —
             # OFF by default, on via the /settings "Diff previews" toggle
@@ -809,8 +821,16 @@ class NotifyMixin:
         if event in ("tool_done", "tool_failed"):
             # PostToolUse / PostToolUseFailure — mark tool as done or failed
             tool_summary = context.get("tool_summary", "")
+            agent_id = context.get("agent_id", "")
             mark = "failed" if event == "tool_failed" else True
-            if tool_summary:
+            # An attributed tool (agent_id matches a LIVE active_subagents
+            # entry) never created a parent tool_history row to settle —
+            # the tool_use handler routed it to record_agent_tool instead
+            # ("agent activity rows on the busy card"). Skip the
+            # parent-row search entirely so it can never mark an unrelated
+            # in-flight row done via the "no exact match" fallback below.
+            attributed = bool(agent_id and agent_id in sess.active_subagents)
+            if tool_summary and not attributed:
                 for i, (s, done) in enumerate(sess.tool_history):
                     if s == tool_summary and not done:
                         sess.tool_history[i] = (s, mark)
@@ -855,15 +875,20 @@ class NotifyMixin:
             agent_type = context.get("agent_type", "agent")
             elapsed = context.get("elapsed", 0.0)
             history_idx = context.get("history_idx")
-            # Format elapsed time
+            tool_count = context.get("tool_count", 0)
+            # Format elapsed time — floored to "0s" rather than "" below
+            # 1s (was blank before this feature) so the settled row's
+            # three-segment shape ("type · N tool calls · elapsed") is
+            # always fixed ("agent activity rows on the busy card").
             if elapsed >= 60:
                 elapsed_str = f"{int(elapsed) // 60}m {int(elapsed) % 60}s"
-            elif elapsed >= 1:
-                elapsed_str = f"{int(elapsed)}s"
             else:
-                elapsed_str = ""
-            suffix = f" ({elapsed_str})" if elapsed_str else ""
-            done_summary = f"\U0001f916 {agent_type}{suffix}"
+                elapsed_str = f"{int(elapsed)}s"
+            plural = "" if tool_count == 1 else "s"
+            done_summary = (
+                f"\U0001f916 {agent_type} · {tool_count} tool call{plural}"
+                f" · {elapsed_str}"
+            )
             # Mark the matching tool_history entry as done SYNCHRONOUSLY
             if history_idx is not None and 0 <= history_idx < len(sess.tool_history):
                 sess.tool_history[history_idx] = (done_summary, True)
@@ -1140,6 +1165,32 @@ class NotifyMixin:
             # commentary.
             log_tools = list(sess.tool_history)
             log_commentary = list(sess.stream_commentary)
+            # Snapshot every agent seen this turn — finished (already a
+            # {type, started_at, elapsed, tool_count, tools} snapshot) plus
+            # still-active (defensive: by the time a genuine Finished close
+            # runs, active_subagents should already be empty per
+            # job_background_open()'s own invariant, but this costs
+            # nothing and covers any edge path) — for build_full_log's
+            # AGENTS section ("agent activity rows on the busy card").
+            # Chronological (start order), matching the section's own
+            # "start order" contract.
+            log_agents = sorted(
+                list(sess.finished_subagents)
+                + [
+                    {
+                        "type": info.get("type", "agent"),
+                        "started_at": info.get("started_at", 0.0),
+                        "elapsed": (
+                            time.monotonic()
+                            - info.get("started_at", time.monotonic())
+                        ),
+                        "tool_count": info.get("tool_count", 0),
+                        "tools": list(info.get("tools", [])),
+                    }
+                    for info in sess.active_subagents.values()
+                ],
+                key=lambda a: a.get("started_at", 0.0),
+            )
 
             # Mark all tools as done
             sess.tool_history = [(s, True) for s, _ in sess.tool_history]
@@ -1526,7 +1577,8 @@ class NotifyMixin:
             # beyond what the interim state already showed.
             attach_log = send_file or sess.last_card_truncated
             file_content = (
-                build_full_log(label, log_tools, log_commentary, content)
+                build_full_log(label, log_tools, log_commentary, content,
+                                agents=log_agents)
                 if attach_log else ""
             )
             if attach_log and file_content:

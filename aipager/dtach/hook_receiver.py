@@ -608,6 +608,7 @@ class HookReceiver:
                     "tool_name": tool_name,
                     "tool_summary": summary,
                     "tool_input_full": forward_input,
+                    "agent_id": msg.get("agent_id", ""),
                 })
 
         elif event == "PostToolUse":
@@ -619,6 +620,7 @@ class HookReceiver:
                 await self.notify_fn(sess, "tool_done", {
                     "tool_name": tool_name,
                     "tool_summary": summary,
+                    "agent_id": msg.get("agent_id", ""),
                 })
 
         elif event == "PostToolUseFailure":
@@ -630,6 +632,7 @@ class HookReceiver:
                 await self.notify_fn(sess, "tool_failed", {
                     "tool_name": tool_name,
                     "tool_summary": summary,
+                    "agent_id": msg.get("agent_id", ""),
                 })
 
         elif event == "MessageDisplay":
@@ -640,6 +643,13 @@ class HookReceiver:
             delta = msg.get("delta", "")
             if delta:
                 sess = self.registry.get_or_create(session_name)
+                agent_id = msg.get("agent_id", "")
+                if agent_id and agent_id in sess.active_subagents:
+                    # A subagent's own prose — folded under its row like
+                    # its tool calls are, not forwarded into the parent's
+                    # commentary/card ("agent activity rows on the busy
+                    # card"; mirrors the tool-attribution guard above).
+                    return
                 await self.notify_fn(sess, "assistant_text", {
                     "delta": delta,
                     "message_id": msg.get("message_id", ""),
@@ -665,6 +675,13 @@ class HookReceiver:
                     "type": agent_type,
                     "started_at": time.monotonic(),
                     "history_idx": None,  # set by telegram_bot notify
+                    # Attribution bookkeeping ("agent activity rows on the
+                    # busy card") — updated by record_agent_tool as this
+                    # agent's own tool calls are attributed to it.
+                    "activity": "",
+                    "tool_count": 0,
+                    "last_tool_at": 0.0,
+                    "tools": [],
                 }):
                     log.info(
                         "[%s] active_subagents at cap (%d); evicted oldest "
@@ -687,6 +704,7 @@ class HookReceiver:
                 info = sess.active_subagents.pop(agent_id, None)
                 if info:
                     elapsed = time.monotonic() - info["started_at"]
+                    sess.archive_finished_subagent(agent_type, info, elapsed)
                     if not sess.active_subagents and sess.job_interim_seen:
                         # The last real background agent just stopped after
                         # an interim idle — Claude will enqueue the
@@ -707,6 +725,7 @@ class HookReceiver:
                     "agent_type": agent_type,
                     "elapsed": elapsed,
                     "history_idx": info["history_idx"] if info else None,
+                    "tool_count": info.get("tool_count", 0) if info else 0,
                 })
 
         elif event == "safety_blocked":

@@ -99,6 +99,112 @@ def test_tool_use_appends_to_history(mk_bot, run_async):
     assert sess.last_tool_summary == "Read: /x"
 
 
+# ---- agent attribution ("agent activity rows on the busy card") --------
+
+def test_tool_use_with_matching_agent_id_updates_agent_entry_and_skips_parent_row(
+    mk_bot, run_async,
+):
+    bot = mk_bot()
+    sess = _sess(busy_msg_id=None)
+    sess.active_subagents["agent-1"] = {
+        "type": "explore", "started_at": 0.0, "history_idx": 0,
+        "activity": "", "tool_count": 0, "last_tool_at": 0.0, "tools": [],
+    }
+    run_async(bot.notify(sess, "tool_use", {
+        "tool_summary": "Bash: ls",
+        "tool_name": "Bash",
+        "tool_input_full": None,
+        "agent_id": "agent-1",
+    }))
+    assert sess.tool_history == []
+    assert sess.active_subagents["agent-1"]["activity"] == "Bash: ls"
+
+
+def test_tool_use_attribution_increments_tool_count_activity_and_tools_list(
+    mk_bot, run_async,
+):
+    bot = mk_bot()
+    sess = _sess(busy_msg_id=None)
+    sess.active_subagents["agent-1"] = {
+        "type": "explore", "started_at": 0.0, "history_idx": 0,
+        "activity": "", "tool_count": 0, "last_tool_at": 0.0, "tools": [],
+    }
+    for summary in ("Bash: ls", "Read: /x"):
+        run_async(bot.notify(sess, "tool_use", {
+            "tool_summary": summary, "tool_name": summary.split(":")[0],
+            "tool_input_full": None, "agent_id": "agent-1",
+        }))
+    info = sess.active_subagents["agent-1"]
+    assert info["tool_count"] == 2
+    assert info["activity"] == "Read: /x"
+    assert info["tools"] == ["Bash: ls", "Read: /x"]
+
+
+def test_tool_use_with_unknown_agent_id_falls_back_to_parent_row(mk_bot, run_async):
+    bot = mk_bot()
+    sess = _sess(busy_msg_id=None)
+    # agent-1 already stopped (or never started) — not in active_subagents
+    run_async(bot.notify(sess, "tool_use", {
+        "tool_summary": "Bash: ls",
+        "tool_name": "Bash",
+        "tool_input_full": None,
+        "agent_id": "agent-1",
+    }))
+    assert sess.tool_history == [("Bash: ls", False)]
+
+
+def test_tool_use_with_empty_agent_id_falls_back_to_parent_row(mk_bot, run_async):
+    bot = mk_bot()
+    sess = _sess(busy_msg_id=None)
+    # A pathological entry keyed by "" — if the guard checked membership
+    # alone (dropped the `agent_id and` truthiness test), an empty
+    # agent_id would wrongly match it instead of falling back.
+    sess.active_subagents[""] = {
+        "type": "explore", "started_at": 0.0, "history_idx": 0,
+    }
+    run_async(bot.notify(sess, "tool_use", {
+        "tool_summary": "Bash: ls",
+        "tool_name": "Bash",
+        "tool_input_full": None,
+        "agent_id": "",
+    }))
+    assert sess.tool_history == [("Bash: ls", False)]
+
+
+def test_tool_done_for_attributed_tool_does_not_touch_parent_tool_history(
+    mk_bot, run_async,
+):
+    bot = mk_bot()
+    sess = _sess(busy_msg_id=None)
+    # An unrelated in-flight parent row that the "no exact match, mark
+    # most recent undone" fallback would otherwise wrongly settle.
+    sess.tool_history = [("Read: /unrelated", False)]
+    sess.active_subagents["agent-1"] = {
+        "type": "explore", "started_at": 0.0, "history_idx": None,
+    }
+    run_async(bot.notify(sess, "tool_done", {
+        "tool_name": "Bash", "tool_summary": "Bash: ls",
+        "agent_id": "agent-1",
+    }))
+    assert sess.tool_history == [("Read: /unrelated", False)]
+
+
+def test_tool_failed_for_attributed_tool_does_not_touch_parent_tool_history(
+    mk_bot, run_async,
+):
+    bot = mk_bot()
+    sess = _sess(busy_msg_id=None)
+    sess.tool_history = [("Read: /unrelated", False)]
+    sess.active_subagents["agent-1"] = {
+        "type": "explore", "started_at": 0.0, "history_idx": None,
+    }
+    run_async(bot.notify(sess, "tool_failed", {
+        "tool_name": "Bash", "tool_summary": "Bash: ls",
+        "agent_id": "agent-1",
+    }))
+    assert sess.tool_history == [("Read: /unrelated", False)]
+
+
 def _edit_event():
     return {
         "tool_summary": "Edit: /x",
@@ -280,6 +386,37 @@ def test_subagent_stop_with_no_match_appends_done(mk_bot, run_async):
     assert sess.tool_history[0][1] is True
 
 
+def test_subagent_stop_settles_row_with_frozen_tool_count_and_elapsed(
+    mk_bot, run_async,
+):
+    """"agent activity rows on the busy card": the settled row is the
+    fixed three-segment shape "type · N tool calls · elapsed", frozen
+    into tool_history — a later render never recomputes it."""
+    bot = mk_bot()
+    sess = _sess(busy_msg_id=None)
+    sess.tool_history = [("🤖 explore", False)]
+    run_async(bot.notify(sess, "subagent_stop", {
+        "agent_id": "agent-1", "agent_type": "explore",
+        "elapsed": 42.0, "history_idx": 0, "tool_count": 5,
+    }))
+    summary, done = sess.tool_history[0]
+    assert done is True
+    assert summary == "🤖 explore · 5 tool calls · 42s"
+
+
+def test_subagent_stop_settled_row_singular_tool_call(mk_bot, run_async):
+    bot = mk_bot()
+    sess = _sess(busy_msg_id=None)
+    sess.tool_history = [("🤖 explore", False)]
+    run_async(bot.notify(sess, "subagent_stop", {
+        "agent_id": "agent-1", "agent_type": "explore",
+        "elapsed": 5.0, "history_idx": 0, "tool_count": 1,
+    }))
+    summary, _done = sess.tool_history[0]
+    assert "1 tool call · " in summary
+    assert "1 tool calls" not in summary
+
+
 def test_phantom_subagent_stop_empty_type_adds_no_row(mk_bot, run_async):
     """design.md "model Claude Code background-agent jobs" requirement 5:
     an unknown-id, empty-agent_type SubagentStop (hook_receiver's phantom
@@ -294,6 +431,42 @@ def test_phantom_subagent_stop_empty_type_adds_no_row(mk_bot, run_async):
         "elapsed": 0.0, "history_idx": None,
     }))
     assert sess.tool_history == []
+
+
+def test_phantom_subagent_stop_does_not_append_to_finished_subagents(
+    mk_bot, run_async,
+):
+    """NEW — same phantom setup as above, at the finished_subagents layer.
+    (notify.py's subagent_stop handler never touches finished_subagents —
+    that's hook_receiver.py's archive_finished_subagent's job — this pins
+    the invariant regardless of which layer changes next.)"""
+    bot = mk_bot()
+    sess = _sess(busy_msg_id=None)
+    sess.tool_history = []
+    run_async(bot.notify(sess, "subagent_stop", {
+        "agent_id": "unknown-1", "agent_type": "",
+        "elapsed": 0.0, "history_idx": None,
+    }))
+    assert sess.finished_subagents == []
+
+
+def test_subagent_stop_with_trimmed_history_idx_appends_fresh_row_without_crashing(
+    mk_bot, run_async,
+):
+    """A history_idx that pointed at a row record_tool's TOOL_HISTORY_CAP
+    trim has since shifted away (stale, out of range) must not crash —
+    falls through to the "no matching start" fresh-append branch."""
+    bot = mk_bot()
+    sess = _sess(busy_msg_id=None)
+    sess.tool_history = [("Bash: unrelated", True)]
+    run_async(bot.notify(sess, "subagent_stop", {
+        "agent_id": "agent-1", "agent_type": "explore",
+        "elapsed": 3.0, "history_idx": 99,  # stale/out-of-range
+        "tool_count": 1,
+    }))
+    assert sess.tool_history[0] == ("Bash: unrelated", True)  # untouched
+    assert sess.tool_history[-1][1] is True
+    assert "explore" in sess.tool_history[-1][0]
 
 
 # ---- compacting ---------------------------------------------------------
@@ -659,3 +832,55 @@ def test_separate_message_permission_prompt_shows_the_real_command(mk_bot, run_a
     kb = call.kwargs["reply_markup"]
     labels = [b.text for row in kb.inline_keyboard for b in row]
     assert not any("Allow always" in lbl for lbl in labels), labels
+
+
+# ---- full-log snapshot: log_agents ("agent activity rows on the busy
+# card") ----------------------------------------------------------------
+
+def test_full_log_snapshot_includes_finished_and_still_active_agents(
+    mk_bot, run_async, monkeypatch,
+):
+    """notify.py's IDLE-close path snapshots log_agents from
+    finished_subagents + (defensively) active_subagents, chronological by
+    start time, and passes it through to build_full_log's agents= kwarg.
+    """
+    monkeypatch.setattr(
+        "aipager.bot.notify.send_rich_message", AsyncMock(return_value={}),
+    )
+    bot = mk_bot()
+    sess = _sess(status=Status.IDLE, busy_msg_id=None)
+    sess.last_card_truncated = True  # forces the .txt attachment
+    sess.finished_subagents = [
+        {"type": "explore", "started_at": 10.0, "elapsed": 5.0,
+         "tool_count": 2, "tools": ["Bash: ls", "Read: /x"]},
+    ]
+    sess.active_subagents["agent-2"] = {
+        "type": "review", "started_at": 20.0, "tool_count": 1,
+        "tools": ["Grep: foo"],
+    }
+    # job_background_open() would normally route a non-empty
+    # active_subagents through the interim path instead of this close
+    # path — overridden so the (defensive) "still active" half of the
+    # snapshot gets exercised too, per design.md's own rationale for why
+    # it's there.
+    sess.job_background_open = lambda: False
+    bot._app.bot.send_document = AsyncMock()
+
+    import aipager.bot.notify as notify_mod
+    real_build_full_log = notify_mod.build_full_log
+    captured: dict = {}
+
+    def _spy(*args, **kwargs):
+        captured["agents"] = kwargs.get("agents")
+        return real_build_full_log(*args, **kwargs)
+
+    monkeypatch.setattr(notify_mod, "build_full_log", _spy)
+    run_async(bot.notify(sess, "idle_prompt", {"summary": "done"}))
+
+    agents = captured["agents"]
+    assert [a["type"] for a in agents] == ["explore", "review"]  # start order
+    finished, active = agents
+    assert finished["tool_count"] == 2
+    assert finished["tools"] == ["Bash: ls", "Read: /x"]
+    assert active["tool_count"] == 1
+    assert active["tools"] == ["Grep: foo"]

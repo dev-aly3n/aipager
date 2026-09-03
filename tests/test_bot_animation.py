@@ -14,6 +14,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from aipager.state import Status, TrackedSession
+from aipager.bot.animation import (
+    _build_sections,
+    _fit_sections,
+    build_full_log,
+    build_stream_card_ex,
+)
 
 
 # ===== _safe_edit_callback ===============================================
@@ -162,6 +168,35 @@ def test_build_busy_text_with_subagent_elapsed(mk_bot):
     text = bot._build_busy_text("jim", "Working", sess)
     # Subagent elapsed time shown
     assert "15s" in text or "m" in text
+
+
+def test_build_busy_text_agent_row_shows_activity(mk_bot):
+    """"agent activity rows on the busy card": the legacy HTML card's live
+    agent row shows type · activity · elapsed, HTML-escaped, same shape as
+    the rich card."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.tool_history = [("🤖 explore", False)]
+    sess.active_subagents["a1"] = {
+        "type": "explore",
+        "started_at": time.monotonic() - 15,
+        "history_idx": 0,
+        "activity": "Bash: ls",
+    }
+    text = bot._build_busy_text("jim", "Working", sess)
+    assert "explore · Bash: ls · 15s" in text
+
+
+def test_build_busy_text_agent_row_settled_shows_frozen_text(mk_bot):
+    """The settled row's frozen text lives straight in tool_history and
+    needs zero special-casing from _build_busy_text — it renders like any
+    other done tool row."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.tool_history = [("🤖 explore · 5 tool calls · 42s", True)]
+    text = bot._build_busy_text("jim", "Working", sess)
+    assert "✅" in text
+    assert "explore · 5 tool calls · 42s" in text
 
 
 def test_build_busy_text_with_inline_permission_ask(mk_bot):
@@ -830,3 +865,108 @@ def test_permission_display_bound_holds_for_front_loaded_escapes(mk_bot):
         block = text.split("<pre>", 1)[1].split("</pre>", 1)[0]
         assert len(block) <= _PERM_DETAIL_HTML_MAX + 1, (len(block), detail[:20])
         assert block.endswith("…")
+
+
+# ===== agent activity rows on the busy card ==============================
+# _build_sections / _fit_sections / build_full_log — live-row rendering,
+# Phase-1 shedding protection, and the full-log AGENTS section.
+
+def _agent_sess(agent_info, *, tool_summary="\U0001f916 explore"):
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.tool_history = [(tool_summary, False)]
+    sess.active_subagents["a1"] = {"history_idx": 0, **agent_info}
+    return sess
+
+
+def test_build_sections_agent_row_shows_starting_before_first_activity():
+    sess = _agent_sess({"type": "explore", "started_at": time.monotonic()})
+    sections = _build_sections(sess)
+    assert sections == [("agent-run", ["⏳ `\U0001f916 explore · starting · 0s`"])]
+
+
+def test_build_sections_agent_row_shows_activity_and_elapsed_when_active():
+    sess = _agent_sess({
+        "type": "explore", "started_at": time.monotonic() - 130,
+        "activity": "Bash: run tests",
+    })
+    sections = _build_sections(sess)
+    assert len(sections) == 1
+    kind, rows = sections[0]
+    assert kind == "agent-run"
+    assert "· Bash: run tests ·" in rows[0]
+    assert "2m " in rows[0]
+    assert rows[0].endswith("s`")
+
+
+def test_fit_sections_phase1_never_collapses_a_run_containing_an_active_agent_row():
+    """Mutation target: including "agent-run" in _fit_sections's own
+    all_runs filter (instead of "run" only) lets Phase 1 collapse a LONE
+    active-agent section directly into an individual "▸ _1 tool call_"
+    placeholder — exactly the string a single-row "run" section collapses
+    to. Tuned so the byte budget forces the agent-run section's bytes to
+    be reduced one way or another; the only LEGITIMATE way that can
+    happen is Phase 2's aggregate "N earlier steps hidden" marker (an
+    accepted last resort — design.md's own documented risk), never an
+    individual Phase-1-style placeholder naming just the agent's own row.
+    """
+    def _sections():
+        old_run = ("run", [f"⏳ `Bash: old-{i} " + "x" * 30 + "`" for i in range(3)])
+        agent_run = ("agent-run", ["⏳ `\U0001f916 explore · Bash: ls · 5s`"])
+        newest_run = ("run", ["⏳ `Bash: newest`"])
+        return [old_run, agent_run, newest_run]
+
+    budget = 75
+    rows, truncated = _fit_sections(_sections(), 32_768 - budget)
+    assert truncated is True
+    assert "▸ _1 tool call_" not in rows, rows
+
+
+def test_build_stream_card_ex_keeps_active_agent_row_visible_under_byte_pressure():
+    """End-to-end via build_stream_card_ex: an oversized tool_history
+    forces truncation, but the still-active agent's row survives."""
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.busy_started_at = time.monotonic()
+    sess.tool_history = [
+        (f"Bash: old command number {i} " + "y" * 100, True) for i in range(300)
+    ]
+    idx = len(sess.tool_history)
+    sess.tool_history.append(("\U0001f916 explore", False))
+    sess.active_subagents["a1"] = {
+        "type": "explore", "started_at": time.monotonic() - 5,
+        "history_idx": idx, "activity": "Bash: ls",
+    }
+    card, hid_something = build_stream_card_ex(sess, "Working")
+    assert hid_something is True
+    assert "\U0001f916 explore · Bash: ls · 5s" in card
+
+
+def test_build_full_log_agents_section_lists_type_elapsed_count_and_tools():
+    agents = [
+        {"type": "explore", "started_at": 0.0, "elapsed": 7.0,
+         "tool_count": 2, "tools": ["Bash: ls", "Read: /x"]},
+        {"type": "review", "started_at": 10.0, "elapsed": 65.0,
+         "tool_count": 1, "tools": ["Grep: foo"]},
+    ]
+    log = build_full_log(
+        "jim", [("Bash: parent", True)], [], "the answer", agents=agents,
+    )
+    assert "AGENTS" in log
+    assert "\U0001f916 explore — 7s — 2 tool calls" in log
+    assert "  - Bash: ls" in log
+    assert "  - Read: /x" in log
+    assert "\U0001f916 review — 1m 5s — 1 tool call" in log
+    assert "1 tool calls" not in log  # singular, not plural
+    assert log.index("AGENTS") < log.index("FINAL ANSWER")
+
+
+def test_build_full_log_omits_agents_section_when_no_agents_ran():
+    log_default = build_full_log("jim", [("Bash: x", True)], [], "answer")
+    assert "AGENTS" not in log_default
+    log_empty = build_full_log(
+        "jim", [("Bash: x", True)], [], "answer", agents=[],
+    )
+    assert "AGENTS" not in log_empty
+    log_none = build_full_log(
+        "jim", [("Bash: x", True)], [], "answer", agents=None,
+    )
+    assert "AGENTS" not in log_none

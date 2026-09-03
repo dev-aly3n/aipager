@@ -167,11 +167,16 @@ def test_card_tool_tally_names_have_no_trailing_colon():
 
 
 def test_card_tool_tally_handles_subagent_summaries():
+    """"agent activity rows on the busy card" (requirement 3) changes this
+    from the old behavior: agent rows (live or settled) never contribute a
+    "🤖 ×N" tally segment — their tool calls are counted on the agent's own
+    row, not the parent's tally. Companion of
+    test_status_line_tally_excludes_settled_agent_rows below."""
     sess = _sess()
     sess.tool_history = [("\U0001f916 general-purpose", False),
                          ("\U0001f916 Explore", True)]
     card = build_stream_card(sess, "Working")
-    assert "\U0001f916 ×2" in card
+    assert "\U0001f916 ×" not in card
 
 
 def test_card_tool_tally_omitted_when_empty():
@@ -470,13 +475,18 @@ def test_timeline_anchor_past_history_end_renders_last():
 
 
 def test_timeline_subagent_elapsed_suffix_preserved():
+    """"agent activity rows on the busy card" changes the live row's shape
+    from the old bare "summary (elapsed)" suffix to "type · activity or
+    'starting' · elapsed" — the elapsed time is still there, just as part
+    of the new three-segment row."""
     sess = _sess()
     sess.tool_history = [("\U0001f916 Explore", False)]
     sess.active_subagents = {
-        "abc": {"history_idx": 0, "started_at": time.monotonic() - 5},
+        "abc": {"type": "Explore", "history_idx": 0,
+                "started_at": time.monotonic() - 5},
     }
     rows = _body(build_stream_card(sess, "Working"))
-    assert rows == ["⏳ `\U0001f916 Explore (5s)`"]
+    assert rows == ["⏳ `\U0001f916 Explore · starting · 5s`"]
 
 
 def test_timeline_commentary_budget_drops_oldest_blocks():
@@ -1051,6 +1061,31 @@ def test_subagent_row_is_stepped_over(tmp_path):
     sess.stream_offset = 0
     sess.tool_history = [("Task: audit", True), ("🤖 explorer", True),
                          ("Bash: after", False)]
+
+    _write_entry(tp, [{"type": "tool_use", "id": "a", "name": "Task", "input": {}}])
+    _write_entry(tp, [
+        {"type": "text", "text": "agent done, running the check"},
+        {"type": "tool_use", "id": "b", "name": "Bash", "input": {}},
+    ])
+    _read_stream_text(sess)
+    assert sess.stream_commentary == [(2, "agent done, running the check")]
+
+
+def test_subagent_row_settled_still_stepped_over(tmp_path):
+    """Orchestrator amendment 4: the settled row's new frozen text ("🤖
+    <type> · N tool calls · elapsed") keeps the _SUBAGENT_MARK prefix, so
+    _advance_tool_cursor steps over it exactly like the old short "🤖
+    <type>" shape did — no code change needed, this pins it."""
+    tp = tmp_path / "t.jsonl"
+    tp.write_text("")
+    sess = _sess()
+    sess.stream_transcript_path = str(tp)
+    sess.stream_offset = 0
+    sess.tool_history = [
+        ("Task: audit", True),
+        ("\U0001f916 explorer · 3 tool calls · 5s", True),
+        ("Bash: after", False),
+    ]
 
     _write_entry(tp, [{"type": "tool_use", "id": "a", "name": "Task", "input": {}}])
     _write_entry(tp, [
@@ -1637,6 +1672,33 @@ def test_status_line_is_last_on_every_frame():
     # ...and nothing status-shaped at the top: the story leads.
     for card in (busy, final, waiting):
         assert card.startswith("> opening prose")
+
+
+def test_status_line_tally_excludes_settled_agent_rows():
+    """"agent activity rows on the busy card" requirement 3: neither a
+    live NOR a settled agent row ever contributes a "🤖 ×N" tally
+    segment. Mutation target: remove the startswith(_SUBAGENT_MARK):
+    continue guard in _status_line's tally loop."""
+    sess = _sess()
+    sess.tool_history = [
+        ("\U0001f916 explore", False),
+        ("\U0001f916 review · 3 tool calls · 5s", True),
+        ("Bash: ls", True),
+    ]
+    card = build_stream_card(sess, "Working")
+    assert "\U0001f916 ×" not in card
+    assert "Bash ×1" in card
+
+
+def test_status_line_tally_still_counts_parent_task_tool_call():
+    """Sanity: the parent's own Task/Agent-launching tool call is a
+    completely different summary shape ("Task: <description>", no 🤖
+    prefix) and keeps tallying normally — the guard only excludes rows
+    that actually start with the agent marker."""
+    sess = _sess()
+    sess.tool_history = [("Task: audit the repo", True)]
+    card = build_stream_card(sess, "Working")
+    assert "Task ×1" in card
 
 
 def test_status_line_survives_every_shedding_phase():

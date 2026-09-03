@@ -218,10 +218,15 @@ def _read_stream_text(sess: TrackedSession) -> bool:
 def _build_sections(
     sess: TrackedSession, *, final: bool = False,
 ) -> list[tuple[str, list[str]]]:
-    """The timeline as chronological SECTIONS: ("prose", [quote rows]) and
-    ("run", [tool rows]) alternating ("layered-card-shedding"). Sections —
-    not a flat row list — because the shedding policy treats them
-    differently: commentary is the narrative and outlives tool rows.
+    """The timeline as chronological SECTIONS: ("prose", [quote rows]),
+    ("run", [tool rows]), and ("agent-run", [a single LIVE agent row])
+    alternating ("layered-card-shedding"). Sections — not a flat row list
+    — because the shedding policy treats them differently: commentary is
+    the narrative and outlives tool rows, and an "agent-run" section is
+    invisible to :func:`_fit_sections`'s Phase 1/1b collapse (they filter
+    on kind == "run" literally — "agent activity rows on the busy card")
+    while the agent it represents is still active; once settled, that row
+    becomes an ordinary "run" row.
 
     Keeps the batch-hold (a run whose introducing sentence hasn't arrived
     yet is withheld) and the answer-filter (a hook-streamed block with no
@@ -246,11 +251,14 @@ def _build_sections(
         slot = min(max(anchor, 0), len(history))
         by_anchor.setdefault(slot, []).append(text)
 
-    subagent_started: dict[int, float] = {}
+    # idx -> the full active_subagents info dict (not just started_at) so
+    # the renderer has type/activity/tool_count available too ("agent
+    # activity rows on the busy card").
+    subagent_live: dict[int, dict] = {}
     for info in sess.active_subagents.values():
         idx = info.get("history_idx")
         if idx is not None:
-            subagent_started[idx] = info["started_at"]
+            subagent_live[idx] = info
 
     sections: list[tuple[str, list[str]]] = []
 
@@ -268,15 +276,17 @@ def _build_sections(
         elif done:
             _push("run", f"✅ {_mono(summary)}")
         else:
-            display = summary
-            started_at = subagent_started.get(i)
-            if started_at:
-                secs = int(time.monotonic() - started_at)
-                if secs >= 60:
-                    display = f"{summary} ({secs // 60}m {secs % 60}s)"
-                elif secs >= 2:
-                    display = f"{summary} ({secs}s)"
-            _push("run", f"⏳ {_mono(display)}")
+            info = subagent_live.get(i)
+            if info is not None:
+                # A LIVE agent row — its own section kind ("agent-run", not
+                # "run") so _fit_sections's Phase 1/1b (which filter on
+                # kind == "run") can never collapse it while the agent is
+                # still active. Once settled it is pushed as an ordinary
+                # "run" row (the `elif done:` branch above), eligible for
+                # every shedding phase like any other tool row.
+                _push("agent-run", f"⏳ {_mono(_agent_live_row(info))}")
+            else:
+                _push("run", f"⏳ {_mono(summary)}")
     for slot in sorted(by_anchor):
         for text in by_anchor[slot]:
             _push("prose", _quote(text))
@@ -297,10 +307,16 @@ def _fit_sections(
 
     - Fits → everything renders, untouched.
     - Phase 1: older tool RUNS collapse to one-line in-place placeholders,
-      oldest first — commentary stays.
+      oldest first — commentary stays. A LIVE agent's section has
+      ``kind == "agent-run"``, not ``"run"`` ("agent activity rows on the
+      busy card"), so it is automatically excluded from this phase — the
+      ``all_runs`` filter below matches on ``k == "run"`` literally. Once
+      the agent settles its row becomes an ordinary ``"run"`` row, eligible
+      like any other.
     - Phase 1b: the NEWEST run sheds its own oldest rows into an in-place
       count; it is never fully collapsed (it is the live tail, and for a
-      single giant row the byte backstop is the honest tool).
+      single giant row the byte backstop is the honest tool). Same
+      ``"agent-run"`` exclusion as Phase 1.
     - Phase 2: whole oldest sections are removed one at a time, replaced
       by a single aggregate marker at the TOP of the timeline, so what was
       removed always leaves a visible trace. The newest prose section and
@@ -424,6 +440,22 @@ def _elapsed_str(started_at: float) -> str:
     return f"{elapsed_s}s"
 
 
+def _agent_live_row(info: dict) -> str:
+    """``"🤖 <type> · <activity or 'starting'> · <elapsed>"`` — the LIVE
+    agent row text ("agent activity rows on the busy card"), shared
+    verbatim by both card renderers. Each caller applies its OWN
+    destination escaping to the whole returned string exactly as it
+    already does for every other tool summary: the rich card wraps it in
+    :func:`_mono` (a code span — `_md_escape` would show literal
+    backslashes inside one, not protect anything), the legacy card wraps
+    it in ``html.escape``. Pure — no I/O, no mutation.
+    """
+    agent_type = info.get("type") or "agent"
+    activity = info.get("activity") or "starting"
+    elapsed = _elapsed_str(info.get("started_at", time.monotonic()))
+    return f"{_SUBAGENT_MARK}{agent_type} · {activity} · {elapsed}"
+
+
 def _agent_phrase(sess: TrackedSession) -> str:
     """Shared "N agent(s) (types)" fragment of the waiting status line. During the continuation-grace
     window the table is legitimately EMPTY (the agent finished, the
@@ -484,6 +516,15 @@ def _status_line(
     if sess.tool_history:
         tally: dict[str, int] = {}
         for summary, _done in sess.tool_history:
+            # Agent rows (live "🤖 <type>" or settled "🤖 <type> · N tool
+            # calls · elapsed") never contribute a "🤖 ×N" tally segment —
+            # their tool calls are counted on the agent's own row, not the
+            # parent's tally ("agent activity rows on the busy card"
+            # requirement 3). The parent's own Task/Agent tool call is a
+            # different summary shape ("Task: <description>", no 🤖
+            # prefix) and keeps tallying normally.
+            if summary.startswith(_SUBAGENT_MARK):
+                continue
             # Summaries are "Read: /path", "Grep: pat in dir" or "🤖 agent-type".
             # Everything before the colon is the tool name; without one, the
             # first word stands in.
@@ -572,17 +613,38 @@ def build_stream_card(
     return card
 
 
+def _fmt_duration(seconds: float) -> str:
+    """``"0s"`` / ``"Xs"`` / ``"Xm Ys"`` — the same three-branch elapsed
+    rule as :func:`_elapsed_str`, but over an already-computed duration
+    (an agent's own frozen ``elapsed``, not "now minus started_at") for
+    :func:`build_full_log`'s AGENTS section."""
+    secs = max(0, int(seconds))
+    if secs >= 60:
+        return f"{secs // 60}m {secs % 60}s"
+    return f"{secs}s"
+
+
 def build_full_log(
     label: str,
     tool_history: list,
     commentary: list,
     answer: str,
+    *,
+    agents: list[dict] | None = None,
 ) -> str:
     """The complete plain-text play-by-play for the full-log attachment
     ("layered-card-shedding" requirement 2): every commentary block and
     every tool row still held in memory, chronological, then the full
     answer. Pure — operates on snapshots the caller captured BEFORE the
-    close path reset the streaming state."""
+    close path reset the streaming state.
+
+    ``agents`` (NEW, trailing keyword — merge-friendly signature change,
+    "agent activity rows on the busy card"): a list of ``{type, elapsed,
+    tool_count, tools}`` dicts in chronological (start) order, every agent
+    seen this turn (active and finished). Appends an AGENTS section after
+    the tool-row list and before FINAL ANSWER; omitted entirely when
+    ``None``/empty, so every existing call site's output is unchanged.
+    """
     by_anchor: dict[int, list[str]] = {}
     for anchor, text in commentary:
         slot = min(max(anchor, 0), len(tool_history))
@@ -604,6 +666,20 @@ def build_full_log(
         for text in by_anchor[slot]:
             lines.append("")
             lines.append(f"> {text}")
+    if agents:
+        lines += ["", "=" * 40, "AGENTS", "=" * 40]
+        for agent in agents:
+            agent_type = agent.get("type", "agent")
+            elapsed_str = _fmt_duration(agent.get("elapsed", 0.0))
+            tool_count = agent.get("tool_count", 0)
+            plural = "" if tool_count == 1 else "s"
+            lines.append("")
+            lines.append(
+                f"\U0001f916 {agent_type} — {elapsed_str} — "
+                f"{tool_count} tool call{plural}"
+            )
+            for tool_summary in agent.get("tools", []):
+                lines.append(f"  - {tool_summary}")
     if answer:
         lines += ["", "=" * 40, "FINAL ANSWER", "=" * 40, "", answer]
     return "\n".join(lines)
@@ -684,12 +760,14 @@ class AnimationMixin:
             visible = history[-max_visible:]
         if hidden_done:
             text += f"\n✅ <i>{hidden_done} earlier tool{'s' if hidden_done != 1 else ''}</i>"
-        # Build a map of history_idx → started_at for live subagent elapsed time
-        _subagent_started: dict[int, float] = {}
+        # Build a map of history_idx → the full info dict for live agent
+        # rows (same widening as _build_sections's subagent_live — "agent
+        # activity rows on the busy card").
+        _subagent_live: dict[int, dict] = {}
         for info in sess.active_subagents.values():
             idx = info.get("history_idx")
             if idx is not None:
-                _subagent_started[idx] = info["started_at"]
+                _subagent_live[idx] = info
         # Compute offset into tool_history for visible slice indices
         _vis_offset = len(history) - len(visible)
         for i, (summary, done) in enumerate(visible):
@@ -698,15 +776,8 @@ class AnimationMixin:
             elif done:
                 text += f"\n✅ <code>{html_mod.escape(summary)}</code>"
             else:
-                display = summary
-                # Append live elapsed time for active subagent entries
-                started_at = _subagent_started.get(_vis_offset + i)
-                if started_at:
-                    sa_secs = int(time.monotonic() - started_at)
-                    if sa_secs >= 60:
-                        display = f"{summary} ({sa_secs // 60}m {sa_secs % 60}s)"
-                    elif sa_secs >= 2:
-                        display = f"{summary} ({sa_secs}s)"
+                info = _subagent_live.get(_vis_offset + i)
+                display = _agent_live_row(info) if info is not None else summary
                 text += f"\n⏳ <code>{html_mod.escape(display)}</code>"
         # Append inline permission display if active
         if sess.pending_permission:
@@ -1262,6 +1333,7 @@ class AnimationMixin:
             sess.last_tool_summary = ""
             sess.tool_history.clear()
             sess.active_subagents.clear()
+            sess.finished_subagents.clear()
             sess.pending_permission = None
             sess.last_token_pct = 0
             sess.last_output_tokens = 0

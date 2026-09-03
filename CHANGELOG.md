@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Background agents now get their own activity row on the busy card**:
+  `🤖 <type> · <activity> · <elapsed>` while running, settling to `✅ 🤖
+  <type> · N tool calls · <elapsed>` when the agent stops. An agent's own
+  tool calls are folded under its row instead of flooding the parent's
+  timeline or its `Bash ×N` tallies, and the full-log `.txt` attachment
+  gains an AGENTS section listing every agent that ran the turn.
+
 ### Fixed
 - The busy card could sit frozen — elapsed counter stopped, tool rows
   still landing — while the session was BUSY. A permission answered in

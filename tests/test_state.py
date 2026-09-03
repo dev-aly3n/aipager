@@ -234,6 +234,72 @@ def test_record_tool_shifts_active_subagent_indices():
     assert sess.tool_history[new_idx] == ("agent", False)
 
 
+# ----- agent activity rows on the busy card: record_agent_tool ----------
+
+def test_record_agent_tool_updates_activity_tool_count_and_appends_to_tools():
+    from aipager.state import TrackedSession
+    sess = TrackedSession(name="claude-jim", label="jim")
+    sess.active_subagents["agent-1"] = {
+        "type": "explore", "started_at": 0.0, "history_idx": 0,
+        "activity": "", "tool_count": 0, "last_tool_at": 0.0, "tools": [],
+    }
+    sess.record_agent_tool("agent-1", "Bash: ls")
+    sess.record_agent_tool("agent-1", "Read: /x")
+    info = sess.active_subagents["agent-1"]
+    assert info["activity"] == "Read: /x"
+    assert info["tool_count"] == 2
+    assert info["tools"] == ["Bash: ls", "Read: /x"]
+    assert info["last_tool_at"] > 0.0
+    # No parent row was ever created for either attributed call
+    assert sess.tool_history == []
+
+
+def test_record_agent_tool_caps_tools_list_at_agent_tools_cap():
+    from aipager.state import AGENT_TOOLS_CAP, TrackedSession
+    sess = TrackedSession(name="claude-jim", label="jim")
+    sess.active_subagents["agent-1"] = {
+        "type": "explore", "started_at": 0.0, "history_idx": 0,
+    }
+    for i in range(AGENT_TOOLS_CAP + 20):
+        sess.record_agent_tool("agent-1", f"tool{i}")
+    tools = sess.active_subagents["agent-1"]["tools"]
+    assert len(tools) == AGENT_TOOLS_CAP
+    assert tools[-1] == f"tool{AGENT_TOOLS_CAP + 19}"
+    assert tools[0] == "tool20"
+    # tool_count keeps the TRUE total, not the capped list length
+    assert sess.active_subagents["agent-1"]["tool_count"] == AGENT_TOOLS_CAP + 20
+
+
+def test_record_agent_tool_is_a_noop_for_unknown_agent_id():
+    from aipager.state import TrackedSession
+    sess = TrackedSession(name="claude-jim", label="jim")
+    # No entry in active_subagents for "ghost" — already stopped, evicted,
+    # or simply never existed.
+    sess.record_agent_tool("ghost", "Bash: ls")
+    assert sess.active_subagents == {}
+    assert sess.tool_history == []
+
+
+# ----- agent activity rows on the busy card: archive_finished_subagent ---
+
+def test_archive_finished_subagent_snapshots_type_elapsed_count_and_tools():
+    from aipager.state import TrackedSession
+    sess = TrackedSession(name="claude-jim", label="jim")
+    info = {
+        "type": "explore", "started_at": 100.0, "history_idx": 0,
+        "activity": "Bash: ls", "tool_count": 2, "last_tool_at": 105.0,
+        "tools": ["Bash: ls", "Read: /x"],
+    }
+    sess.archive_finished_subagent("explore", info, 7.5)
+    assert sess.finished_subagents == [{
+        "type": "explore", "started_at": 100.0, "elapsed": 7.5,
+        "tool_count": 2, "tools": ["Bash: ls", "Read: /x"],
+    }]
+    # It's a SNAPSHOT — mutating the source dict afterward must not leak in
+    info["tools"].append("Grep: foo")
+    assert sess.finished_subagents[0]["tools"] == ["Bash: ls", "Read: /x"]
+
+
 # ----- Status not persisted (2.2 invariant lock-in) -----
 
 def test_status_not_persisted_across_save_load(tmp_state_file):

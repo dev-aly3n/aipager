@@ -314,6 +314,36 @@ def test_pre_tool_use_bash_fires_tool_use_notification(receiver, run_async):
     assert ctx["tool_input_full"] is None
 
 
+def test_pre_tool_use_forwards_agent_id_in_tool_use_context(receiver, run_async):
+    """Design "agent activity rows on the busy card": a PreToolUse fired
+    from inside a subagent carries agent_id, forwarded verbatim so
+    notify.py can attribute the tool call to that agent instead of the
+    parent's tool_history."""
+    _, recv, notify_fn = receiver
+    _send(recv, run_async,
+          hook_event_name="PreToolUse",
+          session="claude-jim",
+          tool_name="Bash",
+          tool_input={"command": "ls"},
+          agent_id="agent-1")
+    _, event, ctx = notify_fn.await_args.args
+    assert event == "tool_use"
+    assert ctx["agent_id"] == "agent-1"
+
+
+def test_pre_tool_use_no_agent_id_forwards_empty_string(receiver, run_async):
+    """The parent's own tool calls carry no agent_id — forwarded as ""
+    (never None), the exact truthiness the attribution guard relies on."""
+    _, recv, notify_fn = receiver
+    _send(recv, run_async,
+          hook_event_name="PreToolUse",
+          session="claude-jim",
+          tool_name="Bash",
+          tool_input={"command": "ls"})
+    _, event, ctx = notify_fn.await_args.args
+    assert ctx["agent_id"] == ""
+
+
 def test_pre_tool_use_write_forwards_full_input(receiver, run_async):
     _, recv, notify_fn = receiver
     _send(recv, run_async,
@@ -356,6 +386,19 @@ def test_post_tool_use_fires_tool_done(receiver, run_async):
     assert event == "tool_done"
 
 
+def test_post_tool_use_forwards_agent_id_in_tool_done_context(receiver, run_async):
+    _, recv, notify_fn = receiver
+    _send(recv, run_async,
+          hook_event_name="PostToolUse",
+          session="claude-jim",
+          tool_name="Bash",
+          tool_input={"command": "ls"},
+          agent_id="agent-1")
+    _, event, ctx = notify_fn.await_args.args
+    assert event == "tool_done"
+    assert ctx["agent_id"] == "agent-1"
+
+
 def test_pre_tool_use_marks_tool_in_flight(receiver, run_async):
     registry, recv, _ = receiver
     _send(recv, run_async,
@@ -389,6 +432,21 @@ def test_post_tool_use_failure_fires_tool_failed(receiver, run_async):
           tool_input={"command": "ls"})
     _, event, _ = notify_fn.await_args.args
     assert event == "tool_failed"
+
+
+def test_post_tool_use_failure_forwards_agent_id_in_tool_failed_context(
+    receiver, run_async,
+):
+    _, recv, notify_fn = receiver
+    _send(recv, run_async,
+          hook_event_name="PostToolUseFailure",
+          session="claude-jim",
+          tool_name="Bash",
+          tool_input={"command": "ls"},
+          agent_id="agent-1")
+    _, event, ctx = notify_fn.await_args.args
+    assert event == "tool_failed"
+    assert ctx["agent_id"] == "agent-1"
 
 
 def test_post_tool_use_failure_clears_tool_in_flight(receiver, run_async):
@@ -993,6 +1051,36 @@ def test_identical_repeated_chunk_is_still_deduped(receiver, run_async):
               hook_event_name="MessageDisplay", delta="same",
               message_id="m1", index=0, final=True)
     assert notify_fn.await_count == 1
+
+
+def test_message_display_from_active_subagent_is_not_forwarded(receiver, run_async):
+    """Orchestrator amendment 7 ("agent activity rows on the busy card"):
+    a subagent's own prose is folded under its row like its tool calls,
+    not forwarded into the parent's commentary/card — mirrors the
+    tool-attribution guard."""
+    registry, recv, notify_fn = receiver
+    sess = registry.get_or_create("claude-x")
+    sess.active_subagents["agent-1"] = {
+        "type": "explore", "started_at": 0.0, "history_idx": 0,
+    }
+    _send(recv, run_async, session="claude-x", hook_event_name="MessageDisplay",
+          delta="agent's own prose", message_id="m1", index=0, final=False,
+          agent_id="agent-1")
+    notify_fn.assert_not_awaited()
+
+
+def test_message_display_with_unknown_agent_id_still_forwards(receiver, run_async):
+    """An agent_id that doesn't match a LIVE active_subagents entry (empty,
+    already stopped, evicted) is the parent's own prose — forwarded exactly
+    as before this feature."""
+    _registry, recv, notify_fn = receiver
+    _send(recv, run_async, session="claude-x", hook_event_name="MessageDisplay",
+          delta="parent prose", message_id="m1", index=0, final=False,
+          agent_id="unknown-agent")
+    notify_fn.assert_awaited_once()
+    _sess, event, ctx = notify_fn.await_args.args
+    assert event == "assistant_text"
+    assert ctx["delta"] == "parent prose"
 
 
 # ---- active_subagents size cap ------------------------------------------
