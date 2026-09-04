@@ -642,6 +642,17 @@ def _fit_sections(
             )
             body = f"{head}{_ROW_SEP}{tail}" if tail else head
         else:
+            # Fallback: even the bare agent rows do not fit, so the whole
+            # body is cut. This is the ONE path where the cut can still
+            # land inside a fold and leave a `</details>` without its
+            # opener — reachable only with ~155+ simultaneously kept agent
+            # sections carrying long type names, which is past both
+            # ACTIVE_SUBAGENTS_CAP and FINISHED_SUBAGENTS_CAP combined and
+            # is what state.py calls a runaway. Accepted as the same
+            # severity class design.md already carries for the raw chop
+            # (review rev-iter5): the alternative needs offset tracking
+            # through the cut, and two rounds proved a textual repair
+            # cannot tell markup from row content.
             body = _chop_to_fit(body, char_budget, byte_budget)
     return body, dropped_any
 
