@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import time
 from unittest.mock import AsyncMock, MagicMock
 
@@ -17,7 +18,14 @@ import pytest
 from aipager.state import Status, TrackedSession
 from aipager.bot.animation import (
     build_stream_card,
+    build_stream_card_ex,
+    _CARD_CHAR_BUDGET,
+    _details_summary,
+    _build_details_block,
+    _fit_sections,
     _read_stream_text,
+    _ROW_SEP,
+    _strip_details_tags,
 )
 
 
@@ -610,6 +618,61 @@ def test_edit_busy_rich_gone_clears_busy_msg_id(mk_bot, run_async, monkeypatch):
     assert sess.busy_msg_id == 0
 
 
+def test_edit_busy_rich_fallback_required_degrades_to_plain_text_edit(
+    mk_bot, run_async, monkeypatch,
+):
+    """Defensive arm (research.md gotcha ~53/54): edit_message_text_rich
+    structurally cannot raise RichMessageFallbackRequired today — this
+    pins the LETTER of the requirement with a monkeypatch-raise, proving
+    the degrade path rather than requiring the unreachable path to fire
+    for real. The plain-text edit must carry the <details> block's
+    summary text but no raw <details>/<summary> markup, and no
+    parse_mode."""
+    from aipager.bot.rich_message import RichMessageFallbackRequired
+    bot = mk_bot()
+    sess = _sess()
+    sess.busy_msg_id = 10
+    sess.busy_started_at = time.monotonic() - 5
+    sess.stream_last_rendered = ""
+    # Force a <details> block to exist so the stripped text is non-trivial.
+    sess.tool_history = [(f"Bash: t-{i} " + "x" * 200, True) for i in range(60)]
+
+    monkeypatch.setattr(
+        "aipager.bot.animation.edit_message_text_rich",
+        AsyncMock(side_effect=RichMessageFallbackRequired("changed transport")),
+    )
+    bot._app.bot.edit_message_text = AsyncMock()
+    result = run_async(bot._edit_busy_rich(sess, "Working"))
+    assert result is True
+    bot._app.bot.edit_message_text.assert_awaited_once()
+    call = bot._app.bot.edit_message_text.await_args
+    text = call.args[0]
+    assert "<details" not in text and "<summary" not in text and "</details>" not in text
+    assert "earlier step" in text and "tool call" in text  # summary survives
+    assert call.kwargs.get("parse_mode") is None
+
+
+def test_edit_busy_rich_fallback_required_returns_false_on_its_own_failure(
+    mk_bot, run_async, monkeypatch,
+):
+    """If even the plain-text degrade edit fails, the tick reports a
+    transient failure (False), same as any other retry-next-tick case."""
+    from aipager.bot.rich_message import RichMessageFallbackRequired
+    bot = mk_bot()
+    sess = _sess()
+    sess.busy_msg_id = 10
+    sess.busy_started_at = time.monotonic() - 5
+    sess.stream_last_rendered = ""
+
+    monkeypatch.setattr(
+        "aipager.bot.animation.edit_message_text_rich",
+        AsyncMock(side_effect=RichMessageFallbackRequired("changed transport")),
+    )
+    bot._app.bot.edit_message_text = AsyncMock(side_effect=RuntimeError("network"))
+    result = run_async(bot._edit_busy_rich(sess, "Working"))
+    assert result is False
+
+
 def test_edit_busy_rich_transient_failure_returns_false(mk_bot, run_async, monkeypatch):
     bot = mk_bot()
     sess = _sess()
@@ -899,17 +962,17 @@ def test_final_card_keeps_every_commentary_block():
 
 
 def test_live_card_still_drops_oldest_commentary():
-    # Contract change ("layered-card-shedding"): fit-driven, not window-
-    # or budget-driven; commentary outlives tool rows.
-    # Phase 2 only: oldest commentary folds into the single hidden marker
-    # once even collapsed runs cannot fit — never before.
+    # Contract change ("collapse-busy-card-timeline"): the aggregate
+    # marker is retired — oldest commentary moves verbatim into the ONE
+    # <details> block once even collapsed runs cannot fit — never before.
     sess = _sess()
     n = 60
     sess.tool_history = [(f"Bash: t-{i}", True) for i in range(n)]
     sess.stream_commentary = [(i, f"BLOCK-{i:02d} " + "k" * 1200) for i in range(n)]
     card = build_stream_card(sess, "Working")
-    assert "hidden" in card          # the aggregate marker exists
-    assert "BLOCK-00" not in card    # oldest folded away
+    assert "<details><summary>▸" in card   # the details block exists
+    assert "earlier step" in card and "tool call" in card
+    assert "BLOCK-00" not in card          # oldest folded away
     assert f"BLOCK-{n-1:02d}" in card
 
 
@@ -992,17 +1055,19 @@ def test_final_edit_bypasses_the_dedupe(mk_bot, run_async, monkeypatch):
     assert len(payloads) == 1
 
 
-def test_final_card_shed_marker_sits_below_the_opening_prose():
-    # Contract change ("layered-card-shedding"): fit-driven, not window-
-    # or budget-driven; commentary outlives tool rows.
-    # A collapsed run's placeholder sits at the run's own position — BELOW
-    # the prose that introduced it, never above.
+def test_final_card_details_block_sits_above_the_opening_prose():
+    # Contract change ("collapse-busy-card-timeline"): a collapsed run's
+    # rows no longer sit in-place as an inline placeholder below the
+    # prose that introduced it — everything shed moves into the single
+    # <details> block at the very TOP of the card, above even the newest
+    # surviving prose ("collapsed content reads FIRST").
     sess = _sess()
     n = 400
     sess.tool_history = [(f"Bash: {'m' * 120}-{i}", True) for i in range(n)]
     sess.stream_commentary = [(0, "OPENING-PROSE")]
     card = build_stream_card(sess, "Done", final=True)
-    assert card.index("OPENING-PROSE") < card.index("tool call")
+    assert card.startswith("<details>")
+    assert card.index("</details>") < card.index("OPENING-PROSE")
 
 
 def _write_entry(path, content: list[dict], mode="a") -> None:
@@ -1569,34 +1634,43 @@ def test_commentary_outlives_tool_rows_under_pressure():
     assert "earlier tool" not in card  # the old top counter is gone
 
 
-def test_phase1_placeholders_sit_between_their_commentaries():
-    """A collapsed run's placeholder stays at the run's position: the run
-    between C1 and C2 collapses into a line between C1 and C2."""
+def test_collapsed_content_moves_into_the_details_block_above_survivors():
+    """Contract change ("collapse-busy-card-timeline"): a collapsed run's
+    rows no longer stay in-place as an interleaved placeholder (the
+    retired _run_placeholder) — everything shed by any phase moves
+    verbatim into the ONE <details> block at the top of the card, above
+    whatever survives visibly. The newest prose section is still
+    protected and always stays visible below the block; an older prose
+    section can be swept up by Phase 2 pressure just like an older run."""
     n = 400
     commentary = [(0, "OPENING-PROSE"), (200, "MIDDLE-PROSE")]
     sess = _many_tools_sess(n, commentary)
     sess.tool_history = [(f"Bash: {'y' * 100}-{i}", True) for i in range(n)]
     card = build_stream_card(sess, "Working")
-    i_open = card.index("OPENING-PROSE")
+    assert card.startswith("<details>")
+    i_close = card.index("</details>")
     i_mid = card.index("MIDDLE-PROSE")
-    # a placeholder between the two prose blocks
-    between = card[i_open:i_mid]
-    assert "tool call" in between
+    i_open = card.index("OPENING-PROSE")
+    assert i_mid > i_close   # newest prose survives, visible below the block
+    assert i_open < i_close  # the older prose got swept into the block
 
 
-def test_phase2_marker_sits_at_the_top_of_the_timeline():
+def test_details_block_sits_at_the_top_of_the_timeline():
     """Phase 2: when even all-collapsed runs + commentary exceed the
-    ceiling, whole oldest sections fold into ONE marker line at the TOP of
-    the timeline ("status-line-at-card-bottom" moved the status away from
-    there), and the NEWEST commentary always survives."""
+    ceiling, whole oldest sections move into ONE <details> block at the
+    TOP of the timeline ("status-line-at-card-bottom" moved the status
+    away from there), and the NEWEST commentary always survives, visible
+    below the block."""
     n = 60
     blocks = [(i, f"PROSE-{i:03d} " + "z" * 1200) for i in range(0, n)]
     sess = _many_tools_sess(n, blocks)
     card = build_stream_card(sess, "Working")
+    assert len(card) <= _CARD_CHAR_BUDGET
     assert len(card.encode("utf-8")) <= 32768
-    assert "hidden" in card  # the aggregate marker
-    assert f"PROSE-{n-1:03d}" in card  # newest narrative survives
-    assert card.startswith("▸")  # marker is the card's first line
+    assert card.startswith("<details><summary>▸")  # block is the card's first element
+    assert "earlier step" in card and "tool call" in card
+    i_close = card.index("</details>")
+    assert card.index(f"PROSE-{n-1:03d}") > i_close  # newest narrative survives, visible
 
 
 def test_layered_render_is_deterministic():
@@ -1634,23 +1708,224 @@ def test_newest_run_survives_phase2_with_trailing_prose():
     assert "NEWEST-ROW-END" in card
     assert "tiny trailing note" in card
 
-def test_phase2_marker_counts_blocks_not_sections():
-    """Review rev-iter1-004: several commentary blocks sharing one hidden
-    section are counted individually in the marker."""
+def test_details_summary_counts_blocks_not_sections():
+    """Review rev-iter1-004: several commentary blocks sharing one
+    collapsed section are counted individually in the <details> summary,
+    not by section count. An oversized older run absorbs the genuine
+    backstop drop on its own (dropping only some of its own oldest rows —
+    moving content into <details> costs the same as leaving it visible,
+    so a big-enough sacrificial run always exists to spare the smaller
+    prose rows), leaving both prose blocks fully recoverable via tap."""
     sess = _sess()
-    sess.tool_history = [(f"Bash: t-{i}", True) for i in range(12)]
+    n_old = 30
+    sess.tool_history = ([(f"Bash: old-{i} " + "o" * 250, True) for i in range(n_old)]
+                         + [("Bash: newest", True)])
     sess.stream_commentary = [
-        (0, "A-BLOCK " + "a" * 2000),
-        (0, "B-BLOCK " + "b" * 2000),
-        (6, "KEEP-ME " + "k" * 29000),
+        (n_old, "A-BLOCK " + "a" * 400),
+        (n_old, "B-BLOCK " + "b" * 400),
+        (n_old + 1, "KEEP-ME " + "k" * 100),
     ]
     card = build_stream_card(sess, "Working")
-    assert len(card.encode("utf-8")) <= 32768
-    assert "A-BLOCK" not in card and "B-BLOCK" not in card
+    assert len(card) <= _CARD_CHAR_BUDGET
+    assert "A-BLOCK" in card and "B-BLOCK" in card  # both survive, tap-recoverable
     assert "KEEP-ME" in card
-    import re as _re
-    m = _re.search(r"(\d+) commentar", card)
-    assert m and int(m.group(1)) == 2
+    assert card.index("KEEP-ME") > card.index("</details>")  # newest prose stays visible
+    m = re.search(r"▸ (\d+) earlier steps? · (\d+) tool calls?", card)
+    assert m
+    steps, tools = int(m.group(1)), int(m.group(2))
+    assert steps - tools == 2  # the two prose BLOCKS, counted individually
+
+
+# ---- char-budget fit, Phase 0/1/1b/2, direct against _fit_sections ---------
+
+def test_fit_sections_phase0_no_op_when_everything_fits():
+    """Phase 0: total verbatim content already under budget → returned
+    untouched, no <details> block at all — the short-turn contract
+    (verification item (d))."""
+    sections = [("prose", ["> hello"]), ("run", ["✅ `Bash: ls`"])]
+    visible_body, details_block, truly_dropped = _fit_sections(sections, 0)
+    assert details_block == ""
+    assert truly_dropped is False
+    assert visible_body == "> hello" + _ROW_SEP + "✅ `Bash: ls`"
+
+
+def test_fit_sections_phase1_collapses_the_older_of_two_runs():
+    """Phase 1: with two "run" sections, the OLDER one is the one swept
+    into the collapsed bucket — the newest run is left alone for Phase 1b
+    (and, being the physically last section, protected outright)."""
+    older_run = ("run", [f"✅ `Bash: old-{i}`" + "x" * 300 for i in range(4)])
+    newest_run = ("run", ["✅ `Bash: newest`"])
+    sections = [older_run, newest_run]
+    budget = 200
+    visible_body, _details_block, _truly_dropped = _fit_sections(
+        sections, _CARD_CHAR_BUDGET - budget,
+    )
+    assert "Bash: newest" in visible_body
+    assert "Bash: old-0" not in visible_body
+
+
+def test_fit_sections_phase1b_sheds_the_newest_runs_own_oldest_rows_never_the_last():
+    """Phase 1b: a single "run" section (both the only and the newest
+    run) sheds its own oldest rows one at a time, but never its very last
+    row — even under real pressure, once the budget is at least big
+    enough for that one row to survive."""
+    only_run = ("run", [f"✅ `Bash: r-{i}`" + "x" * 300 for i in range(10)])
+    sections = [only_run]
+    budget = 400
+    visible_body, _details_block, truly_dropped = _fit_sections(
+        sections, _CARD_CHAR_BUDGET - budget,
+    )
+    assert truly_dropped is True
+    assert "Bash: r-9`" in visible_body  # the very last row always survives
+    assert "Bash: r-0`" not in visible_body
+
+
+def test_fit_sections_phase2_sheds_whole_older_prose_sections_oldest_first():
+    """Phase 2: once Phase 1/1b's shedding of run sections isn't enough,
+    whole older prose sections move too, oldest first — the newest prose
+    section stays protected."""
+    prose_a = ("prose", ["> " + "A" * 2000])
+    prose_b = ("prose", ["> " + "B" * 2000])
+    run = ("run", ["✅ `Bash: only`"])
+    sections = [prose_a, prose_b, run]
+    budget = 300
+    visible_body, _details_block, _truly_dropped = _fit_sections(
+        sections, _CARD_CHAR_BUDGET - budget,
+    )
+    assert "AAAA" not in visible_body
+    assert "BBBB" in visible_body    # newest prose — protected
+    assert "Bash: only" in visible_body
+
+
+# ---- <details> block construction and stripping ----------------------------
+
+def test_row_separator_survives_inside_a_details_block():
+    """Offline proxy for the still-open nested-in-<details> visual
+    question (design.md "Unverified"): the constructed markdown contains
+    two _ROW_SEP-separated collapsed rows strictly between
+    <details>...<summary>...</summary> and </details> — never a bare
+    newline, which would let Telegram silently merge them into fewer
+    blocks."""
+    db = _build_details_block("SUMMARY", ["row-one", "row-two"])
+    assert db.startswith("<details><summary>SUMMARY</summary>")
+    assert db.endswith("</details>")
+    body = db.split("</summary>", 1)[1].rsplit("</details>", 1)[0]
+    assert f"row-one{_ROW_SEP}row-two" in body
+    assert "row-one\nrow-two" not in body  # not a bare-newline join
+
+
+def test_strip_details_tags_keeps_summary_drops_tags_and_body():
+    db = _build_details_block("▸ 3 earlier steps · 1 tool call",
+                              ["hidden-row-1", "hidden-row-2"])
+    markdown = f"{db}{_ROW_SEP}visible tail{_ROW_SEP}status line"
+    stripped = _strip_details_tags(markdown)
+    assert "<details" not in stripped
+    assert "<summary" not in stripped
+    assert "</details>" not in stripped
+    assert "▸ 3 earlier steps · 1 tool call" in stripped
+    assert "hidden-row-1" not in stripped and "hidden-row-2" not in stripped
+    assert "visible tail" in stripped
+    assert "status line" in stripped
+
+
+def test_strip_details_tags_is_a_no_op_without_a_details_block():
+    markdown = "plain body" + _ROW_SEP + "status"
+    assert _strip_details_tags(markdown) == markdown
+
+
+def test_details_summary_pluralizes_both_numbers_independently():
+    assert _details_summary(0, 0) == "▸ 0 earlier steps · 0 tool calls"
+    assert _details_summary(1, 0) == "▸ 1 earlier step · 0 tool calls"
+    assert _details_summary(0, 1) == "▸ 1 earlier step · 1 tool call"
+    assert _details_summary(2, 1) == "▸ 3 earlier steps · 1 tool call"
+
+
+# ---- last_card_truncated semantics ("layered-card-shedding" narrowing) -----
+
+def test_last_card_truncated_false_when_nothing_needs_to_move():
+    """The common case: total content fits verbatim, nothing is hidden at
+    all — last_card_truncated must be False."""
+    sess = _sess()
+    sess.tool_history = [("Bash: ls", True)]
+    card, truncated = build_stream_card_ex(sess, "Working")
+    assert truncated is False
+    assert "<details" not in card
+
+
+def test_last_card_truncated_true_once_any_shedding_is_needed():
+    """last_card_truncated's narrowed meaning still trips True once the
+    card's total content exceeds the char budget and something must
+    genuinely move out of the visible body. Moving content into
+    <details> costs exactly as many characters as leaving it visible
+    (design.md's "core insight") — so once Phase 0 fails, the inner
+    char-budget backstop always ends up trimming SOMETHING to fit under
+    8,000 characters; whatever survives that trim remains fully
+    recoverable via the tap regardless."""
+    sess = _sess()
+    sess.tool_history = [(f"Bash: t-{i} " + "x" * 200, True) for i in range(60)]
+    card, truncated = build_stream_card_ex(sess, "Working")
+    assert truncated is True
+    assert "<details><summary>▸" in card
+
+
+# ---- char budget vs. the byte ceiling ("layered-card-shedding") ------------
+
+def test_card_char_budget_binds_before_byte_ceiling_for_ascii_content():
+    """For plain ASCII content, 1 char == 1 byte, so the tighter
+    8,000-character budget binds well before the 32,768-byte ceiling ever
+    could — extends the test_card_truncation_valid_utf8 pattern to the
+    new dual budget."""
+    sess = _sess()
+    sess.tool_history = [(f"Bash: t-{i} " + "x" * 200, True) for i in range(60)]
+    card = build_stream_card(sess, "Working")
+    assert len(card) <= _CARD_CHAR_BUDGET
+    assert len(card.encode("utf-8")) < 32_768  # nowhere near the byte ceiling
+
+
+def test_card_char_byte_divergence_persian_text_stays_under_both_ceilings():
+    """Persian text is multi-byte per character — the char budget and the
+    byte ceiling must BOTH still hold even when they diverge sharply, and
+    the char-level chop (Python string slicing, not raw bytes) must never
+    produce invalid UTF-8."""
+    sess = _sess()
+    sess.tool_history = [("Bash: " + "سلام دنیا " * 2000, True)]
+    card = build_stream_card(sess, "Working")
+    assert len(card) <= _CARD_CHAR_BUDGET
+    assert len(card.encode("utf-8")) <= 32_768
+    card.encode("utf-8")  # must not raise
+
+
+def test_outer_byte_backstop_drops_the_whole_details_block_before_chopping_it(
+    monkeypatch,
+):
+    """design.md: if the char-fit's output still trips the 32,768-byte
+    ceiling (e.g. dense multi-byte content pushing past what the
+    8,000-character budget alone bounds), the WHOLE <details> block is
+    dropped wholesale first — never partial-byte-chopped inside it, which
+    would leave an unclosed tag. Made deterministic by monkeypatching
+    _fit_sections's return and shrinking _RICH_LIMIT, rather than relying
+    on hunting for real content that naturally trips both ceilings."""
+    import aipager.bot.animation as anim
+
+    # Deliberately bigger than the byte ceiling below so that a naive
+    # head-chop of the COMBINED body would keep the tail END of the
+    # <details> span (its closing "</details>") while dropping its
+    # opening "<details><summary>" — malformed, unclosed-looking markup.
+    # The correct behavior drops the block WHOLESALE instead, leaving
+    # neither tag.
+    fake_details = ("<details><summary>▸ 1 earlier step · 1 tool call</summary>"
+                    "\n\n" + ("x" * 200) + "\n\n</details>")
+    fake_visible = "y" * 40
+    monkeypatch.setattr(
+        anim, "_fit_sections",
+        lambda sections, reserve: (fake_visible, fake_details, False),
+    )
+    monkeypatch.setattr(anim, "_RICH_LIMIT", 120)
+    sess = _sess()
+    card = build_stream_card(sess, "Working")
+    assert "<details" not in card
+    assert "</details>" not in card
+    assert len(card.encode("utf-8")) <= 120
 
 
 # ---- status line at the bottom ("status-line-at-card-bottom") --------------
@@ -1702,7 +1977,7 @@ def test_status_line_tally_still_counts_parent_task_tool_call():
 
 
 def test_status_line_survives_every_shedding_phase():
-    """Phase 1 (run collapse), phase 2 (section folding) and the byte
+    """Phase 1 (run collapse), phase 2 (section folding) and the char
     backstop all leave the status line as the card's last line."""
     sess = _sess("omni")
     sess.busy_started_at = time.monotonic() - 90
@@ -1714,16 +1989,17 @@ def test_status_line_survives_every_shedding_phase():
     sess.stream_commentary = [(i, f"BIG-{i:02d} " + "q" * 1500)
                               for i in range(40)]
     phase2 = build_stream_card(sess, "Working")
-    # byte backstop: one row that alone blows the ceiling
+    # char backstop: one row that alone blows the ceiling
     sess.tool_history = [("Bash: " + "z" * 60000, True)]
     sess.stream_commentary = []
     backstop = build_stream_card(sess, "Working")
     for card in (phase1, phase2, backstop):
+        assert len(card) <= _CARD_CHAR_BUDGET
         assert len(card.encode("utf-8")) <= 32768
         assert card.splitlines()[-1].startswith("⏳ **omni** ·")
-    assert "tool call" in phase1        # phase 1 really engaged
-    assert "hidden" in phase2           # phase 2 really engaged
-    assert backstop.startswith("…")     # backstop really engaged
+    assert "earlier step" in phase1 and "tool call" in phase1  # phase 1 really engaged
+    assert "earlier step" in phase2 and "tool call" in phase2  # phase 2 really engaged
+    assert backstop.startswith("…")     # char backstop really engaged
 
 
 def test_reserve_keeps_the_card_clean_across_the_ceiling_boundary():

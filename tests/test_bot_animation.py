@@ -16,6 +16,7 @@ import pytest
 from aipager.state import Status, TrackedSession
 from aipager.bot.animation import (
     _build_sections,
+    _CARD_CHAR_BUDGET,
     _fit_sections,
     build_full_log,
     build_stream_card_ex,
@@ -900,14 +901,17 @@ def test_build_sections_agent_row_shows_activity_and_elapsed_when_active():
 
 def test_fit_sections_phase1_never_collapses_a_run_containing_an_active_agent_row():
     """Mutation target: including "agent-run" in _fit_sections's own
-    all_runs filter (instead of "run" only) lets Phase 1 collapse a LONE
-    active-agent section directly into an individual "▸ _1 tool call_"
-    placeholder — exactly the string a single-row "run" section collapses
-    to. Tuned so the byte budget forces the agent-run section's bytes to
-    be reduced one way or another; the only LEGITIMATE way that can
-    happen is Phase 2's aggregate "N earlier steps hidden" marker (an
-    accepted last resort — design.md's own documented risk), never an
-    individual Phase-1-style placeholder naming just the agent's own row.
+    all_runs filter (instead of "run" only) lets Phase 1 (and Phase 1b)
+    treat a LONE active-agent section as an ordinary run, eligible to be
+    moved into the <details> block — exactly what the "agent-run" kind
+    exclusion exists to prevent. New signature/return shape
+    (``reserve_chars``, ``(visible_body, details_block, truly_dropped)``)
+    per design.md's rewrite. Tuned so the char budget forces the tiny
+    older run to be genuinely dropped by the backstop (it's too small to
+    survive recoverably at this budget — an accepted last resort) while
+    the still-live agent's own row is never even considered for
+    collapsing: it must survive in the VISIBLE body, never inside the
+    <details> block.
     """
     def _sections():
         old_run = ("run", [f"⏳ `Bash: old-{i} " + "x" * 30 + "`" for i in range(3)])
@@ -916,9 +920,48 @@ def test_fit_sections_phase1_never_collapses_a_run_containing_an_active_agent_ro
         return [old_run, agent_run, newest_run]
 
     budget = 75
-    rows, truncated = _fit_sections(_sections(), 32_768 - budget)
-    assert truncated is True
-    assert "▸ _1 tool call_" not in rows, rows
+    visible_body, details_block, truly_dropped = _fit_sections(
+        _sections(), _CARD_CHAR_BUDGET - budget,
+    )
+    assert truly_dropped is True
+    assert "\U0001f916 explore" in visible_body
+    assert "\U0001f916 explore" not in details_block
+
+
+def test_fit_sections_phase2_never_collapses_an_agent_run_section_reached_only_under_phase2_pressure():
+    """The Phase-2 fix (research.md gotcha ~53): Phase 2 has its own
+    index-walking loop, separate from Phase 1/1b's ``all_runs`` filter,
+    and must ``continue`` (not ``break``) past a still-live agent's
+    section. Sized so there is only ONE "run" section (the newest,
+    protected, 1 row) — Phase 1 and 1b are structural no-ops here, so ALL
+    shedding pressure lands on Phase 2's own walk, and the section
+    immediately AFTER the agent-run section must still get collapsed to
+    prove the loop didn't stop dead at the agent's position.
+    """
+    def _sections():
+        prose_a = ("prose", ["> " + "A" * 1500])
+        agent_run = ("agent-run", ["⏳ `\U0001f916 explore · Bash: ls · 5s`"])
+        prose_b = ("prose", ["> " + "B" * 1500])
+        prose_c = ("prose", ["> " + "C" * 60])  # newest prose — protected
+        newest_run = ("run", ["⏳ `Bash: newest`"])
+        return [prose_a, agent_run, prose_b, prose_c, newest_run]
+
+    budget = 400
+    visible_body, details_block, truly_dropped = _fit_sections(
+        _sections(), _CARD_CHAR_BUDGET - budget,
+    )
+    assert truly_dropped is True
+    # The still-live agent's row always survives, visible, never collapsed.
+    assert "\U0001f916 explore" in visible_body
+    assert "\U0001f916 explore" not in details_block
+    # Both prose sections flanking the agent row are gone from the
+    # visible body — Phase 2 reached prose_b (AFTER the agent's index)
+    # too, proving it continued past the agent rather than stopping there.
+    assert "AAAA" not in visible_body
+    assert "BBBB" not in visible_body
+    # The protected newest prose and newest run survive untouched.
+    assert "CCCC" in visible_body
+    assert "newest" in visible_body
 
 
 def test_build_stream_card_ex_keeps_active_agent_row_visible_under_byte_pressure():
