@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Tapping Allow / Deny / Allow-always in Telegram while a permission
+  prompt's hook is still parked now answers Claude Code directly with a
+  `PermissionRequest` decision instead of injecting `Down`/`Enter`
+  keystrokes into the terminal — no more row-order guessing across
+  Claude Code releases, and "Allow always" only ever echoes a rule
+  Claude itself suggested, never a guessed one. If the daemon is down,
+  the hook already gave up, or anything about that path fails, the tap
+  falls back to the exact same keystroke sequence as before, with
+  identical operator-visible behavior. The audit log now records which
+  path actually answered each tap.
+
 ## [0.7.6] - 2026-09-04
 
 ### Added

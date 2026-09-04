@@ -78,10 +78,26 @@ header changes to "⚠️ Tool failed" until the next event.
 
 ### `PermissionRequest` (and the legacy `permission_prompt`)
 
-Emitted by claude when a tool needs user approval at a moment when
-no `PreToolUse` hook is in flight (e.g. headless flows). aipager
-treats it identically to a `PreToolUse: Ask` and shows the same
-keyboard.
+The primary, first-arriving signal for an ordinary interactive
+permission ask — not, as an earlier version of this doc claimed, a
+moment when no `PreToolUse` hook is in flight. aipager treats it
+identically to a `PreToolUse: Ask` and shows the same keyboard.
+`permission_prompt` (a `Notification` hook) is a slower fallback that
+only fires if `PermissionRequest` didn't already handle it.
+
+On the fast path, `aipager-hook` itself can answer the prompt directly:
+it opens a short-lived reply socket, forwards its address alongside the
+usual datagram, and waits (~20s by default) for the daemon to deliver a
+verdict — allow, allow with a remembered rule ("Allow always"), or deny
+— which it then prints back to Claude Code as a `PermissionRequest`
+decision object, so the tool call resolves with **no** keystrokes sent
+to the terminal at all. If no verdict arrives in time, the daemon can't
+be reached, or anything about that path errors, the hook prints nothing
+and Claude Code's own interactive dialog appears exactly as it always
+has — answered by the existing `Down`/`Enter` keystroke injection when a
+Telegram button is tapped after that point. The audit log
+(`~/.claude/aipager-audit.jsonl`) records which path actually answered
+each tap as `"via": "hook_decision"` or `"via": "keystroke_fallback"`.
 
 ### `SubagentStart` / `SubagentStop`
 
