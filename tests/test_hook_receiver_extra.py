@@ -666,6 +666,196 @@ def test_lsp_outside_cwd_keeps_allow_always(receiver, run_async):
     assert ctx["tool_info"]["always_available"] is True
 
 
+# ---- standing_rule_suggestion (design.md "answer PermissionRequest hooks
+# with a decision instead of keystrokes") -----------------------------------
+
+@pytest.mark.parametrize("suggestions,expected", [
+    ([{"type": "addRules", "rules": []}], {"type": "addRules", "rules": []}),
+    ([{"type": "addDirectories", "directories": ["/tmp"]}],
+     {"type": "addDirectories", "directories": ["/tmp"]}),
+    ([{"type": "setMode", "mode": "acceptEdits", "destination": "session"}], None),
+    ([{"type": "setMode", "mode": "acceptEdits"}, {"type": "addRules", "rules": []}],
+     {"type": "addRules", "rules": []}),
+    ([{"type": "somethingNew"}], None),
+    ([{"rules": []}], None),  # dict with no "type" key at all
+    (["x"], None),
+    ([], None),
+    (None, None),
+    ("nope", None),
+])
+def test_standing_rule_suggestion_retains_the_entry_not_just_a_bool(
+        receiver, run_async, suggestions, expected):
+    """Mirrors test_suggestion_types_gate_always_available's own
+    parametrization, but asserts the RETAINED entry (or None), not just
+    the always_available boolean."""
+    registry, recv, notify_fn = receiver
+    _perm_request(recv, run_async, permission_suggestions=suggestions)
+    _, _, ctx = notify_fn.await_args.args
+    assert ctx["tool_info"]["standing_rule_suggestion"] == expected
+    assert ctx["tool_info"]["always_available"] is (expected is not None)
+
+
+def test_standing_rule_suggestion_picks_the_first_matching_entry(receiver, run_async):
+    """Two distinct addRules entries — the FIRST must be echoed, not the
+    last. Mutation check: change hr._standing_rule_suggestion to return
+    the last matching entry instead of the first -> this test must fail;
+    restore, confirm `git diff aipager/dtach/hook_receiver.py` is empty."""
+    registry, recv, notify_fn = receiver
+    first = {"type": "addRules", "rules": [{"toolName": "Bash", "ruleContent": "ls"}],
+             "behavior": "allow", "destination": "localSettings"}
+    second = {"type": "addRules", "rules": [{"toolName": "Bash", "ruleContent": "pwd"}],
+              "behavior": "allow", "destination": "localSettings"}
+    _perm_request(recv, run_async, permission_suggestions=[first, second])
+    _, _, ctx = notify_fn.await_args.args
+    assert ctx["tool_info"]["standing_rule_suggestion"] == first
+
+
+def test_standing_rule_suggestion_never_returns_setmode(receiver, run_async):
+    """setMode must never come back from _standing_rule_suggestion, even
+    when it's the only entry present — it is a session-wide mode switch,
+    not a standing rule. Mutation check: temporarily widen
+    hr._STANDING_RULE_SUGGESTION_TYPES to include "setMode" -> this test
+    must fail; restore, confirm the tree is byte-identical."""
+    registry, recv, notify_fn = receiver
+    _perm_request(recv, run_async, permission_suggestions=[
+        {"type": "setMode", "mode": "acceptEdits", "destination": "session"},
+    ])
+    _, _, ctx = notify_fn.await_args.args
+    assert ctx["tool_info"]["standing_rule_suggestion"] is None
+
+
+def test_standing_rule_suggestion_none_when_bash_command_not_a_string(receiver, run_async):
+    """The Bash non-string-command narrowing forces both always_available
+    AND standing_rule_suggestion to their negative value — never diverge."""
+    registry, recv, notify_fn = receiver
+    _send(recv, run_async, hook_event_name="PermissionRequest", session="claude-jim",
+          tool_name="Bash", tool_input={"command": None, "description": "x"},
+          permission_suggestions=[{"type": "addRules", "rules": []}])
+    _, _, ctx = notify_fn.await_args.args
+    assert ctx["tool_info"]["always_available"] is False
+    assert ctx["tool_info"]["standing_rule_suggestion"] is None
+
+
+def test_standing_rule_suggestion_none_when_read_outside_working_dir(receiver, run_async):
+    registry, recv, notify_fn = receiver
+    _read_request(recv, run_async, "/tmp/aipager-files/shot.png")
+    _, _, ctx = notify_fn.await_args.args
+    assert ctx["tool_info"]["always_available"] is False
+    assert ctx["tool_info"]["standing_rule_suggestion"] is None
+
+
+# ---- context["hook_reply"] (design.md reply-channel plumbing) -------------
+
+def test_hook_reply_present_when_both_keys_present(receiver, run_async):
+    registry, recv, notify_fn = receiver
+    _perm_request(recv, run_async,
+                  aipager_reply_addr="/run/user/1000/aipager-reply-abc.sock",
+                  aipager_request_id="abc")
+    _, _, ctx = notify_fn.await_args.args
+    assert ctx["hook_reply"] == {
+        "addr": "/run/user/1000/aipager-reply-abc.sock", "request_id": "abc",
+    }
+
+
+@pytest.mark.parametrize("extra", [
+    {},
+    {"aipager_reply_addr": "/run/user/1000/x.sock"},  # missing request_id
+    {"aipager_request_id": "abc"},  # missing addr
+    {"aipager_reply_addr": "", "aipager_request_id": "abc"},  # empty addr
+    {"aipager_reply_addr": "/x.sock", "aipager_request_id": ""},  # empty id
+    {"aipager_reply_addr": 5, "aipager_request_id": "abc"},  # non-string
+])
+def test_hook_reply_none_when_either_key_missing_or_malformed(receiver, run_async, extra):
+    registry, recv, notify_fn = receiver
+    _perm_request(recv, run_async, **extra)
+    _, _, ctx = notify_fn.await_args.args
+    assert ctx["hook_reply"] is None
+
+
+# ---- permission_reply_timeout (design.md self-reported hook give-up) ------
+
+def test_permission_reply_timeout_clears_only_hook_reply(receiver, run_async):
+    from aipager.state import TrackedSession
+
+    registry, recv, notify_fn = receiver
+    sess = TrackedSession(name="claude-jim", label="jim")
+    sess.pending_permission = {
+        "tool_summary": "Bash: ls", "tool_info": {"name": "Bash"},
+        "wait_started_at": 1.0,
+        "hook_reply": {"addr": "/run/user/1000/x.sock", "request_id": "abc"},
+    }
+    registry._sessions["claude-jim"] = sess
+
+    _send(recv, run_async, hook_event_name="permission_reply_timeout",
+          session="claude-jim", aipager_request_id="abc")
+
+    assert sess.pending_permission["hook_reply"] is None
+    # Everything else in pending_permission is untouched.
+    assert sess.pending_permission["tool_summary"] == "Bash: ls"
+    assert sess.pending_permission["wait_started_at"] == 1.0
+
+
+def test_permission_reply_timeout_mismatched_request_id_leaves_it_alone(receiver, run_async):
+    """Regression guard: a stale/duplicate timeout notice for an OLDER
+    request must never clobber a NEWER request's live hook_reply."""
+    from aipager.state import TrackedSession
+
+    registry, recv, notify_fn = receiver
+    sess = TrackedSession(name="claude-jim", label="jim")
+    live_hook_reply = {"addr": "/run/user/1000/newer.sock", "request_id": "newer-id"}
+    sess.pending_permission = {
+        "tool_summary": "Bash: ls", "tool_info": {"name": "Bash"},
+        "wait_started_at": 1.0,
+        "hook_reply": live_hook_reply,
+    }
+    registry._sessions["claude-jim"] = sess
+
+    _send(recv, run_async, hook_event_name="permission_reply_timeout",
+          session="claude-jim", aipager_request_id="older-id")
+
+    assert sess.pending_permission["hook_reply"] == live_hook_reply
+
+
+def test_permission_reply_timeout_uses_registry_get_not_get_or_create(
+        receiver, run_async, monkeypatch):
+    """The branch itself must look the session up with registry.get(),
+    never registry.get_or_create() — spied at the call-site level.
+    _on_datagram's own shared pre-dispatch bookkeeping (unrelated to
+    this feature) already calls get_or_create once for every event type
+    before any branch runs, so this asserts the NEW branch doesn't
+    additionally call it a second time — not that the session is
+    literally absent from the registry, which the shared preamble
+    already rules out regardless of this branch's own implementation.
+
+    Mutation check: change the branch to use registry.get_or_create()
+    -> this test must fail; restore, confirm
+    `git diff aipager/dtach/hook_receiver.py` is empty."""
+    registry, recv, notify_fn = receiver
+    calls = []
+    orig_get_or_create = registry.get_or_create
+
+    def _spy_get_or_create(name):
+        calls.append(name)
+        return orig_get_or_create(name)
+
+    monkeypatch.setattr(registry, "get_or_create", _spy_get_or_create)
+    _send(recv, run_async, hook_event_name="permission_reply_timeout",
+          session="claude-ghost", aipager_request_id="abc")
+    assert calls.count("claude-ghost") == 1
+
+
+def test_permission_reply_timeout_no_pending_permission_is_a_safe_noop(receiver, run_async):
+    from aipager.state import TrackedSession
+
+    registry, recv, notify_fn = receiver
+    sess = TrackedSession(name="claude-jim", label="jim")
+    assert sess.pending_permission is None
+    registry._sessions["claude-jim"] = sess
+    _send(recv, run_async, hook_event_name="permission_reply_timeout",
+          session="claude-jim", aipager_request_id="abc")  # must not raise
+    assert sess.pending_permission is None
+
+
 # ---- finished_subagents cap ("agent activity rows on the busy card") ----
 
 def test_subagent_stop_caps_finished_subagents_list(receiver, run_async):
