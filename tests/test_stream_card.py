@@ -2157,3 +2157,45 @@ def test_reserve_keeps_the_card_clean_across_the_ceiling_boundary():
         assert len(card) <= _CARD_CHAR_BUDGET, n
         assert len(card.encode("utf-8")) <= 32768, n
         assert card.splitlines()[-1].startswith("⏳ **omni** ·"), n
+
+
+def test_newest_content_and_agent_row_survive_extreme_pressure():
+    """Review findings rev-iter1-001 and rev-iter1-006, pinned with the
+    reviewer's own reproduction.
+
+    001: an unauthorized "second wave" dropped EVERY non-agent section —
+    the newest prose and the newest run included — whenever an agent
+    section was present and the protected floor still overflowed, leaving
+    a card whose status line counted 150 tool calls above a body with
+    none. Design rule 7 forbids dropping the newest run or newest prose.
+
+    006: removing that wave exposed the opposite loss — the tail-keeping
+    chop deleted the agent row outright, because an agent sits
+    chronologically before the newest content. The chop now keeps agent
+    rows (never their nested folds) and cuts only what follows.
+    """
+    sess = _sess("probe")
+    sess.busy_started_at = time.monotonic() - 30
+    sess.stream_commentary.append((0, "OLD-NARRATIVE " + "o" * 2000))
+    for i in range(5):
+        sess.record_tool(f"Bash: old-{i} " + "x" * 200, True)
+    idx = sess.record_tool("\U0001f916 agent starting", False)
+    sess.active_subagents["a1"] = {
+        "type": "worker", "activity": "digging",
+        "started_at": time.monotonic() - 20, "history_idx": idx,
+        "tools": [f"Read: /path/to/file_{i}.py" for i in range(40)],
+    }
+    sess.stream_commentary.append(
+        (len(sess.tool_history), "Newest prose sentence. " * 60))
+    for i in range(150):
+        sess.record_tool(f"Grep: some_pattern_{i} in some/really/long/path", True)
+
+    card, dropped = build_stream_card_ex(sess, "Working")
+
+    assert dropped is True
+    assert "Newest prose sentence" in card          # rev-iter1-001
+    assert card.count("some_pattern_") > 0          # rev-iter1-001
+    assert "worker" in card                          # rev-iter1-006
+    assert "OLD-NARRATIVE" not in card               # oldest still yields first
+    assert len(card) <= 8_800
+    assert card.rstrip().splitlines()[-1].startswith("\u23f3 **probe** \u00b7")

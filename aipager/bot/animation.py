@@ -532,17 +532,12 @@ def _fit_sections(
       comes from measuring the real candidate. At most one reassemble+
       measure per SECTION dropped (not per row), so this stays cheap.
     - If the protected floor that remains still exceeds either real,
-      measured bound, a second wave (still skipping every agent section,
-      no other exceptions this time) drops the newest-prose/newest-run/
-      last-section survivors too, oldest-first, reassembling and
-      re-measuring after each — an agent section (live or settled) must
-      never be the section a chop targets first (entrypoints.md), so
-      this whole-section drop is preferred over ever touching an agent
-      row's own text. Only once nothing non-agent is left to drop does
-      :func:`_chop_to_fit` — a raw head-chop, characters first, then
-      bytes — become unavoidable; same accepted "rare, can cut mid-block"
-      severity class documented in design.md's Risks, now reached only
-      when even every non-agent section combined can't make room.
+      measured bound, fall straight to the raw tail-keeping chop. The
+      newest run and the newest prose are NEVER dropped wholesale to make
+      room (design.md rule 7): a card that keeps its agent row but shows
+      no tool rows at all, while its own status line still counts them,
+      is worse than one whose head was cut.
+
 
     ``dropped`` is True only when a whole section was actually removed or
     the raw chop fired — never merely because some section's own content
@@ -600,40 +595,33 @@ def _fit_sections(
         if _fits(body):
             return body, True
 
-    # Second wave, last resort before ever touching an agent section's own
-    # text: the newest-prose/newest-run/last-section protection Step B
-    # gave everything above was about ORDINARY shedding, not about "what
-    # survives when literally nothing else can be dropped." An agent
-    # section (live or settled) must never be the section a chop targets
-    # first (entrypoints.md) — so, ONLY when an agent section is actually
-    # present to protect, drop whatever non-agent sections remain,
-    # oldest-first, with no further exceptions, before falling to a
-    # character-level chop that could otherwise corrupt the agent's own
-    # row. Without an agent section present, there is nothing to protect
-    # from the chop, and dropping the sole remaining (newest-run/prose)
-    # section WHOLESALE here would throw away MORE than the ordinary
-    # tail-keeping chop does for no benefit — so this wave is skipped
-    # entirely in that case, same as before this refinement.
-    if any(kept_flags[i] and kinds[i] in ("agent-run", "agent-settled")
-           for i in range(n)):
-        start = 0
-        while start < n:
-            if not kept_flags[start] or kinds[start] in ("agent-run", "agent-settled"):
-                start += 1
-                continue
-            kept_flags[start] = False
-            start += 1
-            body = _body([i for i in range(n) if kept_flags[i]])
-            if _fits(body):
-                return body, True
-
     # The protected floor alone still exceeds a real, measured bound —
     # the raw chop always runs here; no path above returns without this
     # final string having actually been verified.
     body = _body([i for i in range(n) if kept_flags[i]])
     if not _fits(body):
         dropped_any = True
-        body = _chop_to_fit(body, char_budget, byte_budget)
+        # An agent row sits chronologically BEFORE the newest prose/run, so
+        # a plain tail-keeping chop deletes it outright — the operator would
+        # lose the only sign that a background agent is running, which is
+        # exactly what the agent rows exist to show (review rev-iter1-006).
+        # Keep those rows (never their nested folds, which are the bulky
+        # part) and chop only what follows them.
+        agent_rows = [
+            texts[i].split(_ROW_SEP, 1)[0]
+            for i in range(n)
+            if kept_flags[i] and kinds[i] in ("agent-run", "agent-settled")
+        ]
+        head = _ROW_SEP.join(agent_rows)
+        if agent_rows and _fits(head):
+            reserve = len(head) + len(_ROW_SEP)
+            reserve_b = len(head.encode("utf-8")) + len(_ROW_SEP.encode("utf-8"))
+            tail = _chop_to_fit(
+                body, char_budget - reserve, byte_budget - reserve_b,
+            )
+            body = f"{head}{_ROW_SEP}{tail}" if tail else head
+        else:
+            body = _chop_to_fit(body, char_budget, byte_budget)
     return body, dropped_any
 
 
