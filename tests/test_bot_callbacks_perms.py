@@ -120,6 +120,221 @@ def test_allow_always_degraded_tap_says_so(mk_bot, mk_query, run_async):
                for summary, _done in sess.tool_history), sess.tool_history
 
 
+def _answer_for(bot, mk_query, run_async, action, *, pending=None,
+                 send_decision_result=True):
+    """Like :func:`_keys_for`, but also patches
+    ``aipager.dtach.hook_reply.send_decision`` and ``aipager.audit.append``.
+
+    Returns ``(keys_sent, hook_decision_calls, via)`` — ``hook_decision_calls``
+    is the list of ``(hook_reply, decision)`` tuples ``send_decision`` was
+    called with, ``via`` is the last ``audit.append(..., via=...)`` kwarg
+    seen (``None`` if audit.append was never called, e.g. no
+    ``pending_permission`` at all)."""
+    sess = TrackedSession(name="claude-dev", label="dev", status=Status.INTERACTIVE)
+    sess.pending_permission = pending
+    bot.registry._sessions["claude-dev"] = sess
+    update, query = mk_query(f"claude-dev:{action}")
+
+    key_calls = []
+    hook_decision_calls = []
+    audit_calls = []
+
+    async def mock_send_keys(session_name, key):
+        key_calls.append(key)
+        return True
+
+    async def mock_is_alive(name):
+        return True
+
+    def mock_send_decision(hook_reply_dict, decision):
+        hook_decision_calls.append((hook_reply_dict, decision))
+        # Mirror the real function's own defensive contract: a missing/
+        # malformed hook_reply is always False, regardless of
+        # send_decision_result — only a genuinely present hook_reply's
+        # outcome is under this fixture's control.
+        if not isinstance(hook_reply_dict, dict):
+            return False
+        return send_decision_result
+
+    def mock_audit_append(**kwargs):
+        audit_calls.append(kwargs)
+        return True
+
+    with patch("aipager.dtach.inject.send_keys", side_effect=mock_send_keys), \
+         patch("aipager.dtach.inject.is_alive", side_effect=mock_is_alive), \
+         patch("aipager.dtach.hook_reply.send_decision", side_effect=mock_send_decision), \
+         patch("aipager.audit.append", side_effect=mock_audit_append):
+        run_async(bot._handle_callback(update, MagicMock()))
+
+    via = audit_calls[-1]["via"] if audit_calls else None
+    return key_calls, hook_decision_calls, via
+
+
+_HOOK_REPLY = {"addr": "/tmp/aipager-reply-test.sock", "request_id": "deadbeef" * 4}
+_STANDING_SUGGESTION = {
+    "type": "addRules", "rules": [{"toolName": "Bash", "ruleContent": "ls"}],
+    "behavior": "allow", "destination": "localSettings",
+}
+
+
+# ---- hook-decision-succeeds: zero keystrokes, via="hook_decision" ---------
+
+def test_allow_uses_hook_decision_when_available(mk_bot, mk_query, run_async):
+    pending = {"tool_summary": "Bash: x", "tool_info": {"name": "Bash"},
+               "hook_reply": _HOOK_REPLY}
+    keys, calls, via = _answer_for(mk_bot(), mk_query, run_async, "allow", pending=pending)
+    assert keys == []
+    assert len(calls) == 1
+    hr, decision = calls[0]
+    assert hr == _HOOK_REPLY
+    assert decision == {"behavior": "allow"}
+    assert via == "hook_decision"
+
+
+def test_allow_always_uses_hook_decision_with_standing_rule(mk_bot, mk_query, run_async):
+    pending = {"tool_summary": "Bash: x",
+               "tool_info": {"name": "Bash", "always_available": True,
+                             "standing_rule_suggestion": _STANDING_SUGGESTION},
+               "hook_reply": _HOOK_REPLY}
+    keys, calls, via = _answer_for(mk_bot(), mk_query, run_async, "allow_always", pending=pending)
+    assert keys == []
+    assert len(calls) == 1
+    hr, decision = calls[0]
+    assert hr == _HOOK_REPLY
+    assert decision == {"behavior": "allow", "updatedPermissions": [_STANDING_SUGGESTION]}
+    assert via == "hook_decision"
+
+
+def test_allow_always_degraded_still_tries_a_plain_hook_decision(mk_bot, mk_query, run_async):
+    """No standing rule to echo — still tries the hook path first with a
+    PLAIN allow (no updatedPermissions), which needs no navigation."""
+    pending = {"tool_summary": "Bash: x",
+               "tool_info": {"name": "Bash", "always_available": False,
+                             "standing_rule_suggestion": None},
+               "hook_reply": _HOOK_REPLY}
+    keys, calls, via = _answer_for(mk_bot(), mk_query, run_async, "allow_always", pending=pending)
+    assert keys == []
+    assert len(calls) == 1
+    hr, decision = calls[0]
+    assert decision == {"behavior": "allow"}
+    assert via == "hook_decision"
+
+
+def test_deny_uses_hook_decision_when_available(mk_bot, mk_query, run_async):
+    pending = {"tool_summary": "Bash: x", "tool_info": {"name": "Bash"},
+               "hook_reply": _HOOK_REPLY}
+    keys, calls, via = _answer_for(mk_bot(), mk_query, run_async, "deny", pending=pending)
+    assert keys == []
+    assert len(calls) == 1
+    hr, decision = calls[0]
+    assert hr == _HOOK_REPLY
+    assert via == "hook_decision"
+
+
+# ---- hook-decision-fails (or absent): existing keystroke fallback ----------
+
+def test_allow_falls_back_to_keystrokes_when_hook_reply_absent(mk_bot, mk_query, run_async):
+    pending = {"tool_summary": "Bash: x", "tool_info": {"name": "Bash"}}
+    keys, calls, via = _answer_for(mk_bot(), mk_query, run_async, "allow", pending=pending)
+    assert keys == ["Enter"]
+    assert via == "keystroke_fallback"
+
+
+def test_allow_falls_back_to_keystrokes_when_send_decision_fails(mk_bot, mk_query, run_async):
+    pending = {"tool_summary": "Bash: x", "tool_info": {"name": "Bash"},
+               "hook_reply": _HOOK_REPLY}
+    keys, calls, via = _answer_for(mk_bot(), mk_query, run_async, "allow", pending=pending,
+                                    send_decision_result=False)
+    assert keys == ["Enter"]
+    assert len(calls) == 1
+    assert via == "keystroke_fallback"
+
+
+def test_allow_always_falls_back_to_existing_keystrokes_when_hook_fails(mk_bot, mk_query, run_async):
+    pending = {"tool_summary": "Bash: x",
+               "tool_info": {"name": "Bash", "always_available": True,
+                             "standing_rule_suggestion": _STANDING_SUGGESTION},
+               "hook_reply": _HOOK_REPLY}
+    keys, calls, via = _answer_for(mk_bot(), mk_query, run_async, "allow_always", pending=pending,
+                                    send_decision_result=False)
+    assert keys == ["Down", "Enter"]
+    assert via == "keystroke_fallback"
+
+
+def test_deny_falls_back_to_existing_overshoot_when_hook_fails(mk_bot, mk_query, run_async):
+    pending = {"tool_summary": "Bash: x", "tool_info": {"name": "Bash"},
+               "hook_reply": _HOOK_REPLY}
+    keys, calls, via = _answer_for(mk_bot(), mk_query, run_async, "deny", pending=pending,
+                                    send_decision_result=False)
+    assert keys[-1] == "Enter"
+    assert set(keys[:-1]) == {"Down"}
+    assert len(keys) - 1 >= 4
+    assert via == "keystroke_fallback"
+
+
+def test_existing_pinned_keystroke_tests_still_pass_via_answer_for(mk_bot, mk_query, run_async):
+    """Regression pin: with no hook_reply at all, the answer_for harness
+    reproduces exactly what _keys_for's own dedicated tests already pin —
+    this is the 'existing keystroke sequences fire exactly' requirement,
+    checked through the new harness too."""
+    keys, calls, via = _answer_for(mk_bot(), mk_query, run_async, "allow",
+                                    pending={"tool_info": {"name": "Bash"}})
+    assert keys == ["Enter"]
+    assert calls and calls[0][1] == {"behavior": "allow"}  # hook WAS attempted
+    assert via == "keystroke_fallback"  # ...but it failed (no hook_reply), so keys fired
+
+
+# ---- AskUserQuestion guard: hook_reply.send_decision never called ----------
+
+@pytest.mark.parametrize("action", ["allow", "allow_always", "deny"])
+def test_ask_user_question_never_attempts_hook_decision(mk_bot, mk_query, run_async, action):
+    pending = {"tool_summary": "AskUserQuestion (loading…)",
+               "tool_info": {"name": "AskUserQuestion",
+                             "standing_rule_suggestion": _STANDING_SUGGESTION},
+               "hook_reply": _HOOK_REPLY}
+    keys, calls, via = _answer_for(mk_bot(), mk_query, run_async, action, pending=pending)
+    assert calls == []
+    assert via == "keystroke_fallback"
+
+
+# ---- deny message shape: PermissionRequest {behavior, message, interrupt} -
+
+def test_deny_decision_shape_is_permission_request_not_pretooluse(mk_bot, mk_query, run_async):
+    pending = {"tool_summary": "Bash: x", "tool_info": {"name": "Bash"},
+               "hook_reply": _HOOK_REPLY}
+    _keys, calls, _via = _answer_for(mk_bot(), mk_query, run_async, "deny", pending=pending)
+    assert len(calls) == 1
+    _hr, decision = calls[0]
+    assert decision.keys() == {"behavior", "message", "interrupt"}
+    assert decision["behavior"] == "deny"
+    assert isinstance(decision["message"], str) and decision["message"]
+    assert decision["interrupt"] is False
+    # Never the PreToolUse shape (enforce.deny_decision_json).
+    assert "reason" not in decision
+    assert "decision" not in decision
+
+
+# ---- allow_always defense-in-depth: never echoes setMode -------------------
+
+def test_allow_always_never_echoes_setmode_even_if_it_slips_through(mk_bot, mk_query, run_async):
+    """Simulates a hypothetical future bug upstream that let a non-
+    standing-rule suggestion through onto tool_info — the callback layer
+    must independently refuse to echo it, not just trust the retained
+    value."""
+    bogus = {"type": "setMode", "mode": "acceptEdits", "destination": "session"}
+    pending = {"tool_summary": "Write: x",
+               "tool_info": {"name": "Write", "always_available": True,
+                             "standing_rule_suggestion": bogus},
+               "hook_reply": _HOOK_REPLY}
+    keys, calls, via = _answer_for(mk_bot(), mk_query, run_async, "allow_always", pending=pending)
+    assert keys == []
+    assert len(calls) == 1
+    _hr, decision = calls[0]
+    assert "updatedPermissions" not in decision
+    assert decision == {"behavior": "allow"}
+    assert via == "hook_decision"
+
+
 def test_deny_overshoots_to_the_last_option(mk_bot, mk_query, run_async):
     """Deny must overshoot, not step to a fixed index.
 

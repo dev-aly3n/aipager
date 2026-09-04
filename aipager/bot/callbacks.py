@@ -31,7 +31,7 @@ from telegram.ext import (
 )
 
 from aipager.bot import new_flow, session_parity
-from aipager.dtach import inject
+from aipager.dtach import hook_reply, inject
 
 from aipager import preferences
 from aipager.bot.settings_menu import (
@@ -113,6 +113,14 @@ log = logging.getLogger(__name__)
 # No), so the menu can be four rows deep: two Downs from the top would stop
 # ON the auto-mode row; five clamp onto "No" whatever the length.
 _DENY_OVERSHOOT = 5
+
+# Mirrors aipager.dtach.hook_receiver._STANDING_RULE_SUGGESTION_TYPES —
+# deliberately duplicated, not imported, so this decision-building code
+# doesn't take on hook_receiver.py's module surface as a dependency (same
+# decoupling convention as _TASK_NOTIFICATION_PREFIX elsewhere in this
+# codebase). See the "Defense in depth" comment at its one call site
+# (allow_always) for why this check exists here too, not only there.
+_STANDING_RULE_SUGGESTION_TYPES = frozenset({"addRules", "addDirectories"})
 
 
 _PERMS_POLL_COUNT = 15
@@ -912,6 +920,13 @@ class CallbackDispatchMixin:
         ok = True
         perm = sess.pending_permission or {}
         answer_text = None  # a branch may override the "<verb> [label]" toast
+        # design.md "answer PermissionRequest hooks with a decision
+        # instead of keystrokes": allow/allow_always/deny set this to
+        # "hook_decision" or "keystroke_fallback"; every other action
+        # (opt<N>, submit, continue, ...) leaves it empty — audit.append's
+        # own `via` kwarg defaults to "" too, so this changes nothing for
+        # them.
+        via = ""
         if is_option or action == "submit":
             log.info("[%s] Callback: action=%s, multi_select=%s, has_perm=%s",
                      sess.label, action, perm.get("multi_select"), bool(perm))
@@ -1074,10 +1089,72 @@ class CallbackDispatchMixin:
                 ok = await inject.send_keys(session_name, "Enter")
         elif action == "allow":
             verb = ACTION_VERBS[action]
-            ok = await inject.send_keys(session_name, "Enter")
+            # design.md "answer PermissionRequest hooks with a decision
+            # instead of keystrokes": try the hook-returned-decision fast
+            # path first — skipped entirely for AskUserQuestion, which
+            # keeps its existing keystroke-only handling untouched.
+            hook_answered = False
+            if (perm.get("tool_info") or {}).get("name") != "AskUserQuestion":
+                try:
+                    hook_answered = hook_reply.send_decision(
+                        perm.get("hook_reply"), hook_reply.allow_decision())
+                except Exception:
+                    hook_answered = False
+            if hook_answered:
+                via = "hook_decision"
+                ok = True
+            else:
+                via = "keystroke_fallback"
+                ok = await inject.send_keys(session_name, "Enter")
         elif action == "allow_always":
             perm_info = perm.get("tool_info") or {}
-            if perm_info.get("always_available") is True:
+            standing_rule = perm_info.get("standing_rule_suggestion")
+            # Defense in depth: re-validate the retained suggestion's
+            # ``type`` here too, not only at hook_receiver.py's own
+            # retention point (_standing_rule_suggestion). A future bug
+            # upstream that let a non-standing-rule entry (e.g. a
+            # ``setMode`` session-wide mode switch) through onto
+            # tool_info["standing_rule_suggestion"] must still never get
+            # echoed as "Allow always"'s updatedPermissions — treat
+            # anything outside this set exactly like "no suggestion at
+            # all" (the degraded case below).
+            if not (isinstance(standing_rule, dict)
+                    and standing_rule.get("type") in _STANDING_RULE_SUGGESTION_TYPES):
+                standing_rule = None
+            hook_answered = False
+            if perm_info.get("name") != "AskUserQuestion":
+                try:
+                    if standing_rule is not None:
+                        hook_answered = hook_reply.send_decision(
+                            perm.get("hook_reply"),
+                            hook_reply.allow_decision(
+                                updated_permissions=[standing_rule]),
+                        )
+                    else:
+                        # Degraded case (no standing rule to echo) — a
+                        # PLAIN allow still eliminates the dialog-row-
+                        # order fragility the keystroke fallback below
+                        # exists to work around, since it needs no
+                        # navigation at all.
+                        hook_answered = hook_reply.send_decision(
+                            perm.get("hook_reply"), hook_reply.allow_decision())
+                except Exception:
+                    hook_answered = False
+            if hook_answered:
+                via = "hook_decision"
+                ok = True
+                if standing_rule is not None:
+                    verb = ACTION_VERBS[action]
+                else:
+                    verb = ACTION_VERBS["allow"]
+                    answer_text = (
+                        f"No always-rule for this command — allowed once [{sess.label}]"
+                    )
+                    log.info("[%s] allow_always degraded to a single allow "
+                             "(always_available=%r)", sess.label,
+                             perm_info.get("always_available"))
+            elif perm_info.get("always_available") is True:
+                via = "keystroke_fallback"
                 verb = ACTION_VERBS[action]
                 # One Down → "Yes, and don't ask again for …", the second
                 # row — present exactly when the hook carried permission
@@ -1094,6 +1171,7 @@ class CallbackDispatchMixin:
                 # blind would drop the session into auto mode while
                 # reporting "Allowed always". Never navigate — confirm the
                 # pre-selected "Yes" and say so.
+                via = "keystroke_fallback"
                 verb = ACTION_VERBS["allow"]
                 answer_text = (
                     f"No always-rule for this command — allowed once [{sess.label}]"
@@ -1104,14 +1182,40 @@ class CallbackDispatchMixin:
                 ok = await inject.send_keys(session_name, "Enter")
         elif action == "deny":
             verb = ACTION_VERBS[action]
-            # Overshoot to the last item — see _DENY_OVERSHOOT.
-            for _ in range(_DENY_OVERSHOOT):
-                if not await inject.send_keys(session_name, "Down"):
-                    ok = False
-                    break
-                await asyncio.sleep(0.1)
-            if ok:
-                ok = await inject.send_keys(session_name, "Enter")
+            hook_answered = False
+            if (perm.get("tool_info") or {}).get("name") != "AskUserQuestion":
+                actor_for_reason = (
+                    member if member is not None and member.id != 0 else None
+                )
+                reason = (
+                    f"Denied via aipager by {attribution_label(actor_for_reason)}"
+                    if actor_for_reason else "Denied via aipager"
+                )
+                try:
+                    # PermissionRequest's {behavior, message, interrupt}
+                    # shape — NEVER enforce.py's deny_decision_json
+                    # (PreToolUse's incompatible permissionDecision
+                    # shape). interrupt is always False here: this is
+                    # "no to this one tool call", never "abort the turn".
+                    hook_answered = hook_reply.send_decision(
+                        perm.get("hook_reply"),
+                        hook_reply.deny_decision(message=reason, interrupt=False),
+                    )
+                except Exception:
+                    hook_answered = False
+            if hook_answered:
+                via = "hook_decision"
+                ok = True
+            else:
+                via = "keystroke_fallback"
+                # Overshoot to the last item — see _DENY_OVERSHOOT.
+                for _ in range(_DENY_OVERSHOOT):
+                    if not await inject.send_keys(session_name, "Down"):
+                        ok = False
+                        break
+                    await asyncio.sleep(0.1)
+                if ok:
+                    ok = await inject.send_keys(session_name, "Enter")
         elif action == "continue":
             verb = ACTION_VERBS[action]
             ok = await inject.send_keys(session_name, "Enter")
@@ -1147,6 +1251,7 @@ class CallbackDispatchMixin:
                     scope_label=self._scope_label(sess.scope_chat_id),
                     scope_chat_id=sess.scope_chat_id or None,
                     denied=(verb == "Deny"),
+                    via=via,
                 )
 
                 # Audit reply in chat — persistent record of the decision
@@ -1224,7 +1329,8 @@ class CallbackDispatchMixin:
                     text = self._build_busy_text(sess.label, "Working", sess)
                     await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
                     self._start_animation(sess)
-                    log.info("[%s] Inline permission: %s", sess.label, verb)
+                    log.info("[%s] Inline permission: %s (via=%s)",
+                             sess.label, verb, via or "n/a")
             else:
                 # Original behavior: edit the separate permission message
                 try:
