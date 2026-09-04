@@ -1685,17 +1685,21 @@ def test_newest_run_survives_phase2_with_trailing_prose():
     must not make that run eligible for phase-2 removal. Geometry: phase 2
     must march past two huge prose sections and the older run and arrive
     AT the newest run while still over budget — without the index guard
-    the run (already 1b-collapsed to placeholder + newest row) would be
-    removed wholesale; with it, the newest row survives."""
+    the run (already 1b-shed down to its collapsed rows plus its own
+    newest row) would be swept away wholesale; with it, the newest row
+    survives via the char-budget backstop's tail-keep, exactly the
+    rev-iter1-001 guard this test targets. Every row here dwarfs the new
+    8,000-character budget on its own, so this exercises the innermost
+    char-chop-the-visible-body backstop, not the <details> block at all."""
     sess = _sess()
     tools = [(f"Bash: old-{i}", True) for i in range(10)]
     tools += [(f"Bash: {'r' * 300}-{i}", True) for i in range(90)]
     # The run's newest row is itself huge, sentinel at its END: after
-    # phase 1b the remainder [marker, placeholder, this row, trailing]
-    # still exceeds the budget, so phase 2 arrives AT the newest run —
-    # the exact moment the index guard decides between "break and let the
-    # tail-keep backstop preserve the newest text" (correct) and "remove
-    # the live tail wholesale" (the rev-iter1-001 bug).
+    # phase 1b the remainder still exceeds the budget, so phase 2 arrives
+    # AT the newest run — the exact moment the index guard decides
+    # between "break and let the tail-keep backstop preserve the newest
+    # text" (correct) and "remove the live tail wholesale" (the
+    # rev-iter1-001 bug).
     tools.append(("Bash: " + "z" * 33000 + "NEWEST-ROW-END", True))
     sess.tool_history = tools
     sess.stream_commentary = [
@@ -1704,6 +1708,7 @@ def test_newest_run_survives_phase2_with_trailing_prose():
         (len(tools), "tiny trailing note"),
     ]
     card = build_stream_card(sess, "Working")
+    assert len(card) <= _CARD_CHAR_BUDGET
     assert len(card.encode("utf-8")) <= 32768
     assert "NEWEST-ROW-END" in card
     assert "tiny trailing note" in card
