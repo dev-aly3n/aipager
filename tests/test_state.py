@@ -296,10 +296,33 @@ def test_archive_finished_subagent_snapshots_type_elapsed_count_and_tools():
     assert sess.finished_subagents == [{
         "type": "explore", "started_at": 100.0, "elapsed": 7.5,
         "tool_count": 2, "tools": ["Bash: ls", "Read: /x"],
+        "history_idx": 0,
     }]
     # It's a SNAPSHOT — mutating the source dict afterward must not leak in
     info["tools"].append("Grep: foo")
     assert sess.finished_subagents[0]["tools"] == ["Bash: ls", "Read: /x"]
+
+
+def test_archive_finished_subagent_links_history_idx_for_the_nested_fold():
+    """collapse-busy-card-timeline's one state addition: history_idx links
+    a settled agent's archived tools back to its row, so the busy card's
+    per-section renderer can find its own nested <details> fold."""
+    from aipager.state import TrackedSession
+    sess = TrackedSession(name="claude-jim", label="jim")
+    info = {"type": "explore", "started_at": 0.0, "history_idx": 7, "tools": []}
+    sess.archive_finished_subagent("explore", info, 1.0)
+    assert sess.finished_subagents[0]["history_idx"] == 7
+
+
+def test_archive_finished_subagent_history_idx_is_none_without_a_source_value():
+    """A hand-built *info* that never went through the real
+    subagent_start path (e.g. an old test, or a truly orphaned entry) —
+    the field is present but None, never a missing key."""
+    from aipager.state import TrackedSession
+    sess = TrackedSession(name="claude-jim", label="jim")
+    info = {"type": "explore", "started_at": 0.0, "tools": []}  # no history_idx
+    sess.archive_finished_subagent("explore", info, 1.0)
+    assert sess.finished_subagents[0]["history_idx"] is None
 
 
 # ----- Status not persisted (2.2 invariant lock-in) -----

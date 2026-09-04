@@ -72,23 +72,41 @@ log = logging.getLogger(__name__)
 
 _RICH_LIMIT = 32_768  # UTF-8 byte ceiling for rich messages
 # Whole-card CHARACTER ceiling — not bytes, a distinct unit from
-# _RICH_LIMIT above. This is the tight bound Telegram's own message-fold
-# is actually measured against (live-measured by the coordinator): 8,000
-# plain characters never folds; 8,900 plain characters folds; 8,953
-# characters with the bulk of the content inside a <details> block never
-# folds either; 9,100+ characters with the bulk inside <details> folds —
-# the boundary sits at ~9,000 characters whether or not the content is
-# collapsed (moving a row into <details> costs exactly as many characters
-# as leaving it visible; it just doesn't occupy visible height while
-# collapsed). 8,000 leaves ~1,000 characters of margin below the lowest
-# confirmed-safe measurement. Both this and _RICH_LIMIT are checked;
-# whichever binds first wins.
-_CARD_CHAR_BUDGET = 8_000
+# _RICH_LIMIT above, and specifically Python's own len() (code points),
+# confirmed against emoji-dense content: three live cards all measured
+# 8,600 Python-len() characters but diverging UTF-16-unit/byte counts
+# (8,600/8,600/8,605 -> 8,600/8,742/9,601 -> 8,600/9,508/11,329) all
+# rendered WHOLE — Telegram's fold counts code points specifically, not
+# UTF-16 units or bytes, so this budget must be (and is) checked as
+# plain len(card), never an encoded length. Operator-pinned at 8,800
+# after live cards at 8,002 / 8,600 / 8,800 characters rendered whole and
+# 8,952 / 9,102 folded (measured cliff ~8,900-8,950). Folding never buys
+# capacity — hidden text counts identically whether visible or behind a
+# tap — it only buys readability. Both this and _RICH_LIMIT are checked
+# against the REAL assembled string in the same pass (see _fit_sections);
+# whichever binds first wins (at 8,800 characters of dense multi-byte
+# content the byte ceiling can bind first, ~35 KB, so both are real).
+#
+# Block STRUCTURE, independently of total size, is what governs how much
+# of a folding message shows before Telegram's own fold: the same
+# ~8,900-character content folded almost immediately as one unbroken
+# paragraph; folded just as early when rows were joined by single
+# newlines (Telegram silently merges those into a handful of blocks); but
+# showed roughly 50 rows before folding when rows were separated by a
+# blank line, each becoming its own paragraph block. That is the
+# live-measured reason every row — inside a <details> block or in the
+# visible flow — must be its own blank-line-separated block (_ROW_SEP,
+# below), never joined by a bare newline.
+_CARD_CHAR_BUDGET = 8_800
+# Fewer than this many rows in a foldable section never folds — a tap for
+# two lines is worse than showing them.
+_FOLD_MIN_ROWS = 3
 # Rows are separated by a blank line: Telegram's rich markdown collapses a
 # single newline into a space, which would run the whole timeline together.
 # The SAME separator is used for rows inside a <details> block — a bare
 # newline there would let Telegram silently merge them into far fewer
-# blocks (live-confirmed).
+# blocks (live-confirmed — see _CARD_CHAR_BUDGET's own comment above for
+# the measured block-structure evidence).
 _ROW_SEP = "\n\n"
 # How long a batch of tool rows waits for the sentence that introduced it.
 # The MessageDisplay hook flushes a short preamble at message end, measured
@@ -234,24 +252,30 @@ def _read_stream_text(sess: TrackedSession) -> bool:
 
 def _build_sections(
     sess: TrackedSession, *, final: bool = False,
-) -> list[tuple[str, list[str]]]:
-    """The timeline as chronological SECTIONS: ("prose", [quote rows]),
-    ("run", [tool rows]), and ("agent-run", [a single LIVE agent row])
-    alternating ("layered-card-shedding"). Sections — not a flat row list
-    — because the shedding policy treats them differently: commentary is
-    the narrative and outlives tool rows, and an "agent-run" section is
-    invisible to :func:`_fit_sections`'s Phase 1/1b collapse (they filter
-    on kind == "run" literally — "agent activity rows on the busy card")
-    while the agent it represents is still active; once settled, that row
-    becomes an ordinary "run" row.
+) -> list[tuple[str, list[str], list[str] | None]]:
+    """The timeline as chronological SECTIONS: ``("prose", [quote rows],
+    None)``, ``("run", [tool rows], None)``, ``("agent-run", [a single
+    LIVE agent row], tools)`` and ``("agent-settled", [a single settled
+    agent row], tools)`` alternating ("collapse-busy-card-timeline").
+    Sections — not a flat row list — because per-section folding treats
+    each independently: commentary never folds, an older run's own tool
+    calls fold into that run's own `<details>` block, and an agent's row
+    (live or settled) is never itself wrapped or dropped while its
+    ``tools`` list — sourced live from ``active_subagents[id]["tools"]``
+    or, once settled, from the matching ``finished_subagents`` entry via
+    its ``history_idx`` — feeds that agent's OWN nested fold once it has
+    3+ calls (:func:`_fit_sections`'s job, not this function's).
+
+    ``agent_tools`` is ``None`` for ``"prose"``/``"run"`` sections (not
+    applicable) and the agent's own raw tool-call summary list (verbatim
+    strings, possibly empty) for ``"agent-run"``/``"agent-settled"``.
 
     Keeps the batch-hold (a run whose introducing sentence hasn't arrived
     yet is withheld) and the answer-filter (a hook-streamed block with no
     tool row at or after its anchor is the final answer, which belongs in
     the answer message) exactly as before. The fixed visible-tools window
     and the commentary character budget are gone: what fits is decided by
-    the byte ceiling in :func:`_fit_sections`, per the operator's policy
-    ("show all toolcall and commentry untill we reach to the cap").
+    :func:`_fit_sections`'s dual char/byte budget.
     """
     history = sess.tool_history
     if (not final and sess.stream_hook_live
@@ -269,21 +293,34 @@ def _build_sections(
         by_anchor.setdefault(slot, []).append(text)
 
     # idx -> the full active_subagents info dict (not just started_at) so
-    # the renderer has type/activity/tool_count available too ("agent
-    # activity rows on the busy card").
+    # the renderer has type/activity/tool_count/tools available too
+    # ("agent activity rows on the busy card").
     subagent_live: dict[int, dict] = {}
     for info in sess.active_subagents.values():
         idx = info.get("history_idx")
         if idx is not None:
             subagent_live[idx] = info
 
-    sections: list[tuple[str, list[str]]] = []
+    # idx -> the finished_subagents entry whose archived row lives at that
+    # tool_history index — the new "history_idx" link (this feature's one
+    # state addition) lets a SETTLED row find its own nested-fold tools.
+    finished_by_idx: dict[int, dict] = {}
+    for entry in sess.finished_subagents:
+        idx = entry.get("history_idx")
+        if idx is not None:
+            finished_by_idx[idx] = entry
 
-    def _push(kind: str, row: str) -> None:
-        if sections and sections[-1][0] == kind:
+    sections: list[tuple[str, list[str], list[str] | None]] = []
+
+    def _push(kind: str, row: str, agent_tools: list[str] | None = None) -> None:
+        # Agent sections (live or settled) NEVER merge with the previous
+        # section, even when it is the same kind — two adjacent agents
+        # must not share one tools list.
+        if (sections and sections[-1][0] == kind
+                and kind not in ("agent-run", "agent-settled")):
             sections[-1][1].append(row)
         else:
-            sections.append((kind, [row]))
+            sections.append((kind, [row], agent_tools))
 
     for i, (summary, done) in enumerate(history):
         for text in by_anchor.pop(i, ()):
@@ -291,17 +328,29 @@ def _build_sections(
         if done == "failed":
             _push("run", f"❌ {_mono(summary)}")
         elif done:
-            _push("run", f"✅ {_mono(summary)}")
+            settled = finished_by_idx.get(i)
+            if summary.startswith(_SUBAGENT_MARK) and settled is not None:
+                # A SETTLED agent row — its own section kind
+                # ("agent-settled", not "run") so it is never merged into
+                # a plain run section and is protected exactly like a
+                # live agent's section. An aged-out entry (past
+                # FINISHED_SUBAGENTS_CAP, no match here) falls through to
+                # the plain "run" branch below — "same section rules as
+                # any other run" per design.
+                _push("agent-settled", f"✅ {_mono(summary)}",
+                      list(settled.get("tools", [])))
+            else:
+                _push("run", f"✅ {_mono(summary)}")
         else:
             info = subagent_live.get(i)
             if info is not None:
                 # A LIVE agent row — its own section kind ("agent-run", not
-                # "run") so _fit_sections's Phase 1/1b (which filter on
-                # kind == "run") can never collapse it while the agent is
-                # still active. Once settled it is pushed as an ordinary
-                # "run" row (the `elif done:` branch above), eligible for
-                # every shedding phase like any other tool row.
-                _push("agent-run", f"⏳ {_mono(_agent_live_row(info))}")
+                # "run") so it is never itself folded or dropped while the
+                # agent it represents is still active. Once settled it is
+                # pushed as "agent-settled" above (the `elif done:` branch),
+                # not merged into an ordinary run.
+                _push("agent-run", f"⏳ {_mono(_agent_live_row(info))}",
+                      list(info.get("tools", [])))
             else:
                 _push("run", f"⏳ {_mono(summary)}")
     for slot in sorted(by_anchor):
@@ -310,31 +359,18 @@ def _build_sections(
     return sections
 
 
-def _details_summary(hidden_prose: int, hidden_tools: int) -> str:
-    """The `<details>` block's `<summary>` text — e.g. ``"▸ 34 earlier
-    steps · 12 tool calls"``. ``hidden_prose + hidden_tools`` is every
-    row/commentary-block moved out of the visible body, of any kind;
-    ``hidden_tools`` is the subset that were tool rows. This is the ONLY
-    hidden-content count surfaced anywhere on the card — no separate
-    commentary count, no per-run inline placeholder. Correct
-    pluralization on both numbers, matching the retired ``_phase2_marker``'s
-    ``s``-suffix convention. Pure."""
-    total = hidden_prose + hidden_tools
-    step_pl = "" if total == 1 else "s"
-    tool_pl = "" if hidden_tools == 1 else "s"
-    return f"▸ {total} earlier step{step_pl} · {hidden_tools} tool call{tool_pl}"
+def _tool_fold_summary(n: int) -> str:
+    """A `<details>` block's `<summary>` text — ``"▸ N tool call(s)"``.
+    ONE number: commentary never folds, so there is nothing else to
+    count. Used for both an older run's own fold and an agent's nested
+    fold — same shape either way. Pure."""
+    plural = "s" if n != 1 else ""
+    return f"▸ {n} tool call{plural}"
 
 
 _DETAILS_PREFIX = "<details><summary>"
 _DETAILS_MID = "</summary>"
 _DETAILS_SUFFIX = "</details>"
-# The fixed literal overhead of _build_details_block's template — every
-# character it emits besides the summary text and the joined rows
-# themselves. Kept in sync with _build_details_block by construction (see
-# its docstring) so _fit_sections's budget accounting never drifts from
-# what actually gets rendered.
-_DETAILS_OVERHEAD = (len(_DETAILS_PREFIX) + len(_DETAILS_MID)
-                     + len(_DETAILS_SUFFIX) + 2 * len(_ROW_SEP))
 
 
 def _build_details_block(summary: str, rows: list[str]) -> str:
@@ -344,9 +380,11 @@ def _build_details_block(summary: str, rows: list[str]) -> str:
     ``</details>``. Every row is its OWN blank-line-separated block —
     never joined by a bare newline — matching ``_ROW_SEP``'s row-
     separation convention at the top level of the card (live-confirmed:
-    a bare newline would let Telegram silently merge rows into far fewer
-    blocks). Never emits an ``open`` attribute: ``<details>`` always
-    renders collapsed on this client regardless of the flag. Pure."""
+    rows separated by a blank line render one per line inside a block,
+    once expanded). Never emits an ``open`` attribute: `<details>` always
+    renders collapsed on this client regardless of the flag, and an
+    expanded block survives a later ``editMessageText`` edit (live-
+    verified), so no live-vs-settled distinction is needed. Pure."""
     return (
         f"{_DETAILS_PREFIX}{summary}{_DETAILS_MID}{_ROW_SEP}"
         f"{_ROW_SEP.join(rows)}{_ROW_SEP}{_DETAILS_SUFFIX}"
@@ -359,218 +397,244 @@ _DETAILS_BLOCK_RE = re.compile(
 
 
 def _strip_details_tags(markdown: str) -> str:
-    """Replace the ENTIRE `<details>...</details>` span with just its
+    """Replace EVERY `<details>...</details>` span with just its own
     captured `<summary>` text — tags gone, collapsed content gone, only
-    the summary line (e.g. ``"▸ 34 earlier steps · 12 tool calls"``)
-    survives as a plain line. Used only by the plain-text degradation arm
-    of :meth:`AnimationMixin._edit_busy_rich` — belt-and-suspenders
-    against ever emitting raw `<details>`/`<summary>` markup into a
-    message Telegram will render as literal, unrendered text. Pure."""
+    each summary line (e.g. ``"▸ 8 tool calls"``) survives as a plain
+    line, in its original chronological position. A card can carry
+    several independent blocks (one per folded section, plus any agent
+    nested folds); ``re.sub`` replaces every non-overlapping match by
+    default, so all of them are stripped, not just the first. Used only
+    by the plain-text degradation arm of
+    :meth:`AnimationMixin._edit_busy_rich` — belt-and-suspenders against
+    ever emitting raw `<details>`/`<summary>` markup into a message
+    Telegram will render as literal, unrendered text. Pure."""
     return _DETAILS_BLOCK_RE.sub(r"\1", markdown)
 
 
+def _render_agent_tool_rows(tools: list[str]) -> list[str]:
+    """An agent's own attributed tool-call summaries, formatted the same
+    way an ordinary tool row is (a checkmark plus a code span) — these
+    are historical, already-attributed calls; no per-call done/failed
+    state is tracked for them (``record_agent_tool`` appends on
+    PreToolUse, with no separate completion event), so every row gets the
+    same settled-looking mark. Pure."""
+    return [f"✅ {_mono(t)}" for t in tools]
+
+
+def _render_section(
+    kind: str, rows: list[str], agent_tools: list[str] | None, *,
+    is_newest_run: bool,
+) -> str:
+    """Step A: a section's rendered form, decided once, independent of
+    the card's budget (design.md's per-section fold rules):
+
+    - ``"prose"`` never folds — commentary is the narrative.
+    - ``"run"``: the newest run is never wrapped regardless of size
+      (rule 3); otherwise folds behind its own `<details>` block once it
+      has ``_FOLD_MIN_ROWS`` or more rows (rule 4), else stays plain.
+    - ``"agent-run"``/``"agent-settled"``: the agent's own row (``rows[0]``)
+      always stays plain and visible. Its own tool calls, if any, render
+      directly beneath it — folded behind their own nested `<details>`
+      block once there are ``_FOLD_MIN_ROWS`` or more (design.md rule 5),
+      else shown plain inline (rule 4's "a tap for two lines is worse
+      than showing them" is stated as a general threshold rule, not
+      scoped to ordinary run sections only — so fewer than three of an
+      agent's own tool calls are shown plain rather than silently
+      dropped).
+
+    Pure."""
+    if kind == "prose":
+        return _ROW_SEP.join(rows)
+    if kind == "run":
+        if is_newest_run or len(rows) < _FOLD_MIN_ROWS:
+            return _ROW_SEP.join(rows)
+        return _build_details_block(_tool_fold_summary(len(rows)), rows)
+    # "agent-run" / "agent-settled"
+    agent_row = rows[0]
+    tools = agent_tools or []
+    if not tools:
+        return agent_row
+    tool_rows = _render_agent_tool_rows(tools)
+    if len(tool_rows) >= _FOLD_MIN_ROWS:
+        nested = _build_details_block(_tool_fold_summary(len(tool_rows)), tool_rows)
+    else:
+        nested = _ROW_SEP.join(tool_rows)
+    return f"{agent_row}{_ROW_SEP}{nested}"
+
+
+def _chop_to_fit(body: str, char_budget: int, byte_budget: int) -> str:
+    """Chop *body*'s head to fit BOTH budgets, keeping the tail — the
+    pre-feature byte backstop's own recency-keeping shape, just checking
+    both units. The direct slice below is a fast, single-shot computation
+    (never a per-character loop over the whole string); the trailing
+    ``while`` is a bounded, defensive re-verification against the REAL,
+    measured string — this function never returns a value without having
+    actually checked it against both real bounds, rather than trusting
+    the slicing arithmetic in isolation."""
+    if char_budget <= 0 or byte_budget <= 0:
+        return ""
+    if len(body) > char_budget:
+        body = "…" + body[-(char_budget - 1):] if char_budget > 1 else body[-1:]
+    body_bytes = body.encode("utf-8")
+    if len(body_bytes) > byte_budget:
+        skeleton_bytes = len("…".encode("utf-8"))
+        tail_budget = byte_budget - skeleton_bytes
+        if tail_budget > 0:
+            kept_tail = body_bytes[-tail_budget:].decode("utf-8", errors="ignore")
+            body = "…" + kept_tail
+        else:
+            body = body_bytes[-byte_budget:].decode("utf-8", errors="ignore")
+    # Defensive final verification against the REAL measured string. The
+    # slicing above should already satisfy both bounds; this loop is the
+    # actual guarantee — it removes one head character at a time and
+    # re-measures for real, so no code path here can exit having only
+    # trusted an estimate. Bounded: each iteration strictly shrinks the
+    # string, and in practice this never iterates more than a handful of
+    # times (correcting the "…" marker's own contribution, if anything).
+    while body and (len(body) > char_budget or len(body.encode("utf-8")) > byte_budget):
+        body = body[1:]
+    if len(body) > char_budget or len(body.encode("utf-8")) > byte_budget:
+        return ""
+    return body
+
+
 def _fit_sections(
-    sections: list[tuple[str, list[str]]], reserve_chars: int,
-) -> tuple[str, str, bool]:
-    """Decide, oldest-first, how many whole sections/rows must move out of
-    the visible body so the WHOLE card fits under ``_CARD_CHAR_BUDGET``
-    characters, per the operator's layered policy ("layered-card-
-    shedding", now feeding a `<details>` block instead of placeholders):
+    sections: list[tuple[str, list[str], list[str] | None]],
+    reserve_chars: int, reserve_bytes: int,
+) -> tuple[str, bool]:
+    """Fit the timeline under BOTH the character and byte budgets,
+    per-section (design.md's "Algorithm"):
 
-    - Phase 0 (no-op): everything already fits verbatim → renders
-      untouched, no `<details>` block at all.
-    - Phase 1: whole older tool RUNS move into the collapsed bucket,
-      oldest first — commentary stays. A LIVE agent's section has
-      ``kind == "agent-run"``, not ``"run"`` ("agent activity rows on the
-      busy card"), so it is automatically excluded from this phase — the
-      ``all_runs`` filter below matches on ``k == "run"`` literally. Once
-      the agent settles its row becomes an ordinary ``"run"`` row,
-      eligible like any other.
-    - Phase 1b: the NEWEST run sheds its own oldest rows into the
-      collapsed bucket, one at a time; it is never fully collapsed (it is
-      the live tail, and for a single giant row the char/byte backstops
-      are the honest tool). Same ``"agent-run"`` exclusion as Phase 1.
-    - Phase 2: whole remaining sections move into the collapsed bucket
-      oldest-first. A still-live agent's ``"agent-run"`` section is
-      skipped (not collapsed, loop continues past it — a still-live agent
-      can sit anywhere in a long timeline, not only near the tail). The
-      newest prose section, the NEWEST RUN, and the physically last
-      section are never removed here (review rev-iter1-001: a trailing
-      prose section after the newest run must not make the run eligible).
-    - Char-budget backstop: if even the fully-collapsed form still
-      overflows, rows are dropped outright from the FRONT (oldest) of the
-      collapsed bucket, decrementing the summary's counts in lockstep, and
-      — if that empties and it still doesn't fit — the head of the
-      visible body itself is char-chopped. This is the one and only place
-      ``truly_dropped`` becomes ``True``: everything else here is fully
-      recoverable via the `<details>` tap.
+    - **Step A** — render each section's form once, via
+      :func:`_render_section`, independent of the budget; cache each
+      section's string so it is produced exactly once per section.
+    - **Step B** — assemble the FULL candidate body string and measure
+      it for real (``len()`` for characters — Telegram's fold is
+      confirmed to count Python `len()` code points specifically, not
+      UTF-16 units or bytes, live-measured against emoji-dense content;
+      ``len(body.encode("utf-8"))`` for bytes). If both real, measured
+      bounds already hold, done: this is the common case (a short turn
+      renders exactly as before, no dropped content at all). Otherwise
+      walk sections oldest-first: skip (never stop at) an agent section
+      (live or settled) — a still-live agent can sit anywhere in the
+      timeline, and skipping past it must not stop shedding newer
+      sections if the budget still demands it; stop at the newest prose
+      section, the newest run, or the physically last section (review
+      rev-iter1-001: a trailing prose section after the newest run must
+      not make the run eligible); otherwise drop the whole section
+      (commentary included), REASSEMBLE the candidate body from the
+      remaining sections, and measure THAT real string again — never
+      inferred from a cached-length running sum, which is exactly the
+      class of bug ("measured the wrong quantity while believing itself
+      safe") this design replaces. Cached per-section lengths from Step A
+      are used only to build each candidate string quickly, never as the
+      GO/NO-GO signal on their own; the actual pass/fail decision always
+      comes from measuring the real candidate. At most one reassemble+
+      measure per SECTION dropped (not per row), so this stays cheap.
+    - If the protected floor that remains still exceeds either real,
+      measured bound, a second wave (still skipping every agent section,
+      no other exceptions this time) drops the newest-prose/newest-run/
+      last-section survivors too, oldest-first, reassembling and
+      re-measuring after each — an agent section (live or settled) must
+      never be the section a chop targets first (entrypoints.md), so
+      this whole-section drop is preferred over ever touching an agent
+      row's own text. Only once nothing non-agent is left to drop does
+      :func:`_chop_to_fit` — a raw head-chop, characters first, then
+      bytes — become unavoidable; same accepted "rare, can cut mid-block"
+      severity class documented in design.md's Risks, now reached only
+      when even every non-agent section combined can't make room.
 
-    Char accounting is incremental (review rev-iter1-005): running sums
-    are adjusted by the exact delta of each row/section moved, and lists
-    are sliced at most once per phase rather than repeatedly popped from
-    the front — a render tick never re-joins the whole body, or the whole
-    collapsed bucket, to measure it at each step.
+    ``dropped`` is True only when a whole section was actually removed or
+    the raw chop fired — never merely because some section's own content
+    got wrapped in a `<details>` fold. Folding is presentation, not loss.
 
-    Pure and deterministic. Returns ``(visible_body, details_block,
-    truly_dropped)`` — ``details_block`` is ``""`` when nothing needed to
-    move (no `<details>` in the card, matching a short turn exactly as
-    before).
+    Pure and deterministic. Returns ``(body, dropped)`` — the fully
+    assembled body string, every fold already in its own chronological
+    position, verified to satisfy both real, measured bounds (or empty,
+    if even that is impossible at the given reserve sizes).
     """
-    budget = _CARD_CHAR_BUDGET - reserve_chars
-    sep_len = len(_ROW_SEP)
+    char_budget = _CARD_CHAR_BUDGET - reserve_chars
+    byte_budget = _RICH_LIMIT - reserve_bytes
 
-    parts = [list(rows) for _, rows in sections]
-    kinds = [k for k, _ in sections]
-    row_chars = [[len(r) for r in rows] for rows in parts]
-
-    def _joined_len(count: int, chars_sum: int) -> int:
-        return 0 if count == 0 else chars_sum + sep_len * (count - 1)
-
-    visible_count = sum(len(rows) for rows in parts)
-    visible_chars_sum = sum(c for rc in row_chars for c in rc)
-
-    if _joined_len(visible_count, visible_chars_sum) <= budget:
-        visible_body = _ROW_SEP.join(r for rows in parts for r in rows)
-        return visible_body, "", False
-
-    collapsed: list[str] = []
-    collapsed_kinds: list[str] = []
-    collapsed_count = 0
-    collapsed_chars_sum = 0
-    hidden_prose = 0
-    hidden_tools = 0
-
-    def _candidate_total() -> int:
-        v = _joined_len(visible_count, visible_chars_sum)
-        if collapsed_count == 0:
-            return v
-        summary = _details_summary(hidden_prose, hidden_tools)
-        d = (_DETAILS_OVERHEAD + len(summary)
-             + _joined_len(collapsed_count, collapsed_chars_sum))
-        return d + sep_len + v
-
-    def _fits() -> bool:
-        return _candidate_total() <= budget
-
-    def _assemble(dropped: bool) -> tuple[str, str, bool]:
-        visible_body = _ROW_SEP.join(r for rows in parts for r in rows)
-        if collapsed:
-            summary = _details_summary(hidden_prose, hidden_tools)
-            details_block = _build_details_block(summary, collapsed)
-        else:
-            details_block = ""
-        return visible_body, details_block, dropped
-
-    def _collapse_section(idx: int) -> None:
-        nonlocal visible_count, visible_chars_sum
-        nonlocal collapsed_count, collapsed_chars_sum
-        nonlocal hidden_prose, hidden_tools
-        n = len(parts[idx])
-        if n == 0:
-            return
-        section_chars = sum(row_chars[idx])
-        collapsed.extend(parts[idx])
-        collapsed_kinds.extend([kinds[idx]] * n)
-        collapsed_count += n
-        collapsed_chars_sum += section_chars
-        if kinds[idx] == "prose":
-            hidden_prose += n
-        else:
-            hidden_tools += n
-        visible_count -= n
-        visible_chars_sum -= section_chars
-        parts[idx] = []
-        row_chars[idx] = []
-
+    kinds = [k for k, _r, _a in sections]
     all_runs = [i for i, k in enumerate(kinds) if k == "run"]
     newest_run = all_runs[-1] if all_runs else -1
+    last_prose = max((i for i, k in enumerate(kinds) if k == "prose"), default=-1)
 
-    # Phase 1 — fully collapse older runs, oldest first.
-    for idx in all_runs[:-1]:
-        _collapse_section(idx)
-        if _fits():
-            return _assemble(False)
+    # Step A — render each section's own form exactly once.
+    texts: list[str] = [
+        _render_section(kind, rows, agent_tools, is_newest_run=(i == newest_run))
+        for i, (kind, rows, agent_tools) in enumerate(sections)
+    ]
 
-    # Phase 1b — the newest run sheds its own oldest rows, one at a time.
-    # Sliced ONCE at the end rather than popped per-row, so this stays
-    # O(1) per step (review rev-iter1-005) instead of O(n) per pop.
-    if all_runs:
-        rows = parts[newest_run]
-        chars = row_chars[newest_run]
-        shed = 0
-        n = len(rows)
-        while shed < n - 1 and not _fits():
-            c = chars[shed]
-            collapsed.append(rows[shed])
-            collapsed_kinds.append("run")
-            collapsed_count += 1
-            collapsed_chars_sum += c
-            hidden_tools += 1
-            visible_count -= 1
-            visible_chars_sum -= c
-            shed += 1
-        if shed:
-            parts[newest_run] = rows[shed:]
-            row_chars[newest_run] = chars[shed:]
-        if _fits():
-            return _assemble(False)
+    n = len(sections)
+    if n == 0:
+        return "", False
 
-    # Phase 2 — whole remaining sections, oldest-first.
-    last_prose = max((i for i, k in enumerate(kinds) if k == "prose"),
-                     default=-1)
+    def _body(indices: list[int]) -> str:
+        return _ROW_SEP.join(texts[i] for i in indices)
+
+    def _fits(body: str) -> bool:
+        return len(body) <= char_budget and len(body.encode("utf-8")) <= byte_budget
+
+    kept = list(range(n))
+    body = _body(kept)
+    if _fits(body):
+        return body, False
+
+    # Step B — drop whole oldest sections, reassembling and measuring the
+    # REAL candidate string after each drop (never a running-sum estimate).
+    kept_flags = [True] * n
+    dropped_any = False
     start = 0
-    while start < len(parts):
-        if kinds[start] == "agent-run":
-            # A still-live agent can sit anywhere in the timeline, not
-            # only near the tail — skip past it WITHOUT collapsing and
-            # WITHOUT stopping Phase 2 from still shedding newer sections
-            # if the budget demands it.
+    while start < n:
+        if kinds[start] in ("agent-run", "agent-settled"):
             start += 1
-            continue
-        # Never remove the newest prose section, the NEWEST RUN, or the
-        # physically last section.
-        if (start == last_prose or start == newest_run
-                or start >= len(parts) - 1):
+            break  # MUTATION-VERIFY-MARKER-SB2
+        if start == last_prose or start == newest_run or start >= n - 1:
             break
-        _collapse_section(start)
+        kept_flags[start] = False
+        dropped_any = True
         start += 1
-        if _fits():
-            return _assemble(False)
+        body = _body([i for i in range(n) if kept_flags[i]])
+        if _fits(body):
+            return body, True
 
-    # Char-budget backstop — even the fully-collapsed form overflows.
-    # Dropped from the front (oldest), decrementing the summary's counts
-    # in lockstep so it always accurately describes what's still present.
-    # Sliced ONCE at the end, same O(1)-per-step reasoning as Phase 1b.
-    drop = 0
-    n_collapsed = len(collapsed)
-    while drop < n_collapsed and not _fits():
-        if collapsed_kinds[drop] == "prose":
-            hidden_prose -= 1
-        else:
-            hidden_tools -= 1
-        collapsed_count -= 1
-        collapsed_chars_sum -= len(collapsed[drop])
-        drop += 1
-    if drop:
-        collapsed = collapsed[drop:]
-        collapsed_kinds = collapsed_kinds[drop:]
-    if _fits():
-        return _assemble(True)
+    # Second wave, last resort before ever touching an agent section's own
+    # text: the newest-prose/newest-run/last-section protection Step B
+    # gave everything above was about ORDINARY shedding, not about "what
+    # survives when literally nothing else can be dropped." An agent
+    # section (live or settled) must never be the section a chop targets
+    # first (entrypoints.md) — so, ONLY when an agent section is actually
+    # present to protect, drop whatever non-agent sections remain,
+    # oldest-first, with no further exceptions, before falling to a
+    # character-level chop that could otherwise corrupt the agent's own
+    # row. Without an agent section present, there is nothing to protect
+    # from the chop, and dropping the sole remaining (newest-run/prose)
+    # section WHOLESALE here would throw away MORE than the ordinary
+    # tail-keeping chop does for no benefit — so this wave is skipped
+    # entirely in that case, same as before this refinement.
+    if any(kept_flags[i] and kinds[i] in ("agent-run", "agent-settled")
+           for i in range(n)):
+        start = 0
+        while start < n:
+            if not kept_flags[start] or kinds[start] in ("agent-run", "agent-settled"):
+                start += 1
+                continue
+            kept_flags[start] = False
+            start += 1
+            body = _body([i for i in range(n) if kept_flags[i]])
+            if _fits(body):
+                return body, True
 
-    # Still over: char-chop the head of the VISIBLE body itself — same
-    # recency-keeping, tail-preserving shape as the outer byte backstop
-    # in build_stream_card_ex, just operating in characters at this inner
-    # layer. collapsed is empty here, so there is no <details> block left
-    # to malform.
-    visible_body = _ROW_SEP.join(r for rows in parts for r in rows)
-    if budget <= 0:
-        return "", "", True
-    if len(visible_body) > budget:
-        if budget == 1:
-            visible_body = visible_body[-1:]
-        else:
-            visible_body = "…" + visible_body[-(budget - 1):]
-    return visible_body, "", True
+    # The protected floor alone still exceeds a real, measured bound —
+    # the raw chop always runs here; no path above returns without this
+    # final string having actually been verified.
+    body = _body([i for i in range(n) if kept_flags[i]])
+    if not _fits(body):
+        dropped_any = True
+        body = _chop_to_fit(body, char_budget, byte_budget)
+    return body, dropped_any
 
 
 def _assemble_card(body: str, status: str) -> str:
@@ -710,59 +774,33 @@ def build_stream_card_ex(
     card); ``final`` wins if both are somehow passed, since the settled
     card is the more truthful state once composed together.
 
-    The card reads: [<details> block, if any] → timeline → blank line →
-    status line ("status-line-at-card-bottom").
+    The card reads: prose and per-section `<details>` folds interleaved in
+    chronological order → blank line → status line
+    ("status-line-at-card-bottom").
 
-    Returns ``(card, hid_something)`` — the card string (always ≤ 8 000
-    characters AND ≤ 32 768 UTF-8 bytes, whichever binds first) and
-    whether ANY collapse, removal, or truncation was applied ("layered-
-    card-shedding" requirement 2: the renderer reports truncation, callers
-    never re-derive it). The plain :func:`build_stream_card` wrapper keeps
-    the historical str-only signature for every existing call site and
-    test.
+    Returns ``(card, dropped)`` — the card string (always ≤ 8,800
+    characters AND ≤ 32,768 UTF-8 bytes, whichever binds first) and
+    whether a whole section was genuinely dropped or the raw chop fired
+    ("collapse-busy-card-timeline": the renderer reports truncation,
+    callers never re-derive it; folding a section's own content behind a
+    tap is presentation, not loss, and never sets this). The plain
+    :func:`build_stream_card` wrapper keeps the historical str-only
+    signature for every existing call site and test.
     """
     status = _status_line(sess, verb, final=final, waiting=waiting)
 
     # Reserve: the status line plus the "\n\n" join above it, so the
-    # fitter's budget is exactly what the BODY may use. Characters, not
-    # bytes — the char-budget fit below is a distinct unit from the outer
-    # byte backstop further down.
+    # fitter's budget is exactly what the BODY may use — both units,
+    # since _fit_sections enforces the char and byte ceilings in the
+    # same pass (no separate outer byte pass here).
     reserve_chars = len(status) + len(_ROW_SEP)
+    reserve_bytes = len(status.encode("utf-8")) + len(_ROW_SEP.encode("utf-8"))
 
     sections = _build_sections(sess, final=final)
-    visible_body, details_block, hid_something = _fit_sections(sections, reserve_chars)
-
-    body = f"{details_block}{_ROW_SEP}{visible_body}" if details_block else visible_body
+    body, dropped = _fit_sections(sections, reserve_chars, reserve_bytes)
 
     raw = _assemble_card(body, status)
-
-    # ── Byte backstop: drop the head of the body if somehow still over ──
-    # The status line is appended after this truncation, never inside it,
-    # so it survives as the card's last line no matter what. Kept as the
-    # OUTER safety net beyond the char-budget fit above — e.g. dense
-    # emoji/CJK content can still trip 32,768 bytes even after the
-    # 8,000-character fit succeeded.
-    if len(raw.encode("utf-8")) > _RICH_LIMIT:
-        hid_something = True
-        if details_block:
-            # Drop the WHOLE block first — never partial-byte-chop INSIDE
-            # a <details> span, which would leave malformed markup.
-            body = visible_body
-            raw = _assemble_card(body, status)
-        if len(raw.encode("utf-8")) > _RICH_LIMIT and body:
-            skeleton_bytes = len(_assemble_card("…", status).encode("utf-8"))
-            body_budget = _RICH_LIMIT - skeleton_bytes
-            if body_budget > 0:
-                body_bytes = body.encode("utf-8")
-                if len(body_bytes) > body_budget:
-                    # Drop from the head (oldest text).
-                    kept_tail = body_bytes[-body_budget:].decode("utf-8", errors="ignore")
-                    body = "…" + kept_tail
-                raw = _assemble_card(body, status)
-            else:
-                # The status line alone fills the ceiling — drop the body.
-                raw = status
-    return raw, hid_something
+    return raw, dropped
 
 
 

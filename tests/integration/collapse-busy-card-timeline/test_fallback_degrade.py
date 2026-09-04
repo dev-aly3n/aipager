@@ -30,8 +30,12 @@ def test_fallback_required_edit_carries_summary_but_no_details_markup(
 ):
     bot = mk_bot()
     sess = _sess()
-    # Force a <details> block to exist in the rendered markdown.
-    sess.tool_history = [(f"Bash: t-{i} " + "x" * 200, True) for i in range(60)]
+    # Force a <details> block to exist: folding needs an OLDER section, and
+    # only commentary creates one — a bare run is the newest and never folds.
+    # Small enough to FIT: an over-budget card would drop the older section
+    # outright instead of folding it, leaving no summary to degrade.
+    sess.tool_history = [(f"Bash: t-{i} " + "x" * 20, True) for i in range(20)]
+    sess.stream_commentary = [(0, "First pass."), (10, "Second pass.")]
 
     monkeypatch.setattr(
         "aipager.bot.animation.edit_message_text_rich",
@@ -48,7 +52,7 @@ def test_fallback_required_edit_carries_summary_but_no_details_markup(
     assert "<details" not in text
     assert "<summary" not in text
     assert "</details>" not in text
-    assert "earlier step" in text  # the summary line survives, plain text
+    assert "tool call" in text  # each fold's summary survives, plain text
     assert call.kwargs.get("parse_mode") is None
 
 

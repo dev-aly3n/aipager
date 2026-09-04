@@ -750,6 +750,15 @@ class TrackedSession:
         from the caller (SubagentStop's own payload), not re-derived from
         *info*, since a hand-built *info* dict in a test may not carry a
         ``type`` matching the event's.
+
+        ``history_idx`` (collapse-busy-card-timeline's one state addition)
+        links the archived entry back to its own row/tools in
+        ``tool_history``, so the busy card's per-section renderer can find
+        a SETTLED agent's own nested `<details>` fold. It is already set
+        synchronously by the ``subagent_start`` handler before any
+        ``SubagentStop`` can arrive on this single-threaded loop, so
+        *info* always carries the right value (or ``None`` for a
+        hand-built *info* in a test that never went through that path).
         """
         self.finished_subagents.append({
             "type": agent_type,
@@ -757,6 +766,7 @@ class TrackedSession:
             "elapsed": elapsed,
             "tool_count": info.get("tool_count", 0),
             "tools": list(info.get("tools", [])),
+            "history_idx": info.get("history_idx"),
         })
         if len(self.finished_subagents) > FINISHED_SUBAGENTS_CAP:
             drop = len(self.finished_subagents) - FINISHED_SUBAGENTS_CAP

@@ -1,9 +1,15 @@
 """spec.md requirement 4 ("Shedding"): an active agent row is never
-collapsed by phase-1 "▸ N tool calls" folding while the agent is still
-running — driven end-to-end through ``build_stream_card_ex`` with an
-oversized ``tool_history`` to force byte-pressure truncation, exactly
-the scenario a long-running turn with many parent tool calls produces
-in production.
+folded or dropped while the agent is still running — driven end-to-end
+through ``build_stream_card_ex`` with an oversized ``tool_history``/
+``stream_commentary`` to force genuine truncation, exactly the scenario
+a long-running turn with many parent tool calls produces in production.
+
+Updated for "collapse-busy-card-timeline": the single-global-budget
+phase machinery this file originally targeted is retired in favor of
+per-section folding (design.md) — "phase2-only" is now "step-b-only",
+and the specific retired placeholder text this file used to check for
+is gone, replaced by checking the row never lands inside a `<details>`
+block at all.
 """
 
 from __future__ import annotations
@@ -46,22 +52,26 @@ def _oversized_sess(*, agent_position="middle"):
         ]
         history = fat_rows + [agent_row]
         idx = len(fat_rows)
-    elif agent_position == "phase2-only":
+    elif agent_position == "step-b-only":
         # Only ONE "run" section exists in the whole timeline (the
-        # trailing "Bash: newest" row) — Phase 1 and 1b are structural
-        # no-ops (there is no OLDER run to collapse, and the single-row
-        # newest run has nothing left to shed), so ALL shedding pressure
-        # lands on Phase 2's own index walk. That walk must pass THROUGH
-        # the agent's own section (kind == "agent-run") without
-        # collapsing it, and keep going to shed the prose sections
-        # flanking it — the specific gap research.md gotcha ~53 names
-        # (Phase 2 has no agent-run exclusion of its own, only Phase 1/1b
-        # do, via the "run"-only kind filter).
+        # trailing "Bash: newest" row, 1 row, so it never folds anyway) —
+        # there is nothing foldable at all, so ALL shedding pressure
+        # lands on Step B's whole-section drop walk. That walk must pass
+        # THROUGH the agent's own section (kind == "agent-run") without
+        # dropping it, and keep going to shed the prose sections flanking
+        # it — the specific gap research.md gotcha ~53 names (today's
+        # Step B has no agent-run exclusion of its own unless it is
+        # added explicitly, distinct from the newest-run/newest-prose
+        # kind filters).
         history = [agent_row, ("Bash: newest", True)]
         idx = 0
+        # PROSE-A alone is deliberately too small to free enough room on
+        # its own — Step B must continue PAST the agent's section (skip,
+        # not stop) and also drop PROSE-B (chronologically AFTER the
+        # agent) to fit, proving the loop didn't halt at the agent.
         commentary = [
-            (0, "PROSE-A " + "a" * 4200),
-            (1, "PROSE-B " + "b" * 4200),
+            (0, "PROSE-A " + "a" * 500),
+            (1, "PROSE-B " + "b" * 9000),
             (2, "PROSE-C " + "c" * 60),
         ]
     else:
@@ -91,31 +101,31 @@ def test_active_agent_row_text_survives_forced_truncation_as_newest():
     assert f"{MARK} crawler · Bash: find . -name '*.py' · 8s" in card
 
 
-def test_active_agent_row_is_never_replaced_by_a_single_tool_call_placeholder():
-    """The specific phase-1 collapse text ("▸ 1 tool call" / "▸ _1 tool
-    call_") that a lone ordinary "run" section of one row would fold
-    into must never appear for the still-active agent's own row."""
+def test_active_agent_row_is_never_folded_behind_a_details_block():
+    """A lone-row run would normally be too short to fold anyway (rule 4:
+    under 3 rows never folds) — but the still-active agent's own row must
+    never be wrapped in a <details> block regardless of row count."""
     sess = _oversized_sess(agent_position="middle")
     card, truncated = build_stream_card_ex(sess, "Working")
     assert truncated is True
-    assert "▸ _1 tool call_" not in card
-    assert "▸ 1 tool call" not in card
+    if "<details>" in card:
+        assert f"{MARK} crawler" not in card.split("</details>", 1)[0]
 
 
-def test_active_agent_row_survives_when_only_phase2_pressure_reaches_it():
+def test_active_agent_row_survives_when_only_step_b_pressure_reaches_it():
     """Extends this file's own documented gap: neither "middle" nor
-    "newest" ever forces Phase 2 (research.md). "phase2-only" is sized so
-    Phase 1/1b have nothing to collapse at all, and the fitter must reach
-    Phase 2's own index walk to decide the agent's section's neighbors —
-    the exact untested path research.md gotcha ~53 named."""
-    sess = _oversized_sess(agent_position="phase2-only")
+    "newest" ever forces whole-section dropping. "step-b-only" is sized
+    so there is nothing foldable at all, and the fitter must reach Step
+    B's own walk to decide the agent's section's neighbors — the exact
+    untested path research.md gotcha ~53 named."""
+    sess = _oversized_sess(agent_position="step-b-only")
     card, truncated = build_stream_card_ex(sess, "Working")
     assert truncated is True
     assert f"{MARK} crawler · Bash: find . -name '*.py' · 8s" in card
 
 
-def test_active_agent_row_is_never_inside_the_details_block_under_phase2_pressure():
-    sess = _oversized_sess(agent_position="phase2-only")
+def test_active_agent_row_is_never_inside_the_details_block_under_step_b_pressure():
+    sess = _oversized_sess(agent_position="step-b-only")
     card, truncated = build_stream_card_ex(sess, "Working")
     assert truncated is True
     if "</details>" in card:
@@ -123,20 +133,20 @@ def test_active_agent_row_is_never_inside_the_details_block_under_phase2_pressur
         assert f"{MARK} crawler" not in inside_details
 
 
-def test_phase2_continues_past_the_agent_row_to_shed_what_comes_after_it():
+def test_step_b_continues_past_the_agent_row_to_shed_what_comes_after_it():
     """The specific `continue`-not-`break` fix: a prose section
     positioned AFTER the agent's own section (PROSE-B) must still be
-    reachable and collapsed by Phase 2, proving the loop did not stop
-    dead at the agent's index. PROSE-C (the newest prose) stays
-    protected and visible throughout."""
-    sess = _oversized_sess(agent_position="phase2-only")
+    reachable and dropped — PROSE-A alone is too small to free enough
+    room, so this only passes if Step B kept walking past the agent's
+    index rather than stopping dead there. PROSE-C (the newest prose)
+    stays protected and visible throughout."""
+    sess = _oversized_sess(agent_position="step-b-only")
     card, truncated = build_stream_card_ex(sess, "Working")
     assert truncated is True
-    assert "<details>" in card
-    inside_details = card.split("</details>", 1)[0]
-    assert "PROSE-B" in inside_details  # swept up by Phase 2 AFTER the agent
+    assert "PROSE-A" not in card
+    assert "PROSE-B" not in card  # only reachable by continuing past the agent
     assert "PROSE-C" in card
-    assert card.index("PROSE-C") > card.index("</details>")  # visible, protected
+    assert f"{MARK} crawler" in card  # the agent itself is untouched throughout
 
 
 def test_once_settled_the_row_is_an_ordinary_row_and_may_be_folded_like_any_other():
