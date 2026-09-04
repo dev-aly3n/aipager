@@ -159,3 +159,22 @@ def test_append_legacy_shape_has_empty_scope_fields(tmp_path):
     assert record["scope_chat_id"] is None
     assert record["denied"] is False
     assert record["bypass_safety"] is False
+
+
+# ---- via (design.md "answer PermissionRequest hooks with a decision
+# instead of keystrokes") ---------------------------------------------------
+
+def test_append_records_via_hook_decision(tmp_path):
+    log = tmp_path / "audit.jsonl"
+    audit.append(session="claude-jim", label="jim", action="Allowed",
+                 via="hook_decision", path=log)
+    record = json.loads(log.read_text().splitlines()[0])
+    assert record["via"] == "hook_decision"
+
+
+def test_append_omitting_via_defaults_to_empty_string(tmp_path):
+    log = tmp_path / "audit.jsonl"
+    audit.append(session="claude-jim", label="jim", action="Allowed",
+                 path=log)
+    record = json.loads(log.read_text().splitlines()[0])
+    assert record["via"] == ""
