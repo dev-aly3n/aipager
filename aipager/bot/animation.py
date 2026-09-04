@@ -606,7 +606,8 @@ def _fit_sections(
         # lose the only sign that a background agent is running, which is
         # exactly what the agent rows exist to show (review rev-iter1-006).
         # Keep those rows (never their nested folds, which are the bulky
-        # part) and chop only what follows them.
+        # part) and chop the NON-agent remainder — never the whole body,
+        # which would still carry the agent's own section and duplicate it.
         agent_idx = [i for i in range(n) if kept_flags[i]
                      and kinds[i] in ("agent-run", "agent-settled")]
         agent_rows = [texts[i].split(_ROW_SEP, 1)[0] for i in agent_idx]
