@@ -48,7 +48,7 @@ def _first_line(rich_mock):
 # ---- IDLE: simple "Finished" message ------------------------------------
 
 def test_idle_sends_finished_message(mk_bot, run_async, rich_mock):
-    """No card: the ✅ header is the first line of the ONE rich message
+    """No card: the 💬 result line is the first line of the ONE rich message
     that carries the answer — never a message of its own."""
     bot = mk_bot()
     sess = _sess(status=Status.IDLE)
@@ -59,7 +59,7 @@ def test_idle_sends_finished_message(mk_bot, run_async, rich_mock):
     bot._app.bot.send_message.assert_not_awaited()
     rich_mock.assert_awaited_once()
     text = rich_mock.await_args.args[1]
-    assert text.startswith("✅ **jim** · Finished")
+    assert text.startswith("💬 **jim** · Finished")
     assert text.endswith("\n\ndone")
 
 
@@ -127,7 +127,7 @@ def test_idle_recovery_with_new_content_delivers_normally(mk_bot, run_async, ric
     bot._app.bot.send_message.assert_not_awaited()
     rich_mock.assert_awaited_once()
     text = rich_mock.await_args.args[1]
-    assert text.startswith("✅ **jim** · Finished")
+    assert text.startswith("💬 **jim** · Finished")
     assert text.endswith("\n\na brand new answer")
 
 
@@ -163,7 +163,7 @@ def test_idle_final_render_failure_never_breaks_the_turn(
     # The answer still went out — with the header composed in, since the
     # failed render left no card to name the turn.
     rich_mock.assert_awaited_once()
-    assert rich_mock.await_args.args[1].startswith("✅ **jim** · Finished")
+    assert rich_mock.await_args.args[1].startswith("💬 **jim** · Finished")
 
 
 def test_idle_deletes_busy_msg_when_knob_off(mk_bot, run_async, monkeypatch):
@@ -310,7 +310,7 @@ def test_idle_with_short_summary_composes_one_message(mk_bot, run_async, rich_mo
     run_async(bot.notify(sess, "idle_prompt", {"summary": "Short reply"}))
     bot._app.bot.send_message.assert_not_awaited()
     text = rich_mock.await_args.args[1]
-    assert text.startswith("✅ **jim** · Finished")
+    assert text.startswith("💬 **jim** · Finished")
     assert text.endswith("\n\nShort reply")
 
 
@@ -326,7 +326,7 @@ def test_idle_with_html_summary_preserves_html(mk_bot, run_async, rich_mock):
     run_async(bot.notify(sess, "idle_prompt", {
         "summary": "print(1)", "html_summary": True,
     }))
-    assert _first_line(rich_mock).startswith("✅ **jim** · Finished")
+    assert _first_line(rich_mock).startswith("💬 **jim** · Finished")
     assert "<b>" not in rich_mock.await_args.args[1]
 
 
@@ -627,7 +627,7 @@ def test_idle_composes_the_header_when_the_card_was_not_kept(
     assert _headers(bot) == []
     rich_mock.assert_awaited_once()
     text = rich_mock.await_args.args[1]
-    assert text.startswith("✅ **jim** · Finished")
+    assert text.startswith("💬 **jim** · Finished")
     assert text.endswith("\n\nthe answer")
 
 

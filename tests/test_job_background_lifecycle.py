@@ -80,6 +80,15 @@ def _write_transcript(tp: Path, *, with_continuation: bool) -> None:
     tp.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
 
 
+def _strip_result_line(markdown: str) -> str:
+    """Every answer now opens with its session's result line — `💬 **name**`,
+    or the stats form when no card remains (contract change
+    "session-name-on-every-message"). These tests pin the BODY that follows
+    it, so the line is peeled off at capture time."""
+    first, sep, rest = markdown.partition("\n\n")
+    return rest if sep and first.startswith("💬 ") else markdown
+
+
 @pytest.fixture
 def _sent_messages():
     return []
@@ -107,7 +116,7 @@ def test_hiva_sequence_replayed_end_to_end(mk_bot, run_async, tmp_path, monkeypa
 
     rich_sends: list[str] = []
     async def _send_rich(chat_id, content, **kwargs):
-        rich_sends.append(content)
+        rich_sends.append(_strip_result_line(content))
         return {"message_id": next_id[0]}
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
 
@@ -341,7 +350,7 @@ def test_ishaq_endgame_job_stays_open_through_continuation(
 
     rich_sends: list[str] = []
     async def _send_rich(chat_id, content, **kwargs):
-        rich_sends.append(content)
+        rich_sends.append(_strip_result_line(content))
         return {"message_id": next_id[0]}
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
 
@@ -445,7 +454,7 @@ def test_final_path_dedup_suppresses_stale_redelivery(
     bot._app.bot.delete_message = AsyncMock(return_value=None)
     rich_sends: list[str] = []
     async def _send_rich(chat_id, content, **kwargs):
-        rich_sends.append(content)
+        rich_sends.append(_strip_result_line(content))
         return {"message_id": next_id[0]}
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
     async def _edit_rich_transport(chat_id, msg_id, markdown, **kwargs):
@@ -639,7 +648,7 @@ def test_double_hop_continuation_spawning_new_agents(
     bot._app.bot.delete_message = AsyncMock(return_value=None)
     rich_sends: list[str] = []
     async def _send_rich(chat_id, content, **kwargs):
-        rich_sends.append(content)
+        rich_sends.append(_strip_result_line(content))
         return {"message_id": next_id[0]}
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
     edit_calls: list[dict] = []
@@ -722,7 +731,7 @@ def test_real_prompt_during_grace_supersedes_and_late_continuation_closes(
     bot._app.bot.delete_message = AsyncMock(return_value=None)
     rich_sends: list[str] = []
     async def _send_rich(chat_id, content, **kwargs):
-        rich_sends.append(content)
+        rich_sends.append(_strip_result_line(content))
         return {"message_id": next_id[0]}
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
     edit_calls: list[dict] = []
@@ -793,7 +802,7 @@ def test_grace_expired_flushes_the_buffer(mk_bot, run_async, monkeypatch):
     sess = _buffered_sess(bot)
     rich_sends = []
     async def _send_rich(chat_id, content, **kw):
-        rich_sends.append(content)
+        rich_sends.append(_strip_result_line(content))
         return {"message_id": 9001}
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
     async def _edit_raw(msg_id, text, chat_id=None):
@@ -811,7 +820,7 @@ def test_agents_lost_flushes_the_buffer(mk_bot, run_async, monkeypatch):
     sess = _buffered_sess(bot)
     rich_sends = []
     async def _send_rich(chat_id, content, **kw):
-        rich_sends.append(content)
+        rich_sends.append(_strip_result_line(content))
         return {"message_id": 9002}
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
     async def _edit_raw(msg_id, text, chat_id=None):
@@ -832,7 +841,7 @@ def test_stop_during_wait_flushes_the_buffer(mk_bot, run_async, monkeypatch):
     sess.active_subagents["a1"] = {"type": "Explore", "started_at": 1.0}
     rich_sends = []
     async def _send_rich(chat_id, content, **kw):
-        rich_sends.append(content)
+        rich_sends.append(_strip_result_line(content))
         return {"message_id": 9003}
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
     monkeypatch.setattr("aipager.dtach.inject.send_keys", AsyncMock(return_value=True))
@@ -867,7 +876,7 @@ def test_api_error_final_still_flushes_the_buffer(mk_bot, run_async, monkeypatch
     sess.status = Status.IDLE
     rich_sends = []
     async def _send_rich(chat_id, content, **kw):
-        rich_sends.append(content)
+        rich_sends.append(_strip_result_line(content))
         return {"message_id": 9101}
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=9102))
@@ -889,7 +898,7 @@ def test_session_end_flushes_the_buffer(mk_bot, run_async, monkeypatch):
     sess = _buffered_sess(bot)
     rich_sends = []
     async def _send_rich(chat_id, content, **kw):
-        rich_sends.append(content)
+        rich_sends.append(_strip_result_line(content))
         return {"message_id": 9103}
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=9104))
@@ -908,7 +917,7 @@ def test_kill_flushes_the_buffer(mk_bot, run_async, monkeypatch):
     sess = _buffered_sess(bot)
     rich_sends = []
     async def _send_rich(chat_id, content, **kw):
-        rich_sends.append(content)
+        rich_sends.append(_strip_result_line(content))
         return {"message_id": 9105}
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
     monkeypatch.setattr("aipager.dtach.inject.kill_session",
@@ -935,7 +944,7 @@ def test_composed_overflow_keeps_the_final_answer_visible(
 
     rich_sends = []
     async def _send_rich(chat_id, content, **kw):
-        rich_sends.append(content)
+        rich_sends.append(_strip_result_line(content))
         return {"message_id": 9107}
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=9108))
@@ -1172,3 +1181,24 @@ def test_promise_strip_still_removes_the_observed_sign_off(mk_bot):
     out = bot._strip_promise_lines(text, "omni")
     assert "the moment it lands" not in out
     assert "Structure below." in out and "volcanic" in out
+
+
+def test_job_grace_expired_without_a_card_sends_the_result_form(
+    mk_bot, run_async,
+):
+    """With no live card to settle, the grace-expired notice is the turn's
+    only message: it opens with the result glyph like every other result
+    ("session-name-on-every-message"), while a settled CARD keeps ✅."""
+    bot = mk_bot()
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=9))
+    sess = bot.registry.get_or_create(SESSION)
+    sess.status = Status.IDLE
+    sess.label = SESSION
+    sess.busy_msg_id = None
+    sess.busy_started_at = 1.0
+
+    run_async(bot.notify(sess, "job_grace_expired", {}))
+
+    texts = [c.args[1] for c in bot._app.bot.send_message.await_args_list]
+    assert texts and texts[0].startswith(f"💬 <b>{SESSION}</b> · Finished"), texts
+    assert sess.trigger_msg_id is None

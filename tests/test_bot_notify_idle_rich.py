@@ -34,7 +34,7 @@ def _sess(label="jim", status=Status.IDLE, *, scope_kind="dm"):
 
 
 def _header(rich_mock) -> str:
-    """The composed message's first line — the ✅ header."""
+    """The composed message's first line — the result line."""
     return rich_mock.await_args.args[1].split("\n", 1)[0]
 
 
@@ -197,10 +197,11 @@ def test_fallback_on_rich_message_required(mk_bot, run_async, monkeypatch):
         AsyncMock(side_effect=RichMessageFallbackRequired("400")),
     )
     run_async(bot.notify(sess, "idle_prompt", {"raw_md": "# Heading\n\nText"}))
-    # Two calls: header + fallback body
-    assert bot._app.bot.send_message.await_count >= 2
+    # One packed plain message: the composed first line and the body share
+    # a chunk (contract change "session-name-on-every-message").
+    assert bot._app.bot.send_message.await_count >= 1
     # The fallback call(s) must NOT pass parse_mode
-    for c in bot._app.bot.send_message.await_args_list[1:]:
+    for c in bot._app.bot.send_message.await_args_list:
         assert c.kwargs.get("parse_mode") is None
 
 

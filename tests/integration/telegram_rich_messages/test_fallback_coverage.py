@@ -69,7 +69,7 @@ def test_sc1_body_content_passed_verbatim_to_rich_message(mk_bot, run_async, mon
     run_async(bot.notify(sess, "idle_prompt", {"raw_md": "# Heading\n\nSome **bold** text"}))
 
     markdown = captured.get("markdown", "")
-    assert markdown.startswith("✅ **alice** · Finished")
+    assert markdown.startswith("💬 **alice** · Finished")
     assert markdown.split("\n\n", 1)[1] == "# Heading\n\nSome **bold** text"
 
 
@@ -103,7 +103,7 @@ def test_sc5_400_fallback_fires(mk_bot, run_async, monkeypatch):
 
     # header (index 0) + fallback body (index 1+)
     calls = bot._app.bot.send_message.await_args_list
-    assert len(calls) >= 2
+    assert len(calls) >= 1  # one packed plain message now (contract change "session-name-on-every-message": the chunker packs paragraphs, so the composed first line and the body share a chunk)
 
 
 def test_sc5_400_fallback_has_no_parse_mode(mk_bot, run_async, monkeypatch):
@@ -115,7 +115,7 @@ def test_sc5_400_fallback_has_no_parse_mode(mk_bot, run_async, monkeypatch):
 
     calls = bot._app.bot.send_message.await_args_list
     # All calls after the first header must have no parse_mode
-    for call in calls[1:]:
+    for call in calls:  # every call is the plain fallback: no separate header message
         assert call.kwargs.get("parse_mode") is None
 
 
@@ -140,7 +140,7 @@ def test_sc5_404_fallback_fires(mk_bot, run_async, monkeypatch):
     run_async(bot.notify(sess, "idle_prompt", {"raw_md": "content 404"}))
 
     calls = bot._app.bot.send_message.await_args_list
-    assert len(calls) >= 2
+    assert len(calls) >= 1  # one packed plain message now (contract change "session-name-on-every-message": the chunker packs paragraphs, so the composed first line and the body share a chunk)
 
 
 def test_sc5_404_fallback_no_parse_mode(mk_bot, run_async, monkeypatch):
@@ -151,7 +151,7 @@ def test_sc5_404_fallback_no_parse_mode(mk_bot, run_async, monkeypatch):
     run_async(bot.notify(sess, "idle_prompt", {"raw_md": "content 404 pm"}))
 
     calls = bot._app.bot.send_message.await_args_list
-    for call in calls[1:]:
+    for call in calls:  # every call is the plain fallback: no separate header message
         assert call.kwargs.get("parse_mode") is None
 
 
@@ -165,7 +165,7 @@ def test_sc5_429_twice_fallback_fires(mk_bot, run_async, monkeypatch):
     run_async(bot.notify(sess, "idle_prompt", {"raw_md": "content 429"}))
 
     calls = bot._app.bot.send_message.await_args_list
-    assert len(calls) >= 2
+    assert len(calls) >= 1  # one packed plain message now (contract change "session-name-on-every-message": the chunker packs paragraphs, so the composed first line and the body share a chunk)
 
 
 def test_sc5_429_twice_fallback_carries_identical_content(mk_bot, run_async, monkeypatch):
@@ -189,7 +189,7 @@ def test_sc5_5xx_fallback_fires(mk_bot, run_async, monkeypatch):
     run_async(bot.notify(sess, "idle_prompt", {"raw_md": "content 5xx"}))
 
     calls = bot._app.bot.send_message.await_args_list
-    assert len(calls) >= 2
+    assert len(calls) >= 1  # one packed plain message now (contract change "session-name-on-every-message": the chunker packs paragraphs, so the composed first line and the body share a chunk)
 
 
 def test_sc5_5xx_fallback_no_parse_mode(mk_bot, run_async, monkeypatch):
@@ -200,7 +200,7 @@ def test_sc5_5xx_fallback_no_parse_mode(mk_bot, run_async, monkeypatch):
     run_async(bot.notify(sess, "idle_prompt", {"raw_md": "5xx no pm"}))
 
     calls = bot._app.bot.send_message.await_args_list
-    for call in calls[1:]:
+    for call in calls:  # every call is the plain fallback: no separate header message
         assert call.kwargs.get("parse_mode") is None
 
 
@@ -214,7 +214,7 @@ def test_sc5_timeout_fallback_fires(mk_bot, run_async, monkeypatch):
     run_async(bot.notify(sess, "idle_prompt", {"raw_md": "timeout content"}))
 
     calls = bot._app.bot.send_message.await_args_list
-    assert len(calls) >= 2
+    assert len(calls) >= 1  # one packed plain message now (contract change "session-name-on-every-message": the chunker packs paragraphs, so the composed first line and the body share a chunk)
 
 
 def test_sc5_timeout_fallback_carries_content(mk_bot, run_async, monkeypatch):
@@ -238,7 +238,7 @@ def test_sc5_connection_error_fallback_fires(mk_bot, run_async, monkeypatch):
     run_async(bot.notify(sess, "idle_prompt", {"raw_md": "conn error content"}))
 
     calls = bot._app.bot.send_message.await_args_list
-    assert len(calls) >= 2
+    assert len(calls) >= 1  # one packed plain message now (contract change "session-name-on-every-message": the chunker packs paragraphs, so the composed first line and the body share a chunk)
 
 
 def test_sc5_connection_error_fallback_no_parse_mode(mk_bot, run_async, monkeypatch):
@@ -249,7 +249,7 @@ def test_sc5_connection_error_fallback_no_parse_mode(mk_bot, run_async, monkeypa
     run_async(bot.notify(sess, "idle_prompt", {"raw_md": "refused content"}))
 
     calls = bot._app.bot.send_message.await_args_list
-    for call in calls[1:]:
+    for call in calls:  # every call is the plain fallback: no separate header message
         assert call.kwargs.get("parse_mode") is None
 
 
@@ -331,7 +331,7 @@ def test_fallback_chunks_no_parse_mode(mk_bot, run_async, monkeypatch):
 
     calls = bot._app.bot.send_message.await_args_list
     # Skip header (index 0); all fallback sends must lack parse_mode
-    for call in calls[1:]:
+    for call in calls:  # every call is the plain fallback: no separate header message
         assert call.kwargs.get("parse_mode") is None
 
 
@@ -346,5 +346,5 @@ def test_fallback_each_chunk_max_4096_chars(mk_bot, run_async, monkeypatch):
 
     calls = bot._app.bot.send_message.await_args_list
     # Skip header (index 0)
-    for call in calls[1:]:
+    for call in calls:  # every call is the plain fallback: no separate header message
         assert len(call.args[1]) <= 4096

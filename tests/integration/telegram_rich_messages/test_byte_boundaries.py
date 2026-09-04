@@ -50,19 +50,61 @@ def _run_notify(mk_bot, run_async, rich_mock, content):
 
 # ── at-limit: exactly 32768 UTF-8 bytes, single-byte ASCII ──────────────────
 
+def _body_ceiling(label: str) -> int:
+    """The body's byte ceiling: the rich limit minus the result line that
+    opens a card-less turn's one message (contract change
+    "session-name-on-every-message" — the line counts, so the body's own
+    limit is what is left). With no elapsed time the line has no suffix."""
+    return 32_768 - len(f"💬 **{label}** · Finished\n\n".encode("utf-8"))
+
+
+def _no_elapsed(sess):
+    sess.busy_started_at = None
+    sess.busy_started_wall = 0.0
+    return sess
+
+
 def test_sc9_exactly_at_limit_no_attachment(mk_bot, run_async, rich_mock):
-    """32 768 bytes of ASCII → within limit → no .txt attachment."""
-    at_limit = "x" * 32_768  # 32768 ASCII bytes == 32768 chars
+    """A body exactly at its ceiling → within limit → no .txt attachment.
+    The ceiling is 32 768 minus the result line the message opens with
+    (contract change "session-name-on-every-message")."""
+    sess = _no_elapsed(_sess())
+    at_limit = "x" * _body_ceiling(sess.label)
 
     bot = mk_bot()
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=1))
     bot._app.bot.send_document = AsyncMock()
     bot._maybe_update_bot_name = AsyncMock()
-    sess = _sess()
 
     run_async(bot.notify(sess, "idle_prompt", {"raw_md": at_limit}))
 
     bot._app.bot.send_document.assert_not_awaited()
+
+
+def test_sc9_one_byte_over_the_body_ceiling_triggers_attachment(
+    mk_bot, run_async, monkeypatch,
+):
+    """32 768 bytes of ASCII used to fit exactly; with the result line in
+    front it no longer does, so the overflow path (attachment) must run
+    rather than an over-limit send ("session-name-on-every-message")."""
+    sess = _no_elapsed(_sess())
+    over = "x" * (_body_ceiling(sess.label) + 1)
+    captured = {}
+
+    async def _capture(chat_id, markdown, **kw):
+        captured["markdown"] = markdown
+        return {}
+
+    bot = mk_bot()
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=1))
+    bot._app.bot.send_document = AsyncMock()
+    bot._maybe_update_bot_name = AsyncMock()
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message", _capture)
+
+    run_async(bot.notify(sess, "idle_prompt", {"raw_md": over}))
+
+    bot._app.bot.send_document.assert_awaited_once()
+    assert len(captured["markdown"].encode("utf-8")) <= 32_768
 
 
 def test_sc9_one_byte_over_limit_triggers_attachment(mk_bot, run_async, monkeypatch):
@@ -130,17 +172,19 @@ def test_sc9_multibyte_persian_over_byte_limit_triggers_attachment(mk_bot, run_a
 
 
 def test_sc9_multibyte_persian_under_byte_limit_no_attachment(mk_bot, run_async, monkeypatch):
-    """16 384 Persian chars = 32 768 bytes → exactly at limit → no attachment."""
+    """Persian chars filling the body ceiling exactly (2 bytes each) → no
+    attachment. The ceiling leaves room for the result line (contract
+    change "session-name-on-every-message")."""
+    sess = _no_elapsed(_sess())
     persian_char = "ا"
-    persian_content = persian_char * 16_384
-    assert len(persian_content.encode("utf-8")) == 32_768  # exactly at limit
+    persian_content = persian_char * (_body_ceiling(sess.label) // 2)
+    assert len(persian_content.encode("utf-8")) <= _body_ceiling(sess.label)
 
     bot = mk_bot()
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=1))
     bot._app.bot.send_document = AsyncMock()
     bot._maybe_update_bot_name = AsyncMock()
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", AsyncMock(return_value={}))
-    sess = _sess()
 
     run_async(bot.notify(sess, "idle_prompt", {"raw_md": persian_content}))
 

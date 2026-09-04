@@ -27,6 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and a still-running (or just-finished) background agent's own tool
   calls get the same fold under its own row once it has three or more.
 
+- Every answer now opens with its session's result line — `💬 name`, or
+  `💬 name · Finished (…)` when no finished card is left in the chat to
+  show the turn's stats — so a result can be told from a busy card and
+  from another session's answer at a glance. The busy card keeps its
+  `⏳`/`✅ name · …` status line as its last line, and the merged layout
+  carries both lines, one per section, exactly as they appear unmerged.
+  Plain-text fallbacks now pack paragraphs into as few messages as fit
+  instead of sending one message per paragraph.
+
 ### Fixed
 - Each sentence on the busy card now sits directly above the tool calls
   its message made, placed from the transcript's own message structure

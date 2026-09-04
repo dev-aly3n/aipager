@@ -2,7 +2,7 @@
 
 Success criteria covered:
   SC2  - raw_md → summary → "" — never sess.summary (the previous turn's
-         answer); with no card the body rides under a composed ✅ header
+         answer); with no card the body rides under a composed 💬 result line
   SC3  - {"summary": ...} with no raw_md key (idle-recovery path) sends "text"
   SC4  - all empty → header only, zero body sends of any kind
 
@@ -39,10 +39,10 @@ def rich_mock(monkeypatch):
 
 
 def _body(rich_mock) -> str:
-    """The answer under the composed ✅ header line (no card in these
+    """The answer under the composed 💬 result line (no card in these
     tests, so the header is the rich message's first line)."""
     text = rich_mock.await_args.args[1]
-    assert text.startswith("✅ **bob** · Finished")
+    assert text.startswith("💬 **bob** · Finished")
     return text.split("\n\n", 1)[1]
 
 
@@ -138,7 +138,7 @@ def test_sc4_all_empty_no_body_call(mk_bot, run_async, rich_mock):
 
 
 def test_sc4_all_empty_header_still_sent(mk_bot, run_async, rich_mock):
-    """All sources empty → the ✅ Finished header is still sent."""
+    """All sources empty → the 💬 Finished header is still sent."""
     bot = mk_bot()
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=1))
     bot._maybe_update_bot_name = AsyncMock()

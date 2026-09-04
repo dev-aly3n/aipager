@@ -77,7 +77,7 @@ def test_idle_truncation_failed_no_longer_applies(mk_bot, run_async, monkeypatch
     bot._app.bot.send_message.assert_not_awaited()  # no standalone header
     rich_mock.assert_awaited_once()
     text = rich_mock.await_args.args[1]
-    assert text.startswith("✅ **jim** · Finished")
+    assert text.startswith("💬 **jim** · Finished")
     assert text.endswith("\n\nShort content")
     assert "attachment" not in text
 

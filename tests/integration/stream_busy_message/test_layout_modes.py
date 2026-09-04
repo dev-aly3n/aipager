@@ -114,7 +114,7 @@ def test_replace_layout_keeps_header_when_card_delete_fails(
     methods = [m for m, _p in rich_calls]
     assert methods == ["sendRichMessage"]
     markdown = rich_calls[0][1]["rich_message"]["markdown"]
-    assert markdown.startswith("✅ **dev** · Finished")
+    assert markdown.startswith("💬 **dev** · Finished")
     assert markdown.endswith("\n\nthe answer")
 
 

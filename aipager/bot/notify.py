@@ -111,6 +111,24 @@ _PROMISE_SUBJECT_RE = re.compile(
 # header-skip logic below already uses for `card` layout).
 _MERGED_SEPARATOR = "―――――――――――――"
 
+# The result line ("session-name-on-every-message"): the FIRST line of
+# every result message, as the status line is the LAST line of every busy
+# card — one glyph per message kind, always in the same place, so a reader
+# can tell a session's answer from its timeline (and from another
+# session's) at a glance. The short form below is for a result that lands
+# under a finished card, which already says Done and the turn's stats; the
+# stats form (`💬 **label** · Finished (…)`) is built in the finish path
+# for a result that is the only message left for its turn.
+_RESULT_GLYPH = "💬"
+
+
+def _result_line_md(label: str) -> str:
+    return f"{_RESULT_GLYPH} **{_md_escape(label)}**"
+
+
+def _result_line_plain(label: str) -> str:
+    return f"{_RESULT_GLYPH} {label}"
+
 
 def _drop_answer_tail(sess: TrackedSession, answer: str) -> None:
     """Drop trailing commentary blocks that are just the final answer.
@@ -147,34 +165,48 @@ def _plain_text_chunks(body_content: str) -> list[str]:
     can never disagree about how an oversized answer gets split. Always
     returns at least one chunk (truncated to 4096 bytes) even for input
     with no markdown-safe boundary at all.
+
+    Paragraphs are PACKED: consecutive segments share one chunk while
+    they fit, and a new chunk starts only at a boundary that would push
+    it over. Splitting at every boundary sent one message per paragraph,
+    and would have made the result line — the first paragraph of every
+    plain-text fallback ("session-name-on-every-message") — a message of
+    its own. A single segment over 4096 bytes (a long paragraph with no
+    break) is still hard-cut.
     """
     bounds = _md_safe_boundaries(body_content)
-    chunks: list[str] = []
+    segments: list[str] = []
     prev = 0
     for b in bounds:
-        chunk = body_content[prev:b]
-        if len(chunk.encode("utf-8")) > 4096:
-            # Safety: hard-cut at 4096 bytes if a single segment
-            # exceeds the limit (very long paragraph, no breaks).
-            encoded = chunk.encode("utf-8")
-            pos = 0
-            while pos < len(encoded):
-                piece = encoded[pos:pos + 4096].decode("utf-8", errors="ignore")
-                if piece:
-                    chunks.append(piece)
-                pos += 4096
-        elif chunk:
-            chunks.append(chunk)
+        segments.append(body_content[prev:b])
         prev = b
-    tail = body_content[prev:]
-    if tail:
-        encoded = tail.encode("utf-8")
+    segments.append(body_content[prev:])
+
+    chunks: list[str] = []
+    current = ""
+    for segment in segments:
+        if not segment:
+            continue
+        if len((current + segment).encode("utf-8")) <= 4096:
+            current += segment
+            continue
+        if current:
+            chunks.append(current)
+            current = ""
+        if len(segment.encode("utf-8")) <= 4096:
+            current = segment
+            continue
+        # Safety: hard-cut at 4096 bytes if a single segment exceeds the
+        # limit (very long paragraph, no breaks).
+        encoded = segment.encode("utf-8")
         pos = 0
         while pos < len(encoded):
             piece = encoded[pos:pos + 4096].decode("utf-8", errors="ignore")
             if piece:
                 chunks.append(piece)
             pos += 4096
+    if current:
+        chunks.append(current)
     if not chunks:
         chunks = [body_content[:4096]]
     return chunks
@@ -204,13 +236,21 @@ class NotifyMixin:
         except Exception:
             log.debug("[%s] merged: card render failed", sess.label, exc_info=True)
             return False
-        # Order: timeline → status line → separator → answer. The status
-        # line therefore sits MID-message here, and deliberately so
-        # (review rev-iter1-002): this is the settled delivery, and what
+        # Order: timeline → status line → separator → result line → answer.
+        # The status line therefore sits MID-message here, and deliberately
+        # so (review rev-iter1-002): this is the settled delivery, and what
         # should be on screen when it lands is the ANSWER, not a status
         # that has stopped changing. "Status last" exists for the LIVE
-        # card, where the status is the only thing still moving.
-        combined = f"{card_md}\n\n{_MERGED_SEPARATOR}\n\n{answer}" if answer else card_md
+        # card, where the status is the only thing still moving. Each
+        # section keeps exactly the line it would carry unmerged — the
+        # card's status line at its end, the answer's result line at its
+        # start ("session-name-on-every-message") — so the merged shape
+        # reads the same as the two-message one.
+        combined = (
+            f"{card_md}\n\n{_MERGED_SEPARATOR}\n\n"
+            f"{_result_line_md(sess.label)}\n\n{answer}"
+            if answer else card_md
+        )
         if len(combined.encode("utf-8")) > _RICH_LIMIT:
             log.info("[%s] merged: combined card+answer over the byte ceiling "
                      "— falling back to replace", sess.label)
@@ -361,11 +401,16 @@ class NotifyMixin:
         sess.remember_delivered(digest)
         is_rtl = detect_rtl(content)
         chat_id = resolve_chat_id_int(sess)
+        # A flushed interim answer is a result: it opens with the result
+        # line like every other one ("session-name-on-every-message").
+        # The dedup digest above is over the bare content on purpose.
+        rich_text = f"{_result_line_md(sess.label)}\n\n{content}"
+        plain_text = f"{_result_line_plain(sess.label)}\n\n{content}"
         try:
             if chat_id is None:
                 raise RichMessageFallbackRequired("no numeric chat id resolved")
             sent = await send_rich_message(
-                chat_id, content, is_rtl=is_rtl,
+                chat_id, rich_text, is_rtl=is_rtl,
                 reply_to_message_id=sess.trigger_msg_id,
             )
             if isinstance(sent, dict) and sent.get("message_id"):
@@ -379,7 +424,7 @@ class NotifyMixin:
                 "[%s] job buffer sendRichMessage failed — falling back to "
                 "plain text", sess.label, exc_info=True,
             )
-            for chunk in _plain_text_chunks(content):
+            for chunk in _plain_text_chunks(plain_text):
                 try:
                     fallback = await self._app.bot.send_message(
                         resolve_chat_id(sess), chunk,
@@ -641,7 +686,14 @@ class NotifyMixin:
                 elif elapsed_s > 0:
                     elapsed_str = f"{elapsed_s}s"
             suffix = f" ({elapsed_str})" if elapsed_str else ""
-            text = f"✅ <b>{html_mod.escape(label)}</b> · Finished{suffix}"
+            # Two forms of the same line ("session-name-on-every-message"):
+            # the busy card settles to ITS glyph (✅ — the card's terminal
+            # state), while a standalone notice, sent because no card is
+            # left to settle, is the turn's result message and opens with
+            # the result glyph like the idle path's standalone header.
+            name = html_mod.escape(label)
+            text = f"✅ <b>{name}</b> · Finished{suffix}"
+            text_alone = f"{_RESULT_GLYPH} <b>{name}</b> · Finished{suffix}"
             # The accumulated interim is the only full copy of what this
             # job produced — deliver it before the card resolves ("one
             # response per background job" requirement 4). Best-effort.
@@ -657,6 +709,7 @@ class NotifyMixin:
                 )
                 sess.busy_msg_id = None
             else:
+                text = text_alone
                 try:
                     await bot.send_message(
                         resolve_chat_id(sess), text, parse_mode="HTML",
@@ -1240,13 +1293,12 @@ class NotifyMixin:
             # True once the busy card has been successfully disposed of —
             # either kept as the finished card (`card_kept`, below) or
             # deleted outright (`replace`, and `merged`'s own delete-on-
-            # fallback a little further down). Either way there's nothing
-            # left in the chat repeating what the header would say, so the
-            # header itself becomes skippable — see `skip_header` below.
-            # Per the user's own framing of `replace`: "still we have only
-            # one message after user message but busy message gets
-            # removed" — one message, not a removed-card-plus-two-sends.
-            card_deleted = False
+            # fallback a little further down). A kept card already says
+            # Done and the turn's stats, so the answer under it opens with
+            # the SHORT result line; with the card gone the answer's first
+            # line carries the stats instead — still ONE message, per the
+            # user's own framing of `replace`: "still we have only one
+            # message after user message but busy message gets removed".
             if sess.busy_msg_id and sess.busy_msg_id > 0:
                 if layout in ("card", "merged"):
                     # Leave the timeline in the chat: which tools ran, in what
@@ -1270,14 +1322,13 @@ class NotifyMixin:
                     # the answer text is known, and clears it either way.
                 else:
                     # "replace" — delete the busy card, then send the answer
-                    # alone (header skipped below — nothing is left in the
-                    # chat that repeats what it would say).
+                    # as the turn's one message (its first line carries the
+                    # stats the card would have shown).
                     try:
                         await bot.delete_message(
                             chat_id=resolve_chat_id(sess),
                             message_id=sess.busy_msg_id,
                         )
-                        card_deleted = True
                     except Exception:
                         pass
                     sess.busy_msg_id = None
@@ -1435,11 +1486,16 @@ class NotifyMixin:
             # Build suffix: combine non-empty parts with comma
             parts = [p for p in (elapsed_str, lines_str) if p]
             suffix = f" ({', '.join(parts)})" if parts else ""
-            header_text = f"✅ <b>{html_mod.escape(label)}</b> · Finished{suffix}"
-            # The same line in the rich-message dialect (bold = **) for the
-            # composed no-card send, and bare for its plain-text fallback.
-            header_md = f"✅ **{_md_escape(label)}** · Finished{suffix}"
-            header_plain = f"✅ {label} · Finished{suffix}"
+            # The result line in its STATS form — a result that is the only
+            # message left for its turn says Finished and how long it took
+            # ("session-name-on-every-message"). HTML for the standalone
+            # header message, the rich-message dialect (bold = **) for a
+            # composed send, bare for the plain-text fallback.
+            header_text = (
+                f"{_RESULT_GLYPH} <b>{html_mod.escape(label)}</b> · Finished{suffix}"
+            )
+            header_md = f"{_result_line_md(label)} · Finished{suffix}"
+            header_plain = f"{_result_line_plain(label)} · Finished{suffix}"
 
             # ── merged layout: one combined edit, timeline + answer ────────
             # Attempted here — after the header text exists (used only by the
@@ -1469,7 +1525,8 @@ class NotifyMixin:
                     # never acceptable — fall back to the replace-style send
                     # below by clearing the (now presumed-gone-or-stale) card.
                     # Falling back to "replace" means behaving exactly like
-                    # it: one message, header skipped, once the card is gone.
+                    # it: one message opening with the stats result line,
+                    # once the card is gone.
                     if sess.busy_msg_id:
                         # Still live — _send_merged_final's own failure
                         # wasn't a RichMessageGone, so the card needs an
@@ -1479,14 +1536,11 @@ class NotifyMixin:
                                 chat_id=resolve_chat_id(sess),
                                 message_id=pre_merge_busy_msg_id,
                             )
-                            card_deleted = True
                         except Exception:
                             pass
-                    else:
-                        # _send_merged_final already found the card gone
-                        # (RichMessageGone) and cleared busy_msg_id itself —
-                        # nothing left in the chat either way.
-                        card_deleted = True
+                    # Else _send_merged_final already found the card gone
+                    # (RichMessageGone) and cleared busy_msg_id itself —
+                    # nothing left in the chat either way.
                 sess.busy_msg_id = None
 
             # ── Overflow detection ─────────────────────────────────────────
@@ -1495,9 +1549,18 @@ class NotifyMixin:
             # turn's answer.
             send_file = False
             body_content = content  # may be truncated below
+            # The first line the body carries when it goes out as ONE rich
+            # message: the short result line under a kept card (the card
+            # already says Done + stats), the stats form when no card
+            # remains (`replace`, `merged`'s fallback, a turn that never
+            # had a card). It counts against the byte ceiling, so the
+            # overflow check below leaves room for it.
+            lead_md = _result_line_md(label) if card_kept else header_md
+            lead_plain = _result_line_plain(label) if card_kept else header_plain
+            body_limit = _RICH_LIMIT - len(f"{lead_md}\n\n".encode("utf-8"))
             if not merged_delivered and content:
                 content_utf8 = content.encode("utf-8")
-                if len(content_utf8) > 32768:
+                if len(content_utf8) > body_limit:
                     if composed_with_interim:
                         # A composed message puts old interim text FIRST
                         # and the actual answer LAST — head-keeping
@@ -1505,45 +1568,52 @@ class NotifyMixin:
                         # the answer (review rev-iter1-003). Keep the
                         # TAIL instead; the .txt attachment below still
                         # carries the full chronological text.
-                        # 32 768 total INCLUDING the 3-byte ellipsis.
-                        body_content = ("…" + content_utf8[-(32768 - 3):]
+                        # body_limit total INCLUDING the 3-byte ellipsis.
+                        body_content = ("…" + content_utf8[-(body_limit - 3):]
                                         .decode("utf-8", errors="ignore"))
                         send_file = True
                         content_utf8 = b""  # handled; skip the head path
-                    # Truncate at the last markdown-safe boundary under 32768.
+                    # Truncate at the last markdown-safe boundary under the limit.
                     bounds = _md_safe_boundaries(content) if content_utf8 else []
                     cut = 0
                     for b in bounds:
                         b_bytes = len(content[:b].encode("utf-8"))
-                        if b_bytes <= 32768:
+                        if b_bytes <= body_limit:
                             cut = b
                     if cut:
                         body_content = content[:cut]
                     elif content_utf8:
                         # No safe boundary found — truncate at byte limit.
-                        body_content = content_utf8[:32768].decode("utf-8", errors="ignore")
+                        body_content = content_utf8[:body_limit].decode("utf-8", errors="ignore")
                     send_file = True
 
-            # ── Header placement: one message per turn, never a bare one ──
-            # card kept + body        → body alone, threaded to the prompt.
-            #                           The card right above it already reads
-            #                           ✅ label · elapsed; a header would
-            #                           repeat it.
+            # ── Result-line placement: one message per turn, never a bare
+            # one, and every result opens with the session's name
+            # ("session-name-on-every-message") ──
+            # card kept + body        → ONE rich message — the SHORT result
+            #                           line (`💬 label`), blank line, body —
+            #                           threaded to the prompt. The card
+            #                           right above already reads
+            #                           ✅ label · Done · stats, so nothing
+            #                           of that is repeated.
             # card kept + no body     → nothing. The card's ✅ status line IS
             #                           the record; a bare "Finished" under it
             #                           only ever repeated it.
-            # card deleted + body     → body alone (`replace`, and `merged`
-            #                           falling back to it): one message.
-            # no card + body          → ONE rich message — header line, blank
-            #                           line, body — never a header message
-            #                           followed by a body message. "No card"
-            #                           covers a turn that never had one and a
-            #                           final render that failed.
+            # card deleted + body     → ONE rich message — the STATS result
+            #                           line (`💬 label · Finished (…)`),
+            #                           blank line, body (`replace`, and
+            #                           `merged` falling back to it): the
+            #                           card is gone, so this line carries
+            #                           the elapsed time.
+            # no card + body          → the same stats-line message. "No
+            #                           card" covers a turn that never had
+            #                           one and a final render that failed.
             # no card / deleted card, → one header message carrying the
             #   no body                 elapsed time: nothing else in the chat
             #                           says the turn ended.
             # Overflow keeps the standalone header regardless: the "attached
-            # below" note and the document's reply target both live on it.
+            # below" note and the document's reply target both live on it,
+            # and the body then follows it bare.
             #
             # EXCEPT: a recovery-originated idle (session_monitor.py's
             # missed-Stop-hook guess) with no body — content was empty, or
@@ -1556,10 +1626,6 @@ class NotifyMixin:
                 not merged_delivered
                 and not (recovered and not body_content)
                 and (send_file or (not card_kept and not body_content))
-            )
-            compose_header = (
-                not merged_delivered and bool(body_content)
-                and not card_kept and not card_deleted and not send_file
             )
             msg_id = 0
             if standalone_header:
@@ -1581,18 +1647,23 @@ class NotifyMixin:
 
             # ── Send the body via sendRichMessage ──────────────────────────
             if not merged_delivered and body_content:
-                if compose_header:
-                    rich_text = f"{header_md}\n\n{body_content}"
-                    plain_text = f"{header_plain}\n\n{body_content}"
-                else:
+                if standalone_header:
+                    # The header message above already opens the turn's
+                    # result with the session's name; the body follows it.
                     rich_text = body_content
                     plain_text = body_content
+                else:
+                    # One message — its FIRST line is the result line
+                    # ("session-name-on-every-message"), in whichever form
+                    # `lead_md` picked above.
+                    rich_text = f"{lead_md}\n\n{body_content}"
+                    plain_text = f"{lead_plain}\n\n{body_content}"
                 is_rtl = detect_rtl(body_content)
                 log.info("[%s] sendRichMessage: %d chars, rtl=%s, overflow=%s, "
-                         "header=%s",
+                         "lead=%s",
                          label, len(rich_text), is_rtl, send_file,
-                         "composed" if compose_header
-                         else ("standalone" if standalone_header else "card"))
+                         "standalone" if standalone_header
+                         else ("short" if card_kept else "stats"))
                 # Without a standalone header the body IS the turn's message:
                 # it carries the reply link and becomes the tracked message.
                 body_is_the_message = not standalone_header
