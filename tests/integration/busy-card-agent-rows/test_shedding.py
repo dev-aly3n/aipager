@@ -34,6 +34,7 @@ def _oversized_sess(*, agent_position="middle"):
 
     agent_row = (f"{MARK} crawler", False)
 
+    commentary = None
     if agent_position == "middle":
         old_rows = [(f"Bash: old-{i} " + ("z" * 120), True) for i in range(2)]
         new_rows = [(f"Bash: new-{i} " + ("z" * 120), True) for i in range(250)]
@@ -45,6 +46,24 @@ def _oversized_sess(*, agent_position="middle"):
         ]
         history = fat_rows + [agent_row]
         idx = len(fat_rows)
+    elif agent_position == "phase2-only":
+        # Only ONE "run" section exists in the whole timeline (the
+        # trailing "Bash: newest" row) — Phase 1 and 1b are structural
+        # no-ops (there is no OLDER run to collapse, and the single-row
+        # newest run has nothing left to shed), so ALL shedding pressure
+        # lands on Phase 2's own index walk. That walk must pass THROUGH
+        # the agent's own section (kind == "agent-run") without
+        # collapsing it, and keep going to shed the prose sections
+        # flanking it — the specific gap research.md gotcha ~53 names
+        # (Phase 2 has no agent-run exclusion of its own, only Phase 1/1b
+        # do, via the "run"-only kind filter).
+        history = [agent_row, ("Bash: newest", True)]
+        idx = 0
+        commentary = [
+            (0, "PROSE-A " + "a" * 4200),
+            (1, "PROSE-B " + "b" * 4200),
+            (2, "PROSE-C " + "c" * 60),
+        ]
     else:
         raise ValueError(agent_position)
 
@@ -53,6 +72,8 @@ def _oversized_sess(*, agent_position="middle"):
         "type": "crawler", "started_at": time.monotonic() - 8,
         "history_idx": idx, "activity": "Bash: find . -name '*.py'",
     }
+    if commentary is not None:
+        sess.stream_commentary = commentary
     return sess
 
 
@@ -79,6 +100,43 @@ def test_active_agent_row_is_never_replaced_by_a_single_tool_call_placeholder():
     assert truncated is True
     assert "▸ _1 tool call_" not in card
     assert "▸ 1 tool call" not in card
+
+
+def test_active_agent_row_survives_when_only_phase2_pressure_reaches_it():
+    """Extends this file's own documented gap: neither "middle" nor
+    "newest" ever forces Phase 2 (research.md). "phase2-only" is sized so
+    Phase 1/1b have nothing to collapse at all, and the fitter must reach
+    Phase 2's own index walk to decide the agent's section's neighbors —
+    the exact untested path research.md gotcha ~53 named."""
+    sess = _oversized_sess(agent_position="phase2-only")
+    card, truncated = build_stream_card_ex(sess, "Working")
+    assert truncated is True
+    assert f"{MARK} crawler · Bash: find . -name '*.py' · 8s" in card
+
+
+def test_active_agent_row_is_never_inside_the_details_block_under_phase2_pressure():
+    sess = _oversized_sess(agent_position="phase2-only")
+    card, truncated = build_stream_card_ex(sess, "Working")
+    assert truncated is True
+    if "</details>" in card:
+        inside_details = card.split("</details>", 1)[0]
+        assert f"{MARK} crawler" not in inside_details
+
+
+def test_phase2_continues_past_the_agent_row_to_shed_what_comes_after_it():
+    """The specific `continue`-not-`break` fix: a prose section
+    positioned AFTER the agent's own section (PROSE-B) must still be
+    reachable and collapsed by Phase 2, proving the loop did not stop
+    dead at the agent's index. PROSE-C (the newest prose) stays
+    protected and visible throughout."""
+    sess = _oversized_sess(agent_position="phase2-only")
+    card, truncated = build_stream_card_ex(sess, "Working")
+    assert truncated is True
+    assert "<details>" in card
+    inside_details = card.split("</details>", 1)[0]
+    assert "PROSE-B" in inside_details  # swept up by Phase 2 AFTER the agent
+    assert "PROSE-C" in card
+    assert card.index("PROSE-C") > card.index("</details>")  # visible, protected
 
 
 def test_once_settled_the_row_is_an_ordinary_row_and_may_be_folded_like_any_other():
