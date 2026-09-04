@@ -157,23 +157,27 @@ attached below ↓` footer. Buttons:
 While a session is busy, each background agent Claude launches (via
 `Task`) gets its own line on the busy card: `🤖 <type> · <activity> ·
 <elapsed>`, showing the agent's type and what it's currently doing,
-refreshed as its own tool calls come in. An agent's tool calls are
-folded under that row — they never appear in the parent's timeline or
+refreshed as its own tool calls come in. Once that agent has made three
+or more tool calls, they fold into their own `▸ N tool calls` tap
+directly beneath its row — never appearing in the parent's timeline or
 its `Bash ×N` tallies. When the agent finishes, its row settles to `✅
-🤖 <type> · N tool calls · <elapsed>` and stays that way. The full
+🤖 <type> · N tool calls · <elapsed>` and keeps the same tap. The full
 play-by-play `.txt` attachment above gains an AGENTS section listing
 every agent that ran the turn, its elapsed time, tool count, and the
 tools it called.
 
-Once a turn's timeline grows past Telegram's own message-length limit,
-the oldest rows move behind a `▸ N earlier steps · M tool calls` tap
-instead of being cut off — tap it to read them in place; the newest
-activity and the status line are always visible without tapping
-anything. A still-running background agent's own row is never folded
-into that tap while the agent is active. Only if the timeline is so
-large that even the tappable block can't hold it all does content get
-genuinely dropped from the card — in that case the `.txt` attachment
-above carries the complete record.
+Once a turn's timeline grows long, each older run of tool calls (three
+or more in a row, and not the run currently in progress) folds into its
+own `▸ N tool calls` tap right where it happened, instead of piling up
+in full or being cut off by Telegram's own message-length limit — tap
+any one to read it in place. Commentary never folds; the newest activity
+and the status line are always visible without tapping anything. A
+still-running (or just-settled) background agent's own row is never
+folded into a tap itself, only its tool calls, and never while it's the
+one thing standing between the timeline and the ceiling. Only if the
+timeline is so large that even every fold together still can't fit does
+content get genuinely dropped from the card — in that case the `.txt`
+attachment above carries the complete record.
 
 ### Kill confirmation
 

@@ -590,7 +590,7 @@ def _fit_sections(
     while start < n:
         if kinds[start] in ("agent-run", "agent-settled"):
             start += 1
-            break  # MUTATION-VERIFY-MARKER-SB2
+            continue
         if start == last_prose or start == newest_run or start >= n - 1:
             break
         kept_flags[start] = False

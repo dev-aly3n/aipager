@@ -1946,6 +1946,27 @@ def test_card_char_byte_divergence_persian_text_stays_under_both_ceilings():
     card.encode("utf-8")  # must not raise
 
 
+def test_step_b_never_stops_early_on_a_char_only_fit_when_bytes_still_overflow():
+    """Mutation target: Step B's own go/no-go check (``_fits``) must
+    verify BOTH real, measured bounds before accepting a candidate as
+    final — a char-only check would stop as soon as chars fit even
+    though bytes are still over. Dense 4-byte-per-character emoji content
+    sized so char-count alone comfortably fits under 8,800 once the older
+    section is dropped, while the surviving emoji-heavy section's own
+    bytes alone still exceed 32,768 — a scenario a char-only ``_fits``
+    would wrongly accept."""
+    sess = _sess()
+    sess.tool_history = [("Bash: only", True)]
+    sess.stream_commentary = [
+        (0, "OLDER " + "a" * 500),
+        (1, "NEWEST " + "\U0001f600" * 8500),
+    ]
+    card, dropped = build_stream_card_ex(sess, "Working")
+    assert dropped is True
+    assert len(card) <= _CARD_CHAR_BUDGET
+    assert len(card.encode("utf-8")) <= 32_768
+
+
 # ---- broad property sweep: both budgets + status-line-last, always -------
 #
 # hypothesis is not a project dependency (checked: not present in
