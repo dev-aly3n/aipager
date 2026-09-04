@@ -2199,3 +2199,34 @@ def test_newest_content_and_agent_row_survive_extreme_pressure():
     assert "OLD-NARRATIVE" not in card               # oldest still yields first
     assert len(card) <= 8_800
     assert card.rstrip().splitlines()[-1].startswith("\u23f3 **probe** \u00b7")
+
+
+def test_chop_never_leaves_unbalanced_details_markup_around_an_agent_row():
+    """Review rev-iter2-001: the agent-preserving chop used to slice the
+    ORIGINAL body, which still carried the agent's own section, so the kept
+    row appeared twice and the cut could land inside that section's
+    `<details>` span — emitting a dangling `</details>` with no opening tag
+    (reproduced at 162 newest rows). The chop now excludes agent sections
+    from the text it slices. Swept across the band where the overage is
+    smaller than the agent section itself, which is where it bit."""
+    for nrows in range(150, 175):
+        sess = _sess("probe")
+        sess.busy_started_at = time.monotonic() - 20
+        sess.stream_commentary.append((0, "OLD " + "o" * 400))
+        for i in range(5):
+            sess.record_tool(f"Bash: old-{i} " + "x" * 120, True)
+        idx = sess.record_tool("\U0001f916 agent starting", False)
+        sess.active_subagents["a1"] = {
+            "type": "worker", "activity": "digging",
+            "started_at": time.monotonic() - 20, "history_idx": idx,
+            "tools": [f"Read: /path/to/file_{i}.py" for i in range(6)],
+        }
+        sess.stream_commentary.append(
+            (len(sess.tool_history), "Short final answer sentence."))
+        for i in range(nrows):
+            sess.record_tool(f"Grep: some_pattern_{i} in some/really/long/path", True)
+
+        card, _dropped = build_stream_card_ex(sess, "Working")
+        assert card.count("<details>") == card.count("</details>"), nrows
+        assert card.count("\U0001f916 worker") <= 1, nrows  # never duplicated
+        assert len(card) <= 8_800, nrows

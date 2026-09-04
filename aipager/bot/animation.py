@@ -607,17 +607,22 @@ def _fit_sections(
         # exactly what the agent rows exist to show (review rev-iter1-006).
         # Keep those rows (never their nested folds, which are the bulky
         # part) and chop only what follows them.
-        agent_rows = [
-            texts[i].split(_ROW_SEP, 1)[0]
-            for i in range(n)
-            if kept_flags[i] and kinds[i] in ("agent-run", "agent-settled")
-        ]
+        agent_idx = [i for i in range(n) if kept_flags[i]
+                     and kinds[i] in ("agent-run", "agent-settled")]
+        agent_rows = [texts[i].split(_ROW_SEP, 1)[0] for i in agent_idx]
         head = _ROW_SEP.join(agent_rows)
         if agent_rows and _fits(head):
+            # Chop only what is NOT an agent section (review rev-iter2-001).
+            # Chopping the full body would leave the agent's own section
+            # inside the tail as well, so the kept row would appear twice and
+            # the cut could land inside that section's own <details> span —
+            # producing a dangling </details> with no opening tag.
+            rest = _body([i for i in range(n)
+                          if kept_flags[i] and i not in set(agent_idx)])
             reserve = len(head) + len(_ROW_SEP)
             reserve_b = len(head.encode("utf-8")) + len(_ROW_SEP.encode("utf-8"))
             tail = _chop_to_fit(
-                body, char_budget - reserve, byte_budget - reserve_b,
+                rest, char_budget - reserve, byte_budget - reserve_b,
             )
             body = f"{head}{_ROW_SEP}{tail}" if tail else head
         else:
