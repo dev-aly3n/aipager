@@ -165,6 +165,16 @@ play-by-play `.txt` attachment above gains an AGENTS section listing
 every agent that ran the turn, its elapsed time, tool count, and the
 tools it called.
 
+Once a turn's timeline grows past Telegram's own message-length limit,
+the oldest rows move behind a `▸ N earlier steps · M tool calls` tap
+instead of being cut off — tap it to read them in place; the newest
+activity and the status line are always visible without tapping
+anything. A still-running background agent's own row is never folded
+into that tap while the agent is active. Only if the timeline is so
+large that even the tappable block can't hold it all does content get
+genuinely dropped from the card — in that case the `.txt` attachment
+above carries the complete record.
+
 ### Kill confirmation
 
 `/kill <label>` and the `💀 Kill` button always confirm:

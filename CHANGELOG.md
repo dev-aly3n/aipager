@@ -19,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   identical operator-visible behavior. The audit log now records which
   path actually answered each tap.
 
+### Changed
+- The busy card's older timeline now collapses into a tappable `▸ N
+  earlier steps` block instead of vanishing behind Telegram's own
+  message fold — the newest activity and the status line stay visible
+  without tapping anything, even on a long-running turn.
+
 ## [0.7.6] - 2026-09-04
 
 ### Added
