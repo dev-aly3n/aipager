@@ -203,6 +203,66 @@ def test_interactive_auto_deny_admin_bypasses(mk_bot, run_async):
     bot._auto_deny.assert_not_awaited()
 
 
+# ===== pending_permission["hook_reply"] threading (design.md "answer
+# PermissionRequest hooks with a decision instead of keystrokes") ==========
+
+def test_pending_permission_carries_hook_reply_for_plain_tool(mk_bot, run_async):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
+    sess.busy_msg_id = 42
+    bot._edit_busy_raw = AsyncMock(return_value=True)
+    hook_reply_ctx = {"addr": "/run/user/1000/aipager-reply-abc.sock", "request_id": "abc"}
+    run_async(bot.notify(sess, "permission_prompt", {
+        "tool_info": {"name": "Bash", "summary": "Bash: ls",
+                      "input": {"command": "ls"}, "always_available": False},
+        "hook_reply": hook_reply_ctx,
+    }))
+    assert sess.pending_permission["hook_reply"] == hook_reply_ctx
+
+
+def test_pending_permission_hook_reply_none_when_context_omits_it(mk_bot, run_async):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
+    sess.busy_msg_id = 42
+    bot._edit_busy_raw = AsyncMock(return_value=True)
+    run_async(bot.notify(sess, "permission_prompt", {
+        "tool_info": {"name": "Bash", "summary": "Bash: ls",
+                      "input": {"command": "ls"}, "always_available": False},
+    }))
+    assert sess.pending_permission["hook_reply"] is None
+
+
+def test_pending_permission_omits_hook_reply_for_ask_user_question_with_data(mk_bot, run_async):
+    """Deliberate omission (not just downstream-guarded) — belt-and-
+    suspenders alongside callbacks.py's own AskUserQuestion tool-name
+    guard."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
+    sess.busy_msg_id = 42
+    bot._edit_busy_raw = AsyncMock(return_value=True)
+    hook_reply_ctx = {"addr": "/run/user/1000/aipager-reply-abc.sock", "request_id": "abc"}
+    run_async(bot.notify(sess, "permission_prompt", {
+        "tool_info": {"name": "AskUserQuestion",
+                      "input": {"questions": [{"question": "Which?",
+                                               "options": [{"label": "A"}]}]}},
+        "hook_reply": hook_reply_ctx,
+    }))
+    assert "hook_reply" not in sess.pending_permission
+
+
+def test_pending_permission_omits_hook_reply_for_ask_user_question_loading(mk_bot, run_async):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.INTERACTIVE)
+    sess.busy_msg_id = 42
+    bot._edit_busy_raw = AsyncMock(return_value=True)
+    hook_reply_ctx = {"addr": "/run/user/1000/aipager-reply-abc.sock", "request_id": "abc"}
+    run_async(bot.notify(sess, "permission_prompt", {
+        "tool_info": {"name": "AskUserQuestion", "input": {}},  # no questions yet
+        "hook_reply": hook_reply_ctx,
+    }))
+    assert "hook_reply" not in sess.pending_permission
+
+
 # ===== tool_use with no busy_msg ========================================
 
 def test_tool_use_no_busy_msg_short_circuits(mk_bot, run_async):
