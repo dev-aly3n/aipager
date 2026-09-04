@@ -462,24 +462,6 @@ def _render_section(
     return f"{agent_row}{_ROW_SEP}{nested}"
 
 
-def _drop_dangling_close_tags(body: str) -> str:
-    """Remove a ``</details>`` left without its opening tag.
-
-    A head-cutting chop can land inside a fold, so the kept tail begins
-    mid-block and carries a close tag whose ``<details>`` was cut away.
-    Telegram would receive literal broken markup, and the plain-text
-    degrade path cannot strip it either (its regex needs a matched pair).
-    Cheap, total, and independent of WHICH path did the cutting.
-    """
-    while True:
-        close = body.find("</details>")
-        if close == -1:
-            return body
-        if "<details>" in body[:close]:
-            return body            # properly opened — nothing dangling
-        body = body[close + len("</details>"):].lstrip("\n")
-
-
 def _chop_to_fit(body: str, char_budget: int, byte_budget: int) -> str:
     """Chop *body*'s head to fit BOTH budgets, keeping the tail — the
     pre-feature byte backstop's own recency-keeping shape, just checking
@@ -638,22 +620,29 @@ def _fit_sections(
         agent_rows = [texts[i].split(_ROW_SEP, 1)[0] for i in agent_idx]
         head = _ROW_SEP.join(agent_rows)
         if agent_rows and _fits(head):
-            # Chop only what is NOT an agent section (review rev-iter2-001).
-            # Chopping the full body would leave the agent's own section
-            # inside the tail as well, so the kept row would appear twice and
-            # the cut could land inside that section's own <details> span —
-            # producing a dangling </details> with no opening tag.
-            rest = _body([i for i in range(n)
-                          if kept_flags[i] and i not in set(agent_idx)])
+            # Assemble from the NON-agent sections only (review
+            # rev-iter2-001): including the agent's own section here would
+            # repeat the row already kept above it.
+            #
+            # No textual "repair" of the chopped result is attempted. Once
+            # Step B steps past protected sections rather than stopping at
+            # them (review rev-iter3-001), the only non-agent sections that
+            # can survive to here are the newest prose and the newest run —
+            # and neither is ever wrapped in a fold, so this cut cannot land
+            # inside one. A scan for a "dangling" close tag was tried and
+            # removed: it could not tell markup from a tool row whose own
+            # text merely contained `</details>`, and destroyed most of the
+            # card when one did (review rev-iter4-001).
             reserve = len(head) + len(_ROW_SEP)
             reserve_b = len(head.encode("utf-8")) + len(_ROW_SEP.encode("utf-8"))
-            tail = _drop_dangling_close_tags(_chop_to_fit(
+            rest = _body([i for i in range(n)
+                          if kept_flags[i] and i not in set(agent_idx)])
+            tail = _chop_to_fit(
                 rest, char_budget - reserve, byte_budget - reserve_b,
-            ))
+            )
             body = f"{head}{_ROW_SEP}{tail}" if tail else head
         else:
-            body = _drop_dangling_close_tags(
-                _chop_to_fit(body, char_budget, byte_budget))
+            body = _chop_to_fit(body, char_budget, byte_budget)
     return body, dropped_any
 
 

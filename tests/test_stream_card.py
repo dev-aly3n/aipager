@@ -2268,3 +2268,27 @@ def test_no_dangling_details_tag_across_a_family_of_pressured_shapes():
                 assert "</details>" not in card.split("<details>")[0], shape
                 assert len(card) <= 8_800, shape
                 assert card.rstrip().splitlines()[-1].startswith("⏳ "), shape
+
+
+def test_a_row_whose_text_contains_a_close_tag_costs_no_content():
+    """Review rev-iter4-001: a textual "is this tag dangling?" repair could
+    not tell markup from a tool row whose own text merely CONTAINED
+    `</details>` — a row like ``Grep: </details> in animation.py`` made it
+    discard everything before that row, ~89% of the card. The repair is
+    gone (Step B stepping past protected sections removed the need for it),
+    so such a row must now cost nothing at all."""
+    def _card(poisoned: bool) -> str:
+        sess = _sess("probe")
+        sess.busy_started_at = time.monotonic() - 20
+        sess.stream_commentary.append((0, "OLD " + "o" * 300))
+        for i in range(200):
+            text = ("Grep: </details> in aipager/bot/animation.py"
+                    if poisoned and i == 40
+                    else f"Grep: some_pattern_{i} in some/really/long/path")
+            sess.record_tool(text, True)
+        return build_stream_card(sess, "Working")
+
+    clean, poisoned = _card(False), _card(True)
+    assert poisoned.count("✅ `Grep") == clean.count("✅ `Grep")
+    assert len(poisoned) >= len(clean) - 40   # same card, give or take the row
+    assert poisoned.rstrip().splitlines()[-1].startswith("⏳ **probe** ·")
