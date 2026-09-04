@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instead of sending one message per paragraph.
 
 ### Fixed
+- A per-session setting, rename or menu action could silently land on
+  a finished twin of the session with the same name (left behind by a
+  resume or rename) and never apply to the live one. Looking a session
+  up by name now always prefers the live session over a finished one.
 - Each sentence on the busy card now sits directly above the tool calls
   its message made, placed from the transcript's own message structure
   rather than a 1.5-second clock. A message that ran several tools one

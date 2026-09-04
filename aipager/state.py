@@ -1242,7 +1242,17 @@ class SessionRegistry:
         ``include_gone``. Works for both flat (grandfathered) and
         suffixed session names because it matches on ``sess.label``,
         never on parsing the name.
+
+        A LIVE match always wins over a GONE one, whatever their
+        insertion order; a GONE match is returned only when no live
+        session carries the label (resume-by-label still reaches it).
+        Live regression (2026-09-04): a GONE orphan that had inherited a
+        renamed label sat before the live session of the same name, so
+        every ``include_gone`` lookup — a per-session setting from the
+        Mini App included — landed on the dead twin and the change never
+        applied to the session the operator was looking at.
         """
+        gone_match: TrackedSession | None = None
         for sess in self._sessions.values():
             if sess.label != label:
                 continue
@@ -1250,10 +1260,12 @@ class SessionRegistry:
                 0, scope_chat_id,
             ):
                 continue
-            if not include_gone and sess.status == Status.GONE:
+            if sess.status == Status.GONE:
+                if include_gone and gone_match is None:
+                    gone_match = sess
                 continue
             return sess
-        return None
+        return gone_match
 
     def live_labels(self, scope_chat_id: int | None = None) -> set[str]:
         """Labels of non-GONE sessions, optionally filtered to a scope."""

@@ -1486,9 +1486,10 @@ class MiniAppServer:
         if new_label != previous_label:
             # Same collision rule POST /api/sessions applies (design.md
             # Unknown 3): a GONE session with a resumable transcript
-            # still blocks — find_by_label has no tiebreaker, so two
-            # entries claiming the same label the moment the GONE one
-            # is resumed makes every future lookup non-deterministic.
+            # still blocks. find_by_label now prefers a live session over
+            # a gone twin, so a collision would no longer make lookups
+            # non-deterministic — but the resumed twin would still shadow
+            # this one's history the moment it went GONE too.
             existing = self.registry.find_by_label(
                 new_label, scope_chat_id=scope_chat_id, include_gone=True,
             )

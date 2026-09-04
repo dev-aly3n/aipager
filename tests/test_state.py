@@ -509,6 +509,48 @@ def test_find_by_label_excludes_gone(tmp_state_file):
     assert r.find_by_label("jim", 111, include_gone=True) is not None
 
 
+def test_find_by_label_prefers_a_live_session_over_a_gone_twin(tmp_state_file):
+    """Live regression (2026-09-04 23:02): a GONE orphan carrying a renamed
+    label sat BEFORE the live session with the same label, so every
+    ``include_gone`` lookup — the Mini App's per-session settings included
+    — landed on the dead twin and the change never applied."""
+    r = SessionRegistry()
+    _mk(r, "claude-fable", "aipager_boss", 256113222, status=Status.GONE)
+    _mk(r, "claude-aipager_boss", "aipager_boss", 256113222)
+    live = r.find_by_label("aipager_boss", 256113222, include_gone=True)
+    assert live is not None and live.name == "claude-aipager_boss"
+    unscoped = r.find_by_label("aipager_boss", None, include_gone=True)
+    assert unscoped is not None and unscoped.name == "claude-aipager_boss"
+
+
+def test_find_by_label_still_falls_back_to_the_only_gone_match(tmp_state_file):
+    """Resume-by-label relies on reaching a GONE session when no live one
+    carries the name; a live session with a DIFFERENT label must not
+    shadow it."""
+    r = SessionRegistry()
+    _mk(r, "claude-old__d111", "old", 111, status=Status.GONE)
+    _mk(r, "claude-other__d111", "other", 111)
+    gone = r.find_by_label("old", 111, include_gone=True)
+    assert gone is not None and gone.name == "claude-old__d111"
+    assert r.find_by_label("old", 111) is None
+
+
+def test_find_by_label_two_gone_matches_keep_insertion_order(tmp_state_file):
+    r = SessionRegistry()
+    _mk(r, "claude-first", "dup", 0, status=Status.GONE)
+    _mk(r, "claude-second", "dup", 0, status=Status.GONE)
+    assert r.find_by_label("dup", 111, include_gone=True).name == "claude-first"
+    assert r.find_by_label("dup", 111) is None
+
+
+def test_find_by_label_two_live_matches_keep_insertion_order(tmp_state_file):
+    r = SessionRegistry()
+    _mk(r, "claude-first", "dup", 0)
+    _mk(r, "claude-second", "dup", 0)
+    assert r.find_by_label("dup", 111).name == "claude-first"
+    assert r.find_by_label("dup", 111, include_gone=True).name == "claude-first"
+
+
 def test_find_by_label_grandfathered_flat(tmp_state_file):
     """A flat-named, unstamped (scope 0) session matches any scope."""
     r = SessionRegistry()
