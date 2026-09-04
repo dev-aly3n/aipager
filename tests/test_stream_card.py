@@ -2230,3 +2230,41 @@ def test_chop_never_leaves_unbalanced_details_markup_around_an_agent_row():
         assert card.count("<details>") == card.count("</details>"), nrows
         assert card.count("\U0001f916 worker") <= 1, nrows  # never duplicated
         assert len(card) <= 8_800, nrows
+
+
+def test_no_dangling_details_tag_across_a_family_of_pressured_shapes():
+    """Review rev-iter3-001: Step B's walk used to BREAK at the first
+    protected section, so later droppable sections were never considered
+    and the raw chop landed inside one of their folds — leaving a
+    `</details>` with no opening tag, which the plain-text degrade path
+    cannot strip either (its regex needs a matched pair).
+
+    The walk now steps past protected sections, and every chop result is
+    swept for an unmatched close tag. Verified across a family of shapes
+    rather than one: the previous code failed at (5 old rows, 60-char
+    padding, 160/162/164 newest rows) among others.
+    """
+    for n_old in (5, 10):
+        for pad in (60, 120):
+            for n_new in (150, 160, 162, 164, 180):
+                sess = _sess("probe")
+                sess.busy_started_at = time.monotonic() - 20
+                sess.stream_commentary.append((0, "ONLY-PROSE " + "o" * 200))
+                for i in range(n_old):
+                    sess.record_tool(f"Bash: A-{i} " + "x" * pad, True)
+                idx = sess.record_tool("\U0001f916 agent starting", False)
+                sess.active_subagents["a1"] = {
+                    "type": "worker", "activity": "digging",
+                    "started_at": time.monotonic() - 20, "history_idx": idx,
+                    "tools": [f"Read: /f{i}.py" for i in range(6)],
+                }
+                for i in range(n_new):
+                    sess.record_tool(
+                        f"Grep: some_pattern_{i} in some/really/long/path", True)
+
+                card, _dropped = build_stream_card_ex(sess, "Working")
+                shape = (n_old, pad, n_new)
+                assert card.count("<details>") == card.count("</details>"), shape
+                assert "</details>" not in card.split("<details>")[0], shape
+                assert len(card) <= 8_800, shape
+                assert card.rstrip().splitlines()[-1].startswith("⏳ "), shape

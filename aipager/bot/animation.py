@@ -462,6 +462,24 @@ def _render_section(
     return f"{agent_row}{_ROW_SEP}{nested}"
 
 
+def _drop_dangling_close_tags(body: str) -> str:
+    """Remove a ``</details>`` left without its opening tag.
+
+    A head-cutting chop can land inside a fold, so the kept tail begins
+    mid-block and carries a close tag whose ``<details>`` was cut away.
+    Telegram would receive literal broken markup, and the plain-text
+    degrade path cannot strip it either (its regex needs a matched pair).
+    Cheap, total, and independent of WHICH path did the cutting.
+    """
+    while True:
+        close = body.find("</details>")
+        if close == -1:
+            return body
+        if "<details>" in body[:close]:
+            return body            # properly opened — nothing dangling
+        body = body[close + len("</details>"):].lstrip("\n")
+
+
 def _chop_to_fit(body: str, char_budget: int, byte_budget: int) -> str:
     """Chop *body*'s head to fit BOTH budgets, keeping the tail — the
     pre-feature byte backstop's own recency-keeping shape, just checking
@@ -587,7 +605,14 @@ def _fit_sections(
             start += 1
             continue
         if start == last_prose or start == newest_run or start >= n - 1:
-            break
+            # Step PAST a protected section, never stop at it (review
+            # rev-iter3-001). Stopping here left later, genuinely
+            # droppable sections in place — and the raw chop then landed
+            # inside one of their own <details> spans, emitting a
+            # dangling </details>. The protected sections themselves are
+            # still never dropped; they are simply not a wall.
+            start += 1
+            continue
         kept_flags[start] = False
         dropped_any = True
         start += 1
@@ -622,12 +647,13 @@ def _fit_sections(
                           if kept_flags[i] and i not in set(agent_idx)])
             reserve = len(head) + len(_ROW_SEP)
             reserve_b = len(head.encode("utf-8")) + len(_ROW_SEP.encode("utf-8"))
-            tail = _chop_to_fit(
+            tail = _drop_dangling_close_tags(_chop_to_fit(
                 rest, char_budget - reserve, byte_budget - reserve_b,
-            )
+            ))
             body = f"{head}{_ROW_SEP}{tail}" if tail else head
         else:
-            body = _chop_to_fit(body, char_budget, byte_budget)
+            body = _drop_dangling_close_tags(
+                _chop_to_fit(body, char_budget, byte_budget))
     return body, dropped_any
 
 
