@@ -777,3 +777,58 @@ def test_read_turn_stream_missing_file_returns_empty(tmp_path):
     items, off = transcript.read_turn_stream(str(tmp_path / "nope.jsonl"), 7)
     assert items == []
     assert off == 7
+
+
+# ---- read_turn_blocks --------------------------------------------------------
+
+def _block_line(message_id: str, block: dict) -> dict:
+    """One transcript line per content block, as Claude Code writes them."""
+    return {"type": "assistant", "message": {"id": message_id, "content": [block]}}
+
+
+def test_read_turn_blocks_carries_message_ids(tmp_path):
+    """Every item names the assistant message it came from — what lets the
+    card place a hook-delivered sentence at ITS tool rows exactly."""
+    lines = [
+        _block_line("M1", {"type": "text", "text": "first"}),
+        _block_line("M1", {"type": "tool_use", "id": "a", "name": "Bash", "input": {}}),
+        _block_line("M2", {"type": "tool_use", "id": "b", "name": "Read", "input": {}}),
+    ]
+    path = _write_jsonl_bytes(tmp_path, lines)
+    items, off = transcript.read_turn_blocks(path, 0)
+    assert items == [("text", "first", "M1"), ("tool", "Bash", "M1"), ("tool", "Read", "M2")]
+    # read_turn_stream is the same walk minus the id — byte-identical contract.
+    assert transcript.read_turn_stream(path, 0) == (
+        [("text", "first"), ("tool", "Bash"), ("tool", "Read")], off,
+    )
+
+
+def test_read_turn_blocks_leaves_a_partial_trailing_line(tmp_path):
+    full = json.dumps(_block_line("M1", {"type": "text", "text": "done"})) + "\n"
+    partial = json.dumps(_block_line("M2", {"type": "text", "text": "half"}))[:-4]
+    p = tmp_path / "t.jsonl"
+    p.write_bytes((full + partial).encode("utf-8"))
+    items, off = transcript.read_turn_blocks(str(p), 0)
+    assert items == [("text", "done", "M1")]
+    assert off == len(full.encode("utf-8"))
+
+
+def test_read_turn_blocks_missing_id_is_empty_string(tmp_path):
+    entry = {"type": "assistant", "message": {"content": [{"type": "text", "text": "x"}]}}
+    path = _write_jsonl_bytes(tmp_path, [entry])
+    items, _off = transcript.read_turn_blocks(path, 0)
+    assert items == [("text", "x", "")]
+
+
+def test_read_turn_blocks_tolerates_odd_content_shapes(tmp_path):
+    """A bare-string content is one text block; a non-list, non-string
+    content is skipped rather than iterated (review rev-iter1-001) — this
+    walk now runs on every animate tick and inside notify's handlers."""
+    lines = [
+        {"type": "assistant", "message": {"id": "S", "content": "whole string"}},
+        {"type": "assistant", "message": {"id": "N", "content": 42}},
+        {"type": "assistant", "message": {"id": "L", "content": [{"type": "text", "text": "list"}]}},
+    ]
+    path = _write_jsonl_bytes(tmp_path, lines)
+    items, _off = transcript.read_turn_blocks(path, 0)
+    assert items == [("text", "whole string", "S"), ("text", "list", "L")]

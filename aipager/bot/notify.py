@@ -44,7 +44,8 @@ from aipager.config import (
 )
 from aipager.state import Status, TrackedSession
 from aipager.bot.animation import (
-    FINAL_VERB, _RICH_LIMIT, _expire_tool_batch, _md_escape, build_full_log,
+    FINAL_VERB, _RICH_LIMIT, _expire_tool_batch, _md_escape,
+    _sync_anchors_from_transcript, build_full_log,
     build_stream_card_ex,
 )
 
@@ -806,11 +807,33 @@ class NotifyMixin:
                 anchor, text = sess.stream_commentary[-1]
                 sess.stream_commentary[-1] = (anchor, text + delta)
             else:
+                # Settle every round the transcript has flushed BEFORE
+                # placing this sentence ("transcript-exact-sentence-
+                # anchors"): a silent message's rows then sit below the
+                # floor, and a message whose own round beat its hook text
+                # here (its last tool was quick, and the NEXT message's
+                # first row may already have landed) has its exact anchor
+                # waiting.
+                _sync_anchors_from_transcript(sess)
                 sess.stream_msg_id = msg_id
-                sess.stream_commentary.append((sess.stream_anchor_floor, delta))
-                sess.stream_anchor_floor = len(sess.tool_history)
-                # The batch now has its sentence; the card can draw both.
-                sess.stream_batch_since = None
+                exact = sess.stream_exact_anchor.get(msg_id) if msg_id else None
+                if exact is None:
+                    # Unflushed round: the rows since the last block are
+                    # this message's — the sentence goes above them, and
+                    # everything known is now attributed, so the floor
+                    # moves up. The batch has its sentence; the card can
+                    # draw both.
+                    anchor = sess.stream_anchor_floor
+                    sess.stream_anchor_floor = len(sess.tool_history)
+                    sess.stream_batch_since = None
+                else:
+                    # Flushed round: the scan above already put the floor
+                    # past this message's rows and left any rows beyond it
+                    # to the next message (batch untouched).
+                    anchor = exact
+                sess.stream_commentary.append((anchor, delta))
+                if msg_id:
+                    sess.stream_block_index[msg_id] = len(sess.stream_commentary) - 1
             if not sess.busy_msg_id or sess.busy_msg_id < 0:
                 return
             sess.stream_dirty = True
@@ -1159,6 +1182,11 @@ class NotifyMixin:
                     sess.job_continuation_active = False
                 await self._handle_job_interim(sess, context)
                 return
+            # The last round flushes right before Stop; no tick may have
+            # run in between. Place its sentence exactly before anything
+            # below snapshots or renders the timeline
+            # ("transcript-exact-sentence-anchors").
+            _sync_anchors_from_transcript(sess)
             # Snapshot the play-by-play FIRST — before the done-marking
             # below coerces every row to True (which would misreport
             # failed rows as successes in the full-log attachment, review
@@ -1309,6 +1337,8 @@ class NotifyMixin:
             sess.stream_msg_id = ""
             sess.stream_anchor_floor = 0
             sess.stream_batch_since = None
+            sess.stream_block_index = {}
+            sess.stream_exact_anchor = {}
             sess.stream_dirty = False
             sess.stream_last_rendered = ""
             sess.stream_offset = 0

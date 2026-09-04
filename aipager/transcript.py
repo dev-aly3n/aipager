@@ -329,6 +329,31 @@ def read_turn_stream(
     consumed, so the next call picks it up once it is complete.
 
     Returns ``([], offset)`` on any error — the function never raises.
+
+    The same walk as :func:`read_turn_blocks` with the message id dropped —
+    kept as its own name so the transcript-fallback path's contract (and
+    its tests) are untouched.
+    """
+    items, new_offset = read_turn_blocks(transcript_path, offset)
+    return ([(kind, value) for kind, value, _mid in items], new_offset)
+
+
+def read_turn_blocks(
+    transcript_path: str, offset: int,
+) -> tuple[list[tuple[str, str, str]], int]:
+    """:func:`read_turn_stream` plus the assistant message each item came
+    from: ``("text", block, message_id)`` / ``("tool", tool_name,
+    message_id)``, *message_id* being the entry's ``message.id`` (``""``
+    when absent).
+
+    Claude Code writes one line per content block, every line of one
+    message carrying the same id, and flushes a message's lines together
+    once its tool-result round ends. The id is what ties a sentence the
+    MessageDisplay hook already delivered (it carries the same
+    ``message_id``) to the tool_use blocks of ITS message — the exact
+    "which rows did this sentence introduce" the busy card anchors on
+    ("transcript-exact-sentence-anchors"). Same offset, partial-line and
+    error rules as :func:`read_turn_stream`.
     """
     if not transcript_path:
         return ([], offset)
@@ -354,7 +379,7 @@ def read_turn_stream(
     # stalled the streaming draft after its first chunk.
     lines = lines[:-1]
 
-    items: list[tuple[str, str]] = []
+    items: list[tuple[str, str, str]] = []
     consumed_bytes = 0
     for line_bytes in lines:
         # Each "line" here excludes the trailing \n; add 1 for the separator.
@@ -373,20 +398,31 @@ def read_turn_stream(
         # as though it were the reply taking shape.
         if is_no_response_entry(entry):
             continue
-        content = entry.get("message", {}).get("content", [])
+        message = entry.get("message", {})
+        if not isinstance(message, dict):
+            continue
+        mid = message.get("id", "")
+        mid = mid if isinstance(mid, str) else ""
+        content = message.get("content", [])
+        if isinstance(content, str):
+            # A bare-string content is one text block, not a run of
+            # one-character blocks.
+            content = [content]
+        elif not isinstance(content, list):
+            continue
         for block in content:
             if isinstance(block, dict):
                 kind = block.get("type")
                 if kind == "text":
                     t = _strip_leaked_tool_xml(block.get("text", ""))
                     if t:
-                        items.append(("text", t))
+                        items.append(("text", t, mid))
                 elif kind == "tool_use":
-                    items.append(("tool", block.get("name", "")))
+                    items.append(("tool", block.get("name", ""), mid))
             elif isinstance(block, str) and block:
                 t = _strip_leaked_tool_xml(block)
                 if t:
-                    items.append(("text", t))
+                    items.append(("text", t, mid))
 
     return (items, offset + consumed_bytes)
 

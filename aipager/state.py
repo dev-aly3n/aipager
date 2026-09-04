@@ -411,7 +411,8 @@ class TrackedSession:
     #   seeded to the file size at turn start so a new turn never reads
     #   the previous turn's text.
     # stream_transcript_path: the transcript file pinned at turn-seed time.
-    #   _read_stream_text reads exclusively from this path for the whole turn,
+    #   _read_stream_text (hook not live) and _sync_anchors_from_transcript
+    #   (hook live) both read exclusively from this path for the whole turn,
     #   so the offset can never be applied to a file it wasn't measured against.
     # stream_commentary: Claude's prose blocks for this turn, each paired with
     #   the tool_history index of the row that follows it in the transcript.
@@ -419,10 +420,21 @@ class TrackedSession:
     #   the order they actually happened; tool_history itself must keep its
     #   shape because active_subagents[...]["history_idx"] indexes into it.
     # stream_tool_cursor: how far into tool_history the transcript scan has
-    #   walked this turn — the anchor handed to the next prose block. Only
-    #   used by the transcript fallback; the MessageDisplay hook anchors on
-    #   len(tool_history) at arrival, which is accurate because the hook
-    #   fires as the prose is generated rather than seconds later.
+    #   walked this turn. For the transcript fallback (hook not live) it is
+    #   the anchor handed to the next prose block read from the file. Once
+    #   the MessageDisplay hook is live the same cursor is driven by the
+    #   exact-anchor scan (_sync_anchors_from_transcript), which walks the
+    #   flushed rounds only to PLACE hook-delivered sentences — never to
+    #   read text ("transcript-exact-sentence-anchors").
+    # stream_block_index: message_id -> index into stream_commentary of the
+    #   block the hook created for that message, so the exact scan can
+    #   correct its anchor once the message's round is readable.
+    # stream_exact_anchor: message_id -> the tool_history index of that
+    #   message's FIRST tool row, learned from the transcript. Consulted
+    #   when the hook text arrives (its round may already have flushed —
+    #   the last tool was quick — and the next message's rows may already
+    #   sit above the floor) and applied to an existing block otherwise.
+    #   Both maps are per-turn and never persisted.
     # stream_msg_id: Claude's message id for the commentary block currently
     #   being appended to, so a later chunk of the same message grows that
     #   block instead of starting a new row.
@@ -455,6 +467,8 @@ class TrackedSession:
     stream_msg_id: str = ""
     stream_anchor_floor: int = 0
     stream_batch_since: float | None = field(default=None, repr=False)
+    stream_block_index: dict[str, int] = field(default_factory=dict, repr=False)
+    stream_exact_anchor: dict[str, int] = field(default_factory=dict, repr=False)
     stream_hook_live: bool = False
     stream_dirty: bool = False
     stream_last_rendered: str = ""
@@ -968,6 +982,10 @@ class TrackedSession:
                 (max(0, anchor - drop), text)
                 for anchor, text in self.stream_commentary
             ]
+            self.stream_exact_anchor = {
+                mid: max(0, anchor - drop)
+                for mid, anchor in self.stream_exact_anchor.items()
+            }
         return new_idx
 
 

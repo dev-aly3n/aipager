@@ -27,6 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and a still-running (or just-finished) background agent's own tool
   calls get the same fold under its own row once it has three or more.
 
+### Fixed
+- Each sentence on the busy card now sits directly above the tool calls
+  its message made, placed from the transcript's own message structure
+  rather than a 1.5-second clock. A message that ran several tools one
+  after another used to end seconds after its first call, so its
+  sentence landed below (or in the middle of) its own rows, a fold could
+  mix calls from two stages, and the last sentence before the answer
+  could be hidden as if it were the answer and never shown.
+
 ## [0.7.6] - 2026-09-04
 
 ### Added

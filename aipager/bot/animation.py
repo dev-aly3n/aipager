@@ -30,7 +30,7 @@ from aipager.bot.rich_message import (
     RichMessageFallbackRequired,
     RichMessageGone,
 )
-from aipager.transcript import read_turn_stream
+from aipager.transcript import read_turn_blocks, read_turn_stream
 from aipager.state import Status, TrackedSession
 
 # Pure-function helpers and constants live in aipager.bot.transport
@@ -162,29 +162,51 @@ def _quote(text: str) -> str:
     return "\n".join(f"{_QUOTE_MARK}{line}" for line in text.split("\n"))
 
 
-def _advance_tool_cursor(
-    sess: TrackedSession, tool_name: str, cursor: int,
-) -> int:
-    """Walk *cursor* past the ``tool_history`` row produced by *tool_name*.
+def _find_tool_row(sess: TrackedSession, tool_name: str, cursor: int) -> int | None:
+    """Index of the first ``tool_history`` row at or after *cursor* that a
+    transcript ``tool_use`` block named *tool_name* produced, or ``None``.
 
     Rows are ``"Bash: ..."``-shaped for the tools that get a summary and the
-    bare tool name for the rest, so a prefix test identifies both. A Task also
-    grows a "🤖 agent" row from SubagentStart, which belongs to the Task's
-    tool_use block rather than to one of its own — so the cursor steps over
-    those too, keeping later prose below the agent it followed.
-
-    Returns *cursor* unchanged when the row is not there yet, so a transcript
-    that has run ahead of the hooks can never walk the cursor off the end.
+    bare tool name for the rest, so a prefix test identifies both. One
+    matcher for the transcript fallback's cursor walk and the exact-anchor
+    scan, so the two can never disagree about which row a block is.
     """
     history = sess.tool_history
     for i in range(cursor, len(history)):
         summary = history[i][0]
         if summary == tool_name or summary.startswith(f"{tool_name}:"):
-            i += 1
-            while i < len(history) and history[i][0].startswith(_SUBAGENT_MARK):
-                i += 1
             return i
-    return cursor
+    return None
+
+
+def _advance_tool_cursor(
+    sess: TrackedSession, tool_name: str, cursor: int,
+) -> int:
+    """Walk *cursor* past the ``tool_history`` row produced by *tool_name*.
+
+    A Task also grows a "🤖 agent" row from SubagentStart, which belongs to
+    the Task's tool_use block rather than to one of its own — so the cursor
+    steps over those too, keeping later prose below the agent it followed.
+
+    Returns *cursor* unchanged when the row is not there yet, so a transcript
+    that has run ahead of the hooks can never walk the cursor off the end.
+    """
+    history = sess.tool_history
+    i = _find_tool_row(sess, tool_name, cursor)
+    if i is None:
+        return cursor
+    i += 1
+    while i < len(history) and history[i][0].startswith(_SUBAGENT_MARK):
+        i += 1
+    return i
+
+
+def _exact_anchors_available(sess: TrackedSession) -> bool:
+    """Whether the transcript can place this session's hook-delivered
+    sentences exactly: the hook is live (so the transcript is not being
+    read for TEXT — see :func:`_read_stream_text`'s duplication guard) and
+    the turn pinned a transcript path to scan."""
+    return bool(sess.stream_hook_live and sess.stream_transcript_path)
 
 
 def _expire_tool_batch(sess: TrackedSession) -> None:
@@ -194,13 +216,95 @@ def _expire_tool_batch(sess: TrackedSession) -> None:
     stay held, and worse, the next message's prose would anchor above them and
     claim tools it never introduced. Advancing the floor here settles them
     where they are, so the next block lands below.
+
+    A FALLBACK only, for a session whose transcript cannot be scanned. When
+    it can, :func:`_sync_anchors_from_transcript` settles a silent message
+    the moment its round is readable and never a moment sooner — the clock
+    cannot tell a silent message from a multi-tool message whose sentence
+    arrives at message END, seconds after its first row, and guessing wrong
+    put every such sentence below (or in the middle of) its own rows
+    ("transcript-exact-sentence-anchors"). The hold in
+    :func:`_build_sections` still stops withholding rows on its own clock,
+    so the live card keeps drawing them promptly either way.
     """
     if sess.stream_batch_since is None:
+        return
+    if _exact_anchors_available(sess):
         return
     if time.monotonic() - sess.stream_batch_since < _BATCH_HOLD_SECS:
         return
     sess.stream_anchor_floor = len(sess.tool_history)
     sess.stream_batch_since = None
+
+
+def _sync_anchors_from_transcript(sess: TrackedSession) -> bool:
+    """Place hook-delivered sentences exactly, from the transcript's own
+    message structure ("transcript-exact-sentence-anchors").
+
+    Claude Code flushes an assistant message's lines — its text block and
+    its tool_use blocks, all sharing ``message.id`` — together, once that
+    message's tool-result round ends. That is the ground truth for "which
+    rows did this sentence introduce": the MessageDisplay hook delivers
+    the sentence (with the same ``message_id``) only at message end, after
+    the rows have landed, so arrival order alone cannot say.
+
+    Walks the newly flushed lines from ``stream_offset``. A text line
+    marks its message as pending; that message's first tool_use line is
+    matched to a row (name order, from ``stream_tool_cursor`` — the same
+    rule the transcript fallback has always used) and that row index
+    becomes the message's exact anchor: recorded in
+    ``stream_exact_anchor`` for a sentence not yet delivered, and written
+    into the block ``stream_block_index`` names when it already is. Every
+    matched tool line advances the cursor (stepping over the 🤖 rows a
+    SubagentStart adds after an Agent row); an unmatched one is skipped —
+    the transcript cannot legitimately run ahead of PreToolUse. Afterwards
+    the floor is at least the cursor, so the next sentence cannot claim a
+    flushed message's rows, and the batch is settled once every row is
+    attributed (left open otherwise — the rows past the cursor are the
+    next message's, mid-hold).
+
+    Returns True when an existing block moved (the card needs a redraw).
+    Never reads text into the card: while the hook is live the transcript
+    is read only for STRUCTURE. Inert when the hook is not live (the
+    fallback owns the cursor and offset then) or no transcript is pinned.
+    """
+    if not _exact_anchors_available(sess):
+        return False
+    items, sess.stream_offset = read_turn_blocks(
+        sess.stream_transcript_path, sess.stream_offset,
+    )
+    if not items:
+        return False
+    changed = False
+    cursor = sess.stream_tool_cursor
+    pending: str | None = None
+    for kind, value, mid in items:
+        if kind == "text":
+            pending = mid if mid and mid not in sess.stream_exact_anchor else None
+            continue
+        if pending is not None and mid != pending:
+            # A text-only message (the answer, or one whose tool lines all
+            # went unmatched) never borrows the NEXT message's first row.
+            pending = None
+        row = _find_tool_row(sess, value, cursor)
+        if row is None:
+            continue
+        if pending is not None:
+            sess.stream_exact_anchor[pending] = row
+            idx = sess.stream_block_index.get(pending)
+            if idx is not None and 0 <= idx < len(sess.stream_commentary):
+                anchor, text = sess.stream_commentary[idx]
+                if anchor != row:
+                    sess.stream_commentary[idx] = (row, text)
+                    changed = True
+            pending = None
+        cursor = _advance_tool_cursor(sess, value, cursor)
+    sess.stream_tool_cursor = cursor
+    if cursor > sess.stream_anchor_floor:
+        sess.stream_anchor_floor = cursor
+    if cursor >= len(sess.tool_history):
+        sess.stream_batch_since = None
+    return changed
 
 
 def _read_stream_text(sess: TrackedSession) -> bool:
@@ -1249,6 +1353,11 @@ class AnimationMixin:
             # prose is a real change, so it earns the fast cadence.
             if _read_stream_text(sess):
                 sess.stream_dirty = True
+            # Hook live instead: the transcript is read for STRUCTURE only
+            # — a round that flushed since the last tick places (or
+            # corrects) the sentence it belongs to, exactly.
+            if _sync_anchors_from_transcript(sess):
+                sess.stream_dirty = True
         # Choose the required minimum gap.
         gap = STREAM_EDIT_INTERVAL if sess.stream_dirty else BUSY_EDIT_INTERVAL
         now = time.monotonic()
@@ -1622,6 +1731,8 @@ class AnimationMixin:
             sess.stream_msg_id = ""
             sess.stream_anchor_floor = 0
             sess.stream_batch_since = None
+            sess.stream_block_index = {}
+            sess.stream_exact_anchor = {}
             sess.stream_dirty = False
             sess.stream_last_rendered = ""
             sess.stream_offset = 0
