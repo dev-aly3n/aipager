@@ -66,6 +66,33 @@ _DEBUG = os.environ.get("AIPAGER_DEBUG") == "1"
 # full reasoning.
 _TASK_NOTIFICATION_PREFIX = "<task-notification>"
 
+# design.md "answer PermissionRequest hooks with a decision instead of
+# keystrokes": how long THIS hook process itself waits, after a
+# successful forward send, for the daemon to deliver a verdict over the
+# reply socket before giving up and printing nothing (falling through to
+# Claude Code's own interactive dialog). 20s leaves a huge margin under
+# Claude Code's own external hook timeout for this event (30s once
+# settings_patch.py's PermissionRequest entry carries one, 600s
+# otherwise) while still giving a genuinely-away-from-desk Telegram user
+# a real chance to tap a button. Overridable for tests (and only tests —
+# there is no supported production reason to change this) via
+# AIPAGER_PERMISSION_REPLY_DEADLINE_SECONDS; any non-positive or
+# unparseable value silently falls back to this default rather than
+# ever raising or hanging the hook.
+_PERMISSION_REPLY_DEADLINE_SECONDS = 20
+
+
+def _permission_reply_deadline_seconds() -> float:
+    raw = os.environ.get("AIPAGER_PERMISSION_REPLY_DEADLINE_SECONDS", "").strip()
+    if raw:
+        try:
+            val = float(raw)
+        except ValueError:
+            val = None
+        if val is not None and val > 0:
+            return val
+    return _PERMISSION_REPLY_DEADLINE_SECONDS
+
 
 def _debug(msg: str) -> None:
     """Print a diagnostic line to stderr when AIPAGER_DEBUG=1.
@@ -290,23 +317,91 @@ def _run(session: str, cap_slot: list[bytes]) -> None:
         if tokens:
             data["sl_tokens"] = tokens
 
-    # Fire-and-forget UDP datagram
-    def _udp(payload: dict) -> None:
+    # Fire-and-forget UDP datagram. Returns whether the sendto() itself
+    # succeeded (a listener existed at SOCKET_PATH) — NOT delivery/
+    # processing confirmation. Every pre-existing call site below ignores
+    # this; the new PermissionRequest branch is the only caller that
+    # reads it, to skip the reply wait outright when the daemon is
+    # provably down rather than blocking for the full deadline.
+    def _udp(payload: dict) -> bool:
         try:
             s = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
             s.sendto(json.dumps(payload).encode(), SOCKET_PATH)
             s.close()
+            return True
         except OSError as e:
             _debug(f"daemon socket {SOCKET_PATH} unreachable: {e}")
             # daemon not running — session_monitor catches it
+            return False
 
-    _udp(data)
+    hook_event_name = data.get("hook_event_name")
+
+    if hook_event_name == "PermissionRequest":
+        # design.md "answer PermissionRequest hooks with a decision
+        # instead of keystrokes": the reply-socket address/id must be
+        # embedded in `data` BEFORE it is forwarded, so the daemon can
+        # reply to THIS specific, still-parked invocation. Lazy import —
+        # this is the only branch of this file that pays any cost beyond
+        # the stdlib; every other event (including the plain _udp(data)
+        # forward in the `else` below) never imports this module.
+        sock = None
+        reply_path = None
+        request_id = None
+        try:
+            from aipager.dtach import hook_reply
+
+            runtime_dir = os.path.dirname(SOCKET_PATH) or "/tmp"
+            opened = hook_reply.open_reply_socket(runtime_dir)
+            if opened is not None:
+                sock, reply_path, request_id = opened
+                data["aipager_reply_addr"] = reply_path
+                data["aipager_request_id"] = request_id
+
+            forward_ok = _udp(data)
+
+            if opened is not None and forward_ok:
+                decision = hook_reply.wait_for_decision(
+                    sock, request_id, _permission_reply_deadline_seconds(),
+                )
+                if decision is not None:
+                    print(json.dumps({
+                        "hookSpecificOutput": {
+                            "hookEventName": "PermissionRequest",
+                            "decision": decision,
+                        },
+                    }))
+                else:
+                    # No (or no well-formed, on-time) verdict — best-
+                    # effort tell the daemon this specific reply channel
+                    # is abandoned, shrinking the window where a stale
+                    # Telegram tap thinks it can still reach this hook.
+                    # Diagnostic only: its own failure is swallowed.
+                    try:
+                        _udp({
+                            "hook_event_name": "permission_reply_timeout",
+                            "session": data.get("session", ""),
+                            "aipager_request_id": request_id,
+                        })
+                    except Exception:
+                        pass
+        except MemoryError:
+            raise  # let main() handle it uniformly
+        except Exception as e:  # never wedge claude — fall through to the dialog
+            _debug(f"permission reply error (falling through to dialog): {e}")
+        finally:
+            if sock is not None:
+                try:
+                    hook_reply.close_reply_socket(sock, reply_path)
+                except Exception:
+                    pass
+    else:
+        _udp(data)
 
     # Phase E: PreToolUse safety enforcement. The daemon notify above is
     # fire-and-forget; here we may additionally BLOCK the tool by emitting
     # a Claude Code deny decision on stdout. Best-effort — any error falls
     # through to "allow" so the hook never wedges a session.
-    if data.get("hook_event_name") == "PreToolUse":
+    if hook_event_name == "PreToolUse":
         try:
             from aipager.dtach.enforce import decide, deny_decision_json
             block = decide(data)
@@ -332,7 +427,7 @@ def _run(session: str, cap_slot: list[bytes]) -> None:
     # PreToolUse branch above (try/except Exception, never wedge claude)
     # and prints nothing at all — not even an empty line — when there's
     # nothing to say, matching every other event's existing silence.
-    elif data.get("hook_event_name") == "UserPromptSubmit":
+    elif hook_event_name == "UserPromptSubmit":
         prompt_text = data.get("prompt", "") or ""
         if prompt_text.startswith(_TASK_NOTIFICATION_PREFIX):
             # Continuation turn: the SAME job waking itself up, not a new

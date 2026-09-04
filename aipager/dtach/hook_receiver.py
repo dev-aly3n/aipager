@@ -234,6 +234,22 @@ _OUTSIDE_READ_TOOLS: dict[str, tuple[str, bool]] = {
 _STANDING_RULE_SUGGESTION_TYPES = frozenset({"addRules", "addDirectories"})
 
 
+def _standing_rule_suggestion(suggestions: object) -> dict | None:
+    """First entry of *suggestions* whose ``type`` is a standing-rule
+    type (:data:`_STANDING_RULE_SUGGESTION_TYPES`), or ``None`` — same
+    gate as the ``always_available`` boolean below, but RETAINS the
+    entry instead of reducing it to a bool, so "Allow always" can later
+    echo it verbatim as a hook decision's ``updatedPermissions``
+    (design.md "answer PermissionRequest hooks with a decision instead
+    of keystrokes")."""
+    if not isinstance(suggestions, list):
+        return None
+    for s in suggestions:
+        if isinstance(s, dict) and s.get("type") in _STANDING_RULE_SUGGESTION_TYPES:
+            return s
+    return None
+
+
 def _read_outside_working_dir(tool_name: str, tool_input: object, cwd: str) -> bool:
     """True when ``tool_name`` is one of :data:`_OUTSIDE_READ_TOOLS` and its
     path lies outside ``cwd`` (see :func:`_outside_working_dir`)."""
@@ -419,14 +435,16 @@ class HookReceiver:
                 # never auto mode). Closing that needs a hook-returned
                 # decision instead of keystrokes.
                 suggestions = msg.get("permission_suggestions")
-                always = isinstance(suggestions, list) and any(
-                    isinstance(s, dict) and s.get("type") in _STANDING_RULE_SUGGESTION_TYPES
-                    for s in suggestions
-                )
+                standing_rule_suggestion = _standing_rule_suggestion(suggestions)
+                # `always` is DERIVED from the retained suggestion so the
+                # two can never diverge (design.md) — a single source of
+                # truth instead of two independent computations.
+                always = standing_rule_suggestion is not None
                 if tool_name == "Bash" and not isinstance(
                         tool_input.get("command") if isinstance(tool_input, dict) else None,
                         str):
                     always = False
+                    standing_rule_suggestion = None
                 # A read-only file access outside the working directory
                 # (Read / Grep / Glob) may be drawing the one-time
                 # "block outside reads?" dialog instead of the ordinary
@@ -435,17 +453,54 @@ class HookReceiver:
                 # dialogs apart. Never offer Allow-always for it.
                 if _read_outside_working_dir(tool_name, tool_input, sess_ref.cwd):
                     always = False
+                    standing_rule_suggestion = None
                 tool_info = {
                     "name": tool_name, "input": tool_input,
                     "summary": _summarize_tool(tool_name, tool_input),
                     "always_available": always,
+                    "standing_rule_suggestion": standing_rule_suggestion,
                     "detail": _tool_detail(tool_name, tool_input),
                 }
-                context = {"tool_info": tool_info, "transcript_path": transcript_path}
+                # design.md "answer PermissionRequest hooks with a
+                # decision instead of keystrokes": the hook offers a
+                # reply channel by embedding these two keys on the
+                # forward datagram; both present and non-empty is the
+                # only signal that a hook is actually parked waiting.
+                reply_addr = msg.get("aipager_reply_addr")
+                reply_request_id = msg.get("aipager_request_id")
+                if (isinstance(reply_addr, str) and reply_addr
+                        and isinstance(reply_request_id, str) and reply_request_id):
+                    hook_reply_ctx = {"addr": reply_addr, "request_id": reply_request_id}
+                else:
+                    hook_reply_ctx = None
+                context = {
+                    "tool_info": tool_info, "transcript_path": transcript_path,
+                    "hook_reply": hook_reply_ctx,
+                }
                 sess = self.registry.transition(session_name, Status.INTERACTIVE)
                 if sess:
                     log.info("[%s] PermissionRequest: %s", sess.label, tool_info["summary"])
                     await self.notify_fn(sess, "permission_prompt", context)
+            return
+
+        elif event == "permission_reply_timeout":
+            # The hook's own internal wait deadline elapsed with no
+            # reply — it is unlinking its reply socket and exiting right
+            # now (design.md). Clear ONLY the hook_reply key so a stale
+            # Telegram tap fails safe (falls through to keystrokes)
+            # instead of sendto()-ing into a channel the hook already
+            # abandoned. `pending_permission` itself is left intact: the
+            # keyboard and its tool_info are still valid, and Claude
+            # Code's own dialog is what appears next.
+            #
+            # registry.get() — NEVER get_or_create() — a stale timeout
+            # notice for a session that's already gone must not
+            # resurrect a fresh, empty TrackedSession.
+            sess = self.registry.get(session_name)
+            pending = sess.pending_permission if sess else None
+            hr = pending.get("hook_reply") if pending else None
+            if isinstance(hr, dict) and hr.get("request_id") == msg.get("aipager_request_id"):
+                pending["hook_reply"] = None
             return
 
         elif event == "permission_prompt":

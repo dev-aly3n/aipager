@@ -43,6 +43,15 @@ HOOK_EVENTS = (
 )
 TOOL_MATCHER_EVENTS = {"PreToolUse", "PostToolUse", "PermissionRequest"}
 
+# design.md "answer PermissionRequest hooks with a decision instead of
+# keystrokes": defense-in-depth against a genuinely wedged hook process
+# (a bug that blocks past its own internal wait). 10s of margin above the
+# hook's own ~20s internal deadline — process spawn + import + bind
+# overhead is real but sub-second, so this is generous headroom, not a
+# tight budget. Applies ONLY to the PermissionRequest hook entry; every
+# other HOOK_EVENTS entry is left with no `timeout` key at all.
+PERMISSION_REQUEST_HOOK_TIMEOUT_SECONDS = 30
+
 _TOKEN_RE = re.compile(r"\d{6,12}:[A-Za-z0-9_-]{20,80}")
 _CHAT_NOT_FOUND_RE = re.compile(r"chat\s*[\s_-]*not\s*[\s_-]*found", re.I)
 

@@ -42,6 +42,7 @@ def append(*, session: str, label: str, action: str,
            denied: bool = False,
            reason: str = "",
            bypass_safety: bool = False,
+           via: str = "",
            path: Path | None = None) -> bool:
     """Append a single record. Returns True on success, False on failure.
 
@@ -54,6 +55,11 @@ def append(*, session: str, label: str, action: str,
     records authorization/safety rejections; ``bypass_safety`` flags an
     owner acting with the safety boundary bypassed. All default-empty, so
     legacy/personal records keep their original shape.
+
+    ``via`` (design.md "answer PermissionRequest hooks with a decision
+    instead of keystrokes") records how a permission tap was actually
+    resolved — ``"hook_decision"`` or ``"keystroke_fallback"``. Default-
+    empty, so every pre-existing call site's output is unchanged.
 
     ``path`` is overrideable for tests; production callers leave it as
     None so it picks up ``AUDIT_LOG_PATH``.
@@ -73,6 +79,7 @@ def append(*, session: str, label: str, action: str,
         "denied": denied,
         "reason": reason[:200],
         "bypass_safety": bypass_safety,
+        "via": via,
     }
     target = path or AUDIT_LOG_PATH
     try:

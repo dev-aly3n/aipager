@@ -505,6 +505,86 @@ def test_merge_hooks_includes_tool_matcher_for_tool_events(monkeypatch):
         assert block.get("matcher") == "*"
 
 
+# ---- _merge_hooks: PermissionRequest gets its own timeout (design.md
+# "answer PermissionRequest hooks with a decision instead of keystrokes")
+
+def test_merge_hooks_fresh_install_permission_request_gets_timeout_others_dont(monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}")
+    settings = {}
+    settings_patch._merge_hooks(settings)
+    perm_hook = settings["hooks"]["PermissionRequest"][0]["hooks"][0]
+    assert perm_hook["timeout"] == 30
+    for event in settings_patch.HOOK_EVENTS:
+        if event == "PermissionRequest":
+            continue
+        for block in settings["hooks"][event]:
+            for hook in block["hooks"]:
+                assert "timeout" not in hook, (event, hook)
+
+
+def test_merge_hooks_backfills_timeout_on_already_wired_entry_and_counts_it(monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}")
+    settings = {
+        "hooks": {
+            "PermissionRequest": [
+                {"matcher": "*", "hooks": [
+                    {"type": "command", "command": "/usr/bin/aipager-hook"},
+                ]},
+            ],
+        },
+    }
+    repointed = settings_patch._merge_hooks(settings)
+    hook = settings["hooks"]["PermissionRequest"][0]["hooks"][0]
+    assert hook["timeout"] == 30
+    assert repointed >= 1
+
+
+def test_merge_hooks_leaves_correct_timeout_untouched_idempotent(monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}")
+    settings = {}
+    settings_patch._merge_hooks(settings)
+    first = json.dumps(settings, sort_keys=True)
+    settings_patch._merge_hooks(settings)
+    second = json.dumps(settings, sort_keys=True)
+    assert first == second
+    perm_hook = settings["hooks"]["PermissionRequest"][0]["hooks"][0]
+    assert perm_hook["timeout"] == 30
+
+
+# ---- _ensure_permission_timeout -----------------------------------------
+
+def test_ensure_permission_timeout_backfills_missing_key():
+    entries = [{"matcher": "*", "hooks": [
+        {"type": "command", "command": "/usr/bin/aipager-hook"},
+    ]}]
+    changed = settings_patch._ensure_permission_timeout(entries, "aipager-hook", 30)
+    assert changed == 1
+    assert entries[0]["hooks"][0]["timeout"] == 30
+
+
+def test_ensure_permission_timeout_leaves_correct_value_untouched():
+    entries = [{"matcher": "*", "hooks": [
+        {"type": "command", "command": "/usr/bin/aipager-hook", "timeout": 30},
+    ]}]
+    changed = settings_patch._ensure_permission_timeout(entries, "aipager-hook", 30)
+    assert changed == 0
+    assert entries[0]["hooks"][0]["timeout"] == 30
+
+
+def test_ensure_permission_timeout_ignores_non_matching_hooks():
+    entries = [{"matcher": "*", "hooks": [
+        {"type": "command", "command": "/usr/bin/other-hook"},
+    ]}]
+    changed = settings_patch._ensure_permission_timeout(entries, "aipager-hook", 30)
+    assert changed == 0
+    assert "timeout" not in entries[0]["hooks"][0]
+
+
+def test_ensure_permission_timeout_tolerates_malformed_entries():
+    entries = ["not a dict", {"hooks": "not a list"}, {"hooks": [42, {"command": 5}]}]
+    assert settings_patch._ensure_permission_timeout(entries, "aipager-hook", 30) == 0
+
+
 # ---- _has_hook_cmd ------------------------------------------------------
 
 def test_has_hook_cmd_present():

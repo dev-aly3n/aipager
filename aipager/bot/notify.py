@@ -1751,6 +1751,12 @@ class NotifyMixin:
                         "tool_summary": tool_summary,
                         "tool_info": tool_info,
                         "wait_started_at": time.monotonic(),
+                        # design.md "answer PermissionRequest hooks with
+                        # a decision instead of keystrokes": deliberately
+                        # NOT added to either AskUserQuestion-flavored
+                        # shape above — belt-and-suspenders alongside
+                        # callbacks.py's own tool-name guard.
+                        "hook_reply": context.get("hook_reply"),
                     }
                     keyboard = self._build_permission_keyboard(sess)
 
