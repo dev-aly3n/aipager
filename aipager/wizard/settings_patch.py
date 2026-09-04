@@ -15,6 +15,7 @@ from aipager.ui import console, ok, step
 from aipager.wizard._constants import (
     CLAUDE_SETTINGS,
     HOOK_CMD, STATUSLINE_CMD, HOOK_EVENTS, TOOL_MATCHER_EVENTS,
+    PERMISSION_REQUEST_HOOK_TIMEOUT_SECONDS,
 )
 
 
@@ -144,6 +145,35 @@ def _repoint_hook_cmds(entries: list, bare_name: str, resolved: str) -> int:
     return changed
 
 
+def _ensure_permission_timeout(entries: list, bare_name: str, timeout_seconds: int) -> int:
+    """Backfill ``timeout`` onto an already-wired ``PermissionRequest``
+    hook entry — a wizard re-run against a ``settings.json`` written
+    before this ship (design.md "answer PermissionRequest hooks with a
+    decision instead of keystrokes"). Mirrors :func:`_repoint_hook_cmds`'s
+    shape (same malformed-entry tolerance, same "count of hook dicts
+    changed" return) so `_step_settings`'s "repointed N entries" message
+    naturally covers this too.
+
+    Idempotent: an entry whose ``timeout`` already equals
+    *timeout_seconds* is left untouched, so a second `_merge_hooks()`
+    call against already-correct settings produces byte-identical JSON.
+    """
+    changed = 0
+    for block in entries:
+        if not isinstance(block, dict):
+            continue
+        for hook in block.get("hooks") or ():
+            if not isinstance(hook, dict):
+                continue
+            cmd = hook.get("command")
+            if not isinstance(cmd, str) or not _is_aipager_hook(cmd, bare_name):
+                continue
+            if hook.get("timeout") != timeout_seconds:
+                hook["timeout"] = timeout_seconds
+                changed += 1
+    return changed
+
+
 def _validate_settings_schema(settings: dict) -> None:
     hooks = settings.get("hooks")
     if hooks is None:
@@ -166,6 +196,16 @@ def _merge_hooks(settings: dict) -> int:
     statusline_path = _resolve(STATUSLINE_CMD)
     hooks = settings.setdefault("hooks", {})
     entry = {"type": "command", "command": hook_path}
+    # PermissionRequest gets its OWN, separate dict — never `entry`
+    # above. The loop below appends `entry` by REFERENCE into every
+    # other event's `hooks` list; adding a "timeout" key to that shared
+    # object would silently give EVERY hook event a 30s timeout, not
+    # just PermissionRequest (design.md "load-bearing implementation
+    # gotcha" — a real regression this separate dict exists to prevent).
+    permission_entry = {
+        "type": "command", "command": hook_path,
+        "timeout": PERMISSION_REQUEST_HOOK_TIMEOUT_SECONDS,
+    }
     repointed = 0
     for event in HOOK_EVENTS:
         entries = hooks.setdefault(event, [])
@@ -173,8 +213,14 @@ def _merge_hooks(settings: dict) -> int:
             # Already wired — but possibly to a different install. Bring it
             # to this one rather than leaving the event on a stale build.
             repointed += _repoint_hook_cmds(entries, HOOK_CMD, hook_path)
+            if event == "PermissionRequest":
+                repointed += _ensure_permission_timeout(
+                    entries, HOOK_CMD, PERMISSION_REQUEST_HOOK_TIMEOUT_SECONDS,
+                )
             continue
-        if event in TOOL_MATCHER_EVENTS:
+        if event == "PermissionRequest":
+            entries.append({"matcher": "*", "hooks": [permission_entry]})
+        elif event in TOOL_MATCHER_EVENTS:
             entries.append({"matcher": "*", "hooks": [entry]})
         else:
             entries.append({"hooks": [entry]})
