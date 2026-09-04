@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.6] - 2026-09-04
+
 ### Added
 - **Background agents now get their own activity row on the busy card**:
   `🤖 <type> · <activity> · <elapsed>` while running, settling to `✅ 🤖
