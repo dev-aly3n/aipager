@@ -13,11 +13,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from aipager.state import Status, TrackedSession
+from aipager.state import FINISHED_SUBAGENTS_CAP, Status, TrackedSession
 from aipager.bot.animation import (
     _build_sections,
+    _CARD_CHAR_BUDGET,
     _fit_sections,
     build_full_log,
+    build_stream_card,
     build_stream_card_ex,
 )
 
@@ -871,6 +873,9 @@ def test_permission_display_bound_holds_for_front_loaded_escapes(mk_bot):
 # _build_sections / _fit_sections / build_full_log — live-row rendering,
 # Phase-1 shedding protection, and the full-log AGENTS section.
 
+MARK = "\U0001f916"
+
+
 def _agent_sess(agent_info, *, tool_summary="\U0001f916 explore"):
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
     sess.tool_history = [(tool_summary, False)]
@@ -881,7 +886,9 @@ def _agent_sess(agent_info, *, tool_summary="\U0001f916 explore"):
 def test_build_sections_agent_row_shows_starting_before_first_activity():
     sess = _agent_sess({"type": "explore", "started_at": time.monotonic()})
     sections = _build_sections(sess)
-    assert sections == [("agent-run", ["⏳ `\U0001f916 explore · starting · 0s`"])]
+    assert sections == [
+        ("agent-run", ["⏳ `\U0001f916 explore · starting · 0s`"], []),
+    ]
 
 
 def test_build_sections_agent_row_shows_activity_and_elapsed_when_active():
@@ -891,39 +898,153 @@ def test_build_sections_agent_row_shows_activity_and_elapsed_when_active():
     })
     sections = _build_sections(sess)
     assert len(sections) == 1
-    kind, rows = sections[0]
+    kind, rows, agent_tools = sections[0]
     assert kind == "agent-run"
     assert "· Bash: run tests ·" in rows[0]
     assert "2m " in rows[0]
     assert rows[0].endswith("s`")
+    assert agent_tools == []
 
 
-def test_fit_sections_phase1_never_collapses_a_run_containing_an_active_agent_row():
-    """Mutation target: including "agent-run" in _fit_sections's own
-    all_runs filter (instead of "run" only) lets Phase 1 collapse a LONE
-    active-agent section directly into an individual "▸ _1 tool call_"
-    placeholder — exactly the string a single-row "run" section collapses
-    to. Tuned so the byte budget forces the agent-run section's bytes to
-    be reduced one way or another; the only LEGITIMATE way that can
-    happen is Phase 2's aggregate "N earlier steps hidden" marker (an
-    accepted last resort — design.md's own documented risk), never an
-    individual Phase-1-style placeholder naming just the agent's own row.
-    """
+def test_build_sections_agent_row_carries_its_own_tools_list():
+    sess = _agent_sess({
+        "type": "explore", "started_at": time.monotonic(),
+        "tools": ["Bash: a", "Bash: b"],
+    })
+    sections = _build_sections(sess)
+    assert sections[0][2] == ["Bash: a", "Bash: b"]
+
+
+def test_build_sections_gives_a_settled_agent_its_own_section_kind():
+    """The settled row's own kind ("agent-settled", not "run"), sourced
+    from the matching finished_subagents entry via its history_idx —
+    this feature's one state addition."""
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.tool_history = [(f"{MARK} explore · 4 tool calls · 5s", True)]
+    sess.finished_subagents.append({
+        "type": "explore", "started_at": 0.0, "elapsed": 5.0, "tool_count": 4,
+        "tools": ["Bash: a", "Bash: b", "Bash: c", "Bash: d"], "history_idx": 0,
+    })
+    sections = _build_sections(sess)
+    assert len(sections) == 1
+    kind, rows, agent_tools = sections[0]
+    assert kind == "agent-settled"
+    assert rows == [f"✅ `{MARK} explore · 4 tool calls · 5s`"]
+    assert agent_tools == ["Bash: a", "Bash: b", "Bash: c", "Bash: d"]
+
+
+def test_build_sections_settled_agent_without_a_matching_entry_falls_back_to_plain_run():
+    """An entry that has aged out past FINISHED_SUBAGENTS_CAP (no match
+    at this history_idx) gets "same section rules as any other run" —
+    not "agent-settled", per entrypoints.md."""
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.tool_history = [(f"{MARK} explore · 2 tool calls · 5s", True)]
+    sections = _build_sections(sess)  # no finished_subagents entry at all
+    assert sections[0][0] == "run"
+
+
+def test_build_sections_settled_agent_evicted_by_the_cap_falls_back_to_plain_run():
+    """End-to-end cap eviction: a settled agent's own section survives
+    while its finished_subagents entry is present, and reverts to a
+    plain run once FINISHED_SUBAGENTS_CAP churn evicts it."""
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.tool_history = [(f"{MARK} keep-me · 1 tool calls · 5s", True)]
+    info = {"history_idx": 0, "started_at": 0.0, "tool_count": 1,
+            "tools": ["Bash: only"]}
+    sess.archive_finished_subagent("keep-me", info, 5.0)
+    assert _build_sections(sess)[0][0] == "agent-settled"
+
+    for i in range(FINISHED_SUBAGENTS_CAP):
+        sess.archive_finished_subagent(
+            "filler", {"history_idx": 999 + i, "started_at": 0.0,
+                       "tool_count": 0, "tools": []}, 1.0,
+        )
+    assert not any(e.get("history_idx") == 0 for e in sess.finished_subagents)
+    assert _build_sections(sess)[0][0] == "run"
+
+
+def test_build_sections_adjacent_live_agents_never_merge_into_one_section():
+    """_push must never merge two agent sections, even the same kind, or
+    two adjacent agents would share one tools list."""
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.tool_history = [(f"{MARK} explore", False), (f"{MARK} review", False)]
+    sess.active_subagents["a1"] = {
+        "type": "explore", "started_at": time.monotonic(),
+        "history_idx": 0, "tools": ["Bash: e1"],
+    }
+    sess.active_subagents["a2"] = {
+        "type": "review", "started_at": time.monotonic(),
+        "history_idx": 1, "tools": ["Bash: r1", "Bash: r2"],
+    }
+    sections = _build_sections(sess)
+    assert len(sections) == 2
+    assert sections[0][0] == "agent-run" and sections[1][0] == "agent-run"
+    assert sections[0][2] == ["Bash: e1"]
+    assert sections[1][2] == ["Bash: r1", "Bash: r2"]
+
+
+def test_build_sections_adjacent_live_and_settled_agents_never_merge():
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.tool_history = [
+        (f"{MARK} settled-one · 1 tool calls · 5s", True),
+        (f"{MARK} live-two", False),
+    ]
+    sess.finished_subagents.append({
+        "type": "settled-one", "started_at": 0.0, "elapsed": 5.0,
+        "tool_count": 1, "tools": ["Bash: s1"], "history_idx": 0,
+    })
+    sess.active_subagents["a2"] = {
+        "type": "live-two", "started_at": time.monotonic(),
+        "history_idx": 1, "tools": [],
+    }
+    sections = _build_sections(sess)
+    assert [k for k, _r, _a in sections] == ["agent-settled", "agent-run"]
+
+
+def test_fit_sections_step_b_never_drops_an_active_agent_run_section():
+    """Mutation target: Step B must skip (never drop) an "agent-run"
+    section, even when everything droppable around it is dropped."""
     def _sections():
-        old_run = ("run", [f"⏳ `Bash: old-{i} " + "x" * 30 + "`" for i in range(3)])
-        agent_run = ("agent-run", ["⏳ `\U0001f916 explore · Bash: ls · 5s`"])
-        newest_run = ("run", ["⏳ `Bash: newest`"])
+        old_run = ("run", [f"⏳ `Bash: old-{i} " + "x" * 30 + "`" for i in range(3)], None)
+        agent_run = ("agent-run", ["⏳ `\U0001f916 explore · Bash: ls · 5s`"], [])
+        newest_run = ("run", ["⏳ `Bash: newest`"], None)
         return [old_run, agent_run, newest_run]
 
     budget = 75
-    rows, truncated = _fit_sections(_sections(), 32_768 - budget)
-    assert truncated is True
-    assert "▸ _1 tool call_" not in rows, rows
+    body, dropped = _fit_sections(
+        _sections(), _CARD_CHAR_BUDGET - budget, 32_768 - budget,
+    )
+    assert dropped is True
+    assert "\U0001f916 explore" in body
 
 
-def test_build_stream_card_ex_keeps_active_agent_row_visible_under_byte_pressure():
+def test_fit_sections_step_b_skips_past_an_agent_section_to_keep_shedding():
+    """Step B must ``continue`` (not stop) past a still-live agent's
+    section — a section positioned AFTER it must still get dropped if the
+    budget demands it, proving the loop didn't halt at the agent."""
+    def _sections():
+        prose_a = ("prose", ["> " + "A" * 1500], None)
+        agent_run = ("agent-run", ["⏳ `\U0001f916 explore · Bash: ls · 5s`"], [])
+        prose_b = ("prose", ["> " + "B" * 1500], None)
+        prose_c = ("prose", ["> " + "C" * 60], None)  # newest prose — protected
+        newest_run = ("run", ["⏳ `Bash: newest`"], None)
+        return [prose_a, agent_run, prose_b, prose_c, newest_run]
+
+    budget = 400
+    body, dropped = _fit_sections(
+        _sections(), _CARD_CHAR_BUDGET - budget, 32_768 - budget,
+    )
+    assert dropped is True
+    assert "\U0001f916 explore" in body  # never collapsed or dropped
+    assert "AAAA" not in body
+    assert "BBBB" not in body  # dropped too — proves the loop kept going
+    assert "CCCC" in body
+    assert "newest" in body
+
+
+def test_build_stream_card_ex_keeps_active_agent_row_visible_under_pressure():
     """End-to-end via build_stream_card_ex: an oversized tool_history
-    forces truncation, but the still-active agent's row survives."""
+    forces genuine dropping, but the still-active agent's row survives."""
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
     sess.busy_started_at = time.monotonic()
     sess.tool_history = [
@@ -935,9 +1056,74 @@ def test_build_stream_card_ex_keeps_active_agent_row_visible_under_byte_pressure
         "type": "explore", "started_at": time.monotonic() - 5,
         "history_idx": idx, "activity": "Bash: ls",
     }
-    card, hid_something = build_stream_card_ex(sess, "Working")
-    assert hid_something is True
+    card, dropped = build_stream_card_ex(sess, "Working")
+    assert dropped is True
+    assert len(card) <= _CARD_CHAR_BUDGET
     assert "\U0001f916 explore · Bash: ls · 5s" in card
+
+
+# ---- live and settled agent nested folds ------------------------------------
+
+def test_live_agent_gets_a_nested_fold_once_it_has_three_or_more_tools():
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.tool_history = [(f"{MARK} explore", False)]
+    sess.active_subagents["a1"] = {
+        "type": "explore", "started_at": time.monotonic() - 10,
+        "history_idx": 0, "activity": "Bash: ls",
+        "tools": ["Bash: a", "Bash: b", "Bash: c"],
+    }
+    card = build_stream_card(sess, "Working")
+    assert "<details><summary>▸ 3 tool calls</summary>" in card
+    assert f"{MARK} explore · Bash: ls · 10s" in card
+    # The nested fold sits directly beneath the agent's own row.
+    assert card.index(f"{MARK} explore") < card.index("<details>")
+
+
+def test_live_agent_with_fewer_than_three_tools_shows_them_plain():
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.tool_history = [(f"{MARK} explore", False)]
+    sess.active_subagents["a1"] = {
+        "type": "explore", "started_at": time.monotonic() - 10,
+        "history_idx": 0, "activity": "Bash: ls",
+        "tools": ["Bash: a", "Bash: b"],
+    }
+    card = build_stream_card(sess, "Working")
+    assert "<details" not in card
+    assert "Bash: a" in card and "Bash: b" in card
+
+
+def test_live_agent_with_no_tools_shows_only_its_own_row():
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.tool_history = [(f"{MARK} explore", False)]
+    sess.active_subagents["a1"] = {
+        "type": "explore", "started_at": time.monotonic(),
+        "history_idx": 0, "tools": [],
+    }
+    card = build_stream_card(sess, "Working")
+    assert "<details" not in card
+
+
+def test_settled_agent_gets_a_nested_fold_from_finished_subagents():
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.tool_history = [(f"{MARK} explore · 4 tool calls · 5s", True)]
+    sess.finished_subagents.append({
+        "type": "explore", "started_at": 0.0, "elapsed": 5.0, "tool_count": 4,
+        "tools": ["Bash: a", "Bash: b", "Bash: c", "Bash: d"], "history_idx": 0,
+    })
+    card = build_stream_card(sess, "Working")
+    assert "<details><summary>▸ 4 tool calls</summary>" in card
+    assert f"✅ `{MARK} explore · 4 tool calls · 5s`" in card
+
+
+def test_settled_agent_aged_out_past_the_cap_gets_no_fold():
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.tool_history = [(f"{MARK} explore · 4 tool calls · 5s", True)]
+    # No finished_subagents entry — simulates having aged out past
+    # FINISHED_SUBAGENTS_CAP (see the eviction test above for the
+    # end-to-end path through archive_finished_subagent).
+    card = build_stream_card(sess, "Working")
+    assert "<details" not in card
+    assert f"✅ `{MARK} explore · 4 tool calls · 5s`" in card
 
 
 def test_build_full_log_agents_section_lists_type_elapsed_count_and_tools():

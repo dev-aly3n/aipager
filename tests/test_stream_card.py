@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import random
 import time
 from unittest.mock import AsyncMock, MagicMock
 
@@ -17,7 +18,14 @@ import pytest
 from aipager.state import Status, TrackedSession
 from aipager.bot.animation import (
     build_stream_card,
+    build_stream_card_ex,
+    _CARD_CHAR_BUDGET,
+    _build_details_block,
+    _fit_sections,
     _read_stream_text,
+    _ROW_SEP,
+    _strip_details_tags,
+    _tool_fold_summary,
 )
 
 
@@ -610,6 +618,75 @@ def test_edit_busy_rich_gone_clears_busy_msg_id(mk_bot, run_async, monkeypatch):
     assert sess.busy_msg_id == 0
 
 
+def test_edit_busy_rich_fallback_required_degrades_to_plain_text_edit(
+    mk_bot, run_async, monkeypatch,
+):
+    """Defensive arm (research.md gotcha ~53/54): edit_message_text_rich
+    structurally cannot raise RichMessageFallbackRequired today — this
+    pins the LETTER of the requirement with a monkeypatch-raise, proving
+    the degrade path rather than requiring the unreachable path to fire
+    for real. The plain-text edit must carry every fold's own summary
+    text but no raw <details>/<summary> markup, and no parse_mode — the
+    regression case here is TWO independent folded sections (an older
+    run each side of a commentary block), pinning that _strip_details_tags
+    strips ALL blocks, not just the first."""
+    from aipager.bot.rich_message import RichMessageFallbackRequired
+    bot = mk_bot()
+    sess = _sess()
+    sess.busy_msg_id = 10
+    sess.busy_started_at = time.monotonic() - 5
+    sess.stream_last_rendered = ""
+    # Two older runs (>= 3 rows each), each foldable, either side of a
+    # commentary block — and a newest run (split off by a second
+    # commentary block) so BOTH older ones actually fold.
+    sess.tool_history = (
+        [(f"Bash: old-{i}", True) for i in range(4)]
+        + [(f"Bash: mid-{i}", True) for i in range(4)]
+        + [("Bash: newest", True)]
+    )
+    sess.stream_commentary = [
+        (4, "Between the two runs."),
+        (8, "Right before the newest call."),
+    ]
+
+    monkeypatch.setattr(
+        "aipager.bot.animation.edit_message_text_rich",
+        AsyncMock(side_effect=RichMessageFallbackRequired("changed transport")),
+    )
+    bot._app.bot.edit_message_text = AsyncMock()
+    result = run_async(bot._edit_busy_rich(sess, "Working"))
+    assert result is True
+    bot._app.bot.edit_message_text.assert_awaited_once()
+    call = bot._app.bot.edit_message_text.await_args
+    text = call.args[0]
+    assert "<details" not in text and "<summary" not in text and "</details>" not in text
+    assert text.count("▸ 4 tool calls") == 2  # both summaries survive, stripped
+    assert "Between the two runs." in text
+    assert "Right before the newest call." in text
+    assert call.kwargs.get("parse_mode") is None
+
+
+def test_edit_busy_rich_fallback_required_returns_false_on_its_own_failure(
+    mk_bot, run_async, monkeypatch,
+):
+    """If even the plain-text degrade edit fails, the tick reports a
+    transient failure (False), same as any other retry-next-tick case."""
+    from aipager.bot.rich_message import RichMessageFallbackRequired
+    bot = mk_bot()
+    sess = _sess()
+    sess.busy_msg_id = 10
+    sess.busy_started_at = time.monotonic() - 5
+    sess.stream_last_rendered = ""
+
+    monkeypatch.setattr(
+        "aipager.bot.animation.edit_message_text_rich",
+        AsyncMock(side_effect=RichMessageFallbackRequired("changed transport")),
+    )
+    bot._app.bot.edit_message_text = AsyncMock(side_effect=RuntimeError("network"))
+    result = run_async(bot._edit_busy_rich(sess, "Working"))
+    assert result is False
+
+
 def test_edit_busy_rich_transient_failure_returns_false(mk_bot, run_async, monkeypatch):
     bot = mk_bot()
     sess = _sess()
@@ -790,15 +867,19 @@ def test_animate_compact_never_calls_edit_message_text_rich(
 
 
 def test_card_body_capped_to_recent_window():
-    # Contract change ("layered-card-shedding"): fit-driven, not window-
-    # or budget-driven; commentary outlives tool rows.
-    # The only cap is the byte ceiling; a card over it is brought under it
-    # by the layered policy, never by a fixed recent-N window.
+    # Contract change ("collapse-busy-card-timeline"): fit-driven, not
+    # window-driven. One unbroken run is trivially the newest run — never
+    # wrapped (rule 3) — so an over-budget card like this one goes
+    # straight to the raw chop, keeping the tail (design.md Risks:
+    # "Retiring the newest run's partial shedding... goes from fully
+    # visible straight to the raw chop. Accepted per rule 3").
     sess = _sess()
     sess.tool_history = [(f"Bash: {'u' * 120}-{i}", True) for i in range(400)]
     card = build_stream_card(sess, "Working")
+    assert len(card) <= _CARD_CHAR_BUDGET
     assert len(card.encode("utf-8")) <= 32768
-    assert "tool call" in card  # collapsed in place, not silently gone
+    assert "<details" not in card  # the newest run is never wrapped
+    assert "-399`" in card  # newest row survives, tail-kept
 
 
 def test_card_short_body_not_truncated():
@@ -872,19 +953,20 @@ def test_final_card_keeps_every_tool_row():
     assert len(_rows(card)) == 40
 
 
-def test_live_card_still_collapses_old_tool_rows():
-    # Contract change ("layered-card-shedding"): fit-driven, not window-
-    # or budget-driven; commentary outlives tool rows.
-    # Phase 1 on the LIVE card: over the ceiling, the oldest run collapses
-    # into an in-place placeholder while the newest rows stay visible.
+def test_live_card_still_folds_old_tool_rows():
+    # Contract change ("collapse-busy-card-timeline"): fit-driven, per
+    # section — the OLDER (non-newest) run folds behind its own
+    # <details> block while the NEWEST run's rows stay fully visible.
     sess = _sess()
-    n = 400
-    sess.tool_history = [(f"Bash: {'l' * 120}-{i}", True) for i in range(n)]
+    n = 20
+    sess.tool_history = [(f"Bash: l-{i}", True) for i in range(n)]
     sess.stream_commentary = [(n // 2, "MIDWAY-PROSE")]
     sess.stream_hook_live = True
     card = build_stream_card(sess, "Working")
+    assert len(card) <= _CARD_CHAR_BUDGET
     assert len(card.encode("utf-8")) <= 32768
-    assert "tool call" in card
+    assert "<details><summary>▸ 10 tool calls</summary>" in card
+    assert "Bash: l-19" in card and "l-19" not in card.split("</details>", 1)[0]
     assert "MIDWAY-PROSE" in card
     assert f"-{n-1}" in card  # the newest row is visible
 
@@ -899,18 +981,17 @@ def test_final_card_keeps_every_commentary_block():
 
 
 def test_live_card_still_drops_oldest_commentary():
-    # Contract change ("layered-card-shedding"): fit-driven, not window-
-    # or budget-driven; commentary outlives tool rows.
-    # Phase 2 only: oldest commentary folds into the single hidden marker
-    # once even collapsed runs cannot fit — never before.
+    # Contract change ("collapse-busy-card-timeline"): commentary never
+    # folds (rule 1) — under pressure, Step B drops whole oldest
+    # commentary (and single-row run) sections outright, never a fold.
     sess = _sess()
     n = 60
     sess.tool_history = [(f"Bash: t-{i}", True) for i in range(n)]
     sess.stream_commentary = [(i, f"BLOCK-{i:02d} " + "k" * 1200) for i in range(n)]
     card = build_stream_card(sess, "Working")
-    assert "hidden" in card          # the aggregate marker exists
-    assert "BLOCK-00" not in card    # oldest folded away
-    assert f"BLOCK-{n-1:02d}" in card
+    assert len(card) <= _CARD_CHAR_BUDGET
+    assert "BLOCK-00" not in card          # oldest genuinely dropped
+    assert f"BLOCK-{n-1:02d}" in card      # newest survives
 
 
 def test_final_card_footer_is_settled_not_hourglass():
@@ -921,20 +1002,19 @@ def test_final_card_footer_is_settled_not_hourglass():
     assert footer.startswith("✅")
 
 
-def test_final_card_sheds_oldest_tools_keeping_commentary():
-    # Contract change ("layered-card-shedding"): fit-driven, not window-
-    # or budget-driven; commentary outlives tool rows.
-    # The FINAL card uses the same layered policy: runs collapse in place,
-    # commentary stays.
+def test_final_card_folds_the_older_run_keeping_commentary_visible():
+    # Contract change ("collapse-busy-card-timeline"): the FINAL card
+    # uses the same per-section policy — an older, non-newest run folds
+    # behind its own block; commentary stays fully visible, never folded.
     sess = _sess()
-    n = 400
-    sess.tool_history = [(f"Bash: {'f' * 120}-{i}", True) for i in range(n)]
+    n = 20
+    sess.tool_history = [(f"Bash: f-{i}", True) for i in range(n)]
     sess.stream_commentary = [(0, "OPENING-PROSE"), (n // 2, "MID-PROSE")]
     card = build_stream_card(sess, "Done", final=True)
+    assert len(card) <= _CARD_CHAR_BUDGET
     assert len(card.encode("utf-8")) <= 32768
     assert "OPENING-PROSE" in card and "MID-PROSE" in card
-    assert "tool call" in card
-    assert "earlier tool" not in card
+    assert "<details><summary>▸ 10 tool calls</summary>" in card
 
 
 def test_final_card_shedding_is_a_no_op_when_it_already_fits():
@@ -992,17 +1072,24 @@ def test_final_edit_bypasses_the_dedupe(mk_bot, run_async, monkeypatch):
     assert len(payloads) == 1
 
 
-def test_final_card_shed_marker_sits_below_the_opening_prose():
-    # Contract change ("layered-card-shedding"): fit-driven, not window-
-    # or budget-driven; commentary outlives tool rows.
-    # A collapsed run's placeholder sits at the run's own position — BELOW
-    # the prose that introduced it, never above.
+def test_folded_run_sits_between_the_prose_that_flanks_it():
+    """Contract change ("collapse-busy-card-timeline"): a folded run's
+    <details> block stays exactly where that run happened in the
+    timeline — never moved to the top of the card or gathered elsewhere.
+    An older, non-newest run (>= 3 rows) folds between the two prose
+    blocks that flank it, in chronological place."""
     sess = _sess()
-    n = 400
-    sess.tool_history = [(f"Bash: {'m' * 120}-{i}", True) for i in range(n)]
-    sess.stream_commentary = [(0, "OPENING-PROSE")]
-    card = build_stream_card(sess, "Done", final=True)
-    assert card.index("OPENING-PROSE") < card.index("tool call")
+    sess.tool_history = (
+        [(f"Bash: mid-{i}", True) for i in range(4)]
+        + [("Bash: newest", True)]
+    )
+    sess.stream_commentary = [(0, "OPENING-PROSE"), (4, "MIDDLE-PROSE")]
+    card = build_stream_card(sess, "Working")
+    i_open = card.index("OPENING-PROSE")
+    i_details = card.index("<details>")
+    i_close = card.index("</details>")
+    i_mid = card.index("MIDDLE-PROSE")
+    assert i_open < i_details < i_close < i_mid
 
 
 def _write_entry(path, content: list[dict], mode="a") -> None:
@@ -1533,7 +1620,7 @@ def test_waiting_status_during_grace_says_finishing_up():
     assert "0 agent" not in card
 
 
-# ---- layered shedding ("layered-card-shedding" /deliver) -------------------
+# ---- per-section folding ("collapse-busy-card-timeline") -------------------
 
 
 def _many_tools_sess(n_tools=30, commentary=None):
@@ -1544,59 +1631,97 @@ def _many_tools_sess(n_tools=30, commentary=None):
     return sess
 
 
-def test_all_tools_visible_when_under_ceiling():
-    """Fit-driven, not window-driven: 30 short tool rows are far under the
-    byte ceiling, so ALL of them render — no "earlier tools" counter."""
+def test_all_tools_visible_when_it_is_a_single_newest_run():
+    """30 tool rows with nothing to split them stay ONE section, which is
+    trivially the newest run — rule 3 says it is never wrapped, however
+    many rows it has."""
     sess = _many_tools_sess(30)
     card = build_stream_card(sess, "Working")
-    assert "earlier tool" not in card
+    assert "<details" not in card
     assert "step-0" in card and "step-29" in card
 
 
-def test_commentary_outlives_tool_rows_under_pressure():
-    """Phase 1: over the ceiling, tool runs collapse to in-place
-    placeholders OLDEST first while every commentary block stays."""
-    n = 400
-    commentary = [(100, "FIRST-NARRATIVE " + "a" * 400),
-                  (300, "SECOND-NARRATIVE " + "b" * 400)]
-    sess = _many_tools_sess(n, commentary)
-    sess.tool_history = [(f"Bash: {'x' * 100}-{i}", True) for i in range(n)]
+def test_short_run_under_fold_min_rows_never_folds():
+    """Rule 4: fewer than _FOLD_MIN_ROWS (3) never folds, even when the
+    run is older, not the newest."""
+    sess = _sess()
+    sess.tool_history = [("Bash: a", True), ("Bash: b", True)]
+    sess.stream_commentary = [(2, "Split point.")]
+    sess.tool_history.append(("Bash: newest", True))
     card = build_stream_card(sess, "Working")
-    assert len(card.encode("utf-8")) <= 32768
-    assert "FIRST-NARRATIVE" in card
-    assert "SECOND-NARRATIVE" in card
-    assert "tool call" in card  # in-place placeholder
-    assert "earlier tool" not in card  # the old top counter is gone
+    assert "<details" not in card
+    assert "Bash: a" in card and "Bash: b" in card
 
 
-def test_phase1_placeholders_sit_between_their_commentaries():
-    """A collapsed run's placeholder stays at the run's position: the run
-    between C1 and C2 collapses into a line between C1 and C2."""
-    n = 400
-    commentary = [(0, "OPENING-PROSE"), (200, "MIDDLE-PROSE")]
-    sess = _many_tools_sess(n, commentary)
-    sess.tool_history = [(f"Bash: {'y' * 100}-{i}", True) for i in range(n)]
+def test_older_run_with_three_or_more_rows_folds_behind_its_own_block():
+    """Rule 2/4: an older, non-newest run with >= 3 rows folds behind its
+    own <details> block, summary counting exactly its own rows. The row
+    text itself is still PRESENT in the markdown (verbatim, recoverable
+    via the tap) — it is Telegram's client rendering, not the markdown
+    string, that hides it until tapped — so it must sit strictly inside
+    the block's own span, not outside it."""
+    sess = _sess()
+    sess.tool_history = [(f"Bash: old-{i}", True) for i in range(3)]
+    sess.stream_commentary = [(3, "Split point.")]
+    sess.tool_history.append(("Bash: newest", True))
     card = build_stream_card(sess, "Working")
-    i_open = card.index("OPENING-PROSE")
-    i_mid = card.index("MIDDLE-PROSE")
-    # a placeholder between the two prose blocks
-    between = card[i_open:i_mid]
-    assert "tool call" in between
+    assert "<details><summary>▸ 3 tool calls</summary>" in card
+    inside = card.split("<details>", 1)[1].split("</details>", 1)[0]
+    assert "Bash: old-0" in inside
+    outside = card.split("</details>", 1)[1]
+    assert "Bash: old-0" not in outside
 
 
-def test_phase2_marker_sits_at_the_top_of_the_timeline():
-    """Phase 2: when even all-collapsed runs + commentary exceed the
-    ceiling, whole oldest sections fold into ONE marker line at the TOP of
-    the timeline ("status-line-at-card-bottom" moved the status away from
-    there), and the NEWEST commentary always survives."""
-    n = 60
-    blocks = [(i, f"PROSE-{i:03d} " + "z" * 1200) for i in range(0, n)]
-    sess = _many_tools_sess(n, blocks)
+def test_newest_run_never_wraps_regardless_of_row_count():
+    """Rule 3: the newest run section is never wrapped, however many
+    rows it has — retiring the old code's partial-shedding of the
+    newest run (design.md Risks: "that case now goes from fully visible
+    straight to the raw chop")."""
+    sess = _sess()
+    sess.tool_history = [(f"Bash: t-{i}", True) for i in range(50)]
     card = build_stream_card(sess, "Working")
-    assert len(card.encode("utf-8")) <= 32768
-    assert "hidden" in card  # the aggregate marker
-    assert f"PROSE-{n-1:03d}" in card  # newest narrative survives
-    assert card.startswith("▸")  # marker is the card's first line
+    assert "<details" not in card
+    assert "Bash: t-0" in card and "Bash: t-49" in card
+
+
+def test_commentary_never_folds_at_any_age():
+    """Rule 1: commentary is never itself wrapped in a <details> block —
+    it can only ever be genuinely DROPPED whole by Step B, never folded."""
+    sess = _sess()
+    sess.tool_history = [(f"Bash: old-{i}", True) for i in range(3)]
+    sess.stream_commentary = [(0, "OLD-NARRATIVE")]
+    # A second split so the "old" run is not trivially the newest run —
+    # otherwise rule 3 alone (never wraps) would explain the absence of
+    # a fold, not rule 1.
+    sess.stream_commentary.append((3, "Split point."))
+    sess.tool_history.append(("Bash: newest", True))
+    card = build_stream_card(sess, "Working")
+    assert "<details" in card  # the run DID fold
+    assert "OLD-NARRATIVE" in card
+    inside = card.split("<details>", 1)[1].split("</details>", 1)[0]
+    assert "OLD-NARRATIVE" not in inside
+
+
+def test_multiple_folded_sections_each_get_their_own_accurate_summary():
+    """Several independent blocks per card is normal (rule 2) — each
+    summary's count matches ONLY that section's own rows, row-for-row."""
+    sess = _sess()
+    sess.tool_history = (
+        [(f"Bash: a-{i}", True) for i in range(3)]
+        + [(f"Bash: b-{i}", True) for i in range(5)]
+        + [("Bash: newest", True)]
+    )
+    sess.stream_commentary = [
+        (3, "Between A and B."),
+        (8, "Between B and newest."),
+    ]
+    card = build_stream_card(sess, "Working")
+    assert card.count("<details>") == 2
+    assert "▸ 3 tool calls" in card
+    assert "▸ 5 tool calls" in card
+    first_block = card.split("</details>", 1)[0]
+    assert first_block.count("✅ `Bash: a-") == 3
+    assert "Bash: b-" not in first_block  # the first block is A's alone
 
 
 def test_layered_render_is_deterministic():
@@ -1606,22 +1731,16 @@ def test_layered_render_is_deterministic():
     assert a == b
 
 
-def test_newest_run_survives_phase2_with_trailing_prose():
-    """Review rev-iter1-001: a trailing prose section AFTER the newest run
-    must not make that run eligible for phase-2 removal. Geometry: phase 2
-    must march past two huge prose sections and the older run and arrive
-    AT the newest run while still over budget — without the index guard
-    the run (already 1b-collapsed to placeholder + newest row) would be
-    removed wholesale; with it, the newest row survives."""
+def test_newest_run_survives_when_the_protected_floor_still_overflows():
+    """Review rev-iter1-001, carried into design.md rule 7: a trailing
+    prose section AFTER the newest run must not make that run eligible
+    for whole-section removal. Every row here dwarfs the 8,800-character
+    budget many times over, so even the protected floor overflows and the
+    raw chop fires — the newest run's own last row is what the chop's
+    tail-keep preserves."""
     sess = _sess()
     tools = [(f"Bash: old-{i}", True) for i in range(10)]
     tools += [(f"Bash: {'r' * 300}-{i}", True) for i in range(90)]
-    # The run's newest row is itself huge, sentinel at its END: after
-    # phase 1b the remainder [marker, placeholder, this row, trailing]
-    # still exceeds the budget, so phase 2 arrives AT the newest run —
-    # the exact moment the index guard decides between "break and let the
-    # tail-keep backstop preserve the newest text" (correct) and "remove
-    # the live tail wholesale" (the rev-iter1-001 bug).
     tools.append(("Bash: " + "z" * 33000 + "NEWEST-ROW-END", True))
     sess.tool_history = tools
     sess.stream_commentary = [
@@ -1630,27 +1749,312 @@ def test_newest_run_survives_phase2_with_trailing_prose():
         (len(tools), "tiny trailing note"),
     ]
     card = build_stream_card(sess, "Working")
+    assert len(card) <= _CARD_CHAR_BUDGET
     assert len(card.encode("utf-8")) <= 32768
     assert "NEWEST-ROW-END" in card
     assert "tiny trailing note" in card
 
-def test_phase2_marker_counts_blocks_not_sections():
-    """Review rev-iter1-004: several commentary blocks sharing one hidden
-    section are counted individually in the marker."""
-    sess = _sess()
-    sess.tool_history = [(f"Bash: t-{i}", True) for i in range(12)]
-    sess.stream_commentary = [
-        (0, "A-BLOCK " + "a" * 2000),
-        (0, "B-BLOCK " + "b" * 2000),
-        (6, "KEEP-ME " + "k" * 29000),
+
+# ---- <details> block construction, summary text, and stripping -------------
+
+def test_row_separator_survives_inside_a_details_block():
+    """Live-verified (design.md "Verified" #1): rows separated by a blank
+    line render one per line inside a block, once expanded — offline
+    proxy: the constructed markdown contains two _ROW_SEP-separated rows
+    strictly between <details>...<summary>...</summary> and </details> —
+    never a bare newline, which would let Telegram silently merge them."""
+    db = _build_details_block("SUMMARY", ["row-one", "row-two"])
+    assert db.startswith("<details><summary>SUMMARY</summary>")
+    assert db.endswith("</details>")
+    body = db.split("</summary>", 1)[1].rsplit("</details>", 1)[0]
+    assert f"row-one{_ROW_SEP}row-two" in body
+    assert "row-one\nrow-two" not in body  # not a bare-newline join
+
+
+def test_build_details_block_never_emits_an_open_attribute():
+    db = _build_details_block("▸ 3 tool calls", ["r1", "r2", "r3"])
+    assert "open" not in db.split(">", 1)[0]
+
+
+def test_tool_fold_summary_pluralizes():
+    assert _tool_fold_summary(0) == "▸ 0 tool calls"
+    assert _tool_fold_summary(1) == "▸ 1 tool call"
+    assert _tool_fold_summary(2) == "▸ 2 tool calls"
+
+
+def test_strip_details_tags_strips_every_block_not_just_the_first():
+    """design.md: the multi-block regression case for _strip_details_tags
+    — a card can carry several independent folds; every one of them must
+    lose its tags, not only the first `re.sub` match would find."""
+    block1 = _build_details_block("▸ 3 tool calls", ["r1", "r2", "r3"])
+    block2 = _build_details_block("▸ 5 tool calls", ["r4", "r5", "r6", "r7", "r8"])
+    markdown = f"{block1}{_ROW_SEP}mid prose{_ROW_SEP}{block2}{_ROW_SEP}status"
+    stripped = _strip_details_tags(markdown)
+    assert "<details" not in stripped
+    assert "</details>" not in stripped
+    assert "<summary" not in stripped
+    assert stripped.count("▸ 3 tool calls") == 1
+    assert stripped.count("▸ 5 tool calls") == 1
+    assert "mid prose" in stripped
+    assert "r1" not in stripped and "r8" not in stripped
+
+
+def test_strip_details_tags_is_a_no_op_without_a_details_block():
+    markdown = "plain body" + _ROW_SEP + "status"
+    assert _strip_details_tags(markdown) == markdown
+
+
+# ---- direct Step A / Step B coverage against _fit_sections -----------------
+
+def test_fit_sections_folds_an_eligible_older_run_and_reports_not_dropped():
+    sections = [
+        ("run", [f"✅ `Bash: old-{i}`" for i in range(3)], None),
+        ("run", ["✅ `Bash: newest`"], None),
     ]
+    body, dropped = _fit_sections(sections, 0, 0)
+    assert dropped is False
+    assert "<details><summary>▸ 3 tool calls</summary>" in body
+    assert "Bash: newest" in body
+
+
+def test_fit_sections_step_b_drops_whole_oldest_sections_under_pressure():
+    prose_a = ("prose", ["> " + "A" * 2000], None)
+    prose_b = ("prose", ["> " + "B" * 2000], None)
+    run = ("run", ["✅ `Bash: only`"], None)
+    sections = [prose_a, prose_b, run]
+    body, dropped = _fit_sections(
+        sections, _CARD_CHAR_BUDGET - 300, 32_768 - 300,
+    )
+    assert dropped is True
+    assert "AAAA" not in body
+    assert "BBBB" in body    # newest prose — protected
+    assert "Bash: only" in body
+
+
+def test_fit_sections_never_drops_a_live_agent_section():
+    """Step B protection, mutation target: an agent-run section must
+    never be removed by the whole-section backstop, regardless of where
+    it sits relative to sections that DO get dropped."""
+    prose_a = ("prose", ["> " + "A" * 2000], None)
+    agent = ("agent-run", ["⏳ `\U0001f916 explore · Bash: ls · 5s`"], [])
+    prose_c = ("prose", ["> " + "C" * 60], None)
+    run_newest = ("run", ["✅ `Bash: newest`"], None)
+    sections = [prose_a, agent, prose_c, run_newest]
+    body, dropped = _fit_sections(
+        sections, _CARD_CHAR_BUDGET - 300, 32_768 - 300,
+    )
+    assert dropped is True
+    assert "explore" in body
+    assert "AAAA" not in body
+    assert "CCCC" in body
+    assert "newest" in body
+
+
+def test_fit_sections_never_drops_a_settled_agent_section():
+    prose_a = ("prose", ["> " + "A" * 2000], None)
+    settled = ("agent-settled", ["✅ `\U0001f916 explore · 5 tool calls · 5s`"], [])
+    prose_c = ("prose", ["> " + "C" * 60], None)
+    run_newest = ("run", ["✅ `Bash: newest`"], None)
+    sections = [prose_a, settled, prose_c, run_newest]
+    body, dropped = _fit_sections(
+        sections, _CARD_CHAR_BUDGET - 300, 32_768 - 300,
+    )
+    assert dropped is True
+    assert "explore" in body
+    assert "AAAA" not in body
+
+
+def test_fit_sections_agent_skip_does_not_stop_shedding_sections_after_it():
+    """Skip (do not stop at) an agent section — a still-live agent can sit
+    anywhere in the timeline, and skipping past it must not stop Step B
+    from still shedding newer sections if the budget demands it."""
+    prose_a = ("prose", ["> " + "A" * 2000], None)
+    agent = ("agent-run", ["⏳ `\U0001f916 explore · Bash: ls · 5s`"], [])
+    prose_b = ("prose", ["> " + "B" * 2000], None)
+    prose_c = ("prose", ["> " + "C" * 60], None)
+    run_newest = ("run", ["✅ `Bash: newest`"], None)
+    sections = [prose_a, agent, prose_b, prose_c, run_newest]
+    body, dropped = _fit_sections(
+        sections, _CARD_CHAR_BUDGET - 400, 32_768 - 400,
+    )
+    assert dropped is True
+    assert "explore" in body
+    assert "AAAA" not in body
+    assert "BBBB" not in body  # dropped too — Step B kept going past the agent
+    assert "CCCC" in body
+
+
+# ---- last_card_truncated semantics ("collapse-busy-card-timeline") ---------
+
+def test_last_card_truncated_false_when_only_folding_happened():
+    """Folding is presentation, not loss — even with several folds in the
+    card, last_card_truncated stays False as long as nothing had to be
+    genuinely dropped."""
+    sess = _sess()
+    sess.tool_history = (
+        [(f"Bash: a-{i}", True) for i in range(3)]
+        + [(f"Bash: b-{i}", True) for i in range(4)]
+        + [("Bash: newest", True)]
+    )
+    sess.stream_commentary = [(3, "split")]
+    card, truncated = build_stream_card_ex(sess, "Working")
+    assert "<details" in card  # folds really happened
+    assert truncated is False
+
+
+def test_last_card_truncated_true_when_a_whole_section_is_dropped():
+    """Once even the fully-folded card exceeds budget, Step B drops whole
+    oldest sections (commentary included) — THAT sets last_card_truncated
+    True, never mere folding."""
+    sess = _sess()
+    n = 300
+    sess.tool_history = [(f"Bash: old-{i} " + "z" * 40, True) for i in range(n)]
+    sess.stream_commentary = [
+        (0, "OLD-NARRATIVE " + "e" * 2000), (n, "NEWEST-NARRATIVE"),
+    ]
+    sess.tool_history.append(("Bash: newest", True))
+    card, truncated = build_stream_card_ex(sess, "Working")
+    assert truncated is True
+    assert "OLD-NARRATIVE" not in card  # whole section dropped, commentary included
+    assert "NEWEST-NARRATIVE" in card
+
+
+# ---- char budget vs. the byte ceiling ("collapse-busy-card-timeline") ------
+
+def test_card_char_budget_binds_before_byte_ceiling_for_ascii_content():
+    """For plain ASCII content, 1 char == 1 byte, so the tighter
+    8,800-character budget binds well before the 32,768-byte ceiling ever
+    could — extends the test_card_truncation_valid_utf8 pattern to the
+    new dual budget."""
+    sess = _sess()
+    sess.tool_history = [(f"Bash: t-{i} " + "x" * 300, True) for i in range(60)]
     card = build_stream_card(sess, "Working")
-    assert len(card.encode("utf-8")) <= 32768
-    assert "A-BLOCK" not in card and "B-BLOCK" not in card
-    assert "KEEP-ME" in card
-    import re as _re
-    m = _re.search(r"(\d+) commentar", card)
-    assert m and int(m.group(1)) == 2
+    assert len(card) <= _CARD_CHAR_BUDGET
+    assert len(card.encode("utf-8")) < 32_768  # nowhere near the byte ceiling
+
+
+def test_card_char_byte_divergence_persian_text_stays_under_both_ceilings():
+    """Persian text is multi-byte per character — the char budget and the
+    byte ceiling must BOTH still hold even when they diverge sharply, and
+    the char-level chop (Python string slicing, not raw bytes) must never
+    produce invalid UTF-8."""
+    sess = _sess()
+    sess.tool_history = [("Bash: " + "سلام دنیا " * 2000, True)]
+    card = build_stream_card(sess, "Working")
+    assert len(card) <= _CARD_CHAR_BUDGET
+    assert len(card.encode("utf-8")) <= 32_768
+    card.encode("utf-8")  # must not raise
+
+
+def test_step_b_never_stops_early_on_a_char_only_fit_when_bytes_still_overflow():
+    """Mutation target: Step B's own go/no-go check (``_fits``) must
+    verify BOTH real, measured bounds before accepting a candidate as
+    final — a char-only check would stop as soon as chars fit even
+    though bytes are still over. Dense 4-byte-per-character emoji content
+    sized so char-count alone comfortably fits under 8,800 once the older
+    section is dropped, while the surviving emoji-heavy section's own
+    bytes alone still exceed 32,768 — a scenario a char-only ``_fits``
+    would wrongly accept."""
+    sess = _sess()
+    sess.tool_history = [("Bash: only", True)]
+    sess.stream_commentary = [
+        (0, "OLDER " + "a" * 500),
+        (1, "NEWEST " + "\U0001f600" * 8500),
+    ]
+    card, dropped = build_stream_card_ex(sess, "Working")
+    assert dropped is True
+    assert len(card) <= _CARD_CHAR_BUDGET
+    assert len(card.encode("utf-8")) <= 32_768
+
+
+# ---- broad property sweep: both budgets + status-line-last, always -------
+#
+# hypothesis is not a project dependency (checked: not present in
+# pyproject.toml or anywhere under tests/), so this hand-rolls a
+# parametrized sweep with Python's own random, fixed seeds for
+# reproducibility, rather than adding a new dependency for one test.
+
+MARK_EMOJI = "\U0001f916"
+_SWEEP_EMOJI_POOL = "\U0001f600\U0001f680\U0001f4a5\U0001f9e0\U0001f30d"
+
+
+def _sweep_random_text(rng, max_len, *, emoji=False):
+    n = rng.randint(0, max_len)
+    if emoji:
+        return "".join(rng.choice(_SWEEP_EMOJI_POOL) for _ in range(n))
+    alphabet = "abcdefghijklmnopqrstuvwxyz ABCDEFGHIJ0123456789"
+    return "".join(rng.choice(alphabet) for _ in range(n))
+
+
+def _sweep_random_session(rng):
+    """A varied TrackedSession: random prose length/density (including
+    emoji-heavy, multi-byte text), random run-section row counts (some
+    under _FOLD_MIN_ROWS, some well over), a random number of sections,
+    and randomly-placed live and settled agent sections (with random
+    tool-call counts, some under and some over the nested-fold
+    threshold) — with and without enough total content to force any
+    shedding at all."""
+    sess = TrackedSession(name="claude-x", label="x", status=Status.BUSY)
+    sess.busy_started_at = time.monotonic() - rng.uniform(0, 3600)
+    for _ in range(rng.randint(0, 10)):
+        kind = rng.choice(["run", "run", "run", "prose", "agent_live", "agent_settled"])
+        if rng.random() < 0.5:
+            text = _sweep_random_text(
+                rng, rng.choice([0, 20, 200, 2000, 5000]), emoji=rng.random() < 0.2,
+            )
+            if text:
+                sess.stream_commentary.append((len(sess.tool_history), text))
+        if kind == "run":
+            for _j in range(rng.randint(0, 8)):
+                summary = f"Bash: {_sweep_random_text(rng, rng.choice([5, 50, 300]))}"
+                sess.tool_history.append((summary, True))
+        elif kind == "agent_live":
+            idx = len(sess.tool_history)
+            agent_type = rng.choice(["explore", "review", "crawler"])
+            sess.tool_history.append((f"{MARK_EMOJI} {agent_type}", False))
+            n_tools = rng.randint(0, 8)
+            sess.active_subagents[f"a{idx}"] = {
+                "type": agent_type,
+                "started_at": time.monotonic() - rng.uniform(0, 600),
+                "history_idx": idx,
+                "activity": _sweep_random_text(rng, 40),
+                "tools": [f"Bash: {_sweep_random_text(rng, 30)}" for _ in range(n_tools)],
+            }
+        elif kind == "agent_settled":
+            idx = len(sess.tool_history)
+            agent_type = rng.choice(["explore", "review", "crawler"])
+            n_tools = rng.randint(0, 8)
+            plural = "" if n_tools == 1 else "s"
+            summary = f"{MARK_EMOJI} {agent_type} · {n_tools} tool call{plural} · 5s"
+            sess.tool_history.append((summary, True))
+            sess.finished_subagents.append({
+                "type": agent_type, "started_at": 0.0, "elapsed": 5.0,
+                "tool_count": n_tools,
+                "tools": [f"Bash: {_sweep_random_text(rng, 30)}" for _ in range(n_tools)],
+                "history_idx": idx,
+            })
+    return sess
+
+
+@pytest.mark.parametrize("seed", [20260904, 777])
+def test_property_sweep_every_generated_shape_holds_both_budgets_and_status_last(seed):
+    """The actual guarantee: not a handful of fixed hand-picked cases, but
+    many varied shapes (300 per seed), each independently checked against
+    the REAL assembled string for both ceilings and for the status line
+    sitting last on whichever frame it was rendered as."""
+    rng = random.Random(seed)
+    for _ in range(300):
+        waiting = rng.random() < 0.1
+        final = rng.random() < 0.1 and not waiting
+        sess = _sweep_random_session(rng)
+        card, _dropped = build_stream_card_ex(
+            sess, "Working", final=final, waiting=waiting,
+        )
+        assert len(card) <= _CARD_CHAR_BUDGET
+        assert len(card.encode("utf-8")) <= 32_768
+        last_line = card.rstrip("\n").splitlines()[-1] if card else ""
+        mark = "✅" if final else ("\U0001f504" if waiting else "⏳")
+        assert last_line.startswith(mark), (seed, card[-120:])
 
 
 # ---- status line at the bottom ("status-line-at-card-bottom") --------------
@@ -1701,41 +2105,47 @@ def test_status_line_tally_still_counts_parent_task_tool_call():
     assert "Task ×1" in card
 
 
-def test_status_line_survives_every_shedding_phase():
-    """Phase 1 (run collapse), phase 2 (section folding) and the byte
-    backstop all leave the status line as the card's last line."""
+def test_status_line_survives_every_shedding_shape():
+    """Several folded sections, whole-section Step B drops, and the raw
+    char backstop all leave the status line as the card's last line."""
     sess = _sess("omni")
     sess.busy_started_at = time.monotonic() - 90
-    # phase 1: many fat runs, prose between them
-    sess.tool_history = [(f"Bash: {'p' * 300}-{i}", True) for i in range(200)]
-    sess.stream_commentary = [(i * 40, f"PROSE-{i}") for i in range(5)]
-    phase1 = build_stream_card(sess, "Working")
-    # phase 2: prose so heavy that collapsed runs cannot save it
-    sess.stream_commentary = [(i, f"BIG-{i:02d} " + "q" * 1500)
-                              for i in range(40)]
-    phase2 = build_stream_card(sess, "Working")
-    # byte backstop: one row that alone blows the ceiling
+    # Folds survive: six small older runs, split by short prose, none of
+    # them the newest — each gets its own <details> block.
+    sess.tool_history = []
+    for i in range(6):
+        sess.tool_history += [(f"Bash: r{i}-{j}", True) for j in range(5)]
+    sess.stream_commentary = [(k * 5, f"PROSE-{k}") for k in range(6)]
+    folded = build_stream_card(sess, "Working")
+    # Step B: prose so heavy that even with every eligible run folded, the
+    # oldest whole prose section must be dropped to fit.
+    sess.stream_commentary = [(k * 5, f"BIG-{k:02d} " + "q" * 1500) for k in range(6)]
+    dropped_whole = build_stream_card(sess, "Working")
+    # Raw char backstop: one row that alone blows the ceiling — nothing to
+    # fold or drop, so it chops straight away.
     sess.tool_history = [("Bash: " + "z" * 60000, True)]
     sess.stream_commentary = []
     backstop = build_stream_card(sess, "Working")
-    for card in (phase1, phase2, backstop):
+    for card in (folded, dropped_whole, backstop):
+        assert len(card) <= _CARD_CHAR_BUDGET
         assert len(card.encode("utf-8")) <= 32768
         assert card.splitlines()[-1].startswith("⏳ **omni** ·")
-    assert "tool call" in phase1        # phase 1 really engaged
-    assert "hidden" in phase2           # phase 2 really engaged
-    assert backstop.startswith("…")     # backstop really engaged
+    assert "<details" in folded and "tool call" in folded
+    assert "BIG-00" not in dropped_whole and "BIG-05" in dropped_whole
+    assert backstop.startswith("…")
 
 
 def test_reserve_keeps_the_card_clean_across_the_ceiling_boundary():
-    """The fitter's reserve is sized from the status line itself, so a card
-    crossing the ceiling sheds one more row rather than letting the byte
-    backstop clip its head ("status-line-at-card-bottom").
+    """The fitter's reserves are sized from the status line itself, so a
+    card crossing either ceiling sheds a whole section or chops cleanly,
+    rather than the status line itself ever getting clipped
+    ("status-line-at-card-bottom").
 
-    Geometry chosen so the shortfall is observable: SMALL tool rows (fine
-    shedding granularity, so the fitter converges to within a few bytes of
-    its budget) and MANY distinct tool names (a fat status line, so an
-    unreserved status is what tips the card over). Without the reserve
-    these sizes clip; with it they render clean.
+    Geometry: a single unbroken run (no commentary splits it, so it is
+    trivially the newest run — never wrapped, rule 3) grown past the
+    char budget, with MANY distinct tool names (a fat status line, so an
+    unreserved status would be what tips the card over). Sweeps a range
+    straddling the ceiling to catch an off-by-one in the reserve math.
     """
     for n in range(810, 875, 7):
         sess = _sess("omni")
@@ -1744,6 +2154,141 @@ def test_reserve_keeps_the_card_clean_across_the_ceiling_boundary():
             (f"Tool{i % 40}: {'k' * 20}-{i}", True) for i in range(n)
         ]
         card = build_stream_card(sess, "Working")
+        assert len(card) <= _CARD_CHAR_BUDGET, n
         assert len(card.encode("utf-8")) <= 32768, n
-        assert not card.startswith("…"), f"head clipped at n={n}"
         assert card.splitlines()[-1].startswith("⏳ **omni** ·"), n
+
+
+def test_newest_content_and_agent_row_survive_extreme_pressure():
+    """Review findings rev-iter1-001 and rev-iter1-006, pinned with the
+    reviewer's own reproduction.
+
+    001: an unauthorized "second wave" dropped EVERY non-agent section —
+    the newest prose and the newest run included — whenever an agent
+    section was present and the protected floor still overflowed, leaving
+    a card whose status line counted 150 tool calls above a body with
+    none. Design rule 7 forbids dropping the newest run or newest prose.
+
+    006: removing that wave exposed the opposite loss — the tail-keeping
+    chop deleted the agent row outright, because an agent sits
+    chronologically before the newest content. The chop now keeps agent
+    rows (never their nested folds) and cuts only what follows.
+    """
+    sess = _sess("probe")
+    sess.busy_started_at = time.monotonic() - 30
+    sess.stream_commentary.append((0, "OLD-NARRATIVE " + "o" * 2000))
+    for i in range(5):
+        sess.record_tool(f"Bash: old-{i} " + "x" * 200, True)
+    idx = sess.record_tool("\U0001f916 agent starting", False)
+    sess.active_subagents["a1"] = {
+        "type": "worker", "activity": "digging",
+        "started_at": time.monotonic() - 20, "history_idx": idx,
+        "tools": [f"Read: /path/to/file_{i}.py" for i in range(40)],
+    }
+    sess.stream_commentary.append(
+        (len(sess.tool_history), "Newest prose sentence. " * 60))
+    for i in range(150):
+        sess.record_tool(f"Grep: some_pattern_{i} in some/really/long/path", True)
+
+    card, dropped = build_stream_card_ex(sess, "Working")
+
+    assert dropped is True
+    assert "Newest prose sentence" in card          # rev-iter1-001
+    assert card.count("some_pattern_") > 0          # rev-iter1-001
+    assert "worker" in card                          # rev-iter1-006
+    assert "OLD-NARRATIVE" not in card               # oldest still yields first
+    assert len(card) <= 8_800
+    assert card.rstrip().splitlines()[-1].startswith("\u23f3 **probe** \u00b7")
+
+
+def test_chop_never_leaves_unbalanced_details_markup_around_an_agent_row():
+    """Review rev-iter2-001: the agent-preserving chop used to slice the
+    ORIGINAL body, which still carried the agent's own section, so the kept
+    row appeared twice and the cut could land inside that section's
+    `<details>` span — emitting a dangling `</details>` with no opening tag
+    (reproduced at 162 newest rows). The chop now excludes agent sections
+    from the text it slices. Swept across the band where the overage is
+    smaller than the agent section itself, which is where it bit."""
+    for nrows in range(150, 175):
+        sess = _sess("probe")
+        sess.busy_started_at = time.monotonic() - 20
+        sess.stream_commentary.append((0, "OLD " + "o" * 400))
+        for i in range(5):
+            sess.record_tool(f"Bash: old-{i} " + "x" * 120, True)
+        idx = sess.record_tool("\U0001f916 agent starting", False)
+        sess.active_subagents["a1"] = {
+            "type": "worker", "activity": "digging",
+            "started_at": time.monotonic() - 20, "history_idx": idx,
+            "tools": [f"Read: /path/to/file_{i}.py" for i in range(6)],
+        }
+        sess.stream_commentary.append(
+            (len(sess.tool_history), "Short final answer sentence."))
+        for i in range(nrows):
+            sess.record_tool(f"Grep: some_pattern_{i} in some/really/long/path", True)
+
+        card, _dropped = build_stream_card_ex(sess, "Working")
+        assert card.count("<details>") == card.count("</details>"), nrows
+        assert card.count("\U0001f916 worker") <= 1, nrows  # never duplicated
+        assert len(card) <= 8_800, nrows
+
+
+def test_no_dangling_details_tag_across_a_family_of_pressured_shapes():
+    """Review rev-iter3-001: Step B's walk used to BREAK at the first
+    protected section, so later droppable sections were never considered
+    and the raw chop landed inside one of their folds — leaving a
+    `</details>` with no opening tag, which the plain-text degrade path
+    cannot strip either (its regex needs a matched pair).
+
+    The walk now steps past protected sections, and every chop result is
+    swept for an unmatched close tag. Verified across a family of shapes
+    rather than one: the previous code failed at (5 old rows, 60-char
+    padding, 160/162/164 newest rows) among others.
+    """
+    for n_old in (5, 10):
+        for pad in (60, 120):
+            for n_new in (150, 160, 162, 164, 180):
+                sess = _sess("probe")
+                sess.busy_started_at = time.monotonic() - 20
+                sess.stream_commentary.append((0, "ONLY-PROSE " + "o" * 200))
+                for i in range(n_old):
+                    sess.record_tool(f"Bash: A-{i} " + "x" * pad, True)
+                idx = sess.record_tool("\U0001f916 agent starting", False)
+                sess.active_subagents["a1"] = {
+                    "type": "worker", "activity": "digging",
+                    "started_at": time.monotonic() - 20, "history_idx": idx,
+                    "tools": [f"Read: /f{i}.py" for i in range(6)],
+                }
+                for i in range(n_new):
+                    sess.record_tool(
+                        f"Grep: some_pattern_{i} in some/really/long/path", True)
+
+                card, _dropped = build_stream_card_ex(sess, "Working")
+                shape = (n_old, pad, n_new)
+                assert card.count("<details>") == card.count("</details>"), shape
+                assert "</details>" not in card.split("<details>")[0], shape
+                assert len(card) <= 8_800, shape
+                assert card.rstrip().splitlines()[-1].startswith("⏳ "), shape
+
+
+def test_a_row_whose_text_contains_a_close_tag_costs_no_content():
+    """Review rev-iter4-001: a textual "is this tag dangling?" repair could
+    not tell markup from a tool row whose own text merely CONTAINED
+    `</details>` — a row like ``Grep: </details> in animation.py`` made it
+    discard everything before that row, ~89% of the card. The repair is
+    gone (Step B stepping past protected sections removed the need for it),
+    so such a row must now cost nothing at all."""
+    def _card(poisoned: bool) -> str:
+        sess = _sess("probe")
+        sess.busy_started_at = time.monotonic() - 20
+        sess.stream_commentary.append((0, "OLD " + "o" * 300))
+        for i in range(200):
+            text = ("Grep: </details> in aipager/bot/animation.py"
+                    if poisoned and i == 40
+                    else f"Grep: some_pattern_{i} in some/really/long/path")
+            sess.record_tool(text, True)
+        return build_stream_card(sess, "Working")
+
+    clean, poisoned = _card(False), _card(True)
+    assert poisoned.count("✅ `Grep") == clean.count("✅ `Grep")
+    assert len(poisoned) >= len(clean) - 40   # same card, give or take the row
+    assert poisoned.rstrip().splitlines()[-1].startswith("⏳ **probe** ·")

@@ -1,9 +1,15 @@
 """spec.md requirement 4 ("Shedding"): an active agent row is never
-collapsed by phase-1 "▸ N tool calls" folding while the agent is still
-running — driven end-to-end through ``build_stream_card_ex`` with an
-oversized ``tool_history`` to force byte-pressure truncation, exactly
-the scenario a long-running turn with many parent tool calls produces
-in production.
+folded or dropped while the agent is still running — driven end-to-end
+through ``build_stream_card_ex`` with an oversized ``tool_history``/
+``stream_commentary`` to force genuine truncation, exactly the scenario
+a long-running turn with many parent tool calls produces in production.
+
+Updated for "collapse-busy-card-timeline": the single-global-budget
+phase machinery this file originally targeted is retired in favor of
+per-section folding (design.md) — "phase2-only" is now "step-b-only",
+and the specific retired placeholder text this file used to check for
+is gone, replaced by checking the row never lands inside a `<details>`
+block at all.
 """
 
 from __future__ import annotations
@@ -34,6 +40,7 @@ def _oversized_sess(*, agent_position="middle"):
 
     agent_row = (f"{MARK} crawler", False)
 
+    commentary = None
     if agent_position == "middle":
         old_rows = [(f"Bash: old-{i} " + ("z" * 120), True) for i in range(2)]
         new_rows = [(f"Bash: new-{i} " + ("z" * 120), True) for i in range(250)]
@@ -45,6 +52,28 @@ def _oversized_sess(*, agent_position="middle"):
         ]
         history = fat_rows + [agent_row]
         idx = len(fat_rows)
+    elif agent_position == "step-b-only":
+        # Only ONE "run" section exists in the whole timeline (the
+        # trailing "Bash: newest" row, 1 row, so it never folds anyway) —
+        # there is nothing foldable at all, so ALL shedding pressure
+        # lands on Step B's whole-section drop walk. That walk must pass
+        # THROUGH the agent's own section (kind == "agent-run") without
+        # dropping it, and keep going to shed the prose sections flanking
+        # it — the specific gap research.md gotcha ~53 names (today's
+        # Step B has no agent-run exclusion of its own unless it is
+        # added explicitly, distinct from the newest-run/newest-prose
+        # kind filters).
+        history = [agent_row, ("Bash: newest", True)]
+        idx = 0
+        # PROSE-A alone is deliberately too small to free enough room on
+        # its own — Step B must continue PAST the agent's section (skip,
+        # not stop) and also drop PROSE-B (chronologically AFTER the
+        # agent) to fit, proving the loop didn't halt at the agent.
+        commentary = [
+            (0, "PROSE-A " + "a" * 500),
+            (1, "PROSE-B " + "b" * 9000),
+            (2, "PROSE-C " + "c" * 60),
+        ]
     else:
         raise ValueError(agent_position)
 
@@ -53,6 +82,8 @@ def _oversized_sess(*, agent_position="middle"):
         "type": "crawler", "started_at": time.monotonic() - 8,
         "history_idx": idx, "activity": "Bash: find . -name '*.py'",
     }
+    if commentary is not None:
+        sess.stream_commentary = commentary
     return sess
 
 
@@ -70,15 +101,52 @@ def test_active_agent_row_text_survives_forced_truncation_as_newest():
     assert f"{MARK} crawler · Bash: find . -name '*.py' · 8s" in card
 
 
-def test_active_agent_row_is_never_replaced_by_a_single_tool_call_placeholder():
-    """The specific phase-1 collapse text ("▸ 1 tool call" / "▸ _1 tool
-    call_") that a lone ordinary "run" section of one row would fold
-    into must never appear for the still-active agent's own row."""
+def test_active_agent_row_is_never_folded_behind_a_details_block():
+    """A lone-row run would normally be too short to fold anyway (rule 4:
+    under 3 rows never folds) — but the still-active agent's own row must
+    never be wrapped in a <details> block regardless of row count."""
     sess = _oversized_sess(agent_position="middle")
     card, truncated = build_stream_card_ex(sess, "Working")
     assert truncated is True
-    assert "▸ _1 tool call_" not in card
-    assert "▸ 1 tool call" not in card
+    if "<details>" in card:
+        assert f"{MARK} crawler" not in card.split("</details>", 1)[0]
+
+
+def test_active_agent_row_survives_when_only_step_b_pressure_reaches_it():
+    """Extends this file's own documented gap: neither "middle" nor
+    "newest" ever forces whole-section dropping. "step-b-only" is sized
+    so there is nothing foldable at all, and the fitter must reach Step
+    B's own walk to decide the agent's section's neighbors — the exact
+    untested path research.md gotcha ~53 named."""
+    sess = _oversized_sess(agent_position="step-b-only")
+    card, truncated = build_stream_card_ex(sess, "Working")
+    assert truncated is True
+    assert f"{MARK} crawler · Bash: find . -name '*.py' · 8s" in card
+
+
+def test_active_agent_row_is_never_inside_the_details_block_under_step_b_pressure():
+    sess = _oversized_sess(agent_position="step-b-only")
+    card, truncated = build_stream_card_ex(sess, "Working")
+    assert truncated is True
+    if "</details>" in card:
+        inside_details = card.split("</details>", 1)[0]
+        assert f"{MARK} crawler" not in inside_details
+
+
+def test_step_b_continues_past_the_agent_row_to_shed_what_comes_after_it():
+    """The specific `continue`-not-`break` fix: a prose section
+    positioned AFTER the agent's own section (PROSE-B) must still be
+    reachable and dropped — PROSE-A alone is too small to free enough
+    room, so this only passes if Step B kept walking past the agent's
+    index rather than stopping dead there. PROSE-C (the newest prose)
+    stays protected and visible throughout."""
+    sess = _oversized_sess(agent_position="step-b-only")
+    card, truncated = build_stream_card_ex(sess, "Working")
+    assert truncated is True
+    assert "PROSE-A" not in card
+    assert "PROSE-B" not in card  # only reachable by continuing past the agent
+    assert "PROSE-C" in card
+    assert f"{MARK} crawler" in card  # the agent itself is untouched throughout
 
 
 def test_once_settled_the_row_is_an_ordinary_row_and_may_be_folded_like_any_other():

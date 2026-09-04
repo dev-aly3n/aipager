@@ -19,6 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   identical operator-visible behavior. The audit log now records which
   path actually answered each tap.
 
+### Changed
+- The busy card now folds each older run of tool calls into its own
+  tappable `▸ N tool calls` block, right where that run happened in the
+  timeline, instead of vanishing behind Telegram's own message fold —
+  commentary always stays visible, the newest activity is never folded,
+  and a still-running (or just-finished) background agent's own tool
+  calls get the same fold under its own row once it has three or more.
+
 ## [0.7.6] - 2026-09-04
 
 ### Added
