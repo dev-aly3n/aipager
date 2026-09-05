@@ -215,17 +215,31 @@ def _plain_text_chunks(body_content: str) -> list[str]:
 class NotifyMixin:
     """Mixin for TelegramBot — see :mod:`aipager.bot` overview."""
 
-    async def _send_merged_final(self, sess: TrackedSession, answer: str) -> bool:
-        """Try to deliver a finished turn as ONE edit: the finished timeline
-        (exactly what ``card`` mode renders) with the answer appended below
-        a separator, on the existing busy message.
+    async def _send_merged_final(
+        self, sess: TrackedSession, answer: str, *,
+        send_as_new: bool = False, reply_to: int | None = None,
+    ) -> bool:
+        """Try to deliver a finished turn as ONE message: the finished
+        timeline (exactly what ``card`` mode renders) with the answer
+        appended below a separator — normally an EDIT of the existing
+        busy message, or, when ``send_as_new`` is set (design.md "turn
+        anchor follows consumption" R5/B6), a fresh SEND under
+        ``reply_to`` instead, because the busy message is anchored to a
+        message this turn did not actually consume and Telegram cannot
+        move an existing message's reply target.
 
         Returns ``True`` on success — the turn is fully delivered, the
         caller sends nothing else. Returns ``False`` when the caller MUST
         fall back to the ``replace``-style send so the answer is never
         lost: either the combined text exceeds the byte ceiling (checked
         before any network call — no edit is attempted at all) or the
-        edit itself failed for any reason. Never raises.
+        edit/send itself failed for any reason. Never raises.
+
+        ``send_as_new`` deliberately does NOT reuse ``_reanchor_busy_card``
+        (which always sends ``disable_notification=True``) — this send
+        IS the turn's one and only user-facing message, so it must ping
+        normally, unlike a re-anchor that's always followed by a
+        separately-notified answer.
         """
         try:
             card_md, hid = build_stream_card_ex(sess, FINAL_VERB, final=True)
@@ -270,6 +284,27 @@ class NotifyMixin:
         # majority-RTL by sample, matching how the plain single-message
         # body-send already treats detect_rtl(body_content) above.
         is_rtl = detect_rtl(combined)
+        if send_as_new:
+            try:
+                sent = await send_rich_message(
+                    chat_id, combined, is_rtl=is_rtl,
+                    reply_to_message_id=reply_to,
+                )
+            except RichMessageBlocked:
+                log.warning("[%s] merged: sendRichMessage blocked", sess.label)
+                return False
+            except (RichMessageFallbackRequired, Exception):
+                log.debug("[%s] merged: send-as-new failed", sess.label,
+                          exc_info=True)
+                return False
+            if isinstance(sent, dict) and sent.get("message_id"):
+                sess.busy_msg_id = sent["message_id"]
+                sess.busy_card_trigger = reply_to
+                self.registry.track_message(
+                    sent["message_id"], sess.name, chat_id or 0,
+                )
+                return True
+            return False
         try:
             result = await edit_message_text_rich(
                 chat_id, int(sess.busy_msg_id), combined,
@@ -283,6 +318,86 @@ class NotifyMixin:
             sess.busy_msg_id = 0
             return False
         return result is not None
+
+    async def _apply_consumption(
+        self, sess: TrackedSession, consumed: list[dict],
+    ) -> None:
+        """R2 (design.md "turn anchor follows consumption"): a message
+        was actually consumed by Claude — picked up as the next turn, or
+        absorbed mid-turn. Reacts 👍 on each consumed message, tracks it
+        so a later reply routes back here, and moves the reply target to
+        the LAST consumed message.
+
+        ``consumed`` is either the hook's minimal wire shape
+        (``notify_hook._note_wire``: ``msg_id``/``chat_id``/``raw_text``)
+        or a full on-disk note dict
+        (:func:`aipager.policy_snapshot.consume_notes_matching`'s
+        return) — only those three keys are read here, so both shapes
+        work unchanged.
+
+        Does NOT delete notes — deletion already happened upstream (the
+        hook's ``_match_and_promote`` for pick-up;
+        ``consume_notes_matching`` for absorption) before this function
+        ever sees the list.
+        """
+        if not consumed:
+            return
+        bot = self._app.bot
+        default_chat_id = resolve_chat_id(sess)
+        for note in consumed:
+            note_msg_id = note.get("msg_id")
+            if note_msg_id is None:
+                continue
+            note_chat_id = note.get("chat_id") or default_chat_id
+            try:
+                self.registry.track_message(
+                    note_msg_id, sess.name, note_chat_id or 0,
+                )
+            except Exception:
+                log.debug("consumption track_message failed", exc_info=True)
+            try:
+                await bot.set_message_reaction(
+                    note_chat_id, note_msg_id, "👍",
+                )
+            except Exception:
+                log.debug("consumption reaction failed", exc_info=True)
+        last = consumed[-1]
+        last_msg_id = last.get("msg_id")
+        if last_msg_id is not None:
+            sess.trigger_msg_id = last_msg_id
+            sess.last_prompt = last.get("raw_text", "") or ""
+            self.registry.mark_dirty()
+
+    async def _consume_and_reanchor(self, sess: TrackedSession) -> None:
+        """Drain ``sess.stream_consumed_notes`` (staged by
+        ``_sync_anchors_from_transcript``'s absorption detection) and, if
+        it moved the reply target off a still-live card, re-anchor that
+        card (R3). Called from two sites: ``animation._animate_tick``
+        (every tick, waiting or not) and the ``assistant_text`` notify
+        handler — the whole of R3 for the "live" case.
+
+        Draining the WHOLE batch before making exactly one ``if``-gated
+        re-anchor call is what makes "at most one re-anchor per
+        detection batch" (design.md B3) structural, never one per
+        queue-operation line.
+
+        The mismatch check below is a bare ``!=``, deliberately with no
+        ``busy_card_trigger is not None`` carve-out (review
+        rev-iter1-002): every production call site that establishes a
+        live card now records ``busy_card_trigger`` alongside it, so a
+        missing record is never silent — it is a real (if narrow, restart
+        or hand-built-session) case, and the fix belongs at the site that
+        forgot to seed it, not in a guard here that would also swallow a
+        genuine post-compaction absorption.
+        """
+        consumed = sess.stream_consumed_notes
+        if not consumed:
+            return
+        sess.stream_consumed_notes = []
+        await self._apply_consumption(sess, consumed)
+        if (sess.busy_msg_id and sess.busy_msg_id > 0
+                and sess.busy_card_trigger != sess.trigger_msg_id):
+            await self._reanchor_busy_card(sess, sess.trigger_msg_id, final=False)
 
     @staticmethod
     def _diff_preview_enabled(sess) -> bool:
@@ -565,27 +680,18 @@ class NotifyMixin:
             # their 👀 (no reaction change — Claude may still process a
             # TTL-lapsed one after aipager stops watching) and get one
             # best-effort notice instead of per-message noise.
+            #
+            # R2 (design.md "turn anchor follows consumption"):
+            # _apply_consumption also moves trigger_msg_id/last_prompt to
+            # the LAST consumed message — hook_receiver.py's own
+            # _on_datagram already does this too before calling here, so
+            # this is a harmless re-affirmation for that path, and the
+            # ONLY place it happens for a caller that reaches this event
+            # some other way (e.g. a unit test driving notify() directly).
             consumed = context.get("consumed") or []
             expired = context.get("expired") or []
             default_chat_id = resolve_chat_id(sess)
-            for note in consumed:
-                note_msg_id = note.get("msg_id")
-                if note_msg_id is None:
-                    continue
-                note_chat_id = note.get("chat_id") or default_chat_id
-                try:
-                    self.registry.track_message(
-                        note_msg_id, sess.name, note_chat_id or 0,
-                    )
-                except Exception:
-                    log.debug("queue_pickup track_message failed",
-                              exc_info=True)
-                try:
-                    await bot.set_message_reaction(
-                        note_chat_id, note_msg_id, "👍",
-                    )
-                except Exception:
-                    log.debug("queue_pickup reaction failed", exc_info=True)
+            await self._apply_consumption(sess, consumed)
             if expired:
                 try:
                     preview = (expired[0].get("raw_text") or "")[:80]
@@ -868,6 +974,12 @@ class NotifyMixin:
                 # first row may already have landed) has its exact anchor
                 # waiting.
                 _sync_anchors_from_transcript(sess)
+                # design.md "turn anchor follows consumption" R3/R4: this
+                # scan may have just staged an absorption/pick-up match —
+                # drain it and re-anchor the live card before placing
+                # THIS sentence, so a mid-turn re-anchor never straddles
+                # the block this delta is about to append.
+                await self._consume_and_reanchor(sess)
                 sess.stream_msg_id = msg_id
                 exact = sess.stream_exact_anchor.get(msg_id) if msg_id else None
                 if exact is None:
@@ -1012,6 +1124,14 @@ class NotifyMixin:
                         reply_to_message_id=sess.trigger_msg_id,
                     )
                     pushed_msg_id = msg.message_id
+                    # review rev-iter1-002 (design.md "turn anchor follows
+                    # consumption"): this bypasses send_busy, so it must
+                    # record busy_card_trigger itself — otherwise this
+                    # genuinely live, correctly-anchored card reads as
+                    # "never seeded" against the very next re-anchor
+                    # decision, and a real absorption after this point
+                    # would go undetected.
+                    sess.busy_card_trigger = sess.trigger_msg_id
                 except Exception:
                     log.warning("Failed to send compact message", exc_info=True)
             if pushed_msg_id is not None:
@@ -1112,6 +1232,19 @@ class NotifyMixin:
                     # still find it, matching pre-stack behaviour where
                     # busy_msg_id stayed set after compact_done resolved it.
                     sess.busy_msg_id = target_msg_id
+                    # review rev-iter1-002: this message is already live
+                    # and already reply-anchored to whatever trigger_msg_id
+                    # was at the moment it was sent (either by the
+                    # "compacting" branch's own fresh send above, or by
+                    # this session's original send_busy before compaction
+                    # started) — current trigger_msg_id is the best
+                    # available record of that if it hasn't moved since,
+                    # matching the same best-effort reasoning as the
+                    # restart seed in state.py's load(). Without this a
+                    # later absorption's mismatch check reads a stale/None
+                    # busy_card_trigger against a genuinely live card and
+                    # never re-anchors it.
+                    sess.busy_card_trigger = sess.trigger_msg_id
             else:
                 try:
                     msg = await bot.send_message(
@@ -1119,6 +1252,7 @@ class NotifyMixin:
                         reply_to_message_id=sess.trigger_msg_id,
                     )
                     sess.busy_msg_id = msg.message_id
+                    sess.busy_card_trigger = sess.trigger_msg_id  # review rev-iter1-002
                 except Exception:
                     log.warning("Failed to send compact_done message", exc_info=True)
             if self.observers:
@@ -1240,6 +1374,17 @@ class NotifyMixin:
             # below snapshots or renders the timeline
             # ("transcript-exact-sentence-anchors").
             _sync_anchors_from_transcript(sess)
+            # R2 (design.md "turn anchor follows consumption", B6): the
+            # absorption line can be first visible only right here — no
+            # tick ran between it and Stop. Apply the consumption (move
+            # the target, react, track) BEFORE anything below snapshots
+            # or renders the timeline; the layout-aware re-anchor DECISION
+            # itself needs `layout`, resolved a few lines down, so it is
+            # not folded into `_consume_and_reanchor` here.
+            consumed = sess.stream_consumed_notes
+            sess.stream_consumed_notes = []
+            if consumed:
+                await self._apply_consumption(sess, consumed)
             # Snapshot the play-by-play FIRST — before the done-marking
             # below coerces every row to True (which would misreport
             # failed rows as successes in the full-log attachment, review
@@ -1289,6 +1434,61 @@ class NotifyMixin:
             layout = preferences.resolve_preferences(
                 sess.scope_chat_id, sess.preference_overrides(),
             ).layout
+            # R3/R5 (design.md "turn anchor follows consumption"): decide
+            # HERE, once layout is known, whether the about-to-be-
+            # finalised card needs to move. `card` re-anchors immediately
+            # (the finished render happens inside `_reanchor_busy_card`
+            # itself); `merged` only flags it — the old card is still
+            # needed for `_drop_answer_tail` below and the answer text
+            # isn't known yet, so the actual delete+resend happens once
+            # `_send_merged_final` is called, further down. `replace` is
+            # unchanged: the delete-then-answer-under-`trigger_msg_id`
+            # path already reads the now-correct target from insertion
+            # point 1 above.
+            #
+            # A real mismatch between `busy_card_trigger` and
+            # `trigger_msg_id` is the ONLY signal design.md defines for
+            # "consumption moved the target" (R3) — every production call
+            # site that establishes a live card now also records
+            # `busy_card_trigger` (`send_busy`, both `_reanchor_busy_card`
+            # sends, `_send_merged_final(send_as_new=True)`, the
+            # `compacting`/`compact_done` bypass sends, and the `load()`
+            # restart seed), so a bare `!= ` check — no `is not None`
+            # carve-out — cannot silently disable a genuine re-anchor
+            # after one of those paths runs (review rev-iter1-002: a
+            # `busy_card_trigger is not None` guard here used to survive
+            # exactly the compaction-bypass gap those sites had before
+            # this fix, degrading a real absorption to pre-feature
+            # behaviour with no signal it had happened). A hand-built
+            # `TrackedSession` that skips every production call site (as
+            # several pre-existing unit tests do) must seed
+            # `busy_card_trigger` itself, same as design.md's own contract
+            # already required.
+            reanchor_needed = bool(
+                sess.busy_msg_id and sess.busy_msg_id > 0
+                and sess.busy_card_trigger != sess.trigger_msg_id
+            )
+            # review rev-iter1-001: trim any trailing commentary that just
+            # duplicates the incoming answer BEFORE either final-render
+            # path below — the immediate `card`-layout re-anchor a few
+            # lines down renders the finished card RIGHT HERE via
+            # `_reanchor_busy_card`, and `card_already_final` then skips
+            # the second (correctly-ordered) render that used to catch
+            # this. Running the trim first means both the immediate
+            # re-anchor render and the ordinary in-place final render see
+            # the already-trimmed `stream_commentary`, so there is only
+            # ever one place this decision has to be made.
+            if sess.busy_msg_id and sess.busy_msg_id > 0 and layout in ("card", "merged"):
+                _drop_answer_tail(
+                    sess, context.get("raw_md") or context.get("summary") or "",
+                )
+            card_already_final = False
+            merged_send_as_new = False
+            if reanchor_needed and layout == "card":
+                await self._reanchor_busy_card(sess, sess.trigger_msg_id, final=True)
+                card_already_final = True
+            elif reanchor_needed and layout == "merged":
+                merged_send_as_new = True
             card_kept = False
             # True once the busy card has been successfully disposed of —
             # either kept as the finished card (`card_kept`, below) or
@@ -1306,16 +1506,21 @@ class NotifyMixin:
                     # how this answer was reached. Rendered here — before the
                     # streaming state is reset below and before the answer goes
                     # out — so scrollback reads card, header, body.
-                    _drop_answer_tail(
-                        sess, context.get("raw_md") or context.get("summary") or "",
-                    )
+                    # (the trim already ran above, before any final render.)
                     if layout == "card":
-                        try:
-                            card_kept = await self._edit_busy_rich(
-                                sess, FINAL_VERB, final=True,
-                            ) is True
-                        except Exception:
-                            log.debug("Final busy-card render failed", exc_info=True)
+                        if card_already_final:
+                            # _reanchor_busy_card already rendered the
+                            # exact same final content under the new
+                            # message a moment ago — a second POST here
+                            # would be redundant, harmless-but-wasteful.
+                            card_kept = True
+                        else:
+                            try:
+                                card_kept = await self._edit_busy_rich(
+                                    sess, FINAL_VERB, final=True,
+                                ) is True
+                            except Exception:
+                                log.debug("Final busy-card render failed", exc_info=True)
                         sess.busy_msg_id = None
                     # "merged": busy_msg_id stays live on purpose — the one
                     # combined edit (timeline + answer) happens below, once
@@ -1519,7 +1724,30 @@ class NotifyMixin:
                 # made the merged edit target a *different* message_id
                 # than the one tracked at send time, replies to it would
                 # silently stop resolving to this session.
-                merged_delivered = await self._send_merged_final(sess, content)
+                #
+                # R5/B6 (design.md "turn anchor follows consumption"):
+                # `merged_send_as_new` (set once, layout-aware, right
+                # after `layout` was resolved above) means this card is
+                # anchored to a message this turn did NOT consume —
+                # Telegram cannot move an existing message's reply
+                # target, so the combined card+answer must be a fresh
+                # SEND under the new target instead of an edit in place.
+                if merged_send_as_new:
+                    merged_delivered = await self._send_merged_final(
+                        sess, content, send_as_new=True,
+                        reply_to=sess.trigger_msg_id,
+                    )
+                    if merged_delivered and pre_merge_busy_msg_id and pre_merge_busy_msg_id > 0:
+                        try:
+                            await bot.delete_message(
+                                chat_id=resolve_chat_id(sess),
+                                message_id=pre_merge_busy_msg_id,
+                            )
+                        except Exception:
+                            log.debug("[%s] stale merged card delete failed",
+                                      sess.label, exc_info=True)
+                else:
+                    merged_delivered = await self._send_merged_final(sess, content)
                 if not merged_delivered:
                     # Losing the timeline is acceptable; losing the answer is
                     # never acceptable — fall back to the replace-style send
@@ -1715,6 +1943,7 @@ class NotifyMixin:
                                         label, exc_info=True)
 
             sess.trigger_msg_id = None  # reply cycle complete
+            sess.busy_card_trigger = None
             self.registry.mark_dirty()
             if msg_id:
                 self.registry.track_message(msg_id, sess.name, resolve_chat_id_int(sess) or 0)

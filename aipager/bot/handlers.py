@@ -1413,8 +1413,11 @@ class CommandHandlersMixin:
         # not-yet-picked-up queue, matched by the UserPromptSubmit hook
         # at pick-up. `_direct_send`/`_send_command` have injected into a
         # BUSY session's pty all along; this is that same behaviour.
-        sess.trigger_msg_id = update.message.message_id
-        sess.last_prompt = text
+        # R1 (design.md "turn anchor follows consumption"): the reply
+        # target itself moves only when this message starts a turn from
+        # IDLE — `_adopt_trigger` no-ops the target (but always sets
+        # `last_prompt` when not-BUSY) while BUSY.
+        self._adopt_trigger(sess, update.message.message_id, text)
         self._mark_driver(sess, update)
         self.registry.track_message(update.message.message_id, sess.name, chat_id or 0)
         self.registry.mark_dirty()
@@ -1578,9 +1581,9 @@ class CommandHandlersMixin:
             return
 
         # Injects immediately regardless of Status.BUSY — see the same
-        # comment in _handle_message (design.md "queue handoff").
-        sess.trigger_msg_id = update.message.message_id
-        sess.last_prompt = transcript
+        # comment in _handle_message (design.md "queue handoff"). R1:
+        # the reply target itself only moves via _adopt_trigger.
+        self._adopt_trigger(sess, update.message.message_id, transcript)
         self._mark_driver(sess, update)
         self.registry.track_message(update.message.message_id, sess.name, chat_id or 0)
         self.registry.mark_dirty()
@@ -1714,9 +1717,9 @@ class CommandHandlersMixin:
             return
 
         # Injects immediately regardless of Status.BUSY — see the same
-        # comment in _handle_message (design.md "queue handoff").
-        sess.trigger_msg_id = msg.message_id
-        sess.last_prompt = prompt
+        # comment in _handle_message (design.md "queue handoff"). R1:
+        # the reply target itself only moves via _adopt_trigger.
+        self._adopt_trigger(sess, msg.message_id, prompt)
         self._mark_driver(sess, update)
         self.registry.track_message(msg.message_id, sess.name, chat_id or 0)
         self.registry.mark_dirty()
@@ -1832,10 +1835,10 @@ class CommandHandlersMixin:
             return
 
         # Injects immediately regardless of Status.BUSY — see the same
-        # comment in _handle_message (design.md "queue handoff").
+        # comment in _handle_message (design.md "queue handoff"). R1:
+        # the reply target itself only moves via _adopt_trigger.
         template_chat_id = calling_chat_id(update)
-        sess.trigger_msg_id = update.message.message_id
-        sess.last_prompt = prompt_text
+        self._adopt_trigger(sess, update.message.message_id, prompt_text)
         self.registry.track_message(update.message.message_id, sess.name,
                                     template_chat_id or 0)
         self.registry.mark_dirty()
@@ -1910,8 +1913,9 @@ class CommandHandlersMixin:
             self.registry.last_active_session = name
             if await self._hold_for_open_dialog(update, sess, prompt_text):
                 return
-            sess.trigger_msg_id = update.message.message_id
-            sess.last_prompt = prompt_text
+            # R1 (design.md "turn anchor follows consumption"): the
+            # reply target itself only moves via _adopt_trigger.
+            self._adopt_trigger(sess, update.message.message_id, prompt_text)
             self.registry.track_message(update.message.message_id, name,
                                         calling_chat_id(update) or 0)
             self.registry.mark_dirty()
@@ -1938,8 +1942,9 @@ class CommandHandlersMixin:
             self.registry.last_active_session = session_name
             if await self._hold_for_open_dialog(update, new_sess, prompt_text):
                 return
-            new_sess.trigger_msg_id = update.message.message_id
-            new_sess.last_prompt = prompt_text
+            # R1 (design.md "turn anchor follows consumption"): the
+            # reply target itself only moves via _adopt_trigger.
+            self._adopt_trigger(new_sess, update.message.message_id, prompt_text)
             self.registry.track_message(update.message.message_id, session_name,
                                         calling_chat_id(update) or 0)
             self.registry.mark_dirty()

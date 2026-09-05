@@ -472,6 +472,22 @@ class TrackedSession:
     stream_hook_live: bool = False
     stream_dirty: bool = False
     stream_last_rendered: str = ""
+    # design.md "turn anchor follows consumption" — busy_card_trigger:
+    # which message the CURRENT live/finished card is replying to (set
+    # by send_busy/_reanchor_busy_card). Compared against trigger_msg_id
+    # to decide whether a live card has gone stale (R3). Transient —
+    # never in _PERSIST_FIELDS; see SessionRegistry.load()'s post-
+    # construction seed for why a restart re-derives it from
+    # trigger_msg_id rather than leaving it None.
+    busy_card_trigger: int | None = None
+    # A scratch outbox: notes matched-and-already-deleted by
+    # _sync_anchors_from_transcript's absorption detection, staged here
+    # rather than returned (that function's bool return — "did an
+    # anchor move" — is asserted byte-for-byte by
+    # tests/test_transcript_exact_anchors.py and must not change shape).
+    # Drained (and reset to []) by whichever caller reads it next
+    # tick/event/finish-sync. Never persisted.
+    stream_consumed_notes: list[dict] = field(default_factory=list, repr=False)
     # MD5 hex digest of the last DELIVERED job-open interim summary's raw
     # (pre-HTML) text — design.md "model Claude Code background-agent
     # jobs", requirement 2. Transient (never in _PERSIST_FIELDS): a job
@@ -1514,6 +1530,16 @@ class SessionRegistry:
             # the stack empty — either way byte-for-byte the same runtime
             # state as before this property existed.
             sess.busy_msg_id = sd.get("busy_msg_id")
+            # design.md "turn anchor follows consumption": busy_card_trigger
+            # is transient (never persisted), so a restart mid-turn would
+            # otherwise see it default to None != trigger_msg_id on the
+            # very first tick and fire one spurious (harmless but visible)
+            # re-anchor purely because of the restart. Seeding it from the
+            # just-restored trigger_msg_id is a best-effort mitigation, not
+            # a hard guarantee — see design.md's Risks for the narrow
+            # window this doesn't cover.
+            if sess.busy_msg_id:
+                sess.busy_card_trigger = sess.trigger_msg_id
             # Multi-scope backfill: stamp legacy sessions (scope_chat_id == 0)
             # with the single configured chat so notify routing is explicit.
             if sess.scope_chat_id == 0 and _default is not None:

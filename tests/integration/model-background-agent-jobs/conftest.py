@@ -109,6 +109,15 @@ def mk_job_session():
         sess = TrackedSession(name=SESSION, label=LABEL, status=status)
         sess.trigger_msg_id = trigger_msg_id
         sess.busy_msg_id = busy_msg_id
+        # A real card always has busy_card_trigger seeded by send_busy at
+        # send time ("turn anchor follows consumption") — this factory
+        # bypasses send_busy, so it must seed it itself, mirroring
+        # state.py's own load() restart-seed precedent, or the
+        # busy_card_trigger != trigger_msg_id check misreads a freshly
+        # built session as a real mismatch and fires a re-anchor none of
+        # this directory's tests are about.
+        if sess.busy_msg_id:
+            sess.busy_card_trigger = sess.trigger_msg_id
         sess.last_prompt_origin = last_prompt_origin
         sess.active_subagents = (active_subagents if active_subagents is not None
                                  else {})

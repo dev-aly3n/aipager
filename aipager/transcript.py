@@ -332,10 +332,16 @@ def read_turn_stream(
 
     The same walk as :func:`read_turn_blocks` with the message id dropped —
     kept as its own name so the transcript-fallback path's contract (and
-    its tests) are untouched.
+    its tests) are untouched. ``"queue"`` items (see :func:`read_turn_blocks`)
+    are dropped here rather than passed through: this function's callers
+    (``_read_stream_text`` via ``read_turn_text``) treat anything that
+    isn't ``"tool"`` as prose text to append to the draft, and a 4-tuple
+    has no ``.split()`` — passing one through would raise deep inside the
+    live card's rendering path instead of here.
     """
     items, new_offset = read_turn_blocks(transcript_path, offset)
-    return ([(kind, value) for kind, value, _mid in items], new_offset)
+    return ([(kind, value) for kind, value, _mid in items
+             if kind != "queue"], new_offset)
 
 
 def read_turn_blocks(
@@ -344,7 +350,12 @@ def read_turn_blocks(
     """:func:`read_turn_stream` plus the assistant message each item came
     from: ``("text", block, message_id)`` / ``("tool", tool_name,
     message_id)``, *message_id* being the entry's ``message.id`` (``""``
-    when absent).
+    when absent). A ``{"type": "queue-operation", ...}`` line (design.md
+    "turn anchor follows consumption") yields
+    ``("queue", (operation, reason, content, timestamp), "")`` instead —
+    still a 3-tuple, so every ``for kind, value, mid in items:`` unpack
+    keeps working; here ``value`` is itself a 4-tuple and ``mid`` is
+    always ``""`` (a queue-operation line carries no ``message.id``).
 
     Claude Code writes one line per content block, every line of one
     message carrying the same id, and flushes a message's lines together
@@ -391,7 +402,23 @@ def read_turn_blocks(
             entry = json.loads(line)
         except json.JSONDecodeError:
             continue
-        if entry.get("type") != "assistant":
+        etype = entry.get("type")
+        if etype == "queue-operation":
+            # design.md "turn anchor follows consumption": Claude Code
+            # writes one of these at the moment it enqueues/dequeues/
+            # drops/absorbs a piece of queued input. Carried as its own
+            # 3-tuple item — `value` is itself a 4-tuple
+            # (operation, reason, content, timestamp) — so every
+            # existing `for kind, value, mid in items:` unpack keeps
+            # working; `mid` is always "" since this line carries no
+            # `message.id`. Callers that don't know about "queue" treat
+            # it as inert (see read_turn_stream's filter below).
+            items.append(("queue", (
+                entry.get("operation", ""), entry.get("reason"),
+                entry.get("content", ""), entry.get("timestamp"),
+            ), ""))
+            continue
+        if etype != "assistant":
             continue
         # Skip the no-response placeholder but keep the offset advancing —
         # streaming it would push "No response requested." into the draft

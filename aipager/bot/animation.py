@@ -30,6 +30,7 @@ from aipager.bot.rich_message import (
     RichMessageFallbackRequired,
     RichMessageGone,
 )
+from aipager import policy_snapshot
 from aipager.transcript import read_turn_blocks, read_turn_stream
 from aipager.state import Status, TrackedSession
 
@@ -279,6 +280,28 @@ def _sync_anchors_from_transcript(sess: TrackedSession) -> bool:
     cursor = sess.stream_tool_cursor
     pending: str | None = None
     for kind, value, mid in items:
+        if kind == "queue":
+            # design.md "turn anchor follows consumption" R4: a message
+            # absorbed mid-turn, or delivered to a running background
+            # agent, is the ONLY thing that moves the reply target here —
+            # `enqueue`/`dequeue`/bare `remove` (discarded)/`popAll` are
+            # ignored on purpose (R7: a discard is handled by the stop
+            # path; `dequeue` is followed by the real UserPromptSubmit
+            # pick-up, which does the work via `queue_pickup` instead).
+            # Placed FIRST in the loop so a queue item never reaches
+            # `_find_tool_row` (which would otherwise stringify its
+            # 4-tuple `value` into a bogus tool-name match) and never
+            # disturbs `pending`/`cursor` state.
+            operation, reason, content, _ts = value
+            if operation == "remove" and reason in (
+                "absorbed_mid_turn", "delivered_to_agent",
+            ):
+                consumed = policy_snapshot.consume_notes_matching(
+                    sess.name, content or "",
+                )
+                if consumed:
+                    sess.stream_consumed_notes.extend(consumed)
+            continue
         if kind == "text":
             pending = mid if mid and mid not in sess.stream_exact_anchor else None
             continue
@@ -1028,17 +1051,33 @@ class AnimationMixin:
 
     # ── Notification methods (called by hook_receiver and session_monitor) ──
 
-    async def send_busy(self, sess: TrackedSession) -> int | None:
-        """Send initial 'Working...' message and start animation. Returns message_id."""
+    async def send_busy(
+        self, sess: TrackedSession, *,
+        reply_to: int | None = None, disable_notification: bool = False,
+    ) -> int | None:
+        """Send initial 'Working...' message and start animation. Returns message_id.
+
+        ``reply_to``/``disable_notification`` (design.md "turn anchor
+        follows consumption") let :meth:`_reanchor_busy_card` reuse this
+        same send for a re-anchor: ``reply_to`` defaults to
+        ``sess.trigger_msg_id`` (today's behaviour, unchanged for every
+        existing call site), and a successful send records
+        ``sess.busy_card_trigger`` — which message THIS card currently
+        replies to — so a later mismatch against ``trigger_msg_id`` (R3)
+        can be detected.
+        """
         if not self._app:
             return None
+        target = reply_to if reply_to is not None else sess.trigger_msg_id
         text = f"⚙️ <b>{html_mod.escape(sess.label)}</b> · Thinking…"
         try:
             msg = await self._app.bot.send_message(
                 resolve_chat_id(sess), text, parse_mode="HTML",
-                reply_to_message_id=sess.trigger_msg_id,
+                reply_to_message_id=target,
                 reply_markup=self._build_stop_keyboard(sess),
+                disable_notification=disable_notification,
             )
+            sess.busy_card_trigger = target
             return msg.message_id
         except Exception:
             log.warning("Failed to send busy message", exc_info=True)
@@ -1265,6 +1304,71 @@ class AnimationMixin:
             sess.stream_dirty = False
             return True
 
+    async def _reanchor_busy_card(
+        self, sess: TrackedSession, target_msg_id: int, *, final: bool,
+    ) -> None:
+        """R3/R5 (design.md "turn anchor follows consumption"): the live
+        or about-to-be-finalised card is anchored to a stale message —
+        Claude consumed a DIFFERENT one for this turn. Re-send the SAME
+        timeline under ``target_msg_id`` instead: send new, then delete
+        the old one (best-effort) — never the other order.
+
+        Ordering rationale (send-then-delete, not delete-then-send): B8
+        ("delete of the old card fails: new card still sent; old one
+        left behind") is the observable contract. Sending FIRST
+        guarantees the session always has a live card even if the delete
+        fails, races, or the process is killed between the two calls —
+        deleting first risks a window with NO live card at all if the
+        send then fails.
+
+        Never touches any of the per-turn-reset fields
+        ``_send_busy_and_animate`` clears (``tool_history``,
+        ``stream_commentary``, etc.) — the whole point of a re-anchor is
+        the SAME timeline, under a different reply target.
+
+        Takes ``sess.animate_lock`` for its whole body: this serialises
+        against ``_send_busy_and_animate`` and against a second
+        concurrent re-anchor call, which is also the B9 mechanism — see
+        design.md's own discussion of the finish path's ``final=True``
+        call always running strictly after ``_stop_animation``.
+        """
+        async with sess.animate_lock:
+            old_msg_id = sess.busy_msg_id
+            if not old_msg_id or old_msg_id <= 0:
+                # Nothing live (already gone, or a -1 claim from a
+                # concurrently-interrupted send) — the caller's own
+                # layout fallback (a standalone answer under the now-
+                # correct trigger_msg_id) covers this degraded case.
+                return
+            new_msg_id = await self.send_busy(
+                sess, reply_to=target_msg_id, disable_notification=True,
+            )
+            if not new_msg_id:
+                log.warning("[%s] re-anchor send failed — keeping the stale card",
+                            sess.label)
+                return
+            sess.busy_msg_id = new_msg_id  # mutates the SAME "busy" stack entry
+            self.registry.track_message(
+                new_msg_id, sess.name, resolve_chat_id_int(sess) or 0,
+            )
+            verb = FINAL_VERB if final else "Working"
+            waiting = (sess.status != Status.BUSY) if not final else False
+            try:
+                if await self._edit_busy_rich(
+                    sess, verb, final=final, waiting=waiting,
+                ) is None:
+                    self._stop_animation(sess)
+            except Exception:
+                log.debug("[%s] re-anchor timeline render failed", sess.label,
+                          exc_info=True)
+            try:
+                await self._app.bot.delete_message(
+                    chat_id=resolve_chat_id(sess), message_id=old_msg_id,
+                )
+            except Exception:
+                log.debug("[%s] re-anchor: old card delete failed (left behind)",
+                          sess.label, exc_info=True)
+
     async def _animate_busy(self, sess: TrackedSession) -> None:
         """Background task: stream transcript text while session is BUSY.
 
@@ -1353,11 +1457,19 @@ class AnimationMixin:
             # prose is a real change, so it earns the fast cadence.
             if _read_stream_text(sess):
                 sess.stream_dirty = True
-            # Hook live instead: the transcript is read for STRUCTURE only
-            # — a round that flushed since the last tick places (or
-            # corrects) the sentence it belongs to, exactly.
-            if _sync_anchors_from_transcript(sess):
-                sess.stream_dirty = True
+        # Hook live instead: the transcript is read for STRUCTURE only —
+        # a round that flushed since the last tick places (or corrects)
+        # the sentence it belongs to, exactly. Run this — and the
+        # absorption-consumption check right after it — EVEN WHILE
+        # ``waiting`` (design.md "turn anchor follows consumption" R4/B5):
+        # a background job's waiting frame must still re-anchor when a
+        # message is delivered to the running agent, though nothing new
+        # is being generated by the parent turn to stream. Both are cheap
+        # no-ops when there's nothing new (`_sync_anchors_from_transcript`
+        # returns early on an empty read).
+        if _sync_anchors_from_transcript(sess):
+            sess.stream_dirty = True
+        await self._consume_and_reanchor(sess)
         # Choose the required minimum gap.
         gap = STREAM_EDIT_INTERVAL if sess.stream_dirty else BUSY_EDIT_INTERVAL
         now = time.monotonic()
@@ -1737,6 +1849,12 @@ class AnimationMixin:
             sess.stream_last_rendered = ""
             sess.stream_offset = 0
             sess.stream_transcript_path = ""
+            # design.md "turn anchor follows consumption": a fresh turn
+            # starts with no stale re-anchor state. send_busy re-seeds
+            # busy_card_trigger correctly a few lines below regardless —
+            # this reset only matters for the window before that call.
+            sess.busy_card_trigger = None
+            sess.stream_consumed_notes = []
             tp = sess.transcript_path
             if tp:
                 sess.stream_transcript_path = tp

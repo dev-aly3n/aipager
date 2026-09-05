@@ -575,6 +575,12 @@ def test_idle_answer_carries_the_reply_link_when_the_header_is_skipped(
     bot = _finished_card_bot(mk_bot, monkeypatch)
     sess = _sess(status=Status.IDLE, busy_msg_id=42)
     sess.trigger_msg_id = 7
+    # A real card always has busy_card_trigger seeded by send_busy at
+    # send time — this hand-built session skips send_busy entirely, so
+    # it must seed it itself or "turn anchor follows consumption"'s
+    # busy_card_trigger != trigger_msg_id check misreads this as a real
+    # mismatch and fires a spurious re-anchor this test isn't about.
+    sess.busy_card_trigger = 7
     # A resolvable numeric destination, deliberately independent of the
     # ambient (possibly-empty) config.CHAT_ID — this test's point is the
     # reply-link/tracking wiring around a *reached* sendRichMessage call,
@@ -602,6 +608,9 @@ def test_idle_answer_delivered_when_session_has_no_scope_and_no_chat_id(
     sess = _sess(status=Status.IDLE, busy_msg_id=42)
     assert sess.scope_chat_id == 0  # unscoped — never explicitly stamped
     sess.trigger_msg_id = 7
+    # See test_idle_answer_carries_the_reply_link_when_the_header_is_skipped
+    # above — this hand-built session must seed busy_card_trigger itself.
+    sess.busy_card_trigger = 7
     bot.registry.track_message = MagicMock()
 
     # Must not raise — this is the regression itself: notify() aborting
