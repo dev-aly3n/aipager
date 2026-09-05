@@ -180,6 +180,7 @@ def _match_and_promote(session: str, prompt_text: str) -> tuple[list[dict], list
     from aipager.policy_snapshot import (
         delete_notes,
         list_outstanding_notes,
+        match_notes_prefix_run,
         merge_snapshots,
         write_merged_snapshot,
     )
@@ -187,17 +188,16 @@ def _match_and_promote(session: str, prompt_text: str) -> tuple[list[dict], list
     expired: list[dict] = []
     outstanding = list_outstanding_notes(session, expired_out=expired)
 
-    consumed: list[dict] = []
-    cursor = 0
-    for note in outstanding:
-        body = note.get("body") or ""
-        if not body:
-            break
-        idx = prompt_text.find(body, cursor)
-        if idx == -1:
-            break
-        consumed.append(note)
-        cursor = idx + len(body)
+    # Reuse ONLY the pure matcher — never `consume_notes_matching`, which
+    # calls `list_outstanding_notes` itself. Doing that here would call it
+    # TWICE per pick-up (once inside `consume_notes_matching`, once for
+    # the `expired_out=expired` collection just above), and
+    # `list_outstanding_notes` TTL-prunes as a side effect: the first
+    # call would silently swallow the truly-expired notes before the
+    # `expired_out` collection above ever sees them, under-reporting
+    # `expired` on the datagram (double-prune trap — see
+    # `policy_snapshot.consume_notes_matching`'s own docstring).
+    consumed = match_notes_prefix_run(outstanding, prompt_text)
 
     if consumed:
         delete_notes(session, consumed)
@@ -394,6 +394,54 @@ def _run(session: str, cap_slot: list[bytes]) -> None:
                     hook_reply.close_reply_socket(sock, reply_path)
                 except Exception:
                     pass
+    elif hook_event_name == "UserPromptSubmit":
+        # design.md "turn anchor follows consumption" R6: the queue-handoff
+        # pick-up match + its `queue_pickup` datagram must reach the daemon
+        # BEFORE the forwarded UserPromptSubmit does, so the receiver's
+        # IDLE→BUSY card for the new turn is built from the ALREADY-updated
+        # `trigger_msg_id` — one send, not a send-then-correct. The UDS
+        # datagram socket preserves order for one sender, so emission order
+        # here is delivery order there. `prompt_text` is a function-scope
+        # local (not block-scope) — the SECOND `elif hook_event_name ==
+        # "UserPromptSubmit":` branch further down (style/reply-context
+        # injection) reads this exact same variable; both branches only
+        # ever run when hook_event_name == "UserPromptSubmit", so it is
+        # always already bound by the time that branch reads it.
+        prompt_text = data.get("prompt", "") or ""
+        submit_session = data.get("session", "")
+        if submit_session and not prompt_text.startswith(_TASK_NOTIFICATION_PREFIX):
+            # Continuation turn: the SAME job waking itself up, not a new
+            # human prompt (design.md "model Claude Code background-agent
+            # jobs") — skip the queue-handoff match entirely so it never
+            # consumes notes meant for a real prompt, exactly as the
+            # style/reply-context branch below already skips for the same
+            # reason.
+            try:
+                consumed, expired = _match_and_promote(submit_session, prompt_text)
+                if consumed or expired:
+                    _udp({
+                        "hook_event_name": "queue_pickup",
+                        "session": submit_session,
+                        "consumed": [_note_wire(n) for n in consumed],
+                        "expired": [_note_wire(n) for n in expired],
+                    })
+            except MemoryError:
+                raise
+            except Exception as e:
+                # Never leave a stale (possibly broader) snapshot in
+                # place on an unexpected failure — fail closed to the
+                # floor rather than fail open to whatever was written
+                # for some earlier turn.
+                _debug(f"queue pickup matching error (falling back to "
+                       f"floor): {e}")
+                try:
+                    from aipager.policy_snapshot import (
+                        merge_snapshots, write_merged_snapshot,
+                    )
+                    write_merged_snapshot(submit_session, merge_snapshots([]))
+                except Exception:
+                    pass
+        _udp(data)
     else:
         _udp(data)
 
@@ -428,54 +476,20 @@ def _run(session: str, cap_slot: list[bytes]) -> None:
     # and prints nothing at all — not even an empty line — when there's
     # nothing to say, matching every other event's existing silence.
     elif hook_event_name == "UserPromptSubmit":
-        prompt_text = data.get("prompt", "") or ""
+        # The queue-handoff match itself (and its `queue_pickup` emission)
+        # already ran in the FIRST `if/elif` chain above, before this
+        # event was forwarded (R6) — `prompt_text` is the SAME function-
+        # scope local set there, reused rather than re-fetched. Only the
+        # continuation early-return and the style/reply-context injection
+        # are left here.
         if prompt_text.startswith(_TASK_NOTIFICATION_PREFIX):
             # Continuation turn: the SAME job waking itself up, not a new
             # human prompt (design.md "model Claude Code background-agent
-            # jobs"). Skip BOTH the queue-handoff match (which would
-            # consume notes that were never meant for this synthetic
-            # prompt) and the style/reply-context additionalContext print
+            # jobs"). The style/reply-context additionalContext print
             # (already injected on the real prompt that started this job)
-            # entirely — most importantly, this means `_match_and_promote`
-            # never runs, so its unconditional "always rewrite the
-            # snapshot" contract never fires here and the job's existing
-            # merged policy snapshot stays pinned exactly as it was.
+            # is skipped entirely for it, same as the queue-handoff match
+            # already was above.
             return
-        # Queue-handoff (design.md): match this pick-up against the
-        # session's outstanding per-message notes and rewrite the
-        # canonical policy snapshot from the merge BEFORE the style/
-        # reply-context read below — that read must see THIS turn's
-        # merged snapshot, not a stale one from whenever `_inject_prompt`
-        # last wrote it (it no longer writes it at all).
-        submit_session = data.get("session", "")
-        if submit_session:
-            try:
-                consumed, expired = _match_and_promote(
-                    submit_session, data.get("prompt", "") or "",
-                )
-                if consumed or expired:
-                    _udp({
-                        "hook_event_name": "queue_pickup",
-                        "session": submit_session,
-                        "consumed": [_note_wire(n) for n in consumed],
-                        "expired": [_note_wire(n) for n in expired],
-                    })
-            except MemoryError:
-                raise
-            except Exception as e:
-                # Never leave a stale (possibly broader) snapshot in
-                # place on an unexpected failure — fail closed to the
-                # floor rather than fail open to whatever was written
-                # for some earlier turn.
-                _debug(f"queue pickup matching error (falling back to "
-                       f"floor): {e}")
-                try:
-                    from aipager.policy_snapshot import (
-                        merge_snapshots, write_merged_snapshot,
-                    )
-                    write_merged_snapshot(submit_session, merge_snapshots([]))
-                except Exception:
-                    pass
         try:
             from aipager.policy_snapshot import read_snapshot
             snap = read_snapshot(data.get("session", "")) or {}

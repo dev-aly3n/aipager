@@ -331,6 +331,75 @@ def delete_notes(session_name: str, notes: list[dict]) -> None:
             pass
 
 
+def match_notes_prefix_run(outstanding: list[dict], content: str) -> list[dict]:
+    """The longest PREFIX run of *outstanding* (oldest-first) whose
+    ``body`` appears, in order, as a substring of *content*.
+
+    Pure — no I/O, no TTL pruning, no snapshot writes. This is the exact
+    matching loop ``notify_hook._match_and_promote`` has always used
+    (design.md "turn anchor follows consumption"), extracted so it can
+    also drive absorption detection (:func:`consume_notes_matching`)
+    without duplicating the substring-run rule. Walks *outstanding* in
+    order, searching for each note's ``body`` starting where the
+    previous match left off; the first note whose body can't be found
+    stops the run — everything before it is "matched", everything from
+    it onward is not.
+    """
+    matched: list[dict] = []
+    cursor = 0
+    for note in outstanding:
+        body = note.get("body") or ""
+        if not body:
+            break
+        idx = content.find(body, cursor)
+        if idx == -1:
+            break
+        matched.append(note)
+        cursor = idx + len(body)
+    return matched
+
+
+def consume_notes_matching(session_name: str, content: str) -> list[dict]:
+    """Match *content* (a transcript ``queue-operation`` line's own
+    ``content`` field) against *session_name*'s outstanding notes and
+    delete whichever ones matched — the absorption/pick-up-adjacent half
+    of design.md "turn anchor follows consumption".
+
+    Returns the matched notes (oldest first, :func:`match_notes_prefix_run`'s
+    own order) so the caller can react/track/re-anchor on them. Returns
+    ``[]`` when nothing outstanding matches — including a note the 5s
+    Stop-triggered sweep (:func:`expire_notes_after_turn_end`) already
+    swept: :func:`list_outstanding_notes` simply won't find it (R7 — the
+    sweep stays the safety net, this function never resurrects anything
+    it already dropped).
+
+    Deliberately does NOT touch the merged policy snapshot
+    (``merge_snapshots``/``write_merged_snapshot``) — unlike
+    ``notify_hook._match_and_promote``, this path has no PreToolUse
+    enforcement to feed: a message absorbed mid-turn never gets its own
+    ``UserPromptSubmit``, so its safety fields were never merged in
+    either, before or after this feature (spec.md: the notes' TTL and
+    queue safety semantics are out of scope here). This function's only
+    job is telling the reply-target machinery which notes were consumed,
+    in order.
+
+    Do NOT make ``notify_hook._match_and_promote`` call this function —
+    that would call :func:`list_outstanding_notes` TWICE per pick-up
+    (once here, once for ``_match_and_promote``'s own
+    ``expired_out=expired`` collection), and ``list_outstanding_notes``
+    TTL-prunes as a side effect: the first call would silently swallow
+    the truly-expired notes before the second call ever sees them,
+    under-reporting ``expired`` on the datagram. ``_match_and_promote``
+    instead calls :func:`match_notes_prefix_run` directly, reusing ONLY
+    the pure matcher.
+    """
+    outstanding = list_outstanding_notes(session_name)
+    consumed = match_notes_prefix_run(outstanding, content)
+    if consumed:
+        delete_notes(session_name, consumed)
+    return consumed
+
+
 # Grace window for the Stop-triggered sweep below. A message injected
 # into an already-BUSY session goes straight into Claude Code's own
 # input handling; whether it becomes a fresh UserPromptSubmit (the
