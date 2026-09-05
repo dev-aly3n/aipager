@@ -202,3 +202,70 @@ def test_reanchor_busy_card_serializes_via_animate_lock(mk_bot, run_async, rich_
     run_async(scenario())
     assert calls["n"] == 2
     assert sess.busy_msg_id == 202  # the SECOND call's send won last
+
+
+# ---- R4: only remove/absorbed_mid_turn and remove/delivered_to_agent -----
+
+def _write_queue_op(path, operation, reason, content):
+    import json
+    line = {"type": "queue-operation", "operation": operation, "content": content}
+    if reason is not None:
+        line["reason"] = reason
+    with open(path, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(line) + "\n")
+
+
+def _hook_live_sess(tmp_path):
+    from aipager import policy_snapshot as ps
+    s = TrackedSession(name="claude-r4", label="r4", status=Status.BUSY)
+    p = tmp_path / "t.jsonl"
+    p.write_bytes(b"")
+    s.stream_transcript_path = str(p)
+    s.stream_offset = 0
+    s.stream_hook_live = True
+    ps.write_note(
+        s.name, None, None, None,
+        msg_id=2, chat_id=555, sender_key=(1, 1),
+        body="ignored text", raw_text="ignored text",
+    )
+    return s
+
+
+@pytest.mark.parametrize("operation,reason", [
+    ("enqueue", None),
+    ("dequeue", None),
+    ("remove", None),  # bare remove == discard, not absorption
+    ("popAll", None),
+    ("remove", "some_other_reason"),
+])
+def test_sync_anchors_ignores_every_non_absorption_queue_operation(
+    operation, reason, tmp_path,
+):
+    from aipager.bot.animation import _sync_anchors_from_transcript
+    from aipager import policy_snapshot as ps
+
+    sess = _hook_live_sess(tmp_path)
+    _write_queue_op(sess.stream_transcript_path, operation, reason, "ignored text")
+
+    _sync_anchors_from_transcript(sess)
+
+    assert sess.stream_consumed_notes == [], (
+        f"operation={operation!r} reason={reason!r} must never consume a note"
+    )
+    assert len(ps.list_outstanding_notes(sess.name)) == 1, (
+        "the note must still be outstanding — R4's filter must not touch it"
+    )
+
+
+@pytest.mark.parametrize("reason", ["absorbed_mid_turn", "delivered_to_agent"])
+def test_sync_anchors_consumes_on_the_two_real_absorption_reasons(reason, tmp_path):
+    from aipager.bot.animation import _sync_anchors_from_transcript
+    from aipager import policy_snapshot as ps
+
+    sess = _hook_live_sess(tmp_path)
+    _write_queue_op(sess.stream_transcript_path, "remove", reason, "ignored text")
+
+    _sync_anchors_from_transcript(sess)
+
+    assert len(sess.stream_consumed_notes) == 1
+    assert ps.list_outstanding_notes(sess.name) == []
