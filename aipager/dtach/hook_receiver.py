@@ -47,6 +47,12 @@ _BOUNDARY_EVENTS = frozenset({
     "UserPromptSubmit", "Stop", "StopFailure", "SubagentStop", "queue_pickup",
 })
 
+# A Stop hook landing on an already-IDLE session within this many seconds
+# of an explicit /stop (or safety halt) is Claude finalising the turn the
+# operator just interrupted — its partial answer must not be delivered
+# under a card that already says Stopped (review rev-iter1-003).
+_STOP_SUPPRESS_SECONDS = 60.0
+
 
 _CTX_WINDOW_SIZE = 200_000  # all current Claude models use 200k context
 
@@ -639,7 +645,13 @@ class HookReceiver:
             if not consumed and not expired:
                 return
             sess = self.registry.get_or_create(session_name)
-            if consumed:
+            # Only a pick-up that STARTS a turn moves the reply target
+            # here. Claude Code fires this hook at submit time for a
+            # message typed while a turn runs, before that message's fate
+            # (absorbed into this turn, or popped as the next one) is
+            # known — notify's queue_pickup handler records those as
+            # queued targets instead ("anchor-on-transcript-consumption").
+            if consumed and sess.status != Status.BUSY:
                 last = consumed[-1]
                 last_trigger = last.get("msg_id")
                 if last_trigger is not None:
@@ -1114,9 +1126,42 @@ class HookReceiver:
                 log.info("[%s] Stop while already IDLE (debounced or "
                          "repeated) — finalizing anyway", session_name)
                 tracked = self.registry.get(session_name)
-                if (tracked and tracked.trigger_msg_id
-                        and msg.get("last_assistant_message")):
-                    sess = tracked  # bypass debounce — user is waiting
+                # An undelivered answer must reach the finish path whether
+                # or not a reply target is still set: a queued message
+                # Claude popped as the next turn fires no hook, so that
+                # turn's Stop lands on an already-IDLE session whose
+                # previous finish cleared the target — requiring it here
+                # silently dropped the answer (2026-09-05,
+                # "anchor-on-transcript-consumption"). The delivered-digest
+                # ring keeps a repeated Stop from re-sending.
+                late_msg = _strip_leaked_tool_xml(
+                    msg.get("last_assistant_message", "") or ""
+                )
+                if not late_msg and tracked:
+                    # Some hook variants omit last_assistant_message; the
+                    # normal Stop path below falls back to the transcript,
+                    # and so must this one (review rev-iter1-004).
+                    late_tp = transcript_path or tracked.transcript_path
+                    if late_tp:
+                        try:
+                            late_msg = extract_last_response(
+                                late_tp, since=tracked.turn_entered_wall or None,
+                            ) or ""
+                        except Exception:
+                            late_msg = ""
+                late_digest = (
+                    hashlib.md5(late_msg.encode("utf-8")).hexdigest()
+                    if late_msg else ""
+                )
+                just_stopped = bool(
+                    tracked and tracked.user_stopped_at
+                    and (time.monotonic() - tracked.user_stopped_at)
+                    < _STOP_SUPPRESS_SECONDS
+                )
+                if (tracked and late_msg and not just_stopped
+                        and late_msg.strip() != NO_RESPONSE_TEXT
+                        and not tracked.was_delivered(late_digest)):
+                    sess = tracked  # bypass debounce — an answer is waiting
                 else:
                     return
 

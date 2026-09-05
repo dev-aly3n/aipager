@@ -202,6 +202,27 @@ def _advance_tool_cursor(
     return i
 
 
+def _pop_queued_target(sess: TrackedSession, content: str) -> dict | None:
+    """Remove and return the queued target a transcript ``queue-operation``
+    line is about, or ``None``.
+
+    The line's ``content`` carries the injected text verbatim (the
+    ``[via Telegram · @owner]`` prefix and any reply-context framing
+    included), so the user's own text is a substring of it. Among the
+    targets whose text appears in *content* the LONGEST wins, oldest
+    first on a tie: a short message ("ok") is a substring of a longer
+    one ("ok let's go with plan B") and a bare first-match would pop
+    the wrong target and strand the real one (review rev-iter1-001).
+    Pure apart from the pop."""
+    best: int | None = None
+    best_len = 0
+    for i, target in enumerate(sess.queued_targets):
+        text = target.get("raw_text") or ""
+        if text and text in content and len(text) > best_len:
+            best, best_len = i, len(text)
+    return sess.queued_targets.pop(best) if best is not None else None
+
+
 def _exact_anchors_available(sess: TrackedSession) -> bool:
     """Whether the transcript can place this session's hook-delivered
     sentences exactly: the hook is live (so the transcript is not being
@@ -286,8 +307,10 @@ def _sync_anchors_from_transcript(sess: TrackedSession) -> bool:
             # agent, is the ONLY thing that moves the reply target here —
             # `enqueue`/`dequeue`/bare `remove` (discarded)/`popAll` are
             # ignored on purpose (R7: a discard is handled by the stop
-            # path; `dequeue` is followed by the real UserPromptSubmit
-            # pick-up, which does the work via `queue_pickup` instead).
+            # path; a `dequeue` — the message popped as the NEXT turn —
+            # fires no hook at all, so the finish path starts that turn
+            # itself from the still-queued target, R8, and the line is
+            # confirmation only).
             # Placed FIRST in the loop so a queue item never reaches
             # `_find_tool_row` (which would otherwise stringify its
             # 4-tuple `value` into a bogus tool-name match) and never
@@ -296,11 +319,22 @@ def _sync_anchors_from_transcript(sess: TrackedSession) -> bool:
             if operation == "remove" and reason in (
                 "absorbed_mid_turn", "delivered_to_agent",
             ):
-                consumed = policy_snapshot.consume_notes_matching(
-                    sess.name, content or "",
-                )
-                if consumed:
-                    sess.stream_consumed_notes.extend(consumed)
+                # A message queued while this turn ran was recorded as a
+                # queued target at its submit-time pick-up (the hook
+                # already deleted its note then); this line is the moment
+                # Claude actually consumed it
+                # ("anchor-on-transcript-consumption"). The on-disk note
+                # match stays as the fallback for a note no pick-up ever
+                # consumed.
+                target = _pop_queued_target(sess, content or "")
+                if target is not None:
+                    sess.stream_consumed_notes.append(target)
+                else:
+                    consumed = policy_snapshot.consume_notes_matching(
+                        sess.name, content or "",
+                    )
+                    if consumed:
+                        sess.stream_consumed_notes.extend(consumed)
             continue
         if kind == "text":
             pending = mid if mid and mid not in sess.stream_exact_anchor else None

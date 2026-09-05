@@ -230,16 +230,19 @@ Send several and they queue inside Claude itself, which picks each up
 at a natural boundary:
 
 - 👀 on your message — sent to the session.
-- 👍 — Claude has picked it up and started on it.
+- 👍 — Claude has taken it in. For a message sent while a turn runs
+  this happens at once: Claude queues it, and only later either folds
+  it into the turn already running or starts a new turn for it.
 
 The busy card and the eventual answer follow whichever message Claude
 actually consumed for a turn — the one it started on if the session
-was idle, or the one it absorbed into the turn already running or
-picked up next if you sent a second message while it was busy — never
+was idle, or the one it absorbed into the turn already running — never
 simply the last message you sent. Sending a follow-up mid-turn does
-not "jump the reply" to itself; it either becomes part of the answer
-already forming (and the card jumps to it once that happens) or starts
-its own turn once the first one finishes.
+not "jump the reply" to itself: if Claude folds it into the answer
+already forming, the card jumps to it the moment that happens; if
+Claude instead finishes first and then picks it up, the first answer
+stays under the first message and the follow-up gets its own turn,
+with its own card and answer under it.
 
 Two cases are held back instead of sent, and delivered automatically
 once resolved:

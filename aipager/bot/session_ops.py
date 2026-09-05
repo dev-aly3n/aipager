@@ -594,6 +594,9 @@ class SessionOpsMixin:
             return "", err
 
         sess = self.registry.get_or_create(session_name)
+        # /new reusing a finished session's name reuses its entry: drop any
+        # queued target the old process left behind (review rev-iter2-001).
+        sess.queued_targets.clear()
         sess.label = label
         sess.skip_perms = skip_perms
         if cwd:
@@ -708,6 +711,10 @@ class SessionOpsMixin:
         sess.job_grace_until = 0.0
         sess.trigger_msg_id = None
         sess.busy_card_trigger = None
+        # Claude's own queue was discarded above — nothing left in it can
+        # become the next turn ("anchor-on-transcript-consumption").
+        sess.queued_targets.clear()
+        sess.user_stopped_at = time.monotonic()
         sess.last_idle_at = time.monotonic()  # prevent debounce of next real IDLE
         self.registry.mark_dirty()
 
@@ -811,6 +818,8 @@ class SessionOpsMixin:
         sess.status = Status.IDLE
         sess.trigger_msg_id = None
         sess.busy_card_trigger = None
+        sess.queued_targets.clear()
+        sess.user_stopped_at = time.monotonic()
         sess.last_idle_at = time.monotonic()
         self.registry.mark_dirty()
         log.info("[%s] halted by safety policy", sess.label)
@@ -937,6 +946,10 @@ class SessionOpsMixin:
 
         # Resume succeeded — recover state.
         sess.gone_at = None
+        # A resumed claude starts with an empty input queue: a target the
+        # old process had queued but never absorbed must not start a
+        # phantom turn later (review rev-iter2-001).
+        sess.queued_targets.clear()
         sess.skip_perms = effective_skip_perms
         self.registry.transition(session_name, Status.IDLE)
         if driver_user_id is not None:
@@ -1231,6 +1244,11 @@ class SessionOpsMixin:
         sess.claude_session_id = resume_id  # restore — launch_session may clear
         sess.cwd = cwd or sess.cwd
         sess.gone_at = None
+        # The relaunched claude starts with an empty input queue: a
+        # message the old process had queued but never absorbed must not
+        # start a phantom turn later ("anchor-on-transcript-consumption",
+        # review rev-iter1-002).
+        sess.queued_targets.clear()
         self.registry.transition(session_name, Status.IDLE)
         self.registry.mark_dirty()
 
@@ -1304,6 +1322,7 @@ class SessionOpsMixin:
         clear_notes_dir(sess.name)
         if outstanding_notes:
             await inject.discard_queued_input(sess.name)
+        sess.queued_targets.clear()
         self.registry.mark_dirty()
         log.info("[%s] queue cleared (dropped %d)", sess.label, dropped)
         return ClearQueueOutcome(ok=True, label=sess.label, dropped=dropped)

@@ -1121,3 +1121,88 @@ def test_rename_session_core_real_change_schedules_command_refresh(
     assert sess.label == "james"
     assert bot.registry._dirty is True
     assert len(scheduled) == 1
+
+
+def test_kill_and_relaunch_core_drops_queued_targets(mk_bot, run_async, monkeypatch):
+    """The relaunched claude starts with an empty input queue: a message
+    the old process had queued but never absorbed must not start a
+    phantom turn later ("anchor-on-transcript-consumption", review
+    rev-iter1-002)."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    sess.claude_session_id = "uuid-1"
+    sess.queued_targets = [{"msg_id": 7, "chat_id": -1, "raw_text": "later"}]
+    bot.registry._sessions["claude-jim"] = sess
+    _neuter_sleep(monkeypatch)
+    monkeypatch.setattr("aipager.bot.session_ops.Path", _fake_path_cls(False))
+    monkeypatch.setattr("aipager.dtach.inject.kill_session", AsyncMock(return_value=True))
+    monkeypatch.setattr("aipager.dtach.inject.launch_session", AsyncMock(return_value=(True, "")))
+    outcome = run_async(bot._kill_and_relaunch_core(
+        sess, target_skip_perms=True, interrupt_first=False,
+    ))
+    assert outcome.ok is True
+    assert sess.queued_targets == []
+
+
+def test_do_resume_drops_queued_targets(mk_bot, run_async, monkeypatch):
+    """rev-iter2-001: a resumed claude has an empty input queue; a stale
+    queued target must not survive the resume and start a phantom turn."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
+    sess.claude_session_id = "UUID-1"
+    sess.cwd = "/x"
+    sess.gone_at = 1234.0
+    sess.queued_targets = [{"msg_id": 7, "chat_id": -1, "raw_text": "later"}]
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr("aipager.dtach.inject.launch_session",
+                        AsyncMock(return_value=(True, "")))
+    bot._build_session_dashboard = MagicMock(return_value="dashboard text")
+    bot._maybe_update_bot_name = AsyncMock()
+    bot._update_bot_commands = AsyncMock()
+    run_async(bot._do_resume(label="jim", reply_fn=AsyncMock()))
+    assert sess.status != Status.GONE
+    assert sess.queued_targets == []
+
+
+def test_create_session_reusing_a_finished_name_drops_queued_targets(
+    mk_bot, run_async, monkeypatch,
+):
+    bot = mk_bot()
+    # create_session builds the scoped name (`claude-jim__d0` for scope 0);
+    # the finished entry must sit under THAT name to be reused.
+    sess = TrackedSession(name="claude-jim__d0", label="jim", status=Status.GONE)
+    sess.queued_targets = [{"msg_id": 7, "chat_id": -1, "raw_text": "later"}]
+    bot.registry._sessions["claude-jim__d0"] = sess
+    monkeypatch.setattr("aipager.dtach.inject.launch_session",
+                        AsyncMock(return_value=(True, "")))
+    bot._maybe_update_bot_name = AsyncMock()
+    bot._update_bot_commands = AsyncMock()
+    name, err = run_async(bot.create_session("jim", scope_chat_id=0, skip_perms=False))
+    assert err == "" and name == "claude-jim__d0"
+    assert bot.registry.get(name) is sess, "the finished entry is reused, not replaced"
+    assert sess.queued_targets == []
+
+
+def test_clear_queue_core_drops_queued_targets(mk_bot, run_async):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.queue_prompt("a", 1)
+    sess.queued_targets = [{"msg_id": 7, "chat_id": -1, "raw_text": "later"}]
+    bot.registry._sessions["claude-jim"] = sess
+    outcome = run_async(bot._clear_queue_core(sess))
+    assert outcome.ok is True
+    assert sess.queued_targets == []
+
+
+def test_halt_for_safety_drops_queued_targets(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess.scope_chat_id = -1
+    sess.queued_targets = [{"msg_id": 7, "chat_id": -1, "raw_text": "later"}]
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr("aipager.dtach.inject.send_keys", AsyncMock(return_value=True))
+    monkeypatch.setattr("aipager.dtach.inject.discard_queued_input", AsyncMock(return_value=True))
+    bot._edit_busy_raw = AsyncMock(return_value=True)
+    bot._app.bot.send_message = AsyncMock()
+    run_async(bot._halt_for_safety(sess, "policy"))
+    assert sess.queued_targets == []

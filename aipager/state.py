@@ -488,6 +488,23 @@ class TrackedSession:
     # Drained (and reset to []) by whichever caller reads it next
     # tick/event/finish-sync. Never persisted.
     stream_consumed_notes: list[dict] = field(default_factory=list, repr=False)
+    # Messages Claude Code has QUEUED during a running turn whose fate is
+    # not yet known ("anchor-on-transcript-consumption"): the hook's
+    # pick-up fires at SUBMIT time for such a message, so it is recorded
+    # here ({msg_id, chat_id, raw_text}, submit order) instead of moving
+    # the reply target. A transcript `absorbed_mid_turn` line for it
+    # consumes it (the real signal, see _sync_anchors_from_transcript);
+    # whatever is still here when the turn ends is the NEXT turn's prompt
+    # (Claude Code pops its queue at once and fires no hook for it).
+    # Spans turns by design; cleared by /stop, /clearqueue, kill and
+    # restart. Never persisted.
+    queued_targets: list[dict] = field(default_factory=list, repr=False)
+    # monotonic stamp of the last explicit /stop (or safety halt). A Stop
+    # hook that lands on an already-IDLE session shortly after it is
+    # Claude finalising the INTERRUPTED turn, not an unanswered one — the
+    # already-IDLE delivery guard must not send that partial answer under
+    # a card that already says Stopped (review rev-iter1-003). Transient.
+    user_stopped_at: float = 0.0
     # MD5 hex digest of the last DELIVERED job-open interim summary's raw
     # (pre-HTML) text — design.md "model Claude Code background-agent
     # jobs", requirement 2. Transient (never in _PERSIST_FIELDS): a job

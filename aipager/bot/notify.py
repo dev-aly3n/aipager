@@ -342,9 +342,26 @@ class NotifyMixin:
         """
         if not consumed:
             return
+        await self._mark_consumed(sess, consumed)
+        last = consumed[-1]
+        last_msg_id = last.get("msg_id")
+        if last_msg_id is not None:
+            sess.trigger_msg_id = last_msg_id
+            sess.last_prompt = last.get("raw_text", "") or ""
+            self.registry.mark_dirty()
+
+    async def _mark_consumed(
+        self, sess: TrackedSession, notes: list[dict],
+    ) -> None:
+        """The per-message side of consumption that does NOT depend on
+        the message's fate: 👍 on each message (Claude has it) and
+        ``track_message`` so a later reply routes back here. Shared by
+        ``_apply_consumption`` (a message that moves the reply target)
+        and the queued-while-busy branch of the ``queue_pickup`` handler
+        (a message whose fate is not known yet)."""
         bot = self._app.bot
         default_chat_id = resolve_chat_id(sess)
-        for note in consumed:
+        for note in notes:
             note_msg_id = note.get("msg_id")
             if note_msg_id is None:
                 continue
@@ -361,12 +378,29 @@ class NotifyMixin:
                 )
             except Exception:
                 log.debug("consumption reaction failed", exc_info=True)
-        last = consumed[-1]
-        last_msg_id = last.get("msg_id")
-        if last_msg_id is not None:
-            sess.trigger_msg_id = last_msg_id
-            sess.last_prompt = last.get("raw_text", "") or ""
-            self.registry.mark_dirty()
+
+    async def _start_queued_turn(self, sess: TrackedSession) -> None:
+        """Start the turn for the oldest message Claude queued during the
+        turn that just ended and never absorbed: Claude Code pops its
+        queue the moment a run ends and fires NO hook for the prompt it
+        submits, so that turn would otherwise have no card, no reply
+        target and — its Stop landing inside the IDLE debounce — no
+        delivered answer ("anchor-on-transcript-consumption", R8).
+
+        Accepted residual risk (review rev-iter1-005): if the operator
+        clears Claude's queue from the terminal (Escape) in the fraction
+        of a second between this turn's Stop and the pop, this card
+        shows a turn that never runs. No hook can confirm the pop; the
+        card sits until /stop, /kill or the stale-BUSY warning.
+        """
+        nxt = sess.queued_targets.pop(0)
+        sess.trigger_msg_id = nxt.get("msg_id")
+        sess.last_prompt = nxt.get("raw_text") or ""
+        self.registry.mark_dirty()
+        self.registry.transition(sess.name, Status.BUSY)
+        await self._send_busy_and_animate(sess)
+        log.info("[%s] next turn started for queued message %s",
+                 sess.label, nxt.get("msg_id"))
 
     async def _consume_and_reanchor(self, sess: TrackedSession) -> None:
         """Drain ``sess.stream_consumed_notes`` (staged by
@@ -606,8 +640,16 @@ class NotifyMixin:
             queued_text, queued_trigger, _queued_at,
             queued_reply_context, queued_driver_user_id,
         ) = sess.pending_queue.pop(0)
-        sess.trigger_msg_id = queued_trigger
-        sess.last_prompt = queued_text
+        # A drain at an idle moment starts the turn and owns its target.
+        # When a turn is already running (the finish path just started
+        # one for a message Claude had queued — R8), the drained message
+        # is a mid-turn send instead: injected as usual, it becomes a
+        # queued target through the hook's submit-time pick-up and must
+        # not move the running turn's target or send a second card.
+        starts_turn = sess.status != Status.BUSY
+        if starts_turn:
+            sess.trigger_msg_id = queued_trigger
+            sess.last_prompt = queued_text
         if queued_trigger is not None:
             # Queued messages are never tracked at queue time
             # (Part 1 only covers the immediate-inject branches)
@@ -624,9 +666,10 @@ class NotifyMixin:
             msg_id=queued_trigger, chat_id=resolve_chat_id_int(sess),
             driver_user_id=queued_driver_user_id,
         )
-        if ok:
+        if ok and starts_turn:
             self.registry.transition(sess.name, Status.BUSY)
             await self._send_busy_and_animate(sess)
+        if ok:
             log.info("[%s] Flushed queued: %s", sess.label, queued_text[:80])
 
     async def notify(self, sess: TrackedSession, event: str, context: dict) -> None:
@@ -691,7 +734,32 @@ class NotifyMixin:
             consumed = context.get("consumed") or []
             expired = context.get("expired") or []
             default_chat_id = resolve_chat_id(sess)
-            await self._apply_consumption(sess, consumed)
+            # Claude Code fires this pick-up at SUBMIT time for a message
+            # typed while a turn runs — before its fate is known
+            # (measured 2026-09-05, "anchor-on-transcript-consumption").
+            # Such a message is "queued, fate unknown": it keeps its 👍
+            # and routing, but the reply target does not move and no
+            # card re-anchors until the transcript says the turn absorbed
+            # it (_sync_anchors_from_transcript) — or, if it is still
+            # queued when this turn ends, it becomes the next turn's
+            # prompt (the finish path's _start_queued_turn).
+            if sess.status == Status.BUSY:
+                queued = [n for n in consumed
+                          if n.get("msg_id") is not None
+                          and n.get("msg_id") != sess.trigger_msg_id]
+            else:
+                queued = []
+            own = [n for n in consumed if n not in queued]
+            if queued:
+                await self._mark_consumed(sess, queued)
+                sess.queued_targets.extend({
+                    "msg_id": n.get("msg_id"),
+                    "chat_id": n.get("chat_id"),
+                    "raw_text": n.get("raw_text", "") or "",
+                } for n in queued)
+                log.info("[%s] queued while busy: %s", label,
+                         [n.get("msg_id") for n in queued])
+            await self._apply_consumption(sess, own)
             if expired:
                 try:
                     preview = (expired[0].get("raw_text") or "")[:80]
@@ -2005,6 +2073,14 @@ class NotifyMixin:
                         obs_text, doc_bytes, f"{label}_response.txt"))
                 else:
                     asyncio.create_task(self.observers.broadcast(obs_text))
+
+            # A message Claude queued during this turn and did not absorb
+            # is the NEXT turn's prompt — Claude Code pops it as soon as
+            # the run ends, silently. Give that turn its card and target
+            # now (R8, "anchor-on-transcript-consumption"); a background
+            # job's waiting window keeps the queue for the job's close.
+            if sess.queued_targets and not sess.job_background_open():
+                await self._start_queued_turn(sess)
 
             # Flush next queued message (one at a time, rest flush on next IDLE)
             await self._drain_next_queued(sess)
