@@ -34,6 +34,12 @@ def _sess(chat_id, *, busy_msg_id=42, label="set"):
     s.busy_msg_id = busy_msg_id
     s.busy_started_at = time.monotonic() - 5
     s.trigger_msg_id = 7
+    # A real card always has busy_card_trigger seeded by send_busy at
+    # send time ("turn anchor follows consumption") — this hand-built
+    # session bypasses send_busy, so it must seed it itself or the
+    # busy_card_trigger != trigger_msg_id check misreads this as a real
+    # mismatch and fires a re-anchor none of this file's tests are about.
+    s.busy_card_trigger = 7
     return s
 
 

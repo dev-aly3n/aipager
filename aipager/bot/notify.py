@@ -380,6 +380,15 @@ class NotifyMixin:
         re-anchor call is what makes "at most one re-anchor per
         detection batch" (design.md B3) structural, never one per
         queue-operation line.
+
+        The mismatch check below is a bare ``!=``, deliberately with no
+        ``busy_card_trigger is not None`` carve-out (review
+        rev-iter1-002): every production call site that establishes a
+        live card now records ``busy_card_trigger`` alongside it, so a
+        missing record is never silent — it is a real (if narrow, restart
+        or hand-built-session) case, and the fix belongs at the site that
+        forgot to seed it, not in a guard here that would also swallow a
+        genuine post-compaction absorption.
         """
         consumed = sess.stream_consumed_notes
         if not consumed:
@@ -387,7 +396,6 @@ class NotifyMixin:
         sess.stream_consumed_notes = []
         await self._apply_consumption(sess, consumed)
         if (sess.busy_msg_id and sess.busy_msg_id > 0
-                and sess.busy_card_trigger is not None
                 and sess.busy_card_trigger != sess.trigger_msg_id):
             await self._reanchor_busy_card(sess, sess.trigger_msg_id, final=False)
 
@@ -1116,6 +1124,14 @@ class NotifyMixin:
                         reply_to_message_id=sess.trigger_msg_id,
                     )
                     pushed_msg_id = msg.message_id
+                    # review rev-iter1-002 (design.md "turn anchor follows
+                    # consumption"): this bypasses send_busy, so it must
+                    # record busy_card_trigger itself — otherwise this
+                    # genuinely live, correctly-anchored card reads as
+                    # "never seeded" against the very next re-anchor
+                    # decision, and a real absorption after this point
+                    # would go undetected.
+                    sess.busy_card_trigger = sess.trigger_msg_id
                 except Exception:
                     log.warning("Failed to send compact message", exc_info=True)
             if pushed_msg_id is not None:
@@ -1216,6 +1232,19 @@ class NotifyMixin:
                     # still find it, matching pre-stack behaviour where
                     # busy_msg_id stayed set after compact_done resolved it.
                     sess.busy_msg_id = target_msg_id
+                    # review rev-iter1-002: this message is already live
+                    # and already reply-anchored to whatever trigger_msg_id
+                    # was at the moment it was sent (either by the
+                    # "compacting" branch's own fresh send above, or by
+                    # this session's original send_busy before compaction
+                    # started) — current trigger_msg_id is the best
+                    # available record of that if it hasn't moved since,
+                    # matching the same best-effort reasoning as the
+                    # restart seed in state.py's load(). Without this a
+                    # later absorption's mismatch check reads a stale/None
+                    # busy_card_trigger against a genuinely live card and
+                    # never re-anchors it.
+                    sess.busy_card_trigger = sess.trigger_msg_id
             else:
                 try:
                     msg = await bot.send_message(
@@ -1223,6 +1252,7 @@ class NotifyMixin:
                         reply_to_message_id=sess.trigger_msg_id,
                     )
                     sess.busy_msg_id = msg.message_id
+                    sess.busy_card_trigger = sess.trigger_msg_id  # review rev-iter1-002
                 except Exception:
                     log.warning("Failed to send compact_done message", exc_info=True)
             if self.observers:
@@ -1416,19 +1446,26 @@ class NotifyMixin:
             # path already reads the now-correct target from insertion
             # point 1 above.
             #
-            # `busy_card_trigger is not None` guards a session whose card
-            # was never sent through `send_busy`/a restart-seeded `load()`
-            # (busy_card_trigger stays at its dataclass default) — without
-            # it, EVERY such session (every hand-built `TrackedSession` in
-            # this test suite included, and any future caller that stamps
-            # `busy_msg_id`/`trigger_msg_id` directly) looks "stale" and
-            # re-anchors on every finish, never matching what it was
-            # actually last sent under. Only a KNOWN mismatch — a real
-            # `busy_card_trigger` that disagrees with `trigger_msg_id` —
-            # is a genuine signal that consumption moved the target.
+            # A real mismatch between `busy_card_trigger` and
+            # `trigger_msg_id` is the ONLY signal design.md defines for
+            # "consumption moved the target" (R3) — every production call
+            # site that establishes a live card now also records
+            # `busy_card_trigger` (`send_busy`, both `_reanchor_busy_card`
+            # sends, `_send_merged_final(send_as_new=True)`, the
+            # `compacting`/`compact_done` bypass sends, and the `load()`
+            # restart seed), so a bare `!= ` check — no `is not None`
+            # carve-out — cannot silently disable a genuine re-anchor
+            # after one of those paths runs (review rev-iter1-002: a
+            # `busy_card_trigger is not None` guard here used to survive
+            # exactly the compaction-bypass gap those sites had before
+            # this fix, degrading a real absorption to pre-feature
+            # behaviour with no signal it had happened). A hand-built
+            # `TrackedSession` that skips every production call site (as
+            # several pre-existing unit tests do) must seed
+            # `busy_card_trigger` itself, same as design.md's own contract
+            # already required.
             reanchor_needed = bool(
                 sess.busy_msg_id and sess.busy_msg_id > 0
-                and sess.busy_card_trigger is not None
                 and sess.busy_card_trigger != sess.trigger_msg_id
             )
             # review rev-iter1-001: trim any trailing commentary that just

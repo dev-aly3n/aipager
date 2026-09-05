@@ -195,13 +195,16 @@ def test_consume_and_reanchor_skips_reanchor_when_already_matching(mk_bot, run_a
     bot._reanchor_busy_card.assert_not_awaited()
 
 
-def test_consume_and_reanchor_skips_reanchor_when_busy_card_trigger_unseeded(
+def test_consume_and_reanchor_still_reanchors_when_busy_card_trigger_was_never_seeded(
     mk_bot, run_async,
 ):
-    """A session whose card was never sent through send_busy/load()'s
-    restart seed has busy_card_trigger == None — never treated as a
-    "known mismatch" (avoids a spurious re-anchor on every hand-built
-    or not-yet-fully-seeded session)."""
+    """review-1 rev-iter1-002: a live card whose busy_card_trigger was
+    never recorded (e.g. a production bypass site that forgot to seed
+    it, or a hand-built session) must NOT read as "nothing to compare
+    against" — a `busy_card_trigger is not None` carve-out here used to
+    silently disable every later re-anchor for the rest of the turn.
+    `None != trigger_msg_id` is a real, actionable mismatch like any
+    other."""
     bot = mk_bot()
     sess = _sess(busy_msg_id=100, trigger_msg_id=5)
     sess.busy_card_trigger = None
@@ -212,7 +215,7 @@ def test_consume_and_reanchor_skips_reanchor_when_busy_card_trigger_unseeded(
     run_async(bot._consume_and_reanchor(sess))
 
     assert sess.trigger_msg_id == 9  # consumption still applied
-    bot._reanchor_busy_card.assert_not_awaited()
+    bot._reanchor_busy_card.assert_awaited_once_with(sess, 9, final=False)
 
 
 def test_consume_and_reanchor_noop_when_no_live_card(mk_bot, run_async):

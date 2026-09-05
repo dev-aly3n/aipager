@@ -51,6 +51,21 @@ def test_compacting_with_no_busy_sends_exactly_one_new_message(mk_bot, run_async
     assert len(sess._live_stack) == 1  # no phantom busy entry underneath
 
 
+def test_compacting_with_no_busy_records_busy_card_trigger(mk_bot, run_async):
+    """review-1 rev-iter1-002 (design.md "turn anchor follows
+    consumption"): this branch bypasses send_busy, so it must record
+    busy_card_trigger itself — otherwise this genuinely live,
+    correctly-anchored card reads as "never seeded" against the very
+    next re-anchor decision, and a real absorption after this point
+    would silently never move it."""
+    bot = mk_bot()
+    sess = _sess(busy_msg_id=None)
+    sess.trigger_msg_id = 9
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=555))
+    run_async(bot.notify(sess, "compacting", {"trigger": "auto"}))
+    assert sess.busy_card_trigger == 9
+
+
 def test_compacting_send_failure_does_not_push_a_stack_entry(mk_bot, run_async):
     bot = mk_bot()
     sess = _sess(busy_msg_id=None)
@@ -112,6 +127,91 @@ def test_compact_done_on_solo_compacting_entry_edits_that_same_message_no_second
     # Re-established tracking on the resolved message, matching pre-stack
     # behaviour where busy_msg_id stayed set after compact_done resolved it.
     assert sess.busy_msg_id == 777
+
+
+def test_compact_done_on_solo_compacting_entry_records_busy_card_trigger(
+    mk_bot, run_async, monkeypatch,
+):
+    """review-1 rev-iter1-002: the "nothing to restore" re-establish
+    branch must also seed busy_card_trigger for the message it just
+    re-adopted — otherwise a later re-anchor decision against this
+    genuinely live card reads a stale/None busy_card_trigger and
+    silently never fires."""
+    bot = mk_bot()
+    sess = _sess(busy_msg_id=None)
+    sess.trigger_msg_id = 9
+    sess.push_compacting(777, time.monotonic(), deadline_seconds=180.0)
+    bot._edit_busy_raw = AsyncMock(return_value=True)
+    bot._stop_animation = MagicMock()
+    bot._start_animation = MagicMock()
+
+    monkeypatch.setattr("aipager.bot.notify.COMPACT_DONE_PAUSE_SECONDS", 0)
+
+    run_async(bot.notify(sess, "compact_done", {"before_pct": 0, "after_pct": 4}))
+
+    assert sess.busy_msg_id == 777
+    assert sess.busy_card_trigger == 9
+
+
+def test_compact_done_with_nothing_live_sends_fresh_and_records_busy_card_trigger(
+    mk_bot, run_async, monkeypatch,
+):
+    """review-1 rev-iter1-002: the fully-empty-stack fresh-send branch
+    (a duplicate/late compact_done fire after everything else already
+    cleared) must also seed busy_card_trigger for the message it just
+    sent."""
+    bot = mk_bot()
+    sess = _sess(busy_msg_id=None)
+    sess.trigger_msg_id = 9
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=321))
+    bot._start_animation = MagicMock()
+
+    monkeypatch.setattr("aipager.bot.notify.COMPACT_DONE_PAUSE_SECONDS", 0)
+
+    run_async(bot.notify(sess, "compact_done", {"before_pct": 0, "after_pct": 4}))
+
+    bot._app.bot.send_message.assert_awaited_once()
+    assert sess.busy_msg_id == 321
+    assert sess.busy_card_trigger == 9
+
+
+def test_absorption_after_compaction_bypass_still_reanchors(
+    mk_bot, run_async, monkeypatch,
+):
+    """review-1 rev-iter1-002, end to end: no card is live, "compacting"
+    sends a fresh one (a bypass site, never send_busy), "compact_done"
+    resolves it in place, and only THEN does a message get absorbed
+    mid-turn. Before this fix, none of the compaction bypass sites
+    recorded busy_card_trigger, so this exact sequence left it at None
+    forever and the later absorption never re-anchored — the same
+    failure mode a `busy_card_trigger is not None` guard would also
+    have produced. Proves the fix, not just the guard's removal."""
+    bot = mk_bot()
+    sess = _sess(status=Status.BUSY, busy_msg_id=None)
+    sess.trigger_msg_id = 1
+    bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=555))
+    bot._edit_busy_raw = AsyncMock(return_value=True)
+    bot._stop_animation = MagicMock()
+    bot._start_animation = MagicMock()
+    monkeypatch.setattr("aipager.bot.notify.COMPACT_DONE_PAUSE_SECONDS", 0)
+
+    run_async(bot.notify(sess, "compacting", {"trigger": "auto"}))
+    assert sess.busy_card_trigger == 1
+
+    run_async(bot.notify(sess, "compact_done", {"before_pct": 80, "after_pct": 5}))
+    assert sess.busy_msg_id == 555
+    assert sess.busy_card_trigger == 1  # still correct after compact_done
+
+    # A message gets absorbed mid-turn — the target (and the card) must
+    # still move.
+    sess.trigger_msg_id = 2
+    sess.stream_consumed_notes = [{"msg_id": 2, "chat_id": 555, "raw_text": "x"}]
+    bot.registry.track_message = MagicMock()
+    bot._reanchor_busy_card = AsyncMock()
+
+    run_async(bot._consume_and_reanchor(sess))
+
+    bot._reanchor_busy_card.assert_awaited_once_with(sess, 2, final=False)
 
 
 def test_compact_done_pop_does_not_disturb_merged_reply_routing(mk_bot, run_async, monkeypatch):
