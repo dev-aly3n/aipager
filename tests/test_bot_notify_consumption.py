@@ -344,6 +344,56 @@ def test_finish_path_card_layout_no_reanchor_when_trigger_already_matches(
     bot._edit_busy_rich.assert_awaited_once()
 
 
+def test_finish_path_trims_answer_tail_before_the_immediate_card_reanchor(
+    mk_bot, run_async, rich_calls,
+):
+    """review-1 rev-iter1-001 (regression): a `card`-layout re-anchor
+    used to render the final card via ``_reanchor_busy_card`` BEFORE
+    ``_drop_answer_tail`` trimmed a trailing commentary block that
+    duplicates the incoming answer — ``card_already_final`` then skipped
+    the only OTHER render that would have caught it, so the duplicate
+    survived in the re-anchored card's own timeline for good. The trim
+    must run before any final render, not after — this test drives the
+    REAL ``_reanchor_busy_card`` (unlike
+    ``test_finish_path_card_layout_reanchors_and_skips_redundant_final_edit``
+    above, which mocks it out and so cannot see this ordering bug)."""
+    from types import SimpleNamespace
+
+    bot = _wire_idle_bot(mk_bot)
+    ids = iter(range(9001, 9010))
+
+    async def _send_message(*_a, **_kw):
+        return SimpleNamespace(message_id=next(ids))
+
+    bot._app.bot.send_message = AsyncMock(side_effect=_send_message)
+    bot._app.bot.delete_message = AsyncMock()
+
+    sess = _idle_sess(layout="card", trigger_msg_id=2, busy_card_trigger=1)
+    # A trailing commentary block that duplicates the incoming answer —
+    # the exact shape _drop_answer_tail's docstring describes (the
+    # hook-arrival-order anchor inference slipped and let the answer's
+    # own sentence land inside the timeline instead of being withheld
+    # for the answer message).
+    sess.tool_history = [("Read file.py", True)]
+    answer = "it was indeed a test"
+    sess.stream_commentary = [(0, answer)]
+
+    run_async(bot.notify(sess, "idle_prompt", {
+        "summary": answer, "raw_md": answer,
+    }))
+
+    edits = [p for m, p in rich_calls if m == "editMessageText"]
+    assert len(edits) == 1, f"expected exactly one final render; got {rich_calls}"
+    markdown = edits[0]["rich_message"]["markdown"]
+    assert answer not in markdown, (
+        "the re-anchored FINAL card must not carry the answer's own "
+        f"text in its own timeline (rev-iter1-001); markdown={markdown!r}"
+    )
+    # The trim actually ran (not just happened to not show up in this
+    # one render) — the duplicate block is gone from session state too.
+    assert sess.stream_commentary == []
+
+
 def test_finish_path_merged_layout_flags_send_as_new_not_immediate_reanchor(
     mk_bot, run_async, rich_calls,
 ):

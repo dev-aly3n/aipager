@@ -1431,6 +1431,20 @@ class NotifyMixin:
                 and sess.busy_card_trigger is not None
                 and sess.busy_card_trigger != sess.trigger_msg_id
             )
+            # review rev-iter1-001: trim any trailing commentary that just
+            # duplicates the incoming answer BEFORE either final-render
+            # path below — the immediate `card`-layout re-anchor a few
+            # lines down renders the finished card RIGHT HERE via
+            # `_reanchor_busy_card`, and `card_already_final` then skips
+            # the second (correctly-ordered) render that used to catch
+            # this. Running the trim first means both the immediate
+            # re-anchor render and the ordinary in-place final render see
+            # the already-trimmed `stream_commentary`, so there is only
+            # ever one place this decision has to be made.
+            if sess.busy_msg_id and sess.busy_msg_id > 0 and layout in ("card", "merged"):
+                _drop_answer_tail(
+                    sess, context.get("raw_md") or context.get("summary") or "",
+                )
             card_already_final = False
             merged_send_as_new = False
             if reanchor_needed and layout == "card":
@@ -1455,9 +1469,7 @@ class NotifyMixin:
                     # how this answer was reached. Rendered here — before the
                     # streaming state is reset below and before the answer goes
                     # out — so scrollback reads card, header, body.
-                    _drop_answer_tail(
-                        sess, context.get("raw_md") or context.get("summary") or "",
-                    )
+                    # (the trim already ran above, before any final render.)
                     if layout == "card":
                         if card_already_final:
                             # _reanchor_busy_card already rendered the

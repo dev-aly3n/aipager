@@ -68,6 +68,43 @@ def test_b6_card_layout_resends_finished_card_and_answer_under_m2(
     assert answer_payload["reply_to_message_id"] == 2
 
 
+def test_b6_card_layout_does_not_duplicate_a_trailing_answer_in_the_resent_card(
+    wired, mk_update, run_async, rich_calls, append_queue_op,
+):
+    """review-1 rev-iter1-001 (regression): the finish path used to
+    render the re-anchored FINAL card (via ``_reanchor_busy_card``)
+    BEFORE ``_drop_answer_tail`` trimmed a trailing commentary block
+    that duplicates the incoming answer, and ``card_already_final`` then
+    skipped the only OTHER render that would have caught it — the
+    duplicate survived in the re-anchored card's own timeline for good.
+    B6's own card-layout finish-at-Stop path is exactly where this
+    fires: the re-anchor and the final render are the SAME call."""
+    bot, sess, injected = wired
+    prefs.set_preference(sess.scope_chat_id, "layout", "card")
+    _absorb_m2_with_no_tick(bot, mk_update, run_async, append_queue_op, sess)
+
+    answer = "it was indeed a test"
+    # A trailing commentary block that duplicates the incoming answer —
+    # the anchor-slip shape _drop_answer_tail's own docstring describes
+    # (a hook-streamed sentence flushed before its tool calls lands
+    # inside the timeline instead of being withheld for the answer).
+    sess.tool_history = [("Read file.py", True)]
+    sess.stream_commentary = [(0, answer)]
+
+    sess.status = Status.IDLE
+    run_async(bot.notify(sess, "idle_prompt", {
+        "summary": answer, "raw_md": answer,
+    }))
+
+    edits = [p for m, p in rich_calls if m == "editMessageText"]
+    assert len(edits) == 1, f"expected exactly one final render; got {rich_calls}"
+    markdown = edits[0]["rich_message"]["markdown"]
+    assert answer not in markdown, (
+        "the re-anchored FINAL card must not carry the answer's own "
+        f"text in its own timeline (rev-iter1-001); markdown={markdown!r}"
+    )
+
+
 def test_b6_merged_layout_sends_fresh_combined_message_under_m2(
     wired, mk_update, run_async, rich_calls, append_queue_op,
 ):
