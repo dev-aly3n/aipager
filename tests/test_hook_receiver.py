@@ -1173,3 +1173,49 @@ def test_populations_under_the_cap_are_untouched(receiver, run_async):
           agent_type="explore")
     assert len(sess.active_subagents) == 17
     assert "agent-3" not in sess.active_subagents
+
+
+# ---- turn-boundary hook arrivals are visible in the journal -------------
+
+def test_boundary_hooks_log_their_arrival_with_the_session_status(
+    receiver, run_async, caplog,
+):
+    """One INFO line per turn-boundary hook, carrying the session's status
+    BEFORE handling — the only way to see from the journal that a next
+    turn's prompt hooks overtook the previous Stop (2026-09-05 e2e)."""
+    import logging
+    registry, recv, _notify = receiver
+    registry.transition("claude-x", Status.BUSY)
+    with caplog.at_level(logging.INFO, logger="aipager.dtach.hook_receiver"):
+        _send(recv, run_async, hook_event_name="PreToolUse", session="claude-x",
+              tool_name="Bash", tool_input={"command": "ls"})
+        _send(recv, run_async, hook_event_name="Stop", session="claude-x",
+              last_assistant_message="done")
+    lines = [r.getMessage() for r in caplog.records if " hook " in r.getMessage()]
+    assert lines == ["[x] hook Stop (agent_id=-, status=BUSY)"]
+
+
+def test_boundary_hook_log_names_the_agent_and_an_untracked_session(
+    receiver, run_async, caplog,
+):
+    import logging
+    _registry, recv, _notify = receiver
+    with caplog.at_level(logging.INFO, logger="aipager.dtach.hook_receiver"):
+        _send(recv, run_async, hook_event_name="SubagentStop", session="claude-new",
+              agent_id="abc123", agent_type="")
+    lines = [r.getMessage() for r in caplog.records if " hook " in r.getMessage()]
+    assert lines == ["[claude-new] hook SubagentStop (agent_id=abc123, status=untracked)"]
+
+
+def test_stop_on_an_already_idle_session_is_logged(receiver, run_async, caplog):
+    """A Stop swallowed by the IDLE debounce used to leave no trace; now the
+    journal says the turn end landed on an idle session."""
+    import logging
+    registry, recv, _notify = receiver
+    registry.transition("claude-x", Status.BUSY)
+    registry.transition("claude-x", Status.IDLE)
+    with caplog.at_level(logging.INFO, logger="aipager.dtach.hook_receiver"):
+        _send(recv, run_async, hook_event_name="Stop", session="claude-x",
+              last_assistant_message="late answer")
+    msgs = [r.getMessage() for r in caplog.records]
+    assert any("Stop while already IDLE" in m for m in msgs), msgs

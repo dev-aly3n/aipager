@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- The daemon journal now records every turn-boundary hook as it
+  arrives (prompt submit, stop, agent stop, queue pick-up) with the
+  session's state at that moment, and says when a stop lands on a
+  session that is already idle — enough to see from the log alone why
+  a turn's answer went missing or landed under the wrong message.
 - Tapping Allow / Deny / Allow-always in Telegram while a permission
   prompt's hook is still parked now answers Claude Code directly with a
   `PermissionRequest` decision instead of injecting `Down`/`Enter`

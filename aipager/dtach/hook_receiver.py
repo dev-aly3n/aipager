@@ -39,6 +39,14 @@ from aipager.transcript import (
 
 log = logging.getLogger(__name__)
 
+# Hook events that mark a turn boundary. Each arrival is logged at INFO
+# with the session's status before handling (see _on_datagram) — the
+# per-tool events (PreToolUse/PostToolUse/MessageDisplay) are not, they
+# would flood the journal.
+_BOUNDARY_EVENTS = frozenset({
+    "UserPromptSubmit", "Stop", "StopFailure", "SubagentStop", "queue_pickup",
+})
+
 
 _CTX_WINDOW_SIZE = 200_000  # all current Claude models use 200k context
 
@@ -378,6 +386,20 @@ class HookReceiver:
             )
             return
         self._recent_fingerprints[fp] = now_mono
+
+        if event in _BOUNDARY_EVENTS:
+            # One line per turn-boundary hook, with the session's status
+            # BEFORE handling: the only way to see from the journal that
+            # a next turn's prompt hooks overtook the previous Stop, or
+            # that a Stop landed on an already-IDLE session (the log level
+            # is fixed at INFO in production).
+            tracked = self.registry.get(session_name)
+            log.info(
+                "[%s] hook %s (agent_id=%s, status=%s)",
+                tracked.label if tracked else session_name, event,
+                msg.get("agent_id") or "-",
+                tracked.status.name if tracked else "untracked",
+            )
 
         # Update last activity timestamp (stale detection) + store transcript path
         sess_ref = self.registry.get_or_create(session_name)
@@ -1039,6 +1061,8 @@ class HookReceiver:
             if sess is None:
                 # Already IDLE (or debounce blocked) — get the session so
                 # we can still notify. Finalizing must not be skipped.
+                log.info("[%s] Stop while already IDLE (debounced or "
+                         "repeated) — finalizing anyway", session_name)
                 sess = self.registry.get(session_name)
             if sess is None:
                 return
@@ -1087,6 +1111,8 @@ class HookReceiver:
             if sess is None:
                 # Force notification if there's an undelivered response
                 # (user sent a prompt via Telegram but debounce suppressed IDLE)
+                log.info("[%s] Stop while already IDLE (debounced or "
+                         "repeated) — finalizing anyway", session_name)
                 tracked = self.registry.get(session_name)
                 if (tracked and tracked.trigger_msg_id
                         and msg.get("last_assistant_message")):
