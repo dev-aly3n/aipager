@@ -52,6 +52,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sentence landed below (or in the middle of) its own rows, a fold could
   mix calls from two stages, and the last sentence before the answer
   could be hidden as if it were the answer and never shown.
+- A message sent while a session was busy no longer has its card/answer
+  land under whichever message happened to be sent *after* it. The
+  reply target now moves only when Claude actually consumes a message
+  — absorbed into the turn already running, or picked up as the next
+  one — instead of at send time: the busy card, the finished card, and
+  the answer all follow whichever message Claude actually consumed for
+  that turn.
 
 ## [0.7.6] - 2026-09-04
 
