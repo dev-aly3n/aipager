@@ -247,7 +247,11 @@ Held messages are capped at 50 per session and expire after 24 h;
 ### Files
 
 Uploaded files are downloaded into the active session's workspace
-and the path is offered to claude. The 20 MB Telegram bot file
+and the path is offered to claude: with a caption, the prompt is the
+caption followed by the path(s); without one it is just
+`check this: <path>` (or `check these: <paths>` for an album), so
+claude is pointed at the file without being told what to do with it.
+The 20 MB Telegram bot file
 download cap is enforced up-front; oversized files get a clear
 rejection before any download attempt.
 A download that hits a transient network error is retried up to

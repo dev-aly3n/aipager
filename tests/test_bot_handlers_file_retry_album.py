@@ -120,7 +120,7 @@ def test_timed_out_twice_then_success_injects_once(
 
     assert photo.get_file.await_count == 3
     sent.assert_awaited_once()
-    assert sent.await_args.args[1] == f"Describe this image: {downloads.written[0]}"
+    assert sent.await_args.args[1] == f"check this: {downloads.written[0]}"
     update.message.reply_text.assert_not_awaited()
     retries = [r.getMessage() for r in caplog.records
                if r.levelno == logging.INFO and "retrying" in r.getMessage()]
@@ -201,7 +201,7 @@ def test_single_photo_injects_immediately_with_existing_shape(
     run_async(bot._handle_file(update, MagicMock()))
 
     sent.assert_awaited_once()
-    assert sent.await_args.args[1] == f"Describe this image: {downloads.written[0]}"
+    assert sent.await_args.args[1] == f"check this: {downloads.written[0]}"
     assert Path(downloads.written[0]).parent == tmp_path
     assert Path(downloads.written[0]).name.endswith("_photo.jpg")
     assert bot._albums == {}
@@ -315,7 +315,7 @@ def test_album_without_caption_uses_plural_default_wording(
 
     run_async(scenario())
 
-    assert sent.await_args.args[1] == "Describe these images: " + " ".join(downloads.written)
+    assert sent.await_args.args[1] == "check these: " + " ".join(downloads.written)
 
 
 def test_album_with_one_failing_item_injects_the_rest_and_notes_it_once(
@@ -428,3 +428,29 @@ def test_new_album_item_cancels_the_armed_settle_timer(
         assert first.cancelled()
 
     run_async(scenario())
+
+
+# ---- the default prompt only points at the file ---------------------------
+
+def test_file_prompt_without_a_caption_only_points_at_the_files():
+    """Operator request (2026-09-05): "it should just say check this:
+    address of file" — the old defaults ("Describe this image",
+    "Read and analyze this file") presumed the task. Photos and documents
+    alike, one or many."""
+    one = [Path("/tmp/aipager-files/1_photo.jpg")]
+    two = one + [Path("/tmp/aipager-files/2_photo.jpg")]
+    assert handlers._file_prompt("", one, all_photos=True) == "check this: /tmp/aipager-files/1_photo.jpg"
+    assert handlers._file_prompt("", one, all_photos=False) == "check this: /tmp/aipager-files/1_photo.jpg"
+    assert handlers._file_prompt("", two, all_photos=True) == (
+        "check these: /tmp/aipager-files/1_photo.jpg /tmp/aipager-files/2_photo.jpg"
+    )
+    assert handlers._file_prompt("", two, all_photos=False) == (
+        "check these: /tmp/aipager-files/1_photo.jpg /tmp/aipager-files/2_photo.jpg"
+    )
+
+
+def test_file_prompt_with_a_caption_is_the_caption_then_the_paths():
+    one = [Path("/tmp/aipager-files/1_photo.jpg")]
+    assert handlers._file_prompt("what is wrong here?", one, all_photos=True) == (
+        "what is wrong here? /tmp/aipager-files/1_photo.jpg"
+    )

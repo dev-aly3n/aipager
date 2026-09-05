@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   path actually answered each tap.
 
 ### Changed
+- A photo or file sent without a caption now reaches claude as just
+  `check this: <path>` (`check these: …` for an album) instead of
+  "Describe this image" / "Read and analyze this file", which told
+  claude what to do with a file you had only meant to hand over.
 - The busy card now folds each older run of tool calls into its own
   tappable `▸ N tool calls` block, right where that run happened in the
   timeline, instead of vanishing behind Telegram's own message fold —

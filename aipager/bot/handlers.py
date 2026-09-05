@@ -146,15 +146,19 @@ def _unique_save_path(directory: Path, filename: str) -> Path:
 def _file_prompt(caption: str, paths: list[Path], *, all_photos: bool) -> str:
     """The prompt handed to claude for one or more uploaded files —
     shared by the lone-file and album paths so an album reads exactly
-    like a single upload, pluralised."""
+    like a single upload, pluralised.
+
+    Without a caption the prompt only POINTS at the file(s) — ``check
+    this: <path>`` / ``check these: <paths>`` — and never presumes the
+    task: the old "Describe this image" / "Read and analyze this file"
+    defaults sent claude off describing a screenshot the operator had
+    only meant to hand over (operator request, 2026-09-05). Photos and
+    documents get the same neutral form; ``all_photos`` is kept for the
+    callers' sake and no longer changes the wording."""
     joined = " ".join(str(p) for p in paths)
     if caption:
         return f"{caption} {joined}"
-    if all_photos:
-        noun = "this image" if len(paths) == 1 else "these images"
-        return f"Describe {noun}: {joined}"
-    noun = "this file" if len(paths) == 1 else "these files"
-    return f"Read and analyze {noun}: {joined}"
+    return f"check {'this' if len(paths) == 1 else 'these'}: {joined}"
 
 
 async def _download_with_retry(media, save_path: Path, *, display_name: str) -> None:
