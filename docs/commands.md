@@ -263,6 +263,13 @@ and the path is offered to claude: with a caption, the prompt is the
 caption followed by the path(s); without one it is just
 `check this: <path>` (or `check these: <paths>` for an album), so
 claude is pointed at the file without being told what to do with it.
+A caption that starts with `/<label>` picks the session, exactly as
+`/<label> <prompt>` does for text, and the label is dropped from the
+prompt: `/api` alone sends `check this: <path>` to `api`, and
+`/api compare these` sends `compare these <paths>` there. Only a
+leading `/<label>` routes; a slash later in the caption is just text.
+A label no session answers to is refused with `⚠️ Unknown session`
+and nothing is sent.
 The 20 MB Telegram bot file
 download cap is enforced up-front; oversized files get a clear
 rejection before any download attempt.

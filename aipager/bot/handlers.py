@@ -161,6 +161,28 @@ def _file_prompt(caption: str, paths: list[Path], *, all_photos: bool) -> str:
     return f"check {'this' if len(paths) == 1 else 'these'}: {joined}"
 
 
+def _split_caption_target(caption: str) -> tuple[str | None, str]:
+    """``(label, rest)`` for a caption whose FIRST token is ``/<label>``,
+    ``(None, caption)`` otherwise.
+
+    Mirrors the text path, where ``/<label> <prompt>`` is a direct send
+    to that session and a bare ``/<label>`` names it too. Only the first
+    token routes: ``check /ann`` is a caption, not a target. The slash is
+    never left in the prompt — ``session_ops._inject_prompt`` sends a
+    ``/``-prefixed text raw, and Claude Code then reads it as a slash
+    command and rejects it without firing a hook (observed 2026-09-05,
+    roadmap 8.10). A bare slash (``/`` or ``/ text``) has no label and
+    is returned as the label ``/`` so the caller refuses it as an
+    unknown session rather than sending it."""
+    stripped = caption.strip()
+    if not stripped.startswith("/"):
+        return None, caption
+    parts = stripped.split(None, 1)
+    head = parts[0]
+    rest = parts[1] if len(parts) > 1 else ""
+    return head[1:] or head, rest
+
+
 async def _download_with_retry(media, save_path: Path, *, display_name: str) -> None:
     """``get_file()`` + ``download_to_drive()`` with bounded retries.
 
@@ -1668,25 +1690,40 @@ class CommandHandlersMixin:
             await msg.reply_text(f"❌ Failed to download file: {display_name}")
             return
 
-        # Construct prompt — keep it clean, let the file path do the work
-        prompt = _file_prompt(msg.caption or "", [save_path], all_photos=bool(msg.photo))
-        await self._inject_file_prompt(update, ctx, prompt, log_name=save_path.name)
+        await self._inject_file_prompt(
+            update, ctx, msg.caption or "", [save_path],
+            all_photos=bool(msg.photo), log_name=save_path.name,
+        )
 
     async def _inject_file_prompt(
-        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE, prompt: str,
-        *, log_name: str,
+        self, update: Update, ctx: ContextTypes.DEFAULT_TYPE, caption: str,
+        paths: list[Path], *, all_photos: bool, log_name: str,
     ) -> None:
-        """Route an upload prompt to a session and inject it — the shared
-        tail of the lone-file and album paths."""
-        msg = update.message
+        """Route an upload to a session and inject its prompt — the shared
+        tail of the lone-file and album paths.
 
-        # Resolve target session (same routing precedence as _handle_message)
-        reply_to = msg.reply_to_message
+        A caption whose first token is ``/<label>`` picks the session the
+        way ``/<label> <prompt>`` does for text and is stripped from the
+        prompt; the wording itself is ``_file_prompt``'s alone. A label
+        nothing answers to is refused here (the text path's reply) and
+        nothing is injected — an upload never hands claude a prompt that
+        begins with ``/``."""
+        msg = update.message
         chat_id = calling_chat_id(update)
-        sess = self._resolve_reply_target(reply_to, chat_id)
-        if not sess:
-            name = self.registry.last_active_session
-            sess = self.registry.get(name) if name else None
+
+        label, caption = _split_caption_target(caption)
+        if label is not None:
+            sess = await self._session_for_typed_label(update, label)
+            if sess is None:
+                return
+        else:
+            # Same routing precedence as _handle_message: the reply
+            # pointer, then the last active session.
+            sess = self._resolve_reply_target(msg.reply_to_message, chat_id)
+            if not sess:
+                name = self.registry.last_active_session
+                sess = self.registry.get(name) if name else None
+        prompt = _file_prompt(caption, paths, all_photos=all_photos)
 
         if not sess:
             await msg.reply_text(
@@ -1794,10 +1831,9 @@ class CommandHandlersMixin:
         """Inject the whole group as ONE prompt, with ONE reply for any
         items that failed every download attempt — never one per item."""
         if album.paths:
-            prompt = _file_prompt(
-                album.caption, album.paths, all_photos=album.all_photos)
             await self._inject_file_prompt(
-                album.update, album.ctx, prompt,
+                album.update, album.ctx, album.caption, album.paths,
+                all_photos=album.all_photos,
                 log_name=f"album of {len(album.paths)}",
             )
         if album.failed:
@@ -1898,6 +1934,28 @@ class CommandHandlersMixin:
             log.info("[%s] Command sent: %s", sess.label, command_text)
         else:
             await update.message.reply_text(f"❌ Failed to send to [{sess.label}]")
+
+    async def _session_for_typed_label(
+        self, update: Update, label: str,
+    ) -> TrackedSession | None:
+        """The session an operator-typed ``/<label>`` names, resolved the
+        way ``_direct_send`` resolves it: the registry (scoped to the
+        calling chat, finished twins included), then discovery of a live
+        ``claude-<label>`` adopted under the typed label. Replies with
+        the reason and returns ``None`` when nothing usable answers to
+        it, so callers only have to bail out."""
+        sess = self.registry.find_by_label(
+            label, calling_chat_id(update), include_gone=True)
+        if sess is not None:
+            if not await inject.is_alive(sess.name):
+                await update.message.reply_text(f"⚠️ [{label}] session not alive")
+                return None
+            return sess
+        session_name = f"claude-{label}"
+        if await inject.is_alive(session_name):
+            return self._adopt_by_typed_name(session_name, label)
+        await update.message.reply_text(f"⚠️ Unknown session: {label}")
+        return None
 
     async def _direct_send(self, update: Update, target_label: str, prompt_text: str) -> None:
         """Send prompt directly to a session by label."""

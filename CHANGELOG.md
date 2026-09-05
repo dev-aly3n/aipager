@@ -66,6 +66,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that turn. A message Claude picks up only after finishing now gets a
   turn of its own, with its own card and answer under it, instead of
   being lost inside the previous turn's wrap-up.
+- A photo, document or album captioned `/<label> …` now goes to that
+  session with the prefix stripped, the way a text message does. It
+  used to land on whichever session was last active with the caption
+  kept verbatim, so Claude Code read `/<label>` as a slash command,
+  rejected it in the terminal and never fired a hook — Telegram showed
+  a busy card that never finished. A label no session answers to is
+  now refused with `⚠️ Unknown session` instead of being sent.
 
 ## [0.7.6] - 2026-09-04
 
