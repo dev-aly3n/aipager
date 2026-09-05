@@ -266,6 +266,27 @@ def _external_quote_context(fragment: str) -> str:
 class SessionOpsMixin:
     """Mixin for TelegramBot — see :mod:`aipager.bot` overview."""
 
+    def _adopt_trigger(
+        self, sess: TrackedSession, msg_id: int | None, text: str | None = None,
+    ) -> None:
+        """R1 (design.md "turn anchor follows consumption"): move the
+        reply target only for a message that STARTS a turn.
+
+        A send while BUSY must never move ``trigger_msg_id`` — the turn
+        already running owns the target until consumption (R2) says
+        otherwise. Only a non-BUSY session adopts ``msg_id`` immediately,
+        because for that one message send and consumption are the same
+        event. ``_drain_next_queued`` (a held message released at an
+        idle moment) and the hook's ``queue_pickup`` handler both start
+        or move a turn by definition and correctly keep setting the
+        target unconditionally — neither goes through this method.
+        """
+        if sess.status == Status.BUSY:
+            return
+        sess.trigger_msg_id = msg_id
+        if text is not None:
+            sess.last_prompt = text
+
     def _adopt_by_typed_name(self, session_name: str,
                              target_label: str) -> TrackedSession:
         """Adopt the session `session_name`, which was rebuilt from what
@@ -686,6 +707,7 @@ class SessionOpsMixin:
         sess.job_continuation_active = False
         sess.job_grace_until = 0.0
         sess.trigger_msg_id = None
+        sess.busy_card_trigger = None
         sess.last_idle_at = time.monotonic()  # prevent debounce of next real IDLE
         self.registry.mark_dirty()
 
@@ -788,6 +810,7 @@ class SessionOpsMixin:
         sess.pending_permission = None
         sess.status = Status.IDLE
         sess.trigger_msg_id = None
+        sess.busy_card_trigger = None
         sess.last_idle_at = time.monotonic()
         self.registry.mark_dirty()
         log.info("[%s] halted by safety policy", sess.label)
