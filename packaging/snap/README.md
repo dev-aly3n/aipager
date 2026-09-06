@@ -14,6 +14,15 @@ aipager start
 The `home`, `network`, and `network-bind` plugs are auto-connected
 for strict-confinement snaps — no manual `snap connect` step.
 
+## Publishing
+
+`.github/workflows/snap.yml` builds the snap in CI on every push to
+`main` and on release tags, and releases it to the `stable` channel on
+tags once the repository secret `SNAPCRAFT_STORE_CREDENTIALS` exists
+(`snapcraft export-login --snaps aipager --channels stable -` on the
+Ubuntu One account that ran `snapcraft register aipager`). Without the
+secret the publish job skips.
+
 ## Known constraints (strict confinement)
 
 1. **Workspace must live under `~/`.** The `home` plug only exposes
@@ -44,7 +53,10 @@ sudo snap install --dangerous aipager_0.3.12_amd64.snap
 `--dangerous` skips signature verification, which only the Snap
 Store can produce.
 
-## Publish a release
+## Publish a release (manual fallback)
+
+`snap.yml` releases to `stable` on every `v*` tag once its secret exists;
+the steps below are the by-hand equivalent.
 
 One-time account setup:
 
@@ -75,6 +87,9 @@ time — also visible at
 once the name is registered.
 
 ## Bump checklist
+
+The publish job refuses a tag whose version does not match
+`snapcraft.yaml`, so the bump below is not optional.
 
 - [ ] `version:` in `snapcraft.yaml` matches the PyPI release.
 - [ ] No new Python deps not listed in `parts.aipager.python-packages`.

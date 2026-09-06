@@ -1,8 +1,17 @@
 # AUR — `aipager`
 
-Arch Linux build recipe. Mirrored to
+Arch Linux build recipe. Published to
 [`aur.archlinux.org/aipager.git`](https://aur.archlinux.org/packages/aipager)
-on each release.
+by `.github/workflows/aur.yml` on every `v*` tag once the repository
+secret `AUR_SSH_PRIVATE_KEY` exists (the private half of the SSH key on
+the publisher's AUR account); without the secret the job skips.
+
+Three runtime dependencies are AUR packages, not official ones —
+`python-telegram-bot`, `python-questionary` and `dtach` — so install
+with an AUR helper, which resolves them. The recipe was built and
+linted (`makepkg`, `namcap`) in an `archlinux:latest` container on
+2026-09-06 for 0.7.7; nobody on this project has an Arch machine, so
+that container is the reference build.
 
 ## Install (from AUR)
 
@@ -34,7 +43,10 @@ aipager config       # interactive setup
 aipager start        # foreground daemon, or `aipager service install`
 ```
 
-## Bump a release
+## Bump a release (manual fallback)
+
+The `aur.yml` workflow does this on every `v*` tag once its secret
+exists; the steps below are the by-hand equivalent.
 
 Update both `PKGBUILD` and `.SRCINFO` then push to AUR.
 

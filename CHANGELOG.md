@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   because it posts to the operator's chat.
 
 ### Changed
+- The AUR recipe is current again (0.7.7, built and linted on Arch in a
+  container) and a workflow now publishes it to the AUR on every release
+  tag once the publisher key is configured.
+- The snap is built in CI on every push and release tag, and released
+  to the Snap Store on tags once the store credential is configured.
 - Sessions that ended more than 14 days ago now drop out of the registry
   (and the `/resume` picker) on their own, at daemon start and on the
   monitor's tick, instead of accumulating until the 50-entry cap pushed

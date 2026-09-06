@@ -1,6 +1,6 @@
 # Maintainer: dev-aly3n <dev.aly3n@gmail.com>
 pkgname=aipager
-pkgver=0.3.19
+pkgver=0.7.7
 pkgrel=1
 pkgdesc="Telegram remote-control daemon for Claude Code CLI sessions"
 arch=('any')
@@ -34,7 +34,7 @@ optdepends=(
   'faster-whisper: optional voice input transcription'
 )
 source=("https://files.pythonhosted.org/packages/source/${pkgname:0:1}/${pkgname}/${pkgname}-${pkgver}.tar.gz")
-sha256sums=('54f70cb17b7ee4133f98ac8609e4476bc34df5fbdb49737ed7bc5ddc67142755')
+sha256sums=('4d6ab0866ddee2245082678fa7fa804ed9e28d999e15ae4093342a186b96ca9a')
 
 build() {
   cd "${pkgname}-${pkgver}"
@@ -48,4 +48,6 @@ build() {
 package() {
   cd "${pkgname}-${pkgver}"
   python -m installer --destdir="${pkgdir}" dist/*.whl
+  # MIT is an "uncommon" identifier for namcap: ship the text.
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
 }

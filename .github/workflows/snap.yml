@@ -1,0 +1,73 @@
+name: snap
+
+# Build the snap on release tags, on pushes that touch the recipe, and on
+# demand (a real snapcraft build in CI — nobody on this project runs LXD
+# locally; it installs Claude Code through npm, so it is minutes, not
+# seconds, which is why it does not run on every push), and
+# publish it to the Snap Store on tags once the repository secret
+# SNAPCRAFT_STORE_CREDENTIALS exists (`snapcraft export-login` output for
+# the account that registered the name `aipager`). Without the secret
+# the publish job skips, so a tag push never fails on it.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packaging/snap/**'
+      - '.github/workflows/snap.yml'
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      snap: ${{ steps.build.outputs.snap }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage the recipe where snapcraft expects it
+        run: mkdir -p snap && cp packaging/snap/snapcraft.yaml snap/snapcraft.yaml
+      - uses: snapcore/action-build@v1
+        id: build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snap
+          path: ${{ steps.build.outputs.snap }}
+          retention-days: 14
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    env:
+      HAS_STORE_KEY: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS != '' }}
+    steps:
+      - name: Skip until the store credential is configured
+        if: env.HAS_STORE_KEY != 'true'
+        run: echo "SNAPCRAFT_STORE_CREDENTIALS is not set — not publishing to the Snap Store"
+      - uses: actions/checkout@v4
+        if: env.HAS_STORE_KEY == 'true'
+      - name: The recipe's version must be the tag's
+        if: env.HAS_STORE_KEY == 'true'
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          grep -q "^version: \"$ver\"" packaging/snap/snapcraft.yaml || {
+            echo "packaging/snap/snapcraft.yaml is not at version $ver — bump it before tagging" >&2
+            exit 1
+          }
+      - uses: actions/download-artifact@v4
+        if: env.HAS_STORE_KEY == 'true'
+        with:
+          name: snap
+      - name: Release to stable
+        if: env.HAS_STORE_KEY == 'true'
+        uses: snapcore/action-publish@v1
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        with:
+          snap: ${{ needs.build.outputs.snap }}
+          release: stable

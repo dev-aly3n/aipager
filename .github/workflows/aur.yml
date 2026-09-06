@@ -1,0 +1,69 @@
+name: aur
+
+# Publish the AUR package on every release tag. Needs the repository
+# secret AUR_SSH_PRIVATE_KEY — the private half of the key registered on
+# the publisher's aur.archlinux.org account. Until it exists the job
+# runs and skips, so a tag push never fails on it.
+#
+# The action builds nothing: it updates pkgver/pkgrel and checksums
+# (updpkgsums, which downloads the PyPI sdist), regenerates .SRCINFO in
+# an Arch container and pushes to aur.archlinux.org/aipager.git. The
+# sdist has to be on PyPI first, so the job waits for publish.yml.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (e.g. v0.7.7)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  aur:
+    runs-on: ubuntu-latest
+    env:
+      HAS_AUR_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY != '' }}
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip until the AUR key is configured
+        if: env.HAS_AUR_KEY != 'true'
+        run: echo "AUR_SSH_PRIVATE_KEY is not set — not publishing to the AUR"
+
+      - name: Wait for the sdist on PyPI
+        if: env.HAS_AUR_KEY == 'true'
+        run: |
+          ver="${TAG#v}"
+          for _ in $(seq 1 40); do
+            if curl -fsS "https://pypi.org/pypi/aipager/$ver/json" >/dev/null; then
+              echo "PyPI has $ver"; exit 0
+            fi
+            sleep 30
+          done
+          echo "PyPI never showed $ver" >&2
+          exit 1
+
+      - name: Point the PKGBUILD at the tagged version
+        if: env.HAS_AUR_KEY == 'true'
+        run: |
+          ver="${TAG#v}"
+          sed -i "s/^pkgver=.*/pkgver=$ver/; s/^pkgrel=.*/pkgrel=1/" packaging/aur/PKGBUILD
+          grep -E '^pkg(ver|rel)=' packaging/aur/PKGBUILD
+
+      - name: Push to the AUR
+        if: env.HAS_AUR_KEY == 'true'
+        uses: KSXGitHub/github-actions-deploy-aur@v4.2.0
+        with:
+          pkgname: aipager
+          pkgbuild: ./packaging/aur/PKGBUILD
+          updpkgsums: true
+          commit_username: dev-aly3n
+          commit_email: dev.aly3n@gmail.com
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "Update to ${{ env.TAG }}"
+          ssh_keyscan_types: rsa,ecdsa,ed25519
