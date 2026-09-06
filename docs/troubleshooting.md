@@ -133,6 +133,13 @@ If no backup is recoverable, you can safely delete the state file —
 the daemon will recover live sessions by scanning
 `/tmp/claude-dtach-*.sock` on first monitor tick.
 
+## A session launch fails
+
+A launch dtach refuses shows a one-line reason in chat (socket already
+exists, shell not executable, no pseudo-terminal, name too long,
+permission denied, missing directory); dtach's own message, paths
+included, is in `aipager logs`.
+
 ## `aipager doctor` check list
 
 The order matters — each later check assumes earlier ones passed.

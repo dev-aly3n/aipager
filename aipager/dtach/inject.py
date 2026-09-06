@@ -546,6 +546,43 @@ def _conversation_exists(session_id: str) -> bool:
         return False
 
 
+# (substring, phrase) — checked in order, case-insensitively, against
+# dtach's stderr. The phrases are what chat sees (roadmap 8.7): every one
+# of dtach's own messages carries its binary path and the socket path
+# (session name, /tmp), and the exec failure carries the command path with
+# the operator's home directory, so the raw text must not reach a
+# Telegram message; it goes to the daemon log instead. Measured
+# 2026-09-06 against the bundled dtach: "<sock>: Address already in use",
+# "could not execute <cmd>: No such file or directory", "<sock>: No such
+# file or directory", "<sock>: File name too long"; "Could not find a
+# pty." and "Permission denied" come from its source. "could not execute"
+# is checked before "No such file or directory" because the exec failure
+# ends with the latter.
+_DTACH_FAILURE_PHRASES: tuple[tuple[str, str], ...] = (
+    ("address already in use",
+     "a session socket with this name already exists — kill it or pick another name"),
+    ("could not execute",
+     "dtach could not start the shell (bash missing or not executable?)"),
+    ("could not find a pty", "no pseudo-terminal available on this machine"),
+    ("file name too long",
+     "the session name makes the socket path too long — pick a shorter name"),
+    ("permission denied", "no permission to create the session socket"),
+    ("no such file or directory", "the socket directory does not exist"),
+)
+_DTACH_STDERR_LOG_MAX = 300  # chars of dtach's first stderr line kept in the log
+
+
+def _describe_dtach_failure(returncode: int, stderr: str) -> str:
+    """The fixed, path-free phrase for a failed ``dtach -n`` — see
+    ``_DTACH_FAILURE_PHRASES``. Anything unrecognised (an empty stderr
+    included) names only the exit status and points at the log."""
+    lowered = stderr.lower()
+    for needle, phrase in _DTACH_FAILURE_PHRASES:
+        if needle in lowered:
+            return phrase
+    return f"dtach exited with status {returncode} (see `aipager logs`)"
+
+
 async def launch_session(
     name: str,
     skip_perms: bool = False,
@@ -703,7 +740,11 @@ async def launch_session(
         )
         _, stderr = await asyncio.wait_for(proc.communicate(), timeout=5)
         if proc.returncode != 0:
-            return False, f"dtach failed: {stderr.decode().strip()}"
+            raw = stderr.decode(errors="replace").strip()
+            first = (raw.splitlines() or [""])[0][:_DTACH_STDERR_LOG_MAX]
+            log.warning("[%s] dtach launch failed (rc=%d): %s",
+                        name, proc.returncode, first)
+            return False, f"dtach failed: {_describe_dtach_failure(proc.returncode, raw)}"
     except FileNotFoundError:
         return False, "dtach not installed"
     except asyncio.TimeoutError:

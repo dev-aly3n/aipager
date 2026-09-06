@@ -89,6 +89,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `aipager doctor` no longer dies when one check throws; the check shows
   as a warning row naming the error and the rest of the report still
   prints.
+- A session launch that dtach refuses now reports a fixed, path-free
+  reason in chat (socket already exists, shell not executable, no
+  pseudo-terminal, name too long, permission denied, missing directory)
+  and keeps dtach's raw message in the daemon log; it used to forward
+  that message verbatim, binary and socket paths included.
 
 ## [0.7.6] - 2026-09-04
 
