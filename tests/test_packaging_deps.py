@@ -95,11 +95,11 @@ _DOWNSTREAM_NAMES = {
 # Dependencies knowingly absent downstream today. Each entry is a real gap,
 # recorded rather than hidden so the drift test can still protect everything
 # else. Shrink this list; do not grow it.
-_KNOWN_GAPS = {
-    ("PKGBUILD", "python-httpx"),   # pulled transitively by python-telegram-bot
-    ("PKGBUILD", "python-yaml"),    # genuinely missing — see roadmap
-    ("flake.nix", "httpx"),         # pulled transitively by python-telegram-bot
-}
+# (file, downstream name) pairs the drift test tolerates. Empty since
+# roadmap 8.9 closed the last three (python-yaml / python-httpx in the
+# PKGBUILD, httpx in the flake); add to it only with a reason, and shrink
+# it again as soon as that reason is gone.
+_KNOWN_GAPS: set[tuple[str, str]] = set()
 
 
 def _base_names() -> list[str]:

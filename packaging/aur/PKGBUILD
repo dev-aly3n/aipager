@@ -16,6 +16,11 @@ depends=(
   # pyproject.toml, so anything added there has to be added here too or
   # Arch users get an aipager whose Mini App silently cannot start.
   'python-aiohttp'
+  # Base dependencies too: PyYAML reads aipager.yaml (nothing else pulls
+  # it in), httpx is the rich-message client (python-telegram-bot happens
+  # to pull it transitively today; listed so that stays true on purpose).
+  'python-yaml'
+  'python-httpx'
   'dtach'
 )
 makedepends=(
