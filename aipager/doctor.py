@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import platform
 import shutil
@@ -28,6 +29,8 @@ import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
+
+log = logging.getLogger(__name__)
 
 OK = "ok"
 WARN = "warn"
@@ -592,8 +595,53 @@ CHECKS: list[Callable[[], CheckResult]] = [
 ]
 
 
+_CRASH_DETAIL_MAX = 200  # chars of a crashed check's message kept on its row
+
+
+def _check_title(fn: Callable[[], CheckResult]) -> str:
+    """The row title for a check that never returned one: its function
+    name minus the ``check_`` prefix, underscores as spaces
+    (``check_claude_auth`` → ``claude auth``)."""
+    name = getattr(fn, "__name__", "") or "check"
+    for prefix in ("_check_", "check_"):
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+            break
+    return name.replace("_", " ") or "check"
+
+
 def run_all() -> list[CheckResult]:
-    return [fn() for fn in CHECKS]
+    """Run every check in order. A check that raises becomes one WARN
+    row naming the check and the error (roadmap 8.8) instead of taking
+    the whole report down: every check is written never to raise, but
+    that is fourteen separate promises holding a diagnostic tool up,
+    and `doctor` is what the operator runs when something is already
+    wrong. ``Exception`` only — Ctrl-C must still stop the command. The
+    error text is escaped because both renderers print through a rich
+    console that would otherwise read ``[...]`` in a message as markup.
+    """
+    from rich.markup import escape
+
+    results: list[CheckResult] = []
+    for fn in CHECKS:
+        try:
+            results.append(fn())
+        except Exception as e:
+            title = _check_title(fn)
+            log.debug("doctor check %s crashed",
+                      getattr(fn, "__name__", None) or title, exc_info=True)
+            # One line, bounded — a row is one line in both renderers
+            # (the off-TTY form is documented as grep-able), the same
+            # treatment `_probe_binary` gives a subprocess's stderr.
+            first_line = (str(e).splitlines() or [""])[0].strip()[:_CRASH_DETAIL_MAX]
+            text = f"check crashed: {type(e).__name__}"
+            if first_line:
+                text += f": {first_line}"
+            results.append(CheckResult(
+                WARN, title, detail=[escape(text)],
+                fix="Re-run `aipager doctor`; if it keeps crashing, report the line above.",
+            ))
+    return results
 
 
 _STATUS_STYLE = {OK: "ok", WARN: "warn", FAIL: "err"}

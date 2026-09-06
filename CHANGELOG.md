@@ -86,6 +86,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A session that was killed but whose socket could not be removed now
   says so in the daemon log instead of silently leaving a socket the next
   scan re-adopts under a derived name.
+- `aipager doctor` no longer dies when one check throws; the check shows
+  as a warning row naming the error and the rest of the report still
+  prints.
 
 ## [0.7.6] - 2026-09-04
 

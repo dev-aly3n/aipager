@@ -136,6 +136,8 @@ the daemon will recover live sessions by scanning
 ## `aipager doctor` check list
 
 The order matters — each later check assumes earlier ones passed.
+A check that crashes on an unexpected environment shows as a single
+⚠ row naming the check and the error; the remaining checks still run.
 
 | Check | What it verifies | Fix hint |
 |---|---|---|
