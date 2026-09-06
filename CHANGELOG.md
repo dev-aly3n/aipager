@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.8] - 2026-09-06
+
 ### Added
 - An opt-in live-daemon e2e module, `tests/e2e/test_e2e_live_daemon.py`,
   that drives a throwaway session through the running daemon and the
