@@ -336,6 +336,18 @@ PROMPT_HOOK_GRACE_SECONDS: float = float(
     os.environ.get("PROMPT_HOOK_GRACE_SECONDS", "8")
 )
 
+# Days a session that has ended stays in the registry — and so in the
+# /resume picker and the dashboard's gone list — before it is dropped
+# (roadmap 8.12). MAX_GONE_HISTORY only caps the COUNT of gone entries,
+# so a session that died weeks ago sat there until fifty newer ones
+# pushed it out; test probes and one-off experiments accumulate faster
+# than that. Dropping the row loses nothing but the picker entry: the
+# Claude transcript stays on disk and `claude --resume <id>` still works.
+# 0 (or negative) disables ageing. Override via the env var.
+GONE_SESSION_MAX_AGE_DAYS: float = float(
+    os.environ.get("GONE_SESSION_MAX_AGE_DAYS", "14")
+)
+
 # Upper bound on how long a single tool call may run before the stale
 # busy detector fires anyway. When a PreToolUse hook has fired without a
 # matching PostToolUse, the session is legitimately "quiet" — no hooks

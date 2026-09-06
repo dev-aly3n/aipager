@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 
 
 from aipager.state import SessionRegistry, Status, TrackedSession
@@ -83,7 +84,7 @@ def test_load_old_json_without_skip_perms_defaults_to_false(tmp_state_file):
                 "last_driver_user_id": None,
                 "claude_session_id": "some-uuid",
                 "cwd": "/home/user",
-                "gone_at": 1234567890.0,
+                "gone_at": time.time() - 3600.0,  # recent: load() ages out older ones (8.12)
                 "last_assistant_preview": "",
                 "hidden_from_status": False,
                 # NO skip_perms key — simulates old daemon
@@ -124,7 +125,7 @@ def test_load_json_with_skip_perms_true(tmp_state_file):
                 "last_driver_user_id": None,
                 "claude_session_id": "some-uuid",
                 "cwd": "/home/user",
-                "gone_at": 1234567890.0,
+                "gone_at": time.time() - 3600.0,  # recent: load() ages out older ones (8.12)
                 "last_assistant_preview": "",
                 "hidden_from_status": False,
                 "skip_perms": True,

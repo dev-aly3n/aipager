@@ -294,6 +294,10 @@ class SessionMonitor:
             except Exception:
                 log.warning("on_sessions_changed callback failed", exc_info=True)
 
+        # Age out sessions that ended more than GONE_SESSION_MAX_AGE_DAYS
+        # ago (roadmap 8.12); the loop's save_if_dirty persists the drop.
+        self.registry.expire_gone()
+
         # Check for stale BUSY sessions (no hook activity for too long).
         # Also: auto-demote INTERACTIVE sessions whose permission prompt
         # has been hanging for too long (claude crashed mid-prompt), and

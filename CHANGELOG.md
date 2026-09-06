@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Sessions that ended more than 14 days ago now drop out of the registry
+  (and the `/resume` picker) on their own, at daemon start and on the
+  monitor's tick, instead of accumulating until the 50-entry cap pushed
+  them out; `GONE_SESSION_MAX_AGE_DAYS` tunes the age, `0` disables it.
+
 ## [0.7.7] - 2026-09-06
 
 ### Added

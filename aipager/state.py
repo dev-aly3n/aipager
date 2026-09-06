@@ -26,6 +26,7 @@ from typing import Any
 
 from aipager.scope import strip_scope_suffix
 from aipager.config import (
+    GONE_SESSION_MAX_AGE_DAYS,
     COMPACT_INFLIGHT_MAX_SECONDS,
     SESSION_STATE_FILE,
     TOOL_INFLIGHT_MAX_SECONDS,
@@ -1111,6 +1112,36 @@ class SessionRegistry:
             self._evict_gone_overflow()
         return self._sessions[name]
 
+    def expire_gone(self, now: float | None = None) -> list[str]:
+        """Drop every GONE session whose ``gone_at`` is older than
+        ``GONE_SESSION_MAX_AGE_DAYS`` (roadmap 8.12). Returns the names
+        dropped. Called at the end of ``load()`` and once per monitor
+        scan; ``MAX_GONE_HISTORY``'s count cap is a separate guard.
+
+        An entry with no ``gone_at`` is never aged — there is nothing to
+        measure, and ``load()`` only marks an entry GONE when it has (or
+        could backfill) a stamp. ``remove()`` does the dropping so the
+        session's ``msg_map`` keys go with it, same as ``/kill``.
+        """
+        if GONE_SESSION_MAX_AGE_DAYS <= 0:
+            return []
+        now = time.time() if now is None else now
+        cutoff = now - GONE_SESSION_MAX_AGE_DAYS * 86400.0
+        dropped: list[str] = []
+        for name, sess in list(self._sessions.items()):
+            if sess.status != Status.GONE or sess.gone_at is None:
+                continue
+            if sess.gone_at < cutoff:
+                log.info("Dropping gone session %s (gone %dd ago)",
+                         name, int((now - sess.gone_at) // 86400))
+                self.remove(name)
+                dropped.append(name)
+        if dropped:
+            if self.last_active_session in dropped:
+                self.last_active_session = ""  # the field's unset value, never None
+            self._dirty = True
+        return dropped
+
     def _evict_gone_overflow(self) -> None:
         """Keep at most ``MAX_GONE_HISTORY`` GONE entries in the registry.
 
@@ -1709,6 +1740,11 @@ class SessionRegistry:
         # `_dirty` may have been set True by the backfill loop above so
         # the next save_if_dirty cycle persists the derived gone_at.
         # Otherwise it stays False (load alone doesn't dirty the state).
+
+        # Age out sessions that ended more than GONE_SESSION_MAX_AGE_DAYS
+        # ago (roadmap 8.12) — after msg_map and last_active_session are
+        # restored, so their references go with the entries.
+        self.expire_gone()
 
     def save_if_dirty(self) -> None:
         """Save state if it has been modified since last save."""

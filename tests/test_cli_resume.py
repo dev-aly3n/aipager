@@ -310,7 +310,7 @@ def test_picker_passes_full_name_for_scoped_session(monkeypatch):
 _DDD = {
     "name": "claude-ddd__d447759837", "label": "ddd",
     "claude_session_id": "1d86b6ee-2927-4009-aa63-7ba50119d0c8",
-    "cwd": "/home/aipager", "gone_at": 1785752900.28, "skip_perms": True,
+    "cwd": "/home/aipager", "gone_at": time.time() - 3600.0, "skip_perms": True,  # recent gone_at: load() ages out older ones (8.12)
 }
 
 

@@ -8,6 +8,7 @@ SessionRegistry / TrackedSession API listed in entrypoints.md.
 from __future__ import annotations
 
 import json
+import time
 
 
 from aipager.state import SessionRegistry, Status
@@ -113,7 +114,7 @@ def test_sc3_old_state_file_without_skip_perms_defaults_to_false(tmp_state_file)
                 "last_driver_user_id": None,
                 "claude_session_id": "old-uuid",
                 "cwd": "/home/user",
-                "gone_at": 1234567890.0,
+                "gone_at": time.time() - 3600.0,  # recent: load() ages out older ones (8.12)
                 "last_assistant_preview": "",
                 "hidden_from_status": False,
                 "scope_chat_id": 0,

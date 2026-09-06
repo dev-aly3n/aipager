@@ -7,6 +7,10 @@ import pytest
 
 from aipager.state import SessionRegistry, Status
 
+# A gone stamp inside GONE_SESSION_MAX_AGE_DAYS: load() ages older ones out
+# (roadmap 8.12), and these tests are about field round-trips, not age.
+_RECENT_GONE_AT = float(int(time.time())) - 3600.0
+
 
 def test_same_state_transition_returns_none(tmp_state_file):
     r = SessionRegistry()
@@ -374,7 +378,7 @@ def test_resume_fields_round_trip(tmp_state_file):
     sess.claude_session_id = "e4f739a9-e19a-4d17-a8c2-12ba1b288907"
     sess.cwd = "/home/aly/project"
     sess.last_assistant_preview = "I have refactored the module."
-    sess.gone_at = 1716230400.0
+    sess.gone_at = _RECENT_GONE_AT
     r1.save()
 
     r2 = SessionRegistry()
@@ -383,7 +387,7 @@ def test_resume_fields_round_trip(tmp_state_file):
     assert s2.claude_session_id == "e4f739a9-e19a-4d17-a8c2-12ba1b288907"
     assert s2.cwd == "/home/aly/project"
     assert s2.last_assistant_preview == "I have refactored the module."
-    assert s2.gone_at == 1716230400.0
+    assert s2.gone_at == _RECENT_GONE_AT
 
 
 def test_gone_at_present_loads_as_gone_status(tmp_state_file):
@@ -575,7 +579,7 @@ def test_hidden_from_status_round_trips(tmp_state_file):
     sess = r1.get("claude-jim")
     sess.hidden_from_status = True
     sess.claude_session_id = "uuid-1"
-    sess.gone_at = 1716230400.0
+    sess.gone_at = _RECENT_GONE_AT
     r1.save()
 
     r2 = SessionRegistry()
@@ -628,7 +632,7 @@ def test_load_backfills_gone_at_from_transcript_mtime(tmp_state_file, tmp_path):
     import json
     transcript = tmp_path / "uuid.jsonl"
     transcript.write_text("{}\n")
-    os.utime(transcript, (1700000000.0, 1700000000.0))
+    os.utime(transcript, (_RECENT_GONE_AT, _RECENT_GONE_AT))
 
     state = {
         "sessions": {
@@ -646,7 +650,7 @@ def test_load_backfills_gone_at_from_transcript_mtime(tmp_state_file, tmp_path):
     r = SessionRegistry()
     r.load()
     s = r.get("claude-old")
-    assert s.gone_at == 1700000000.0
+    assert s.gone_at == _RECENT_GONE_AT
     assert s.status == Status.GONE  # status follows gone_at presence
 
 
@@ -706,7 +710,7 @@ def test_hidden_from_status_defaults_false_on_legacy_state(tmp_state_file):
                 "name": "claude-old",
                 "label": "old",
                 "claude_session_id": "uuid-x",
-                "gone_at": 1716230400.0,
+                "gone_at": _RECENT_GONE_AT,
                 # NB: no `hidden_from_status` key
             },
         },

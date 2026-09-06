@@ -20,7 +20,7 @@ and on every session change.
 | `/status` | — | One-message snapshot of every live session: model, context %, cost, queue depth. |
 | `/stop` | — | Interrupt the active session's current turn. Also discards queued messages and replies with how many were discarded. |
 | `/new [label] [prompt]` | all optional | Create a session. With no args, an interactive wizard walks name → mode → model → folder. With a label (and optional first prompt), creates `claude-<label>` directly. |
-| `/resume [label]` | optional | Resume a previously-gone session by name, or open a picker. |
+| `/resume [label]` | optional | Resume a previously-gone session by name, or open a picker. A session that ended stays listed for `GONE_SESSION_MAX_AGE_DAYS` (default 14) and then leaves the registry; its Claude transcript is untouched. |
 | `/kill [label]` | optional | Destroy a session. With no arg, opens a picker. Always two-tap: shows `[💀 Kill] [Cancel]`. |
 | `/restart [label]` | optional | Kill and relaunch a session, keeping its conversation. |
 | `/rename [label]` | optional | Give a session a new name. |
