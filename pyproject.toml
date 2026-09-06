@@ -93,6 +93,9 @@ testpaths = ["tests"]
 # auth + network + tokens, so they're excluded from the default run and CI.
 # Run them with:  pytest -m e2e        (all)
 #                 pytest tests/e2e/test_e2e_sticky.py -m e2e   (one file)
+# tests/e2e/test_e2e_live_daemon.py drives the RUNNING daemon and posts to
+# the operator's chat; it also needs AIPAGER_E2E_LIVE=1 (and
+# AIPAGER_E2E_RESTART=1 for the test that restarts the daemon).
 # The CLI -m overrides this addopts default.
 addopts = "-m 'not e2e'"
 markers = [

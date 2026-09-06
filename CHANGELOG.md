@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- An opt-in live-daemon e2e module, `tests/e2e/test_e2e_live_daemon.py`,
+  that drives a throwaway session through the running daemon and the
+  Mini App (prompt round trip, subagent hooks and cost, diff route and
+  auth gate, the waiting reminder, a restart mid-answer, the kill route)
+  with the daemon journal as the oracle. Gated on `AIPAGER_E2E_LIVE=1`
+  because it posts to the operator's chat.
+
 ### Changed
 - Sessions that ended more than 14 days ago now drop out of the registry
   (and the `/resume` picker) on their own, at daemon start and on the
