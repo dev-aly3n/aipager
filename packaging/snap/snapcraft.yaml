@@ -44,11 +44,15 @@ parts:
   # ~/.claude/.credentials.json from the user's home dir.
   claude-code:
     plugin: nil
-    stage-packages:
+    # nodejs/npm from the BUILD environment run the install (the staged
+    # copy cannot: its node cannot find libnode.so outside the snap's
+    # runtime library path — the first CI build died on exactly that);
+    # the staged nodejs is what runs claude inside the snap at runtime.
+    build-packages:
       - nodejs
       - npm
+    stage-packages:
+      - nodejs
     override-prime: |
       craftctl default
-      "${CRAFT_PRIME}/usr/bin/npm" install -g \
-        --prefix="${CRAFT_PRIME}/usr" \
-        @anthropic-ai/claude-code
+      npm install -g --prefix="${CRAFT_PRIME}/usr" @anthropic-ai/claude-code
