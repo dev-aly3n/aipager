@@ -458,7 +458,23 @@ class SessionOpsMixin:
             )
         except Exception:
             log.debug("policy note write failed", exc_info=True)
-        return await inject.send_text_and_enter(sess.name, body)
+        # Read BEFORE the send: every caller flips the session to BUSY
+        # right after this returns, and the "prompt not taken" watchdog
+        # (session_monitor.prompt_not_taken) only judges a send that
+        # STARTED a turn. A send made while BUSY stamps nothing — it is
+        # not judged, and it must not overwrite the deadline of an
+        # earlier from-idle send Claude Code may still be ignoring
+        # (review rev-iter1-001). A failed send stamps nothing either:
+        # there is no turn to watch for.
+        was_idle = sess.status != Status.BUSY
+        ok = await inject.send_text_and_enter(sess.name, body)
+        if ok and was_idle:
+            sess.prompt_sent_at = time.monotonic()
+            sess.prompt_sent_msg = (
+                (msg_id, chat_id)
+                if msg_id is not None and chat_id is not None else None
+            )
+        return ok
 
     def _build_reply_context(
         self, msg, sess, *, bot_id: int, allow_file: bool,

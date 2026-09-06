@@ -322,6 +322,16 @@ def _tool_detail(name: str, inp: dict) -> str:
     return ""
 
 
+# Datagrams that do NOT prove a turn started, so they must not clear the
+# "prompt not taken" watchdog (roadmap 8.11): ``statusline`` is the
+# aipager-statusline repaint, which Claude Code emits whenever its status
+# line redraws — including right after it rejects an input; the phantom
+# ``SubagentStop`` (empty type, 0.0 s) lands 2–5 s after every Stop as
+# post-turn housekeeping, so a prompt sent right after an answer would be
+# "confirmed" by the previous turn's tail.
+_NOT_TURN_EVIDENCE = frozenset({"statusline", "SubagentStop"})
+
+
 class HookReceiver:
     """Receives UDP datagrams from notify_hook.py and drives state transitions.
 
@@ -410,6 +420,11 @@ class HookReceiver:
         # Update last activity timestamp (stale detection) + store transcript path
         sess_ref = self.registry.get_or_create(session_name)
         sess_ref.last_hook_at = now_mono
+        # Evidence that a turn is alive, for the "prompt not taken"
+        # watchdog (session_monitor.prompt_not_taken): every datagram
+        # counts except the two that arrive without any turn behind them.
+        if event not in _NOT_TURN_EVIDENCE:
+            sess_ref.turn_hook_at = now_mono
         if transcript_path:
             sess_ref.transcript_path = transcript_path
             # The transcript filename IS Claude Code's session id —

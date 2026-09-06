@@ -998,6 +998,78 @@ class NotifyMixin:
             self._resume_animation_if_dead(sess, reason="tool_use while BUSY")
             return
 
+        if event == "prompt_not_taken":
+            # The session monitor saw a turn-starting Telegram send go
+            # PROMPT_HOOK_GRACE_SECONDS without any hook (roadmap 8.11):
+            # Claude Code refused the input outright — an unknown slash
+            # command, a built-in that only opens a dialog — and printed
+            # its error in the terminal where nobody in chat can see it.
+            # Modelled on _stop_session_core: settle the card into a
+            # warning, drop the message's own note (it would otherwise
+            # be matched by a later pick-up), and put the session back
+            # to IDLE directly — no idle notification, there was no turn.
+            # If the hook is merely late, UserPromptSubmit flips the
+            # session BUSY again and sends a fresh card on its own.
+            grace = float(context.get("grace", 0.0))
+            msg_ref = context.get("msg") or sess.prompt_sent_msg
+            msg_id, msg_chat = msg_ref if msg_ref else (None, None)
+            log.warning(
+                "[%s] prompt not taken by Claude Code: no hook within %.0fs "
+                "of the send (msg_id=%s)", label, grace, msg_id,
+            )
+            self._stop_animation(sess)
+            warn_text = (
+                f"⚠️ <b>{html_mod.escape(label)}</b> · Not taken by Claude Code\n"
+                "\n"
+                f"No hook arrived within {grace:.0f} s of the send. A message "
+                "that starts with \"/\" is read as a slash command — check "
+                "the terminal."
+            )
+            if sess.busy_msg_id and sess.busy_msg_id > 0:
+                await self._edit_busy_raw(
+                    sess.busy_msg_id, warn_text, chat_id=resolve_chat_id(sess),
+                )
+            else:
+                try:
+                    await bot.send_message(
+                        resolve_chat_id(sess), warn_text, parse_mode="HTML",
+                        reply_to_message_id=sess.trigger_msg_id,
+                    )
+                except Exception:
+                    log.debug("[%s] prompt_not_taken notice failed", label,
+                              exc_info=True)
+            if msg_id is not None:
+                try:
+                    from aipager.policy_snapshot import (
+                        delete_notes, list_outstanding_notes,
+                    )
+                    # Both halves, like track_message: a message id is
+                    # only unique within its chat.
+                    own = [n for n in list_outstanding_notes(sess.name)
+                           if n.get("msg_id") == msg_id
+                           and n.get("chat_id") == msg_chat]
+                    if own:
+                        delete_notes(sess.name, own)
+                except Exception:
+                    log.debug("[%s] note drop failed", label, exc_info=True)
+            sess.busy_msg_id = None
+            sess.status = Status.IDLE
+            sess.trigger_msg_id = None
+            sess.busy_card_trigger = None
+            sess.prompt_sent_msg = None
+            sess.last_idle_at = time.monotonic()
+            self.registry.mark_dirty()
+            if self.observers:
+                asyncio.create_task(self.observers.broadcast(warn_text))
+            # A message held behind the rejected one (the mixed-sender
+            # hold in _hold_for_open_dialog parks it in pending_queue)
+            # would otherwise sit there until some later turn's idle
+            # moment drained it — the session is idle NOW, so give it
+            # its turn the way the idle path does (review rev-iter1-002).
+            # That send is a from-idle send and gets its own deadline.
+            await self._drain_next_queued(sess)
+            return
+
         if event == "busy_card_watchdog":
             # The session monitor found the live card frozen (no animate
             # task, or no successful edit in CARD_STALE_SECONDS) — see

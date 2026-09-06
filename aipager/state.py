@@ -317,6 +317,23 @@ class TrackedSession:
     # which would otherwise trip the stale-busy detector. Not persisted
     # (same reason as pending_tool_started_at above).
     compact_started_at: float | None = None
+    # "Prompt not taken" watchdog (roadmap 8.11; session_monitor.
+    # prompt_not_taken). All monotonic and transient — never persisted,
+    # for the same reason as pending_tool_started_at. ``_inject_prompt``
+    # stamps the first two on every SUCCESSFUL turn-STARTING Telegram
+    # send — when it went out, and the (msg_id, chat_id) of the Telegram
+    # message so the handler can drop its policy note. A send made while
+    # the session is already BUSY leaves both untouched: it is not judged
+    # (the running turn's own hooks keep arriving, so "no hook since the
+    # send" proves nothing), and overwriting the slot would let it
+    # silently cancel the deadline of an earlier, still-unanswered
+    # from-idle send (review rev-iter1-001). ``turn_hook_at`` is stamped
+    # by the hook receiver for every datagram that proves a turn is
+    # alive — every one except ``statusline`` repaints and the phantom
+    # SubagentStop.
+    prompt_sent_at: float = 0.0
+    prompt_sent_msg: tuple[int, int] | None = None
+    turn_hook_at: float = 0.0
     # Guards the idle-recovery fallback's own INFO log (session_monitor.py)
     # so a tool/compaction that stands the recovery down for minutes logs
     # ONE line for the whole episode rather than one per 2s scan tick.

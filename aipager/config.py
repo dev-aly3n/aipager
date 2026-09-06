@@ -315,6 +315,27 @@ KEEP_FINISHED_CARD: bool = os.environ.get(
 # enough to be worth reading. Override via the env var.
 STALE_BUSY_TIMEOUT: float = float(os.environ.get("STALE_BUSY_TIMEOUT", "600"))
 
+# Seconds a Telegram send that started a turn may go without ANY hook
+# before the daemon concludes Claude Code never took it (roadmap 8.11).
+# An accepted prompt fires UserPromptSubmit ~0.15 s after the inject
+# (measured 2026-09-05); /compact, /clear and /exit fire PreCompact,
+# SessionStart and SessionEnd just as fast. What fires nothing at all is
+# an input Claude Code refused outright — an unknown slash command, a
+# built-in that only opens a dialog — and that used to leave the busy
+# card spinning until STALE_BUSY_TIMEOUT. 8 s is ~50x the measured hook
+# latency and still short enough to read as immediate in chat. Override
+# via the env var.
+#
+# Known limit: the latency was measured against a running Claude Code.
+# A message sent in the seconds right after /new or /resume, before the
+# TUI is up, may see its first hook (SessionStart, then the prompt's
+# own) later than this — the card then shows the warning briefly and
+# is replaced by a fresh one when the hook lands (the watchdog is
+# self-healing), which is the wrong picture for a moment, not lost work.
+PROMPT_HOOK_GRACE_SECONDS: float = float(
+    os.environ.get("PROMPT_HOOK_GRACE_SECONDS", "8")
+)
+
 # Upper bound on how long a single tool call may run before the stale
 # busy detector fires anyway. When a PreToolUse hook has fired without a
 # matching PostToolUse, the session is legitimately "quiet" — no hooks

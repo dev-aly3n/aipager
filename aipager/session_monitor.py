@@ -19,6 +19,7 @@ from aipager.dtach import inject as dtach_inject
 from aipager.config import (
     COMPACT_INFLIGHT_MAX_SECONDS,
     PANE_POLL_INTERVAL,
+    PROMPT_HOOK_GRACE_SECONDS,
     STALE_BUSY_TIMEOUT,
     STATUSLINE_ALIVE_SECONDS,
     TOOL_INFLIGHT_MAX_SECONDS,
@@ -124,6 +125,37 @@ def busy_card_watchdog_action(
     if since < CARD_STALE_SECONDS:
         return None
     return "refresh", since
+
+
+def prompt_not_taken(sess: TrackedSession, now: float) -> bool:
+    """Did Claude Code refuse the Telegram send that put *sess* into
+    BUSY? Pure — no I/O, no clock inside (roadmap 8.11).
+
+    True when the session is BUSY, a turn-starting send is stamped
+    (``_inject_prompt`` stamps only a send made while the session was
+    not BUSY), no datagram that proves a turn is alive has arrived
+    since it (``turn_hook_at`` older
+    than ``prompt_sent_at`` — the receiver stamps every hook except the
+    ``statusline`` repaint and the phantom SubagentStop), and the send
+    is older than ``PROMPT_HOOK_GRACE_SECONDS``. An accepted prompt
+    fires UserPromptSubmit within ~0.15 s; nothing at all arrives for an
+    input Claude Code rejected outright (an unknown slash command, a
+    built-in that only opens a dialog), which used to leave the busy
+    card spinning until STALE_BUSY_TIMEOUT.
+
+    A send made while the session was already BUSY is deliberately out
+    of scope: the running turn's own hooks keep stamping
+    ``turn_hook_at``, so "no hook since the send" cannot be told from
+    "the turn is busy elsewhere" — and the 👀 reaction that never turns
+    into 👍 already shows that message was not taken. Such a send is
+    never stamped, so it can neither trip this nor cancel the deadline
+    of an earlier from-idle send.
+    """
+    if sess.status != Status.BUSY:
+        return False
+    if sess.prompt_sent_at <= 0.0 or sess.turn_hook_at >= sess.prompt_sent_at:
+        return False
+    return (now - sess.prompt_sent_at) > PROMPT_HOOK_GRACE_SECONDS
 
 
 def _quiet_since(sess: TrackedSession) -> float | None:
@@ -310,6 +342,24 @@ class SessionMonitor:
                     self.registry.transition(name, Status.BUSY)
                     self.registry.mark_dirty()
                     # Fall through so stale-busy logic still applies.
+
+            # "Prompt not taken" watchdog (roadmap 8.11). Cleared BEFORE
+            # the notify so it fires exactly once per send, whatever the
+            # handler does; the card watchdog is skipped for this scan
+            # because the handler is about to settle the card itself.
+            if prompt_not_taken(sess, now):
+                sess.prompt_sent_at = 0.0
+                try:
+                    await self.notify_fn(sess, "prompt_not_taken", {
+                        "grace": PROMPT_HOOK_GRACE_SECONDS,
+                        "msg": sess.prompt_sent_msg,
+                    })
+                except Exception:
+                    log.warning(
+                        "Failed to notify prompt_not_taken for %s", name,
+                        exc_info=True,
+                    )
+                continue
 
             # Busy-card staleness watchdog. Placed right after the
             # INTERACTIVE demotion above on purpose: that transition

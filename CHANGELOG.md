@@ -73,6 +73,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rejected it in the terminal and never fired a hook — Telegram showed
   a busy card that never finished. A label no session answers to is
   now refused with `⚠️ Unknown session` instead of being sent.
+- A message Claude Code rejected outright (an unknown slash command, a
+  built-in that only opens a dialog) used to leave the busy card
+  spinning for up to ten minutes with nothing in Telegram saying why —
+  Claude Code prints the error in the terminal and fires no hook. The
+  card now turns into `⚠️ name · Not taken by Claude Code` within
+  seconds and the session is idle again; `PROMPT_HOOK_GRACE_SECONDS`
+  (default 8) tunes the wait.
 
 ## [0.7.6] - 2026-09-04
 

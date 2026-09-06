@@ -244,6 +244,16 @@ Claude instead finishes first and then picks it up, the first answer
 stays under the first message and the follow-up gets its own turn,
 with its own card and answer under it.
 
+If Claude Code refuses a message outright — an unknown slash command,
+or a built-in that only opens a dialog in the terminal — no hook fires,
+so nothing would ever end the turn the daemon just announced. After
+8 s without any hook (`PROMPT_HOOK_GRACE_SECONDS`) the busy card
+becomes `⚠️ name · Not taken by Claude Code` with a one-line
+explanation and the session is idle again; the reason is on the
+terminal. Only a message that started a turn is judged this way — one
+queued behind a running turn just keeps its 👀 reaction, which never
+turns into 👍 if Claude did not take it.
+
 Two cases are held back instead of sent, and delivered automatically
 once resolved:
 
