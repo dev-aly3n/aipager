@@ -11,12 +11,13 @@ name: snap
 
 on:
   push:
+    # Path filters are not evaluated for tag pushes, so every v* tag
+    # builds; a push to main builds only when the recipe changed.
     branches: [main]
+    tags: ['v*']
     paths:
       - 'packaging/snap/**'
       - '.github/workflows/snap.yml'
-  push:
-    tags: ['v*']
   workflow_dispatch:
 
 permissions:
