@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from unittest.mock import AsyncMock
 
 import pytest
@@ -105,7 +106,7 @@ def test_inject_prompt_stamps_a_successful_send(mk_bot, run_async, monkeypatch, 
     sess = _sess()
     monkeypatch.setattr(inject, "send_text_and_enter", AsyncMock(return_value=True))
 
-    before = steady_clock()
+    before = time.monotonic()  # the real clock: steady_clock pins only the monitor and the animator
     ok = run_async(bot._inject_prompt(sess, "hello", msg_id=555, chat_id=CHAT))
 
     assert ok is True
@@ -312,6 +313,7 @@ def test_handler_turns_the_card_into_a_warning_and_idles_the_session(
     ps.write_note(NAME, None, None, None, msg_id=778, chat_id=CHAT,
                   sender_key=(0, 0), body="keep me", raw_text="keep me")
     bot = _wired_bot(mk_bot, sess)
+    t0 = time.monotonic()
 
     with caplog.at_level(logging.WARNING, logger="aipager.bot.notify"):
         run_async(bot.notify(sess, "prompt_not_taken",
@@ -332,7 +334,7 @@ def test_handler_turns_the_card_into_a_warning_and_idles_the_session(
     assert sess.trigger_msg_id is None
     assert sess.busy_card_trigger is None
     assert sess.prompt_sent_msg is None
-    assert sess.last_idle_at >= now
+    assert sess.last_idle_at >= t0
     remaining = [n["msg_id"] for n in ps.list_outstanding_notes(NAME)]
     assert remaining == [778]
     warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]

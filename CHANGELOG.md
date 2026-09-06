@@ -19,12 +19,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The AUR recipe is current again (0.7.7, built and linted on Arch in a
   container) and a workflow now publishes it to the AUR on every release
   tag once the publisher key is configured.
-- The snap is built in CI on every push and release tag, and released
-  to the Snap Store on tags once the store credential is configured.
+- The snap is built in CI on release tags and recipe changes, and
+  released to the Snap Store on tags once the store credential is
+  configured; the recipe now installs Claude Code with the build
+  environment's npm (the staged node could not load its own library).
 - Sessions that ended more than 14 days ago now drop out of the registry
   (and the `/resume` picker) on their own, at daemon start and on the
   monitor's tick, instead of accumulating until the 50-entry cap pushed
   them out; `GONE_SESSION_MAX_AGE_DAYS` tunes the age, `0` disables it.
+
+### Fixed
+- The test suite no longer depends on a chat id found on the developer's
+  disk: a fresh checkout (CI) saw an empty `CHAT_ID`, sixteen card tests
+  died in `int("")`, and the `test` workflow had been red on every push
+  since before 0.7.6. Every test now runs against the same pinned chat.
 
 ## [0.7.7] - 2026-09-06
 

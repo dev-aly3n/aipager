@@ -71,6 +71,25 @@ def _isolate_wizard_config(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _pin_single_chat_config(monkeypatch):
+    """Every machine sees the same configured single chat.
+
+    ``aipager.config`` resolves ``CHAT_ID`` at import from, in order, the
+    environment, ``~/.config/aipager/config.env``, the gitignored
+    project-root ``.env`` of a development checkout, and the v2
+    ``aipager.yaml`` scopes. On the developer's box the ``.env`` (or the
+    yaml) fills it; on a fresh CI runner nothing does, so
+    ``resolve_chat_id()`` returned ``""`` and sixteen tests that edit or
+    send a card died in ``int("")`` — the `test` workflow had been red on
+    every push since before 0.7.6 without anyone noticing (roadmap 8.14).
+    Pinning here makes the suite independent of what happens to be on
+    disk; a test about an UNconfigured install overrides this with its
+    own later ``monkeypatch`` (a later patch wins).
+    """
+    monkeypatch.setattr("aipager.config.CHAT_ID", "256113222")
+
+
+@pytest.fixture(autouse=True)
 def _isolate_home_paths(tmp_path, monkeypatch):
     """Redirect every module-level ``Path.home()`` write target to tmp.
 
