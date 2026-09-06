@@ -998,6 +998,33 @@ class NotifyMixin:
             self._resume_animation_if_dead(sess, reason="tool_use while BUSY")
             return
 
+        if event == "waiting_reminder":
+            # Claude Code nudged about idle input while this session is
+            # blocked on a permission prompt or a question (roadmap 8.4).
+            # The state is right — INTERACTIVE — and stays; the chat gets
+            # one line pointing at the prompt, threaded under the inline
+            # card when there is one. No keyboard: the buttons are on the
+            # prompt itself.
+            kind = context.get("kind")
+            summary = context.get("summary")
+            reminder = (f"⬆️ <b>{html_mod.escape(label)}</b> · still waiting "
+                        "for your answer above")
+            if summary:
+                head = "Question" if kind == "question" else "Permission"
+                reminder += f"\n{head}: {html_mod.escape(str(summary)[:120])}"
+            reply_to = (sess.busy_msg_id
+                        if sess.busy_msg_id and sess.busy_msg_id > 0 else None)
+            try:
+                await bot.send_message(
+                    resolve_chat_id(sess), reminder, parse_mode="HTML",
+                    reply_to_message_id=reply_to,
+                )
+            except Exception:
+                log.debug("[%s] waiting reminder failed", label, exc_info=True)
+            if self.observers:
+                asyncio.create_task(self.observers.broadcast(reminder))
+            return
+
         if event == "prompt_not_taken":
             # The session monitor saw a turn-starting Telegram send go
             # PROMPT_HOOK_GRACE_SECONDS without any hook (roadmap 8.11):

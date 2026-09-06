@@ -94,6 +94,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pseudo-terminal, name too long, permission denied, missing directory)
   and keeps dtach's raw message in the daemon log; it used to forward
   that message verbatim, binary and socket paths included.
+- A session waiting on a permission prompt or a question could be
+  announced as idle when Claude Code sent its "waiting for your input"
+  notification; it now stays waiting and the chat gets a one-line
+  reminder pointing at the prompt instead, once per wait.
 
 ## [0.7.6] - 2026-09-04
 

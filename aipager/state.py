@@ -334,6 +334,12 @@ class TrackedSession:
     prompt_sent_at: float = 0.0
     prompt_sent_msg: tuple[int, int] | None = None
     turn_hook_at: float = 0.0
+    # One "still waiting for your answer" reminder per INTERACTIVE wait
+    # (roadmap 8.4): set by the hook receiver when Claude Code's idle
+    # notification arrives while the session is blocked on a human,
+    # cleared by ``transition()`` on every entry into INTERACTIVE.
+    # Transient — a daemon restart starts a fresh wait anyway.
+    waiting_reminder_sent: bool = False
     # Guards the idle-recovery fallback's own INFO log (session_monitor.py)
     # so a tool/compaction that stands the recovery down for minutes logs
     # ONE line for the whole episode rather than one per 2s scan tick.
@@ -699,6 +705,24 @@ class TrackedSession:
             return None
         top = self._live_stack[-1]
         return top.created_at if top.kind == "compacting" else None
+
+    def waiting_on_human(self) -> tuple[str | None, str | None]:
+        """``(kind, summary)`` of what this session is blocked on —
+        ``("question", q)`` for an AskUserQuestion, ``("permission",
+        tool_summary)`` for a permission prompt, ``(None, None)`` when the
+        inline prompt could not be recorded (the separate-message
+        fallback leaves ``pending_permission`` None while the status is
+        still INTERACTIVE). Meaningful only while ``status`` is
+        INTERACTIVE: the status alone says "waiting", this only
+        enriches it — never gate on ``pending_permission``. Shared by
+        the Mini App grid and the chat reminder so both agree.
+        """
+        perm = self.pending_permission
+        if not perm:
+            return None, None
+        if perm.get("ask_question"):
+            return "question", perm.get("question")
+        return "permission", perm.get("tool_summary")
 
     def queue_prompt(self, text: str, msg_id: int | None,
                      reply_context: str = "",
@@ -1142,6 +1166,9 @@ class SessionRegistry:
                 return None  # don't notify
             sess.last_idle_at = now
 
+        # A new wait on a human gets its own reminder (roadmap 8.4).
+        if new_status == Status.INTERACTIVE:
+            sess.waiting_reminder_sent = False
         # Reset idle timer when entering BUSY so next IDLE always notifies
         if new_status == Status.BUSY:
             sess.last_idle_at = 0.0

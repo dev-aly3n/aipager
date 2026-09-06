@@ -1123,6 +1123,30 @@ class HookReceiver:
             await expire_notes_after_turn_end(session_name, pre_notes)
 
         elif event.lower() in ("idle_prompt", "idle", "stop", "notification"):
+            # A Notification-class idle event (Claude Code's "waiting for
+            # your input" nudge, `notification_type` set) for a session
+            # that is INTERACTIVE is not a turn end: the session is blocked
+            # on a permission prompt or an AskUserQuestion that the
+            # operator has not answered. Turning it into "idle" told them
+            # the turn was over while the prompt above still waited
+            # (roadmap 8.4). Keep the state and remind once per wait. A
+            # real Stop/StopFailure carries no notification_type and still
+            # ends the turn below — the operator may have answered in the
+            # terminal.
+            waiting = self.registry.get(session_name)
+            if (msg.get("notification_type") and waiting is not None
+                    and waiting.status == Status.INTERACTIVE):
+                if not waiting.waiting_reminder_sent:
+                    waiting.waiting_reminder_sent = True
+                    kind, summary = waiting.waiting_on_human()
+                    log.info("[%s] idle notification while waiting on a human "
+                             "— reminding, not idling", waiting.label)
+                    await self.notify_fn(waiting, "waiting_reminder",
+                                         {"kind": kind, "summary": summary})
+                else:
+                    log.debug("[%s] idle notification while waiting — already "
+                              "reminded this wait", waiting.label)
+                return
             # Turn finished — reset origin fail-closed (Phase D §3.7a) so the
             # window before the next prompt is treated as restricted.
             #

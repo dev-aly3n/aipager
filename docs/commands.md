@@ -134,6 +134,11 @@ Every tap is recorded in `~/.claude/aipager-audit.jsonl` and mirrored
 as a one-line reply threaded under the busy message:
 `✅ [jim] · Allowed · Bash: ls -la /tmp`.
 
+While a prompt — or an AskUserQuestion — waits for you, the session
+shows as waiting, never idle. If Claude Code nudges about idle input
+during that wait, the chat gets `⬆️ jim · still waiting for your answer
+above` as a reply to the prompt, once per wait.
+
 `AskUserQuestion` dialogs render the same way, with one button per
 option (and checkbox-style multi-select where the question allows it).
 

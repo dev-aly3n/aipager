@@ -80,12 +80,8 @@ def _derive_status(sess: "TrackedSession") -> tuple[str, str | None, str | None]
     if sess.status != Status.INTERACTIVE:
         return sess.status.name.lower(), None, None
 
-    perm = sess.pending_permission
-    if not perm:
-        return _WAITING_STATUS, None, None
-    if perm.get("ask_question"):
-        return _WAITING_STATUS, "question", perm.get("question")
-    return _WAITING_STATUS, "permission", perm.get("tool_summary")
+    kind, summary = sess.waiting_on_human()
+    return _WAITING_STATUS, kind, summary
 
 
 # Display order for the grid (design §2: "ordered by last activity", with
