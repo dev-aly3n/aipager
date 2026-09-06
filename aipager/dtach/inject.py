@@ -447,8 +447,13 @@ async def kill_session(session: str) -> bool:
 
     try:
         sock_path.unlink(missing_ok=True)
-    except OSError:
-        pass
+    except OSError as e:
+        # Swallowing this silently left a socket the monitor's next 2 s
+        # scan re-adopted as a "new" session under a derived label
+        # (roadmap 8.6). The kill itself succeeded, so still True — but
+        # say so, so the re-adoption has an explanation in the journal.
+        log.warning("[%s] killed, but could not remove socket %s: %s — "
+                    "the next scan may re-adopt it", session, sock, e)
     return True
 
 

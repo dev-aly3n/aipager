@@ -80,6 +80,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   card now turns into `⚠️ name · Not taken by Claude Code` within
   seconds and the session is idle again; `PROMPT_HOOK_GRACE_SECONDS`
   (default 8) tunes the wait.
+- The AUR build file and the Nix flake now list PyYAML and httpx, which
+  the daemon imports at startup; an Arch install could previously fail on
+  the missing YAML reader.
+- A session that was killed but whose socket could not be removed now
+  says so in the daemon log instead of silently leaving a socket the next
+  scan re-adopts under a derived name.
 
 ## [0.7.6] - 2026-09-04
 

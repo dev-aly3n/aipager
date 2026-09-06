@@ -592,3 +592,49 @@ def test_discard_queued_input_sends_to_the_named_session(monkeypatch, run_async)
     monkeypatch.setattr(inject, "send_keys", _fake_send_keys)
     run_async(inject.discard_queued_input("claude-target"))
     assert seen_sessions == ["claude-target", "claude-target"]
+
+
+def test_kill_session_warns_when_the_socket_cannot_be_removed(
+    tmp_path, monkeypatch, run_async, caplog,
+):
+    """The kill still succeeds, but a socket left behind is said out
+    loud (roadmap 8.6): it is what the monitor's next scan re-adopts."""
+    import logging
+    from pathlib import Path
+    sock_path = tmp_path / "claude-dtach-jim.sock"
+    srv = _socket.socket(_socket.AF_UNIX, _socket.SOCK_STREAM)
+    srv.bind(str(sock_path))
+    monkeypatch.setattr(inject, "_sock_path", lambda s: str(sock_path))
+
+    async def _fake_exec(*args, **kwargs):
+        from unittest.mock import AsyncMock
+        proc = AsyncMock()
+        proc.communicate = AsyncMock(return_value=(b"12345\n", b""))
+        return proc
+    monkeypatch.setattr(inject, "_proc_socket_pids", lambda sock: [])
+    monkeypatch.setattr(inject.asyncio, "create_subprocess_exec", _fake_exec)
+    dead = set()
+
+    def _fake_kill(pid, sig):
+        if sig == 0:
+            if pid in dead:
+                raise ProcessLookupError(pid)
+            return
+        dead.add(pid)
+    monkeypatch.setattr("os.kill", _fake_kill)
+    real_unlink = Path.unlink
+
+    def _refuse(self, *a, **kw):
+        if self == sock_path:
+            raise PermissionError(13, "Operation not permitted")
+        return real_unlink(self, *a, **kw)
+    monkeypatch.setattr(Path, "unlink", _refuse)
+    try:
+        with caplog.at_level(logging.WARNING, logger="aipager.dtach.inject"):
+            ok = run_async(inject.kill_session("claude-jim"))
+    finally:
+        srv.close()
+
+    assert ok is True
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("could not remove socket" in w and "re-adopt" in w for w in warnings), warnings
