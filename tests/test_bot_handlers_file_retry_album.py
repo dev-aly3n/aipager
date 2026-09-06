@@ -422,7 +422,8 @@ def test_new_album_item_cancels_the_armed_settle_timer(
         await bot._handle_file(u2, MagicMock())
         second = bot._albums[(CHAT_ID, "g7")].settle_task
         assert first is not second
-        assert first.cancelled() or first.cancelling()
+        if hasattr(first, "cancelling"):  # Task.cancelling() is 3.11+; 3.10 relies on the
+            assert first.cancelling()      # post-gather cancelled() check below
         second.cancel()
         await asyncio.gather(first, second, return_exceptions=True)
         assert first.cancelled()
