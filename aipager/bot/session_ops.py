@@ -22,6 +22,7 @@ from telegram import (
     Update,
 )
 
+from aipager.config import RESUME_GUARD_SECONDS
 from aipager.dtach import inject
 
 # Single source of truth for the poll timing (design.md ORCHESTRATOR
@@ -948,31 +949,43 @@ class SessionOpsMixin:
             else sess.skip_perms
         )
         sys_extra = self._session_system_prompt(sess.scope_chat_id, label)
-        ok, err = await inject.launch_session(
-            short_name, resume_id=resume_id, cwd=cwd,
-            skip_perms=effective_skip_perms, is_relaunch=True,
-            system_prompt_extra=sys_extra,
-        )
-        if not ok:
-            # Restore the id so the user can try again after fixing whatever
-            # broke (e.g. removing a stale socket).
-            sess.claude_session_id = resume_id
-            self.registry.mark_dirty()
-            return ResumeOutcome(ok=False, reason="launch_failed", err=err)
+        # Hold off the ageing sweep for the launch AND the restore that
+        # follows it: until `gone_at` is cleared below, this session is
+        # still GONE carrying its original stamp, so a sweep landing here
+        # would `remove()` the entry and leave everything below mutating
+        # an orphan while the operator was told "Resumed" (roadmap 8.12
+        # follow-up). Released in the `finally` on every path.
+        sess.resuming_until = time.monotonic() + RESUME_GUARD_SECONDS
+        try:
+            ok, err = await inject.launch_session(
+                short_name, resume_id=resume_id, cwd=cwd,
+                skip_perms=effective_skip_perms, is_relaunch=True,
+                system_prompt_extra=sys_extra,
+            )
+            if not ok:
+                # Restore the id so the user can try again after fixing
+                # whatever broke (e.g. removing a stale socket).
+                sess.claude_session_id = resume_id
+                self.registry.mark_dirty()
+                return ResumeOutcome(ok=False, reason="launch_failed", err=err)
 
-        # Resume succeeded — recover state.
-        sess.gone_at = None
-        # A resumed claude starts with an empty input queue: a target the
-        # old process had queued but never absorbed must not start a
-        # phantom turn later (review rev-iter2-001).
-        sess.queued_targets.clear()
-        sess.skip_perms = effective_skip_perms
-        self.registry.transition(session_name, Status.IDLE)
-        if driver_user_id is not None:
-            sess.last_driver_user_id = driver_user_id
-            sess.created_by_user_id = sess.created_by_user_id or driver_user_id
-        self.registry.last_active_session = session_name
-        self.registry.mark_dirty()
+            # Resume succeeded — recover state.
+            sess.gone_at = None
+            # A resumed claude starts with an empty input queue: a target the
+            # old process had queued but never absorbed must not start a
+            # phantom turn later (review rev-iter2-001).
+            sess.queued_targets.clear()
+            sess.skip_perms = effective_skip_perms
+            self.registry.transition(session_name, Status.IDLE)
+            if driver_user_id is not None:
+                sess.last_driver_user_id = driver_user_id
+                sess.created_by_user_id = (
+                    sess.created_by_user_id or driver_user_id
+                )
+            self.registry.last_active_session = session_name
+            self.registry.mark_dirty()
+        finally:
+            sess.resuming_until = 0.0
         asyncio.create_task(self._maybe_update_bot_name(session_name))
         asyncio.create_task(self._update_bot_commands())
 

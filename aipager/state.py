@@ -364,6 +364,10 @@ class TrackedSession:
     # expires on its own. Not persisted — a restart never spans a daemon
     # restart.
     restarting_until: float = 0.0
+    # Monotonic deadline while a resume's launch is in flight — read by
+    # `is_resuming()`, which the ageing sweep honours. Transient: a
+    # daemon restart means no resume is in flight any more.
+    resuming_until: float = 0.0
     # Team-mode attribution (None in personal mode). `created_by` is the
     # user who first created/owns the session; `last_driver` is whoever
     # most recently injected a prompt into it — used to attribute
@@ -998,6 +1002,23 @@ class TrackedSession:
         """True while a deliberate kill-and-relaunch is still in flight."""
         return time.monotonic() < self.restarting_until
 
+    def is_resuming(self) -> bool:
+        """True while this session's resume is between its launch and the
+        state restore that follows it.
+
+        `_do_resume_core` leaves the session GONE, with its original
+        `gone_at`, for the whole of `launch_session` — so a resume that
+        happens to land on the tick the entry crosses
+        `GONE_SESSION_MAX_AGE_DAYS` had it swept out from under itself:
+        the later `transition()` re-created a blank entry and the resume's
+        restored cwd, scope, permission mode and message routing were lost
+        on the orphan, while the operator was told "Resumed" (roadmap 8.12
+        follow-up). Distinct from `is_restarting()` on purpose: that one
+        also suppresses the `session_end` alert, which a resumed session
+        that dies immediately should still produce.
+        """
+        return time.monotonic() < self.resuming_until
+
     def preference_overrides(self) -> dict:
         """Only the fields this session has explicitly set — the exact
         shape `aipager.preferences.resolve_preferences` expects as its
@@ -1130,6 +1151,12 @@ class SessionRegistry:
         dropped: list[str] = []
         for name, sess in list(self._sessions.items()):
             if sess.status != Status.GONE or sess.gone_at is None:
+                continue
+            if sess.is_resuming():
+                # Its resume is mid-launch; dropping the entry now would
+                # strand that resume on an orphan. Silent: if the resume
+                # fails the session stays GONE and old, and a later tick
+                # sweeps it normally.
                 continue
             if sess.gone_at < cutoff:
                 log.info("Dropping gone session %s (gone %dd ago)",

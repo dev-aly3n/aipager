@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A session resumed at the exact moment it aged out of the registry could
+  come back with its working directory, chat and permission mode lost —
+  and its replies routed nowhere — while still reporting "Resumed". The
+  ageing sweep now leaves a session alone while its resume is in flight,
+  and releases it again however that resume ends.
+
 ## [0.7.8] - 2026-09-06
 
 ### Added

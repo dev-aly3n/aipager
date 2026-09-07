@@ -348,6 +348,19 @@ GONE_SESSION_MAX_AGE_DAYS: float = float(
     os.environ.get("GONE_SESSION_MAX_AGE_DAYS", "14")
 )
 
+# Upper bound on how long a resume may hold off the ageing sweep above
+# (`TrackedSession.is_resuming`). The sweep drops a GONE session the
+# instant it crosses the age cutoff, and a resume is GONE-with-the-old-
+# stamp until its launch returns — so a resume landing in that instant
+# used to have its registry entry removed mid-flight and replaced by a
+# blank one (roadmap 8.12 follow-up). The launch's own timeouts cap it
+# at ~8 s; 60 s is generous for a slow box and still short enough that a
+# resume that dies without releasing the guard cannot pin a dead entry
+# in the registry for long. Override via the env var.
+RESUME_GUARD_SECONDS: float = float(
+    os.environ.get("RESUME_GUARD_SECONDS", "60")
+)
+
 # Upper bound on how long a single tool call may run before the stale
 # busy detector fires anyway. When a PreToolUse hook has fired without a
 # matching PostToolUse, the session is legitimately "quiet" — no hooks
