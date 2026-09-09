@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.9] - 2026-09-09
+
 ### Fixed
 - A session resumed at the exact moment it aged out of the registry could
   come back with its working directory, chat and permission mode lost —
