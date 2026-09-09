@@ -16,6 +16,8 @@ Every test that reaches inject.kill_session/is_alive monkeypatches it.
 
 from __future__ import annotations
 
+import time
+
 from unittest.mock import AsyncMock
 
 from aipager.state import Status
@@ -245,6 +247,31 @@ def test_kill_twice_second_call_gets_404_not_found(server, run_async, monkeypatc
             assert second.status == 404
             assert await second.json() == {"error": "not_found"}
             assert send.await_count == 1
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+# ===== a resume in flight (roadmap 8.16) ====================================
+
+def test_kill_refuses_409_while_a_resume_is_in_flight(
+    server, run_async, monkeypatch,
+):
+    """Not the 404 fallthrough: the session exists, its resume is simply
+    mid-launch. Killing there would remove the entry the resume is about
+    to restore onto (see `_kill_session_core`)."""
+    _mock_kill(monkeypatch, killed=True, alive_after=False)
+
+    async def _run():
+        sess = _mk_session(server, "dev", status=Status.GONE)
+        sess.resuming_until = time.monotonic() + 30
+        client = await _client_for(server)
+        try:
+            resp = await client.post(
+                "/api/sessions/dev/kill", headers=_hdr(ADMIN_ID))
+            assert resp.status == 409
+            assert (await resp.json())["error"] == "resuming"
+            assert server.registry.get(sess.name) is sess
         finally:
             await client.close()
     run_async(_run())

@@ -1151,6 +1151,14 @@ class MiniAppServer:
                 "error": "still_running",
                 "detail": "Could not kill — the process is still running. Try again.",
             }, status=409)
+        if outcome.result == "resuming":
+            # NOT the 404 fallthrough below: the session very much exists,
+            # its resume is simply mid-launch (roadmap 8.16).
+            return web.json_response({
+                "error": "resuming",
+                "detail": "This session is being resumed right now. "
+                          "Try again in a moment.",
+            }, status=409)
         # "not_found": the dtach socket was already gone by the time we
         # looked (a post-lookup race). Deliberately the SAME minimal body
         # as the route-level 404 above, not a distinct code — both cases
@@ -1230,6 +1238,15 @@ class MiniAppServer:
             return web.json_response({
                 "error": "conflict",
                 "detail": "Session is still running. Use Kill to stop it first.",
+            }, status=409)
+        # GONE stays true for the whole of a resume's launch, so the check
+        # above passes while the session is coming back; removing it here
+        # would strand that resume on an orphan (roadmap 8.16).
+        if sess.is_resuming():
+            return web.json_response({
+                "error": "resuming",
+                "detail": "This session is being resumed right now. "
+                          "Try again in a moment.",
             }, status=409)
 
         label = sess.label

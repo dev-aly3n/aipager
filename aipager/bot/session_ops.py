@@ -86,7 +86,9 @@ class StopOutcome:
 class KillOutcome:
     """Result of :meth:`SessionOpsMixin._kill_session_core`.
 
-    ``result`` is one of ``"killed"``, ``"still_running"``, ``"not_found"``.
+    ``result`` is one of ``"killed"``, ``"still_running"``,
+    ``"not_found"``, ``"resuming"`` (a resume is in flight — the kill was
+    refused and NOTHING was destroyed; see the core's own docstring).
     """
 
     result: str
@@ -846,9 +848,22 @@ class SessionOpsMixin:
 
         The shared seam both chat and the Mini App call — edit behaviour
         here, not in the wrapper.
+
+        Refuses with ``"resuming"`` while a resume is in flight. The
+        session is GONE for the whole of that launch, so nothing else here
+        would stop the kill from removing the entry, after which the
+        resume's own ``transition()`` fabricates a blank replacement and
+        restores cwd/scope/perms onto an orphan while reporting success
+        (roadmap 8.16). The window is seconds and bounded by
+        ``RESUME_GUARD_SECONDS``, so telling the operator to try again is
+        honest; cancelling a resume mid-launch is not something this seam
+        can do safely.
         """
-        # Stop animation if running
         sess = self.registry.get(session_name)
+        if sess is not None and sess.is_resuming():
+            return KillOutcome(
+                result="resuming", label=label, session_name=session_name,
+            )
         if sess:
             # Deliver any buffered interim answers before the session (and
             # its card) is destroyed — the buffer is the only full copy
@@ -900,6 +915,11 @@ class SessionOpsMixin:
         outcome = await self._kill_session_core(session_name, target_label)
         if outcome.result == "killed":
             await _reply(f"💀 Killed [{target_label}]")
+        elif outcome.result == "resuming":
+            await _reply(
+                f"⏳ [{target_label}] is being resumed right now — "
+                f"try the kill again in a moment",
+            )
         elif outcome.result == "still_running":
             await _reply(f"⚠️ Could not kill [{target_label}] — still running")
         else:

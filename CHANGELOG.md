@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and its replies routed nowhere — while still reporting "Resumed". The
   ageing sweep now leaves a session alone while its resume is in flight,
   and releases it again however that resume ends.
+- The same corruption was reachable through three other doors, two of them
+  a plain button tap: the gone-history count cap could evict a session
+  mid-resume, and `/kill`, the Mini App's Delete and the chat's Delete
+  button all removed one because it still looked gone. The cap now skips a
+  session that is coming back, and the three delete/kill paths refuse with
+  "being resumed right now — try again in a moment" instead of silently
+  succeeding and breaking the resume.
 
 ## [0.7.8] - 2026-09-06
 

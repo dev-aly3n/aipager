@@ -51,6 +51,13 @@ from aipager.state import PREFERENCE_OVERRIDE_FIELDS, Status, TrackedSession
 
 log = logging.getLogger(__name__)
 
+# Both delete taps refuse with this while a resume is mid-launch:
+# the session is still GONE, so the status guard alone would let
+# the removal through (roadmap 8.16).
+_RESUMING_REFUSAL = (
+    "This session is being resumed right now. Try again in a moment."
+)
+
 if TYPE_CHECKING:
     from aipager.bot.core import TelegramBot
 
@@ -1063,6 +1070,11 @@ async def handle_callback(
                 query, "Session is still running. Use Kill to stop it first.",
             )
             return True
+        if sess.is_resuming():
+            # Don't even draw the confirm: the tap after it would be
+            # refused anyway (roadmap 8.16).
+            await bot._safe_answer(query, _RESUMING_REFUSAL)
+            return True
         text, kb = _render_delete_confirm(bot, chat_id, sess)
         await _edit(query, text, kb)
         return True
@@ -1075,6 +1087,12 @@ async def handle_callback(
             await bot._safe_answer(
                 query, "Session is still running. Use Kill to stop it first.",
             )
+            return True
+        # A session stays GONE for the whole of a resume's launch, so the
+        # check above passes while it is coming back; removing it here
+        # would strand that resume on an orphan (roadmap 8.16).
+        if sess.is_resuming():
+            await bot._safe_answer(query, _RESUMING_REFUSAL)
             return True
         label = sess.label
         # registry.remove() does NOT call mark_dirty() itself — must be

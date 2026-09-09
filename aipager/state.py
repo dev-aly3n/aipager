@@ -1175,16 +1175,27 @@ class SessionRegistry:
         Sorted by ``gone_at`` ascending so the oldest die first. A GONE
         entry without a ``gone_at`` stamp (legacy / pre-feature) sorts as
         oldest and is evicted preferentially.
+
+        A session whose resume is in flight is never the one evicted, even
+        when it is the oldest — which it usually is, since a resume
+        targets an old entry. Popping it would strand the resume on an
+        orphan (roadmap 8.15, the race ``expire_gone`` already guards).
         """
         gone = [
-            (s.gone_at if s.gone_at is not None else 0.0, n)
+            (s.gone_at if s.gone_at is not None else 0.0, n, s)
             for n, s in self._sessions.items()
             if s.status == Status.GONE
         ]
         if len(gone) <= MAX_GONE_HISTORY:
             return
-        gone.sort()
-        for _, name in gone[: len(gone) - MAX_GONE_HISTORY]:
+        over = len(gone) - MAX_GONE_HISTORY
+        # A resuming session still counts toward the cap (it is GONE right
+        # now) but is never the one evicted, so the cap is met by taking
+        # the next-oldest instead. If every candidate is resuming the
+        # registry simply stays over the cap for a few seconds.
+        gone.sort(key=lambda row: (row[0], row[1]))
+        victims = [n for _, n, sess in gone if not sess.is_resuming()][:over]
+        for name in victims:
             log.info("Evicting GONE session from history (LRU): %s", name)
             self._sessions.pop(name, None)
             self._dirty = True

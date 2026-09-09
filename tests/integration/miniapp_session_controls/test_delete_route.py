@@ -13,6 +13,8 @@ not just one representative.
 
 from __future__ import annotations
 
+import time
+
 from aipager.state import Status
 
 from .conftest import (
@@ -195,6 +197,44 @@ def test_delete_twice_second_call_returns_404_not_409(server, run_async):
             assert second.status == 404
             assert await second.json() == {"error": "not_found"}
             assert send.await_count == 1
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+# ===== a resume in flight (roadmap 8.16) ====================================
+
+def test_delete_refuses_409_while_a_resume_is_in_flight(server, run_async):
+    """A session stays GONE for the whole of a resume's launch, so the
+    status guard above passes while it is coming back. Removing it there
+    strands the resume on an orphan: its own `transition()` fabricates a
+    blank replacement and the restored cwd/scope/perms land on an object
+    the registry no longer holds, while the operator is told "Resumed"."""
+    async def _run():
+        sess = _mk_session(server, "dev", status=Status.GONE)
+        sess.resuming_until = time.monotonic() + 30
+        client = await _client_for(server)
+        try:
+            resp = await client.delete(
+                "/api/sessions/dev", headers=_hdr(ADMIN_ID))
+            assert resp.status == 409
+            assert (await resp.json())["error"] == "resuming"
+            assert server.registry.get(sess.name) is sess
+        finally:
+            await client.close()
+    run_async(_run())
+
+
+def test_delete_works_again_once_the_resume_finishes(server, run_async):
+    async def _run():
+        sess = _mk_session(server, "dev", status=Status.GONE)
+        sess.resuming_until = time.monotonic() - 1   # lapsed
+        client = await _client_for(server)
+        try:
+            resp = await client.delete(
+                "/api/sessions/dev", headers=_hdr(ADMIN_ID))
+            assert resp.status == 200
+            assert server.registry.get(sess.name) is None
         finally:
             await client.close()
     run_async(_run())
