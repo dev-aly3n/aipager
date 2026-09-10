@@ -24,6 +24,8 @@ import os
 import time
 from typing import TYPE_CHECKING
 
+from aipager.miniapp.webapp_sdk import WebAppSdk
+
 if TYPE_CHECKING:
     from aiohttp import web
 
@@ -173,6 +175,10 @@ class MiniAppServer:
         # Lazily created so constructing the server needs no running loop
         # (tests build it outside asyncio).
         self._diff_sem = None
+        # Telegram's Mini App SDK, served from this origin when we have
+        # a copy — see miniapp/webapp_sdk.py for the fetch/cache chain
+        # and _handle_index for what the page does when we do not.
+        self._sdk = WebAppSdk()
 
     def _build_app(self) -> "web.Application":
         """Construct the aiohttp Application. Split out from start() so
@@ -182,6 +188,11 @@ class MiniAppServer:
 
         app = web.Application()
         app.router.add_get("/", self._handle_index)
+        # The one asset the page loads besides itself. Unauthenticated by
+        # necessity, like GET / — the page loads it BEFORE it has any
+        # initData, because this script is what produces initData. Public
+        # bytes, not a secret; same trust level as the page itself.
+        app.router.add_get("/telegram-web-app.js", self._handle_webapp_sdk)
         app.router.add_get("/api/status", self._handle_status)
         app.router.add_get("/api/sessions", self._handle_sessions)
         # The only route in aipager that can spawn a process. Gated
@@ -269,9 +280,15 @@ class MiniAppServer:
         # read from config, args, or env.
         site = web.TCPSite(self._runner, "127.0.0.1", self.port)
         await site.start()
+        # Warm Telegram's SDK in the background so the first phone to
+        # open the page already gets it from this origin. Returns
+        # immediately and never raises — a failure just means the page
+        # loads the script from telegram.org, as it always used to.
+        self._sdk.prefetch()
         log.info("Mini App server listening on 127.0.0.1:%d", self.port)
 
     async def stop(self) -> None:
+        self._sdk.close()
         if self._runner is not None:
             await self._runner.cleanup()
             self._runner = None
@@ -280,8 +297,47 @@ class MiniAppServer:
     async def _handle_index(self, request):
         from aiohttp import web
 
-        from aipager.miniapp.static import INDEX_HTML
-        return web.Response(text=INDEX_HTML, content_type="text/html")
+        from aipager.miniapp.static import index_html
+
+        # Which host the page loads Telegram's SDK from is decided here,
+        # per request, by whether we actually have the script: from this
+        # origin when we do (one reachable host for the whole page), from
+        # telegram.org when we do not (exactly the pre-8.18 page). get()
+        # never waits on a fetch, so this cannot slow a page load down.
+        body = await self._sdk.get()
+        return web.Response(
+            text=index_html(sdk_from_self=body is not None),
+            content_type="text/html",
+        )
+
+    async def _handle_webapp_sdk(self, request):
+        """``GET /telegram-web-app.js`` — Telegram's SDK from our origin.
+
+        No auth gate here, on purpose (see the route comment). A day of
+        client caching matches the daemon's own refresh cadence; the 503
+        is ``no-store`` so a phone never caches the failure.
+
+        The 503 is close to unreachable in practice: a page rendered
+        while the daemon had no copy points its ``<script>`` at
+        telegram.org instead, so nothing asks us for a script we do not
+        have. It stays as the honest answer for anything that asks
+        anyway (a stale tab, a probe) — and a page that somehow got the
+        empty answer fails exactly as it did before this feature existed:
+        no ``window.Telegram``, so the app's own ``if (!initData)`` guard
+        shows its message.
+        """
+        from aiohttp import web
+
+        body = await self._sdk.get()
+        if body is None:
+            return web.Response(
+                status=503, text="Telegram Mini App SDK unavailable",
+                content_type="text/plain", headers={"Cache-Control": "no-store"},
+            )
+        return web.Response(
+            body=body, content_type="application/javascript", charset="utf-8",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
 
     async def _authenticate(self, request, route_name: str):
         """Shared auth gate for every JSON route: header read → initData

@@ -9,15 +9,40 @@ real ``.html``/``.css``/``.js`` files.
 
 from __future__ import annotations
 
-HTML_HEAD = """\
+# Where the page loads Telegram's SDK from. The daemon serves it at
+# SDK_SRC_SELF when it has a copy (fetched once, cached under the data
+# dir — see miniapp/webapp_sdk.py), which is the good case: the page then
+# needs exactly ONE reachable host, the one that just delivered it.
+# When the daemon has no copy, the page falls back to SDK_SRC_TELEGRAM,
+# which is precisely what it did before roadmap 8.18 — so the worst case
+# is the old behaviour, never worse. aipager does not redistribute
+# Telegram's script, so there is no third option; server.py's
+# _handle_index picks between these two per request.
+SDK_SRC_SELF = "/telegram-web-app.js"
+SDK_SRC_TELEGRAM = "https://telegram.org/js/telegram-web-app.js"
+
+# The only piece of the page that varies. ``.format()`` is safe here and
+# nowhere else in this package: this string has no other braces, while
+# the CSS and JS below are full of them.
+HTML_HEAD_TEMPLATE = """\
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>aipager</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="{sdk_src}"></script>
 """
+
+
+def html_head(sdk_src: str = SDK_SRC_SELF) -> str:
+    """The page head with the SDK ``<script>`` pointed at ``sdk_src``."""
+    return HTML_HEAD_TEMPLATE.format(sdk_src=sdk_src)
+
+
+# The default (self-served) head, kept as a module constant because that
+# is the import shape the rest of the package and its tests already use.
+HTML_HEAD = html_head()
 
 # Markup only — no inline event handlers (onclick="..." etc): every
 # listener is wired in _app.py via addEventListener, which is both the

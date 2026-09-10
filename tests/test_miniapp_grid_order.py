@@ -166,15 +166,32 @@ def test_every_getelementbyid_reference_resolves():
     )
 
 
-def test_page_loads_no_external_asset_but_the_telegram_sdk():
-    """CSP-friendliness and the no-bundler rule: the only thing the page may
-    fetch from another host is Telegram's own required SDK."""
+def test_page_loads_no_external_asset_beyond_the_sdk_fallback():
+    """CSP-friendliness and the no-bundler rule, per page variant.
+
+    Telegram's SDK used to be the page's one external asset. Since
+    roadmap 8.18 the daemon serves it from the page's own origin when it
+    has a copy, so THAT variant fetches nothing from another host at all.
+    The fallback variant — rendered when the daemon has no copy — loads
+    the SDK from telegram.org exactly as the page always did, and that
+    one URL is the only external asset it may carry.
+    """
     import re
 
-    from aipager.miniapp.static import INDEX_HTML
+    from aipager.miniapp.static import INDEX_HTML, SDK_SRC_TELEGRAM, index_html
 
-    external = set(re.findall(r'(?:src|href)="(https?://[^"]+)"', INDEX_HTML))
-    assert external == {"https://telegram.org/js/telegram-web-app.js"}
+    def _external(page):
+        return set(re.findall(r'(?:src|href)="(https?://[^"]+)"', page))
+
+    self_served = index_html(sdk_from_self=True)
+    fallback = index_html(sdk_from_self=False)
+
+    assert _external(self_served) == set()
+    assert 'src="/telegram-web-app.js"' in self_served
+    assert _external(fallback) == {SDK_SRC_TELEGRAM}
+    # The constant the rest of this file asserts against is the
+    # self-served page, and it is what the server renders.
+    assert INDEX_HTML == self_served
 
 
 def test_page_has_no_inline_event_handlers():
