@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.10] - 2026-09-10
+
 ### Fixed
 - A Telegram flood ban no longer makes the bot look dead for hours. The
   rich-message sends (every finished answer and every busy-card edit)
