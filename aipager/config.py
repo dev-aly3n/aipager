@@ -456,6 +456,28 @@ TELEGRAM_MAX_RETRY_AFTER: float = float(
     os.environ.get("TELEGRAM_MAX_RETRY_AFTER", "90")
 )
 
+# Telegram's published flood limits: ~30 messages/s bot-wide and 20
+# messages/min into any one group. The ONE `AIORateLimiter` the daemon
+# builds from these (lifecycle._make_builder) paces every PTB call AND
+# every raw rich-message POST (rich_message._post acquires through the
+# same instance) — a second, independent bucket for the rich path let
+# two chatty sessions put 40/min into one chat and earned an 8-hour
+# ban (roadmap 8.17). Named here so nothing can rebuild the limiter
+# from different numbers.
+TELEGRAM_OVERALL_MAX_RATE: float = 30.0
+TELEGRAM_OVERALL_TIME_PERIOD: float = 1.0
+TELEGRAM_GROUP_MAX_RATE: float = 20.0
+TELEGRAM_GROUP_TIME_PERIOD: float = 60.0
+
+# Signal file the daemon drops beside its control socket while a chat is
+# flood-muted (`{"muted": [{"chat_id", "until", "retry_after"}]}`), so
+# `aipager status` / `aipager doctor` — separate processes with no reply
+# channel to the daemon — can say "Telegram flood-muted until HH:MM".
+# The daemon writes it and never reads it back: the mute itself lives in
+# memory only (bot/flood.py) and is gone on restart, which also unlinks
+# whatever a previous daemon left here.
+FLOOD_MUTE_FILE: str = str(Path(SOCKET_PATH).parent / "aipager-flood-mute.json")
+
 # When two hook events arrive with identical (session, event_name,
 # payload-hash) within this window, drop the second. Belt-and-braces
 # against double-wiring scenarios (e.g. a wrapper script whose name

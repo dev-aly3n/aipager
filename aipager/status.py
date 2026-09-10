@@ -4,6 +4,8 @@ Read-only; never makes Telegram API calls. Pulls everything from local
 files written by the daemon and Claude Code's statusLine hook:
 
 - `$XDG_RUNTIME_DIR/aipager.sock`  daemon liveness probe (see config.SOCKET_PATH)
+- `$XDG_RUNTIME_DIR/aipager-flood-mute.json`  chats the daemon is
+  flood-muting (see config.FLOOD_MUTE_FILE, bot/flood.py)
 - `/tmp/claude-dtach-*.sock`   live dtach sessions
 - `~/.claude/aipager-sessions.json`  persisted session state
 - `/tmp/claude-status-claude-{label}.json`  live per-session stats
@@ -17,8 +19,10 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
 import json
 import socket
+import time
 from pathlib import Path
 
 from aipager.config import BOT_TOKEN, CHAT_ID, SESSION_STATE_FILE, SOCKET_PATH
@@ -67,6 +71,44 @@ def _daemon_alive() -> bool:
         return False
     finally:
         s.close()
+
+
+def read_flood_mutes(path: str | None = None) -> list[dict]:
+    """Chats the daemon is flood-muting right now (``bot/flood.py``).
+
+    Read from the signal file the daemon drops beside its socket:
+    ``[{"chat_id", "until"}]`` with ``until`` on the wall clock, lapsed
+    entries dropped. ``[]`` when the file is missing, unreadable or
+    malformed — a mute is never inferred. The path is read late from
+    ``config`` so tests (and the conftest isolation fixture) can move it.
+    """
+    from aipager import config
+
+    try:
+        data = json.loads(Path(path or config.FLOOD_MUTE_FILE).read_text())
+    except (FileNotFoundError, PermissionError, json.JSONDecodeError, OSError):
+        return []
+    entries = data.get("muted") if isinstance(data, dict) else None
+    now = time.time()
+    out: list[dict] = []
+    for entry in entries or []:
+        try:
+            until = float(entry["until"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if until > now:
+            out.append({"chat_id": entry.get("chat_id"), "until": until})
+    return out
+
+
+def flood_mute_lines(mutes: list[dict]) -> list[str]:
+    """One line per muted chat: ``Telegram flood-muted until HH:MM (chat X)``."""
+    return [
+        "Telegram flood-muted until "
+        f"{_dt.datetime.fromtimestamp(m['until']).strftime('%H:%M')} "
+        f"(chat {m['chat_id']})"
+        for m in mutes
+    ]
 
 
 def _gather_sessions() -> tuple[list[dict], set[str]]:
@@ -188,7 +230,8 @@ def render_sessions_plain(sessions: list[dict]) -> None:
         console.print("  " + "  ".join(parts))
 
 
-def _render_rich(daemon_up: bool, sessions: list[dict], total_cost: float) -> None:
+def _render_rich(daemon_up: bool, sessions: list[dict], total_cost: float,
+                 mutes: list[dict] | None = None) -> None:
     console.print()
     if daemon_up:
         console.print(
@@ -200,6 +243,8 @@ def _render_rich(daemon_up: bool, sessions: list[dict], total_cost: float) -> No
             "  [err]✗[/err]  daemon            "
             "[hint]not running[/hint]"
         )
+    for line in flood_mute_lines(mutes or []):
+        console.print(f"  [warn]⚠[/warn]  [warn]{line}[/warn]")
 
     if sessions:
         console.print()
@@ -211,11 +256,14 @@ def _render_rich(daemon_up: bool, sessions: list[dict], total_cost: float) -> No
     console.print()
 
 
-def _render_plain(daemon_up: bool, sessions: list[dict], total_cost: float) -> None:
+def _render_plain(daemon_up: bool, sessions: list[dict], total_cost: float,
+                  mutes: list[dict] | None = None) -> None:
     line = "daemon: " + ("up" if daemon_up else "not running")
     if daemon_up:
         line += f" (chat {CHAT_ID})"
     console.print(line)
+    for mute_line in flood_mute_lines(mutes or []):
+        console.print(mute_line)
     render_sessions_plain(sessions)
     if total_cost > 0:
         console.print(f"  total cost: ${total_cost:.2f}")
@@ -256,11 +304,13 @@ def cmd_status(args: argparse.Namespace | None = None) -> int:
     daemon_up = _daemon_alive()
     sessions, _live = _gather_sessions()
     total_cost = sum((s["cost_usd"] or 0.0) for s in sessions)
+    mutes = read_flood_mutes()
 
     if as_json:
         print(json.dumps({
             "daemon": {"up": daemon_up, "chat_id": CHAT_ID},
             "config_error": CONFIG_ERROR,
+            "flood_muted": mutes,
             "sessions": sessions,
             "total_cost_usd": round(total_cost, 4),
         }, indent=2))
@@ -274,15 +324,17 @@ def cmd_status(args: argparse.Namespace | None = None) -> int:
             "",
         )
     if console.is_terminal:
-        _render_rich(daemon_up, sessions, total_cost)
+        _render_rich(daemon_up, sessions, total_cost, mutes)
     else:
-        _render_plain(daemon_up, sessions, total_cost)
+        _render_plain(daemon_up, sessions, total_cost, mutes)
 
     return 0 if daemon_up else 1
 
 
 __all__ = [
     "cmd_status",
+    "flood_mute_lines",
+    "read_flood_mutes",
     "render_sessions_rich",
     "render_sessions_plain",
     "_gather_sessions",

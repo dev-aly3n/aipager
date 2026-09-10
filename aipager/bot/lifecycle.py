@@ -33,8 +33,12 @@ from telegram.error import BadRequest, Forbidden, RetryAfter
 from aipager.dtach import inject
 
 from aipager.bot import session_parity
+from aipager.bot.flood import MUTE, FloodMuted
+from aipager.bot.rich_message import set_rate_limiter
 from aipager.config import (
     APP_BUTTON, BOT_TOKEN, CHAT_ID,
+    TELEGRAM_GROUP_MAX_RATE, TELEGRAM_GROUP_TIME_PERIOD,
+    TELEGRAM_OVERALL_MAX_RATE, TELEGRAM_OVERALL_TIME_PERIOD,
 )
 from aipager.state import TrackedSession
 
@@ -235,9 +239,28 @@ class LifecycleMixin:
         # prompts still reached Claude, but no reply could ever be sent
         # back. AIORateLimiter queues and retries after the stated
         # interval instead of hammering and failing.
-        return builder.rate_limiter(AIORateLimiter())
+        #
+        # ONE instance, built from the named limits in config and handed
+        # to rich_message too (roadmap 8.17): sendRichMessage /
+        # editMessageText go out through their own httpx client, which
+        # PTB's limiter never sees. With a budget of their own they let
+        # three chatty sessions put 40/min into one chat — Telegram
+        # answered retry_after=28911 and the bot went mute for 8 hours.
+        limiter = AIORateLimiter(
+            overall_max_rate=TELEGRAM_OVERALL_MAX_RATE,
+            overall_time_period=TELEGRAM_OVERALL_TIME_PERIOD,
+            group_max_rate=TELEGRAM_GROUP_MAX_RATE,
+            group_time_period=TELEGRAM_GROUP_TIME_PERIOD,
+            max_retries=0,
+        )
+        set_rate_limiter(limiter)
+        return builder.rate_limiter(limiter)
 
     async def start(self) -> None:
+        # R5: a restart forgets any flood mute. The registry is empty
+        # already; this drops the status signal file a previous daemon
+        # may have left beside the socket.
+        MUTE.clear()
         builder = self._make_builder()
 
         self._app = builder.build()
@@ -322,6 +345,9 @@ class LifecycleMixin:
         # don't leave open connections dangling after the event loop ends.
         from aipager.bot.rich_message import close_client
         await close_client()
+        # The mute is this process's memory; take its status signal down
+        # with it so `aipager status` never reports a dead daemon's ban.
+        MUTE.clear()
         if self._app:
             await self._app.updater.stop()
             await self._app.stop()
@@ -721,6 +747,10 @@ class LifecycleMixin:
         for chat_id in self._all_notify_chat_ids():
             try:
                 await _send_with_retry(self._app.bot, chat_id=chat_id, text=text)
+            except FloodMuted as e:
+                # R4: never a startup send into a ban.
+                log.info("Startup notice to chat %s skipped — Telegram "
+                         "flood-muted for another %ds", chat_id, e.retry_after)
             except Exception:
                 log.warning(
                     "Failed to send startup notice to chat %s", chat_id,

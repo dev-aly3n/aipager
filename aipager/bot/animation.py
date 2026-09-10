@@ -23,11 +23,13 @@ from aipager.config import (
     COMPACT_ANIMATE_MAX_TICKS, SPINNER_VERBS,
     STREAM_EDIT_INTERVAL,
 )
+from aipager.bot.flood import MUTE
 from aipager.bot.rich_message import (
     detect_rtl,
     edit_message_text_rich,
     RichMessageBlocked,
     RichMessageFallbackRequired,
+    RichMessageFloodBanned,
     RichMessageGone,
 )
 from aipager import policy_snapshot
@@ -1301,6 +1303,15 @@ class AnimationMixin:
                           sess.label)
                 sess.busy_msg_id = 0
                 return None
+            except RichMessageFloodBanned:
+                # Telegram has flood-banned this chat, or still has it
+                # muted: stop exactly as on a block. Every further edit
+                # is a skipped send and a plain-text degrade would be a
+                # fresh violation. Debug only — flood.py logs the mute
+                # once, never per skipped edit.
+                log.debug("[%s] editMessageText flood-banned — stopping animation",
+                          sess.label)
+                return None
             except RichMessageFallbackRequired:
                 # Defensive: edit_message_text_rich structurally cannot
                 # raise this today (research.md gotcha ~53/54) — it only
@@ -1483,6 +1494,11 @@ class AnimationMixin:
         ``True`` when an edit was attempted (the loop rotates the verb),
         ``False`` when the tick was debounced.
         """
+        if MUTE.is_muted(resolve_chat_id(sess)):
+            # R3: the edit and the typing indicators below are all sends
+            # into a flood ban. End the loop as on a block; the card stays
+            # as last rendered until the turn ends.
+            return None
         if not waiting:
             # A batch whose message said nothing settles here, so the
             # card stops holding it and the next prose lands below it.

@@ -25,9 +25,11 @@ from telegram import (
 )
 from telegram.error import Forbidden
 
+from aipager.bot.flood import MUTE
 from aipager.bot.rich_message import (
     RichMessageBlocked,
     RichMessageFallbackRequired,
+    RichMessageFloodBanned,
     RichMessageGone,
     detect_rtl,
     edit_message_text_rich,
@@ -293,6 +295,12 @@ class NotifyMixin:
             except RichMessageBlocked:
                 log.warning("[%s] merged: sendRichMessage blocked", sess.label)
                 return False
+            except RichMessageFloodBanned:
+                # The chat is flood-muted now; the replace-style path the
+                # caller falls back to skips its own sends the same way.
+                log.info("[%s] merged: sendRichMessage flood-banned — answer "
+                         "not delivered", sess.label)
+                return False
             except (RichMessageFallbackRequired, Exception):
                 log.debug("[%s] merged: send-as-new failed", sess.label,
                           exc_info=True)
@@ -316,6 +324,10 @@ class NotifyMixin:
         except RichMessageGone:
             log.debug("[%s] merged: busy message gone", sess.label)
             sess.busy_msg_id = 0
+            return False
+        except RichMessageFloodBanned:
+            log.info("[%s] merged: editMessageText flood-banned — answer "
+                     "not delivered", sess.label)
             return False
         return result is not None
 
@@ -568,6 +580,10 @@ class NotifyMixin:
                 )
         except RichMessageBlocked:
             _log_blocked_once(Exception("sendRichMessage 403"))
+        except RichMessageFloodBanned:
+            # No plain-text fallback: that is a second violation (R2).
+            log.info("[%s] job buffer sendRichMessage flood-banned — not "
+                     "delivered", sess.label)
         except (RichMessageFallbackRequired, Exception):
             log.warning(
                 "[%s] job buffer sendRichMessage failed — falling back to "
@@ -1922,10 +1938,11 @@ class NotifyMixin:
                     # Falling back to "replace" means behaving exactly like
                     # it: one message opening with the stats result line,
                     # once the card is gone.
-                    if sess.busy_msg_id:
+                    if sess.busy_msg_id and not MUTE.is_muted(resolve_chat_id(sess)):
                         # Still live — _send_merged_final's own failure
                         # wasn't a RichMessageGone, so the card needs an
-                        # explicit delete here.
+                        # explicit delete here (a send too: skipped while
+                        # the chat is flood-muted).
                         try:
                             await bot.delete_message(
                                 chat_id=resolve_chat_id(sess),
@@ -2023,7 +2040,12 @@ class NotifyMixin:
                 and (send_file or (not card_kept and not body_content))
             )
             msg_id = 0
-            if standalone_header:
+            if standalone_header and MUTE.is_muted(resolve_chat_id(sess)):
+                # R3: the header is a send too. The body below raises
+                # RichMessageFloodBanned before any HTTP and nothing
+                # falls back, so the whole turn costs zero attempts.
+                log.info("[%s] IDLE header skipped — chat flood-muted", label)
+            elif standalone_header:
                 if send_file:
                     header_text += "\n\n📎 <i>Full response attached below ↓</i>"
                 log.debug("[%s] Sending IDLE notification (%d chars header)",
@@ -2085,6 +2107,12 @@ class NotifyMixin:
                         msg_id = sent.get("message_id") or 0
                 except RichMessageBlocked:
                     _log_blocked_once(Exception("sendRichMessage 403"))
+                except RichMessageFloodBanned:
+                    # Flood ban (R2): this was the one attempt. A plain-text
+                    # fallback would be a fresh violation extending the
+                    # ban; the chat is muted until it lifts.
+                    log.info("[%s] sendRichMessage flood-banned — answer not "
+                             "delivered, no fallback", label)
                 except (RichMessageFallbackRequired, Exception):
                     # Plain-text fallback — split into ≤4096-char chunks at
                     # markdown-safe boundaries so the send cannot fail to parse.
@@ -2146,6 +2174,11 @@ class NotifyMixin:
                         label, mb,
                     )
                     file_content = ""  # also skip the observer-broadcast path below
+                elif MUTE.is_muted(resolve_chat_id(sess)):
+                    # R3: a document is a send. Observers (own bots, own
+                    # budgets) still get theirs below.
+                    log.info("[%s] full-log attachment skipped — chat "
+                             "flood-muted", label)
                 else:
                     try:
                         tmp = Path(tempfile.mktemp(suffix=".txt", prefix=f"{label}_"))

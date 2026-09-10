@@ -11,10 +11,21 @@ send_rich_message(chat_id, markdown, *, is_rtl, reply_to_message_id)
 edit_message_text_rich(chat_id, message_id, markdown, *, is_rtl, reply_markup)
 detect_rtl(text)
 close_client()
+set_rate_limiter(limiter)
 
 RichMessageFallbackRequired  -- caller should re-send as plain text
 RichMessageBlocked           -- bot is blocked; no fallback
 RichMessageGone              -- target message no longer exists
+RichMessageFloodBanned       -- flood ban / chat muted; no retry, NO fallback
+
+Flood control (roadmap 8.17): every POST here acquires through the SAME
+``AIORateLimiter`` instance PTB uses (handed over by
+``lifecycle._make_builder`` via :func:`set_rate_limiter`), so the rich
+path and the PTB path share one 30/s + 20/min-per-group budget instead
+of two. A 429 whose ``retry_after`` exceeds ``TELEGRAM_MAX_RETRY_AFTER``
+is a ban: it mutes the chat (``bot/flood.py``) and raises
+:class:`RichMessageFloodBanned` after exactly one POST — no clamp, no
+sleep, no plain-text fallback, each of which was a fresh violation.
 
 sendRichMessageDraft is deliberately absent. It is the only source of
 Telegram's native word-by-word animation, but a draft is a 30-second
@@ -33,6 +44,9 @@ import re
 
 import httpx
 
+from aipager.bot.flood import MUTE, FloodMuted
+from aipager.config import TELEGRAM_MAX_RETRY_AFTER
+
 log = logging.getLogger(__name__)
 
 # Rich-message body size ceiling (UTF-8 bytes) imposed by Telegram.
@@ -40,6 +54,15 @@ _RICH_LIMIT: int = 32_768
 
 # Constructed lazily by _get_client(); closed by close_client().
 _client: httpx.AsyncClient | None = None
+
+# The daemon's one AIORateLimiter (telegram.ext), set by
+# lifecycle._make_builder before polling starts. None only in tests and
+# means "unpaced" — never leave it None in a running daemon.
+_rate_limiter = None
+
+# The 429 back-off sleep. A module attribute so tests shorten THIS and
+# never patch asyncio.sleep, which is the global module (see CLAUDE.md).
+_sleep = asyncio.sleep
 
 # RTL / LTR letter ranges (Unicode script blocks).
 _RTL_RE = re.compile(
@@ -61,6 +84,16 @@ class RichMessageBlocked(Exception):
 
 class RichMessageGone(Exception):
     """Raised when the message being edited no longer exists (deleted)."""
+
+
+class RichMessageFloodBanned(FloodMuted):
+    """Raised on a 429 whose ``retry_after`` exceeds ``TELEGRAM_MAX_RETRY_AFTER``
+    — Telegram has flood-banned the bot in that chat — and on every later
+    send or edit to that chat while the resulting mute holds (before any
+    HTTP is made). Deliberately NOT a ``RichMessageFallbackRequired``: a
+    plain-text fallback is a fresh violation that extends the ban. Callers
+    stop; nothing is retried. ``retry_after`` is the seconds left.
+    """
 
 
 # ── HTTP client ──────────────────────────────────────────────────────────────
@@ -97,8 +130,20 @@ def _api_url(method: str) -> str:
     return f"https://api.telegram.org/bot{BOT_TOKEN}/{method}"
 
 
+def set_rate_limiter(limiter) -> None:
+    """Hand over the daemon's ``AIORateLimiter`` so every POST from this
+    module is paced by the same budget as PTB's own calls (R1)."""
+    global _rate_limiter
+    _rate_limiter = limiter
+
+
 async def _post(method: str, payload: dict) -> dict:
     """POST *payload* to *method*, return the parsed response body.
+
+    Acquires the shared rate-limit budget first: ``AIORateLimiter``'s
+    ``process_request`` keys its per-group bucket on ``data["chat_id"]``
+    and runs the callback inside both limiters, exactly as it does for a
+    PTB ``send_message``.
 
     Raises httpx exceptions on network / timeout failures; returns the raw
     dict (including ok/error_code/description) on any HTTP-level response.
@@ -106,8 +151,42 @@ async def _post(method: str, payload: dict) -> dict:
     client = _get_client()
     # Do NOT log the URL — it contains the bot token.
     log.debug("sendRichMessage family: calling %s", method)
-    resp = await client.post(_api_url(method), json=payload)
-    return resp.json()
+
+    async def _do() -> dict:
+        resp = await client.post(_api_url(method), json=payload)
+        return resp.json()
+
+    limiter = _rate_limiter
+    if limiter is None:
+        return await _do()
+    return await limiter.process_request(
+        callback=_do, args=(), kwargs={}, endpoint=method, data=payload,
+        rate_limit_args=None,
+    )
+
+
+def _raise_if_muted(chat_id) -> None:
+    """R3: skip the send outright while the chat is flood-muted."""
+    if MUTE.is_muted(chat_id):
+        raise RichMessageFloodBanned(MUTE.remaining(chat_id), chat_id)
+
+
+def _retry_after_of(data: dict) -> int:
+    params = data.get("parameters") or {}
+    return int(params.get("retry_after", 30))
+
+
+def _ban_if_excessive(method: str, payload: dict, retry_after: int) -> None:
+    """R2: a ``retry_after`` past the cap is a flood ban, not a rate limit.
+
+    Mutes the chat for the whole ``retry_after`` and raises
+    :class:`RichMessageFloodBanned`; the caller has made exactly one POST
+    and makes no more. Small values return and keep the sleep-and-retry.
+    """
+    if retry_after > TELEGRAM_MAX_RETRY_AFTER:
+        chat_id = payload.get("chat_id")
+        MUTE.mute(chat_id, retry_after, source=method)
+        raise RichMessageFloodBanned(retry_after, chat_id)
 
 
 # ── Public API ───────────────────────────────────────────────────────────────
@@ -125,11 +204,16 @@ async def send_rich_message(
     ------
     RichMessageBlocked
         HTTP 403 — bot is blocked by the user; caller must not fall back.
+    RichMessageFloodBanned
+        The chat is flood-muted (raised before any HTTP), or this very
+        send got a 429 with ``retry_after`` over the cap and muted it.
+        Caller must NOT fall back to plain text.
     RichMessageFallbackRequired
         Any other failure (400, 404, 5xx, timeout, network error, or a 429
         that fails again after one retry) — caller should re-send as plain
         text with no parse_mode.
     """
+    _raise_if_muted(chat_id)
     payload: dict = {
         "chat_id": chat_id,
         "rich_message": {"markdown": markdown, "is_rtl": is_rtl},
@@ -179,12 +263,13 @@ async def _handle_response(
         raise RichMessageBlocked(description)
 
     if error_code == 429:
-        params = data.get("parameters") or {}
-        retry_after: int = min(int(params.get("retry_after", 30)), 30)
+        raw_retry_after = _retry_after_of(data)
+        _ban_if_excessive(method, payload, raw_retry_after)
+        retry_after: int = min(raw_retry_after, 30)
         if allow_retry:
             log.warning("%s rate-limited (429), sleeping %ds then retrying",
                         method, retry_after)
-            await asyncio.sleep(retry_after)
+            await _sleep(retry_after)
             try:
                 data2 = await _post(method, payload)
             except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
@@ -234,7 +319,12 @@ async def edit_message_text_rich(
     RichMessageGone
         The target message no longer exists (deleted by the user or by
         Telegram); caller must clear ``busy_msg_id`` and stop editing.
+    RichMessageFloodBanned
+        The chat is flood-muted (raised before any HTTP), or this edit got
+        a 429 with ``retry_after`` over the cap and muted it; caller must
+        stop editing and must not degrade to a plain-text edit.
     """
+    _raise_if_muted(chat_id)
     payload: dict = {
         "chat_id": chat_id,
         "message_id": message_id,
@@ -286,18 +376,20 @@ async def _handle_edit_response(data: dict, *, payload: dict) -> dict | None:
         return None
 
     if error_code == 429:
-        params = data.get("parameters") or {}
-        retry_after: int = min(int(params.get("retry_after", 30)), 30)
+        raw_retry_after = _retry_after_of(data)
+        _ban_if_excessive("editMessageText", payload, raw_retry_after)
+        retry_after: int = min(raw_retry_after, 30)
         log.warning("editMessageText rate-limited (429), sleeping %ds then retrying",
                     retry_after)
-        await asyncio.sleep(retry_after)
+        await _sleep(retry_after)
         try:
             data2 = await _post("editMessageText", payload)
         except Exception as exc:
             log.warning("editMessageText retry error: %s", exc)
             return None
-        # Second 429 → give up quietly
+        # Second 429 → give up quietly (unless it is a ban — then mute)
         if not data2.get("ok") and data2.get("error_code") == 429:
+            _ban_if_excessive("editMessageText", payload, _retry_after_of(data2))
             log.warning("editMessageText rate-limited again after retry")
             return None
         return await _handle_edit_response(data2, payload=payload)

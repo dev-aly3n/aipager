@@ -416,6 +416,19 @@ def check_daemon() -> CheckResult:
         return CheckResult(WARN, "aipager daemon", detail=[str(e)])
     finally:
         s.close()
+    # A live daemon that Telegram has flood-banned in a chat looks dead
+    # from the chat. Say so here rather than let the operator restart it
+    # into the ban (the mute self-clears; a restart sends one more
+    # attempt — see docs/troubleshooting.md).
+    from aipager.status import flood_mute_lines, read_flood_mutes
+
+    mutes = read_flood_mutes()
+    if mutes:
+        return CheckResult(
+            WARN, "aipager daemon",
+            detail=[SOCKET_PATH, *flood_mute_lines(mutes),
+                    "self-clears when the ban lapses — do not restart into it"],
+        )
     return CheckResult(OK, "aipager daemon", detail=[SOCKET_PATH])
 
 

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A Telegram flood ban no longer makes the bot look dead for hours. The
+  rich-message sends (every finished answer and every busy-card edit)
+  went out through their own HTTP client with no rate limiting at all,
+  so a few chatty sessions in one chat could exceed Telegram's 20/min
+  and earn a multi-hour `retry_after` — which was then treated as a
+  30-second one: clamped, slept, retried, and re-sent as plain text,
+  three fresh violations per message, each extending the ban. Every
+  send now shares the one rate limiter, a `retry_after` past
+  `TELEGRAM_MAX_RETRY_AFTER` ends the attempt after a single POST, and
+  the chat is muted for exactly the time Telegram asked: nothing is
+  retried or sent into the ban, other chats are unaffected, `aipager
+  status` and `doctor` show "Telegram flood-muted until HH:MM", and the
+  mute lifts on its own (a restart forgets it). Reactions still go out,
+  so a dropped answer still gets its 🚨.
+
 ## [0.7.9] - 2026-09-09
 
 ### Fixed

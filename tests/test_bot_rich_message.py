@@ -215,14 +215,19 @@ def test_send_rich_message_429_retries_once_and_succeeds(run_async, monkeypatch)
         return {"ok": True, "result": result}
 
     monkeypatch.setattr(rm, "_post", _fake_post)
-    monkeypatch.setattr(asyncio, "sleep", AsyncMock())
+    monkeypatch.setattr(rm, "_sleep", AsyncMock())
     out = run_async(send_rich_message(1, "text"))
     assert out == result
     assert call_count == 2
 
 
 def test_send_rich_message_429_retry_caps_sleep_at_30s(run_async, monkeypatch):
-    """retry_after > 30 is capped at 30."""
+    """retry_after > 30 (but under the flood-ban cap) is capped at 30.
+
+    A value past TELEGRAM_MAX_RETRY_AFTER is a ban, not a rate limit —
+    tests/test_rich_message_flood.py covers that; here the value stays
+    inside the cap so this pins the clamp alone.
+    """
     slept = []
 
     async def _fake_sleep(seconds):
@@ -230,11 +235,11 @@ def test_send_rich_message_429_retry_caps_sleep_at_30s(run_async, monkeypatch):
 
     async def _fake_post(method, payload):
         return {"ok": False, "error_code": 429,
-                "parameters": {"retry_after": 999},
+                "parameters": {"retry_after": 60},
                 "description": "Too Many Requests"}
 
     monkeypatch.setattr(rm, "_post", _fake_post)
-    monkeypatch.setattr(asyncio, "sleep", _fake_sleep)
+    monkeypatch.setattr(rm, "_sleep", _fake_sleep)
     with pytest.raises(RichMessageFallbackRequired):
         run_async(send_rich_message(1, "text"))
     assert slept[0] == 30
@@ -247,7 +252,7 @@ def test_send_rich_message_429_twice_raises_fallback(run_async, monkeypatch):
         "parameters": {"retry_after": 1},
         "description": "Too Many Requests",
     }))
-    monkeypatch.setattr(asyncio, "sleep", AsyncMock())
+    monkeypatch.setattr(rm, "_sleep", AsyncMock())
     with pytest.raises(RichMessageFallbackRequired):
         run_async(send_rich_message(1, "text"))
 

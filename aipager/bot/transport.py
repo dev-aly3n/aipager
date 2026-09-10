@@ -32,6 +32,7 @@ import time
 
 from telegram.error import BadRequest, Forbidden, RetryAfter
 
+from aipager.bot.flood import MUTE, FloodMuted
 from aipager.config import TELEGRAM_MAX_RETRY_AFTER
 from aipager.team import Role, User as TeamUser
 
@@ -360,7 +361,14 @@ async def _send_with_retry(bot, *, chat_id, text: str, parse_mode: str | None = 
                            reply_to_message_id: int | None = None,
                            reply_markup=None, max_retries: int = 2):
     """Send a Telegram message with backoff for RetryAfter and graceful
-    handling of "message is too long"."""
+    handling of "message is too long".
+
+    Raises :class:`~aipager.bot.flood.FloodMuted` without touching the bot
+    while the chat is flood-muted (R3): the next attempt into a ban
+    extends it, and callers already treat a failed send as non-fatal.
+    """
+    if MUTE.is_muted(chat_id):
+        raise FloodMuted(MUTE.remaining(chat_id), chat_id)
     last_err: Exception | None = None
     truncations = 0
     for _attempt in range(max_retries + 1):
@@ -383,6 +391,9 @@ async def _send_with_retry(bot, *, chat_id, text: str, parse_mode: str | None = 
                     "cap=%ss, giving up on this message",
                     wait, TELEGRAM_MAX_RETRY_AFTER,
                 )
+                # A retry_after this long is a ban: remember it so no
+                # later send tries this chat again until it lifts (R3).
+                MUTE.mute(chat_id, wait, source="sendMessage")
                 if reply_to_message_id:
                     try:
                         await bot.set_message_reaction(

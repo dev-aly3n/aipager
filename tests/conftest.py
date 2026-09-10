@@ -478,6 +478,28 @@ def _block_real_telegram_http(monkeypatch):
     monkeypatch.setattr("aipager.bot.rich_message._post", _refuse)
 
 
+@pytest.fixture(autouse=True)
+def _isolate_flood_mute(tmp_path, monkeypatch):
+    """No test inherits another's flood mute, leaks a rate limiter into
+    ``rich_message``, or touches the live daemon's flood-mute signal file.
+
+    ``bot/flood.py``'s registry is module-level daemon state — a mute
+    armed by one test would silently skip every send in the next — and
+    its signal file defaults to the real ``$XDG_RUNTIME_DIR``, where the
+    operator's daemon writes (and ``aipager status`` reads) its own. The
+    path is moved FIRST, then the registry cleared, so the clear can only
+    ever unlink the tmp copy.
+    """
+    monkeypatch.setattr("aipager.config.FLOOD_MUTE_FILE",
+                        str(tmp_path / "aipager-flood-mute.json"))
+    from aipager.bot import flood, rich_message
+
+    flood.MUTE.clear()
+    monkeypatch.setattr(rich_message, "_rate_limiter", None)
+    yield
+    flood.MUTE.clear()
+
+
 def _control_socket_path() -> Path:
     """Resolve the daemon's control socket once, for the whole session.
 

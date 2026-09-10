@@ -42,6 +42,40 @@ aipager service start
 4. Bot was never `/start`ed: open the bot in Telegram and tap Start
    once.
 
+## The bot went quiet: flood control
+
+Telegram allows roughly 20 messages a minute into one group. A few
+chatty sessions answering at once in the same chat can exceed that, and
+Telegram then answers every send with `429` and a `retry_after` that can
+run to hours. From the chat it looks like the bot died — prompts still
+reach Claude, sessions keep working, but no reply comes back.
+
+What you see:
+
+- `aipager status` (and the `aipager daemon` row of `aipager doctor`)
+  shows **`Telegram flood-muted until HH:MM (chat …)`**.
+- One line in `aipager logs`: `Telegram flood control — chat … muted
+  for Ns (until HH:MM) …`, then silence for that chat. Later, one
+  `flood mute on chat … lifted` line.
+- A 🚨 reaction on your message when the answer to it was dropped.
+
+The daemon mutes the chat for exactly the time Telegram asked and skips
+every send to it — answers, busy-card edits, attachments — instead of
+retrying into the ban, because each retry (and each plain-text fallback)
+is a fresh violation that extends it. Answers produced during the mute
+are not queued; ask again once it lifts. Other chats are unaffected.
+
+What NOT to do:
+
+- Don't restart the daemon to "fix" it. The mute self-clears at the
+  time shown; a restart forgets it and sends one more attempt into the
+  ban, which can extend it.
+- Don't lower `TELEGRAM_MAX_RETRY_AFTER` below the default 90 s hoping
+  to retry sooner — everything past that cap is a ban, not a rate limit.
+
+To avoid it: run fewer simultaneous sessions per chat, or give the
+busiest ones a chat of their own (`aipager config`).
+
 ## Session shows GONE in pinned status
 
 The dtach process for that session exited (machine reboot,
