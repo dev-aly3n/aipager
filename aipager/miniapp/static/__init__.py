@@ -21,15 +21,39 @@ necessity — see design.md's threat model item 2.
 from __future__ import annotations
 
 from aipager.miniapp.static._app import APP_JS
-from aipager.miniapp.static._shell import HTML_BODY, HTML_HEAD, HTML_TAIL
+from aipager.miniapp.static._shell import (
+    HTML_BODY,
+    HTML_TAIL,
+    SDK_SRC_SELF,
+    SDK_SRC_TELEGRAM,
+    html_head,
+)
 from aipager.miniapp.static._styles import CSS
 
-INDEX_HTML = (
-    HTML_HEAD
-    + "<style>\n" + CSS + "</style>\n"
+# Everything below the head is identical in both variants, so build it
+# once and only vary the head.
+_PAGE_TAIL = (
+    "<style>\n" + CSS + "</style>\n"
     + HTML_BODY
     + "<script>\n" + APP_JS + "\n</script>\n"
     + HTML_TAIL
 )
 
-__all__ = ["INDEX_HTML"]
+
+def index_html(*, sdk_from_self: bool = True) -> str:
+    """The page, with Telegram's SDK loaded from this origin when the
+    daemon has a copy of it (``sdk_from_self``) and straight from
+    telegram.org when it does not — the pre-8.18 behaviour, which is the
+    floor this feature must never fall below. ``server.py`` decides.
+    """
+    return html_head(SDK_SRC_SELF if sdk_from_self else SDK_SRC_TELEGRAM) + _PAGE_TAIL
+
+
+# Built by the same function the server calls — never re-assembled here —
+# so the constant ~100 tests assert against cannot drift away from the
+# page users actually get. The variant is named rather than defaulted:
+# this is the self-served page, the one the daemon renders once it has
+# the script. The fallback page is index_html(sdk_from_self=False).
+INDEX_HTML = index_html(sdk_from_self=True)
+
+__all__ = ["INDEX_HTML", "SDK_SRC_SELF", "SDK_SRC_TELEGRAM", "index_html"]

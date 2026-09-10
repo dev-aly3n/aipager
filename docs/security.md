@@ -218,6 +218,14 @@ option) and is reachable from outside solely through the managed
 tunnel described below. Outbound:
 
 - HTTPS long-poll to `api.telegram.org` (Telegram bot polling).
+- HTTPS to `telegram.org` for the Mini App's SDK script
+  (`telegram-web-app.js`), fetched once when the Mini App server
+  starts and refreshed at most once a day; cached under
+  `~/.local/share/aipager/webapp-sdk/`. The daemon serves those bytes
+  to the page from its own origin and never executes them. aipager
+  does not redistribute the script: nothing is bundled in the
+  package, and when the daemon has no copy the page loads it from
+  `telegram.org` directly, as it did before.
 - The Mini App tunnel to Cloudflare, while enabled (the default).
 - HTTPS to `pypi.org` and friends, only when the user taps the
   voice install button.

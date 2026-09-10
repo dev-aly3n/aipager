@@ -126,6 +126,40 @@ If the bot lost connection mid-install, the install itself usually
 completed on the host — restart the daemon and try a voice message
 again.
 
+## Open App shows "Open this page from the Telegram app to sign in"
+
+The page loaded, but Telegram's Mini App SDK script (the one that
+produces `initData`) did not, so the page has nothing to sign in with
+and makes no API call at all. The message blames you; the cause is a
+network one.
+
+Recent versions of aipager fetch that script themselves and serve it
+from the page's own origin (`/telegram-web-app.js`), so the phone only
+needs to reach the host that delivered the page — not `telegram.org` as
+well. If you see this on an older version, upgrade.
+
+Then, in order:
+
+1. Look at the page source. If its `<script>` tag points at
+   `https://telegram.org/js/telegram-web-app.js`, the daemon has not
+   managed to fetch the script yet and the page is falling back to
+   loading it from Telegram — which is the case that fails on a phone
+   that cannot reach `telegram.org`. The daemon fetches it when the Mini
+   App server starts and retries at most once a day, so restarting the
+   daemon retries immediately; `journalctl --user -u aipager | grep
+   "webapp sdk"` says what went wrong (a blocked or filtered
+   `telegram.org`, usually).
+2. If the tag points at `/telegram-web-app.js`, check the daemon serves
+   it: `curl -sI http://127.0.0.1:8765/telegram-web-app.js` on the
+   daemon host (adjust the port if you changed it) should answer `200`
+   with `Content-Type: application/javascript`. The copy lives under
+   `~/.local/share/aipager/webapp-sdk/`.
+3. You opened the URL in a regular browser rather than from the bot's
+   `/app` button or menu button: that is the expected message. The SDK
+   only produces `initData` inside Telegram.
+4. The page was left open for more than five minutes: `initData`
+   expires and the page asks to be reopened. Tap `/app` again.
+
 ## `pyexpat _XML_SetAllocTrackerActivationThreshold` on brew install
 
 Homebrew's `python@3.12` bottle was compiled against a newer

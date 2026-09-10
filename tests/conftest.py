@@ -767,3 +767,47 @@ def mk_update():
         update.effective_chat.id = chat_id
         return update
     return _mk
+
+
+@pytest.fixture(autouse=True)
+def _isolate_webapp_sdk(tmp_path, monkeypatch):
+    """Keep the Mini App SDK module off the real data dir and off telegram.org.
+
+    ``aipager.miniapp.webapp_sdk`` caches the fetched script under
+    ``~/.local/share/aipager/webapp-sdk/`` and fetches it from telegram.org.
+    Three things are redirected here for every test:
+
+    * the cache dir, to ``tmp_path`` (the env override the module reads
+      fresh on each call, same shape as ``AIPAGER_CLOUDFLARED_CACHE_DIR``);
+    * the download, to a stub that answers "offline" (``None``) — the
+      module's own never-raise path — while recording the call, so a test
+      that reaches it without faking it fails at teardown;
+    * the background refresh scheduler, to a no-op.
+
+    The third one is what keeps this fixture cheap. ``GET /`` asks the SDK
+    whether it has a copy (that is how the page picks its ``<script>``
+    src), and asking is also what schedules the once-a-day refresh — so
+    without this, every one of the ~180 tests that render the page would
+    spawn a refresh task and an executor thread it never asked for, and
+    trip the recorder above. Tests of the SDK itself restore the real
+    scheduler (``tests/test_miniapp_webapp_sdk.py``); a function-scoped
+    patch inside a test body wins over any of these.
+    """
+    monkeypatch.setenv("AIPAGER_WEBAPP_SDK_CACHE_DIR", str(tmp_path / "webapp-sdk-cache"))
+
+    reached: list = []
+
+    def _offline(url):
+        reached.append(url)
+        return None
+
+    monkeypatch.setattr("aipager.miniapp.webapp_sdk._download_sync", _offline)
+    monkeypatch.setattr(
+        "aipager.miniapp.webapp_sdk.WebAppSdk._start_background_refresh",
+        lambda self: None,
+    )
+    yield
+    assert not reached, (
+        f"test reached the Mini App SDK download path for {reached!r} without "
+        "faking it. Mock aipager.miniapp.webapp_sdk._download_sync in the test."
+    )

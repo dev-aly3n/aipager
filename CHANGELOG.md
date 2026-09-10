@@ -36,6 +36,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lost. The button toast and the 🚨 reaction, which Telegram meters
   separately, still answer, so a *button* tap is never silent — but a
   typed command during a mute now does nothing at all until it lifts.
+- The Mini App could come up as a dead page saying "Open this page from
+  the Telegram app to sign in" on a phone that could load the page but
+  not `telegram.org`, where its one third-party script lived. The daemon
+  now fetches that script itself — once at startup, cached under the
+  aipager data dir, refreshed in the background at most once a day — and
+  serves it from the Mini App's own origin, so the page needs exactly one
+  reachable host: the one that already delivered it. If the daemon has no
+  copy yet, the page loads the script from `telegram.org` as it always
+  did, so the worst case is unchanged.
 
 ## [0.7.9] - 2026-09-09
 
