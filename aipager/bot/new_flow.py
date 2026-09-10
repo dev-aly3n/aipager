@@ -79,7 +79,7 @@ from typing import TYPE_CHECKING
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from aipager.bot.settings_menu import settings_schema
-from aipager.bot.transport import calling_chat_id
+from aipager.bot.transport import calling_chat_id, edit_text_at, MUTED, reply_text
 from aipager.config import MODEL_CHOICES
 from aipager.miniapp import launch
 from aipager.preferences import is_valid_value
@@ -348,7 +348,7 @@ async def _edit_wizard(
     kb: InlineKeyboardMarkup | None = None,
 ) -> None:
     try:
-        await bot._app.bot.edit_message_text(
+        await edit_text_at(bot._app.bot,
             chat_id=chat_id, message_id=pending["msg_id"], text=text,
             parse_mode="HTML", reply_markup=kb,
         )
@@ -362,7 +362,7 @@ async def _edit_stale(bot: TelegramBot, chat_id: int, message_id: int | None) ->
     if message_id is None:
         return
     try:
-        await bot._app.bot.edit_message_text(
+        await edit_text_at(bot._app.bot,
             chat_id=chat_id, message_id=message_id, text=_EXPIRED_TEXT,
             reply_markup=None,
         )
@@ -461,16 +461,21 @@ async def start_wizard(
         # the old message's keyboard rather than leaving two live
         # wizards a tap could land on.
         try:
-            await bot._app.bot.edit_message_text(
+            await edit_text_at(bot._app.bot,
                 chat_id=chat_id, message_id=old["msg_id"],
                 text="↩️ Cancelled — started over.", reply_markup=None,
             )
         except Exception:
             log.debug("new_flow: failed to strip old wizard message", exc_info=True)
 
-    sent = await update.message.reply_text(
+    sent = await reply_text(update.message,
         _name_prompt_text(), parse_mode="HTML", reply_markup=_cancel_kb(),
     )
+    if sent is MUTED:
+        # The chat is flood-muted: the prompt never went out, so there is
+        # nothing for a typed name to answer. Seeding the wizard anyway
+        # would silently swallow the user's next message as its name.
+        return
     store[chat_id] = {
         "step": "name",
         "user_id": user_id,

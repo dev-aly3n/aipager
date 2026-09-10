@@ -42,6 +42,9 @@ from aipager.transcript import last_assistant_preview as _read_preview
 # TelegramBot class body below (and any external consumers like the
 # tests) keeps working without changes.
 from aipager.bot.transport import (  # noqa: F401
+    reply_text,
+    edit_text,
+    send_text,
     ACTION_VERBS,
     TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES,
     TELEGRAM_MAX_DOC_BYTES,
@@ -771,7 +774,7 @@ class SessionOpsMixin:
             await self._safe_answer(query, ack)
             # Also edit the callback query's message if it's the busy message
             try:
-                await query.edit_message_text(
+                await edit_text(query,
                     f"⚠️ <b>{html_mod.escape(sess.label)}</b> · Stopped",
                     parse_mode="HTML",
                 )
@@ -790,7 +793,7 @@ class SessionOpsMixin:
             await self._react(update, "✅")
             if getattr(update, "message", None) is not None:
                 try:
-                    await update.message.reply_text(ack)
+                    await reply_text(update.message, ack)
                 except Exception:
                     log.debug("[%s] stop acknowledgement reply failed",
                               sess.label, exc_info=True)
@@ -825,7 +828,7 @@ class SessionOpsMixin:
                 await self._edit_busy_raw(
                     sess.busy_msg_id, notice, chat_id=resolve_chat_id(sess))
             elif self._app:
-                await self._app.bot.send_message(
+                await send_text(self._app.bot,
                     resolve_chat_id(sess), notice, parse_mode="HTML")
         except Exception:
             log.debug("[%s] safety halt notice failed", sess.label,
@@ -903,9 +906,9 @@ class SessionOpsMixin:
         """
         async def _reply(text: str) -> None:
             if hasattr(source, 'message') and source.message:
-                await source.message.reply_text(text)
+                await reply_text(source.message, text)
             else:
-                await source.edit_message_text(text)
+                await edit_text(source, text)
 
         # Find session within the calling scope (label may repeat across scopes)
         found = self.registry.find_by_label(
@@ -1104,9 +1107,9 @@ class SessionOpsMixin:
         if sess is not None:
             outcome = await self._stop_session(sess, update=update)
             if not outcome.ok:
-                await update.message.reply_text(f"[{target_label}] is not busy.")
+                await reply_text(update.message, f"[{target_label}] is not busy.")
             return
-        await update.message.reply_text(f"⚠️ Unknown session: {target_label}")
+        await reply_text(update.message, f"⚠️ Unknown session: {target_label}")
 
     def _guess_session_from_text(
         self, text: str, scope_chat_id: int | None = None,
@@ -1188,7 +1191,7 @@ class SessionOpsMixin:
             self.registry.mark_dirty()
             asyncio.create_task(self._maybe_update_bot_name(name))
             dashboard = self._build_session_dashboard(sess)
-            await update.message.reply_text(dashboard, parse_mode="HTML")
+            await reply_text(update.message, dashboard, parse_mode="HTML")
             return
 
         # Try auto-discover
@@ -1200,10 +1203,10 @@ class SessionOpsMixin:
             asyncio.create_task(self._maybe_update_bot_name(session_name))
             asyncio.create_task(self._update_bot_commands())
             dashboard = self._build_session_dashboard(sess)
-            await update.message.reply_text(dashboard, parse_mode="HTML")
+            await reply_text(update.message, dashboard, parse_mode="HTML")
             return
 
-        await update.message.reply_text(f"⚠️ Unknown session: {target_label}")
+        await reply_text(update.message, f"⚠️ Unknown session: {target_label}")
 
     # ── Mini App session menu actions (perms / clear-queue / compact /
     #    restart / rename) — see design.md's ORCHESTRATOR OVERRIDE ──

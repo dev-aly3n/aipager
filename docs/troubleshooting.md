@@ -60,9 +60,12 @@ What you see:
 - A 🚨 reaction on your message when the answer to it was dropped.
 
 The daemon mutes the chat for exactly the time Telegram asked and skips
-every send to it — answers, busy-card edits, attachments — instead of
+every send to it — answers, busy-card edits, attachments, and the replies
+your own commands and button taps would have produced — instead of
 retrying into the ban, because each retry (and each plain-text fallback)
-is a fresh violation that extends it. Answers produced during the mute
+is a fresh violation that extends it. A command typed during a mute
+therefore answers with nothing at all; a button tap still gets its toast,
+which Telegram meters separately. Answers produced during the mute
 are not queued; ask again once it lifts. Other chats are unaffected.
 
 What NOT to do:

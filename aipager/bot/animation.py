@@ -58,6 +58,7 @@ from aipager.bot.transport import (  # noqa: F401
     _log_blocked_once,
     _MAX_TRUNCATIONS,
     _md_safe_boundaries,
+    _message_chat_id,
     _PERSONAL_MODE_SENTINEL,
     _RETRY_AFTER_RE,
     _safe_truncate,
@@ -1078,6 +1079,14 @@ class AnimationMixin:
     ) -> None:
         """Edit the message tied to a callback query, swallowing
         edit-failed errors (message gone, identical content, etc.)."""
+        # Flood-muted (roadmap 8.17b): return without attempting. This is
+        # the busy card's callback edit — a permission answer or a
+        # multi-select toggle, the most common tap on this product — and
+        # every attempt into a ban is a fresh violation that extends it.
+        # The ``query.answer`` toast is metered separately and still
+        # fires, so the tap is never silent.
+        if MUTE.is_muted(_message_chat_id(getattr(query, "message", None))):
+            return
         try:
             await query.edit_message_text(
                 text, parse_mode=parse_mode, reply_markup=reply_markup,
@@ -1215,6 +1224,12 @@ class AnimationMixin:
         None on permanent failure (message gone).
         """
         if not self._app:
+            return False
+        # Flood-muted (roadmap 8.17b): skip the attempt. False, never
+        # None — the mute is transient, while None means "message gone"
+        # and makes every caller that inspects the result drop
+        # ``busy_msg_id`` and lose the card for good.
+        if MUTE.is_muted(chat_id or CHAT_ID):
             return False
         try:
             await self._app.bot.edit_message_text(

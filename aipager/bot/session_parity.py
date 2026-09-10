@@ -45,7 +45,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from aipager.bot import settings_menu
-from aipager.bot.transport import calling_chat_id
+from aipager.bot.transport import calling_chat_id, edit_text, reply_document, reply_text
 from aipager.preferences import get_preferences, is_valid_value, resolve_preferences
 from aipager.state import PREFERENCE_OVERRIDE_FIELDS, Status, TrackedSession
 
@@ -221,7 +221,7 @@ async def _edit(query, text: str, kb: InlineKeyboardMarkup | None) -> None:
     branch in this codebase already does — a toast already told the user
     what happened; a failed edit must never surface as a crash."""
     try:
-        await query.edit_message_text(text, parse_mode="HTML", reply_markup=kb)
+        await edit_text(query, text, parse_mode="HTML", reply_markup=kb)
     except Exception:
         pass
 
@@ -318,13 +318,13 @@ async def handle_restart_cmd(
             if sess.status != Status.GONE and sess.label
         ]
         if not sessions:
-            await update.message.reply_text("No live sessions to restart.")
+            await reply_text(update.message, "No live sessions to restart.")
             return
         buttons = [
             [InlineKeyboardButton(f"🔄 {sess.label}", callback_data=session_cb(bot, chat_id, sess, "restart"))]
             for sess in sessions
         ]
-        await update.message.reply_text(
+        await reply_text(update.message,
             "Which session to restart?", reply_markup=InlineKeyboardMarkup(buttons),
         )
         return
@@ -332,13 +332,13 @@ async def handle_restart_cmd(
     label = parts[1].strip()
     sess = bot.registry.find_by_label(label, chat_id)
     if sess is None:
-        await update.message.reply_text(
+        await reply_text(update.message,
             f"⚠️ Unknown or already-gone session: {html_mod.escape(label)}",
             parse_mode="HTML",
         )
         return
-    reply_text, kb = _render_restart_confirm(bot, chat_id, sess)
-    await update.message.reply_text(reply_text, reply_markup=kb, parse_mode="HTML")
+    body, kb = _render_restart_confirm(bot, chat_id, sess)
+    await reply_text(update.message, body, reply_markup=kb, parse_mode="HTML")
 
 
 def _restart_outcome_text(outcome) -> str:
@@ -365,7 +365,7 @@ async def _apply_rename(
 
     clean, err = validate_session_name(new_label)
     if err:
-        await reply_target.reply_text(f"⚠️ {html_mod.escape(err)}", parse_mode="HTML")
+        await reply_text(reply_target, f"⚠️ {html_mod.escape(err)}", parse_mode="HTML")
         return
 
     if clean != sess.label:
@@ -373,7 +373,7 @@ async def _apply_rename(
         if existing is not None and (
             existing.status != Status.GONE or existing.claude_session_id
         ):
-            await reply_target.reply_text(
+            await reply_text(reply_target,
                 f"⚠️ A session named {html_mod.escape(clean)} already exists in this chat.",
                 parse_mode="HTML",
             )
@@ -381,13 +381,13 @@ async def _apply_rename(
 
     outcome = await bot._rename_session_core(sess, clean)
     if outcome.changed:
-        await reply_target.reply_text(
+        await reply_text(reply_target,
             f"✏️ [<b>{html_mod.escape(outcome.previous_label)}</b>] renamed to "
             f"[<b>{html_mod.escape(outcome.new_label)}</b>].",
             parse_mode="HTML",
         )
     else:
-        await reply_target.reply_text(
+        await reply_text(reply_target,
             f"[<b>{html_mod.escape(sess.label)}</b>] name unchanged.",
             parse_mode="HTML",
         )
@@ -410,7 +410,7 @@ async def handle_rename_cmd(
         old_label, new_label = parts[1].strip(), parts[2].strip()
         sess = bot.registry.find_by_label(old_label, chat_id, include_gone=True)
         if sess is None:
-            await update.message.reply_text(
+            await reply_text(update.message,
                 f"⚠️ Unknown session: {html_mod.escape(old_label)}", parse_mode="HTML",
             )
             return
@@ -419,13 +419,13 @@ async def handle_rename_cmd(
 
     sessions = [s for s in bot.registry.all_sessions(chat_id).values() if s.label]
     if not sessions:
-        await update.message.reply_text("No sessions to rename.")
+        await reply_text(update.message, "No sessions to rename.")
         return
     buttons = [
         [InlineKeyboardButton(sess.label, callback_data=session_cb(bot, chat_id, sess, "rename"))]
         for sess in sessions
     ]
-    await update.message.reply_text(
+    await reply_text(update.message,
         "Which session to rename?", reply_markup=InlineKeyboardMarkup(buttons),
     )
 
@@ -464,13 +464,13 @@ async def handle_delete_cmd(
             if sess.status == Status.GONE and sess.label
         ]
         if not sessions:
-            await update.message.reply_text("No finished sessions to delete.")
+            await reply_text(update.message, "No finished sessions to delete.")
             return
         buttons = [
             [InlineKeyboardButton(f"🗑️ {sess.label}", callback_data=session_cb(bot, chat_id, sess, "delete"))]
             for sess in sessions
         ]
-        await update.message.reply_text(
+        await reply_text(update.message,
             "Which finished session to remove?", reply_markup=InlineKeyboardMarkup(buttons),
         )
         return
@@ -478,19 +478,19 @@ async def handle_delete_cmd(
     label = parts[1].strip()
     sess = bot.registry.find_by_label(label, chat_id, include_gone=True)
     if sess is None:
-        await update.message.reply_text(
+        await reply_text(update.message,
             f"⚠️ Unknown session: {html_mod.escape(label)}", parse_mode="HTML",
         )
         return
     if sess.status != Status.GONE:
-        await update.message.reply_text(
+        await reply_text(update.message,
             f"⚠️ [<b>{html_mod.escape(sess.label)}</b>] is still running. "
             "Use /kill to stop it first.",
             parse_mode="HTML",
         )
         return
-    reply_text, kb = _render_delete_confirm(bot, chat_id, sess)
-    await update.message.reply_text(reply_text, reply_markup=kb, parse_mode="HTML")
+    body, kb = _render_delete_confirm(bot, chat_id, sess)
+    await reply_text(update.message, body, reply_markup=kb, parse_mode="HTML")
 
 
 # ---- diff ------------------------------------------------------------
@@ -538,7 +538,7 @@ async def _run_diff(bot: "TelegramBot", sess: TrackedSession, *, target_message)
     if not result.get("available"):
         reason = result.get("reason", "git_error")
         template = _DIFF_REASON_TEXT.get(reason, _DIFF_REASON_TEXT["git_error"])
-        await target_message.reply_text(
+        await reply_text(target_message,
             template.format(label=html_mod.escape(sess.label)),
             parse_mode="HTML",
         )
@@ -546,7 +546,7 @@ async def _run_diff(bot: "TelegramBot", sess: TrackedSession, *, target_message)
 
     files = result.get("files") or []
     if not files:
-        await target_message.reply_text(
+        await reply_text(target_message,
             f"No changes in [<b>{html_mod.escape(sess.label)}</b>]'s working directory.",
             parse_mode="HTML",
         )
@@ -561,17 +561,17 @@ async def _run_diff(bot: "TelegramBot", sess: TrackedSession, *, target_message)
     patch_text = _concat_patch(files)
 
     if not any_unusable and len(patch_text) < _DIFF_INLINE_THRESHOLD:
-        await target_message.reply_text(
+        await reply_text(target_message,
             f"{stat_line}\n<pre>{html_mod.escape(patch_text)}</pre>",
             parse_mode="HTML",
         )
         return
 
-    await target_message.reply_text(stat_line, parse_mode="HTML")
+    await reply_text(target_message, stat_line, parse_mode="HTML")
     filename = f"{sess.label}.diff"
     doc = io.BytesIO(patch_text.encode("utf-8"))
     doc.name = filename  # never written to disk — built and sent in memory
-    await target_message.reply_document(document=doc, filename=filename)
+    await reply_document(target_message, document=doc, filename=filename)
 
 
 async def handle_diff_cmd(
@@ -590,13 +590,13 @@ async def handle_diff_cmd(
         name = bot.registry.last_active_session
         sess = bot.registry.get(name) if name else None
         if sess is None:
-            await update.message.reply_text("No active session to diff.")
+            await reply_text(update.message, "No active session to diff.")
             return
     else:
         label = parts[1].strip()
         sess = bot.registry.find_by_label(label, chat_id, include_gone=True)
         if sess is None:
-            await update.message.reply_text(
+            await reply_text(update.message,
                 f"⚠️ Unknown session: {html_mod.escape(label)}", parse_mode="HTML",
             )
             return
@@ -818,14 +818,14 @@ async def maybe_handle_text(
 
     sess = bot.registry.get(pending["session_name"])
     if sess is None:
-        await update.message.reply_text(
+        await reply_text(update.message,
             "⚠️ That session is no longer available — run /rename again.",
         )
         return True
 
     user_id = update.effective_user.id if update.effective_user else None
     if not bot._can_prompt_user(user_id, chat_id):
-        await update.message.reply_text("🚫 You can't rename this session.")
+        await reply_text(update.message, "🚫 You can't rename this session.")
         return True
 
     await _apply_rename(bot, sess, text.strip(), chat_id, reply_target=update.message)

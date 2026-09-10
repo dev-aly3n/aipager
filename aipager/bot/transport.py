@@ -9,6 +9,10 @@ Sections:
 
 - Telegram-side primitives: ``_send_with_retry``, ``_safe_truncate``,
   ``_md_safe_boundaries``.
+- The plain-reply seam (flood mute, roadmap 8.17b): ``reply_text``,
+  ``reply_document``, ``edit_message``, ``edit_text``, ``edit_markup``,
+  ``edit_text_at``, ``send_text`` and the ``MUTED`` value they return
+  for a muted chat.
 - "Bot blocked by user" detection: ``_log_blocked_once``,
   ``_is_bot_blocked``.
 - Write/Edit diff rendering: ``_truncate_diff``, ``_build_diff_block``.
@@ -431,6 +435,126 @@ async def _send_with_retry(bot, *, chat_id, text: str, parse_mode: str | None = 
             raise
     if last_err:
         raise last_err
+
+
+# ── Plain replies — the flood-mute seam (roadmap 8.17b) ──
+#
+# Every command reply, callback edit and bot-originated notice that is not
+# already on a gated path (``_send_with_retry`` above, the rich-message
+# path, the animator, ``notify.py``) goes through one of the helpers
+# below. Each resolves the target chat, returns :data:`MUTED` without
+# touching Telegram while that chat is flood-muted (``flood.MUTE``), and
+# otherwise performs exactly the call the caller would have made, with
+# the arguments passed through untouched. Nothing is logged per skipped
+# send (the mute logs once when it starts and once when it lifts) and
+# nothing is raised: a caller that never looked at ``reply_text``'s
+# return keeps working; one that stores the sent message's id checks
+# ``is MUTED`` first. Why it matters: during a ban every attempt into the
+# chat is a fresh violation that extends it, and a human who doesn't know
+# about the ban keeps tapping /status.
+#
+# Deliberately NOT routed here: ``query.answer`` toasts and
+# ``set_message_reaction`` — a separate rate-limit bucket, and during a
+# ban the one signal that still reaches the user.
+
+
+class _MutedSend:
+    """The value every seam helper returns instead of a Telegram result
+    when the target chat is flood-muted. Falsy, so ``if sent:`` reads as
+    "was it delivered"; it carries no ``message_id``, so a caller that
+    needs one tests ``sent is MUTED`` first."""
+
+    __slots__ = ()
+
+    def __bool__(self) -> bool:
+        return False
+
+    def __repr__(self) -> str:
+        return "MUTED"
+
+
+MUTED = _MutedSend()
+
+
+def _message_chat_id(message):
+    """Chat id of a Message (``message.chat.id``, else ``message.chat_id``),
+    or ``None`` when it can't be determined — which the registry reads as
+    "not muted", so an odd target is sent to, never silently blocked."""
+    chat_id = getattr(getattr(message, "chat", None), "id", None)
+    if chat_id is None:
+        chat_id = getattr(message, "chat_id", None)
+    return chat_id
+
+
+def _chat_id_from_call(args, kwargs, position):
+    """The ``chat_id`` of a bot-level call, given as a keyword or at
+    positional index *position* — PTB's ``send_message(chat_id, text)``
+    puts it first, ``edit_message_text(text, chat_id, message_id)``
+    second."""
+    if "chat_id" in kwargs:
+        return kwargs["chat_id"]
+    return args[position] if len(args) > position else None
+
+
+async def reply_text(message, *args, **kwargs):
+    """``message.reply_text(*args, **kwargs)`` unless the message's chat
+    is flood-muted, in which case :data:`MUTED` and no Telegram call."""
+    if MUTE.is_muted(_message_chat_id(message)):
+        return MUTED
+    return await message.reply_text(*args, **kwargs)
+
+
+async def reply_document(message, *args, **kwargs):
+    """``message.reply_document(...)`` — same contract as :func:`reply_text`."""
+    if MUTE.is_muted(_message_chat_id(message)):
+        return MUTED
+    return await message.reply_document(*args, **kwargs)
+
+
+async def edit_message(message, *args, **kwargs):
+    """``message.edit_text(...)`` on a Message a seam helper returned
+    earlier: skipped while its chat is muted, and skipped — never
+    crashed — when ``message`` is :data:`MUTED` because the reply it
+    would edit was itself never sent."""
+    if message is MUTED or MUTE.is_muted(_message_chat_id(message)):
+        return MUTED
+    return await message.edit_text(*args, **kwargs)
+
+
+async def edit_text(query, *args, **kwargs):
+    """``query.edit_message_text(...)`` for a CallbackQuery unless the
+    tapped message's chat is muted. The ``query.answer`` toast is not
+    this helper's business — see the section comment above."""
+    if MUTE.is_muted(_message_chat_id(getattr(query, "message", None))):
+        return MUTED
+    return await query.edit_message_text(*args, **kwargs)
+
+
+async def edit_markup(query, *args, **kwargs):
+    """``query.edit_message_reply_markup(...)`` — the settings menu's
+    "Close" tap strips its keyboard this way. It is a real
+    editMessageReplyMarkup call into the chat, so it counts against a
+    ban exactly like a text edit; same contract as :func:`edit_text`."""
+    if MUTE.is_muted(_message_chat_id(getattr(query, "message", None))):
+        return MUTED
+    return await query.edit_message_reply_markup(*args, **kwargs)
+
+
+async def edit_text_at(bot, *args, **kwargs):
+    """``bot.edit_message_text(...)`` unless the target chat is muted —
+    ``chat_id=`` or the second positional, PTB's order being
+    ``text, chat_id, message_id``."""
+    if MUTE.is_muted(_chat_id_from_call(args, kwargs, 1)):
+        return MUTED
+    return await bot.edit_message_text(*args, **kwargs)
+
+
+async def send_text(bot, *args, **kwargs):
+    """``bot.send_message(...)`` unless the target chat is muted —
+    ``chat_id=`` or the first positional."""
+    if MUTE.is_muted(_chat_id_from_call(args, kwargs, 0)):
+        return MUTED
+    return await bot.send_message(*args, **kwargs)
 
 
 def _md_safe_boundaries(md: str) -> list[int]:

@@ -33,6 +33,9 @@ from aipager.transcript import last_assistant_preview as _read_preview
 # TelegramBot class body below (and any external consumers like the
 # tests) keeps working without changes.
 from aipager.bot.transport import (  # noqa: F401
+    MUTED,
+    edit_text_at,
+    send_text,
     ACTION_VERBS,
     TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES,
     TELEGRAM_MAX_DOC_BYTES,
@@ -100,7 +103,7 @@ class DashboardMixin:
                 f"</code></pre>"
                 f"{footer}"
             )
-            await self._app.bot.send_message(
+            await send_text(self._app.bot,
                 CHAT_ID, text, parse_mode="HTML",
                 reply_to_message_id=(sess.busy_msg_id
                                      if sess.busy_msg_id and sess.busy_msg_id > 0
@@ -181,14 +184,20 @@ class DashboardMixin:
         chat = int(CHAT_ID)
         try:
             if self.registry.pinned_msg_id:
-                await self._app.bot.edit_message_text(
+                edited = await edit_text_at(self._app.bot,
                     text, chat, self.registry.pinned_msg_id,
                     parse_mode="HTML",
                 )
+                if edited is MUTED:
+                    # Flood-muted: nothing went out, so don't record this
+                    # text as shown — the next refresh must try again.
+                    return
             else:
-                msg = await self._app.bot.send_message(
+                msg = await send_text(self._app.bot,
                     chat, text, parse_mode="HTML",
                 )
+                if msg is MUTED:
+                    return  # no message to remember or pin; see above
                 # Store the message id IMMEDIATELY — before attempting
                 # to pin. In groups where the bot isn't an admin (no
                 # pin permission), the pin call fails but we still

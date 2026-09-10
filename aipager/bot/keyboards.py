@@ -34,6 +34,8 @@ from aipager.config import (
 # TelegramBot class body below (and any external consumers like the
 # tests) keeps working without changes.
 from aipager.bot.transport import (  # noqa: F401
+    MUTED,
+    send_text,
     ACTION_VERBS,
     TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES,
     TELEGRAM_MAX_DOC_BYTES,
@@ -155,6 +157,8 @@ class KeyboardMixin:
             rows.append(nav)
             msg_text = "\u2328\ufe0f"
 
+        prev_level = self._keyboard_level
+        prev_deferred = self._keyboard_deferred
         self._keyboard_level = level
 
         keyboard = ReplyKeyboardMarkup(
@@ -178,10 +182,21 @@ class KeyboardMixin:
             self._keyboard_deferred = False
 
         try:
-            await self._app.bot.send_message(
+            sent = await send_text(self._app.bot,
                 target, msg_text,
                 reply_markup=keyboard,
             )
+            if sent is MUTED:
+                # Flood-muted (roadmap 8.17b): nothing was attempted, so
+                # the hold must survive. Clearing before the send is
+                # deliberate for a *failed* attempt, but a main keyboard
+                # suppressed for the length of a ban would otherwise never
+                # be re-sent — exactly the "buttonless until some
+                # unrelated later event" bug this feature exists to fix.
+                # Restore both flags so the next trigger sends it once.
+                self._keyboard_level = prev_level
+                self._keyboard_deferred = prev_deferred
+                return
         except Forbidden as e:
             _log_blocked_once(e)
         except BadRequest as e:

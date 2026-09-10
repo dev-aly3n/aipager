@@ -51,6 +51,10 @@ from aipager.state import QUEUE_CAP, Status, TrackedSession
 # TelegramBot class body below (and any external consumers like the
 # tests) keeps working without changes.
 from aipager.bot.transport import (  # noqa: F401
+    MUTED,
+    reply_text,
+    edit_message,
+    send_text,
     ACTION_VERBS,
     TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES,
     TELEGRAM_MAX_DOC_BYTES,
@@ -261,7 +265,7 @@ class CommandHandlersMixin:
             return False
         if not sess.queue_prompt(text, update.message.message_id, reply_context,
                                  driver_id_from_update(update)):
-            await update.message.reply_text(
+            await reply_text(update.message,
                 f"⚠️ Queue is full ({QUEUE_CAP} pending) for "
                 f"[{html_mod.escape(sess.label)}]. Answer the prompt or "
                 "clear the queue.",
@@ -511,7 +515,7 @@ class CommandHandlersMixin:
             "  /perms — switch a session between Ask and Auto\n"
         )
         try:
-            await self._app.bot.send_message(
+            await send_text(self._app.bot,
                 update.effective_chat.id, text, parse_mode="HTML",
             )
         except Exception:
@@ -558,7 +562,7 @@ class CommandHandlersMixin:
         app_row = self._app_button_row(update)
         if app_row:
             kb = InlineKeyboardMarkup(list(kb.inline_keyboard) + app_row)
-        await update.message.reply_text(text, parse_mode="HTML", reply_markup=kb)
+        await reply_text(update.message, text, parse_mode="HTML", reply_markup=kb)
 
     async def _handle_app_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /app — send the Mini App launcher button.
@@ -573,7 +577,7 @@ class CommandHandlersMixin:
 
         chat = update.effective_chat
         if chat is None or chat.id <= 0:
-            await update.message.reply_text(
+            await reply_text(update.message,
                 "📱 The Mini App only works in a private chat — DM the bot "
                 "and send /app there."
             )
@@ -581,7 +585,7 @@ class CommandHandlersMixin:
 
         from aipager.config import MINIAPP_ENABLED
         if not MINIAPP_ENABLED:
-            await update.message.reply_text(
+            await reply_text(update.message,
                 "The Mini App server isn't enabled on this machine.\n"
                 "Ask the operator to run <code>aipager miniapp enable</code> "
                 "and restart the daemon.",
@@ -605,14 +609,14 @@ class CommandHandlersMixin:
             # fails and succeeds on the retry).
             from aipager.miniapp.server import miniapp_extra_available
             if not miniapp_extra_available():
-                await update.message.reply_text(
+                await reply_text(update.message,
                     "📱 The Mini App can't start on this machine — its "
                     "install looks incomplete.\n\n"
                     "Everything else keeps working; ask whoever set this "
                     "up to reinstall aipager.",
                 )
             else:
-                await update.message.reply_text(
+                await reply_text(update.message,
                     "📱 The Mini App link is still being set up — "
                     "try /app again in a few seconds.",
                 )
@@ -629,7 +633,7 @@ class CommandHandlersMixin:
             if not self._is_personal_mode_operator(
                 tg_user.id if tg_user is not None else None,
             ):
-                await update.message.reply_text(
+                await reply_text(update.message,
                     "🚫 This bot isn't configured to talk to you. "
                     "Ask the operator to add your Telegram user ID "
                     f"({tg_user.id if tg_user is not None else '?'}) "
@@ -640,7 +644,7 @@ class CommandHandlersMixin:
         keyboard = InlineKeyboardMarkup([[
             InlineKeyboardButton("📱 Open Mini App", web_app=WebAppInfo(url=url)),
         ]])
-        await update.message.reply_text(
+        await reply_text(update.message,
             "Tap to open the aipager dashboard:", reply_markup=keyboard,
         )
 
@@ -660,7 +664,7 @@ class CommandHandlersMixin:
                 # richer view — offer it here too, not only when
                 # there are sessions to list.
                 _app = self._app_button_row(update)
-                await update.message.reply_text(
+                await reply_text(update.message,
                     "No sessions in this chat.",
                     reply_markup=InlineKeyboardMarkup(_app) if _app else None,
                 )
@@ -671,7 +675,7 @@ class CommandHandlersMixin:
                 # richer view — offer it here too, not only when
                 # there are sessions to list.
                 _app = self._app_button_row(update)
-                await update.message.reply_text(
+                await reply_text(update.message,
                     "No sessions found.",
                     reply_markup=InlineKeyboardMarkup(_app) if _app else None,
                 )
@@ -760,7 +764,7 @@ class CommandHandlersMixin:
             ])
         rows_kb += self._app_button_row(update)
         keyboard = InlineKeyboardMarkup(rows_kb) if rows_kb else None
-        await update.message.reply_text(
+        await reply_text(update.message,
             "\n\n".join(blocks), parse_mode="HTML", reply_markup=keyboard,
         )
         asyncio.create_task(self._update_bot_commands())
@@ -794,15 +798,15 @@ class CommandHandlersMixin:
             return
         name = self.registry.last_active_session
         if not name:
-            await update.message.reply_text("No active session to stop.")
+            await reply_text(update.message, "No active session to stop.")
             return
         sess = self.registry.get(name)
         if not sess:
-            await update.message.reply_text("[?] is not busy.")
+            await reply_text(update.message, "[?] is not busy.")
             return
         outcome = await self._stop_session(sess, update=update)
         if not outcome.ok:
-            await update.message.reply_text(f"[{sess.label}] is not busy.")
+            await reply_text(update.message, f"[{sess.label}] is not busy.")
 
     async def _handle_clearqueue_cmd(
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
@@ -825,23 +829,23 @@ class CommandHandlersMixin:
             return
         name = self.registry.last_active_session
         if not name:
-            await update.message.reply_text(
+            await reply_text(update.message,
                 "No active session — switch to one with /<label> first.",
             )
             return
         sess = self.registry.get(name)
         if not sess:
-            await update.message.reply_text(f"Session '{name}' not found.")
+            await reply_text(update.message, f"Session '{name}' not found.")
             return
         outcome = await self._clear_queue_core(sess)
         if not outcome.ok:
-            await update.message.reply_text(
+            await reply_text(update.message,
                 f"Nothing to clear in [{html_mod.escape(sess.label)}].",
                 parse_mode="HTML",
             )
             return
         plural = "s" if outcome.dropped > 1 else ""
-        await update.message.reply_text(
+        await reply_text(update.message,
             f"🗑️ Cleared {outcome.dropped} queued message{plural} for "
             f"[<b>{html_mod.escape(sess.label)}</b>].",
             parse_mode="HTML",
@@ -862,7 +866,7 @@ class CommandHandlersMixin:
                 if sess.status != Status.GONE and sess.label
             ]
             if not alive:
-                await update.message.reply_text("No sessions to kill.")
+                await reply_text(update.message, "No sessions to kill.")
                 return
             kill_chat_id = calling_chat_id(update) or 0
             buttons = [
@@ -872,7 +876,7 @@ class CommandHandlersMixin:
                         self, kill_chat_id, sess, "kill"))]
                 for sess in alive
             ]
-            await update.message.reply_text(
+            await reply_text(update.message,
                 "Which session to kill?",
                 reply_markup=InlineKeyboardMarkup(buttons),
             )
@@ -884,7 +888,7 @@ class CommandHandlersMixin:
         # session; the user explicitly confirms here.
         sess = self.registry.find_by_label(target_label, calling_chat_id(update))
         if sess is None:
-            await update.message.reply_text(
+            await reply_text(update.message,
                 f"⚠️ Unknown or already-gone session: {target_label}",
             )
             return
@@ -899,7 +903,7 @@ class CommandHandlersMixin:
                 callback_data=session_parity.session_cb(
                     self, confirm_chat_id, sess, "kill-cancel")),
         ]])
-        await update.message.reply_text(
+        await reply_text(update.message,
             f"⚠️ Kill session [<b>{html_mod.escape(target_label)}</b>]? "
             "This will terminate the running claude process.",
             reply_markup=keyboard,
@@ -932,7 +936,7 @@ class CommandHandlersMixin:
         prompt = parts[2].strip() if len(parts) > 2 else ""
 
         if not name:
-            await update.message.reply_text(
+            await reply_text(update.message,
                 "⚠️ Session name is empty after stripping <code>!</code>.",
                 parse_mode="HTML",
             )
@@ -947,7 +951,7 @@ class CommandHandlersMixin:
         # did not, which is exactly the sort of divergence this ship
         # exists to remove.
         if name.lower() in inject._RESERVED:
-            await update.message.reply_text(
+            await reply_text(update.message,
                 f"⚠️ <code>{html_mod.escape(name)}</code> is a command name — "
                 "pick something else, or it would shadow /"
                 f"{html_mod.escape(name.lower())}.",
@@ -957,7 +961,7 @@ class CommandHandlersMixin:
 
         # Admin gate: Auto mode (--dangerously-skip-permissions) requires admin.
         if skip_perms and not self._is_admin(update):
-            await update.message.reply_text(
+            await reply_text(update.message,
                 "Switching to Auto mode requires admin role.",
             )
             return
@@ -987,7 +991,7 @@ class CommandHandlersMixin:
 
         mode_icon = "🤖" if skip_perms else "💬"
         mode_label = "Auto" if skip_perms else "Ask"
-        status_msg = await update.message.reply_text(
+        status_msg = await reply_text(update.message,
             f"🚀 Launching <b>{html_mod.escape(name)}</b> "
             f"{mode_icon} {mode_label}…",
             parse_mode="HTML",
@@ -999,7 +1003,7 @@ class CommandHandlersMixin:
             name, scope_chat_id=chat_id, skip_perms=skip_perms,
         )
         if not session_name:
-            await status_msg.edit_text(f"❌ {html_mod.escape(err)}")
+            await edit_message(status_msg, f"❌ {html_mod.escape(err)}")
             return
 
         sess = self.registry.get_or_create(session_name)
@@ -1034,7 +1038,7 @@ class CommandHandlersMixin:
         # want the richer view. Empty in groups and when no Mini App URL
         # is known, so this degrades to exactly the old reply.
         app_row = self._app_button_row(update)
-        await status_msg.edit_text(
+        await edit_message(status_msg,
             f"✅ <b>{html_mod.escape(name)}</b> created\n"
             f"{mode_icon2} {mode_label2} mode"
             f"{model_line}{cwd_line}"
@@ -1107,7 +1111,7 @@ class CommandHandlersMixin:
                         self, conflict_chat_id, existing, "new_cancel")),
             ],
         ])
-        await update.message.reply_text(
+        await reply_text(update.message,
             header, parse_mode="HTML", reply_markup=keyboard,
         )
 
@@ -1121,7 +1125,7 @@ class CommandHandlersMixin:
             text, kb = self._render_resume_picker(
                 page=0, scope_chat_id=calling_chat_id(update),
             )
-            await update.message.reply_text(
+            await reply_text(update.message,
                 text, parse_mode="HTML", reply_markup=kb,
             )
             return
@@ -1149,14 +1153,14 @@ class CommandHandlersMixin:
 
         name = self.registry.last_active_session
         if not name:
-            await update.message.reply_text(
+            await reply_text(update.message,
                 "No active session. Use /new to start one.",
             )
             return
 
         sess = self.registry.get(name)
         if not sess or sess.status == Status.GONE:
-            await update.message.reply_text(
+            await reply_text(update.message,
                 "No active session. Use /new to start one.",
             )
             return
@@ -1165,13 +1169,13 @@ class CommandHandlersMixin:
 
         # Admin gate: switching TO Auto mode requires admin.
         if target_skip_perms and not self._is_admin(update):
-            await update.message.reply_text(
+            await reply_text(update.message,
                 "Switching to Auto mode requires admin role.",
             )
             return
 
         if sess.status == Status.UNKNOWN:
-            await update.message.reply_text(
+            await reply_text(update.message,
                 f"⚠️ <b>{html_mod.escape(sess.label)}</b>'s status is still initializing."
                 f" Try /perms again in a moment.",
                 parse_mode="HTML",
@@ -1182,12 +1186,16 @@ class CommandHandlersMixin:
             # BUSY flow: show Stop & switch / Not now keyboard.
             kb = self._build_perms_busy_keyboard(sess)
             mode_label = "Auto" if target_skip_perms else "Ask"
-            sent = await update.message.reply_text(
+            sent = await reply_text(update.message,
                 f"⚙️ <b>{html_mod.escape(sess.label)}</b> is busy.\n"
                 f"Switch to {mode_label} mode?",
                 parse_mode="HTML",
                 reply_markup=kb,
             )
+            if sent is MUTED:
+                # Flood-muted: no keyboard reached the user, so there is
+                # nothing pending for a tap to confirm.
+                return
             self._perms_pending[sess.name] = {
                 "target_skip_perms": target_skip_perms,
                 "msg_id": sent.message_id,
@@ -1199,7 +1207,7 @@ class CommandHandlersMixin:
         if target_skip_perms:
             # Ask→Auto: require confirmation.
             kb = self._build_perms_confirm_keyboard(sess)
-            sent = await update.message.reply_text(
+            sent = await reply_text(update.message,
                 f"⚙️ Switch <b>{html_mod.escape(sess.label)}</b> to "
                 f"🤖 Auto mode?\n"
                 f"<i>Claude will run tools without prompting "
@@ -1207,6 +1215,8 @@ class CommandHandlersMixin:
                 parse_mode="HTML",
                 reply_markup=kb,
             )
+            if sent is MUTED:
+                return  # as above: no prompt went out, nothing to confirm
             self._perms_pending[sess.name] = {
                 "target_skip_perms": True,
                 "msg_id": sent.message_id,
@@ -1214,7 +1224,7 @@ class CommandHandlersMixin:
             }
         else:
             # Auto→Ask: execute immediately, no confirmation needed.
-            status_msg = await update.message.reply_text(
+            status_msg = await reply_text(update.message,
                 f"⚙️ Switching <b>{html_mod.escape(sess.label)}</b> "
                 f"to 💬 Ask mode…",
                 parse_mode="HTML",
@@ -1222,9 +1232,9 @@ class CommandHandlersMixin:
 
             async def _edit(text, **kw):
                 try:
-                    await status_msg.edit_text(text, **kw)
+                    await edit_message(status_msg, text, **kw)
                 except Exception:
-                    await update.message.reply_text(text, **kw)
+                    await reply_text(update.message, text, **kw)
 
             await self._do_perms_switch_via_fn(sess, False, _edit)
 
@@ -1243,7 +1253,7 @@ class CommandHandlersMixin:
             scope = self._scope_for(chat.id if chat else None)
             member = self._member_in_scope(scope, tg_user.id if tg_user else None)
             if member is None:
-                await update.message.reply_text(
+                await reply_text(update.message,
                     "🪪 You're not a member of this scope.")
                 return
             role = self.policy.get_role(member.role)
@@ -1260,7 +1270,7 @@ class CommandHandlersMixin:
                 f"  effective deny_tools: {html_mod.escape(deny)}",
                 f"  effective allow_tools: {html_mod.escape(allow)}",
             ]
-            await update.message.reply_text(
+            await reply_text(update.message,
                 "\n".join(lines), parse_mode="HTML")
             return
 
@@ -1268,18 +1278,18 @@ class CommandHandlersMixin:
             tg_user = update.effective_user
             member = self.team.get(tg_user.id) if tg_user else None
             if member is None:
-                await update.message.reply_text(
+                await reply_text(update.message,
                     "🪪 You're not on this bot's allow-list.")
                 return
             deny = ", ".join(self.team.rules.deny_tools) or "(none)"
-            await update.message.reply_text(
+            await reply_text(update.message,
                 f"🪪 <b>@{html_mod.escape(member.label)}</b>\n"
                 f"  role: <b>{html_mod.escape(member.role.value)}</b>\n"
                 f"  deny_tools: {html_mod.escape(deny)}",
                 parse_mode="HTML")
             return
 
-        await update.message.reply_text(
+        await reply_text(update.message,
             "🪪 Personal mode — full control of this machine from this DM.")
 
     async def _handle_message(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1400,7 +1410,7 @@ class CommandHandlersMixin:
 
         if not sess:
             log.warning("Dropped text %r — no session to route to", text[:80])
-            await update.message.reply_text(
+            await reply_text(update.message,
                 "⚠️ I don't know which session this is for. Pick one with "
                 "/<label> or the keyboard."
             )
@@ -1413,7 +1423,7 @@ class CommandHandlersMixin:
         asyncio.create_task(self._maybe_update_bot_name(sess.name))
 
         if not await inject.is_alive(sess.name):
-            await update.message.reply_text(
+            await reply_text(update.message,
                 f"⚠️ Session '{sess.name}' not found",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(
                     "🔁 Resume",
@@ -1454,7 +1464,7 @@ class CommandHandlersMixin:
             await self._send_busy_and_animate(sess)
             log.info("[%s] Sent text: %s", sess.label, text[:80])
         else:
-            await update.message.reply_text(f"❌ Failed to send to [{sess.label}]")
+            await reply_text(update.message, f"❌ Failed to send to [{sess.label}]")
 
     async def _handle_voice(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle voice messages — transcribe via local Whisper, inject as prompt.
@@ -1481,7 +1491,7 @@ class CommandHandlersMixin:
                 InlineKeyboardButton(
                     "Cancel", callback_data="__voice__:cancel"),
             ]])
-            await msg.reply_text(
+            await reply_text(msg,
                 "⚠️ Voice messages need the optional voice extra "
                 "(~200 MB install · ~74 MB model on first use).",
                 reply_markup=keyboard,
@@ -1493,7 +1503,7 @@ class CommandHandlersMixin:
         if size > TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES:
             mb = size / (1024 * 1024)
             limit_mb = TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES // (1024 * 1024)
-            await msg.reply_text(
+            await reply_text(msg,
                 f"⚠️ Voice message is {mb:.1f} MB; Telegram bots are capped at {limit_mb} MB.",
             )
             return
@@ -1507,33 +1517,33 @@ class CommandHandlersMixin:
             await tg_file.download_to_drive(custom_path=str(save_path))
         except Exception:
             log.warning("Voice download failed", exc_info=True)
-            await msg.reply_text("❌ Failed to download voice message.")
+            await reply_text(msg, "❌ Failed to download voice message.")
             return
 
         # Acknowledge so the user knows we're working
-        ack_msg = await msg.reply_text(
+        ack_msg = await reply_text(msg,
             "🎙️ <i>Transcribing…</i>", parse_mode="HTML",
         )
 
         try:
             text = await voice.transcribe(str(save_path))
         except voice.VoiceUnavailable as e:
-            await ack_msg.edit_text(f"⚠️ {e}")
+            await edit_message(ack_msg, f"⚠️ {e}")
             return
         except Exception as e:
             log.warning("transcription failed", exc_info=True)
-            await ack_msg.edit_text(f"❌ Transcription failed: {e}")
+            await edit_message(ack_msg, f"❌ Transcription failed: {e}")
             return
         finally:
             # Clean up the audio file once we've transcribed it
             save_path.unlink(missing_ok=True)
 
         if not text:
-            await ack_msg.edit_text("⚠️ Couldn't make out any speech in that.")
+            await edit_message(ack_msg, "⚠️ Couldn't make out any speech in that.")
             return
 
         # Show the transcript to the user
-        await ack_msg.edit_text(
+        await edit_message(ack_msg,
             f"🎙️ <i>Heard:</i> {html_mod.escape(text)}",
             parse_mode="HTML",
         )
@@ -1575,7 +1585,7 @@ class CommandHandlersMixin:
             name = self.registry.last_active_session
             sess = self.registry.get(name) if name else None
         if not sess:
-            await update.message.reply_text(
+            await reply_text(update.message,
                 "⚠️ Voice transcribed but no active session to send it to. "
                 "Pick one with /<label> first."
             )
@@ -1585,7 +1595,7 @@ class CommandHandlersMixin:
         asyncio.create_task(self._maybe_update_bot_name(sess.name))
 
         if not await inject.is_alive(sess.name):
-            await update.message.reply_text(
+            await reply_text(update.message,
                 f"⚠️ Session '{sess.name}' not found",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(
                     "🔁 Resume",
@@ -1620,7 +1630,7 @@ class CommandHandlersMixin:
             await self._send_busy_and_animate(sess)
             log.info("[%s] Voice injected: %r", sess.label, transcript[:80])
         else:
-            await update.message.reply_text(
+            await reply_text(update.message,
                 f"❌ Failed to inject transcript into [{sess.label}]",
             )
 
@@ -1648,7 +1658,7 @@ class CommandHandlersMixin:
         if file_size and file_size > TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES:
             mb = file_size / (1024 * 1024)
             limit_mb = TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES // (1024 * 1024)
-            await msg.reply_text(
+            await reply_text(msg,
                 f"⚠️ File is {mb:.1f} MB. The Telegram bot API caps file "
                 f"downloads at {limit_mb} MB. Try splitting it, or paste the "
                 "content as text.",
@@ -1687,7 +1697,7 @@ class CommandHandlersMixin:
         if album is not None:
             return  # _flush_album injects the whole group once it settles
         if save_path is None:
-            await msg.reply_text(f"❌ Failed to download file: {display_name}")
+            await reply_text(msg, f"❌ Failed to download file: {display_name}")
             return
 
         await self._inject_file_prompt(
@@ -1726,7 +1736,7 @@ class CommandHandlersMixin:
         prompt = _file_prompt(caption, paths, all_photos=all_photos)
 
         if not sess:
-            await msg.reply_text(
+            await reply_text(msg,
                 "⚠️ I don't know which session this file is for. Pick one with "
                 "/<label> or the keyboard."
             )
@@ -1736,7 +1746,7 @@ class CommandHandlersMixin:
         asyncio.create_task(self._maybe_update_bot_name(sess.name))
 
         if not await inject.is_alive(sess.name):
-            await msg.reply_text(
+            await reply_text(msg,
                 f"⚠️ Session '{sess.name}' not found",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(
                     "🔁 Resume",
@@ -1771,7 +1781,7 @@ class CommandHandlersMixin:
             await self._send_busy_and_animate(sess)
             log.info("[%s] File sent: %s", sess.label, log_name)
         else:
-            await msg.reply_text(f"❌ Failed to send to [{sess.label}]")
+            await reply_text(msg, f"❌ Failed to send to [{sess.label}]")
 
     # ---- Albums (media groups) --------------------------------------------
 
@@ -1839,7 +1849,7 @@ class CommandHandlersMixin:
         if album.failed:
             noun = "file" if len(album.failed) == 1 else "files"
             tail = " (left out of the album)" if album.paths else ""
-            await album.update.message.reply_text(
+            await reply_text(album.update.message,
                 f"❌ Failed to download {noun}: {', '.join(album.failed)}{tail}")
 
     def _sweep_albums(self, now: float) -> None:
@@ -1860,11 +1870,11 @@ class CommandHandlersMixin:
         sess = self.registry.get(name) if name else None
 
         if not sess or sess.status == Status.GONE:
-            await update.message.reply_text("⚠️ No active session")
+            await reply_text(update.message, "⚠️ No active session")
             return
 
         if not await inject.is_alive(sess.name):
-            await update.message.reply_text(f"⚠️ Session '{sess.name}' not found")
+            await reply_text(update.message, f"⚠️ Session '{sess.name}' not found")
             return
 
         if await self._hold_for_open_dialog(update, sess, prompt_text):
@@ -1889,7 +1899,7 @@ class CommandHandlersMixin:
             await self._send_busy_and_animate(sess)
             log.info("[%s] Template sent: %s", sess.label, prompt_text[:80])
         else:
-            await update.message.reply_text(f"❌ Failed to send to [{sess.label}]")
+            await reply_text(update.message, f"❌ Failed to send to [{sess.label}]")
 
     async def _send_command(self, update: Update, command_text: str) -> None:
         """Inject an instant Claude Code slash command (no BUSY transition).
@@ -1902,16 +1912,16 @@ class CommandHandlersMixin:
         sess = self.registry.get(name) if name else None
 
         if not sess or sess.status == Status.GONE:
-            await update.message.reply_text("⚠️ No active session")
+            await reply_text(update.message, "⚠️ No active session")
             return
 
         if not await inject.is_alive(sess.name):
-            await update.message.reply_text(f"⚠️ Session '{sess.name}' not found")
+            await reply_text(update.message, f"⚠️ Session '{sess.name}' not found")
             return
 
         # /clear is destructive — refuse while session is actively working
         if command_text == "/clear" and sess.status == Status.BUSY:
-            await update.message.reply_text("⚠️ Can't clear while session is busy")
+            await reply_text(update.message, "⚠️ Can't clear while session is busy")
             return
 
         if await self._hold_for_open_dialog(update, sess, command_text):
@@ -1927,13 +1937,13 @@ class CommandHandlersMixin:
             # Explicit feedback for model changes
             if command_text.startswith("/model "):
                 model_arg = command_text.split(" ", 1)[1]
-                await update.message.reply_text(
+                await reply_text(update.message,
                     f"🔄 <b>{html_mod.escape(sess.label)}</b> → {html_mod.escape(model_arg)}",
                     parse_mode="HTML",
                 )
             log.info("[%s] Command sent: %s", sess.label, command_text)
         else:
-            await update.message.reply_text(f"❌ Failed to send to [{sess.label}]")
+            await reply_text(update.message, f"❌ Failed to send to [{sess.label}]")
 
     async def _session_for_typed_label(
         self, update: Update, label: str,
@@ -1948,13 +1958,13 @@ class CommandHandlersMixin:
             label, calling_chat_id(update), include_gone=True)
         if sess is not None:
             if not await inject.is_alive(sess.name):
-                await update.message.reply_text(f"⚠️ [{label}] session not alive")
+                await reply_text(update.message, f"⚠️ [{label}] session not alive")
                 return None
             return sess
         session_name = f"claude-{label}"
         if await inject.is_alive(session_name):
             return self._adopt_by_typed_name(session_name, label)
-        await update.message.reply_text(f"⚠️ Unknown session: {label}")
+        await reply_text(update.message, f"⚠️ Unknown session: {label}")
         return None
 
     async def _direct_send(self, update: Update, target_label: str, prompt_text: str) -> None:
@@ -1964,7 +1974,7 @@ class CommandHandlersMixin:
         if sess is not None:
             name = sess.name
             if not await inject.is_alive(name):
-                await update.message.reply_text(f"⚠️ [{target_label}] session not alive")
+                await reply_text(update.message, f"⚠️ [{target_label}] session not alive")
                 return
             # Targeting is the operator's explicit choice and applies even
             # when the message itself is held, so it is recorded first.
@@ -1990,7 +2000,7 @@ class CommandHandlersMixin:
                 await self._send_busy_and_animate(sess)
                 log.info("[%s] Direct send: %s", target_label, prompt_text[:80])
             else:
-                await update.message.reply_text(f"❌ Failed to send to [{target_label}]")
+                await reply_text(update.message, f"❌ Failed to send to [{target_label}]")
             return
 
         # Not found in registry — try session discovery
@@ -2018,6 +2028,6 @@ class CommandHandlersMixin:
                 self.registry.transition(session_name, Status.BUSY)
                 await self._send_busy_and_animate(new_sess)
             else:
-                await update.message.reply_text(f"❌ Failed to send to [{target_label}]")
+                await reply_text(update.message, f"❌ Failed to send to [{target_label}]")
         else:
-            await update.message.reply_text(f"⚠️ Unknown session: {target_label}")
+            await reply_text(update.message, f"⚠️ Unknown session: {target_label}")

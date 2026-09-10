@@ -22,6 +22,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   status` and `doctor` show "Telegram flood-muted until HH:MM", and the
   mute lifts on its own (a restart forgets it). Reactions still go out,
   so a dropped answer still gets its 🚨.
+- Tapping the bot during a Telegram flood ban — commands, button taps,
+  permission answers, the Stop button — no longer fires a reply into it.
+  (A new prompt still opens its busy card; that is tracked separately.)
+  The mute above covered the daemon's own sends; every reply a tap
+  produced (`/status`, a kill confirmation, a `/new` wizard step, a
+  `/perms` prompt, `/diff`'s file, the pinned status line, the audit
+  notices, the settings menu's Close, and the busy card's own edits)
+  still made one attempt, and each attempt was a fresh violation that
+  made the ban longer. They now go through one seam that skips the send
+  while the chat is muted and resumes when it lifts, and a keyboard held
+  back by a mute is sent by the next trigger after the ban rather than
+  lost. The button toast and the 🚨 reaction, which Telegram meters
+  separately, still answer, so a *button* tap is never silent — but a
+  typed command during a mute now does nothing at all until it lifts.
 
 ## [0.7.9] - 2026-09-09
 

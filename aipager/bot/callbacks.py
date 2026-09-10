@@ -52,6 +52,10 @@ from aipager.team import (
 # TelegramBot class body below (and any external consumers like the
 # tests) keeps working without changes.
 from aipager.bot.transport import (  # noqa: F401
+    edit_message,
+    edit_markup,
+    edit_text,
+    send_text,
     ACTION_VERBS,
     TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES,
     TELEGRAM_MAX_DOC_BYTES,
@@ -235,14 +239,14 @@ class CallbackDispatchMixin:
         if not parts or parts == ["back"]:
             text, kb = render_settings_root(chat_id or 0)
             try:
-                await query.edit_message_text(text, parse_mode="HTML", reply_markup=kb)
+                await edit_text(query, text, parse_mode="HTML", reply_markup=kb)
             except Exception:
                 pass
             return
 
         if parts == ["close"]:
             try:
-                await query.edit_message_reply_markup(reply_markup=None)
+                await edit_markup(query, reply_markup=None)
             except Exception:
                 pass
             return
@@ -255,7 +259,7 @@ class CallbackDispatchMixin:
                 return
             text, kb = rendered
             try:
-                await query.edit_message_text(text, parse_mode="HTML", reply_markup=kb)
+                await edit_text(query, text, parse_mode="HTML", reply_markup=kb)
             except Exception:
                 pass
             return
@@ -307,7 +311,7 @@ class CallbackDispatchMixin:
 
             text, kb = render_settings_section(chat_id or 0, section)
             try:
-                await query.edit_message_text(text, parse_mode="HTML", reply_markup=kb)
+                await edit_text(query, text, parse_mode="HTML", reply_markup=kb)
             except Exception:
                 pass
             return
@@ -430,7 +434,7 @@ class CallbackDispatchMixin:
 
         if action == "kill-cancel":
             try:
-                await query.edit_message_text(
+                await edit_text(query,
                     "↩️ Cancelled (no session killed).",
                 )
             except Exception:
@@ -441,7 +445,7 @@ class CallbackDispatchMixin:
         if session_name == "__voice__":
             if action == "cancel":
                 try:
-                    await query.edit_message_text(
+                    await edit_text(query,
                         "↩️ OK, voice not installed."
                     )
                 except Exception:
@@ -487,7 +491,7 @@ class CallbackDispatchMixin:
                 # button so it can be tapped again once the prompt is
                 # answered. `last_prompt` is untouched, so nothing is lost.
                 try:
-                    await query.message.edit_text(
+                    await edit_message(query.message,
                         f"{original_text}\n\n⏸ Not retried — a prompt is "
                         "open. Answer it, then tap Retry again.",
                         reply_markup=query.message.reply_markup,
@@ -564,7 +568,7 @@ class CallbackDispatchMixin:
                 self.registry.mark_dirty()
                 await self._safe_answer(query, f"Hidden {len(hidden)} session(s)")
                 try:
-                    await query.edit_message_text(
+                    await edit_text(query,
                         f"Hidden from /status: {', '.join(hidden)}\n"
                         f"<i>Still available in /resume.</i>",
                         parse_mode="HTML",
@@ -586,14 +590,14 @@ class CallbackDispatchMixin:
 
             if action == "perms_cancel":
                 try:
-                    await query.edit_message_text("↩️ Cancelled.")
+                    await edit_text(query, "↩️ Cancelled.")
                 except Exception:
                     pass
                 return
 
             if action == "perms_wait":
                 try:
-                    await query.edit_message_text(
+                    await edit_text(query,
                         f"⏳ Cancelled — try /perms again when "
                         f"<b>{html_mod.escape(label)}</b> is idle.",
                         parse_mode="HTML",
@@ -604,16 +608,16 @@ class CallbackDispatchMixin:
 
             if sess is None:
                 try:
-                    await query.edit_message_text("⚠️ Session not found.")
+                    await edit_text(query, "⚠️ Session not found.")
                 except Exception:
                     pass
                 return
 
             async def _edit(text, **kw):
                 try:
-                    await query.edit_message_text(text, **kw)
+                    await edit_text(query, text, **kw)
                 except Exception:
-                    await self._app.bot.send_message(
+                    await send_text(self._app.bot,
                         chat_id=CHAT_ID, text=text, **kw,
                     )
 
@@ -647,7 +651,7 @@ class CallbackDispatchMixin:
 
                 if outcome.reason == "still_stopping":
                     try:
-                        await query.edit_message_text(
+                        await edit_text(query,
                             f"⚠️ <b>{html_mod.escape(label)}</b> is still stopping — "
                             f"mode not changed. Try /perms again in a moment.",
                             parse_mode="HTML",
@@ -658,7 +662,7 @@ class CallbackDispatchMixin:
 
                 if outcome.reason == "launch_failed":
                     try:
-                        await query.edit_message_text(
+                        await edit_text(query,
                             f"❌ Couldn't switch mode: {html_mod.escape(outcome.err)}",
                             parse_mode="HTML",
                         )
@@ -672,7 +676,7 @@ class CallbackDispatchMixin:
                 mode_icon = "🤖" if target_skip_perms else "💬"
                 mode_label = "Auto" if target_skip_perms else "Ask"
                 try:
-                    await query.edit_message_text(
+                    await edit_text(query,
                         f"{mode_icon} <b>{html_mod.escape(label)}</b> is now in "
                         f"{mode_label} mode.",
                         parse_mode="HTML",
@@ -694,7 +698,7 @@ class CallbackDispatchMixin:
 
             if action == "resume_mode_cancel":
                 try:
-                    await query.edit_message_text("↩️ Cancelled.")
+                    await edit_text(query, "↩️ Cancelled.")
                 except Exception:
                     pass
                 return
@@ -703,9 +707,9 @@ class CallbackDispatchMixin:
 
             async def _reply(text, **kw):
                 try:
-                    await query.edit_message_text(text, **kw)
+                    await edit_text(query, text, **kw)
                 except Exception:
-                    await self._app.bot.send_message(
+                    await send_text(self._app.bot,
                         chat_id=CHAT_ID, text=text, **kw,
                     )
 
@@ -736,7 +740,7 @@ class CallbackDispatchMixin:
                 page=page, scope_chat_id=calling_chat_id(query),
             )
             try:
-                await query.edit_message_text(
+                await edit_text(query,
                     text, parse_mode="HTML", reply_markup=kb,
                 )
             except Exception:
@@ -755,7 +759,7 @@ class CallbackDispatchMixin:
 
             if action == "new_cancel":
                 try:
-                    await query.edit_message_text(
+                    await edit_text(query,
                         "↩️ Cancelled — no session changed.",
                     )
                 except Exception:
@@ -793,7 +797,7 @@ class CallbackDispatchMixin:
                     ):
                         self.registry.mark_dirty()
                     try:
-                        await query.edit_message_text(
+                        await edit_text(query,
                             f"↩️ Switched to <b>{html_mod.escape(label)}</b>"
                             + ("\n📝 Prompt queued" if prompt else ""),
                             parse_mode="HTML",
@@ -805,9 +809,9 @@ class CallbackDispatchMixin:
                 # GONE: route through the shared _do_resume helper.
                 async def _reply(text, **kw):
                     try:
-                        await query.edit_message_text(text, **kw)
+                        await edit_text(query, text, **kw)
                     except Exception:
-                        await self._app.bot.send_message(
+                        await send_text(self._app.bot,
                             chat_id=CHAT_ID, text=text, **kw,
                         )
 
@@ -852,7 +856,7 @@ class CallbackDispatchMixin:
                     self.registry.mark_dirty()
 
                 try:
-                    await query.edit_message_text(
+                    await edit_text(query,
                         f"🚀 Launching <b>{html_mod.escape(label)}</b> "
                         f"(fresh)…",
                         parse_mode="HTML",
@@ -864,7 +868,7 @@ class CallbackDispatchMixin:
                     label, skip_perms=skip_perms, is_relaunch=True)
                 if not ok:
                     try:
-                        await self._app.bot.send_message(
+                        await send_text(self._app.bot,
                             chat_id=CHAT_ID,
                             text=f"❌ {html_mod.escape(err)}",
                             parse_mode="HTML",
@@ -887,7 +891,7 @@ class CallbackDispatchMixin:
                     self.registry.mark_dirty()
 
                 try:
-                    await self._app.bot.send_message(
+                    await send_text(self._app.bot,
                         chat_id=CHAT_ID,
                         text=(
                             f"✅ <b>{html_mod.escape(label)}</b> launched"
@@ -1021,7 +1025,7 @@ class CallbackDispatchMixin:
                 )
                 by_attr = f" by {attribution_label(actor)}" if actor else ""
                 try:
-                    await self._app.bot.send_message(
+                    await send_text(self._app.bot,
                         CHAT_ID,
                         f"✓ <b>{html_mod.escape(sess.label)}</b> · "
                         f"Answered{html_mod.escape(by_attr)} · "
@@ -1265,7 +1269,7 @@ class CallbackDispatchMixin:
                 }.get(verb, "·")
                 by_attr = f" by {attribution_label(actor)}" if actor else ""
                 try:
-                    await self._app.bot.send_message(
+                    await send_text(self._app.bot,
                         CHAT_ID,
                         f"{audit_icon} <b>{html_mod.escape(sess.label)}</b> · "
                         f"{verb}{html_mod.escape(by_attr)} · "
@@ -1334,7 +1338,7 @@ class CallbackDispatchMixin:
             else:
                 # Original behavior: edit the separate permission message
                 try:
-                    await query.edit_message_text(f"{original_text}\n\n→ {verb}")
+                    await edit_text(query, f"{original_text}\n\n→ {verb}")
                 except Exception:
                     pass
                 self.registry.remove_message(

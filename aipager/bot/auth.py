@@ -37,6 +37,8 @@ from aipager.team import (
 # TelegramBot class body below (and any external consumers like the
 # tests) keeps working without changes.
 from aipager.bot.transport import (  # noqa: F401
+    reply_text,
+    send_text,
     ACTION_VERBS,
     TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES,
     TELEGRAM_MAX_DOC_BYTES,
@@ -312,7 +314,7 @@ class AuthMixin:
                 msg = update.effective_message
                 if msg is not None:
                     try:
-                        await msg.reply_text(
+                        await reply_text(msg,
                             "🚫 You're not on this bot's allow-list. "
                             "Ask an admin to add your Telegram user ID "
                             f"({tg_user.id}) to ~/.config/aipager/team.yaml — "
@@ -326,7 +328,7 @@ class AuthMixin:
             msg = update.effective_message
             if msg is not None:
                 try:
-                    await msg.reply_text(
+                    await reply_text(msg,
                         f"👀 {attribution_label(member)} — your role is "
                         "<i>read_only</i>; you can use <code>/status</code> "
                         "but can't drive sessions.",
@@ -357,7 +359,7 @@ class AuthMixin:
                 msg = update.effective_message
                 if msg is not None:
                     try:
-                        await msg.reply_text(
+                        await reply_text(msg,
                             "🚫 This bot isn't configured to talk to you. "
                             f"Ask the operator to add your Telegram user ID "
                             f"({tg_user.id}) via `aipager config`.",
@@ -384,7 +386,7 @@ class AuthMixin:
                 msg = update.effective_message
                 if msg is not None:
                     try:
-                        await msg.reply_text(
+                        await reply_text(msg,
                             "🚫 You're not on this scope's allow-list. "
                             f"Ask the operator to add your Telegram user ID "
                             f"({tg_user.id}) via `aipager config`.",
@@ -398,7 +400,7 @@ class AuthMixin:
             msg = update.effective_message
             if msg is not None:
                 try:
-                    await msg.reply_text(
+                    await reply_text(msg,
                         f"👀 {attribution_label(member)} — your role is "
                         f"<i>{html_mod.escape(member.role)}</i>; you can use "
                         "<code>/status</code> but can't drive sessions.",
@@ -450,7 +452,7 @@ class AuthMixin:
             else ""
         )
         try:
-            await self._app.bot.send_message(
+            await send_text(self._app.bot,
                 CHAT_ID,
                 f"⛔ <b>{html_mod.escape(sess.label)}</b> · "
                 f"Auto-denied · {html_mod.escape(tool_name)} · "
