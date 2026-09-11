@@ -98,6 +98,17 @@ _SKIP_RESERVE: float = 2.0
 # diagnostic for `aipager status` in ANOTHER process, not daemon state.
 _SIGNAL_MIN_INTERVAL: float = 5.0
 
+# Tolerance on a token comparison, in tokens. Refilling is
+# `tokens + (now - stamp) * rate`, and for a rate that is not a binary
+# fraction (the group bucket is 20/60) that lands a few ULPs SHORT of a
+# whole token after sleeping exactly `time_until`. The residual wait is
+# then ~1e-15 s, which `now + wait` cannot even represent once the clock
+# is in the millions of seconds a monotonic clock reports — so the
+# acquire loop spins forever without advancing, wedging the event loop.
+# One microsecond of refill is far below anything a 1-token/s budget can
+# notice and far above the float noise.
+_TOKEN_EPS: float = 1e-6
+
 
 class FloodSkipped(Exception):
     """Raised instead of making a skip-kind call when the chat's budget is
@@ -150,15 +161,15 @@ class TokenBucket:
 
     def take(self, n: float = 1.0) -> bool:
         """Consume *n* tokens if they are there. Synchronous, never waits."""
-        if self.tokens() < n:
+        if self.tokens() + _TOKEN_EPS < n:
             return False
-        self._tokens -= n
+        self._tokens = max(self._tokens - n, 0.0)
         return True
 
     def time_until(self, n: float = 1.0) -> float:
         """Seconds until *n* tokens exist; ``0.0`` when they already do."""
         have = self.tokens()
-        if have >= n:
+        if have + _TOKEN_EPS >= n:
             return 0.0
         if self.rate <= 0:
             return float("inf")
