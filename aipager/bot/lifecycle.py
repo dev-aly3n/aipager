@@ -21,7 +21,6 @@ from telegram import (
     BotCommandScopeChat,
 )
 from telegram.ext import (
-    AIORateLimiter,
     ApplicationBuilder,
     CallbackQueryHandler,
     CommandHandler,
@@ -34,11 +33,14 @@ from aipager.dtach import inject
 
 from aipager.bot import session_parity
 from aipager.bot.flood import MUTE, FloodMuted
+from aipager.bot.flood_budget import BudgetRateLimiter, clear_backoff_signal
 from aipager.bot.rich_message import set_rate_limiter
 from aipager.config import (
     APP_BUTTON, BOT_TOKEN, CHAT_ID,
+    TELEGRAM_CHAT_BURST,
     TELEGRAM_GROUP_MAX_RATE, TELEGRAM_GROUP_TIME_PERIOD,
     TELEGRAM_OVERALL_MAX_RATE, TELEGRAM_OVERALL_TIME_PERIOD,
+    TELEGRAM_PRIVATE_MAX_RATE,
 )
 from aipager.state import TrackedSession
 
@@ -237,8 +239,7 @@ class LifecycleMixin:
         # every subsequent send raised telegram.error.RetryAfter as an
         # unhandled traceback. The bot went mute for most of a day —
         # prompts still reached Claude, but no reply could ever be sent
-        # back. AIORateLimiter queues and retries after the stated
-        # interval instead of hammering and failing.
+        # back.
         #
         # ONE instance, built from the named limits in config and handed
         # to rich_message too (roadmap 8.17): sendRichMessage /
@@ -246,12 +247,24 @@ class LifecycleMixin:
         # PTB's limiter never sees. With a budget of their own they let
         # three chatty sessions put 40/min into one chat — Telegram
         # answered retry_after=28911 and the bot went mute for 8 hours.
-        limiter = AIORateLimiter(
+        #
+        # `BudgetRateLimiter` replaces PTB's `AIORateLimiter` outright
+        # (roadmap 8.21). AIORateLimiter buckets per chat only for groups
+        # and channels, so a private DM met the 30/s overall bucket and
+        # NOTHING else, and `max_retries=0` made it re-raise every 429
+        # with a traceback before its own halt could arm. Two sessions
+        # streaming their cards into one DM earned 2,021 small 429s in 14
+        # hours and then a 5.4-hour ban. Every chat now has a real 1/s
+        # budget with a small burst, card edits are a skippable class of
+        # caller, and a small 429 defers that chat instead of being
+        # retried on the next tick. `max_retries` goes with PTB's loop.
+        limiter = BudgetRateLimiter(
             overall_max_rate=TELEGRAM_OVERALL_MAX_RATE,
             overall_time_period=TELEGRAM_OVERALL_TIME_PERIOD,
+            chat_max_rate=TELEGRAM_PRIVATE_MAX_RATE,
+            chat_burst=TELEGRAM_CHAT_BURST,
             group_max_rate=TELEGRAM_GROUP_MAX_RATE,
             group_time_period=TELEGRAM_GROUP_TIME_PERIOD,
-            max_retries=0,
         )
         set_rate_limiter(limiter)
         return builder.rate_limiter(limiter)
@@ -261,6 +274,10 @@ class LifecycleMixin:
         # already; this drops the status signal file a previous daemon
         # may have left beside the socket.
         MUTE.clear()
+        # Same rule for the 8.21 per-chat backoff (R8): a fresh limiter
+        # starts every chat at x1, so a file claiming otherwise can only
+        # be a previous daemon's, and `aipager status` would report it.
+        clear_backoff_signal()
         builder = self._make_builder()
 
         self._app = builder.build()
@@ -347,7 +364,9 @@ class LifecycleMixin:
         await close_client()
         # The mute is this process's memory; take its status signal down
         # with it so `aipager status` never reports a dead daemon's ban.
+        # The per-chat backoff is the same kind of state (roadmap 8.21).
         MUTE.clear()
+        clear_backoff_signal()
         if self._app:
             await self._app.updater.stop()
             await self._app.stop()
