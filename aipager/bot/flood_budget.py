@@ -729,6 +729,15 @@ class BudgetRateLimiter(BaseRateLimiter):
                 raise FloodSkipped(chat_id, endpoint) from exc
             if not allow_retry:
                 raise
+            if budget is None:
+                # No resolvable chat (answerCallbackQuery, getMe, …), so
+                # `note_retry_after` had nothing to defer and the retry
+                # would meet only the 30/s overall bucket — i.e. go
+                # straight back into the window Telegram has just closed,
+                # which is the exact failure mode 8.21 exists to remove.
+                # Wait out what it asked for, once. Bounded: anything past
+                # TELEGRAM_MAX_RETRY_AFTER was re-raised above as a ban.
+                await self._sleep(max(seconds, 0.0))
             await self._acquire_blocking(budget)
             return await self._run(
                 budget, callback, args, kwargs, endpoint, chat_id,

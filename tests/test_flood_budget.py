@@ -632,6 +632,57 @@ def test_answer_callback_query_is_never_delayed_by_a_chat(run_async):
     assert _chat(limiter.snapshot(), 3)["calls"] == 0
 
 
+def test_a_429_with_no_resolvable_chat_waits_before_its_one_retry(run_async):
+    """Row H's other half (review rev-iter1-007). A 429 on a call with no
+    chat id — ``answerCallbackQuery``, ``getMe`` — has no chat budget to
+    defer, so without this the retry meets only the 30/s overall bucket
+    and goes straight back into the window Telegram has just closed. That
+    is the retry storm 8.21 exists to remove, in miniature.
+
+    Mutation: retry immediately when ``budget is None`` (drop the
+    ``self._sleep(seconds)``) and the second attempt lands in the same
+    instant as the first.
+    """
+    clock = FakeClock()
+    limiter = _limiter(clock)
+    stamps: list[float] = []
+
+    async def _call(**kw):
+        stamps.append(clock.now)
+        if len(stamps) == 1:
+            raise RetryAfter(2)
+        return {"ok": True}
+
+    async def _drive():
+        return await _acquire(limiter, _call, endpoint="answerCallbackQuery",
+                              chat_id=None)
+
+    assert run_async(_drive()) == {"ok": True}
+    assert [round(t - stamps[0], 6) for t in stamps] == [0.0, 2.0]
+
+
+def test_a_429_with_no_resolvable_chat_is_retried_exactly_once(run_async):
+    """The bound on that retry: one, then the error surfaces. Mutation:
+    recurse with ``allow_retry=True`` and a chat-less endpoint retries for
+    as long as Telegram keeps refusing.
+    """
+    clock = FakeClock()
+    limiter = _limiter(clock)
+    stamps: list[float] = []
+
+    async def _call(**kw):
+        stamps.append(clock.now)
+        raise RetryAfter(2)
+
+    async def _drive():
+        with pytest.raises(RetryAfter):
+            await _acquire(limiter, _call, endpoint="answerCallbackQuery",
+                           chat_id=None)
+
+    run_async(_drive())
+    assert len(stamps) == 2
+
+
 # ── E1/E3/E4: the backoff ────────────────────────────────────────────────────
 
 def test_a_small_429_stops_every_call_to_that_chat_until_it_elapses(run_async):
