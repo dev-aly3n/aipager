@@ -274,11 +274,11 @@ RICH_SUMMARIES: bool = os.environ.get("CLAUDE_RICH_SUMMARIES", "1") not in ("0",
 SESSION_STATE_FILE = Path.home() / ".claude" / "aipager-sessions.json"
 
 # Minimum seconds between busy-message edits (rate-limit for Telegram API)
-BUSY_EDIT_INTERVAL: float = 3.0
+BUSY_EDIT_INTERVAL: float = float(os.environ.get("BUSY_EDIT_INTERVAL", "3.0"))
 
 # Seconds between busy-message edits while the turn is producing new content.
 # Also the minimum gap between any two busy-message edits (debounce floor).
-STREAM_EDIT_INTERVAL: float = float(os.environ.get("STREAM_EDIT_INTERVAL", "0.9"))
+STREAM_EDIT_INTERVAL: float = float(os.environ.get("STREAM_EDIT_INTERVAL", "1.2"))
 
 
 # Keep the busy card in the chat when the turn ends, re-rendered once as a
@@ -469,6 +469,42 @@ TELEGRAM_OVERALL_TIME_PERIOD: float = 1.0
 TELEGRAM_GROUP_MAX_RATE: float = 20.0
 TELEGRAM_GROUP_TIME_PERIOD: float = 60.0
 
+# Per-CHAT budget (roadmap 8.21). The limiter above buckets per chat only
+# for groups and channels (python-telegram-bot's AIORateLimiter keys its
+# per-chat bucket on a NEGATIVE id), so a private DM got the 30/s overall
+# bucket and nothing else. Telegram's own rule is ~1 message/s into any
+# one chat with a short burst allowance: two sessions streaming their
+# busy cards into one DM at 0.9 s each put ~2.2 edits/s into it, earned
+# 2,021 small 429s in 14 hours and then a 5.4-hour ban (2026-09-11).
+# `BudgetRateLimiter` (bot/flood_budget.py) is built from these; named
+# here, non-env, so nothing can rebuild the budget from different numbers.
+TELEGRAM_PRIVATE_MAX_RATE: float = 1.0
+TELEGRAM_CHAT_BURST: float = 3.0
+
+# Busy-card cadence (roadmap 8.21 §4.3). The card interval is
+# `max(BASE, N * floor) * MARGIN * backoff`, where N is the number of
+# BUSY sessions sharing the chat: the cards of a chat share its budget
+# instead of each assuming it owns one. MARGIN leaves headroom for the
+# answers, replies, reactions and dashboard refreshes that are NOT cards.
+CARD_CADENCE_MARGIN: float = 1.1
+CARD_CADENCE_FLOOR_PRIVATE: float = 1.0
+CARD_CADENCE_FLOOR_GROUP: float = 3.0
+
+# A small 429 (retry_after <= TELEGRAM_MAX_RETRY_AFTER) doubles that
+# chat's card interval, up to this ceiling, and one quiet window halves
+# it back. Telegram escalates on the COUNT of violations, so a handled
+# 429 is still a problem: the answer is to go slower, not to retry.
+FLOOD_BACKOFF_MAX: float = 8.0
+FLOOD_BACKOFF_DECAY_SECONDS: float = 60.0
+
+# Upper bound on the one BLOCKING card edit the starvation guard makes
+# after a card has been refused for 2 x its interval. It runs inside
+# `sess._stream_edit_lock`, and the stale-card watchdog replaces a task
+# that holds that lock for CARD_REFRESH_TIMEOUT (20 s) — so this must
+# stay well under it. It only bites during a 429 deferral, where not
+# editing is the right answer anyway.
+CARD_STARVATION_BLOCK_TIMEOUT: float = 5.0
+
 # Signal file the daemon drops beside its control socket while a chat is
 # flood-muted (`{"muted": [{"chat_id", "until", "retry_after"}]}`), so
 # `aipager status` / `aipager doctor` — separate processes with no reply
@@ -477,6 +513,16 @@ TELEGRAM_GROUP_TIME_PERIOD: float = 60.0
 # memory only (bot/flood.py) and is gone on restart, which also unlinks
 # whatever a previous daemon left here.
 FLOOD_MUTE_FILE: str = str(Path(SOCKET_PATH).parent / "aipager-flood-mute.json")
+
+# Signal file for the 8.21 per-chat backoff, beside the mute file and
+# deliberately NOT the same path: `FloodMute._write_signal` unlinks
+# FLOOD_MUTE_FILE whenever no mute is active (bot/flood.py), so a second
+# writer's section would vanish the first time a mute lapsed — and two
+# writers doing write-then-replace on one path race, with the loser's
+# half silently lost. Written only by bot/flood_budget.py, read only by
+# `status.read_flood_backoffs`, unlinked at daemon start/stop and as soon
+# as no chat is backing off.
+FLOOD_BACKOFF_FILE: str = str(Path(SOCKET_PATH).parent / "aipager-flood-backoff.json")
 
 # When two hook events arrive with identical (session, event_name,
 # payload-hash) within this window, drop the second. Belt-and-braces
