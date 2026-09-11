@@ -34,6 +34,7 @@ from aipager.transcript import last_assistant_preview as _read_preview
 # tests) keeps working without changes.
 from aipager.bot.transport import (  # noqa: F401
     MUTED,
+    SKIPPED,
     edit_text_at,
     send_text,
     ACTION_VERBS,
@@ -187,16 +188,22 @@ class DashboardMixin:
                 edited = await edit_text_at(self._app.bot,
                     text, chat, self.registry.pinned_msg_id,
                     parse_mode="HTML",
+                    rate_limit_args={"kind": "skip"},
                 )
-                if edited is MUTED:
-                    # Flood-muted: nothing went out, so don't record this
-                    # text as shown — the next refresh must try again.
+                if edited is MUTED or edited is SKIPPED:
+                    # Nothing went out — flood-muted, or the chat's budget
+                    # was momentarily short and this refresh was skipped
+                    # (roadmap 8.21). Either way, don't record this text as
+                    # shown: the next state change must try again. The
+                    # dashboard is a summary that is always re-derivable,
+                    # which is exactly what makes it skippable while an
+                    # answer is not.
                     return
             else:
                 msg = await send_text(self._app.bot,
                     chat, text, parse_mode="HTML",
                 )
-                if msg is MUTED:
+                if msg is MUTED or msg is SKIPPED:
                     return  # no message to remember or pin; see above
                 # Store the message id IMMEDIATELY — before attempting
                 # to pin. In groups where the bot isn't an admin (no
