@@ -99,10 +99,24 @@ def _fake_token(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _reset_client(monkeypatch):
+    """Give each row its own httpx client, and CLOSE it — loop included.
+
+    ``test_rich_message_flood.py``'s version of this fixture abandons the
+    event loop it builds for the teardown. That is one leaked loop (with
+    its epoll fd and self-pipe) per test, and the suite runs under a hard
+    1 GiB ``RLIMIT_AS`` that ``notify_hook.main()`` clamps on the pytest
+    process itself and can never raise back: the cost does not show up
+    here, it shows up as "can't start new thread" in an unrelated later
+    test. Roadmap 8.19 — worked around, not fixed.
+    """
     monkeypatch.setattr(rm, "_client", None)
     yield
     if rm._client is not None and not rm._client.is_closed:
-        asyncio.new_event_loop().run_until_complete(rm._client.aclose())
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(rm._client.aclose())
+        finally:
+            loop.close()
     monkeypatch.setattr(rm, "_client", None)
 
 
