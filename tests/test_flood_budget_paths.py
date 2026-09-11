@@ -237,7 +237,10 @@ def test_a_rich_429_logs_one_warning_and_no_traceback(method, run_async,
     clock = FakeClock()
     _install(clock)
     _scripted_http(monkeypatch, _429(5), _ok(7))
-    caplog.set_level("DEBUG")
+    # WARNING, not DEBUG: the claim is "exactly one warning from anywhere,
+    # and no traceback on it". Capturing every library's DEBUG line to
+    # prove that costs address space the suite has not got (roadmap 8.19).
+    caplog.set_level("WARNING")
 
     run_async(_call(method))
 
