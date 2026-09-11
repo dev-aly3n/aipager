@@ -26,6 +26,7 @@ from __future__ import annotations
 import asyncio
 import importlib
 import json
+import statistics
 import time
 import types
 from typing import Any
@@ -291,16 +292,28 @@ def test_two_sessions_in_one_private_chat_each_slow_to_two_point_two_seconds(
 ):
     """Row B1 / R4 — the incident itself: two cards at 0.9 s put 2.2
     edits/s into one DM. Mutation: compute the interval from the session
-    instead of from the chat's BUSY count and this returns to 1.32."""
+    instead of from the chat's BUSY count and this returns to 1.32.
+
+    Asserted on EVERY gap, not just the smallest. A floor
+    (``min(gaps) == 2.2``) is what this row used to assert, and it stayed
+    green through iteration 1 while the real gaps ran 2.2 s / 6.6 s — the
+    cards were being refused by the budget half the time and the
+    assertion could not see it. With no other traffic in the chat the
+    cadence rule, not the limiter's reserve, must be what paces a card:
+    mean within 10% of the interval, and no single gap past twice it."""
     bot = _ext_bot(mk_bot(), telegram, limiter, PRIVATE)
     cards = [_card(bot, "a", 10, PRIVATE),
              _card(bot, "b", 11, PRIVATE)]
     _run_cards(vloop, bot, cards, 20.0)
-    gaps = [g for mid in (10, 11)
-            for g in _gaps(_card_calls(telegram, PRIVATE, mid))]
-    assert gaps, "no card edit went out at all"
-    assert min(gaps) == pytest.approx(2.2), \
-        "a card edited faster than the two-session interval"
+    interval = card_interval(base=an.STREAM_EDIT_INTERVAL, busy_sessions=2,
+                             is_group=False)
+    for mid in (10, 11):
+        gaps = _gaps(_card_calls(telegram, PRIVATE, mid))
+        assert gaps, f"card {mid} never edited twice"
+        assert min(gaps) >= interval - 1e-3, \
+            "a card edited faster than the two-session interval"
+        assert statistics.mean(gaps) <= 1.1 * interval, (mid, gaps)
+        assert max(gaps) <= 2 * interval, (mid, gaps)
 
 
 def test_two_sessions_in_one_private_chat_draw_no_429_from_telegram(
@@ -320,13 +333,23 @@ def test_two_sessions_in_one_private_chat_draw_no_429_from_telegram(
 def test_three_sessions_in_one_chat_stay_inside_the_chats_budget(
     mk_bot, vloop, telegram, limiter,
 ):
-    """Row B1 widened: the rule has to hold for any N, not just two.
-    Mutation: cap N at two and three sessions overrun the chat again."""
+    """Row B1 widened: the rule has to hold for any N, not just two — and
+    every card must actually GET its interval, not merely stay legal.
+    Mutation: cap N at two and three sessions overrun the chat again; make
+    the cards contend for tokens instead of pacing themselves and the mean
+    gap runs past the interval while `violations` stays empty."""
     bot = _ext_bot(mk_bot(), telegram, limiter, PRIVATE)
     cards = [_card(bot, name, 10 + i, PRIVATE)
              for i, name in enumerate(("a", "b", "c"))]
     _run_cards(vloop, bot, cards, 30.0)
     assert telegram.violations == []
+    interval = card_interval(base=an.STREAM_EDIT_INTERVAL, busy_sessions=3,
+                             is_group=False)
+    for mid in (10, 11, 12):
+        gaps = _gaps(_card_calls(telegram, PRIVATE, mid))
+        assert gaps, f"card {mid} never edited twice"
+        assert statistics.mean(gaps) <= 1.1 * interval, (mid, gaps)
+        assert max(gaps) <= 2 * interval, (mid, gaps)
 
 
 # ── row B2: N changes while the cards run ────────────────────────────────────

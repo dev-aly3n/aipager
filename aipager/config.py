@@ -503,6 +503,16 @@ CARD_CADENCE_FLOOR_GROUP: float = 3.0
 FLOOD_BACKOFF_MAX: float = 8.0
 FLOOD_BACKOFF_DECAY_SECONDS: float = 60.0
 
+# How soon a busy card whose last edit the budget REFUSED tries again,
+# instead of sitting out a whole card interval. N cards started by one
+# burst of prompts tick in phase, and a chat's burst (3) against the
+# 2-token skip reserve admits only two of them — so without this the
+# third card loses every cluster and the starvation guard becomes its
+# normal cadence. It can never make a card edit FASTER than its interval:
+# `_animate_tick`'s debounce is the gate and is unchanged. One second is
+# exactly one token of a 1 call/s chat budget.
+CARD_RETRY_WAKE: float = 1.0
+
 # Upper bound on the one BLOCKING card edit the starvation guard makes
 # after a card has been refused for 2 x its interval. It runs inside
 # `sess._stream_edit_lock`, and the stale-card watchdog replaces a task

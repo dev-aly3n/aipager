@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 
 from aipager.config import (
     BUSY_EDIT_INTERVAL, CARD_CADENCE_FLOOR_GROUP, CARD_CADENCE_FLOOR_PRIVATE,
+    CARD_RETRY_WAKE,
     CARD_STARVATION_BLOCK_TIMEOUT, CHAT_ID, COMPACT_ANIMATE_INTERVAL_SECONDS,
     COMPACT_ANIMATE_MAX_TICKS, SPINNER_VERBS,
     STREAM_EDIT_INTERVAL,
@@ -1569,8 +1570,23 @@ class AnimationMixin:
                 # STREAMING interval while the edits themselves are paced
                 # by `_animate_tick`'s debounce. Both read the same
                 # function, so they cannot drift.
+                #
+                # A card whose last edit was REFUSED by the budget wakes
+                # sooner (`CARD_RETRY_WAKE`) instead of sitting out a whole
+                # interval. With N cards started by one burst of prompts
+                # they tick in phase for ever, and the chat's burst is 3
+                # against a 2-token skip reserve — so the third card of
+                # every cluster is refused, and if its retry is a full
+                # interval away it loses the next cluster too. Measured
+                # with three sessions in one DM: 43 edits a minute, 14
+                # refused and gaps up to 9.9 s, against 3.3 s flat once the
+                # refusal is retried on the stream cadence. It cannot make
+                # any card FASTER than its interval: `_animate_tick`'s
+                # debounce is the gate, and it is unchanged.
                 await asyncio.sleep(
                     self._first_tick_delay(sess) if first_tick
+                    else min(self._card_interval(sess, streaming=True),
+                             CARD_RETRY_WAKE) if sess.card_skipped_since
                     else self._card_interval(sess, streaming=True),
                 )
                 first_tick = False
