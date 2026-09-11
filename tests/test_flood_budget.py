@@ -61,28 +61,29 @@ def run_async():
 
     So: cancel pending tasks, shut the default executor down and close
     each loop when the test ends.
+        Closed EAGERLY, as each coroutine finishes, rather than collected and
+    closed at teardown: the suite runs with VmSize within a few tens of
+    kilobytes of its ``RLIMIT_AS`` on this machine already, so holding
+    even two loops at once is worth avoiding.
     """
-    loops: list[asyncio.AbstractEventLoop] = []
-
     def _run(coro):
         loop = asyncio.new_event_loop()
-        loops.append(loop)
-        return loop.run_until_complete(coro)
-
-    yield _run
-
-    for loop in loops:
         try:
-            pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
-            for task in pending:
-                task.cancel()
-            if pending:
-                loop.run_until_complete(
-                    asyncio.gather(*pending, return_exceptions=True),
-                )
-            loop.run_until_complete(loop.shutdown_default_executor())
+            return loop.run_until_complete(coro)
         finally:
-            loop.close()
+            try:
+                pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
+                for task in pending:
+                    task.cancel()
+                if pending:
+                    loop.run_until_complete(
+                        asyncio.gather(*pending, return_exceptions=True),
+                    )
+                loop.run_until_complete(loop.shutdown_default_executor())
+            finally:
+                loop.close()
+
+    return _run
 
 
 def _limiter(clock: FakeClock, **kw) -> BudgetRateLimiter:
@@ -909,16 +910,25 @@ def test_flood_budget_reads_time_only_through_its_injected_clock():
     Mutation: call ``time.monotonic()`` anywhere in the module and this
     names the line.
     """
-    import ast
+    import tokenize
 
     from aipager.bot import flood_budget
 
-    source = Path(flood_budget.__file__).read_text(encoding="utf-8")
-    offenders = [
-        node.lineno
-        for node in ast.walk(ast.parse(source))
-        if (isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "monotonic")
-    ]
+    # Tokenised, not parsed, and streamed through a four-token window
+    # rather than collected into a list: comments and docstrings come back
+    # as COMMENT and STRING tokens, so prose mentioning ``time.monotonic()``
+    # cannot trip this, and neither a module AST (~1.7 MB) nor a full token
+    # list is held — the suite runs within ~1 MB of its RLIMIT_AS and every
+    # megabyte of peak raises the high-water mark for good (roadmap 8.19).
+    offenders = []
+    window: list[tuple[int, str]] = []
+    with open(flood_budget.__file__, encoding="utf-8") as fh:
+        for tok in tokenize.generate_tokens(fh.readline):
+            if tok.type not in (tokenize.NAME, tokenize.OP):
+                continue
+            window.append((tok.start[0], tok.string))
+            if len(window) > 4:
+                window.pop(0)
+            if [t for _, t in window] == ["time", ".", "monotonic", "("]:
+                offenders.append(window[0][0])
     assert offenders == [], offenders

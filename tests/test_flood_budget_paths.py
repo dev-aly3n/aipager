@@ -15,7 +15,6 @@ path (``aipager.bot.transport.asyncio`` IS the global module; CLAUDE.md).
 
 from __future__ import annotations
 
-import ast
 import asyncio
 from pathlib import Path
 
@@ -68,28 +67,29 @@ def run_async():
     itself and can never raise it back) — a leak here would fail an
     unrelated LATER test with "can't start new thread", not this file.
     Roadmap 8.19; worked around, not fixed.
+        Closed EAGERLY, as each coroutine finishes, rather than collected and
+    closed at teardown: the suite runs with VmSize within a few tens of
+    kilobytes of its ``RLIMIT_AS`` on this machine already, so holding
+    even two loops at once is worth avoiding.
     """
-    loops: list[asyncio.AbstractEventLoop] = []
-
     def _run(coro):
         loop = asyncio.new_event_loop()
-        loops.append(loop)
-        return loop.run_until_complete(coro)
-
-    yield _run
-
-    for loop in loops:
         try:
-            pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
-            for task in pending:
-                task.cancel()
-            if pending:
-                loop.run_until_complete(
-                    asyncio.gather(*pending, return_exceptions=True),
-                )
-            loop.run_until_complete(loop.shutdown_default_executor())
+            return loop.run_until_complete(coro)
         finally:
-            loop.close()
+            try:
+                pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
+                for task in pending:
+                    task.cancel()
+                if pending:
+                    loop.run_until_complete(
+                        asyncio.gather(*pending, return_exceptions=True),
+                    )
+                loop.run_until_complete(loop.shutdown_default_executor())
+            finally:
+                loop.close()
+
+    return _run
 
 
 @pytest.fixture(autouse=True)
@@ -516,20 +516,28 @@ def test_no_mini_app_module_builds_its_own_telegram_bot():
     ``bot._app.bot`` — the same ``ExtBot`` the limiter is installed on —
     so it is metered by the chat budget with no code of its own.
 
-    Mutation: construct a ``telegram.Bot(token=...)`` anywhere under
-    ``aipager/miniapp/`` (as ``bot/observer.py`` deliberately does, with
-    its own token and its own budget) and this names the file.
+    Asserted at its root: nothing under ``aipager/miniapp/`` so much as
+    IMPORTS ``telegram``, so it cannot construct a ``Bot`` with a token
+    and a budget of its own the way ``bot/observer.py`` deliberately does.
+    A text scan rather than an AST sweep — the AST of this package peaks
+    at ~5 MB of address space, and the suite has not got that to spare
+    (roadmap 8.19).
+
+    Mutation: add ``from telegram import Bot`` to any Mini App module and
+    this names the file.
     """
     from aipager import miniapp
 
+    # Streamed a line at a time, never ``read_text().splitlines()``: this
+    # package is 8,000 lines and the suite runs within ~1 MB of its
+    # RLIMIT_AS (roadmap 8.19).
     offenders = []
     for path in sorted(Path(miniapp.__file__).parent.rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        for node in ast.walk(tree):
-            func = getattr(node, "func", None)
-            name = getattr(func, "attr", None) or getattr(func, "id", None)
-            if isinstance(node, ast.Call) and name == "Bot":
-                offenders.append(f"{path.name}:{node.lineno}")
+        with open(path, encoding="utf-8") as fh:
+            for lineno, line in enumerate(fh, 1):
+                code = line.split("#", 1)[0]
+                if "telegram" in code and ("import " in code or "Bot(" in code):
+                    offenders.append(f"{path.name}:{lineno}: {line.strip()}")
     assert offenders == [], offenders
 
 

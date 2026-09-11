@@ -61,28 +61,29 @@ def run_async():
     on the pytest process itself and can never raise it back). A leak
     here would not fail THIS file; it would fail an unrelated LATER test
     with "can't start new thread". Roadmap 8.19, worked around here.
+        Closed EAGERLY, as each coroutine finishes, rather than collected and
+    closed at teardown: the suite runs with VmSize within a few tens of
+    kilobytes of its ``RLIMIT_AS`` on this machine already, so holding
+    even two loops at once is worth avoiding.
     """
-    loops: list[asyncio.AbstractEventLoop] = []
-
     def _run(coro):
         loop = asyncio.new_event_loop()
-        loops.append(loop)
-        return loop.run_until_complete(coro)
-
-    yield _run
-
-    for loop in loops:
         try:
-            pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
-            for task in pending:
-                task.cancel()
-            if pending:
-                loop.run_until_complete(
-                    asyncio.gather(*pending, return_exceptions=True),
-                )
-            loop.run_until_complete(loop.shutdown_default_executor())
+            return loop.run_until_complete(coro)
         finally:
-            loop.close()
+            try:
+                pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
+                for task in pending:
+                    task.cancel()
+                if pending:
+                    loop.run_until_complete(
+                        asyncio.gather(*pending, return_exceptions=True),
+                    )
+                loop.run_until_complete(loop.shutdown_default_executor())
+            finally:
+                loop.close()
+
+    return _run
 
 
 def _sess(label="jim", *, status=Status.BUSY, chat=0, streaming=False,
@@ -255,12 +256,22 @@ def test_the_loop_wake_and_the_debounce_read_the_same_interval():
     this names it.
     """
     import ast
+    import textwrap
 
-    source = Path(animation.__file__).read_text(encoding="utf-8")
-    loop = next(
-        node for node in ast.walk(ast.parse(source))
-        if isinstance(node, ast.AsyncFunctionDef) and node.name == "_animate_busy"
-    )
+    # Only the one method, streamed out of the file a line at a time:
+    # neither a full-module AST nor ``inspect.getsource`` (which pulls the
+    # whole 2,000-line module into ``linecache``) — the suite runs within
+    # ~1 MB of its RLIMIT_AS and that peak is never returned (8.19).
+    snippet: list[str] = []
+    with open(animation.__file__, encoding="utf-8") as fh:
+        for line in fh:
+            if snippet and (line.startswith("    def ")
+                            or line.startswith("    async def ")):
+                break
+            if snippet or line.startswith("    async def _animate_busy"):
+                snippet.append(line)
+    assert snippet, "_animate_busy not found in animation.py"
+    loop = ast.parse(textwrap.dedent("".join(snippet)))
     sleeps = [
         node for node in ast.walk(loop)
         if (isinstance(node, ast.Call)
