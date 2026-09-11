@@ -88,7 +88,11 @@ def clock():
 
 @pytest.fixture
 def limiter(clock):
-    lim = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    """Signal path passed explicitly — see the note on the same fixture in
+    ``test_budget_rules.py``: without it, "no backoff file was written" is
+    vacuously true on a machine with no daemon socket."""
+    lim = BudgetRateLimiter(clock=clock, sleep=clock.sleep,
+                            signal_path=config.FLOOD_BACKOFF_FILE)
     yield lim
     lim.reset()
 

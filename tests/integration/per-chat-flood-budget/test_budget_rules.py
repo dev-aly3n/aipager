@@ -82,7 +82,18 @@ def clock():
 
 @pytest.fixture
 def limiter(clock):
-    lim = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    """The limiter under test, with its signal file passed EXPLICITLY.
+
+    ``signal_path=None`` means "publish only when the daemon's control
+    socket is there", which makes a file assertion depend on whether the
+    machine running the suite happens to have a daemon up: the two file
+    rows below passed on the developer's box and failed with no socket
+    present (see the report's CI-parity finding). The explicit path is the
+    seam entrypoints.md documents, and it is what makes these rows
+    deterministic anywhere. ``config.FLOOD_BACKOFF_FILE`` is already
+    inside ``tmp_path`` by the autouse ``_isolate_flood_mute`` fixture."""
+    lim = BudgetRateLimiter(clock=clock, sleep=clock.sleep,
+                            signal_path=config.FLOOD_BACKOFF_FILE)
     yield lim
     lim.reset()
 
@@ -203,6 +214,107 @@ def test_a_group_chat_admits_no_more_than_twenty_calls_in_any_sixty_seconds(
     try:
         run_async(asyncio.wait_for(burst(), timeout=20))
         assert _most_in_window([t for _, _, t in log], 60.0) <= 20
+    finally:
+        limiter.reset()
+
+
+def test_exactly_twenty_group_calls_land_in_the_first_minute_and_the_rest_after(
+    clock, run_async,
+):
+    """Row G's exact schedule, now that the group limit is a ROLLING 60 s
+    window rather than a token bucket: 25 queued calls split 20 / 5 at the
+    minute boundary. Mutation: model the window as a bucket with capacity
+    20 again and all 25 land inside the first 22 s (iteration 1's red
+    row)."""
+    limiter = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    log: list[tuple] = []
+
+    async def burst():
+        for i in range(25):
+            await _call(limiter, clock, log, chat_id=GROUP, tag=i)
+
+    try:
+        run_async(asyncio.wait_for(burst(), timeout=20))
+        stamps = [t for _, _, t in log]
+        first_minute = [t for t in stamps if t < stamps[0] + 60.0]
+        assert (len(first_minute), len(stamps)) == (20, 25)
+    finally:
+        limiter.reset()
+
+
+def test_the_twenty_first_group_call_waits_for_the_window_to_roll(
+    clock, run_async,
+):
+    """The boundary itself: the 21st call cannot go out until the oldest
+    of the twenty is a full minute old. Mutation: drop the oldest-stamp
+    wait and it leaves early — which is exactly how a group earns its
+    429."""
+    limiter = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    log: list[tuple] = []
+
+    async def burst():
+        for i in range(21):
+            await _call(limiter, clock, log, chat_id=GROUP, tag=i)
+
+    try:
+        run_async(asyncio.wait_for(burst(), timeout=20))
+        stamps = [t for _, _, t in log]
+        assert stamps[20] - stamps[0] == pytest.approx(60.0, abs=1e-6)
+    finally:
+        limiter.reset()
+
+
+def test_a_group_window_that_has_rolled_admits_a_fresh_twenty(
+    clock, run_async,
+):
+    """"Rolling" means the budget comes back on its own: after a quiet
+    minute the group may take another twenty at the ordinary 1/s pace,
+    with no call ever making 21 in any window. Mutation: never expire the
+    stamps and the group is throttled for ever after its first busy
+    minute."""
+    limiter = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    log: list[tuple] = []
+
+    async def burst(n):
+        for i in range(n):
+            await _call(limiter, clock, log, chat_id=GROUP, tag=i)
+
+    try:
+        run_async(asyncio.wait_for(burst(20), timeout=20))
+        clock.now += 61.0
+        started = clock.now
+        run_async(asyncio.wait_for(burst(20), timeout=20))
+        stamps = [t for _, _, t in log]
+        assert stamps[-1] - started < 20.0, "the rolled window did not come back"
+        assert _most_in_window(stamps, 60.0) <= 20
+    finally:
+        limiter.reset()
+
+
+def test_a_skip_acquire_into_a_full_group_window_is_refused(clock, run_async):
+    """The skip half of the rolling window: a card must yield to the
+    window even when the 1/s bucket is full of tokens (it is, five seconds
+    after the twentieth call). Mutation: check only the token bucket for
+    skip callers and the card spends the group's minute."""
+    limiter = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    log: list[tuple] = []
+
+    async def fill():
+        for i in range(20):
+            await _call(limiter, clock, log, chat_id=GROUP, tag=i)
+
+    try:
+        run_async(asyncio.wait_for(fill(), timeout=20))
+        clock.now += 5.0  # the per-chat bucket is back to its full burst
+        assert limiter.snapshot()["chats"][0]["tokens"] == pytest.approx(3.0)
+
+        async def card():
+            await _call(limiter, clock, log, chat_id=GROUP,
+                        endpoint="editMessageText", kind="skip", tag="card")
+
+        with pytest.raises(FloodSkipped):
+            run_async(asyncio.wait_for(card(), timeout=10))
+        assert [tag for tag, _, _ in log] == list(range(20))
     finally:
         limiter.reset()
 
@@ -575,6 +687,80 @@ def test_the_signal_file_goes_away_once_the_chat_has_decayed_back_to_one(
     clock.now += 120.0
     assert limiter.cadence_multiplier(PRIVATE) == 1.0
     assert not _backoff_file().exists()
+
+
+def _published(path: Path) -> list:
+    return json.loads(path.read_text())["backoff"]
+
+
+def test_the_signal_file_is_not_rewritten_more_than_once_every_five_seconds(
+    limiter, clock,
+):
+    """The write throttle, per the coordinator's ruling on
+    tester-iter1-007: on change AND never more than once per 5 s. A chat
+    that 429s twice inside the window costs ONE write, so a flood cannot
+    turn into a write storm on the runtime directory. Mutation: drop the
+    throttle and the file already reads x4 here."""
+    limiter.note_retry_after(PRIVATE, 5)
+    clock.now += 1.0
+    limiter.note_retry_after(PRIVATE, 5)
+    assert limiter.cadence_multiplier(PRIVATE) == 4.0
+    assert _published(_backoff_file())[0]["multiplier"] == 2.0
+
+
+def test_a_change_held_back_by_the_throttle_is_published_at_the_end_of_it(
+    limiter, clock,
+):
+    """The other half of the same ruling: throttled is deferred, never
+    dropped — the next event past the window publishes the state the file
+    missed. Mutation: skip the pending write and `aipager status`
+    permanently under-reports a chat that escalated inside one window."""
+    limiter.note_retry_after(PRIVATE, 5)
+    clock.now += 1.0
+    limiter.note_retry_after(PRIVATE, 5)
+    clock.now += 5.0
+    limiter.sweep()
+    assert _published(_backoff_file())[0]["multiplier"] == 4.0
+
+
+def test_a_sweep_republishes_a_decaying_chat_and_then_takes_the_file_down(
+    limiter, clock,
+):
+    """``sweep()`` is what the session monitor ticks: with no traffic at
+    all, the decay is invisible until something reads it, so the CLI would
+    keep showing a stale multiplier for a quiet chat. Mutation: make the
+    sweep a no-op and the signal file outlives the backoff it describes."""
+    limiter.note_retry_after(PRIVATE, 5)
+    limiter.note_retry_after(PRIVATE, 5)
+    clock.now += 65.0
+    limiter.sweep()
+    published = _published(_backoff_file())[0]["multiplier"]
+    clock.now += 120.0
+    limiter.sweep()
+    assert (published, _backoff_file().exists()) == (2.0, False)
+
+
+def test_no_backoff_signal_is_written_by_a_process_that_is_not_the_daemon(
+    clock, monkeypatch, tmp_path,
+):
+    """The signal file is the DAEMON's, and `aipager status`, the hook
+    binary and any stray probe share its default path — on a box where the
+    daemon is running they sit right next to its socket. A limiter that
+    resolves its path late therefore publishes only while that socket is
+    there. Mutation: drop the check and any process that reports a 429
+    invents a backoff for the running daemon.
+
+    Deterministic on any machine BECAUSE it pins the socket path itself:
+    with no socket, nothing is written even though the 429 is accounted."""
+    monkeypatch.setattr("aipager.config.SOCKET_PATH",
+                        str(tmp_path / "no-daemon-here.sock"))
+    lim = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    try:
+        lim.note_retry_after(PRIVATE, 5)
+        assert lim.cadence_multiplier(PRIVATE) == 2.0
+        assert not _backoff_file().exists()
+    finally:
+        lim.reset()
 
 
 def test_a_fresh_limiter_starts_every_chat_at_one_after_a_restart(

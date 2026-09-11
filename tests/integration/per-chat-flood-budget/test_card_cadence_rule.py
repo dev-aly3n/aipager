@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import inspect
 import json
 import statistics
 import time
@@ -231,7 +232,9 @@ def _run_cards(vloop, bot, sessions, seconds: float, *, at=None, busy=None):
 
             async def _later():
                 await asyncio.sleep(when)
-                fn()
+                out = fn()
+                if inspect.isawaitable(out):
+                    await out
 
             tasks.append(asyncio.ensure_future(_later()))
         await asyncio.sleep(seconds)
@@ -466,6 +469,153 @@ def test_every_call_a_live_card_makes_is_a_card_edit(
     _run_cards(vloop, bot, [sess], 12.0)
     assert {endpoint for endpoint, _, _, _ in telegram.calls} == \
         {"editMessageText"}
+
+
+def test_a_group_card_sends_no_typing_indicator_either(
+    mk_bot, vloop, telegram, limiter,
+):
+    """Row M as amended, on the OTHER chat kind — the one where a typing
+    bubble cost 18 of the group's 20 calls a minute. The DM row above
+    cannot see a group-only regression. Mutation: restore the indicator
+    for groups alone and this counts it."""
+    bot = _ext_bot(mk_bot(), telegram, limiter, GROUP)
+    sess = _card(bot, "g", 10, GROUP)
+    _run_cards(vloop, bot, [sess], 20.0)
+    assert {endpoint for endpoint, _, _, _ in telegram.calls} == \
+        {"editMessageText"}
+
+
+def test_the_bot_package_no_longer_sends_a_typing_indicator_at_all(
+    mk_bot, vloop, telegram, limiter,
+):
+    """Row M's third arm: the indicator is gone from card CREATION too,
+    not just from the tick — and the loop tests above can only see the
+    tick. Swept statically because "the code never calls it" is the whole
+    claim; streamed line by line, since the suite runs under a 1 GiB
+    address-space cap. Mutation: put ``send_chat_action`` back anywhere in
+    the bot package and this names the file and line."""
+    from pathlib import Path
+
+    from aipager import bot as bot_pkg
+
+    offenders = []
+    for path in sorted(Path(bot_pkg.__file__).parent.rglob("*.py")):
+        with path.open(encoding="utf-8") as handle:
+            for lineno, line in enumerate(handle, 1):
+                if line.lstrip().startswith("#"):
+                    continue  # the comments that RECORD the removal
+                if "send_chat_action(" in line:
+                    offenders.append(f"{path.name}:{lineno}")
+    assert offenders == [], offenders
+
+
+# ── CARD_RETRY_WAKE: a refused card comes back sooner, never faster ──────────
+
+@pytest.mark.parametrize("sessions,chat", [
+    (1, PRIVATE), (2, PRIVATE), (3, PRIVATE), (1, GROUP),
+])
+def test_no_card_ever_edits_faster_than_its_own_interval(
+    mk_bot, vloop, telegram, limiter, sessions, chat,
+):
+    """``CARD_RETRY_WAKE = 1.0`` makes a REFUSED card come back in a
+    second instead of a whole interval — it must never turn into a second
+    way to edit. The in-phase three-session cluster is the case it was
+    added for, so it is one of the parameters. Mutation: retry on the wake
+    unconditionally (drop the "not before the interval" gate) and a
+    contended card starts editing every 1 s."""
+    bot = _ext_bot(mk_bot(), telegram, limiter, chat)
+    cards = [_card(bot, f"s{i}", 10 + i, chat) for i in range(sessions)]
+    _run_cards(vloop, bot, cards, 30.0)
+    interval = card_interval(base=an.STREAM_EDIT_INTERVAL,
+                             busy_sessions=sessions, is_group=chat < 0)
+    for mid in range(10, 10 + sessions):
+        gaps = _gaps(_card_calls(telegram, chat, mid))
+        assert gaps, f"card {mid} never edited twice"
+        assert min(gaps) >= interval - 1e-3, (mid, gaps)
+
+
+def test_the_retry_wake_never_costs_the_chat_a_429(
+    mk_bot, vloop, telegram, limiter,
+):
+    """R1 under the new wake: three in-phase cards in one DM retry every
+    second while they are being refused, which is three times the wake
+    traffic of iteration 1. A strict Telegram must still never answer 429.
+    Mutation: let the retry bypass the skip acquire and the fake refuses."""
+    bot = _ext_bot(mk_bot(), telegram, limiter, PRIVATE)
+    cards = [_card(bot, f"s{i}", 10 + i, PRIVATE) for i in range(3)]
+    _run_cards(vloop, bot, cards, 40.0)
+    assert telegram.violations == []
+
+
+def test_a_refused_card_comes_back_in_a_second_not_in_an_interval(
+    mk_bot, vloop, telegram, limiter,
+):
+    """The point of ``CARD_RETRY_WAKE``, in a GROUP where the interval
+    (3.3 s) is far longer than the wake (1.0 s): a card whose first tick
+    is refused must land its edit on a one-second retry, not wait out the
+    whole interval. The chat's burst is spent just before the first tick,
+    so that tick is certainly refused and a token is back 1 s later.
+    Mutation: set ``CARD_RETRY_WAKE`` to the interval (0.7.10's behaviour)
+    and the first edit slips past 5 s."""
+    bot = _ext_bot(mk_bot(), telegram, limiter, GROUP)
+    sess = _card(bot, "g", 10, GROUP)
+
+    async def _spend():
+        for _ in range(3):
+            async def _call():
+                telegram.admit("sendMessage", GROUP)
+            await limiter.process_request(
+                callback=_call, args=(), kwargs={}, endpoint="sendMessage",
+                data={"chat_id": GROUP}, rate_limit_args=None)
+
+    # 2.9 s: one tenth of a second before the card's first tick, so the
+    # tick is certainly refused and two tokens are back at 4.9 s. A card
+    # retrying on the wake lands at 5.0; one retrying on its interval not
+    # before 6.3.
+    _run_cards(vloop, bot, [sess], 9.0, at=(2.9, _spend))
+    edits = _card_calls(telegram, GROUP, 10)
+    assert edits, "the card never edited at all"
+    assert edits[0] - 1_000_000.0 < 5.5, [round(e - 1_000_000.0, 3) for e in edits]
+
+
+# ── the acceptance table: what a minute of card traffic costs ────────────────
+
+@pytest.mark.parametrize("sessions,chat,edits,skipped,gap", [
+    (1, GROUP, 18, 0, 3.30),
+    (1, PRIVATE, 46, 0, 1.32),
+    (2, PRIVATE, 56, 0, 2.20),
+    (3, PRIVATE, 56, 1, 3.30),
+])
+def test_a_minute_of_card_traffic_costs_exactly_what_was_promised(
+    mk_bot, vloop, telegram, limiter, sessions, chat, edits, skipped, gap,
+):
+    """The operator-facing acceptance criterion, measured independently:
+    over 61 simulated seconds the card loop makes exactly this many calls,
+    all of them card edits, with every gap exactly the promised interval
+    and no 429 from a strict Telegram. Mutation: anything that changes the
+    cadence, re-admits the typing indicator, or lets the budget refuse a
+    card in an otherwise quiet chat moves one of these numbers."""
+    bot = _ext_bot(mk_bot(), telegram, limiter, chat)
+    cards = [_card(bot, f"s{i}", 10 + i, chat) for i in range(sessions)]
+    _run_cards(vloop, bot, cards, 61.0)
+    snap = limiter.snapshot()["chats"][0]
+    observed = {
+        "calls": len(telegram.calls),
+        "edits": len([1 for e, _, _, _ in telegram.calls
+                      if e == "editMessageText"]),
+        "other_endpoints": sorted({e for e, _, _, _ in telegram.calls}
+                                  - {"editMessageText"}),
+        "admitted": snap["calls"],
+        "skipped": snap["skipped"],
+        "violations": telegram.violations,
+        "gaps": sorted({round(g, 3) for mid in range(10, 10 + sessions)
+                        for g in _gaps(_card_calls(telegram, chat, mid))}),
+    }
+    assert observed == {
+        "calls": edits, "edits": edits, "other_endpoints": [],
+        "admitted": edits, "skipped": skipped, "violations": [],
+        "gaps": [gap],
+    }
 
 
 # ── row C2: the starvation guard ─────────────────────────────────────────────
