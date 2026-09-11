@@ -1564,11 +1564,11 @@ class AnimationMixin:
                 # chat's stream cadence. The loop wake also drives the
                 # transcript read (`_read_stream_text`,
                 # `_sync_anchors_from_transcript`) — a local file read that
-                # costs no Telegram call now that the typing indicator is
-                # tied to the edit branch — so the loop keeps the STREAMING
-                # interval while the edits themselves are paced by
-                # `_animate_tick`'s debounce. Both read the same function,
-                # so they cannot drift.
+                # costs no Telegram call now that nothing but the edit
+                # itself is sent from here — so the loop keeps the
+                # STREAMING interval while the edits themselves are paced
+                # by `_animate_tick`'s debounce. Both read the same
+                # function, so they cannot drift.
                 await asyncio.sleep(
                     self._first_tick_delay(sess) if first_tick
                     else self._card_interval(sess, streaming=True),
@@ -1656,9 +1656,9 @@ class AnimationMixin:
             # loop wake per BUSY session, which the debounce never
             # suppressed: at 0.9 s wakes it roughly DOUBLED the daemon's
             # real call rate into the chat and was the single most
-            # frequent chat-scoped call in the incident. The typing
-            # indicator now goes out only beside an attempted edit, i.e.
-            # at most once per `interval` (design §11 U3).
+            # frequent chat-scoped call in the incident. It is gone from
+            # the whole card loop now, not just from this branch — see
+            # the note below the edit.
             return False
         # An ordinary tick is skippable: a card edit is worth making only
         # if the chat can afford it now, and an answer must always find a
@@ -1691,26 +1691,19 @@ class AnimationMixin:
                                                 kind="skip")
         if result is None:
             return None
-        if not waiting and not is_group_chat(resolve_chat_id_int(sess)):
-            # Send typing AFTER edit (edit cancels the typing indicator).
-            # Skippable: it is a courtesy, and it must never spend the
-            # token an answer is waiting for.
-            #
-            # NOT SENT AT ALL IN A GROUP (8.21): a group's whole budget is
-            # 20 calls a minute, and a card ticking on the 3.3 s group
-            # floor already spends 18 of them. A per-tick typing bubble
-            # would cost the other half of the minute for an ornament the
-            # card edit itself already conveys — the edited card IS the
-            # visible progress in a group. In a DM the budget is 1 call/s,
-            # the indicator is close to free, and it is what tells one
-            # person that their session is thinking.
-            try:
-                await self._app.bot.send_chat_action(
-                    int(resolve_chat_id(sess)), "typing",
-                    rate_limit_args={"kind": "skip"},
-                )
-            except Exception:
-                pass
+        # NO TYPING INDICATOR. Case M, as amended in 8.21: while a busy
+        # card is live nothing sends `sendChatAction`, in any chat kind.
+        # The card IS the progress display — a "typing…" bubble above a
+        # spinner that already reports the elapsed time and the running
+        # tool says nothing the user cannot see — and it cost a Telegram
+        # call per tick per session, i.e. HALF of every chat's budget.
+        # Measured over a simulated minute with two sessions streaming
+        # into one DM: with the indicator, 57 calls of which 49% of the
+        # card edits were refused and the cards ran 2.2–6.6 s apart;
+        # without it, 56 calls, nothing refused, and every card gap
+        # exactly the promised 2.2 s. In a group (20 calls a minute) it
+        # was worse still: 11 edits a minute with ten-second freezes,
+        # against 18 evenly spaced.
         return True
 
     def _start_animation(self, sess: TrackedSession) -> None:
@@ -2087,20 +2080,9 @@ class AnimationMixin:
                     sess.stream_offset = 0
             msg_id = await self.send_busy(sess)
             if msg_id:
-                # Send typing AFTER the busy message (sending a message cancels typing)
-                if not is_group_chat(resolve_chat_id_int(sess)):
-                    try:
-                        # Skippable: it fires right after a BLOCKING send,
-                        # so it is exactly the caller the reserve token
-                        # exists to protect other callers from. Never in a
-                        # group, where the whole budget is 20 calls a
-                        # minute — see `_animate_tick` (8.21).
-                        await self._app.bot.send_chat_action(
-                            int(resolve_chat_id(sess)), "typing",
-                            rate_limit_args={"kind": "skip"},
-                        )
-                    except Exception:
-                        pass
+                # No typing indicator here either: the card that just went
+                # out is the progress display, and this call fired before
+                # the first tick of every single card. See `_animate_tick`.
                 sess.busy_msg_id = msg_id
                 sess.last_tool_edit_at = 0.0
                 sess.last_tool_name = ""

@@ -413,35 +413,36 @@ def test_a_legacy_session_never_creates_a_phantom_chat_zero(
 
 # ── row M: the typing indicator ──────────────────────────────────────────────
 
-def test_the_typing_indicator_is_sent_at_most_once_per_card_interval(
+def test_no_typing_indicator_is_sent_while_a_card_is_live(
     mk_bot, vloop, telegram, limiter,
 ):
-    """Row M / §11 U3: ``sendChatAction`` fired once per loop wake in
-    0.7.10 — including debounced wakes — and roughly doubled the call
-    rate. Mutation: move it back above the cadence gate and this counts
-    more indicators than edits."""
+    """Row M, as amended after iteration 2: ``sendChatAction`` fired once
+    per loop wake in 0.7.10 and once per interval after §11 U3; it is now
+    sent NOT AT ALL while a busy card is live, in any chat kind, because
+    the card is the progress display and the call was half of the chat's
+    budget. Mutation: restore it after the edit and this counts one."""
     bot = _ext_bot(mk_bot(), telegram, limiter, PRIVATE)
     sess = _card(bot, "a", 10, PRIVATE)
     _run_cards(vloop, bot, [sess], 12.0)
     actions = [t for endpoint, _, _, t in telegram.calls
                if endpoint == "sendChatAction"]
     edits = _card_calls(telegram, PRIVATE)
-    assert 0 < len(actions) <= len(edits)
+    assert (actions, bool(edits)) == ([], True)
 
 
-def test_the_typing_indicator_rides_along_with_a_card_edit(
+def test_every_call_a_live_card_makes_is_a_card_edit(
     mk_bot, vloop, telegram, limiter,
 ):
-    """Row M's "only alongside an attempted edit". Mutation: send it from
-    the debounced branch and an indicator appears at a moment no edit
-    does."""
+    """Row M's replacement for "only alongside an attempted edit": with
+    the indicator gone there is nothing left for a live card to send but
+    the edit itself. Mutation: send anything else from the loop — an
+    indicator from the debounced branch, a second edit shape — and this
+    names the endpoint."""
     bot = _ext_bot(mk_bot(), telegram, limiter, PRIVATE)
     sess = _card(bot, "a", 10, PRIVATE)
     _run_cards(vloop, bot, [sess], 12.0)
-    edits = set(_card_calls(telegram, PRIVATE))
-    strays = [t for endpoint, _, _, t in telegram.calls
-              if endpoint == "sendChatAction" and t not in edits]
-    assert strays == []
+    assert {endpoint for endpoint, _, _, _ in telegram.calls} == \
+        {"editMessageText"}
 
 
 # ── row C2: the starvation guard ─────────────────────────────────────────────

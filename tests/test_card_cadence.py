@@ -286,7 +286,7 @@ def test_the_loop_wake_and_the_debounce_read_the_same_interval():
     assert "BUSY_EDIT_INTERVAL" not in argument, argument
 
 
-# ── M: the typing indicator ──────────────────────────────────────────────────
+# ── M: no typing indicator while a card is live ──────────────────────────────
 
 def test_a_debounced_tick_makes_no_telegram_call_at_all(mk_bot, run_async):
     """Row M / G18. Until 8.21 a debounced tick still fired a
@@ -309,96 +309,90 @@ def test_a_debounced_tick_makes_no_telegram_call_at_all(mk_bot, run_async):
     bot._app.bot.send_chat_action.assert_not_awaited()
 
 
-def test_the_typing_indicator_goes_out_once_per_edit_as_a_skip_caller(
+def test_a_ticking_card_sends_no_typing_indicator_in_any_chat_kind(
         mk_bot, run_async):
-    """Row M. It is emitted only beside an attempted edit — so at most
-    once per interval — and it is skippable, because it must never spend
-    the token an answer is waiting for.
+    """Case M, as amended in 8.21: **no typing indicator is ever sent
+    while a busy card is live, in any chat kind.** The card is the
+    progress display; a "typing…" bubble above a spinner that already
+    shows the elapsed time and the running tool says nothing the user
+    cannot see, and it cost one Telegram call per tick per session — half
+    of every chat's budget.
 
-    Mutation: drop the ``rate_limit_args`` and the typing indicator
-    competes with real content for the reserve.
+    It is what stood between two streaming sessions and the promised
+    2.2 s card gaps: with the indicator, 57 calls a minute into one DM
+    with 49% of the card edits refused and gaps running 2.2–6.6 s;
+    without it, 56 calls, nothing refused, every gap exactly 2.2 s.
+
+    Mutation: restore the ``send_chat_action`` after the edit — with or
+    without a chat-kind guard — and one of these two rows records a call.
     """
-    sess = _sess(chat=PRIVATE, streaming=True)
-    bot = _bot(mk_bot, sess)
-    bot._edit_busy_rich = AsyncMock(return_value=True)
-    sess.last_tool_edit_at = 0.0                # well outside the interval
+    for chat in (PRIVATE, GROUP):
+        sess = _sess(chat=chat, streaming=True)
+        bot = _bot(mk_bot, sess)
+        bot._edit_busy_rich = AsyncMock(return_value=True)
+        sess.last_tool_edit_at = 0.0             # well outside the interval
 
-    assert run_async(bot._animate_tick(sess, "Working", False)) is True
+        assert run_async(bot._animate_tick(sess, "Working", False)) is True
 
-    bot._app.bot.send_chat_action.assert_awaited_once()
-    assert bot._app.bot.send_chat_action.await_args.kwargs[
-        "rate_limit_args"] == {"kind": "skip"}
+        bot._edit_busy_rich.assert_awaited_once()   # the edit still goes out
+        bot._app.bot.send_chat_action.assert_not_awaited()
 
 
-def test_a_group_card_never_sends_a_typing_indicator(mk_bot, run_async):
-    """Row M in a GROUP (8.21 fix iteration 2). A group's whole budget is
-    20 calls a minute and a card on the 3.3 s group floor already spends
-    18 of them, so a per-tick typing bubble would cost the other half of
-    the minute — and cost it to the card, which is the group's actual
-    progress display: with the indicator in, one session's card sent 11
-    edits and 9 indicators in 61 s, froze for 9.9 s at a time and had 11
-    of its edits refused; with it out, 18 edits, evenly spaced, none
-    refused.
-
-    Mutation: drop the ``is_group_chat`` guard from ``_animate_tick`` and
-    a group card starts spending two calls a tick again.
+def test_a_fresh_card_sends_no_typing_indicator_in_any_chat_kind(mk_bot,
+                                                                 run_async):
+    """The same rule at card CREATION, where it fired once for every card
+    ever sent. Mutation: restore the ``send_chat_action`` after
+    ``send_busy`` and every new card costs an extra call up front.
     """
-    sess = _sess(chat=GROUP, streaming=True)
-    bot = _bot(mk_bot, sess)
-    bot._edit_busy_rich = AsyncMock(return_value=True)
-    sess.last_tool_edit_at = 0.0                # well outside the interval
+    for chat in (PRIVATE, GROUP):
+        sess = _sess(chat=chat)
+        sess.busy_msg_id = None
+        bot = _bot(mk_bot, sess)
+        bot.send_busy = AsyncMock(return_value=42)
+        bot._start_animation = MagicMock()
 
-    assert run_async(bot._animate_tick(sess, "Working", False)) is True
+        run_async(bot._send_busy_and_animate(sess))
 
-    bot._edit_busy_rich.assert_awaited_once()   # the edit still goes out
-    bot._app.bot.send_chat_action.assert_not_awaited()
+        assert sess.busy_msg_id == 42
+        bot._app.bot.send_chat_action.assert_not_awaited()
 
 
-def test_a_fresh_group_card_never_sends_a_typing_indicator(mk_bot, run_async):
-    """The same rule at card CREATION: zero indicators in a group, not
-    "one per card". Mutation: drop the guard in ``_send_busy_and_animate``
-    and every group card still costs an extra call up front.
+def test_the_card_loop_holds_no_reference_to_send_chat_action():
+    """The rule as a property of the code rather than of one scenario: no
+    branch of the animation module may call ``send_chat_action`` at all.
+    A row driving one tick can only ever prove the branches it happens to
+    take — this covers the ones it does not.
+
+    Mutation: add the call back anywhere in ``aipager/bot/animation.py``
+    and this names the line.
     """
-    sess = _sess(chat=GROUP)
-    sess.busy_msg_id = None
-    bot = _bot(mk_bot, sess)
-    bot.send_busy = AsyncMock(return_value=42)
-    bot._start_animation = MagicMock()
-
-    run_async(bot._send_busy_and_animate(sess))
-
-    assert sess.busy_msg_id == 42
-    bot._app.bot.send_chat_action.assert_not_awaited()
+    source = Path(animation.__file__).read_text(encoding="utf-8").splitlines()
+    offenders = [
+        i + 1 for i, line in enumerate(source)
+        if "send_chat_action(" in line and not line.lstrip().startswith("#")
+    ]
+    assert offenders == [], offenders
 
 
-def test_a_fresh_private_card_still_sends_one_typing_indicator(mk_bot,
-                                                               run_async):
-    """The other half of the ruling: a DM keeps the indicator, at card
-    creation and once per interval (case M). Mutation: gate the indicator
-    on nothing but ``is_group_chat`` inverted, or delete it outright, and
-    a one-person DM loses the "thinking" signal it has always had.
+def test_a_waiting_tick_still_edits_the_card_and_calls_nothing_else(
+        mk_bot, run_async):
+    """A session sitting on an open background job is not generating
+    anything, but its card still has an elapsed counter to advance — so
+    the edit goes out and nothing else does. (Until 8.21 this row read
+    "sends no typing indicator"; since the indicator is gone from every
+    branch, what is left to pin is that the waiting frame is still
+    edited.)
+
+    Mutation: skip the edit while ``waiting`` and a background job's card
+    freezes with a stopped clock.
     """
-    sess = _sess(chat=PRIVATE)
-    sess.busy_msg_id = None
-    bot = _bot(mk_bot, sess)
-    bot.send_busy = AsyncMock(return_value=42)
-    bot._start_animation = MagicMock()
-
-    run_async(bot._send_busy_and_animate(sess))
-
-    bot._app.bot.send_chat_action.assert_awaited_once()
-
-
-def test_a_waiting_tick_sends_no_typing_indicator(mk_bot, run_async):
-    """Unchanged from 0.7.10: a session sitting on a background job is not
-    generating anything, so there is nothing to signal. Mutation: drop the
-    ``if not waiting`` guard."""
     sess = _sess(chat=PRIVATE, status=Status.IDLE)
     bot = _bot(mk_bot, sess)
     bot._edit_busy_rich = AsyncMock(return_value=True)
     sess.last_tool_edit_at = 0.0
 
     assert run_async(bot._animate_tick(sess, "Working", True)) is True
+    bot._edit_busy_rich.assert_awaited_once()
     bot._app.bot.send_chat_action.assert_not_awaited()
 
 
