@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Telegram no longer flood-bans a busy chat. Private chats had no
+  per-chat pacing at all — the rate limiter bucketed per chat only for
+  groups — so two sessions streaming their busy cards into one DM put
+  about 2.2 edits a second into a chat Telegram allows one a second, and
+  every `429` that came back was retried on the very next tick. That
+  earned 2,021 rate-limit errors in fourteen hours and then a 5.4-hour
+  ban. Now every chat has its own budget of ~1 call a second with a small
+  burst, and the busy cards of a chat share it: with N sessions working
+  in one chat each card refreshes about every 1.1 × N seconds, and a card
+  edit the chat cannot afford is skipped and retried on the next tick
+  instead of queueing. Answers, replies and button responses keep a
+  reserved token and are never skipped, and a card that has been skipped
+  for two intervals is pushed through, so it can be slow but never
+  freezes. A small `429` now defers that chat for exactly the time
+  Telegram asked, retries the deferred send once, and slows that chat's
+  cards until a quiet minute passes — one log line, no traceback, nothing
+  muted and no answer lost. `aipager status` and `aipager doctor` show
+  `Telegram flood backoff ×4 (chat …), last 429 12 s ago` while it lasts.
+  A `retry_after` past `TELEGRAM_MAX_RETRY_AFTER` is still a ban and
+  still mutes the chat exactly as before. Reactions still go out.
+
+### Changed
+- `STREAM_EDIT_INTERVAL` now defaults to `1.2` seconds (was `0.9`) and
+  `BUSY_EDIT_INTERVAL` (`3.0`) became configurable from the environment
+  like it. Values below the per-chat floor are harmless — the floor wins.
+
 ## [0.7.10] - 2026-09-10
 
 ### Fixed
