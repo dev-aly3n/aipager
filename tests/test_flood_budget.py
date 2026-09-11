@@ -658,6 +658,41 @@ def test_the_backoff_file_is_not_the_mute_file():
     assert Path(config.FLOOD_BACKOFF_FILE).name == "aipager-flood-backoff.json"
 
 
+def test_a_backoff_never_writes_to_the_mute_file(tmp_path):
+    """Row P / G25. The two signal files have separate owners and separate
+    lifecycles: ``FloodMute._write_signal`` UNLINKS the mute file whenever
+    no mute is active, so a backoff section living there would vanish the
+    first time a mute lapsed — and two writers doing write-then-replace on
+    one path race, with the loser's half silently lost.
+
+    Mutation: point ``_maybe_write_signal`` / ``clear_backoff_signal`` at
+    ``config.FLOOD_MUTE_FILE`` and the mute's file gains a foreign
+    document while the backoff's own file is never written.
+    """
+    clock = FakeClock()
+    limiter = _limiter(clock)          # signal_path=None: reads config late
+    limiter.note_retry_after(26, 5)
+    assert Path(config.FLOOD_BACKOFF_FILE).exists()
+    assert not Path(config.FLOOD_MUTE_FILE).exists()
+    assert json.loads(Path(config.FLOOD_BACKOFF_FILE).read_text())["backoff"]
+
+
+def test_flood_py_is_not_a_writer_of_the_backoff_file():
+    """Row P, the other half: ``bot/flood.py`` is untouched by 8.21 and
+    must stay that way — it is the 8.17 mute's sole owner, and its two
+    unlink tests are what a shared file would break.
+
+    Mutation: teach ``flood.py`` about the backoff and the mute's own
+    signal-file tests start failing for reasons unrelated to their names.
+    """
+    from aipager.bot import flood
+
+    source = Path(flood.__file__).read_text(encoding="utf-8")
+    assert "FLOOD_BACKOFF" not in source
+    assert "flood_budget" not in source
+    assert "backoff" not in source.lower()
+
+
 def test_the_backoff_file_never_points_at_the_real_runtime_dir(tmp_path):
     """A guard on the guard (G29). Mutation: remove the new
     ``monkeypatch.setattr`` from ``conftest._isolate_flood_mute`` and
