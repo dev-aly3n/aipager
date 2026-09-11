@@ -222,12 +222,23 @@ def test_send_rich_message_429_retries_once_and_succeeds(run_async, monkeypatch)
 
 
 def test_send_rich_message_429_retry_caps_sleep_at_30s(run_async, monkeypatch):
-    """retry_after > 30 (but under the flood-ban cap) is capped at 30.
+    """retry_after > 30 (but under the flood-ban cap) reaches the limiter
+    WHOLE, and nothing sleeps here.
+
+    Until roadmap 8.21 this module clamped the value to 30 s and slept it
+    privately, which both under-waited what Telegram asked for and waited
+    on top of whatever the limiter had already waited. The chat is now
+    barred for the full 60 s, once, in one place.
 
     A value past TELEGRAM_MAX_RETRY_AFTER is a ban, not a rate limit —
-    tests/test_rich_message_flood.py covers that; here the value stays
-    inside the cap so this pins the clamp alone.
+    tests/test_rich_message_flood.py covers that; 60 keeps this test on
+    the rate-limit side.
+
+    Mutation: restore ``min(raw_retry_after, 30)`` + ``await _sleep(...)``
+    and ``slept`` is ``[30]`` while the bar drops to 30 s.
     """
+    from aipager.bot.flood_budget import BudgetRateLimiter
+
     slept = []
 
     async def _fake_sleep(seconds):
@@ -238,11 +249,14 @@ def test_send_rich_message_429_retry_caps_sleep_at_30s(run_async, monkeypatch):
                 "parameters": {"retry_after": 60},
                 "description": "Too Many Requests"}
 
+    limiter = BudgetRateLimiter(clock=lambda: 1_000_000.0)
+    rm.set_rate_limiter(limiter)
     monkeypatch.setattr(rm, "_post", _fake_post)
     monkeypatch.setattr(rm, "_sleep", _fake_sleep)
     with pytest.raises(RichMessageFallbackRequired):
         run_async(send_rich_message(1, "text"))
-    assert slept[0] == 30
+    assert slept == []
+    assert limiter.snapshot()["chats"][0]["retry_until_in"] == 60.0
 
 
 def test_send_rich_message_429_twice_raises_fallback(run_async, monkeypatch):

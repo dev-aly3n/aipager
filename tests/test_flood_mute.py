@@ -272,9 +272,8 @@ def test_startup_notice_skips_a_muted_chat_and_still_reaches_the_others(
 def test_builder_hands_the_same_limiter_instance_to_rich_message(mk_bot, monkeypatch):
     """R1: one budget. Mutation: drop ``set_rate_limiter(limiter)`` and the
     rich path is left with None — unpaced, the exact bug."""
-    from telegram.ext import AIORateLimiter
-
     from aipager.bot import lifecycle as lc
+    from aipager.bot.flood_budget import BudgetRateLimiter
 
     seen = {}
 
@@ -289,7 +288,7 @@ def test_builder_hands_the_same_limiter_instance_to_rich_message(mk_bot, monkeyp
     monkeypatch.setattr(lc, "ApplicationBuilder", _RecordingBuilder)
     mk_bot()._make_builder()
 
-    assert isinstance(seen["limiter"], AIORateLimiter)
+    assert isinstance(seen["limiter"], BudgetRateLimiter)
     assert rm._rate_limiter is seen["limiter"], \
         "rich_message must pace itself with PTB's limiter, not a second bucket"
 
@@ -310,11 +309,16 @@ def test_builder_limits_are_the_named_config_constants(mk_bot, monkeypatch):
     monkeypatch.setattr(lc, "ApplicationBuilder", _RecordingBuilder)
     mk_bot()._make_builder()
     limiter = seen["limiter"]
-    assert limiter._base_limiter.max_rate == config.TELEGRAM_OVERALL_MAX_RATE
-    assert limiter._base_limiter.time_period == config.TELEGRAM_OVERALL_TIME_PERIOD
+    assert limiter._overall.capacity == config.TELEGRAM_OVERALL_MAX_RATE
+    assert limiter._overall.rate == (config.TELEGRAM_OVERALL_MAX_RATE
+                                     / config.TELEGRAM_OVERALL_TIME_PERIOD)
+    assert limiter._chat_max_rate == config.TELEGRAM_PRIVATE_MAX_RATE
+    assert limiter._chat_burst == config.TELEGRAM_CHAT_BURST
     assert limiter._group_max_rate == config.TELEGRAM_GROUP_MAX_RATE
     assert limiter._group_time_period == config.TELEGRAM_GROUP_TIME_PERIOD
-    assert limiter._max_retries == 0, "RetryAfter surfaces to the sender, not a queue"
+    # `max_retries` went with python-telegram-bot's retry loop (8.21): the
+    # limiter defers a small 429 and retries it exactly once itself, and a
+    # big one is a ban that surfaces to the sender untouched.
 
 
 def test_start_forgets_a_previous_daemons_mute_before_anything_else(mk_bot, run_async):

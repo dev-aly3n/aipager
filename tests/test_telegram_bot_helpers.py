@@ -2,6 +2,12 @@
 
 Covers _log_blocked_once throttle, _is_bot_blocked, _send_with_retry
 RetryAfter / too-long handling, and the document size guard.
+
+Nothing here patches ``asyncio.sleep`` through ``transport``'s module
+path any more: since roadmap 8.21 ``_send_with_retry`` has no sleep at
+all (the limiter owns every wait), so those patches neutralised nothing
+while doing the one thing CLAUDE.md forbids — ``aipager.bot.transport.
+asyncio`` IS the global module.
 """
 
 from __future__ import annotations
@@ -86,17 +92,20 @@ def test_send_with_retry_passes_through_on_success(run_async):
     assert len(bot.calls) == 1
 
 
-def test_send_with_retry_retries_on_flood(monkeypatch, run_async):
-    # First call: RetryAfter. Second: success.
-    bot = _FakeBot([RetryAfter(0), "MSG"])
+def test_send_with_retry_makes_one_attempt_and_propagates_a_flood(run_async):
+    """Since 8.21 the limiter defers a small 429 and makes the one retry
+    itself, so a ``RetryAfter`` that still reaches here has ALREADY been
+    retried — retrying again would put a third attempt into the window
+    that just rejected two. One attempt, and the error propagates.
 
-    async def _no_sleep(_):
-        return None
+    Mutation: re-add the ``await asyncio.sleep(wait)`` + ``continue`` arm
+    and this makes three attempts and returns "MSG".
+    """
+    bot = _FakeBot([RetryAfter(0), "MSG", "MSG"])
 
-    monkeypatch.setattr(tbt.asyncio, "sleep", _no_sleep)
-    out = run_async(_send_with_retry(bot, chat_id=1, text="hi"))
-    assert out == "MSG"
-    assert len(bot.calls) == 2
+    with pytest.raises(RetryAfter):
+        run_async(_send_with_retry(bot, chat_id=1, text="hi"))
+    assert len(bot.calls) == 1
 
 
 def test_send_with_retry_truncates_on_too_long(run_async):
@@ -272,48 +281,41 @@ class _ReactionBot:
             raise self._reaction_side
 
 
-def test_send_with_retry_caps_long_retry_after(monkeypatch, run_async):
-    """Retry_after longer than the cap → raise, do NOT sleep."""
-    from aipager.config import TELEGRAM_MAX_RETRY_AFTER
+def test_send_with_retry_caps_long_retry_after(run_async):
+    """Retry_after longer than the cap → raise, do NOT sleep.
+
+    Nothing patches a sleep here any more: since 8.21 this function has
+    none to patch, so a reinstated one would block the test for its full
+    duration rather than pass quietly.
+    """
     bot = _ReactionBot([RetryAfter(17000)])
 
-    async def _guard_sleep(seconds):
-        # If we ever sleep here it must be well under the cap; the
-        # cap-exceeded path must NOT call sleep at all.
-        if seconds > TELEGRAM_MAX_RETRY_AFTER:
-            raise AssertionError(
-                f"unexpected asyncio.sleep({seconds}) beyond cap")
-
-    monkeypatch.setattr(tbt.asyncio, "sleep", _guard_sleep)
     with pytest.raises(RetryAfter):
         run_async(_send_with_retry(bot, chat_id=1, text="hi"))
 
 
-def test_send_with_retry_normal_retry_after_still_sleeps(monkeypatch,
-                                                         run_async):
-    """Retry_after under the cap: sleep and retry as before."""
+def test_send_with_retry_never_sleeps_on_a_small_retry_after(run_async):
+    """Retry_after under the cap: propagate it, do not wait again.
+
+    Until 8.21 this slept the full ``retry_after`` and retried — on top
+    of whatever the limiter had already waited, and into the same window.
+    The deferral now happens once, in the limiter, and the chat is barred
+    for exactly as long as Telegram asked.
+
+    Mutation: restore ``await asyncio.sleep(wait)`` and this test takes
+    30 real seconds and returns "MSG" instead of raising.
+    """
     bot = _ReactionBot([RetryAfter(30), "MSG"])
-    slept: list[float] = []
 
-    async def _record_sleep(seconds):
-        slept.append(seconds)
-
-    monkeypatch.setattr(tbt.asyncio, "sleep", _record_sleep)
-    out = run_async(_send_with_retry(bot, chat_id=1, text="hi"))
-    assert out == "MSG"
-    assert slept == [30]
+    with pytest.raises(RetryAfter):
+        run_async(_send_with_retry(bot, chat_id=1, text="hi"))
 
 
-def test_send_with_retry_sets_flood_reaction_when_giving_up(monkeypatch,
-                                                            run_async):
+def test_send_with_retry_sets_flood_reaction_when_giving_up(run_async):
     """When give-up threshold is exceeded and a reply-to target is set,
     react on it with 🚨 (visible signal for the user) before re-raising."""
     bot = _ReactionBot([RetryAfter(1000)])
 
-    async def _no_sleep(_):
-        return None
-
-    monkeypatch.setattr(tbt.asyncio, "sleep", _no_sleep)
     with pytest.raises(RetryAfter):
         run_async(_send_with_retry(
             bot, chat_id=7, text="hi", reply_to_message_id=42,
@@ -321,22 +323,16 @@ def test_send_with_retry_sets_flood_reaction_when_giving_up(monkeypatch,
     assert bot.reactions == [(7, 42, "🚨")]
 
 
-def test_send_with_retry_no_reaction_when_no_reply_target(monkeypatch,
-                                                          run_async):
+def test_send_with_retry_no_reaction_when_no_reply_target(run_async):
     """No reply target → no reaction attempted (nothing to attach to)."""
     bot = _ReactionBot([RetryAfter(1000)])
 
-    async def _no_sleep(_):
-        return None
-
-    monkeypatch.setattr(tbt.asyncio, "sleep", _no_sleep)
     with pytest.raises(RetryAfter):
         run_async(_send_with_retry(bot, chat_id=7, text="hi"))
     assert bot.reactions == []
 
 
-def test_send_with_retry_reaction_failure_does_not_mask_retryafter(
-        monkeypatch, run_async):
+def test_send_with_retry_reaction_failure_does_not_mask_retryafter(run_async):
     """A failing reaction call must NOT swallow the original RetryAfter —
     the caller depends on that exception to know the send failed."""
     bot = _ReactionBot(
@@ -344,10 +340,6 @@ def test_send_with_retry_reaction_failure_does_not_mask_retryafter(
         reaction_side_effect=RuntimeError("reaction api down"),
     )
 
-    async def _no_sleep(_):
-        return None
-
-    monkeypatch.setattr(tbt.asyncio, "sleep", _no_sleep)
     with pytest.raises(RetryAfter):
         run_async(_send_with_retry(
             bot, chat_id=7, text="hi", reply_to_message_id=42,

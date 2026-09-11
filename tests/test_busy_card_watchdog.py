@@ -394,7 +394,7 @@ def test_watchdog_refresh_forces_one_edit_and_reports_it(
     bot = mk_bot()
     sess = _bot_session(task="live", edited_ago=25)
 
-    async def _edit(s, verb, *, final=False, waiting=False):
+    async def _edit(s, verb, *, final=False, waiting=False, kind="blocking"):
         s.last_tool_edit_at = time.monotonic()  # what a landed POST stamps
         return True
 
@@ -565,8 +565,11 @@ def test_tool_use_leaves_a_running_animation_alone(mk_bot, run_async):
 
 
 def test_tool_use_does_not_resume_after_permanent_edit_failure(mk_bot, run_async):
+    # `edited_ago` must clear notify.py's STREAM_EDIT_INTERVAL debounce, or
+    # no edit is attempted and there is no permanent failure to react to.
+    # The default rose from 0.9 to 1.2 in 8.21 (design §11 U5).
     bot = mk_bot()
-    sess = _bot_session(task="none")
+    sess = _bot_session(task="none", edited_ago=5)
     bot.registry._sessions["claude-jim"] = sess
     bot._edit_busy_rich = AsyncMock(return_value=None)
     bot._start_animation = MagicMock()

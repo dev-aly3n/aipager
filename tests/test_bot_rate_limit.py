@@ -24,9 +24,8 @@ def test_this_daemons_builder_installs_a_rate_limiter(mk_bot, monkeypatch):
     aipager's rate_limiter() call deleted — it proved the library works,
     not that we use it.
     """
-    from telegram.ext import AIORateLimiter
-
     from aipager.bot import lifecycle as lc
+    from aipager.bot.flood_budget import BudgetRateLimiter
 
     seen = {}
 
@@ -42,7 +41,7 @@ def test_this_daemons_builder_installs_a_rate_limiter(mk_bot, monkeypatch):
     mk_bot()._make_builder()
 
     assert "limiter" in seen, "this daemon never calls .rate_limiter()"
-    assert isinstance(seen["limiter"], AIORateLimiter)
+    assert isinstance(seen["limiter"], BudgetRateLimiter)
 
 
 def test_flood_control_logs_one_line_not_a_traceback(mk_bot, run_async, caplog):
