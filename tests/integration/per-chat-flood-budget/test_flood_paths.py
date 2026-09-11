@@ -273,6 +273,37 @@ def test_the_transport_never_sleeps_out_a_small_retry_after_itself(
     assert time.monotonic() - started < 1.0
 
 
+def test_a_second_429_on_the_one_retry_surfaces_instead_of_looping(
+    limiter, clock, run_async,
+):
+    """Error guessing, and the incident's own failure mode: the limiter
+    retries a deferred call EXACTLY once. If Telegram 429s that retry too,
+    the error must reach the sender — a limiter that keeps retrying is the
+    retry storm 8.21 exists to end. Mutation: loop until it succeeds and
+    this hangs (the timeout fires) or the send count climbs past two."""
+    bot = _LimitedBot(limiter, clock, [RetryAfter(5), RetryAfter(5)])
+    with pytest.raises(RetryAfter):
+        run_async(asyncio.wait_for(
+            _send_with_retry(bot, chat_id=CHAT, text="the answer"),
+            timeout=10))
+    assert len(bot.sends) == 2
+
+
+def test_two_429s_in_a_row_leave_the_chat_at_four_times_its_cadence(
+    limiter, clock, run_async,
+):
+    """R5's accounting for the row above: every small 429 doubles the
+    backoff, including the one that comes back on the retry — the chat
+    Telegram refused twice must slow the most. Mutation: account only the
+    first and a chat being hammered keeps a ×2 cadence."""
+    bot = _LimitedBot(limiter, clock, [RetryAfter(5), RetryAfter(5)])
+    with pytest.raises(RetryAfter):
+        run_async(asyncio.wait_for(
+            _send_with_retry(bot, chat_id=CHAT, text="the answer"),
+            timeout=10))
+    assert limiter.cadence_multiplier(CHAT) == 4.0
+
+
 def test_a_ban_sized_retry_after_on_the_ptb_path_still_mutes_and_reacts(
     limiter, clock, run_async,
 ):

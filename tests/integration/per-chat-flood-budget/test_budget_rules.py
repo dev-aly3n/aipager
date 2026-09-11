@@ -10,8 +10,10 @@ this file sleeps for real, and ``asyncio.sleep`` is never patched.
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
+import socket
 from pathlib import Path
 
 import pytest
@@ -385,6 +387,31 @@ def test_a_skip_acquire_with_one_token_left_is_refused_without_calling_telegram(
     assert [tag for tag, _, _ in log] == ["sendMessage", "sendMessage"]
 
 
+def test_a_refusal_names_the_chat_and_the_endpoint_it_refused(
+    limiter, clock, run_async,
+):
+    """``FloodSkipped.chat_id`` / ``.endpoint`` are contract: the card
+    loop, the dashboard and the rich path all catch one exception class
+    and have to be able to say WHAT was dropped, in a log line an operator
+    reads at 3 a.m. Mutation: raise a bare ``FloodSkipped()`` and both
+    attributes come back empty."""
+    log: list[tuple] = []
+    caught: list[FloodSkipped] = []
+
+    async def scenario():
+        for _ in range(3):
+            await _call(limiter, clock, log)
+        try:
+            await _call(limiter, clock, log, endpoint="editMessageText",
+                        kind="skip", tag="card")
+        except FloodSkipped as exc:
+            caught.append(exc)
+
+    run_async(asyncio.wait_for(scenario(), timeout=10))
+    assert [(e.chat_id, e.endpoint) for e in caught] == \
+        [(PRIVATE, "editMessageText")]
+
+
 def test_the_token_a_skip_acquire_was_refused_is_still_there_for_an_answer(
     limiter, clock, run_async,
 ):
@@ -533,6 +560,52 @@ def test_a_reaction_is_counted_per_chat_so_the_exemption_stays_observable(
     run_async(asyncio.wait_for(
         _call(limiter, clock, log, endpoint="setMessageReaction"), timeout=10))
     assert limiter.snapshot()["chats"][0]["reactions"] == 1
+
+
+def test_a_reaction_is_still_held_by_the_overall_bucket(clock, run_async):
+    """§11 U4 exempts ``setMessageReaction`` from the CHAT budget only —
+    R1 keeps it inside the 30/s overall one, because Telegram meters the
+    bot as a whole whatever it thinks of reactions. Mutation: return early
+    for reactions before the overall acquire and a burst of 🚨 can
+    out-send the daemon's own global limit."""
+    limiter = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    log: list[tuple] = []
+
+    async def scenario():
+        for i in range(30):  # the overall bucket's entire burst, 30 chats
+            await _call(limiter, clock, log, chat_id=2000 + i)
+        started = clock.now
+        await _call(limiter, clock, log, chat_id=PRIVATE, tag="reaction",
+                    endpoint="setMessageReaction")
+        return clock.now - started
+
+    try:
+        waited = run_async(asyncio.wait_for(scenario(), timeout=10))
+        assert waited > 0.0 and log[-1][0] == "reaction"
+    finally:
+        limiter.reset()
+
+
+def test_a_card_is_refused_instantly_while_its_chat_is_deferred(
+    limiter, clock, run_async,
+):
+    """Error guessing: the whole point of a deferral is that NOTHING goes
+    to that chat for ``retry_after`` seconds, and a card must learn that
+    without waiting the deferral out inside the acquire (its loop would
+    freeze for five seconds a tick). Mutation: treat a skip acquire like a
+    blocking one once ``retry_until`` is armed and the injected sleep
+    records the whole deferral."""
+    log: list[tuple] = []
+    limiter.note_retry_after(PRIVATE, 5)
+    clock.sleeps.clear()
+
+    async def scenario():
+        with pytest.raises(FloodSkipped):
+            await _call(limiter, clock, log, endpoint="editMessageText",
+                        kind="skip", tag="card")
+
+    run_async(asyncio.wait_for(scenario(), timeout=10))
+    assert (log, clock.sleeps) == ([], [])
 
 
 # ── R5: the backoff, as accounting ───────────────────────────────────────────
@@ -723,6 +796,22 @@ def test_a_change_held_back_by_the_throttle_is_published_at_the_end_of_it(
     assert _published(_backoff_file())[0]["multiplier"] == 4.0
 
 
+def test_the_next_429_past_the_window_publishes_what_the_throttle_held(
+    limiter, clock,
+):
+    """The same ruling through the path an operator actually hits: the
+    file catches up on ORDINARY traffic, not only on the monitor's sweep.
+    A throttle that needed the sweep to exist would under-report every
+    chat between two ticks. Mutation: clear the pending state instead of
+    holding it and the file stops at ×2 for ever."""
+    limiter.note_retry_after(PRIVATE, 5)   # ×2 — written at once
+    clock.now += 1.0
+    limiter.note_retry_after(PRIVATE, 5)   # ×4 — inside the 5 s window
+    clock.now += 5.0
+    limiter.note_retry_after(PRIVATE, 5)   # ×8 — the window has rolled
+    assert _published(_backoff_file())[0]["multiplier"] == 8.0
+
+
 def test_a_sweep_republishes_a_decaying_chat_and_then_takes_the_file_down(
     limiter, clock,
 ):
@@ -874,4 +963,113 @@ def test_no_mini_app_module_builds_a_telegram_bot_of_its_own():
                     offenders.append(f"{path.name}:{lineno}")
                 elif "telegram.Bot(" in line or "= Bot(" in line:
                     offenders.append(f"{path.name}:{lineno}")
+    assert offenders == [], offenders
+
+
+# ── the operator surface: `aipager doctor` and `aipager status` ──────────────
+
+def _bound_socket(monkeypatch, tmp_path):
+    """A daemon that is reachable, so ``check_daemon`` gets past its own
+    liveness probe and the only thing left to look at is the detail."""
+    path = tmp_path / "aipager.sock"
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    sock.bind(str(path))
+    monkeypatch.setattr("aipager.config.SOCKET_PATH", str(path))
+    return sock
+
+
+def test_the_doctor_daemon_row_names_a_chat_that_is_backing_off(
+    limiter, monkeypatch, tmp_path,
+):
+    """``docs/troubleshooting.md`` already tells operators that ``aipager
+    doctor`` shows the backoff, so an unwired ``check_daemon`` makes the
+    shipped docs promise behaviour that does not exist. Mutation: drop the
+    ``read_flood_backoffs`` call from ``check_daemon`` and the row goes
+    silent while the signal file says ×2."""
+    from aipager import doctor
+
+    sock = _bound_socket(monkeypatch, tmp_path)
+    try:
+        limiter.note_retry_after(PRIVATE, 5)
+        row = doctor.check_daemon()
+    finally:
+        sock.close()
+    assert any("×2" in line and str(PRIVATE) in line for line in row.detail), \
+        row.detail
+
+
+def test_a_backing_off_chat_never_turns_the_doctor_row_into_a_warning(
+    limiter, monkeypatch, tmp_path,
+):
+    """The coordinator's ruling 2, second half: a backoff is normal
+    operation, not a fault — only a MUTE warns. Mutation: raise the
+    severity with the detail and every busy minute reads as a problem."""
+    from aipager import doctor
+
+    sock = _bound_socket(monkeypatch, tmp_path)
+    try:
+        limiter.note_retry_after(PRIVATE, 5)
+        row = doctor.check_daemon()
+    finally:
+        sock.close()
+    assert row.status == doctor.OK
+
+
+def _status_ns(**kw):
+    return argparse.Namespace(**kw)
+
+
+def _quiet_status(monkeypatch):
+    """``cmd_status`` without a daemon to interrogate: the same stubs
+    ``tests/test_flood_mute.py`` uses for the mute's own CLI rows."""
+    monkeypatch.setattr(status, "BOT_TOKEN", "tok")
+    monkeypatch.setattr(status, "CHAT_ID", "5")
+    monkeypatch.setattr(status, "_daemon_alive", lambda: True)
+    monkeypatch.setattr(status, "_gather_sessions", lambda: ([], set()))
+
+
+def test_status_json_carries_the_backoff_beside_the_mute(
+    limiter, monkeypatch, capsys,
+):
+    """The documented ``--json`` contract: a NEW ``flood_backoff`` key,
+    with ``flood_muted`` unchanged next to it — the two are different
+    conditions and a script must be able to tell them apart. Mutation:
+    reuse the ``flood_muted`` key and a rate limit reads as a ban."""
+    _quiet_status(monkeypatch)
+    limiter.note_retry_after(PRIVATE, 5)
+    assert status.cmd_status(_status_ns(as_json=True)) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert (payload["flood_muted"],
+            [(e["chat_id"], e["multiplier"]) for e in payload["flood_backoff"]]) \
+        == ([], [(PRIVATE, 2.0)])
+
+
+def test_status_prints_one_backoff_line_in_its_plain_renderer(
+    limiter, monkeypatch, capsys,
+):
+    """The same state through the human renderer, which is what an
+    operator in the middle of an incident actually reads. Mutation: render
+    it only in ``--json`` and the CLI stays silent about a chat that is
+    deliberately slowing down."""
+    _quiet_status(monkeypatch)
+    limiter.note_retry_after(PRIVATE, 5)
+    status.cmd_status(_status_ns(as_json=False))
+    assert "flood backoff ×2" in capsys.readouterr().out
+
+
+def test_the_mute_module_never_mentions_the_backoff_file(limiter):
+    """Row P / §11 U2, as a property of the code rather than of a git
+    diff: the two signal files have ONE owner each. ``flood.py`` unlinks
+    the mute file whenever no mute is active, which is exactly why the
+    backoff could not share it. Mutation: let ``flood.py`` write or unlink
+    ``FLOOD_BACKOFF_FILE`` and the two owners race — the rejected design.
+
+    Read line by line, never held whole (1 GiB address-space cap)."""
+    from aipager.bot import flood as flood_module
+
+    offenders = []
+    with open(flood_module.__file__, encoding="utf-8") as handle:
+        for lineno, line in enumerate(handle, 1):
+            if "FLOOD_BACKOFF" in line or "flood-backoff" in line:
+                offenders.append(f"{lineno}: {line.strip()}")
     assert offenders == [], offenders

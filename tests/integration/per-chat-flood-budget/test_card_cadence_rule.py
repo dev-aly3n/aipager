@@ -405,6 +405,41 @@ def test_a_group_card_stays_under_twenty_calls_a_minute(
     assert _most_in_window(telegram.stamps_for(GROUP), 60.0) <= 20
 
 
+def test_two_cards_in_one_group_stay_inside_the_groups_minute(
+    mk_bot, vloop, telegram, limiter,
+):
+    """Row B3 / R1's group clause where it is tightest: two BUSY sessions
+    share the 20-a-minute window, each at ``max(1.2, 2×3.0) × 1.1 = 6.6``
+    s, and the whole minute must still fit. The one-session row cannot see
+    an N-blind group floor. Mutation: compute the group interval per
+    session instead of per chat and the two cards ask for 36 calls a
+    minute — the window then refuses a third of them."""
+    bot = _ext_bot(mk_bot(), telegram, limiter, GROUP)
+    cards = [_card(bot, "g1", 10, GROUP), _card(bot, "g2", 11, GROUP)]
+    _run_cards(vloop, bot, cards, 61.0)
+    assert telegram.violations == []
+    assert _most_in_window(telegram.stamps_for(GROUP), 60.0) <= 20
+    assert limiter.snapshot()["chats"][0]["skipped"] == 0
+
+
+def test_the_strict_telegram_does_refuse_a_daemon_that_paces_itself_badly(
+    mk_bot, vloop, telegram, monkeypatch,
+):
+    """Anti-vacuity, and the reason every ``violations == []`` row above is
+    worth anything: the fake Telegram must be ABLE to answer 429. This is
+    the incident's own configuration — the blind 0.9 s cadence with
+    nothing metering the chat (``get_rate_limiter() is None``, the state
+    the autouse fixture leaves behind) — and it must be refused.
+    Mutation: make ``_StrictTelegram.admit`` always return True and this
+    is the only test in the file that notices."""
+    monkeypatch.setattr(an, "card_interval", lambda **kw: 0.9)
+    bot = mk_bot()
+    cards = [_card(bot, "a", 10, PRIVATE), _card(bot, "b", 11, PRIVATE)]
+    assert rm.get_rate_limiter() is None, "this row is the UNPACED state"
+    _run_cards(vloop, bot, cards, 20.0)
+    assert telegram.violations != []
+
+
 # ── row B4: a legacy session counts too ──────────────────────────────────────
 
 def test_a_legacy_session_without_a_stamped_chat_still_counts_towards_n(
@@ -726,14 +761,17 @@ def test_a_backed_off_chat_slows_its_card_by_the_backoff_factor(
 ):
     """Row E4 / R4's ``× backoff`` term, observed end to end: after one
     small 429 the chat is at ×2, so the card's own gaps double from 1.32 s
-    to 2.64 s. Mutation: read the backoff nowhere in the cadence and a
-    chat Telegram just pushed back on keeps its old rhythm."""
+    to 2.64 s. Asserted on EVERY gap: a ``min(gaps)`` floor is what let a
+    2.2/6.6 s alternation hide in row B1 through iteration 1, and the same
+    hiding place must not exist here. Mutation: read the backoff nowhere in
+    the cadence and a chat Telegram just pushed back on keeps its old
+    rhythm."""
     bot = _ext_bot(mk_bot(), telegram, limiter, PRIVATE)
     sess = _card(bot, "a", 10, PRIVATE)
     limiter.note_retry_after(PRIVATE, 1)
     _run_cards(vloop, bot, [sess], 14.0)
     gaps = _gaps(_card_calls(telegram, PRIVATE, 10))
-    assert gaps and min(gaps) == pytest.approx(2.64)
+    assert gaps and gaps == [pytest.approx(2.64)] * len(gaps)
 
 
 # ── R9: the two env-configurable bases ───────────────────────────────────────
