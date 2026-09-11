@@ -1614,9 +1614,10 @@ class AnimationMixin:
         """One tick of :meth:`_animate_busy`, the part that can raise.
 
         Returns ``None`` on a permanent edit failure (the loop must stop),
-        ``True`` when an edit was attempted (the loop rotates the verb),
-        ``False`` when the tick was debounced or the edit was skipped by
-        the per-chat budget.
+        ``True`` when an edit was ATTEMPTED — landed or refused by the
+        per-chat budget alike, since a refusal is transient and the verb
+        may as well move on — and ``False`` only when the tick was
+        debounced and no Telegram call was made at all.
         """
         if MUTE.is_muted(resolve_chat_id(sess)):
             # R3: the edit and the typing indicators below are all sends
@@ -1690,10 +1691,19 @@ class AnimationMixin:
                                                 kind="skip")
         if result is None:
             return None
-        if not waiting:
+        if not waiting and not is_group_chat(resolve_chat_id_int(sess)):
             # Send typing AFTER edit (edit cancels the typing indicator).
             # Skippable: it is a courtesy, and it must never spend the
             # token an answer is waiting for.
+            #
+            # NOT SENT AT ALL IN A GROUP (8.21): a group's whole budget is
+            # 20 calls a minute, and a card ticking on the 3.3 s group
+            # floor already spends 18 of them. A per-tick typing bubble
+            # would cost the other half of the minute for an ornament the
+            # card edit itself already conveys — the edited card IS the
+            # visible progress in a group. In a DM the budget is 1 call/s,
+            # the indicator is close to free, and it is what tells one
+            # person that their session is thinking.
             try:
                 await self._app.bot.send_chat_action(
                     int(resolve_chat_id(sess)), "typing",
@@ -2078,16 +2088,19 @@ class AnimationMixin:
             msg_id = await self.send_busy(sess)
             if msg_id:
                 # Send typing AFTER the busy message (sending a message cancels typing)
-                try:
-                    # Skippable: it fires right after a BLOCKING send, so
-                    # it is exactly the caller the reserve token exists to
-                    # protect other callers from.
-                    await self._app.bot.send_chat_action(
-                        int(resolve_chat_id(sess)), "typing",
-                        rate_limit_args={"kind": "skip"},
-                    )
-                except Exception:
-                    pass
+                if not is_group_chat(resolve_chat_id_int(sess)):
+                    try:
+                        # Skippable: it fires right after a BLOCKING send,
+                        # so it is exactly the caller the reserve token
+                        # exists to protect other callers from. Never in a
+                        # group, where the whole budget is 20 calls a
+                        # minute — see `_animate_tick` (8.21).
+                        await self._app.bot.send_chat_action(
+                            int(resolve_chat_id(sess)), "typing",
+                            rate_limit_args={"kind": "skip"},
+                        )
+                    except Exception:
+                        pass
                 sess.busy_msg_id = msg_id
                 sess.last_tool_edit_at = 0.0
                 sess.last_tool_name = ""
