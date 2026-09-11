@@ -107,8 +107,17 @@ Claude spawned a Task subagent (or it returned). aipager increments
 `cost_usd` total.
 
 `SubagentStop` decrements the counter. Subagents whose `Stop` never
-arrives are garbage-collected after 1 h
-(`AIPAGER_SUBAGENT_TTL`, seconds).
+arrives are garbage-collected once they have gone **silent** — 30 min
+with no hook event of any kind carrying that agent's id
+(`AIPAGER_SUBAGENT_SILENCE`, seconds). A working agent emits tool hooks
+every few seconds, so it survives for as long as it keeps emitting them,
+however long it runs; a genuinely missed `SubagentStop` (daemon restart,
+crash, dropped datagram) is what ages out. Note the window still bounds
+one uninterrupted gap: a single tool call or a nested agent that emits
+nothing under this agent's id for 30 minutes collects its row too.
+
+`AIPAGER_SUBAGENT_TTL`, which used to bound an agent's total age at 1 h,
+is accepted as a deprecated alias for the silence window.
 
 ### `SessionStart` / `SessionEnd`
 

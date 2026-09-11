@@ -420,6 +420,18 @@ class HookReceiver:
         # Update last activity timestamp (stale detection) + store transcript path
         sess_ref = self.registry.get_or_create(session_name)
         sess_ref.last_hook_at = now_mono
+        # Per-agent liveness (roadmap 8.22). `last_hook_at` above says the
+        # SESSION is alive; it says nothing about WHICH of several running
+        # agents is. Every hook event fired inside a subagent carries that
+        # agent's id, so stamping the matching row here — once, before the
+        # per-event handling below, so no branch can forget it — turns the
+        # traffic the daemon already receives into the heartbeat
+        # session_monitor's sweep judges the agent by. Unknown ids (the
+        # constant phantom SubagentStops) match nothing and are ignored:
+        # touch_subagent never creates a row.
+        hook_agent_id = msg.get("agent_id") or ""
+        if hook_agent_id:
+            sess_ref.touch_subagent(hook_agent_id, now_mono)
         # Evidence that a turn is alive, for the "prompt not taken"
         # watchdog (session_monitor.prompt_not_taken): every datagram
         # counts except the two that arrive without any turn behind them.

@@ -46,13 +46,66 @@ INTERACTIVE_TIMEOUT_SECONDS: float = float(
     os.environ.get("AIPAGER_INTERACTIVE_TIMEOUT", "300")
 )
 
-# Item 2.4 — drop subagent entries that have been "live" for more than
-# this without a corresponding SubagentStop. Real subagents finish in
-# seconds; entries older than this almost certainly mean a missed stop
-# event (daemon restart, crash, dropped hook).
+# Roadmap 8.22 — drop a subagent entry once it has gone SILENT, not once
+# it is merely old. Item 2.4 originally swept by age on the rationale
+# "real subagents finish in seconds"; that is false. Agents run for
+# hours: on 2026-09-11 a /ship pipeline's ship-developer had been working
+# for 60 minutes when the age sweep dropped it, which emptied
+# `active_subagents` and let idle-recovery publish a "Finished (95m)"
+# card while the agent was still going.
+#
+# A working agent, by contrast, emits tool hooks every few seconds, and
+# every hook fired inside a subagent carries its `agent_id` — so
+# hook_receiver stamps the entry's `last_seen` on each one
+# (TrackedSession.touch_subagent). Silence for this long is the real
+# evidence that a SubagentStop was missed (daemon restart, crash, dropped
+# datagram); age is evidence of nothing.
+#
+# Tunable via `AIPAGER_SUBAGENT_SILENCE` (seconds).
+SUBAGENT_SILENCE_DEFAULT: float = 1800.0
+
+_LEGACY_SILENCE_ENV = "AIPAGER_SUBAGENT_TTL"
+_SILENCE_ENV = "AIPAGER_SUBAGENT_SILENCE"
+
+# Pre-8.22 name for the old age-based bound. Retained as a deprecated
+# alias so an operator's existing override keeps working: it feeds the
+# silence window below when the new variable is unset. The constant
+# itself is kept because the pre-8.22 tests still import it; no
+# production module does, and nothing reads it to decide a drop.
+#
+# Blank counts as unset here too, for the same reason it does in
+# `_resolve_silence_window` and unlike the pre-8.22 line this replaces:
+# a unit file or CI job that spells "no override" as `FOO=` took the
+# daemon down at import with `float('')`.
 SUBAGENT_TTL_SECONDS: float = float(
-    os.environ.get("AIPAGER_SUBAGENT_TTL", "3600")
+    os.environ.get(_LEGACY_SILENCE_ENV) or "3600"
 )
+
+
+def _resolve_silence_window(env: dict | None = None) -> tuple[float, str | None]:
+    """Resolve the subagent silence window from *env*.
+
+    Returns ``(seconds, deprecated_env_name_or_None)``. The new variable
+    wins whenever it is set; the pre-8.22 one is honoured as an alias only
+    when it is not, and is reported back so the caller can say so once at
+    startup. An empty value counts as unset (a blank env var is how CI and
+    systemd units spell "no override", and ``float("")`` would otherwise
+    take the daemon down at import).
+    """
+    src = os.environ if env is None else env
+    fresh = src.get(_SILENCE_ENV)
+    if fresh:
+        return float(fresh), None
+    legacy = src.get(_LEGACY_SILENCE_ENV)
+    if legacy:
+        return float(legacy), _LEGACY_SILENCE_ENV
+    return SUBAGENT_SILENCE_DEFAULT, None
+
+
+SUBAGENT_SILENCE_SECONDS, _SILENCE_DEPRECATED_ENV = _resolve_silence_window()
+# Set once the deprecation notice has been emitted, so a daemon logs it at
+# startup and not once per SessionMonitor ever constructed.
+_silence_deprecation_logged: bool = False
 
 # Idle-recovery fallback. The normal BUSY→IDLE transition comes from
 # Claude's Stop hook (hook_receiver). If that hook is ever missed — e.g.
@@ -230,6 +283,19 @@ class SessionMonitor:
         self.notify_fn = notify_fn
         self._task: asyncio.Task | None = None
         self.on_sessions_changed = None  # optional async callback
+        # One deprecation line per process, emitted here rather than at
+        # import: `logging.basicConfig` runs in cli/daemon.py's start
+        # command, so a message logged while this module is being imported
+        # would miss the journal's formatting entirely.
+        global _silence_deprecation_logged
+        if _SILENCE_DEPRECATED_ENV and not _silence_deprecation_logged:
+            _silence_deprecation_logged = True
+            log.warning(
+                "%s is deprecated — it now sets the subagent SILENCE window "
+                "(%.0fs), not an age limit. Rename it to %s.",
+                _SILENCE_DEPRECATED_ENV, SUBAGENT_SILENCE_SECONDS,
+                _SILENCE_ENV,
+            )
 
     async def start(self) -> None:
         self._task = asyncio.create_task(self._loop())
@@ -394,7 +460,7 @@ class SessionMonitor:
                         exc_info=True,
                     )
 
-            # Subagent TTL (item 2.4)
+            # Subagent silence sweep (roadmap 8.22; was item 2.4's age TTL)
             if sess.active_subagents:
                 # Captured BEFORE popping (design.md "model Claude Code
                 # background-agent jobs" requirement 6) — job_background_open()
@@ -402,23 +468,35 @@ class SessionMonitor:
                 # sweep's own eviction below is exactly what needs to be
                 # observed as "was this job open a moment ago".
                 was_job_open = sess.job_background_open()
-                stale_ids = [
+                # An entry built by anything other than add_subagent (a
+                # restored table, a hand-built one) starts its silence
+                # window from its own start stamp, or from now when it has
+                # neither — never from zero, which would drop it on sight.
+                sess.normalize_subagent_liveness(now)
+                silent_ids = [
                     aid for aid, info in sess.active_subagents.items()
-                    if info.get("started_at")
-                    and (now - info["started_at"]) > SUBAGENT_TTL_SECONDS
+                    if (now - info["last_seen"]) > SUBAGENT_SILENCE_SECONDS
                 ]
-                for aid in stale_ids:
-                    log.info("[%s] dropping stale subagent %s (no Stop hook in "
-                             "%d min)", sess.label, aid,
-                             int(SUBAGENT_TTL_SECONDS / 60))
+                for aid in silent_ids:
+                    log.info("[%s] dropping silent subagent %s (no hook event "
+                             "in %d min)", sess.label, aid,
+                             int(SUBAGENT_SILENCE_SECONDS / 60))
                     sess.active_subagents.pop(aid, None)
-                # A job cannot wait forever: once the TTL sweep empties the
-                # table for a session sitting IDLE with a job open, produce
+                # A job cannot wait forever: once the silence sweep empties
+                # the table for a session sitting IDLE with a job open, produce
                 # the terminal "background agent lost" card rather than
                 # leaving the waiting card ticking indefinitely. Gated on
                 # IDLE specifically — a session that flipped back to BUSY
                 # (the background agent's own tool call re-entered before
                 # this scan) is still genuinely working, not orphaned.
+                # The emptiness check IS the liveness check (roadmap 8.22):
+                # the sweep immediately above has just removed every entry
+                # that went silent, so anything still in the table was heard
+                # from inside the window. An explicit second liveness test
+                # here would be unreachable by construction — and therefore
+                # unkillable by any test, which this project treats as worse
+                # than absent (CLAUDE.md: every guard gets a test that fails
+                # when the guard is removed).
                 if (was_job_open and sess.status == Status.IDLE
                         and not sess.active_subagents):
                     sess.job_interim_seen = False
@@ -467,6 +545,21 @@ class SessionMonitor:
             # Only the hook-stamped path is trusted. A session with no stamped
             # path recovers nothing and falls through to STALE_BUSY_TIMEOUT —
             # guessing here once published another session's answer.
+            # Where the "don't finalize a session whose agent is still
+            # working" guarantee actually comes from (roadmap 8.22), so
+            # nobody re-adds a dead guard here: a working agent refreshes
+            # its `last_seen` several times a minute, the silence sweep
+            # above therefore leaves its row in `active_subagents`, and
+            # `job_background_open()` is True for as long as that row
+            # exists — so this branch is never reached. The incident was
+            # the age sweep DELETING that row; it is fixed at the sweep,
+            # not by a second test here. A liveness check in this
+            # condition would be unreachable by construction.
+            #
+            # Known limitation, unchanged by this: a session waiting only
+            # on a background TASK — a job with no agent rows at all — has
+            # no row to keep alive, so it stays recoverable exactly as
+            # before.
             if sess.status == Status.BUSY and not sess.job_background_open():
                 # The job-open guard ("close the background-job endgame"
                 # requirement 1): while a background agent is running (or a

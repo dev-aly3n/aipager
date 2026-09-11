@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A subagent that works for more than an hour no longer gets dropped,
+  with the card finalized as "Finished" while it is still running. The
+  sweep that cleans up subagents whose stop event went missing judged
+  them by AGE — anything over an hour was assumed dead, on the premise
+  that real subagents finish in seconds. They don't: a `/ship`
+  pipeline's developer stage routinely runs longer, and dropping it
+  emptied the table that was the only evidence a background job was
+  open, so the idle watchdog then took the lazily-written transcript's
+  finished-looking tail for the end of the session and published
+  "Finished (95m)" with every interim update merged — the card the
+  operator reads as the result — 95 minutes into a run that was still
+  going. Staleness is now judged by SILENCE instead: every hook event
+  fired inside a subagent carries its id, so a working agent refreshes
+  itself several times a minute, and an entry is dropped only after 30
+  minutes with no event at all. Keeping the entry is what keeps the job
+  open, so the idle watchdog and the "background agent lost" card both
+  hold off for as long as the agent keeps talking. A genuinely missed
+  stop event still clears — one silence window later, rather than the
+  hour the age limit used to take. `AIPAGER_SUBAGENT_TTL` keeps working
+  as a deprecated alias for the new `AIPAGER_SUBAGENT_SILENCE` (seconds,
+  default 1800).
+
 ## [0.7.10] - 2026-09-10
 
 ### Fixed

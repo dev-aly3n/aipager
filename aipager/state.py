@@ -287,12 +287,20 @@ class TrackedSession:
     pending_permission: dict | None = None
     # Active subagents — keyed by agent_id ("agent activity rows on the
     # busy card"). Format: {agent_id: {"type": str, "started_at": float,
-    # "history_idx": int | None, "activity": str, "tool_count": int,
-    # "last_tool_at": float, "tools": list[str]}} — the last four keys are
-    # updated by `record_agent_tool` as the agent's own tool calls are
-    # attributed to it instead of the parent's `tool_history` ("activity"
-    # is the latest attributed summary, "" before the first; "tools" is
-    # capped at AGENT_TOOLS_CAP).
+    # "last_seen": float, "history_idx": int | None, "activity": str,
+    # "tool_count": int, "last_tool_at": float, "tools": list[str]}} — the
+    # last four keys are updated by `record_agent_tool` as the agent's own
+    # tool calls are attributed to it instead of the parent's
+    # `tool_history` ("activity" is the latest attributed summary, ""
+    # before the first; "tools" is capped at AGENT_TOOLS_CAP).
+    #
+    # `last_seen` (roadmap 8.22) is the monotonic stamp of the most recent
+    # hook datagram this agent emitted — written by `touch_subagent`, which
+    # hook_receiver calls for EVERY datagram carrying a matching
+    # `agent_id`. It is the liveness signal session_monitor's sweep judges
+    # an entry by; `started_at` is only its age, and age is not evidence of
+    # anything (agents legitimately run for hours). Monotonic, so
+    # meaningless across a restart — see `normalize_subagent_liveness`.
     active_subagents: dict = field(default_factory=dict)
     # Agents that SubagentStop'd this turn, appended in stop order by
     # `archive_finished_subagent`, capped at FINISHED_SUBAGENTS_CAP. Entry
@@ -792,6 +800,16 @@ class TrackedSession:
         it always carries the newest ``started_at``, and on a tie dict
         insertion order makes the older entry the ``min``.
         """
+        # Roadmap 8.22: the liveness stamp is set HERE, not at the call
+        # site, for the same reason the cap is — a second caller added
+        # later cannot forget it, and an entry with no `last_seen` is
+        # exactly the shape `normalize_subagent_liveness` exists to repair.
+        # `started_at` first, `time.monotonic()` only as a last resort:
+        # this is state.py's own `time`, which the `steady_clock` fixture
+        # does NOT rebind (it patches session_monitor and bot.animation
+        # only), so a test building an entry without `started_at` under a
+        # fake clock would otherwise mix two time bases.
+        info.setdefault("last_seen", info.get("started_at") or time.monotonic())
         self.active_subagents[agent_id] = info
         evicted: list[tuple[str, dict]] = []
         while len(self.active_subagents) > ACTIVE_SUBAGENTS_CAP:
@@ -801,6 +819,70 @@ class TrackedSession:
             )
             evicted.append((oldest, self.active_subagents.pop(oldest)))
         return evicted
+
+    def touch_subagent(self, agent_id: str, now: float) -> bool:
+        """Refresh the liveness stamp of the LIVE ``active_subagents`` entry
+        keyed by *agent_id* (roadmap 8.22). Returns whether one matched.
+
+        hook_receiver calls this for every datagram that carries an
+        ``agent_id`` — PreToolUse, PostToolUse, Notification, statusline,
+        the folded-prose path, all of them — so a working agent refreshes
+        itself several times a minute. That refresh, not the entry's age,
+        is what ``session_monitor``'s sweep judges it by.
+
+        Never CREATES an entry. The phantom ``SubagentStop`` events that
+        arrive constantly (empty type, unknown id, 0.0s — tolerated by
+        design) carry ids this table has never seen, and inventing a row
+        for one would resurrect a dead agent and hold the job open forever.
+        """
+        info = self.active_subagents.get(agent_id)
+        if info is None:
+            return False
+        info["last_seen"] = now
+        return True
+
+    def normalize_subagent_liveness(self, now: float, *,
+                                    reset: bool = False) -> None:
+        """Give every ``active_subagents`` entry a usable ``last_seen``
+        stamp (roadmap 8.22). Without *reset*, only entries that have none
+        are filled in, preferring their own ``started_at``; with *reset*,
+        EVERY entry is restamped to *now*.
+
+        The sweep calls it plainly, to cover entries built by anything
+        other than :meth:`add_subagent`: an entry that reached the sweep
+        without a stamp must start its silence window now rather than be
+        dropped on the first scan, which would empty the table and hand
+        idle-recovery a false "finished". Once stamped it is swept like any
+        other entry after the window, so a genuinely dead agent still
+        clears — one window late, never not at all.
+
+        ``SessionRegistry.load()`` calls it with ``reset=True``, and the
+        distinction is the whole point: ``last_seen`` and ``started_at``
+        are ``time.monotonic()`` values, seconds since THIS boot. A stamp
+        that came out of a file was written against a different boot's
+        clock, so it is not merely stale, it is meaningless — large enough
+        to drop a live agent on the first scan, or (when the previous
+        uptime was longer than this one) in the future, which no elapsed
+        comparison can ever exceed and which would make the row immortal.
+        Filling in only the missing ones would leave exactly those values
+        in place, so a restart restamps all of them and every restored row
+        gets one honest silence window. Note this repairs ``last_seen``
+        only — ``started_at`` is a previous boot's monotonic value too, and
+        it still feeds the card's agent-elapsed row and the
+        ``ACTIVE_SUBAGENTS_CAP`` eviction key, so persisting the table
+        would need that handled as well; ``reset=True`` alone is not
+        enough to make a restored entry wholly safe.
+
+        ``active_subagents`` is transient and deliberately absent from
+        ``_PERSIST_FIELDS`` (see the note there), so no entry survives a
+        restart today and the ``load()`` call has nothing to restamp; it is
+        wired so the invariant holds on the day the table is persisted.
+        """
+        for info in self.active_subagents.values():
+            if reset or info.get("last_seen") is None:
+                info["last_seen"] = now if reset else (
+                    info.get("started_at") or now
+                )
 
     def record_agent_tool(self, agent_id: str, summary: str) -> None:
         """Attribute *summary* to the LIVE ``active_subagents`` entry keyed
@@ -1499,6 +1581,16 @@ class SessionRegistry:
         "override_layout", "override_simple_formatting",
         "override_answer_length", "override_language_level",
         "override_diff_preview",
+        # NOT here, and not by oversight: `active_subagents` /
+        # `finished_subagents` / `tool_history` are per-turn state, and the
+        # subagent rows carry `started_at` / `last_seen` as
+        # `time.monotonic()` values — seconds since THIS boot. Persisting
+        # them would restore stamps written against a different clock, so
+        # roadmap 8.22's silence sweep would read a live agent as decades
+        # silent (drop it, and publish the false "Finished" card) or as
+        # stamped in the future (never sweep it at all). If they are ever
+        # persisted, `load()`'s `normalize_subagent_liveness(..., reset=True)`
+        # is what keeps that honest.
     )
     _MAX_MSG_MAP = 2000  # cap _msg_map entries to avoid unbounded growth (doubled — Part 1 roughly doubles density by also tracking user prompts)
 
@@ -1728,6 +1820,16 @@ class SessionRegistry:
                     "[%s] dropped %d queue entries older than %d h",
                     sess.label, dropped, int(QUEUE_MAX_AGE_SECONDS / 3600),
                 )
+            # Roadmap 8.22: every restored subagent row starts one honest
+            # silence window here. `reset=True` and not the plain fill-in:
+            # a `last_seen` that came out of the file is a monotonic stamp
+            # from a PREVIOUS boot, so keeping it would either drop a live
+            # agent on the first scan (the false-"Finished" card this fix
+            # removes) or, if that boot ran longer than this one, sit in
+            # the future and make the row immortal. `active_subagents` is
+            # transient (not in _PERSIST_FIELDS), so there is nothing to
+            # restamp today — this is wired for the day it is persisted.
+            sess.normalize_subagent_liveness(time.monotonic(), reset=True)
             self._sessions[name] = sess
             log.info("Restored session: %s [%s] (msg_id=%s, trigger=%s, queue=%d)",
                      name, sess.label, sess.last_msg_id, sess.trigger_msg_id,
