@@ -60,6 +60,7 @@ import collections
 import contextlib
 import json
 import logging
+import math
 import os
 import time
 from pathlib import Path
@@ -111,14 +112,6 @@ _SIGNAL_MIN_INTERVAL: float = 5.0
 # notice and far above the float noise.
 _TOKEN_EPS: float = 1e-6
 
-# The same tolerance for :class:`SlidingWindow`, in SECONDS. A waiter
-# sleeps exactly `time_until()` and then expects the oldest stamp to have
-# left the window; `stamp + period - now` followed by `now + wait` is not
-# exact in binary, so without this the stamp can come back a hair YOUNGER
-# than the period, the next wait is ~1e-10 s, the clock cannot advance by
-# it and the acquire loop spins. One microsecond of slack on a 60 s window
-# is 1/60,000,000 of the budget.
-_WINDOW_EPS: float = 1e-6
 
 
 class FloodSkipped(Exception):
@@ -215,9 +208,18 @@ class SlidingWindow:
         self._stamps: collections.deque = collections.deque()
 
     def _evict(self, now: float) -> None:
-        """Drop every stamp that has aged out of the window."""
-        cutoff = now - self.period + _WINDOW_EPS
-        while self._stamps and self._stamps[0] <= cutoff:
+        """Drop every stamp that has aged out of the window.
+
+        Written as an AGE (``now - stamp``) rather than against a cutoff
+        (``now - period``) so that it is the SAME expression
+        :meth:`time_until` rounds its wait up against: the two then agree
+        about whether a slot is free by construction, rather than by two
+        roundings happening to land the same way. (No clock value has been
+        found where the cutoff form actually differs — the difference of
+        two nearby floats is exact — so this is a choice of formulation,
+        not a guard with a mutation of its own.)
+        """
+        while self._stamps and (now - self._stamps[0]) >= self.period:
             self._stamps.popleft()
 
     def used(self) -> int:
@@ -244,6 +246,17 @@ class SlidingWindow:
 
         That is when the ``n``-th oldest stamp still inside the window
         leaves it — which is exactly the wait a blocking caller owes.
+
+        Rounded UP until sleeping it really does age that stamp out.
+        ``stamp + period`` is not exact at the magnitudes a monotonic
+        clock reports: it can round DOWN by an ULP (~1.2e-10 s at 1e6 s),
+        and a waiter that wakes there finds the stamp 59.999999999883585
+        seconds old, asks for another 1.2e-10 s, and cannot advance the
+        clock by it — the acquire loop spins without advancing and wedges
+        the event loop. Rounding the WAIT up, rather than loosening the
+        eviction, is what keeps "no more than ``limit`` in any ``period``"
+        literally true: the twenty-first call is made a fraction of a
+        nanosecond LATE, never early.
         """
         count = max(int(n), 1)
         need = count - self.free()
@@ -251,7 +264,18 @@ class SlidingWindow:
             return 0.0
         if need > len(self._stamps):
             return float("inf")
-        return self._stamps[need - 1] + self.period - self._clock()
+        oldest = self._stamps[need - 1]
+        now = self._clock()
+        wait = oldest + self.period - now
+        # Converges in one step (the deficit is at most an ULP of `now`);
+        # bounded anyway, because a loop inside a rate limiter that cannot
+        # prove its own termination is how a daemon wedges.
+        for _ in range(4):
+            short = self.period - ((now + wait) - oldest)
+            if short <= 0:
+                break
+            wait += max(short, math.ulp(now + wait))
+        return wait
 
 
 class ChatBudget:

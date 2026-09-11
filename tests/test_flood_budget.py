@@ -25,6 +25,7 @@ from aipager import config, status
 from aipager.bot.flood_budget import (
     BudgetRateLimiter,
     FloodSkipped,
+    SlidingWindow,
     TokenBucket,
     card_interval,
     clear_backoff_signal,
@@ -290,6 +291,37 @@ def test_a_refused_skip_returns_without_sleeping(run_async):
     assert slept == []
 
 
+def test_a_group_card_yields_the_last_calls_of_the_minute_to_real_content(
+    run_async,
+):
+    """Row C1 in a GROUP: the skip reserve is counted in SLOTS of the
+    rolling window as well as in tokens, so the last two calls of the
+    minute belong to an answer or a reply — never to a card refresh.
+
+    Mutation: check only the chat bucket in ``_acquire_skip`` (drop the
+    ``budget.group.free() < _SKIP_RESERVE`` clause) and a card spends the
+    group's last call of the minute, leaving a real reply to wait up to a
+    minute behind it.
+    """
+    clock = FakeClock()
+    limiter = _limiter(clock)
+    call = _recorder(clock)
+
+    async def _drive():
+        for _ in range(19):                 # 19 of the group's 20 spent
+            await _acquire(limiter, call, chat_id=-1005)
+        clock.now += 10.0                   # the chat bucket is full again
+        with pytest.raises(FloodSkipped):   # ... but the minute is not
+            await _acquire(limiter, call, chat_id=-1005, kind="skip")
+        started = clock.now
+        await _acquire(limiter, call, chat_id=-1005)   # blocking still gets it
+        assert clock.now == started
+
+    run_async(_drive())
+    assert len(call.stamps) == 20
+    assert _chat(limiter.snapshot(), -1005)["skipped"] == 1
+
+
 def test_a_skip_is_refused_while_the_chat_is_deferred_by_a_429(run_async):
     """Mutation: drop the ``retry_until`` term from the skip refusal and a
     card keeps editing straight through Telegram's own window."""
@@ -435,29 +467,61 @@ def test_a_group_window_never_admits_a_twenty_first_call_early(run_async):
     assert stamps[-1] - stamps[0] == pytest.approx(60.0)
 
 
-def test_a_group_acquire_never_spins_on_a_fractional_token(run_async):
-    """Regression, found by this file: the group rate (20/60) is not a
-    binary fraction, so refilling for exactly ``time_until`` lands a few
-    ULPs SHORT of a whole token. The residual wait is then ~1e-15 s —
-    which ``now + wait`` cannot represent once the clock reads the
-    millions of seconds a real monotonic clock reports — so the acquire
-    loop spins forever WITHOUT advancing and wedges the event loop.
+def test_a_bucket_refilled_for_exactly_its_own_wait_can_spend_the_token():
+    """The ``_TOKEN_EPS`` livelock guard, at the level where it bites.
 
-    Mutation: drop ``_TOKEN_EPS`` from ``TokenBucket.time_until`` and the
-    30th acquire never completes (the task is still pending when the
-    pump gives up, so this fails rather than hanging).
+    ``time_until`` promises "wait this long and you can take one". For a
+    rate that is not a binary fraction that promise is false in IEEE754:
+    ``(n - have) / rate * rate`` comes back a few ULPs SHORT, so the
+    bucket refilled for exactly its own wait holds 0.9999999999999999
+    tokens. The residual wait is then ~3e-16 s — which ``now + wait``
+    cannot even represent at the millions of seconds a monotonic clock
+    reports — so ``_acquire_blocking`` sleeps zero, wakes, recomputes the
+    same wait and spins forever, wedging the event loop.
+
+    Reproduced deterministically: 20/60 is not a binary fraction, 1e6 is
+    where a monotonic clock lives, and half a second of partial refill is
+    what any 429 deferral or overall-bucket wait leaves behind.
+
+    Mutation: ``_TOKEN_EPS = 0.0``, or drop ``+ _TOKEN_EPS`` from
+    ``TokenBucket.time_until`` or from ``TokenBucket.take`` — each one
+    fails a line below. (This is what the iteration-1 test of this name
+    did NOT do: it drove the loop from a clock value where the arithmetic
+    happened to be exact, so it passed with the guard removed.)
     """
-    clock = FakeClock()  # starts at 1e6, where the ULP gap really bites
-    limiter = _limiter(clock)
+    clock = FakeClock()                              # 1e6
+    bucket = TokenBucket(20 / 60, 20.0, clock=clock)  # not a binary fraction
+    bucket.take(20.0)
+    clock.now += 0.5                                 # a partial refill
+    clock.now += bucket.time_until(1.0)              # sleep EXACTLY that long
+
+    have = bucket._tokens + (clock.now - bucket._stamp) * bucket.rate
+    assert have < 1.0, "the float shortfall this guard exists for is gone"
+    assert clock.now + (1.0 - have) / bucket.rate == clock.now, \
+        "the residual wait cannot advance the clock — that is the livelock"
+
+    assert bucket.time_until(1.0) == 0.0
+    assert bucket.take(1.0) is True
+
+
+def test_an_acquire_on_a_fractional_rate_settles_instead_of_spinning(run_async):
+    """The same guard through ``process_request``, bounded so a live
+    wedge FAILS the run rather than hanging it: the acquire is pumped a
+    fixed number of loop turns and then cancelled.
+
+    Mutation: ``_TOKEN_EPS = 0.0`` and the 21st acquire never completes —
+    the clock stops advancing while the loop keeps turning.
+    """
+    clock = FakeClock()
+    limiter = _limiter(clock, chat_max_rate=20 / 60, chat_burst=20.0)
     call = _recorder(clock)
 
     async def _drive():
-        async def _all():
-            for _ in range(40):
-                await _acquire(limiter, call, chat_id=-1001)
-
-        task = asyncio.ensure_future(_all())
-        for _ in range(20_000):
+        for _ in range(20):                # drain the burst
+            await _acquire(limiter, call, chat_id=44)
+        clock.now += 0.5                   # ... leaving a fractional refill
+        task = asyncio.ensure_future(_acquire(limiter, call, chat_id=44))
+        for _ in range(5_000):
             if task.done():
                 break
             await asyncio.sleep(0)
@@ -465,8 +529,64 @@ def test_a_group_acquire_never_spins_on_a_fractional_token(run_async):
             task.cancel()
         return task.done() and task.exception() is None
 
-    assert run_async(_drive()) is True, "the group acquire loop never settled"
-    assert len(call.stamps) == 40
+    assert run_async(_drive()) is True, "the acquire loop never settled"
+    assert len(call.stamps) == 21
+
+
+def test_a_window_slot_freed_by_waiting_is_really_free():
+    """The same livelock, one class over: the group's rolling window.
+
+    At clock values where ``stamp + period`` ITSELF rounds down by an ULP
+    — 1048525.6230842356 is one, and a monotonic clock reports exactly
+    this kind of number — the naive wait lands where the oldest stamp is
+    59.999999999883585 seconds old, so it has NOT left the window: the
+    waiter asks for another 1.2e-10 s, cannot advance the clock by it and
+    spins. ``time_until`` therefore rounds its wait up against the very
+    expression ``_evict`` tests.
+
+    Mutation: ``return wait`` straight out of ``SlidingWindow.time_until``
+    without the rounding loop, and ``take`` silently records NOTHING (its
+    return value is what the acquire path ignores) — so the window loses
+    a stamp and the minute after admits more than its limit.
+    """
+    clock = FakeClock(1_048_525.6230842356)
+    window = SlidingWindow(1, 60.0, clock=clock)
+    assert window.take() is True
+    stamp = clock.now
+    naive = stamp + 60.0 - clock.now
+    assert (clock.now + naive) - stamp < 60.0, \
+        "the float shortfall this guard exists for is gone"
+
+    clock.now += window.time_until(1.0)     # sleep exactly what it asked for
+    assert window.free() == 1
+    assert window.take() is True
+    assert window.used() == 1
+
+
+def test_a_group_still_admits_only_twenty_when_the_clocks_arithmetic_rounds(
+    run_async,
+):
+    """The same rounding as the CONTRACT sees it: R1's twenty-a-minute has
+    to hold at a clock value whose arithmetic rounds down, not only at the
+    tidy 1e6 the rest of this file uses. Measured exactly the way a
+    black-box test measures it — the largest number of stamps in any
+    ``[t, t + 60)`` — which is what makes the one-ULP-early call visible.
+
+    Mutation: ``return wait`` out of ``SlidingWindow.time_until`` without
+    the rounding loop and the 21st call lands 1.2e-10 s inside the first
+    minute, unrecorded, so the drift compounds into the next one.
+    """
+    clock = FakeClock(1_048_525.6230842356)
+    limiter = _limiter(clock)
+    call = _recorder(clock)
+
+    async def _drive():
+        for _ in range(45):
+            await _acquire(limiter, call, chat_id=-1004)
+
+    run_async(_drive())
+    stamps = [t for _e, _c, t in call.stamps]
+    assert _max_in_window(stamps, 60.0) <= 20, stamps
 
 
 def test_a_blocking_acquire_is_deferred_never_dropped(run_async):
