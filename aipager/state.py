@@ -508,6 +508,15 @@ class TrackedSession:
     # construction seed for why a restart re-derives it from
     # trigger_msg_id rather than leaving it None.
     busy_card_trigger: int | None = None
+    # roadmap 8.21 starvation guard: monotonic stamp of the FIRST
+    # skip-refused card edit in the current run of refusals, 0.0 when the
+    # last attempt landed. `_animate_tick` makes one BLOCKING attempt once
+    # this is 2 x the card interval old, so a busy card under a tight
+    # per-chat budget can be slow but never frozen. Transient — never in
+    # _PERSIST_FIELDS: a restart has no budget state to be starved by, and
+    # a limiter that starts every chat unthrottled must not meet a card
+    # that thinks it has been refused for an hour.
+    card_skipped_since: float = 0.0
     # A scratch outbox: notes matched-and-already-deleted by
     # _sync_anchors_from_transcript's absorption detection, staged here
     # rather than returned (that function's bool return — "did an
