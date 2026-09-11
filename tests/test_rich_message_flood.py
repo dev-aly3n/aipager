@@ -100,6 +100,12 @@ def _mock_http(monkeypatch, handler):
     )
 
 
+# Captured before conftest's autouse "no real Telegram" fixture replaces
+# ``rm._post`` for the length of each test: this is the SEAM the doubles
+# in this file stand in for, and the only honest thing to compare them to.
+_REAL_POST = rm._post
+
+
 def _ok(message_id=1):
     return {"ok": True, "result": {"message_id": message_id}}
 
@@ -111,16 +117,48 @@ def _429(retry_after):
 
 def _scripted_post(*responses):
     """A ``_post`` double answering the scripted responses in order and
-    repeating the last one; records every call."""
+    repeating the last one; records every call and the kind it was made
+    with.
+
+    The ``kind`` keyword mirrors the real seam
+    (``rich_message._post(method, payload, *, kind="blocking")``, roadmap
+    8.21). A double without it raises ``TypeError`` for any skip-kind
+    call, which the rich path swallows into "unexpected error" and a
+    ``None`` return — a silent no-op that reads to the card loop as a
+    permanent failure, i.e. a vacuously green test.
+    """
     calls: list[tuple[str, dict]] = []
+    kinds: list[str] = []
     script = list(responses)
 
-    async def _post(method, payload):
+    async def _post(method, payload, *, kind: str = "blocking"):
         calls.append((method, payload))
+        kinds.append(kind)
         return script.pop(0) if len(script) > 1 else script[0]
 
-    _post.calls = calls  # type: ignore[attr-defined]
+    _post.calls = calls    # type: ignore[attr-defined]
+    _post.kinds = kinds    # type: ignore[attr-defined]
     return _post
+
+
+def test_the_scripted_post_double_matches_the_seam_it_replaces():
+    """The double is only worth anything while its signature matches
+    ``rich_message._post``. Compared against ``_REAL_POST``, captured at
+    import time — ``rm._post`` itself is replaced by conftest's
+    "no real Telegram" guard for the length of every test.
+
+    Mutation: drop the ``kind`` parameter from ``_scripted_post`` and a
+    skip-kind call raises ``TypeError`` into the rich path's own
+    ``except Exception``, which returns ``None`` — every assertion about a
+    skipped call would then pass for the wrong reason.
+    """
+    import inspect
+
+    real = inspect.signature(_REAL_POST).parameters
+    double = inspect.signature(_scripted_post(_ok())).parameters
+    assert list(double) == list(real)
+    assert double["kind"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert double["kind"].default == real["kind"].default
 
 
 class _FakeLimiter:

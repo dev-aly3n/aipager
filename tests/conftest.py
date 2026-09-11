@@ -469,7 +469,12 @@ def _block_real_telegram_http(monkeypatch):
     and anything added later. Tests that exercise the transport patch ``_post``
     themselves; a function-scoped patch inside the test body wins over this one.
     """
-    async def _refuse(method, payload):
+    async def _refuse(method, payload, *, kind: str = "blocking"):
+        # ``kind`` mirrors the real seam (roadmap 8.21). Without it a
+        # skip-kind call would raise TypeError here instead of this
+        # AssertionError, and the rich path's own `except Exception` would
+        # swallow it into a silent ``None`` — the guard would look like it
+        # had passed.
         raise AssertionError(
             f"test attempted a real Telegram API call: {method}. "
             "Mock aipager.bot.rich_message._post (or the calling helper)."
