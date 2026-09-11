@@ -926,6 +926,56 @@ def test_the_backoff_file_never_points_at_the_real_runtime_dir(tmp_path):
     assert Path(config.FLOOD_MUTE_FILE).parent == tmp_path
 
 
+def test_a_probe_that_is_not_the_daemon_never_writes_beside_the_socket(
+        tmp_path, monkeypatch, run_async):
+    """Process safety (tester-iter1-008), found the hard way during QA: a
+    throwaway ``python -c`` that calls ``note_retry_after`` used to write
+    ``aipager-flood-backoff.json`` into the LIVE daemon's runtime
+    directory, and `aipager status` would then report a backoff no daemon
+    has. The conftest fixture cannot help anything running outside pytest.
+
+    Both paths are rehearsed on a tmp directory shaped like the real one
+    (signal file beside the socket), so the mutation below cannot write
+    into ``$XDG_RUNTIME_DIR`` even while it is failing.
+
+    Mutation: drop the ``_signal_armed`` check from
+    ``_maybe_write_signal`` and the unarmed limiter writes the file.
+    """
+    monkeypatch.setattr("aipager.config.SOCKET_PATH",
+                        str(tmp_path / "aipager.sock"))
+    monkeypatch.setattr("aipager.config.FLOOD_BACKOFF_FILE",
+                        str(tmp_path / "aipager-flood-backoff.json"))
+    signal = Path(config.FLOOD_BACKOFF_FILE)
+
+    probe = _limiter(FakeClock())          # nothing ever initialize()d it
+    probe.note_retry_after(-100, 5)
+    assert not signal.exists()
+
+    daemon = _limiter(FakeClock())
+    run_async(daemon.initialize())         # what ExtBot.initialize awaits
+    daemon.note_retry_after(-100, 5)
+    assert signal.exists()
+
+
+def test_an_explicit_signal_path_is_always_the_callers_to_write(
+        tmp_path, monkeypatch):
+    """The other half of the arming rule: a caller that NAMES the path
+    owns it, daemon or not — even when it names the daemon's own
+    directory, which is how a future tool ("show me the live backoff")
+    would drive this writer deliberately.
+
+    Mutation: ``self._signal_armed = False`` in ``__init__`` (arm only on
+    ``initialize``) and every ``signal_path=`` caller pointed at the
+    runtime directory silently stops writing.
+    """
+    monkeypatch.setattr("aipager.config.SOCKET_PATH",
+                        str(tmp_path / "aipager.sock"))
+    signal = tmp_path / "aipager-flood-backoff.json"   # beside that socket
+    limiter = _limiter(FakeClock(), signal_path=str(signal))
+    limiter.note_retry_after(-100, 5)
+    assert json.loads(signal.read_text())["backoff"][0]["multiplier"] == 2.0
+
+
 def test_a_backing_off_chat_is_published_and_cleared_again(tmp_path):
     """Mutation: never unlink when no chat is backing off and `aipager
     status` reports a multiplier that decayed away minutes ago."""

@@ -448,6 +448,12 @@ class BudgetRateLimiter(BaseRateLimiter):
         self._backoff_max = float(backoff_max)
         self._backoff_decay_seconds = float(backoff_decay_seconds)
         self._signal_path = signal_path
+        # Only the DAEMON may write beside the daemon's socket. An
+        # explicit path means the caller owns it (tests, tools);
+        # `initialize()` — which python-telegram-bot awaits from
+        # `ExtBot.initialize`, i.e. only in a real daemon — arms the
+        # default one. See `_maybe_write_signal`.
+        self._signal_armed: bool = signal_path is not None
         self._budgets: dict = {}
         self._last_signal_key: str | None = None
         self._last_signal_at: float = 0.0
@@ -456,7 +462,14 @@ class BudgetRateLimiter(BaseRateLimiter):
 
     async def initialize(self) -> None:
         """Drop a previous daemon's backoff file. Nothing is restored: a
-        restart starts every chat at ×1 (R8)."""
+        restart starts every chat at ×1 (R8).
+
+        Also arms the signal writer: ``ExtBot.initialize`` awaits this,
+        and nothing else does, so reaching it is what proves this limiter
+        belongs to a running daemon rather than to a `python -c` probe
+        pointed at the live runtime directory (`_maybe_write_signal`).
+        """
+        self._signal_armed = True
         clear_backoff_signal(self._signal_path)
 
     async def shutdown(self) -> None:
@@ -850,6 +863,23 @@ class BudgetRateLimiter(BaseRateLimiter):
         from aipager import config
 
         path = Path(self._signal_path or config.FLOOD_BACKOFF_FILE)
+        if not self._signal_armed and path.parent == Path(config.SOCKET_PATH).parent:
+            # Not the daemon's limiter (nothing ever awaited `initialize`,
+            # and no explicit path was given), and the file it is about to
+            # write sits in the LIVE daemon's runtime directory beside its
+            # socket. Refuse: `aipager status` and `aipager doctor` would
+            # report a phantom backoff for a daemon that has none, and the
+            # daemon itself never reads the file back, so nothing would
+            # correct it. This happened during 8.21's own QA, from a
+            # throwaway `python -c` that called `note_retry_after`.
+            #
+            # Tests are unaffected: conftest's `_isolate_flood_mute` moves
+            # FLOOD_BACKOFF_FILE into `tmp_path`, which is not the socket's
+            # directory — that fixture stays the primary isolation, this is
+            # the belt for everything that runs outside pytest.
+            log.debug("flood: not writing %s — this process is not the daemon",
+                      path)
+            return
         try:
             tmp = path.with_name(path.name + ".tmp")
             tmp.write_text(
