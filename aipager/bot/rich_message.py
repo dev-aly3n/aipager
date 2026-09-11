@@ -7,25 +7,35 @@ configured bot token at call time (never captured at import).
 
 Public API
 ----------
-send_rich_message(chat_id, markdown, *, is_rtl, reply_to_message_id)
-edit_message_text_rich(chat_id, message_id, markdown, *, is_rtl, reply_markup)
+send_rich_message(chat_id, markdown, *, is_rtl, reply_to_message_id, kind)
+edit_message_text_rich(chat_id, message_id, markdown, *, is_rtl,
+                       reply_markup, kind)
 detect_rtl(text)
 close_client()
-set_rate_limiter(limiter)
+set_rate_limiter(limiter) / get_rate_limiter()
 
 RichMessageFallbackRequired  -- caller should re-send as plain text
 RichMessageBlocked           -- bot is blocked; no fallback
 RichMessageGone              -- target message no longer exists
 RichMessageFloodBanned       -- flood ban / chat muted; no retry, NO fallback
 
-Flood control (roadmap 8.17): every POST here acquires through the SAME
-``AIORateLimiter`` instance PTB uses (handed over by
+Flood control (roadmap 8.17, extended by 8.21): every POST here acquires
+through the SAME ``BudgetRateLimiter`` instance PTB uses (handed over by
 ``lifecycle._make_builder`` via :func:`set_rate_limiter`), so the rich
-path and the PTB path share one 30/s + 20/min-per-group budget instead
-of two. A 429 whose ``retry_after`` exceeds ``TELEGRAM_MAX_RETRY_AFTER``
-is a ban: it mutes the chat (``bot/flood.py``) and raises
+path and the PTB path share one per-chat budget instead of two. A 429
+whose ``retry_after`` exceeds ``TELEGRAM_MAX_RETRY_AFTER`` is a ban: it
+mutes the chat (``bot/flood.py``) and raises
 :class:`RichMessageFloodBanned` after exactly one POST — no clamp, no
 sleep, no plain-text fallback, each of which was a fresh violation.
+
+A SMALL 429 no longer sleeps here either (8.21). Both response handlers
+report it with ``limiter.note_retry_after`` and let the limiter defer the
+whole chat; a blocking caller's request is then re-POSTed exactly once
+THROUGH the limiter, whose acquire is what waits out the deferral. A
+``kind="skip"`` caller — the busy card, the typing indicator, the pinned
+dashboard — is abandoned with :class:`FloodSkipped` instead, because a
+card that re-enters the window that just rejected it is one more
+violation per tick, which is how the 2026-09-11 ban was earned.
 
 sendRichMessageDraft is deliberately absent. It is the only source of
 Telegram's native word-by-word animation, but a draft is a 30-second
@@ -45,6 +55,7 @@ import re
 import httpx
 
 from aipager.bot.flood import MUTE, FloodMuted
+from aipager.bot.flood_budget import FloodSkipped
 from aipager.config import TELEGRAM_MAX_RETRY_AFTER
 
 log = logging.getLogger(__name__)
@@ -55,13 +66,17 @@ _RICH_LIMIT: int = 32_768
 # Constructed lazily by _get_client(); closed by close_client().
 _client: httpx.AsyncClient | None = None
 
-# The daemon's one AIORateLimiter (telegram.ext), set by
+# The daemon's one BudgetRateLimiter (bot/flood_budget.py), set by
 # lifecycle._make_builder before polling starts. None only in tests and
 # means "unpaced" — never leave it None in a running daemon.
 _rate_limiter = None
 
-# The 429 back-off sleep. A module attribute so tests shorten THIS and
-# never patch asyncio.sleep, which is the global module (see CLAUDE.md).
+# Kept defined, and kept patchable, but since 8.21 NOTHING on a 429 path
+# calls it: the limiter owns every wait now, so a second, module-private
+# sleep here would double the deferral and put the retry back into the
+# window it was deferred out of. The `no_sleep` fixture asserts the
+# absence. A module attribute so tests shorten THIS and never patch
+# asyncio.sleep, which is the global module (see CLAUDE.md).
 _sleep = asyncio.sleep
 
 # RTL / LTR letter ranges (Unicode script blocks).
@@ -131,19 +146,36 @@ def _api_url(method: str) -> str:
 
 
 def set_rate_limiter(limiter) -> None:
-    """Hand over the daemon's ``AIORateLimiter`` so every POST from this
+    """Hand over the daemon's ``BudgetRateLimiter`` so every POST from this
     module is paced by the same budget as PTB's own calls (R1)."""
     global _rate_limiter
     _rate_limiter = limiter
 
 
-async def _post(method: str, payload: dict) -> dict:
+def get_rate_limiter():
+    """The ONE limiter ``lifecycle._make_builder`` installed, or ``None``.
+
+    Read late, never cached by a caller: the busy-card cadence asks this
+    for the chat's backoff on every tick, and caching a second reference
+    is exactly how two budgets drift apart (roadmap 8.17). ``None`` means
+    "unpaced" — the state every test starts in, and never a running
+    daemon's.
+    """
+    return _rate_limiter
+
+
+async def _post(method: str, payload: dict, *, kind: str = "blocking") -> dict:
     """POST *payload* to *method*, return the parsed response body.
 
-    Acquires the shared rate-limit budget first: ``AIORateLimiter``'s
-    ``process_request`` keys its per-group bucket on ``data["chat_id"]``
-    and runs the callback inside both limiters, exactly as it does for a
-    PTB ``send_message``.
+    Acquires the shared rate-limit budget first: ``BudgetRateLimiter``'s
+    ``process_request`` keys the per-chat bucket on ``data["chat_id"]``
+    and runs the callback inside every bucket that applies, exactly as it
+    does for a PTB ``send_message``.
+
+    ``kind="skip"`` marks the call skippable (a busy-card edit): if the
+    chat's budget is short it is refused with :class:`FloodSkipped` and no
+    HTTP happens at all. Blocking callers — answers, replies — are never
+    refused, only deferred.
 
     Raises httpx exceptions on network / timeout failures; returns the raw
     dict (including ok/error_code/description) on any HTTP-level response.
@@ -159,10 +191,24 @@ async def _post(method: str, payload: dict) -> dict:
     limiter = _rate_limiter
     if limiter is None:
         return await _do()
+    # PTB drops a FALSY rate_limit_args before the limiter ever sees it
+    # (_extbot.py:335), so never pass {} — None is the blocking marker.
     return await limiter.process_request(
         callback=_do, args=(), kwargs={}, endpoint=method, data=payload,
-        rate_limit_args=None,
+        rate_limit_args={"kind": "skip"} if kind == "skip" else None,
     )
+
+
+def _kind_kwargs(kind: str) -> dict:
+    """``{"kind": kind}`` for a skippable call, ``{}`` for the default.
+
+    ``_post`` is the seam the whole test suite doubles, almost always with
+    a two-argument stub, and a BLOCKING call — which is every call this
+    module made before 8.21 — must keep looking exactly like
+    ``_post(method, payload)`` to all of them. Only a skippable call
+    carries the extra keyword.
+    """
+    return {"kind": kind} if kind != "blocking" else {}
 
 
 def _raise_if_muted(chat_id) -> None:
@@ -197,6 +243,7 @@ async def send_rich_message(
     *,
     is_rtl: bool = False,
     reply_to_message_id: int | None = None,
+    kind: str = "blocking",
 ) -> dict | None:
     """POST sendRichMessage and return the result dict, or None on ok-but-empty.
 
@@ -212,6 +259,9 @@ async def send_rich_message(
         Any other failure (400, 404, 5xx, timeout, network error, or a 429
         that fails again after one retry) — caller should re-send as plain
         text with no parse_mode.
+    FloodSkipped
+        ``kind="skip"`` only: the chat's budget was short, so nothing was
+        sent. Transient and healthy — the next trigger simply tries again.
     """
     _raise_if_muted(chat_id)
     payload: dict = {
@@ -221,13 +271,20 @@ async def send_rich_message(
     if reply_to_message_id is not None:
         payload["reply_to_message_id"] = reply_to_message_id
 
-    return await _send_rich_message_once(payload, allow_retry=True)
+    return await _send_rich_message_once(payload, allow_retry=True, kind=kind)
 
 
-async def _send_rich_message_once(payload: dict, *, allow_retry: bool) -> dict | None:
+async def _send_rich_message_once(payload: dict, *, allow_retry: bool,
+                                  kind: str = "blocking") -> dict | None:
     """Inner send with optional 429-retry logic."""
     try:
-        data = await _post("sendRichMessage", payload)
+        data = await _post("sendRichMessage", payload, **_kind_kwargs(kind))
+    except FloodSkipped:
+        # A refused skip is not a failure to fall back from: it means the
+        # chat's budget was short and nothing was attempted. Swallowing it
+        # into RichMessageFallbackRequired would degrade a card to a
+        # plain-text edit — an extra call into the chat that is short.
+        raise
     except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
         log.warning("sendRichMessage network error: %s", type(exc).__name__)
         raise RichMessageFallbackRequired("network error") from exc
@@ -236,7 +293,8 @@ async def _send_rich_message_once(payload: dict, *, allow_retry: bool) -> dict |
         raise RichMessageFallbackRequired("unexpected error") from exc
 
     return await _handle_response(data, method="sendRichMessage",
-                                  payload=payload, allow_retry=allow_retry)
+                                  payload=payload, allow_retry=allow_retry,
+                                  kind=kind)
 
 
 async def _handle_response(
@@ -245,6 +303,7 @@ async def _handle_response(
     method: str,
     payload: dict,
     allow_retry: bool,
+    kind: str = "blocking",
 ) -> dict | None:
     """Interpret the Telegram response dict and raise/return appropriately."""
     if data.get("ok"):
@@ -264,14 +323,21 @@ async def _handle_response(
 
     if error_code == 429:
         raw_retry_after = _retry_after_of(data)
+        # A retry_after past the cap is a ban: mute + raise, first and
+        # unchanged (R6). Only a SMALL one reaches the limiter below.
         _ban_if_excessive(method, payload, raw_retry_after)
-        retry_after: int = min(raw_retry_after, 30)
+        # 8.21: no private clamp, no private sleep. The limiter bars the
+        # whole chat for exactly the time Telegram asked and doubles its
+        # card cadence; the re-POST below waits that out in its OWN
+        # acquire, so the wait happens once, in one place.
+        limiter = get_rate_limiter()
+        if limiter is not None:
+            limiter.note_retry_after(payload.get("chat_id"), raw_retry_after)
+        if kind == "skip":
+            raise FloodSkipped(payload.get("chat_id"), method)
         if allow_retry:
-            log.warning("%s rate-limited (429), sleeping %ds then retrying",
-                        method, retry_after)
-            await _sleep(retry_after)
             try:
-                data2 = await _post(method, payload)
+                data2 = await _post(method, payload, **_kind_kwargs(kind))
             except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
                 log.warning("%s network error on retry: %s", method, type(exc).__name__)
                 raise RichMessageFallbackRequired("network error on retry") from exc
@@ -280,7 +346,8 @@ async def _handle_response(
                 raise RichMessageFallbackRequired("unexpected error on retry") from exc
             # allow_retry=False so a second 429 immediately falls back
             return await _handle_response(data2, method=method,
-                                          payload=payload, allow_retry=False)
+                                          payload=payload, allow_retry=False,
+                                          kind=kind)
         # Second 429 → fall back
         log.warning("%s rate-limited again after retry", method)
         raise RichMessageFallbackRequired(f"429 after retry: {description}")
@@ -306,6 +373,7 @@ async def edit_message_text_rich(
     *,
     is_rtl: bool = False,
     reply_markup: dict | None = None,
+    kind: str = "blocking",
 ) -> dict | None:
     """POST editMessageText with rich_message (Bot API 10.1).
 
@@ -323,6 +391,10 @@ async def edit_message_text_rich(
         The chat is flood-muted (raised before any HTTP), or this edit got
         a 429 with ``retry_after`` over the cap and muted it; caller must
         stop editing and must not degrade to a plain-text edit.
+    FloodSkipped
+        ``kind="skip"`` only: the chat's budget was short, so no edit was
+        attempted. Transient — the caller returns False and tries again on
+        its next tick, leaving every card stamp untouched.
     """
     _raise_if_muted(chat_id)
     payload: dict = {
@@ -333,17 +405,24 @@ async def edit_message_text_rich(
     if reply_markup is not None:
         payload["reply_markup"] = reply_markup
     try:
-        data = await _post("editMessageText", payload)
+        data = await _post("editMessageText", payload, **_kind_kwargs(kind))
+    except FloodSkipped:
+        # Not a failure: nothing was attempted, and the chat is healthy.
+        # Swallowing it into `return None` would make the animator read it
+        # as a transient error and log at card cadence.
+        raise
     except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
         log.warning("editMessageText network error: %s", type(exc).__name__)
         return None
     except Exception as exc:
         log.warning("editMessageText unexpected error: %s", exc)
         return None
-    return await _handle_edit_response(data, payload=payload)
+    return await _handle_edit_response(data, payload=payload, kind=kind)
 
 
-async def _handle_edit_response(data: dict, *, payload: dict) -> dict | None:
+async def _handle_edit_response(data: dict, *, payload: dict,
+                                kind: str = "blocking",
+                                allow_retry: bool = True) -> dict | None:
     """Interpret the Telegram response for an editMessageText rich call.
 
     Distinct from ``_handle_response`` because 400 ``message is not modified``
@@ -378,12 +457,21 @@ async def _handle_edit_response(data: dict, *, payload: dict) -> dict | None:
     if error_code == 429:
         raw_retry_after = _retry_after_of(data)
         _ban_if_excessive("editMessageText", payload, raw_retry_after)
-        retry_after: int = min(raw_retry_after, 30)
-        log.warning("editMessageText rate-limited (429), sleeping %ds then retrying",
-                    retry_after)
-        await _sleep(retry_after)
+        # 8.21: THIS is the busy-card path, i.e. the 2026-09-11 incident
+        # itself — a fix that converts only `_handle_response` fixes
+        # nothing. Same rule as there: report it, never sleep privately.
+        limiter = get_rate_limiter()
+        if limiter is not None:
+            limiter.note_retry_after(payload.get("chat_id"), raw_retry_after)
+        if kind == "skip":
+            raise FloodSkipped(payload.get("chat_id"), "editMessageText")
+        if not allow_retry:
+            log.warning("editMessageText rate-limited again after retry")
+            return None
         try:
-            data2 = await _post("editMessageText", payload)
+            data2 = await _post("editMessageText", payload, **_kind_kwargs(kind))
+        except FloodSkipped:
+            raise
         except Exception as exc:
             log.warning("editMessageText retry error: %s", exc)
             return None
@@ -392,7 +480,8 @@ async def _handle_edit_response(data: dict, *, payload: dict) -> dict | None:
             _ban_if_excessive("editMessageText", payload, _retry_after_of(data2))
             log.warning("editMessageText rate-limited again after retry")
             return None
-        return await _handle_edit_response(data2, payload=payload)
+        return await _handle_edit_response(data2, payload=payload, kind=kind,
+                                           allow_retry=False)
 
     if error_code == 404 or "method not found" in desc_lower:
         log.warning("editMessageText not found (404): %s", description)
