@@ -11,14 +11,17 @@ Every test's docstring names the mutation that makes it fail.
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
+import socket
+import time
 from pathlib import Path
 
 import pytest
 from telegram.error import RetryAfter
 
-from aipager import config
+from aipager import config, status
 from aipager.bot.flood_budget import (
     BudgetRateLimiter,
     FloodSkipped,
@@ -118,6 +121,12 @@ def _chat(snapshot: dict, chat_id) -> dict:
         if entry["chat_id"] == chat_id:
             return entry
     raise AssertionError(f"chat {chat_id} not in {snapshot}")
+
+
+def _ns(**kw) -> argparse.Namespace:
+    """The argparse shape ``cmd_status`` reads, as ``tests/test_flood_mute.py``
+    builds it."""
+    return argparse.Namespace(**{"as_json": False, **kw})
 
 
 def _max_in_window(stamps: list[float], window: float) -> int:
@@ -975,3 +984,165 @@ def test_flood_budget_reads_time_only_through_its_injected_clock():
             if [t for _, t in window] == ["time", ".", "monotonic", "("]:
                 offenders.append(window[0][0])
     assert offenders == [], offenders
+
+
+# ── P/J, the reading half: `aipager status` and `aipager doctor` ─────────────
+
+def _write_backoff_signal(multiplier=4.0, chat_id=-100, ago=12.0) -> float:
+    """Drop the signal file exactly as ``_maybe_write_signal`` writes it."""
+    last = time.time() - ago
+    Path(config.FLOOD_BACKOFF_FILE).write_text(json.dumps(
+        {"backoff": [{"chat_id": chat_id, "multiplier": multiplier,
+                      "last_429_at": last}], "reactions": []}))
+    return last
+
+
+def test_read_flood_backoffs_returns_backing_off_chats_only():
+    """The reader mirrors ``read_flood_mutes``: never infer a backoff, and
+    drop anything that does not carry a multiplier over 1.
+
+    Mutation: return the raw ``data["backoff"]`` list and a malformed
+    entry, a ×1 entry or a half-written file becomes a phantom backoff in
+    the operator's status output.
+    """
+    assert status.read_flood_backoffs() == []            # no file
+    Path(config.FLOOD_BACKOFF_FILE).write_text("{not json")
+    assert status.read_flood_backoffs() == []            # garbage
+    Path(config.FLOOD_BACKOFF_FILE).write_text(json.dumps({"backoff": "no"}))
+    assert status.read_flood_backoffs() == []            # wrong shape
+    Path(config.FLOOD_BACKOFF_FILE).write_text(
+        json.dumps({"backoff": [{"chat_id": 7}]}))
+    assert status.read_flood_backoffs() == []            # no multiplier
+    _write_backoff_signal(multiplier=1.0)
+    assert status.read_flood_backoffs() == []            # not backing off
+    _write_backoff_signal(multiplier=4.0)
+    entry = status.read_flood_backoffs()[0]
+    assert (entry["chat_id"], entry["multiplier"]) == (-100, 4.0)
+
+
+def test_the_age_of_a_backoff_is_computed_when_it_is_read():
+    """The file is rewritten at most once every 5 s, so a stored age would
+    be stale before anyone read it. Two reads of ONE file must therefore
+    disagree by the time between them.
+
+    Mutation: store ``last_429_ago`` at write time and read it back, and a
+    chat that 429'd an hour ago still reports "12 s ago".
+    """
+    _write_backoff_signal(ago=12.0)
+    assert int(status.read_flood_backoffs()[0]["last_429_ago"]) == 12
+    _write_backoff_signal(ago=3600.0)
+    assert int(status.read_flood_backoffs()[0]["last_429_ago"]) == 3600
+
+
+def test_a_backoff_line_reads_like_the_troubleshooting_doc_says(tmp_path):
+    """``docs/troubleshooting.md`` quotes this line verbatim; so does
+    ``design.md`` §9. Mutation: render the multiplier with ``%f`` and the
+    operator reads "×4.000000", or drop the ``:g`` and a ×2 backoff prints
+    as "×2.0".
+    """
+    _write_backoff_signal(multiplier=4.0, chat_id=-100, ago=12.0)
+    backoffs = status.read_flood_backoffs()
+    assert status.flood_backoff_lines(backoffs) == [
+        "Telegram flood backoff ×4 (chat -100), last 429 12 s ago"]
+    assert status.flood_backoff_lines([]) == []
+
+
+def test_the_daemon_writes_the_backoff_line_the_cli_reads_back(tmp_path):
+    """Writer and reader agree on the file, end to end: arm a 429 the way
+    the daemon does, read it the way `aipager status` does.
+
+    Mutation: change either half's key names and this is the test that
+    notices — the two live in different modules and different processes.
+    """
+    clock = FakeClock()
+    limiter = _limiter(clock)
+    limiter.note_retry_after(-100, 5)
+    line = status.flood_backoff_lines(status.read_flood_backoffs())[0]
+    assert line.startswith("Telegram flood backoff ×2 (chat -100), last 429 ")
+
+
+def test_status_json_and_text_both_carry_the_backoff(monkeypatch, capsys):
+    """Case J through `aipager status` itself, both renderings.
+
+    Mutation: drop ``flood_backoff`` from the JSON payload or the lines
+    from ``_render_plain`` and the operator has no way to see why the
+    cards slowed down.
+    """
+    monkeypatch.setattr(status, "BOT_TOKEN", "tok")
+    monkeypatch.setattr(status, "CHAT_ID", "5")
+    monkeypatch.setattr(status, "_daemon_alive", lambda: True)
+    monkeypatch.setattr(status, "_gather_sessions", lambda: ([], set()))
+    _write_backoff_signal(multiplier=4.0, chat_id=-100)
+
+    assert status.cmd_status(_ns(as_json=True)) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert [b["chat_id"] for b in payload["flood_backoff"]] == [-100]
+
+    status.cmd_status(_ns(as_json=False))
+    assert "Telegram flood backoff ×4 (chat -100)" in capsys.readouterr().out
+
+    Path(config.FLOOD_BACKOFF_FILE).unlink()
+    status.cmd_status(_ns(as_json=False))
+    assert "flood backoff" not in capsys.readouterr().out
+
+
+def test_doctors_daemon_row_reports_a_backoff_without_changing_severity(
+        tmp_path, monkeypatch):
+    """`design.md` §10, and the promise `docs/troubleshooting.md` already
+    makes to the user. A backoff is NORMAL operation — the chat is being
+    paced, nothing is muted, no message is lost — so it rides along in the
+    row's ``detail`` and the row stays green.
+
+    Mutation: delete the ``read_flood_backoffs`` wiring from
+    ``check_daemon`` (the state this shipped in at iteration 1) and the
+    line never appears; make it a WARN and an operator starts restarting a
+    healthy daemon into a chat that is merely being paced.
+    """
+    from aipager import doctor
+
+    sock_path = tmp_path / "aipager.sock"
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    server.bind(str(sock_path))
+    try:
+        monkeypatch.setattr("aipager.config.SOCKET_PATH", str(sock_path))
+        row = doctor.check_daemon()
+        assert row.status == doctor.OK
+        assert not [d for d in row.detail if "backoff" in d]
+
+        _write_backoff_signal(multiplier=4.0, chat_id=-100, ago=12.0)
+        row = doctor.check_daemon()
+        assert row.status == doctor.OK, "a backoff is not a warning"
+        assert "Telegram flood backoff ×4 (chat -100), last 429 12 s ago" \
+            in row.detail
+    finally:
+        server.close()
+
+
+def test_doctors_muted_row_keeps_its_warning_and_gains_the_backoff_line(
+        tmp_path, monkeypatch):
+    """The other branch of §10: a mute still WARNs, still tells the
+    operator not to restart into it, and the backoff line is appended
+    after the mute's own lines rather than replacing them.
+
+    Mutation: return early on the mute and the backoff disappears exactly
+    when the chat is in the most trouble.
+    """
+    from aipager import doctor
+
+    sock_path = tmp_path / "aipager.sock"
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    server.bind(str(sock_path))
+    try:
+        monkeypatch.setattr("aipager.config.SOCKET_PATH", str(sock_path))
+        Path(config.FLOOD_MUTE_FILE).write_text(json.dumps(
+            {"muted": [{"chat_id": -100, "until": time.time() + 3600,
+                        "retry_after": 28911}]}))
+        _write_backoff_signal(multiplier=8.0, chat_id=-100, ago=1.0)
+
+        row = doctor.check_daemon()
+        assert row.status == doctor.WARN
+        assert [d for d in row.detail if "flood-muted until" in d]
+        assert [d for d in row.detail if "self-clears" in d]
+        assert [d for d in row.detail if "flood backoff ×8" in d]
+    finally:
+        server.close()
