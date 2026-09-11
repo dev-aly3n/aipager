@@ -45,9 +45,12 @@ aipager service start
 ## Busy cards got slower
 
 Telegram allows roughly one message a second into any one chat (and 20 a
-minute into a group). Every call counts: sends, edits, even the "typing…"
-indicator. The daemon gives each chat its own budget of about 1 call a
-second, with a small burst, and the busy cards of that chat **share** it.
+minute into a group). Every call counts: sends and edits alike. The
+daemon gives each chat its own budget of about 1 call a second, with a
+small burst, and the busy cards of that chat **share** it. (A busy card
+no longer sends a "typing…" indicator: the card is the progress display,
+and the indicator cost a second call on every refresh — half the chat's
+budget, for something the card already tells you.)
 
 So with two sessions working in the same chat, each card refreshes about
 every 2.2 seconds instead of every 1.2; with three, about every 3.3. **A
@@ -58,10 +61,8 @@ skipped and retried on the next tick rather than queued in front of your
 answer.
 
 In a **group** the limit is 20 calls a minute however many sessions are
-in it, so a card there refreshes every 3.3 seconds and the daemon does
-not send a "typing…" indicator at all — the card edit is the progress
-display, and an indicator would cost half the group's minute. Direct
-messages keep the indicator.
+in it, so a card there refreshes every 3.3 seconds whatever else is going
+on.
 
 To speed the cards up: run fewer simultaneous sessions per chat, or give
 the busiest ones a chat of their own (`aipager config`). You can also

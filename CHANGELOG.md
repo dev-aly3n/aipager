@@ -34,12 +34,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   through in the first minute.
 
 ### Changed
-- A busy card in a group no longer sends a "typing…" indicator. A group
-  gets 20 calls a minute in total and a card already spends 18 of them,
-  so the indicator was costing the other half of the minute and the card
-  itself was being skipped: 11 edits a minute with pauses of ten seconds,
-  where it is now 18 evenly spaced. Direct messages keep the indicator —
-  there the budget is one call a second, not twenty a minute.
+- A busy card no longer sends a "typing…" indicator, in any chat. The
+  card itself is the progress display — it already shows the elapsed
+  time and what Claude is doing — and the indicator was a second
+  Telegram call on every tick of every session, i.e. half of the chat's
+  whole budget. It was also the only thing standing between two sessions
+  sharing a chat and the refresh rate this release promises them: with
+  it, two streaming cards in one chat managed a refresh every 2.2 to 6.6
+  seconds and half their edits were refused; without it, every refresh
+  lands on 2.2 seconds exactly. In a group, where the budget is 20 calls
+  a minute, the card went from 11 edits a minute with ten-second pauses
+  to 18 evenly spaced.
+- A card refresh the budget refuses is retried a second later instead of
+  waiting out a whole interval. Sessions started together tick together,
+  and a chat's small burst allowance admits only two of them at a time,
+  so the third used to lose every round: three sessions in one chat got
+  43 refreshes a minute with gaps up to ten seconds, and now get 56 at a
+  flat 3.3 seconds each. A card can still never refresh faster than its
+  interval.
 - `STREAM_EDIT_INTERVAL` now defaults to `1.2` seconds (was `0.9`) and
   `BUSY_EDIT_INTERVAL` (`3.0`) became configurable from the environment
   like it. Values below the per-chat floor are harmless — the floor wins.
