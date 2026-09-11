@@ -314,8 +314,8 @@ def test_builder_limits_are_the_named_config_constants(mk_bot, monkeypatch):
                                      / config.TELEGRAM_OVERALL_TIME_PERIOD)
     assert limiter._chat_max_rate == config.TELEGRAM_PRIVATE_MAX_RATE
     assert limiter._chat_burst == config.TELEGRAM_CHAT_BURST
-    assert limiter._group_max_rate == config.TELEGRAM_GROUP_MAX_RATE
-    assert limiter._group_time_period == config.TELEGRAM_GROUP_TIME_PERIOD
+    assert limiter._group_max_calls == config.TELEGRAM_GROUP_MAX_CALLS
+    assert limiter._group_window == config.TELEGRAM_GROUP_WINDOW
     # `max_retries` went with python-telegram-bot's retry loop (8.21): the
     # limiter defers a small 429 and retries it exactly once itself, and a
     # big one is a ban that surfaces to the sender untouched.

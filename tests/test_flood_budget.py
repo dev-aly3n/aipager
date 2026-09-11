@@ -365,22 +365,65 @@ def _sequential_stamps(run_async, chat_id, count):
     return [t for _e, _c, t in call.stamps]
 
 
-def test_a_group_is_additionally_capped_at_twenty_calls_a_minute(run_async):
-    """Row G. A group gets the 1/s chat bucket AND a 20-per-60 s bucket,
-    so once its burst is spent it settles at one call every 3 s — where
-    the same traffic into a private chat settles at one per second.
+def test_a_group_is_additionally_capped_at_twenty_calls_in_any_minute(run_async):
+    """Row G / R1's group clause, as a ROLLING WINDOW: at most 20 calls in
+    ANY 60 s window, not 20 tokens that refill. Sixty back-to-back calls
+    into a group, and no minute-long window anywhere in the result may
+    hold more than twenty — while the same traffic into a private chat is
+    held only by the 1/s bucket and runs three times faster.
 
-    Mutation: drop the group bucket from ``ChatBudget`` and the group's
-    tail paces exactly like the private one.
+    Mutation: model the group as ``TokenBucket(20/60, 20)`` again (its
+    burst lets 25 calls into the first minute, which is exactly
+    rev-iter1-002), or drop the group limit from ``ChatBudget``, and the
+    window count goes over twenty.
     """
     group = _sequential_stamps(run_async, -1001, 60)
     private = _sequential_stamps(run_async, 256113222, 60)
-    # Steady state, the sustained rule: 20 calls span a full minute.
-    assert group[-1] - group[-20] == pytest.approx(57.0)
-    assert private[-1] - private[-20] == pytest.approx(19.0)
+    assert _max_in_window(group, 60.0) <= 20, group
+    assert _max_in_window(private, 60.0) > 20
     # Still ordered, and still under the per-chat burst.
     assert group == sorted(group)
     assert _max_in_window(group, 1.0) <= 3, group
+
+
+def test_twenty_five_group_calls_run_twenty_in_the_first_minute_then_five(
+    run_async,
+):
+    """Case G's own arithmetic, literally: 25 queued blocking calls into a
+    group leave 20 inside the first 60 s and the remaining 5 in the next
+    window — none dropped, none reordered.
+
+    Mutation: give the group a token bucket with a burst and all 25 land
+    in the first 22 seconds.
+    """
+    stamps = _sequential_stamps(run_async, -1002, 25)
+    start = stamps[0]
+    assert len([t for t in stamps if t < start + 60.0]) == 20
+    assert len([t for t in stamps if start + 60.0 <= t < start + 120.0]) == 5
+    assert stamps == sorted(stamps)
+
+
+def test_a_group_window_never_admits_a_twenty_first_call_early(run_async):
+    """The window is a window, not a bucket: 20 calls, then a 21st that
+    must wait for the OLDEST of them to age out — even though the window
+    has been "refilling" for 59 seconds.
+
+    Mutation: evict on ``now - period`` with the stamps in the wrong
+    order, or refill slots continuously, and the 21st call goes early.
+    """
+    clock = FakeClock()
+    limiter = _limiter(clock)
+    call = _recorder(clock)
+
+    async def _drive():
+        for _ in range(20):          # spread by the 1/s chat bucket
+            await _acquire(limiter, call, chat_id=-1003)
+        clock.now += 40.0            # 40 quiet seconds
+        await _acquire(limiter, call, chat_id=-1003)
+
+    run_async(_drive())
+    stamps = [t for _e, _c, t in call.stamps]
+    assert stamps[-1] - stamps[0] == pytest.approx(60.0)
 
 
 def test_a_group_acquire_never_spins_on_a_fractional_token(run_async):
@@ -874,10 +917,10 @@ def test_snapshot_reports_the_whole_budget(run_async):
     assert snap["overall_tokens"] == pytest.approx(28.0)
     group = _chat(snap, -1002)
     assert group["kind"] == "group"
-    assert group["group_tokens"] == pytest.approx(19.0)
+    assert group["group_window_free"] == 19
     private = _chat(snap, 31)
     assert private["kind"] == "private"
-    assert private["group_tokens"] is None
+    assert private["group_window_free"] is None
     assert private["waiters"] == 0
 
 

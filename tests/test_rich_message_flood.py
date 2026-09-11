@@ -238,9 +238,10 @@ def test_the_real_limiter_accepts_the_seam_and_buckets_a_private_chat(
     run_async(few())
     chats = {c["chat_id"]: c for c in limiter.snapshot()["chats"]}
     assert chats[-100]["kind"] == "group"
-    assert chats[-100]["group_tokens"] is not None
+    assert chats[-100]["group_window_free"] is not None
     assert chats[555]["kind"] == "private", "a private chat is budgeted too"
-    assert chats[555]["group_tokens"] is None, "but has no group bucket"
+    assert chats[555]["group_window_free"] is None, \
+        "but has no 20-per-60 s window"
     assert chats[555]["calls"] == 1
 
 

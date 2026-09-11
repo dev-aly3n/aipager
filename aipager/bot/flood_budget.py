@@ -2,8 +2,9 @@
 
 Every outbound call this daemon makes — PTB's and the rich-message
 module's raw httpx POSTs alike — acquires here first. One chat gets one
-budget: 1 call/s sustained with a burst of 3, plus 20 per 60 s when the
-chat is a group or channel, under the existing 30/s overall bucket.
+budget: 1 call/s sustained with a burst of 3, plus no more than 20 in
+any rolling 60 s when the chat is a group or channel, under the existing
+30/s overall bucket.
 
 Why it exists: python-telegram-bot's ``AIORateLimiter`` keys its per-chat
 bucket on a NEGATIVE chat id (``_aioratelimiter.py:263``), so a private
@@ -39,6 +40,7 @@ Public API
 ----------
 FloodSkipped                 -- raised instead of making a skip-kind call
 TokenBucket                  -- continuous refill, injectable clock
+SlidingWindow                -- N calls in any W seconds (the group rule)
 ChatBudget                   -- one chat's buckets, deferral and counters
 BudgetRateLimiter            -- the daemon's telegram.ext.BaseRateLimiter
 card_interval(...)           -- the pure busy-card cadence rule
@@ -72,8 +74,8 @@ from aipager.config import (
     FLOOD_BACKOFF_DECAY_SECONDS,
     FLOOD_BACKOFF_MAX,
     TELEGRAM_CHAT_BURST,
-    TELEGRAM_GROUP_MAX_RATE,
-    TELEGRAM_GROUP_TIME_PERIOD,
+    TELEGRAM_GROUP_MAX_CALLS,
+    TELEGRAM_GROUP_WINDOW,
     TELEGRAM_MAX_RETRY_AFTER,
     TELEGRAM_OVERALL_MAX_RATE,
     TELEGRAM_OVERALL_TIME_PERIOD,
@@ -100,14 +102,23 @@ _SIGNAL_MIN_INTERVAL: float = 5.0
 
 # Tolerance on a token comparison, in tokens. Refilling is
 # `tokens + (now - stamp) * rate`, and for a rate that is not a binary
-# fraction (the group bucket is 20/60) that lands a few ULPs SHORT of a
-# whole token after sleeping exactly `time_until`. The residual wait is
+# fraction (20/60, say) that lands a few ULPs SHORT of a whole token
+# after sleeping exactly `time_until`. The residual wait is
 # then ~1e-15 s, which `now + wait` cannot even represent once the clock
 # is in the millions of seconds a monotonic clock reports — so the
 # acquire loop spins forever without advancing, wedging the event loop.
 # One microsecond of refill is far below anything a 1-token/s budget can
 # notice and far above the float noise.
 _TOKEN_EPS: float = 1e-6
+
+# The same tolerance for :class:`SlidingWindow`, in SECONDS. A waiter
+# sleeps exactly `time_until()` and then expects the oldest stamp to have
+# left the window; `stamp + period - now` followed by `now + wait` is not
+# exact in binary, so without this the stamp can come back a hair YOUNGER
+# than the period, the next wait is ~1e-10 s, the clock cannot advance by
+# it and the acquire loop spins. One microsecond of slack on a 60 s window
+# is 1/60,000,000 of the budget.
+_WINDOW_EPS: float = 1e-6
 
 
 class FloodSkipped(Exception):
@@ -176,12 +187,82 @@ class TokenBucket:
         return (n - have) / self.rate
 
 
+class SlidingWindow:
+    """At most ``limit`` calls in ANY ``period``-long window.
+
+    Telegram's group rule is a ROLLING WINDOW, not a bucket, and the two
+    are not interchangeable: a 20-token bucket refilling at 20/60 s starts
+    full, so 25 calls paced by the 1/s chat bucket all land inside the
+    first 22 seconds and the bucket never binds — 25 in the first minute
+    against a limit of 20 (review iteration 1, rev-iter1-002). Keeping the
+    stamps themselves is what makes "no more than 20 per minute" literally
+    true: the 21st call waits until the oldest of the 20 is ``period`` old.
+
+    Half-open by construction: a stamp exactly ``period`` seconds old has
+    left the window, so twenty calls at t and twenty at t+60 is legal and
+    ``[t, t+60)`` still holds exactly twenty.
+
+    ``clock`` is the same injected seam :class:`TokenBucket` uses — nothing
+    here reads the wall or monotonic clock directly.
+    """
+
+    __slots__ = ("limit", "period", "_clock", "_stamps")
+
+    def __init__(self, limit: float, period: float, clock=time.monotonic) -> None:
+        self.limit: int = max(int(limit), 0)
+        self.period: float = float(period)
+        self._clock = clock
+        self._stamps: collections.deque = collections.deque()
+
+    def _evict(self, now: float) -> None:
+        """Drop every stamp that has aged out of the window."""
+        cutoff = now - self.period + _WINDOW_EPS
+        while self._stamps and self._stamps[0] <= cutoff:
+            self._stamps.popleft()
+
+    def used(self) -> int:
+        """Calls made inside the current window."""
+        self._evict(self._clock())
+        return len(self._stamps)
+
+    def free(self) -> int:
+        """Calls that may still be made inside the current window."""
+        return max(self.limit - self.used(), 0)
+
+    def take(self, n: float = 1.0) -> bool:
+        """Record *n* calls if the window has room. Never waits."""
+        count = max(int(n), 1)
+        if self.free() < count:
+            return False
+        now = self._clock()
+        for _ in range(count):
+            self._stamps.append(now)
+        return True
+
+    def time_until(self, n: float = 1.0) -> float:
+        """Seconds until *n* more calls fit; ``0.0`` when they already do.
+
+        That is when the ``n``-th oldest stamp still inside the window
+        leaves it — which is exactly the wait a blocking caller owes.
+        """
+        count = max(int(n), 1)
+        need = count - self.free()
+        if need <= 0:
+            return 0.0
+        if need > len(self._stamps):
+            return float("inf")
+        return self._stamps[need - 1] + self.period - self._clock()
+
+
 class ChatBudget:
     """Everything the limiter knows about one chat.
 
     ``chat`` is the 1/s-with-a-burst bucket every chat gets. ``group`` is
-    the additional 20-per-60 s bucket, present only for groups and
-    channels. ``retry_until`` bars the chat after a small 429; ``backoff``
+    the additional 20-calls-per-60 s ROLLING WINDOW, present only for
+    groups and channels — not a second bucket, because a bucket's burst
+    would let 25 calls into the first minute (see
+    :class:`SlidingWindow`). ``retry_until`` bars the chat after a small
+    429; ``backoff``
     is the multiplier the busy-card cadence reads, doubling per 429 and
     halving per quiet ``FLOOD_BACKOFF_DECAY_SECONDS``.
 
@@ -198,13 +279,13 @@ class ChatBudget:
 
     def __init__(
         self, chat_id, *, clock, chat_rate: float, chat_burst: float,
-        group_rate: float, group_period: float, is_group: bool,
+        group_max_calls: float, group_window: float, is_group: bool,
     ) -> None:
         self.chat_id = chat_id
         self.is_group: bool = is_group
         self.chat: TokenBucket = TokenBucket(chat_rate, chat_burst, clock=clock)
-        self.group: TokenBucket | None = (
-            TokenBucket(group_rate / group_period, group_rate, clock=clock)
+        self.group: SlidingWindow | None = (
+            SlidingWindow(group_max_calls, group_window, clock=clock)
             if is_group else None
         )
         self.retry_until: float = 0.0
@@ -323,8 +404,8 @@ class BudgetRateLimiter(BaseRateLimiter):
         overall_time_period: float = TELEGRAM_OVERALL_TIME_PERIOD,
         chat_max_rate: float = TELEGRAM_PRIVATE_MAX_RATE,
         chat_burst: float = TELEGRAM_CHAT_BURST,
-        group_max_rate: float = TELEGRAM_GROUP_MAX_RATE,
-        group_time_period: float = TELEGRAM_GROUP_TIME_PERIOD,
+        group_max_calls: float = TELEGRAM_GROUP_MAX_CALLS,
+        group_window: float = TELEGRAM_GROUP_WINDOW,
         backoff_max: float = FLOOD_BACKOFF_MAX,
         backoff_decay_seconds: float = FLOOD_BACKOFF_DECAY_SECONDS,
         clock=time.monotonic,
@@ -338,8 +419,8 @@ class BudgetRateLimiter(BaseRateLimiter):
         )
         self._chat_max_rate = float(chat_max_rate)
         self._chat_burst = float(chat_burst)
-        self._group_max_rate = float(group_max_rate)
-        self._group_time_period = float(group_time_period)
+        self._group_max_calls = float(group_max_calls)
+        self._group_window = float(group_window)
         self._backoff_max = float(backoff_max)
         self._backoff_decay_seconds = float(backoff_decay_seconds)
         self._signal_path = signal_path
@@ -391,8 +472,8 @@ class BudgetRateLimiter(BaseRateLimiter):
                 clock=self._clock,
                 chat_rate=self._chat_max_rate,
                 chat_burst=self._chat_burst,
-                group_rate=self._group_max_rate,
-                group_period=self._group_time_period,
+                group_max_calls=self._group_max_calls,
+                group_window=self._group_window,
                 is_group=is_group_chat(chat_id),
             )
             self._budgets[chat_id] = budget
@@ -482,13 +563,16 @@ class BudgetRateLimiter(BaseRateLimiter):
 
         Refuses while the chat is deferred by a 429, and whenever taking
         a token would leave fewer than :data:`_SKIP_RESERVE` behind: the
-        last token belongs to whatever blocking caller comes next.
+        last token belongs to whatever blocking caller comes next. In a
+        group the same reserve is counted in SLOTS of the rolling window —
+        the last two calls of the minute belong to real content, not to a
+        card refresh.
         """
         now = self._clock()
         if (now < budget.retry_until
                 or budget.chat.tokens() < _SKIP_RESERVE
                 or (budget.group is not None
-                    and budget.group.tokens() < _SKIP_RESERVE)
+                    and budget.group.free() < _SKIP_RESERVE)
                 or self._overall.tokens() < 1.0):
             budget.skipped += 1
             raise FloodSkipped(budget.chat_id, endpoint)
@@ -498,9 +582,12 @@ class BudgetRateLimiter(BaseRateLimiter):
         self._overall.take(1.0)
 
     async def _acquire_blocking(self, budget: ChatBudget | None) -> None:
-        """Wait for a token for every bucket that applies, then take them.
+        """Wait until every limit that applies has room, then spend it.
 
-        Never drops a request and never reorders one: each caller appends
+        Three limits, whichever is furthest out: the chat's token bucket,
+        the group's rolling 60 s window and the 30/s overall bucket (plus
+        any 429 deferral). Never drops a request and never reorders one:
+        each caller appends
         a ticket and only the ticket at the head of the deque waits on
         the clock, handing the queue on in its ``finally``. The final
         availability check and the consumption happen in ONE synchronous
@@ -631,6 +718,9 @@ class BudgetRateLimiter(BaseRateLimiter):
 
         ``calls`` counts every callback run for the chat, reactions
         included; ``reactions`` is that exempt subset on its own.
+        ``group_window_free`` is how many of the group's 20 calls are
+        still unspent in the rolling 60 s window (``None`` for a private
+        chat, which has no such window).
         """
         now = self._clock()
         chats = []
@@ -640,8 +730,8 @@ class BudgetRateLimiter(BaseRateLimiter):
                 "chat_id": budget.chat_id,
                 "kind": "group" if budget.is_group else "private",
                 "tokens": budget.chat.tokens(),
-                "group_tokens": (
-                    budget.group.tokens() if budget.group is not None else None
+                "group_window_free": (
+                    budget.group.free() if budget.group is not None else None
                 ),
                 "backoff": max(budget.backoff, 1.0),
                 "retry_until_in": max(budget.retry_until - now, 0.0),
@@ -725,6 +815,7 @@ __all__ = [
     "ChatBudget",
     "FloodSkipped",
     "REACTION_ENDPOINT",
+    "SlidingWindow",
     "TokenBucket",
     "card_interval",
     "clear_backoff_signal",

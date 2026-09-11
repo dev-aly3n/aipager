@@ -466,8 +466,14 @@ TELEGRAM_MAX_RETRY_AFTER: float = float(
 # from different numbers.
 TELEGRAM_OVERALL_MAX_RATE: float = 30.0
 TELEGRAM_OVERALL_TIME_PERIOD: float = 1.0
-TELEGRAM_GROUP_MAX_RATE: float = 20.0
-TELEGRAM_GROUP_TIME_PERIOD: float = 60.0
+# The group limit is a ROLLING WINDOW, not a bucket: no more than
+# TELEGRAM_GROUP_MAX_CALLS calls in ANY TELEGRAM_GROUP_WINDOW seconds.
+# Modelling it as a 20-token bucket refilling at 20/60 s reads the same
+# on paper and is not: a bucket starts full, so 25 calls paced only by
+# the 1/s chat bucket all land inside the first 22 s and the group limit
+# never binds (review iteration 1, rev-iter1-002).
+TELEGRAM_GROUP_MAX_CALLS: float = 20.0
+TELEGRAM_GROUP_WINDOW: float = 60.0
 
 # Per-CHAT budget (roadmap 8.21). The limiter above buckets per chat only
 # for groups and channels (python-telegram-bot's AIORateLimiter keys its

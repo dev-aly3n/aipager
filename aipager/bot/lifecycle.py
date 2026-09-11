@@ -38,7 +38,7 @@ from aipager.bot.rich_message import set_rate_limiter
 from aipager.config import (
     APP_BUTTON, BOT_TOKEN, CHAT_ID,
     TELEGRAM_CHAT_BURST,
-    TELEGRAM_GROUP_MAX_RATE, TELEGRAM_GROUP_TIME_PERIOD,
+    TELEGRAM_GROUP_MAX_CALLS, TELEGRAM_GROUP_WINDOW,
     TELEGRAM_OVERALL_MAX_RATE, TELEGRAM_OVERALL_TIME_PERIOD,
     TELEGRAM_PRIVATE_MAX_RATE,
 )
@@ -263,8 +263,8 @@ class LifecycleMixin:
             overall_time_period=TELEGRAM_OVERALL_TIME_PERIOD,
             chat_max_rate=TELEGRAM_PRIVATE_MAX_RATE,
             chat_burst=TELEGRAM_CHAT_BURST,
-            group_max_rate=TELEGRAM_GROUP_MAX_RATE,
-            group_time_period=TELEGRAM_GROUP_TIME_PERIOD,
+            group_max_calls=TELEGRAM_GROUP_MAX_CALLS,
+            group_window=TELEGRAM_GROUP_WINDOW,
         )
         set_rate_limiter(limiter)
         return builder.rate_limiter(limiter)
