@@ -766,6 +766,27 @@ class BudgetRateLimiter(BaseRateLimiter):
             })
         return {"overall_tokens": self._overall.tokens(), "chats": chats}
 
+    def sweep(self) -> None:
+        """Decay every chat to now and refresh the status signal file.
+
+        Called from the session monitor's 2 s tick, because the animator's
+        :meth:`cadence_multiplier` — the other caller that takes the file
+        back down — only runs while a busy card is TICKING. A chat that
+        429s and then goes quiet (every session IDLE, no card) would leave
+        `aipager status` and `aipager doctor` reporting "×4" for hours,
+        where design §5 says the file is unlinked as soon as no chat is
+        backing off. Driving it from work that already happens means no
+        timer of our own to leak, and it is cheap: a handful of chats, and
+        `_maybe_write_signal` returns before serialising anything whenever
+        nothing is backing off.
+
+        One call does it all: :meth:`_maybe_write_signal` decays every
+        chat on its way through them, then rewrites — or unlinks — the
+        file. (A separate decay loop here would be dead code, and dead
+        code that looks like a guard is worse than none.)
+        """
+        self._maybe_write_signal()
+
     def reset(self) -> None:
         """Forget every chat and take the signal file down with them."""
         self._budgets.clear()

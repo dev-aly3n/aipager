@@ -947,6 +947,97 @@ def test_backoff_signal_write_failure_never_reaches_the_send_path(tmp_path,
     assert len(call.stamps) == 1
 
 
+def test_a_sweep_takes_the_signal_down_once_the_backoff_has_decayed(tmp_path):
+    """Design §5: the file is unlinked as soon as no chat is backing off.
+    ``cadence_multiplier`` only runs while a busy card is TICKING, so a
+    chat that 429s and then goes quiet would report "×2" to `aipager
+    status` for as long as nobody started a turn.
+
+    Mutation: drop the ``_decay`` loop from ``sweep`` (or make it a no-op)
+    and the file survives its own backoff.
+    """
+    clock = FakeClock()
+    limiter = _limiter(clock)
+    limiter.note_retry_after(-100, 5)
+    assert Path(config.FLOOD_BACKOFF_FILE).exists()
+
+    clock.now += config.FLOOD_BACKOFF_DECAY_SECONDS   # one quiet window: ×2 → ×1
+    limiter.sweep()
+
+    assert not Path(config.FLOOD_BACKOFF_FILE).exists()
+    assert status.read_flood_backoffs() == []
+
+
+def test_a_sweep_keeps_publishing_a_chat_that_is_still_backing_off(tmp_path):
+    """The other half: a sweep must not unlink a LIVE backoff. Mutation:
+    unlink unconditionally in ``sweep`` and the operator loses the one
+    line that explains why the cards are slow.
+    """
+    clock = FakeClock()
+    limiter = _limiter(clock)
+    limiter.note_retry_after(-100, 5)
+    clock.now += 1.0
+    limiter.sweep()
+    assert [b["multiplier"] for b in status.read_flood_backoffs()] == [2.0]
+
+
+def test_the_session_monitor_tick_sweeps_the_backoff(monkeypatch, run_async):
+    """The wiring itself: the 2 s scan is what drives the decay when no
+    card is ticking. Driven through ``_scan`` — the daemon's own periodic
+    work — rather than by calling the helper, so the MUTATION that matters
+    is covered.
+
+    Mutation: delete the ``_sweep_flood_backoff()`` call from
+    ``SessionMonitor._scan`` and a stale multiplier lives for ever.
+    """
+    from unittest.mock import AsyncMock
+
+    from aipager.bot import rich_message as rm
+    from aipager.session_monitor import SessionMonitor
+    from aipager.state import SessionRegistry
+
+    clock = FakeClock()
+    limiter = _limiter(clock)
+    rm.set_rate_limiter(limiter)
+    limiter.note_retry_after(-100, 5)
+    assert Path(config.FLOOD_BACKOFF_FILE).exists()
+
+    async def _noop(*a, **kw):
+        return None
+
+    monitor = SessionMonitor(SessionRegistry(), _noop)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        AsyncMock(return_value=[]))
+    clock.now += config.FLOOD_BACKOFF_DECAY_SECONDS
+    run_async(monitor._scan())
+
+    assert not Path(config.FLOOD_BACKOFF_FILE).exists()
+
+
+def test_a_monitor_scan_survives_a_daemon_with_no_budget_limiter(monkeypatch,
+                                                                 run_async):
+    """A daemon running PTB's own limiter (or none at all — every test
+    that does not install one) must still scan. Mutation: call
+    ``limiter.sweep()`` without the isinstance check and every such scan
+    raises ``AttributeError`` into the monitor's error log.
+    """
+    from unittest.mock import AsyncMock
+
+    from aipager.bot import rich_message as rm
+    from aipager.session_monitor import SessionMonitor
+    from aipager.state import SessionRegistry
+
+    rm.set_rate_limiter(object())
+
+    async def _noop(*a, **kw):
+        return None
+
+    monitor = SessionMonitor(SessionRegistry(), _noop)
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        AsyncMock(return_value=[]))
+    run_async(monitor._scan())   # MUST NOT raise
+
+
 def test_clear_backoff_signal_is_idempotent_and_never_raises(tmp_path):
     """Mutation: drop the ``missing_ok``/``OSError`` guard and daemon
     start-up crashes when there is nothing to clean up."""
