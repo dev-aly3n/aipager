@@ -28,8 +28,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Telegram flood backoff ×4 (chat …), last 429 12 s ago` while it lasts.
   A `retry_after` past `TELEGRAM_MAX_RETRY_AFTER` is still a ban and
   still mutes the chat exactly as before. Reactions still go out.
+- A group or channel is now held to no more than 20 calls in *any* 60
+  seconds, which is what Telegram's group limit actually means. It used
+  to be counted as a refilling allowance of 20, which let a burst of 25
+  through in the first minute.
 
 ### Changed
+- A busy card in a group no longer sends a "typing…" indicator. A group
+  gets 20 calls a minute in total and a card already spends 18 of them,
+  so the indicator was costing the other half of the minute and the card
+  itself was being skipped: 11 edits a minute with pauses of ten seconds,
+  where it is now 18 evenly spaced. Direct messages keep the indicator —
+  there the budget is one call a second, not twenty a minute.
 - `STREAM_EDIT_INTERVAL` now defaults to `1.2` seconds (was `0.9`) and
   `BUSY_EDIT_INTERVAL` (`3.0`) became configurable from the environment
   like it. Values below the per-chat floor are harmless — the floor wins.

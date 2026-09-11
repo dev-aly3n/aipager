@@ -57,6 +57,12 @@ reserved token, and a card edit that cannot afford a call is simply
 skipped and retried on the next tick rather than queued in front of your
 answer.
 
+In a **group** the limit is 20 calls a minute however many sessions are
+in it, so a card there refreshes every 3.3 seconds and the daemon does
+not send a "typing…" indicator at all — the card edit is the progress
+display, and an indicator would cost half the group's minute. Direct
+messages keep the indicator.
+
 To speed the cards up: run fewer simultaneous sessions per chat, or give
 the busiest ones a chat of their own (`aipager config`). You can also
 tune `STREAM_EDIT_INTERVAL` (default `1.2`, the cadence while the card is
