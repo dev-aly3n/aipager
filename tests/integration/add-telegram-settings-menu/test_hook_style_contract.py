@@ -18,6 +18,9 @@ import json
 import socket
 import sys
 
+# Driving ``main()`` in-process is safe: tests/conftest.py's autouse
+# ``_never_clamp_the_test_process`` fixture records the hook's RLIMIT_AS
+# clamp instead of applying it to the pytest process.
 from aipager.dtach import notify_hook
 
 

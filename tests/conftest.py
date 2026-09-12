@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import resource
 from importlib import import_module
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -703,6 +704,73 @@ def _never_spawn_real_dtach(monkeypatch):
     # real session regardless. The constant is what `launch_session` execs.
     monkeypatch.setattr("aipager.dtach.inject._DTACH",
                         "/nonexistent/dtach-blocked-in-tests", raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _never_clamp_the_test_process(monkeypatch):
+    """Keep a hook's ``RLIMIT_AS`` clamp inside the hook, out of pytest.
+
+    ``dtach/notify_hook.main()`` and ``dtach/statusline_notify.main()``
+    both open with ``resource.setrlimit(RLIMIT_AS, (1 GiB, 1 GiB))``.
+    That is exactly right for the hook *subprocess*: its job is to die
+    with ``MemoryError`` rather than eat gigabytes of the host (see the
+    ``_MEMORY_CAP_BYTES`` comment in ``notify_hook``). It is a disaster
+    in-process. Eight test files drive those ``main()`` functions
+    directly, so the first one to run clamps the **pytest process
+    itself**, and a hard limit cannot be raised again by an
+    unprivileged process — every test after it runs pinned at the
+    ceiling, whatever order pytest picked.
+
+    The resulting failure is not a ``MemoryError`` and names none of the
+    guilty files. Address space is not RSS: a full run peaks around
+    220 MB resident, but VmSize — mappings, thread stacks, glibc arenas
+    — finished one at 1023.9 MiB, i.e. 99.99 % of the cap, roughly
+    120 kB short. The next 8 MB thread-stack mmap then fails and pytest
+    blames whichever unrelated test called ``run_in_executor`` next,
+    with ``RuntimeError: can't start new thread``
+    (``test_voice.py::test_transcribe_calls_executor_for_blocking_work``
+    is the usual canary). It gets likelier the more tests exist, so
+    every branch that adds a file inherits a phantom failure — and CI
+    runs the whole suite in one process.
+
+    So: record the call, apply nothing. ``getrlimit`` is deliberately
+    left real, so a test can still read the process's true limits. The
+    recorded ``(resource, (soft, hard))`` tuples are yielded, so a test
+    that wants to assert on the arguments can request this fixture by
+    name — ``tests/test_pytest_address_space.py`` does exactly that.
+    Tests that install their own ``setrlimit`` stub keep working
+    untouched: ``test_dtach_hook_stubs.py``'s ``_capture_setrlimit``
+    and the ones that make it raise all patch it again per-test, and a
+    later monkeypatch wins (and is undone first).
+
+    What this does NOT do is hand the real ``setrlimit`` back. Nothing
+    needs it today — the hooks are the only callers — but a future test
+    that genuinely wants to set a limit on a child must stash its own
+    reference before this fixture runs, or reach for ``resource`` in a
+    subprocess where the patch does not apply.
+
+    Autouse rather than opt-in, for the same reason as the isolation
+    fixtures above: the fix must not depend on every future author
+    remembering to stub ``setrlimit`` before calling a hook's ``main()``
+    in-process. Of the eight existing caller files, exactly one stubs it
+    at all — ``test_dtach_hook_stubs.py``, and only in the 8 of its 37
+    ``main()`` calls that are *about* the cap (6 asserting the cap
+    itself, 2 asserting it is set after the notifier socket is pre-opened).
+    Knowing about the hazard was not enough even for the file that
+    documented it.
+    """
+    # Patch the attribute on the stdlib ``resource`` module object itself.
+    # ``notify_hook.resource`` and ``statusline_notify.resource`` ARE that
+    # single module, so one setattr covers both hooks — and any future
+    # importer that reaches setrlimit by the same qualified path.
+    calls: list[tuple[int, tuple[int, int]]] = []
+
+    def _record(res, limits):
+        calls.append((res, limits))
+
+    monkeypatch.setattr(resource, "setrlimit", _record)
+    yield calls
+
 
 @pytest.fixture
 def mk_bot():
