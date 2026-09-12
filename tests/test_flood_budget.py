@@ -871,6 +871,40 @@ def test_a_reaction_goes_out_while_the_chat_budget_is_empty(run_async):
     assert _chat(limiter.snapshot(), 20)["reactions"] == 2
 
 
+def test_a_429_on_a_reaction_still_defers_and_backs_off_the_chat(run_async):
+    """Row N's other half, and the guard roadmap 8.24 put underneath it: a
+    reaction is exempt from the chat BUDGET, not from what a 429 MEANS. It
+    is a message-shaped call that Telegram answered by saying "too many
+    into this chat", so the chat is deferred and its card cadence doubles
+    exactly as for any send — which is what 0.7.11 shipped and what
+    ``note_429`` must not quietly change.
+
+    The chat action is the ONLY exempt endpoint that skips
+    ``note_retry_after`` (its 429 says nothing about the message bucket it
+    is not in). Nothing asserted the other side of that ``!=`` until this
+    row: review iteration 2 replaced
+    ``note_429=endpoint != CHAT_ACTION_ENDPOINT`` with ``note_429=False``
+    and the whole 6,815-test suite still passed.
+
+    Mutation: widen ``note_429=False`` to every exempt endpoint and this is
+    the only row in the suite that notices.
+    """
+    clock = FakeClock()
+    limiter = _limiter(clock)
+
+    async def _boom(**kw):
+        raise RetryAfter(5)
+
+    async def _drive():
+        with pytest.raises(RetryAfter):
+            await _acquire(limiter, _boom, endpoint="setMessageReaction",
+                           chat_id=21)
+
+    run_async(_drive())
+    assert limiter.cadence_multiplier(21) == 2.0
+    assert _chat(limiter.snapshot(), 21)["retry_until_in"] == pytest.approx(5.0)
+
+
 # ── P / J: the signal file ───────────────────────────────────────────────────
 
 def test_the_backoff_file_is_not_the_mute_file():

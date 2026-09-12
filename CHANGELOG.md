@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its own, so it neither borrows the card's schedule nor lends it anything.
   That refresh runs every `TYPING_INDICATOR_INTERVAL` seconds per working
   session (default 4.5, under the 5 seconds after which Telegram clears a
-  typing status, so the bubble stays lit rather than blinking), only while
+  typing status), only while
   the session is genuinely working — a session waiting on a background
   agent or on a permission prompt shows nothing — and never into a
   flood-muted chat. `0` disables it. This matters because the bubble is the

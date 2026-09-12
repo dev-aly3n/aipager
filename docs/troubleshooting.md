@@ -78,10 +78,10 @@ chat under Telegram's limit whatever you put in the file.
 None of this affects the "typing…" bubble. It has a schedule of its own,
 one refresh every `TYPING_INDICATOR_INTERVAL` seconds (default 4.5) for as
 long as a session is working, however slow that session's card happens to
-be — so a chat with three busy sessions still shows the bubble steadily
-while its cards refresh every 3.3 seconds. Raising the interval above 5
-seconds would make the bubble blink, because that is when Telegram clears
-a typing status.
+be — so a chat with three busy sessions refreshes the bubble exactly as
+often as a chat with one, while its cards refresh every 3.3 seconds.
+Telegram clears a typing status after 5 seconds, which is why the default
+sits just under that; setting it higher leaves gaps between refreshes.
 
 ## The bot slowed down: a rate limit (429)
 
