@@ -525,6 +525,17 @@ class TrackedSession:
     # a limiter that starts every chat unthrottled must not meet a card
     # that thinks it has been refused for an hour.
     card_skipped_since: float = 0.0
+    # roadmap 8.24: the "typing…" task for this session's busy card —
+    # `animation._animate_typing`, started and cancelled alongside
+    # `animate_task` by `_start_animation` / `_stop_animation`. A SECOND
+    # task rather than work inside the animator's, because the bubble has
+    # to be refreshed on its own ~4.5 s clock: riding the card's wake grid
+    # quantized it to 5.28-6.6 s, past the 5 s expiry Telegram gives a
+    # typing status. Deliberately not cadence state — nothing here is read
+    # by `_card_interval`, the card debounce or the starvation guard.
+    # Transient, like `animate_task`: never in _PERSIST_FIELDS (a Task is
+    # not serialisable, and a restart has no bubble lit to resume).
+    typing_task: Any = field(default=None, repr=False)
     # A scratch outbox: notes matched-and-already-deleted by
     # _sync_anchors_from_transcript's absorption detection, staged here
     # rather than returned (that function's bool return — "did an

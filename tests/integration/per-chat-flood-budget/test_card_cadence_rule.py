@@ -107,7 +107,22 @@ class _StrictTelegram:
     """Telegram as the design assumes it behaves: one call per second per
     chat, burst three. Anything faster is recorded as a violation and
     answered with a 429 — so "no 429 came back" is a property of the code
-    under test, not of the assertion."""
+    under test, not of the assertion.
+
+    ``sendChatAction`` is METERED BY NOTHING here, which is not a
+    convenience: it is what the real API was measured doing on 2026-09-12
+    (design §12). Bounded probes drove one chat into a genuine
+    ``retry_after=10``; through that whole window every
+    ``editMessageText`` was refused and all ELEVEN ``sendChatAction
+    typing`` calls returned 200, with the bubble visible on the phone.
+    A fake that charged the action to the message bucket would be
+    asserting 8.21's disproved assumption, and would fail any daemon that
+    sends the indicator however sparingly. The calls are still RECORDED,
+    so a row can count them (and ``metered_stamps_for`` is what the
+    budget ceilings are asserted on)."""
+
+    #: Endpoints Telegram does not count against a chat's message budget.
+    EXEMPT: frozenset = frozenset({"sendChatAction"})
 
     def __init__(self, clock, rate=1.0, burst=3.0):
         self.clock, self.rate, self.burst = clock, rate, burst
@@ -117,9 +132,11 @@ class _StrictTelegram:
 
     def admit(self, endpoint: str, chat_id: Any, message_id: Any = None) -> bool:
         now = self.clock()
+        self.calls.append((endpoint, chat_id, message_id, now))
+        if endpoint in self.EXEMPT:
+            return True
         tokens, last = self._tokens.get(chat_id, (self.burst, now))
         tokens = min(self.burst, tokens + (now - last) * self.rate)
-        self.calls.append((endpoint, chat_id, message_id, now))
         if tokens < 1.0:
             self.violations.append((endpoint, chat_id, message_id, now))
             self._tokens[chat_id] = (tokens, now)
@@ -129,6 +146,17 @@ class _StrictTelegram:
 
     def stamps_for(self, chat_id: Any) -> list[float]:
         return [t for _, chat, _, t in self.calls if chat == chat_id]
+
+    def metered_stamps_for(self, chat_id: Any) -> list[float]:
+        """Only the calls that cost the chat a token — what a budget
+        ceiling (1/s private, 20/minute group) is actually about."""
+        return [t for endpoint, chat, _, t in self.calls
+                if chat == chat_id and endpoint not in self.EXEMPT]
+
+    def actions_for(self, chat_id: Any) -> list[float]:
+        """The stamps of the ``sendChatAction`` calls into *chat_id*."""
+        return [t for endpoint, chat, _, t in self.calls
+                if chat == chat_id and endpoint == "sendChatAction"]
 
 
 @pytest.fixture
@@ -219,12 +247,25 @@ async def _stimulus(sessions, every=0.1):
             sess.stream_dirty = True
 
 
-def _run_cards(vloop, bot, sessions, seconds: float, *, at=None, busy=None):
+def _run_cards(vloop, bot, sessions, seconds: float, *, at=None, busy=None,
+               typing=True):
     """Animate ``sessions`` for ``seconds`` of SIMULATED time. ``at`` is an
     optional ``(when, fn)`` hook fired mid-run; ``busy`` names the sessions
-    kept visibly working (default: the animated ones)."""
+    kept visibly working (default: the animated ones).
+
+    Starts BOTH tasks a live busy card owns, exactly as
+    ``_start_animation`` does in the daemon: the card animator and the
+    "typing…" refresher (roadmap 8.24). They are independent tasks with
+    independent clocks, which is the property most of the rows below are
+    about — so a harness that started only the animator would assert the
+    cadence of a daemon that does not exist. ``typing=False`` is for the
+    rows that deliberately measure the card alone.
+    """
     async def main():
         tasks = [asyncio.ensure_future(bot._animate_busy(s)) for s in sessions]
+        if typing:
+            tasks += [asyncio.ensure_future(bot._animate_typing(s))
+                      for s in sessions]
         tasks.append(asyncio.ensure_future(
             _stimulus(sessions if busy is None else busy)))
         if at is not None:
@@ -278,14 +319,24 @@ def test_a_single_streaming_card_edits_once_per_computed_interval(
 def test_a_single_card_keeps_its_chat_under_one_call_per_second(
     mk_bot, vloop, telegram, limiter,
 ):
-    """Row A / R1, counting EVERY call the card makes — edits and typing
-    indicators alike. Mutation: exempt ``sendChatAction`` from the budget
-    and the card doubles its own call rate (§11 U3)."""
+    """Row A / R1, counting every call the card makes that COSTS the chat
+    a token. Since 8.24 the typing indicator is not one of them (§12: the
+    real API answered 200 on it throughout a `retry_after` window that
+    refused every edit), so it is excluded here the same way Telegram
+    excludes it — while the total, bubble included, is asserted right
+    below so the exemption cannot hide an unbounded call rate.
+
+    Mutation: budget the card edits per session instead of per chat, or
+    drop the margin, and the metered rate breaks the ceiling."""
     bot = _ext_bot(mk_bot(), telegram, limiter, PRIVATE)
     sess = _card(bot, "a", 10, PRIVATE)
     _run_cards(vloop, bot, [sess], 12.0)
     assert rm.get_rate_limiter() is limiter, "a pacing row needs a limiter"
-    assert _most_in_window(telegram.stamps_for(PRIVATE), 1.0) <= 3
+    assert _most_in_window(telegram.metered_stamps_for(PRIVATE), 1.0) <= 3
+    # The whole truth, off-budget calls included: one card edit every
+    # 1.32 s and one bubble refresh every 4.5 s cannot put more than two
+    # calls of any kind into one second.
+    assert _most_in_window(telegram.stamps_for(PRIVATE), 1.0) <= 2
 
 
 # ── row B1: two sessions sharing one private chat ────────────────────────────
@@ -398,11 +449,17 @@ def test_a_group_card_stays_under_twenty_calls_a_minute(
 ):
     """Row B3 / R1's group clause, counted over a full simulated minute.
     Mutation: drop the group floor and the card alone spends the whole
-    group budget."""
+    group budget.
+
+    Metered calls only, since 8.24: the group's 20-a-minute window is a
+    MESSAGE limit, and the chat action is not in it (§12). The bubble
+    refreshes ~13 times a minute here, which is precisely why 8.21
+    concluded the indicator cost "the other half of the minute" — it
+    would, if Telegram counted it."""
     bot = _ext_bot(mk_bot(), telegram, limiter, GROUP)
     sess = _card(bot, "g", 10, GROUP)
     _run_cards(vloop, bot, [sess], 61.0)
-    assert _most_in_window(telegram.stamps_for(GROUP), 60.0) <= 20
+    assert _most_in_window(telegram.metered_stamps_for(GROUP), 60.0) <= 20
 
 
 def test_two_cards_in_one_group_stay_inside_the_groups_minute(
@@ -418,7 +475,7 @@ def test_two_cards_in_one_group_stay_inside_the_groups_minute(
     cards = [_card(bot, "g1", 10, GROUP), _card(bot, "g2", 11, GROUP)]
     _run_cards(vloop, bot, cards, 61.0)
     assert telegram.violations == []
-    assert _most_in_window(telegram.stamps_for(GROUP), 60.0) <= 20
+    assert _most_in_window(telegram.metered_stamps_for(GROUP), 60.0) <= 20
     assert limiter.snapshot()["chats"][0]["skipped"] == 0
 
 
@@ -474,74 +531,142 @@ def test_a_legacy_session_never_creates_a_phantom_chat_zero(
 
 # ── row M: the typing indicator ──────────────────────────────────────────────
 
-def test_no_typing_indicator_is_sent_while_a_card_is_live(
+def test_the_typing_indicator_holds_its_own_interval_while_a_card_is_live(
     mk_bot, vloop, telegram, limiter,
 ):
-    """Row M, as amended after iteration 2: ``sendChatAction`` fired once
-    per loop wake in 0.7.10 and once per interval after §11 U3; it is now
-    sent NOT AT ALL while a busy card is live, in any chat kind, because
-    the card is the progress display and the call was half of the chat's
-    budget. Mutation: restore it after the edit and this counts one."""
+    """Row M, as amended by roadmap 8.24 — **the reverse of what this row
+    asserted in 0.7.11** (``sendChatAction`` "sent NOT AT ALL while a busy
+    card is live").
+
+    ``sendChatAction`` fired once per loop wake in 0.7.10, once per
+    interval after §11 U3, and not at all after §11's superseding note. It
+    is back, because §12 measured the premise of that removal to be false:
+    during a real ``retry_after=10`` window every edit into the chat was
+    refused while all eleven typing calls returned 200.
+
+    The contract now is exact: one refresh per ``TYPING_INDICATOR_INTERVAL``
+    per session, on the indicator's own task, off the chat's budget — and
+    therefore EVERY gap strictly under the 5 s Telegram gives a typing
+    status, so the bubble never visibly drops. Review iteration 1 caught
+    the first draft failing precisely here: offered from inside the card
+    tick, the 4.5 s interval realized as ``ceil(4.5 / wake) * wake`` =
+    5.28 s with one session and 6.6 s with two, above the expiry in every
+    configuration.
+
+    Mutation: send the indicator from ``_animate_tick`` again and the gaps
+    become 5.28 s (the wake grid); drop the sleep and it floods; drop the
+    send and this counts none.
+    """
     bot = _ext_bot(mk_bot(), telegram, limiter, PRIVATE)
     sess = _card(bot, "a", 10, PRIVATE)
-    _run_cards(vloop, bot, [sess], 12.0)
-    actions = [t for endpoint, _, _, t in telegram.calls
-               if endpoint == "sendChatAction"]
-    edits = _card_calls(telegram, PRIVATE)
-    assert (actions, bool(edits)) == ([], True)
+    _run_cards(vloop, bot, [sess], 20.0)
+    actions = telegram.actions_for(PRIVATE)
+    assert len(actions) >= 4, [round(a - 1_000_000.0, 3) for a in actions]
+    gaps = _gaps(actions)
+    assert gaps == [pytest.approx(_config.TYPING_INDICATOR_INTERVAL)] * len(gaps)
+    assert max(gaps) < 5.0, "the typing status lapsed between refreshes"
+    assert _card_calls(telegram, PRIVATE), "the card stopped editing"
 
 
-def test_every_call_a_live_card_makes_is_a_card_edit(
+def test_a_slow_chat_action_does_not_stretch_the_refresh_interval(
     mk_bot, vloop, telegram, limiter,
 ):
-    """Row M's replacement for "only alongside an attempted edit": with
-    the indicator gone there is nothing left for a live card to send but
-    the edit itself. Mutation: send anything else from the loop — an
-    indicator from the debounced branch, a second edit shape — and this
-    names the endpoint."""
+    """The period is measured from the START of each refresh, so the round
+    trip is spent INSIDE the interval rather than added to it. Telegram's
+    5 s expiry leaves 0.5 s of headroom at the 4.5 s default; a single slow
+    call would eat it and the bubble would blink.
+
+    Mutation: ``await asyncio.sleep(TYPING_INDICATOR_INTERVAL)`` after the
+    send instead of sleeping the remainder, and this row's gaps become
+    4.5 + 0.8 = 5.3 s — past the expiry.
+    """
+    bot = _ext_bot(mk_bot(), telegram, limiter, PRIVATE)
+    real = bot._app.bot.send_chat_action
+
+    async def slow(*a, **kw):
+        await asyncio.sleep(0.8)      # simulated latency, on the virtual clock
+        return await real(*a, **kw)
+
+    bot._app.bot.send_chat_action = slow
+    sess = _card(bot, "a", 10, PRIVATE)
+    _run_cards(vloop, bot, [sess], 20.0)
+    gaps = _gaps(telegram.actions_for(PRIVATE))
+    assert gaps, "the bubble was never lit"
+    assert gaps == [pytest.approx(_config.TYPING_INDICATOR_INTERVAL)] * len(gaps)
+
+
+def test_every_budgeted_call_a_live_card_makes_is_a_card_edit(
+    mk_bot, vloop, telegram, limiter,
+):
+    """Row M's other arm: the only call a live card makes that COSTS the
+    chat anything is the edit itself. The typing indicator is the one
+    permitted extra, and only because Telegram does not meter it (§12).
+    Mutation: send anything else from the loop — a second edit shape, a
+    stray sendMessage — and this names the endpoint."""
     bot = _ext_bot(mk_bot(), telegram, limiter, PRIVATE)
     sess = _card(bot, "a", 10, PRIVATE)
     _run_cards(vloop, bot, [sess], 12.0)
     assert {endpoint for endpoint, _, _, _ in telegram.calls} == \
-        {"editMessageText"}
+        {"editMessageText", "sendChatAction"}
+    assert {endpoint for endpoint, _, _, _ in telegram.calls
+            if endpoint not in telegram.EXEMPT} == {"editMessageText"}
 
 
-def test_a_group_card_sends_no_typing_indicator_either(
+def test_a_group_card_sends_the_typing_indicator_too(
     mk_bot, vloop, telegram, limiter,
 ):
-    """Row M as amended, on the OTHER chat kind — the one where a typing
-    bubble cost 18 of the group's 20 calls a minute. The DM row above
-    cannot see a group-only regression. Mutation: restore the indicator
-    for groups alone and this counts it."""
+    """Row M as amended, on the OTHER chat kind — the one where 8.21
+    reckoned a typing bubble cost 18 of the group's 20 calls a minute. It
+    costs none of them: the 20-a-minute window is a message limit. The DM
+    row above cannot see a group-only regression, and 8.21's own
+    intermediate design (§11 U3) was exactly a group-only suppression, so
+    this row is the one that would catch its return.
+
+    Mutation: gate ``_typing_chat`` on ``is_group_chat`` and this counts
+    nothing. (That the action spends no slot of the group's rolling window
+    is asserted directly on the limiter, in
+    ``tests/test_typing_indicator.py::test_the_typing_action_never_spends_a_group_window_slot``
+    — here it would only show up as a delay, which this row cannot see.)"""
     bot = _ext_bot(mk_bot(), telegram, limiter, GROUP)
     sess = _card(bot, "g", 10, GROUP)
     _run_cards(vloop, bot, [sess], 20.0)
-    assert {endpoint for endpoint, _, _, _ in telegram.calls} == \
-        {"editMessageText"}
+    actions = telegram.actions_for(GROUP)
+    assert actions, "no bubble in a group"
+    assert telegram.violations == []
+    gaps = _gaps(actions)
+    assert gaps == [pytest.approx(_config.TYPING_INDICATOR_INTERVAL)] * len(gaps)
+    assert _most_in_window(telegram.metered_stamps_for(GROUP), 60.0) <= 20
 
 
-def test_the_bot_package_no_longer_sends_a_typing_indicator_at_all(
+def test_the_bot_package_sends_the_chat_action_from_one_place_only(
     mk_bot, vloop, telegram, limiter,
 ):
-    """Row M's third arm: the indicator is gone from card CREATION too,
-    not just from the tick — and the loop tests above can only see the
-    tick. Swept statically because "the code never calls it" is the whole
-    claim; streamed line by line, since the suite runs under a 1 GiB
-    address-space cap. Mutation: put ``send_chat_action`` back anywhere in
-    the bot package and this names the file and line."""
+    """Row M's third arm: every chat action in the package goes through
+    ``animation._send_typing``, which is the only function holding the
+    interval gate, the BUSY check and the mute check. A loop row can only
+    see the branches it takes; this covers the ones it does not, card
+    CREATION included. Swept statically, streamed line by line, since the
+    suite runs under a 1 GiB address-space cap.
+
+    (Until 8.24 this row asserted the package held NO call site at all —
+    what 8.21 removed. The claim is the same: nothing sends the action
+    except through the gate.)
+
+    Mutation: add a second ``send_chat_action(`` call site anywhere in
+    ``aipager/bot/`` and this names the file and line."""
     from pathlib import Path
 
     from aipager import bot as bot_pkg
 
-    offenders = []
+    sites = []
     for path in sorted(Path(bot_pkg.__file__).parent.rglob("*.py")):
         with path.open(encoding="utf-8") as handle:
             for lineno, line in enumerate(handle, 1):
                 if line.lstrip().startswith("#"):
-                    continue  # the comments that RECORD the removal
+                    continue  # the comments that RECORD the history
                 if "send_chat_action(" in line:
-                    offenders.append(f"{path.name}:{lineno}")
-    assert offenders == [], offenders
+                    sites.append(f"{path.name}:{lineno}")
+    assert len(sites) == 1 and sites[0].startswith("animation.py:"), sites
 
 
 # ── CARD_RETRY_WAKE: a refused card comes back sooner, never faster ──────────
@@ -615,21 +740,42 @@ def test_a_refused_card_comes_back_in_a_second_not_in_an_interval(
 
 # ── the acceptance table: what a minute of card traffic costs ────────────────
 
-@pytest.mark.parametrize("sessions,chat,edits,skipped,gap", [
-    (1, GROUP, 18, 0, 3.30),
-    (1, PRIVATE, 46, 0, 1.32),
-    (2, PRIVATE, 56, 0, 2.20),
-    (3, PRIVATE, 56, 1, 3.30),
+@pytest.mark.parametrize("sessions,chat,edits,actions,skipped,gap", [
+    (1, GROUP, 18, 14, 0, 3.30),
+    (1, PRIVATE, 46, 14, 0, 1.32),
+    (2, PRIVATE, 56, 28, 0, 2.20),
+    (3, PRIVATE, 56, 42, 1, 3.30),
 ])
 def test_a_minute_of_card_traffic_costs_exactly_what_was_promised(
-    mk_bot, vloop, telegram, limiter, sessions, chat, edits, skipped, gap,
+    mk_bot, vloop, telegram, limiter, sessions, chat, edits, actions,
+    skipped, gap,
 ):
     """The operator-facing acceptance criterion, measured independently:
     over 61 simulated seconds the card loop makes exactly this many calls,
-    all of them card edits, with every gap exactly the promised interval
-    and no 429 from a strict Telegram. Mutation: anything that changes the
-    cadence, re-admits the typing indicator, or lets the budget refuse a
-    card in an otherwise quiet chat moves one of these numbers."""
+    with every gap exactly the promised interval and no 429 from a strict
+    Telegram. Mutation: anything that changes the cadence, or that lets the
+    budget refuse a card in an otherwise quiet chat, moves one of these
+    numbers.
+
+    ``edits``, ``skipped`` and ``gap`` are 8.21's OWN acceptance numbers,
+    unchanged, reproduced here with the typing indicator switched back ON
+    (roadmap 8.24) — that is the whole claim of 8.24 and this is where it
+    is checked. ``actions`` is the new column: the bubble refreshes on the
+    animator's own ≤4.5 s schedule and costs the chat's budget nothing
+    (``admitted`` counts them, since the limiter counts every callback it
+    runs, but ``skipped`` and the gaps do not move and ``violations`` stays
+    empty). Mutation: route the action through the chat budget and the
+    private rows lose edits to skips; await it in the tick instead of
+    spawning it and every gap grows.
+
+    ``actions`` is ``sessions x 14``: the indicator's own task refreshes
+    every 4.5 s from the moment the card is created, and 61 s holds
+    fourteen of those (t=0, 4.5, … 58.5) per session, whatever the card's
+    cadence happens to be. That independence is the point — review
+    iteration 1 rejected the first draft, where the indicator rode the
+    card's wake grid and the realized spacing became ``ceil(4.5/W)*W`` =
+    5.28–6.6 s, past the 5 s expiry Telegram gives a typing status.
+    """
     bot = _ext_bot(mk_bot(), telegram, limiter, chat)
     cards = [_card(bot, f"s{i}", 10 + i, chat) for i in range(sessions)]
     _run_cards(vloop, bot, cards, 61.0)
@@ -638,17 +784,21 @@ def test_a_minute_of_card_traffic_costs_exactly_what_was_promised(
         "calls": len(telegram.calls),
         "edits": len([1 for e, _, _, _ in telegram.calls
                       if e == "editMessageText"]),
+        "actions": len(telegram.actions_for(chat)),
         "other_endpoints": sorted({e for e, _, _, _ in telegram.calls}
-                                  - {"editMessageText"}),
+                                  - {"editMessageText", "sendChatAction"}),
         "admitted": snap["calls"],
+        "chat_actions": snap["chat_actions"],
         "skipped": snap["skipped"],
         "violations": telegram.violations,
         "gaps": sorted({round(g, 3) for mid in range(10, 10 + sessions)
                         for g in _gaps(_card_calls(telegram, chat, mid))}),
     }
     assert observed == {
-        "calls": edits, "edits": edits, "other_endpoints": [],
-        "admitted": edits, "skipped": skipped, "violations": [],
+        "calls": edits + actions, "edits": edits, "actions": actions,
+        "other_endpoints": [],
+        "admitted": edits + actions, "chat_actions": actions,
+        "skipped": skipped, "violations": [],
         "gaps": [gap],
     }
 

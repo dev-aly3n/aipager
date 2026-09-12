@@ -19,10 +19,12 @@ window again on its next tick.
 The three answers, all here:
 
 * **A real per-chat bucket**, private chats included.
-* **A skippable class of caller.** A busy-card edit or a typing
-  indicator is worth making only if the chat can afford it now; it
-  raises :class:`FloodSkipped` instead of queueing, and always leaves a
-  token in reserve for an answer or a reply, which never skip.
+* **A skippable class of caller.** A busy-card edit is worth making only
+  if the chat can afford it now; it raises :class:`FloodSkipped` instead
+  of queueing, and always leaves a token in reserve for an answer or a
+  reply, which never skip. (The "typing…" indicator used to be in this
+  class. Since 8.24 it is not budgeted at all — see
+  :data:`CHAT_ACTION_ENDPOINT`.)
 * **A bounded deferral instead of a retry storm.** A small 429
   (``retry_after <= TELEGRAM_MAX_RETRY_AFTER``) bars the chat for exactly
   the time Telegram asked, retries a blocking caller once, and doubles
@@ -34,10 +36,15 @@ re-raised untouched so the 8.17 flood mute (``bot/flood.py``,
 ``rich_message._ban_if_excessive``) owns it exactly as it did in 0.7.10.
 Reactions are exempt from the chat budget entirely (design §11 U4): the
 🚨 in ``transport._send_with_retry`` fires precisely when a chat's queue
-is jammed, and it is the one signal that still reaches the user.
+is jammed, and it is the one signal that still reaches the user. So is
+the "typing…" chat action (§12, roadmap 8.24), which live probes caught
+answering 200 all the way through a `retry_after` window that refused
+every edit into the same chat: Telegram does not meter chat actions with
+messages, so budgeting them only starved the cards.
 
 Public API
 ----------
+CHAT_ACTION_ENDPOINT         -- the chat-action method, exempt (§12)
 FloodSkipped                 -- raised instead of making a skip-kind call
 TokenBucket                  -- continuous refill, injectable clock
 SlidingWindow                -- N calls in any W seconds (the group rule)
@@ -90,6 +97,28 @@ log = logging.getLogger(__name__)
 # future incident can settle with evidence whether Telegram meters
 # reactions into the same window as sends.
 REACTION_ENDPOINT: str = "setMessageReaction"
+
+# The second exempt method (§12, roadmap 8.24): the "typing…" chat
+# action, and this one is exempt on MEASURED evidence rather than on
+# inference. Bounded probes against the real API on 2026-09-12 drove one
+# chat into a genuine `retry_after=10`; during that window every
+# `editMessageText` was refused and all ELEVEN `sendChatAction typing`
+# calls returned 200, with the bubble visible on the phone throughout.
+# Chat actions are not in the per-chat message/edit bucket, so charging
+# them to it — which 8.21 did, and then dropped the indicator to pay for
+# the cards — takes a token from a card edit for a call Telegram never
+# counted. Exempt like a reaction: the 30/s overall bucket only, never a
+# chat token, never a wait on one. A 429 on it is NOT recorded against
+# the chat either (see `_run`'s `note_429`).
+CHAT_ACTION_ENDPOINT: str = "sendChatAction"
+
+# Every method that skips the per-chat budget. Membership is checked
+# BEFORE `_kind_of`, so a caller that also passes ``kind="skip"`` for one
+# of these gets the exemption rather than the skip class — the reserve
+# exists to protect real content from BUDGETED callers, and these do not
+# spend the budget at all.
+_CHAT_BUDGET_EXEMPT: frozenset = frozenset({REACTION_ENDPOINT,
+                                           CHAT_ACTION_ENDPOINT})
 
 # Tokens a chat must have before a SKIP-kind caller may spend one. The
 # extra token is the reserve: an answer, a reply or any other blocking
@@ -297,8 +326,9 @@ class ChatBudget:
     mutation to be able to break it.
 
     Counters: ``calls`` counts every callback actually run for this chat,
-    INCLUDING the budget-exempt reactions; ``reactions`` counts that
-    exempt subset on its own; ``skipped`` counts refused skip acquires.
+    INCLUDING the budget-exempt reactions and chat actions; ``reactions``
+    and ``chat_actions`` count those exempt subsets on their own;
+    ``skipped`` counts refused skip acquires.
     """
 
     def __init__(
@@ -319,6 +349,7 @@ class ChatBudget:
         self.calls: int = 0
         self.skipped: int = 0
         self.reactions: int = 0
+        self.chat_actions: int = 0
 
 
 def is_group_chat(chat_id) -> bool:
@@ -688,19 +719,30 @@ class BudgetRateLimiter(BaseRateLimiter):
         if budget is not None:
             self._decay(budget, self._clock())
 
-        if endpoint == REACTION_ENDPOINT:
+        if endpoint in _CHAT_BUDGET_EXEMPT:
             # §11 U4: reactions are exempt from the chat budget. They are
             # a separate bucket on Telegram's side, and `transport.py`'s
             # 🚨 give-up reaction fires exactly when this chat's queue is
             # jammed — budgeting it would gag the one signal that still
             # reaches the user (see transport.py:456-458). Counted, so a
             # future incident can show whether that is still true.
+            #
+            # §12: the "typing…" chat action is exempt on the same terms,
+            # and on live evidence — it answered 200 throughout a real
+            # `retry_after=10` window that refused every edit into the
+            # same chat (see CHAT_ACTION_ENDPOINT). Neither waits on a
+            # chat token nor consumes one; both still meet the 30/s
+            # overall bucket.
             if budget is not None:
-                budget.reactions += 1
+                if endpoint == REACTION_ENDPOINT:
+                    budget.reactions += 1
+                else:
+                    budget.chat_actions += 1
             await self._wait_for_overall()
             return await self._run(
                 budget, callback, args, kwargs, endpoint, chat_id,
                 kind="blocking", allow_retry=False,
+                note_429=endpoint != CHAT_ACTION_ENDPOINT,
             )
 
         kind = _kind_of(rate_limit_args)
@@ -717,6 +759,7 @@ class BudgetRateLimiter(BaseRateLimiter):
     async def _run(
         self, budget, callback, args, kwargs, endpoint, chat_id,
         *, kind: str = "blocking", allow_retry: bool = True,
+        note_429: bool = True,
     ):
         """Run the callback whose budget has already been paid.
 
@@ -725,6 +768,14 @@ class BudgetRateLimiter(BaseRateLimiter):
         propagates untouched — ``BaseRateLimiter``'s contract says this
         method "should not handle any other exception raised by
         ``callback``".
+
+        ``note_429=False`` re-raises a small 429 without recording it
+        against the chat. Only the "typing…" chat action passes it
+        (§12/R4): that call is not in the chat's message bucket, so a 429
+        on it is no evidence about the bucket — deferring the chat and
+        doubling its card cadence over one would slow every card for a
+        call that never competed with them. The animator logs it once an
+        hour and skips the indicator.
         """
         if budget is not None:
             budget.calls += 1
@@ -736,6 +787,12 @@ class BudgetRateLimiter(BaseRateLimiter):
                 # A ban. `transport._send_with_retry`'s give-up branch and
                 # `rich_message._ban_if_excessive` own it: mute, 🚨, stop.
                 # No backoff bump, no deferral, no log line here (R6).
+                raise
+            if not note_429:
+                # An exempt call's 429 (the typing action, §12/R4): the
+                # chat's send budget is not implicated, so nothing is
+                # deferred and no backoff is bumped. The caller drops the
+                # call — it never reaches the mute or the card path.
                 raise
             self.note_retry_after(chat_id, seconds)
             if kind == "skip":
@@ -762,8 +819,9 @@ class BudgetRateLimiter(BaseRateLimiter):
     def snapshot(self) -> dict:
         """The whole budget, decayed to now, for tests and the status file.
 
-        ``calls`` counts every callback run for the chat, reactions
-        included; ``reactions`` is that exempt subset on its own.
+        ``calls`` counts every callback run for the chat, the exempt ones
+        included; ``reactions`` and ``chat_actions`` are those exempt
+        subsets on their own.
         ``group_window_free`` is how many of the group's 20 calls are
         still unspent in the rolling 60 s window (``None`` for a private
         chat, which has no such window).
@@ -784,6 +842,7 @@ class BudgetRateLimiter(BaseRateLimiter):
                 "calls": budget.calls,
                 "skipped": budget.skipped,
                 "reactions": budget.reactions,
+                "chat_actions": budget.chat_actions,
                 "waiters": len(budget.waiters),
             })
         return {"overall_tokens": self._overall.tokens(), "chats": chats}
@@ -896,6 +955,7 @@ class BudgetRateLimiter(BaseRateLimiter):
 
 __all__ = [
     "BudgetRateLimiter",
+    "CHAT_ACTION_ENDPOINT",
     "ChatBudget",
     "FloodSkipped",
     "REACTION_ENDPOINT",

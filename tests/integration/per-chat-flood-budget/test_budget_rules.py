@@ -162,10 +162,24 @@ def test_twenty_back_to_back_sends_into_one_private_chat_stay_under_one_per_seco
 def test_every_chat_scoped_endpoint_is_metered_by_the_same_chat_bucket(
     limiter, clock, run_async,
 ):
-    """R1 names nine endpoints; one bucket must cover them all. Mutation:
-    meter only ``sendMessage`` and the card's edits go unpaced."""
+    """R1 names the message-shaped endpoints; one bucket must cover them
+    all. Mutation: meter only ``sendMessage`` and the card's edits go
+    unpaced.
+
+    ``sendChatAction`` is deliberately NOT in this list since roadmap 8.24
+    — Telegram does not meter chat actions with messages (measured
+    2026-09-12, §12), so the daemon does not either, and the row below
+    asserts that directly. It used to be listed here and the row still
+    passed, because the assertion is an upper bound that an instant exempt
+    call cannot break: a guard naming an endpoint it no longer covers
+    (review rev-iter1-002).
+
+    Asserted as an EXACT sequence, not just a ceiling, so the row cannot
+    pass while one of the endpoints it names is unmetered: six calls paced
+    1/s with a burst of 3 land at 0, 0, 0, 1, 2, 3.
+    """
     endpoints = ["sendMessage", "editMessageText", "editMessageReplyMarkup",
-                 "deleteMessage", "sendDocument", "sendPhoto", "sendChatAction"]
+                 "deleteMessage", "sendDocument", "sendPhoto"]
     log: list[tuple] = []
 
     async def burst():
@@ -173,7 +187,43 @@ def test_every_chat_scoped_endpoint_is_metered_by_the_same_chat_bucket(
             await _call(limiter, clock, log, endpoint=endpoint)
 
     run_async(asyncio.wait_for(burst(), timeout=10))
+    start = log[0][2]
+    assert [round(t - start, 6) for _, _, t in log] == [0, 0, 0, 1, 2, 3]
     assert _most_in_window([t for _, _, t in log], 1.0) <= 3
+
+
+def test_the_chat_action_endpoint_is_not_metered_by_the_chat_bucket(
+    limiter, clock, run_async,
+):
+    """The sibling of the row above, and the reason ``sendChatAction`` left
+    its list (roadmap 8.24 / review rev-iter1-002). The endpoint stays
+    NAMED in this suite — it is simply named as the one exception.
+
+    Telegram was measured answering it 200 on all eleven calls made inside
+    a real ``retry_after=10`` window that refused every ``editMessageText``
+    into the same chat (§12), so the daemon must not charge it to that
+    chat's budget: an ornament that takes a token is an ornament that
+    costs a card edit.
+
+    Mutation: drop ``sendChatAction`` from ``_CHAT_BUDGET_EXEMPT`` (i.e.
+    meter it like a message again) and the fourth call here waits a second
+    instead of going out at once — and the exempt counter stays 0.
+    """
+    log: list[tuple] = []
+
+    async def burst():
+        for _ in range(3):                      # drain the chat's burst
+            await _call(limiter, clock, log, endpoint="sendMessage")
+        for _ in range(4):                      # …then four chat actions
+            await _call(limiter, clock, log, endpoint="sendChatAction")
+
+    run_async(asyncio.wait_for(burst(), timeout=10))
+    start = log[0][2]
+    assert [round(t - start, 6) for _, _, t in log] == [0, 0, 0, 0, 0, 0, 0]
+    chat = next(c for c in limiter.snapshot()["chats"]
+                if c["chat_id"] == PRIVATE)
+    assert chat["chat_actions"] == 4
+    assert chat["tokens"] < 1.0, "the actions spent the chat's tokens"
 
 
 def test_sixty_chats_sending_at_once_are_paced_by_the_overall_bucket(

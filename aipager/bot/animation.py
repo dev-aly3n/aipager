@@ -18,15 +18,23 @@ import re
 import time
 from typing import TYPE_CHECKING
 
+from telegram.error import RetryAfter
+
 from aipager.config import (
     BUSY_EDIT_INTERVAL, CARD_CADENCE_FLOOR_GROUP, CARD_CADENCE_FLOOR_PRIVATE,
     CARD_RETRY_WAKE,
     CARD_STARVATION_BLOCK_TIMEOUT, CHAT_ID, COMPACT_ANIMATE_INTERVAL_SECONDS,
     COMPACT_ANIMATE_MAX_TICKS, SPINNER_VERBS,
-    STREAM_EDIT_INTERVAL,
+    STREAM_EDIT_INTERVAL, TELEGRAM_MAX_RETRY_AFTER,
+    TYPING_INDICATOR_INTERVAL,
 )
-from aipager.bot.flood import MUTE
-from aipager.bot.flood_budget import FloodSkipped, card_interval, is_group_chat
+from aipager.bot.flood import MUTE, _key as _chat_key
+from aipager.bot.flood_budget import (
+    FloodSkipped,
+    _retry_after_seconds as _retry_after_secs,
+    card_interval,
+    is_group_chat,
+)
 from aipager.bot.rich_message import (
     detect_rtl,
     edit_message_text_rich,
@@ -137,6 +145,58 @@ FIRST_TICK_DELAY = 1.5
 # only matters if something upstream wedges — and then the monitor must
 # get its 2s cadence back rather than hang with the card.
 CARD_REFRESH_TIMEOUT = 20.0
+
+# The one chat action this daemon sends (roadmap 8.24). Telegram's
+# documented contract is that the status "is set for 5 seconds or less
+# (when a message arrives from your bot, Telegram clients clear its typing
+# status)", so it has to be re-sent every TYPING_INDICATOR_INTERVAL to
+# stay lit, which `_animate_typing` does unconditionally — the schedule
+# does NOT assume anything about what else clears the status. Whether a
+# card EDIT clears it is not established: the 2026-09-12 probe saw the
+# bubble lit while edits were being refused, never while one landed. The
+# unconditional resend is what makes that question moot.
+TYPING_ACTION = "typing"
+# A 429 on the chat action gets ONE INFO line per chat per hour (R4). The
+# action is off-budget, so its refusal says nothing about the chat's send
+# budget — and must not become a log line per refresh either.
+_TYPING_429_LOG_INTERVAL = 3600.0
+# chat id -> monotonic stamp of the last such line. Module level, like
+# `transport._LAST_BLOCKED_LOG_TS`, and LOG-ONLY state: a stale entry can
+# cost at most one suppressed INFO line, never a suppressed call. Keyed
+# through `flood._key`, so the same chat reached as an int (a scoped
+# session) and as a str (the legacy CHAT_ID fallback) earns one line an
+# hour between them rather than one each.
+_TYPING_429_LOGGED: dict = {}
+
+
+def _log_typing_429_once(chat, label: str, exc: Exception, *,
+                         ban: bool = False) -> None:
+    """One INFO line per chat per hour for a 429 on the typing action.
+
+    INFO, not WARNING: the indicator is an ornament on top of the card,
+    the card itself is unaffected (a chat action and a card edit are
+    metered separately — that is the whole premise of 8.24), and there is
+    nothing for the operator to do. The action is skipped; nothing arms
+    the mute, bumps the card backoff or defers the chat.
+
+    ``ban`` distinguishes a ``retry_after`` past
+    ``TELEGRAM_MAX_RETRY_AFTER`` — a ban rather than a rate limit, which
+    the limiter re-raises untouched. It still does not arm the mute from
+    here (R4: the mute is the 8.17 owners' to arm, from the paths that
+    carry real content), but a chat action refused for ten minutes and one
+    refused for five seconds must not read identically in the log.
+    """
+    key = _chat_key(chat)
+    now = time.monotonic()
+    last = _TYPING_429_LOGGED.get(key)
+    if last is not None and (now - last) < _TYPING_429_LOG_INTERVAL:
+        return
+    _TYPING_429_LOGGED[key] = now
+    log.info(
+        "[%s] Telegram %s the typing indicator for chat %s (%s) — skipping "
+        "it; the busy card's own cadence is unaffected",
+        label, "BANNED" if ban else "rate-limited", chat, exc,
+    )
 
 
 # ── Module-level pure helpers ────────────────────────────────────────────────
@@ -1098,6 +1158,151 @@ class AnimationMixin:
         except Exception:
             log.debug("callback edit failed (probably no-op)", exc_info=True)
 
+    # ── the "typing…" indicator (roadmap 8.24) ──────────────────────────
+
+    def _typing_chat(self, sess: TrackedSession):
+        """The chat to light a "typing…" bubble in, or ``None``.
+
+        Pure gate — no stamps, no side effects, nothing a cadence decision
+        could read (R3). In order: the feature is on
+        (``TYPING_INDICATOR_INTERVAL > 0`` — 0, or a negative value,
+        disables it outright), there is an application to send through, the
+        session is genuinely BUSY (never IDLE/INTERACTIVE/GONE, so a
+        background job's waiting card shows no phantom bubble — R5), the
+        chat resolves, and the chat is not flood-MUTED (a mute is a real
+        ban; poking it is a fresh violation — R5).
+
+        The once-per-interval bound is NOT here: it belongs to
+        :meth:`_animate_typing`, which is the only caller and whose sleep
+        IS the schedule. A second bound here would be worse than
+        redundant — the task wakes exactly one interval after it last sent,
+        so a gate comparing "elapsed < interval" would refuse that wake by
+        a few microseconds and halve the real refresh rate.
+        """
+        if TYPING_INDICATOR_INTERVAL <= 0:
+            return None
+        if not self._app or sess.status is not Status.BUSY:
+            return None
+        chat = resolve_chat_id(sess)
+        if not chat or MUTE.is_muted(chat):
+            return None
+        return chat
+
+    async def _send_typing(self, sess: TrackedSession, chat) -> None:
+        """Send the chat action. Never raises, never blocks on the chat's
+        send budget.
+
+        ``sendChatAction`` is exempt from the per-chat budget in
+        ``flood_budget`` (§12/R1): it meets the 30/s overall bucket and
+        nothing else, so it cannot take a token a card edit was going to
+        spend and cannot be refused because a card just spent one. No
+        ``rate_limit_args`` is passed — the exemption is keyed on the
+        endpoint, and the skip class this call used to belong to before
+        8.21 removed it is exactly what it must NOT rejoin.
+
+        The BUSY status and the mute are re-checked HERE, at send time, and
+        not only in :meth:`_typing_chat`: between the gate and the await,
+        the turn can end and — more to the point — another coroutine's
+        answer can arm the flood mute, and every call into a live ban is a
+        fresh violation that extends it (R5). Fail-closed, and it costs a
+        dict lookup.
+
+        A 429 is logged once per chat per hour and dropped (R4). Anything
+        else goes to debug: the indicator is an ornament, and its caller is
+        a background task whose only job is this call.
+        """
+        if sess.status is not Status.BUSY or MUTE.is_muted(chat):
+            return
+        try:
+            await self._app.bot.send_chat_action(
+                chat_id=chat, action=TYPING_ACTION,
+            )
+        except RetryAfter as exc:
+            _log_typing_429_once(
+                chat, sess.label, exc,
+                ban=_retry_after_secs(exc) > TELEGRAM_MAX_RETRY_AFTER,
+            )
+        except Exception:
+            log.debug("[%s] typing indicator failed", sess.label, exc_info=True)
+
+    async def _animate_typing(self, sess: TrackedSession) -> None:
+        """Background task: keep the chat's "typing…" bubble lit for as
+        long as this session's busy card is live (roadmap 8.24).
+
+        Its OWN task and its OWN clock, deliberately not the card's. The
+        first version of 8.24 offered the indicator from inside
+        ``_animate_tick``, which cost it twice: the send could only happen
+        on the animator's wake grid, so a 4.5 s interval realized as
+        ``ceil(4.5 / wake) * wake`` — 5.28 s with one session in a DM,
+        6.6 s with two or in a group, i.e. ABOVE Telegram's 5 s expiry in
+        every measured configuration, so the bubble blinked off exactly
+        where it was supposed to be reassuring; and the card-creation send
+        had to be awaited inside ``send_busy``, which is also
+        ``_reanchor_busy_card``'s send path and therefore runs inside a
+        tick, putting a Telegram round trip in front of a card edit and
+        holding ``animate_lock`` across it (review rev-iter1-001/003).
+
+        Here the period is exactly ``TYPING_INDICATOR_INTERVAL``,
+        measured from the START of each refresh so the send's own latency
+        does not stretch it, and nothing on any card path ever waits for
+        it.
+
+        Liveness is ``busy_card_should_animate()`` — the SAME rule the
+        animator, the watchdog and the resume path share, so a compacting
+        or INTERACTIVE card (whose message is not the animator's to poke)
+        and the ``-1`` claim sentinel are all excluded by construction.
+        The task deliberately outlives an interim IDLE while a background
+        job is open, exactly as ``_animate_busy`` does: the send gate
+        (BUSY-only) keeps the waiting card dark, and the continuation's
+        BUSY phase gets its bubble back without anything having to restart
+        the task.
+        """
+        try:
+            while sess.busy_card_should_animate():
+                started = time.monotonic()
+                chat = self._typing_chat(sess)
+                if chat is not None:
+                    await self._send_typing(sess, chat)
+                # Sleep the REMAINDER of the interval, so a slow round trip
+                # (or a mute check) cannot push the next refresh past
+                # Telegram's 5 s expiry. Never negative: a send that took
+                # longer than the whole interval yields and goes again, and
+                # it cannot spin, because the send itself awaits.
+                await asyncio.sleep(max(
+                    TYPING_INDICATOR_INTERVAL - (time.monotonic() - started),
+                    0.0,
+                ))
+        except asyncio.CancelledError:
+            pass
+
+    def _start_typing(self, sess: TrackedSession) -> None:
+        """Start this session's typing task, replacing any existing one.
+
+        Called from :meth:`_start_animation` and nowhere else: that is the
+        one place a busy card starts ticking — the fresh card in
+        ``_send_busy_and_animate`` (immediately after ``send_busy``
+        returns, so a new card still lights its bubble at once), the
+        watchdog's restart and the resume path. Starting it here rather
+        than in ``send_busy`` also keeps a re-anchor from restarting the
+        schedule: the re-anchor reuses ``send_busy`` for its send, and the
+        card's existing task is already ticking through it.
+        """
+        self._stop_typing(sess)
+        if TYPING_INDICATOR_INTERVAL <= 0:
+            return
+        sess.typing_task = asyncio.create_task(self._animate_typing(sess))
+
+    def _stop_typing(self, sess: TrackedSession) -> None:
+        """Cancel the typing task if running. Mirrors
+        :meth:`_stop_animation`, and is called from it — so every path that
+        takes a busy card down (the turn ending, /stop, a kill, a reclaim)
+        takes the bubble down with it rather than leaving a session that is
+        no longer working looking as though it were.
+        """
+        if sess.typing_task and not sess.typing_task.done():
+            sess.typing_task.cancel()
+        sess.typing_task = None
+
     # ── Notification methods (called by hook_receiver and session_monitor) ──
 
     async def send_busy(
@@ -1105,6 +1310,11 @@ class AnimationMixin:
         reply_to: int | None = None, disable_notification: bool = False,
     ) -> int | None:
         """Send initial 'Working...' message and start animation. Returns message_id.
+
+        Sends the card and nothing else — in particular no chat action:
+        the "typing…" bubble is :meth:`_animate_typing`'s, started by
+        :meth:`_start_animation` right after this returns, because this
+        function is also a CARD path (see the note at the end of the body).
 
         ``reply_to``/``disable_notification`` (design.md "turn anchor
         follows consumption") let :meth:`_reanchor_busy_card` reuse this
@@ -1127,10 +1337,30 @@ class AnimationMixin:
                 disable_notification=disable_notification,
             )
             sess.busy_card_trigger = target
-            return msg.message_id
+            # Read INSIDE the try, as this always has been: a send that
+            # answers something without a `message_id` (a stub, a mocked
+            # transport, a future API change) is a FAILED send, and the
+            # ``except`` below is what turns it into ``None`` for the
+            # caller rather than an AttributeError out of the card path.
+            msg_id = msg.message_id
         except Exception:
             log.warning("Failed to send busy message", exc_info=True)
             return None
+        # NO CHAT ACTION HERE, and that is a fix rather than an omission
+        # (review rev-iter1-001). The "typing…" bubble a fresh card earns
+        # is sent by `_animate_typing`, whose task `_start_animation`
+        # begins the moment this function returns — see `_start_typing`.
+        # Sending it from here would put a Telegram round trip on a CARD
+        # path: this function is also `_reanchor_busy_card`'s send, which
+        # runs inside `_animate_tick` and holds `sess.animate_lock`, so an
+        # awaited action here delays the re-anchor's own edit, the old
+        # card's delete and `track_message` behind it — exactly what R2
+        # and R3 forbid. (The ordering that mattered is preserved for
+        # free: the task's first refresh happens after this send, and
+        # Telegram clears a typing status when a message from the bot
+        # arrives, so an action sent BEFORE the card would be cancelled by
+        # the card itself.)
+        return msg_id
 
     @staticmethod
     def _fmt_tokens(n: int) -> str:
@@ -1667,14 +1897,17 @@ class AnimationMixin:
         interval = self._card_interval(sess, streaming=sess.stream_dirty)
         now = time.monotonic()
         if now - sess.last_tool_edit_at < interval:
-            # Debounced — and that means NO Telegram call at all. Until
-            # 8.21 this branch still fired a `sendChatAction`, once per
-            # loop wake per BUSY session, which the debounce never
+            # Debounced — and that means NO Telegram call at all, of any
+            # kind. Until 8.21 this branch still fired a `sendChatAction`,
+            # once per loop wake per BUSY session, which the debounce never
             # suppressed: at 0.9 s wakes it roughly DOUBLED the daemon's
-            # real call rate into the chat and was the single most
-            # frequent chat-scoped call in the incident. It is gone from
-            # the whole card loop now, not just from this branch — see
-            # the note below the edit.
+            # real call rate into the chat and was the single most frequent
+            # chat-scoped call in the incident.
+            #
+            # 8.24 brought the indicator back but deliberately NOT here:
+            # it has its own task and its own 4.5 s clock
+            # (`_animate_typing`), so the card loop neither sends it nor
+            # paces it, and a wake is not a send in any branch.
             return False
         # An ordinary tick is skippable: a card edit is worth making only
         # if the chat can afford it now, and an answer must always find a
@@ -1707,25 +1940,49 @@ class AnimationMixin:
                                                 kind="skip")
         if result is None:
             return None
-        # NO TYPING INDICATOR. Case M, as amended in 8.21: while a busy
-        # card is live nothing sends `sendChatAction`, in any chat kind.
-        # The card IS the progress display — a "typing…" bubble above a
-        # spinner that already reports the elapsed time and the running
-        # tool says nothing the user cannot see — and it cost a Telegram
-        # call per tick per session, i.e. HALF of every chat's budget.
-        # Measured over a simulated minute with two sessions streaming
-        # into one DM: with the indicator, 57 calls of which 49% of the
-        # card edits were refused and the cards ran 2.2–6.6 s apart;
-        # without it, 56 calls, nothing refused, and every card gap
-        # exactly the promised 2.2 s. In a group (20 calls a minute) it
-        # was worse still: 11 edits a minute with ten-second freezes,
-        # against 18 evenly spaced.
+        # NO TYPING INDICATOR ON THIS PATH EITHER (Case M, as amended by
+        # roadmap 8.24): the bubble is real again, but it belongs to
+        # `_animate_typing`'s own task, not to the card loop. The card's
+        # cadence is the promise and the indicator is the ornament, so the
+        # ornament gets neither a slot on the wake grid (which would
+        # quantize its 4.5 s to 5.28-6.6 s, past Telegram's 5 s expiry) nor
+        # a millisecond of the tick's own time.
+        #
+        # 8.21 removed this call from every branch on the grounds that it
+        # was half of the chat's budget: measured over a simulated minute
+        # with two sessions streaming into one DM, the BUDGETED indicator
+        # cost 57 calls of which 49% of the card edits were refused, with
+        # the cards running 2.2–6.6 s apart; without it, 56 calls, nothing
+        # refused, every gap exactly the promised 2.2 s. In a group it was
+        # worse (11 edits a minute with ten-second freezes against 18
+        # evenly spaced). Those numbers were real, but the cause was not
+        # the call — it was charging the call to the chat's SEND budget.
+        # Live probes on 2026-09-12 (design §12) settled it: during a real
+        # `retry_after=10` window that refused every edit into the chat,
+        # all eleven `sendChatAction typing` calls returned 200 and the
+        # bubble stayed lit on the phone. Telegram does not meter chat
+        # actions with messages. So the indicator comes back exempt from
+        # the per-chat budget (`flood_budget.CHAT_ACTION_ENDPOINT`), at
+        # most once per TYPING_INDICATOR_INTERVAL per session, and the
+        # 8.21 acceptance numbers above are reproduced WITH it on — the
+        # edits, the skips and every gap are unchanged, because no card
+        # edit ever waits on it or loses a token to it.
+        #
+        # Why it is worth a call at all: the bubble is the one signal the
+        # operator sees in the chat LIST without opening the chat.
         return True
 
     def _start_animation(self, sess: TrackedSession) -> None:
-        """Start the spinner animation task, cancelling any existing one."""
+        """Start the spinner animation task, cancelling any existing one.
+
+        Also (re)starts the session's "typing…" task (roadmap 8.24): the
+        bubble is lit for as long as the card is, and this is the one place
+        a card starts ticking — so the two cannot get out of step, and
+        nothing else has to remember to start it.
+        """
         self._stop_animation(sess)
         sess.animate_task = asyncio.create_task(self._animate_busy(sess))
+        self._start_typing(sess)
 
     def _resume_animation_if_dead(
         self, sess: TrackedSession, *, reason: str,
@@ -1855,10 +2112,13 @@ class AnimationMixin:
             pass
 
     def _stop_animation(self, sess: TrackedSession) -> None:
-        """Cancel the animation task if running."""
+        """Cancel the animation task if running — and the typing task with
+        it (roadmap 8.24), so a card that stops ticking stops claiming the
+        session is working."""
         if sess.animate_task and not sess.animate_task.done():
             sess.animate_task.cancel()
         sess.animate_task = None
+        self._stop_typing(sess)
 
     async def _close_superseded_card(self, sess: TrackedSession) -> None:
         """Settle the waiting card a genuinely new prompt is reclaiming.
@@ -2096,9 +2356,6 @@ class AnimationMixin:
                     sess.stream_offset = 0
             msg_id = await self.send_busy(sess)
             if msg_id:
-                # No typing indicator here either: the card that just went
-                # out is the progress display, and this call fired before
-                # the first tick of every single card. See `_animate_tick`.
                 sess.busy_msg_id = msg_id
                 sess.last_tool_edit_at = 0.0
                 sess.last_tool_name = ""

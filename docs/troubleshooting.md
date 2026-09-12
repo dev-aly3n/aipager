@@ -45,12 +45,15 @@ aipager service start
 ## Busy cards got slower
 
 Telegram allows roughly one message a second into any one chat (and 20 a
-minute into a group). Every call counts: sends and edits alike. The
-daemon gives each chat its own budget of about 1 call a second, with a
-small burst, and the busy cards of that chat **share** it. (A busy card
-no longer sends a "typing…" indicator: the card is the progress display,
-and the indicator cost a second call on every refresh — half the chat's
-budget, for something the card already tells you.)
+minute into a group). Every message and every edit counts. The daemon
+gives each chat its own budget of about 1 call a second, with a small
+burst, and the busy cards of that chat **share** it. (The "typing…"
+indicator is *not* in that budget — Telegram does not count chat actions
+with messages, which is measured, not assumed — so a working session
+shows the bubble in your chat list without ever slowing its card. It is
+refreshed on its own schedule, every 4.5 seconds per working session,
+because Telegram clears a typing status after 5; `TYPING_INDICATOR_INTERVAL`
+tunes that, and `0` turns the bubble off.)
 
 So with two sessions working in the same chat, each card refreshes about
 every 2.2 seconds instead of every 1.2; with three, about every 3.3. **A
@@ -71,6 +74,14 @@ streaming text) and `BUSY_EDIT_INTERVAL` (default `3.0`, when it is
 quiet) in your config. Setting either *below* the per-chat floor is
 harmless and changes nothing — the floor wins, which is what keeps the
 chat under Telegram's limit whatever you put in the file.
+
+None of this affects the "typing…" bubble. It has a schedule of its own,
+one refresh every `TYPING_INDICATOR_INTERVAL` seconds (default 4.5) for as
+long as a session is working, however slow that session's card happens to
+be — so a chat with three busy sessions still shows the bubble steadily
+while its cards refresh every 3.3 seconds. Raising the interval above 5
+seconds would make the bubble blink, because that is when Telegram clears
+a typing status.
 
 ## The bot slowed down: a rate limit (429)
 

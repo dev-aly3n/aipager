@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The "typing…" indicator is back while a session is working. 0.7.11
+  removed it to protect the busy cards' refresh rate, on the assumption
+  that Telegram charges chat actions to the same per-chat budget as
+  messages and edits. Measured against the live API, it does not: driven
+  into a real rate limit that refused every card edit into a chat for ten
+  seconds, `sendChatAction` answered every one of eleven calls made inside
+  that window and the bubble stayed visible in the chat header throughout.
+  So the bubble returns *outside* the budget — it never waits for a token,
+  never spends one, and a rate limit on the indicator alone is logged once
+  an hour and otherwise ignored. The cards keep exactly the cadence 0.7.11
+  promised them (1.3 s for one session in a chat, 2.2 s for two, 3.3 s for
+  three, 3.3 s in a group), because nothing about their pacing changed and
+  no card edit waits for an indicator: the bubble is refreshed by a task of
+  its own, so it neither borrows the card's schedule nor lends it anything.
+  That refresh runs every `TYPING_INDICATOR_INTERVAL` seconds per working
+  session (default 4.5, under the 5 seconds after which Telegram clears a
+  typing status, so the bubble stays lit rather than blinking), only while
+  the session is genuinely working — a session waiting on a background
+  agent or on a permission prompt shows nothing — and never into a
+  flood-muted chat. `0` disables it. This matters because the bubble is the
+  one sign of a session working that shows in the chat list without
+  opening the chat.
+
 ## [0.7.11] - 2026-09-12
 
 ### Fixed
