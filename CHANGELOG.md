@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- The answer no longer appears under a busy card that still reads
+  "Processing". In the card layout the daemon already renders the
+  finished card BEFORE it sends the answer, and always did — but both
+  landed in the same second, and a phone draws a new message instantly
+  while it draws an edit a beat later, so the card was seen to flip to
+  Finished *after* the answer it belongs to had already arrived. The card
+  reads as lagging or broken exactly when it is the record of how the
+  answer was reached. The answer now follows the finished card by a short
+  head start, measured FROM the card edit rather than added on top of it:
+  building the answer text already spends part of it and only the
+  remainder is ever waited out, so a turn with a long answer waits for
+  nothing. `FINISH_CARD_GRACE_SECONDS` tunes it (seconds, default 0.8),
+  and 0 restores the old same-second behaviour. Only the card layout is
+  affected — `merged` puts the answer and the timeline in one message,
+  and `replace` deletes the card.
 - A subagent that works for more than an hour no longer gets dropped,
   with the card finalized as "Finished" while it is still running. The
   sweep that cleans up subagents whose stop event went missing judged

@@ -41,6 +41,7 @@ from aipager import preferences
 from aipager.config import (
     COMPACT_CARD_TIMEOUT_SECONDS,
     COMPACT_DONE_PAUSE_SECONDS,
+    FINISH_CARD_GRACE_SECONDS,
     STALE_BUSY_TIMEOUT,
     STREAM_EDIT_INTERVAL,
 )
@@ -86,6 +87,13 @@ if TYPE_CHECKING:
     pass
 
 log = logging.getLogger(__name__)
+
+# The ONLY sleep in the finish path: the head start the finished card gets
+# before the answer is sent (FINISH_CARD_GRACE_SECONDS, roadmap 8.23). A
+# module attribute so tests shorten THIS and never patch asyncio.sleep,
+# which is the global module — patching it through a module path has hung
+# this suite twice (see CLAUDE.md). Same pattern as rich_message._sleep.
+_finish_sleep = asyncio.sleep
 
 # "I'll send it the moment it lands" — a promise to deliver separately,
 # which the single-response job model makes false (see
@@ -1673,6 +1681,12 @@ class NotifyMixin:
             elif reanchor_needed and layout == "merged":
                 merged_send_as_new = True
             card_kept = False
+            # When the finished card went out, on the monotonic clock: the
+            # answer send below owes it FINISH_CARD_GRACE_SECONDS measured
+            # from that moment (roadmap 8.23) — the clock starts where
+            # this is STAMPED, a few lines down, not here. 0.0 means no
+            # finished card was rendered, and so nothing to wait for.
+            finish_card_at = 0.0
             # True once the busy card has been successfully disposed of —
             # either kept as the finished card (`card_kept`, below) or
             # deleted outright (`replace`, and `merged`'s own delete-on-
@@ -1704,6 +1718,15 @@ class NotifyMixin:
                                 ) is True
                             except Exception:
                                 log.debug("Final busy-card render failed", exc_info=True)
+                        if card_kept:
+                            # Stamped for BOTH branches above, and only
+                            # once the card is really out: the re-anchor
+                            # rendered it a few lines up, the edit right
+                            # here. A failed final render (`card_kept`
+                            # False) leaves this 0.0 — there is no
+                            # finished card for the answer to follow, so
+                            # the answer must not be held back for one.
+                            finish_card_at = time.monotonic()
                         sess.busy_msg_id = None
                     # "merged": busy_msg_id stays live on purpose — the one
                     # combined edit (timeline + answer) happens below, once
@@ -2086,6 +2109,41 @@ class NotifyMixin:
                 body_is_the_message = not standalone_header
                 reply_to = sess.trigger_msg_id if body_is_the_message else None
                 chat_id = resolve_chat_id_int(sess)
+                # ── the finished card's head start (roadmap 8.23) ───────
+                # Wire order is already right; this makes it the VISIBLE
+                # order. Only the REMAINDER of the grace is slept — the
+                # answer-text building since the card edit counts toward
+                # it — and only in the `card` layout with a finished card
+                # really out, which is exactly what `finish_card_at`
+                # records (`merged` edits the card into the answer, so
+                # there is no ordering to fix; `replace` deleted it).
+                # This is the single grace site in the finish path: the
+                # plain-text fallbacks below follow a FAILED send, by
+                # which point the head start has long since elapsed.
+                #
+                # NOT "the card is always seen first", though — two sends
+                # can still precede it with a stamped card, and both are
+                # deliberate: the standalone overflow header just above
+                # (reachable with a kept card only when `send_file` is
+                # set, i.e. an answer over the byte ceiling going out as
+                # an attachment), and the API-error notice that returns
+                # early, upstream of here. Neither is the ANSWER — the
+                # message that actually competes with the card edit for
+                # the operator's eye — and the answer still follows the
+                # card by the grace in both cases, so the card is never
+                # the last thing to render. Covering those two wants its
+                # own decision, not a second grace site here: moving the
+                # wait above the header would also delay header-only
+                # turns and would have to learn about the flood mute,
+                # which skips that header entirely.
+                # A grace of 0 disables the wait through `owed` alone, so
+                # there is no separate (untestable) branch for it.
+                if finish_card_at:
+                    owed = FINISH_CARD_GRACE_SECONDS - (
+                        time.monotonic() - finish_card_at
+                    )
+                    if owed > 0:
+                        await _finish_sleep(owed)
                 try:
                     if chat_id is None:
                         # Unscoped session, no global CHAT_ID configured —

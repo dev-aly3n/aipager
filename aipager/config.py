@@ -300,6 +300,21 @@ KEEP_FINISHED_CARD: bool = os.environ.get(
     "KEEP_FINISHED_CARD", "1",
 ) not in ("0", "false", "no")
 
+# Seconds the finished busy card gets to itself before the answer is sent,
+# in the "card" layout only (roadmap 8.23). The daemon already does this in
+# the right ORDER — the final card render is a blocking call that completes
+# before the answer goes out — but during the 8.21 live round-trip both
+# landed in the same second and the phone client drew the new message
+# immediately and the edit a beat later, so `hmd`'s answer sat under a card
+# that still read "Processing". That client behaviour cannot be changed;
+# landing the two in the same second can. The grace is measured FROM the
+# card edit, not added on top of it: the answer-text building in between
+# already spends some of it, and only the remainder is ever slept. 0
+# disables, restoring the old same-second behaviour.
+FINISH_CARD_GRACE_SECONDS: float = float(
+    os.environ.get("FINISH_CARD_GRACE_SECONDS", "0.8")
+)
+
 # Seconds a session can stay BUSY with no hook activity before the bot
 # posts an informational "still working" note in chat. Nothing is wrong
 # when this fires — a session running a long tool call, generating

@@ -91,6 +91,37 @@ def _pin_single_chat_config(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _pin_finish_card_grace(monkeypatch):
+    """No test waits out the finished card's head start (roadmap 8.23).
+
+    The finish path gives the finished busy card
+    ``FINISH_CARD_GRACE_SECONDS`` (0.8 s by default) to itself before it
+    sends the answer. That is a REAL ``asyncio.sleep`` in every test that
+    drives a card-layout turn to its end: 49 pre-existing tests started
+    serving it, worth ~25-33 s (13-17 %) of the suite's wall clock, and a
+    future operator-scale value would turn CI into a hang rather than a
+    slow run. Pinning it to 0 here also makes the suite independent of
+    what happens to be in the environment or
+    ``~/.config/aipager/config.env`` — the same trap
+    ``_pin_single_chat_config`` above exists for, which kept the `test`
+    workflow red for weeks. Tests ABOUT the grace override this with
+    their own later ``monkeypatch`` (a later patch wins) — see
+    ``tests/test_finish_card_grace.py``, which pins its own value per
+    test.
+
+    Both bindings are pinned, and the ``notify`` one is the one that
+    does the work: ``notify.py`` does ``from aipager.config import
+    FINISH_CARD_GRACE_SECONDS``, so the float is bound into that
+    module's namespace at import and patching ``aipager.config`` alone
+    would not stop a single sleep. ``aipager.config`` is pinned too so a
+    later direct reader — or a test that asserts against the configured
+    value — sees the same 0 rather than the operator's setting.
+    """
+    monkeypatch.setattr("aipager.config.FINISH_CARD_GRACE_SECONDS", 0.0)
+    monkeypatch.setattr("aipager.bot.notify.FINISH_CARD_GRACE_SECONDS", 0.0)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_home_paths(tmp_path, monkeypatch):
     """Redirect every module-level ``Path.home()`` write target to tmp.
 
