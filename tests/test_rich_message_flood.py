@@ -6,7 +6,8 @@
   POST acquires), then once against the real class.
 - R2: a 429 whose ``retry_after`` exceeds ``TELEGRAM_MAX_RETRY_AFTER`` is a
   ban — ONE POST, no sleep, no plain-text fallback, ``RichMessageFloodBanned``.
-  A small ``retry_after`` keeps sleep-and-retry-once exactly.
+  A small ``retry_after`` is reported to the limiter and retried once, and
+  since roadmap 8.21 it is the LIMITER that waits, never this module.
 - R3: after a ban on chat A, sends and edits to A make zero HTTP calls and
   zero PTB calls, B still goes out, the animation loop stops, and when the
   mute lapses A goes through again with one "lifted" line.
@@ -99,6 +100,12 @@ def _mock_http(monkeypatch, handler):
     )
 
 
+# Captured before conftest's autouse "no real Telegram" fixture replaces
+# ``rm._post`` for the length of each test: this is the SEAM the doubles
+# in this file stand in for, and the only honest thing to compare them to.
+_REAL_POST = rm._post
+
+
 def _ok(message_id=1):
     return {"ok": True, "result": {"message_id": message_id}}
 
@@ -110,16 +117,48 @@ def _429(retry_after):
 
 def _scripted_post(*responses):
     """A ``_post`` double answering the scripted responses in order and
-    repeating the last one; records every call."""
+    repeating the last one; records every call and the kind it was made
+    with.
+
+    The ``kind`` keyword mirrors the real seam
+    (``rich_message._post(method, payload, *, kind="blocking")``, roadmap
+    8.21). A double without it raises ``TypeError`` for any skip-kind
+    call, which the rich path swallows into "unexpected error" and a
+    ``None`` return — a silent no-op that reads to the card loop as a
+    permanent failure, i.e. a vacuously green test.
+    """
     calls: list[tuple[str, dict]] = []
+    kinds: list[str] = []
     script = list(responses)
 
-    async def _post(method, payload):
+    async def _post(method, payload, *, kind: str = "blocking"):
         calls.append((method, payload))
+        kinds.append(kind)
         return script.pop(0) if len(script) > 1 else script[0]
 
-    _post.calls = calls  # type: ignore[attr-defined]
+    _post.calls = calls    # type: ignore[attr-defined]
+    _post.kinds = kinds    # type: ignore[attr-defined]
     return _post
+
+
+def test_the_scripted_post_double_matches_the_seam_it_replaces():
+    """The double is only worth anything while its signature matches
+    ``rich_message._post``. Compared against ``_REAL_POST``, captured at
+    import time — ``rm._post`` itself is replaced by conftest's
+    "no real Telegram" guard for the length of every test.
+
+    Mutation: drop the ``kind`` parameter from ``_scripted_post`` and a
+    skip-kind call raises ``TypeError`` into the rich path's own
+    ``except Exception``, which returns ``None`` — every assertion about a
+    skipped call would then pass for the wrong reason.
+    """
+    import inspect
+
+    real = inspect.signature(_REAL_POST).parameters
+    double = inspect.signature(_scripted_post(_ok())).parameters
+    assert list(double) == list(real)
+    assert double["kind"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert double["kind"].default == real["kind"].default
 
 
 class _FakeLimiter:
@@ -151,6 +190,20 @@ class _FakeLimiter:
             return await callback(*args, **kwargs)
         finally:
             self.inside = False
+
+
+class _StepClock:
+    """A monotonic clock a test steps by hand; ``sleep`` advances it."""
+
+    def __init__(self, start: float = 1_000_000.0) -> None:
+        self.now = start
+
+    def __call__(self) -> float:
+        return self.now
+
+    async def sleep(self, seconds: float) -> None:
+        self.now += max(seconds, 0.0)
+        await asyncio.sleep(0)
 
 
 def _sess(label="jim", status=Status.IDLE):
@@ -196,15 +249,22 @@ def test_every_rich_post_acquires_the_shared_budget_and_is_paced(run_async, monk
     assert max(limiter.stamps) >= 120, "45 sends need three 60 s windows"
 
 
-def test_real_aioratelimiter_accepts_the_seam_and_buckets_by_chat(run_async, monkeypatch):
+def test_the_real_limiter_accepts_the_seam_and_buckets_a_private_chat(
+        run_async, monkeypatch):
     """The signature ``_post`` uses is PTB's real one (a keyword renamed in
-    a PTB upgrade would fail here first), and negative chat ids get the
-    per-group bucket exactly as PTB's own sends do."""
-    from telegram.ext import AIORateLimiter
+    a PTB upgrade would fail here first), and EVERY chat gets a per-chat
+    bucket — private ones included.
 
-    limiter = AIORateLimiter(overall_max_rate=30, overall_time_period=1,
-                             group_max_rate=20, group_time_period=60,
-                             max_retries=0)
+    Until 8.21 this asserted the opposite for a private chat, because
+    ``AIORateLimiter`` keys its per-chat bucket on a negative id: the
+    assertion documented the bug rather than the behaviour, and two cards
+    streaming into one DM went out unpaced. Mutation: make ``_budget_for``
+    return ``None`` for positive ids and chat 555 vanishes from the
+    snapshot.
+    """
+    from aipager.bot.flood_budget import BudgetRateLimiter
+
+    limiter = BudgetRateLimiter()
     rm.set_rate_limiter(limiter)
     _mock_http(monkeypatch, lambda request: httpx.Response(200, json=_ok(9)))
 
@@ -214,8 +274,13 @@ def test_real_aioratelimiter_accepts_the_seam_and_buckets_by_chat(run_async, mon
         assert (await edit_message_text_rich(555, 1, "x"))["message_id"] == 9
 
     run_async(few())
-    assert -100 in limiter._group_limiters
-    assert 555 not in limiter._group_limiters, "a private chat has no group bucket"
+    chats = {c["chat_id"]: c for c in limiter.snapshot()["chats"]}
+    assert chats[-100]["kind"] == "group"
+    assert chats[-100]["group_window_free"] is not None
+    assert chats[555]["kind"] == "private", "a private chat is budgeted too"
+    assert chats[555]["group_window_free"] is None, \
+        "but has no 20-per-60 s window"
+    assert chats[555]["calls"] == 1
 
 
 # ── R2: a big retry_after ends the attempt ───────────────────────────────────
@@ -251,12 +316,14 @@ def test_edit_ban_makes_one_post_no_sleep_and_raises(run_async, monkeypatch, no_
     lambda: edit_message_text_rich(-100, 7, "x"),
 ], ids=["send", "edit"])
 def test_a_ban_on_the_retry_after_a_small_429_mutes_too(run_async, monkeypatch, no_sleep, call):
+    """The ban-on-the-retry path is preserved exactly; only who waits for
+    the first 429 changed (the limiter, not a private sleep here)."""
     post = _scripted_post(_429(5), _429(BAN))
     monkeypatch.setattr(rm, "_post", post)
     with pytest.raises(RichMessageFloodBanned):
         run_async(call())
     assert len(post.calls) == 2
-    assert no_sleep == [5]
+    assert no_sleep == []
     assert MUTE.is_muted(-100)
 
 
@@ -264,32 +331,65 @@ def test_a_ban_on_the_retry_after_a_small_429_mutes_too(run_async, monkeypatch, 
     lambda: send_rich_message(-100, "x"),
     lambda: edit_message_text_rich(-100, 7, "x"),
 ], ids=["send", "edit"])
-def test_small_retry_after_still_sleeps_and_retries_once(run_async, monkeypatch, no_sleep, call):
-    """Today's behaviour, byte for byte: 429/5 → sleep 5 → retry → result."""
+def test_small_retry_after_defers_through_the_limiter_and_never_sleeps(
+        run_async, monkeypatch, no_sleep, call):
+    """429/5 → tell the limiter → retry once → result. Still exactly two
+    POSTs, but this module no longer waits: the limiter bars the whole
+    chat for the five seconds Telegram asked for, so the retry's own
+    acquire is the wait, and every OTHER caller into that chat is deferred
+    too. Sleeping here as well would double it.
+
+    Mutation: restore the ``min(retry_after, 30)`` clamp-sleep in either
+    response handler and ``no_sleep`` records a 5.
+    """
+    from aipager.bot.flood_budget import BudgetRateLimiter
+
+    limiter = BudgetRateLimiter()
+    rm.set_rate_limiter(limiter)
     post = _scripted_post(_429(5), _ok(42))
     monkeypatch.setattr(rm, "_post", post)
     assert run_async(call()) == {"message_id": 42}
     assert len(post.calls) == 2
-    assert no_sleep == [5]
+    assert no_sleep == []
+    assert limiter.cadence_multiplier(-100) == 2.0
     assert not MUTE.is_muted(-100)
 
 
 def test_retry_after_exactly_at_the_cap_is_a_rate_limit_not_a_ban(run_async, monkeypatch, no_sleep):
-    """Boundary: the cap is exclusive (``>``), and the clamp to 30 s stays."""
+    """Boundary: the cap is exclusive (``>``), so the cap value itself is
+    still a rate limit — reported to the limiter, retried, not muted.
+
+    The clamp to 30 s is gone with the private sleep (8.21); the boundary
+    semantics this test is really named for are unchanged.
+    """
+    from aipager.bot.flood_budget import BudgetRateLimiter
     from aipager.config import TELEGRAM_MAX_RETRY_AFTER
 
+    limiter = BudgetRateLimiter()
+    rm.set_rate_limiter(limiter)
     post = _scripted_post(_429(int(TELEGRAM_MAX_RETRY_AFTER)), _ok(1))
     monkeypatch.setattr(rm, "_post", post)
     assert run_async(send_rich_message(-100, "x")) == {"message_id": 1}
-    assert no_sleep == [30]
+    assert no_sleep == []
+    assert limiter.cadence_multiplier(-100) == 2.0
     assert not MUTE.is_muted(-100)
 
 
 def test_429_without_retry_after_keeps_the_30s_default(run_async, monkeypatch, no_sleep):
+    """``_retry_after_of``'s default of 30 is what this test is named for
+    and is unchanged; only who waits it out moved (8.21)."""
+    from aipager.bot.flood_budget import BudgetRateLimiter
+
+    clock = _StepClock()
+    limiter = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    rm.set_rate_limiter(limiter)
     post = _scripted_post({"ok": False, "error_code": 429, "description": "x"}, _ok(1))
     monkeypatch.setattr(rm, "_post", post)
+    started = clock.now
     assert run_async(edit_message_text_rich(-100, 7, "x")) == {"message_id": 1}
-    assert no_sleep == [30]
+    assert no_sleep == []
+    assert limiter.snapshot()["chats"][0]["retry_until_in"] == pytest.approx(
+        30.0 - (clock.now - started))
     assert not MUTE.is_muted(-100)
 
 
@@ -392,6 +492,10 @@ def test_animate_busy_loop_stops_for_a_session_in_a_muted_chat(mk_bot, run_async
     post = _scripted_post(_ok(10))
     monkeypatch.setattr(rm, "_post", post)
     monkeypatch.setattr("aipager.bot.animation.FIRST_TICK_DELAY", 0.01)
+    # The first-tick delay is max(FIRST_TICK_DELAY, the chat's floor)
+    # since 8.21, so the floor has to come down with it or this waits a
+    # full second. Behaviour under test is unchanged.
+    monkeypatch.setattr("aipager.bot.animation.CARD_CADENCE_FLOOR_PRIVATE", 0.01)
     bot._app.bot.send_chat_action = AsyncMock()
     MUTE.mute(123456, BAN)
     run_async(asyncio.wait_for(bot._animate_busy(sess), timeout=3.0))

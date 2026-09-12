@@ -27,7 +27,6 @@ the send pipeline contract.
 
 from __future__ import annotations
 
-import asyncio
 import difflib
 import html as html_mod
 import logging
@@ -37,6 +36,7 @@ import time
 from telegram.error import BadRequest, Forbidden, RetryAfter
 
 from aipager.bot.flood import MUTE, FloodMuted
+from aipager.bot.flood_budget import FloodSkipped
 from aipager.config import TELEGRAM_MAX_RETRY_AFTER
 from aipager.team import Role, User as TeamUser
 
@@ -364,12 +364,17 @@ _MAX_TRUNCATIONS = 2
 async def _send_with_retry(bot, *, chat_id, text: str, parse_mode: str | None = None,
                            reply_to_message_id: int | None = None,
                            reply_markup=None, max_retries: int = 2):
-    """Send a Telegram message with backoff for RetryAfter and graceful
-    handling of "message is too long".
+    """Send a Telegram message, handling "message is too long" gracefully.
 
     Raises :class:`~aipager.bot.flood.FloodMuted` without touching the bot
     while the chat is flood-muted (R3): the next attempt into a ban
     extends it, and callers already treat a failed send as non-fatal.
+
+    A ``RetryAfter`` is no longer retried here (roadmap 8.21): a small one
+    has already been deferred and retried by the limiter, and a large one
+    is a ban. Both propagate, the large one after arming the mute and the
+    🚨. ``max_retries`` therefore governs ONLY the truncate-and-resend
+    loop below.
     """
     if MUTE.is_muted(chat_id):
         raise FloodMuted(MUTE.remaining(chat_id), chat_id)
@@ -407,10 +412,13 @@ async def _send_with_retry(bot, *, chat_id, text: str, parse_mode: str | None = 
                         log.debug("Failed to set flood-control reaction",
                                   exc_info=True)
                 raise
-            log.warning("Telegram flood control — retrying in %ss", wait)
-            await asyncio.sleep(wait)
-            last_err = e
-            continue
+            # Since 8.21 the limiter (bot/flood_budget.py) defers the whole
+            # chat for exactly the retry_after Telegram asked for and makes
+            # the one retry itself — so anything that still reaches here
+            # has ALREADY been retried once. Sleeping again would double
+            # the wait and put a third attempt into the same window, which
+            # is how a handled 429 becomes a ban.
+            raise
         except BadRequest as e:
             if "too long" in str(e).lower():
                 truncations += 1
@@ -453,9 +461,19 @@ async def _send_with_retry(bot, *, chat_id, text: str, parse_mode: str | None = 
 # chat is a fresh violation that extends it, and a human who doesn't know
 # about the ban keeps tapping /status.
 #
+# Since 8.21 each helper also translates the budget's skip class: a
+# caller that passes ``rate_limit_args={"kind": "skip"}`` is telling the
+# limiter "only make this call if the chat can afford it now", and gets
+# :data:`SKIPPED` back when it cannot. The helpers TRANSLATE that
+# decision, they never take it — the tokens are accounted in one place
+# (bot/flood_budget.py) or they are accounted twice, with two clocks,
+# which is the exact failure 8.17 was written to prevent.
+#
 # Deliberately NOT routed here: ``query.answer`` toasts and
 # ``set_message_reaction`` — a separate rate-limit bucket, and during a
-# ban the one signal that still reaches the user.
+# ban the one signal that still reaches the user. Reactions are exempt
+# from the 8.21 per-chat budget too (design §11 U4), not only from the
+# mute: the 🚨 below fires exactly when the chat's queue is jammed.
 
 
 class _MutedSend:
@@ -474,6 +492,29 @@ class _MutedSend:
 
 
 MUTED = _MutedSend()
+
+
+class _SkippedSend:
+    """The value every seam helper returns instead of a Telegram result
+    when a skippable call was refused by the per-chat budget (8.21).
+
+    Same shape as :data:`MUTED` — falsy, no ``message_id`` — and read the
+    same way, but it means something different and better: nothing went
+    out AND THE CHAT IS HEALTHY. There is no ban to wait out; the budget
+    was momentarily short, so the next refresh simply tries again. A
+    caller that records what it showed the user must not record this one
+    (``dashboard._maybe_update_bot_name``)."""
+
+    __slots__ = ()
+
+    def __bool__(self) -> bool:
+        return False
+
+    def __repr__(self) -> str:
+        return "SKIPPED"
+
+
+SKIPPED = _SkippedSend()
 
 
 def _message_chat_id(message):
@@ -498,17 +539,27 @@ def _chat_id_from_call(args, kwargs, position):
 
 async def reply_text(message, *args, **kwargs):
     """``message.reply_text(*args, **kwargs)`` unless the message's chat
-    is flood-muted, in which case :data:`MUTED` and no Telegram call."""
+    is flood-muted, in which case :data:`MUTED` and no Telegram call.
+
+    Returns :data:`SKIPPED` when the call was made skippable
+    (``rate_limit_args={"kind": "skip"}``) and the chat's budget was
+    short — nothing went out, and the chat is fine."""
     if MUTE.is_muted(_message_chat_id(message)):
         return MUTED
-    return await message.reply_text(*args, **kwargs)
+    try:
+        return await message.reply_text(*args, **kwargs)
+    except FloodSkipped:
+        return SKIPPED
 
 
 async def reply_document(message, *args, **kwargs):
     """``message.reply_document(...)`` — same contract as :func:`reply_text`."""
     if MUTE.is_muted(_message_chat_id(message)):
         return MUTED
-    return await message.reply_document(*args, **kwargs)
+    try:
+        return await message.reply_document(*args, **kwargs)
+    except FloodSkipped:
+        return SKIPPED
 
 
 async def edit_message(message, *args, **kwargs):
@@ -518,7 +569,10 @@ async def edit_message(message, *args, **kwargs):
     would edit was itself never sent."""
     if message is MUTED or MUTE.is_muted(_message_chat_id(message)):
         return MUTED
-    return await message.edit_text(*args, **kwargs)
+    try:
+        return await message.edit_text(*args, **kwargs)
+    except FloodSkipped:
+        return SKIPPED
 
 
 async def edit_text(query, *args, **kwargs):
@@ -527,7 +581,10 @@ async def edit_text(query, *args, **kwargs):
     this helper's business — see the section comment above."""
     if MUTE.is_muted(_message_chat_id(getattr(query, "message", None))):
         return MUTED
-    return await query.edit_message_text(*args, **kwargs)
+    try:
+        return await query.edit_message_text(*args, **kwargs)
+    except FloodSkipped:
+        return SKIPPED
 
 
 async def edit_markup(query, *args, **kwargs):
@@ -537,7 +594,10 @@ async def edit_markup(query, *args, **kwargs):
     ban exactly like a text edit; same contract as :func:`edit_text`."""
     if MUTE.is_muted(_message_chat_id(getattr(query, "message", None))):
         return MUTED
-    return await query.edit_message_reply_markup(*args, **kwargs)
+    try:
+        return await query.edit_message_reply_markup(*args, **kwargs)
+    except FloodSkipped:
+        return SKIPPED
 
 
 async def edit_text_at(bot, *args, **kwargs):
@@ -546,7 +606,10 @@ async def edit_text_at(bot, *args, **kwargs):
     ``text, chat_id, message_id``."""
     if MUTE.is_muted(_chat_id_from_call(args, kwargs, 1)):
         return MUTED
-    return await bot.edit_message_text(*args, **kwargs)
+    try:
+        return await bot.edit_message_text(*args, **kwargs)
+    except FloodSkipped:
+        return SKIPPED
 
 
 async def send_text(bot, *args, **kwargs):
@@ -554,7 +617,10 @@ async def send_text(bot, *args, **kwargs):
     ``chat_id=`` or the first positional."""
     if MUTE.is_muted(_chat_id_from_call(args, kwargs, 0)):
         return MUTED
-    return await bot.send_message(*args, **kwargs)
+    try:
+        return await bot.send_message(*args, **kwargs)
+    except FloodSkipped:
+        return SKIPPED
 
 
 def _md_safe_boundaries(md: str) -> list[int]:

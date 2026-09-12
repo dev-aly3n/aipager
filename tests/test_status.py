@@ -258,7 +258,7 @@ def test_cmd_status_total_cost_sums(monkeypatch):
          "model": "", "context_pct": None, "cost_usd": None, "queue_depth": 0},
     ], set()))
 
-    def _capture(daemon_up, sessions, total, mutes=None):
+    def _capture(daemon_up, sessions, total, mutes=None, backoffs=None):
         captured["total"] = total
 
     # cmd_status picks _render_rich or _render_plain based on console.is_terminal

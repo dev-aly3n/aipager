@@ -19,14 +19,18 @@ import time
 from typing import TYPE_CHECKING
 
 from aipager.config import (
-    BUSY_EDIT_INTERVAL, CHAT_ID, COMPACT_ANIMATE_INTERVAL_SECONDS,
+    BUSY_EDIT_INTERVAL, CARD_CADENCE_FLOOR_GROUP, CARD_CADENCE_FLOOR_PRIVATE,
+    CARD_RETRY_WAKE,
+    CARD_STARVATION_BLOCK_TIMEOUT, CHAT_ID, COMPACT_ANIMATE_INTERVAL_SECONDS,
     COMPACT_ANIMATE_MAX_TICKS, SPINNER_VERBS,
     STREAM_EDIT_INTERVAL,
 )
 from aipager.bot.flood import MUTE
+from aipager.bot.flood_budget import FloodSkipped, card_interval, is_group_chat
 from aipager.bot.rich_message import (
     detect_rtl,
     edit_message_text_rich,
+    get_rate_limiter,
     RichMessageBlocked,
     RichMessageFallbackRequired,
     RichMessageFloodBanned,
@@ -1212,13 +1216,21 @@ class AnimationMixin:
         return text
 
     async def _edit_busy_raw(self, msg_id: int, text: str,
-                             reply_markup=None, chat_id=None) -> bool | None:
+                             reply_markup=None, chat_id=None, *,
+                             kind: str = "blocking") -> bool | None:
         """Edit busy message with pre-built text.
 
         ``chat_id`` is the chat the busy message lives in; defaults to
         the global ``CHAT_ID`` for callers that don't route per scope.
         Sess-aware callers in the notify path pass
         ``chat_id=resolve_chat_id(sess)``.
+
+        ``kind="skip"`` makes the edit skippable by the per-chat budget
+        (roadmap 8.21): it returns False without touching Telegram when the
+        chat cannot afford the call right now. No caller passes it today;
+        the parameter exists so the two sibling card editors behave
+        identically and a future skippable caller cannot land here by
+        accident with the wrong semantics.
 
         Returns True on success, False on transient error,
         None on permanent failure (message gone).
@@ -1231,12 +1243,19 @@ class AnimationMixin:
         # ``busy_msg_id`` and lose the card for good.
         if MUTE.is_muted(chat_id or CHAT_ID):
             return False
+        extra = {"rate_limit_args": {"kind": "skip"}} if kind == "skip" else {}
         try:
             await self._app.bot.edit_message_text(
                 text, chat_id=chat_id or CHAT_ID, message_id=msg_id,
-                parse_mode="HTML", reply_markup=reply_markup,
+                parse_mode="HTML", reply_markup=reply_markup, **extra,
             )
             return True
+        except FloodSkipped:
+            # Before the generic arm below, whose string-matching ladder
+            # would classify it by accident. False, never None: the budget
+            # is transient, while None means "message gone" and costs the
+            # card for good.
+            return False
         except Exception as e:
             err = str(e).lower()
             if "message is not modified" in err:
@@ -1248,7 +1267,7 @@ class AnimationMixin:
 
     async def _edit_busy_rich(
         self, sess: TrackedSession, verb: str, *, final: bool = False,
-        waiting: bool = False,
+        waiting: bool = False, kind: str = "blocking",
     ) -> bool | None:
         """Edit the busy message with the streaming card.
 
@@ -1261,11 +1280,20 @@ class AnimationMixin:
         rest of the edit logic stay exactly as they are for an ordinary
         busy card, since the session genuinely can still be interrupted.
 
+        ``kind="skip"`` (roadmap 8.21) offers the edit to the per-chat
+        budget as skippable: if the chat cannot afford a call right now
+        the edit is refused with no Telegram call at all, and this returns
+        False with every card stamp left untouched, so the next tick
+        re-renders exactly the same content. The animation tick passes
+        "skip" for ordinary ticks and "blocking" once a card has been
+        refused for two intervals, so a card can be slow but never frozen.
+
         Returns
         -------
         True   — success; ``last_tool_edit_at`` and ``stream_last_rendered``
                  updated, ``stream_dirty`` cleared.
-        False  — transient failure; caller should retry on the next tick.
+        False  — transient failure, or a skipped edit; caller should retry
+                 on the next tick.
         None   — permanent failure (blocked or message gone); caller must stop
                  animating.
         """
@@ -1309,7 +1337,23 @@ class AnimationMixin:
                     markdown,
                     is_rtl=is_rtl,
                     reply_markup=reply_markup,
+                    kind=kind,
                 )
+            except FloodSkipped:
+                # The chat's budget was short and this edit was skippable,
+                # so NOTHING was sent. Transient: False, never None. Every
+                # stamp is deliberately left alone — `last_tool_edit_at`
+                # so the debounce still lets the next tick through,
+                # `stream_last_rendered` / `stream_dirty` so the dedupe
+                # below does not suppress the re-render (same reasoning as
+                # the RichMessageFallbackRequired arm). `card_skipped_since`
+                # marks the START of this run of refusals, not the latest
+                # one, so the starvation guard measures the whole run.
+                if not sess.card_skipped_since:
+                    sess.card_skipped_since = time.monotonic()
+                log.debug("[%s] busy-card edit skipped — chat budget short",
+                          sess.label)
+                return False
             except RichMessageBlocked:
                 log.warning("[%s] editMessageText blocked — stopping animation", sess.label)
                 return None
@@ -1349,8 +1393,15 @@ class AnimationMixin:
                         chat_id=int(resolve_chat_id(sess)),
                         message_id=int(sess.busy_msg_id),
                         reply_markup=reply_markup,
+                        rate_limit_args={"kind": "skip"},
                     )
                     return True
+                except FloodSkipped:
+                    # Same contract as the rich arm above: nothing sent,
+                    # nothing stamped, try again next tick.
+                    if not sess.card_skipped_since:
+                        sess.card_skipped_since = time.monotonic()
+                    return False
                 except Exception:
                     log.debug("[%s] plain-text degrade edit failed", sess.label,
                               exc_info=True)
@@ -1362,6 +1413,8 @@ class AnimationMixin:
             sess.last_tool_edit_at = time.monotonic()
             sess.stream_last_rendered = markdown
             sess.stream_dirty = False
+            # An edit landed, so the run of refusals (if any) is over.
+            sess.card_skipped_since = 0.0
             return True
 
     async def _reanchor_busy_card(
@@ -1429,6 +1482,53 @@ class AnimationMixin:
                 log.debug("[%s] re-anchor: old card delete failed (left behind)",
                           sess.label, exc_info=True)
 
+    def _card_interval(self, sess: TrackedSession, *, streaming: bool) -> float:
+        """Seconds this session's busy card may take per edit (design §4.3).
+
+        ``max(BASE, N x floor) x MARGIN x backoff``, where N is the number
+        of BUSY sessions resolving to the SAME chat. The cards of a chat
+        share the chat's 1/s budget instead of each assuming it owns one:
+        two sessions streaming into one DM at 0.9 s apiece is what earned
+        the 2026-09-11 ban.
+
+        N is counted over ``all_sessions()`` filtered by
+        ``resolve_chat_id_int`` — NOT the convenient ``all_sessions(chat)``,
+        which filters on the RAW ``scope_chat_id`` and treats 0 as matching
+        every scope, so every legacy session would be counted into every
+        chat (research D9).
+
+        The backoff comes from the live limiter, read late on every call:
+        caching a reference is how two budgets drift apart.
+        """
+        chat = resolve_chat_id_int(sess)
+        base = STREAM_EDIT_INTERVAL if streaming else BUSY_EDIT_INTERVAL
+        if chat is None:
+            # Unresolvable chat: pace it as a lone private session rather
+            # than not at all.
+            busy, group = 1, False
+        else:
+            busy = sum(
+                1 for s in self.registry.all_sessions().values()
+                if resolve_chat_id_int(s) == chat and s.status is Status.BUSY
+            )
+            group = is_group_chat(chat)
+        limiter = get_rate_limiter()
+        backoff = limiter.cadence_multiplier(chat) if limiter is not None else 1.0
+        return card_interval(base=base, busy_sessions=busy, is_group=group,
+                             backoff=backoff)
+
+    def _first_tick_delay(self, sess: TrackedSession) -> float:
+        """Delay before the animate task's first tick.
+
+        A fresh card should render quickly, but never faster than the
+        chat's own floor — in a group that is 3 s, and a 1.5 s first tick
+        would spend a token the card is about to need again.
+        """
+        floor = (CARD_CADENCE_FLOOR_GROUP
+                 if is_group_chat(resolve_chat_id_int(sess))
+                 else CARD_CADENCE_FLOOR_PRIVATE)
+        return max(FIRST_TICK_DELAY, floor)
+
     async def _animate_busy(self, sess: TrackedSession) -> None:
         """Background task: stream transcript text while session is BUSY.
 
@@ -1461,9 +1561,33 @@ class AnimationMixin:
 
         try:
             while _alive():
-                # First tick early for a quick initial render, then stream cadence.
+                # First tick early for a quick initial render, then the
+                # chat's stream cadence. The loop wake also drives the
+                # transcript read (`_read_stream_text`,
+                # `_sync_anchors_from_transcript`) — a local file read that
+                # costs no Telegram call now that nothing but the edit
+                # itself is sent from here — so the loop keeps the
+                # STREAMING interval while the edits themselves are paced
+                # by `_animate_tick`'s debounce. Both read the same
+                # function, so they cannot drift.
+                #
+                # A card whose last edit was REFUSED by the budget wakes
+                # sooner (`CARD_RETRY_WAKE`) instead of sitting out a whole
+                # interval. With N cards started by one burst of prompts
+                # they tick in phase for ever, and the chat's burst is 3
+                # against a 2-token skip reserve — so the third card of
+                # every cluster is refused, and if its retry is a full
+                # interval away it loses the next cluster too. Measured
+                # with three sessions in one DM: 43 edits a minute, 14
+                # refused and gaps up to 9.9 s, against 3.3 s flat once the
+                # refusal is retried on the stream cadence. It cannot make
+                # any card FASTER than its interval: `_animate_tick`'s
+                # debounce is the gate, and it is unchanged.
                 await asyncio.sleep(
-                    FIRST_TICK_DELAY if first_tick else STREAM_EDIT_INTERVAL,
+                    self._first_tick_delay(sess) if first_tick
+                    else min(self._card_interval(sess, streaming=True),
+                             CARD_RETRY_WAKE) if sess.card_skipped_since
+                    else self._card_interval(sess, streaming=True),
                 )
                 first_tick = False
                 if not _alive():
@@ -1506,8 +1630,10 @@ class AnimationMixin:
         """One tick of :meth:`_animate_busy`, the part that can raise.
 
         Returns ``None`` on a permanent edit failure (the loop must stop),
-        ``True`` when an edit was attempted (the loop rotates the verb),
-        ``False`` when the tick was debounced.
+        ``True`` when an edit was ATTEMPTED — landed or refused by the
+        per-chat budget alike, since a refusal is transient and the verb
+        may as well move on — and ``False`` only when the tick was
+        debounced and no Telegram call was made at all.
         """
         if MUTE.is_muted(resolve_chat_id(sess)):
             # R3: the edit and the typing indicators below are all sends
@@ -1535,31 +1661,65 @@ class AnimationMixin:
         if _sync_anchors_from_transcript(sess):
             sess.stream_dirty = True
         await self._consume_and_reanchor(sess)
-        # Choose the required minimum gap.
-        gap = STREAM_EDIT_INTERVAL if sess.stream_dirty else BUSY_EDIT_INTERVAL
+        # Choose the required minimum gap: the chat's own interval, which
+        # scales with how many BUSY sessions share it and with any 429
+        # backoff.
+        interval = self._card_interval(sess, streaming=sess.stream_dirty)
         now = time.monotonic()
-        if now - sess.last_tool_edit_at < gap:
-            # Debounced — still send typing indicator (skipped while
-            # waiting: nothing is being generated to signal).
-            if not waiting:
-                try:
-                    await self._app.bot.send_chat_action(
-                        int(resolve_chat_id(sess)), "typing",
-                    )
-                except Exception:
-                    pass
+        if now - sess.last_tool_edit_at < interval:
+            # Debounced — and that means NO Telegram call at all. Until
+            # 8.21 this branch still fired a `sendChatAction`, once per
+            # loop wake per BUSY session, which the debounce never
+            # suppressed: at 0.9 s wakes it roughly DOUBLED the daemon's
+            # real call rate into the chat and was the single most
+            # frequent chat-scoped call in the incident. It is gone from
+            # the whole card loop now, not just from this branch — see
+            # the note below the edit.
             return False
-        result = await self._edit_busy_rich(sess, verb, waiting=waiting)
+        # An ordinary tick is skippable: a card edit is worth making only
+        # if the chat can afford it now, and an answer must always find a
+        # token left. But a card that is refused forever is a frozen card,
+        # so once this run of refusals is two intervals old, make ONE
+        # blocking attempt.
+        starved = bool(sess.card_skipped_since) and (
+            now - sess.card_skipped_since) >= 2 * interval
+        if starved:
+            # Bounded: this runs inside `sess._stream_edit_lock`, and the
+            # stale-card watchdog RESTARTS a task that holds that lock for
+            # CARD_REFRESH_TIMEOUT (20 s). Five seconds is generous against
+            # a 1 token/s refill and only bites during a 429 deferral,
+            # where not editing is the right answer anyway.
+            try:
+                result = await asyncio.wait_for(
+                    self._edit_busy_rich(sess, verb, waiting=waiting,
+                                         kind="blocking"),
+                    timeout=CARD_STARVATION_BLOCK_TIMEOUT,
+                )
+            except asyncio.TimeoutError:
+                # Treat as a skip and leave `card_skipped_since` set, so
+                # the next tick blocks again rather than dropping back to
+                # skipping forever.
+                log.debug("[%s] starvation-guard card edit timed out after %.0fs",
+                          sess.label, CARD_STARVATION_BLOCK_TIMEOUT)
+                result = False
+        else:
+            result = await self._edit_busy_rich(sess, verb, waiting=waiting,
+                                                kind="skip")
         if result is None:
             return None
-        if not waiting:
-            # Send typing AFTER edit (edit cancels the typing indicator).
-            try:
-                await self._app.bot.send_chat_action(
-                    int(resolve_chat_id(sess)), "typing",
-                )
-            except Exception:
-                pass
+        # NO TYPING INDICATOR. Case M, as amended in 8.21: while a busy
+        # card is live nothing sends `sendChatAction`, in any chat kind.
+        # The card IS the progress display — a "typing…" bubble above a
+        # spinner that already reports the elapsed time and the running
+        # tool says nothing the user cannot see — and it cost a Telegram
+        # call per tick per session, i.e. HALF of every chat's budget.
+        # Measured over a simulated minute with two sessions streaming
+        # into one DM: with the indicator, 57 calls of which 49% of the
+        # card edits were refused and the cards ran 2.2–6.6 s apart;
+        # without it, 56 calls, nothing refused, and every card gap
+        # exactly the promised 2.2 s. In a group (20 calls a minute) it
+        # was worse still: 11 edits a minute with ten-second freezes,
+        # against 18 evenly spaced.
         return True
 
     def _start_animation(self, sess: TrackedSession) -> None:
@@ -1609,6 +1769,12 @@ class AnimationMixin:
         reports at INFO only when an edit actually landed. A refresh that
         cannot even get through in ``CARD_REFRESH_TIMEOUT`` means the
         task holding the edit lock is wedged: it is replaced.
+
+        The forced refresh is a SKIP caller (roadmap 8.21). A card that is
+        stale because its chat is over budget must not be "fixed" by
+        spending the budget: a skipped refresh returns False, leaves
+        ``last_tool_edit_at`` alone, takes the "made no edit" branch below,
+        and the session monitor simply re-arms in 20 s.
         """
         if action == "restart":
             self._resume_animation_if_dead(sess, reason="no animate task while BUSY")
@@ -1622,7 +1788,8 @@ class AnimationMixin:
         waiting = sess.status != Status.BUSY
         try:
             result = await asyncio.wait_for(
-                self._edit_busy_rich(sess, "Working", waiting=waiting),
+                self._edit_busy_rich(sess, "Working", waiting=waiting,
+                                     kind="skip"),
                 timeout=CARD_REFRESH_TIMEOUT,
             )
         except asyncio.TimeoutError:
@@ -1929,11 +2096,9 @@ class AnimationMixin:
                     sess.stream_offset = 0
             msg_id = await self.send_busy(sess)
             if msg_id:
-                # Send typing AFTER the busy message (sending a message cancels typing)
-                try:
-                    await self._app.bot.send_chat_action(int(resolve_chat_id(sess)), "typing")
-                except Exception:
-                    pass
+                # No typing indicator here either: the card that just went
+                # out is the progress display, and this call fired before
+                # the first tick of every single card. See `_animate_tick`.
                 sess.busy_msg_id = msg_id
                 sess.last_tool_edit_at = 0.0
                 sess.last_tool_name = ""

@@ -470,7 +470,12 @@ def _block_real_telegram_http(monkeypatch):
     and anything added later. Tests that exercise the transport patch ``_post``
     themselves; a function-scoped patch inside the test body wins over this one.
     """
-    async def _refuse(method, payload):
+    async def _refuse(method, payload, *, kind: str = "blocking"):
+        # ``kind`` mirrors the real seam (roadmap 8.21). Without it a
+        # skip-kind call would raise TypeError here instead of this
+        # AssertionError, and the rich path's own `except Exception` would
+        # swallow it into a silent ``None`` — the guard would look like it
+        # had passed.
         raise AssertionError(
             f"test attempted a real Telegram API call: {method}. "
             "Mock aipager.bot.rich_message._post (or the calling helper)."
@@ -490,9 +495,17 @@ def _isolate_flood_mute(tmp_path, monkeypatch):
     operator's daemon writes (and ``aipager status`` reads) its own. The
     path is moved FIRST, then the registry cleared, so the clear can only
     ever unlink the tmp copy.
+
+    ``FLOOD_BACKOFF_FILE`` (roadmap 8.21) is the second file of the same
+    kind — written by ``bot/flood_budget.py`` while a chat is backing off
+    from a 429 — and defaults beside the live daemon's own socket, so it
+    is moved here too. Any test that arms a backoff would otherwise write
+    into ``$XDG_RUNTIME_DIR`` next to the running daemon's files.
     """
     monkeypatch.setattr("aipager.config.FLOOD_MUTE_FILE",
                         str(tmp_path / "aipager-flood-mute.json"))
+    monkeypatch.setattr("aipager.config.FLOOD_BACKOFF_FILE",
+                        str(tmp_path / "aipager-flood-backoff.json"))
     from aipager.bot import flood, rich_message
 
     flood.MUTE.clear()

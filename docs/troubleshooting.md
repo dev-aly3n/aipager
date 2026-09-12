@@ -42,13 +42,63 @@ aipager service start
 4. Bot was never `/start`ed: open the bot in Telegram and tap Start
    once.
 
+## Busy cards got slower
+
+Telegram allows roughly one message a second into any one chat (and 20 a
+minute into a group). Every call counts: sends and edits alike. The
+daemon gives each chat its own budget of about 1 call a second, with a
+small burst, and the busy cards of that chat **share** it. (A busy card
+no longer sends a "typing…" indicator: the card is the progress display,
+and the indicator cost a second call on every refresh — half the chat's
+budget, for something the card already tells you.)
+
+So with two sessions working in the same chat, each card refreshes about
+every 2.2 seconds instead of every 1.2; with three, about every 3.3. **A
+slower card is the budget working, not a bug.** Answers, replies and
+button responses are never slowed to make room for a card — they keep a
+reserved token, and a card edit that cannot afford a call is simply
+skipped and retried on the next tick rather than queued in front of your
+answer.
+
+In a **group** the limit is 20 calls a minute however many sessions are
+in it, so a card there refreshes every 3.3 seconds whatever else is going
+on.
+
+To speed the cards up: run fewer simultaneous sessions per chat, or give
+the busiest ones a chat of their own (`aipager config`). You can also
+tune `STREAM_EDIT_INTERVAL` (default `1.2`, the cadence while the card is
+streaming text) and `BUSY_EDIT_INTERVAL` (default `3.0`, when it is
+quiet) in your config. Setting either *below* the per-chat floor is
+harmless and changes nothing — the floor wins, which is what keeps the
+chat under Telegram's limit whatever you put in the file.
+
+## The bot slowed down: a rate limit (429)
+
+If Telegram rate-limits a chat anyway, it answers one call with `429` and
+a `retry_after` of a few seconds. The daemon stops calling that chat for
+exactly that long, makes the one deferred send again afterwards, and
+**doubles that chat's card interval** (up to ×8). Each quiet minute halves
+it back to normal.
+
+What you see:
+
+- `aipager status` (and the `aipager daemon` row of `aipager doctor`)
+  shows **`Telegram flood backoff ×4 (chat …), last 429 12 s ago`**.
+- Exactly one line in `aipager logs`, with no traceback:
+  `flood: chat … 429 retry_after=5s → cadence ×2`.
+- Nothing is muted, and **no answer is lost** — it is deferred, not
+  dropped.
+
+Nothing to do. It clears itself. The backoff line disappears once the
+chat has been quiet for a minute or two, and `aipager doctor` keeps the
+daemon row green throughout: a chat backing off is normal operation.
+
 ## The bot went quiet: flood control
 
-Telegram allows roughly 20 messages a minute into one group. A few
-chatty sessions answering at once in the same chat can exceed that, and
-Telegram then answers every send with `429` and a `retry_after` that can
-run to hours. From the chat it looks like the bot died — prompts still
-reach Claude, sessions keep working, but no reply comes back.
+A `retry_after` past `TELEGRAM_MAX_RETRY_AFTER` (default 90 s) is not a
+rate limit — it is a **ban**, and it can run to hours. From the chat it
+looks like the bot died: prompts still reach Claude, sessions keep
+working, but no reply comes back.
 
 What you see:
 

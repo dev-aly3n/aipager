@@ -420,16 +420,30 @@ def check_daemon() -> CheckResult:
     # from the chat. Say so here rather than let the operator restart it
     # into the ban (the mute self-clears; a restart sends one more
     # attempt — see docs/troubleshooting.md).
-    from aipager.status import flood_mute_lines, read_flood_mutes
+    #
+    # A 429 BACKOFF is the other half of that story and the opposite kind
+    # of news: the chat is being paced more slowly on purpose, nothing is
+    # muted and no message is lost, so it rides along in `detail` and
+    # NEVER changes the row's severity (roadmap 8.21). An operator whose
+    # cards feel slow reads this row and sees why, instead of restarting
+    # a daemon that is working exactly as designed.
+    from aipager.status import (
+        flood_backoff_lines,
+        flood_mute_lines,
+        read_flood_backoffs,
+        read_flood_mutes,
+    )
 
     mutes = read_flood_mutes()
+    backoff = flood_backoff_lines(read_flood_backoffs())
     if mutes:
         return CheckResult(
             WARN, "aipager daemon",
             detail=[SOCKET_PATH, *flood_mute_lines(mutes),
-                    "self-clears when the ban lapses — do not restart into it"],
+                    "self-clears when the ban lapses — do not restart into it",
+                    *backoff],
         )
-    return CheckResult(OK, "aipager daemon", detail=[SOCKET_PATH])
+    return CheckResult(OK, "aipager daemon", detail=[SOCKET_PATH, *backoff])
 
 
 def check_service_installed() -> CheckResult:

@@ -259,11 +259,22 @@ def test_429_retries_once_and_succeeds(run_async, monkeypatch):
 
 
 def test_429_sleep_capped_at_30(run_async, monkeypatch):
-    """retry_after in (30, TELEGRAM_MAX_RETRY_AFTER] is clamped to 30.
+    """retry_after in (30, TELEGRAM_MAX_RETRY_AFTER] reaches the limiter
+    WHOLE, and nothing sleeps here.
+
+    This is the busy-card branch, and it carried its own independent
+    clamp-sleep-retry — a copy of the one in ``_handle_response`` that a
+    fix to that function alone would have left running, on the exact path
+    the 2026-09-11 ban was earned on. Both are gone (roadmap 8.21).
 
     Past the cap it is a flood ban (tests/test_rich_message_flood.py);
-    60 keeps this test on the clamp.
+    60 keeps this test on the rate-limit side.
+
+    Mutation: restore the clamp-sleep in ``_handle_edit_response`` and
+    ``slept`` is ``[30]``.
     """
+    from aipager.bot.flood_budget import BudgetRateLimiter
+
     slept = []
 
     async def _fake_sleep(seconds):
@@ -274,11 +285,14 @@ def test_429_sleep_capped_at_30(run_async, monkeypatch):
                 "parameters": {"retry_after": 60},
                 "description": "Too Many Requests"}
 
+    limiter = BudgetRateLimiter(clock=lambda: 1_000_000.0)
+    rm.set_rate_limiter(limiter)
     monkeypatch.setattr(rm, "_post", _fake_post)
     monkeypatch.setattr(rm, "_sleep", _fake_sleep)
     out = run_async(edit_message_text_rich(1, 2, "hi"))
     assert out is None
-    assert slept[0] == 30
+    assert slept == []
+    assert limiter.snapshot()["chats"][0]["retry_until_in"] == 60.0
 
 
 def test_429_twice_returns_none(run_async, monkeypatch):

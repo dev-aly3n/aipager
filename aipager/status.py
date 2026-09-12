@@ -111,6 +111,54 @@ def flood_mute_lines(mutes: list[dict]) -> list[str]:
     ]
 
 
+def read_flood_backoffs(path: str | None = None) -> list[dict]:
+    """Chats whose card cadence is currently backed off after a 429
+    (``bot/flood_budget.py``, roadmap 8.21).
+
+    Read from the daemon's backoff signal file — a DIFFERENT file from the
+    mute's, because ``flood.py`` unlinks that one whenever no mute is
+    active. Entries without a numeric ``multiplier`` over 1 are dropped; a
+    backoff is never inferred, and ``[]`` is returned when the file is
+    missing, unreadable or malformed.
+
+    ``last_429_ago`` is computed HERE, at read time, from the stored wall
+    stamp: the file is rewritten at most once every 5 s, so a stored age
+    would be stale by the time anyone read it.
+    """
+    from aipager import config
+
+    try:
+        data = json.loads(Path(path or config.FLOOD_BACKOFF_FILE).read_text())
+    except (FileNotFoundError, PermissionError, json.JSONDecodeError, OSError):
+        return []
+    entries = data.get("backoff") if isinstance(data, dict) else None
+    now = time.time()
+    out: list[dict] = []
+    for entry in entries or []:
+        try:
+            multiplier = float(entry["multiplier"])
+            last_429_at = float(entry.get("last_429_at", now))
+        except (KeyError, TypeError, ValueError):
+            continue
+        if multiplier > 1:
+            out.append({
+                "chat_id": entry.get("chat_id"),
+                "multiplier": multiplier,
+                "last_429_ago": max(now - last_429_at, 0.0),
+            })
+    return out
+
+
+def flood_backoff_lines(backoffs: list[dict]) -> list[str]:
+    """One line per backing-off chat: ``Telegram flood backoff ×4 (chat
+    123), last 429 12 s ago``. The multiplier loses a trailing ``.0``."""
+    return [
+        f"Telegram flood backoff ×{b['multiplier']:g} (chat {b['chat_id']}), "
+        f"last 429 {int(b['last_429_ago'])} s ago"
+        for b in backoffs
+    ]
+
+
 def _gather_sessions() -> tuple[list[dict], set[str]]:
     """Returns (session_dicts, live_names).
 
@@ -231,7 +279,8 @@ def render_sessions_plain(sessions: list[dict]) -> None:
 
 
 def _render_rich(daemon_up: bool, sessions: list[dict], total_cost: float,
-                 mutes: list[dict] | None = None) -> None:
+                 mutes: list[dict] | None = None,
+                 backoffs: list[dict] | None = None) -> None:
     console.print()
     if daemon_up:
         console.print(
@@ -245,6 +294,8 @@ def _render_rich(daemon_up: bool, sessions: list[dict], total_cost: float,
         )
     for line in flood_mute_lines(mutes or []):
         console.print(f"  [warn]⚠[/warn]  [warn]{line}[/warn]")
+    for line in flood_backoff_lines(backoffs or []):
+        console.print(f"  [warn]⚠[/warn]  [warn]{line}[/warn]")
 
     if sessions:
         console.print()
@@ -257,13 +308,16 @@ def _render_rich(daemon_up: bool, sessions: list[dict], total_cost: float,
 
 
 def _render_plain(daemon_up: bool, sessions: list[dict], total_cost: float,
-                  mutes: list[dict] | None = None) -> None:
+                  mutes: list[dict] | None = None,
+                  backoffs: list[dict] | None = None) -> None:
     line = "daemon: " + ("up" if daemon_up else "not running")
     if daemon_up:
         line += f" (chat {CHAT_ID})"
     console.print(line)
     for mute_line in flood_mute_lines(mutes or []):
         console.print(mute_line)
+    for backoff_line in flood_backoff_lines(backoffs or []):
+        console.print(backoff_line)
     render_sessions_plain(sessions)
     if total_cost > 0:
         console.print(f"  total cost: ${total_cost:.2f}")
@@ -305,12 +359,14 @@ def cmd_status(args: argparse.Namespace | None = None) -> int:
     sessions, _live = _gather_sessions()
     total_cost = sum((s["cost_usd"] or 0.0) for s in sessions)
     mutes = read_flood_mutes()
+    backoffs = read_flood_backoffs()
 
     if as_json:
         print(json.dumps({
             "daemon": {"up": daemon_up, "chat_id": CHAT_ID},
             "config_error": CONFIG_ERROR,
             "flood_muted": mutes,
+            "flood_backoff": backoffs,
             "sessions": sessions,
             "total_cost_usd": round(total_cost, 4),
         }, indent=2))
@@ -324,16 +380,18 @@ def cmd_status(args: argparse.Namespace | None = None) -> int:
             "",
         )
     if console.is_terminal:
-        _render_rich(daemon_up, sessions, total_cost, mutes)
+        _render_rich(daemon_up, sessions, total_cost, mutes, backoffs=backoffs)
     else:
-        _render_plain(daemon_up, sessions, total_cost, mutes)
+        _render_plain(daemon_up, sessions, total_cost, mutes, backoffs=backoffs)
 
     return 0 if daemon_up else 1
 
 
 __all__ = [
     "cmd_status",
+    "flood_backoff_lines",
     "flood_mute_lines",
+    "read_flood_backoffs",
     "read_flood_mutes",
     "render_sessions_rich",
     "render_sessions_plain",

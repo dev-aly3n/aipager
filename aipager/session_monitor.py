@@ -275,6 +275,29 @@ def expired_compacting_sessions(
             if sess.compacting_is_overdue(now)]
 
 
+def _sweep_flood_backoff() -> None:
+    """Let every chat's 429 backoff decay on the clock, not only while a
+    busy card happens to be ticking (roadmap 8.21).
+
+    The backoff halves once per quiet minute and the daemon publishes the
+    chats still above ×1 to a small file `aipager status` and `aipager
+    doctor` read. Both the decay and that file are driven from the card
+    animator — so a chat that 429s and then goes quiet, with every session
+    IDLE, would keep reporting "×4" for as long as nobody started a turn.
+    This scan already runs every 2 s; one sweep here is the whole fix.
+
+    Imported late and typed on the limiter we install, so a daemon running
+    without one (or with PTB's, in a test) is simply skipped. Never
+    raises: a diagnostic file must not be able to stop the session scan.
+    """
+    from aipager.bot.flood_budget import BudgetRateLimiter
+    from aipager.bot.rich_message import get_rate_limiter
+
+    limiter = get_rate_limiter()
+    if isinstance(limiter, BudgetRateLimiter):
+        limiter.sweep()
+
+
 class SessionMonitor:
     """Periodically discovers dtach sessions and marks dead ones GONE."""
 
@@ -311,6 +334,7 @@ class SessionMonitor:
             await asyncio.sleep(PANE_POLL_INTERVAL)
 
     async def _scan(self) -> None:
+        _sweep_flood_backoff()
         sessions = await dtach_inject.list_sessions()
         old_names = set(self.registry.all_sessions().keys())
 

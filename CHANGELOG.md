@@ -43,6 +43,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   applying it, so the cap still ships in the hook and CI's
   single-process run stops inheriting a phantom failure. Developer-only
   — no runtime behaviour changes.
+- Telegram no longer flood-bans a busy chat. Private chats had no
+  per-chat pacing at all — the rate limiter bucketed per chat only for
+  groups — so two sessions streaming their busy cards into one DM put
+  about 2.2 edits a second into a chat Telegram allows one a second, and
+  every `429` that came back was retried on the very next tick. That
+  earned 2,021 rate-limit errors in fourteen hours and then a 5.4-hour
+  ban. Now every chat has its own budget of ~1 call a second with a small
+  burst, and the busy cards of a chat share it: with N sessions working
+  in one chat each card refreshes about every 1.1 × N seconds, and a card
+  edit the chat cannot afford is skipped and retried on the next tick
+  instead of queueing. Answers, replies and button responses keep a
+  reserved token and are never skipped, and a card that has been skipped
+  for two intervals is pushed through, so it can be slow but never
+  freezes. A small `429` now defers that chat for exactly the time
+  Telegram asked, retries the deferred send once, and slows that chat's
+  cards until a quiet minute passes — one log line, no traceback, nothing
+  muted and no answer lost. `aipager status` and `aipager doctor` show
+  `Telegram flood backoff ×4 (chat …), last 429 12 s ago` while it lasts.
+  A `retry_after` past `TELEGRAM_MAX_RETRY_AFTER` is still a ban and
+  still mutes the chat exactly as before. Reactions still go out.
+- A group or channel is now held to no more than 20 calls in *any* 60
+  seconds, which is what Telegram's group limit actually means. It used
+  to be counted as a refilling allowance of 20, which let a burst of 25
+  through in the first minute.
+
+### Changed
+- A busy card no longer sends a "typing…" indicator, in any chat. The
+  card itself is the progress display — it already shows the elapsed
+  time and what Claude is doing — and the indicator was a second
+  Telegram call on every tick of every session, i.e. half of the chat's
+  whole budget. It was also the only thing standing between two sessions
+  sharing a chat and the refresh rate this release promises them: with
+  it, two streaming cards in one chat managed a refresh every 2.2 to 6.6
+  seconds and half their edits were refused; without it, every refresh
+  lands on 2.2 seconds exactly. In a group, where the budget is 20 calls
+  a minute, the card went from 11 edits a minute with ten-second pauses
+  to 18 evenly spaced.
+- A card refresh the budget refuses is retried a second later instead of
+  waiting out a whole interval. Sessions started together tick together,
+  and a chat's small burst allowance admits only two of them at a time,
+  so the third used to lose every round: three sessions in one chat got
+  43 refreshes a minute with gaps up to ten seconds, and now get 56 at a
+  flat 3.3 seconds each. A card can still never refresh faster than its
+  interval.
+- `STREAM_EDIT_INTERVAL` now defaults to `1.2` seconds (was `0.9`) and
+  `BUSY_EDIT_INTERVAL` (`3.0`) became configurable from the environment
+  like it. Values below the per-chat floor are harmless — the floor wins.
 
 ## [0.7.10] - 2026-09-10
 
