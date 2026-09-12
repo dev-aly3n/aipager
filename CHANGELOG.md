@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.11] - 2026-09-12
+
 ### Fixed
 - The answer no longer appears under a busy card that still reads
   "Processing". In the card layout the daemon already renders the
