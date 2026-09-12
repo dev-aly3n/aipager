@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.12] - 2026-09-12
+
 ### Fixed
 - The "typing…" indicator is back while a session is working. 0.7.11
   removed it to protect the busy cards' refresh rate, on the assumption
