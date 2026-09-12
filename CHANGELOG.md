@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The test suite no longer clamps its own address space. `notify_hook`
+  and `statusline_notify` cap their subprocess at 1 GiB of `RLIMIT_AS`
+  early in `main()` — correct for a hook, fatal for pytest:
+  eight test files call those `main()` functions in-process, so the
+  first one to run pinned the whole test process to that ceiling, and a
+  hard limit can never be raised back. A full run ended at 99.99 % of
+  the cap, so the next thread-stack `mmap` failed with `RuntimeError:
+  can't start new thread`, reported against whichever unrelated test
+  called `run_in_executor` next (usually `test_voice.py`) and getting
+  likelier with every test added. An autouse fixture in
+  `tests/conftest.py` now records the `setrlimit` call instead of
+  applying it, so the cap still ships in the hook and CI's
+  single-process run stops inheriting a phantom failure. Developer-only
+  — no runtime behaviour changes.
+
 ## [0.7.10] - 2026-09-10
 
 ### Fixed

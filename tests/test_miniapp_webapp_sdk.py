@@ -88,14 +88,19 @@ def run_async():
     executor thread — the download runs in the loop's default
     ``ThreadPoolExecutor`` — and an abandoned loop keeps that thread alive
     until the cyclic GC happens to collect the loop. Each live thread
-    costs 8 MB of *address space* (its stack) plus a glibc arena, and the
-    suite runs under a hard 1 GiB ``RLIMIT_AS``: the first test file to
-    run calls ``notify_hook.main()``, which clamps ``RLIMIT_AS`` on the
-    pytest process itself and can never raise it back. The suite already
-    sits within a few MB of that ceiling, so leaking threads here would
-    not fail THIS file — it would fail an unrelated later test whose
-    ``run_in_executor`` can no longer mmap a stack ("RuntimeError: can't
-    start new thread", seen in test_voice.py).
+    costs 8 MB of *address space* (its stack) plus a glibc arena, and a
+    leak here would not fail THIS file — it would fail an unrelated later
+    test whose ``run_in_executor`` can no longer mmap a stack
+    ("RuntimeError: can't start new thread", seen in test_voice.py).
+
+    That used to be a near-certainty rather than a risk: the suite ran
+    under a hard 1 GiB ``RLIMIT_AS``, because the first test file to call
+    ``notify_hook.main()`` clamped the pytest process itself and nothing
+    could raise it back, leaving a full run a few MB under the ceiling.
+    conftest's autouse ``_never_clamp_the_test_process`` fixture closed
+    that hole, so the ceiling is now whatever the OS gives us — but the
+    thread hygiene below stays: it is cheap, and it is what keeps this
+    file from being the one that puts the next ceiling in reach.
 
     So: shut the default executor down and close each loop when the test
     ends. Pending tasks are cancelled first, so closing never leaves a
