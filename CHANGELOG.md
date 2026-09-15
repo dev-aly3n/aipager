@@ -7,6 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **No Bot API call can reach a flood-banned chat any more, by any path.**
+  Enforcement moved into `BudgetRateLimiter.process_request` — the one
+  chokepoint every outbound call already passes through, and which until
+  now did not know bans existed (`grep -c MUTE aipager/bot/flood_budget.py`
+  was 0). The mute previously lived in 22 checks scattered across five
+  files, and on 2026-09-15 a single forgotten site (`animation.send_busy`,
+  which creates the busy card) put a user's prompt straight into an active
+  ban: three bans followed in one day, escalating `retry_after`
+  1283 → 312 → **34212 s (9.5 hours)**, with 3, then 5, then 9 requests
+  fired into each. A new send site now inherits the gate instead of having
+  to remember it, and four static sweeps fail the build for one that
+  slips through — they cover `aipager/miniapp/` as well as `aipager/bot/`,
+  and `delete_message` and `send_chat_action` as well as the nine method
+  names the old sweep knew.
+- **No answer is lost to a ban.** An answer a mute refuses is held and
+  delivered once the ban lifts, within one 2-second tick, prefixed with
+  `⏳ delivered late (held N min during a Telegram rate limit)`. Five
+  answers were dropped on 2026-09-15, each leaving one log line and
+  nothing else. There is still no plain-text fallback into a ban — that
+  was never the problem — but "cannot send now" no longer means "cannot
+  send".
+- **The busy-card watchdog stops fighting a muted chat.** A muted tick no
+  longer kills its own animation task, so the watchdog no longer restarts
+  it every 20 seconds for the length of the ban (348 restarts in 54
+  minutes, against six actual refusals all day). One log line when
+  suppression starts and one when it lifts.
+
+### Changed
+- **Each chat's send rate is now learned instead of assumed.** Telegram
+  does not publish the limit that applies to a given bot — it depends on
+  the account's recent history — so `TELEGRAM_PRIVATE_MAX_RATE` (1 call/s)
+  becomes a *ceiling* rather than the sustained allowance it was. A chat
+  starts at 0.5 calls/s, earns +0.1 per quiet minute, halves on a 429 and
+  drops to 0.05 on a ban, climbing back over six hours afterwards.
+- **Every chat now has a rolling volume cap**, not just groups: 30 calls
+  per 60 s (groups keep their stricter 20). A private chat previously had
+  none at all, so its 1/s bucket permitted 60 calls a minute indefinitely
+  — which is what two busy sessions did for 45 minutes before the 9.5-hour
+  ban. Busy cards are told about the cap and pace themselves under it, so
+  a single card now refreshes every 2.2 s rather than 1.32 s.
+- **Outbound calls are classified.** Busy cards, the typing bubble and the
+  pinned dashboard are *ornaments*; reactions are *signals*; everything
+  else — answers, replies, permission prompts — is *essential* and is
+  never dropped. Below 0.2 calls/s a chat enters **minimal mode**:
+  ornaments are suspended and the card shows one static
+  `⏳ working — updates paused` line while answers keep flowing.
+- **A flood ban survives a daemon restart.** The mute deadline is now
+  wall-clock and is persisted, with each chat's earned rate and ban
+  history, to `~/.claude/aipager-flood-state.json`. Previously a restart
+  forgot everything and its own startup notice was the first request back
+  into the ban.
+- `aipager status` (both renderers and `--json`, as `flood_chats`) and the
+  `aipager daemon` row of `aipager doctor` now show each chat's earned
+  rate, its usage against the cap, minimal mode and bans in the last 24 h.
+  `doctor` warns on minimal mode, so a paused card is never mistaken for a
+  broken one.
+- **The 🚨 reaction on a dropped answer is gone**, correcting the promise
+  made in 0.7.10 ("a dropped answer still gets its 🚨") and again in
+  0.7.11. It was sent into the chat that had just been banned, on the
+  theory that reactions ride a separate rate-limit bucket. They do — for
+  *pacing*. Measured on 2026-09-15, a request into an active ban extends
+  it whatever endpoint it names. Nothing is lost by removing it: the
+  answer it used to flag is now held and delivered instead of dropped, so
+  there is nothing left to signal. Button-tap toasts are withheld during a
+  ban for the same reason.
+
 ## [0.7.12] - 2026-09-12
 
 ### Fixed

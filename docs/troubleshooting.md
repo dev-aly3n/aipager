@@ -99,10 +99,32 @@ What you see:
   `flood: chat … 429 retry_after=5s → cadence ×2`.
 - Nothing is muted, and **no answer is lost** — it is deferred, not
   dropped.
+- The chat's **earned send rate halves**, and `aipager status` shows it:
+  `Telegram chat 123: rate 0.25/s, 7/30 in the last minute`.
 
-Nothing to do. It clears itself. The backoff line disappears once the
-chat has been quiet for a minute or two, and `aipager doctor` keeps the
-daemon row green throughout: a chat backing off is normal operation.
+Nothing to do. It clears itself. The rate climbs back by 0.1 calls/s for
+every quiet minute, the backoff line disappears once the chat has been
+quiet for a minute or two, and `aipager doctor` keeps the daemon row
+green throughout: a chat backing off is normal operation.
+
+### The earned rate, and why your cards may be slower than they were
+
+Since 0.7.13 each chat's sustained send rate is **learned rather than
+assumed**. Telegram does not publish the limit that actually applies to
+your bot — it depends on your account's recent history — so the daemon
+starts each chat at 0.5 calls/s, adds 0.1 for every quiet minute up to a
+ceiling of 1/s, halves it on a 429 and drops it to 0.05 after a ban. A
+bot that has just been banned is therefore paced far more carefully than
+one that has not, and it earns its speed back over the following hours.
+
+If a chat's rate falls below 0.2 calls/s it enters **minimal mode**: busy
+cards stop animating and show one static `⏳ working — updates paused`
+line, the typing bubble stops, and the pinned dashboard stops refreshing.
+**Answers, replies and permission prompts keep flowing** — that is the
+point. The card is about 95 % of what this bot sends and the answer about
+5 %, so under pressure it sheds pixels rather than work. `aipager doctor`
+reports minimal mode as a warning so a paused card is never mistaken for
+a broken one; it lifts by itself as the rate recovers.
 
 ## The bot went quiet: flood control
 
@@ -118,22 +140,36 @@ What you see:
 - One line in `aipager logs`: `Telegram flood control — chat … muted
   for Ns (until HH:MM) …`, then silence for that chat. Later, one
   `flood mute on chat … lifted` line.
-- A 🚨 reaction on your message when the answer to it was dropped.
+- `aipager status` also shows the chat's state in full:
+  `Telegram chat 123: rate 0.05/s — MINIMAL MODE, card updates paused —
+  flood-muted until 09:41 (1 ban(s) in the last 24 h)`.
 
-The daemon mutes the chat for exactly the time Telegram asked and skips
-every send to it — answers, busy-card edits, attachments, and the replies
-your own commands and button taps would have produced — instead of
-retrying into the ban, because each retry (and each plain-text fallback)
-is a fresh violation that extends it. A command typed during a mute
-therefore answers with nothing at all; a button tap still gets its toast,
-which Telegram meters separately. Answers produced during the mute
-are not queued; ask again once it lifts. Other chats are unaffected.
+The daemon mutes the chat for exactly the time Telegram asked and makes
+**no call of any kind** to it — answers, busy-card edits, attachments,
+reactions, typing indicators, button-tap toasts and the replies your
+commands would have produced. Each one would be a fresh violation that
+extends the ban; a request into an active ban is what turned a 21-minute
+ban into a 9.5-hour one on 2026-09-15. A command typed during a mute
+therefore answers with nothing at all, and **a button tap is not
+acknowledged either** — up to 0.7.12 the toast still fired, on the theory
+that Telegram meters it separately. It does, for pacing; it does not for
+bans. Other chats are unaffected.
+
+**Answers are not lost.** An answer produced while the chat is muted is
+held and delivered once the ban lifts, within a couple of seconds, with
+its first line reading `⏳ delivered late (held 42 min during a Telegram
+rate limit)`. You do not need to ask again. (Held answers live in memory:
+if you restart the daemon while any are waiting, they are lost — the
+shutdown log says how many.)
 
 What NOT to do:
 
-- Don't restart the daemon to "fix" it. The mute self-clears at the
-  time shown; a restart forgets it and sends one more attempt into the
-  ban, which can extend it.
+- Don't restart the daemon to "fix" it. The mute self-clears at the time
+  shown. Since 0.7.13 a restart no longer forgets the ban — the deadline,
+  the chat's earned rate and its ban history are persisted to
+  `~/.claude/aipager-flood-state.json` and restored on start — so
+  restarting no longer extends it either. But it will throw away any
+  answers still held, and it fixes nothing.
 - Don't lower `TELEGRAM_MAX_RETRY_AFTER` below the default 90 s hoping
   to retry sooner — everything past that cap is a ban, not a rate limit.
 
