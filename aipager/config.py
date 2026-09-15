@@ -302,11 +302,17 @@ FLOOD_STATE_FILE = Path.home() / ".claude" / "aipager-flood-state.json"
 # under that, so a burst of 429s costs one write rather than twenty.
 FLOOD_STATE_MIN_INTERVAL: float = 5.0
 
-# How stale the volatile figures in that file (sustained usage, minimal
-# mode) may get before a tick refreshes them for `aipager status`, which
-# reads it from another process. Only refreshed when a chat has actually
-# sent something since the last write — an idle daemon writes nothing.
-FLOOD_STATE_REFRESH_SECONDS: float = 30.0
+# There is deliberately no periodic-refresh constant here (review
+# rev-iter1-008). `FLOOD_STATE_REFRESH_SECONDS = 30.0` was defined in
+# iteration 1 with a docstring describing behaviour nothing implemented,
+# and a documented constant wired to nothing is worse than an honest
+# limitation: the file is written when something MATERIAL changes (a 429,
+# a ban, a mute arming or lifting), so the volatile figures in it —
+# sustained usage, minimal mode — are only fresh for
+# `FLOOD_SUSTAINED_WINDOW` after a flood event, and `status.py` omits them
+# as stale outside that. A healthy chat that has never been rate-limited
+# produces no file and no line at all, which is the correct reading of
+# "nothing is wrong".
 
 # Sanity clamp on ANY mute deadline, armed or restored (8.28 D-7). Making
 # the deadline wall-clock is what lets it survive a restart; it also makes

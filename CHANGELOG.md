@@ -61,9 +61,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   into the ban.
 - `aipager status` (both renderers and `--json`, as `flood_chats`) and the
   `aipager daemon` row of `aipager doctor` now show each chat's earned
-  rate, its usage against the cap, minimal mode and bans in the last 24 h.
+  rate, minimal mode, any mute deadline and bans in the last 24 h.
   `doctor` warns on minimal mode, so a paused card is never mistaken for a
-  broken one.
+  broken one. Volume against the rolling cap is shown only for about a
+  minute after a flood event, and omitted rather than guessed after that:
+  the figures come from a file written when something material changes,
+  and a rolling window that has already rolled is worse than no number.
 - **The 🚨 reaction on a dropped answer is gone**, correcting the promise
   made in 0.7.10 ("a dropped answer still gets its 🚨") and again in
   0.7.11. It was sent into the chat that had just been banned, on the
