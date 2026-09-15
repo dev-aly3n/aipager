@@ -113,6 +113,7 @@ from aipager.config import (
     FLOOD_BACKOFF_MAX,
     FLOOD_MIN_RATE,
     FLOOD_MINIMAL_MODE_RATE_FLOOR,
+    FLOOD_MUTE_MAX_SECONDS,
     FLOOD_RATE_INCREASE,
     FLOOD_RATE_RECOVERY_HOURS,
     FLOOD_START_RATE,
@@ -164,6 +165,20 @@ CHAT_ACTION_ENDPOINT: str = "sendChatAction"
 # taking reactions and chat actions again — that is the mutation.
 _CHAT_BUDGET_EXEMPT: frozenset = frozenset({REACTION_ENDPOINT,
                                            CHAT_ACTION_ENDPOINT})
+
+# How long one ban stays in a chat's memory (8.29 R5 / rev-iter1-005).
+# 24 hours, matching `config.FLOOD_MUTE_MAX_SECONDS`: within this window a
+# chat's rate CEILING is halved, so "a ban today means a reduced start
+# tomorrow" is a rule rather than a hope. Telegram's own memory is
+# measured in hours; ours used to be measured in process lifetimes.
+_BAN_MEMORY_SECONDS: float = 86400.0
+
+# The fraction of the normal ceiling a chat with a ban in the last 24 h
+# may climb to. Half: enough to keep one session's card animating, not
+# enough to repeat yesterday's volume. Recovering FULLY six hours after a
+# 9.5-hour ban is how the 2026-09-15 ladder was earned three times in one
+# day.
+_BANNED_CEILING_FRACTION: float = 0.5
 
 # Tokens a chat must have before a SKIP-kind caller may spend one. The
 # extra token is the reserve: an answer, a reply or any other blocking
@@ -451,6 +466,15 @@ class ChatBudget:
         self.rate_earned_at: float = clock()
         self.ban_stamps: list[float] = []
         self.ban_seen_until: float = 0.0
+        # WALL-clock instant this chat's mute lifts (or lifted). The one
+        # thing `_earn` needs and cannot recover later: while a mute holds
+        # NOTHING reaches the limiter, so the first call after the lift
+        # would otherwise measure its success window from before the ban
+        # and credit every muted minute as quiet time (8.29 T1(b)/(c)).
+        # Recorded whenever the limiter observes a live mute, and at the
+        # instant a ban is armed; persisted, because a restart inside a
+        # ban must not forget where the ban ends.
+        self.muted_until: float = 0.0
         self.waiters: collections.deque = collections.deque()
         self.calls: int = 0
         self.skipped: int = 0
@@ -469,10 +493,29 @@ class ChatBudget:
         never earned when the rate goes up, and confiscating tokens it
         did earn when it goes down. On a ban (1.0 -> 0.05) that
         difference is the whole penalty.
+
+        A non-finite *new_rate* is REFUSED, not clamped (8.29 T2). NaN
+        compares false against every bound, so an unchecked one survives
+        the range check in :meth:`BudgetRateLimiter.restore`, and
+        ``min(capacity, tokens + elapsed * NaN)`` then leaves the bucket
+        permanently full — the chat's pacing silently disabled, which is
+        precisely the failure this ship exists to end. The start rate is
+        the conservative answer: untrusted input degrades to the default,
+        never to "unlimited".
         """
+        try:
+            rate = float(new_rate)
+        except (TypeError, ValueError):
+            return
+        if not math.isfinite(rate):
+            log.warning(
+                "flood: refusing a non-finite rate (%r) for chat %s — "
+                "keeping %g calls/s", new_rate, self.chat_id, self.rate,
+            )
+            return
         self.chat._refill(now)
-        self.rate = float(new_rate)
-        self.chat.rate = float(new_rate)
+        self.rate = rate
+        self.chat.rate = rate
 
     def note_ban_stamp(self, wall_now: float) -> None:
         """Record one ban, newest-kept and bounded."""
@@ -480,16 +523,23 @@ class ChatBudget:
         if len(self.ban_stamps) > self.MAX_BAN_STAMPS:
             del self.ban_stamps[:-self.MAX_BAN_STAMPS]
 
-    def bans_today(self, wall_now: float) -> int:
-        """Bans recorded in the last 24 h — what ``status`` reports."""
+    def bans_in_last_24h(self, wall_now: float) -> int:
+        """How many bans this chat has taken in the last 24 hours.
+
+        The durable memory R5 asks for, read two ways: ``status`` displays
+        it (as ``bans_today``), and the limiter HALVES this chat's rate
+        ceiling while it is non-zero, so "a ban today means a reduced
+        start tomorrow" is literally true rather than an aspiration. It
+        decays by itself — a stamp simply ages out of the window — which
+        is why there is no counter to keep in step with the list.
+        """
         return sum(1 for stamp in self.ban_stamps
-                   if 0.0 <= wall_now - stamp <= 86400.0)
-        # Calls the mute gate refused for this chat (8.26 R1). Counted
-        # rather than merely dropped so `snapshot()` — and a future
-        # incident — can show that the gate did fire, and how often.
-        # `calls` is deliberately NOT bumped for these: the callback
-        # never ran.
-        self.muted_refusals: int = 0
+                   if 0.0 <= wall_now - stamp <= _BAN_MEMORY_SECONDS)
+
+    def bans_today(self, wall_now: float) -> int:
+        """The display name for :meth:`bans_in_last_24h`; what
+        ``snapshot()`` and ``aipager status`` report."""
+        return self.bans_in_last_24h(wall_now)
 
 
 def is_group_chat(chat_id) -> bool:
@@ -572,6 +622,32 @@ def _mark_state_dirty() -> None:
         flood_state.mark_dirty()
     except Exception:  # pragma: no cover - defensive
         log.debug("could not mark flood state dirty", exc_info=True)
+
+
+def _finite(value) -> float | None:
+    """*value* as a finite float, or ``None`` if it is not one.
+
+    Everything read from ``FLOOD_STATE_FILE`` goes through here (8.29 T2).
+    Persisted state is UNTRUSTED INPUT: the file can be truncated by a
+    crash mid-write, hand-edited, or carried across a clock jump, and
+    ``json.loads`` happily returns ``float('nan')`` for the bare literal
+    ``NaN`` that ``json.dumps`` itself writes. NaN then compares FALSE
+    against every bound, so it survives a range check, and
+    ``min(capacity, tokens + elapsed * NaN)`` leaves the token bucket
+    permanently full — pacing silently disabled for that chat, for ever.
+    Negative and absurd values were already clamped; only the non-finite
+    ones slipped through.
+
+    ``None`` means "this field was not readable", and every caller
+    defaults it rather than guessing.
+    """
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return None
+    return out if math.isfinite(out) else None
 
 
 def _window_gap(limit: float, period: float) -> float:
@@ -834,9 +910,9 @@ class BudgetRateLimiter(BaseRateLimiter):
 
         * after a **429**: ``FLOOD_SUCCESS_WINDOW_SECONDS`` (60 s), so a
           chat that merely went too fast for a moment recovers in minutes;
-        * within ``FLOOD_RATE_RECOVERY_HOURS`` of a **ban**: the same ten
-          steps stretched over those hours (2160 s per step), because a
-          9.5-hour ban is not information about the next minute.
+        * within ``FLOOD_RATE_RECOVERY_HOURS`` of a **ban LIFTING**: the
+          same ten steps stretched over those hours (2160 s per step),
+          because a 9.5-hour ban is not information about the next minute.
 
         The arithmetic is what settles it: +0.1 per 60 s climbs MIN (0.05)
         to the ceiling (1.0) in 9.5 MINUTES. Using that after a ban would
@@ -845,12 +921,80 @@ class BudgetRateLimiter(BaseRateLimiter):
         """
         if not budget.ban_stamps:
             return self._success_window
-        recent = max(budget.ban_stamps)
+        # From the END of the penalty, not its start (8.29 T1(c)). A ban
+        # is armed for hours: measured from the arming, the slow regime of
+        # a 9.5-HOUR ban has entirely expired by the time that ban lifts,
+        # so the chat leaves it on the 60 s regime and climbs a whole step
+        # a minute later — the escalation this ship exists to end, one
+        # layer down. `muted_until` is the lift instant; `ban_stamps` is
+        # all there is for a ban recorded without a mute.
+        recent = max([*budget.ban_stamps, budget.muted_until])
         if wall_now - recent > self._recovery_hours * 3600.0:
             return self._success_window
         span = max(self._chat_max_rate - self._min_rate, 0.0)
         steps = max(math.ceil(span / self._rate_increase), 1)
         return (self._recovery_hours * 3600.0) / steps
+
+    def max_rate_for(self, budget: ChatBudget, wall_now: float) -> float:
+        """The ceiling THIS chat may climb to, right now (R5).
+
+        ``TELEGRAM_PRIVATE_MAX_RATE`` for a chat with a clean day, HALF of
+        it while it has a ban in the last 24 hours (:data:`_BAN_MEMORY_SECONDS`),
+        decaying out by itself as the stamp ages past the window.
+
+        This is "a ban today means a reduced start tomorrow", made
+        arithmetic. Without it the post-ban regime alone returns a chat to
+        the full ceiling six hours after a 9.5-hour ban — a memory shorter
+        than the incident it is supposed to remember, and the shape that
+        earned three bans in one day on 2026-09-15.
+
+        Never below ``FLOOD_MIN_RATE``: a ceiling under the floor would
+        invert the two and pin a chat at a rate it can never leave.
+        """
+        if not budget.ban_stamps:
+            return self._chat_max_rate
+        if budget.bans_in_last_24h(wall_now) <= 0:
+            return self._chat_max_rate
+        return max(self._chat_max_rate * _BANNED_CEILING_FRACTION,
+                   self._min_rate)
+
+    def _earn_floor(self, budget: ChatBudget, now: float) -> float:
+        """The earliest instant a success window may be measured from —
+        the moment the chat's most recent ban LIFTED (8.29 T1(b)/(c)).
+
+        A muted interval is not quiet time. It is the interval in which
+        every send was refused, by us, because Telegram had banned the
+        chat; crediting it as success is crediting the ban itself. And
+        because nothing reaches ``process_request`` while a mute holds,
+        the freeze in :meth:`_earn` alone never runs during the ban — the
+        FIRST call after the lift is what evaluates the whole span, and it
+        would see one unbroken quiet window per minute of the ban.
+        Measured before this existed: a chat entered a 1283 s ban at 0.5
+        calls/s and came out at 1.0, the ceiling.
+
+        So the anchor is floored at the lift instant. Two consequences,
+        both wanted:
+
+        * **(b)** the muted interval is EXCLUDED from the success window
+          rather than merely not counted twice; and
+        * **(c)** the first window after a lift is a FULL one, measured
+          from the lift, because whatever credit had accrued before the
+          ban is discarded rather than banked.
+
+        ``muted_until`` is a WALL-clock deadline (it is the mute's own),
+        so it is rebased onto this limiter's clock with
+        :meth:`mono_equiv`, which reports a deadline still in the FUTURE
+        as "now" — exactly right: while the ban runs, nothing may be
+        earned from any instant at all.
+
+        It is the MUTED interval that is excluded, not merely a recorded
+        ``retry_after``: a ban the daemon knows about but is not muted for
+        is a rate event like any other, and freezing on it would stop a
+        healthy chat's climb for hours over a ban that is not in force.
+        """
+        if budget.muted_until <= 0.0:
+            return 0.0
+        return self.mono_equiv(budget.muted_until)
 
     def _earn(self, budget: ChatBudget, now: float) -> None:
         """Credit whole quiet windows since the anchor. Lazy, like
@@ -860,12 +1004,22 @@ class BudgetRateLimiter(BaseRateLimiter):
         Frozen while the chat is muted: climbing through a ban is
         precisely learning nothing, which is the defect this replaces.
         The anchor is still moved to ``now`` so the mute does not bank a
-        pile of windows to be cashed the moment it lifts.
+        pile of windows to be cashed the moment it lifts — and
+        :meth:`_earn_floor` makes that true even for the muted minutes in
+        which this method was never called at all, which is every one of
+        them (8.29 T1).
         """
         if MUTE.is_muted(budget.chat_id):
+            self._note_mute_deadline(budget)
             budget.rate_earned_at = now
             return
-        if budget.rate >= self._chat_max_rate:
+        # The ban is over, but the interval it covered is still not quiet
+        # time: never measure a success window from before the lift.
+        floor = self._earn_floor(budget, now)
+        if floor > budget.rate_earned_at:
+            budget.rate_earned_at = floor
+        ceiling = self.max_rate_for(budget, time.time())
+        if budget.rate >= ceiling:
             budget.rate_earned_at = now
             return
         window = self._success_window_for(budget, time.time())
@@ -875,10 +1029,26 @@ class BudgetRateLimiter(BaseRateLimiter):
         if steps <= 0:
             return
         budget.set_rate(
-            min(budget.rate + steps * self._rate_increase, self._chat_max_rate),
+            min(budget.rate + steps * self._rate_increase, ceiling),
             now,
         )
         budget.rate_earned_at += steps * window
+
+    def _note_mute_deadline(self, budget: ChatBudget) -> None:
+        """Remember when this chat's mute lifts, while it is still known.
+
+        ``flood.MUTE.is_muted`` is a DESTRUCTIVE read — the first call
+        after the deadline forgets the entry — so the lift instant is only
+        knowable while the mute holds. Every read path that touches a
+        budget runs this, and so does the arming point, which is what
+        makes ``_earn_floor`` work for a ban that came and went with no
+        call in between: the case that is not the exception but the rule,
+        because the whole point of a mute is that nothing is sent.
+        """
+        remaining = MUTE.remaining(budget.chat_id)
+        if remaining > 0.0:
+            budget.muted_until = max(budget.muted_until,
+                                     time.time() + remaining)
 
     def _sync_mute(self, budget: ChatBudget, now: float) -> None:
         """Notice a ban armed on the RICH path, where ``_run`` never sees it.
@@ -911,15 +1081,23 @@ class BudgetRateLimiter(BaseRateLimiter):
         and ``rich_message.py``), so there is exactly one place to look
         when asking why a chat is muted.
         """
-        try:
-            seconds = float(seconds)
-        except (TypeError, ValueError):
+        value = _finite(seconds)
+        if value is None:
+            # A non-finite or unreadable duration is not a ban we can
+            # reason about (8.29 T2): `now + inf` is a deadline nothing
+            # ever passes, which would freeze this chat's climb for ever.
             return
+        seconds = min(max(value, 0.0), FLOOD_MUTE_MAX_SECONDS)
         budget = self._budget_for(self._key(chat_id))
         if budget is None:
             return
         wall_now = time.time()
-        deadline = wall_now + max(seconds, 0.0)
+        deadline = wall_now + seconds
+        # ABOVE the idempotence guard on purpose. `_run`'s ban branch
+        # calls this BEFORE `transport._send_with_retry` arms the mute, so
+        # on that path the only call that can see a live mute is the
+        # second one — the one the guard turns back.
+        self._note_mute_deadline(budget)
         if deadline <= budget.ban_seen_until + 1.0:
             return
         budget.ban_seen_until = deadline
@@ -1030,10 +1208,10 @@ class BudgetRateLimiter(BaseRateLimiter):
         exceeds ``TELEGRAM_MAX_RETRY_AFTER`` — that is a ban and the
         8.17 mute owns it, including its own log line (R6).
         """
-        try:
-            seconds = float(seconds)
-        except (TypeError, ValueError):
+        value = _finite(seconds)
+        if value is None:
             return
+        seconds = value
         if seconds > TELEGRAM_MAX_RETRY_AFTER:
             return
         budget = self._budget_for(self._key(chat_id))
@@ -1430,6 +1608,17 @@ class BudgetRateLimiter(BaseRateLimiter):
                     if budget.last_429_at > 0.0 else 0.0
                 ),
                 "ban_stamps": list(budget.ban_stamps),
+                # Already WALL clock (it is the deadline the ban was armed
+                # with), so it goes out as it is. Carried across the
+                # restart so the same ban is not counted a second time by
+                # `_sync_mute` when the new daemon's first call finds the
+                # restored mute still running — and so `_earn_floor` still
+                # knows when it lifts.
+                "ban_seen_until": budget.ban_seen_until,
+                # The lift instant `_earn_floor` measures from. A restart
+                # INSIDE a ban must not come back able to credit the rest
+                # of that ban as quiet time.
+                "muted_until": budget.muted_until,
                 "sustained_used": budget.window.used(),
                 "sustained_limit": budget.window.limit,
                 "minimal": self._minimal(budget),
@@ -1451,6 +1640,7 @@ class BudgetRateLimiter(BaseRateLimiter):
         if not isinstance(chats, list):
             return 0
         restored = 0
+        wall_now = time.time()
         for entry in chats:
             if not isinstance(entry, dict):
                 continue
@@ -1461,25 +1651,48 @@ class BudgetRateLimiter(BaseRateLimiter):
                 budget = self._budget_for(key)
                 if budget is None:
                     continue
-                if "rate" in entry:
-                    rate = float(entry["rate"])
-                    if not (self._min_rate <= rate <= self._chat_max_rate):
-                        rate = min(max(rate, self._min_rate), self._chat_max_rate)
-                    budget.set_rate(rate, self._clock())
-                if entry.get("rate_earned_at"):
-                    budget.rate_earned_at = self.mono_equiv(
-                        entry["rate_earned_at"])
-                if entry.get("backoff"):
-                    budget.backoff = min(max(float(entry["backoff"]), 1.0),
-                                         self._backoff_max)
-                if entry.get("last_429_at"):
-                    budget.last_429_at = self.mono_equiv(entry["last_429_at"])
+                # BAN HISTORY FIRST: the ceiling the rate is clamped to
+                # depends on it (`max_rate_for`), so restoring the rate
+                # before the stamps would admit a rate this chat's own
+                # history says it may not have.
                 stamps = entry.get("ban_stamps")
                 if isinstance(stamps, list):
+                    # A stamp in the FUTURE is a clock that moved, not a
+                    # ban that has not happened yet — clamped to now
+                    # rather than dropped, because dropping it would
+                    # forget a penalty, which is the unsafe direction.
                     budget.ban_stamps = [
-                        float(x) for x in stamps[-ChatBudget.MAX_BAN_STAMPS:]
-                        if isinstance(x, (int, float))
+                        min(stamp, wall_now) for stamp in (
+                            _finite(x) for x in
+                            stamps[-ChatBudget.MAX_BAN_STAMPS:]
+                        )
+                        if stamp is not None and stamp >= 0.0
                     ]
+                for field, attr in (("ban_seen_until", "ban_seen_until"),
+                                    ("muted_until", "muted_until")):
+                    value = _finite(entry.get(field))
+                    if value is not None and value > 0.0:
+                        # Clamped like every other deadline (D-7): a file
+                        # written before a clock jump must not freeze the
+                        # climb for years.
+                        setattr(budget, attr,
+                                min(value, wall_now + FLOOD_MUTE_MAX_SECONDS))
+                rate = _finite(entry.get("rate"))
+                if rate is not None:
+                    budget.set_rate(
+                        min(max(rate, self._min_rate),
+                            self.max_rate_for(budget, wall_now)),
+                        self._clock(),
+                    )
+                earned_at = _finite(entry.get("rate_earned_at"))
+                if earned_at:
+                    budget.rate_earned_at = self.mono_equiv(earned_at)
+                backoff = _finite(entry.get("backoff"))
+                if backoff:
+                    budget.backoff = min(max(backoff, 1.0), self._backoff_max)
+                last_429 = _finite(entry.get("last_429_at"))
+                if last_429:
+                    budget.last_429_at = self.mono_equiv(last_429)
             except (TypeError, ValueError):
                 log.debug("flood state: skipping malformed chat entry %r",
                           entry, exc_info=True)

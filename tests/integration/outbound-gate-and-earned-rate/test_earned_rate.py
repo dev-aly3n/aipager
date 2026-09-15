@@ -195,6 +195,13 @@ def test_after_a_ban_the_climb_is_stretched_over_the_named_hours(
 
     Mutation: use `_success_window` unconditionally and a chat banned for
     9.5 hours is back at full speed before the ban has even lifted.
+
+    The last assertion changed in iteration 2 (ruling 5): the whole
+    recovery period now buys the whole climb UP TO THE REDUCED CEILING,
+    because a chat with a ban in the last 24 h may not reach the full one.
+    `test_a_ban_today_halves_the_ceiling_until_tomorrow` owns that rule;
+    this row owns the SHAPE of the climb, so it asserts the climb is
+    complete (at its ceiling) rather than naming a number twice.
     """
     limiter.note_ban(CHAT, 60.0)
     flood_clock.advance(61.0)          # let the mute lapse; the ban stands
@@ -207,7 +214,7 @@ def test_after_a_ban_the_climb_is_stretched_over_the_named_hours(
     # The whole recovery period buys the whole climb.
     flood_clock.advance(config.FLOOD_RATE_RECOVERY_HOURS * 3600.0)
     assert limiter.earned_rate(CHAT) == pytest.approx(
-        config.TELEGRAM_PRIVATE_MAX_RATE)
+        config.TELEGRAM_PRIVATE_MAX_RATE * 0.5)
 
 
 def test_the_slow_regime_expires_and_minutes_count_again(limiter, flood_clock):

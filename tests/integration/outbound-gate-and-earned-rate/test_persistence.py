@@ -356,10 +356,21 @@ def test_restore_never_raises_on_junk(entries):
 
 
 def test_the_limiter_restore_never_raises_on_junk(limiter):
+    """Whatever the file holds, the daemon starts.
+
+    The last line changed in iteration 2 (T2): a numeric field that cannot
+    be read is now DEFAULTED and the rest of the entry kept, rather than
+    the whole entry being discarded. Discarding it is the unsafe
+    direction — the entry is also where `ban_stamps` live, so one junk
+    rate used to forget a chat's whole ban history. What matters is that
+    the chat is left at a SAFE rate, which is asserted rather than the
+    count.
+    """
     assert limiter.restore(None) == 0
     assert limiter.restore(["not a dict"]) == 0
     assert limiter.restore([{"chat_id": None}]) == 0
-    assert limiter.restore([{"chat_id": 1, "rate": "fast"}]) == 0
+    limiter.restore([{"chat_id": 1, "rate": "fast"}])
+    assert limiter.earned_rate(1) == pytest.approx(config.FLOOD_START_RATE)
 
 
 def test_a_restored_rate_outside_the_legal_range_is_clamped(limiter):

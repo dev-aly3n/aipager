@@ -962,19 +962,31 @@ def test_a_backoff_never_writes_to_the_mute_file(tmp_path):
 
 
 def test_flood_py_is_not_a_writer_of_the_backoff_file():
-    """Row P, the other half: ``bot/flood.py`` is untouched by 8.21 and
-    must stay that way — it is the 8.17 mute's sole owner, and its two
-    unlink tests are what a shared file would break.
+    """Row P, the other half: ``bot/flood.py`` owns the 8.17 mute and its
+    own signal file, and NOT the backoff file — its two unlink tests are
+    what a shared file would break.
 
     Mutation: teach ``flood.py`` about the backoff and the mute's own
     signal-file tests start failing for reasons unrelated to their names.
+
+    The "no mention of ``flood_budget`` at all" form of this assertion was
+    retired in 8.29 T1: arming a mute now tells the live limiter, so the
+    ban drops the earned rate at the instant it is armed rather than
+    whenever a call next happens to reach the limiter (which, while a mute
+    holds, is never). That is ONE late import inside ONE function, and
+    what this row pins now is that it stayed that way — nothing about the
+    BACKOFF, and no module-level dependency that could invert the import
+    order (``flood_budget`` imports ``flood`` at module level).
     """
     from aipager.bot import flood
 
     source = Path(flood.__file__).read_text(encoding="utf-8")
     assert "FLOOD_BACKOFF" not in source
-    assert "flood_budget" not in source
     assert "backoff" not in source.lower()
+    code = [line for line in source.splitlines()
+            if "flood_budget" in line and not line.lstrip().startswith(("#", "*"))
+            and ":class:" not in line and "``" not in line]
+    assert code == ["        from aipager.bot.flood_budget import BudgetRateLimiter"]
 
 
 def test_the_backoff_file_never_points_at_the_real_runtime_dir(tmp_path):

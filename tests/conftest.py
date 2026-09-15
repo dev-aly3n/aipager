@@ -527,9 +527,19 @@ def _block_real_telegram_http(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
-def _isolate_flood_mute(tmp_path, monkeypatch):
+def _isolate_flood_mute(_isolate_home_paths, tmp_path, monkeypatch):
     """No test inherits another's flood mute, leaks a rate limiter into
     ``rich_message``, or touches the live daemon's flood-mute signal file.
+
+    DEPENDS ON ``_isolate_home_paths``, and that parameter is load-bearing
+    (review rev-iter1-009). This fixture calls ``flood_state.clear()``,
+    which unlinks ``config.FLOOD_STATE_FILE`` — and that path defaults
+    into the operator's REAL ``~/.claude/``, which ``_guard_real_home``
+    deliberately does not watch. Without the dependency the ordering holds
+    only because pytest instantiates same-scope autouse fixtures in
+    definition order, so MOVING EITHER FIXTURE would start deleting the
+    operator's live flood state on every test. ``_reset_preferences_cache``
+    declares the same dependency for the same reason.
 
     ``bot/flood.py``'s registry is module-level daemon state — a mute
     armed by one test would silently skip every send in the next — and

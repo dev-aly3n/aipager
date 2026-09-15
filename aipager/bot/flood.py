@@ -12,9 +12,33 @@ session kept working and each finished turn fired more violations.
 So a ban is remembered, per chat, for exactly as long as Telegram said,
 and every outbound path checks :data:`MUTE` first and skips the send
 while it holds (raising :class:`FloodMuted`, which callers already treat
-as a non-fatal send failure). Reactions are exempt — they are a separate
-bucket, and the 🚨 reaction in ``transport._send_with_retry`` is how the
-user learns a message was dropped.
+as a non-fatal send failure). Since 8.26 that check lives in ONE place —
+``flood_budget.process_request``, the chokepoint every Bot API call
+already passes through — rather than in per-site checks a new call site
+has to remember.
+
+NOTHING IS EXEMPT FROM THE MUTE (8.26 D-1). Reactions and the "typing…"
+chat action are exempt from the per-chat BUDGET, because Telegram meters
+them in a separate bucket; they are not exempt from a BAN, and the
+``sendChatAction`` answering 200 through a small ``retry_after`` window
+says nothing about one. The 🚨 give-up reaction this module's docstring
+used to promise is GONE: it fired exactly when the chat was banned, so it
+was itself a request into the ban, and 0.7.10's claim that it is "how the
+user learns a message was dropped" was never true — a reaction on the
+user's own prompt is not a delivery report. An answer a mute refuses is
+now HELD and delivered late (``bot/held.py``) instead.
+
+A ban also TEACHES THE LIMITER, at the instant it is armed (8.27 T1):
+:meth:`FloodMute.mute` tells the live :class:`~aipager.bot.flood_budget.
+BudgetRateLimiter` so the chat's earned rate drops to the floor and the
+ban is counted THEN, not whenever a call next happens to reach the
+limiter. While a mute holds nothing reaches it at all — that is the whole
+point — so a lazily-noticed ban is a ban the controller never sees, and
+the muted hours read to it as an unbroken quiet window it rewards with an
+additive increase. A chat then LEAVES a ban faster than it entered one,
+which is the escalation ladder (1283 → 312 → 34212) reproduced inside the
+fix meant to end it. Silence during a ban is the absence of evidence, not
+evidence of good behaviour.
 
 On the WALL clock, and persisted (roadmap 8.28). Until 0.7.12 this was
 in memory only and on the MONOTONIC clock, and the module docstring said
@@ -47,6 +71,7 @@ from __future__ import annotations
 import datetime as _dt
 import json
 import logging
+import math
 import os
 import time
 from pathlib import Path
@@ -100,6 +125,20 @@ def _clamped(retry_after, source: str = "send") -> float:
         seconds = max(float(retry_after), 0.0)
     except (TypeError, ValueError):
         return 0.0
+    if not math.isfinite(seconds):
+        # NaN and inf are what a corrupt state file, a hand-edited one or
+        # a hostile payload hand over (8.29 T2). Every comparison below is
+        # FALSE against a NaN, so an unchecked one would sail past the cap
+        # and land as a deadline of `now + nan` — a mute that `is_muted`
+        # then reads as already lifted, logging "lifted" for a ban that
+        # never started. Untrusted input degrades to "no mute", never to
+        # "muted for ever" and never to a value the arithmetic below
+        # cannot represent.
+        log.warning(
+            "Telegram flood mute from %s asked for a non-finite retry_after "
+            "(%r) — ignored", source, retry_after,
+        )
+        return 0.0
     if seconds > FLOOD_MUTE_MAX_SECONDS:
         log.warning(
             "Telegram flood mute from %s asked for %.0fs — clamped to %.0fs; "
@@ -122,6 +161,40 @@ def _mark_state_dirty() -> None:
         flood_state.mark_dirty()
     except Exception:  # pragma: no cover - defensive
         log.debug("could not mark flood state dirty", exc_info=True)
+
+
+def _tell_limiter_about_the_ban(chat_id, retry_after: float) -> None:
+    """Drop the chat's earned rate the moment a ban is ARMED (8.29 T1).
+
+    Late import and swallowed, exactly like :func:`_mark_state_dirty`:
+    ``flood_budget`` imports this module, and a limiter problem must never
+    reach a send path.
+
+    WHY THIS EXISTS. The limiter learns from the calls that reach
+    ``process_request`` — and while a mute holds, none do: the gate is
+    above everything, and the callers' own kept pre-checks
+    (``rich_message._raise_if_muted``, the animator's tick guard) turn
+    most of them back before that. A ban noticed only lazily is therefore
+    a ban the controller may never notice at all, and the muted hours read
+    to it as one long quiet window, which it rewards with an additive
+    increase. Measured: a chat entering a 1283 s ban at 0.5 calls/s left
+    it at 1.0 — the ceiling — with ``bans_today`` still 0.
+
+    So the ban is recorded HERE, at the arming point, where it is known:
+    rate to the floor, one ban stamp, one more ban in the last 24 h.
+    ``note_ban`` is idempotent per ban (``ban_seen_until``), so the
+    limiter's own ``RetryAfter`` branch and ``_sync_mute`` seeing the same
+    ban later are no-ops rather than a double count.
+    """
+    try:
+        from aipager.bot.flood_budget import BudgetRateLimiter
+        from aipager.bot.rich_message import get_rate_limiter
+
+        limiter = get_rate_limiter()
+        if isinstance(limiter, BudgetRateLimiter):
+            limiter.note_ban(chat_id, retry_after)
+    except Exception:  # pragma: no cover - defensive
+        log.debug("could not tell the limiter about the ban", exc_info=True)
 
 
 def clear_time(wall_until: float) -> str:
@@ -178,6 +251,11 @@ class FloodMute:
                 int(retry_after),
             )
         self._write_signal()
+        # The ban drops the earned rate NOW, not when a call next happens
+        # to reach the limiter — see `_tell_limiter_about_the_ban`. Before
+        # the dirty flag, so the write the next tick makes already carries
+        # the reduced rate and the new ban stamp.
+        _tell_limiter_about_the_ban(key, retry_after)
         _mark_state_dirty()
 
     # ── querying ────────────────────────────────────────────────────────
