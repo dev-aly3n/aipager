@@ -57,7 +57,13 @@ def test_b6_card_layout_resends_finished_card_and_answer_under_m2(
     }))
 
     assert sess.trigger_msg_id is None  # reply cycle complete, reset at the end
-    bot._app.bot.delete_message.assert_any_await(chat_id=CHAT_ID, message_id=c1)
+    bot._app.bot.delete_message.assert_any_await(
+        chat_id=CHAT_ID, message_id=c1,
+        # 8.26 R3: the re-anchor's delete of the OLD card is an
+        # ORNAMENT — card housekeeping. Leaving a stale card behind
+        # is cosmetic; taking an answer's token to remove it is not.
+        rate_limit_args={"class": "ornament"},
+    )
     finished_card_send = next(
         c for c in bot._app.bot.send_message.await_args_list
         if c.kwargs.get("reply_to_message_id") == 2
@@ -118,7 +124,13 @@ def test_b6_merged_layout_sends_fresh_combined_message_under_m2(
     }))
 
     # The old card is deleted — never edited in place.
-    bot._app.bot.delete_message.assert_any_await(chat_id=CHAT_ID, message_id=c1)
+    bot._app.bot.delete_message.assert_any_await(
+        chat_id=CHAT_ID, message_id=c1,
+        # NOT an ornament: under the MERGED layout the old card is
+        # removed by `notify`'s own delivery path, not by
+        # `_reanchor_busy_card`. Only card housekeeping is declared
+        # ORNAMENT (8.26 R3); the merged send IS the answer.
+    )
     methods_and_payloads = [(m, p) for m, p in rich_calls]
     assert not any(m == "editMessageText" and p.get("message_id") == c1
                    for m, p in methods_and_payloads), (

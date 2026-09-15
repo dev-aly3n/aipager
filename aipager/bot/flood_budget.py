@@ -149,6 +149,29 @@ _SIGNAL_MIN_INTERVAL: float = 5.0
 # notice and far above the float noise.
 _TOKEN_EPS: float = 1e-6
 
+# ── priority classes (8.26 R3) ───────────────────────────────────────────
+#
+# Declared through the `rate_limit_args` dict every caller already has:
+# `{"kind": "skip", "class": "ornament"}`. Build it with
+# `rate_limit_args()`, never by hand.
+#
+# ESSENTIAL — an answer, a reply, a permission prompt. Never dropped,
+#   never suspended, and it never waits behind an ORNAMENT: an ornament
+#   acquires against `_SKIP_RESERVE` on the BLOCKING path too, where
+#   before 8.26 only skip-kind callers respected it.
+# ORNAMENT  — the busy card, the typing bubble, the pinned dashboard.
+#   Refused with `FloodSkipped` in minimal mode; every caller already
+#   treats that as "nothing sent, chat healthy, stamps untouched".
+# SIGNAL    — reactions and the consumed-👍. Exempt from the per-chat
+#   BUDGET (Telegram meters them elsewhere), never from the MUTE, and
+#   never suspended by minimal mode.
+#
+# The card is ~95 % of outbound volume and the answer ~5 %, so under
+# pressure this is the difference between losing pixels and losing work.
+PRIORITY_ESSENTIAL: str = "essential"
+PRIORITY_ORNAMENT: str = "ornament"
+PRIORITY_SIGNAL: str = "signal"
+
 
 
 class FloodSkipped(Exception):
@@ -431,6 +454,47 @@ def _kind_of(rate_limit_args) -> str:
     return "blocking"
 
 
+def _class_of(rate_limit_args) -> str:
+    """The priority class a caller declared, defaulting to ESSENTIAL.
+
+    Fail-open in the direction that matters (8.26 D-9): an UNCLASSIFIED
+    call is ESSENTIAL, so a forgotten classification degrades to "never
+    dropped" rather than "silently dropped". That is the whole thesis —
+    shed pixels, never answers — and it is what keeps this diff bounded:
+    the real inventory is 66 outbound sites, 23 of them inside one
+    1726-line method, and only the ~10 ornaments and 2 signals need an
+    edit. Invert this default and every site not yet reviewed becomes
+    droppable.
+    """
+    if isinstance(rate_limit_args, dict):
+        declared = rate_limit_args.get("class")
+        if declared in (PRIORITY_ORNAMENT, PRIORITY_SIGNAL):
+            return declared
+    return PRIORITY_ESSENTIAL
+
+
+def rate_limit_args(
+    *, kind: str = "blocking", priority: str = PRIORITY_ESSENTIAL,
+) -> dict | None:
+    """Build the wire dict a caller passes as ``rate_limit_args=``.
+
+    Returns ``None`` — not ``{}`` — for a plain blocking ESSENTIAL call:
+    python-telegram-bot drops a FALSY ``rate_limit_args`` before the
+    limiter ever sees it (``_extbot.py:335``), so ``{}`` and ``None`` are
+    indistinguishable downstream and only ``None`` says so honestly.
+
+    One builder so no call site hand-rolls the dict and quietly misspells
+    a key into "unclassified" — which, by :func:`_class_of`, would be a
+    silent demotion to ESSENTIAL rather than a visible error.
+    """
+    args: dict = {}
+    if kind == "skip":
+        args["kind"] = "skip"
+    if priority != PRIORITY_ESSENTIAL:
+        args["class"] = priority
+    return args or None
+
+
 def _retry_after_seconds(exc: RetryAfter) -> float:
     """Seconds out of a ``telegram.error.RetryAfter``.
 
@@ -663,7 +727,9 @@ class BudgetRateLimiter(BaseRateLimiter):
             budget.group.take(1.0)
         self._overall.take(1.0)
 
-    async def _acquire_blocking(self, budget: ChatBudget | None) -> None:
+    async def _acquire_blocking(
+        self, budget: ChatBudget | None, *, reserve: float = 0.0,
+    ) -> None:
         """Wait until every limit that applies has room, then spend it.
 
         Three limits, whichever is furthest out: the chat's token bucket,
@@ -675,12 +741,45 @@ class BudgetRateLimiter(BaseRateLimiter):
         availability check and the consumption happen in ONE synchronous
         block, with no await between them — otherwise two waiters woken
         by the same refill both see the token.
+
+        ``reserve`` is how many tokens this caller must leave BEHIND
+        (8.26 R3, row L). ``_SKIP_RESERVE`` for an ORNAMENT, ``0.0`` for
+        everything else: a blocking card edit must not take the last
+        token an answer is about to need. Before 8.26 only SKIP-kind
+        callers respected the reserve, so a card that had been refused
+        twice and escalated to blocking could take it — which is the
+        priority inversion R3 exists to end. It is a WAIT, never a
+        refusal: the ornament simply queues until the chat is comfortable.
         """
         if budget is None:
             await self._wait_for_overall()
             return
         ticket: asyncio.Future = asyncio.get_running_loop().create_future()
-        budget.waiters.append(ticket)
+        # The reserve IS the ornament marker: it is the only class that
+        # asks for one (see `process_request`).
+        ticket._aipager_ornament = reserve > 0.0
+        if reserve > 0.0:
+            budget.waiters.append(ticket)
+        else:
+            # R3, the ordering half of "an ESSENTIAL never waits behind an
+            # ORNAMENT". The reserve alone does not deliver that: this
+            # deque is a strict FIFO, so an ornament that arrived first and
+            # is waiting out `1 + _SKIP_RESERVE` tokens would HEAD-OF-LINE
+            # BLOCK an answer that only needs one and could have it now —
+            # the very inversion R3 exists to end, just moved from the
+            # bucket into the queue.
+            #
+            # So a non-ornament is inserted ahead of every ORNAMENT ticket
+            # and behind every non-ornament one. FIFO is preserved WITHIN a
+            # class, which is what "serve in arrival order" was protecting;
+            # across classes the order is now priority, deliberately.
+            # An ornament is never dropped by this — only overtaken.
+            index = len(budget.waiters)
+            for position, waiting in enumerate(budget.waiters):
+                if getattr(waiting, "_aipager_ornament", False):
+                    index = position
+                    break
+            budget.waiters.insert(index, ticket)
         try:
             if budget.waiters[0] is not ticket:
                 await ticket
@@ -689,7 +788,7 @@ class BudgetRateLimiter(BaseRateLimiter):
                 self._decay(budget, now)
                 wait = max(
                     budget.retry_until - now,
-                    budget.chat.time_until(1.0),
+                    budget.chat.time_until(1.0 + reserve),
                     (budget.group.time_until(1.0)
                      if budget.group is not None else 0.0),
                     self._overall.time_until(1.0),
@@ -764,6 +863,11 @@ class BudgetRateLimiter(BaseRateLimiter):
                 budget.muted_refusals += 1
             raise FloodMuted(MUTE.remaining(chat_id), chat_id)
 
+        # The priority class this caller declared. Read BEFORE the exempt
+        # branch so a SIGNAL keeps its budget exemption whatever else
+        # changes, and so the class is available to the acquire below.
+        cls = _class_of(rate_limit_args)
+
         if endpoint in _CHAT_BUDGET_EXEMPT:
             # §11 U4: reactions are exempt from the chat budget. They are
             # a separate bucket on Telegram's side, and `transport.py`'s
@@ -796,7 +900,14 @@ class BudgetRateLimiter(BaseRateLimiter):
         else:
             # No resolvable chat (answerCallbackQuery, getMe, …) meets the
             # overall bucket and nothing else, and is never skipped (R7).
-            await self._acquire_blocking(budget)
+            #
+            # An ORNAMENT leaves the reserve behind even here, on the
+            # BLOCKING path (R3, row L): an answer must never queue behind
+            # a card edit that took the last token.
+            await self._acquire_blocking(
+                budget,
+                reserve=(_SKIP_RESERVE if cls == PRIORITY_ORNAMENT else 0.0),
+            )
         return await self._run(
             budget, callback, args, kwargs, endpoint, chat_id, kind=kind,
         )

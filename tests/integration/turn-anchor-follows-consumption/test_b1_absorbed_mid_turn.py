@@ -83,6 +83,10 @@ def test_b1_absorbed_mid_turn_reanchors_live_card_and_answer(
 
     bot._app.bot.delete_message.assert_any_await(
         chat_id=CHAT_ID, message_id=c1,
+        # 8.26 R3: the re-anchor's delete of the OLD card is an
+        # ORNAMENT — card housekeeping. Leaving a stale card behind
+        # is cosmetic; taking an answer's token to remove it is not.
+        rate_limit_args={"class": "ornament"},
     )
     reanchor_send = bot._app.bot.send_message.await_args_list[-1]
     assert reanchor_send.kwargs["reply_to_message_id"] == 2

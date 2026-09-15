@@ -362,7 +362,7 @@ def test_new_turn_seed_clears_the_per_turn_maps(mk_bot, run_async, tmp_path):
 def rich_calls(monkeypatch):
     calls = []
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         calls.append((method, payload))
         return {"ok": True, "result": {"message_id": 999}}
 

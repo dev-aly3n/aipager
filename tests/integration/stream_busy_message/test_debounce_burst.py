@@ -158,7 +158,7 @@ def test_burst_of_five_tool_events_produces_at_most_one_edit(mk_bot, run_async, 
     # within the same "second" are debounced
     fixed_time = [time.monotonic()]
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         nonlocal http_call_count
         http_call_count += 1
         # Simulate that after the first edit, time has advanced only a tiny bit
@@ -204,7 +204,7 @@ def test_debounce_blocked_stream_dirty_stays_true(mk_bot, run_async, monkeypatch
 
     http_calls = []
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         http_calls.append(method)
         return {"ok": True, "result": {}}
 
@@ -242,7 +242,7 @@ def test_successful_edit_clears_stream_dirty(mk_bot, run_async, monkeypatch):
     # Ensure debounce window has elapsed
     sess.last_tool_edit_at = 0.0
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         return {"ok": True, "result": {}}
 
     monkeypatch.setattr(rm_mod, "_post", _fake_post)

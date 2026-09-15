@@ -43,7 +43,7 @@ def rich_calls(monkeypatch):
     sendRichMessage alike."""
     calls = []
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         calls.append((method, payload))
         return {"ok": True, "result": {"message_id": 999}}
 
@@ -221,7 +221,7 @@ def test_merged_layout_edit_failure_still_delivers_the_answer(
 
     calls = []
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         calls.append((method, payload))
         if method == "editMessageText":
             return {"ok": False, "error_code": 400, "description": "boom"}
@@ -299,7 +299,7 @@ def test_merged_layout_message_gone_falls_back_and_clears_busy_msg_id(
 
     calls = []
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         calls.append((method, payload))
         if method == "editMessageText":
             return {

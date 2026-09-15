@@ -83,6 +83,10 @@ def test_b9_final_reanchor_wins_after_live_one_is_cancelled_mid_send(
     assert sess.busy_msg_id == 9002, "the FINAL card is the one left live"
     bot._app.bot.delete_message.assert_awaited_once_with(
         chat_id=-2002, message_id=555,
+        # 8.26 R3: the re-anchor's delete of the OLD card is an
+        # ORNAMENT — card housekeeping. Leaving a stale card behind
+        # is cosmetic; taking an answer's token to remove it is not.
+        rate_limit_args={"class": "ornament"},
     )
 
     final_edits = [p for m, p in rich_calls if m == "editMessageText"]

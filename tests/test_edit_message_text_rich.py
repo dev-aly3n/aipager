@@ -45,7 +45,7 @@ def run_async():
 def test_payload_has_chat_id_and_message_id(run_async, monkeypatch):
     captured = {}
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         captured.update(payload)
         return {"ok": True, "result": {"message_id": 1}}
 
@@ -58,7 +58,7 @@ def test_payload_has_chat_id_and_message_id(run_async, monkeypatch):
 def test_payload_rich_message_nested(run_async, monkeypatch):
     captured = {}
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         captured.update(payload)
         return {"ok": True, "result": {}}
 
@@ -73,7 +73,7 @@ def test_payload_rich_message_nested(run_async, monkeypatch):
 def test_payload_no_text_field(run_async, monkeypatch):
     captured = {}
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         captured.update(payload)
         return {"ok": True, "result": {}}
 
@@ -85,7 +85,7 @@ def test_payload_no_text_field(run_async, monkeypatch):
 def test_payload_reply_markup_present_when_given(run_async, monkeypatch):
     captured = {}
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         captured.update(payload)
         return {"ok": True, "result": {}}
 
@@ -98,7 +98,7 @@ def test_payload_reply_markup_present_when_given(run_async, monkeypatch):
 def test_payload_reply_markup_absent_when_none(run_async, monkeypatch):
     captured = {}
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         captured.update(payload)
         return {"ok": True, "result": {}}
 
@@ -242,7 +242,7 @@ def test_429_retries_once_and_succeeds(run_async, monkeypatch):
     result = {"message_id": 7}
     call_count = 0
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -280,7 +280,7 @@ def test_429_sleep_capped_at_30(run_async, monkeypatch):
     async def _fake_sleep(seconds):
         slept.append(seconds)
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         return {"ok": False, "error_code": 429,
                 "parameters": {"retry_after": 60},
                 "description": "Too Many Requests"}

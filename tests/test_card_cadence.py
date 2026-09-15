@@ -400,7 +400,11 @@ def test_a_fresh_card_starts_the_bubble_without_sending_it_itself(mk_bot,
         assert sess.busy_msg_id == 42
         assert by_card_path == [], "the card path made the chat action itself"
         bot._app.bot.send_chat_action.assert_awaited_once_with(
-            chat_id=chat, action="typing")
+            chat_id=chat, action="typing",
+            # 8.26 R3: the bubble declares itself an ORNAMENT so minimal
+            # mode can suspend it. No `kind` — the endpoint exemption is
+            # what keeps it off the per-chat budget.
+            rate_limit_args={"class": "ornament"})
 
 
 def test_the_animation_module_sends_the_chat_action_from_one_place_only():
@@ -674,7 +678,10 @@ def test_a_skipped_pinned_refresh_is_retried_on_the_next_change(mk_bot,
 
     run_async(bot._maybe_update_bot_name("claude-jim"))
     assert bot._last_pinned_text != "first", "a skipped refresh was never shown"
-    assert calls[0]["rate_limit_args"] == {"kind": "skip"}
+    # 8.26 R3: the pinned dashboard is an ORNAMENT — a summary that is
+    # always re-derivable, which is what makes it sheddable while an
+    # answer is not. `kind` is unchanged.
+    assert calls[0]["rate_limit_args"] == {"kind": "skip", "class": "ornament"}
 
     run_async(bot._maybe_update_bot_name("claude-jim"))
     assert bot._last_pinned_text == "second"

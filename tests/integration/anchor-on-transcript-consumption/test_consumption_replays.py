@@ -79,7 +79,13 @@ def test_pickup_while_busy_moves_nothing_and_absorption_reanchors(
     assert sess.queued_targets == []
     (re_send,) = _reanchor_sends(bot)
     assert re_send.kwargs["reply_to_message_id"] == 2
-    bot._app.bot.delete_message.assert_any_await(chat_id=CHAT_ID, message_id=c1)
+    bot._app.bot.delete_message.assert_any_await(
+        chat_id=CHAT_ID, message_id=c1,
+        # 8.26 R3: the re-anchor's delete of the OLD card is an
+        # ORNAMENT — card housekeeping. Leaving a stale card behind
+        # is cosmetic; taking an answer's token to remove it is not.
+        rate_limit_args={"class": "ornament"},
+    )
 
     sess.status = Status.IDLE
     run_async(bot.notify(sess, "idle_prompt", {"summary": "done", "raw_md": "done"}))

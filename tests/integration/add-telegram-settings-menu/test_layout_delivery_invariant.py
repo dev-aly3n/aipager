@@ -60,7 +60,7 @@ def _wire_bot(mk_bot, monkeypatch, *, post_responses=None):
     post_responses = post_responses or {}
     post_calls = []
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         post_calls.append((method, payload))
         if method in post_responses:
             return post_responses[method]

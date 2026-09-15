@@ -70,7 +70,13 @@ def test_b5_waiting_card_reanchors_to_message_delivered_to_agent(
     assert sess.busy_card_trigger == 2, "R3: re-anchors even while waiting"
     assert sess.busy_msg_id and sess.busy_msg_id != c1
 
-    bot._app.bot.delete_message.assert_any_await(chat_id=CHAT_ID, message_id=c1)
+    bot._app.bot.delete_message.assert_any_await(
+        chat_id=CHAT_ID, message_id=c1,
+        # 8.26 R3: the re-anchor's delete of the OLD card is an
+        # ORNAMENT — card housekeeping. Leaving a stale card behind
+        # is cosmetic; taking an answer's token to remove it is not.
+        rate_limit_args={"class": "ornament"},
+    )
     reanchor_send = next(
         c for c in bot._app.bot.send_message.await_args_list
         if c.kwargs.get("reply_to_message_id") == 2

@@ -37,6 +37,10 @@ from telegram.ext import (
 from aipager.dtach import inject
 
 from aipager.bot import new_flow, session_parity
+from aipager.bot.flood_budget import (
+    PRIORITY_SIGNAL,
+    rate_limit_args as _rl_args,
+)
 from aipager.bot.settings_menu import render_settings_root
 from aipager.config import (
     APP_BUTTON, BACK_BUTTON, COMMANDS_BUTTON,
@@ -282,6 +286,13 @@ class CommandHandlersMixin:
         try:
             await self._app.bot.set_message_reaction(
                 update.effective_chat.id, update.message.message_id, emoji,
+                # SIGNAL (8.26 R3): the 👀 that tells the user their
+                # message was seen. Already exempt from the per-chat
+                # BUDGET by endpoint; the class is what keeps it out of
+                # minimal-mode suspension, so a chat under pressure still
+                # acknowledges input. It is NOT exempt from the mute —
+                # nothing is (D-1).
+                rate_limit_args=_rl_args(priority=PRIORITY_SIGNAL),
             )
         except Exception:
             pass  # reaction API may not be available in all contexts

@@ -48,7 +48,7 @@ def test_merged_layout_still_deletes_the_card_when_the_combined_text_overflows(
     bot = _wire_bot(mk_bot)
     rich_calls = []
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         rich_calls.append((method, payload))
         return {"ok": True, "result": {"message_id": 999}}
 
@@ -75,7 +75,7 @@ def test_merged_layout_edit_failure_still_falls_back_and_delivers_the_answer(
     bot = _wire_bot(mk_bot)
     calls = []
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         calls.append((method, payload))
         if method == "editMessageText":
             return {"ok": False, "error_code": 400, "description": "boom"}

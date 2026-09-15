@@ -24,7 +24,7 @@ def rich_calls(monkeypatch):
     ``tests/integration/stream_busy_message/test_layout_modes.py``)."""
     calls = []
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         calls.append((method, payload))
         return {"ok": True, "result": {"message_id": 999}}
 
@@ -117,7 +117,11 @@ def test_reanchor_busy_card_sends_new_before_deleting_old(mk_bot, run_async, ric
     )
     assert sess.busy_msg_id == 200
     assert sess.busy_card_trigger == 2
-    bot._app.bot.delete_message.assert_awaited_once_with(chat_id=555, message_id=100)
+    bot._app.bot.delete_message.assert_awaited_once_with(
+        chat_id=555, message_id=100,
+        # 8.26 R3: card housekeeping is an ORNAMENT — leaving a stale card
+        # behind is cosmetic; taking an answer's token to remove it is not.
+        rate_limit_args={"class": "ornament"})
 
 
 def test_reanchor_busy_card_swallows_delete_failure(mk_bot, run_async, rich_calls):

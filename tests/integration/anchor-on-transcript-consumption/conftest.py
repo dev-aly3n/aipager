@@ -114,7 +114,7 @@ def rich_calls(monkeypatch):
     ``tests/integration/stream_busy_message/test_layout_modes.py``)."""
     calls = []
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         calls.append((method, payload))
         return {"ok": True, "result": {"message_id": 999}}
 

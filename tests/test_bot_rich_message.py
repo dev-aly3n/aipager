@@ -109,7 +109,7 @@ def test_send_rich_message_ok_missing_result_returns_none(run_async, monkeypatch
 def test_send_rich_message_is_rtl_passed_in_payload(run_async, monkeypatch):
     captured = {}
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         captured.update(payload)
         return {"ok": True, "result": {}}
 
@@ -121,7 +121,7 @@ def test_send_rich_message_is_rtl_passed_in_payload(run_async, monkeypatch):
 def test_send_rich_message_reply_to_omitted_when_none(run_async, monkeypatch):
     captured = {}
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         captured.update(payload)
         return {"ok": True, "result": {}}
 
@@ -133,7 +133,7 @@ def test_send_rich_message_reply_to_omitted_when_none(run_async, monkeypatch):
 def test_send_rich_message_reply_to_included_when_set(run_async, monkeypatch):
     captured = {}
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         captured.update(payload)
         return {"ok": True, "result": {}}
 
@@ -205,7 +205,7 @@ def test_send_rich_message_429_retries_once_and_succeeds(run_async, monkeypatch)
     result = {"message_id": 7}
     call_count = 0
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -244,7 +244,7 @@ def test_send_rich_message_429_retry_caps_sleep_at_30s(run_async, monkeypatch):
     async def _fake_sleep(seconds):
         slept.append(seconds)
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         return {"ok": False, "error_code": 429,
                 "parameters": {"retry_after": 60},
                 "description": "Too Many Requests"}
@@ -383,7 +383,7 @@ def test_send_rich_message_body_shape(run_async, monkeypatch):
     """The payload must nest is_rtl inside rich_message, not at the top level."""
     captured = {}
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         captured.update(payload)
         return {"ok": True, "result": {}}
 

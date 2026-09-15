@@ -43,7 +43,7 @@ def _sess(label="dev", *, scope_chat_id=555, busy_msg_id=42):
 def rich_calls(monkeypatch):
     calls = []
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         calls.append((method, payload))
         return {"ok": True, "result": {"message_id": 999}}
 
@@ -130,7 +130,7 @@ def test_merged_fallback_answer_starts_with_the_stats_result_line(
     prefs.set_preference(sess.scope_chat_id, "layout", "merged")
     calls = []
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         calls.append((method, payload))
         if method == "editMessageText":
             return {"ok": False, "error_code": 400, "description": "boom"}
@@ -195,7 +195,7 @@ def test_plain_text_fallback_first_chunk_starts_with_the_plain_result_line(
     sess = _sess()
     prefs.set_preference(sess.scope_chat_id, "layout", "card")
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         if method == "sendRichMessage":
             return {"ok": False, "error_code": 400, "description": "nope"}
         return {"ok": True, "result": {"message_id": 5}}
@@ -214,7 +214,7 @@ def test_interim_flush_plain_fallback_starts_with_the_plain_result_line(
     sess = _sess()
     sess.job_interim_buffer = ["interim"]
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         return {"ok": False, "error_code": 400, "description": "nope"}
 
     monkeypatch.setattr("aipager.bot.rich_message._post", _fake_post)

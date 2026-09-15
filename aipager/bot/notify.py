@@ -26,6 +26,10 @@ from telegram import (
 from telegram.error import Forbidden
 
 from aipager.bot.flood import MUTE, FloodMuted
+from aipager.bot.flood_budget import (
+    PRIORITY_SIGNAL,
+    rate_limit_args as _rl_args,
+)
 from aipager.bot.rich_message import (
     RichMessageBlocked,
     RichMessageFallbackRequired,
@@ -395,6 +399,11 @@ class NotifyMixin:
             try:
                 await bot.set_message_reaction(
                     note_chat_id, note_msg_id, "👍",
+                    # SIGNAL (8.26 R3): the 👍 marking a queued message as
+                    # delivered to the agent. Budget-exempt by endpoint,
+                    # never suspended by minimal mode, never exempt from
+                    # the mute.
+                    rate_limit_args=_rl_args(priority=PRIORITY_SIGNAL),
                 )
             except Exception:
                 log.debug("consumption reaction failed", exc_info=True)

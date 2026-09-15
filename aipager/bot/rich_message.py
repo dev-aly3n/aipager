@@ -55,7 +55,11 @@ import re
 import httpx
 
 from aipager.bot.flood import MUTE, FloodMuted
-from aipager.bot.flood_budget import FloodSkipped
+from aipager.bot.flood_budget import (
+    PRIORITY_ESSENTIAL,
+    FloodSkipped,
+    rate_limit_args as _rate_limit_args,
+)
 from aipager.config import TELEGRAM_MAX_RETRY_AFTER
 
 log = logging.getLogger(__name__)
@@ -164,7 +168,8 @@ def get_rate_limiter():
     return _rate_limiter
 
 
-async def _post(method: str, payload: dict, *, kind: str = "blocking") -> dict:
+async def _post(method: str, payload: dict, *, kind: str = "blocking",
+                priority: str = PRIORITY_ESSENTIAL) -> dict:
     """POST *payload* to *method*, return the parsed response body.
 
     Acquires the shared rate-limit budget first: ``BudgetRateLimiter``'s
@@ -196,7 +201,7 @@ async def _post(method: str, payload: dict, *, kind: str = "blocking") -> dict:
     try:
         return await limiter.process_request(
             callback=_do, args=(), kwargs={}, endpoint=method, data=payload,
-            rate_limit_args={"kind": "skip"} if kind == "skip" else None,
+            rate_limit_args=_rate_limit_args(kind=kind, priority=priority),
         )
     except RichMessageFloodBanned:
         # Already the right type — it IS a FloodMuted subclass, so it must
@@ -219,16 +224,23 @@ async def _post(method: str, payload: dict, *, kind: str = "blocking") -> dict:
         raise RichMessageFloodBanned(exc.retry_after, exc.chat_id) from None
 
 
-def _kind_kwargs(kind: str) -> dict:
-    """``{"kind": kind}`` for a skippable call, ``{}`` for the default.
+def _kind_kwargs(kind: str, priority: str = PRIORITY_ESSENTIAL) -> dict:
+    """The keyword-only extras ``_post`` needs, and NOTHING when there are
+    none.
 
     ``_post`` is the seam the whole test suite doubles, almost always with
-    a two-argument stub, and a BLOCKING call — which is every call this
-    module made before 8.21 — must keep looking exactly like
-    ``_post(method, payload)`` to all of them. Only a skippable call
-    carries the extra keyword.
+    a two-argument stub, and a BLOCKING ESSENTIAL call — which is every
+    call this module made before 8.21 — must keep looking exactly like
+    ``_post(method, payload)`` to all of them. Only a skippable or
+    non-essential call carries an extra keyword; adding them
+    unconditionally would break ~a dozen two-argument doubles at once.
     """
-    return {"kind": kind} if kind != "blocking" else {}
+    extra: dict = {}
+    if kind != "blocking":
+        extra["kind"] = kind
+    if priority != PRIORITY_ESSENTIAL:
+        extra["priority"] = priority
+    return extra
 
 
 def _raise_if_muted(chat_id) -> None:
@@ -264,8 +276,13 @@ async def send_rich_message(
     is_rtl: bool = False,
     reply_to_message_id: int | None = None,
     kind: str = "blocking",
+    priority: str = PRIORITY_ESSENTIAL,
 ) -> dict | None:
     """POST sendRichMessage and return the result dict, or None on ok-but-empty.
+
+    ``priority`` declares the call's class to the limiter (8.26 R3).
+    Defaults to ESSENTIAL — an answer is never dropped — so no existing
+    caller changes. Only the busy card passes ``PRIORITY_ORNAMENT``.
 
     Raises
     ------
@@ -291,14 +308,18 @@ async def send_rich_message(
     if reply_to_message_id is not None:
         payload["reply_to_message_id"] = reply_to_message_id
 
-    return await _send_rich_message_once(payload, allow_retry=True, kind=kind)
+    return await _send_rich_message_once(payload, allow_retry=True, kind=kind,
+                                        priority=priority)
 
 
 async def _send_rich_message_once(payload: dict, *, allow_retry: bool,
-                                  kind: str = "blocking") -> dict | None:
+                                  kind: str = "blocking",
+                                  priority: str = PRIORITY_ESSENTIAL,
+                                  ) -> dict | None:
     """Inner send with optional 429-retry logic."""
     try:
-        data = await _post("sendRichMessage", payload, **_kind_kwargs(kind))
+        data = await _post("sendRichMessage", payload,
+                           **_kind_kwargs(kind, priority))
     except FloodSkipped:
         # A refused skip is not a failure to fall back from: it means the
         # chat's budget was short and nothing was attempted. Swallowing it
@@ -321,7 +342,7 @@ async def _send_rich_message_once(payload: dict, *, allow_retry: bool,
 
     return await _handle_response(data, method="sendRichMessage",
                                   payload=payload, allow_retry=allow_retry,
-                                  kind=kind)
+                                  kind=kind, priority=priority)
 
 
 async def _handle_response(
@@ -331,6 +352,7 @@ async def _handle_response(
     payload: dict,
     allow_retry: bool,
     kind: str = "blocking",
+    priority: str = PRIORITY_ESSENTIAL,
 ) -> dict | None:
     """Interpret the Telegram response dict and raise/return appropriately."""
     if data.get("ok"):
@@ -364,7 +386,8 @@ async def _handle_response(
             raise FloodSkipped(payload.get("chat_id"), method)
         if allow_retry:
             try:
-                data2 = await _post(method, payload, **_kind_kwargs(kind))
+                data2 = await _post(method, payload,
+                                    **_kind_kwargs(kind, priority))
             except RichMessageFloodBanned:
                 # 8.26 D-2: the retry met a mute (this very call may have
                 # armed it). Above the broad arm, for the same reason as
@@ -379,7 +402,7 @@ async def _handle_response(
             # allow_retry=False so a second 429 immediately falls back
             return await _handle_response(data2, method=method,
                                           payload=payload, allow_retry=False,
-                                          kind=kind)
+                                          kind=kind, priority=priority)
         # Second 429 → fall back
         log.warning("%s rate-limited again after retry", method)
         raise RichMessageFallbackRequired(f"429 after retry: {description}")
@@ -406,8 +429,13 @@ async def edit_message_text_rich(
     is_rtl: bool = False,
     reply_markup: dict | None = None,
     kind: str = "blocking",
+    priority: str = PRIORITY_ESSENTIAL,
 ) -> dict | None:
     """POST editMessageText with rich_message (Bot API 10.1).
+
+    ``priority`` declares the call's class to the limiter (8.26 R3). The
+    busy card passes ``PRIORITY_ORNAMENT``; everything else is ESSENTIAL
+    by default, so a forgotten classification is never dropped.
 
     Returns the Telegram ``result`` dict on success, or ``None`` on any
     non-fatal failure (transient errors, rate-limits, unchanged content).
@@ -437,7 +465,8 @@ async def edit_message_text_rich(
     if reply_markup is not None:
         payload["reply_markup"] = reply_markup
     try:
-        data = await _post("editMessageText", payload, **_kind_kwargs(kind))
+        data = await _post("editMessageText", payload,
+                           **_kind_kwargs(kind, priority))
     except FloodSkipped:
         # Not a failure: nothing was attempted, and the chat is healthy.
         # Swallowing it into `return None` would make the animator read it
@@ -455,11 +484,13 @@ async def edit_message_text_rich(
     except Exception as exc:
         log.warning("editMessageText unexpected error: %s", exc)
         return None
-    return await _handle_edit_response(data, payload=payload, kind=kind)
+    return await _handle_edit_response(data, payload=payload, kind=kind,
+                                      priority=priority)
 
 
 async def _handle_edit_response(data: dict, *, payload: dict,
                                 kind: str = "blocking",
+                                priority: str = PRIORITY_ESSENTIAL,
                                 allow_retry: bool = True) -> dict | None:
     """Interpret the Telegram response for an editMessageText rich call.
 
@@ -507,8 +538,13 @@ async def _handle_edit_response(data: dict, *, payload: dict,
             log.warning("editMessageText rate-limited again after retry")
             return None
         try:
-            data2 = await _post("editMessageText", payload, **_kind_kwargs(kind))
+            data2 = await _post("editMessageText", payload,
+                                **_kind_kwargs(kind, priority))
         except FloodSkipped:
+            raise
+        except RichMessageFloodBanned:
+            # 8.26 D-2: above the broad arm, which returns None — the
+            # animator reads None as "message gone" and drops the card.
             raise
         except Exception as exc:
             log.warning("editMessageText retry error: %s", exc)
@@ -519,7 +555,7 @@ async def _handle_edit_response(data: dict, *, payload: dict,
             log.warning("editMessageText rate-limited again after retry")
             return None
         return await _handle_edit_response(data2, payload=payload, kind=kind,
-                                           allow_retry=False)
+                                           priority=priority, allow_retry=False)
 
     if error_code == 404 or "method not found" in desc_lower:
         log.warning("editMessageText not found (404): %s", description)

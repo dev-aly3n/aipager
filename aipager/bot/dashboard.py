@@ -24,6 +24,10 @@ from aipager.config import (
     CHAT_ID,
 )
 from aipager.bot import session_parity
+from aipager.bot.flood_budget import (
+    PRIORITY_ORNAMENT,
+    rate_limit_args as _rl_args,
+)
 from aipager.policy_snapshot import queue_depth_parts
 from aipager.state import Status, TrackedSession
 from aipager.transcript import last_assistant_preview as _read_preview
@@ -188,7 +192,8 @@ class DashboardMixin:
                 edited = await edit_text_at(self._app.bot,
                     text, chat, self.registry.pinned_msg_id,
                     parse_mode="HTML",
-                    rate_limit_args={"kind": "skip"},
+                    rate_limit_args=_rl_args(
+                        kind="skip", priority=PRIORITY_ORNAMENT),
                 )
                 if edited is MUTED or edited is SKIPPED:
                     # Nothing went out — flood-muted, or the chat's budget
@@ -202,6 +207,13 @@ class DashboardMixin:
             else:
                 msg = await send_text(self._app.bot,
                     chat, text, parse_mode="HTML",
+                    # ORNAMENT (8.26 R3): the pinned dashboard is a
+                    # summary that is always re-derivable — which is
+                    # exactly what makes it sheddable while an answer is
+                    # not. Blocking rather than skip, because the FIRST
+                    # send is what creates the message every later refresh
+                    # edits in place.
+                    rate_limit_args=_rl_args(priority=PRIORITY_ORNAMENT),
                 )
                 if msg is MUTED or msg is SKIPPED:
                     return  # no message to remember or pin; see above
@@ -217,6 +229,10 @@ class DashboardMixin:
                     await self._app.bot.pin_chat_message(
                         chat, msg.message_id,
                         disable_notification=True,
+                        # ORNAMENT (8.26 R3): pinning is decoration on
+                        # decoration — this call already fails harmlessly
+                        # whenever the bot is not a group admin.
+                        rate_limit_args=_rl_args(priority=PRIORITY_ORNAMENT),
                     )
                 except Exception as e:
                     log.info(

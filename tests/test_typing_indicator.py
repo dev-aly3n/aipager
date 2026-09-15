@@ -157,6 +157,19 @@ def _actions(bot) -> list[dict]:
     return [call.kwargs for call in bot._app.bot.send_chat_action.await_args_list]
 
 
+def _typing_call(chat_id=None) -> dict:
+    """The exact kwargs one indicator refresh carries.
+
+    ``rate_limit_args`` joined the shape in 8.26: the bubble is declared
+    ORNAMENT (R3) so minimal mode can suspend it. Kept in ONE helper so a
+    future change to the declaration is a one-line edit here rather than a
+    hunt through a dozen literal dicts — and so the rows below keep
+    asserting the WHOLE call rather than quietly loosening to a subset.
+    """
+    return {"chat_id": PRIVATE if chat_id is None else chat_id, **TYPING,
+            "rate_limit_args": {"class": "ornament"}}
+
+
 def _stops_after(sess, sends: list, n: int):
     """A ``send_chat_action`` double that ends the typing loop after *n*
     refreshes, by taking the card away — the same liveness signal the real
@@ -442,7 +455,7 @@ def test_the_typing_task_refreshes_until_the_card_is_gone(mk_bot, run_async,
     elapsed = time.monotonic() - started
 
     assert len(sends) == 3
-    assert all(s == {"chat_id": PRIVATE, **TYPING} for s in sends), sends
+    assert all(s == _typing_call() for s in sends), sends
     assert elapsed >= 2 * interval, f"the loop did not wait between refreshes ({elapsed:.4f}s)"
 
 
@@ -485,7 +498,7 @@ def test_the_typing_task_goes_dark_while_a_background_job_waits(
         await asyncio.wait_for(task, timeout=3.0)
 
     run_async(_drive())
-    assert sends == [{"chat_id": PRIVATE, **TYPING}]
+    assert sends == [_typing_call()]
 
 
 def test_no_card_path_sends_or_awaits_a_chat_action(mk_bot, run_async):
@@ -540,7 +553,7 @@ def test_a_fresh_card_starts_the_typing_task(mk_bot, run_async):
 
     run_async(_drive())
     assert sess.busy_msg_id == 42
-    assert _actions(bot) == [{"chat_id": PRIVATE, **TYPING}], _actions(bot)
+    assert _actions(bot) == [_typing_call()], _actions(bot)
 
 
 def test_stopping_the_animation_stops_the_bubble(mk_bot, run_async):
@@ -663,13 +676,23 @@ def test_the_gate_touches_no_state_at_all(mk_bot):
             sess.stream_last_rendered) == (111.0, 222.0, "frozen")
 
 
-def test_the_indicator_does_not_pass_the_skip_class(mk_bot, run_async):
-    """The call must not carry ``rate_limit_args={"kind": "skip"}`` — the
-    shape it had until 8.21. The endpoint exemption is what keeps it off
-    the budget; a skip kind would only re-expose it to the reserve rule on
-    a chat that is momentarily short.
+def test_the_indicator_passes_the_ornament_class_and_never_the_skip_kind(
+        mk_bot, run_async):
+    """Two things at once, and they are easy to confuse.
 
-    Mutation: pass the skip class again and this names the kwarg.
+    ``kind`` says "may this be refused when the budget is momentarily
+    short"; the indicator must NOT carry ``{"kind": "skip"}`` — the shape
+    it had until 8.21 — because the endpoint exemption is what keeps it
+    off the per-chat budget entirely, and a skip kind would only
+    re-expose it to the reserve rule on a chat that is short.
+
+    ``class`` says "how much is it worth". Since 8.26 the indicator IS
+    declared ORNAMENT: the bubble is the most disposable thing this daemon
+    sends, so minimal mode suspends it while answers keep flowing. The
+    class costs it no tokens and buys it no exemption from the mute.
+
+    Mutation: pass the skip kind again, or drop the class, and this names
+    the exact kwarg.
     """
     sess = _sess()
     bot = _bot(mk_bot, sess)
@@ -677,7 +700,9 @@ def test_the_indicator_does_not_pass_the_skip_class(mk_bot, run_async):
     run_async(bot._send_typing(sess, PRIVATE))
 
     kwargs = bot._app.bot.send_chat_action.await_args.kwargs
-    assert kwargs == {"chat_id": PRIVATE, **TYPING}
+    assert kwargs == {"chat_id": PRIVATE, **TYPING,
+                      "rate_limit_args": {"class": "ornament"}}
+    assert "kind" not in kwargs["rate_limit_args"]
 
 
 # ── R4: a 429 on the action itself ───────────────────────────────────────────

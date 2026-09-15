@@ -534,7 +534,7 @@ def test_edit_busy_rich_skips_post_when_markdown_identical(mk_bot, run_async, mo
 
     post_calls = []
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         post_calls.append(payload)
         return {"ok": True, "result": {}}
 
@@ -555,7 +555,7 @@ def test_edit_busy_rich_posts_when_content_changed(mk_bot, run_async, monkeypatc
 
     post_calls = []
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         post_calls.append(payload)
         return {"ok": True, "result": {}}
 
@@ -575,7 +575,7 @@ def test_edit_busy_rich_reply_markup_on_every_call(mk_bot, run_async, monkeypatc
 
     payloads = []
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         payloads.append(payload)
         return {"ok": True, "result": {}}
 
@@ -746,7 +746,7 @@ def test_edit_busy_rich_rtl_body_passes_is_rtl_true(mk_bot, run_async, monkeypat
 
     payloads = []
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         payloads.append(payload)
         return {"ok": True, "result": {}}
 
@@ -842,7 +842,7 @@ def test_animate_compact_never_calls_edit_message_text_rich(
 
     rich_calls = []
 
-    async def _fake_rich_post(method, payload):
+    async def _fake_rich_post(method, payload, **_kw):
         rich_calls.append(method)
         return {"ok": True, "result": {}}
 
@@ -1044,7 +1044,7 @@ def test_final_edit_omits_reply_markup(mk_bot, run_async, monkeypatch):
     sess.busy_msg_id = 10
     payloads = []
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         payloads.append(payload)
         return {"ok": True, "result": {}}
 
@@ -1063,7 +1063,7 @@ def test_final_edit_bypasses_the_dedupe(mk_bot, run_async, monkeypatch):
     sess.stream_last_rendered = build_stream_card(sess, "Done", final=True)
     payloads = []
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         payloads.append(payload)
         return {"ok": True, "result": {}}
 

@@ -120,24 +120,29 @@ def _scripted_post(*responses):
     repeating the last one; records every call and the kind it was made
     with.
 
-    The ``kind`` keyword mirrors the real seam
-    (``rich_message._post(method, payload, *, kind="blocking")``, roadmap
-    8.21). A double without it raises ``TypeError`` for any skip-kind
-    call, which the rich path swallows into "unexpected error" and a
-    ``None`` return — a silent no-op that reads to the card loop as a
-    permanent failure, i.e. a vacuously green test.
+    The ``kind`` and ``priority`` keywords mirror the real seam
+    (``rich_message._post(method, payload, *, kind="blocking",
+    priority="essential")`` — 8.21 and 8.26 respectively). A double
+    missing either raises ``TypeError`` for the calls that pass it, which
+    the rich path swallows into "unexpected error" and a ``None`` return —
+    a silent no-op that reads to the card loop as a permanent failure,
+    i.e. a vacuously green test.
     """
     calls: list[tuple[str, dict]] = []
     kinds: list[str] = []
+    priorities: list[str] = []
     script = list(responses)
 
-    async def _post(method, payload, *, kind: str = "blocking"):
+    async def _post(method, payload, *, kind: str = "blocking",
+                    priority: str = "essential"):
         calls.append((method, payload))
         kinds.append(kind)
+        priorities.append(priority)
         return script.pop(0) if len(script) > 1 else script[0]
 
-    _post.calls = calls    # type: ignore[attr-defined]
-    _post.kinds = kinds    # type: ignore[attr-defined]
+    _post.calls = calls              # type: ignore[attr-defined]
+    _post.kinds = kinds              # type: ignore[attr-defined]
+    _post.priorities = priorities    # type: ignore[attr-defined]
     return _post
 
 
@@ -147,18 +152,20 @@ def test_the_scripted_post_double_matches_the_seam_it_replaces():
     import time — ``rm._post`` itself is replaced by conftest's
     "no real Telegram" guard for the length of every test.
 
-    Mutation: drop the ``kind`` parameter from ``_scripted_post`` and a
-    skip-kind call raises ``TypeError`` into the rich path's own
-    ``except Exception``, which returns ``None`` — every assertion about a
-    skipped call would then pass for the wrong reason.
+    Mutation: drop the ``kind`` or ``priority`` parameter from
+    ``_scripted_post`` and the calls that pass it raise ``TypeError`` into
+    the rich path's own ``except Exception``, which returns ``None`` —
+    every assertion about such a call would then pass for the wrong
+    reason.
     """
     import inspect
 
     real = inspect.signature(_REAL_POST).parameters
     double = inspect.signature(_scripted_post(_ok())).parameters
     assert list(double) == list(real)
-    assert double["kind"].kind is inspect.Parameter.KEYWORD_ONLY
-    assert double["kind"].default == real["kind"].default
+    for name in ("kind", "priority"):
+        assert double[name].kind is inspect.Parameter.KEYWORD_ONLY, name
+        assert double[name].default == real[name].default, name
 
 
 class _FakeLimiter:

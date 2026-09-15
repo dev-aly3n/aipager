@@ -30,7 +30,9 @@ from aipager.config import (
 )
 from aipager.bot.flood import MUTE, FloodMuted, _key as _chat_key
 from aipager.bot.flood_budget import (
+    PRIORITY_ORNAMENT,
     FloodSkipped,
+    rate_limit_args as _rl_args,
     _retry_after_seconds as _retry_after_secs,
     card_interval,
     is_group_chat,
@@ -1223,6 +1225,11 @@ class AnimationMixin:
         try:
             await self._app.bot.send_chat_action(
                 chat_id=chat, action=TYPING_ACTION,
+                # ORNAMENT (8.26 R3): the bubble is the most disposable
+                # thing this daemon sends. Still budget-EXEMPT by
+                # endpoint — the class suspends it in minimal mode, it
+                # does not start charging it a chat token.
+                rate_limit_args=_rl_args(priority=PRIORITY_ORNAMENT),
             )
         except RetryAfter as exc:
             _log_typing_429_once(
@@ -1342,6 +1349,12 @@ class AnimationMixin:
                 reply_to_message_id=target,
                 reply_markup=self._build_stop_keyboard(sess),
                 disable_notification=disable_notification,
+                # ORNAMENT (8.26 R3): the card's creation. It is the
+                # single largest consumer of a chat's budget (~95 % of
+                # outbound volume against the answer's ~5 %), so it is
+                # the first thing pressure sheds — and `_reanchor_busy_card`
+                # inherits the class through this call.
+                rate_limit_args=_rl_args(priority=PRIORITY_ORNAMENT),
             )
             sess.busy_card_trigger = target
             # Read INSIDE the try, as this always has been: a send that
@@ -1490,7 +1503,14 @@ class AnimationMixin:
         # ``busy_msg_id`` and lose the card for good.
         if MUTE.is_muted(chat_id or CHAT_ID):
             return False
-        extra = {"rate_limit_args": {"kind": "skip"}} if kind == "skip" else {}
+        # ORNAMENT (8.26 R3) whatever the kind: a card edit is a card
+        # edit. `kind` says "may this be refused when the budget is
+        # momentarily short"; `class` says "how much is it worth". The
+        # animator escalates kind skip -> blocking after two refusals so a
+        # card is slow but never frozen, and the class is what keeps that
+        # escalated edit from taking an answer's last token.
+        extra = {"rate_limit_args": _rl_args(kind=kind,
+                                             priority=PRIORITY_ORNAMENT)}
         try:
             await self._app.bot.edit_message_text(
                 text, chat_id=chat_id or CHAT_ID, message_id=msg_id,
@@ -1592,6 +1612,7 @@ class AnimationMixin:
                     is_rtl=is_rtl,
                     reply_markup=reply_markup,
                     kind=kind,
+                    priority=PRIORITY_ORNAMENT,   # 8.26 R3: the card
                 )
             except FloodSkipped:
                 # The chat's budget was short and this edit was skippable,
@@ -1647,7 +1668,8 @@ class AnimationMixin:
                         chat_id=int(resolve_chat_id(sess)),
                         message_id=int(sess.busy_msg_id),
                         reply_markup=reply_markup,
-                        rate_limit_args={"kind": "skip"},
+                        rate_limit_args=_rl_args(
+                            kind="skip", priority=PRIORITY_ORNAMENT),
                     )
                     return True
                 except FloodSkipped:
@@ -1731,6 +1753,10 @@ class AnimationMixin:
             try:
                 await self._app.bot.delete_message(
                     chat_id=resolve_chat_id(sess), message_id=old_msg_id,
+                    # ORNAMENT (8.26 R3): card housekeeping. Leaving a
+                    # stale card behind is cosmetic; taking an answer's
+                    # token to remove it is not.
+                    rate_limit_args=_rl_args(priority=PRIORITY_ORNAMENT),
                 )
             except Exception:
                 log.debug("[%s] re-anchor: old card delete failed (left behind)",
@@ -2210,6 +2236,12 @@ class AnimationMixin:
                 resolve_chat_id(sess), document=content_bytes,
                 filename=f"{label}_full_log.txt",
                 reply_to_message_id=old_msg_id,
+                # ORNAMENT (8.26 R3): card housekeeping again — the
+                # superseded card's hidden rows. The turn's own answer and
+                # its full-log attachment are ESSENTIAL and go out
+                # separately; this one compensates a card that is already
+                # being replaced.
+                rate_limit_args=_rl_args(priority=PRIORITY_ORNAMENT),
             )
         except Exception:
             log.info("[%s] superseded card %s: full-log attachment failed",

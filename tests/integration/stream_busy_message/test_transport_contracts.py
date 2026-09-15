@@ -53,7 +53,7 @@ def test_400_not_modified_logged_at_debug_not_warning(run_async, monkeypatch, ca
     NOT at WARNING level."""
     import aipager.bot.rich_message as rm_mod
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         return {
             "ok": False,
             "error_code": 400,
@@ -149,7 +149,7 @@ def test_every_edit_carries_stop_button_dm(mk_bot, run_async, monkeypatch):
 
     payloads = []
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         payloads.append(payload)
         return {"ok": True, "result": {}}
 
@@ -175,7 +175,7 @@ def test_every_edit_carries_stop_button_group(mk_bot, run_async, monkeypatch):
 
     payloads = []
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         payloads.append(payload)
         return {"ok": True, "result": {}}
 
@@ -204,7 +204,7 @@ def test_identical_consecutive_renders_produce_one_http_call(mk_bot, run_async, 
 
     http_calls = []
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         http_calls.append(method)
         return {"ok": True, "result": {}}
 
@@ -232,7 +232,7 @@ def test_rtl_body_sends_is_rtl_true(mk_bot, run_async, monkeypatch):
 
     payloads = []
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         payloads.append(payload)
         return {"ok": True, "result": {}}
 
@@ -305,7 +305,7 @@ def test_animate_compact_does_not_call_edit_message_text_rich(mk_bot, run_async,
 
     rich_edit_calls = []
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         # This _post is used by edit_message_text_rich (the rich path)
         rich_edit_calls.append(method)
         return {"ok": True, "result": {}}

@@ -52,7 +52,7 @@ def test_merged_edit_success_preserves_reply_routing_to_busy_msg_id(
     # message is registered ONCE, before any edit happens.
     bot.registry.track_message(42, sess.name, chat_id)
 
-    async def _fake_post(method, payload):
+    async def _fake_post(method, payload, **_kw):
         assert method == "editMessageText"
         return {"ok": True, "result": {"message_id": 42}}
 
