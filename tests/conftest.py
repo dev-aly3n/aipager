@@ -548,12 +548,20 @@ def _isolate_flood_mute(tmp_path, monkeypatch):
                         str(tmp_path / "aipager-flood-mute.json"))
     monkeypatch.setattr("aipager.config.FLOOD_BACKOFF_FILE",
                         str(tmp_path / "aipager-flood-backoff.json"))
-    from aipager.bot import flood, rich_message
+    from aipager.bot import flood, flood_state, held, rich_message
 
     flood.MUTE.clear()
+    # The 8.29 held-answer buffer is module-level daemon state of exactly
+    # the same kind: an answer held by one test would be delivered by the
+    # next one's flush. And `flood_state`'s dirty flag + write throttle
+    # would otherwise make "did this write?" depend on test ordering.
+    held.HELD.clear()
+    flood_state.clear()
     monkeypatch.setattr(rich_message, "_rate_limiter", None)
     yield
     flood.MUTE.clear()
+    held.HELD.clear()
+    flood_state.clear()
 
 
 def _control_socket_path() -> Path:

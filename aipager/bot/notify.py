@@ -308,10 +308,12 @@ class NotifyMixin:
                 log.warning("[%s] merged: sendRichMessage blocked", sess.label)
                 return False
             except RichMessageFloodBanned:
-                # The chat is flood-muted now; the replace-style path the
-                # caller falls back to skips its own sends the same way.
-                log.info("[%s] merged: sendRichMessage flood-banned — answer "
-                         "not delivered", sess.label)
+                # HELD, not dropped (8.29 R6). The chat is flood-muted, so
+                # this attempt and the caller's replace-style fallback are
+                # both refused — but the answer is still worth reading once
+                # the ban lifts. `return False` is unchanged, so the
+                # caller's control flow is exactly as before.
+                self._hold_answer(sess, combined, combined, reply_to)
                 return False
             except (RichMessageFallbackRequired, Exception):
                 log.debug("[%s] merged: send-as-new failed", sess.label,
@@ -338,8 +340,8 @@ class NotifyMixin:
             sess.busy_msg_id = 0
             return False
         except RichMessageFloodBanned:
-            log.info("[%s] merged: editMessageText flood-banned — answer "
-                     "not delivered", sess.label)
+            # HELD, not dropped (8.29 R6) — see the send-as-new arm above.
+            self._hold_answer(sess, combined, combined, reply_to)
             return False
         return result is not None
 
@@ -558,6 +560,97 @@ class NotifyMixin:
                 "entry (%d chars)", sess.label, len(dropped),
             )
 
+    def _hold_answer(self, sess: TrackedSession, rich_text: str,
+                     plain_text: str, reply_to: int | None) -> None:
+        """Keep an answer a flood mute refused (8.29 R6). Never raises.
+
+        One INFO where "not delivered, no fallback" used to be — the
+        operator is told the answer is coming, not that it is gone.
+
+        Never raises, because every call site is inside a turn that must
+        finish: a failure to BUFFER an answer must not also abort the rest
+        of the turn.
+        """
+        try:
+            from aipager.bot.held import HELD
+
+            HELD.hold(
+                chat_id=resolve_chat_id_int(sess) or resolve_chat_id(sess),
+                session=sess.name, label=sess.label,
+                rich_text=rich_text, plain_text=plain_text,
+                reply_to=reply_to,
+            )
+            log.info(
+                "[%s] answer held — the chat is flood-muted; it will be "
+                "delivered when the mute lifts", sess.label,
+            )
+        except Exception:  # pragma: no cover - defensive
+            log.warning("[%s] could not hold the refused answer", sess.label,
+                        exc_info=True)
+
+    async def flush_held_answers(self, sess: TrackedSession) -> int:
+        """Deliver everything held for this session's chat. Returns how
+        many went out.
+
+        ``0`` while the chat is still muted or with nothing held — the
+        cheap early return, because the session monitor calls this on its
+        2 s tick for every session that has something held.
+
+        Each delivery is a BLOCKING, ESSENTIAL ``send_rich_message`` with
+        the late marker as its first line. An entry that fails for a
+        reason other than the mute keeps its place and counts an attempt;
+        at ``HELD_ANSWER_MAX_ATTEMPTS`` it is dropped with one WARNING
+        naming the session and its size — not silently, which is the whole
+        point of R6.
+        """
+        from aipager.bot.held import HELD, HELD_ANSWER_MAX_ATTEMPTS, late_marker
+
+        chat_id = resolve_chat_id_int(sess) or resolve_chat_id(sess)
+        if not chat_id or MUTE.is_muted(chat_id):
+            return 0
+        entries = [e for e in HELD.pending(chat_id) if e.session == sess.name]
+        if not entries:
+            return 0
+
+        delivered = 0
+        for entry in entries:
+            marker = late_marker(entry.held_seconds())
+            try:
+                sent = await send_rich_message(
+                    int(chat_id), f"{marker}\n\n{entry.rich_text}",
+                    is_rtl=detect_rtl(entry.rich_text),
+                    reply_to_message_id=entry.reply_to,
+                )
+            except RichMessageFloodBanned:
+                # Re-muted between the check above and the send. Keep it:
+                # this is not a failed delivery, it is a postponed one,
+                # and it must not count against the attempt budget.
+                return delivered
+            except Exception:
+                entry.attempts += 1
+                if entry.attempts >= HELD_ANSWER_MAX_ATTEMPTS:
+                    HELD.drop(entry.chat_id, entry.session)
+                    log.warning(
+                        "[%s] held answer dropped after %d failed delivery "
+                        "attempts (%d chars) — it is lost",
+                        entry.label, entry.attempts, len(entry.rich_text),
+                    )
+                else:
+                    log.debug("[%s] held answer delivery failed (attempt %d)",
+                              entry.label, entry.attempts, exc_info=True)
+                continue
+            HELD.drop(entry.chat_id, entry.session)
+            delivered += 1
+            if isinstance(sent, dict) and sent.get("message_id"):
+                self.registry.track_message(
+                    sent["message_id"], sess.name,
+                    resolve_chat_id_int(sess) or 0,
+                )
+        if delivered:
+            log.info("[%s] delivered %d held answer(s) after the mute lifted",
+                     sess.label, delivered)
+        return delivered
+
     async def _flush_job_buffer(self, sess: TrackedSession) -> None:
         """Deliver the accumulated interim content as the job's final
         message on the close paths that never reach the Finished
@@ -571,12 +664,10 @@ class NotifyMixin:
         if not sess.job_interim_buffer:
             return
         content = "\n\n———\n\n".join(sess.job_interim_buffer)
-        sess.job_interim_buffer.clear()
         digest = hashlib.md5(content.encode("utf-8")).hexdigest()
         if digest == sess.last_idle_summary_hash or sess.was_delivered(digest):
+            sess.job_interim_buffer.clear()
             return
-        sess.last_idle_summary_hash = digest
-        sess.remember_delivered(digest)
         is_rtl = detect_rtl(content)
         chat_id = resolve_chat_id_int(sess)
         # A flushed interim answer is a result: it opens with the result
@@ -584,6 +675,24 @@ class NotifyMixin:
         # The dedup digest above is over the bare content on purpose.
         rich_text = f"{_result_line_md(sess.label)}\n\n{content}"
         plain_text = f"{_result_line_plain(sess.label)}\n\n{content}"
+
+        # ORDERING (8.29 R6, research gotcha 6). The buffer used to be
+        # CLEARED and the digest recorded as DELIVERED right here, before
+        # the send. On a flood ban that lost a background job's entire
+        # output twice over: the only copy was gone, and the digest said
+        # it had already been delivered, so even a later retry would be
+        # deduped away. Nothing in this method is retried today, which is
+        # why nobody noticed.
+        #
+        # The new rule: clear and remember only once the content is either
+        # SENT or HELD. Any other failure keeps today's behaviour, because
+        # the plain-text fallback below owns it and clearing after a
+        # successful fallback is correct.
+        def _consume() -> None:
+            sess.job_interim_buffer.clear()
+            sess.last_idle_summary_hash = digest
+            sess.remember_delivered(digest)
+
         try:
             if chat_id is None:
                 raise RichMessageFallbackRequired("no numeric chat id resolved")
@@ -596,11 +705,16 @@ class NotifyMixin:
                     sent["message_id"], sess.name, chat_id or 0,
                 )
         except RichMessageBlocked:
+            _consume()
             _log_blocked_once(Exception("sendRichMessage 403"))
         except RichMessageFloodBanned:
-            # No plain-text fallback: that is a second violation (R2).
-            log.info("[%s] job buffer sendRichMessage flood-banned — not "
-                     "delivered", sess.label)
+            # HELD (8.29 R6). Still no plain-text fallback — that is a
+            # second violation into the ban — but the content is kept and
+            # delivered once the mute lifts. The buffer is cleared ONLY
+            # because the hold now owns the only copy.
+            self._hold_answer(sess, rich_text, plain_text,
+                              sess.trigger_msg_id)
+            _consume()
         except (RichMessageFallbackRequired, Exception):
             log.warning(
                 "[%s] job buffer sendRichMessage failed — falling back to "
@@ -621,6 +735,9 @@ class NotifyMixin:
                         "[%s] job buffer plain-text fallback chunk send "
                         "failed", sess.label, exc_info=True,
                     )
+            _consume()
+        else:
+            _consume()
 
     async def _handle_job_interim(
         self, sess: TrackedSession, context: dict,
@@ -719,6 +836,14 @@ class NotifyMixin:
         # ── Pinned message refresh (e.g. model changed) ──
         if event == "pinned_update":
             return  # _maybe_update_bot_name already fired at top
+
+        # ── A mute lifted and this session has an answer waiting (8.29) ──
+        # Dispatched by `SessionMonitor._scan` on the 2 s tick it already
+        # runs, so a held answer lands within one tick of the ban lifting
+        # with no busy-wait, no timer and no new task.
+        if event == "held_answer_flush":
+            await self.flush_held_answers(sess)
+            return
 
         if event == "hook_memory_cap_hit":
             hook_name = context.get("hook", "aipager-hook")
@@ -2175,11 +2300,17 @@ class NotifyMixin:
                 except RichMessageBlocked:
                     _log_blocked_once(Exception("sendRichMessage 403"))
                 except RichMessageFloodBanned:
-                    # Flood ban (R2): this was the one attempt. A plain-text
-                    # fallback would be a fresh violation extending the
-                    # ban; the chat is muted until it lifts.
-                    log.info("[%s] sendRichMessage flood-banned — answer not "
-                             "delivered, no fallback", label)
+                    # HELD (8.29 R6). This is THE drop path the incident
+                    # log named five times on 2026-09-15: the answer lived
+                    # in a local of this method and went out of scope with
+                    # it, leaving one INFO line and nothing else.
+                    #
+                    # Still no plain-text fallback — that would be a fresh
+                    # violation extending the ban, and R2 is unchanged.
+                    # What changes is that "cannot send now" stops meaning
+                    # "cannot send": the text is kept and delivered once
+                    # the mute lifts, with an honest late marker.
+                    self._hold_answer(sess, rich_text, plain_text, reply_to)
                 except (RichMessageFallbackRequired, Exception):
                     # Plain-text fallback — split into ≤4096-char chunks at
                     # markdown-safe boundaries so the send cannot fail to parse.

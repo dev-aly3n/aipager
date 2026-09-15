@@ -275,6 +275,26 @@ def expired_compacting_sessions(
             if sess.compacting_is_overdue(now)]
 
 
+def _has_held_answer(sess) -> bool:
+    """Does *sess* have an answer waiting for its chat's mute to lift?
+
+    Late import and never raises: this runs on the 2 s scan for every
+    session, and a buffer problem must not be able to stop the scan.
+    The mute itself is re-checked by ``flush_held_answers``; asking here
+    would double the work for no benefit, since the flush returns 0
+    immediately while still muted.
+    """
+    try:
+        from aipager.bot.held import HELD
+
+        if HELD.count() == 0:
+            return False
+        return any(session == sess.name
+                   for _chat, session in HELD.sessions_with_held())
+    except Exception:  # pragma: no cover - defensive
+        return False
+
+
 def _sweep_flood_backoff() -> None:
     """Let every chat's 429 backoff decay on the clock, not only while a
     busy card happens to be ticking (roadmap 8.21).
@@ -488,6 +508,21 @@ class SessionMonitor:
                 except Exception:
                     log.warning(
                         "Failed to notify busy_card_watchdog for %s", name,
+                        exc_info=True,
+                    )
+
+            # Held answers (8.29 R6): an answer a flood mute refused is
+            # kept, and this is what delivers it. Driven from the tick
+            # that already runs rather than a timer or a busy-wait, so a
+            # held answer lands within 2 s of the ban lifting. The guard
+            # is cheap and false almost always — nothing is held unless a
+            # chat has actually been banned.
+            if _has_held_answer(sess):
+                try:
+                    await self.notify_fn(sess, "held_answer_flush", {})
+                except Exception:
+                    log.warning(
+                        "Failed to flush held answers for %s", name,
                         exc_info=True,
                     )
 
