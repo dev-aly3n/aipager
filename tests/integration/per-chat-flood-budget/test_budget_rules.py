@@ -593,9 +593,12 @@ def test_a_chatless_call_is_never_skipped_even_when_it_asks_to_be(
 def test_a_reaction_goes_out_while_the_chat_is_empty_and_deferred(
     limiter, clock, run_async,
 ):
-    """Row N / §11 U4: the 🚨 give-up reaction is the one signal that must
-    still reach the user when the chat is jammed. Mutation: budget
-    reactions again and the reaction waits behind the flood."""
+    """Row N / §11 U4: a reaction is the one acknowledgement that must
+    still reach the user when the chat is jammed — the 👀 "seen" and the
+    👍 "delivered to the agent". (The 🚨 give-up reaction this row was
+    written for is gone: 8.26 D-1 deleted it, because it fired into a
+    chat that had just been banned.) Mutation: budget reactions again and
+    the acknowledgement waits behind the flood."""
     log: list[tuple] = []
 
     async def scenario():
@@ -627,7 +630,7 @@ def test_a_reaction_is_still_held_by_the_overall_bucket(clock, run_async):
     """§11 U4 exempts ``setMessageReaction`` from the CHAT budget only —
     R1 keeps it inside the 30/s overall one, because Telegram meters the
     bot as a whole whatever it thinks of reactions. Mutation: return early
-    for reactions before the overall acquire and a burst of 🚨 can
+    for reactions before the overall acquire and a burst of them can
     out-send the daemon's own global limit."""
     limiter = BudgetRateLimiter(start_rate=_FIXED_RATE, clock=clock, sleep=clock.sleep)
     log: list[tuple] = []

@@ -875,8 +875,10 @@ def test_note_retry_after_ignores_a_value_past_the_cap():
 
 def test_a_reaction_goes_out_while_the_chat_budget_is_empty(run_async):
     """Row N (§11 U4). Mutation: remove ``setMessageReaction`` from the
-    exempt endpoint and the 🚨 that tells the user a message was dropped
-    is itself dropped — at exactly the moment the chat is jammed."""
+    exempt endpoint and the 👀 that tells the user their message was seen
+    is itself refused — at exactly the moment the chat is jammed. (This
+    row named the 🚨 give-up reaction until 8.26 D-1 deleted it: it fired
+    into a chat that had just been banned.)"""
     clock = FakeClock()
     limiter = _limiter(clock)
     call = _recorder(clock)

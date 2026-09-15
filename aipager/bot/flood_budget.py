@@ -1456,12 +1456,22 @@ class BudgetRateLimiter(BaseRateLimiter):
             raise FloodSkipped(chat_id, endpoint)
 
         if endpoint in _CHAT_BUDGET_EXEMPT:
-            # §11 U4: reactions are exempt from the chat budget. They are
-            # a separate bucket on Telegram's side, and `transport.py`'s
-            # 🚨 give-up reaction fires exactly when this chat's queue is
-            # jammed — budgeting it would gag the one signal that still
-            # reaches the user (see transport.py:456-458). Counted, so a
-            # future incident can show whether that is still true.
+            # §11 U4: reactions are exempt from the chat budget. They
+            # are a separate bucket on Telegram's side, and the two that
+            # survive are SIGNALS the user reads as "seen" — the 👀 on a
+            # message the daemon accepted (`handlers._react`) and the 👍
+            # on one delivered to a running agent (`notify.py`). Budgeting
+            # them would make the acknowledgement wait behind the very
+            # card edits the chat is already struggling with. Counted, so
+            # a future incident can show whether that is still true.
+            #
+            # The 🚨 GIVE-UP REACTION THIS COMMENT USED TO CITE IS GONE
+            # (8.26 D-1). It fired exactly when the chat had just been
+            # banned, so it was itself a request into the ban; the answer
+            # it flagged is now HELD and delivered late instead. Budget
+            # exemption is about PACING and always was — nothing here is
+            # exempt from the mute, which is why the gate sits above this
+            # branch.
             #
             # §12: the "typing…" chat action is exempt on the same terms,
             # and on live evidence — it answered 200 throughout a real
