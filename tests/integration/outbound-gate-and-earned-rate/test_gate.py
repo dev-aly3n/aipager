@@ -449,3 +449,168 @@ def test_the_ptb_path_still_gets_a_bare_flood_muted(
             data={"chat_id": MUTED_CHAT}, rate_limit_args=None,
         ))
     assert not isinstance(ei.value, RichMessageFloodBanned)
+
+
+# ── the seam's translation, exercised where the pre-check cannot fire ───────
+#
+# `transport.py`'s seven helpers keep their own `MUTE.is_muted` pre-check —
+# they must, because they have to hold for a bot that is not limiter-bound,
+# and because the 27 MagicMock-based tests in
+# `test_command_replies_respect_mute.py` exercise exactly that path. But the
+# pre-check is not what production takes when the mute is armed BETWEEN the
+# check and the await, by another coroutine finishing its own turn. Then the
+# gate underneath raises `FloodMuted` into the middle of the helper, and the
+# `except FloodMuted: return MUTED` arm is the only thing that keeps the
+# falsy-sentinel contract every caller reads (`dashboard.py:193/206`,
+# `keyboards.py:189`, `new_flow.py:474`, `handlers.py:1195/1218`).
+#
+# The mutation protocol found this uncovered: deleting all seven arms broke
+# no test at all, because every existing row stops at the pre-check.
+
+class _MutesMidFlight:
+    """A limiter-routed bot that arms the mute just before it calls.
+
+    Models the real race: another coroutine's answer gets a ban-sized
+    `retry_after` and arms `flood.MUTE` while this send is already past
+    its own pre-check.
+    """
+
+    def __init__(self, limiter, clock, chat_id, retry_after=BAN):
+        self._inner = None
+        self._limiter = limiter
+        self._clock = clock
+        self._chat_id = chat_id
+        self._retry_after = retry_after
+        self.calls: list = []
+
+    def _arm_then(self, endpoint, position):
+        async def _method(*args, rate_limit_args=None, **kwargs):
+            MUTE.mute(self._chat_id, self._retry_after, source="other turn")
+            chat_id = kwargs.get("chat_id")
+            if chat_id is None and len(args) > position:
+                chat_id = args[position]
+
+            async def _call():
+                self.calls.append((endpoint, chat_id))
+
+            return await self._limiter.process_request(
+                callback=_call, args=(), kwargs={}, endpoint=endpoint,
+                data={"chat_id": chat_id}, rate_limit_args=rate_limit_args)
+        return _method
+
+    def __getattr__(self, name):
+        table = {"send_message": ("sendMessage", 0),
+                 "edit_message_text": ("editMessageText", 1)}
+        if name not in table:
+            raise AttributeError(name)
+        return self._arm_then(*table[name])
+
+
+def test_send_text_returns_the_muted_sentinel_when_the_gate_fires_mid_flight(
+    limiter, flood_clock, run_async,
+):
+    """The seam's translation, and the contract it protects.
+
+    `send_text` must answer with the falsy `MUTED` sentinel however the
+    decision is reached — by its own pre-check, or by the gate underneath
+    it. Callers test `sent is MUTED` and read `sent.message_id` otherwise;
+    a `FloodMuted` escaping here would instead abort whichever command
+    handler made the call.
+
+    Mutation: delete the seven `except FloodMuted: return MUTED` arms in
+    `transport.py` and this raises `FloodMuted` out of `send_text`.
+    """
+    from aipager.bot.transport import MUTED, send_text
+
+    bot = _MutesMidFlight(limiter, flood_clock, MUTED_CHAT)
+    assert not MUTE.is_muted(MUTED_CHAT), "precondition: the pre-check passes"
+
+    result = run_async(send_text(bot, MUTED_CHAT, "hello"))
+
+    assert result is MUTED
+    assert not result, "the sentinel must stay falsy"
+    assert bot.calls == [], "the send went out anyway"
+
+
+def test_edit_text_at_returns_the_muted_sentinel_when_the_gate_fires(
+    limiter, flood_clock, run_async,
+):
+    """The same for the edit helper, whose chat id is the SECOND
+    positional (PTB's order is `text, chat_id, message_id`)."""
+    from aipager.bot.transport import MUTED, edit_text_at
+
+    bot = _MutesMidFlight(limiter, flood_clock, MUTED_CHAT)
+    result = run_async(edit_text_at(bot, "new text", MUTED_CHAT, 99))
+
+    assert result is MUTED
+    assert bot.calls == []
+
+
+# ── _sync_mute: a ban armed on the RICH path, which `_run` never sees ───────
+
+def test_a_ban_armed_on_the_rich_path_still_reaches_the_earned_rate(
+    limiter, flood_clock, run_async,
+):
+    """A rich-path ban never passes through `_run`'s `RetryAfter` branch.
+
+    It arrives as an HTTP **200** whose body carries
+    `{"error_code": 429, "parameters": {"retry_after": 34212}}`;
+    `rich_message._handle_response` reads it, calls `MUTE.mute(...)` and
+    raises. `_run` sees no exception from Telegram at all, so the branch
+    that records a ban against the chat's earned rate is never reached.
+
+    Rather than an observer registry or a new callback, the limiter
+    notices by comparing `MUTE`'s deadline against what it has already
+    recorded, on a path it runs anyway (`_sync_mute`, from
+    `process_request`). Without it, the worst kind of ban — the one the
+    rich answer path produces — would teach the rate limiter nothing.
+
+    Mutation: drop the `_sync_mute` call from `process_request` and the
+    rate stays at `FLOOD_START_RATE` through a 9.5-hour ban.
+    """
+    assert limiter.earned_rate(MUTED_CHAT) == pytest.approx(
+        config.FLOOD_START_RATE)
+
+    # Exactly what `rich_message._ban_if_excessive` does, and no more:
+    # it arms the mute and raises. It does not touch the limiter.
+    MUTE.mute(MUTED_CHAT, BAN, source="sendRichMessage")
+
+    async def _callback():
+        return "sent"
+
+    # The next call through the limiter is refused by the gate — and on
+    # its way there, `_sync_mute` notices the ban.
+    with pytest.raises(FloodMuted):
+        run_async(limiter.process_request(
+            callback=_callback, args=(), kwargs={}, endpoint="sendMessage",
+            data={"chat_id": MUTED_CHAT}, rate_limit_args=None))
+
+    assert limiter.earned_rate(MUTED_CHAT) == pytest.approx(
+        config.FLOOD_MIN_RATE), "the rich-path ban was never recorded"
+    assert limiter.snapshot()["chats"][0]["bans_today"] == 1
+
+
+def test_a_rich_path_ban_is_not_double_counted_with_the_ptb_one(
+    limiter, flood_clock, run_async,
+):
+    """`_sync_mute` and `_run`'s ban branch can both see one ban — the
+    PTB path arms the mute AND raises `RetryAfter`. `ban_seen_until` is
+    what keeps that from counting twice.
+
+    Mutation: drop the `ban_seen_until` guard and `bans_today` counts
+    requests rather than bans, so `aipager status` reports "9 bans today"
+    for one ban with nine attempts against it.
+    """
+    MUTE.mute(MUTED_CHAT, BAN, source="sendMessage")
+    limiter.note_ban(MUTED_CHAT, BAN)
+
+    async def _callback():
+        return "sent"
+
+    for _ in range(5):
+        with pytest.raises(FloodMuted):
+            run_async(limiter.process_request(
+                callback=_callback, args=(), kwargs={}, endpoint="sendMessage",
+                data={"chat_id": MUTED_CHAT}, rate_limit_args=None))
+
+    assert limiter.snapshot()["chats"][0]["bans_today"] == 1
