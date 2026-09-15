@@ -142,6 +142,14 @@ FINAL_VERB = "Done"
 # Delay before the animate task's first tick: short so a fresh card gets
 # its first real render quickly, before the regular stream cadence.
 FIRST_TICK_DELAY = 1.5
+
+# The sentinel `stream_last_rendered` carries while a chat is in minimal
+# mode (8.27 R3). It is deliberately NOT the rendered text: the text
+# contains the session label, so comparing against the text would re-send
+# the line whenever a session is renamed, and a chat at 0.05 calls/s
+# cannot afford an edit it does not need. Any real render replaces it, so
+# leaving minimal mode re-animates normally on the next tick.
+_PAUSED_CARD_TEXT = "\x00minimal-mode-paused"
 # Ceiling on the session monitor's forced stale-card refresh. The refresh
 # runs on the monitor's own loop, under the per-session edit lock; the
 # HTTP call beneath is bounded (15s httpx timeout, one 429 retry) so this
@@ -1777,8 +1785,18 @@ class AnimationMixin:
         every scope, so every legacy session would be counted into every
         chat (research D9).
 
-        The backoff comes from the live limiter, read late on every call:
-        caching a reference is how two budgets drift apart.
+        The pacing comes from the live limiter, read late on every call
+        and never cached: caching a reference is how two budgets drift
+        apart (the 8.17 failure). Since 8.27 that is the chat's EARNED
+        rate and its sustained gap as well as the 429 backoff — one
+        `pacing_for` read rather than three, so the card cannot pace
+        itself against a rate it took one tick and a backoff it took the
+        next.
+
+        Telling the cadence about the earned rate is what makes a
+        penalised chat animate SLOWLY instead of having every edit
+        refused: without it a chat at 0.1 calls/s would ask for an edit
+        every 1.3 s and be turned down twelve times out of thirteen.
         """
         chat = resolve_chat_id_int(sess)
         base = STREAM_EDIT_INTERVAL if streaming else BUSY_EDIT_INTERVAL
@@ -1793,9 +1811,13 @@ class AnimationMixin:
             )
             group = is_group_chat(chat)
         limiter = get_rate_limiter()
-        backoff = limiter.cadence_multiplier(chat) if limiter is not None else 1.0
-        return card_interval(base=base, busy_sessions=busy, is_group=group,
-                             backoff=backoff)
+        pacing = limiter.pacing_for(chat) if limiter is not None else {}
+        return card_interval(
+            base=base, busy_sessions=busy, is_group=group,
+            backoff=pacing.get("backoff", 1.0),
+            chat_rate=pacing.get("rate"),
+            sustained_min_gap=pacing.get("sustained_min_gap"),
+        )
 
     def _first_tick_delay(self, sess: TrackedSession) -> float:
         """Delay before the animate task's first tick.
@@ -1904,6 +1926,46 @@ class AnimationMixin:
         except asyncio.CancelledError:
             pass
 
+    async def _render_paused_card(self, sess: TrackedSession) -> bool:
+        """While the chat is in minimal mode, show ONE static line and
+        stop animating. Returns True when minimal mode is in force.
+
+        The line is the promise the card was making — "this session is
+        working" — kept without the animation that was making it. It is
+        sent ESSENTIAL, not ORNAMENT: minimal mode suspends ornaments, so
+        an ornament here would suspend the very message that explains the
+        suspension.
+
+        Sent ONCE per entry into minimal mode, not once per tick, and the
+        dedupe is `sess.stream_last_rendered` — the same mechanism the
+        streaming card already uses to avoid "message is not modified"
+        400s. A chat at 0.05 calls/s cannot afford a repeated edit, and a
+        static line repeated is not static.
+        """
+        limiter = get_rate_limiter()
+        if limiter is None:
+            return False
+        chat = resolve_chat_id_int(sess)
+        if chat is None or not limiter.minimal_mode(chat):
+            return False
+        if not sess.busy_msg_id or sess.busy_msg_id <= 0:
+            return True          # nothing to edit; still minimal
+        if sess.stream_last_rendered == _PAUSED_CARD_TEXT:
+            return True          # already shown for this entry
+        try:
+            sent = await self._edit_busy_raw(
+                sess.busy_msg_id,
+                f"⏳ <b>{html_mod.escape(sess.label)}</b> · working — "
+                "updates paused",
+                chat_id=resolve_chat_id(sess),
+            )
+        except Exception:
+            log.debug("[%s] paused-card line failed", sess.label, exc_info=True)
+            return True
+        if sent:
+            sess.stream_last_rendered = _PAUSED_CARD_TEXT
+        return True
+
     async def _animate_tick(
         self, sess: TrackedSession, verb: str, waiting: bool,
     ) -> bool | None:
@@ -1920,6 +1982,20 @@ class AnimationMixin:
             # into a flood ban. End the loop as on a block; the card stays
             # as last rendered until the turn ends.
             return None
+        if await self._render_paused_card(sess):
+            # MINIMAL MODE (8.27 R3): this chat's earned rate has fallen
+            # under `FLOOD_MINIMAL_MODE_RATE_FLOOR`, so it can no longer
+            # afford an animation — but it can still afford the ANSWER,
+            # which is the whole point of shedding pixels first.
+            #
+            # FALSE, NEVER NONE. `None` ends `_animate_busy`'s loop and
+            # kills the task; the watchdog then restarts it every 20 s for
+            # as long as the condition lasts (348 restarts in 54 minutes,
+            # measured 2026-09-15). `False` means "no Telegram call, no
+            # stamps touched" — the loop stays alive, keeps sleeping at
+            # the chat's new, much slower cadence, and resumes animating
+            # by itself the moment the rate recovers.
+            return False
         if not waiting:
             # A batch whose message said nothing settles here, so the
             # card stops holding it and the next prose lands below it.

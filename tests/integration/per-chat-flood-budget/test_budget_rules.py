@@ -21,11 +21,22 @@ import pytest
 from aipager import config, status
 from aipager.bot.flood_budget import (
     BudgetRateLimiter,
+
     FloodSkipped,
     TokenBucket,
     card_interval,
     is_group_chat,
 )
+
+# The 8.21 rows below are about the BUDGET MECHANICS — the token bucket,
+# the rolling window, the reserve, the deferral — at a known, fixed chat
+# rate. 8.27 made that rate LEARNED, starting at `FLOOD_START_RATE` (half
+# the ceiling), so leaving it to the default would silently double every
+# expected interval here and turn these into rows about the starting
+# allowance instead. Pinned to the ceiling so each row keeps measuring
+# what it was written to measure; the earned rate has its own rows in
+# `tests/integration/outbound-gate-and-earned-rate/test_earned_rate.py`.
+_FIXED_RATE = config.TELEGRAM_PRIVATE_MAX_RATE
 
 PRIVATE = 256113222
 GROUP = -1001234567890
@@ -94,7 +105,7 @@ def limiter(clock):
     seam entrypoints.md documents, and it is what makes these rows
     deterministic anywhere. ``config.FLOOD_BACKOFF_FILE`` is already
     inside ``tmp_path`` by the autouse ``_isolate_flood_mute`` fixture."""
-    lim = BudgetRateLimiter(clock=clock, sleep=clock.sleep,
+    lim = BudgetRateLimiter(start_rate=_FIXED_RATE, clock=clock, sleep=clock.sleep,
                             signal_path=config.FLOOD_BACKOFF_FILE)
     yield lim
     lim.reset()
@@ -235,7 +246,7 @@ def test_sixty_chats_sending_at_once_are_paced_by_the_overall_bucket(
     capacity): the 60th call cannot land before the 31st-to-60th have been
     refilled at 30/s. Mutation: drop the overall bucket and all sixty land
     in the same instant."""
-    limiter = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    limiter = BudgetRateLimiter(start_rate=_FIXED_RATE, clock=clock, sleep=clock.sleep)
     log: list[tuple] = []
 
     async def burst():
@@ -256,7 +267,7 @@ def test_a_group_chat_admits_no_more_than_twenty_calls_in_any_sixty_seconds(
     """Row B3/G, the group's second bucket. The fixture pins a POSITIVE
     CHAT_ID, so the group id is stamped explicitly. Mutation: apply only
     the 1/s private bucket and 25 calls land inside one minute."""
-    limiter = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    limiter = BudgetRateLimiter(start_rate=_FIXED_RATE, clock=clock, sleep=clock.sleep)
     log: list[tuple] = []
 
     async def burst():
@@ -278,7 +289,7 @@ def test_exactly_twenty_group_calls_land_in_the_first_minute_and_the_rest_after(
     minute boundary. Mutation: model the window as a bucket with capacity
     20 again and all 25 land inside the first 22 s (iteration 1's red
     row)."""
-    limiter = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    limiter = BudgetRateLimiter(start_rate=_FIXED_RATE, clock=clock, sleep=clock.sleep)
     log: list[tuple] = []
 
     async def burst():
@@ -301,7 +312,7 @@ def test_the_twenty_first_group_call_waits_for_the_window_to_roll(
     of the twenty is a full minute old. Mutation: drop the oldest-stamp
     wait and it leaves early — which is exactly how a group earns its
     429."""
-    limiter = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    limiter = BudgetRateLimiter(start_rate=_FIXED_RATE, clock=clock, sleep=clock.sleep)
     log: list[tuple] = []
 
     async def burst():
@@ -324,7 +335,7 @@ def test_a_group_window_that_has_rolled_admits_a_fresh_twenty(
     with no call ever making 21 in any window. Mutation: never expire the
     stamps and the group is throttled for ever after its first busy
     minute."""
-    limiter = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    limiter = BudgetRateLimiter(start_rate=_FIXED_RATE, clock=clock, sleep=clock.sleep)
     log: list[tuple] = []
 
     async def burst(n):
@@ -348,7 +359,7 @@ def test_a_skip_acquire_into_a_full_group_window_is_refused(clock, run_async):
     window even when the 1/s bucket is full of tokens (it is, five seconds
     after the twentieth call). Mutation: check only the token bucket for
     skip callers and the card spends the group's minute."""
-    limiter = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    limiter = BudgetRateLimiter(start_rate=_FIXED_RATE, clock=clock, sleep=clock.sleep)
     log: list[tuple] = []
 
     async def fill():
@@ -378,7 +389,7 @@ def test_twenty_five_queued_group_calls_all_run_in_submission_order(
 ):
     """Row G / R2: none dropped, none reordered. Mutation: serve waiters
     from a set (or LIFO) and the recorded tags come back shuffled."""
-    limiter = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    limiter = BudgetRateLimiter(start_rate=_FIXED_RATE, clock=clock, sleep=clock.sleep)
     log: list[tuple] = []
 
     async def submit_all():
@@ -618,7 +629,7 @@ def test_a_reaction_is_still_held_by_the_overall_bucket(clock, run_async):
     bot as a whole whatever it thinks of reactions. Mutation: return early
     for reactions before the overall acquire and a burst of 🚨 can
     out-send the daemon's own global limit."""
-    limiter = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    limiter = BudgetRateLimiter(start_rate=_FIXED_RATE, clock=clock, sleep=clock.sleep)
     log: list[tuple] = []
 
     async def scenario():
@@ -893,7 +904,7 @@ def test_no_backoff_signal_is_written_by_a_process_that_is_not_the_daemon(
     with no socket, nothing is written even though the 429 is accounted."""
     monkeypatch.setattr("aipager.config.SOCKET_PATH",
                         str(tmp_path / "no-daemon-here.sock"))
-    lim = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    lim = BudgetRateLimiter(start_rate=_FIXED_RATE, clock=clock, sleep=clock.sleep)
     try:
         lim.note_retry_after(PRIVATE, 5)
         assert lim.cadence_multiplier(PRIVATE) == 2.0
@@ -908,7 +919,7 @@ def test_a_fresh_limiter_starts_every_chat_at_one_after_a_restart(
     """Row J / R8: nothing survives the restart. Mutation: read the file
     back at construction and the backoff becomes persistent state."""
     limiter.note_retry_after(PRIVATE, 5)
-    fresh = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    fresh = BudgetRateLimiter(start_rate=_FIXED_RATE, clock=clock, sleep=clock.sleep)
     try:
         run_async(fresh.initialize())
         assert fresh.cadence_multiplier(PRIVATE) == 1.0

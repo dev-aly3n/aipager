@@ -32,6 +32,17 @@ from aipager.bot.flood_budget import (
 from aipager.bot.transport import MUTED, SKIPPED
 from aipager.state import Status, TrackedSession
 
+
+# The 8.21 rows below are about the BUDGET MECHANICS — the token bucket,
+# the rolling window, the reserve, the deferral — at a known, fixed chat
+# rate. 8.27 made that rate LEARNED, starting at `FLOOD_START_RATE` (half
+# the ceiling), so leaving it to the default would silently double every
+# expected interval here and turn these into rows about the starting
+# allowance instead. Pinned to the ceiling so each row keeps measuring
+# what it was written to measure; the earned rate has its own rows in
+# `tests/integration/outbound-gate-and-earned-rate/test_earned_rate.py`.
+_FIXED_RATE = config.TELEGRAM_PRIVATE_MAX_RATE
+
 PRIVATE = 256113222   # what conftest's _pin_single_chat_config pins CHAT_ID to
 GROUP = -1001
 
@@ -120,7 +131,7 @@ async def _tick(bot, sess, verb="Working", *, waiting=False):
 
 
 def _install(clock=None) -> BudgetRateLimiter:
-    limiter = (BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    limiter = (BudgetRateLimiter(start_rate=_FIXED_RATE, clock=clock, sleep=clock.sleep)
                if clock is not None else BudgetRateLimiter())
     rm.set_rate_limiter(limiter)
     return limiter
@@ -213,15 +224,26 @@ def test_a_not_streaming_card_uses_the_slower_base(mk_bot):
 
 def test_a_backing_off_chat_multiplies_every_card_interval(mk_bot):
     """Row E4 through the animator. Mutation: ignore the limiter's
-    ``cadence_multiplier`` and a 429 changes nothing about how fast the
-    cards go back into the window that produced it."""
+    pacing and a 429 changes nothing about how fast the cards go back
+    into the window that produced it.
+
+    Both of the 429's effects are visible here (8.27). The baseline is
+    2.2 s — ``max(STREAM_EDIT_INTERVAL, 1×2.0) × 1.1``, where 2.0 s is
+    the chat's sustained gap (60/30). Two 429s then take the cadence
+    multiplier to ×4 AND halve the earned rate twice, 0.5 -> 0.25 -> 0.125,
+    whose 1/rate = 8.0 s replaces the sustained gap as the binding floor:
+    ``max(1.2, 8.0) × 1.1 × 4 = 35.2``. A chat Telegram has pushed back on
+    twice ends up ticking its card once every 35 seconds, which is the
+    intended shape of "go slower rather than retry".
+    """
     sess = _sess(chat=PRIVATE, streaming=True)
     bot = _bot(mk_bot, sess)
     limiter = _install()
-    assert bot._card_interval(sess, streaming=True) == pytest.approx(1.32)
+    assert bot._card_interval(sess, streaming=True) == pytest.approx(2.2)
     limiter.note_retry_after(PRIVATE, 5)
     limiter.note_retry_after(PRIVATE, 5)
-    assert bot._card_interval(sess, streaming=True) == pytest.approx(1.32 * 4)
+    assert limiter.earned_rate(PRIVATE) == pytest.approx(0.125)
+    assert bot._card_interval(sess, streaming=True) == pytest.approx(35.2)
 
 
 def test_the_first_tick_delay_never_dips_below_the_chat_floor(mk_bot):
@@ -612,7 +634,7 @@ def test_an_answer_runs_while_two_cards_are_being_refused(run_async):
     spend the last token, so the answer waits a full second behind them.
     """
     clock = FakeClock()
-    limiter = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    limiter = BudgetRateLimiter(start_rate=_FIXED_RATE, clock=clock, sleep=clock.sleep)
     ran: list[tuple[str, float]] = []
 
     async def _card():

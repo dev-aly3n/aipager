@@ -71,6 +71,17 @@ from aipager.bot.flood_budget import (
 )
 from aipager.state import Status, TrackedSession
 
+
+# The 8.21 rows below are about the BUDGET MECHANICS — the token bucket,
+# the rolling window, the reserve, the deferral — at a known, fixed chat
+# rate. 8.27 made that rate LEARNED, starting at `FLOOD_START_RATE` (half
+# the ceiling), so leaving it to the default would silently double every
+# expected interval here and turn these into rows about the starting
+# allowance instead. Pinned to the ceiling so each row keeps measuring
+# what it was written to measure; the earned rate has its own rows in
+# `tests/integration/outbound-gate-and-earned-rate/test_earned_rate.py`.
+_FIXED_RATE = config.TELEGRAM_PRIVATE_MAX_RATE
+
 PRIVATE = 256113222   # what conftest's _pin_single_chat_config pins CHAT_ID to
 GROUP = -1001234567890
 BAN = 400.0           # past TELEGRAM_MAX_RETRY_AFTER: a real mute
@@ -185,7 +196,7 @@ def _stops_after(sess, sends: list, n: int):
 # ── R1: the limiter exemption ────────────────────────────────────────────────
 
 def _limiter(clock: FakeClock, **kw) -> BudgetRateLimiter:
-    return BudgetRateLimiter(clock=clock, sleep=clock.sleep, **kw)
+    return BudgetRateLimiter(start_rate=_FIXED_RATE, clock=clock, sleep=clock.sleep, **kw)
 
 
 def _recorder(clock: FakeClock):
@@ -277,9 +288,12 @@ def test_the_typing_action_never_spends_a_group_window_slot(run_async):
     cost 18 of them. It costs none: the rolling window is a MESSAGE limit,
     and the exempt path never touches ``budget.group``.
 
-    Mutation: take a group slot on the exempt path and
-    ``group_window_free`` drops — and in a group chat the card starts
+    Mutation: take a window slot on the exempt path and
+    ``sustained_free`` drops — and in a group chat the card starts
     losing edits to an ornament again.
+
+    (8.27 renamed the field and gave every chat kind a window; a group's
+    limit is still the stricter 20/60 s.)
     """
     clock = FakeClock()
     limiter = _limiter(clock)
@@ -287,7 +301,7 @@ def test_the_typing_action_never_spends_a_group_window_slot(run_async):
 
     async def _drive():
         await _acquire(limiter, call, endpoint="sendMessage", chat_id=GROUP)
-        free = _chat(limiter.snapshot(), GROUP)["group_window_free"]
+        free = _chat(limiter.snapshot(), GROUP)["sustained_free"]
         for _ in range(6):
             await _acquire(limiter, call, endpoint=CHAT_ACTION_ENDPOINT,
                            chat_id=GROUP)
@@ -296,7 +310,7 @@ def test_the_typing_action_never_spends_a_group_window_slot(run_async):
     free_before = run_async(_drive())
     snap = _chat(limiter.snapshot(), GROUP)
     assert snap["kind"] == "group", "this row needs a group budget"
-    assert snap["group_window_free"] == free_before
+    assert snap["sustained_free"] == free_before
     assert snap["chat_actions"] == 6
 
 

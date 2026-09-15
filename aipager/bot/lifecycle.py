@@ -37,6 +37,10 @@ from aipager.bot.flood_budget import BudgetRateLimiter, clear_backoff_signal
 from aipager.bot.rich_message import set_rate_limiter
 from aipager.config import (
     APP_BUTTON, BOT_TOKEN, CHAT_ID,
+    FLOOD_MIN_RATE, FLOOD_MINIMAL_MODE_RATE_FLOOR,
+    FLOOD_RATE_INCREASE, FLOOD_RATE_RECOVERY_HOURS,
+    FLOOD_START_RATE, FLOOD_SUCCESS_WINDOW_SECONDS,
+    FLOOD_SUSTAINED_MAX, FLOOD_SUSTAINED_WINDOW,
     TELEGRAM_CHAT_BURST,
     TELEGRAM_GROUP_MAX_CALLS, TELEGRAM_GROUP_WINDOW,
     TELEGRAM_OVERALL_MAX_RATE, TELEGRAM_OVERALL_TIME_PERIOD,
@@ -261,10 +265,20 @@ class LifecycleMixin:
         limiter = BudgetRateLimiter(
             overall_max_rate=TELEGRAM_OVERALL_MAX_RATE,
             overall_time_period=TELEGRAM_OVERALL_TIME_PERIOD,
+            # The CEILING the earned rate climbs toward (8.27), not the
+            # allowance it was until 0.7.12.
             chat_max_rate=TELEGRAM_PRIVATE_MAX_RATE,
             chat_burst=TELEGRAM_CHAT_BURST,
             group_max_calls=TELEGRAM_GROUP_MAX_CALLS,
             group_window=TELEGRAM_GROUP_WINDOW,
+            start_rate=FLOOD_START_RATE,
+            rate_increase=FLOOD_RATE_INCREASE,
+            min_rate=FLOOD_MIN_RATE,
+            success_window=FLOOD_SUCCESS_WINDOW_SECONDS,
+            recovery_hours=FLOOD_RATE_RECOVERY_HOURS,
+            sustained_max=FLOOD_SUSTAINED_MAX,
+            sustained_window=FLOOD_SUSTAINED_WINDOW,
+            minimal_floor=FLOOD_MINIMAL_MODE_RATE_FLOOR,
         )
         set_rate_limiter(limiter)
         return builder.rate_limiter(limiter)

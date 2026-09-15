@@ -1,10 +1,35 @@
-"""Per-chat Telegram send budget, card cadence and 429 backoff (roadmap 8.21).
+"""The one outbound gate: mute, priority, earned rate (8.21, 8.26-8.29).
 
 Every outbound call this daemon makes — PTB's and the rich-message
-module's raw httpx POSTs alike — acquires here first. One chat gets one
-budget: 1 call/s sustained with a burst of 3, plus no more than 20 in
-any rolling 60 s when the chat is a group or channel, under the existing
-30/s overall bucket.
+module's raw httpx POSTs alike — acquires here first, so this module is
+the single authority on whether a call leaves the process. Since 8.26
+that includes whether the chat is BANNED: `process_request` checks
+`flood.MUTE` before anything else and refuses with `FloodMuted`.
+
+Why the gate moved here. Enforcement used to be 22 per-site checks across
+five files, and `grep -c MUTE` on this file was 0 — the chokepoint every
+call already passed through did not know bans existed. That approach
+failed three times. On 2026-09-15 one forgotten site
+(`animation.send_busy`) put a busy card into an active ban; the
+escalation that followed ran retry_after 1283 -> 312 -> 34212 (9.5 h),
+with 3, then 5, then 9 requests fired INTO each active ban and five
+answers silently dropped. A new call site now inherits the gate instead
+of having to remember it, and `tests/sweep_rules.py` fails the build for
+one that does not.
+
+One chat gets one budget: a token bucket whose rate is LEARNED (8.27) —
+starting at `FLOOD_START_RATE`, climbing per quiet window, halving on a
+429, dropping to `FLOOD_MIN_RATE` on a ban — plus a rolling sustained
+window that now exists for EVERY chat kind, under the 30/s overall
+bucket. `TELEGRAM_PRIVATE_MAX_RATE` is the ceiling that climb may not
+pass, not the allowance it used to be: Telegram's real limit is a
+function of the account's recent history, and the only way to know it is
+to be told.
+
+Callers declare a PRIORITY CLASS through `rate_limit_args` (8.26 R3), so
+a chat under pressure sheds pixels rather than answers. An unclassified
+call is ESSENTIAL: a forgotten classification must degrade to "never
+dropped".
 
 Why it exists: python-telegram-bot's ``AIORateLimiter`` keys its per-chat
 bucket on a NEGATIVE chat id (``_aioratelimiter.py:263``), so a private
@@ -33,22 +58,26 @@ The three answers, all here:
 
 A ``retry_after`` PAST the cap is a ban, not a rate limit: it is
 re-raised untouched so the 8.17 flood mute (``bot/flood.py``,
-``rich_message._ban_if_excessive``) owns it exactly as it did in 0.7.10.
-Reactions are exempt from the chat budget entirely (design §11 U4): the
-🚨 in ``transport._send_with_retry`` fires precisely when a chat's queue
-is jammed, and it is the one signal that still reaches the user. So is
-the "typing…" chat action (§12, roadmap 8.24), which live probes caught
-answering 200 all the way through a `retry_after` window that refused
-every edit into the same chat: Telegram does not meter chat actions with
-messages, so budgeting them only starved the cards.
+``rich_message._ban_if_excessive``) owns it exactly as it did in 0.7.10 —
+but since 8.27 it also drops this chat's earned rate to the floor and
+leaves a wall-clock stamp that survives a restart.
+
+Reactions and the "typing…" chat action are exempt from the per-chat
+BUDGET (design §11 U4, §12/8.24): Telegram meters them in a separate
+bucket — live probes on 2026-09-12 caught chat actions answering 200 all
+the way through a `retry_after` window that refused every edit into the
+same chat — so charging them to the chat's budget only starved the cards.
+THEY ARE NOT EXEMPT FROM THE MUTE (8.26 D-1). That distinction is the
+whole of `_CHAT_BUDGET_EXEMPT`: exempt from PACING, never from BANS.
 
 Public API
 ----------
-CHAT_ACTION_ENDPOINT         -- the chat-action method, exempt (§12)
+CHAT_ACTION_ENDPOINT         -- the chat-action method, budget-exempt
 FloodSkipped                 -- raised instead of making a skip-kind call
+PRIORITY_ESSENTIAL/_ORNAMENT/_SIGNAL, rate_limit_args(...)
 TokenBucket                  -- continuous refill, injectable clock
-SlidingWindow                -- N calls in any W seconds (the group rule)
-ChatBudget                   -- one chat's buckets, deferral and counters
+SlidingWindow                -- N calls in any W seconds (every chat now)
+ChatBudget                   -- one chat's buckets, rate, bans, counters
 BudgetRateLimiter            -- the daemon's telegram.ext.BaseRateLimiter
 card_interval(...)           -- the pure busy-card cadence rule
 is_group_chat(chat_id)       -- negative int or str id => group/channel
@@ -82,6 +111,14 @@ from aipager.config import (
     CARD_CADENCE_MARGIN,
     FLOOD_BACKOFF_DECAY_SECONDS,
     FLOOD_BACKOFF_MAX,
+    FLOOD_MIN_RATE,
+    FLOOD_MINIMAL_MODE_RATE_FLOOR,
+    FLOOD_RATE_INCREASE,
+    FLOOD_RATE_RECOVERY_HOURS,
+    FLOOD_START_RATE,
+    FLOOD_SUCCESS_WINDOW_SECONDS,
+    FLOOD_SUSTAINED_MAX,
+    FLOOD_SUSTAINED_WINDOW,
     TELEGRAM_CHAT_BURST,
     TELEGRAM_GROUP_MAX_CALLS,
     TELEGRAM_GROUP_WINDOW,
@@ -341,46 +378,107 @@ class SlidingWindow:
 class ChatBudget:
     """Everything the limiter knows about one chat.
 
-    ``chat`` is the 1/s-with-a-burst bucket every chat gets. ``group`` is
-    the additional 20-calls-per-60 s ROLLING WINDOW, present only for
-    groups and channels — not a second bucket, because a bucket's burst
-    would let 25 calls into the first minute (see
-    :class:`SlidingWindow`). ``retry_until`` bars the chat after a small
-    429; ``backoff``
-    is the multiplier the busy-card cadence reads, doubling per 429 and
-    halving per quiet ``FLOOD_BACKOFF_DECAY_SECONDS``.
+    ``chat`` is the token bucket, whose ``rate`` is the chat's EARNED
+    rate (8.27) rather than a constant: it starts at
+    ``FLOOD_START_RATE``, climbs by ``FLOOD_RATE_INCREASE`` per quiet
+    window, halves on a 429 and drops to ``FLOOD_MIN_RATE`` on a ban.
+    ``rate_earned_at`` anchors that climb on the limiter's clock.
+
+    ``window`` is the additional ROLLING WINDOW — not a second bucket,
+    because a bucket's burst would let 25 calls into the first minute
+    (see :class:`SlidingWindow`). It used to be called ``group`` and to
+    exist only for groups and channels; since 8.27 EVERY chat has one.
+    A private chat had no volume ceiling at all, so the 1/s bucket
+    permitted 60 calls a minute indefinitely — which two BUSY sessions
+    did for ~45 minutes before the 9.5-hour ban on 2026-09-15. Groups
+    keep the stricter limit of the two.
+
+    ``retry_until`` bars the chat after a small 429; ``backoff`` is the
+    multiplier the busy-card CADENCE reads, doubling per 429 and halving
+    per quiet ``FLOOD_BACKOFF_DECAY_SECONDS``. It and the earned rate are
+    both kept on purpose: they have different consumers (the card's
+    interval vs the chat's bucket) and different time scales (a minute vs
+    hours).
+
+    ``ban_stamps`` is the WALL-clock history of bans, capped at 20,
+    newest kept — the hours-scale memory that survives a restart.
+    ``ban_seen_until`` is how ``_sync_mute`` and ``_run`` avoid
+    double-counting one ban from two entry points.
 
     ``waiters`` is an explicit FIFO of blocking tickets rather than an
     ``asyncio.Lock``: CPython's Lock happens to wake waiters in arrival
     order, but that is an implementation detail, not a contract, and
     "serve in arrival order" has to be a line of our own code for a
-    mutation to be able to break it.
+    mutation to be able to break it. Since 8.26 the order is FIFO within
+    a priority class and priority across them.
 
     Counters: ``calls`` counts every callback actually run for this chat,
     INCLUDING the budget-exempt reactions and chat actions; ``reactions``
     and ``chat_actions`` count those exempt subsets on their own;
-    ``skipped`` counts refused skip acquires.
+    ``skipped`` counts refused skip acquires; ``muted_refusals`` counts
+    calls the mute gate refused; ``ornaments_suspended`` counts ornaments
+    minimal mode refused.
     """
+
+    #: Most bans remembered per chat. Bounded so a pathological history
+    #: cannot grow the durable state file without limit; newest kept,
+    #: because "how many bans TODAY" is the only question asked of it.
+    MAX_BAN_STAMPS: int = 20
 
     def __init__(
         self, chat_id, *, clock, chat_rate: float, chat_burst: float,
         group_max_calls: float, group_window: float, is_group: bool,
+        sustained_max: float = 30.0, sustained_window: float = 60.0,
     ) -> None:
         self.chat_id = chat_id
         self.is_group: bool = is_group
         self.chat: TokenBucket = TokenBucket(chat_rate, chat_burst, clock=clock)
-        self.group: SlidingWindow | None = (
-            SlidingWindow(group_max_calls, group_window, clock=clock)
-            if is_group else None
-        )
+        # The stricter of the two ceilings for a group; the plain
+        # sustained cap for everything else.
+        limit = (min(sustained_max, group_max_calls) if is_group
+                 else sustained_max)
+        period = group_window if is_group else sustained_window
+        self.window: SlidingWindow = SlidingWindow(limit, period, clock=clock)
         self.retry_until: float = 0.0
         self.backoff: float = 1.0
         self.last_429_at: float = 0.0
+        self.rate: float = float(chat_rate)
+        self.rate_earned_at: float = clock()
+        self.ban_stamps: list[float] = []
+        self.ban_seen_until: float = 0.0
         self.waiters: collections.deque = collections.deque()
         self.calls: int = 0
         self.skipped: int = 0
         self.reactions: int = 0
         self.chat_actions: int = 0
+        self.muted_refusals: int = 0
+        self.ornaments_suspended: int = 0
+
+    def set_rate(self, new_rate: float, now: float) -> None:
+        """Move the chat to *new_rate*, crediting the elapsed span first.
+
+        The refill MUST happen before the rate changes. ``TokenBucket``
+        accrues lazily as ``tokens + (now - stamp) * rate``, so writing
+        the new rate first would re-price every second since the last
+        touch at the new rate — retroactively granting tokens a chat
+        never earned when the rate goes up, and confiscating tokens it
+        did earn when it goes down. On a ban (1.0 -> 0.05) that
+        difference is the whole penalty.
+        """
+        self.chat._refill(now)
+        self.rate = float(new_rate)
+        self.chat.rate = float(new_rate)
+
+    def note_ban_stamp(self, wall_now: float) -> None:
+        """Record one ban, newest-kept and bounded."""
+        self.ban_stamps.append(float(wall_now))
+        if len(self.ban_stamps) > self.MAX_BAN_STAMPS:
+            del self.ban_stamps[:-self.MAX_BAN_STAMPS]
+
+    def bans_today(self, wall_now: float) -> int:
+        """Bans recorded in the last 24 h — what ``status`` reports."""
+        return sum(1 for stamp in self.ban_stamps
+                   if 0.0 <= wall_now - stamp <= 86400.0)
         # Calls the mute gate refused for this chat (8.26 R1). Counted
         # rather than merely dropped so `snapshot()` — and a future
         # incident — can show that the gate did fire, and how often.
@@ -405,14 +503,25 @@ def is_group_chat(chat_id) -> bool:
 
 def card_interval(
     *, base: float, busy_sessions: int, is_group: bool, backoff: float = 1.0,
+    chat_rate: float | None = None, sustained_min_gap: float | None = None,
 ) -> float:
     """Seconds between busy-card edits for one session (design §4.3).
 
-    ``max(base, N * floor) * MARGIN * backoff``, where N is the number of
-    BUSY sessions sharing the chat: the cards of a chat share the chat's
-    budget rather than each assuming it owns one. Pure — no registry, no
-    clock, no I/O — so both the animation loop's sleep and the tick's
-    debounce can read it and cannot drift apart.
+    ``max(base, N * floor, 1/chat_rate, sustained_min_gap) * MARGIN *
+    backoff``, where N is the number of BUSY sessions sharing the chat:
+    the cards of a chat share the chat's budget rather than each assuming
+    it owns one. Pure — no registry, no clock, no I/O — so both the
+    animation loop's sleep and the tick's debounce can read it and cannot
+    drift apart.
+
+    ``chat_rate`` and ``sustained_min_gap`` are the chat's EARNED pacing
+    (8.27), read live from the limiter. Both default to ``None``, which
+    reproduces the pre-8.27 output EXACTLY — that is deliberate, so every
+    pure-function cadence row keeps its expected numbers and only the
+    rows that drive the real animator change. Without them a chat whose
+    earned rate has fallen would simply have every card edit refused;
+    telling the cadence about the new pacing is what makes a slow chat
+    animate slowly instead of failing loudly.
 
     ``busy_sessions <= 0`` is clamped to 1: a card ticking for a session
     the N predicate does not count (``_animate_busy`` keeps ticking
@@ -420,6 +529,10 @@ def card_interval(
     must still be paced.
     """
     floor = CARD_CADENCE_FLOOR_GROUP if is_group else CARD_CADENCE_FLOOR_PRIVATE
+    if chat_rate is not None and chat_rate > 0:
+        floor = max(floor, 1.0 / chat_rate)
+    if sustained_min_gap is not None:
+        floor = max(floor, sustained_min_gap)
     return (
         max(base, max(busy_sessions, 1) * floor)
         * CARD_CADENCE_MARGIN
@@ -440,6 +553,16 @@ def clear_backoff_signal(path: str | None = None) -> None:
         Path(path or config.FLOOD_BACKOFF_FILE).unlink(missing_ok=True)
     except OSError:
         log.debug("could not unlink the flood-backoff signal file", exc_info=True)
+
+
+def _window_gap(limit: float, period: float) -> float:
+    """The average gap a rolling ``limit``-per-``period`` window implies.
+
+    What the card cadence uses as a floor, so a chat spends its whole
+    allowance EVENLY rather than in a burst that hits the ceiling and then
+    stalls for the rest of the window — the shape Telegram penalises.
+    """
+    return period / limit if limit > 0 else 0.0
 
 
 def _kind_of(rate_limit_args) -> str:
@@ -541,6 +664,14 @@ class BudgetRateLimiter(BaseRateLimiter):
         group_window: float = TELEGRAM_GROUP_WINDOW,
         backoff_max: float = FLOOD_BACKOFF_MAX,
         backoff_decay_seconds: float = FLOOD_BACKOFF_DECAY_SECONDS,
+        start_rate: float = FLOOD_START_RATE,
+        rate_increase: float = FLOOD_RATE_INCREASE,
+        min_rate: float = FLOOD_MIN_RATE,
+        success_window: float = FLOOD_SUCCESS_WINDOW_SECONDS,
+        recovery_hours: float = FLOOD_RATE_RECOVERY_HOURS,
+        sustained_max: float = FLOOD_SUSTAINED_MAX,
+        sustained_window: float = FLOOD_SUSTAINED_WINDOW,
+        minimal_floor: float = FLOOD_MINIMAL_MODE_RATE_FLOOR,
         clock=time.monotonic,
         sleep=None,
         signal_path: str | None = None,
@@ -556,6 +687,16 @@ class BudgetRateLimiter(BaseRateLimiter):
         self._group_window = float(group_window)
         self._backoff_max = float(backoff_max)
         self._backoff_decay_seconds = float(backoff_decay_seconds)
+        # The earned rate (8.27). `_chat_max_rate` above is the CEILING
+        # this climbs toward, not the allowance it used to be.
+        self._start_rate = float(start_rate)
+        self._rate_increase = float(rate_increase)
+        self._min_rate = float(min_rate)
+        self._success_window = float(success_window)
+        self._recovery_hours = float(recovery_hours)
+        self._sustained_max = float(sustained_max)
+        self._sustained_window = float(sustained_window)
+        self._minimal_floor = float(minimal_floor)
         self._signal_path = signal_path
         # Only the DAEMON may write beside the daemon's socket. An
         # explicit path means the caller owns it (tests, tools);
@@ -616,11 +757,16 @@ class BudgetRateLimiter(BaseRateLimiter):
             budget = ChatBudget(
                 chat_id,
                 clock=self._clock,
-                chat_rate=self._chat_max_rate,
+                # A chat we have never seen starts at the EARNED start
+                # rate, not at the ceiling (8.27). `_chat_max_rate` is
+                # now the ceiling `_earn` climbs toward.
+                chat_rate=self._start_rate,
                 chat_burst=self._chat_burst,
                 group_max_calls=self._group_max_calls,
                 group_window=self._group_window,
                 is_group=is_group_chat(chat_id),
+                sustained_max=self._sustained_max,
+                sustained_window=self._sustained_window,
             )
             self._budgets[chat_id] = budget
         return budget
@@ -641,6 +787,197 @@ class BudgetRateLimiter(BaseRateLimiter):
         if steps > 0:
             budget.backoff = max(budget.backoff / (2.0 ** steps), 1.0)
             budget.last_429_at += steps * self._backoff_decay_seconds
+
+    # ── the earned rate (8.27, AIMD) ─────────────────────────────────────
+
+    def _success_window_for(self, budget: ChatBudget, wall_now: float) -> float:
+        """How long one quiet window is for this chat, right now.
+
+        TWO REGIMES, because a 429 and a ban are evidence about different
+        time scales (P-2):
+
+        * after a **429**: ``FLOOD_SUCCESS_WINDOW_SECONDS`` (60 s), so a
+          chat that merely went too fast for a moment recovers in minutes;
+        * within ``FLOOD_RATE_RECOVERY_HOURS`` of a **ban**: the same ten
+          steps stretched over those hours (2160 s per step), because a
+          9.5-hour ban is not information about the next minute.
+
+        The arithmetic is what settles it: +0.1 per 60 s climbs MIN (0.05)
+        to the ceiling (1.0) in 9.5 MINUTES. Using that after a ban would
+        be a memory shorter than the incident it is supposed to remember —
+        defect D3 restated.
+        """
+        if not budget.ban_stamps:
+            return self._success_window
+        recent = max(budget.ban_stamps)
+        if wall_now - recent > self._recovery_hours * 3600.0:
+            return self._success_window
+        span = max(self._chat_max_rate - self._min_rate, 0.0)
+        steps = max(math.ceil(span / self._rate_increase), 1)
+        return (self._recovery_hours * 3600.0) / steps
+
+    def _earn(self, budget: ChatBudget, now: float) -> None:
+        """Credit whole quiet windows since the anchor. Lazy, like
+        :meth:`_decay` — no timer to leak, and no partial progress lost by
+        reading the value, because the anchor advances by WHOLE windows.
+
+        Frozen while the chat is muted: climbing through a ban is
+        precisely learning nothing, which is the defect this replaces.
+        The anchor is still moved to ``now`` so the mute does not bank a
+        pile of windows to be cashed the moment it lifts.
+        """
+        if MUTE.is_muted(budget.chat_id):
+            budget.rate_earned_at = now
+            return
+        if budget.rate >= self._chat_max_rate:
+            budget.rate_earned_at = now
+            return
+        window = self._success_window_for(budget, time.time())
+        if window <= 0:
+            return
+        steps = int((now - budget.rate_earned_at) // window)
+        if steps <= 0:
+            return
+        budget.set_rate(
+            min(budget.rate + steps * self._rate_increase, self._chat_max_rate),
+            now,
+        )
+        budget.rate_earned_at += steps * window
+
+    def _sync_mute(self, budget: ChatBudget, now: float) -> None:
+        """Notice a ban armed on the RICH path, where ``_run`` never sees it.
+
+        A rich-path ban arrives as a 200 body handled by
+        ``rich_message._handle_response``, which mutes the chat and raises
+        — it never reaches ``_run``'s ``RetryAfter`` branch. Rather than
+        an observer registry or a new callback, the limiter simply
+        compares ``MUTE``'s wall deadline against what it has already
+        recorded, on a path it runs anyway.
+
+        ``note_ban`` sets ``ban_seen_until``, so the two entry points
+        (here and ``_run``) cannot double-count one ban.
+        """
+        remaining = MUTE.remaining(budget.chat_id)
+        if remaining <= 0.0:
+            return
+        deadline = time.time() + remaining
+        if deadline <= budget.ban_seen_until + 1.0:
+            return
+        self.note_ban(budget.chat_id, remaining)
+
+    def note_ban(self, chat_id, seconds: float) -> None:
+        """Record a ban: rate to the floor, one stamp, state dirty.
+
+        Idempotent per ban — ``ban_seen_until`` is what makes a second
+        sighting of the SAME ban a no-op, so ``_run``'s branch and
+        ``_sync_mute`` can both call it. Does NOT arm the mute:
+        ``flood.MUTE.mute`` stays the one arming point (``transport.py``
+        and ``rich_message.py``), so there is exactly one place to look
+        when asking why a chat is muted.
+        """
+        try:
+            seconds = float(seconds)
+        except (TypeError, ValueError):
+            return
+        budget = self._budget_for(self._key(chat_id))
+        if budget is None:
+            return
+        wall_now = time.time()
+        deadline = wall_now + max(seconds, 0.0)
+        if deadline <= budget.ban_seen_until + 1.0:
+            return
+        budget.ban_seen_until = deadline
+        budget.note_ban_stamp(wall_now)
+        now = self._clock()
+        before = budget.rate
+        budget.set_rate(self._min_rate, now)
+        budget.rate_earned_at = now
+        if before != budget.rate:
+            log.warning(
+                "flood: chat %s banned for %ds → earned rate %g → %g calls/s",
+                budget.chat_id, int(max(seconds, 0.0)), before, budget.rate,
+            )
+
+    def _minimal(self, budget: ChatBudget | None) -> bool:
+        """Is this chat in minimal mode — ornaments suspended, answers not?
+
+        ``None`` (an unresolvable chat) is never minimal: there is no
+        earned rate to be below a floor, and refusing such a call would
+        mute the daemon rather than pace a chat.
+        """
+        if budget is None:
+            return False
+        return budget.rate < self._minimal_floor
+
+    # ── the earned rate, as a public surface ─────────────────────────────
+
+    def earned_rate(self, chat_id) -> float:
+        """This chat's learned send rate in calls/s, earned up to now.
+
+        ``FLOOD_START_RATE`` for a chat never seen — reported without
+        creating a budget for it, so merely asking does not allocate.
+        """
+        key = self._key(chat_id)
+        budget = self._budgets.get(key) if key is not None else None
+        if budget is None:
+            return self._start_rate
+        now = self._clock()
+        self._decay(budget, now)
+        self._earn(budget, now)
+        return budget.rate
+
+    def minimal_mode(self, chat_id) -> bool:
+        """True while this chat's earned rate is under the floor."""
+        key = self._key(chat_id)
+        budget = self._budgets.get(key) if key is not None else None
+        if budget is None:
+            return False
+        self._earn(budget, self._clock())
+        return self._minimal(budget)
+
+    def sustained_used(self, chat_id) -> int:
+        """Calls this chat has made inside the current rolling window."""
+        key = self._key(chat_id)
+        budget = self._budgets.get(key) if key is not None else None
+        return budget.window.used() if budget is not None else 0
+
+    def _sustained_gap(self, chat_id) -> float:
+        """The sustained gap a budget for *chat_id* would have."""
+        if is_group_chat(chat_id):
+            return _window_gap(min(self._sustained_max, self._group_max_calls),
+                               self._group_window)
+        return _window_gap(self._sustained_max, self._sustained_window)
+
+    def pacing_for(self, chat_id) -> dict:
+        """Everything the busy-card cadence needs, in one read.
+
+        One accessor rather than four, because the animator must read
+        them LATE and together: caching any of them — or reading the rate
+        one tick and the backoff the next — is how two budgets drift
+        apart (the 8.17 failure, repeated).
+        """
+        key = self._key(chat_id)
+        budget = self._budgets.get(key) if key is not None else None
+        if budget is None:
+            # A chat with no budget yet reports what one WOULD have, not
+            # zeros. `_card_interval` asks before the first edit of every
+            # turn, so a zero gap here would let a fresh chat's first card
+            # tick at the old 1.32 s and only slow to 2.2 s once a budget
+            # existed — a burst at exactly the moment a chat is least
+            # known, which is the opposite of what the cap is for.
+            return {"rate": self._start_rate,
+                    "sustained_min_gap": self._sustained_gap(chat_id),
+                    "backoff": 1.0, "minimal": False}
+        now = self._clock()
+        self._decay(budget, now)
+        self._earn(budget, now)
+        return {
+            "rate": budget.rate,
+            "sustained_min_gap": _window_gap(budget.window.limit,
+                                             budget.window.period),
+            "backoff": max(budget.backoff, 1.0),
+            "minimal": self._minimal(budget),
+        }
 
     def note_retry_after(self, chat_id, seconds: float) -> None:
         """Record a 429 Telegram reported for *chat_id* (the rich path's
@@ -670,9 +1007,23 @@ class BudgetRateLimiter(BaseRateLimiter):
         budget.retry_until = max(budget.retry_until, now + max(seconds, 0.0))
         budget.backoff = min(budget.backoff * 2.0, self._backoff_max)
         budget.last_429_at = now
+        # MULTIPLICATIVE DECREASE (8.27). Telegram just said this chat is
+        # going too fast, which is the only direct evidence about its real
+        # limit we ever get — so halve the EARNED RATE, not merely the card
+        # cadence. The two are kept separate on purpose: the multiplier
+        # above paces the card and decays in a minute, this paces the chat
+        # and recovers in minutes or hours depending on whether a ban is
+        # in recent history.
+        before = budget.rate
+        budget.set_rate(max(budget.rate * 0.5, self._min_rate), now)
+        budget.rate_earned_at = now
+        # ONE warning, no traceback: Telegram escalates on the COUNT of
+        # violations, and 2,021 stack traces told the operator nothing
+        # 2,021 times. The rate goes in the same line rather than a second
+        # one, so a 429 is still exactly one log record.
         log.warning(
-            "flood: chat %s 429 retry_after=%ss → cadence ×%g",
-            budget.chat_id, seconds, budget.backoff,
+            "flood: chat %s 429 retry_after=%ss → cadence ×%g, rate %g → %g/s",
+            budget.chat_id, seconds, budget.backoff, before, budget.rate,
         )
         self._maybe_write_signal()
 
@@ -709,22 +1060,21 @@ class BudgetRateLimiter(BaseRateLimiter):
 
         Refuses while the chat is deferred by a 429, and whenever taking
         a token would leave fewer than :data:`_SKIP_RESERVE` behind: the
-        last token belongs to whatever blocking caller comes next. In a
-        group the same reserve is counted in SLOTS of the rolling window —
-        the last two calls of the minute belong to real content, not to a
-        card refresh.
+        last token belongs to whatever blocking caller comes next. The
+        same reserve is counted in SLOTS of the rolling window — the last
+        two calls of the window belong to real content, not to a card
+        refresh. Since 8.27 every chat has that window, so this applies
+        to a private DM too; it used to hold only for groups.
         """
         now = self._clock()
         if (now < budget.retry_until
                 or budget.chat.tokens() < _SKIP_RESERVE
-                or (budget.group is not None
-                    and budget.group.free() < _SKIP_RESERVE)
+                or budget.window.free() < _SKIP_RESERVE
                 or self._overall.tokens() < 1.0):
             budget.skipped += 1
             raise FloodSkipped(budget.chat_id, endpoint)
         budget.chat.take(1.0)
-        if budget.group is not None:
-            budget.group.take(1.0)
+        budget.window.take(1.0)
         self._overall.take(1.0)
 
     async def _acquire_blocking(
@@ -789,14 +1139,12 @@ class BudgetRateLimiter(BaseRateLimiter):
                 wait = max(
                     budget.retry_until - now,
                     budget.chat.time_until(1.0 + reserve),
-                    (budget.group.time_until(1.0)
-                     if budget.group is not None else 0.0),
+                    budget.window.time_until(1.0),
                     self._overall.time_until(1.0),
                 )
                 if wait <= 0:
                     budget.chat.take(1.0)
-                    if budget.group is not None:
-                        budget.group.take(1.0)
+                    budget.window.take(1.0)
                     self._overall.take(1.0)
                     return
                 await self._sleep(wait)
@@ -840,7 +1188,15 @@ class BudgetRateLimiter(BaseRateLimiter):
         chat_id = self._key(data.get("chat_id") if isinstance(data, dict) else None)
         budget = self._budget_for(chat_id)
         if budget is not None:
-            self._decay(budget, self._clock())
+            now = self._clock()
+            # All three are lazy, synchronous and never raise: the backoff
+            # multiplier decays, a ban armed on the rich path is noticed,
+            # and quiet windows are credited to the earned rate. Ordered
+            # so `_earn` sees the ban `_sync_mute` just recorded and
+            # freezes instead of climbing through it.
+            self._decay(budget, now)
+            self._sync_mute(budget, now)
+            self._earn(budget, now)
 
         # ── THE GATE (R1) ────────────────────────────────────────────────
         # Placed here, above the exempt branch, so a mute covers BOTH
@@ -867,6 +1223,21 @@ class BudgetRateLimiter(BaseRateLimiter):
         # branch so a SIGNAL keeps its budget exemption whatever else
         # changes, and so the class is available to the acquire below.
         cls = _class_of(rate_limit_args)
+
+        # ── MINIMAL MODE (R3) ────────────────────────────────────────────
+        # Below `FLOOD_MINIMAL_MODE_RATE_FLOOR` a chat can no longer afford
+        # decoration: ornaments are suspended so the rate it still has is
+        # spent on answers. `FloodSkipped`, deliberately NOT `FloodMuted` —
+        # nothing is banned and the chat is healthy, and every ornament
+        # caller already treats `FloodSkipped` as "nothing sent, stamps
+        # untouched, try again next tick". Raising `FloodMuted` here would
+        # make the animator stop the card for good.
+        #
+        # SIGNAL is never suspended (the user must still see their message
+        # acknowledged) and ESSENTIAL never is — that is the whole point.
+        if cls == PRIORITY_ORNAMENT and self._minimal(budget):
+            budget.ornaments_suspended += 1
+            raise FloodSkipped(chat_id, endpoint)
 
         if endpoint in _CHAT_BUDGET_EXEMPT:
             # §11 U4: reactions are exempt from the chat budget. They are
@@ -941,8 +1312,17 @@ class BudgetRateLimiter(BaseRateLimiter):
             seconds = _retry_after_seconds(exc)
             if seconds > TELEGRAM_MAX_RETRY_AFTER:
                 # A ban. `transport._send_with_retry`'s give-up branch and
-                # `rich_message._ban_if_excessive` own it: mute, 🚨, stop.
-                # No backoff bump, no deferral, no log line here (R6).
+                # `rich_message._ban_if_excessive` own the MUTE; the
+                # re-raise below is unchanged and still theirs.
+                #
+                # What IS recorded here is the rate (8.27): a ban drops the
+                # chat to `FLOOD_MIN_RATE` and leaves a wall-clock stamp
+                # that outlives the process. Before 8.27 a ban taught the
+                # limiter nothing at all — "restart starts every chat at
+                # ×1" — so the daemon came back at full speed into an
+                # account Telegram was still penalising. No backoff bump
+                # and no deferral here, exactly as before (R6).
+                self.note_ban(chat_id, seconds)
                 raise
             if not note_429:
                 # An exempt call's 429 (the typing action, §12/R4): the
@@ -978,23 +1358,32 @@ class BudgetRateLimiter(BaseRateLimiter):
         ``calls`` counts every callback run for the chat, the exempt ones
         included; ``reactions`` and ``chat_actions`` are those exempt
         subsets on their own.
-        ``group_window_free`` is how many of the group's 20 calls are
-        still unspent in the rolling 60 s window (``None`` for a private
-        chat, which has no such window). ``muted_refusals`` counts the
-        calls the mute gate refused for the chat (8.26 R1) — those never
-        reached their callback, so they are deliberately NOT in ``calls``.
+        ``group_window_free`` is GONE (8.27), replaced by
+        ``sustained_used``/``sustained_free``/``sustained_limit``, which
+        exist for every chat rather than only for groups — a private chat
+        had no volume ceiling at all, which is what let two BUSY sessions
+        run ~45 minutes into a 9.5-hour ban.
+
+        ``rate`` is the chat's EARNED send rate and ``minimal`` says it
+        has fallen under the floor. ``muted_refusals`` counts calls the
+        mute gate refused and ``ornaments_suspended`` those minimal mode
+        did — neither reached its callback, so neither is in ``calls``.
         """
         now = self._clock()
+        wall_now = time.time()
         chats = []
         for budget in self._budgets.values():
             self._decay(budget, now)
+            self._earn(budget, now)
             chats.append({
                 "chat_id": budget.chat_id,
                 "kind": "group" if budget.is_group else "private",
                 "tokens": budget.chat.tokens(),
-                "group_window_free": (
-                    budget.group.free() if budget.group is not None else None
-                ),
+                "rate": budget.rate,
+                "minimal": self._minimal(budget),
+                "sustained_used": budget.window.used(),
+                "sustained_free": budget.window.free(),
+                "sustained_limit": budget.window.limit,
                 "backoff": max(budget.backoff, 1.0),
                 "retry_until_in": max(budget.retry_until - now, 0.0),
                 "calls": budget.calls,
@@ -1002,6 +1391,8 @@ class BudgetRateLimiter(BaseRateLimiter):
                 "reactions": budget.reactions,
                 "chat_actions": budget.chat_actions,
                 "muted_refusals": budget.muted_refusals,
+                "ornaments_suspended": budget.ornaments_suspended,
+                "bans_today": budget.bans_today(wall_now),
                 "waiters": len(budget.waiters),
             })
         return {"overall_tokens": self._overall.tokens(), "chats": chats}
@@ -1028,7 +1419,13 @@ class BudgetRateLimiter(BaseRateLimiter):
         self._maybe_write_signal()
 
     def reset(self) -> None:
-        """Forget every chat and take the signal file down with them."""
+        """Forget every chat and take the signal file down with them.
+
+        Clearing the whole dict is what drops the earned rates, ban
+        stamps and counters with it — a per-field reset here would be a
+        second place to keep in step with `ChatBudget.__init__`, and the
+        one that got forgotten.
+        """
         self._budgets.clear()
         self._last_signal_key = None
         self._last_signal_at = 0.0
@@ -1117,10 +1514,14 @@ __all__ = [
     "CHAT_ACTION_ENDPOINT",
     "ChatBudget",
     "FloodSkipped",
+    "PRIORITY_ESSENTIAL",
+    "PRIORITY_ORNAMENT",
+    "PRIORITY_SIGNAL",
     "REACTION_ENDPOINT",
     "SlidingWindow",
     "TokenBucket",
     "card_interval",
     "clear_backoff_signal",
     "is_group_chat",
+    "rate_limit_args",
 ]

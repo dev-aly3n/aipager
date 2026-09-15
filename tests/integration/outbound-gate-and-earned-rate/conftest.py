@@ -26,7 +26,7 @@ import pytest
 
 import aipager.bot.rich_message as rm
 from aipager import config
-from aipager.bot import flood
+from aipager.bot import flood, flood_budget
 from aipager.bot.flood_budget import BudgetRateLimiter
 
 #: The REAL ``_post``, captured before conftest's autouse
@@ -97,11 +97,24 @@ class FloodClock:
 
 @pytest.fixture
 def flood_clock(monkeypatch):
-    """A :class:`FloodClock` with ``flood.time`` already bound to it."""
+    """A :class:`FloodClock` with BOTH modules' own ``time`` bound to it.
+
+    ``flood.py`` reads the wall clock for the mute deadline (8.26 D-7) and
+    ``flood_budget.py`` reads it for ban stamps and for deciding whether a
+    chat is inside its post-ban recovery window. Rebinding only one leaves
+    the other on the real clock, where a test that "advances six hours"
+    advances nothing — the classic false pass in this area, and the reason
+    both are done here rather than per test.
+
+    Each module's OWN ``time`` reference is rebound, never the global
+    ``time`` module and never anything in ``asyncio``.
+    """
     clock = FloodClock()
-    monkeypatch.setattr(flood, "time", types.SimpleNamespace(
+    fake = types.SimpleNamespace(
         monotonic=lambda: clock.now, time=lambda: clock.wall,
-    ))
+    )
+    monkeypatch.setattr(flood, "time", fake)
+    monkeypatch.setattr(flood_budget, "time", fake)
     return clock
 
 

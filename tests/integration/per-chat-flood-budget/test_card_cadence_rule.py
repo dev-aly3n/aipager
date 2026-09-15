@@ -41,6 +41,17 @@ from aipager.bot import animation as an
 from aipager.bot.flood_budget import BudgetRateLimiter, card_interval
 from aipager.state import Status
 
+
+# The 8.21 rows below are about the BUDGET MECHANICS — the token bucket,
+# the rolling window, the reserve, the deferral — at a known, fixed chat
+# rate. 8.27 made that rate LEARNED, starting at `FLOOD_START_RATE` (half
+# the ceiling), so leaving it to the default would silently double every
+# expected interval here and turn these into rows about the starting
+# allowance instead. Pinned to the ceiling so each row keeps measuring
+# what it was written to measure; the earned rate has its own rows in
+# `tests/integration/outbound-gate-and-earned-rate/test_earned_rate.py`.
+_FIXED_RATE = _config.TELEGRAM_PRIVATE_MAX_RATE
+
 _REAL_POST = rm._post
 
 PRIVATE = 256113222          # the chat `_pin_single_chat_config` pins
@@ -190,7 +201,7 @@ def telegram(vloop, monkeypatch):
 def limiter(vloop, monkeypatch):
     """The daemon's limiter on the virtual clock, installed exactly the
     way ``lifecycle._make_builder`` installs it."""
-    lim = BudgetRateLimiter(clock=vloop.time, sleep=asyncio.sleep)
+    lim = BudgetRateLimiter(start_rate=_FIXED_RATE, clock=vloop.time, sleep=asyncio.sleep)
     rm.set_rate_limiter(lim)
     yield lim
     lim.reset()
@@ -304,14 +315,26 @@ def _most_in_window(stamps: list[float], window: float) -> int:
 def test_a_single_streaming_card_edits_once_per_computed_interval(
     mk_bot, vloop, telegram, limiter,
 ):
-    """Row A / R4: ``max(1.2, 1×1.0) × 1.1 = 1.32`` s between card edits.
-    Mutation: drop the margin or the floor and the gap stops matching
-    ``card_interval`` — the one function the rule is written in."""
+    """Row A / R4: ``max(1.2, 1×2.0) × 1.1 = 2.2`` s between card edits.
+
+    The floor is the chat's SUSTAINED GAP since 8.27 —
+    ``FLOOD_SUSTAINED_WINDOW / FLOOD_SUSTAINED_MAX`` = 60/30 = 2.0 s —
+    which now dominates the 1.0 s private cadence floor. It was 1.32 s
+    before, i.e. 46 edits a minute into a chat that had no volume ceiling
+    at all; that is the traffic the 9.5-hour ban was earned with.
+
+    ``expected`` is still derived from ``card_interval`` rather than
+    written as a literal: this row's whole point is that the loop's
+    realized gap matches the one function the rule is written in.
+    Mutation: drop the margin, the floor or the sustained term and the two
+    stop agreeing."""
     bot = _ext_bot(mk_bot(), telegram, limiter, PRIVATE)
     sess = _card(bot, "a", 10, PRIVATE)
     _run_cards(vloop, bot, [sess], 8.0)
+    pacing = limiter.pacing_for(PRIVATE)
     expected = card_interval(base=an.STREAM_EDIT_INTERVAL, busy_sessions=1,
-                             is_group=False)
+                             is_group=False, chat_rate=pacing["rate"],
+                             sustained_min_gap=pacing["sustained_min_gap"])
     assert _gaps(_card_calls(telegram, PRIVATE)) == \
         [pytest.approx(expected)] * len(_gaps(_card_calls(telegram, PRIVATE)))
 
@@ -345,8 +368,11 @@ def test_two_sessions_in_one_private_chat_each_slow_to_two_point_two_seconds(
     mk_bot, vloop, telegram, limiter,
 ):
     """Row B1 / R4 — the incident itself: two cards at 0.9 s put 2.2
-    edits/s into one DM. Mutation: compute the interval from the session
-    instead of from the chat's BUSY count and this returns to 1.32.
+    edits/s into one DM. Each now ticks at ``max(1.2, 2×2.0) × 1.1 =
+    4.4`` s (8.27 raised the per-session floor to the chat's 2.0 s
+    sustained gap), so the pair costs 28 edits a minute rather than 56.
+    Mutation: compute the interval from the session instead of from the
+    chat's BUSY count and each card speeds back up to 2.2.
 
     Asserted on EVERY gap, not just the smallest. A floor
     (``min(gaps) == 2.2``) is what this row used to assert, and it stayed
@@ -359,8 +385,13 @@ def test_two_sessions_in_one_private_chat_each_slow_to_two_point_two_seconds(
     cards = [_card(bot, "a", 10, PRIVATE),
              _card(bot, "b", 11, PRIVATE)]
     _run_cards(vloop, bot, cards, 20.0)
+    # Derived from the rule itself, with the chat's live pacing (8.27):
+    # the sustained gap is part of the floor now, so a literal here would
+    # be asserting last release's tuning rather than this one's rule.
+    _pacing = limiter.pacing_for(PRIVATE)
     interval = card_interval(base=an.STREAM_EDIT_INTERVAL, busy_sessions=2,
-                             is_group=False)
+                             is_group=False, chat_rate=_pacing["rate"],
+                             sustained_min_gap=_pacing["sustained_min_gap"])
     for mid in (10, 11):
         gaps = _gaps(_card_calls(telegram, PRIVATE, mid))
         assert gaps, f"card {mid} never edited twice"
@@ -397,8 +428,13 @@ def test_three_sessions_in_one_chat_stay_inside_the_chats_budget(
              for i, name in enumerate(("a", "b", "c"))]
     _run_cards(vloop, bot, cards, 30.0)
     assert telegram.violations == []
+    # Derived from the rule itself, with the chat's live pacing (8.27):
+    # the sustained gap is part of the floor now, so a literal here would
+    # be asserting last release's tuning rather than this one's rule.
+    _pacing = limiter.pacing_for(PRIVATE)
     interval = card_interval(base=an.STREAM_EDIT_INTERVAL, busy_sessions=3,
-                             is_group=False)
+                             is_group=False, chat_rate=_pacing["rate"],
+                             sustained_min_gap=_pacing["sustained_min_gap"])
     for mid in (10, 11, 12):
         gaps = _gaps(_card_calls(telegram, PRIVATE, mid))
         assert gaps, f"card {mid} never edited twice"
@@ -411,8 +447,8 @@ def test_three_sessions_in_one_chat_stay_inside_the_chats_budget(
 def test_a_sibling_going_idle_speeds_every_other_card_up_on_its_next_tick(
     mk_bot, vloop, telegram, limiter,
 ):
-    """Row B2 / R4: three BUSY sessions tick at 3.3 s; the moment one goes
-    IDLE the survivors' NEXT tick is 2.2 s later, with no rescheduling.
+    """Row B2 / R4: three BUSY sessions tick at 6.6 s; the moment one goes
+    IDLE the survivors' NEXT tick is 4.4 s later, with no rescheduling.
     Mutation: cache N per session at loop start and the card keeps the
     stale interval for the rest of the turn."""
     bot = _ext_bot(mk_bot(), telegram, limiter, PRIVATE)
@@ -424,8 +460,10 @@ def test_a_sibling_going_idle_speeds_every_other_card_up_on_its_next_tick(
 
     _run_cards(vloop, bot, [cards[0]], 14.0, at=(6.0, _retire))
     gaps = _gaps(_card_calls(telegram, PRIVATE))
-    assert gaps[0] == pytest.approx(3.3)
-    assert gaps[-1] == pytest.approx(2.2)
+    # 8.27: the per-session floor is the chat's 2.0 s sustained gap, so
+    # three sessions tick at 6.6 s and two at 4.4 s (was 3.3 / 2.2).
+    assert gaps[0] == pytest.approx(6.6)
+    assert gaps[-1] == pytest.approx(4.4)
 
 
 # ── row B3: a group chat ─────────────────────────────────────────────────────
@@ -513,7 +551,8 @@ def test_a_legacy_session_without_a_stamped_chat_still_counts_towards_n(
     legacy.scope_chat_id = 0
     _run_cards(vloop, bot, [stamped], 10.0)
     gaps = _gaps(_card_calls(telegram, PRIVATE))
-    assert gaps == [pytest.approx(2.2)] * len(gaps)
+    # Two sessions in one DM: 8.27's 2.0 s sustained gap per session.
+    assert gaps == [pytest.approx(4.4)] * len(gaps)
 
 
 def test_a_legacy_session_never_creates_a_phantom_chat_zero(
@@ -740,11 +779,28 @@ def test_a_refused_card_comes_back_in_a_second_not_in_an_interval(
 
 # ── the acceptance table: what a minute of card traffic costs ────────────────
 
+# 8.27 RETUNED THE PRIVATE ROWS, and the change is the point of the ship.
+#
+# Until 0.7.12 a private chat had NO volume ceiling: the 1/s bucket alone
+# permitted 60 calls a minute indefinitely, and these rows recorded the
+# card loop using 46-56 of them. That is the traffic two BUSY sessions
+# sustained for ~45 minutes on 2026-09-15 before the 9.5-hour ban.
+#
+# Every chat now has `FLOOD_SUSTAINED_MAX` (30) per rolling
+# `FLOOD_SUSTAINED_WINDOW` (60 s), and `card_interval` is TOLD about it —
+# `sustained_min_gap` = 60/30 = 2.0 s — so the cards pace themselves under
+# the cap instead of being refused at it. A single private card therefore
+# ticks every 2.2 s rather than 1.32, and a minute costs 28 edits rather
+# than 46. Chat actions are exempt and do not count toward the cap.
+#
+# The GROUP row is UNCHANGED at 3.30 s / 18 edits: a group's window was
+# always 20/60 s, whose 3.0 s gap the 3.0 s group cadence floor already
+# dominated. That it did not move is a useful control on the change.
 @pytest.mark.parametrize("sessions,chat,edits,actions,skipped,gap", [
     (1, GROUP, 18, 14, 0, 3.30),
-    (1, PRIVATE, 46, 14, 0, 1.32),
-    (2, PRIVATE, 56, 28, 0, 2.20),
-    (3, PRIVATE, 56, 42, 1, 3.30),
+    (1, PRIVATE, 28, 14, 0, 2.20),
+    (2, PRIVATE, 28, 28, 0, 4.40),
+    (3, PRIVATE, 29, 42, 1, 6.60),
 ])
 def test_a_minute_of_card_traffic_costs_exactly_what_was_promised(
     mk_bot, vloop, telegram, limiter, sessions, chat, edits, actions,
@@ -757,10 +813,13 @@ def test_a_minute_of_card_traffic_costs_exactly_what_was_promised(
     budget refuse a card in an otherwise quiet chat, moves one of these
     numbers.
 
-    ``edits``, ``skipped`` and ``gap`` are 8.21's OWN acceptance numbers,
-    unchanged, reproduced here with the typing indicator switched back ON
-    (roadmap 8.24) — that is the whole claim of 8.24 and this is where it
-    is checked. ``actions`` is the new column: the bubble refreshes on the
+    ``edits``, ``skipped`` and ``gap`` were 8.21's own acceptance numbers;
+    the PRIVATE rows were retuned by 8.27 (see the table above) and the
+    GROUP row is unchanged. They are reproduced here with the typing
+    indicator switched back ON (roadmap 8.24) — that is the whole claim of
+    8.24 and this is where it is checked. The standing invariant across
+    both tunings: ``edits <= FLOOD_SUSTAINED_MAX`` for the chat, asserted
+    explicitly below so a future retune cannot quietly exceed the cap. ``actions`` is the new column: the bubble refreshes on the
     animator's own ≤4.5 s schedule and costs the chat's budget nothing
     (``admitted`` counts them, since the limiter counts every callback it
     runs, but ``skipped`` and the gaps do not move and ``violations`` stays
@@ -801,6 +860,11 @@ def test_a_minute_of_card_traffic_costs_exactly_what_was_promised(
         "skipped": skipped, "violations": [],
         "gaps": [gap],
     }
+    # The invariant behind the numbers, stated so a retune cannot break it
+    # silently: the METERED calls (chat actions are exempt) stay inside the
+    # chat's own rolling ceiling. This is what 8.21's private rows, at
+    # 46-56 edits a minute, did not do.
+    assert edits <= snap["sustained_limit"], (edits, snap["sustained_limit"])
 
 
 # ── row C2: the starvation guard ─────────────────────────────────────────────
@@ -910,8 +974,10 @@ def test_a_backed_off_chat_slows_its_card_by_the_backoff_factor(
     mk_bot, vloop, telegram, limiter,
 ):
     """Row E4 / R4's ``× backoff`` term, observed end to end: after one
-    small 429 the chat is at ×2, so the card's own gaps double from 1.32 s
-    to 2.64 s. Asserted on EVERY gap: a ``min(gaps)`` floor is what let a
+    small 429 the chat is at ×2 and its EARNED RATE is halved to 0.5/s
+    (8.27), so the gaps go from 2.2 s to 4.4 s — ``max(1.2, 1/0.5, 2.0) ×
+    1.1 × 2``. Both terms are doing work here: the multiplier is the
+    cadence's memory of the 429 and the rate is the chat's. Asserted on EVERY gap: a ``min(gaps)`` floor is what let a
     2.2/6.6 s alternation hide in row B1 through iteration 1, and the same
     hiding place must not exist here. Mutation: read the backoff nowhere in
     the cadence and a chat Telegram just pushed back on keeps its old
@@ -921,7 +987,7 @@ def test_a_backed_off_chat_slows_its_card_by_the_backoff_factor(
     limiter.note_retry_after(PRIVATE, 1)
     _run_cards(vloop, bot, [sess], 14.0)
     gaps = _gaps(_card_calls(telegram, PRIVATE, 10))
-    assert gaps and gaps == [pytest.approx(2.64)] * len(gaps)
+    assert gaps and gaps == [pytest.approx(4.4)] * len(gaps)
 
 
 # ── R9: the two env-configurable bases ───────────────────────────────────────

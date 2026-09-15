@@ -32,8 +32,19 @@ from aipager.bot.rich_message import (
 )
 from aipager.bot.transport import MUTED, SKIPPED, _send_with_retry, edit_text_at
 
+
 # Captured before the autouse ``_block_real_telegram_http`` replaces it, so
 # the rich-path rows can drive the REAL transport through MockTransport.
+# The 8.21 rows below are about the BUDGET MECHANICS — the token bucket,
+# the rolling window, the reserve, the deferral — at a known, fixed chat
+# rate. 8.27 made that rate LEARNED, starting at `FLOOD_START_RATE` (half
+# the ceiling), so leaving it to the default would silently double every
+# expected interval here and turn these into rows about the starting
+# allowance instead. Pinned to the ceiling so each row keeps measuring
+# what it was written to measure; the earned rate has its own rows in
+# `tests/integration/outbound-gate-and-earned-rate/test_earned_rate.py`.
+_FIXED_RATE = config.TELEGRAM_PRIVATE_MAX_RATE
+
 _REAL_POST = rm._post
 
 CHAT = 123456
@@ -91,7 +102,7 @@ def limiter(clock):
     """Signal path passed explicitly — see the note on the same fixture in
     ``test_budget_rules.py``: without it, "no backoff file was written" is
     vacuously true on a machine with no daemon socket."""
-    lim = BudgetRateLimiter(clock=clock, sleep=clock.sleep,
+    lim = BudgetRateLimiter(start_rate=_FIXED_RATE, clock=clock, sleep=clock.sleep,
                             signal_path=config.FLOOD_BACKOFF_FILE)
     yield lim
     lim.reset()

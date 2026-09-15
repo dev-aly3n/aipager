@@ -34,8 +34,19 @@ from aipager.bot.rich_message import (
 )
 from aipager.bot.transport import _send_with_retry
 
+
 # Captured at import, before conftest's _block_real_telegram_http replaces
 # it: these rows must drive the REAL _post through a MockTransport.
+# The 8.21 rows below are about the BUDGET MECHANICS — the token bucket,
+# the rolling window, the reserve, the deferral — at a known, fixed chat
+# rate. 8.27 made that rate LEARNED, starting at `FLOOD_START_RATE` (half
+# the ceiling), so leaving it to the default would silently double every
+# expected interval here and turn these into rows about the starting
+# allowance instead. Pinned to the ceiling so each row keeps measuring
+# what it was written to measure; the earned rate has its own rows in
+# `tests/integration/outbound-gate-and-earned-rate/test_earned_rate.py`.
+_FIXED_RATE = config.TELEGRAM_PRIVATE_MAX_RATE
+
 _REAL_POST = rm._post
 
 CHAT = 123456
@@ -169,7 +180,7 @@ def _scripted_http(monkeypatch, *responses):
 
 
 def _install(clock) -> BudgetRateLimiter:
-    limiter = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    limiter = BudgetRateLimiter(start_rate=_FIXED_RATE, clock=clock, sleep=clock.sleep)
     rm.set_rate_limiter(limiter)
     return limiter
 
@@ -371,7 +382,7 @@ def test_a_small_429_on_the_ptb_path_defers_the_whole_chat(run_async):
     retry goes straight back into Telegram's window.
     """
     clock = FakeClock()
-    limiter = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    limiter = BudgetRateLimiter(start_rate=_FIXED_RATE, clock=clock, sleep=clock.sleep)
     attempts: list[float] = []
     started = clock.now
 
@@ -557,7 +568,7 @@ def test_a_mini_app_send_is_counted_by_the_chat_budget(run_async):
     """The behavioural half of row O: a send made on the ExtBot the
     limiter paces lands in that chat's counters like any other."""
     clock = FakeClock()
-    limiter = BudgetRateLimiter(clock=clock, sleep=clock.sleep)
+    limiter = BudgetRateLimiter(start_rate=_FIXED_RATE, clock=clock, sleep=clock.sleep)
 
     async def _callback():
         return {"ok": True}

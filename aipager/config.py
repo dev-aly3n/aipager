@@ -490,17 +490,66 @@ TELEGRAM_OVERALL_TIME_PERIOD: float = 1.0
 TELEGRAM_GROUP_MAX_CALLS: float = 20.0
 TELEGRAM_GROUP_WINDOW: float = 60.0
 
-# Per-CHAT budget (roadmap 8.21). The limiter above buckets per chat only
-# for groups and channels (python-telegram-bot's AIORateLimiter keys its
-# per-chat bucket on a NEGATIVE id), so a private DM got the 30/s overall
-# bucket and nothing else. Telegram's own rule is ~1 message/s into any
-# one chat with a short burst allowance: two sessions streaming their
-# busy cards into one DM at 0.9 s each put ~2.2 edits/s into it, earned
-# 2,021 small 429s in 14 hours and then a 5.4-hour ban (2026-09-11).
-# `BudgetRateLimiter` (bot/flood_budget.py) is built from these; named
-# here, non-env, so nothing can rebuild the budget from different numbers.
+# Per-CHAT budget (roadmap 8.21, retuned by 8.27). The limiter above
+# buckets per chat only for groups and channels (python-telegram-bot's
+# AIORateLimiter keys its per-chat bucket on a NEGATIVE id), so a private
+# DM got the 30/s overall bucket and nothing else.
+#
+# TELEGRAM_PRIVATE_MAX_RATE KEEPS ITS NAME, ITS VALUE AND ITS ROLE AS THE
+# LIMITER'S `chat_max_rate=`, BUT IT NOW MEANS THE CEILING, NOT THE
+# ALLOWANCE. 1 call/s is Telegram's PUBLISHED BURST ceiling for one chat.
+# 8.21 read it as the sustained allowance and paced every chat at it
+# permanently — which is how a bot with no violation history behaves, and
+# is measurably wrong for a bot with one. On 2026-09-15 a chat pinned at
+# this rate collected three bans in a day, escalating 1283 -> 312 ->
+# 34212 s. Telegram's real limit is not a published number; it is a
+# function of the account's recent history, and the only way to know it
+# is to be told.
+#
+# So the sustained allowance is LEARNED per chat (8.27): every chat
+# starts at FLOOD_START_RATE, earns FLOOD_RATE_INCREASE per quiet
+# FLOOD_SUCCESS_WINDOW_SECONDS, halves on a 429 and drops to
+# FLOOD_MIN_RATE on a ban — additive-increase / multiplicative-decrease,
+# the same shape TCP uses on a link whose capacity it also cannot query.
+# This constant is only the ceiling that climb may not pass.
 TELEGRAM_PRIVATE_MAX_RATE: float = 1.0
 TELEGRAM_CHAT_BURST: float = 3.0
+
+# ── the earned rate (roadmap 8.27) ──────────────────────────────────────
+# All non-env, like the budget above: nothing may rebuild the limiter from
+# different numbers, and a per-box override is exactly how one install
+# ends up with a tuning nobody can reproduce.
+#
+# Half the ceiling: high enough that a single session's card is unhindered
+# (its cadence floor is 1 s/edit shared across the chat's sessions), low
+# enough that a chat we know nothing about is not opened at full rate.
+FLOOD_START_RATE: float = 0.5
+# Additive increase. Ten steps from MIN to the ceiling, so the climb is
+# legible in a log rather than a curve nobody can reason about.
+FLOOD_RATE_INCREASE: float = 0.1
+# Multiplicative decrease bottoms out here: one call per 20 s. Low enough
+# to be a real penalty, non-zero so an answer still eventually goes out —
+# a rate of 0 is a deadlock, not a back-off.
+FLOOD_MIN_RATE: float = 0.05
+# A quiet window that earns one increase. 60 s after a 429.
+FLOOD_SUCCESS_WINDOW_SECONDS: float = 60.0
+# After a BAN the same ten steps are stretched over this many hours
+# (2160 s per step), because a ban is evidence about hours, not minutes.
+# Two regimes on purpose: +0.1 per minute would climb MIN -> ceiling in
+# 9.5 MINUTES, which is not a memory of a 9.5-HOUR ban at all.
+FLOOD_RATE_RECOVERY_HOURS: float = 6.0
+# A rolling ceiling on volume, for EVERY chat kind — the token bucket
+# alone permits 60 calls/minute indefinitely at 1/s, which is what two
+# BUSY sessions did for ~45 minutes before the 9.5-hour ban. Groups keep
+# TELEGRAM_GROUP_MAX_CALLS (20/60 s) as the stricter of the two.
+FLOOD_SUSTAINED_MAX: float = 30.0
+FLOOD_SUSTAINED_WINDOW: float = 60.0
+# Below this earned rate a chat enters MINIMAL MODE: ornaments (the busy
+# card, the typing bubble, the pinned dashboard) are suspended and only
+# answers, replies and signals go out. Sited so the ladder is meaningful:
+# START 0.5 -> one 429 -> 0.25 (above the floor; the card keeps animating,
+# slower) -> a second 429 -> 0.125 (below it; pixels stop, answers do not).
+FLOOD_MINIMAL_MODE_RATE_FLOOR: float = 0.2
 
 # Busy-card cadence (roadmap 8.21 §4.3). The card interval is
 # `max(BASE, N * floor) * MARGIN * backoff`, where N is the number of

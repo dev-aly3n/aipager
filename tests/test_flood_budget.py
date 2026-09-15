@@ -189,9 +189,16 @@ def test_a_private_chat_is_paced_like_a_group(run_async):
     Mutation: make ``_budget_for`` return ``None`` for positive ids —
     exactly what python-telegram-bot's AIORateLimiter does — and the
     stamps collapse to one instant, which is the 2026-09-11 incident.
+
+    ``start_rate`` is pinned to the ceiling because this row is about the
+    BUCKET existing at all, not about the 8.27 earned rate: left to the
+    default 0.5 it would measure the starting allowance instead, and the
+    "collapse to one instant" mutation would still be caught, just at
+    twice the spacing. The earned rate has rows of its own in
+    ``tests/integration/outbound-gate-and-earned-rate/test_earned_rate.py``.
     """
     clock = FakeClock()
-    limiter = _limiter(clock)
+    limiter = _limiter(clock, start_rate=config.TELEGRAM_PRIVATE_MAX_RATE)
     call = _recorder(clock)
 
     async def _drive():
@@ -451,9 +458,14 @@ def test_a_group_window_never_admits_a_twenty_first_call_early(run_async):
 
     Mutation: evict on ``now - period`` with the stamps in the wrong
     order, or refill slots continuously, and the 21st call goes early.
+
+    ``start_rate`` pinned to the ceiling: this row is about the WINDOW,
+    and the 8.27 earned rate would otherwise spread the first twenty
+    calls over 38 s instead of 19 — changing the arithmetic without
+    changing what is being tested.
     """
     clock = FakeClock()
-    limiter = _limiter(clock)
+    limiter = _limiter(clock, start_rate=config.TELEGRAM_PRIVATE_MAX_RATE)
     call = _recorder(clock)
 
     async def _drive():
@@ -814,7 +826,15 @@ def test_decay_never_loses_partial_progress_toward_the_next_halving():
 def test_a_ban_is_re_raised_untouched_and_never_backs_off(run_async, caplog):
     """Row F. Mutation: let ``note_retry_after`` accept a value over the
     cap and the limiter would start competing with the 8.17 mute for the
-    one case the mute exists to own."""
+    one case the mute exists to own.
+
+    The BACKOFF MULTIPLIER and the deferral are still untouched by a ban —
+    that is what this row pins, and it is unchanged. What 8.27 added is
+    that the ban drops the chat's EARNED RATE to the floor and stamps its
+    history, with one WARNING; before it, a ban taught the limiter
+    literally nothing. So the assertion is now "no backoff, no deferral,
+    and exactly one rate line", not "no log at all".
+    """
     clock = FakeClock()
     limiter = _limiter(clock)
     caplog.set_level("DEBUG", logger="aipager.bot.flood_budget")
@@ -832,7 +852,13 @@ def test_a_ban_is_re_raised_untouched_and_never_backs_off(run_async, caplog):
     run_async(_drive())
     assert limiter.cadence_multiplier(18) == 1.0
     assert _chat(limiter.snapshot(), 18)["retry_until_in"] == 0.0
-    assert caplog.records == []
+    # 8.27: the rate remembers the ban even though the cadence does not.
+    assert limiter.earned_rate(18) == pytest.approx(config.FLOOD_MIN_RATE)
+    assert _chat(limiter.snapshot(), 18)["bans_today"] == 1
+    rate_lines = [r for r in caplog.records if "banned for" in r.getMessage()]
+    assert len(rate_lines) == 1, [r.getMessage() for r in caplog.records]
+    assert not rate_lines[0].exc_info, "a ban is expected, not an error"
+    assert [r for r in caplog.records if r not in rate_lines] == []
 
 
 def test_note_retry_after_ignores_a_value_past_the_cap():
@@ -1272,11 +1298,24 @@ def test_snapshot_reports_the_whole_budget(run_async):
     assert snap["overall_tokens"] == pytest.approx(28.0)
     group = _chat(snap, -1002)
     assert group["kind"] == "group"
-    assert group["group_window_free"] == 19
+    # 8.27: `group_window_free` is gone. The rolling window exists for
+    # EVERY chat now — a private chat used to have none at all, so its
+    # 1/s bucket permitted 60 calls a minute indefinitely, which is what
+    # two BUSY sessions did for ~45 minutes before the 9.5-hour ban.
+    # A group keeps the stricter of the two ceilings.
+    assert group["sustained_limit"] == int(config.TELEGRAM_GROUP_MAX_CALLS)
+    assert (group["sustained_used"], group["sustained_free"]) == (1, 19)
     private = _chat(snap, 31)
     assert private["kind"] == "private"
-    assert private["group_window_free"] is None
+    assert private["sustained_limit"] == int(config.FLOOD_SUSTAINED_MAX)
+    assert (private["sustained_used"], private["sustained_free"]) == (1, 29)
     assert private["waiters"] == 0
+    # The 8.26/8.27 columns a reader (`aipager status`) depends on.
+    assert private["rate"] == pytest.approx(config.FLOOD_START_RATE)
+    assert private["minimal"] is False
+    assert (private["muted_refusals"], private["ornaments_suspended"],
+            private["bans_today"]) == (0, 0, 0)
+    assert "group_window_free" not in private
 
 
 def test_an_unrecognised_rate_limit_args_shape_is_blocking(run_async):

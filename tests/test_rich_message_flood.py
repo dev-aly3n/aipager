@@ -30,6 +30,7 @@ from unittest.mock import AsyncMock, MagicMock
 import httpx
 import pytest
 
+from aipager import config
 import aipager.bot.rich_message as rm
 from aipager.bot import flood
 from aipager.bot.flood import MUTE, FloodMuted
@@ -283,10 +284,13 @@ def test_the_real_limiter_accepts_the_seam_and_buckets_a_private_chat(
     run_async(few())
     chats = {c["chat_id"]: c for c in limiter.snapshot()["chats"]}
     assert chats[-100]["kind"] == "group"
-    assert chats[-100]["group_window_free"] is not None
+    # 8.27: the rolling window exists for EVERY chat kind now — a private
+    # chat used to have none, so its bucket permitted 60 calls a minute
+    # indefinitely. A group keeps the stricter of the two ceilings.
+    assert chats[-100]["sustained_limit"] == int(config.TELEGRAM_GROUP_MAX_CALLS)
     assert chats[555]["kind"] == "private", "a private chat is budgeted too"
-    assert chats[555]["group_window_free"] is None, \
-        "but has no 20-per-60 s window"
+    assert chats[555]["sustained_limit"] == int(config.FLOOD_SUSTAINED_MAX), \
+        "a private chat must have a volume ceiling of its own"
     assert chats[555]["calls"] == 1
 
 
