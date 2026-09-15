@@ -12,10 +12,16 @@ now" as "cannot send". A ban lifts, and the answer is still worth reading.
 
 from __future__ import annotations
 
+import logging
+import time
+from types import SimpleNamespace
+
 import pytest
 
+from aipager import config
 from aipager.bot.held import (
     HELD,
+    HELD_ANSWER_MAX_AGE_SECONDS,
     HELD_ANSWER_MAX_ATTEMPTS,
     HELD_ANSWER_MAX_PER_CHAT,
     late_marker,
@@ -75,17 +81,70 @@ def _hold(session="claude-a", chat=CHAT, text="answer", at=None):
                      rich_text=text, plain_text=text, reply_to=1, at=at)
 
 
-def test_a_second_answer_for_one_session_replaces_the_first():
-    """Newest per turn wins — the same rule the busy card follows. Two
-    answers for one session after a ban would be a wall of stale text.
+def test_two_answers_from_one_session_are_both_kept_in_order():
+    """PER TURN, NOT PER SESSION (8.29 T4).
 
-    Mutation: append instead of replacing and a long ban delivers every
-    intermediate answer the session produced.
+    This row is the inversion of the one it replaces. "Newest per turn
+    wins" was read as "newest per session wins", so a second answer
+    REPLACED the first at debug level — but a 9.5-hour ban routinely
+    spans several turns of one session, because the user re-prompts when
+    the first answer goes quiet, which is exactly what they did on
+    2026-09-15. Two turns' answers are two pieces of the operator's work
+    and both must arrive, oldest first. An answer silently replaced is the
+    same failure as an answer silently dropped.
+
+    Mutation: key the buffer by session again and the first answer of
+    every multi-turn ban is lost without a line anyone reads.
     """
-    _hold(text="old")
-    _hold(text="new")
-    assert HELD.count() == 1
-    assert HELD.pending(CHAT)[0].rich_text == "new"
+    _hold(text="first")
+    _hold(text="second")
+    assert HELD.count() == 2
+    assert [e.rich_text for e in HELD.pending(CHAT)] == ["first", "second"]
+
+
+def test_nothing_is_ever_dropped_below_warning_level(caplog):
+    """R6 in one sentence: "nothing is ever SILENTLY dropped". The two
+    caps are the only ways an answer leaves this buffer undelivered, and
+    each names what was lost at WARNING."""
+    caplog.set_level("DEBUG", logger="aipager.bot.held")
+    for i in range(HELD_ANSWER_MAX_PER_CHAT + 1):
+        _hold(session=f"claude-{i}", text=f"body {i}")   # one over the cap
+    _hold(session="claude-old", text="ancient",          # one more over it,
+          at=time.time() - HELD_ANSWER_MAX_AGE_SECONDS - 60)
+    HELD.expire()                                        # and one expiry
+
+    losses = [r for r in caplog.records if "LOST" in r.getMessage()]
+    assert len(losses) == 3, [r.getMessage() for r in losses]
+    assert all(r.levelno >= logging.WARNING for r in losses)
+    # "with what was lost" (T4), not just "something was lost".
+    assert all("chars" in r.getMessage() for r in losses)
+
+
+def test_an_answer_older_than_the_longest_possible_mute_is_expired(caplog):
+    """The AGE half of "bounded by count AND age" (T4). Past
+    `HELD_ANSWER_MAX_AGE_SECONDS` an answer is not waiting for a ban to
+    lift — no mute can last that long — and delivering it later as news
+    would be worse than saying it was lost.
+
+    Mutation: drop `expire()` and an undeliverable answer sits in memory
+    until the daemon restarts, arriving days late if it ever flushes.
+    """
+    caplog.set_level("WARNING", logger="aipager.bot.held")
+    fresh = _hold(session="claude-new", text="recent")
+    _hold(session="claude-old", text="ancient",
+          at=time.time() - HELD_ANSWER_MAX_AGE_SECONDS - 1.0)
+
+    assert HELD.expire() == 1
+    assert [e.key for e in HELD.pending(CHAT)] == [fresh.key]
+    assert any("expired" in r.getMessage() for r in caplog.records)
+
+
+def test_the_age_cap_outlasts_the_longest_possible_mute():
+    """The two constants are in different modules on purpose (held.py has
+    no aipager imports), so something has to pin them together: an age cap
+    SHORTER than the longest mute would expire answers that are still
+    waiting for the ban that refused them."""
+    assert HELD_ANSWER_MAX_AGE_SECONDS >= config.FLOOD_MUTE_MAX_SECONDS
 
 
 def test_the_buffer_is_bounded_per_chat_with_one_warning(caplog):
@@ -234,6 +293,12 @@ def test_a_delivery_that_fails_otherwise_is_retried_then_dropped_loudly(
 
     Mutation: drop the attempt counter and a permanently-failing entry is
     retried every 2 s for the life of the daemon.
+
+    The last attempt now spends the stored PLAIN TEXT before giving up
+    (ruling 7), so this row makes the plain path fail too — the answer is
+    genuinely undeliverable, and that is the case the WARNING is for.
+    `test_the_last_attempt_falls_back_to_the_stored_plain_text` owns the
+    case where it lands.
     """
     import aipager.bot.rich_message as rm
 
@@ -245,6 +310,7 @@ def test_a_delivery_that_fails_otherwise_is_retried_then_dropped_loudly(
     caplog.set_level("WARNING", logger="aipager.bot.notify")
 
     bot = mk_bot()
+    bot._app.bot.send_message = _fail
     sess = _sess(bot)
     bot._hold_answer(sess, "body", "body", 77)
 
@@ -255,6 +321,68 @@ def test_a_delivery_that_fails_otherwise_is_retried_then_dropped_loudly(
     assert run_async(bot.flush_held_answers(sess)) == 0
     assert HELD.count(CHAT) == 0
     assert any("held answer dropped" in r.getMessage() for r in caplog.records)
+
+
+def test_the_last_attempt_falls_back_to_the_stored_plain_text(
+    mk_bot, limiter, flood_clock, run_async, monkeypatch, rich_http,
+):
+    """Ruling 7. `HeldAnswer.plain_text` was stored by every hold site and
+    read by nothing, so an answer that survived a 9.5-hour ban could still
+    be lost to a markdown parse error hours later — with a plain-text
+    fallback available, safe (the chat is demonstrably not muted) and
+    unused.
+
+    Mutation: delete `_deliver_held_as_plain_text`'s call and the answer
+    is dropped as "lost" with the text sitting in the entry.
+    """
+    import aipager.bot.rich_message as rm
+
+    async def _fail(*a, **kw):
+        raise RuntimeError("can't parse entities")
+
+    sent: list[tuple] = []
+
+    async def _plain(chat_id, text, **kw):
+        sent.append((chat_id, text))
+        return SimpleNamespace(message_id=9)
+
+    monkeypatch.setattr(rm, "_rate_limiter", limiter)
+    monkeypatch.setattr("aipager.bot.notify.send_rich_message", _fail)
+    bot = mk_bot()
+    bot._app.bot.send_message = _plain
+    sess = _sess(bot)
+    bot._hold_answer(sess, "**rich**", "the plain one", 77)
+
+    for _ in range(HELD_ANSWER_MAX_ATTEMPTS - 1):
+        assert run_async(bot.flush_held_answers(sess)) == 0
+    assert sent == [], "the plain text was spent before the rich attempts were"
+
+    assert run_async(bot.flush_held_answers(sess)) == 1
+    assert HELD.count(CHAT) == 0
+    assert len(sent) == 1
+    assert "the plain one" in sent[0][1]
+    assert "delivered late" in sent[0][1], "the late marker goes out either way"
+
+
+def test_a_successful_rich_flush_never_touches_the_plain_text(
+    mk_bot, limiter, flood_clock, run_async, monkeypatch, rich_http,
+):
+    """The other half of ruling 7's test: the fallback is a LAST resort,
+    not a second copy of every answer."""
+    plain_sends: list = []
+    bot = mk_bot()
+
+    async def _plain(*a, **kw):                      # pragma: no cover
+        plain_sends.append(a)
+        return SimpleNamespace(message_id=9)
+
+    bot._app.bot.send_message = _plain
+    sess = _sess(bot)
+    bot._hold_answer(sess, "**rich**", "the plain one", 77)
+
+    assert run_async(bot.flush_held_answers(sess)) == 1
+    assert plain_sends == []
+    assert len(rich_http.requests) == 1
 
 
 def test_a_re_mute_mid_flush_postpones_rather_than_spending_an_attempt(

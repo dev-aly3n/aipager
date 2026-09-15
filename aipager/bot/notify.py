@@ -588,6 +588,36 @@ class NotifyMixin:
             log.warning("[%s] could not hold the refused answer", sess.label,
                         exc_info=True)
 
+    async def _deliver_held_as_plain_text(self, entry, marker: str) -> bool:
+        """Last resort for one held answer: the stored plain text.
+
+        Returns whether ANYTHING landed. Chunked at markdown-safe
+        boundaries by the same helper the live answer path uses, with no
+        ``parse_mode``, so Telegram cannot refuse it for parsing — which
+        is the most likely way a rich delivery fails at this point, the
+        chat having just proved it accepts sends.
+
+        NEVER called on a mute (`RichMessageFloodBanned` is handled above
+        and returns): a second attempt into a ban is a fresh violation,
+        and that rule is untouched by this fallback.
+        """
+        bot = self._app.bot if self._app else None
+        if bot is None or not entry.plain_text:
+            return False
+        landed = False
+        for index, chunk in enumerate(_plain_text_chunks(
+                f"{marker}\n\n{entry.plain_text}")):
+            try:
+                await bot.send_message(
+                    entry.chat_id, chunk,
+                    reply_to_message_id=entry.reply_to if index == 0 else None,
+                )
+                landed = True
+            except Exception:
+                log.warning("[%s] held answer: plain-text chunk failed",
+                            entry.label, exc_info=True)
+        return landed
+
     async def flush_held_answers(self, sess: TrackedSession) -> int:
         """Deliver everything held for this session's chat. Returns how
         many went out.
@@ -597,11 +627,25 @@ class NotifyMixin:
         2 s tick for every session that has something held.
 
         Each delivery is a BLOCKING, ESSENTIAL ``send_rich_message`` with
-        the late marker as its first line. An entry that fails for a
-        reason other than the mute keeps its place and counts an attempt;
-        at ``HELD_ANSWER_MAX_ATTEMPTS`` it is dropped with one WARNING
-        naming the session and its size — not silently, which is the whole
-        point of R6.
+        the late marker as its first line, oldest first — two turns of one
+        session inside one ban are two entries (8.29 T4) and they read as
+        nonsense the other way round.
+
+        An entry whose rich delivery fails for a reason OTHER than the
+        mute keeps its place and counts an attempt. On the LAST attempt —
+        the point at which it used to be dropped and lost — the stored
+        plain text is sent instead (8.29 ruling 7). That is what
+        ``HeldAnswer.plain_text`` is for: the chat is demonstrably not
+        muted (the check above passed and the rich attempt reached
+        Telegram), so a plain send is not a request into a ban, it is the
+        same "never lose a reply" net every other answer path already has.
+        An answer that survives a 9.5-hour ban and is then lost to a
+        markdown parse error is the exact failure this buffer exists to
+        prevent, arriving hours later.
+
+        If even that fails the entry is dropped with one WARNING naming
+        the session and its size — not silently, which is the whole point
+        of R6.
         """
         from aipager.bot.held import HELD, HELD_ANSWER_MAX_ATTEMPTS, late_marker
 
@@ -628,18 +672,39 @@ class NotifyMixin:
                 return delivered
             except Exception:
                 entry.attempts += 1
-                if entry.attempts >= HELD_ANSWER_MAX_ATTEMPTS:
-                    HELD.drop(entry.chat_id, entry.session)
-                    log.warning(
-                        "[%s] held answer dropped after %d failed delivery "
-                        "attempts (%d chars) — it is lost",
-                        entry.label, entry.attempts, len(entry.rich_text),
-                    )
-                else:
+                if entry.attempts < HELD_ANSWER_MAX_ATTEMPTS:
                     log.debug("[%s] held answer delivery failed (attempt %d)",
                               entry.label, entry.attempts, exc_info=True)
+                    continue
+                # OUT OF RICH ATTEMPTS — the point at which this answer
+                # used to be dropped and lost. The plain text has been
+                # stored beside it the whole time; spend it here rather
+                # than losing an answer that survived a 9.5-hour ban to a
+                # markdown parse error hours later (8.29 ruling 7).
+                #
+                # At the cap rather than on the first failure, deliberately:
+                # a transient failure deserves another RICH try, and the
+                # fallback is for the loss, not for the failure.
+                log.warning(
+                    "[%s] held answer: %d rich deliveries failed — falling "
+                    "back to the stored plain text",
+                    entry.label, entry.attempts, exc_info=True,
+                )
+                HELD.drop(entry.chat_id, entry.key)
+                if await self._deliver_held_as_plain_text(entry, marker):
+                    delivered += 1
+                    log.info(
+                        "[%s] held answer delivered as plain text after %d "
+                        "failed rich attempts", entry.label, entry.attempts,
+                    )
+                else:
+                    log.warning(
+                        "[%s] held answer dropped after %d failed delivery "
+                        "attempts, plain text included (%d chars) — it is lost",
+                        entry.label, entry.attempts, len(entry.rich_text),
+                    )
                 continue
-            HELD.drop(entry.chat_id, entry.session)
+            HELD.drop(entry.chat_id, entry.key)
             delivered += 1
             if isinstance(sent, dict) and sent.get("message_id"):
                 self.registry.track_message(
