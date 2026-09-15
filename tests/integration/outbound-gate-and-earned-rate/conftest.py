@@ -163,6 +163,11 @@ class _GatedBot:
         self._result = result
         #: ``(endpoint, chat_id, t)`` for every call that actually RAN.
         self.calls: list[tuple[str, object, float]] = []
+        #: ``(endpoint, args, kwargs)`` for the same calls — what a row
+        #: asserting on the TEXT of a card edit needs. Separate from
+        #: ``calls`` so the tuple shape every other row unpacks is
+        #: unchanged.
+        self.sent: list[tuple[str, tuple, dict]] = []
 
     def __getattr__(self, name):
         if name not in self._ENDPOINTS:
@@ -176,6 +181,7 @@ class _GatedBot:
 
             async def _call():
                 self.calls.append((endpoint, chat_id, self._clock()))
+                self.sent.append((endpoint, args, kwargs))
                 return self._result if self._result is not None else _Sent()
 
             return await self._limiter.process_request(

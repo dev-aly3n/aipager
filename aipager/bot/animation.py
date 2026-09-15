@@ -30,6 +30,7 @@ from aipager.config import (
 )
 from aipager.bot.flood import MUTE, FloodMuted, _key as _chat_key
 from aipager.bot.flood_budget import (
+    PRIORITY_ESSENTIAL,
     PRIORITY_ORNAMENT,
     FloodSkipped,
     rate_limit_args as _rl_args,
@@ -1485,7 +1486,8 @@ class AnimationMixin:
 
     async def _edit_busy_raw(self, msg_id: int, text: str,
                              reply_markup=None, chat_id=None, *,
-                             kind: str = "blocking") -> bool | None:
+                             kind: str = "blocking",
+                             priority: str = PRIORITY_ORNAMENT) -> bool | None:
         """Edit busy message with pre-built text.
 
         ``chat_id`` is the chat the busy message lives in; defaults to
@@ -1511,14 +1513,20 @@ class AnimationMixin:
         # ``busy_msg_id`` and lose the card for good.
         if MUTE.is_muted(chat_id or CHAT_ID):
             return False
-        # ORNAMENT (8.26 R3) whatever the kind: a card edit is a card
-        # edit. `kind` says "may this be refused when the budget is
-        # momentarily short"; `class` says "how much is it worth". The
-        # animator escalates kind skip -> blocking after two refusals so a
-        # card is slow but never frozen, and the class is what keeps that
+        # ORNAMENT (8.26 R3) BY DEFAULT: a card edit is a card edit.
+        # `kind` says "may this be refused when the budget is momentarily
+        # short"; `class` says "how much is it worth". The animator
+        # escalates kind skip -> blocking after two refusals so a card is
+        # slow but never frozen, and the class is what keeps that
         # escalated edit from taking an answer's last token.
-        extra = {"rate_limit_args": _rl_args(kind=kind,
-                                             priority=PRIORITY_ORNAMENT)}
+        #
+        # `priority` is overridable for exactly one caller (8.29 T3):
+        # `_render_paused_card`, whose whole job is to explain that
+        # ornaments have been suspended. Sent as an ornament it is refused
+        # by the suspension it exists to announce, and the user is left
+        # with a card frozen mid-animation and no reason — which reads as
+        # a hung bot, the state the operator paged about.
+        extra = {"rate_limit_args": _rl_args(kind=kind, priority=priority)}
         try:
             await self._app.bot.edit_message_text(
                 text, chat_id=chat_id or CHAT_ID, message_id=msg_id,
@@ -1550,6 +1558,7 @@ class AnimationMixin:
     async def _edit_busy_rich(
         self, sess: TrackedSession, verb: str, *, final: bool = False,
         waiting: bool = False, kind: str = "blocking",
+        priority: str = PRIORITY_ORNAMENT,
     ) -> bool | None:
         """Edit the busy message with the streaming card.
 
@@ -1620,7 +1629,11 @@ class AnimationMixin:
                     is_rtl=is_rtl,
                     reply_markup=reply_markup,
                     kind=kind,
-                    priority=PRIORITY_ORNAMENT,   # 8.26 R3: the card
+                    # 8.26 R3: the card is an ORNAMENT — except for the
+                    # ONE edit that brings it back from minimal mode
+                    # (8.29 T3), which is the card telling the truth about
+                    # its own state and must not be shed.
+                    priority=priority,
                 )
             except FloodSkipped:
                 # The chat's budget was short and this edit was skippable,
@@ -1932,21 +1945,39 @@ class AnimationMixin:
 
         The line is the promise the card was making — "this session is
         working" — kept without the animation that was making it. It is
-        sent ESSENTIAL, not ORNAMENT: minimal mode suspends ornaments, so
-        an ornament here would suspend the very message that explains the
-        suspension.
+        sent **ESSENTIAL, not ORNAMENT** (8.29 T3 / ruling 1): minimal
+        mode suspends ornaments, so an ornament here is refused by the
+        very suspension it exists to explain. That is not theory — it is
+        what shipped in iteration 1 and what two independent testers
+        measured: ten ticks at ``FLOOD_MIN_RATE`` put ZERO requests on the
+        wire, leaving a card frozen on its last animated frame with no
+        explanation, indistinguishable from a hung bot.
 
         Sent ONCE per entry into minimal mode, not once per tick, and the
         dedupe is `sess.stream_last_rendered` — the same mechanism the
         streaming card already uses to avoid "message is not modified"
         400s. A chat at 0.05 calls/s cannot afford a repeated edit, and a
         static line repeated is not static.
+
+        AND ONCE MORE WHEN MINIMAL MODE LIFTS, if the card is still live:
+        the user was told the card was paused, so they have to be told it
+        is not. That render is `sess.card_resume_due`, honoured by
+        :meth:`_animate_tick` as one non-debounced ESSENTIAL edit of the
+        ordinary animated frame — the card coming back to life IS the
+        message, so there is no second line to write and nothing to
+        dedupe against.
         """
         limiter = get_rate_limiter()
         if limiter is None:
             return False
         chat = resolve_chat_id_int(sess)
         if chat is None or not limiter.minimal_mode(chat):
+            if sess.stream_last_rendered == _PAUSED_CARD_TEXT:
+                # Cleared FIRST: whatever happens to the resume edit, this
+                # session is no longer showing the paused line, and a
+                # marker left behind would suppress the next entry's line.
+                sess.stream_last_rendered = ""
+                sess.card_resume_due = True
             return False
         if not sess.busy_msg_id or sess.busy_msg_id <= 0:
             return True          # nothing to edit; still minimal
@@ -1958,6 +1989,7 @@ class AnimationMixin:
                 f"⏳ <b>{html_mod.escape(sess.label)}</b> · working — "
                 "updates paused",
                 chat_id=resolve_chat_id(sess),
+                priority=PRIORITY_ESSENTIAL,
             )
         except Exception:
             log.debug("[%s] paused-card line failed", sess.label, exc_info=True)
@@ -2035,6 +2067,26 @@ class AnimationMixin:
         # backoff.
         interval = self._card_interval(sess, streaming=sess.stream_dirty)
         now = time.monotonic()
+        # MINIMAL MODE HAS JUST LIFTED and this card's last render was the
+        # static "updates paused" line (8.29 T3 / ruling 1). One edit, not
+        # debounced and not skippable: the user was told the card was
+        # paused, so they are owed the card coming back. Debounced it
+        # could sit out an interval the chat no longer needs to take, and
+        # as an ORNAMENT it could be refused outright by a budget that is
+        # still tight seconds after the rate crossed back over the floor —
+        # leaving the paused line on screen for a chat that is no longer
+        # paused, which is worse than never having explained.
+        #
+        # Cleared BEFORE the attempt: one resume edit per lift, whether or
+        # not it lands. A retry loop here would be an ornament-grade cost
+        # on the exact chat that has just been in trouble.
+        if sess.card_resume_due:
+            sess.card_resume_due = False
+            result = await self._edit_busy_rich(
+                sess, verb, waiting=waiting, kind="blocking",
+                priority=PRIORITY_ESSENTIAL,
+            )
+            return None if result is None else True
         if now - sess.last_tool_edit_at < interval:
             # Debounced — and that means NO Telegram call at all, of any
             # kind. Until 8.21 this branch still fired a `sendChatAction`,

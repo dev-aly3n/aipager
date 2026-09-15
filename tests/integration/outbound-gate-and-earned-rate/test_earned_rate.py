@@ -21,6 +21,8 @@ retunes ``FLOOD_START_RATE`` to something wrong.
 
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from aipager import config
@@ -471,8 +473,17 @@ def test_card_interval_is_byte_identical_without_the_new_keywords():
 
 # ── row K's card side: one static line, however many ticks run ───────────────
 
-def _minimal_bot(mk_bot, limiter, chat=CHAT):
-    """A BUSY session with a live card, in a chat already in minimal mode."""
+def _minimal_bot(mk_bot, limiter, gated_bot=None, chat=CHAT):
+    """A BUSY session with a live card, in a chat already in minimal mode.
+
+    When *gated_bot* is given, EVERY card surface is real and metered:
+    the PTB side funnels through `limiter.process_request` with the
+    endpoint name PTB would use, and the rich side runs the real `_post`
+    onto an `httpx.MockTransport`. That is the difference between proving
+    a dedupe and proving a DELIVERY — iteration 1's version of the row
+    below monkeypatched `_edit_busy_raw` with a stub returning True, so it
+    passed while the line it was about never reached Telegram at all.
+    """
     import aipager.bot.rich_message as rm
     from aipager.state import Status
 
@@ -482,6 +493,8 @@ def _minimal_bot(mk_bot, limiter, chat=CHAT):
     assert limiter.minimal_mode(chat) is True
 
     bot = mk_bot()
+    if gated_bot is not None:
+        bot._app.bot = gated_bot
     sess = bot.registry.get_or_create("claude-dev")
     sess.label = "dev"
     sess.status = Status.BUSY
@@ -491,37 +504,55 @@ def _minimal_bot(mk_bot, limiter, chat=CHAT):
     return bot, sess
 
 
-def test_minimal_mode_edits_the_card_once_however_many_ticks_run(
-    mk_bot, limiter, flood_clock, run_async, monkeypatch,
-):
-    """Row K's last clause. A chat at 0.125 calls/s cannot afford a
-    repeated edit, and a line that says "updates paused" repeated every
-    tick is not paused.
+def _ornament_is_refused(limiter, run_async, chat=CHAT) -> bool:
+    """Is the chat refusing ORNAMENTS right now? Asked through the gate
+    itself rather than by reading `minimal_mode`."""
+    async def _never():                              # pragma: no cover
+        raise AssertionError("an ornament was admitted")
 
-    The dedupe is `sess.stream_last_rendered`, the same mechanism the
-    streaming card already uses against "message is not modified" 400s —
-    not a new flag, and deliberately not a `TrackedSession` field (D-4).
-
-    Mutation: drop the `stream_last_rendered` check from
-    `_render_paused_card` and this makes one edit per tick, at the exact
-    moment the chat can least afford it.
-    """
-    bot, sess = _minimal_bot(mk_bot, limiter)
-    edits: list[str] = []
-
-    async def _edit(msg_id, text, *a, **kw):
-        edits.append(text)
+    try:
+        run_async(limiter.process_request(
+            callback=_never, args=(), kwargs={}, endpoint="editMessageText",
+            data={"chat_id": chat},
+            rate_limit_args=rate_limit_args(priority=PRIORITY_ORNAMENT),
+        ))
+    except FloodSkipped:
         return True
+    return False
 
-    monkeypatch.setattr(bot, "_edit_busy_raw", _edit)
+
+def test_minimal_mode_edits_the_card_once_however_many_ticks_run(
+    mk_bot, limiter, gated_bot, rich_http, flood_clock, run_async,
+):
+    """Row K's last clause, through the REAL limiter (ruling 1).
+
+    Two claims, and the second is the one iteration 1 shipped broken:
+
+    * exactly ONE `editMessageText` reaches Telegram however many ticks
+      run — a chat at 0.125 calls/s cannot afford a repeated edit, and a
+      line that says "updates paused" repeated every tick is not paused;
+    * **it lands while ornaments are being refused.** The paused line is
+      ESSENTIAL: sent as an ORNAMENT it is refused by the very suspension
+      it exists to explain, leaving a card frozen mid-animation with no
+      reason — which reads as a hung bot.
+
+    Mutations, both covered: drop the `stream_last_rendered` dedupe and
+    this makes one edit per tick; send the line as an ORNAMENT and it
+    makes NONE.
+    """
+    bot, sess = _minimal_bot(mk_bot, limiter, gated_bot)
 
     async def _ticks():
         for _ in range(8):
             assert await bot._animate_tick(sess, "Working", False) is False
 
     run_async(_ticks())
-    assert len(edits) == 1, edits
-    assert "updates paused" in edits[0]
+
+    calls = gated_bot.sent + [(m, (), {}) for m, _c in rich_http.requests]
+    assert [endpoint for endpoint, _a, _k in calls] == ["editMessageText"], calls
+    assert "updates paused" in gated_bot.sent[0][1][0]
+    assert _ornament_is_refused(limiter, run_async), (
+        "the row proves nothing unless ornaments were being refused")
 
 
 def test_the_animate_task_survives_minimal_mode(
@@ -549,25 +580,38 @@ async def _async_true(*a, **kw):
 
 
 def test_leaving_minimal_mode_resumes_the_animation(
-    mk_bot, limiter, flood_clock, run_async, monkeypatch,
+    mk_bot, limiter, gated_bot, rich_http, flood_clock, run_async,
 ):
-    """The state is not a latch: once the rate climbs back over the floor
-    the very next tick animates normally again, with no intervention and
-    no restart."""
-    bot, sess = _minimal_bot(mk_bot, limiter)
-    monkeypatch.setattr(bot, "_edit_busy_raw", _async_true)
+    """Ruling 1's second half: the paused line is sent once more when
+    minimal mode LIFTS, if the card is still live.
+
+    The card coming back to life IS that render, so the assertion is that
+    one edit reaches Telegram on the first tick after the lift — and it
+    has to hold in the state a chat is actually in seconds after its rate
+    crosses back over the floor: DEBOUNCED (the last edit was moments
+    ago) and with an empty bucket, where an ordinary skip-kind ornament
+    tick would be refused and the user would be left reading "updates
+    paused" in a chat that is no longer paused.
+
+    Mutation: drop the `card_resume_due` branch from `_animate_tick` and
+    this tick makes no call at all.
+    """
+    bot, sess = _minimal_bot(mk_bot, limiter, gated_bot)
     run_async(bot._animate_tick(sess, "Working", False))
     assert sess.stream_last_rendered != ""
+    gated_bot.calls.clear()
+    gated_bot.sent.clear()
+    rich_http.requests.clear()
 
     flood_clock.advance(config.FLOOD_SUCCESS_WINDOW_SECONDS * 2)
     assert limiter.minimal_mode(CHAT) is False
+    budget = limiter._budget_for(CHAT)
+    budget.chat.take(budget.chat.tokens())     # an empty bucket
+    sess.last_tool_edit_at = time.monotonic()  # and inside the debounce
 
-    rendered: list[bool] = []
-
-    async def _rich(*a, **kw):
-        rendered.append(True)
-        return True
-
-    monkeypatch.setattr(bot, "_edit_busy_rich", _rich)
     run_async(bot._animate_tick(sess, "Working", False))
-    assert rendered == [True], "the card did not resume when the rate recovered"
+
+    edits = gated_bot.endpoints() + [m for m, _c in rich_http.requests]
+    assert edits == ["editMessageText"], (
+        "the card did not resume when the rate recovered")
+    assert sess.card_resume_due is False, "one resume edit per lift, not a loop"

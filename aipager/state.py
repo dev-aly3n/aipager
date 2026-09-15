@@ -525,6 +525,15 @@ class TrackedSession:
     # a limiter that starts every chat unthrottled must not meet a card
     # that thinks it has been refused for an hour.
     card_skipped_since: float = 0.0
+    # roadmap 8.29 T3 / ruling 1: set when MINIMAL MODE LIFTS while this
+    # session's card is still showing the static "updates paused" line.
+    # The next tick then makes ONE non-debounced, ESSENTIAL edit, so the
+    # card visibly comes back to life instead of waiting out an interval
+    # and then possibly being refused as an ornament by a budget that is
+    # still tight. Transient — never in _PERSIST_FIELDS, for the same
+    # reason as `card_skipped_since`: it describes a limiter state a
+    # restart does not have.
+    card_resume_due: bool = False
     # roadmap 8.24: the "typing…" task for this session's busy card —
     # `animation._animate_typing`, started and cancelled alongside
     # `animate_task` by `_start_animation` / `_stop_animation`. A SECOND
