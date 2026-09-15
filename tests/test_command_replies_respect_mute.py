@@ -277,18 +277,25 @@ def test_status_makes_no_send_while_its_chat_is_muted_and_another_chat_still_get
     assert "No sessions" in other.message.reply_text.await_args.args[0]
 
 
-def test_callback_edit_makes_no_send_while_muted_but_the_toast_still_fires(
+def test_callback_edit_and_its_toast_are_both_skipped_while_muted(
     mk_bot, run_async, clock,
 ):
-    """R3/R4: ``query.answer`` is a separate bucket and the one signal
-    that still reaches the user; the message edit is not attempted."""
+    """8.26 D-1: the toast is no longer the exception. ``answerCallbackQuery``
+    is a request into the chat like any other, and a request into an ACTIVE
+    ban is what escalated retry_after 1283 -> 312 -> 34212 on 2026-09-15 —
+    the separate rate-limit bucket is about PACING, not about bans. It
+    carries no ``chat_id``, so the limiter's gate cannot see it; the check
+    lives in ``callbacks._safe_answer``, the one toast chokepoint.
+
+    Mutation: delete that check and ``query.answer`` is awaited here.
+    """
     bot = mk_bot()
     MUTE.mute(MUTED_CHAT, BAN)
 
     update, query = _tap("claude-jim:kill-cancel", MUTED_CHAT)
     run_async(bot._handle_callback(update, MagicMock()))
     query.edit_message_text.assert_not_awaited()
-    query.answer.assert_awaited()
+    query.answer.assert_not_awaited()
 
     update, query = _tap("claude-jim:kill-cancel", OTHER_CHAT)
     run_async(bot._handle_callback(update, MagicMock()))
@@ -296,15 +303,28 @@ def test_callback_edit_makes_no_send_while_muted_but_the_toast_still_fires(
     assert "Cancelled" in query.edit_message_text.await_args.args[0]
 
 
-def test_a_toast_with_text_still_reaches_a_muted_chat(mk_bot, run_async, clock):
+def test_a_toast_with_text_is_not_sent_into_a_muted_chat(mk_bot, run_async, clock):
+    """8.26 D-1: even a toast that carries real information ("Session not
+    found") is withheld while the chat is banned. The tap goes
+    unacknowledged, exactly as it does while the daemon is busy — which is
+    cheaper than the hours a fresh violation adds to the ban.
+
+    Mutation: delete ``_safe_answer``'s mute check and a "not found" toast
+    is awaited here.
+    """
     bot = mk_bot()
     MUTE.mute(MUTED_CHAT, BAN)
     update, query = _tap("claude-nope:stop", MUTED_CHAT)
     run_async(bot._handle_callback(update, MagicMock()))
-    toasts = [c.args[0] for c in query.answer.await_args_list if c.args]
-    assert any("not found" in (t or "").lower() for t in toasts)
+    query.answer.assert_not_awaited()
     query.edit_message_text.assert_not_awaited()
     bot._app.bot.send_message.assert_not_awaited()
+
+    # ...and an unmuted chat still gets the very toast that was withheld.
+    update, query = _tap("claude-nope:stop", OTHER_CHAT)
+    run_async(bot._handle_callback(update, MagicMock()))
+    toasts = [c.args[0] for c in query.answer.await_args_list if c.args]
+    assert any("not found" in (t or "").lower() for t in toasts)
 
 
 def test_new_wizard_start_makes_no_send_and_seeds_no_wizard_while_muted(
@@ -503,19 +523,20 @@ def test_edit_markup_skips_a_muted_chat_and_passes_through_otherwise(
     other.edit_message_reply_markup.assert_awaited_once()
 
 
-def test_settings_close_tap_makes_no_markup_edit_while_muted_but_the_toast_fires(
+def test_settings_close_tap_makes_no_markup_edit_and_no_toast_while_muted(
     mk_bot, run_async, clock,
 ):
     """The settings menu's Close strips its keyboard with
     ``edit_message_reply_markup`` — the one send family the first pass of
-    the static sweep could not see."""
+    the static sweep could not see. Since 8.26 D-1 its toast is withheld
+    too: both are requests into the banned chat."""
     bot = mk_bot()
     MUTE.mute(MUTED_CHAT, BAN)
 
     update, query = _tap("_:set:close", MUTED_CHAT)
     run_async(bot._handle_callback(update, MagicMock()))
     query.edit_message_reply_markup.assert_not_awaited()
-    query.answer.assert_awaited()
+    query.answer.assert_not_awaited()
 
     update, query = _tap("_:set:close", OTHER_CHAT)
     run_async(bot._handle_callback(update, MagicMock()))
@@ -600,7 +621,15 @@ def test_permission_answer_tap_makes_no_card_edit_while_muted_and_another_chat_d
         update, query = _tap("claude-dev:allow", chat)
         run_async(bot._handle_callback(update, MagicMock()))
         assert bot._app.bot.edit_message_text.await_count == expected, chat
-        query.answer.assert_awaited()  # the toast fires either way
+        # 8.26 D-1: the toast follows the edit. It used to fire either
+        # way ("a separate bucket"); a request into an active ban extends
+        # it whatever endpoint it names. The unmuted chat gets more than
+        # one (the eager ack, then the result), so this asserts presence
+        # rather than a count.
+        if expected:
+            assert query.answer.await_count >= 1, chat
+        else:
+            query.answer.assert_not_awaited()
 
 
 def test_stop_makes_no_card_edit_while_muted_and_another_chat_still_does(

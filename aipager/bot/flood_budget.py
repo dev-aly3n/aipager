@@ -75,6 +75,7 @@ from pathlib import Path
 from telegram.error import RetryAfter
 from telegram.ext import BaseRateLimiter
 
+from aipager.bot.flood import MUTE, FloodMuted
 from aipager.config import (
     CARD_CADENCE_FLOOR_GROUP,
     CARD_CADENCE_FLOOR_PRIVATE,
@@ -117,6 +118,13 @@ CHAT_ACTION_ENDPOINT: str = "sendChatAction"
 # of these gets the exemption rather than the skip class — the reserve
 # exists to protect real content from BUDGETED callers, and these do not
 # spend the budget at all.
+#
+# EXEMPT MEANS EXEMPT FROM THE *BUDGET*, NEVER FROM THE *MUTE* (8.26 D-1).
+# The mute gate in `process_request` sits ABOVE this branch on purpose: a
+# request into an active ban is what escalated 1283 → 312 → 34212 on
+# 2026-09-15, and the endpoint it targets is irrelevant to that
+# escalation. Move the gate below this branch and a muted chat starts
+# taking reactions and chat actions again — that is the mutation.
 _CHAT_BUDGET_EXEMPT: frozenset = frozenset({REACTION_ENDPOINT,
                                            CHAT_ACTION_ENDPOINT})
 
@@ -350,6 +358,12 @@ class ChatBudget:
         self.skipped: int = 0
         self.reactions: int = 0
         self.chat_actions: int = 0
+        # Calls the mute gate refused for this chat (8.26 R1). Counted
+        # rather than merely dropped so `snapshot()` — and a future
+        # incident — can show that the gate did fire, and how often.
+        # `calls` is deliberately NOT bumped for these: the callback
+        # never ran.
+        self.muted_refusals: int = 0
 
 
 def is_group_chat(chat_id) -> bool:
@@ -708,6 +722,16 @@ class BudgetRateLimiter(BaseRateLimiter):
         ``BaseRateLimiter.process_request`` so both keyword callers work:
         PTB's ``ExtBot._do_post`` and ``rich_message._post``.
 
+        Raises :class:`~aipager.bot.flood.FloodMuted` when the resolved
+        chat is flood-muted — THE GATE (8.26 R1). The callback is not
+        called, nothing is retried and no fallback is offered: the next
+        attempt into a ban is a fresh violation that extends it. This is
+        the one place that covers every outbound path, because every Bot
+        API call this daemon makes reaches here — PTB's ``ExtBot._do_post``
+        and ``rich_message._post`` alike. Enforcement used to live in 22
+        per-site checks across five files, and exactly one forgotten site
+        (``animation.send_busy``) cost 9.5 hours on 2026-09-15.
+
         Raises :class:`FloodSkipped` when a skip-kind caller finds the
         budget short — the callback is not called. A ``RetryAfter`` past
         ``TELEGRAM_MAX_RETRY_AFTER`` propagates untouched; a small one is
@@ -718,6 +742,27 @@ class BudgetRateLimiter(BaseRateLimiter):
         budget = self._budget_for(chat_id)
         if budget is not None:
             self._decay(budget, self._clock())
+
+        # ── THE GATE (R1) ────────────────────────────────────────────────
+        # Placed here, above the exempt branch, so a mute covers BOTH
+        # branches with an id already normalised by `_key`. Reactions and
+        # chat actions are exempt from the budget, never from the mute
+        # (D-1); `sendChatAction` answering 200 through a small 429 window
+        # says nothing about a BAN.
+        #
+        # `chat_id is None` means there is no chat to check — `getMe`,
+        # `getFile`, `setMyCommands`, `answerCallbackQuery`. Those are NOT
+        # gated: a mute on one chat must never mute the daemon itself.
+        # It is also why `flood._key(None) == "None"` never matters here:
+        # the short-circuit happens before any `flood` key is built.
+        #
+        # `MUTE.is_muted` is deliberately the DESTRUCTIVE read: the first
+        # call after a deadline lapses is what logs the single "lifted"
+        # INFO and rewrites the signal file.
+        if chat_id is not None and MUTE.is_muted(chat_id):
+            if budget is not None:
+                budget.muted_refusals += 1
+            raise FloodMuted(MUTE.remaining(chat_id), chat_id)
 
         if endpoint in _CHAT_BUDGET_EXEMPT:
             # §11 U4: reactions are exempt from the chat budget. They are
@@ -824,7 +869,9 @@ class BudgetRateLimiter(BaseRateLimiter):
         subsets on their own.
         ``group_window_free`` is how many of the group's 20 calls are
         still unspent in the rolling 60 s window (``None`` for a private
-        chat, which has no such window).
+        chat, which has no such window). ``muted_refusals`` counts the
+        calls the mute gate refused for the chat (8.26 R1) — those never
+        reached their callback, so they are deliberately NOT in ``calls``.
         """
         now = self._clock()
         chats = []
@@ -843,6 +890,7 @@ class BudgetRateLimiter(BaseRateLimiter):
                 "skipped": budget.skipped,
                 "reactions": budget.reactions,
                 "chat_actions": budget.chat_actions,
+                "muted_refusals": budget.muted_refusals,
                 "waiters": len(budget.waiters),
             })
         return {"overall_tokens": self._overall.tokens(), "chats": chats}

@@ -241,14 +241,49 @@ def test_send_with_retry_muted_chat_does_not_block_another(run_async):
     assert bot.sends == [8]
 
 
-def test_send_with_retry_keeps_the_flood_reaction_when_giving_up(run_async):
-    """R7: the 🚨 reaction (its own bucket) still tells the user a message
-    was dropped, and it is the ONE thing that still goes out."""
-    bot = _Bot([RetryAfter(28911)])
+class _RecordingBot(_Bot):
+    """``_Bot`` that records EVERY Bot API method reached, not just the two
+    it knows about. Any attribute is a coroutine that appends its own name,
+    so a call this test never thought of still shows up in ``.calls``."""
+
+    def __init__(self, outcomes):
+        super().__init__(outcomes)
+        self.calls: list[str] = []
+
+    async def send_message(self, chat_id, text, **kw):
+        self.calls.append("sendMessage")
+        return await super().send_message(chat_id, text, **kw)
+
+    def __getattr__(self, name):
+        async def _record(*a, **kw):
+            self.calls.append(name)
+        return _record
+
+
+def test_send_with_retry_makes_no_call_of_any_kind_after_arming_the_mute(
+    run_async,
+):
+    """8.26 D-1, replacing ``…_keys_the_flood_reaction_when_giving_up``.
+
+    R1 is literally zero-exception for the mute. Until 0.7.12 this branch
+    armed the mute and then fired a 🚨 ``setMessageReaction`` INTO the chat
+    it had just banned, on the theory that reactions ride a separate bucket
+    and "a dropped answer still gets its 🚨". Measured on 2026-09-15: a
+    request into an ACTIVE ban is what escalated retry_after
+    1283 -> 312 -> 34212 (9.5 h). The separate bucket governs PACING, not
+    bans, and since 8.29 the answer is held and delivered late, so there is
+    no drop left to signal.
+
+    Mutation: re-add any call after ``MUTE.mute(...)`` — the 🚨 or anything
+    else — and ``calls`` grows past the one send that earned the ban.
+    """
+    bot = _RecordingBot([RetryAfter(28911)])
     with pytest.raises(RetryAfter):
         run_async(_send_with_retry(bot, chat_id=7, text="hi",
                                    reply_to_message_id=3))
-    assert bot.reactions == ["🚨"]
+    assert bot.calls == ["sendMessage"], "something was sent into the ban"
+    assert bot.reactions == [], "the 🚨 is gone (D-1)"
+    assert MUTE.is_muted(7), "the mute itself must still be armed"
 
 
 # ── lifecycle: startup notice, builder handoff, clear on start/stop ──────────

@@ -193,10 +193,30 @@ async def _post(method: str, payload: dict, *, kind: str = "blocking") -> dict:
         return await _do()
     # PTB drops a FALSY rate_limit_args before the limiter ever sees it
     # (_extbot.py:335), so never pass {} — None is the blocking marker.
-    return await limiter.process_request(
-        callback=_do, args=(), kwargs={}, endpoint=method, data=payload,
-        rate_limit_args={"kind": "skip"} if kind == "skip" else None,
-    )
+    try:
+        return await limiter.process_request(
+            callback=_do, args=(), kwargs={}, endpoint=method, data=payload,
+            rate_limit_args={"kind": "skip"} if kind == "skip" else None,
+        )
+    except RichMessageFloodBanned:
+        # Already the right type — it IS a FloodMuted subclass, so it must
+        # be re-raised before the arm below would "translate" it into a
+        # second, different instance.
+        raise
+    except FloodMuted as exc:
+        # THE BOUNDARY TRANSLATION (8.26 D-2). The gate inside
+        # `process_request` raises a bare `FloodMuted`, which is right for
+        # the PTB path. On THIS path a bare one is a live hazard: every
+        # caller of `_post` wraps it in a broad
+        # `except (RichMessageFallbackRequired, Exception)` arm that would
+        # fire a plain-text fallback INTO THE BAN — a fresh violation
+        # created by the fix. Translating here keeps `flood_budget`
+        # ignorant of the rich path (importing `RichMessageFloodBanned`
+        # there would invert the dependency and cycle) while every
+        # existing discriminator — `notify.py:2168`, `animation.py:1595` —
+        # keeps working unchanged. `from None`: the mute is not an error
+        # with a cause worth a chained traceback.
+        raise RichMessageFloodBanned(exc.retry_after, exc.chat_id) from None
 
 
 def _kind_kwargs(kind: str) -> dict:
@@ -285,6 +305,13 @@ async def _send_rich_message_once(payload: dict, *, allow_retry: bool,
         # into RichMessageFallbackRequired would degrade a card to a
         # plain-text edit — an extra call into the chat that is short.
         raise
+    except RichMessageFloodBanned:
+        # 8.26 D-2: the gate under `_post` refused this for a muted chat.
+        # MUST sit above the broad arm below, which would otherwise
+        # re-classify a ban as RichMessageFallbackRequired and send the
+        # answer as plain text INTO the ban. Delete this arm and the
+        # fallback-into-the-ban trap is back.
+        raise
     except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
         log.warning("sendRichMessage network error: %s", type(exc).__name__)
         raise RichMessageFallbackRequired("network error") from exc
@@ -338,6 +365,11 @@ async def _handle_response(
         if allow_retry:
             try:
                 data2 = await _post(method, payload, **_kind_kwargs(kind))
+            except RichMessageFloodBanned:
+                # 8.26 D-2: the retry met a mute (this very call may have
+                # armed it). Above the broad arm, for the same reason as
+                # in `_send_rich_message_once`.
+                raise
             except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
                 log.warning("%s network error on retry: %s", method, type(exc).__name__)
                 raise RichMessageFallbackRequired("network error on retry") from exc
@@ -410,6 +442,12 @@ async def edit_message_text_rich(
         # Not a failure: nothing was attempted, and the chat is healthy.
         # Swallowing it into `return None` would make the animator read it
         # as a transient error and log at card cadence.
+        raise
+    except RichMessageFloodBanned:
+        # 8.26 D-2: the gate refused this edit for a muted chat. MUST sit
+        # above the broad arm below, which returns None — the animator
+        # reads None as "message gone", drops `busy_msg_id` and loses the
+        # card, and the ban is silently downgraded to a transient error.
         raise
     except (httpx.TimeoutException, httpx.ConnectError, httpx.NetworkError) as exc:
         log.warning("editMessageText network error: %s", type(exc).__name__)

@@ -338,10 +338,18 @@ def test_send_with_retry_never_sleeps_on_a_small_retry_after(run_async):
     assert len(bot.calls) == 1, "one attempt; the limiter already retried"
 
 
-def test_send_with_retry_still_mutes_and_reacts_on_a_ban(run_async):
-    """R6: the give-up branch is untouched. Mutation: delete the
-    ``MUTE.mute`` / 🚨 block with the small-value arm and a ban loses both
-    its mute and the one signal the user gets."""
+def test_send_with_retry_mutes_and_then_makes_no_call_at_all_on_a_ban(run_async):
+    """R6 + 8.26 D-1: the give-up branch arms the mute and stops there.
+
+    The 🚨 reaction that used to follow ``MUTE.mute`` is gone: it was a
+    request into the chat the very same branch had just banned, and a
+    request into an ACTIVE ban is what escalated retry_after
+    1283 -> 312 -> 34212. Nothing is lost by dropping it — since 8.29 the
+    answer is held and delivered late, so there is no drop to signal.
+
+    Mutation: delete ``MUTE.mute`` and the ban is forgotten; re-add the
+    reaction and ``calls`` carries a second entry.
+    """
     bot = _FakeBot([RetryAfter(BAN)])
 
     with pytest.raises(RetryAfter):
@@ -349,7 +357,8 @@ def test_send_with_retry_still_mutes_and_reacts_on_a_ban(run_async):
                                    reply_to_message_id=42))
 
     assert MUTE.is_muted(7)
-    assert ("reaction", "🚨") in bot.calls
+    assert ("reaction", "🚨") not in bot.calls
+    assert [c for c in bot.calls if c[0] == "reaction"] == []
 
 
 def test_a_small_429_on_the_ptb_path_defers_the_whole_chat(run_async):

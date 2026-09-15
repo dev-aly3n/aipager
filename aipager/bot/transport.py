@@ -369,12 +369,18 @@ async def _send_with_retry(bot, *, chat_id, text: str, parse_mode: str | None = 
     Raises :class:`~aipager.bot.flood.FloodMuted` without touching the bot
     while the chat is flood-muted (R3): the next attempt into a ban
     extends it, and callers already treat a failed send as non-fatal.
+    This pre-check is KEPT even though the limiter's gate now covers the
+    same ground — this seam is one of the three files that gate's static
+    sweep exempts, and it must hold for a bot that is not limiter-bound
+    (every ``_Bot`` double in the suite is exactly that).
 
     A ``RetryAfter`` is no longer retried here (roadmap 8.21): a small one
     has already been deferred and retried by the limiter, and a large one
-    is a ban. Both propagate, the large one after arming the mute and the
-    🚨. ``max_retries`` therefore governs ONLY the truncate-and-resend
-    loop below.
+    is a ban. Both propagate, the large one after arming the mute — and
+    after arming it this function makes NO further call of any kind
+    (8.26 D-1; the 🚨 that used to follow is gone).
+    ``max_retries`` therefore governs ONLY the truncate-and-resend loop
+    below.
     """
     if MUTE.is_muted(chat_id):
         raise FloodMuted(MUTE.remaining(chat_id), chat_id)
@@ -390,11 +396,10 @@ async def _send_with_retry(bot, *, chat_id, text: str, parse_mode: str | None = 
         except RetryAfter as e:
             wait = getattr(e, "retry_after", None) or 1
             if wait > TELEGRAM_MAX_RETRY_AFTER:
-                # Telegram wants us to back off longer than we're willing to
-                # block the daemon for. Log, notify the user via a reaction
-                # (reactions are a separate rate-limit bucket from
-                # sendMessage, so they still get through), and re-raise so
-                # the caller can update state.
+                # Telegram wants us to back off longer than we're willing
+                # to block the daemon for. Log, arm the mute, re-raise so
+                # the caller can update state — and MAKE NO FURTHER CALL
+                # OF ANY KIND.
                 log.warning(
                     "Telegram flood control — retry_after=%ss exceeds "
                     "cap=%ss, giving up on this message",
@@ -403,14 +408,18 @@ async def _send_with_retry(bot, *, chat_id, text: str, parse_mode: str | None = 
                 # A retry_after this long is a ban: remember it so no
                 # later send tries this chat again until it lifts (R3).
                 MUTE.mute(chat_id, wait, source="sendMessage")
-                if reply_to_message_id:
-                    try:
-                        await bot.set_message_reaction(
-                            chat_id, reply_to_message_id, "🚨",
-                        )
-                    except Exception:
-                        log.debug("Failed to set flood-control reaction",
-                                  exc_info=True)
+                # THE 🚨 IS GONE (8.26 D-1). Until 0.7.12 this fired a
+                # `set_message_reaction` into the chat it had just muted,
+                # on the theory that reactions are a separate bucket and
+                # "a dropped answer still gets its 🚨". Measured on
+                # 2026-09-15: a request into an ACTIVE ban is what
+                # escalated retry_after 1283 → 312 → 34212 (9.5 h), and
+                # the endpoint it targets is irrelevant to that
+                # escalation — the separate bucket is about PACING, not
+                # about bans. The promise it kept is obsolete too: since
+                # 8.29 the answer is HELD and delivered late, so there is
+                # no drop left to signal. Re-add a call here — any call —
+                # and this branch is a violation again.
                 raise
             # Since 8.21 the limiter (bot/flood_budget.py) defers the whole
             # chat for exactly the retry_after Telegram asked for and makes
@@ -470,10 +479,16 @@ async def _send_with_retry(bot, *, chat_id, text: str, parse_mode: str | None = 
 # which is the exact failure 8.17 was written to prevent.
 #
 # Deliberately NOT routed here: ``query.answer`` toasts and
-# ``set_message_reaction`` — a separate rate-limit bucket, and during a
-# ban the one signal that still reaches the user. Reactions are exempt
-# from the 8.21 per-chat budget too (design §11 U4), not only from the
-# mute: the 🚨 below fires exactly when the chat's queue is jammed.
+# ``set_message_reaction``. Both remain exempt from the 8.21 per-chat
+# BUDGET (design §11 U4) — Telegram meters them in a separate bucket, so
+# charging them to the chat's would take a token from a card edit for a
+# call Telegram never counted. Since 8.26 they are NOT exempt from the
+# MUTE: the limiter's gate refuses them like anything else, because a
+# request into an active ban extends it whatever endpoint it names
+# (D-1). The paragraph that used to stand here — "during a ban the one
+# signal that still reaches the user" — was false, and acting on it cost
+# 9.5 hours. Callback toasts carry no ``chat_id`` for the gate to see, so
+# ``callbacks._safe_answer`` checks the mute itself.
 
 
 class _MutedSend:
@@ -550,6 +565,17 @@ async def reply_text(message, *args, **kwargs):
         return await message.reply_text(*args, **kwargs)
     except FloodSkipped:
         return SKIPPED
+    except FloodMuted:
+        # The gate under this call refused it (8.26 R1). The pre-check
+        # above catches the common case; THIS arm is what production
+        # takes when the mute is armed between the check and the await,
+        # or when the call reaches a bot the pre-check could not resolve
+        # a chat for. Both are needed: the pre-check is what the 27
+        # MagicMock-based tests in test_command_replies_respect_mute.py
+        # exercise (a MagicMock bot enforces nothing), the translation is
+        # what a limiter-routed bot takes. Same sentinel either way, so
+        # every `is MUTED` reader is unchanged.
+        return MUTED
 
 
 async def reply_document(message, *args, **kwargs):
@@ -560,6 +586,17 @@ async def reply_document(message, *args, **kwargs):
         return await message.reply_document(*args, **kwargs)
     except FloodSkipped:
         return SKIPPED
+    except FloodMuted:
+        # The gate under this call refused it (8.26 R1). The pre-check
+        # above catches the common case; THIS arm is what production
+        # takes when the mute is armed between the check and the await,
+        # or when the call reaches a bot the pre-check could not resolve
+        # a chat for. Both are needed: the pre-check is what the 27
+        # MagicMock-based tests in test_command_replies_respect_mute.py
+        # exercise (a MagicMock bot enforces nothing), the translation is
+        # what a limiter-routed bot takes. Same sentinel either way, so
+        # every `is MUTED` reader is unchanged.
+        return MUTED
 
 
 async def edit_message(message, *args, **kwargs):
@@ -573,6 +610,17 @@ async def edit_message(message, *args, **kwargs):
         return await message.edit_text(*args, **kwargs)
     except FloodSkipped:
         return SKIPPED
+    except FloodMuted:
+        # The gate under this call refused it (8.26 R1). The pre-check
+        # above catches the common case; THIS arm is what production
+        # takes when the mute is armed between the check and the await,
+        # or when the call reaches a bot the pre-check could not resolve
+        # a chat for. Both are needed: the pre-check is what the 27
+        # MagicMock-based tests in test_command_replies_respect_mute.py
+        # exercise (a MagicMock bot enforces nothing), the translation is
+        # what a limiter-routed bot takes. Same sentinel either way, so
+        # every `is MUTED` reader is unchanged.
+        return MUTED
 
 
 async def edit_text(query, *args, **kwargs):
@@ -585,6 +633,17 @@ async def edit_text(query, *args, **kwargs):
         return await query.edit_message_text(*args, **kwargs)
     except FloodSkipped:
         return SKIPPED
+    except FloodMuted:
+        # The gate under this call refused it (8.26 R1). The pre-check
+        # above catches the common case; THIS arm is what production
+        # takes when the mute is armed between the check and the await,
+        # or when the call reaches a bot the pre-check could not resolve
+        # a chat for. Both are needed: the pre-check is what the 27
+        # MagicMock-based tests in test_command_replies_respect_mute.py
+        # exercise (a MagicMock bot enforces nothing), the translation is
+        # what a limiter-routed bot takes. Same sentinel either way, so
+        # every `is MUTED` reader is unchanged.
+        return MUTED
 
 
 async def edit_markup(query, *args, **kwargs):
@@ -598,6 +657,17 @@ async def edit_markup(query, *args, **kwargs):
         return await query.edit_message_reply_markup(*args, **kwargs)
     except FloodSkipped:
         return SKIPPED
+    except FloodMuted:
+        # The gate under this call refused it (8.26 R1). The pre-check
+        # above catches the common case; THIS arm is what production
+        # takes when the mute is armed between the check and the await,
+        # or when the call reaches a bot the pre-check could not resolve
+        # a chat for. Both are needed: the pre-check is what the 27
+        # MagicMock-based tests in test_command_replies_respect_mute.py
+        # exercise (a MagicMock bot enforces nothing), the translation is
+        # what a limiter-routed bot takes. Same sentinel either way, so
+        # every `is MUTED` reader is unchanged.
+        return MUTED
 
 
 async def edit_text_at(bot, *args, **kwargs):
@@ -610,6 +680,17 @@ async def edit_text_at(bot, *args, **kwargs):
         return await bot.edit_message_text(*args, **kwargs)
     except FloodSkipped:
         return SKIPPED
+    except FloodMuted:
+        # The gate under this call refused it (8.26 R1). The pre-check
+        # above catches the common case; THIS arm is what production
+        # takes when the mute is armed between the check and the await,
+        # or when the call reaches a bot the pre-check could not resolve
+        # a chat for. Both are needed: the pre-check is what the 27
+        # MagicMock-based tests in test_command_replies_respect_mute.py
+        # exercise (a MagicMock bot enforces nothing), the translation is
+        # what a limiter-routed bot takes. Same sentinel either way, so
+        # every `is MUTED` reader is unchanged.
+        return MUTED
 
 
 async def send_text(bot, *args, **kwargs):
@@ -621,6 +702,17 @@ async def send_text(bot, *args, **kwargs):
         return await bot.send_message(*args, **kwargs)
     except FloodSkipped:
         return SKIPPED
+    except FloodMuted:
+        # The gate under this call refused it (8.26 R1). The pre-check
+        # above catches the common case; THIS arm is what production
+        # takes when the mute is armed between the check and the await,
+        # or when the call reaches a bot the pre-check could not resolve
+        # a chat for. Both are needed: the pre-check is what the 27
+        # MagicMock-based tests in test_command_replies_respect_mute.py
+        # exercise (a MagicMock bot enforces nothing), the translation is
+        # what a limiter-routed bot takes. Same sentinel either way, so
+        # every `is MUTED` reader is unchanged.
+        return MUTED
 
 
 def _md_safe_boundaries(md: str) -> list[int]:

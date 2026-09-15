@@ -51,7 +51,9 @@ from aipager.team import (
 # now. Re-export the names this module uses internally so the
 # TelegramBot class body below (and any external consumers like the
 # tests) keeps working without changes.
+from aipager.bot.flood import MUTE
 from aipager.bot.transport import (  # noqa: F401
+    _message_chat_id,
     edit_message,
     edit_markup,
     edit_text,
@@ -150,7 +152,17 @@ class CallbackDispatchMixin:
         second answer for the same query, so without this wrapper the
         whole handler would crash on the second ``answer`` call.
         ``kwargs`` forwards e.g. ``show_alert=True`` for a modal toast.
+
+        Skipped outright while the tapped message's chat is flood-muted
+        (8.26 D-1). ``answerCallbackQuery`` carries no ``chat_id``, so the
+        limiter's gate structurally cannot see it — this is the one
+        chokepoint in this module, and without the check every button tap
+        during a ban would be a fresh request into it. The toast is not
+        worth extending a 9.5-hour ban for; the tap simply goes
+        unacknowledged, exactly as it does while the daemon is busy.
         """
+        if MUTE.is_muted(_message_chat_id(getattr(query, "message", None))):
+            return
         try:
             await query.answer(text, **kwargs)
         except Exception:

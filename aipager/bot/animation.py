@@ -28,7 +28,7 @@ from aipager.config import (
     STREAM_EDIT_INTERVAL, TELEGRAM_MAX_RETRY_AFTER,
     TYPING_INDICATOR_INTERVAL,
 )
-from aipager.bot.flood import MUTE, _key as _chat_key
+from aipager.bot.flood import MUTE, FloodMuted, _key as _chat_key
 from aipager.bot.flood_budget import (
     FloodSkipped,
     _retry_after_seconds as _retry_after_secs,
@@ -1343,6 +1343,16 @@ class AnimationMixin:
             # ``except`` below is what turns it into ``None`` for the
             # caller rather than an AttributeError out of the card path.
             msg_id = msg.message_id
+        except FloodMuted:
+            # The gate refused it (8.26 R1, row A): the chat is banned and
+            # this card is an ornament. No card, no crash, no traceback —
+            # ABOVE the arm below, which would log a WARNING with a stack
+            # trace at card cadence for a refusal that is entirely
+            # expected. `None` is the caller's existing "no card" value,
+            # so nothing downstream changes. This is the site whose
+            # missing mute check cost 9.5 hours on 2026-09-15.
+            log.debug("[%s] busy card not sent — chat flood-muted", sess.label)
+            return None
         except Exception:
             log.warning("Failed to send busy message", exc_info=True)
             return None
@@ -1485,6 +1495,13 @@ class AnimationMixin:
             # would classify it by accident. False, never None: the budget
             # is transient, while None means "message gone" and costs the
             # card for good.
+            return False
+        except FloodMuted:
+            # The gate refused the edit (8.26 R1). FALSE, NEVER NONE, for
+            # exactly the reason above: a mute is transient and the card
+            # must survive it. Returning None here would make every caller
+            # that inspects the result drop ``busy_msg_id`` and lose the
+            # card for good — over a ban that lifts by itself.
             return False
         except Exception as e:
             err = str(e).lower()

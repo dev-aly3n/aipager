@@ -304,19 +304,27 @@ def test_two_429s_in_a_row_leave_the_chat_at_four_times_its_cadence(
     assert limiter.cadence_multiplier(CHAT) == 4.0
 
 
-def test_a_ban_sized_retry_after_on_the_ptb_path_still_mutes_and_reacts(
+def test_a_ban_sized_retry_after_on_the_ptb_path_mutes_and_sends_nothing_more(
     limiter, clock, run_async,
 ):
-    """Row F / R6: 0.7.10's give-up branch is untouched — one attempt, the
-    mute armed, the 🚨 reaction still delivered. Mutation: route the ban
-    into the backoff and the chat keeps being hammered for eight hours."""
+    """Row F / R6: the give-up branch makes ONE attempt and arms the mute.
+
+    It used to add a 🚨 ``setMessageReaction`` into the chat it had just
+    banned; 8.26 D-1 deletes it, because a request into an ACTIVE ban is
+    what escalated retry_after 1283 -> 312 -> 34212 on 2026-09-15 and the
+    endpoint it names is irrelevant to that escalation.
+
+    Mutation: route the ban into the backoff and the chat keeps being
+    hammered for eight hours; re-add any call after ``MUTE.mute`` and
+    ``reactions`` grows again.
+    """
     bot = _LimitedBot(limiter, clock, [RetryAfter(BAN)])
     with pytest.raises(RetryAfter):
         run_async(asyncio.wait_for(
             _send_with_retry(bot, chat_id=CHAT, text="hi",
                              reply_to_message_id=3), timeout=10))
     assert (len(bot.sends), bot.reactions, MUTE.is_muted(CHAT)) == \
-        (1, ["🚨"], True)
+        (1, [], True)
 
 
 def test_a_ban_is_not_also_counted_as_a_backoff(limiter, clock, run_async):

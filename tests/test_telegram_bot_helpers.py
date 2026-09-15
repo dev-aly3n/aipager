@@ -311,16 +311,24 @@ def test_send_with_retry_never_sleeps_on_a_small_retry_after(run_async):
         run_async(_send_with_retry(bot, chat_id=1, text="hi"))
 
 
-def test_send_with_retry_sets_flood_reaction_when_giving_up(run_async):
-    """When give-up threshold is exceeded and a reply-to target is set,
-    react on it with 🚨 (visible signal for the user) before re-raising."""
+def test_send_with_retry_sets_no_reaction_when_giving_up(run_async):
+    """8.26 D-1: the give-up branch reacts on NOTHING, reply target or not.
+
+    Until 0.7.12 it fired a 🚨 ``setMessageReaction`` on the reply target
+    right after arming the mute, on the theory that reactions ride a
+    separate rate-limit bucket. That bucket governs PACING, not bans:
+    measured 2026-09-15, requests into an ACTIVE ban escalated retry_after
+    1283 -> 312 -> 34212 (9.5 h) regardless of endpoint.
+
+    Mutation: re-add the reaction call and ``reactions`` is non-empty.
+    """
     bot = _ReactionBot([RetryAfter(1000)])
 
     with pytest.raises(RetryAfter):
         run_async(_send_with_retry(
             bot, chat_id=7, text="hi", reply_to_message_id=42,
         ))
-    assert bot.reactions == [(7, 42, "🚨")]
+    assert bot.reactions == []
 
 
 def test_send_with_retry_no_reaction_when_no_reply_target(run_async):
@@ -332,9 +340,17 @@ def test_send_with_retry_no_reaction_when_no_reply_target(run_async):
     assert bot.reactions == []
 
 
-def test_send_with_retry_reaction_failure_does_not_mask_retryafter(run_async):
-    """A failing reaction call must NOT swallow the original RetryAfter —
-    the caller depends on that exception to know the send failed."""
+def test_send_with_retry_raises_retryafter_with_no_reaction_attempted(run_async):
+    """The caller depends on the ``RetryAfter`` to know the send failed,
+    and nothing between the mute and the raise may swallow it.
+
+    This used to guard a reaction call whose failure could have masked the
+    exception. 8.26 D-1 removed the call outright, which is the stronger
+    form of the same guarantee: there is no longer anything there to mask
+    it. The bot is still built with a reaction side effect that WOULD
+    raise, so re-adding the call is caught here as well as by the
+    assertion below.
+    """
     bot = _ReactionBot(
         [RetryAfter(1000)],
         reaction_side_effect=RuntimeError("reaction api down"),
@@ -344,5 +360,4 @@ def test_send_with_retry_reaction_failure_does_not_mask_retryafter(run_async):
         run_async(_send_with_retry(
             bot, chat_id=7, text="hi", reply_to_message_id=42,
         ))
-    # Reaction was attempted before the raise.
-    assert bot.reactions == [(7, 42, "🚨")]
+    assert bot.reactions == []
