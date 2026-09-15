@@ -130,7 +130,12 @@ def save_if_dirty(*, path=None, force: bool = False) -> bool:
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
         tmp = target.with_name(target.name + ".tmp")
-        tmp.write_text(json.dumps(_document(), indent=2), encoding="utf-8")
+        # `allow_nan=False`: a non-finite value anywhere in the document
+        # raises here rather than being written as the bare `NaN` literal
+        # that `read` would then have to discard the whole file over. One
+        # unwritten diagnostic beats a file that poisons the next start.
+        tmp.write_text(json.dumps(_document(), indent=2, allow_nan=False),
+                       encoding="utf-8")
         os.replace(tmp, target)
     except OSError:
         log.debug("could not write the flood state file %s", target,
@@ -150,19 +155,62 @@ def _min_interval() -> float:
     return config.FLOOD_STATE_MIN_INTERVAL
 
 
+def _reject_non_finite(constant: str):
+    """``json.loads``'s hook for the bare ``NaN`` / ``Infinity`` literals.
+
+    THE FILE IS UNTRUSTED INPUT (8.29 T2). Python's ``json`` is not strict
+    JSON: ``json.dumps`` emits the bare literal ``NaN`` and ``json.loads``
+    reads it straight back as ``float('nan')``. NaN then compares FALSE
+    against every bound, so it survives a range check, and
+    ``min(capacity, tokens + elapsed * NaN)`` leaves a chat's token bucket
+    permanently full — pacing silently disabled for that chat, for ever,
+    which is precisely the failure this ship exists to end. It would also
+    make ``aipager status --json`` emit a document no strict JSON reader
+    can parse.
+
+    Raising here discards the WHOLE document rather than one field: a file
+    containing a non-finite number is one no writer of ours produced, so
+    nothing else in it is trustworthy either. "No state" is always safe —
+    everything here is re-learned within hours.
+    """
+    raise ValueError(f"non-finite number in the flood state file: {constant}")
+
+
 def read(*, path=None) -> dict:
     """The raw parsed document, or ``{}``.
 
-    ``{}`` for a missing, unreadable, malformed or wrong-``version`` file.
-    Never inferred, never guessed: every consumer treats an empty document
-    as "start fresh", which is always safe.
+    ``{}`` for a missing, unreadable, malformed, non-finite or
+    wrong-``version`` file. Never inferred, never guessed: every consumer
+    treats an empty document as "start fresh", which is always safe.
+
+    A file that EXISTS and cannot be used is worth exactly one WARNING —
+    a truncated write during a crash, a hand edit, a disk that returned
+    garbage. A file that is simply absent is the normal first start and
+    says nothing at all. Degrading to conservative defaults is the
+    contract; degrading to "unlimited" is what would make a corrupt file
+    dangerous.
     """
     target = _path(path)
     try:
-        data = json.loads(target.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        raw = target.read_text(encoding="utf-8")
+    except FileNotFoundError:
         return {}
-    if not isinstance(data, dict) or data.get("version") != SCHEMA_VERSION:
+    except OSError:
+        log.warning("flood state file %s could not be read — starting with no "
+                    "state", target, exc_info=True)
+        return {}
+    try:
+        data = json.loads(raw, parse_constant=_reject_non_finite)
+    except ValueError:
+        log.warning("flood state file %s is corrupt (%d bytes) — discarded, "
+                    "starting with no state", target, len(raw))
+        return {}
+    if not isinstance(data, dict):
+        log.warning("flood state file %s is not an object — discarded", target)
+        return {}
+    if data.get("version") != SCHEMA_VERSION:
+        log.info("flood state file %s is version %r, not %d — ignored",
+                 target, data.get("version"), SCHEMA_VERSION)
         return {}
     return data
 
@@ -184,6 +232,8 @@ def load(*, path=None) -> bool:
         return False
     chats = data.get("chats")
     if not isinstance(chats, list):
+        log.warning("flood state file %s has no usable chat list — ignored",
+                    _path(path))
         return False
 
     restored = 0
