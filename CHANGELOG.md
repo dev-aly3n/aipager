@@ -28,7 +28,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   answers were dropped on 2026-09-15, each leaving one log line and
   nothing else. There is still no plain-text fallback into a ban — that
   was never the problem — but "cannot send now" no longer means "cannot
-  send".
+  send". A ban lasting hours spans several turns, so **every** turn's
+  answer is kept, in order, not just the newest: a second answer from the
+  same session no longer replaces the first. If one ever has to be
+  dropped — more than 20 waiting for one chat, or one older than 24 hours
+  — that is a warning in the log naming what was lost, never silence. An
+  answer whose rich delivery keeps failing after the ban has lifted goes
+  out as plain text rather than being discarded.
+- **A banned chat no longer comes back FASTER than it went in.** The
+  earned rate is dropped and the ban counted the moment the ban is armed,
+  and the muted hours are excluded from the "quiet time" that earns rate
+  back. Previously nothing reached the rate controller while a chat was
+  muted — that is what a mute is for — so it read the ban as one long
+  quiet window and rewarded it: a chat entered a 21-minute ban at 0.5
+  calls/s and left it at 1.0, the ceiling, with no ban recorded at all.
+  Four bans left it pinned at the ceiling. A chat with a ban in the last
+  24 hours is also held to half the normal ceiling, so recovering fully
+  six hours after a 9.5-hour ban is no longer possible.
 - **The busy-card watchdog stops fighting a muted chat.** A muted tick no
   longer kills its own animation task, so the watchdog no longer restarts
   it every 20 seconds for the length of the ban (348 restarts in 54
@@ -53,12 +69,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   else — answers, replies, permission prompts — is *essential* and is
   never dropped. Below 0.2 calls/s a chat enters **minimal mode**:
   ornaments are suspended and the card shows one static
-  `⏳ working — updates paused` line while answers keep flowing.
+  `⏳ working — updates paused` line while answers keep flowing — sent
+  once on the way in and once more when the card comes back, and sent as
+  essential, because a card that freezes without saying why reads as a
+  hung bot.
 - **A flood ban survives a daemon restart.** The mute deadline is now
   wall-clock and is persisted, with each chat's earned rate and ban
   history, to `~/.claude/aipager-flood-state.json`. Previously a restart
   forgot everything and its own startup notice was the first request back
-  into the ban.
+  into the ban. The file is treated as untrusted input: a truncated write,
+  a hand edit or a value no writer of ours produces (`NaN`, infinity) is
+  discarded with one warning and the daemon starts with conservative
+  defaults, never with pacing switched off.
 - `aipager status` (both renderers and `--json`, as `flood_chats`) and the
   `aipager daemon` row of `aipager doctor` now show each chat's earned
   rate, minimal mode, any mute deadline and bans in the last 24 h.

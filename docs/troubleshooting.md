@@ -158,9 +158,19 @@ bans. Other chats are unaffected.
 **Answers are not lost.** An answer produced while the chat is muted is
 held and delivered once the ban lifts, within a couple of seconds, with
 its first line reading `⏳ delivered late (held 42 min during a Telegram
-rate limit)`. You do not need to ask again. (Held answers live in memory:
-if you restart the daemon while any are waiting, they are lost — the
-shutdown log says how many.)
+rate limit)`. You do not need to ask again — and if you did ask again,
+both answers arrive, oldest first: a ban lasting hours spans several
+turns and each one's answer is yours. (Held answers live in memory: if
+you restart the daemon while any are waiting, they are lost — the
+shutdown log says how many. A chat holds at most 20, and nothing older
+than 24 hours; anything dropped for either reason is a warning in the
+log naming what it was.)
+
+**A ban makes the chat slower afterwards, not faster.** The moment a ban
+is armed the chat's learned rate drops to the floor and the ban is
+counted; the muted hours earn nothing back, the climb restarts from the
+moment the ban lifts, and for 24 hours after a ban the chat may climb to
+only half its normal ceiling. `aipager status` shows all of it.
 
 What NOT to do:
 
