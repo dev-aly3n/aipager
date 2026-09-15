@@ -258,7 +258,11 @@ def test_cmd_status_total_cost_sums(monkeypatch):
          "model": "", "context_pct": None, "cost_usd": None, "queue_depth": 0},
     ], set()))
 
-    def _capture(daemon_up, sessions, total, mutes=None, backoffs=None):
+    def _capture(daemon_up, sessions, total, mutes=None, **_kw):
+        # `**_kw` rather than a growing keyword list: this double only
+        # cares about `total`, and every renderer keyword it does not name
+        # would otherwise be a TypeError the moment one is added (8.28's
+        # `flood_chats` was).
         captured["total"] = total
 
     # cmd_status picks _render_rich or _render_plain based on console.is_terminal

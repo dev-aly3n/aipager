@@ -111,6 +111,112 @@ def flood_mute_lines(mutes: list[dict]) -> list[str]:
     ]
 
 
+def read_flood_chats(path: str | None = None) -> list[dict]:
+    """Per-chat flood state from the DURABLE file (roadmap 8.28/R9).
+
+    A different file from the two signals above, and deliberately: those
+    live on tmpfs and are unlinked whenever nothing is muted or backing
+    off, so a HEALTHY chat's earned rate — the thing this is mostly for —
+    would never appear in them. This one is under ``$HOME``, is written
+    debounced by the daemon and survives both a restart and a reboot.
+
+    Each row: ``chat_id``, ``rate`` (the learned calls/s), ``sustained_used``
+    / ``sustained_limit`` (the rolling volume window), ``minimal``,
+    ``bans_today``, ``muted_until`` (wall clock, omitted once lapsed) and
+    ``stale``.
+
+    ``stale`` is True when the document is older than the sustained
+    window, in which case the sustained figures describe a window that has
+    already rolled and MUST be ignored. Computed here rather than stored,
+    because the file is written at most once every few seconds and a
+    stored flag would be wrong the moment after it was written.
+
+    ``[]`` for a missing, unreadable, malformed or wrong-``version`` file:
+    flood state is never INFERRED, and no state is the normal condition of
+    a healthy install that has never been rate-limited.
+    """
+    from aipager import config
+
+    try:
+        data = json.loads(Path(path or config.FLOOD_STATE_FILE).read_text())
+    except (FileNotFoundError, PermissionError, json.JSONDecodeError, OSError):
+        return []
+    if not isinstance(data, dict) or data.get("version") != 1:
+        return []
+    entries = data.get("chats")
+    if not isinstance(entries, list):
+        return []
+    now = time.time()
+    try:
+        age = max(now - float(data.get("written_at", 0.0)), 0.0)
+    except (TypeError, ValueError):
+        age = float("inf")
+    stale = age > config.FLOOD_SUSTAINED_WINDOW
+    out: list[dict] = []
+    for entry in entries:
+        if not isinstance(entry, dict) or "chat_id" not in entry:
+            continue
+        row = {
+            "chat_id": entry.get("chat_id"),
+            "rate": _float_or(entry.get("rate"), config.FLOOD_START_RATE),
+            "sustained_used": int(_float_or(entry.get("sustained_used"), 0)),
+            "sustained_limit": int(
+                _float_or(entry.get("sustained_limit"),
+                          config.FLOOD_SUSTAINED_MAX)),
+            "minimal": bool(entry.get("minimal")),
+            "bans_today": _bans_today(entry.get("ban_stamps"), now),
+            "stale": stale,
+        }
+        muted_until = _float_or(entry.get("muted_until"), 0.0)
+        if muted_until > now:
+            row["muted_until"] = muted_until
+        out.append(row)
+    return out
+
+
+def _float_or(value, default: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _bans_today(stamps, now: float) -> int:
+    if not isinstance(stamps, list):
+        return 0
+    return sum(1 for s in stamps
+               if isinstance(s, (int, float)) and 0.0 <= now - s <= 86400.0)
+
+
+def flood_chat_lines(chats: list[dict]) -> list[str]:
+    """One line per chat, sorted by chat id so the output is stable.
+
+    Reads as a sentence rather than a dump, because the audience is an
+    operator asking "why is my bot slow": the rate first, then the volume,
+    then whatever is wrong. The sustained figures are omitted entirely
+    when the document is stale — showing a window that has already rolled
+    is worse than showing nothing.
+    """
+    lines: list[str] = []
+    for chat in sorted(chats, key=lambda c: str(c.get("chat_id"))):
+        parts = [f"Telegram chat {chat['chat_id']}: "
+                 f"rate {chat['rate']:.2f}/s"]
+        if not chat.get("stale"):
+            parts.append(
+                f", {chat['sustained_used']}/{chat['sustained_limit']} "
+                "in the last minute")
+        if chat.get("minimal"):
+            parts.append(" — MINIMAL MODE, card updates paused")
+        if chat.get("muted_until"):
+            parts.append(
+                " — flood-muted until "
+                f"{_dt.datetime.fromtimestamp(chat['muted_until']).strftime('%H:%M')}")
+        if chat.get("bans_today"):
+            parts.append(f" ({chat['bans_today']} ban(s) in the last 24 h)")
+        lines.append("".join(parts))
+    return lines
+
+
 def read_flood_backoffs(path: str | None = None) -> list[dict]:
     """Chats whose card cadence is currently backed off after a 429
     (``bot/flood_budget.py``, roadmap 8.21).
@@ -280,7 +386,8 @@ def render_sessions_plain(sessions: list[dict]) -> None:
 
 def _render_rich(daemon_up: bool, sessions: list[dict], total_cost: float,
                  mutes: list[dict] | None = None,
-                 backoffs: list[dict] | None = None) -> None:
+                 backoffs: list[dict] | None = None,
+                 flood_chats: list[dict] | None = None) -> None:
     console.print()
     if daemon_up:
         console.print(
@@ -296,6 +403,8 @@ def _render_rich(daemon_up: bool, sessions: list[dict], total_cost: float,
         console.print(f"  [warn]⚠[/warn]  [warn]{line}[/warn]")
     for line in flood_backoff_lines(backoffs or []):
         console.print(f"  [warn]⚠[/warn]  [warn]{line}[/warn]")
+    for line in flood_chat_lines(flood_chats or []):
+        console.print(f"  [hint]·[/hint]  [hint]{line}[/hint]")
 
     if sessions:
         console.print()
@@ -309,7 +418,8 @@ def _render_rich(daemon_up: bool, sessions: list[dict], total_cost: float,
 
 def _render_plain(daemon_up: bool, sessions: list[dict], total_cost: float,
                   mutes: list[dict] | None = None,
-                  backoffs: list[dict] | None = None) -> None:
+                  backoffs: list[dict] | None = None,
+                  flood_chats: list[dict] | None = None) -> None:
     line = "daemon: " + ("up" if daemon_up else "not running")
     if daemon_up:
         line += f" (chat {CHAT_ID})"
@@ -318,6 +428,8 @@ def _render_plain(daemon_up: bool, sessions: list[dict], total_cost: float,
         console.print(mute_line)
     for backoff_line in flood_backoff_lines(backoffs or []):
         console.print(backoff_line)
+    for chat_line in flood_chat_lines(flood_chats or []):
+        console.print(chat_line)
     render_sessions_plain(sessions)
     if total_cost > 0:
         console.print(f"  total cost: ${total_cost:.2f}")
@@ -360,6 +472,7 @@ def cmd_status(args: argparse.Namespace | None = None) -> int:
     total_cost = sum((s["cost_usd"] or 0.0) for s in sessions)
     mutes = read_flood_mutes()
     backoffs = read_flood_backoffs()
+    flood_chats = read_flood_chats()
 
     if as_json:
         print(json.dumps({
@@ -367,6 +480,7 @@ def cmd_status(args: argparse.Namespace | None = None) -> int:
             "config_error": CONFIG_ERROR,
             "flood_muted": mutes,
             "flood_backoff": backoffs,
+            "flood_chats": flood_chats,
             "sessions": sessions,
             "total_cost_usd": round(total_cost, 4),
         }, indent=2))
@@ -380,9 +494,11 @@ def cmd_status(args: argparse.Namespace | None = None) -> int:
             "",
         )
     if console.is_terminal:
-        _render_rich(daemon_up, sessions, total_cost, mutes, backoffs=backoffs)
+        _render_rich(daemon_up, sessions, total_cost, mutes,
+                     backoffs=backoffs, flood_chats=flood_chats)
     else:
-        _render_plain(daemon_up, sessions, total_cost, mutes, backoffs=backoffs)
+        _render_plain(daemon_up, sessions, total_cost, mutes,
+                      backoffs=backoffs, flood_chats=flood_chats)
 
     return 0 if daemon_up else 1
 
@@ -390,8 +506,10 @@ def cmd_status(args: argparse.Namespace | None = None) -> int:
 __all__ = [
     "cmd_status",
     "flood_backoff_lines",
+    "flood_chat_lines",
     "flood_mute_lines",
     "read_flood_backoffs",
+    "read_flood_chats",
     "read_flood_mutes",
     "render_sessions_rich",
     "render_sessions_plain",

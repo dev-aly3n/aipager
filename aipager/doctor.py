@@ -427,23 +427,44 @@ def check_daemon() -> CheckResult:
     # NEVER changes the row's severity (roadmap 8.21). An operator whose
     # cards feel slow reads this row and sees why, instead of restarting
     # a daemon that is working exactly as designed.
+    # MINIMAL MODE is the third state, added by 8.27, and it is the one
+    # new thing here that deserves a WARN of its own: a chat whose earned
+    # rate has fallen under the floor has stopped animating its cards
+    # entirely, which looks broken and is not. A merely REDUCED rate never
+    # changes severity, exactly as the backoff does not — it is the system
+    # working.
     from aipager.status import (
         flood_backoff_lines,
+        flood_chat_lines,
         flood_mute_lines,
         read_flood_backoffs,
+        read_flood_chats,
         read_flood_mutes,
     )
 
     mutes = read_flood_mutes()
     backoff = flood_backoff_lines(read_flood_backoffs())
+    chats = read_flood_chats()
+    chat_lines = flood_chat_lines(chats)
+    minimal = [c for c in chats if c.get("minimal")]
     if mutes:
         return CheckResult(
             WARN, "aipager daemon",
             detail=[SOCKET_PATH, *flood_mute_lines(mutes),
                     "self-clears when the ban lapses — do not restart into it",
-                    *backoff],
+                    *backoff, *chat_lines],
         )
-    return CheckResult(OK, "aipager daemon", detail=[SOCKET_PATH, *backoff])
+    if minimal:
+        return CheckResult(
+            WARN, "aipager daemon",
+            detail=[SOCKET_PATH,
+                    "a chat is in minimal mode — busy-card updates are "
+                    "paused so answers keep flowing; it lifts as the "
+                    "chat's earned rate recovers",
+                    *backoff, *chat_lines],
+        )
+    return CheckResult(OK, "aipager daemon",
+                       detail=[SOCKET_PATH, *backoff, *chat_lines])
 
 
 def check_service_installed() -> CheckResult:
