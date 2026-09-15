@@ -18,7 +18,6 @@ bot / message / query is an ``AsyncMock``-bearing double.
 
 from __future__ import annotations
 
-import ast
 import logging
 import types
 from pathlib import Path
@@ -28,6 +27,15 @@ import pytest
 
 import aipager.bot as bot_pkg
 from aipager.bot import flood, new_flow, session_parity
+from tests.sweep_rules import (
+    EXEMPT_FILES,
+    GATED_FAMILIES,
+    URL_ALLOWLIST,
+    bot_construction_offenders,
+    gated_family_offenders,
+    telegram_url_offenders,
+    untolerated_send_offenders,
+)
 from aipager.bot.flood import MUTE
 from aipager.bot.transport import (
     MUTED,
@@ -679,45 +687,209 @@ def test_a_muted_keyboard_send_keeps_the_hold_and_sends_once_after_the_lift(
     assert bot._keyboard_level == "main"
 
 
-# ── the routing contract, as a static sweep ──────────────────────────────────
-
-_GATED_FAMILIES = {
-    "reply_text", "reply_document", "reply_photo", "edit_message_text",
-    "send_message", "send_document", "send_photo", "edit_text",
-    # Added after review-1: the settings "Close" tap stripped its keyboard
-    # with this one, a real send the first pass of this sweep could not
-    # see because the family list did not name it.
-    "edit_message_reply_markup",
-}
-# Files whose direct calls are gated elsewhere or exempt by design (R3):
-_EXEMPT = {
-    "transport.py",     # the seam itself and `_send_with_retry` (8.17)
-    "notify.py",        # 8.17: per-site mute checks on the delivery paths
-    "animation.py",     # 8.17: `_animate_tick` / `_edit_busy_rich`, plus
-                        # 8.17b's `_edit_busy_raw` / `_safe_edit_callback`
-                        # guards — which this sweep therefore CANNOT
-                        # protect; the N1/N3 behavioural tests above are
-                        # their only guard.
-    "rich_message.py",  # 8.17: `_raise_if_muted` in the rich HTTP path
-    "observer.py",      # observer bots: their own tokens, their own budgets
-    "lifecycle.py",     # startup: runs right after `MUTE.clear()`, and its
-                        # startup notice goes through `_send_with_retry`
-}
+# ── the routing contract, as four static sweeps (8.26 R2) ───────────────────
+#
+# The pure predicates live in `tests/sweep_rules.py` so they can be fed
+# SYNTHETIC source — proving each one actually fires — without writing a
+# file into `aipager/`. Here they are run over the real tree.
+#
+# What changed in 8.26, and why the old sweep could not have caught the
+# 2026-09-15 incident: it walked `aipager/bot/*.py` only (never the Mini
+# App, which holds 13 unguarded sends), knew nine method names (never
+# `delete_message`, which had nine live sites, nor `send_chat_action`),
+# and EXEMPTED `notify.py` and `animation.py` — the two files holding 23
+# of the 66 outbound calls, including `send_busy`, the one that fired
+# into the ban. The file's own comment admitted the sweep "therefore
+# CANNOT protect" them.
 
 
-def test_no_plain_reply_in_the_bot_package_bypasses_the_seam():
-    """Walk every ``ast.Call`` in the bot mixins: a direct
-    ``<anything>.reply_text(...)`` (or any other gated family) outside
-    the exempt files is a send that ignores the mute. Mutation: turn any
-    routed site back into its direct call and this names it."""
+def _package_files():
+    """Every module the sweeps police: `aipager/bot/` AND `aipager/miniapp/`."""
+    root = Path(bot_pkg.__file__).parent.parent
+    return sorted(list((root / "bot").glob("*.py"))
+                  + list((root / "miniapp").glob("*.py")))
+
+
+def _sweep(fn, paths):
     offenders = []
-    for path in sorted(Path(bot_pkg.__file__).parent.glob("*.py")):
-        if path.name in _EXEMPT:
-            continue
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        for node in ast.walk(tree):
-            if (isinstance(node, ast.Call)
-                    and isinstance(node.func, ast.Attribute)
-                    and node.func.attr in _GATED_FAMILIES):
-                offenders.append(f"{path.name}:{node.lineno} .{node.func.attr}(")
+    for path in paths:
+        offenders += fn(str(path), path.read_text(encoding="utf-8"))
+    return offenders
+
+
+def test_the_exempt_set_is_exactly_the_seam_the_gate_and_the_observer():
+    """D-8: `_EXEMPT` shrank from six files to three, and every file that
+    left it is a file the sweep now protects — that is the point of moving
+    enforcement to the chokepoint.
+
+    Pinned as an EQUALITY, not a subset: re-exempting `notify.py` or
+    `animation.py` to make a new offender go away is exactly the move that
+    made the 2026-09-15 leak invisible, and it must fail here first.
+    """
+    assert EXEMPT_FILES == {"transport.py", "flood_budget.py", "observer.py"}
+    assert "delete_message" in GATED_FAMILIES
+    assert "send_chat_action" in GATED_FAMILIES
+
+
+def test_no_send_in_bot_or_miniapp_runs_on_an_ungated_receiver():
+    """Sweep 1 over the real tree.
+
+    A call is an offender unless its receiver IS the daemon's one
+    limiter-bound `ExtBot`. `self._app.bot.send_message(...)` is fine now —
+    the gate underneath it cannot be bypassed. `message.reply_text(...)`
+    and `query.edit_message_text(...)` are NOT: a PTB update object is
+    gated by nothing, which is the 8.17b sentinel contract these 27 tests
+    depend on.
+
+    Mutation: turn any routed site back into its direct call — e.g.
+    `animation._safe_edit_callback`'s `query.edit_message_text` — and this
+    names it.
+    """
+    offenders = _sweep(gated_family_offenders, _package_files())
     assert offenders == [], offenders
+
+
+def test_the_bot_packages_name_no_telegram_api_url():
+    """Sweep 2 (R2). The one in-daemon URL builder is
+    `rich_message._api_url`; every other `api.telegram.org` string in the
+    daemon is a path around the limiter. The allowlist is out-of-process
+    or diagnostic callers only (`doctor`, `cli/daemon`, the wizard,
+    observer bots) and is deliberately tiny — each entry is a path R1 does
+    not cover.
+
+    Docstrings are skipped, which is what keeps `errors.py`'s explanatory
+    prose from tripping it; a real URL in `errors.py` still fails.
+    """
+    root = Path(bot_pkg.__file__).parent.parent
+    offenders = _sweep(telegram_url_offenders, sorted(root.rglob("*.py")))
+    assert offenders == [], offenders
+
+
+def test_no_second_bot_is_constructed_in_the_daemon_packages():
+    """Sweep 3, and the reason sweep 1 may allow the bare receiver name
+    `bot`: if no second `Bot`/`ApplicationBuilder` can be built here, every
+    `bot` in reach is the app's limiter-bound one. The two sweeps are a
+    PAIR — weakening this one silently weakens that one.
+
+    `lifecycle.py` builds the app's; `observer.py` builds the observers'
+    (own tokens, own budgets, 8.21 §11 D12).
+    """
+    offenders = _sweep(bot_construction_offenders, _package_files())
+    assert offenders == [], offenders
+
+
+def test_every_send_is_inside_a_try_that_tolerates_the_gate():
+    """Sweep 4, and load-bearing (P-3).
+
+    The gate raises `FloodMuted` from inside `process_request`, so a send
+    that is not lexically inside a tolerant `try` turns a muted chat into
+    an exception that propagates out of its caller. In
+    `NotifyMixin.notify` — ONE 1726-line method with ~20 direct sends —
+    that would abort the rest of the turn and lose the answer the gate
+    exists to protect: the fix becoming a fresh instance of the bug it
+    ends.
+
+    Mutation: unwrap any send (e.g. the permission-prompt fallback in
+    `notify.notify`) and this names it.
+    """
+    offenders = _sweep(untolerated_send_offenders, _package_files())
+    assert offenders == [], offenders
+
+
+# ── the same four predicates, proved to actually fire (row D) ───────────────
+#
+# A sweep that returns [] over the real tree proves nothing unless it also
+# returns something over source that SHOULD offend. Synthetic source, so
+# nothing is written into `aipager/`.
+
+def test_the_family_sweep_names_a_call_on_a_ptb_update_object():
+    src = "async def f(message):\n    await message.reply_text('hi')\n"
+    assert gated_family_offenders("aipager/bot/x.py", src) == [
+        "x.py:2 message.reply_text("]
+
+
+def test_the_family_sweep_names_a_send_in_the_miniapp_package():
+    """The Mini App was never walked at all before 8.26 — its 13 mirrors
+    were invisible to CI by construction."""
+    src = "async def f(client):\n    await client.send_message(1, 'hi')\n"
+    assert gated_family_offenders("aipager/miniapp/x.py", src) == [
+        "x.py:2 client.send_message("]
+
+
+@pytest.mark.parametrize("method", ["delete_message", "send_chat_action"])
+def test_the_family_sweep_names_the_two_families_d8_added(method):
+    src = f"async def f(q):\n    await q.{method}(1)\n"
+    assert gated_family_offenders("aipager/bot/x.py", src) == [
+        f"x.py:2 q.{method}("]
+
+
+def test_the_family_sweep_allows_the_one_gated_receiver():
+    """The whole point of the chokepoint: this is NOT a leak any more."""
+    src = "async def f(self):\n    await self._app.bot.send_message(1, 'hi')\n"
+    assert gated_family_offenders("aipager/bot/x.py", src) == []
+
+
+def test_the_family_sweep_skips_the_three_exempt_files():
+    src = "async def f(message):\n    await message.reply_text('hi')\n"
+    for name in sorted(EXEMPT_FILES):
+        assert gated_family_offenders(f"aipager/bot/{name}", src) == [], name
+
+
+def test_the_url_sweep_names_an_f_string_outside_the_allowlist():
+    src = "def f(t):\n    return f'https://api.telegram.org/bot{t}/getMe'\n"
+    assert telegram_url_offenders("aipager/bot/x.py", src) == [
+        "x.py:2 api.telegram.org"]
+
+
+def test_the_url_sweep_skips_docstrings_but_not_real_urls():
+    """`errors.py` explains the API in prose; that must not fail the
+    sweep, and a real URL in the same file still must."""
+    doc = '"""Talk to https://api.telegram.org for this."""\n'
+    assert telegram_url_offenders("aipager/errors.py", doc) == []
+    real = doc + "URL = 'https://api.telegram.org/bot'\n"
+    assert telegram_url_offenders("aipager/errors.py", real) == [
+        "errors.py:2 api.telegram.org"]
+
+
+def test_the_url_sweep_allows_the_builder_and_the_out_of_process_callers():
+    src = "URL = 'https://api.telegram.org/bot'\n"
+    assert telegram_url_offenders("aipager/bot/rich_message.py", src) == []
+    for name in sorted(URL_ALLOWLIST):
+        assert telegram_url_offenders(f"aipager/{name}", src) == [], name
+
+
+@pytest.mark.parametrize("ctor", ["Bot", "ApplicationBuilder"])
+def test_the_constructor_sweep_names_a_second_bot(ctor):
+    src = f"def f(t):\n    return {ctor}(token=t)\n"
+    assert bot_construction_offenders("aipager/bot/x.py", src) == [
+        f"x.py:2 {ctor}("]
+    assert bot_construction_offenders("aipager/bot/lifecycle.py", src) == []
+    assert bot_construction_offenders("aipager/bot/observer.py", src) == []
+
+
+def test_the_tolerance_sweep_names_a_send_outside_a_try():
+    src = "async def f(self):\n    await self._app.bot.send_message(1, 'x')\n"
+    assert untolerated_send_offenders("aipager/bot/x.py", src) == [
+        "x.py:2 .send_message( not inside a tolerant try"]
+
+
+def test_the_tolerance_sweep_names_a_send_in_an_intolerant_try():
+    """`except BadRequest` does not catch `FloodMuted`. A try that does
+    not tolerate the gate is no better than no try at all."""
+    src = ("async def f(self):\n"
+           "    try:\n"
+           "        await self._app.bot.send_message(1, 'x')\n"
+           "    except BadRequest:\n"
+           "        pass\n")
+    assert untolerated_send_offenders("aipager/bot/x.py", src) == [
+        "x.py:3 .send_message( not inside a tolerant try"]
+
+
+@pytest.mark.parametrize("arm", ["FloodMuted", "Exception", "BaseException"])
+def test_the_tolerance_sweep_accepts_a_handler_that_catches_the_gate(arm):
+    src = ("async def f(self):\n"
+           "    try:\n"
+           "        await self._app.bot.send_message(1, 'x')\n"
+           f"    except {arm}:\n"
+           "        pass\n")
+    assert untolerated_send_offenders("aipager/bot/x.py", src) == []

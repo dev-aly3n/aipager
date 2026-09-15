@@ -54,6 +54,7 @@ from aipager.state import Status, TrackedSession
 # tests) keeps working without changes.
 from aipager.bot.transport import (  # noqa: F401
     ACTION_VERBS,
+    edit_text,
     TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES,
     TELEGRAM_MAX_DOC_BYTES,
     TELEGRAM_MAX_TEXT_LEN,
@@ -1142,18 +1143,24 @@ class AnimationMixin:
         reply_markup=None,
     ) -> None:
         """Edit the message tied to a callback query, swallowing
-        edit-failed errors (message gone, identical content, etc.)."""
-        # Flood-muted (roadmap 8.17b): return without attempting. This is
-        # the busy card's callback edit — a permission answer or a
-        # multi-select toggle, the most common tap on this product — and
-        # every attempt into a ban is a fresh violation that extends it.
-        # The ``query.answer`` toast is metered separately and still
-        # fires, so the tap is never silent.
-        if MUTE.is_muted(_message_chat_id(getattr(query, "message", None))):
-            return
+        edit-failed errors (message gone, identical content, etc.).
+
+        Routed through ``transport.edit_text`` rather than calling
+        ``query.edit_message_text`` directly (8.26 R2). A call on a PTB
+        UPDATE OBJECT is not gated by anything: ``query`` is not the
+        daemon's limiter-bound ``ExtBot``, so the chokepoint underneath
+        never sees it, and the static sweep names it an offender for
+        exactly that reason. The seam resolves the chat, returns the
+        falsy ``MUTED`` sentinel while it is banned, and passes the call
+        through untouched otherwise — which is also what deletes the
+        hand-written mute check this function used to carry.
+
+        This is the busy card's callback edit: a permission answer or a
+        multi-select toggle, the most common tap on this product.
+        """
         try:
-            await query.edit_message_text(
-                text, parse_mode=parse_mode, reply_markup=reply_markup,
+            await edit_text(
+                query, text, parse_mode=parse_mode, reply_markup=reply_markup,
             )
         except Exception:
             log.debug("callback edit failed (probably no-op)", exc_info=True)

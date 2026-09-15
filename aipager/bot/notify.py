@@ -25,7 +25,7 @@ from telegram import (
 )
 from telegram.error import Forbidden
 
-from aipager.bot.flood import MUTE
+from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot.rich_message import (
     RichMessageBlocked,
     RichMessageFallbackRequired,
@@ -2403,12 +2403,28 @@ class NotifyMixin:
                             callback_data=session_parity.session_cb(self, chat_id, sess, "deny")),
                     ]])
 
-                msg = await bot.send_message(
-                    resolve_chat_id(sess), text, reply_markup=keyboard, parse_mode="HTML",
-                    reply_to_message_id=sess.trigger_msg_id,
-                )
-                self.registry.track_message(msg.message_id, sess.name, resolve_chat_id_int(sess) or 0)
-                await self._maybe_update_bot_name(sess.name)
+                # Wrapped for the gate (8.26 R2, the tolerance sweep). This
+                # is a DIRECT send inside `notify`, a 1726-line method: an
+                # unhandled `FloodMuted` here would propagate out of the
+                # whole notify call and abort everything after it —
+                # including the answer the gate exists to protect. The
+                # prompt itself is genuinely lost while the chat is banned
+                # (there is nowhere to put a permission dialog), but the
+                # turn survives, and Claude's own terminal prompt is still
+                # answerable.
+                try:
+                    msg = await bot.send_message(
+                        resolve_chat_id(sess), text, reply_markup=keyboard,
+                        parse_mode="HTML",
+                        reply_to_message_id=sess.trigger_msg_id,
+                    )
+                except FloodMuted:
+                    log.info("[%s] permission prompt not sent — chat "
+                             "flood-muted", label)
+                else:
+                    self.registry.track_message(
+                        msg.message_id, sess.name, resolve_chat_id_int(sess) or 0)
+                    await self._maybe_update_bot_name(sess.name)
 
         elif sess.status == Status.BUSY:
             # Session went back to working — edit the last idle/interactive message
