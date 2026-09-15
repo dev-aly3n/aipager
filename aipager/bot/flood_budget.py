@@ -175,6 +175,11 @@ _SKIP_RESERVE: float = 2.0
 # diagnostic for `aipager status` in ANOTHER process, not daemon state.
 _SIGNAL_MIN_INTERVAL: float = 5.0
 
+# Sentinel `_last_signal_key` value meaning "whatever is on disk is not
+# ours". Never equal to a real key, which `_maybe_write_signal` builds
+# with `json.dumps` of a list and so always starts with "[".
+_SIGNAL_FORCE: str = "?force"
+
 # Tolerance on a token comparison, in tokens. Refilling is
 # `tokens + (now - stamp) * rate`, and for a rate that is not a binary
 # fraction (20/60, say) that lands a few ULPs SHORT of a whole token
@@ -555,6 +560,20 @@ def clear_backoff_signal(path: str | None = None) -> None:
         log.debug("could not unlink the flood-backoff signal file", exc_info=True)
 
 
+def _mark_state_dirty() -> None:
+    """Tell the durable store something material changed. Never raises.
+
+    Late import, and swallowed: ``flood_state`` imports this module, and a
+    failure to schedule a diagnostic write must never reach a send path.
+    """
+    try:
+        from aipager.bot import flood_state
+
+        flood_state.mark_dirty()
+    except Exception:  # pragma: no cover - defensive
+        log.debug("could not mark flood state dirty", exc_info=True)
+
+
 def _window_gap(limit: float, period: float) -> float:
     """The average gap a rolling ``limit``-per-``period`` window implies.
 
@@ -711,16 +730,33 @@ class BudgetRateLimiter(BaseRateLimiter):
     # ── lifecycle (telegram.ext.BaseRateLimiter) ─────────────────────────
 
     async def initialize(self) -> None:
-        """Drop a previous daemon's backoff file. Nothing is restored: a
-        restart starts every chat at ×1 (R8).
+        """Arm the signal writer and publish the state just loaded.
 
-        Also arms the signal writer: ``ExtBot.initialize`` awaits this,
-        and nothing else does, so reaching it is what proves this limiter
+        8.28 REVERSES WHAT THIS USED TO DO. It said: "Nothing is restored:
+        a restart starts every chat at ×1 (R8)" — and it unlinked the
+        backoff file to make that true. That was the defect: a daemon
+        restarted during a penalty regime came back at full speed, knowing
+        nothing, and on 2026-09-15 its own startup notice was the first
+        request into a ban it had just forgotten. ``flood_state.load()``
+        now runs before this, so the right behaviour is to REFRESH the
+        signal to match the restored state rather than to clear it.
+
+        Arming the signal writer: ``ExtBot.initialize`` awaits this, and
+        nothing else does, so reaching it is what proves this limiter
         belongs to a running daemon rather than to a `python -c` probe
         pointed at the live runtime directory (`_maybe_write_signal`).
         """
         self._signal_armed = True
-        clear_backoff_signal(self._signal_path)
+        # Force past `_maybe_write_signal`'s "on change" throttle. That
+        # throttle compares against `_last_signal_key`, which describes
+        # what THIS process last wrote — and this process has written
+        # nothing, while the file on disk is a previous daemon's. A
+        # sentinel that can never equal a real key (which is always a JSON
+        # array) makes both branches fire: publish when there is something
+        # to publish, unlink when there is not.
+        self._last_signal_key = _SIGNAL_FORCE
+        self._last_signal_at = 0.0
+        self._maybe_write_signal()
 
     async def shutdown(self) -> None:
         """Take the backoff signal down with the daemon, so `aipager
@@ -897,6 +933,7 @@ class BudgetRateLimiter(BaseRateLimiter):
                 "flood: chat %s banned for %ds → earned rate %g → %g calls/s",
                 budget.chat_id, int(max(seconds, 0.0)), before, budget.rate,
             )
+        _mark_state_dirty()
 
     def _minimal(self, budget: ChatBudget | None) -> bool:
         """Is this chat in minimal mode — ornaments suspended, answers not?
@@ -1026,6 +1063,7 @@ class BudgetRateLimiter(BaseRateLimiter):
             budget.chat_id, seconds, budget.backoff, before, budget.rate,
         )
         self._maybe_write_signal()
+        _mark_state_dirty()
 
     def cadence_multiplier(self, chat_id) -> float:
         """This chat's current card-interval multiplier, ``>= 1.0``.
@@ -1349,6 +1387,105 @@ class BudgetRateLimiter(BaseRateLimiter):
                 budget, callback, args, kwargs, endpoint, chat_id,
                 kind=kind, allow_retry=False,
             )
+
+    # ── persistence (8.28) ───────────────────────────────────────────────
+
+    def mono_equiv(self, wall_stamp: float) -> float:
+        """A wall-clock stamp expressed on THIS limiter's clock.
+
+        The durable file is written in wall time — the reader is another
+        process and possibly another boot — while every budget stamp is on
+        the injected (monotonic) clock. Restoring one into the other needs
+        exactly this rebasing, and it is a named method so a test can
+        assert on it rather than on an inline expression.
+
+        A stamp in the FUTURE (a clock that went backwards between the
+        write and the read) is treated as "now": never credit a chat with
+        quiet time it has not had.
+        """
+        elapsed = max(0.0, time.time() - float(wall_stamp))
+        return self._clock() - elapsed
+
+    def serialise(self) -> list[dict]:
+        """The durable per-chat part, in wall time.
+
+        ``sustained_used`` / ``sustained_limit`` / ``minimal`` are for the
+        `aipager status` reader and are deliberately IGNORED on load: they
+        describe a rolling window that has long since rolled by the time
+        anyone restarts.
+        """
+        now = self._clock()
+        wall_now = time.time()
+        chats = []
+        for budget in self._budgets.values():
+            self._decay(budget, now)
+            self._earn(budget, now)
+            chats.append({
+                "chat_id": budget.chat_id,
+                "rate": budget.rate,
+                "rate_earned_at": wall_now - max(now - budget.rate_earned_at, 0.0),
+                "backoff": max(budget.backoff, 1.0),
+                "last_429_at": (
+                    wall_now - max(now - budget.last_429_at, 0.0)
+                    if budget.last_429_at > 0.0 else 0.0
+                ),
+                "ban_stamps": list(budget.ban_stamps),
+                "sustained_used": budget.window.used(),
+                "sustained_limit": budget.window.limit,
+                "minimal": self._minimal(budget),
+            })
+        return chats
+
+    def restore(self, chats) -> int:
+        """Reinstate per-chat state from a loaded document.
+
+        Never raises, whatever the file holds — a corrupt state file must
+        leave the daemon running (the ``SessionRegistry.load`` contract).
+        Unknown keys are ignored and a malformed entry is skipped.
+
+        ``backoff`` is restored as stored and then decays NATURALLY,
+        because ``_decay`` reads the rebased ``last_429_at``: a daemon
+        that was down for an hour finds the multiplier already back at
+        ×1 without any special case here.
+        """
+        if not isinstance(chats, list):
+            return 0
+        restored = 0
+        for entry in chats:
+            if not isinstance(entry, dict):
+                continue
+            key = self._key(entry.get("chat_id"))
+            if key is None:
+                continue
+            try:
+                budget = self._budget_for(key)
+                if budget is None:
+                    continue
+                if "rate" in entry:
+                    rate = float(entry["rate"])
+                    if not (self._min_rate <= rate <= self._chat_max_rate):
+                        rate = min(max(rate, self._min_rate), self._chat_max_rate)
+                    budget.set_rate(rate, self._clock())
+                if entry.get("rate_earned_at"):
+                    budget.rate_earned_at = self.mono_equiv(
+                        entry["rate_earned_at"])
+                if entry.get("backoff"):
+                    budget.backoff = min(max(float(entry["backoff"]), 1.0),
+                                         self._backoff_max)
+                if entry.get("last_429_at"):
+                    budget.last_429_at = self.mono_equiv(entry["last_429_at"])
+                stamps = entry.get("ban_stamps")
+                if isinstance(stamps, list):
+                    budget.ban_stamps = [
+                        float(x) for x in stamps[-ChatBudget.MAX_BAN_STAMPS:]
+                        if isinstance(x, (int, float))
+                    ]
+            except (TypeError, ValueError):
+                log.debug("flood state: skipping malformed chat entry %r",
+                          entry, exc_info=True)
+                continue
+            restored += 1
+        return restored
 
     # ── observability ────────────────────────────────────────────────────
 

@@ -150,6 +150,7 @@ def _isolate_home_paths(tmp_path, monkeypatch):
     config_env = cfg / "config.env"
     team_yaml = cfg / "team.yaml"
     sessions_json = claude / "aipager-sessions.json"
+    flood_state_json = claude / "aipager-flood-state.json"
 
     targets = {
         "aipager.claude_bootstrap._SETTINGS": settings,
@@ -161,6 +162,16 @@ def _isolate_home_paths(tmp_path, monkeypatch):
         "aipager.config.SESSION_STATE_FILE": sessions_json,
         "aipager.state.SESSION_STATE_FILE": sessions_json,
         "aipager.status.SESSION_STATE_FILE": sessions_json,
+        # The 8.28 durable flood state, which lives beside the session
+        # file under the REAL ~/.claude/. One entry is enough because
+        # `flood_state.py` reads `config.FLOOD_STATE_FILE` LATE, inside
+        # each function, rather than importing it by value — and it must
+        # stay that way: a by-value re-import anywhere would need its own
+        # entry here, and the day it is added without one the suite
+        # silently starts writing into the operator's real home.
+        # `_guard_real_home` deliberately excludes ~/.claude/ from its
+        # snapshot, so nothing else would catch it.
+        "aipager.config.FLOOD_STATE_FILE": flood_state_json,
         "aipager.config._KEYBOARD_CONFIG_PATH": cfg / "keyboard.json",
         # migrate.upgrade_to_v3() reads this (and its .retired.* siblings)
         # to recover Mini App settings — without a redirect it would read

@@ -290,12 +290,19 @@ def _sweep_flood_backoff() -> None:
     without one (or with PTB's, in a test) is simply skipped. Never
     raises: a diagnostic file must not be able to stop the session scan.
     """
+    from aipager.bot import flood_state
     from aipager.bot.flood_budget import BudgetRateLimiter
     from aipager.bot.rich_message import get_rate_limiter
 
     limiter = get_rate_limiter()
     if isinstance(limiter, BudgetRateLimiter):
         limiter.sweep()
+    # And the DURABLE state (8.28). Same shape as the registry's own
+    # `save_if_dirty()` two lines up the call stack in `_loop`: a dirty
+    # flag plus this 2 s tick IS the debounce, so there is no timer of our
+    # own to leak. A no-op unless something material changed, and it never
+    # raises — a full disk must not be able to stop the session scan.
+    flood_state.save_if_dirty()
 
 
 class SessionMonitor:

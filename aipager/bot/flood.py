@@ -16,12 +16,27 @@ as a non-fatal send failure). Reactions are exempt — they are a separate
 bucket, and the 🚨 reaction in ``transport._send_with_retry`` is how the
 user learns a message was dropped.
 
-In memory only, on the monotonic clock: a daemon restart forgets the
-mute (its startup message is one attempt — accepted). Nothing here is
-persisted to ``state.py``. The one file this module writes is a *signal*
-for ``aipager status`` / ``doctor`` (``config.FLOOD_MUTE_FILE``), which
-run in another process with no channel to the daemon; the daemon never
-reads it back.
+On the WALL clock, and persisted (roadmap 8.28). Until 0.7.12 this was
+in memory only and on the MONOTONIC clock, and the module docstring said
+so: "a daemon restart forgets the mute (its startup message is one
+attempt — accepted)". That was false comfort. A restart during a 9.5-hour
+ban came back knowing nothing, and its own startup notice was the first
+request into the ban — which is how three bans in one day escalated
+1283 -> 312 -> 34212 on 2026-09-15.
+
+Both halves of the fix are here. The deadline is now wall-clock, because
+a monotonic one is meaningless across a restart (``time.monotonic()`` is
+seconds since BOOT and restarts at a different origin). And
+:meth:`FloodMute.serialise` / :meth:`~FloodMute.restore` let
+``bot/flood_state.py`` carry it across, with
+``config.FLOOD_MUTE_MAX_SECONDS`` clamping both the arming and the
+restore so an NTP jump cannot mute the bot for years.
+
+The one file THIS module writes is still just a *signal* for ``aipager
+status`` / ``doctor`` (``config.FLOOD_MUTE_FILE``), which run in another
+process with no channel to the daemon; the daemon never reads it back.
+The durable copy is ``config.FLOOD_STATE_FILE``, owned by
+``bot/flood_state.py``.
 
 Logging discipline: one ``warning`` when a mute starts, one ``info`` when
 it lifts, nothing per skipped message.
@@ -67,6 +82,48 @@ def _key(chat_id):
         return str(chat_id)
 
 
+def _clamped(retry_after, source: str = "send") -> float:
+    """*retry_after* in seconds, never negative and never past the cap.
+
+    The cap (``config.FLOOD_MUTE_MAX_SECONDS``, 24 h) is what makes a
+    WALL-clock deadline safe to trust (8.28 D-7). A wall clock can jump —
+    an NTP correction, a VM resumed from a snapshot, a container with a
+    bad RTC — and a deadline computed across such a jump, or restored from
+    a file written before one, could otherwise mute the bot for years.
+    The longest ban ever observed here is 34212 s (9.5 h), so this is more
+    than twice the worst real case: anything past it is a clock bug, not a
+    ban.
+    """
+    from aipager.config import FLOOD_MUTE_MAX_SECONDS
+
+    try:
+        seconds = max(float(retry_after), 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+    if seconds > FLOOD_MUTE_MAX_SECONDS:
+        log.warning(
+            "Telegram flood mute from %s asked for %.0fs — clamped to %.0fs; "
+            "a deadline that far out is a clock problem, not a ban",
+            source, seconds, FLOOD_MUTE_MAX_SECONDS,
+        )
+        return FLOOD_MUTE_MAX_SECONDS
+    return seconds
+
+
+def _mark_state_dirty() -> None:
+    """Tell the durable store something changed. Never raises.
+
+    Late import, and swallowed: ``flood_state`` imports this module, and a
+    failure to schedule a diagnostic write must never reach a send path.
+    """
+    try:
+        from aipager.bot import flood_state
+
+        flood_state.mark_dirty()
+    except Exception:  # pragma: no cover - defensive
+        log.debug("could not mark flood state dirty", exc_info=True)
+
+
 def clear_time(wall_until: float) -> str:
     """``HH:MM`` local wall-clock time at which a mute lifts."""
     return _dt.datetime.fromtimestamp(wall_until).strftime("%H:%M")
@@ -76,8 +133,15 @@ class FloodMute:
     """Per-chat ``muted_until`` registry. One instance per daemon: :data:`MUTE`."""
 
     def __init__(self) -> None:
-        # key -> (monotonic_until, wall_until, retry_after)
-        self._entries: dict[int | str, tuple[float, float, float]] = {}
+        # key -> (wall_until, retry_after)
+        #
+        # WALL clock, and that is load-bearing (8.28 D-7). It used to be
+        # `(monotonic_until, wall_until, retry_after)` with every decision
+        # reading the MONOTONIC value and the wall one used only for the
+        # display string. A monotonic deadline cannot survive a restart —
+        # it is seconds since boot — so persisting the mute at all
+        # required inverting which one is the source of truth.
+        self._entries: dict[int | str, tuple[float, float]] = {}
 
     # ── arming ──────────────────────────────────────────────────────────
 
@@ -85,19 +149,23 @@ class FloodMute:
         """Mute *chat_id* for *retry_after* seconds (never shortening an
         existing, longer mute). Logs exactly one warning when a mute starts;
         an extension of a mute already in force is a debug line.
+
+        This is the ONE arming point for a mute, together with its twin in
+        ``rich_message._ban_if_excessive`` — the limiter observes it, it
+        never arms one. So there is exactly one place to look when asking
+        why a chat is muted.
         """
         key = _key(chat_id)
-        retry_after = max(float(retry_after), 0.0)
-        now = time.monotonic()
-        mono_until = now + retry_after
-        wall_until = time.time() + retry_after
+        retry_after = _clamped(retry_after, source)
+        now = time.time()
+        wall_until = now + retry_after
         existing = self._entries.get(key)
         already_muted = existing is not None and existing[0] > now
-        if already_muted and existing[0] >= mono_until:
+        if already_muted and existing[0] >= wall_until:
             log.debug("chat %s already flood-muted past %s — %s ignored",
-                      key, clear_time(existing[1]), source)
+                      key, clear_time(existing[0]), source)
             return
-        self._entries[key] = (mono_until, wall_until, retry_after)
+        self._entries[key] = (wall_until, retry_after)
         if already_muted:
             log.debug("Telegram flood mute on chat %s extended to %s by %s",
                       key, clear_time(wall_until), source)
@@ -110,6 +178,7 @@ class FloodMute:
                 int(retry_after),
             )
         self._write_signal()
+        _mark_state_dirty()
 
     # ── querying ────────────────────────────────────────────────────────
 
@@ -120,11 +189,12 @@ class FloodMute:
         entry = self._entries.get(key)
         if entry is None:
             return False
-        if time.monotonic() < entry[0]:
+        if time.time() < entry[0]:
             return True
         del self._entries[key]
         log.info("Telegram flood mute on chat %s lifted — sends resume", key)
         self._write_signal()
+        _mark_state_dirty()
         return False
 
     def remaining(self, chat_id) -> float:
@@ -132,7 +202,7 @@ class FloodMute:
         entry = self._entries.get(_key(chat_id))
         if entry is None:
             return 0.0
-        return max(0.0, entry[0] - time.monotonic())
+        return max(0.0, entry[0] - time.time())
 
     def check(self, chat_id) -> None:
         """Raise :class:`FloodMuted` if *chat_id* is muted; otherwise return."""
@@ -142,17 +212,83 @@ class FloodMute:
     def active(self) -> list[dict]:
         """Every mute still in force, as ``{"chat_id", "until", "retry_after"}``
         with ``until`` on the wall clock (what the signal file carries)."""
-        now = time.monotonic()
+        now = time.time()
         return [
-            {"chat_id": key, "until": wall, "retry_after": retry_after}
-            for key, (mono, wall, retry_after) in self._entries.items()
-            if mono > now
+            {"chat_id": key, "until": wall_until, "retry_after": retry_after}
+            for key, (wall_until, retry_after) in self._entries.items()
+            if wall_until > now
         ]
+
+    # ── persistence (8.28) ──────────────────────────────────────────────
+
+    def serialise(self) -> list[dict]:
+        """Every mute still in force, for ``config.FLOOD_STATE_FILE``.
+
+        Same shape as :meth:`active` — wall-clock ``until`` — because the
+        reader is another process and, after a reboot, another boot.
+        """
+        return self.active()
+
+    def restore(self, entries) -> int:
+        """Reinstate mutes from a loaded document. Returns how many held.
+
+        Never raises, whatever the file contains: a corrupt state file
+        must leave the daemon running, exactly as
+        ``SessionRegistry.load`` does. Silently drops anything it cannot
+        read.
+
+        Two rules, both load-bearing:
+
+        * a deadline already in the PAST is dropped, not restored — the
+          ban lapsed while the daemon was down, and resurrecting it would
+          mute a healthy chat;
+        * a deadline further out than ``FLOOD_MUTE_MAX_SECONDS`` is
+          CLAMPED, not trusted (D-7). The file may have been written
+          before a clock jump.
+        """
+        if not isinstance(entries, list):
+            return 0
+        now = time.time()
+        restored = 0
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            try:
+                until = float(entry.get("until"))
+            except (TypeError, ValueError):
+                continue
+            if until <= now:
+                continue
+            remaining = _clamped(until - now, source="restore")
+            if remaining <= 0.0:
+                continue
+            try:
+                retry_after = float(entry.get("retry_after", remaining))
+            except (TypeError, ValueError):
+                retry_after = remaining
+            key = _key(entry.get("chat_id"))
+            self._entries[key] = (now + remaining, retry_after)
+            restored += 1
+        if restored:
+            log.warning(
+                "Telegram flood mute restored for %d chat(s) from the "
+                "previous daemon — sends to them stay skipped until it lifts",
+                restored,
+            )
+            self._write_signal()
+        return restored
 
     # ── clearing ────────────────────────────────────────────────────────
 
     def clear(self) -> None:
-        """Forget every mute and drop the signal file (daemon start/stop)."""
+        """Forget every mute and drop the signal file.
+
+        SIGNAL-FILE HYGIENE ONLY since 8.28. `lifecycle.start` still calls
+        it to drop whatever a previous daemon left beside the socket, but
+        it now does so BEFORE `flood_state.load()` reinstates the real
+        deadlines — clearing after the load would be the exact bug R5
+        exists to fix.
+        """
         self._entries.clear()
         self._write_signal()
 

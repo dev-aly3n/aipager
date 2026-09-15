@@ -33,6 +33,7 @@ from aipager.dtach import inject
 
 from aipager.bot import session_parity
 from aipager.bot.flood import MUTE, FloodMuted
+from aipager.bot import flood_state
 from aipager.bot.flood_budget import BudgetRateLimiter, clear_backoff_signal
 from aipager.bot.rich_message import set_rate_limiter
 from aipager.config import (
@@ -80,6 +81,27 @@ if TYPE_CHECKING:
     pass
 
 log = logging.getLogger(__name__)
+
+
+def _warn_held_answers_lost() -> None:
+    """One WARNING if the daemon is stopping with answers still held.
+
+    Held answers (8.29) live in memory only: the text can be large and the
+    durable file is a status artefact, not a queue. That is an accepted
+    limitation, and this is the line that keeps it from being a SILENT
+    one — an operator who restarts mid-ban gets told what it cost.
+    """
+    try:
+        from aipager.bot.held import HELD
+
+        pending = HELD.count()
+        if pending:
+            log.warning(
+                "%d answer(s) were held for a flood-muted chat and are lost "
+                "on shutdown — they are kept in memory only", pending,
+            )
+    except Exception:  # pragma: no cover - defensive
+        log.debug("could not report held answers at shutdown", exc_info=True)
 
 
 
@@ -284,18 +306,32 @@ class LifecycleMixin:
         return builder.rate_limiter(limiter)
 
     async def start(self) -> None:
-        # R5: a restart forgets any flood mute. The registry is empty
-        # already; this drops the status signal file a previous daemon
-        # may have left beside the socket.
+        # STALE-SIGNAL HYGIENE, and only that (8.28 D-6). Both files live
+        # on tmpfs beside the socket and may be a previous daemon's, so
+        # they are dropped here — BEFORE `flood_state.load()` below puts
+        # back the part that is not stale.
+        #
+        # Until 0.7.12 this was the whole story and the comment said "a
+        # restart forgets any flood mute ... a fresh limiter starts every
+        # chat at x1". Forgetting the SIGNAL is hygiene; forgetting the
+        # PENALTY is how a restart during a 9.5-hour ban sends its startup
+        # notice straight into it.
         MUTE.clear()
-        # Same rule for the 8.21 per-chat backoff (R8): a fresh limiter
-        # starts every chat at x1, so a file claiming otherwise can only
-        # be a previous daemon's, and `aipager status` would report it.
         clear_backoff_signal()
         builder = self._make_builder()
 
         self._app = builder.build()
         self._app.add_error_handler(self._on_telegram_error)
+
+        # R5: HONOUR what the last daemon learned. After `builder.build()`
+        # (the limiter now exists and `set_rate_limiter` has published it)
+        # and before `initialize()`/polling, so a restored mute is already
+        # in force for everything startup does — including
+        # `_recover_busy_message`'s `edit_message_text` below, which
+        # otherwise edits a card in a banned chat as the daemon's first
+        # act. Never raises: a corrupt state file must leave the daemon
+        # running.
+        flood_state.load()
 
         # Register handlers
         self._app.add_handler(CallbackQueryHandler(self._handle_callback))
@@ -376,9 +412,19 @@ class LifecycleMixin:
         # don't leave open connections dangling after the event loop ends.
         from aipager.bot.rich_message import close_client
         await close_client()
-        # The mute is this process's memory; take its status signal down
-        # with it so `aipager status` never reports a dead daemon's ban.
-        # The per-chat backoff is the same kind of state (roadmap 8.21).
+        # PERSIST FIRST, then take the runtime signals down (8.28 D-6).
+        # Order matters: `MUTE.clear()` empties the registry
+        # `flood_state.save_if_dirty` reads, so clearing first would write
+        # an empty document over a live ban. `force=True` because there is
+        # no next monitor tick to debounce onto.
+        flood_state.save_if_dirty(force=True)
+        # Held answers are NOT persisted (accepted for this ship — the
+        # text can be large and the state file is a status artefact, not a
+        # queue). Say so once rather than losing them silently.
+        _warn_held_answers_lost()
+        # The signal files are this process's; the durable state is now on
+        # disk, so `aipager status` should stop reporting a dead daemon's
+        # numbers from tmpfs.
         MUTE.clear()
         clear_backoff_signal()
         if self._app:

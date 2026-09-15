@@ -273,6 +273,48 @@ RICH_SUMMARIES: bool = os.environ.get("CLAUDE_RICH_SUMMARIES", "1") not in ("0",
 # Session state persistence (survives daemon restarts)
 SESSION_STATE_FILE = Path.home() / ".claude" / "aipager-sessions.json"
 
+# Per-chat FLOOD state that must outlive the process (roadmap 8.28).
+# Beside the session state file and for the same reason: `$HOME` survives
+# a reboot where `$XDG_RUNTIME_DIR` does not. The two runtime SIGNAL files
+# (FLOOD_MUTE_FILE / FLOOD_BACKOFF_FILE, far below) live on tmpfs and are
+# unlinked whenever nothing is muted or backing off, so neither can carry
+# durable state — that is what this third file is for.
+#
+# A SEPARATE FILE, not a new key inside aipager-sessions.json:
+# `SessionRegistry.save()` serialises per SESSION and this state is per
+# CHAT, `state.py` must not import `flood_budget`, and two writers doing
+# write-then-replace on one path race with the loser's half silently lost
+# (the same reasoning FLOOD_BACKOFF_FILE was split out for).
+#
+# It carries the mute deadline on the WALL clock, each chat's earned rate
+# and its ban history. Before 8.28 a restart forgot all of it — the
+# daemon's own startup notice was then the first request into a ban it no
+# longer knew about.
+#
+# TESTS: redirected into tmp_path by `tests/conftest.py::_isolate_home_paths`.
+# That redirect is NOT optional — `_guard_real_home` deliberately excludes
+# `~/.claude/` from its snapshot, so without it the suite would write into
+# the operator's real home and no guard would catch it.
+FLOOD_STATE_FILE = Path.home() / ".claude" / "aipager-flood-state.json"
+
+# Never rewrite the durable file more often than this. It is driven by a
+# dirty flag on the session monitor's existing 2 s tick; this is the floor
+# under that, so a burst of 429s costs one write rather than twenty.
+FLOOD_STATE_MIN_INTERVAL: float = 5.0
+
+# How stale the volatile figures in that file (sustained usage, minimal
+# mode) may get before a tick refreshes them for `aipager status`, which
+# reads it from another process. Only refreshed when a chat has actually
+# sent something since the last write — an idle daemon writes nothing.
+FLOOD_STATE_REFRESH_SECONDS: float = 30.0
+
+# Sanity clamp on ANY mute deadline, armed or restored (8.28 D-7). Making
+# the deadline wall-clock is what lets it survive a restart; it also makes
+# it sensitive to an NTP jump, and a deadline computed from a skewed clock
+# could otherwise mute the bot for years. The longest ban ever observed
+# here is 34212 s (9.5 h), so 24 h is more than twice the worst case.
+FLOOD_MUTE_MAX_SECONDS: float = 86400.0
+
 # Minimum seconds between busy-message edits (rate-limit for Telegram API)
 BUSY_EDIT_INTERVAL: float = float(os.environ.get("BUSY_EDIT_INTERVAL", "3.0"))
 

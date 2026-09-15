@@ -1224,18 +1224,62 @@ def test_reset_forgets_every_chat_and_unlinks_the_file(tmp_path):
     assert not path.exists()
 
 
-def test_initialize_and_shutdown_both_clear_the_signal_file(tmp_path, run_async):
-    """Mutation: make ``initialize``/``shutdown`` no-ops (what
-    ``AIORateLimiter`` does) and a dead daemon's backoff outlives it."""
+def test_shutdown_takes_the_signal_file_down_with_the_daemon(tmp_path, run_async):
+    """Mutation: make ``shutdown`` a no-op (what ``AIORateLimiter`` does)
+    and a dead daemon's backoff outlives it in `aipager status`."""
     clock = FakeClock()
     path = tmp_path / "backoff.json"
     limiter = _limiter(clock, signal_path=str(path))
     path.write_text('{"backoff": []}')
-    run_async(limiter.initialize())
-    assert not path.exists()
-    path.write_text('{"backoff": []}')
     run_async(limiter.shutdown())
     assert not path.exists()
+
+
+def test_initialize_refreshes_the_signal_to_match_the_restored_state(
+    tmp_path, run_async,
+):
+    """8.28 R5 REVERSES R8 here, and this row is the split of the old
+    "initialize clears the file too".
+
+    ``initialize()`` used to unlink the backoff file because "a restart
+    starts every chat at ×1" — nothing was restored, so any file could
+    only be a previous daemon's. Since 8.28 ``flood_state.load()`` runs
+    BEFORE it and the restored state is real, so unlinking would publish
+    "no backoff" for a chat that genuinely has one. It now REFRESHES the
+    signal instead.
+
+    Mutation: unlink here again and a restored ×4 chat is invisible to
+    `aipager status` until its next 429.
+    """
+    clock = FakeClock()
+    path = tmp_path / "backoff.json"
+    limiter = _limiter(clock, signal_path=str(path))
+    # A chat that the restore has just put back at ×2.
+    limiter.note_retry_after(-1002, 5)
+    path.unlink(missing_ok=True)
+
+    run_async(limiter.initialize())
+
+    assert path.exists(), "the restored backoff was not published"
+    written = json.loads(path.read_text())["backoff"]
+    assert [e["chat_id"] for e in written] == [-1002]
+    assert written[0]["multiplier"] == 2.0
+
+
+def test_initialize_still_publishes_nothing_when_no_chat_is_backing_off(
+    tmp_path, run_async,
+):
+    """The other half: a clean restart must not leave a stale file behind
+    either. With nothing restored there is nothing to publish, and
+    `_maybe_write_signal` unlinks rather than writing an empty list."""
+    clock = FakeClock()
+    path = tmp_path / "backoff.json"
+    limiter = _limiter(clock, signal_path=str(path))
+    path.write_text('{"backoff": [{"chat_id": -1, "multiplier": 8.0}]}')
+
+    run_async(limiter.initialize())
+
+    assert not path.exists(), "a previous daemon's backoff survived a restart"
 
 
 # ── misc surface ─────────────────────────────────────────────────────────────

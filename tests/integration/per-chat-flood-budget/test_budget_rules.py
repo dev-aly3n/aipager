@@ -792,13 +792,52 @@ def test_the_signal_file_never_lands_on_the_mute_file(limiter):
     assert not Path(config.FLOOD_MUTE_FILE).exists()
 
 
-def test_the_daemon_start_hook_clears_a_stale_backoff_file(limiter, run_async):
-    """Rows J/P + R8: ``initialize()`` is what ``ExtBot.initialize`` calls
-    at startup. Mutation: leave the file behind and a restart inherits a
-    ×8 cadence nobody can clear."""
+def test_the_daemon_start_hook_publishes_the_state_it_starts_with(
+    limiter, run_async,
+):
+    """Row P, SPLIT by 8.28 (the design's migration table).
+
+    The *signal* file keeps its lifecycle — it is still this process's,
+    still taken down on shutdown — but ``initialize()`` no longer UNLINKS
+    it. Until 0.7.12 it did, because "a restart starts every chat at ×1"
+    and so any file present could only be a previous daemon's. R5 reverses
+    that: ``flood_state.load()`` runs first and the state is real, so
+    startup must publish it rather than erase it.
+
+    Mutation: unlink here again and a chat restored at ×4 reports ×1 to
+    `aipager status` until its next 429 — a daemon lying about a penalty
+    it is honouring.
+    """
     limiter.note_retry_after(PRIVATE, 5)
+    _backoff_file().unlink(missing_ok=True)
     run_async(limiter.initialize())
-    assert not _backoff_file().exists()
+    assert _backoff_file().exists(), "startup did not publish the live backoff"
+
+
+def test_the_durable_state_file_is_not_touched_by_the_signal_lifecycle(
+    limiter, run_async, tmp_path,
+):
+    """Row P's other split. The two files must not share a lifecycle: the
+    SIGNAL is unlinked at shutdown and whenever nothing is backing off,
+    while the DURABLE state is exactly what has to survive both.
+
+    Mutation: point `flood_state` at `FLOOD_BACKOFF_FILE`, or unlink the
+    state file from `shutdown`, and a 9.5-hour ban is forgotten by the
+    restart it was supposed to outlive.
+    """
+    from aipager.bot import flood_state
+
+    flood_state.mark_dirty()
+    assert flood_state.save_if_dirty(force=True)
+    state = Path(config.FLOOD_STATE_FILE)
+    assert state.exists()
+
+    run_async(limiter.shutdown())
+
+    assert not _backoff_file().exists(), "the signal outlived the daemon"
+    assert state.exists(), "the durable state was taken down with the signal"
+    assert str(state) != str(config.FLOOD_BACKOFF_FILE)
+    assert str(state) != str(config.FLOOD_MUTE_FILE)
 
 
 def test_the_daemon_stop_hook_clears_the_backoff_file(limiter, run_async):
