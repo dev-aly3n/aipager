@@ -1978,10 +1978,23 @@ class AnimationMixin:
         debounced and no Telegram call was made at all.
         """
         if MUTE.is_muted(resolve_chat_id(sess)):
-            # R3: the edit and the typing indicators below are all sends
-            # into a flood ban. End the loop as on a block; the card stays
-            # as last rendered until the turn ends.
-            return None
+            # R3: the edit and the indicators below are all sends into a
+            # flood ban, so this tick makes no Telegram call at all.
+            #
+            # FALSE, NEVER NONE (8.29 R7). Returning None ended
+            # `_animate_busy`'s loop and the task died; the busy-card
+            # watchdog then saw a BUSY session with no animate task and
+            # restarted it every 20 s for the length of the ban — 348
+            # restarts in 54 minutes on 2026-09-15, two log lines each,
+            # against six actual HTTP refusals all day. Silencing only the
+            # watchdog would not have been enough either: `notify.py`'s
+            # tool_use path calls `_resume_animation_if_dead` as well.
+            #
+            # `False` means "no call made, no stamps touched": the loop
+            # stays alive, keeps sleeping at the chat's cadence, and
+            # resumes rendering by itself the moment the mute lifts. The
+            # card stays as last rendered in the meantime.
+            return False
         if await self._render_paused_card(sess):
             # MINIMAL MODE (8.27 R3): this chat's earned rate has fallen
             # under `FLOOD_MINIMAL_MODE_RATE_FLOOR`, so it can no longer

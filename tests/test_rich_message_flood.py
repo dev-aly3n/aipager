@@ -479,25 +479,47 @@ def test_edit_busy_rich_on_a_muted_chat_makes_no_http_call(mk_bot, run_async, mo
     bot._app.bot.edit_message_text.assert_not_awaited()
 
 
-def test_animate_tick_ends_the_loop_while_the_chat_is_muted(mk_bot, run_async, monkeypatch):
-    """Mutation: drop the guard at the top of ``_animate_tick`` → the tick
-    edits (mocked to succeed) and sends a typing indicator."""
+def test_animate_tick_makes_no_call_but_keeps_the_task_alive_while_muted(
+    mk_bot, run_async, monkeypatch,
+):
+    """The tick makes NO Telegram call while the chat is muted — and
+    returns ``False``, not ``None``.
+
+    8.29 R7 changed the return value, and the distinction is the whole
+    fix. ``None`` ends ``_animate_busy``'s loop, so the task dies; the
+    busy-card watchdog then finds a BUSY session with no animate task and
+    restarts it every 20 s for the length of the ban. That produced 348
+    restarts in 54 minutes on 2026-09-15 — two log lines each, against six
+    actual HTTP refusals all day. ``False`` means "nothing sent, nothing
+    stamped": the loop stays alive and resumes by itself when the mute
+    lifts.
+
+    Mutation: drop the guard at the top of ``_animate_tick`` and the tick
+    edits (mocked to succeed) and sends a typing indicator; return ``None``
+    from it again and the restart storm is back.
+    """
     bot = mk_bot()
     sess = _busy_sess()
     monkeypatch.setattr("aipager.bot.animation.edit_message_text_rich",
                         AsyncMock(return_value={"message_id": 10}))
     bot._app.bot.send_chat_action = AsyncMock()
     MUTE.mute(123456, BAN)
-    assert run_async(bot._animate_tick(sess, "Working", False)) is None
+    assert run_async(bot._animate_tick(sess, "Working", False)) is False
     bot._app.bot.send_chat_action.assert_not_awaited()
     from aipager.bot import animation
     animation.edit_message_text_rich.assert_not_awaited()
 
 
-def test_animate_busy_loop_stops_for_a_session_in_a_muted_chat(mk_bot, run_async, monkeypatch):
-    """The whole loop, real ``edit_message_text_rich``: one tick, then done.
-    Without the mute handling it would tick every STREAM_EDIT_INTERVAL
-    for as long as the session is BUSY and the 3 s wait would expire."""
+def test_animate_busy_loop_makes_no_call_for_a_session_in_a_muted_chat(
+    mk_bot, run_async, monkeypatch,
+):
+    """The whole loop, real ``edit_message_text_rich``: zero POSTs and
+    zero chat actions for as long as it runs.
+
+    Since 8.29 R7 the loop is no longer ENDED by the mute — it keeps
+    ticking quietly so the watchdog has nothing to restart — so what this
+    row pins is the traffic, which is what mattered all along. Without
+    the mute handling each tick would POST."""
     bot = mk_bot()
     sess = _busy_sess()
     post = _scripted_post(_ok(10))

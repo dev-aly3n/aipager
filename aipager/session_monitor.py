@@ -139,12 +139,26 @@ CARD_STALE_SECONDS: float = 20.0
 
 
 def busy_card_watchdog_action(
-    sess: TrackedSession, now: float,
+    sess: TrackedSession, now: float, *, suppressed: bool = False,
 ) -> tuple[str, float] | None:
     """What the busy-card watchdog should do for *sess* at *now*, if anything.
 
-    Pure — no I/O, no ``time.monotonic()`` inside, so it is directly
-    callable with a fabricated ``now``. Returns ``("restart", 0.0)`` when
+    ``suppressed`` is "this chat is flood-muted or in minimal mode"
+    (roadmap 8.29 R7). It returns ``None`` FIRST when set: there is no
+    point restarting an animation that cannot animate, and doing so
+    anyway is where 348 restarts in 54 minutes came from on 2026-09-15 —
+    two log lines each, against six actual HTTP refusals all day. The
+    mute path returned ``None`` from ``_animate_tick``, which ended
+    ``_animate_busy``'s loop and killed the task; this function then saw
+    a BUSY session with no animate task and restarted it, every 20 s, for
+    the length of the ban.
+
+    Passed IN rather than looked up, so this function stays PURE — no
+    I/O, no ``time.monotonic()``, no ``MUTE`` lookup inside — and every
+    existing row that fabricates a ``now`` keeps working untouched.
+    ``cards_suppressed`` is the impure half, and it lives next door.
+
+    Returns ``("restart", 0.0)`` when
     the card should be ticking but no animate task is alive, ``("refresh",
     seconds_since_last_edit)`` when a task is alive but the card has gone
     ``CARD_STALE_SECONDS`` without a successful edit, and ``None`` otherwise.
@@ -163,6 +177,8 @@ def busy_card_watchdog_action(
     stamp on send; the first tick lands ~1.5s later). With neither stamp
     there is no baseline and nothing is forced.
     """
+    if suppressed:
+        return None
     if not sess.busy_card_should_animate():
         return None
     if sess.animate_lock.locked():
@@ -178,6 +194,77 @@ def busy_card_watchdog_action(
     if since < CARD_STALE_SECONDS:
         return None
     return "refresh", since
+
+
+def _session_chat_id(sess):
+    """The numeric chat a session resolves to, or ``None``. Never raises.
+
+    Late import: ``aipager.bot.transport`` imports back into this package,
+    so binding it at module scope would cycle.
+    """
+    try:
+        from aipager.bot.transport import resolve_chat_id_int
+
+        return resolve_chat_id_int(sess)
+    except Exception:  # pragma: no cover - defensive
+        return None
+
+
+def cards_suppressed(chat_id) -> bool:
+    """Is this chat's busy card suppressed — muted, or in minimal mode?
+
+    The impure half of the watchdog's decision, kept apart from
+    :func:`busy_card_watchdog_action` so that function stays pure and
+    directly callable with a fabricated ``now``.
+
+    Late imports and NEVER raises: this runs on the 2 s scan for every
+    session, and a limiter problem must not be able to stop it. A chat it
+    cannot answer for is treated as not suppressed — the watchdog then
+    behaves exactly as it did before 8.29, which is the safe direction.
+    """
+    if not chat_id:
+        return False
+    try:
+        from aipager.bot.flood import MUTE
+
+        if MUTE.is_muted(chat_id):
+            return True
+        from aipager.bot.flood_budget import BudgetRateLimiter
+        from aipager.bot.rich_message import get_rate_limiter
+
+        limiter = get_rate_limiter()
+        if isinstance(limiter, BudgetRateLimiter):
+            return limiter.minimal_mode(chat_id)
+    except Exception:  # pragma: no cover - defensive
+        log.debug("could not determine card suppression for %s", chat_id,
+                  exc_info=True)
+    return False
+
+
+def card_suppression_transition(seen: set, chat_key, suppressed: bool):
+    """``"start"``, ``"lift"`` or ``None`` for one chat's suppression.
+
+    Pure over the set it is passed, which it MUTATES — the set is the
+    caller's memory of which chats were suppressed on the previous tick.
+    Returns ``"start"`` the first tick a chat becomes suppressed,
+    ``"lift"`` the first tick it stops, and ``None`` on every tick in
+    between.
+
+    A transition function rather than an ``if suppressed: log`` at the
+    call site, because "exactly one INFO each way" is the actual
+    requirement and at a 2 s tick the naive form emits 1,800 lines an
+    hour. Written as a pure function so a mutation can break it and a
+    test can name it.
+    """
+    if suppressed:
+        if chat_key in seen:
+            return None
+        seen.add(chat_key)
+        return "start"
+    if chat_key in seen:
+        seen.discard(chat_key)
+        return "lift"
+    return None
 
 
 def prompt_not_taken(sess: TrackedSession, now: float) -> bool:
@@ -333,6 +420,11 @@ class SessionMonitor:
         self.notify_fn = notify_fn
         self._task: asyncio.Task | None = None
         self.on_sessions_changed = None  # optional async callback
+        # Session names whose busy card was suppressed on the PREVIOUS
+        # tick, so `card_suppression_transition` can emit exactly one INFO
+        # when suppression starts and one when it lifts (8.29 R7) rather
+        # than 1,800 an hour at a 2 s tick.
+        self._cards_suppressed_seen: set = set()
         # One deprecation line per process, emitted here rather than at
         # import: `logging.basicConfig` runs in cli/daemon.py's start
         # command, so a message logged while this module is being imported
@@ -489,9 +581,25 @@ class SessionMonitor:
             # bot performs the action (restart via _start_animation, or
             # one forced _edit_busy_rich — lock, dedupe and rate stamps
             # included) so Telegram's edit discipline is unchanged.
+            # R7: while this chat is muted or in minimal mode the card
+            # cannot animate, so restarting its animation achieves
+            # nothing except two log lines every 20 s.
+            suppressed = cards_suppressed(_session_chat_id(sess))
+            transition = card_suppression_transition(
+                self._cards_suppressed_seen, sess.name, suppressed)
+            if transition == "start":
+                log.info(
+                    "[%s] busy-card updates suppressed — the chat is "
+                    "flood-muted or in minimal mode; the card stays as last "
+                    "rendered and the animation resumes by itself",
+                    sess.label,
+                )
+            elif transition == "lift":
+                log.info("[%s] busy-card updates resumed", sess.label)
             card_action = (
                 None if name in compact_swept
-                else busy_card_watchdog_action(sess, now)
+                else busy_card_watchdog_action(sess, now,
+                                               suppressed=suppressed)
             )
             if card_action is not None:
                 action_kind, since = card_action
