@@ -53,6 +53,30 @@ GATED_FAMILIES: set[str] = {
     "delete_message", "send_chat_action",
 }
 
+#: Methods that are deliberately NOT in :data:`GATED_FAMILIES`, with the
+#: reason each one is out of the gate's scope BY CONSTRUCTION rather than
+#: by exception. Recorded here, and pinned by a test, so the next reader
+#: of R1's "literally zero-exception" can see they were considered
+#: (review rev-iter1-006, coordinator ruling 6 — a DELIBERATE KEEP).
+UNGATED_BY_CONSTRUCTION: dict[str, str] = {
+    # `query.answer` -> answerCallbackQuery. It carries NO chat_id: the
+    # gate resolves a chat from the payload and there is none to resolve,
+    # so `process_request` short-circuits on `chat_id is None` exactly as
+    # it does for getMe and getFile. Telegram does not meter it against a
+    # chat either, and it is the ONLY feedback an unauthorized tap can
+    # get — `auth.py`'s two "Not on the allow-list" toasts, which answer a
+    # user who is not in the conversation at all. Gating it would mute the
+    # daemon's answer to a stranger's tap, not protect a banned chat.
+    #
+    # NOTE the asymmetry, and that it is intended: `callbacks.py` DOES
+    # withhold the toasts that acknowledge an ALLOWED user's action
+    # (D-1), because those are part of a reply the mute is refusing. The
+    # exemption here is for the toast that IS the whole interaction.
+    "answer": "answerCallbackQuery carries no chat_id and is not "
+              "chat-metered; auth.py's two allow-list toasts are the only "
+              "feedback an unauthorized tap can get (ruling 6)",
+}
+
 #: The only files whose direct calls this sweep does not police.
 #:
 #: SHRUNK from six to three in 8.26 (D-8). ``notify.py``, ``animation.py``
@@ -272,6 +296,7 @@ def untolerated_send_offenders(filename: str, source: str) -> list[str]:
 __all__ = [
     "BOT_RECEIVERS",
     "EXEMPT_FILES",
+    "UNGATED_BY_CONSTRUCTION",
     "GATED_FAMILIES",
     "URL_ALLOWLIST",
     "bot_construction_offenders",

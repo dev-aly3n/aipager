@@ -30,6 +30,7 @@ from aipager.bot import flood, new_flow, session_parity
 from tests.sweep_rules import (
     EXEMPT_FILES,
     GATED_FAMILIES,
+    UNGATED_BY_CONSTRUCTION,
     URL_ALLOWLIST,
     bot_construction_offenders,
     gated_family_offenders,
@@ -729,6 +730,27 @@ def test_the_exempt_set_is_exactly_the_seam_the_gate_and_the_observer():
     assert EXEMPT_FILES == {"transport.py", "flood_budget.py", "observer.py"}
     assert "delete_message" in GATED_FAMILIES
     assert "send_chat_action" in GATED_FAMILIES
+
+
+def test_the_one_ungated_method_is_recorded_with_its_reason():
+    """`query.answer` is a DELIBERATE KEEP, not an oversight (ruling 6).
+
+    `answerCallbackQuery` carries no `chat_id`, so the gate's
+    `chat_id is None` short-circuit is what handles it — the same branch
+    `getMe` and `getFile` take — and Telegram does not meter it against a
+    chat. It is also the only feedback an unauthorized tap can get
+    (`auth.py`'s two allow-list toasts, answering a user who is not in the
+    conversation). Out of the gate's scope BY CONSTRUCTION rather than as
+    an exception to R1.
+
+    This row exists so the next reader of "literally zero-exception" finds
+    the decision instead of assuming a miss — and so adding `answer` to
+    the gated family, which would make `auth.py` an offender, fails here
+    with the reason attached.
+    """
+    assert set(UNGATED_BY_CONSTRUCTION) == {"answer"}
+    assert not set(UNGATED_BY_CONSTRUCTION) & GATED_FAMILIES
+    assert "no chat_id" in UNGATED_BY_CONSTRUCTION["answer"]
 
 
 def test_no_send_in_bot_or_miniapp_runs_on_an_ungated_receiver():
