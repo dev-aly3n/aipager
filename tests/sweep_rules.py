@@ -219,6 +219,18 @@ def bot_construction_offenders(filename: str, source: str) -> list[str]:
     tree = _parse(filename, source)
     if tree is None:
         return []
+    watched = {"Bot", "ApplicationBuilder"}
+    # ALIASES COUNT (found by mutation, iteration 2). Matching on the name
+    # alone let `from telegram import Bot as _B; _B(token=...)` through —
+    # a second, UNGATED bot built in a policed file with the sweep still
+    # green. Since this sweep is what makes the bare name `bot` safe in
+    # BOT_RECEIVERS, a hole here is a hole in the family sweep too.
+    aliases = {
+        alias.asname for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        for alias in node.names
+        if alias.name in watched and alias.asname
+    }
     offenders = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -228,7 +240,7 @@ def bot_construction_offenders(filename: str, source: str) -> list[str]:
             name = node.func.id
         elif isinstance(node.func, ast.Attribute):
             name = node.func.attr
-        if name in {"Bot", "ApplicationBuilder"}:
+        if name in watched or name in aliases:
             offenders.append(f"{base}:{node.lineno} {name}(")
     return offenders
 

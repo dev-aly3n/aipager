@@ -991,6 +991,38 @@ def test_flood_py_is_not_a_writer_of_the_backoff_file():
     assert code == ["        from aipager.bot.flood_budget import BudgetRateLimiter"]
 
 
+def test_the_flood_isolation_declares_its_dependency_on_the_home_redirect():
+    """A guard on the guard, on the fixture that can delete the operator's
+    real state file (review rev-iter1-009).
+
+    `_isolate_flood_mute` calls `flood_state.clear()`, which unlinks
+    `config.FLOOD_STATE_FILE` — a path that defaults into the REAL
+    `~/.claude/`, and one `_guard_real_home` deliberately does not watch.
+    It is safe only because `_isolate_home_paths` has already redirected
+    that path, and without the declared dependency the ordering rests on
+    pytest instantiating same-scope autouse fixtures in DEFINITION order.
+    Moving either fixture would then start deleting the operator's live
+    flood state on every test, silently.
+
+    A behavioural row cannot catch that (both orders work today, in this
+    file's current layout), so this one reads the declaration — the same
+    shape as the sweeps, and the only mutation-detectable form of "the
+    dependency is declared".
+    """
+    import ast
+
+    source = Path(__file__).with_name("conftest.py").read_text(encoding="utf-8")
+    fixture = next(
+        node for node in ast.walk(ast.parse(source))
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name == "_isolate_flood_mute"
+    )
+    params = [a.arg for a in fixture.args.args]
+    assert "_isolate_home_paths" in params, (
+        "_isolate_flood_mute unlinks FLOOD_STATE_FILE and must run AFTER "
+        "the fixture that redirects it out of the operator's real home")
+
+
 def test_the_backoff_file_never_points_at_the_real_runtime_dir(tmp_path):
     """A guard on the guard (G29). Mutation: remove the new
     ``monkeypatch.setattr`` from ``conftest._isolate_flood_mute`` and

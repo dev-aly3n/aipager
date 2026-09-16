@@ -74,6 +74,32 @@ def test_a_non_finite_rate_never_reaches_the_bucket(limiter, rate):
     assert limiter.earned_rate(CHAT) == pytest.approx(config.FLOOD_START_RATE)
 
 
+def test_set_rate_refuses_a_non_finite_value_and_keeps_the_old_one(
+    limiter, flood_clock, caplog,
+):
+    """The guard at the OTHER end of the same hazard (tester-iter1-004
+    asked for both). `restore` filters the file, but `set_rate` is the
+    only writer of `TokenBucket.rate` and is reachable from `_earn`,
+    `note_retry_after` and `note_ban` — all of which compute from values
+    that could themselves be poisoned. Refusing here means a NaN can
+    never become the bucket's rate by ANY route, and says so once.
+
+    Mutation: drop the `math.isfinite` check in `ChatBudget.set_rate` and
+    the chat is left with `rate = NaN`, where every comparison is false
+    and the bucket never refuses anything again.
+    """
+    _install(limiter)
+    budget = limiter._budget_for(CHAT)
+    before = budget.rate
+
+    with caplog.at_level(logging.WARNING, logger="aipager.bot.flood_budget"):
+        budget.set_rate(float("nan"), flood_clock.now)
+
+    assert budget.rate == pytest.approx(before)
+    assert budget.chat.rate == pytest.approx(before)
+    assert any("non-finite" in r.getMessage() for r in caplog.records)
+
+
 def test_a_non_finite_rate_leaves_the_bucket_pacing_normally(
     limiter, flood_clock, run_async,
 ):
