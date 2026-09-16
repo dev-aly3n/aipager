@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.13] - 2026-09-16
+
 ### Fixed
 - **No Bot API call can reach a flood-banned chat any more, by any path.**
   Enforcement moved into `BudgetRateLimiter.process_request` — the one
