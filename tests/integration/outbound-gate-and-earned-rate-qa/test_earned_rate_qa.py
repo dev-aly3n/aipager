@@ -179,15 +179,69 @@ def test_a_ban_puts_the_rate_on_the_floor(limiter, run_async):
     assert limiter.earned_rate(CHAT) == pytest.approx(config.FLOOD_MIN_RATE)
 
 
-def test_the_post_ban_climb_takes_the_named_recovery_hours(
+def test_the_post_ban_climb_completes_at_the_reduced_ceiling(
     limiter, qa_clock, run_async,
 ):
-    """Criterion 12. After a ban the climb is stretched over
-    ``FLOOD_RATE_RECOVERY_HOURS`` — 'a ban today means a reduced start
-    tomorrow', which the old 60 s decay could never express."""
+    """Criterion 12, AMENDED — superseded by ``fix-brief-2.md`` ruling 5
+    ("while ``bans_in_last_24h`` is non-zero, cap the chat's MAX_RATE at
+    half the normal ceiling, decaying out 24 h after the last ban") and by
+    the T1 escalation.
+
+    As written in iteration 1 this row asserted the FULL ceiling six hours
+    after a 9.5-hour ban. It cannot hold under ruling 5, and it should
+    not: those six hours are still INSIDE the ban it had just recorded, so
+    the row asserted the rate climbing while a recorded ban was running —
+    the exact shape T1 was escalated to kill. What the row still owns is
+    the SHAPE of the climb: it is stretched over
+    ``FLOOD_RATE_RECOVERY_HOURS`` rather than the old 60 s decay. What it
+    completes AT is now halved while the ban is still remembered, and the
+    sibling row below owns the ceiling coming back.
+    """
     _seed(limiter, run_async)
     limiter.note_ban(CHAT, BAN)
     qa_clock.advance(config.FLOOD_RATE_RECOVERY_HOURS * 3600)
+    assert limiter.earned_rate(CHAT) == pytest.approx(
+        config.TELEGRAM_PRIVATE_MAX_RATE * 0.5)
+
+
+def test_the_full_ceiling_returns_only_once_the_ban_is_a_day_old(
+    limiter, qa_clock, run_async,
+):
+    """The second half of the amendment above (ruling 5's decay).
+
+    The reduced ceiling is not permanent — it lapses 24 h after the last
+    ban. Asserting only the reduction would let a permanent half-speed
+    daemon pass, which is the opposite failure.
+    """
+    _seed(limiter, run_async)
+    limiter.note_ban(CHAT, BAN)
+    qa_clock.advance(24 * 3600 + WINDOW)
+    assert limiter.earned_rate(CHAT) == pytest.approx(
+        config.TELEGRAM_PRIVATE_MAX_RATE)
+
+
+def test_a_ban_three_hours_ago_never_exceeds_the_reduced_ceiling(
+    limiter, qa_clock, run_async,
+):
+    """Ruling 5's own required row, stated in its own words: 'a chat with
+    a ban 3 h ago never exceeds the reduced ceiling even after full
+    recovery time'. Six hours of recovery are allowed to elapse from the
+    three-hour mark, so the climb is complete and only the CAP is left
+    holding the rate down."""
+    _seed(limiter, run_async)
+    limiter.note_ban(CHAT, 60.0)
+    qa_clock.advance(3 * 3600)
+    qa_clock.advance(config.FLOOD_RATE_RECOVERY_HOURS * 3600)
+    assert limiter.earned_rate(CHAT) <= config.TELEGRAM_PRIVATE_MAX_RATE * 0.5
+
+
+def test_a_chat_with_no_ban_in_a_day_reaches_the_normal_ceiling(
+    limiter, qa_clock, run_async,
+):
+    """Ruling 5's control. Without it the row above passes for a daemon
+    that simply never exceeds half the ceiling."""
+    _seed(limiter, run_async)
+    qa_clock.advance(12 * WINDOW)
     assert limiter.earned_rate(CHAT) == pytest.approx(
         config.TELEGRAM_PRIVATE_MAX_RATE)
 

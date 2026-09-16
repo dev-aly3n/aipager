@@ -105,12 +105,46 @@ def test_a_held_answer_is_pending_for_its_chat():
     assert HELD.count() == 1
 
 
-def test_a_second_hold_for_the_same_session_replaces_the_first():
-    """'Newest per turn wins' — two holds for one session are two renders
-    of the same turn, not two answers."""
+def test_two_holds_from_two_turns_are_both_kept_in_order():
+    """AMENDED — superseded by ``fix-brief-2.md`` T4: "'newest per turn
+    wins' … means per **TURN**, not per chat. Two different turns'
+    answers are two different pieces of the user's work and **both must
+    arrive, in order**."
+
+    As written in iteration 1 this row asserted per-SESSION replacement,
+    and it contradicted this suite's own
+    ``test_replay_qa.py::test_two_answers_from_one_session_during_one_ban_both_arrive``
+    — a 9.5-hour ban routinely spans several turns of one session,
+    because the user re-prompts when the first answer goes quiet. Only
+    one of the two rows could pass; the coordinator resolved it in favour
+    of both-arriving, so this row now asserts retention and ORDER (the
+    older answer first: delivered out of order it reads as a reply to the
+    wrong question).
+    """
     _hold(text="first")
     _hold(text="second")
-    assert [h.rich_text for h in HELD.pending(CHAT)] == ["second"]
+    assert [h.rich_text for h in HELD.pending(CHAT)] == ["first", "second"]
+
+
+def test_one_turn_never_takes_more_than_one_slot_however_often_it_retries(
+    mk_bot, run_async, rich_http,
+):
+    """The other half of the amendment: the buffer is still BOUNDED, so a
+    single turn cannot grow it.
+
+    T4's "a second hold for the same turn replaces the first" has no
+    public surface — ``HELD.hold`` carries no turn or job identity and
+    every call is a new entry — so the property is asserted where the
+    product can express it: one turn whose delivery is refused over and
+    over occupies exactly one slot, however many flushes the 2 s monitor
+    tick runs while the ban holds.
+    """
+    bot = _answer_bot(mk_bot)
+    MUTE.mute(CHAT, BAN)
+    _hold(text="one turn")
+    for _ in range(5):
+        run_async(bot.flush_held_answers(_sess()))
+    assert HELD.count() == 1
 
 
 def test_two_sessions_in_one_chat_are_held_separately():

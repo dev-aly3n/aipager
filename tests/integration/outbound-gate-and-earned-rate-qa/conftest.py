@@ -202,6 +202,9 @@ class _QaGatedBot:
         self._result = result
         #: ``(endpoint, chat_id, t)`` for every call that actually RAN.
         self.calls: list[tuple[str, object, float]] = []
+        #: The same calls with their arguments, for the rows that have to
+        #: read what a card actually SAID and not merely that it was sent.
+        self.payloads: list[tuple[str, tuple, dict]] = []
         #: Every attribute the caller reached for that is not an endpoint,
         #: so a missed send surface shows up instead of passing silently.
         self.unknown: list[str] = []
@@ -219,6 +222,7 @@ class _QaGatedBot:
 
             async def _call():
                 self.calls.append((endpoint, chat_id, self._clock()))
+                self.payloads.append((endpoint, args, kwargs))
                 return self._result if self._result is not None else _Sent()
 
             return await self._limiter.process_request(
@@ -236,6 +240,22 @@ class _QaGatedBot:
 
     def calls_for(self, chat_id) -> list[tuple[str, object, float]]:
         return [c for c in self.calls if c[1] == chat_id]
+
+    def texts(self) -> list[str]:
+        """The text of every call that carried one.
+
+        PTB takes the body positionally (``edit_message_text(text, chat_id,
+        message_id)``) or by keyword depending on the caller, so both are
+        looked at — reading only one of them would silently return ``[]``
+        and make every assertion about card COPY vacuous.
+        """
+        out: list[str] = []
+        for _endpoint, args, kwargs in self.payloads:
+            if isinstance(kwargs.get("text"), str):
+                out.append(kwargs["text"])
+                continue
+            out.extend(a for a in args if isinstance(a, str))
+        return out
 
 
 @pytest.fixture
