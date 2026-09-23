@@ -609,6 +609,96 @@ def test_g_a_ban_on_the_bubble_mutes_the_chat_and_holds_the_answer(
     assert HELD.count(CHAT) == 0
 
 
+def test_g_a_ban_on_the_bubble_refuses_the_calls_already_queued(
+    mk_bot, vbot, vloop, volume_telegram,
+):
+    """Review rev-iter2-001. Row G's answer arrives AFTER the ban; this
+    one is already WAITING in the limiter when it lands. A bubble is in
+    flight for a second and Telegram answers it with vm3's 25,429 s ban.
+    Meanwhile two ``sendMessage``s have drained the bucket and gone out
+    (they were on the wire before the ban was known — unavoidable), and
+    a third ``sendMessage`` plus the turn's answer — the real ``notify``
+    path over the real ``rich_message._post`` — are queued in
+    ``_acquire_blocking``. Neither may reach Telegram after the mute is
+    armed: the ``sendMessage`` is refused with ``FloodMuted``, the answer
+    is HELD, and it is delivered once the ban lifts.
+
+    Before the fix the gate ran only at ``process_request``'s entry, so a
+    queued waiter slept out the floor rate and then called straight into
+    the ban — a fresh violation that extends it (the reviewer's probe saw
+    them go at mute + 10 s and mute + 30 s).
+
+    Mutation: drop the mute check from ``_acquire_blocking``'s take block
+    and the queued calls reach the wire inside the ban.
+    """
+    from aipager.bot.flood import FloodMuted
+    from aipager.bot.held import HELD
+
+    bot = _typing_bot(mk_bot, vbot)
+    sess = _session(bot, vloop, "vm3")
+    limiter = vbot._limiter
+    out: dict = {"refused": 0, "sent": 0}
+
+    async def _slow_ban_bubble(*args, rate_limit_args=None, **kwargs):
+        chat_id = kwargs.get("chat_id", args[0] if args else None)
+
+        async def _call():
+            vbot.calls.append(("sendChatAction", chat_id, vloop.time()))
+            await asyncio.sleep(1.0)            # in flight while calls queue
+            raise RetryAfter(25429)
+
+        return await limiter.process_request(
+            callback=_call, args=(), kwargs={}, endpoint="sendChatAction",
+            data={"chat_id": chat_id}, rate_limit_args=rate_limit_args)
+
+    vbot.send_chat_action = _slow_ban_bubble
+
+    async def _message(text):
+        try:
+            await vbot.send_message(chat_id=CHAT, text=text)
+            out["sent"] += 1
+        except FloodMuted:
+            out["refused"] += 1
+
+    async def _answer():
+        sess.status = Status.IDLE
+        await bot.notify(sess, "idle_prompt",
+                         {"summary": "the answer the ban must not eat"})
+
+    async def main():
+        chat = bot._typing_chat(sess)
+        assert chat is not None
+        bubble = asyncio.ensure_future(bot._send_typing(sess, chat))
+        await asyncio.sleep(0.1)
+        early = [asyncio.ensure_future(_message(f"early {i}")) for i in range(2)]
+        await asyncio.sleep(0)
+        queued = [asyncio.ensure_future(_message("queued")),
+                  asyncio.ensure_future(_answer())]
+        await asyncio.sleep(0.2)
+        out["waiting"] = len(limiter._budgets[CHAT].waiters)
+        await bubble
+        out["muted_at"] = vloop.time()
+        out["muted"] = MUTE.remaining(CHAT) > 0
+        await asyncio.gather(*early, *queued)
+        await asyncio.sleep(60.0)               # well past any floor-rate wait
+        out["held"] = HELD.count(CHAT)
+        out["vbot_in_ban"] = [c for c in vbot.calls if c[2] >= out["muted_at"]]
+        out["rich_in_ban"] = list(volume_telegram.calls)
+        await asyncio.sleep(25430.0)            # the ban lifts
+        out["delivered"] = await bot.flush_held_answers(sess)
+
+    vloop.run_until_complete(main())
+    assert out["waiting"] >= 2, "the calls were not queued when the ban landed"
+    assert out["muted"] is True
+    assert out["vbot_in_ban"] == [], "a queued call went into the ban"
+    assert out["rich_in_ban"] == [], "the queued answer went into the ban"
+    assert out["sent"] == 2 and out["refused"] == 1, out
+    assert out["held"] == 1, "the queued answer was not held"
+    assert out["delivered"] == 1
+    assert [c[0] for c in volume_telegram.calls] == ["sendRichMessage"]
+    assert HELD.count(CHAT) == 0
+
+
 # ── the pacing the reservation reads ─────────────────────────────────────────
 
 def test_pacing_reports_whether_the_bubble_is_open_and_its_window(
