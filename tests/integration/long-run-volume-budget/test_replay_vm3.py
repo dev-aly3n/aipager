@@ -38,6 +38,7 @@ CHAT = 256113222
 T = 12_240.0                       # 3 h 24 min of virtual time
 HOUR = 3600.0
 BIGDOG_MSG = 1000
+PINNED = 9999
 ANSWER = "the answer"
 
 
@@ -123,10 +124,16 @@ def _replay(bot, vloop, *, seed: int = 20260923) -> dict:
     bigdog = _session(bot, "bigdog")
     catfish = _session(bot, "catfish")
     schedule: dict = {"catfish": []}
+    # The run's END on the loop's clock. `T` is a DURATION: the virtual
+    # loop starts at 1,000,000, so passing `T` itself as `_work`'s
+    # deadline (as this did until 8.30's iteration 3) ended bigdog's work
+    # before its first hook, and catfish's last turn too. The replay then
+    # never had two sessions streaming at once, only bigdog's animator.
+    end = vloop.time() + T
 
     async def _bigdog():
         await _begin(bot, bigdog, BIGDOG_MSG, vloop.time())
-        await _work(bot, bigdog, random.Random(seed + 1), T, vloop)
+        await _work(bot, bigdog, random.Random(seed + 1), end, vloop)
 
     async def _catfish():
         for turn in range(9):
@@ -139,8 +146,8 @@ def _replay(bot, vloop, *, seed: int = 20260923) -> dict:
         await asyncio.sleep(rng.uniform(120, 360))
         start = vloop.time()
         await _begin(bot, catfish, 2100, start)                # the long one
-        schedule["catfish"].append((start, T))
-        await _work(bot, catfish, rng, T, vloop)
+        schedule["catfish"].append((start, end))
+        await _work(bot, catfish, rng, end, vloop)
 
     async def main():
         tasks = [asyncio.ensure_future(_bigdog()),
@@ -160,7 +167,7 @@ def _replay(bot, vloop, *, seed: int = 20260923) -> dict:
 # ── C ───────────────────────────────────────────────────────────────────────
 
 def test_c_the_vm3_timeline_stays_inside_the_long_run_budget(
-    mk_bot, vloop, vlimiter, volume_telegram, volume_bot, caplog,
+    mk_bot, vloop, vlimiter, volume_telegram, volume_bot, caplog, monkeypatch,
 ):
     """Row C, the acceptance (Q1/Q7). Over the whole 3.4 h:
 
@@ -177,15 +184,37 @@ def test_c_the_vm3_timeline_stays_inside_the_long_run_budget(
     * zero 429s and zero bans from a Telegram that bans on volume;
     * bigdog's four-hour card: at most 60 edits in any hour after its
       first (it has no state change to bypass on);
-    * total calls ≤ 4,080 — the modelled 0.7.13 figure is ~11,500.
+    * total calls ≤ 4,080 — the modelled 0.7.13 figure is ~11,500;
+    * with the pinned dashboard LIVE (tester-iter2-001), both sessions
+      streaming at once: zero dark minutes, the bubble never shed, and
+      minimal mode never entered, sampled every minute.
+
+    The pinned dashboard is off on every install the daemon has started
+    since v2 (``aipager.yaml`` sets ``scopes``). vm3 did not have one.
+    It is switched on here as a worst case: ``notify`` refreshes it on
+    every hook, headed by the session that sent it. Before its debounce,
+    this replay made 2,203 dashboard edits, the bubble was dark for 164
+    minutes, and minimal mode ran for 48.
 
     On 0.7.13 this is two typing loops, a card on a 2–4 s cadence for the
     whole run and every hook racing a 1.2 s debounce.
     """
     caplog.set_level(logging.WARNING, logger="aipager.bot.flood_budget")
+    monkeypatch.setattr("aipager.bot.dashboard.CHAT_ID", str(CHAT))
     bot = mk_bot()
     bot._app.bot = volume_bot
+    bot.registry.pinned_msg_id = PINNED
+    samples: list[tuple[bool, bool]] = []
+
+    async def _sample():
+        while True:
+            await asyncio.sleep(60.0)
+            hour = vlimiter.hourly_usage(CHAT)
+            samples.append((vlimiter.minimal_mode(CHAT), hour["typing_shed"]))
+
+    sampler = vloop.create_task(_sample())
     _replay(bot, vloop)
+    sampler.cancel()
 
     calls = volume_telegram.calls
     everything = [t for _e, c, _m, t, _x in calls if c == CHAT]
@@ -196,10 +225,22 @@ def test_c_the_vm3_timeline_stays_inside_the_long_run_budget(
     typing = volume_telegram.stamps(endpoint="sendChatAction")
     bigdog = volume_telegram.stamps(endpoint="editMessageText",
                                     message_id=BIGDOG_MSG)
+    # The dashboard edit goes through PTB with its message id positional,
+    # so the fake records no id for it; every card edit carries one.
+    dashboard = [t for e, c, m, t, _x in calls
+                 if c == CHAT and e == "editMessageText" and m is None]
+    start = everything[0]
+    dark = [m for m in range(int(T // 60.0))
+            if not any(start + 60.0 * m <= t < start + 60.0 * (m + 1)
+                       for t in typing)]
     report = {"total": len(everything), "answers": len(answers),
               "typing": len(typing), "bigdog_edits": len(bigdog),
+              "dashboard": len(dashboard),
               "max_hour": _most_in_window(everything),
-              "max_hour_ornament": _most_in_window(ornaments)}
+              "max_hour_ornament": _most_in_window(ornaments),
+              "dark_minutes": len(dark),
+              "minimal_minutes": sum(m for m, _s in samples),
+              "shed_minutes": sum(s for _m, s in samples)}
 
     assert volume_telegram.small_429s == [], report
     assert volume_telegram.bans == [], report
@@ -219,6 +260,11 @@ def test_c_the_vm3_timeline_stays_inside_the_long_run_budget(
     assert _most_in_window(after_first_hour) <= 60, report
     assert report["total"] <= 4080, report
     assert len(answers) == 9, report          # every short turn answered
+    assert len(samples) >= int(T // 60.0) - 1, report
+    assert report["dark_minutes"] == 0, report
+    assert report["shed_minutes"] == 0, report
+    assert report["minimal_minutes"] == 0, report
+    assert 0 < report["dashboard"] <= 60, report
 
 
 # ── K ───────────────────────────────────────────────────────────────────────
