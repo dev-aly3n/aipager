@@ -51,8 +51,9 @@ burst, and the busy cards of that chat **share** it. The "typing…"
 indicator is in that budget too, as the **lowest** thing the chat sends
 (see "The typing bubble" below).
 
-The bubble's share is set aside first (one call every 4.5 seconds while
-any session in the chat is working), and the cards divide what is left.
+The bubble's share is set aside first — one call every 4.5 seconds
+while the chat's oldest working turn is under ten minutes old, less as it
+ages (see "The typing bubble") — and the cards divide what is left.
 So a single card in a DM refreshes about every 4.8 seconds; with two
 sessions working in the same chat, each card about every 9.7 seconds;
 with three, about every 14.5. **A
@@ -109,6 +110,13 @@ client), every `TYPING_INDICATOR_INTERVAL` seconds (default 4.5 —
 Telegram clears a typing status after 5; `0` turns the bubble off). It
 counts in the chat's budget as the lowest thing the chat sends:
 
+- it **slows as the turn gets older**, on the age of the chat's oldest
+  working turn: every 4.5 s for the first ten minutes (a steady bubble),
+  every 9 s up to an hour, every 15 s after that — Telegram shows it for
+  5 s, so an old turn's bubble flickers instead of staying lit. At 4.5 s
+  it alone would be 800 calls an hour and the hourly limit (below) would
+  switch it off for long stretches; switching off **⏱ Long-turn card
+  updates** keeps it at 4.5 s;
 - it **shows from the start of every turn**; a young card refreshes
   slightly slower to make room — the bubble's share of the chat is set
   aside before the cards divide the rest (above), so the two together
