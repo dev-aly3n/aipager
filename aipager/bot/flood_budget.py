@@ -1856,6 +1856,19 @@ class BudgetRateLimiter(BaseRateLimiter):
                     self._overall.time_until(1.0),
                 )
                 if wait <= 0:
+                    # The mute, again, at the instant of taking. The gate
+                    # in `process_request` ran when this caller arrived;
+                    # a ban learned while it queued (a typing bubble's
+                    # RetryAfter, most often — the bubble is the chat's
+                    # most frequent call) would otherwise let it walk
+                    # straight into the ban, a fresh violation that
+                    # extends it. `_run`'s small-429 retry re-enters here,
+                    # so it is covered too. The `finally` hands the queue
+                    # on, and every caller already handles `FloodMuted`.
+                    if MUTE.is_muted(budget.chat_id):
+                        budget.muted_refusals += 1
+                        raise FloodMuted(MUTE.remaining(budget.chat_id),
+                                         budget.chat_id)
                     if (cls == PRIORITY_ORNAMENT
                             and self._ornament_share_spent(budget)):
                         budget.ornaments_suspended += 1
