@@ -40,11 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **⏱ Long-turn card updates** toggle off keeps it at 4.5 s. It never takes a token
   a card edit needs, it is the first thing dropped at 75 % of the hour,
   and a 429 on it blocks only the bubble for as long as Telegram asked. A
-  **ban** on the bubble now mutes the chat like a ban on any other call,
-  so the next answer is held and delivered when the ban lifts instead of
-  being sent into it. That includes an answer that was already waiting
-  its turn when the ban arrived: every call is checked against the ban
-  again at the moment it is sent, whatever the ban was answered to.
+  **ban** on the bubble now mutes the chat, and so does a ban answered to
+  any other call to the chat: a plain edit, a pin or the pinned status
+  message used to lower the chat's rate without muting it. The next
+  answer is held and delivered when the ban lifts instead of being sent
+  into it. That includes an answer that was already waiting its turn
+  when the ban arrived: every call is checked against the ban again at
+  the moment it is sent, whatever call the ban was answered to.
 - **A 429 is a warning worth hours, not minutes.** Any 429 — the typing
   bubble's included — now starts a six-hour warning regime
   (`FLOOD_WARNING_HOURS`): the chat's rate may not climb past 0.5 calls/s
