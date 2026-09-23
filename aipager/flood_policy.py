@@ -199,9 +199,9 @@ def typing_interval(
     this old (8.30, operator ruling #2).
 
     *base* (``TYPING_INDICATOR_INTERVAL``, 4.5 s — a steady bubble) below
-    ``CARD_AGE_TIER2_AT`` (10 min), ``TYPING_AGE_TIER2_INTERVAL`` (9 s) up
-    to ``CARD_AGE_TIER3_AT`` (an hour), ``TYPING_AGE_TIER3_INTERVAL`` (15 s)
-    after — never faster than *base*. Always *base* when the
+    ``CARD_AGE_TIER2_AT`` (10 min), ``TYPING_AGE_TIER2_INTERVAL`` (15 s) up
+    to ``CARD_AGE_TIER3_AT`` (an hour), ``TYPING_AGE_TIER3_INTERVAL`` (15 s
+    too, today) after — never faster than *base*. Always *base* when the
     ``card_age_decay`` preference is off, for a non-positive *base* (the
     bubble disabled) and for a negative or non-finite age. At 4.5 s the
     bubble alone is 800 calls an hour, which trips the hour's typing shed

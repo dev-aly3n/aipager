@@ -112,8 +112,8 @@ counts in the chat's budget as the lowest thing the chat sends:
 
 - it **slows as the turn gets older**, on the age of the chat's oldest
   working turn: every 4.5 s for the first ten minutes (a steady bubble),
-  every 9 s up to an hour, every 15 s after that — Telegram shows it for
-  5 s, so an old turn's bubble flickers instead of staying lit. At 4.5 s
+  every 15 s after that — Telegram shows it for 5 s, so an older turn's
+  bubble flickers instead of staying lit. At 4.5 s
   it alone would be 800 calls an hour and the hourly limit (below) would
   switch it off for long stretches; switching off **⏱ Long-turn card
   updates** keeps it at 4.5 s;

@@ -508,12 +508,12 @@ def test_the_bubble_flows_beside_a_long_running_card(
     """Tiers 1–3 are unchanged: a card ten minutes in edits every 30 s,
     which is slower than anything the reservation asks, so its cadence is
     the tier's and the bubble refreshes on its own clock beside it —
-    every 9 s at this age since operator ruling #2 — nothing refused.
+    every 15 s at this age since operator ruling #2 — nothing refused.
     Mutation: withhold the bubble whenever any card animates and this
     counts none."""
     _start, bubbles, edits, limiter, _planned = _card_and_bubble(
         mk_bot, vbot, vloop, rich_http, age=10 * MIN, seconds=91.0)
-    assert len(bubbles) >= 10, bubbles
+    assert len(bubbles) >= 6, bubbles
     gaps = [b - a for a, b in zip(bubbles, bubbles[1:])]
     assert max(gaps) <= config.TYPING_AGE_TIER2_INTERVAL + LATE + 1e-3, gaps
     card_gaps = [b - a for a, b in zip(edits, edits[1:])]
@@ -700,32 +700,34 @@ def _bubble_gaps(mk_bot, vbot, vloop, sessions_ages, *, seconds=60.0,
 
 @pytest.mark.parametrize("age,expected", [
     (9 * MIN, 4.5),             # stays under 10 min for the whole run
-    (10 * MIN, 9.0),            # exactly 10:00
-    (58 * MIN, 9.0),            # stays under an hour
+    (10 * MIN, 15.0),           # exactly 10:00
+    (58 * MIN, 15.0),           # stays under an hour
     (60 * MIN, 15.0),           # exactly 60:00
     (4 * 60 * MIN, 15.0),
 ])
 def test_the_bubble_decays_with_the_turns_age(mk_bot, vbot, vloop, age,
                                               expected):
-    """Operator ruling #2: 4.5 s for ten minutes, 9 s to an hour, 15 s
-    after, measured on the real loop. Mutation: keep the loop on
+    """Operator ruling #2 (final): 4.5 s for ten minutes, 15 s after,
+    measured on the real loop. Mutation: keep the loop on
     ``TYPING_INDICATOR_INTERVAL`` and every row reads 4.5."""
     gaps = _bubble_gaps(mk_bot, vbot, vloop, [age])
     assert len(gaps) >= 3, gaps
     assert gaps == [pytest.approx(expected, abs=1e-3)] * len(gaps)
 
 
+# The 60:00 boundary is no longer a row: tiers 2 and 3 are both 15 s, so a
+# run across it measures 15 → 15 and cannot tell them apart — it would
+# pass whatever the tier-3 boundary did (see fixes-2.md, the survivor).
 @pytest.mark.parametrize("start,before,after", [
-    (9 * MIN + 50.0, 4.5, 9.0),     # crosses 10:00 at 10 s into the run
-    (59 * MIN + 50.0, 9.0, 15.0),   # crosses 60:00 at 10 s into the run
+    (9 * MIN + 50.0, 4.5, 15.0),    # crosses 10:00 at 10 s into the run
 ])
 def test_the_bubble_changes_pace_at_the_boundary(mk_bot, vbot, vloop, start,
                                                  before, after):
-    """The boundaries, crossed on the loop: from 9:50 the bubbles run at
-    4.5 s while the turn is at most 9:59, and at 9 s from the first
+    """The 10:00 boundary, crossed on the loop: from 9:50 the bubbles run
+    at 4.5 s while the turn is at most 9:59, and at 15 s from the first
     refresh due after 10:00 (the period is read when the next bubble is
-    due); from 59:50 likewise 9 s, then 15 s. Mutation: shift either
-    boundary and the switch lands on the wrong bubble."""
+    due). Mutation: shift the boundary and the switch lands on the wrong
+    bubble."""
     gaps = _bubble_gaps(mk_bot, vbot, vloop, [start], seconds=70.0)
     first_after = next(i for i, g in enumerate(gaps)
                        if g == pytest.approx(after, abs=1e-3))
@@ -733,7 +735,7 @@ def test_the_bubble_changes_pace_at_the_boundary(mk_bot, vbot, vloop, start,
     assert all(g == pytest.approx(after, abs=1e-3) for g in gaps[first_after:])
     # The bubble that opens the first slower gap went out before the
     # boundary, and the one after it is past it.
-    boundary = 10 * MIN if before == INTERVAL else 60 * MIN
+    boundary = 10 * MIN
     last_fast = start + sum(gaps[:first_after])
     assert last_fast <= boundary + 1e-3
     assert last_fast + before > boundary

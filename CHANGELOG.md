@@ -31,10 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   first two minutes refreshes about every 4.8 seconds instead of 2.2, and
   the two together stay inside the chat's limits. Like the card, the
   bubble slows as the turn gets older — on the age of the chat's oldest
-  working turn: every 4.5 s for ten minutes, every 9 s to an hour
-  (`TYPING_AGE_TIER2_INTERVAL`), every 15 s after
-  (`TYPING_AGE_TIER3_INTERVAL`), so on an hour-long turn it flickers
-  rather than using up the hour and going dark for forty minutes; the
+  working turn: every 4.5 s for ten minutes, then every 15 s
+  (`TYPING_AGE_TIER2_INTERVAL`, and `TYPING_AGE_TIER3_INTERVAL` past an
+  hour), so on a long turn it flickers rather than using up the hour and
+  going dark for forty minutes; the
   **⏱ Long-turn card updates** toggle off keeps it at 4.5 s. It never takes a token
   a card edit needs, it is the first thing dropped at 75 % of the hour,
   and a 429 on it blocks only the bubble for as long as Telegram asked. A

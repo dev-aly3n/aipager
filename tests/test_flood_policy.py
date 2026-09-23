@@ -299,13 +299,15 @@ def test_the_card_interval_carries_the_reservation():
 # ── the bubble's own decay (operator ruling #2) ──────────────────────────────
 
 @pytest.mark.parametrize("age,expected", [
-    (0.0, 4.5), (599.9, 4.5), (600.0, 9.0), (3599.9, 9.0), (3600.0, 15.0),
+    (0.0, 4.5), (599.9, 4.5), (600.0, 15.0), (3599.9, 15.0), (3600.0, 15.0),
     (4 * 3600.0, 15.0),
 ])
 def test_the_typing_tiers(age, expected):
-    """4.5 s to 10 min, 9 s to an hour, 15 s after — at the card's own
-    tier-2/3 boundaries. Mutation: shift a boundary or a value."""
-    assert config.TYPING_AGE_TIER2_INTERVAL == 9.0
+    """4.5 s to 10 min, 15 s after (operator ruling #2, final) — at the
+    card's own tier-2 boundary. Tier 3 equals tier 2 today, so no row can
+    tell the tier-3 boundary apart. Mutation: shift the 10-minute boundary
+    or either value."""
+    assert config.TYPING_AGE_TIER2_INTERVAL == 15.0
     assert config.TYPING_AGE_TIER3_INTERVAL == 15.0
     assert typing_interval(age, True) == expected
 
@@ -317,7 +319,7 @@ def test_typing_decay_off_is_the_base_pace(age):
 
 def test_the_bubble_is_never_faster_than_its_base():
     """A base configured above a tier's value wins: decay only slows."""
-    assert typing_interval(700.0, True, base=12.0) == 12.0
+    assert typing_interval(700.0, True, base=20.0) == 20.0
 
 
 @pytest.mark.parametrize("base", [0.0, -1.0])

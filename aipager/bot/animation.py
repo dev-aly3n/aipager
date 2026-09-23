@@ -1372,8 +1372,8 @@ class AnimationMixin:
     def _typing_period(self, members: list, now: float) -> float:
         """Seconds between this chat's bubbles right now (8.30, operator
         ruling #2): ``flood_policy.typing_interval`` on the age of the
-        OLDEST busy turn among *members* — 4.5 s for ten minutes, 9 s to
-        an hour, 15 s after — so an hour-plus turn does not spend the
+        OLDEST busy turn among *members* — 4.5 s for ten minutes, 15 s
+        after — so an hour-plus turn does not spend the
         hour's ornament share on the bubble and have it shed for forty
         minutes at a time.
 
