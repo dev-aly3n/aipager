@@ -116,8 +116,11 @@ def test_a_stale_document_is_flagged_so_its_volume_figures_are_ignored():
 def test_the_line_reads_as_a_sentence_for_a_healthy_chat():
     """AMENDED by 8.30 §4.6: the sentence also carries the ceiling the
     rate may climb to and the chat's calls in the last hour against its
-    hourly budget, labelled with the file's age."""
-    _write([_row(rate=0.5, sustained_used=7)])
+    hourly budget, labelled with the file's age. (The file carries an
+    empty hour — ``hourly=[]`` — as an 8.30 daemon writes one; a file
+    with no hour at all shows none, see
+    ``test_a_file_without_an_hour_shows_no_hourly_figure``.)"""
+    _write([_row(rate=0.5, sustained_used=7, hourly=[])])
     (line,) = status.flood_chat_lines(status.read_flood_chats())
     assert line == (f"Telegram chat {CHAT}: rate 0.50/s (ceiling 1.00/s), "
                     f"0/{config.FLOOD_HOURLY_MAX} calls in the last hour "

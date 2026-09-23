@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
+import math
 import socket
 import time
 from pathlib import Path
@@ -131,7 +132,8 @@ def read_flood_chats(path: str | None = None) -> list[dict]:
     ``bans_today``, ``muted_until`` (wall clock, omitted once lapsed) and
     ``stale``. Since 8.30 also: ``hourly_used`` / ``hourly_budget`` (calls
     in the last hour, summed here from the persisted per-minute buckets
-    against NOW, and the chat's hourly budget), ``hourly_age``
+    against NOW, and the chat's hourly budget — ``None`` when the file
+    carries no hour, as one written before 8.30 does not), ``hourly_age``
     (seconds since the file was written — the hour is at most a minute
     stale while calls flow; ``None`` when unknown), ``warning_remaining``
     (seconds left in the post-429 warning regime, clamped to one regime),
@@ -188,7 +190,12 @@ def read_flood_chats(path: str | None = None) -> list[dict]:
             "bans_today": _bans_today(stamps, now),
             "stale": stale,
             "hourly_used": _hourly_used(entry.get("hourly"), now),
-            "hourly_budget": hourly_limits(bans_7d)[0],
+            # ``None`` — and no hour in the line — for a file with no
+            # readable hour at all (one written before 8.30): "0/1200"
+            # would be a reading the file never made.
+            "hourly_budget": (hourly_limits(bans_7d)[0]
+                              if isinstance(entry.get("hourly"), list)
+                              else None),
             "hourly_age": age if age != float("inf") else None,
             "warning_remaining": warned,
             "bans_7d": bans_7d,
@@ -218,8 +225,6 @@ def _hourly_used(buckets, now: float) -> int:
     own clock, so a file written a minute ago still reports the hour
     ending now. Tolerant of anything a file can hold: junk entries are
     skipped, counts are floored at zero."""
-    import math
-
     if not isinstance(buckets, list):
         return 0
     total = 0

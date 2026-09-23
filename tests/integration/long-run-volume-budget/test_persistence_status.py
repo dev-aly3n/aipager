@@ -342,3 +342,29 @@ def test_v_status_and_restore_read_one_regime_from_the_same_file(
     (line,) = status.flood_chat_lines([shown])
     assert "warning regime, 6h 0m left" in line
 
+
+def test_a_file_without_an_hour_shows_no_hourly_figure(monkeypatch):
+    """A file written before 8.30 has no ``hourly`` key: the line shows no
+    hour rather than "0/1200 calls in the last hour", a reading the file
+    never made. Mutation: always emit ``hourly_budget``."""
+    now = 1_900_000_000.0
+    _hand_write({"chat_id": CHAT, "rate": 0.5, "sustained_used": 3,
+                 "sustained_limit": 30}, now - 5.0)
+    monkeypatch.setattr(status, "time", types.SimpleNamespace(time=lambda: now))
+    (row,) = status.read_flood_chats()
+    assert row["hourly_budget"] is None
+    (line,) = status.flood_chat_lines([row])
+    assert "in the last hour" not in line
+    assert "3/30 in the last minute" in line
+
+
+def test_an_empty_hour_is_a_reading_and_is_shown(monkeypatch):
+    """An 8.30 file whose hour is EMPTY did make a reading: nothing sent.
+    The other half of the row above, so "omit the hour" cannot become
+    "never show it"."""
+    now = 1_900_000_000.0
+    _hand_write({"chat_id": CHAT, "rate": 0.5, "hourly": []}, now - 5.0)
+    monkeypatch.setattr(status, "time", types.SimpleNamespace(time=lambda: now))
+    (row,) = status.read_flood_chats()
+    (line,) = status.flood_chat_lines([row])
+    assert f"0/{config.FLOOD_HOURLY_MAX} calls in the last hour" in line
