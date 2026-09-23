@@ -72,6 +72,11 @@ class TelegramBot(
         self._command_map: dict[str, str] = {label: cmd for label, cmd in QUICK_COMMANDS}
         self._model_map: dict[str, str] = {label: cmd for label, cmd in MODEL_CHOICES}
         self._last_pinned_text: str = ""  # dedup pinned message edits
+        # What the pinned dashboard last SHOWED about each session (its
+        # status, and which sessions there are) and when (loop time) —
+        # the debounce in `_maybe_update_bot_name` (8.30).
+        self._last_pinned_state: tuple = ()
+        self._last_pinned_at: float | None = None
         # `/new <name>` collision state. Keyed by session_name; value is
         # {"prompt": str, "skip_perms": bool, "user_id": int, "msg_id": int}.
         # Populated when /new hits an existing name, drained when the user

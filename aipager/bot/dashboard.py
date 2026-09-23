@@ -9,6 +9,7 @@ Single owner of all Telegram communication. Handles:
 
 from __future__ import annotations
 
+import asyncio
 import html as html_mod
 import logging
 import time
@@ -22,12 +23,16 @@ from telegram import (
 
 from aipager.config import (
     CHAT_ID,
+    FLOOD_HOURLY_TYPING_RESUME_BELOW,
+    PINNED_REFRESH_BUSY_INTERVAL,
+    PINNED_REFRESH_INTERVAL,
 )
 from aipager.bot import session_parity
 from aipager.bot.flood_budget import (
     PRIORITY_ORNAMENT,
     rate_limit_args as _rl_args,
 )
+from aipager.bot.rich_message import get_rate_limiter
 from aipager.policy_snapshot import queue_depth_parts
 from aipager.state import Status, TrackedSession
 from aipager.transcript import last_assistant_preview as _read_preview
@@ -186,7 +191,39 @@ class DashboardMixin:
         text = self._build_pinned_text(session_name)
         if not text or text == self._last_pinned_text:
             return  # skip redundant edit
+        # DEBOUNCE (8.30). `notify` asks for a refresh on EVERY hook,
+        # headed by whichever session sent it, so two sessions streaming at
+        # once flipped the header ("📌 s0" / "📌 s1") on nearly every hook
+        # and the dashboard became the chat's biggest caller. A change of
+        # STATE (a session's status, a session added or gone) still goes
+        # out at once; anything else (the header, cost, context %) waits
+        # until PINNED_REFRESH_INTERVAL has passed since the last refresh
+        # actually shown (PINNED_REFRESH_BUSY_INTERVAL while a session is
+        # busy), AND it YIELDS to the typing bubble: it waits while the
+        # chat's rolling hour is past the bubble's resume mark
+        # (FLOOD_HOURLY_TYPING_RESUME_BELOW of the ornament share), so the
+        # dashboard is never what pushes the bubble into its shed. On the
+        # vm3 replay with the dashboard live, the 60 s debounce alone
+        # still added 44 calls to the busiest hour, one past the shed
+        # line, and the bubble went dark for 13 minutes. Loop time, not
+        # `time`, so it follows the loop's clock. Nothing is lost by
+        # waiting: the text is re-derived in full from the registry by
+        # whichever refresh goes out next.
         chat = int(CHAT_ID)
+        state = self._pinned_state()
+        now = asyncio.get_running_loop().time()
+        if state == self._last_pinned_state and self._last_pinned_at is not None:
+            busy = any(status == Status.BUSY.value for _name, status in state)
+            interval = (PINNED_REFRESH_BUSY_INTERVAL if busy
+                        else PINNED_REFRESH_INTERVAL)
+            if now - self._last_pinned_at < interval:
+                return
+            limiter = get_rate_limiter()
+            if limiter is not None:
+                hour = limiter.hourly_usage(chat)
+                if (hour["ornament_used"] >= FLOOD_HOURLY_TYPING_RESUME_BELOW
+                        * hour["ornament_budget"]):
+                    return
         try:
             if self.registry.pinned_msg_id:
                 edited = await edit_text_at(self._app.bot,
@@ -241,8 +278,21 @@ class DashboardMixin:
                         "instead.", e,
                     )
             self._last_pinned_text = text
+            self._last_pinned_state = state
+            self._last_pinned_at = now
         except Exception:
             log.debug("Pinned message update failed", exc_info=True)
+
+    def _pinned_state(self) -> tuple:
+        """What about the sessions is worth an immediate dashboard refresh:
+        each live session's status, and which sessions there are. Not the
+        header (which session notified last), nor cost or context %. Those
+        change on nearly every hook and ride the debounced refresh."""
+        return tuple(sorted(
+            (s.name, s.status.value)
+            for s in self.registry.all_sessions().values()
+            if s.status != Status.GONE and s.label
+        ))
 
     def _build_session_dashboard(self, sess: TrackedSession) -> str:
         """Build a rich HTML dashboard for a session (used on switch)."""

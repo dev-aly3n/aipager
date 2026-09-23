@@ -755,6 +755,21 @@ TYPING_AGE_TIER3_INTERVAL: float = 15.0
 # most that long. Never used for a refusal that lasts — a shed, a 429's
 # block, minimal mode, a mute.
 TYPING_RETRY_WAKE: float = 0.5
+# The pinned dashboard (legacy single-chat installs only) is refreshed at
+# most this often, unless a session's STATUS changed or a session came or
+# went (8.30). `notify` asks for a refresh on every hook, headed by the
+# session that sent it, so two sessions streaming at once flipped the
+# header on nearly every hook: 1,618 of 2,164 calls in a two-hour QA run,
+# enough to trip the hourly shed and minimal mode. The slowest card tier:
+# the dashboard is a summary, and no summary needs to move faster than
+# the oldest card does.
+PINNED_REFRESH_INTERVAL: float = CARD_AGE_TIER3_INTERVAL
+# ...and while any session is BUSY (the typing bubble is live and every
+# busy card already shows its own session's detail), a refresh that
+# carries no status change waits this long instead. With the 60 s interval
+# alone, the vm3 replay with the dashboard live added 44 calls to its
+# busiest hour, one past the bubble's shed line.
+PINNED_REFRESH_BUSY_INTERVAL: float = 600.0
 
 # Signal file the daemon drops beside its control socket while a chat is
 # flood-muted (`{"muted": [{"chat_id", "until", "retry_after"}]}`), so
