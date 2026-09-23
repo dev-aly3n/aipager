@@ -1,0 +1,259 @@
+"""The vm3 timeline, replayed (rows C and K; the 8.30 acceptance).
+
+What happened, 2026-09-23, owner DM on vm3, aipager 0.7.13: two sessions
+streaming into one chat for 3 h 23 min — bigdog ONE continuous turn the
+whole time, catfish ten turns, the last of them long — under every
+per-second and per-minute window the daemon had; a 429 on the typing
+bubble, forgiven in five minutes; then, with no further warning, a
+straight 7-hour ban. Modelled, not measured (edits were not logged): about
+11,500 calls into the chat in that window, ~57 a minute.
+
+The replay runs the REAL daemon code — the card animator, notify's hook
+dispatcher, the per-chat typing loop and the limiter — for 12,240 virtual
+seconds on a virtual event loop, against :class:`_VolumeTelegram`, a fake
+that meters every endpoint (typing included) and bans on long-run volume.
+The stimulus is the realistic one the design asks for (§8 Harness): a tool
+call every 2–8 s, prose every 20–60 s, a phantom SubagentStop about every
+36 s per session — not 0.7.13's tool row every 0.1 s, which would keep
+every card permanently "busy".
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import random
+
+import pytest
+
+from aipager.bot.flood import MUTE, FloodMuted
+from aipager.bot.flood_budget import (
+    PRIORITY_ORNAMENT,
+    rate_limit_args,
+)
+from aipager.state import Status
+
+CHAT = 256113222
+T = 12_240.0                       # 3 h 24 min of virtual time
+HOUR = 3600.0
+BIGDOG_MSG = 1000
+ANSWER = "the answer"
+
+
+def _most_in_window(stamps: list[float], window: float = HOUR) -> int:
+    """The largest number of stamps in any half-open ``[t, t + window)``."""
+    stamps = sorted(stamps)
+    best, lo = 0, 0
+    for hi, t in enumerate(stamps):
+        while t - stamps[lo] >= window:
+            lo += 1
+        best = max(best, hi - lo + 1)
+    return best
+
+
+def _session(bot, label: str):
+    sess = bot.registry.get_or_create(f"claude-{label}")
+    sess.label = label
+    sess.status = Status.IDLE
+    sess.scope_chat_id = CHAT
+    sess.scope_kind = "dm"
+    sess.trigger_msg_id = 3
+    return sess
+
+
+async def _begin(bot, sess, msg_id: int, now: float) -> None:
+    """A turn starts: the card is sent (an ornament, like ``send_busy``),
+    the per-turn card state is reset the way ``_send_busy_and_animate``
+    resets it, and the animation — card and typing — starts."""
+    sess.status = Status.BUSY
+    await bot.send_busy(sess)
+    sess.busy_msg_id = msg_id
+    sess.busy_started_at = now
+    sess.last_tool_edit_at = 0.0
+    sess.stream_last_rendered = ""
+    sess.tool_history = []
+    sess.stream_commentary = []
+    sess.active_subagents = {}
+    sess.card_frame_state = None
+    sess.card_bypass_at = 0.0
+    sess.card_elapsed_unit = "s"
+    bot._start_animation(sess)
+
+
+async def _end(bot, sess) -> None:
+    """A turn ends: the card settles and the answer goes out (ESSENTIAL)."""
+    sess.status = Status.IDLE
+    bot._stop_animation(sess)
+    await bot._edit_busy_rich(sess, "Done", final=True)
+    await bot._app.bot.send_message(CHAT, ANSWER)
+    sess.busy_msg_id = None
+
+
+async def _work(bot, sess, rng: random.Random, until: float, loop) -> None:
+    """A session actually working, until *until*: a tool call every 2–8 s
+    (PreToolUse, then PostToolUse a moment later), prose every 20–60 s,
+    a phantom SubagentStop (empty type, unknown id, 0.0 s) about every
+    36 s."""
+    n = 0
+    next_prose = loop.time() + rng.uniform(20, 60)
+    next_phantom = loop.time() + rng.expovariate(1 / 36)
+    while loop.time() < until:
+        await asyncio.sleep(rng.uniform(2, 8))
+        n += 1
+        summary = f"Bash: step {n}"
+        await bot.notify(sess, "tool_use", {"tool_summary": summary,
+                                            "tool_name": "Bash"})
+        await asyncio.sleep(rng.uniform(0.3, 1.5))
+        await bot.notify(sess, "tool_done", {"tool_summary": summary})
+        if loop.time() >= next_prose:
+            await bot.notify(sess, "assistant_text", {
+                "delta": f"Moving on to part {n}.", "message_id": f"m{n}"})
+            next_prose = loop.time() + rng.uniform(20, 60)
+        while loop.time() >= next_phantom:
+            await bot.notify(sess, "subagent_stop", {
+                "agent_type": "", "elapsed": 0.0, "history_idx": None,
+                "tool_count": 0})
+            next_phantom += rng.expovariate(1 / 36)
+
+
+def _replay(bot, vloop, *, seed: int = 20260923) -> dict:
+    """Run the vm3 timeline and return the catfish schedule."""
+    rng = random.Random(seed)
+    bigdog = _session(bot, "bigdog")
+    catfish = _session(bot, "catfish")
+    schedule: dict = {"catfish": []}
+
+    async def _bigdog():
+        await _begin(bot, bigdog, BIGDOG_MSG, vloop.time())
+        await _work(bot, bigdog, random.Random(seed + 1), T, vloop)
+
+    async def _catfish():
+        for turn in range(9):
+            await asyncio.sleep(rng.uniform(120, 360))          # idle gap
+            start = vloop.time()
+            await _begin(bot, catfish, 2000 + turn, start)
+            await _work(bot, catfish, rng, start + rng.uniform(180, 480), vloop)
+            await _end(bot, catfish)
+            schedule["catfish"].append((start, vloop.time()))
+        await asyncio.sleep(rng.uniform(120, 360))
+        start = vloop.time()
+        await _begin(bot, catfish, 2100, start)                # the long one
+        schedule["catfish"].append((start, T))
+        await _work(bot, catfish, rng, T, vloop)
+
+    async def main():
+        tasks = [asyncio.ensure_future(_bigdog()),
+                 asyncio.ensure_future(_catfish())]
+        await asyncio.sleep(T)
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        for sess in (bigdog, catfish):
+            bot._stop_animation(sess)
+        await asyncio.sleep(0)
+
+    vloop.run_until_complete(main())
+    return schedule
+
+
+# ── C ───────────────────────────────────────────────────────────────────────
+
+def test_c_the_vm3_timeline_stays_inside_the_long_run_budget(
+    mk_bot, vloop, vlimiter, volume_telegram, volume_bot, caplog,
+):
+    """Row C, the acceptance (Q1/Q7). Over the whole 3.4 h:
+
+    * ornament calls ≤ 1080 in every rolling hour, and all calls ≤ 1200
+      with zero essential overflow;
+    * consecutive typing calls ≥ 4.5 s apart;
+    * zero 429s and zero bans from a Telegram that bans on volume;
+    * bigdog's four-hour card: at most 60 edits in any hour after its
+      first (it has no state change to bypass on);
+    * total calls ≤ 4,080 — the modelled 0.7.13 figure is ~11,500.
+
+    On 0.7.13 this is two typing loops, a card on a 2–4 s cadence for the
+    whole run and every hook racing a 1.2 s debounce.
+    """
+    caplog.set_level(logging.WARNING, logger="aipager.bot.flood_budget")
+    bot = mk_bot()
+    bot._app.bot = volume_bot
+    _replay(bot, vloop)
+
+    calls = volume_telegram.calls
+    everything = [t for _e, c, _m, t, _x in calls if c == CHAT]
+    answers = [t for e, c, _m, t, x in calls
+               if c == CHAT and e == "sendMessage" and x == ANSWER]
+    ornaments = [t for e, c, _m, t, x in calls
+                 if c == CHAT and not (e == "sendMessage" and x == ANSWER)]
+    typing = volume_telegram.stamps(endpoint="sendChatAction")
+    bigdog = volume_telegram.stamps(endpoint="editMessageText",
+                                    message_id=BIGDOG_MSG)
+    report = {"total": len(everything), "answers": len(answers),
+              "typing": len(typing), "bigdog_edits": len(bigdog),
+              "max_hour": _most_in_window(everything),
+              "max_hour_ornament": _most_in_window(ornaments)}
+
+    assert volume_telegram.small_429s == [], report
+    assert volume_telegram.bans == [], report
+    assert report["max_hour_ornament"] <= 1080, report
+    assert report["max_hour"] <= 1200, report
+    assert vlimiter.hourly_usage(CHAT)["essential_overflow"] == 0
+    assert not [r for r in caplog.records
+                if "essential calls over the hourly budget" in r.getMessage()]
+    gaps = [b - a for a, b in zip(typing, typing[1:])]
+    assert typing and min(gaps) >= 4.5 - 1e-6, report
+    after_first_hour = [t for t in bigdog if t >= bigdog[0] + HOUR]
+    assert _most_in_window(after_first_hour) <= 60, report
+    assert report["total"] <= 4080, report
+    assert len(answers) == 9, report          # every short turn answered
+
+
+# ── K ───────────────────────────────────────────────────────────────────────
+
+def test_k_a_ban_mid_replay_still_gets_zero_requests_bubble_included(
+    mk_bot, vloop, vlimiter, volume_telegram, volume_bot,
+):
+    """Row K (R7), the 0.7.13 guarantee through the new traffic: a ban
+    lands mid-run and NOTHING reaches Telegram until it lifts — not a card
+    edit, not an answer, and not the typing bubble, which is budgeted now
+    but still exempt from nothing that matters about a mute. The gate
+    refuses the bubble with ``FloodMuted`` (a ban), never ``FloodSkipped``.
+
+    Mutation: move the typing branch above the mute gate in
+    ``process_request`` and the bubble goes into the ban.
+    """
+    bot = mk_bot()
+    bot._app.bot = volume_bot
+    bigdog = _session(bot, "bigdog")
+    catfish = _session(bot, "catfish")
+    window: dict = {}
+
+    async def main():
+        await _begin(bot, bigdog, BIGDOG_MSG, vloop.time() - 20 * 60.0)
+        await _begin(bot, catfish, 2000, vloop.time() - 20 * 60.0)
+        workers = [asyncio.ensure_future(_work(bot, s, random.Random(i), 1e12, vloop))
+                   for i, s in enumerate((bigdog, catfish))]
+        await asyncio.sleep(600.0)
+        MUTE.mute(CHAT, 1800.0)                  # Telegram: banned for 30 min
+        window["from"] = vloop.time()
+        with pytest.raises(FloodMuted):
+            await volume_bot.send_chat_action(
+                chat_id=CHAT, action="typing",
+                rate_limit_args=rate_limit_args(kind="skip",
+                                                priority=PRIORITY_ORNAMENT))
+        await asyncio.sleep(1799.0)
+        window["to"] = vloop.time()
+        await asyncio.sleep(600.0)
+        for task in workers:
+            task.cancel()
+        await asyncio.gather(*workers, return_exceptions=True)
+        for sess in (bigdog, catfish):
+            bot._stop_animation(sess)
+
+    vloop.run_until_complete(main())
+    into_ban = [t for t in volume_telegram.stamps()
+                if window["from"] <= t <= window["to"]]
+    assert into_ban == []
+    assert volume_telegram.stamps(endpoint="sendChatAction"), "no bubble at all"
+    after = [t for t in volume_telegram.stamps() if t > window["to"]]
+    assert after, "nothing came back after the ban lifted"

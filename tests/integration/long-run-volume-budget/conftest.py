@@ -326,3 +326,137 @@ def vlimiter(vloop):
 def vbot(vloop, vlimiter):
     """A PTB double on the virtual loop's clock, gated by ``vlimiter``."""
     return _GatedBot(vlimiter, vloop.time)
+
+
+# ── the vm3 replay: a Telegram that meters VOLUME ───────────────────────────
+
+class _VolumeTelegram:
+    """Telegram as vm3 met it on 2026-09-23 (8.30 §8 Harness).
+
+    Two rules, and it records every call either way:
+
+    * the per-second rule the 0.7.13 fakes model: one call a second per
+      chat, burst three — past it, a small ``retry_after: 5``;
+    * a LONG-WINDOW rule, which no fake before this one had: more than
+      :attr:`LONG_MAX` calls into a chat in any rolling
+      :attr:`LONG_WINDOW` seconds is answered with a straight ban
+      (``retry_after`` 25429 s, vm3's own), no warning first — the shape
+      that ended vm3's 3 h 23 min.
+
+    ``sendChatAction`` is metered like everything else: whether Telegram
+    counts it with messages is unproven, and the design bounds it anyway.
+    Only reactions are exempt. The 1,500-an-hour rule is OUR guess at a
+    limit Telegram does not publish — the replay's own counts are the
+    assertion; this ban is a second net.
+    """
+
+    LONG_WINDOW = 3600.0
+    LONG_MAX = 1500
+    BAN = 25429.0
+    EXEMPT: frozenset = frozenset({"setMessageReaction"})
+
+    def __init__(self, clock, rate: float = 1.0, burst: float = 3.0) -> None:
+        self.clock = clock
+        self.rate = rate
+        self.burst = burst
+        #: ``(endpoint, chat, message_id, t, text)`` for every call.
+        self.calls: list[tuple] = []
+        self.small_429s: list[tuple] = []
+        self.bans: list[tuple] = []
+        self._tokens: dict = {}
+        self._recent: dict = {}
+
+    def admit(self, endpoint: str, chat_id, message_id=None, text=""):
+        """Record a call; ``None`` when accepted, else the retry_after."""
+        now = self.clock()
+        self.calls.append((endpoint, chat_id, message_id, now, text))
+        if endpoint in self.EXEMPT:
+            return None
+        recent = self._recent.setdefault(chat_id, [])
+        recent.append(now)
+        while recent and now - recent[0] >= self.LONG_WINDOW:
+            recent.pop(0)
+        if len(recent) > self.LONG_MAX:
+            self.bans.append((endpoint, chat_id, now))
+            return self.BAN
+        tokens, last = self._tokens.get(chat_id, (self.burst, now))
+        tokens = min(self.burst, tokens + (now - last) * self.rate)
+        if tokens < 1.0:
+            self._tokens[chat_id] = (tokens, now)
+            self.small_429s.append((endpoint, chat_id, now))
+            return 5.0
+        self._tokens[chat_id] = (tokens - 1.0, now)
+        return None
+
+    def stamps(self, *, endpoint=None, message_id=None, chat_id=CHAT) -> list[float]:
+        return [t for e, c, m, t, _x in self.calls
+                if c == chat_id and (endpoint is None or e == endpoint)
+                and (message_id is None or m == message_id)]
+
+
+class _VolumeBot(_GatedBot):
+    """The PTB side for the replay: gated by the real limiter, answered by
+    :class:`_VolumeTelegram` (a 429 comes back as PTB's ``RetryAfter``)."""
+
+    def __init__(self, limiter, clock, telegram) -> None:
+        super().__init__(limiter, clock)
+        self.telegram = telegram
+
+    def __getattr__(self, name):
+        if name not in self._ENDPOINTS:
+            raise AttributeError(name)
+        endpoint, position = self._ENDPOINTS[name]
+
+        async def _method(*args, rate_limit_args=None, **kwargs):
+            from telegram.error import RetryAfter
+
+            chat_id = kwargs.get("chat_id")
+            if chat_id is None and len(args) > position:
+                chat_id = args[position]
+            text = kwargs.get("text") or (args[1] if len(args) > 1 else "")
+
+            async def _call():
+                retry_after = self.telegram.admit(
+                    endpoint, chat_id, kwargs.get("message_id"), str(text))
+                self.calls.append((endpoint, chat_id, self._clock()))
+                if retry_after is not None:
+                    raise RetryAfter(int(retry_after))
+                return _Sent()
+
+            return await self._limiter.process_request(
+                callback=_call, args=(), kwargs={}, endpoint=endpoint,
+                data={"chat_id": chat_id}, rate_limit_args=rate_limit_args,
+            )
+
+        return _method
+
+
+@pytest.fixture
+def volume_telegram(vloop, monkeypatch):
+    """:class:`_VolumeTelegram` behind the REAL ``rich_message._post``
+    (MockTransport), so every card edit is metered by the limiter first."""
+    fake = _VolumeTelegram(vloop.time)
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "TESTTOKEN")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        endpoint = request.url.path.rsplit("/", 1)[-1]
+        retry_after = fake.admit(endpoint, payload.get("chat_id"),
+                                 payload.get("message_id"))
+        if retry_after is not None:
+            return httpx.Response(200, json={
+                "ok": False, "error_code": 429, "description": "Too Many",
+                "parameters": {"retry_after": int(retry_after)}})
+        return httpx.Response(200, json={
+            "ok": True, "result": {"message_id": payload.get("message_id", 1)}})
+
+    monkeypatch.setattr(rm, "_post", _REAL_POST)
+    monkeypatch.setattr(
+        rm, "_client", httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    yield fake
+    monkeypatch.setattr(rm, "_client", None)
+
+
+@pytest.fixture
+def volume_bot(vloop, vlimiter, volume_telegram):
+    return _VolumeBot(vlimiter, vloop.time, volume_telegram)
