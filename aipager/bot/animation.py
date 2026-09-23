@@ -1987,6 +1987,12 @@ class AnimationMixin:
             )
             verb = FINAL_VERB if final else "Working"
             waiting = (sess.status != Status.BUSY) if not final else False
+            # NOT through `_card_edit_due`, deliberately — an intended
+            # exemption from the turn-age cadence (8.30 Q3), like the
+            # resume, paused-line and final edits: it is user-driven (one
+            # per consumed mid-turn message) and fills in the card this
+            # re-anchor has just sent, which otherwise shows a bare frame
+            # until the next due tick — up to a minute in an old turn.
             try:
                 if await self._edit_busy_rich(
                     sess, verb, final=final, waiting=waiting,
