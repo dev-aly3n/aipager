@@ -47,9 +47,8 @@ The three answers, all here:
 * **A skippable class of caller.** A busy-card edit is worth making only
   if the chat can afford it now; it raises :class:`FloodSkipped` instead
   of queueing, and always leaves a token in reserve for an answer or a
-  reply, which never skip. (The "typing…" indicator used to be in this
-  class. Since 8.24 it is not budgeted at all — see
-  :data:`CHAT_ACTION_ENDPOINT`.)
+  reply, which never skip. The "typing…" indicator is in this class again
+  since 8.30, as the LOWEST ornament — see :data:`CHAT_ACTION_ENDPOINT`.
 * **A bounded deferral instead of a retry storm.** A small 429
   (``retry_after <= TELEGRAM_MAX_RETRY_AFTER``) bars the chat for exactly
   the time Telegram asked, retries a blocking caller once, and doubles
@@ -62,21 +61,26 @@ re-raised untouched so the 8.17 flood mute (``bot/flood.py``,
 but since 8.27 it also drops this chat's earned rate to the floor and
 leaves a wall-clock stamp that survives a restart.
 
-Reactions and the "typing…" chat action are exempt from the per-chat
-BUDGET (design §11 U4, §12/8.24): Telegram meters them in a separate
-bucket — live probes on 2026-09-12 caught chat actions answering 200 all
-the way through a `retry_after` window that refused every edit into the
-same chat — so charging them to the chat's budget only starved the cards.
-THEY ARE NOT EXEMPT FROM THE MUTE (8.26 D-1). That distinction is the
-whole of `_CHAT_BUDGET_EXEMPT`: exempt from PACING, never from BANS.
+Reactions are exempt from the per-chat BUDGET (design §11 U4): Telegram
+meters them in a separate bucket, so charging them to the chat's budget
+only starved the cards. THEY ARE NOT EXEMPT FROM THE MUTE (8.26 D-1).
+That distinction is the whole of `_CHAT_BUDGET_EXEMPT`: exempt from
+PACING, never from BANS. The "typing…" chat action was exempt too from
+8.24 to 8.30, and earned the vm3 DM a 429 of its own on 2026-09-23 — see
+:data:`CHAT_ACTION_ENDPOINT`.
+
+Since 8.30 every budgeted chat also has a rolling HOUR
+(:class:`HourlyWindow`): long-run volume is what Telegram bans on, and no
+window here used to be longer than a minute.
 
 Public API
 ----------
-CHAT_ACTION_ENDPOINT         -- the chat-action method, budget-exempt
+CHAT_ACTION_ENDPOINT         -- the chat-action method, the lowest ornament
 FloodSkipped                 -- raised instead of making a skip-kind call
 PRIORITY_ESSENTIAL/_ORNAMENT/_SIGNAL, rate_limit_args(...)
 TokenBucket                  -- continuous refill, injectable clock
 SlidingWindow                -- N calls in any W seconds (every chat now)
+HourlyWindow                 -- a chat's calls in the last hour, per minute
 ChatBudget                   -- one chat's buckets, rate, bans, counters
 BudgetRateLimiter            -- the daemon's telegram.ext.BaseRateLimiter
 card_interval(...)           -- the pure busy-card cadence rule
@@ -147,25 +151,32 @@ log = logging.getLogger(__name__)
 # reactions into the same window as sends.
 REACTION_ENDPOINT: str = "setMessageReaction"
 
-# The second exempt method (§12, roadmap 8.24): the "typing…" chat
-# action, and this one is exempt on MEASURED evidence rather than on
-# inference. Bounded probes against the real API on 2026-09-12 drove one
-# chat into a genuine `retry_after=10`; during that window every
-# `editMessageText` was refused and all ELEVEN `sendChatAction typing`
-# calls returned 200, with the bubble visible on the phone throughout.
-# Chat actions are not in the per-chat message/edit bucket, so charging
-# them to it — which 8.21 did, and then dropped the indicator to pay for
-# the cards — takes a token from a card edit for a call Telegram never
-# counted. Exempt like a reaction: the 30/s overall bucket only, never a
-# chat token, never a wait on one. A 429 on it is NOT recorded against
-# the chat either (see `_run`'s `note_429`).
+# The "typing…" chat action — BUDGETED AGAIN since 8.30, as the LOWEST
+# ornament.
+#
+# 8.24 made it exempt on real evidence: probes on 2026-09-12 saw all eleven
+# `sendChatAction typing` calls answer 200 inside a `retry_after=10`
+# window that refused every edit. What that proved is that typing is not
+# blocked BY an edit 429 — not that typing is free. On 2026-09-23 the
+# vm3 DM's first warning was a 429 on the typing action itself, after
+# hours of one loop per BUSY SESSION sending it every 4.5 s (~5,400 calls,
+# counted by nothing), and a straight 7-hour ban followed.
+#
+# So (8.30 R1/R2): it counts in the chat's bucket, its 60 s window AND its
+# hour; it is skip-kind, so it never waits; it needs one token and one
+# window slot MORE than a card edit (`_TYPING_RESERVE`), so it goes out
+# only when a card would still have room after it; it stops first when
+# the hour fills (`ChatBudget.typing_shed`); and a 429 on it arms the
+# chat's warning regime and blocks typing for its retry_after, without
+# pausing the cards (`note_typing_429`). The daemon sends it from ONE loop
+# per chat (`animation._animate_typing`).
 CHAT_ACTION_ENDPOINT: str = "sendChatAction"
 
-# Every method that skips the per-chat budget. Membership is checked
-# BEFORE `_kind_of`, so a caller that also passes ``kind="skip"`` for one
-# of these gets the exemption rather than the skip class — the reserve
-# exists to protect real content from BUDGETED callers, and these do not
-# spend the budget at all.
+# Every method that skips the per-chat budget — reactions, and since 8.30
+# ONLY reactions. Membership is checked BEFORE `_kind_of`, so a caller
+# that also passes ``kind="skip"`` for one gets the exemption rather than
+# the skip class — the reserve exists to protect real content from
+# BUDGETED callers, and these do not spend the budget at all.
 #
 # EXEMPT MEANS EXEMPT FROM THE *BUDGET*, NEVER FROM THE *MUTE* (8.26 D-1).
 # The mute gate in `process_request` sits ABOVE this branch on purpose: a
@@ -173,8 +184,7 @@ CHAT_ACTION_ENDPOINT: str = "sendChatAction"
 # 2026-09-15, and the endpoint it targets is irrelevant to that
 # escalation. Move the gate below this branch and a muted chat starts
 # taking reactions and chat actions again — that is the mutation.
-_CHAT_BUDGET_EXEMPT: frozenset = frozenset({REACTION_ENDPOINT,
-                                           CHAT_ACTION_ENDPOINT})
+_CHAT_BUDGET_EXEMPT: frozenset = frozenset({REACTION_ENDPOINT})
 
 # The window ``bans_today`` DISPLAYS (``snapshot()``, ``aipager status``).
 # Display only since 8.30: the POLICY reads the ban memory over
@@ -190,6 +200,16 @@ _BANS_TODAY_SECONDS: float = 86400.0
 # caller always finds something left, however many cards are ticking.
 # Drop this to 1.0 and cards starve real content — that is the guard.
 _SKIP_RESERVE: float = 2.0
+
+# The typing bubble's reserve: ONE MORE token and window slot than a card
+# edit's (8.30). The bubble is the lowest ornament, so it goes out only
+# when a card edit would still find room after it — which keeps the
+# tier-0 card cadence exactly as it was when typing was exempt (8.21
+# measured half the card edits refused once typing shared the card's
+# reserve). It lapses while cards are busy, when the animating card is
+# the signal anyway, and flows freely in a long turn, when the card is
+# slow and the bubble is what the chat list shows.
+_TYPING_RESERVE: float = _SKIP_RESERVE + 1.0
 
 # Floor on how often the backoff signal file is rewritten. It is a
 # diagnostic for `aipager status` in ANOTHER process, not daemon state.
@@ -520,8 +540,9 @@ class ChatBudget:
     a priority class and priority across them.
 
     Counters: ``calls`` counts every callback actually run for this chat,
-    INCLUDING the budget-exempt reactions and chat actions; ``reactions``
-    and ``chat_actions`` count those exempt subsets on their own;
+    INCLUDING the budget-exempt reactions; ``reactions`` counts those on
+    their own and ``chat_actions`` the typing bubbles admitted (budgeted
+    again since 8.30);
     ``skipped`` counts refused skip acquires; ``muted_refusals`` counts
     calls the mute gate refused; ``ornaments_suspended`` counts ornaments
     minimal mode refused.
@@ -1603,6 +1624,40 @@ class BudgetRateLimiter(BaseRateLimiter):
         self._maybe_write_signal()
         _mark_state_dirty()
 
+    def note_typing_429(self, chat_id, seconds: float) -> None:
+        """Record a small 429 on the "typing…" chat action (8.30 Q5).
+
+        Any 429 is a warning, the typing bubble's included — on vm3 it was
+        the ONLY warning, 3 h 23 min before a 7-hour ban — so it starts
+        the chat's warning regime (and so clamps its rate to the warned
+        ceiling). And the bubble itself is refused for exactly the
+        retry_after Telegram asked.
+
+        What it deliberately does NOT do is what :meth:`note_retry_after`
+        does to a card's chat: defer every call (``retry_until``), double
+        the card cadence (``backoff``) or halve the rate. A card must not
+        freeze over the refusal of an ornament. One WARNING.
+
+        A ban-sized retry_after is not handled here: ``_run`` records a
+        ban through :meth:`note_ban`, as for any endpoint.
+        """
+        value = _finite(seconds)
+        if value is None or value > TELEGRAM_MAX_RETRY_AFTER:
+            return
+        budget = self._budget_for(self._key(chat_id))
+        if budget is None:
+            return
+        now = self._clock()
+        budget.typing_blocked_until = max(budget.typing_blocked_until,
+                                          now + max(value, 0.0))
+        wall_now = self._wall_now()
+        self._arm_warning(budget, wall_now)
+        log.warning(
+            "flood: chat %s typing 429 retry_after=%ss → warning regime %gh, "
+            "ceiling %g/s", budget.chat_id, value,
+            self._warning_seconds / 3600.0, self.max_rate_for(budget, wall_now),
+        )
+
     def cadence_multiplier(self, chat_id) -> float:
         """This chat's current card-interval multiplier, ``>= 1.0``.
 
@@ -1820,7 +1875,10 @@ class BudgetRateLimiter(BaseRateLimiter):
         # The priority class this caller declared. Read BEFORE the exempt
         # branch so a SIGNAL keeps its budget exemption whatever else
         # changes, and so the class is available to the acquire below.
-        cls = _class_of(rate_limit_args)
+        # The typing bubble is an ORNAMENT whatever it declared (8.30):
+        # minimal mode suspends it, and it never counts as an answer.
+        cls = (PRIORITY_ORNAMENT if endpoint == CHAT_ACTION_ENDPOINT
+               else _class_of(rate_limit_args))
 
         # ── MINIMAL MODE (R3) ────────────────────────────────────────────
         # Below `FLOOD_MINIMAL_MODE_RATE_FLOOR` a chat can no longer afford
@@ -1836,6 +1894,24 @@ class BudgetRateLimiter(BaseRateLimiter):
         if cls == PRIORITY_ORNAMENT and self._minimal(budget):
             budget.ornaments_suspended += 1
             raise FloodSkipped(chat_id, endpoint)
+
+        # ── THE TYPING BUBBLE (8.30 R1/R2) ───────────────────────────────
+        # The lowest ornament, whatever class its caller declared: skip,
+        # never a wait; refused while the hour has shed it or a 429 on it
+        # is still running; and admitted only with `_TYPING_RESERVE` left,
+        # one more token than a card edit needs. Counted in the hour as an
+        # ORNAMENT like the card it rides on.
+        if endpoint == CHAT_ACTION_ENDPOINT and budget is not None:
+            if budget.typing_shed or self._clock() < budget.typing_blocked_until:
+                budget.typing_shed_refusals += 1
+                raise FloodSkipped(chat_id, endpoint)
+            self._acquire_skip(budget, endpoint, cls=PRIORITY_ORNAMENT,
+                               reserve=_TYPING_RESERVE)
+            budget.chat_actions += 1
+            return await self._run(
+                budget, callback, args, kwargs, endpoint, chat_id,
+                kind="skip", allow_retry=False, cls=PRIORITY_ORNAMENT,
+            )
 
         if endpoint in _CHAT_BUDGET_EXEMPT:
             # §11 U4: reactions are exempt from the chat budget. They
@@ -1855,22 +1931,17 @@ class BudgetRateLimiter(BaseRateLimiter):
             # exempt from the mute, which is why the gate sits above this
             # branch.
             #
-            # §12: the "typing…" chat action is exempt on the same terms,
-            # and on live evidence — it answered 200 throughout a real
-            # `retry_after=10` window that refused every edit into the
-            # same chat (see CHAT_ACTION_ENDPOINT). Neither waits on a
-            # chat token nor consumes one; both still meet the 30/s
-            # overall bucket.
+            # The "typing…" chat action shared this branch from 8.24 until
+            # 8.30, which put it back in the budget (see
+            # CHAT_ACTION_ENDPOINT). A reaction neither waits on a chat
+            # token nor consumes one, and still meets the 30/s overall
+            # bucket.
             if budget is not None:
-                if endpoint == REACTION_ENDPOINT:
-                    budget.reactions += 1
-                else:
-                    budget.chat_actions += 1
+                budget.reactions += 1
             await self._wait_for_overall()
             return await self._run(
                 budget, callback, args, kwargs, endpoint, chat_id,
                 kind="blocking", allow_retry=False,
-                note_429=endpoint != CHAT_ACTION_ENDPOINT,
             )
 
         kind = _kind_of(rate_limit_args)
@@ -1907,12 +1978,15 @@ class BudgetRateLimiter(BaseRateLimiter):
         ``callback``".
 
         ``note_429=False`` re-raises a small 429 without recording it
-        against the chat. Only the "typing…" chat action passes it
-        (§12/R4): that call is not in the chat's message bucket, so a 429
-        on it is no evidence about the bucket — deferring the chat and
-        doubling its card cadence over one would slow every card for a
-        call that never competed with them. The animator logs it once an
-        hour and skips the indicator.
+        against the chat. Nothing passes it since 8.30; it is kept as the
+        seam, not the policy.
+
+        A small 429 on the "typing…" chat action goes to
+        :meth:`note_typing_429` instead of :meth:`note_retry_after`
+        (8.30 Q5): it starts the chat's warning regime and blocks the
+        bubble for its retry_after, but defers no card and bumps no
+        backoff — a card must not freeze over an ornament's refusal. It
+        is re-raised for the animator to log once an hour.
         """
         if budget is not None:
             budget.calls += 1
@@ -1934,11 +2008,10 @@ class BudgetRateLimiter(BaseRateLimiter):
                 # and no deferral here, exactly as before (R6).
                 self.note_ban(chat_id, seconds)
                 raise
+            if endpoint == CHAT_ACTION_ENDPOINT:
+                self.note_typing_429(chat_id, seconds)
+                raise
             if not note_429:
-                # An exempt call's 429 (the typing action, §12/R4): the
-                # chat's send budget is not implicated, so nothing is
-                # deferred and no backoff is bumped. The caller drops the
-                # call — it never reaches the mute or the card path.
                 raise
             self.note_retry_after(chat_id, seconds)
             if kind == "skip":

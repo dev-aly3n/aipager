@@ -272,9 +272,14 @@ class _VirtualLoop(asyncio.SelectorEventLoop):
                 "the virtual loop spun for too many REAL seconds — something "
                 "is polling without a timer")
         if self._scheduled and not self._ready:
-            when = self._scheduled[0]._when
-            if when > self._virtual:
-                self._virtual = when + _LATENCY
+            # The next LIVE timer. A cancelled one (a typing loop's sleep,
+            # cancelled when its card went) is dropped by the base loop
+            # without running; jumping to it would leave the loop to wait
+            # for the next real timer in REAL time — measured at 19 s for
+            # one row before this skipped them.
+            live = [h._when for h in self._scheduled if not h._cancelled]
+            if live and min(live) > self._virtual:
+                self._virtual = min(live) + _LATENCY
         super()._run_once()
 
 

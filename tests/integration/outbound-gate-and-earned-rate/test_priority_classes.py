@@ -282,7 +282,8 @@ def test_the_typing_bubble_declares_itself_an_ornament(
     mk_bot, limiter, flood_clock, run_async,
 ):
     """Mutation: drop the class here and the most disposable call this
-    daemon makes stops being sheddable in minimal mode."""
+    daemon makes stops being sheddable in minimal mode. AMENDED by 8.30 R2:
+    it declares the skip kind as well — budgeted again, never waiting."""
     seen: list[object] = []
 
     class _Recorder:
@@ -297,7 +298,7 @@ def test_the_typing_bubble_declares_itself_an_ornament(
     sess.status = Status.BUSY
     sess.scope_chat_id = CHAT
     run_async(bot._send_typing(sess, CHAT))
-    assert seen == [{"class": "ornament"}]
+    assert seen == [{"kind": "skip", "class": "ornament"}]
 
 
 def test_the_consumed_reaction_declares_itself_a_signal(

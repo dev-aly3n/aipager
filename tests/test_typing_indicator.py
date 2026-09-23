@@ -172,13 +172,15 @@ def _typing_call(chat_id=None) -> dict:
     """The exact kwargs one indicator refresh carries.
 
     ``rate_limit_args`` joined the shape in 8.26: the bubble is declared
-    ORNAMENT (R3) so minimal mode can suspend it. Kept in ONE helper so a
-    future change to the declaration is a one-line edit here rather than a
-    hunt through a dozen literal dicts — and so the rows below keep
-    asserting the WHOLE call rather than quietly loosening to a subset.
+    ORNAMENT (R3) so minimal mode can suspend it — and, since 8.30, SKIP
+    kind, because it is budgeted again as the chat's lowest ornament and
+    must never wait. Kept in ONE helper so a change to the declaration is a
+    one-line edit here rather than a hunt through a dozen literal dicts —
+    and so the rows below keep asserting the WHOLE call rather than
+    quietly loosening to a subset. (AMENDED by 8.30: ``"kind": "skip"``.)
     """
     return {"chat_id": PRIVATE if chat_id is None else chat_id, **TYPING,
-            "rate_limit_args": {"class": "ornament"}}
+            "rate_limit_args": {"kind": "skip", "class": "ornament"}}
 
 
 def _stops_after(sess, sends: list, n: int):
@@ -227,14 +229,16 @@ def _chat(snapshot: dict, chat_id) -> dict:
     raise AssertionError(f"chat {chat_id} not in {snapshot}")
 
 
-def test_the_typing_action_goes_out_while_the_chat_budget_is_empty(run_async):
-    """R1, the headline: the chat has no token left and the action goes
-    out anyway, instantly — which is what the live probe measured
-    (``sendChatAction`` 200 while every edit was refused).
+def test_the_typing_action_is_refused_while_the_chat_budget_is_empty(run_async):
+    """R1, AMENDED by 8.30 R1/R2 (was
+    ``test_the_typing_action_goes_out_while_the_chat_budget_is_empty``).
+    The chat has no token left: the action is REFUSED, at once, and never
+    reaches Telegram. 8.24 sent it anyway, off-budget; on 2026-09-23 the
+    uncounted bubble earned the vm3 DM a 429 of its own before a straight
+    7-hour ban.
 
-    Mutation: drop ``sendChatAction`` from ``_CHAT_BUDGET_EXEMPT`` and it
-    is paced by the chat like a message — it waits for a token here, and
-    in the daemon it takes one a card edit was about to spend.
+    Mutation: put ``sendChatAction`` back in ``_CHAT_BUDGET_EXEMPT`` and it
+    goes out here.
     """
     clock = FakeClock()
     limiter = _limiter(clock)
@@ -245,55 +249,54 @@ def test_the_typing_action_goes_out_while_the_chat_budget_is_empty(run_async):
         for _ in range(3):
             await _acquire(limiter, call)
         assert _chat(limiter.snapshot(), PRIVATE)["tokens"] < 1.0
-        with pytest.raises(FloodSkipped):
-            await _acquire(limiter, call, kind="skip")
-
         started = clock.now
-        await _acquire(limiter, call, endpoint=CHAT_ACTION_ENDPOINT)
-        assert clock.now == started, "the typing action waited on a chat token"
+        with pytest.raises(FloodSkipped):
+            await _acquire(limiter, call, endpoint=CHAT_ACTION_ENDPOINT)
+        assert clock.now == started, "the typing action WAITED on a chat token"
 
     run_async(_drive())
-    assert call.stamps[-1][0] == CHAT_ACTION_ENDPOINT
-    snap = _chat(limiter.snapshot(), PRIVATE)
-    assert snap["chat_actions"] == 1
-    assert snap["tokens"] < 1.0, "the typing action consumed a chat token"
+    assert [s[0] for s in call.stamps] == ["sendMessage"] * 3
+    assert _chat(limiter.snapshot(), PRIVATE)["chat_actions"] == 0
 
 
-def test_the_typing_action_never_consumes_a_chat_token(run_async):
-    """R1's other half: not only does it not WAIT for a token, it does not
-    SPEND one — otherwise a card edit one tick later is refused for a call
-    Telegram never counted.
+def test_the_typing_action_spends_a_chat_token_and_needs_a_spare_one(run_async):
+    """R1's other half, AMENDED by 8.30 R1 (was
+    ``test_the_typing_action_never_consumes_a_chat_token``). The action
+    SPENDS a token like any call, and it is admitted only with a full
+    bucket — one token MORE than a card edit needs — so the second of two
+    back-to-back actions is refused rather than taking what a card is about
+    to spend.
 
-    Mutation: call ``budget.chat.take(1.0)`` on the exempt path and the
-    token count drops.
+    Mutation: acquire it with the card's ``_SKIP_RESERVE`` and the second
+    action goes out; skip the take and the token count does not drop.
     """
     clock = FakeClock()
     limiter = _limiter(clock)
     call = _recorder(clock)
 
     async def _drive():
-        for _ in range(5):
+        await _acquire(limiter, call, endpoint=CHAT_ACTION_ENDPOINT)
+        with pytest.raises(FloodSkipped):
             await _acquire(limiter, call, endpoint=CHAT_ACTION_ENDPOINT)
 
     run_async(_drive())
     snap = _chat(limiter.snapshot(), PRIVATE)
-    assert snap["tokens"] == pytest.approx(config.TELEGRAM_CHAT_BURST)
-    assert snap["chat_actions"] == 5
-    assert snap["skipped"] == 0
+    assert snap["tokens"] == pytest.approx(config.TELEGRAM_CHAT_BURST - 1)
+    assert snap["chat_actions"] == 1
+    assert snap["skipped"] == 1
 
 
-def test_the_typing_action_never_spends_a_group_window_slot(run_async):
-    """R3's group clause, which the DM rows cannot see. A group's whole
-    budget is 20 calls in any 60 s; 8.21 reckoned a typing bubble would
-    cost 18 of them. It costs none: the rolling window is a MESSAGE limit,
-    and the exempt path never touches ``budget.group``.
+def test_the_typing_action_spends_a_group_window_slot(run_async):
+    """R3's group clause, AMENDED by 8.30 R1 (was
+    ``test_the_typing_action_never_spends_a_group_window_slot``). Every
+    chat-scoped call but a reaction counts in the rolling window now, the
+    bubble included: a group's 20-per-60 s window loses one slot per
+    admitted action. (The card is protected by the bubble's higher
+    reserve and by the typing loop's fit check, not by the bubble being
+    free.)
 
-    Mutation: take a window slot on the exempt path and
-    ``sustained_free`` drops — and in a group chat the card starts
-    losing edits to an ornament again.
-
-    (8.27 renamed the field and gave every chat kind a window; a group's
-    limit is still the stricter 20/60 s.)
+    Mutation: skip the window take on the typing path and
+    ``sustained_free`` does not move.
     """
     clock = FakeClock()
     limiter = _limiter(clock)
@@ -302,28 +305,29 @@ def test_the_typing_action_never_spends_a_group_window_slot(run_async):
     async def _drive():
         await _acquire(limiter, call, endpoint="sendMessage", chat_id=GROUP)
         free = _chat(limiter.snapshot(), GROUP)["sustained_free"]
-        for _ in range(6):
-            await _acquire(limiter, call, endpoint=CHAT_ACTION_ENDPOINT,
-                           chat_id=GROUP)
+        clock.now += 10.0                      # a full token bucket again
+        await _acquire(limiter, call, endpoint=CHAT_ACTION_ENDPOINT,
+                       chat_id=GROUP)
         return free
 
     free_before = run_async(_drive())
     snap = _chat(limiter.snapshot(), GROUP)
     assert snap["kind"] == "group", "this row needs a group budget"
-    assert snap["sustained_free"] == free_before
-    assert snap["chat_actions"] == 6
+    assert snap["sustained_free"] == free_before - 1
+    assert snap["chat_actions"] == 1
 
 
-def test_the_typing_action_goes_out_while_the_chat_is_deferred_by_a_429(
+def test_the_typing_action_is_refused_while_the_chat_is_deferred_by_a_429(
         run_async):
-    """R1 as the live probe actually ran it: the chat is inside a
-    ``retry_after`` window, every budgeted call is barred, and the action
-    still goes out at once. This is the row that would have prevented
-    8.21's removal.
+    """R1 as the live probe ran it, AMENDED by 8.30 (was
+    ``test_the_typing_action_goes_out_while_the_chat_is_deferred_by_a_429``).
+    The chat is inside a ``retry_after`` window and every budgeted call is
+    barred — the bubble now included, refused at once and never waiting.
+    The probe proved typing is not blocked BY an edit 429; it did not
+    prove typing is free, and on vm3 it was not.
 
-    Mutation: check ``budget.retry_until`` on the exempt path too and the
-    indicator dies exactly when the operator most needs to see that the
-    session is still working.
+    Mutation: exempt the action from ``retry_until`` again and it goes out
+    here.
     """
     clock = FakeClock()
     limiter = _limiter(clock)
@@ -334,42 +338,48 @@ def test_the_typing_action_goes_out_while_the_chat_is_deferred_by_a_429(
         with pytest.raises(FloodSkipped):
             await _acquire(limiter, call, kind="skip")
         started = clock.now
-        await _acquire(limiter, call, endpoint=CHAT_ACTION_ENDPOINT)
+        with pytest.raises(FloodSkipped):
+            await _acquire(limiter, call, endpoint=CHAT_ACTION_ENDPOINT)
         assert clock.now == started
 
     run_async(_drive())
-    assert [s[0] for s in call.stamps] == [CHAT_ACTION_ENDPOINT]
+    assert call.stamps == []
 
 
 def test_the_typing_action_still_meets_the_overall_bucket(run_async):
-    """R1 stops at the CHAT budget. The 30/s overall bucket is Telegram's
-    global limit and applies to everything, reactions included.
+    """R1 stops at the CHAT budget; the 30/s overall bucket is Telegram's
+    global limit and applies to everything. AMENDED by 8.30 R2: the action
+    is skip-kind now, so an empty overall bucket REFUSES it rather than
+    making it wait — "never blocks" — where 0.7.13 waited.
 
-    Mutation: skip ``_wait_for_overall`` for the exempt endpoints and a
-    chat action can be made while the daemon is over its global rate.
+    Mutation: skip the overall check on the typing path and the action
+    goes out while the daemon is over its global rate.
     """
     clock = FakeClock()
-    limiter = _limiter(clock, overall_max_rate=2.0, overall_time_period=1.0)
+    limiter = _limiter(clock, overall_max_rate=1.0, overall_time_period=1.0)
     call = _recorder(clock)
 
     async def _drive():
-        for _ in range(2):
-            await _acquire(limiter, call, endpoint=CHAT_ACTION_ENDPOINT)
+        await _acquire(limiter, call, endpoint="sendMessage", chat_id=GROUP)
         started = clock.now
-        await _acquire(limiter, call, endpoint=CHAT_ACTION_ENDPOINT)
-        assert clock.now > started, "the third action ignored the 30/s bucket"
+        with pytest.raises(FloodSkipped):
+            await _acquire(limiter, call, endpoint=CHAT_ACTION_ENDPOINT)
+        assert clock.now == started, "the action WAITED on the 30/s bucket"
 
     run_async(_drive())
+    assert [s[0] for s in call.stamps] == ["sendMessage"]
 
 
-def test_a_typing_action_marked_skip_is_exempt_rather_than_skipped(run_async):
-    """The exemption is checked BEFORE the skip class, so a caller that
-    also passes ``kind="skip"`` (the shape this call had until 8.21) gets
-    the exemption, not a refusal. The reserve exists to protect real
-    content from callers that SPEND the budget, and this one does not.
+def test_a_typing_action_is_skip_kind_whatever_its_caller_declared(run_async):
+    """AMENDED by 8.30 R2 (was
+    ``test_a_typing_action_marked_skip_is_exempt_rather_than_skipped``):
+    the action is the chat's lowest ornament and never worth a wait, so it
+    takes the skip path even when its caller forgot to say so — a deferred
+    chat refuses it at once, blocking-declared or not, and it never
+    sleeps out the deferral.
 
-    Mutation: read ``_kind_of`` first and a stray ``kind="skip"`` makes
-    the indicator refusable again on a busy chat.
+    Mutation: honour a blocking ``kind`` for the action and this row waits
+    ten seconds and then sends.
     """
     clock = FakeClock()
     limiter = _limiter(clock)
@@ -377,11 +387,14 @@ def test_a_typing_action_marked_skip_is_exempt_rather_than_skipped(run_async):
     limiter.note_retry_after(PRIVATE, 10.0)
 
     async def _drive():
-        await _acquire(limiter, call, endpoint=CHAT_ACTION_ENDPOINT, kind="skip")
+        for kind in ("skip", None):
+            with pytest.raises(FloodSkipped):
+                await _acquire(limiter, call, endpoint=CHAT_ACTION_ENDPOINT,
+                               kind=kind)
 
     run_async(_drive())
-    assert len(call.stamps) == 1
-    assert _chat(limiter.snapshot(), PRIVATE)["skipped"] == 0
+    assert call.stamps == []
+    assert clock.now == 1_000_000.0, "the action waited"
 
 
 def test_a_429_on_the_typing_action_never_backs_the_chat_off(run_async):
@@ -690,23 +703,22 @@ def test_the_gate_touches_no_state_at_all(mk_bot):
             sess.stream_last_rendered) == (111.0, 222.0, "frozen")
 
 
-def test_the_indicator_passes_the_ornament_class_and_never_the_skip_kind(
+def test_the_indicator_passes_the_skip_kind_and_the_ornament_class(
         mk_bot, run_async):
-    """Two things at once, and they are easy to confuse.
+    """Two things at once, and they are easy to confuse. AMENDED by 8.30
+    R1/R2 (was
+    ``test_the_indicator_passes_the_ornament_class_and_never_the_skip_kind``).
 
     ``kind`` says "may this be refused when the budget is momentarily
-    short"; the indicator must NOT carry ``{"kind": "skip"}`` — the shape
-    it had until 8.21 — because the endpoint exemption is what keeps it
-    off the per-chat budget entirely, and a skip kind would only
-    re-expose it to the reserve rule on a chat that is short.
+    short": the indicator carries ``{"kind": "skip"}`` again, because it
+    is budgeted again and must never wait — 8.24's endpoint exemption,
+    which made the kind moot, is gone.
 
-    ``class`` says "how much is it worth". Since 8.26 the indicator IS
-    declared ORNAMENT: the bubble is the most disposable thing this daemon
-    sends, so minimal mode suspends it while answers keep flowing. The
-    class costs it no tokens and buys it no exemption from the mute.
+    ``class`` says "how much is it worth": ORNAMENT, the most disposable
+    thing this daemon sends, so minimal mode suspends it while answers
+    keep flowing.
 
-    Mutation: pass the skip kind again, or drop the class, and this names
-    the exact kwarg.
+    Mutation: drop the skip kind, or the class, and this names the kwarg.
     """
     sess = _sess()
     bot = _bot(mk_bot, sess)
@@ -715,8 +727,7 @@ def test_the_indicator_passes_the_ornament_class_and_never_the_skip_kind(
 
     kwargs = bot._app.bot.send_chat_action.await_args.kwargs
     assert kwargs == {"chat_id": PRIVATE, **TYPING,
-                      "rate_limit_args": {"class": "ornament"}}
-    assert "kind" not in kwargs["rate_limit_args"]
+                      "rate_limit_args": {"kind": "skip", "class": "ornament"}}
 
 
 # ── R4: a 429 on the action itself ───────────────────────────────────────────

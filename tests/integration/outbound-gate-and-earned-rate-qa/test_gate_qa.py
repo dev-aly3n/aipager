@@ -184,25 +184,37 @@ def test_calls_with_no_resolvable_chat_are_never_gated(
 
 # ===== criterion 22 / R8 — exempt from the BUDGET, not from the mute =====
 
-def test_chat_actions_spend_no_chat_token_and_never_wait(
+def test_chat_actions_are_metered_and_never_wait(
     limiter, qa_clock, run_async,
 ):
-    """R8 / criterion 22: measured 2026-09-12, chat actions answered 200
-    throughout a window that refused every edit into the same chat. Ten
-    in a row is far past ``TELEGRAM_CHAT_BURST``; if they were metered the
-    injected sleep would have been used."""
+    """R8 / criterion 22, AMENDED by 8.30 R1/R2 (was
+    ``test_chat_actions_spend_no_chat_token_and_never_wait``). The 2026-09-12
+    probe showed chat actions are not blocked by an edit 429; vm3 showed
+    they are not free. Ten in a row, far past ``TELEGRAM_CHAT_BURST``: the
+    first goes out, the rest are REFUSED — metered — and still none of
+    them waits, because the bubble is skip-kind: the injected sleep is
+    never used."""
+    from aipager.bot.flood_budget import FloodSkipped
+
+    sent: list[str] = []
+
     async def _callback():
+        sent.append("ok")
         return "ok"
 
     async def _drive():
         for _ in range(10):
-            await limiter.process_request(
-                callback=_callback, args=(), kwargs={},
-                endpoint="sendChatAction", data={"chat_id": CHAT},
-                rate_limit_args=None)
+            try:
+                await limiter.process_request(
+                    callback=_callback, args=(), kwargs={},
+                    endpoint="sendChatAction", data={"chat_id": CHAT},
+                    rate_limit_args=None)
+            except FloodSkipped:
+                pass
 
     run_async(_drive())
     assert qa_clock.sleeps == []
+    assert sent == ["ok"]
 
 
 def test_reactions_spend_no_chat_token(limiter, run_async):

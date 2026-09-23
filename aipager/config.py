@@ -696,28 +696,31 @@ CARD_RETRY_WAKE: float = 1.0
 # editing is the right answer anyway.
 CARD_STARVATION_BLOCK_TIMEOUT: float = 5.0
 
-# How often the "typing…" chat action is re-sent, per SESSION, while its
-# busy card is live (roadmap 8.24). 0 — or any value <= 0 — disables the
-# indicator outright.
+# How often the "typing…" chat action is re-sent, per CHAT, while any busy
+# card in that chat is live (roadmap 8.24; per chat since 8.30). 0 — or any
+# value <= 0 — disables the indicator outright.
 #
 # Telegram's own contract for `sendChatAction`: "The status is set for 5
 # seconds or less (when a message arrives from your bot, Telegram clients
 # clear its typing status)". So keeping the bubble lit needs one call
 # every <= 5 s per chat; 4.5 s leaves margin for the round trip without
 # spending calls on an indicator that is already lit. The refresh runs on
-# its own task (`animation._animate_typing`), whose period is this value
-# measured from the start of each send — NOT on the busy card's wake grid,
-# which would round it up to the card's interval and let the status lapse.
+# its own task (`animation._animate_typing`), ONE per chat, whose period is
+# this value measured from the start of each send — NOT on the busy card's
+# wake grid, which would round it up to the card's interval and let the
+# status lapse.
 #
-# It is deliberately NOT paced by the per-chat budget, and does not need
-# to be: measured live on the operator's bot, 2026-09-12 (design §12),
-# `sendChatAction typing` returned 200 on all ELEVEN calls made DURING a
-# `retry_after=10` window in which every `editMessageText` into the same
-# chat was refused, and the phone showed "typing…" throughout. Chat
-# actions are not in the message/edit bucket. 0.7.11 (8.21) removed the
-# indicator outright on the opposite assumption — see
-# `bot/animation.py`'s `_animate_typing` / `_typing_chat` / `_send_typing`
-# and `bot/flood_budget.CHAT_ACTION_ENDPOINT`.
+# It IS paced by the per-chat budget, as the chat's LOWEST ornament (8.30).
+# 8.24 had made it exempt — live probes on 2026-09-12 saw chat actions
+# answer 200 inside a `retry_after=10` window that refused every edit —
+# which proved typing is not blocked by an edit 429, not that it is free.
+# On 2026-09-23 one loop per busy SESSION had sent ~5,400 uncounted
+# bubbles into the vm3 DM when a 429 on the bubble itself came, and a
+# straight 7-hour ban followed. Now it needs a token more than a card
+# edit, stops first when the rolling hour fills, is refused for a 429's
+# retry_after, and goes out only when it fits beside the chat's cards —
+# see `bot/flood_budget.CHAT_ACTION_ENDPOINT` and
+# `bot/animation._typing_fits_cards`.
 TYPING_INDICATOR_INTERVAL: float = float(
     os.environ.get("TYPING_INDICATOR_INTERVAL", "4.5")
 )

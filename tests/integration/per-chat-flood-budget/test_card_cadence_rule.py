@@ -239,6 +239,15 @@ def _ext_bot(bot, telegram, limiter, chat_id):
     return bot
 
 
+def _aged(vloop, sess, seconds: float = 600.0):
+    """Put *sess*'s turn *seconds* old (8.30): a card ten minutes in is on
+    its 30 s tier and leaves the chat room for the typing bubble, which
+    (as the chat's lowest ornament) does not go out beside a card in its
+    first two minutes."""
+    sess.busy_started_at = vloop.time() - seconds
+    return sess
+
+
 def _gaps(stamps: list[float]) -> list[float]:
     return [round(b - a, 6) for a, b in zip(stamps, stamps[1:])]
 
@@ -584,9 +593,15 @@ def test_the_typing_indicator_holds_its_own_interval_while_a_card_is_live(
     refused while all eleven typing calls returned 200.
 
     The contract now is exact: one refresh per ``TYPING_INDICATOR_INTERVAL``
-    per session, on the indicator's own task, off the chat's budget — and
-    therefore EVERY gap strictly under the 5 s Telegram gives a typing
-    status, so the bubble never visibly drops. Review iteration 1 caught
+    per CHAT, on the indicator's own task — and therefore EVERY gap
+    strictly under the 5 s Telegram gives a typing status, so the bubble
+    never visibly drops.
+
+    AMENDED by 8.30: the bubble is budgeted again, as the lowest ornament,
+    and goes out only when it fits beside the chat's cards — never beside
+    a card in its first two minutes. So the card here is ten minutes into
+    its turn (``_aged``); what the row pins — the bubble's own clock, not
+    the card's wake grid — is unchanged. Review iteration 1 caught
     the first draft failing precisely here: offered from inside the card
     tick, the 4.5 s interval realized as ``ceil(4.5 / wake) * wake`` =
     5.28 s with one session and 6.6 s with two, above the expiry in every
@@ -597,7 +612,7 @@ def test_the_typing_indicator_holds_its_own_interval_while_a_card_is_live(
     send and this counts none.
     """
     bot = _ext_bot(mk_bot(), telegram, limiter, PRIVATE)
-    sess = _card(bot, "a", 10, PRIVATE)
+    sess = _aged(vloop, _card(bot, "a", 10, PRIVATE))
     _run_cards(vloop, bot, [sess], 20.0)
     actions = telegram.actions_for(PRIVATE)
     assert len(actions) >= 4, [round(a - 1_000_000.0, 3) for a in actions]
@@ -617,7 +632,8 @@ def test_a_slow_chat_action_does_not_stretch_the_refresh_interval(
 
     Mutation: ``await asyncio.sleep(TYPING_INDICATOR_INTERVAL)`` after the
     send instead of sleeping the remainder, and this row's gaps become
-    4.5 + 0.8 = 5.3 s — past the expiry.
+    4.5 + 0.8 = 5.3 s — past the expiry. (AMENDED by 8.30: the card is ten
+    minutes into its turn, so the bubble fits beside it — see ``_aged``.)
     """
     bot = _ext_bot(mk_bot(), telegram, limiter, PRIVATE)
     real = bot._app.bot.send_chat_action
@@ -627,7 +643,7 @@ def test_a_slow_chat_action_does_not_stretch_the_refresh_interval(
         return await real(*a, **kw)
 
     bot._app.bot.send_chat_action = slow
-    sess = _card(bot, "a", 10, PRIVATE)
+    sess = _aged(vloop, _card(bot, "a", 10, PRIVATE))
     _run_cards(vloop, bot, [sess], 20.0)
     gaps = _gaps(telegram.actions_for(PRIVATE))
     assert gaps, "the bubble was never lit"
@@ -637,13 +653,15 @@ def test_a_slow_chat_action_does_not_stretch_the_refresh_interval(
 def test_every_budgeted_call_a_live_card_makes_is_a_card_edit(
     mk_bot, vloop, telegram, limiter,
 ):
-    """Row M's other arm: the only call a live card makes that COSTS the
-    chat anything is the edit itself. The typing indicator is the one
-    permitted extra, and only because Telegram does not meter it (§12).
-    Mutation: send anything else from the loop — a second edit shape, a
-    stray sendMessage — and this names the endpoint."""
+    """Row M's other arm: a live card makes the edit itself and, as the one
+    permitted extra, the typing bubble. AMENDED by 8.30: the bubble is
+    budgeted again — the lowest ornament, going out only when it fits
+    beside the card, so the card is ten minutes in (``_aged``) — and this
+    strict fake still does not meter it (``EXEMPT``). Mutation: send
+    anything else from the loop — a second edit shape, a stray
+    sendMessage — and this names the endpoint."""
     bot = _ext_bot(mk_bot(), telegram, limiter, PRIVATE)
-    sess = _card(bot, "a", 10, PRIVATE)
+    sess = _aged(vloop, _card(bot, "a", 10, PRIVATE))
     _run_cards(vloop, bot, [sess], 12.0)
     assert {endpoint for endpoint, _, _, _ in telegram.calls} == \
         {"editMessageText", "sendChatAction"}
@@ -655,8 +673,10 @@ def test_a_group_card_sends_the_typing_indicator_too(
     mk_bot, vloop, telegram, limiter,
 ):
     """Row M as amended, on the OTHER chat kind — the one where 8.21
-    reckoned a typing bubble cost 18 of the group's 20 calls a minute. It
-    costs none of them: the 20-a-minute window is a message limit. The DM
+    reckoned a typing bubble cost 18 of the group's 20 calls a minute.
+    AMENDED by 8.30: it does cost a slot of the group's window again, so it
+    goes out only once the group's card leaves room for it — ten minutes
+    into the turn here (``_aged``), when the card edits every 30 s. The DM
     row above cannot see a group-only regression, and 8.21's own
     intermediate design (§11 U3) was exactly a group-only suppression, so
     this row is the one that would catch its return.
@@ -667,7 +687,7 @@ def test_a_group_card_sends_the_typing_indicator_too(
     ``tests/test_typing_indicator.py::test_the_typing_action_never_spends_a_group_window_slot``
     — here it would only show up as a delay, which this row cannot see.)"""
     bot = _ext_bot(mk_bot(), telegram, limiter, GROUP)
-    sess = _card(bot, "g", 10, GROUP)
+    sess = _aged(vloop, _card(bot, "g", 10, GROUP))
     _run_cards(vloop, bot, [sess], 20.0)
     actions = telegram.actions_for(GROUP)
     assert actions, "no bubble in a group"
@@ -797,10 +817,11 @@ def test_a_refused_card_comes_back_in_a_second_not_in_an_interval(
 # always 20/60 s, whose 3.0 s gap the 3.0 s group cadence floor already
 # dominated. That it did not move is a useful control on the change.
 @pytest.mark.parametrize("sessions,chat,edits,actions,skipped,gap", [
-    (1, GROUP, 18, 14, 0, 3.30),
-    (1, PRIVATE, 28, 14, 0, 2.20),
-    (2, PRIVATE, 28, 28, 0, 4.40),
-    (3, PRIVATE, 29, 42, 1, 6.60),
+    # ``actions`` AMENDED by 8.30: 0 in every row (see the docstring).
+    (1, GROUP, 18, 0, 0, 3.30),
+    (1, PRIVATE, 28, 0, 0, 2.20),
+    (2, PRIVATE, 28, 0, 0, 4.40),
+    (3, PRIVATE, 29, 0, 1, 6.60),
 ])
 def test_a_minute_of_card_traffic_costs_exactly_what_was_promised(
     mk_bot, vloop, telegram, limiter, sessions, chat, edits, actions,
@@ -827,13 +848,17 @@ def test_a_minute_of_card_traffic_costs_exactly_what_was_promised(
     private rows lose edits to skips; await it in the tick instead of
     spawning it and every gap grows.
 
-    ``actions`` is ``sessions x 14``: the indicator's own task refreshes
-    every 4.5 s from the moment the card is created, and 61 s holds
-    fourteen of those (t=0, 4.5, … 58.5) per session, whatever the card's
-    cadence happens to be. That independence is the point — review
-    iteration 1 rejected the first draft, where the indicator rode the
-    card's wake grid and the realized spacing became ``ceil(4.5/W)*W`` =
-    5.28–6.6 s, past the 5 s expiry Telegram gives a typing status.
+    ``actions`` was ``sessions x 14`` until 8.30, when the bubble went
+    back into the budget as the chat's LOWEST ornament. It is now 0 in
+    every row, and the card columns are unchanged — which is the claim
+    this row now checks: these cards are in their first minute and use
+    their chat's pacing to the margin (27 of the sustained window's 30 a
+    minute for one DM card), so the bubble does not fit beside them and
+    does not go out. Measured before the fit check existed: the bubble
+    admitted on a spare token alone cost one DM card 5 of its 28 edits,
+    the 8.21 regression. The bubble's own clock (4.5 s, independent of
+    the card's wake grid) is asserted beside long-running cards, where it
+    fits, in the row-M rows above.
     """
     bot = _ext_bot(mk_bot(), telegram, limiter, chat)
     cards = [_card(bot, f"s{i}", 10 + i, chat) for i in range(sessions)]

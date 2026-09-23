@@ -141,13 +141,16 @@ def test_a_refused_call_never_bumps_calls_but_is_counted_as_a_refusal(
     assert chat["muted_refusals"] == 3
 
 
-def test_a_chat_action_spends_no_chat_token_when_the_chat_is_healthy(
+def test_a_chat_action_spends_one_chat_token_when_the_chat_is_healthy(
     limiter, flood_clock, run_async,
 ):
-    """The other half of row C, and of R8: keeping the mute gate must not
-    cost the endpoints their BUDGET exemption. Mutation: drop
-    ``sendChatAction`` from ``_CHAT_BUDGET_EXEMPT`` and the token count
-    falls.
+    """The other half of row C, AMENDED by 8.30 R1 (was
+    ``test_a_chat_action_spends_no_chat_token_when_the_chat_is_healthy``):
+    the typing bubble lost its BUDGET exemption — every chat-scoped call
+    but a reaction is paced now — so a healthy chat's bubble goes out and
+    spends one token. (What R8 kept is unchanged and asserted above: the
+    mute gate covers it.) Mutation: exempt ``sendChatAction`` again and the
+    token count does not fall.
     """
     async def _callback():
         return None
@@ -158,8 +161,8 @@ def test_a_chat_action_spends_no_chat_token_when_the_chat_is_healthy(
     ))
     after = next(c for c in limiter.snapshot()["chats"]
                  if c["chat_id"] == OTHER_CHAT)
-    assert after["tokens"] == pytest.approx(config.TELEGRAM_CHAT_BURST), \
-        "an exempt endpoint spent a chat token"
+    assert after["tokens"] == pytest.approx(config.TELEGRAM_CHAT_BURST - 1), \
+        "the bubble did not spend a chat token"
     assert after["chat_actions"] == 1
 
 

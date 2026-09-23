@@ -424,9 +424,9 @@ def test_a_fresh_card_starts_the_bubble_without_sending_it_itself(mk_bot,
         bot._app.bot.send_chat_action.assert_awaited_once_with(
             chat_id=chat, action="typing",
             # 8.26 R3: the bubble declares itself an ORNAMENT so minimal
-            # mode can suspend it. No `kind` — the endpoint exemption is
-            # what keeps it off the per-chat budget.
-            rate_limit_args={"class": "ornament"})
+            # mode can suspend it. AMENDED by 8.30: and SKIP kind — it is
+            # budgeted again, as the lowest ornament, and never waits.
+            rate_limit_args={"kind": "skip", "class": "ornament"})
 
 
 def test_the_animation_module_sends_the_chat_action_from_one_place_only():
