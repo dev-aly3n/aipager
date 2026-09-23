@@ -169,8 +169,6 @@ def test_g_one_429_on_typing_starts_a_six_hour_warning(
     with pytest.raises(RetryAfter):
         run_async(_req(limiter, endpoint="sendChatAction", args=TYPING,
                        callback=_typing_429(5)))
-    assert limiter.warning_remaining(CHAT) == pytest.approx(
-        config.FLOOD_WARNING_HOURS * 3600.0)
     snap = limiter.snapshot()["chats"][0]
     assert snap["retry_until_in"] == 0.0, "a typing 429 deferred the cards"
     assert limiter.cadence_multiplier(CHAT) == 1.0
@@ -180,6 +178,8 @@ def test_g_one_429_on_typing_starts_a_six_hour_warning(
         run_async(_req(limiter, endpoint="sendChatAction", args=TYPING))
     flood_clock.advance(5.0)
     assert run_async(_req(limiter, endpoint="sendChatAction", args=TYPING)) == "sent"
+    assert limiter.warning_remaining(CHAT) == pytest.approx(
+        config.FLOOD_WARNING_HOURS * 3600.0 - 6.0)
 
     assert _climb(limiter, flood_clock, run_async, 5) <= 0.5
     assert _climb(limiter, flood_clock, run_async, 180) <= 0.5

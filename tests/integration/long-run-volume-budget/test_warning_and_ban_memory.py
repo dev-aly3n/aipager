@@ -163,10 +163,11 @@ def test_g_a_429_on_a_card_edit_starts_a_six_hour_warning(
     _edit_429(limiter, run_async)
     assert limiter.earned_rate(CHAT) == pytest.approx(0.5)
     assert limiter.cadence_multiplier(CHAT) == 2.0          # still halves
-    assert limiter.warning_remaining(CHAT) == pytest.approx(
-        config.FLOOD_WARNING_HOURS * 3600.0)
 
+    # The behaviour first: still ≤ 0.5 five minutes on (0.7.13: 1.0).
     assert _climb(limiter, flood_clock, run_async, hours=5 / 60) <= 0.5
+    assert limiter.warning_remaining(CHAT) == pytest.approx(
+        config.FLOOD_WARNING_HOURS * 3600.0 - 5 * MINUTE)
     assert _climb(limiter, flood_clock, run_async, hours=3) <= 0.5
     assert limiter.ceiling_for(CHAT) == pytest.approx(config.FLOOD_WARNED_CEILING)
 
