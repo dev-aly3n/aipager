@@ -2063,6 +2063,15 @@ class AnimationMixin:
         """
         if now is None:
             now = time.monotonic()
+        lock = getattr(sess, "_stream_edit_lock", None)
+        if lock is not None and lock.locked():
+            # An edit is IN FLIGHT (it may be waiting on the chat's budget
+            # for a second or more) and `last_tool_edit_at` is stamped
+            # only when it lands. Admitting this one would queue a second
+            # edit behind it on the lock, to go out the moment the first
+            # lands — two edits for one due slot. The in-flight edit IS
+            # this slot; whatever is new rides the next due edit.
+            return False
         floor = flood_policy.card_age_floor(card_age(sess, now),
                                             card_age_decay_enabled(sess))
         since = now - sess.last_tool_edit_at
