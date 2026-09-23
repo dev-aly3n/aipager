@@ -37,6 +37,10 @@ CHAT = 256113222
 GROUP = -1001234567890
 BAN = 34212.0
 
+#: One quiet window of the SLOW regime — what every window after a 429 is
+#: since 8.30 R5 (the warning regime), and after a ban since 8.27.
+SLOW_WINDOW = (config.FLOOD_RATE_RECOVERY_HOURS * 3600.0) / 10
+
 
 def _call(limiter, run_async, chat=CHAT, endpoint="sendMessage", **kw):
     async def _cb():
@@ -147,8 +151,14 @@ def test_a_genuinely_new_ban_is_counted(limiter, flood_clock):
 def test_quiet_minutes_after_a_429_earn_the_rate_back_in_named_steps(
     limiter, flood_clock,
 ):
-    """Row G. ADDITIVE INCREASE: +`FLOOD_RATE_INCREASE` per quiet
-    `FLOOD_SUCCESS_WINDOW_SECONDS`, never past the ceiling.
+    """Row G. ADDITIVE INCREASE: +`FLOOD_RATE_INCREASE` per quiet window,
+    never past the ceiling.
+
+    AMENDED by 8.30 R5. The 0.7.13 row stepped in 60 s windows: a 429 was
+    forgiven in five minutes, which is how vm3's one warning bought
+    nothing. A 429 now starts the six-hour WARNING REGIME, so the same
+    additive steps are the slow ones (``SLOW_WINDOW``) and stop at
+    ``FLOOD_WARNED_CEILING`` rather than the full ceiling.
 
     Mutation: make the anchor `now` instead of advancing it by whole
     windows and partial progress is lost on every read, so a chat that is
@@ -159,9 +169,10 @@ def test_quiet_minutes_after_a_429_earn_the_rate_back_in_named_steps(
     assert start == pytest.approx(config.FLOOD_START_RATE / 2)
 
     for step in range(1, 5):
-        flood_clock.advance(config.FLOOD_SUCCESS_WINDOW_SECONDS)
+        flood_clock.advance(SLOW_WINDOW)
         assert limiter.earned_rate(CHAT) == pytest.approx(
-            start + step * config.FLOOD_RATE_INCREASE), step
+            min(start + step * config.FLOOD_RATE_INCREASE,
+                config.FLOOD_WARNED_CEILING)), step
 
 
 def test_the_climb_stops_at_the_named_ceiling(limiter, flood_clock):
@@ -221,10 +232,20 @@ def test_after_a_ban_the_climb_is_stretched_over_the_named_hours(
 
 def test_the_slow_regime_expires_and_minutes_count_again(limiter, flood_clock):
     """A ban is evidence about the next few hours, not for ever. Past
-    `FLOOD_RATE_RECOVERY_HOURS` the chat is an ordinary chat again."""
+    `FLOOD_RATE_RECOVERY_HOURS` the chat is an ordinary chat again.
+
+    AMENDED by 8.30 R5. The 0.7.13 row put the chat under its ceiling
+    with a fresh 429 and then counted a 60 s window; a 429 now starts its
+    own six-hour warning regime, whose windows are the slow ones, so it
+    cannot be the probe. The rate is lowered through ``restore`` instead —
+    the durable file, which carries no 429 — once both the recovery and
+    the ban's own warning regime have run out.
+    """
     limiter.note_ban(CHAT, 1.0)
     flood_clock.advance(config.FLOOD_RATE_RECOVERY_HOURS * 3600.0 + 10.0)
-    limiter.note_retry_after(CHAT, 5)
+    assert limiter.warning_remaining(CHAT) == 0.0
+    limiter.restore([{"chat_id": CHAT, "rate": 0.1,
+                      "rate_earned_at": flood_clock.wall}])
     before = limiter.earned_rate(CHAT)
     flood_clock.advance(config.FLOOD_SUCCESS_WINDOW_SECONDS)
     assert limiter.earned_rate(CHAT) == pytest.approx(
@@ -362,11 +383,15 @@ def test_a_signal_is_never_suspended_by_minimal_mode(
 
 def test_minimal_mode_lifts_when_the_rate_recovers(limiter, flood_clock):
     """It is a state, not a latch. Mutation: set a sticky flag instead of
-    comparing the live rate and a chat stays in minimal mode for ever."""
+    comparing the live rate and a chat stays in minimal mode for ever.
+
+    AMENDED by 8.30 R5: two 429s start a warning regime, so the two quiet
+    windows that lift the rate over the floor are slow ones.
+    """
     limiter.note_retry_after(CHAT, 5)
     limiter.note_retry_after(CHAT, 5)
     assert limiter.minimal_mode(CHAT) is True
-    flood_clock.advance(config.FLOOD_SUCCESS_WINDOW_SECONDS * 2)
+    flood_clock.advance(SLOW_WINDOW * 2)
     assert limiter.minimal_mode(CHAT) is False
 
 
@@ -595,6 +620,8 @@ def test_leaving_minimal_mode_resumes_the_animation(
 
     Mutation: drop the `card_resume_due` branch from `_animate_tick` and
     this tick makes no call at all.
+
+    AMENDED by 8.30 R5: the recovery windows after the 429s are slow ones.
     """
     bot, sess = _minimal_bot(mk_bot, limiter, gated_bot)
     run_async(bot._animate_tick(sess, "Working", False))
@@ -603,7 +630,7 @@ def test_leaving_minimal_mode_resumes_the_animation(
     gated_bot.sent.clear()
     rich_http.requests.clear()
 
-    flood_clock.advance(config.FLOOD_SUCCESS_WINDOW_SECONDS * 2)
+    flood_clock.advance(SLOW_WINDOW * 2)
     assert limiter.minimal_mode(CHAT) is False
     budget = limiter._budget_for(CHAT)
     budget.chat.take(budget.chat.tokens())     # an empty bucket

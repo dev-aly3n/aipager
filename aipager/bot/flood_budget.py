@@ -122,6 +122,8 @@ from aipager.config import (
     FLOOD_SUCCESS_WINDOW_SECONDS,
     FLOOD_SUSTAINED_MAX,
     FLOOD_SUSTAINED_WINDOW,
+    FLOOD_WARNED_CEILING,
+    FLOOD_WARNING_HOURS,
     TELEGRAM_CHAT_BURST,
     TELEGRAM_GROUP_MAX_CALLS,
     TELEGRAM_GROUP_WINDOW,
@@ -472,6 +474,14 @@ class ChatBudget:
         # instant a ban is armed; persisted, because a restart inside a
         # ban must not forget where the ban ends.
         self.muted_until: float = 0.0
+        # WALL-clock instant this chat's WARNING REGIME ends (8.30 R5).
+        # Armed by any 429 — the typing bubble's included — and by a ban,
+        # always as ``max(existing, now + FLOOD_WARNING_HOURS)``. While it
+        # runs the rate ceiling is FLOOD_WARNED_CEILING and quiet windows
+        # are the slow post-ban ones. Its own stamp, not ``last_429_at``,
+        # which ``_decay`` advances by whole backoff windows and so drifts
+        # (vm3's persisted ``last_429_at`` is a minute after the real 429).
+        self.warned_until: float = 0.0
         self.waiters: collections.deque = collections.deque()
         self.calls: int = 0
         self.skipped: int = 0
@@ -772,11 +782,20 @@ class BudgetRateLimiter(BaseRateLimiter):
         sustained_window: float = FLOOD_SUSTAINED_WINDOW,
         minimal_floor: float = FLOOD_MINIMAL_MODE_RATE_FLOOR,
         ban_memory_days: float = FLOOD_BAN_MEMORY_DAYS,
+        warning_hours: float = FLOOD_WARNING_HOURS,
+        warned_ceiling: float = FLOOD_WARNED_CEILING,
         clock=time.monotonic,
         sleep=None,
         signal_path: str | None = None,
+        wall_clock=None,
     ) -> None:
         self._clock = clock
+        # The WALL-clock seam (8.30): ban stamps, the ban memory, the
+        # warning regime and every persisted deadline are wall time, and a
+        # replay of hours has to be able to move it. ``None`` reads
+        # ``time.time`` LATE, on every call, so a row that rebinds this
+        # module's own ``time`` keeps working unchanged.
+        self._wall_clock = wall_clock
         self._sleep = sleep if sleep is not None else asyncio.sleep
         self._overall = TokenBucket(
             overall_max_rate / overall_time_period, overall_max_rate, clock=clock,
@@ -799,6 +818,9 @@ class BudgetRateLimiter(BaseRateLimiter):
         self._minimal_floor = float(minimal_floor)
         # How far back a ban still divides this chat's ceiling (8.30 R6).
         self._ban_memory_seconds = float(ban_memory_days) * 86400.0
+        # The warning regime a 429 starts (8.30 R5).
+        self._warning_seconds = float(warning_hours) * 3600.0
+        self._warned_ceiling = float(warned_ceiling)
         self._signal_path = signal_path
         # Only the DAEMON may write beside the daemon's socket. An
         # explicit path means the caller owns it (tests, tools);
@@ -809,6 +831,12 @@ class BudgetRateLimiter(BaseRateLimiter):
         self._budgets: dict = {}
         self._last_signal_key: str | None = None
         self._last_signal_at: float = 0.0
+
+    def _wall_now(self) -> float:
+        """The wall clock: the injected one, else ``time.time`` read late."""
+        if self._wall_clock is not None:
+            return float(self._wall_clock())
+        return time.time()
 
     # ── lifecycle (telegram.ext.BaseRateLimiter) ─────────────────────────
 
@@ -925,7 +953,14 @@ class BudgetRateLimiter(BaseRateLimiter):
         to the ceiling (1.0) in 9.5 MINUTES. Using that after a ban would
         be a memory shorter than the incident it is supposed to remember —
         defect D3 restated.
+
+        A THIRD reason for the slow regime since 8.30 (R5): a chat inside
+        its WARNING REGIME. Any 429 is Telegram's warning, and on vm3 it
+        was the only one — 3 h 23 min before a 7-hour ban — while the 60 s
+        window had forgiven it in five minutes.
         """
+        if self._warned(budget, wall_now):
+            return self._slow_window()
         if not budget.ban_stamps:
             return self._success_window
         # From the END of the penalty, not its start (8.29 T1(c)). A ban
@@ -938,9 +973,35 @@ class BudgetRateLimiter(BaseRateLimiter):
         recent = max([*budget.ban_stamps, budget.muted_until])
         if wall_now - recent > self._recovery_hours * 3600.0:
             return self._success_window
+        return self._slow_window()
+
+    def _slow_window(self) -> float:
+        """One quiet window of the SLOW regime: the MIN-to-ceiling climb
+        stretched over ``FLOOD_RATE_RECOVERY_HOURS`` (2160 s a step)."""
         span = max(self._chat_max_rate - self._min_rate, 0.0)
         steps = max(math.ceil(span / self._rate_increase), 1)
         return (self._recovery_hours * 3600.0) / steps
+
+    def _warned(self, budget: ChatBudget, wall_now: float) -> bool:
+        """Is this chat inside its post-429 warning regime right now?"""
+        return wall_now < budget.warned_until
+
+    def _arm_warning(self, budget: ChatBudget, wall_now: float) -> None:
+        """Start — or extend, never shorten — this chat's warning regime
+        (8.30 R5), and clamp its rate down to the regime's ceiling.
+
+        The clamp is a CEILING, not an AIMD halving: a chat already under
+        the warned ceiling keeps its rate. Called for every 429 (budgeted
+        or the typing bubble's) and every ban.
+        """
+        budget.warned_until = max(budget.warned_until,
+                                  wall_now + self._warning_seconds)
+        ceiling = self.max_rate_for(budget, wall_now)
+        if budget.rate > ceiling:
+            now = self._clock()
+            budget.set_rate(ceiling, now)
+            budget.rate_earned_at = now
+        _mark_state_dirty()
 
     def _bans_7d(self, budget: ChatBudget, wall_now: float) -> int:
         """Bans inside this limiter's memory window (``ban_memory_days``,
@@ -961,13 +1022,17 @@ class BudgetRateLimiter(BaseRateLimiter):
         full ceiling, and Telegram — whose memory is plainly longer —
         answered the next long stretch with a straight 7-hour ban.
 
+        Capped further at ``FLOOD_WARNED_CEILING`` (0.5/s) while the chat
+        is in its post-429 WARNING REGIME (R5), for ``FLOOD_WARNING_HOURS``.
+
         Never below ``FLOOD_MIN_RATE``: a ceiling under the floor would
         invert the two and pin a chat at a rate it can never leave.
         """
         return flood_policy.effective_ceiling(
             max_rate=self._chat_max_rate, min_rate=self._min_rate,
-            bans=self._bans_7d(budget, wall_now), warned=False,
-            warned_ceiling=self._chat_max_rate,
+            bans=self._bans_7d(budget, wall_now),
+            warned=self._warned(budget, wall_now),
+            warned_ceiling=self._warned_ceiling,
         )
 
     def _earn_floor(self, budget: ChatBudget, now: float) -> float:
@@ -1030,7 +1095,7 @@ class BudgetRateLimiter(BaseRateLimiter):
         floor = self._earn_floor(budget, now)
         if floor > budget.rate_earned_at:
             budget.rate_earned_at = floor
-        ceiling = self.max_rate_for(budget, time.time())
+        ceiling = self.max_rate_for(budget, self._wall_now())
         if budget.rate > ceiling:
             # CLAMPED DOWN, not merely frozen (8.30). The ceiling can FALL
             # under a rate the chat already has — a ban stamp restored
@@ -1043,7 +1108,7 @@ class BudgetRateLimiter(BaseRateLimiter):
         if budget.rate >= ceiling:
             budget.rate_earned_at = now
             return
-        window = self._success_window_for(budget, time.time())
+        window = self._success_window_for(budget, self._wall_now())
         if window <= 0:
             return
         steps = int((now - budget.rate_earned_at) // window)
@@ -1069,7 +1134,7 @@ class BudgetRateLimiter(BaseRateLimiter):
         remaining = MUTE.remaining(budget.chat_id)
         if remaining > 0.0:
             budget.muted_until = max(budget.muted_until,
-                                     time.time() + remaining)
+                                     self._wall_now() + remaining)
 
     def _sync_mute(self, budget: ChatBudget, now: float) -> None:
         """Notice a ban armed on the RICH path, where ``_run`` never sees it.
@@ -1087,7 +1152,7 @@ class BudgetRateLimiter(BaseRateLimiter):
         remaining = MUTE.remaining(budget.chat_id)
         if remaining <= 0.0:
             return
-        deadline = time.time() + remaining
+        deadline = self._wall_now() + remaining
         if deadline <= budget.ban_seen_until + 1.0:
             return
         self.note_ban(budget.chat_id, remaining)
@@ -1112,7 +1177,7 @@ class BudgetRateLimiter(BaseRateLimiter):
         budget = self._budget_for(self._key(chat_id))
         if budget is None:
             return
-        wall_now = time.time()
+        wall_now = self._wall_now()
         deadline = wall_now + seconds
         # ABOVE the idempotence guard on purpose. `_run`'s ban branch
         # calls this BEFORE `transport._send_with_retry` arms the mute, so
@@ -1127,6 +1192,9 @@ class BudgetRateLimiter(BaseRateLimiter):
         before = budget.rate
         budget.set_rate(self._min_rate, now)
         budget.rate_earned_at = now
+        # A ban is a 429 too: the warning regime runs from it (8.30 R5).
+        budget.warned_until = max(budget.warned_until,
+                                  wall_now + self._warning_seconds)
         if before != budget.rate:
             log.warning(
                 "flood: chat %s banned for %ds → earned rate %g → %g calls/s",
@@ -1179,7 +1247,16 @@ class BudgetRateLimiter(BaseRateLimiter):
         budget = self._budgets.get(key) if key is not None else None
         if budget is None:
             return 0
-        return self._bans_7d(budget, time.time())
+        return self._bans_7d(budget, self._wall_now())
+
+    def warning_remaining(self, chat_id) -> float:
+        """Seconds left in this chat's warning regime; ``0.0`` when none
+        (or for a chat never seen, reported without allocating)."""
+        key = self._key(chat_id)
+        budget = self._budgets.get(key) if key is not None else None
+        if budget is None:
+            return 0.0
+        return max(budget.warned_until - self._wall_now(), 0.0)
 
     def ceiling_for(self, chat_id) -> float:
         """The rate ceiling this chat's earned rate may climb to, right
@@ -1189,7 +1266,7 @@ class BudgetRateLimiter(BaseRateLimiter):
         budget = self._budgets.get(key) if key is not None else None
         if budget is None:
             return self._chat_max_rate
-        return self.max_rate_for(budget, time.time())
+        return self.max_rate_for(budget, self._wall_now())
 
     def sustained_used(self, chat_id) -> int:
         """Calls this chat has made inside the current rolling window."""
@@ -1273,6 +1350,9 @@ class BudgetRateLimiter(BaseRateLimiter):
         before = budget.rate
         budget.set_rate(max(budget.rate * 0.5, self._min_rate), now)
         budget.rate_earned_at = now
+        # AND the warning regime (8.30 R5): hours of the slow climb under a
+        # 0.5/s ceiling, not the five minutes the 60 s window gave vm3.
+        self._arm_warning(budget, self._wall_now())
         # ONE warning, no traceback: Telegram escalates on the COUNT of
         # violations, and 2,021 stack traces told the operator nothing
         # 2,021 times. The rate goes in the same line rather than a second
@@ -1632,7 +1712,7 @@ class BudgetRateLimiter(BaseRateLimiter):
         write and the read) is treated as "now": never credit a chat with
         quiet time it has not had.
         """
-        elapsed = max(0.0, time.time() - float(wall_stamp))
+        elapsed = max(0.0, self._wall_now() - float(wall_stamp))
         return self._clock() - elapsed
 
     def serialise(self) -> list[dict]:
@@ -1644,7 +1724,7 @@ class BudgetRateLimiter(BaseRateLimiter):
         anyone restarts.
         """
         now = self._clock()
-        wall_now = time.time()
+        wall_now = self._wall_now()
         chats = []
         for budget in self._budgets.values():
             self._decay(budget, now)
@@ -1691,7 +1771,7 @@ class BudgetRateLimiter(BaseRateLimiter):
         if not isinstance(chats, list):
             return 0
         restored = 0
-        wall_now = time.time()
+        wall_now = self._wall_now()
         for entry in chats:
             if not isinstance(entry, dict):
                 continue
@@ -1771,7 +1851,7 @@ class BudgetRateLimiter(BaseRateLimiter):
         did — neither reached its callback, so neither is in ``calls``.
         """
         now = self._clock()
-        wall_now = time.time()
+        wall_now = self._wall_now()
         chats = []
         for budget in self._budgets.values():
             self._decay(budget, now)
@@ -1796,6 +1876,7 @@ class BudgetRateLimiter(BaseRateLimiter):
                 "bans_today": budget.bans_today(wall_now),
                 "bans_7d": self._bans_7d(budget, wall_now),
                 "ceiling": self.max_rate_for(budget, wall_now),
+                "warning_remaining": max(budget.warned_until - wall_now, 0.0),
                 "waiters": len(budget.waiters),
             })
         return {"overall_tokens": self._overall.tokens(), "chats": chats}
@@ -1856,7 +1937,7 @@ class BudgetRateLimiter(BaseRateLimiter):
                 backoff.append({
                     "chat_id": budget.chat_id,
                     "multiplier": float(budget.backoff),
-                    "last_429_at": time.time() - max(now - budget.last_429_at, 0.0),
+                    "last_429_at": self._wall_now() - max(now - budget.last_429_at, 0.0),
                 })
             if budget.reactions:
                 reactions.append(

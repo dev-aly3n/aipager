@@ -25,6 +25,8 @@ from aipager.bot.flood_budget import (
 CHAT = 256113222          # a PRIVATE chat: no sustained window before 8.29
 BAN = 34212.0
 WINDOW = config.FLOOD_SUCCESS_WINDOW_SECONDS
+#: The slow regime's window: every window after a 429 is one since 8.30 R5.
+SLOW_WINDOW = (config.FLOOD_RATE_RECOVERY_HOURS * 3600.0) / 10
 
 
 async def _ok():
@@ -128,11 +130,15 @@ def test_a_429_on_one_chat_leaves_another_chats_rate_alone(
 def test_one_quiet_window_earns_exactly_one_increase(
     limiter, qa_clock, run_async,
 ):
-    """Row G / criterion 11, just-inside the boundary."""
+    """Row G / criterion 11, just-inside the boundary.
+
+    AMENDED by 8.30 R5: after a 429 the chat is in its warning regime, so
+    the window that earns one increase is the SLOW one, not 60 s.
+    """
     _seed(limiter, run_async)
     limiter.note_retry_after(CHAT, 5)
     before = limiter.earned_rate(CHAT)
-    qa_clock.advance(WINDOW)
+    qa_clock.advance(SLOW_WINDOW)
     assert limiter.earned_rate(CHAT) == pytest.approx(
         before + config.FLOOD_RATE_INCREASE)
 
@@ -152,10 +158,19 @@ def test_twelve_quiet_minutes_climb_to_the_named_ceiling(
     limiter, qa_clock, run_async,
 ):
     """Row G as the design states it: 0.25 + 12×0.1 would be 1.45, and the
-    ceiling is ``TELEGRAM_PRIVATE_MAX_RATE``."""
+    ceiling is ``TELEGRAM_PRIVATE_MAX_RATE``.
+
+    AMENDED by 8.30 R5. Twelve quiet MINUTES after a 429 are now inside
+    its six-hour warning regime, where the ceiling is
+    ``FLOOD_WARNED_CEILING``; the named ceiling comes back only once the
+    regime has run out. (0.7.13 reached it in twelve minutes — vm3's one
+    warning, forgiven before the card had refreshed a hundred times.)
+    """
     _seed(limiter, run_async)
     limiter.note_retry_after(CHAT, 5)
     qa_clock.advance(12 * WINDOW)
+    assert limiter.earned_rate(CHAT) <= config.FLOOD_WARNED_CEILING
+    qa_clock.advance(config.FLOOD_WARNING_HOURS * 3600 + 12 * WINDOW)
     assert limiter.earned_rate(CHAT) == pytest.approx(
         config.TELEGRAM_PRIVATE_MAX_RATE)
 
