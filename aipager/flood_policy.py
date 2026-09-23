@@ -33,6 +33,7 @@ from aipager.config import (
     CARD_AGE_TIER3_INTERVAL,
     FLOOD_HOURLY_ESSENTIAL_RESERVE,
     FLOOD_HOURLY_MAX,
+    FLOOD_WARNING_HOURS,
 )
 
 #: The elapsed-time units a busy card can render in: seconds (today's
@@ -84,6 +85,32 @@ def effective_ceiling(
     if warned:
         ceiling = min(ceiling, float(warned_ceiling))
     return max(float(min_rate), ceiling)
+
+
+def clamp_warned_until(
+    value, wall_now: float, *,
+    warning_seconds: float = FLOOD_WARNING_HOURS * 3600.0,
+) -> float:
+    """A persisted ``warned_until`` as the wall-clock end of AT MOST one
+    warning regime from *wall_now*, or ``0.0`` for "not warned".
+
+    The one clamp both readers of the durable file apply — the daemon's
+    ``restore`` and ``aipager status`` — so the operator is never shown a
+    regime the daemon itself would not hold (a file written before a clock
+    jump can claim one a year long). Anything that does not read as a
+    finite, positive number (a bool, ``None``, a word, NaN, infinity) is
+    ``0.0``: an unreadable regime is not a regime. A numeric string reads
+    as its number, as every other field of the file does.
+    """
+    if isinstance(value, bool) or value is None:
+        return 0.0
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if not math.isfinite(value) or value <= 0.0:
+        return 0.0
+    return min(value, float(wall_now) + max(float(warning_seconds), 0.0))
 
 
 def hourly_limits(
@@ -183,6 +210,7 @@ __all__ = [
     "UNIT_SECONDS",
     "bans_within",
     "card_age_floor",
+    "clamp_warned_until",
     "effective_ceiling",
     "elapsed_unit",
     "format_elapsed",

@@ -16,6 +16,7 @@ from aipager import config, flood_policy
 from aipager.flood_policy import (
     bans_within,
     card_age_floor,
+    clamp_warned_until,
     effective_ceiling,
     elapsed_unit,
     format_elapsed,
@@ -202,3 +203,36 @@ def test_format_is_total_on_bad_input():
     assert format_elapsed(-4, "s") == "0s"
     assert format_elapsed(math.nan, "m") == "<1m"
     assert format_elapsed(90, "?") == "1m 30s"
+
+
+# ── the warning regime read back from a file ────────────────────────────────
+
+REGIME = config.FLOOD_WARNING_HOURS * 3600.0
+
+
+def test_a_regime_inside_one_regime_is_kept_as_written():
+    """A ``warned_until`` an hour ahead is an hour ahead."""
+    assert clamp_warned_until(NOW + 3600.0, NOW) == NOW + 3600.0
+
+
+def test_a_regime_years_ahead_is_clamped_to_one_regime():
+    """Both readers of the file (the daemon's ``restore`` and ``aipager
+    status``) share this clamp. Mutation: drop the ``min`` and a file
+    written before a clock jump reads as a regime a year long."""
+    assert clamp_warned_until(NOW + 3e7, NOW) == NOW + REGIME
+
+
+def test_the_clamp_follows_its_argument():
+    assert clamp_warned_until(NOW + 3e7, NOW, warning_seconds=60.0) == NOW + 60.0
+
+
+def test_a_numeric_string_reads_as_its_number():
+    """As ``flood_budget._finite`` reads every other field of the file."""
+    assert clamp_warned_until(str(NOW + 60.0), NOW) == NOW + 60.0
+
+
+@pytest.mark.parametrize("junk", [
+    float("nan"), float("inf"), -5.0, 0.0, "soon", None, True, [1], {},
+])
+def test_an_unreadable_regime_is_no_regime(junk):
+    assert clamp_warned_until(junk, NOW) == 0.0

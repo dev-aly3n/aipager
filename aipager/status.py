@@ -26,7 +26,12 @@ import time
 from pathlib import Path
 
 from aipager.config import BOT_TOKEN, CHAT_ID, SESSION_STATE_FILE, SOCKET_PATH
-from aipager.flood_policy import bans_within, effective_ceiling, hourly_limits
+from aipager.flood_policy import (
+    bans_within,
+    clamp_warned_until,
+    effective_ceiling,
+    hourly_limits,
+)
 from aipager.errors import friendly_error, friendly_warn
 from aipager.ui import console
 
@@ -126,12 +131,13 @@ def read_flood_chats(path: str | None = None) -> list[dict]:
     ``bans_today``, ``muted_until`` (wall clock, omitted once lapsed) and
     ``stale``. Since 8.30 also: ``hourly_used`` / ``hourly_budget`` (calls
     in the last hour, summed here from the persisted per-minute buckets
-    against NOW, and the chat's hourly budget), ``hourly_age`` (seconds
-    since the file was written — the hour is at most a minute stale while
-    calls flow; ``None`` when unknown), ``warning_remaining`` (seconds left
-    in the post-429 warning regime), ``bans_7d`` and ``ceiling`` (the rate
-    ceiling those imply). The last three are computed through
-    ``aipager.flood_policy``, the daemon's own arithmetic.
+    against NOW, and the chat's hourly budget), ``hourly_age``
+    (seconds since the file was written — the hour is at most a minute
+    stale while calls flow; ``None`` when unknown), ``warning_remaining``
+    (seconds left in the post-429 warning regime, clamped to one regime),
+    ``bans_7d`` and ``ceiling`` (the rate ceiling those imply). Those are
+    computed through ``aipager.flood_policy``, the daemon's own
+    arithmetic.
 
     ``stale`` is True when the document is older than the sustained
     window, in which case the sustained figures describe a window that has
@@ -166,9 +172,11 @@ def read_flood_chats(path: str | None = None) -> list[dict]:
             continue
         stamps = entry.get("ban_stamps")
         bans_7d = bans_within(stamps, now, config.FLOOD_BAN_MEMORY_DAYS * 86400.0)
-        warned = max(_float_or(entry.get("warned_until"), 0.0) - now, 0.0)
-        if warned != warned or warned == float("inf"):
-            warned = 0.0
+        # Clamped to one regime by the daemon's own rule (8.30): a file
+        # written before a clock jump must not read "8333h left" here
+        # while the daemon, restoring the same file, holds six hours.
+        warned = max(clamp_warned_until(entry.get("warned_until"), now) - now,
+                     0.0)
         row = {
             "chat_id": entry.get("chat_id"),
             "rate": _float_or(entry.get("rate"), config.FLOOD_START_RATE),

@@ -2185,11 +2185,11 @@ class BudgetRateLimiter(BaseRateLimiter):
                 # ceiling the rate is clamped to reads it too. Clamped to
                 # at most one full regime from now — a file written before
                 # a clock jump must not pin a chat warned for a year.
-                warned = _finite(entry.get("warned_until"))
-                if warned is not None and warned > 0.0:
-                    budget.warned_until = max(
-                        budget.warned_until,
-                        min(warned, wall_now + self._warning_seconds))
+                warned = flood_policy.clamp_warned_until(
+                    entry.get("warned_until"), wall_now,
+                    warning_seconds=self._warning_seconds)
+                if warned > 0.0:
+                    budget.warned_until = max(budget.warned_until, warned)
                 self._restore_hourly(budget, entry.get("hourly"), wall_now)
                 for latch in ("hourly_minimal", "typing_shed"):
                     value = entry.get(latch)

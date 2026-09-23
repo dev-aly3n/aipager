@@ -311,3 +311,34 @@ def test_v_status_sums_the_hour_against_its_own_clock(monkeypatch):
     (row,) = status.read_flood_chats()
     assert row["hourly_used"] == 6
     assert row["hourly_age"] == pytest.approx(50.0)
+
+
+def _hand_write(chat_row, written_at):
+    path = Path(config.FLOOD_STATE_FILE)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"version": 1, "written_at": written_at,
+                                "chats": [chat_row]}))
+
+
+def test_v_status_and_restore_read_one_regime_from_the_same_file(
+    flood_clock, monkeypatch,
+):
+    """A hand-edited or clock-jumped file claims a regime a year long. The
+    daemon, restoring it, holds six hours; ``aipager status``, reading the
+    same file, must say six hours too — the same clamp
+    (``flood_policy.clamp_warned_until``) in both. Mutation: drop the
+    clamp from the status reader and it reports ~8333 h."""
+    now = flood_clock.wall
+    row = {"chat_id": CHAT, "rate": 0.5, "warned_until": now + 3e7}
+    _hand_write(row, now)
+    monkeypatch.setattr(status, "time", types.SimpleNamespace(time=lambda: now))
+    (shown,) = status.read_flood_chats()
+    lim = _fresh(flood_clock)
+    lim.restore([row])
+    assert shown["warning_remaining"] == pytest.approx(
+        config.FLOOD_WARNING_HOURS * 3600.0)
+    assert shown["warning_remaining"] == pytest.approx(
+        lim.warning_remaining(CHAT))
+    (line,) = status.flood_chat_lines([shown])
+    assert "warning regime, 6h 0m left" in line
+
