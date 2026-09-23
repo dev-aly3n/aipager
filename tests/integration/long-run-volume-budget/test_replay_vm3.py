@@ -40,6 +40,9 @@ HOUR = 3600.0
 BIGDOG_MSG = 1000
 PINNED = 9999
 ANSWER = "the answer"
+#: Minutes of the replay in which BOTH sessions send a hook. The replay
+#: has 171; two hours leaves room for a reseeded stimulus.
+BOTH_STREAMING_MINUTES = 120
 
 
 def _most_in_window(stamps: list[float], window: float = HOUR) -> int:
@@ -91,11 +94,12 @@ async def _end(bot, sess) -> None:
     sess.busy_msg_id = None
 
 
-async def _work(bot, sess, rng: random.Random, until: float, loop) -> None:
+async def _work(bot, sess, rng: random.Random, until: float, loop,
+                hooks: list | None = None) -> None:
     """A session actually working, until *until*: a tool call every 2–8 s
     (PreToolUse, then PostToolUse a moment later), prose every 20–60 s,
     a phantom SubagentStop (empty type, unknown id, 0.0 s) about every
-    36 s."""
+    36 s. Each tool call is recorded in *hooks* as ``(label, time)``."""
     n = 0
     next_prose = loop.time() + rng.uniform(20, 60)
     next_phantom = loop.time() + rng.expovariate(1 / 36)
@@ -103,6 +107,8 @@ async def _work(bot, sess, rng: random.Random, until: float, loop) -> None:
         await asyncio.sleep(rng.uniform(2, 8))
         n += 1
         summary = f"Bash: step {n}"
+        if hooks is not None:
+            hooks.append((sess.label, loop.time()))
         await bot.notify(sess, "tool_use", {"tool_summary": summary,
                                             "tool_name": "Bash"})
         await asyncio.sleep(rng.uniform(0.3, 1.5))
@@ -119,11 +125,14 @@ async def _work(bot, sess, rng: random.Random, until: float, loop) -> None:
 
 
 def _replay(bot, vloop, *, seed: int = 20260923) -> dict:
-    """Run the vm3 timeline and return the catfish schedule."""
+    """Run the vm3 timeline and return the catfish schedule, the run's
+    start and end, and every tool hook as ``(label, time)``."""
     rng = random.Random(seed)
     bigdog = _session(bot, "bigdog")
     catfish = _session(bot, "catfish")
-    schedule: dict = {"catfish": []}
+    hooks: list[tuple[str, float]] = []
+    schedule: dict = {"catfish": [], "hooks": hooks,
+                      "start": vloop.time(), "end": vloop.time() + T}
     # The run's END on the loop's clock. `T` is a DURATION: the virtual
     # loop starts at 1,000,000, so passing `T` itself as `_work`'s
     # deadline (as this did until 8.30's iteration 3) ended bigdog's work
@@ -133,21 +142,22 @@ def _replay(bot, vloop, *, seed: int = 20260923) -> dict:
 
     async def _bigdog():
         await _begin(bot, bigdog, BIGDOG_MSG, vloop.time())
-        await _work(bot, bigdog, random.Random(seed + 1), end, vloop)
+        await _work(bot, bigdog, random.Random(seed + 1), end, vloop, hooks)
 
     async def _catfish():
         for turn in range(9):
             await asyncio.sleep(rng.uniform(120, 360))          # idle gap
             start = vloop.time()
             await _begin(bot, catfish, 2000 + turn, start)
-            await _work(bot, catfish, rng, start + rng.uniform(180, 480), vloop)
+            await _work(bot, catfish, rng, start + rng.uniform(180, 480), vloop,
+                        hooks)
             await _end(bot, catfish)
             schedule["catfish"].append((start, vloop.time()))
         await asyncio.sleep(rng.uniform(120, 360))
         start = vloop.time()
         await _begin(bot, catfish, 2100, start)                # the long one
         schedule["catfish"].append((start, end))
-        await _work(bot, catfish, rng, end, vloop)
+        await _work(bot, catfish, rng, end, vloop, hooks)
 
     async def main():
         tasks = [asyncio.ensure_future(_bigdog()),
@@ -213,7 +223,7 @@ def test_c_the_vm3_timeline_stays_inside_the_long_run_budget(
             samples.append((vlimiter.minimal_mode(CHAT), hour["typing_shed"]))
 
     sampler = vloop.create_task(_sample())
-    _replay(bot, vloop)
+    run = _replay(bot, vloop)
     sampler.cancel()
 
     calls = volume_telegram.calls
@@ -265,6 +275,21 @@ def test_c_the_vm3_timeline_stays_inside_the_long_run_budget(
     assert report["shed_minutes"] == 0, report
     assert report["minimal_minutes"] == 0, report
     assert 0 < report["dashboard"] <= 60, report
+    # Both sessions really stream (rev-iter3-001). Until 8.30's iteration
+    # 3 the replay passed `T` as `_work`'s absolute deadline on a loop
+    # that starts at 1,000,000, so bigdog made no hook at all and catfish's
+    # long turn none either: every row above passed on one session's
+    # animator. Both must still be sending hooks in the run's last ten
+    # minutes, and for at least two hours of minutes both must have sent.
+    last = run["end"] - 600.0
+    for label in ("bigdog", "catfish"):
+        assert [t for lab, t in run["hooks"] if lab == label and t >= last], (
+            f"{label} sent no hook in the run's last ten minutes")
+    by_minute: dict[int, set[str]] = {}
+    for lab, t in run["hooks"]:
+        by_minute.setdefault(int((t - run["start"]) // 60.0), set()).add(lab)
+    both = sum(1 for labs in by_minute.values() if len(labs) == 2)
+    assert both >= BOTH_STREAMING_MINUTES, (both, report)
 
 
 # ── K ───────────────────────────────────────────────────────────────────────
