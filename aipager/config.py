@@ -733,6 +733,17 @@ CARD_STARVATION_BLOCK_TIMEOUT: float = 5.0
 TYPING_INDICATOR_INTERVAL: float = float(
     os.environ.get("TYPING_INDICATOR_INTERVAL", "4.5")
 )
+# The typing bubble DECAYS WITH TURN AGE too (8.30, operator ruling #2,
+# 2026-09-23), on the age of the chat's OLDEST busy turn and at the card's
+# tier boundaries (CARD_AGE_TIER2_AT / CARD_AGE_TIER3_AT): every
+# TYPING_INDICATOR_INTERVAL for 10 minutes (a steady bubble), then every
+# 9 s, and every 15 s past an hour — past Telegram's 5 s status, so an old
+# turn's bubble flickers rather than staying lit. At 4.5 s the bubble alone
+# is 800 calls an hour, and on the vm3 replay it tripped the hourly shed
+# (75 % of the ornament share) and went dark for 43 minutes at a time; at
+# 15 s it is 240. Off with the `card_age_decay` preference, like the card.
+TYPING_AGE_TIER2_INTERVAL: float = 9.0
+TYPING_AGE_TIER3_INTERVAL: float = 15.0
 # How soon a bubble the budget refused for want of a token THIS second is
 # tried again, instead of a whole TYPING_INDICATOR_INTERVAL later (8.30).
 # The bubble needs one token and one window slot more than a card edit, so

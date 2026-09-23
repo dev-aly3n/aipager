@@ -169,10 +169,14 @@ def test_c_the_vm3_timeline_stays_inside_the_long_run_budget(
     * consecutive typing calls ≥ 4.5 s apart, the first in the run's first
       second, and — by operator ruling 2026-09-23, "typing always shows,
       the young card yields" — never late by more than one retry past a
-      token's refill (4.5 + 2 s at the start rate) except while the
+      token's refill beyond the bubble's own period, which decays with
+      the oldest turn's age (ruling #2: 4.5 / 9 / 15 s), except while the
       rolling hour has SHED it (75 % of the ornament share, back under
       60 %): every gap is either a lit one or a shed one, minutes long,
       and none in between;
+    * the shed darkness is under 30 minutes in all (71 before ruling #2,
+      22.6 with it; the remaining stretch is in the FIRST hour, where the
+      9 s tier and six young catfish turns meet — see fixes-2.md);
     * zero 429s and zero bans from a Telegram that bans on volume;
     * bigdog's four-hour card: at most 60 edits in any hour after its
       first (it has no state change to bypass on);
@@ -210,8 +214,10 @@ def test_c_the_vm3_timeline_stays_inside_the_long_run_budget(
     gaps = [b - a for a, b in zip(typing, typing[1:])]
     assert typing and min(gaps) >= 4.5 - 1e-6, report
     assert typing[0] - everything[0] < 1.0, "no bubble in the first second"
-    late = 4.5 + 1.0 / config.FLOOD_START_RATE
+    late = config.TYPING_AGE_TIER3_INTERVAL + 1.0 / config.FLOOD_START_RATE
     assert not [g for g in gaps if late + 1e-3 < g < 10 * 60.0], report
+    dark = sum(g for g in gaps if g >= 10 * 60.0)
+    assert dark < 30 * 60.0, (dark, report)
     after_first_hour = [t for t in bigdog if t >= bigdog[0] + HOUR]
     assert _most_in_window(after_first_hour) <= 60, report
     assert report["total"] <= 4080, report

@@ -1369,6 +1369,28 @@ class AnimationMixin:
                 out.append(other)
         return out
 
+    def _typing_period(self, members: list, now: float) -> float:
+        """Seconds between this chat's bubbles right now (8.30, operator
+        ruling #2): ``flood_policy.typing_interval`` on the age of the
+        OLDEST busy turn among *members* — 4.5 s for ten minutes, 9 s to
+        an hour, 15 s after — so an hour-plus turn does not spend the
+        hour's ornament share on the bubble and have it shed for forty
+        minutes at a time.
+
+        The bubble is the CHAT's, so it takes the preference of every
+        session lighting it: if any busy session in the chat has
+        ``card_age_decay`` off, the bubble keeps ``TYPING_INDICATOR_INTERVAL``
+        (that operator asked for today's pace). No busy member — nothing
+        to light — is the base interval too.
+        """
+        busy = [m for m in members if m.status is Status.BUSY]
+        if TYPING_INDICATOR_INTERVAL <= 0 or not busy:
+            return TYPING_INDICATOR_INTERVAL
+        enabled = all(card_age_decay_enabled(m) for m in busy)
+        oldest = max(card_age(m, now) for m in busy)
+        return flood_policy.typing_interval(oldest, enabled,
+                                            base=TYPING_INDICATOR_INTERVAL)
+
     def _typing_retry_soon(self, sess: TrackedSession) -> bool:
         """After a bubble that did not go out: is it worth retrying in
         ``TYPING_RETRY_WAKE`` rather than a whole interval?
@@ -1428,7 +1450,8 @@ class AnimationMixin:
         ``_animate_tick``, which put it on the animator's wake grid (5.28
         to 6.6 s, past Telegram's 5 s expiry) and put a Telegram round
         trip on a card path (review rev-iter1-001/003). Here the period is
-        exactly ``TYPING_INDICATOR_INTERVAL``, measured from the start of
+        :meth:`_typing_period` (``TYPING_INDICATOR_INTERVAL`` for a young
+        turn, decaying with the oldest turn's age), measured from the start of
         each refresh, and a per-chat stamp of the last refresh that
         reached Telegram means a RESTARTED loop — a card restarted by the
         watchdog, the next turn's card — never sends sooner than one
@@ -1457,12 +1480,14 @@ class AnimationMixin:
                 if not any(m.busy_card_should_animate() for m in members):
                     break
                 started = time.monotonic()
+                # The period in force NOW: it decays with the age of the
+                # chat's oldest busy turn (8.30, operator ruling #2).
+                period = self._typing_period(members, started)
                 last = sent_at.get(key)
-                if last is not None and started - last < TYPING_INDICATOR_INTERVAL:
+                if last is not None and started - last < period:
                     # Never sooner than one interval after the chat's last
                     # refresh, whichever loop sent it.
-                    await asyncio.sleep(
-                        TYPING_INDICATOR_INTERVAL - (started - last))
+                    await asyncio.sleep(period - (started - last))
                     continue
                 sender = next(
                     (m for m in members if self._typing_chat(m) is not None),
@@ -1476,10 +1501,7 @@ class AnimationMixin:
                 # Sleep the REMAINDER of the interval, so a slow round trip
                 # cannot push the next refresh past Telegram's 5 s expiry.
                 # Never negative, and it cannot spin: the send awaits.
-                pause = max(
-                    TYPING_INDICATOR_INTERVAL - (time.monotonic() - started),
-                    0.0,
-                )
+                pause = max(period - (time.monotonic() - started), 0.0)
                 if not sent and sender is not None and self._typing_retry_soon(sender):
                     # Refused for want of a token or a window slot THIS
                     # second — a card edit landed just before (the bubble
@@ -2154,7 +2176,9 @@ class AnimationMixin:
         bubble at all (not shed by the hour, not blocked by a 429 on it,
         not in minimal mode) — one bubble per
         ``TYPING_INDICATOR_INTERVAL`` is reserved out of the chat's pacing
-        before the cards divide it (``card_interval(typing_interval=)``).
+        before the cards divide it (``card_interval(typing_interval=)``) —
+        the bubble's period IN FORCE (:meth:`_typing_period`, which decays
+        with the chat's oldest busy turn).
         The cards and the bubble together then fit the chat's window, and
         a card never loses its slot to a bubble racing it. In a DM that
         slows a card in its first two minutes from 2.2 s to about 4 s;
@@ -2187,12 +2211,20 @@ class AnimationMixin:
             # a plan that fills the window to its last two slots is a plan
             # in which every bubble is refused.
             gap = max(gap or 0.0, pacing["typing_min_gap"])
+        typing_every = 0.0
+        if reserved:
+            # The rate IN FORCE for this chat's bubble (operator ruling
+            # #2): a young card beside an hour-old turn reserves a 15 s
+            # bubble's share, not a 4.5 s one's.
+            typing_every = self._typing_period(
+                self._typing_sessions(self._typing_key(sess), sess),
+                time.monotonic())
         return card_interval(
             base=base, busy_sessions=busy, is_group=group,
             backoff=pacing.get("backoff", 1.0),
             chat_rate=pacing.get("rate"),
             sustained_min_gap=gap,
-            typing_interval=TYPING_INDICATOR_INTERVAL if reserved else 0.0,
+            typing_interval=typing_every,
         ), reserved
 
     def _card_wake(self, sess: TrackedSession) -> float:

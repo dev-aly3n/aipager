@@ -507,14 +507,15 @@ def test_the_bubble_flows_beside_a_long_running_card(
 ):
     """Tiers 1–3 are unchanged: a card ten minutes in edits every 30 s,
     which is slower than anything the reservation asks, so its cadence is
-    the tier's and the bubble refreshes on its own 4.5 s clock beside it,
-    nothing refused. Mutation: withhold the bubble whenever any card
-    animates and this counts none."""
+    the tier's and the bubble refreshes on its own clock beside it —
+    every 9 s at this age since operator ruling #2 — nothing refused.
+    Mutation: withhold the bubble whenever any card animates and this
+    counts none."""
     _start, bubbles, edits, limiter, _planned = _card_and_bubble(
         mk_bot, vbot, vloop, rich_http, age=10 * MIN, seconds=91.0)
-    assert len(bubbles) >= 20, bubbles
+    assert len(bubbles) >= 10, bubbles
     gaps = [b - a for a, b in zip(bubbles, bubbles[1:])]
-    assert max(gaps) <= INTERVAL + LATE + 1e-3, gaps
+    assert max(gaps) <= config.TYPING_AGE_TIER2_INTERVAL + LATE + 1e-3, gaps
     card_gaps = [b - a for a, b in zip(edits, edits[1:])]
     assert card_gaps, edits
     # Every card gap is the tier's 30 s (plus the loop's 10 ms wake
@@ -668,3 +669,138 @@ def test_a_hook_edit_in_a_young_turn_waits_for_the_yielded_cadence(
 
     vloop.run_until_complete(_drive())
     assert out == {"alone": True, "beside": False, "later": True, "state": True}
+
+
+# ── operator ruling #2: the bubble decays with the OLDEST turn's age ────────
+
+def _bubble_gaps(mk_bot, vbot, vloop, sessions_ages, *, seconds=60.0,
+                 decay_off=()):
+    """Run the chat's REAL typing loop beside sessions whose turns are the
+    given ages (no card traffic, so the budget never refuses a bubble) and
+    return the measured gaps between bubbles."""
+    bot = _typing_bot(mk_bot, vbot)
+    sessions = []
+    for i, age in enumerate(sessions_ages):
+        sess = _session(bot, vloop, f"s{i}", age=age, msg_id=70 + i)
+        if i in decay_off:
+            sess.override_card_age_decay = False
+        sessions.append(sess)
+
+    async def _drive():
+        tasks = [asyncio.ensure_future(bot._animate_typing(s)) for s in sessions]
+        await asyncio.sleep(seconds)
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+    vloop.run_until_complete(_drive())
+    stamps = vbot.stamps("sendChatAction")
+    return [round(b - a, 3) for a, b in zip(stamps, stamps[1:])]
+
+
+@pytest.mark.parametrize("age,expected", [
+    (9 * MIN, 4.5),             # stays under 10 min for the whole run
+    (10 * MIN, 9.0),            # exactly 10:00
+    (58 * MIN, 9.0),            # stays under an hour
+    (60 * MIN, 15.0),           # exactly 60:00
+    (4 * 60 * MIN, 15.0),
+])
+def test_the_bubble_decays_with_the_turns_age(mk_bot, vbot, vloop, age,
+                                              expected):
+    """Operator ruling #2: 4.5 s for ten minutes, 9 s to an hour, 15 s
+    after, measured on the real loop. Mutation: keep the loop on
+    ``TYPING_INDICATOR_INTERVAL`` and every row reads 4.5."""
+    gaps = _bubble_gaps(mk_bot, vbot, vloop, [age])
+    assert len(gaps) >= 3, gaps
+    assert gaps == [pytest.approx(expected, abs=1e-3)] * len(gaps)
+
+
+@pytest.mark.parametrize("start,before,after", [
+    (9 * MIN + 50.0, 4.5, 9.0),     # crosses 10:00 at 10 s into the run
+    (59 * MIN + 50.0, 9.0, 15.0),   # crosses 60:00 at 10 s into the run
+])
+def test_the_bubble_changes_pace_at_the_boundary(mk_bot, vbot, vloop, start,
+                                                 before, after):
+    """The boundaries, crossed on the loop: from 9:50 the bubbles run at
+    4.5 s while the turn is at most 9:59, and at 9 s from the first
+    refresh due after 10:00 (the period is read when the next bubble is
+    due); from 59:50 likewise 9 s, then 15 s. Mutation: shift either
+    boundary and the switch lands on the wrong bubble."""
+    gaps = _bubble_gaps(mk_bot, vbot, vloop, [start], seconds=70.0)
+    first_after = next(i for i, g in enumerate(gaps)
+                       if g == pytest.approx(after, abs=1e-3))
+    assert all(g == pytest.approx(before, abs=1e-3) for g in gaps[:first_after])
+    assert all(g == pytest.approx(after, abs=1e-3) for g in gaps[first_after:])
+    # The bubble that opens the first slower gap went out before the
+    # boundary, and the one after it is past it.
+    boundary = 10 * MIN if before == INTERVAL else 60 * MIN
+    last_fast = start + sum(gaps[:first_after])
+    assert last_fast <= boundary + 1e-3
+    assert last_fast + before > boundary
+
+
+def test_the_oldest_turn_sets_the_chats_pace(mk_bot, vbot, vloop):
+    """The bubble is the CHAT's: a one-minute turn beside a 70-minute one
+    gets the 70-minute turn's 15 s, not its own 4.5 s. Mutation: take the
+    youngest (or the loop's own session's) age and this reads 4.5."""
+    gaps = _bubble_gaps(mk_bot, vbot, vloop, [1 * MIN, 70 * MIN])
+    assert gaps and gaps == [pytest.approx(15.0, abs=1e-3)] * len(gaps)
+
+
+def test_the_preference_off_keeps_the_bubble_at_its_base_pace(
+    mk_bot, vbot, vloop,
+):
+    """``card_age_decay`` off for the session: its 70-minute turn keeps a
+    4.5 s bubble, as its card keeps today's cadence. Mutation: ignore the
+    preference and this reads 15."""
+    alone = _bubble_gaps(mk_bot, vbot, vloop, [70 * MIN], decay_off=(0,))
+    assert alone and alone == [pytest.approx(INTERVAL, abs=1e-3)] * len(alone)
+
+
+def test_one_session_with_the_preference_off_keeps_the_chats_bubble_fast(
+    mk_bot, vbot, vloop,
+):
+    """Off for ANY busy session in the chat is off for the chat's one
+    bubble: a 70-minute turn with decay on beside a 30-minute one with it
+    off is 4.5 s. Mutation: read only the oldest session's preference and
+    this reads 15."""
+    gaps = _bubble_gaps(mk_bot, vbot, vloop, [70 * MIN, 30 * MIN],
+                        decay_off=(1,))
+    assert gaps and gaps == [pytest.approx(INTERVAL, abs=1e-3)] * len(gaps)
+
+
+def test_the_young_card_reserves_the_bubbles_pace_in_force(mk_bot, vbot, vloop):
+    """"The tier-0 card reservation uses the typing rate actually in
+    force": a young card beside a 70-minute turn reserves one 15 s bubble,
+    not one 4.5 s bubble, so it edits faster than it would beside a young
+    turn. Mutation: reserve ``TYPING_INDICATOR_INTERVAL`` always and it
+    reads the 4.5 s figure."""
+    from aipager.bot.flood_budget import card_interval
+    from aipager.config import STREAM_EDIT_INTERVAL
+
+    bot = _typing_bot(mk_bot, vbot)
+    young = _session(bot, vloop, "young", age=30.0, msg_id=71)
+    _session(bot, vloop, "old", age=70 * MIN, msg_id=72)
+    out: dict = {}
+
+    async def _drive():
+        bot._start_typing(young)
+        await asyncio.sleep(0)
+        out["interval"] = bot._card_interval(young, streaming=True)
+        out["pacing"] = vbot._limiter.pacing_for(CHAT)
+        bot._stop_typing(young)
+        await asyncio.sleep(0)
+
+    vloop.run_until_complete(_drive())
+    pacing = out["pacing"]
+
+    def planned(every):
+        return card_interval(
+            base=STREAM_EDIT_INTERVAL, busy_sessions=2, is_group=False,
+            chat_rate=pacing["rate"],
+            sustained_min_gap=max(pacing["sustained_min_gap"],
+                                  pacing["typing_min_gap"]),
+            typing_interval=every)
+
+    assert out["interval"] == pytest.approx(planned(15.0))
+    assert out["interval"] < planned(INTERVAL) - 1.0

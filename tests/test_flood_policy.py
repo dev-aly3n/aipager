@@ -22,6 +22,7 @@ from aipager.flood_policy import (
     elapsed_unit,
     format_elapsed,
     hourly_limits,
+    typing_interval,
 )
 
 WEEK = config.FLOOD_BAN_MEMORY_DAYS * 86400.0
@@ -293,3 +294,37 @@ def test_the_card_interval_carries_the_reservation():
     assert card_interval(sustained_min_gap=DM_TYPING_GAP, typing_interval=4.5,
                          **{**kw, "busy_sessions": 2}) == pytest.approx(
         9.66, abs=0.01)
+
+
+# ── the bubble's own decay (operator ruling #2) ──────────────────────────────
+
+@pytest.mark.parametrize("age,expected", [
+    (0.0, 4.5), (599.9, 4.5), (600.0, 9.0), (3599.9, 9.0), (3600.0, 15.0),
+    (4 * 3600.0, 15.0),
+])
+def test_the_typing_tiers(age, expected):
+    """4.5 s to 10 min, 9 s to an hour, 15 s after — at the card's own
+    tier-2/3 boundaries. Mutation: shift a boundary or a value."""
+    assert config.TYPING_AGE_TIER2_INTERVAL == 9.0
+    assert config.TYPING_AGE_TIER3_INTERVAL == 15.0
+    assert typing_interval(age, True) == expected
+
+
+@pytest.mark.parametrize("age", [0.0, 700.0, 7200.0])
+def test_typing_decay_off_is_the_base_pace(age):
+    assert typing_interval(age, False) == config.TYPING_INDICATOR_INTERVAL
+
+
+def test_the_bubble_is_never_faster_than_its_base():
+    """A base configured above a tier's value wins: decay only slows."""
+    assert typing_interval(700.0, True, base=12.0) == 12.0
+
+
+@pytest.mark.parametrize("base", [0.0, -1.0])
+def test_a_disabled_bubble_stays_disabled(base):
+    assert typing_interval(7200.0, True, base=base) == base
+
+
+@pytest.mark.parametrize("age", [float("nan"), -5.0, "x", None])
+def test_no_age_is_a_young_turn_for_the_bubble(age):
+    assert typing_interval(age, True) == config.TYPING_INDICATOR_INTERVAL

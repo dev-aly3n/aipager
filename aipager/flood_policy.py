@@ -34,6 +34,9 @@ from aipager.config import (
     FLOOD_HOURLY_ESSENTIAL_RESERVE,
     FLOOD_HOURLY_MAX,
     FLOOD_WARNING_HOURS,
+    TYPING_AGE_TIER2_INTERVAL,
+    TYPING_AGE_TIER3_INTERVAL,
+    TYPING_INDICATOR_INTERVAL,
 )
 
 #: The elapsed-time units a busy card can render in: seconds (today's
@@ -188,6 +191,35 @@ def card_age_floor(age_seconds: float, enabled: bool) -> float:
     return float(CARD_AGE_TIER3_INTERVAL)
 
 
+def typing_interval(
+    age_seconds: float, enabled: bool, *,
+    base: float = TYPING_INDICATOR_INTERVAL,
+) -> float:
+    """Seconds between typing bubbles for a chat whose OLDEST busy turn is
+    this old (8.30, operator ruling #2).
+
+    *base* (``TYPING_INDICATOR_INTERVAL``, 4.5 s — a steady bubble) below
+    ``CARD_AGE_TIER2_AT`` (10 min), ``TYPING_AGE_TIER2_INTERVAL`` (9 s) up
+    to ``CARD_AGE_TIER3_AT`` (an hour), ``TYPING_AGE_TIER3_INTERVAL`` (15 s)
+    after — never faster than *base*. Always *base* when the
+    ``card_age_decay`` preference is off, for a non-positive *base* (the
+    bubble disabled) and for a negative or non-finite age. At 4.5 s the
+    bubble alone is 800 calls an hour, which trips the hour's typing shed
+    on any turn much past an hour; at 15 s it is 240.
+    """
+    if not enabled or not base or base <= 0:
+        return base
+    try:
+        age = float(age_seconds)
+    except (TypeError, ValueError):
+        return base
+    if not math.isfinite(age) or age < CARD_AGE_TIER2_AT:
+        return base
+    if age < CARD_AGE_TIER3_AT:
+        return max(float(base), float(TYPING_AGE_TIER2_INTERVAL))
+    return max(float(base), float(TYPING_AGE_TIER3_INTERVAL))
+
+
 def elapsed_unit(age_seconds: float, enabled: bool) -> str:
     """The unit a card this old shows its elapsed counters in.
 
@@ -250,4 +282,5 @@ __all__ = [
     "elapsed_unit",
     "format_elapsed",
     "hourly_limits",
+    "typing_interval",
 ]

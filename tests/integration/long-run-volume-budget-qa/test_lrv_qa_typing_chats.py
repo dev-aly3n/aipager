@@ -31,7 +31,11 @@ def session(bot, vloop, label, chat, *, msg_id=70, status=Status.BUSY):
     sess.scope_chat_id = chat
     sess.scope_kind = "dm"
     sess.busy_msg_id = msg_id
-    sess.busy_started_at = vloop.time() - 10 * 60.0
+    # AMENDED by the developer for operator ruling #2 (8.30): was 10 min,
+    # which is now the bubble's 9 s tier; these rows count a 4.5 s bubble,
+    # so the turn is 5 min old (still a 10 s-tier card, still under 10 min
+    # for the whole of the longest 60 s run).
+    sess.busy_started_at = vloop.time() - 5 * 60.0
     sess.last_tool_edit_at = vloop.time()
     return sess
 
