@@ -421,3 +421,65 @@ def test_an_unclassified_bubble_is_still_suspended_in_minimal_mode(
     with pytest.raises(FloodSkipped):
         run_async(_req(limiter, endpoint="sendChatAction", args=None))
     assert limiter.snapshot()["chats"][0]["ornaments_suspended"] == 1
+
+
+# ── a BAN answered to the bubble is a ban on the chat ────────────────────────
+
+def test_g_a_ban_on_the_bubble_mutes_the_chat_and_holds_the_answer(
+    mk_bot, vbot, vloop, volume_telegram,
+):
+    """Review rev-iter1-001. Since 8.30 typing is metered WITH the chat's
+    messages, so a ban Telegram answers to ``sendChatAction`` is a ban on
+    the chat — and nothing may go into it. Through the REAL typing send
+    path (``_send_typing`` → the gated bot → the limiter), a
+    ``retry_after`` of 25,429 s (vm3's) must arm the mute exactly as
+    ``transport._send_with_retry`` and ``rich_message._ban_if_excessive``
+    do: the very next ``sendMessage`` is refused at the gate with zero
+    requests, the turn's answer — on the real ``notify`` path, over the
+    real ``rich_message._post`` — is HELD with zero requests, and it is
+    delivered once the ban lifts.
+
+    Before the fix, ``note_ban`` dropped the rate to the floor (so the
+    BUBBLE was suspended as an ornament — which is why the QA row
+    ``test_a_ban_answered_to_the_bubble_gets_zero_further_requests`` saw
+    nothing more on the wire: it counted only bubbles) but the mute was
+    never armed, so the ESSENTIAL answer went straight into the ban.
+
+    Mutation: drop the ``MUTE.mute(...)`` from ``_send_typing``'s
+    ``RetryAfter`` arm and the ``sendMessage`` reaches the wire.
+    """
+    from aipager.bot.flood import FloodMuted
+    from aipager.bot.held import HELD
+
+    bot = _typing_bot(mk_bot, vbot)
+    sess = _session(bot, vloop, "vm3")
+    vbot.fail["sendChatAction"] = lambda: RetryAfter(25429)
+    out: dict = {}
+
+    async def main():
+        chat = bot._typing_chat(sess)
+        assert chat is not None
+        out["sent"] = await bot._send_typing(sess, chat)
+        out["muted"] = MUTE.is_muted(CHAT)
+        try:
+            await vbot.send_message(chat_id=CHAT, text="the next answer")
+        except FloodMuted:
+            out["refused"] = True
+        sess.status = Status.IDLE
+        await bot.notify(sess, "idle_prompt",
+                         {"summary": "the answer the ban must not eat"})
+        out["held"] = HELD.count(CHAT)
+        out["wire_in_ban"] = list(volume_telegram.calls)
+        await asyncio.sleep(25430.0)               # the ban lifts
+        out["delivered"] = await bot.flush_held_answers(sess)
+
+    vloop.run_until_complete(main())
+    assert out["sent"] is True
+    assert out["muted"] is True, "a ban on the bubble did not mute the chat"
+    assert out.get("refused") is True
+    assert [c[0] for c in vbot.calls] == ["sendChatAction"], vbot.calls
+    assert out["wire_in_ban"] == [], "a request went into the ban"
+    assert out["held"] == 1, "the answer was not held"
+    assert out["delivered"] == 1
+    assert [c[0] for c in volume_telegram.calls] == ["sendRichMessage"]
+    assert HELD.count(CHAT) == 0

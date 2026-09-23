@@ -25,7 +25,8 @@ from aipager.config import (
     BUSY_EDIT_INTERVAL, CARD_CADENCE_FLOOR_GROUP, CARD_CADENCE_FLOOR_PRIVATE,
     CARD_CADENCE_MARGIN, CARD_RETRY_WAKE, CARD_STATE_BYPASS_MIN_GAP,
     CARD_STARVATION_BLOCK_TIMEOUT, CHAT_ID, COMPACT_ANIMATE_INTERVAL_SECONDS,
-    COMPACT_ANIMATE_MAX_TICKS, SPINNER_VERBS,
+    COMPACT_ANIMATE_MAX_TICKS, FLOOD_WARNED_CEILING, FLOOD_WARNING_HOURS,
+    SPINNER_VERBS,
     STREAM_EDIT_INTERVAL, TELEGRAM_MAX_RETRY_AFTER,
     TYPING_INDICATOR_INTERVAL,
 )
@@ -188,22 +189,22 @@ _TYPING_429_LOG_INTERVAL = 3600.0
 _TYPING_429_LOGGED: dict = {}
 
 
-def _log_typing_429_once(chat, label: str, exc: Exception, *,
-                         ban: bool = False) -> None:
-    """One INFO line per chat per hour for a 429 on the typing action.
+def _log_typing_429_once(chat, label: str, exc: Exception) -> None:
+    """One INFO line per chat per hour for a SMALL 429 on the typing
+    action.
 
-    INFO, not WARNING: the indicator is an ornament on top of the card,
-    the card itself is unaffected (a chat action and a card edit are
-    metered separately — that is the whole premise of 8.24), and there is
-    nothing for the operator to do. The action is skipped; nothing arms
-    the mute, bumps the card backoff or defers the chat.
+    Since 8.30 the bubble is metered with the chat's messages, so a 429 on
+    it is a warning about the CHAT: the limiter (``note_typing_429``) puts
+    the chat in its six-hour warning regime — the earned rate capped at
+    ``FLOOD_WARNED_CEILING`` (0.5/s) and climbing back on the slow
+    schedule, which slows the busy card too — and refuses the bubble for
+    the ``retry_after``. What it does NOT do is defer the chat or bump the
+    card's backoff (Q5). INFO, not WARNING, because the limiter already
+    logged the regime and there is nothing for the operator to do.
 
-    ``ban`` distinguishes a ``retry_after`` past
-    ``TELEGRAM_MAX_RETRY_AFTER`` — a ban rather than a rate limit, which
-    the limiter re-raises untouched. It still does not arm the mute from
-    here (R4: the mute is the 8.17 owners' to arm, from the paths that
-    carry real content), but a chat action refused for ten minutes and one
-    refused for five seconds must not read identically in the log.
+    A BAN (``retry_after`` past ``TELEGRAM_MAX_RETRY_AFTER``) is not
+    logged here: :meth:`_send_typing` arms the flood mute for it, and the
+    mute logs its own WARNING, exactly as for a ban on any other call.
     """
     key = _chat_key(chat)
     now = time.monotonic()
@@ -212,9 +213,10 @@ def _log_typing_429_once(chat, label: str, exc: Exception, *,
         return
     _TYPING_429_LOGGED[key] = now
     log.info(
-        "[%s] Telegram %s the typing indicator for chat %s (%s) — skipping "
-        "it; the busy card's own cadence is unaffected",
-        label, "BANNED" if ban else "rate-limited", chat, exc,
+        "[%s] Telegram rate-limited the typing indicator for chat %s (%s) — "
+        "the chat is in a %gh warning regime (rate capped at %g/s, card "
+        "updates slower) and the bubble waits out the retry_after",
+        label, chat, exc, FLOOD_WARNING_HOURS, FLOOD_WARNED_CEILING,
     )
 
 
@@ -1284,7 +1286,11 @@ class AnimationMixin:
         fresh violation that extends it (R5). Fail-closed, and it costs a
         dict lookup.
 
-        A 429 is logged once per chat per hour and dropped (R4). Anything
+        A small 429 is logged once per chat per hour and dropped (R4; the
+        limiter has already started the chat's warning regime). A BAN
+        arms the flood mute, as every other path does for its own: the
+        bubble is metered with the chat's messages, so a ban on it is a
+        ban on the chat, and the next answer must not go into it. Anything
         else goes to debug: the indicator is an ornament, and its caller is
         a background task whose only job is this call.
         """
@@ -1305,10 +1311,18 @@ class AnimationMixin:
         except FloodMuted:
             return False
         except RetryAfter as exc:
-            _log_typing_429_once(
-                chat, sess.label, exc,
-                ban=_retry_after_secs(exc) > TELEGRAM_MAX_RETRY_AFTER,
-            )
+            secs = _retry_after_secs(exc)
+            if secs > TELEGRAM_MAX_RETRY_AFTER:
+                # A BAN, answered to the bubble. Since 8.30 the bubble is
+                # metered with the chat's messages, so this is a ban on
+                # the CHAT: arm the mute exactly as `transport` and
+                # `rich_message` do for theirs (review rev-iter1-001).
+                # Before this, `note_ban` dropped the rate — which only
+                # suspended ORNAMENTS — and the next answer went straight
+                # into the ban.
+                MUTE.mute(chat, secs, source="sendChatAction")
+            else:
+                _log_typing_429_once(chat, sess.label, exc)
         except Exception:
             log.debug("[%s] typing indicator failed", sess.label, exc_info=True)
         return True

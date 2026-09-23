@@ -1866,10 +1866,10 @@ class BudgetRateLimiter(BaseRateLimiter):
 
         # ── THE GATE (R1) ────────────────────────────────────────────────
         # Placed here, above the exempt branch, so a mute covers BOTH
-        # branches with an id already normalised by `_key`. Reactions and
-        # chat actions are exempt from the budget, never from the mute
-        # (D-1); `sendChatAction` answering 200 through a small 429 window
-        # says nothing about a BAN.
+        # branches with an id already normalised by `_key`. Reactions are
+        # exempt from the budget, never from the mute (D-1); the typing
+        # bubble is budgeted again since 8.30, and gated here like
+        # everything else.
         #
         # `chat_id is None` means there is no chat to check — `getMe`,
         # `getFile`, `setMyCommands`, `answerCallbackQuery`. Those are NOT
@@ -2008,9 +2008,11 @@ class BudgetRateLimiter(BaseRateLimiter):
         except RetryAfter as exc:
             seconds = _retry_after_seconds(exc)
             if seconds > TELEGRAM_MAX_RETRY_AFTER:
-                # A ban. `transport._send_with_retry`'s give-up branch and
-                # `rich_message._ban_if_excessive` own the MUTE; the
-                # re-raise below is unchanged and still theirs.
+                # A ban. The caller that made the call owns the MUTE —
+                # `transport._send_with_retry`'s give-up branch,
+                # `rich_message._ban_if_excessive` and, since the bubble
+                # is metered with the chat's messages (8.30),
+                # `animation._send_typing`; the re-raise below is theirs.
                 #
                 # What IS recorded here is the rate (8.27): a ban drops the
                 # chat to `FLOOD_MIN_RATE` and leaves a wall-clock stamp

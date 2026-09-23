@@ -761,27 +761,36 @@ def test_a_429_on_the_indicator_is_skipped_and_logged_once_an_hour(
     assert not MUTE.is_muted(PRIVATE)
 
 
-def test_a_ban_sized_refusal_of_the_indicator_reads_differently(
+def test_a_ban_sized_refusal_of_the_indicator_mutes_the_chat(
         mk_bot, run_async, caplog):
-    """rev-iter1-005(b): a ``retry_after`` past ``TELEGRAM_MAX_RETRY_AFTER``
-    is a ban, not a rate limit, and the limiter re-raises it untouched. The
-    indicator still does not arm the mute from here (R4 — the mute belongs
-    to the paths that carry real content), but ten minutes of refusal and
-    five seconds of it must not read identically in the log.
+    """AMENDED by 8.30 (review rev-iter1-001); was
+    ``test_a_ban_sized_refusal_of_the_indicator_reads_differently``, which
+    asserted "the indicator must never arm the mute". That rested on 8.24's
+    premise that a chat action is metered apart from the chat's messages;
+    8.30 R1 meters the bubble WITH them, so a ban answered to it is a ban
+    on the chat, and every call into it — the next answer included — is a
+    fresh violation. The mute is armed here exactly as ``transport`` and
+    ``rich_message`` arm it for theirs, for the full ``retry_after``, and
+    the mute's own WARNING (naming ``sendChatAction``) is the one line; the
+    small-429 INFO is not logged for a ban.
 
-    Mutation: log both the same and a chat-action-level ban is invisible.
+    Mutation: drop the ``MUTE.mute(...)`` from ``_send_typing``'s
+    ``RetryAfter`` arm and the chat is not muted.
     """
     sess = _sess()
     bot = _bot(mk_bot, sess)
     bot._app.bot.send_chat_action = AsyncMock(side_effect=RetryAfter(BAN))
 
-    with caplog.at_level(logging.INFO, logger="aipager.bot.animation"):
+    with caplog.at_level(logging.INFO):
         run_async(bot._send_typing(sess, PRIVATE))
 
-    lines = [r for r in caplog.records if "typing indicator" in r.getMessage()]
-    assert len(lines) == 1
-    assert "BANNED" in lines[0].getMessage()
-    assert not MUTE.is_muted(PRIVATE), "the indicator must never arm the mute"
+    assert MUTE.is_muted(PRIVATE), "a ban on the bubble must mute the chat"
+    assert MUTE.remaining(PRIVATE) == pytest.approx(BAN, abs=2.0)
+    muted = [r for r in caplog.records
+             if r.levelno == logging.WARNING and "sendChatAction" in r.getMessage()]
+    assert len(muted) == 1, [r.getMessage() for r in caplog.records]
+    assert not [r for r in caplog.records
+                if "rate-limited the typing indicator" in r.getMessage()]
 
 
 def test_the_hourly_log_guard_lets_the_next_hour_through(mk_bot, run_async,
