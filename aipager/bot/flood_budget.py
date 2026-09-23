@@ -1980,7 +1980,7 @@ class BudgetRateLimiter(BaseRateLimiter):
     async def _run(
         self, budget, callback, args, kwargs, endpoint, chat_id,
         *, kind: str = "blocking", allow_retry: bool = True,
-        note_429: bool = True, cls: str = PRIORITY_ESSENTIAL,
+        cls: str = PRIORITY_ESSENTIAL,
     ):
         """Run the callback whose budget has already been paid.
 
@@ -1989,10 +1989,6 @@ class BudgetRateLimiter(BaseRateLimiter):
         propagates untouched — ``BaseRateLimiter``'s contract says this
         method "should not handle any other exception raised by
         ``callback``".
-
-        ``note_429=False`` re-raises a small 429 without recording it
-        against the chat. Nothing passes it since 8.30; it is kept as the
-        seam, not the policy.
 
         A small 429 on the "typing…" chat action goes to
         :meth:`note_typing_429` instead of :meth:`note_retry_after`
@@ -2025,8 +2021,6 @@ class BudgetRateLimiter(BaseRateLimiter):
                 raise
             if endpoint == CHAT_ACTION_ENDPOINT:
                 self.note_typing_429(chat_id, seconds)
-                raise
-            if not note_429:
                 raise
             self.note_retry_after(chat_id, seconds)
             if kind == "skip":

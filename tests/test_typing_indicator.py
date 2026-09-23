@@ -424,12 +424,13 @@ def test_a_429_on_the_typing_action_never_backs_the_chat_off(run_async):
 
 
 def test_a_429_on_a_budgeted_call_still_backs_the_chat_off(run_async):
-    """Anti-vacuity for the row above: ``note_429`` must be the only thing
-    that changed. A 429 on an ordinary send still defers the chat and
-    doubles its cadence, exactly as in 8.21.
+    """Anti-vacuity for the row above: the chat-action route
+    (``note_typing_429``) must be the only thing that changed. A 429 on an
+    ordinary send still defers the chat and doubles its cadence, exactly
+    as in 8.21.
 
-    Mutation: default ``note_429`` to False and this is the row that
-    notices.
+    Mutation: send every endpoint's small 429 down the chat-action route
+    and this is the row that notices.
     """
     clock = FakeClock()
     limiter = _limiter(clock)

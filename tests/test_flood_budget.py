@@ -914,8 +914,9 @@ def test_a_429_on_a_reaction_still_defers_and_backs_off_the_chat(run_async):
     ``note_429=endpoint != CHAT_ACTION_ENDPOINT`` with ``note_429=False``
     and the whole 6,815-test suite still passed.
 
-    Mutation: widen ``note_429=False`` to every exempt endpoint and this is
-    the only row in the suite that notices.
+    Mutation: send every exempt endpoint's small 429 down the chat-action
+    route (``note_typing_429``, which replaced the ``note_429`` switch in
+    8.30) and this is the only row in the suite that notices.
     """
     clock = FakeClock()
     limiter = _limiter(clock)
