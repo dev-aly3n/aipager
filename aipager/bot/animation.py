@@ -1353,8 +1353,12 @@ class AnimationMixin:
 
     def _typing_sessions(self, key, sess: TrackedSession) -> list:
         """Every session whose bubble is chat *key*'s, *sess* first — the
-        caller is included even if the registry does not know it."""
-        out = [sess]
+        caller is included even if the registry does not know it, but only
+        while it still resolves to *key*: a session that has MOVED to
+        another chat is that chat's loop's business, and a loop that kept
+        it would send a second bubble into the new chat beside that chat's
+        own loop."""
+        out = [sess] if self._typing_key(sess) == key else []
         for other in self.registry.all_sessions().values():
             if other is not sess and self._typing_key(other) == key:
                 out.append(other)
