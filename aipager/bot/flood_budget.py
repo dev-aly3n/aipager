@@ -1345,10 +1345,9 @@ class BudgetRateLimiter(BaseRateLimiter):
 
         Idempotent per ban — ``ban_seen_until`` is what makes a second
         sighting of the SAME ban a no-op, so ``_run``'s branch and
-        ``_sync_mute`` can both call it. Does NOT arm the mute:
-        ``flood.MUTE.mute`` stays the one arming point (``transport.py``
-        and ``rich_message.py``), so there is exactly one place to look
-        when asking why a chat is muted.
+        ``_sync_mute`` can both call it. Does NOT arm the mute itself:
+        ``flood.MUTE.mute`` stays the one arming function. ``_run``'s ban
+        branch calls it just before this, for every chat-scoped call.
         """
         value = _finite(seconds)
         if value is None:
@@ -1362,10 +1361,11 @@ class BudgetRateLimiter(BaseRateLimiter):
             return
         wall_now = self._wall_now()
         deadline = wall_now + seconds
-        # ABOVE the idempotence guard on purpose. `_run`'s ban branch
-        # calls this BEFORE `transport._send_with_retry` arms the mute, so
-        # on that path the only call that can see a live mute is the
-        # second one — the one the guard turns back.
+        # ABOVE the idempotence guard on purpose: `MUTE.mute` reaches
+        # this through `_tell_limiter_about_the_ban` on the process-wide
+        # limiter, which the guard may then turn back on a second
+        # sighting of the ban, and the deadline must still be recorded
+        # on every sighting.
         self._note_mute_deadline(budget)
         if deadline <= budget.ban_seen_until + 1.0:
             return
@@ -2078,13 +2078,24 @@ class BudgetRateLimiter(BaseRateLimiter):
         except RetryAfter as exc:
             seconds = _retry_after_seconds(exc)
             if seconds > TELEGRAM_MAX_RETRY_AFTER:
-                # A ban. The caller that made the call owns the MUTE —
-                # `transport._send_with_retry`'s give-up branch,
-                # `rich_message._ban_if_excessive` and, since the bubble
-                # is metered with the chat's messages (8.30),
-                # `animation._send_typing`; the re-raise below is theirs.
-                #
-                # What IS recorded here is the rate (8.27): a ban drops the
+                # A ban, and a ban on the CHAT whatever call it came back
+                # on. So the mute is armed HERE, for every chat-scoped
+                # call, before anything else can run: the calls queued
+                # behind this one then meet it at the take and are
+                # refused (8.30, tester-iter3-001). Until then only three
+                # callers armed it — `transport._send_with_retry`,
+                # `rich_message._ban_if_excessive` and
+                # `animation._send_typing` — and a ban answered to any
+                # other PTB call (the pinned dashboard's edit, a plain
+                # edit, a pin, a callback edit) noted the rate and armed
+                # nothing, so the queue went out into the ban and an
+                # answer was sent instead of held. Those callers still
+                # arm it too; `MUTE.mute` treats their second sighting of
+                # the same ban as a no-op and never shortens a longer
+                # mute. The re-raise below is still theirs to handle.
+                if chat_id is not None:
+                    MUTE.mute(chat_id, seconds, source=endpoint or "send")
+                # And the rate (8.27): a ban drops the
                 # chat to `FLOOD_MIN_RATE` and leaves a wall-clock stamp
                 # that outlives the process. Before 8.27 a ban taught the
                 # limiter nothing at all — "restart starts every chat at

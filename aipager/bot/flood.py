@@ -202,6 +202,14 @@ def clear_time(wall_until: float) -> str:
     return _dt.datetime.fromtimestamp(wall_until).strftime("%H:%M")
 
 
+# Seconds by which a re-arming may overrun the mute in force and still be
+# the SAME ban seen a second time. The limiter's ban branch and the caller
+# that made the call both arm one ban, a moment apart, so the second
+# deadline lands microseconds after the first; without this slack it read
+# as an extension. One second, as `ChatBudget.ban_seen_until` uses.
+_SAME_BAN_SLACK = 1.0
+
+
 class FloodMute:
     """Per-chat ``muted_until`` registry. One instance per daemon: :data:`MUTE`."""
 
@@ -223,10 +231,14 @@ class FloodMute:
         existing, longer mute). Logs exactly one warning when a mute starts;
         an extension of a mute already in force is a debug line.
 
-        This is the ONE arming point for a mute, together with its twin in
-        ``rich_message._ban_if_excessive`` — the limiter observes it, it
-        never arms one. So there is exactly one place to look when asking
-        why a chat is muted.
+        This is the ONE arming function. It is called by the limiter's
+        own ban branch (``flood_budget._run``) for every chat-scoped PTB
+        call answered with a ban, and by the callers that saw the ban
+        themselves (``transport``, ``rich_message``, the typing bubble).
+        So one ban is usually armed twice, a moment apart: a new deadline
+        within ``_SAME_BAN_SLACK`` of the one already in force is that
+        same ban and is ignored, which keeps it to one warning, one
+        signal write and one ban noted.
         """
         key = _key(chat_id)
         retry_after = _clamped(retry_after, source)
@@ -234,7 +246,7 @@ class FloodMute:
         wall_until = now + retry_after
         existing = self._entries.get(key)
         already_muted = existing is not None and existing[0] > now
-        if already_muted and existing[0] >= wall_until:
+        if already_muted and existing[0] >= wall_until - _SAME_BAN_SLACK:
             log.debug("chat %s already flood-muted past %s — %s ignored",
                       key, clear_time(existing[0]), source)
             return

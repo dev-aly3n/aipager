@@ -834,7 +834,13 @@ def test_a_ban_is_re_raised_untouched_and_never_backs_off(run_async, caplog):
     history, with one WARNING; before it, a ban taught the limiter
     literally nothing. So the assertion is now "no backoff, no deferral,
     and exactly one rate line", not "no log at all".
+
+    Since 8.30 (tester-iter3-001) the limiter's ban branch also ARMS the
+    mute, whatever call the ban came back on, so the chat's one mute
+    warning is the only other line allowed.
     """
+    from aipager.bot.flood import MUTE
+
     clock = FakeClock()
     limiter = _limiter(clock)
     caplog.set_level("DEBUG", logger="aipager.bot.flood_budget")
@@ -858,7 +864,11 @@ def test_a_ban_is_re_raised_untouched_and_never_backs_off(run_async, caplog):
     rate_lines = [r for r in caplog.records if "banned for" in r.getMessage()]
     assert len(rate_lines) == 1, [r.getMessage() for r in caplog.records]
     assert not rate_lines[0].exc_info, "a ban is expected, not an error"
-    assert [r for r in caplog.records if r not in rate_lines] == []
+    mute_lines = [r for r in caplog.records if "muted for" in r.getMessage()]
+    assert len(mute_lines) == 1, [r.getMessage() for r in caplog.records]
+    assert MUTE.is_muted(18)
+    assert [r for r in caplog.records
+            if r not in rate_lines and r not in mute_lines] == []
 
 
 def test_note_retry_after_ignores_a_value_past_the_cap():
