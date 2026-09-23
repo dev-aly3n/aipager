@@ -13,6 +13,10 @@
 3. **Two sessions stream for 2 h with the dashboard live**: the bubble
    never goes dark, the chat never enters minimal mode, and every rolling
    hour stays within 1080 ornament calls.
+4. **Iteration 4**: a ban on any chat-scoped call mutes the chat (section
+   1 also covers a button tap's edit and a PTB ``sendMessage``); the same
+   ban armed twice logs one warning; a shorter later ban (a 30 s 429 or a
+   600 s ban) never shortens a longer mute.
 
 Everything runs on the harness's virtual loop. PTB calls go through the
 real limiter (a ``_GatedBot`` subclass that also records message ids).
@@ -30,6 +34,7 @@ import asyncio
 import json
 import random
 import sys
+from unittest.mock import MagicMock
 
 import httpx
 import pytest
@@ -65,7 +70,10 @@ class _Bot(_h._GatedBot):
       the wire (its callback ran);
     * ``slow_ban``: ``endpoint -> seconds``. The first such call is
       admitted, stays in flight for *seconds*, and is then answered with
-      vm3's 25,429 s ban. ``ban_at`` records when that answer came back.
+      vm3's 25,429 s ban. ``ban_at`` records when that answer came back;
+    * ``script``: several in-flight calls answered with chosen bans at
+      chosen times (two 429s for one chat, as Telegram sends when two
+      calls are in flight when the ban starts).
     """
 
     def __init__(self, limiter, clock):
@@ -73,6 +81,11 @@ class _Bot(_h._GatedBot):
         self.log: list[tuple] = []
         self.slow_ban: dict[str, float] = {}
         self.ban_at: float | None = None
+        #: ``[(answer_at, retry_after)]``: the next calls to CHAT, in the
+        #: order they reach the wire, stay in flight until *answer_at* and
+        #: are then answered with ``RetryAfter(retry_after)``.
+        self.script: list[tuple[float, int]] = []
+        self.bans: list[tuple[float, int]] = []
 
     def __getattr__(self, name):
         if name not in self._ENDPOINTS:
@@ -96,6 +109,11 @@ class _Bot(_h._GatedBot):
                     await asyncio.sleep(delay)
                     self.ban_at = self._clock()
                     raise RetryAfter(BAN)
+                if self.script and chat_id == CHAT:
+                    answer_at, retry = self.script.pop(0)
+                    await asyncio.sleep(max(0.0, answer_at - self._clock()))
+                    self.bans.append((self._clock(), retry))
+                    raise RetryAfter(retry)
                 return _h._Sent()
 
             return await self._limiter.process_request(
@@ -188,16 +206,64 @@ def _tool(n):
 
 # ── 1. a ban lands while ESSENTIAL calls are queued ──────────────────────────
 
-CARRIERS = ["typing", "card_edit", "answer", "dashboard", "mute_armed"]
+CARRIERS = ["typing", "card_edit", "answer", "dashboard", "mute_armed",
+            "callback_edit", "send_message"]
+CALLBACK_MSG = 500
 
 
-def _queued_ban(mk_bot, pbot, http, vloop, carrier, *, lift=False):
+async def _noop_async(*_a, **_k):
+    return None
+
+
+def _callback_update(pbot, data):
+    """A button tap in the DM. ``query.edit_message_text`` is routed to the
+    gated bot's ``edit_message_text``, as PTB's ``CallbackQuery`` does
+    (``get_bot().edit_message_text(chat_id=..., message_id=...)``)."""
+    async def _edit(*args, **kwargs):
+        text = args[0] if args else kwargs.get("text", "")
+        kwargs.pop("text", None)
+        return await pbot.edit_message_text(
+            chat_id=CHAT, message_id=CALLBACK_MSG, text=text, **kwargs)
+
+    query = MagicMock()
+    query.data = data
+    query.answer = _noop_async
+    query.edit_message_text = _edit
+    query.edit_message_reply_markup = _noop_async
+    query.message = MagicMock()
+    query.message.message_id = CALLBACK_MSG
+    query.message.text = ""
+    query.message.chat = MagicMock()
+    query.message.chat.id = CHAT
+    query.from_user = MagicMock()
+    query.from_user.id = CHAT
+    update = MagicMock()
+    update.callback_query = query
+    update.effective_user = query.from_user
+    update.effective_chat = MagicMock()
+    update.effective_chat.id = CHAT
+    return update
+
+
+def _queued_ban(mk_bot, pbot, http, vloop, monkeypatch, carrier, *,
+                lift=False):
     """A DM with two BUSY sessions. The chosen *carrier* goes out and stays
     in flight for a second. While it is in flight, four ESSENTIAL PTB
     ``sendMessage`` calls and session b's answer (the real ``notify`` over
     the real rich ``_post``) are started, and most of them queue in the
     limiter. Then Telegram answers the carrier with a 25,429 s ban (or,
-    for ``mute_armed``, ``MUTE.mute`` is called directly)."""
+    for ``mute_armed``, ``MUTE.mute`` is called directly).
+
+    Carriers: the typing bubble, a card edit (rich), an answer (rich), the
+    pinned dashboard's edit (PTB), a button tap's in-place edit (PTB,
+    ``_handle_callback``), a PTB ``sendMessage`` such as a command reply,
+    and a mute armed directly.
+
+    The pinned dashboard is pinned ON for the ``dashboard`` carrier and OFF
+    for every other one, so no row depends on the host's ``.env`` (an
+    empty CI env leaves ``dashboard.CHAT_ID`` blank)."""
+    monkeypatch.setattr("aipager.bot.dashboard.CHAT_ID",
+                        str(CHAT) if carrier == "dashboard" else "")
     bot = _bot(mk_bot, pbot)
     a = _session(bot, vloop, "a", msg_id=71)
     b = _session(bot, vloop, "b", msg_id=72)
@@ -234,6 +300,21 @@ def _queued_ban(mk_bot, pbot, http, vloop, carrier, *, lift=False):
         if carrier == "dashboard":
             pbot.slow_ban["editMessageText"] = 1.0
             return asyncio.ensure_future(bot.notify(a, "tool_use", _tool(1)))
+        if carrier == "callback_edit":
+            pbot.slow_ban["editMessageText"] = 1.0
+            context = MagicMock()
+            context.bot = pbot
+            return asyncio.ensure_future(bot._handle_callback(
+                _callback_update(pbot, "_:set"), context))
+        if carrier == "send_message":
+            pbot.slow_ban["sendMessage"] = 1.0
+
+            async def _command_reply():
+                try:
+                    await pbot.send_message(chat_id=CHAT, text="reply")
+                except RetryAfter:
+                    pass
+            return asyncio.ensure_future(_command_reply())
         # mute_armed: some other call site learnt of a ban.
         async def _arm():
             await asyncio.sleep(1.0)
@@ -271,8 +352,11 @@ def _queued_ban(mk_bot, pbot, http, vloop, carrier, *, lift=False):
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
         out["held"] = HELD.count(CHAT)
-        out["into_ban"] = [t for t in _wire(pbot, http)
-                           if ban_at is not None and t > ban_at]
+        # No ban observed means the row set nothing up: fail, never pass
+        # vacuously (the CI-env hole of iteration 3).
+        out["into_ban"] = ([-1.0] if ban_at is None else
+                           [t - ban_at for t in _wire(pbot, http)
+                            if t > ban_at])
         out["start"] = start
         if lift:
             await asyncio.sleep(BAN + 5.0 - (vloop.time() - ban_at))
@@ -288,65 +372,67 @@ def _queued_ban(mk_bot, pbot, http, vloop, carrier, *, lift=False):
 
 @pytest.mark.parametrize("carrier", CARRIERS)
 def test_q_the_ban_carrier_really_went_out_before_the_queue(
-    mk_bot, pbot, http, vloop, vlimiter, carrier,
+    mk_bot, pbot, http, vloop, vlimiter, monkeypatch, carrier,
 ):
     """Setup check: something was on the wire before the queue started
     (for ``mute_armed``, which sends nothing, this is vacuous and
     skipped)."""
     if carrier == "mute_armed":
         pytest.skip("no carrier call for a directly armed mute")
-    out = _queued_ban(mk_bot, pbot, http, vloop, carrier)
+    out = _queued_ban(mk_bot, pbot, http, vloop, monkeypatch, carrier)
     assert out["carrier_on_wire"] is True
 
 
 @pytest.mark.parametrize("carrier", CARRIERS)
 def test_q_calls_were_really_queued_when_the_ban_landed(
-    mk_bot, pbot, http, vloop, vlimiter, carrier,
+    mk_bot, pbot, http, vloop, vlimiter, monkeypatch, carrier,
 ):
-    out = _queued_ban(mk_bot, pbot, http, vloop, carrier)
+    out = _queued_ban(mk_bot, pbot, http, vloop, monkeypatch, carrier)
     assert out["pending"] >= 2, out["pending"]
 
 
 @pytest.mark.parametrize("carrier", CARRIERS)
-def test_q_the_ban_arms_the_mute(mk_bot, pbot, http, vloop, vlimiter, carrier):
-    out = _queued_ban(mk_bot, pbot, http, vloop, carrier)
+def test_q_the_ban_arms_the_mute(mk_bot, pbot, http, vloop, vlimiter,
+                                 monkeypatch, carrier):
+    out = _queued_ban(mk_bot, pbot, http, vloop, monkeypatch, carrier)
     assert out["muted"] is True
 
 
 @pytest.mark.parametrize("carrier", CARRIERS)
 def test_q_zero_wire_calls_after_the_mute(
-    mk_bot, pbot, http, vloop, vlimiter, carrier,
+    mk_bot, pbot, http, vloop, vlimiter, monkeypatch, carrier,
 ):
     """The row the operator asked for: whatever the ban arrived on, no
     queued call (PTB or rich, essential or not) reaches Telegram after
     it."""
-    out = _queued_ban(mk_bot, pbot, http, vloop, carrier)
-    assert out["into_ban"] == [], [t - out["ban_at"] for t in out["into_ban"]]
+    out = _queued_ban(mk_bot, pbot, http, vloop, monkeypatch, carrier)
+    assert out["into_ban"] == [], out["into_ban"]
 
 
 @pytest.mark.parametrize("carrier", CARRIERS)
 def test_q_queued_ptb_essentials_are_refused_with_flood_muted(
-    mk_bot, pbot, http, vloop, vlimiter, carrier,
+    mk_bot, pbot, http, vloop, vlimiter, monkeypatch, carrier,
 ):
     """Every PTB ``sendMessage`` that was still queued ends in
     ``FloodMuted``: none is sent and none fails some other way."""
-    out = _queued_ban(mk_bot, pbot, http, vloop, carrier)
+    out = _queued_ban(mk_bot, pbot, http, vloop, monkeypatch, carrier)
     assert (out["sent"] + out["refused"] == 4 and out["refused"] >= 1
             and out["other"] == []), out
 
 
 @pytest.mark.parametrize("carrier", CARRIERS)
 def test_q_the_queued_answer_is_held(mk_bot, pbot, http, vloop, vlimiter,
-                                     carrier):
-    out = _queued_ban(mk_bot, pbot, http, vloop, carrier)
+                                     monkeypatch, carrier):
+    out = _queued_ban(mk_bot, pbot, http, vloop, monkeypatch, carrier)
     assert out["held"] >= 1
 
 
-@pytest.mark.parametrize("carrier", ["card_edit", "dashboard"])
+@pytest.mark.parametrize("carrier", ["card_edit", "dashboard",
+                                     "callback_edit", "send_message"])
 def test_q_the_queued_answer_is_delivered_once_after_the_lift(
-    mk_bot, pbot, http, vloop, vlimiter, carrier,
+    mk_bot, pbot, http, vloop, vlimiter, monkeypatch, carrier,
 ):
-    out = _queued_ban(mk_bot, pbot, http, vloop, carrier, lift=True)
+    out = _queued_ban(mk_bot, pbot, http, vloop, monkeypatch, carrier, lift=True)
     assert len(out["answers_after"]) == 1, len(out["answers_after"])
 
 
@@ -701,3 +787,218 @@ def test_s_the_limiters_ornament_count_never_passes_the_share(two_hours):
 
 def test_s_no_essential_overflow_is_logged(two_hours):
     assert max(s["essential_overflow"] for s in two_hours["samples"]) == 0
+
+
+# ── 4. iteration 4: any ban mutes, one warning, never shortened ─────────────
+#
+# The claim under test: every ban answered to a chat-scoped call mutes the
+# chat, whatever call carried it (section 1's carriers, now including a
+# button tap's in-place edit and a PTB ``sendMessage``). Arming the same
+# ban twice logs ONE warning. A shorter ban arriving later never shortens
+# a longer mute.
+
+def _mute_warnings(caplog) -> list[str]:
+    """The operator-facing mute line, as the daemon logs it (``Telegram
+    flood control — chat <id> muted for <s>s ...``). Observed, not read
+    from source: a WARNING on ``aipager.bot.flood`` that says ``muted``."""
+    return [r.getMessage() for r in caplog.records
+            if r.name == "aipager.bot.flood" and r.levelno >= 30
+            and "muted" in r.getMessage()]
+
+
+@pytest.mark.parametrize("carrier", CARRIERS)
+def test_m_each_ban_carrier_logs_exactly_one_mute_warning(
+    mk_bot, pbot, http, vloop, vlimiter, monkeypatch, carrier, caplog,
+):
+    """Whatever carried the ban (and however many call sites learn of it,
+    the limiter and the caller alike), the operator sees one mute line."""
+    caplog.set_level("INFO")
+    _queued_ban(mk_bot, pbot, http, vloop, monkeypatch, carrier)
+    assert len(_mute_warnings(caplog)) == 1, _mute_warnings(caplog)
+
+
+def test_m_the_same_ban_armed_twice_directly_logs_one_warning(
+    vloop, vlimiter, caplog,
+):
+    caplog.set_level("INFO")
+    MUTE.mute(CHAT, BAN)
+    MUTE.mute(CHAT, BAN)
+    assert len(_mute_warnings(caplog)) == 1, _mute_warnings(caplog)
+
+
+def test_m_a_direct_mute_warns_at_all(vloop, vlimiter, caplog):
+    """Setup check for the rows above: the matcher finds the line."""
+    caplog.set_level("INFO")
+    MUTE.mute(CHAT, BAN)
+    assert len(_mute_warnings(caplog)) == 1
+
+
+# The shorter later answer: a small 429 (30 s, under
+# ``TELEGRAM_MAX_RETRY_AFTER`` = 90 s) and a real but shorter ban (600 s).
+SHORTER = [30, 600]
+
+
+def _two_bans(pbot, vloop, first, second, *, second_after=1.0,
+              bot=None, http=None):
+    """Two PTB ``sendMessage`` calls to CHAT are in flight; Telegram
+    answers the first with *first* seconds at +6 s and the second with
+    *second* seconds *second_after* later. Six more ESSENTIAL calls are
+    started at +5.9 s, so some are still queued in the limiter when the
+    first ban lands (``pending_at_ban``).
+
+    ``LAPSE`` = ``min(first, second) + 60`` s after the first ban (the
+    shorter one has lapsed by then): with *bot*/*http*, session b ends its
+    turn (its answer must be held); 40 s later the mute is sampled."""
+    t0 = vloop.time()
+    pbot.script = [(t0 + 6.0, first), (t0 + 6.0 + second_after, second)]
+    lapse = min(first, second) + 60.0
+    out: dict = {}
+
+    async def _send(tag):
+        try:
+            await pbot.send_message(chat_id=CHAT, text=tag)
+            return "sent"
+        except FloodMuted:
+            return "muted"
+        except RetryAfter:
+            return "banned"
+
+    async def main():
+        heads = [asyncio.ensure_future(_send("first")),
+                 asyncio.ensure_future(_send("second"))]
+        await asyncio.sleep(5.9)
+        out["on_wire_before_ban"] = len(pbot.log)
+        queued = [asyncio.ensure_future(_send(f"q{i}")) for i in range(6)]
+        await asyncio.sleep(0.1 + 0.05)
+        out["pending_at_ban"] = sum(not q.done() for q in queued)
+        out["heads"] = await asyncio.gather(*heads)
+        ban_at = pbot.bans[0][0] if pbot.bans else None
+        out["ban_at"] = ban_at
+        out["queued"] = await asyncio.gather(*queued)
+        await asyncio.sleep(max(0.0, ban_at + lapse - vloop.time()))
+        if bot is not None:
+            b = _session(bot, vloop, "b", msg_id=72)
+            b.status = Status.IDLE
+            await bot.notify(b, "idle_prompt", {"summary": ANSWER})
+            out["held"] = HELD.count(CHAT)
+        await asyncio.sleep(max(0.0, ban_at + lapse + 40.0 - vloop.time()))
+        out["sampled_after"] = vloop.time() - ban_at
+        out["muted_after_lapse"] = MUTE.is_muted(CHAT)
+        out["remaining_after_lapse"] = MUTE.remaining(CHAT)
+        wire = [t for _e, c, _m, t in pbot.log if c == CHAT]
+        if http is not None:
+            wire += [t for _e, c, t, _p in http.requests if c == CHAT]
+        out["into_ban"] = ([-1.0] if ban_at is None else
+                           [t - ban_at for t in wire if t > ban_at])
+
+    vloop.run_until_complete(main())
+    return out
+
+
+@pytest.mark.parametrize("second", SHORTER)
+def test_m_setup_both_calls_are_in_flight_before_the_first_ban(
+    vloop, vlimiter, pbot, second,
+):
+    """Both calls reached the wire before the first ban, the first one's
+    caller saw the ban, and calls were queued when it landed. (The second
+    call's caller may see its own 429 or ``FloodMuted``; either is fine.)"""
+    out = _two_bans(pbot, vloop, BAN, second)
+    assert (out["on_wire_before_ban"] == 2 and out["heads"][0] == "banned"
+            and out["pending_at_ban"] >= 1), out
+
+
+def test_m_the_same_ban_on_two_in_flight_calls_logs_one_warning(
+    vloop, vlimiter, pbot, caplog,
+):
+    """Telegram answers both in-flight calls with the one ban, the second
+    a second later counting down (``BAN - 1``): same deadline."""
+    caplog.set_level("INFO")
+    _two_bans(pbot, vloop, BAN, BAN - 1)
+    assert len(_mute_warnings(caplog)) == 1, _mute_warnings(caplog)
+
+
+@pytest.mark.parametrize("second", SHORTER)
+def test_m_a_shorter_later_ban_does_not_lift_the_mute_early(
+    vloop, vlimiter, pbot, second,
+):
+    """25,429 s, then *second* one second later: 40 s after the shorter
+    one would have lapsed, the chat is still muted."""
+    out = _two_bans(pbot, vloop, BAN, second)
+    assert out["muted_after_lapse"] is True, out["sampled_after"]
+
+
+@pytest.mark.parametrize("second", SHORTER)
+def test_m_a_shorter_later_ban_keeps_the_long_deadline(
+    vloop, vlimiter, pbot, second,
+):
+    out = _two_bans(pbot, vloop, BAN, second)
+    assert (out["remaining_after_lapse"]
+            >= BAN - out["sampled_after"] - 2.0), out
+
+
+@pytest.mark.parametrize("second", SHORTER)
+def test_m_a_shorter_later_ban_lets_no_call_onto_the_wire(
+    vloop, vlimiter, pbot, second,
+):
+    out = _two_bans(pbot, vloop, BAN, second)
+    assert out["into_ban"] == [], out["into_ban"]
+
+
+@pytest.mark.parametrize("second", SHORTER)
+def test_m_a_shorter_later_ban_still_refuses_the_queued_calls(
+    vloop, vlimiter, pbot, second,
+):
+    """Every call still queued when the first ban landed ends in
+    ``FloodMuted``."""
+    out = _two_bans(pbot, vloop, BAN, second)
+    assert (out["queued"].count("muted") >= out["pending_at_ban"] >= 1
+            and "banned" not in out["queued"]), out
+
+
+@pytest.mark.parametrize("second", SHORTER)
+def test_m_a_shorter_later_ban_still_holds_an_answer_after_it_would_lapse(
+    mk_bot, pbot, http, vloop, vlimiter, monkeypatch, second,
+):
+    """60 s after the shorter ban would have lapsed, a session ends its
+    turn: its answer is held, and nothing reaches the wire."""
+    monkeypatch.setattr("aipager.bot.dashboard.CHAT_ID", "")
+    bot = _bot(mk_bot, pbot)
+    out = _two_bans(pbot, vloop, BAN, second, bot=bot, http=http)
+    assert out["held"] >= 1 and out["into_ban"] == [], out
+
+
+def test_m_a_longer_later_ban_extends_a_shorter_mute(
+    vloop, vlimiter, pbot,
+):
+    """Boundary, the other order: 600 s first, then 25,429 s. The longer
+    deadline wins: 100 s after the 600 s one lapsed, still muted."""
+    out = _two_bans(pbot, vloop, 600, BAN)
+    assert out["muted_after_lapse"] is True, out["sampled_after"]
+
+
+@pytest.mark.parametrize("second", SHORTER)
+def test_m_a_shorter_direct_mute_does_not_shorten_a_longer_one(
+    vloop, vlimiter, second,
+):
+    """The same rule when both mutes are armed directly: 25,429 s, then
+    *second* ten seconds later; 60 s after the shorter one would have
+    lapsed, the chat is still muted."""
+    async def _go():
+        MUTE.mute(CHAT, BAN)
+        await asyncio.sleep(10.0)
+        MUTE.mute(CHAT, second)
+        await asyncio.sleep(second + 60.0)
+        return MUTE.is_muted(CHAT)
+    assert vloop.run_until_complete(_go()) is True
+
+
+@pytest.mark.parametrize("seconds", SHORTER)
+def test_m_a_mute_lapses_on_its_own_deadline(vloop, vlimiter, seconds):
+    """Control for the rows above: a lone shorter mute HAS lapsed 60 s
+    after its deadline, so "still muted" there is the longer deadline,
+    not a stuck mute."""
+    async def _go():
+        MUTE.mute(CHAT, seconds)
+        await asyncio.sleep(seconds + 60.0)
+        return MUTE.is_muted(CHAT)
+    assert vloop.run_until_complete(_go()) is False
