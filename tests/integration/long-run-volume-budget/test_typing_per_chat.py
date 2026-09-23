@@ -323,11 +323,19 @@ def test_y_one_loop_outlives_a_session_and_ends_with_the_last(
 def test_z_a_muted_chat_gets_no_bubble_from_its_loop(mk_bot, vbot, vloop):
     """Row Z (R7). A flood-muted chat: zero ``sendChatAction`` on the wire
     from the per-chat loop, however long it runs — and not even an attempt
-    at the gate: the loop's own checks keep it off the limiter entirely.
-    Mutation: drop the mute checks in ``_typing_chat`` and ``_send_typing``
-    and the gate still refuses every call (nothing reaches the wire), but
-    the refusals are counted, which this row forbids; drop the gate too
-    and the bubble goes into the ban."""
+    at the gate.
+
+    What this row pins is the END-TO-END fact, which three layers hold up:
+    arming the mute drops the chat's earned rate to the floor (8.29), so
+    the loop's fit check (``_typing_fits_cards``) already withholds the
+    bubble; ``_typing_chat`` and ``_send_typing`` each check the mute; and
+    the limiter's gate refuses it. Removing the two loop-side mute checks
+    together does NOT fail this row — verified, the fit check holds — so
+    those checks are pinned on their own by
+    ``tests/test_typing_indicator.py::test_no_bubble_into_a_flood_muted_chat``
+    and ``::test_a_mute_armed_after_the_gate_still_stops_the_send``, and
+    the gate by row K.
+    """
     bot = _typing_bot(mk_bot, vbot)
     s1 = _session(bot, vloop, "one", msg_id=71)
     MUTE.mute(CHAT, 400.0)

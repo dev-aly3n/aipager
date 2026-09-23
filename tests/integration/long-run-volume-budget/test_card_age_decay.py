@@ -286,23 +286,35 @@ def test_p_phantom_subagent_stops_never_edit_before_the_tier(
     mk_bot, vbot, vloop, vlimiter, rich_http,
 ):
     """Row P (Q2). A phantom SubagentStop — empty type, unknown id, 0.0 s —
-    every second at 2 h: no edit before the 60 s tier. vm3 took 676 of
-    them in three hours, each a candidate edit on a 1.2 s debounce.
+    every second at 2 h: no edit attempted before the 60 s tier. vm3 took
+    676 of them in three hours, each a candidate edit on a 1.2 s debounce.
 
-    Mutation: treat a subagent event as a state change and the first
-    phantom edits.
+    Counted as ATTEMPTS through the real ``_edit_busy_rich``: a phantom
+    adds no row, so an attempted edit would usually dedupe to no POST and
+    a POST count would pass whether or not the gate held.
+
+    Mutation: put ``subagent_stop`` back on the bare 1.2 s debounce and
+    the first phantom attempts an edit.
     """
     bot, sess = _card(mk_bot, vbot, vloop, rich_http, age=2 * HOUR)
     phantom = {"agent_type": "", "elapsed": 0.0, "history_idx": None,
                "tool_count": 0}
+    real = bot._edit_busy_rich
+    attempts: list[float] = []
+
+    async def _counting(*args, **kwargs):
+        attempts.append(vloop.time())
+        return await real(*args, **kwargs)
 
     async def _drive():
         await _edit_now(bot, sess)
+        bot._edit_busy_rich = _counting
         for _ in range(58):
             await asyncio.sleep(1)
             await bot.notify(sess, "subagent_stop", dict(phantom))
 
     vloop.run_until_complete(_drive())
+    assert attempts == [], "a phantom SubagentStop attempted an edit"
     assert len(rich_http.edits()) == 1
 
 
