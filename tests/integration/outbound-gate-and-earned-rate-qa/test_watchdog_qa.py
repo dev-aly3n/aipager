@@ -10,10 +10,10 @@ chat is muted or in minimal mode, and the animate task is kept ALIVE
 
 from __future__ import annotations
 
-import time
 from unittest.mock import AsyncMock
 
 from aipager import config
+from aipager.bot import animation
 from aipager.session_monitor import (
     CARD_STALE_SECONDS,
     busy_card_watchdog_action,
@@ -162,7 +162,12 @@ def test_cards_suppressed_never_raises_on_a_missing_chat():
 def _busy_sess():
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
     sess.busy_msg_id = 10
-    sess.busy_started_at = time.monotonic()
+    # On the ANIMATOR's clock, which `anim_clock` rebinds: stamped from
+    # the real `time.monotonic()` instead, a host up for more than the
+    # fake clock's 500,000 s puts the start in the card's future, the
+    # counter reads "0s" for ever, every re-render dedupes, and the
+    # "still animates" control sees one edit.
+    sess.busy_started_at = animation.time.monotonic()
     sess.stream_last_rendered = ""
     sess.scope_kind = "dm"
     sess.scope_chat_id = CHAT
