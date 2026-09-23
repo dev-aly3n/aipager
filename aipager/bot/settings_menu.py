@@ -20,11 +20,12 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from aipager.preferences import Preferences, get_preferences
 
-SECTIONS = ("layout", "diffs", "formatting", "length", "level")
+SECTIONS = ("layout", "diffs", "cadence", "formatting", "length", "level")
 
 _SECTION_TITLES = {
     "layout": "🖼 Message layout",
     "diffs": "📝 Diff previews",
+    "cadence": "⏱ Long-turn card updates",
     "formatting": "✏️ Simple formatting",
     "length": "📏 Answer length",
     "level": "🎓 Language level",
@@ -42,6 +43,11 @@ _FORMATTING_ORDER = (False, True)
 
 _DIFFS_LABELS = {False: "Off — busy card only", True: "On — a diff message per edit"}
 _DIFFS_ORDER = (False, True)
+
+# On first: it is the default, and the one that keeps a long turn cheap.
+_CADENCE_LABELS = {True: "On — slow down as a turn gets long",
+                   False: "Off — same pace for the whole turn"}
+_CADENCE_ORDER = (True, False)
 
 _LENGTH_LABELS = {
     "none": "Don't apply any rule",
@@ -63,6 +69,7 @@ _LEVEL_ORDER = ("none", "simple", "normal", "advanced")
 _SECTION_FIELD = {
     "layout": "layout",
     "diffs": "diff_preview",
+    "cadence": "card_age_decay",
     "formatting": "simple_formatting",
     "length": "answer_length",
     "level": "language_level",
@@ -77,6 +84,11 @@ _OPTION_HELP = {
     ("layout", "replace"): "The busy card is replaced by the answer alone.",
     ("diffs", False): "File edits show only as rows on the busy card.",
     ("diffs", True): "Each Write/Edit is also posted as its own diff message under the busy card.",
+    ("cadence", True): ("The card refreshes less often as a turn runs on — every 10 s "
+                        "after 2 min, 30 s after 10 min, a minute after an hour — and "
+                        "counts in minutes, so it never looks frozen. A state change "
+                        "still shows at once."),
+    ("cadence", False): "The card refreshes at the same pace for the whole turn, however long.",
     ("formatting", False): "Claude formats replies however it likes.",
     ("formatting", True): "Plain prose and dashed lists only — no tables or code blocks.",
     ("length", "none"): "No length guidance at all.",
@@ -93,6 +105,7 @@ _OPTION_HELP = {
 _SECTION_ORDERS = {
     "layout": _LAYOUT_ORDER,
     "diffs": _DIFFS_ORDER,
+    "cadence": _CADENCE_ORDER,
     "formatting": _FORMATTING_ORDER,
     "length": _LENGTH_ORDER,
     "level": _LEVEL_ORDER,
@@ -100,6 +113,7 @@ _SECTION_ORDERS = {
 _SECTION_LABELS = {
     "layout": _LAYOUT_LABELS,
     "diffs": _DIFFS_LABELS,
+    "cadence": _CADENCE_LABELS,
     "formatting": _FORMATTING_LABELS,
     "length": _LENGTH_LABELS,
     "level": _LEVEL_LABELS,
@@ -147,6 +161,13 @@ def _root_button_text(section: str, prefs: Preferences) -> str:
         # root row always carries the marker — the one field where "current
         # value" and "something is actively applied" are the same thing.
         return f"{_SECTION_TITLES[section]}: {label} ✅"
+    if section == "cadence":
+        # The one boolean that defaults ON (8.30): its row is marked when
+        # it differs from THAT default — switched off — like every other
+        # row's marker, which says "customized", not "on".
+        label = _CADENCE_LABELS[value]
+        marker = " ✅" if value is False else ""
+        return f"{_SECTION_TITLES[section]}: {label}{marker}"
     if section in ("formatting", "diffs"):
         # Boolean sections: the marker means "actively on".
         label = _SECTION_LABELS[section][value]
@@ -190,6 +211,12 @@ _SECTION_INTRO = {
         "the busy card. Off keeps one busy card and one answer — the card "
         "still lists every edit, and the Mini App has a diff viewer."
     ),
+    "cadence": (
+        "How often a busy card refreshes during a LONG turn. On, it slows "
+        "down as the turn gets older and its counter switches to minutes, "
+        "which keeps a long-running chat well inside Telegram's limits. "
+        "Off keeps the first-minutes pace for the whole turn."
+    ),
     "formatting": (
         "When ON, replies use plain prose and simple dashed lists only — "
         "no tables, code blocks, headings, or bold/italics."
@@ -216,8 +243,8 @@ def render_settings_section(
     rows = []
     for value in order:
         marker = " ✅" if value == current else ""
-        # Boolean fields' (simple_formatting, diff_preview) values are
-        # bools; every other field's values already double as their own
+        # Boolean fields' (simple_formatting, diff_preview,
+        # card_age_decay) values are bools; every other field's values already double as their own
         # callback-data tokens.
         token = "on" if value is True else "off" if value is False else value
         rows.append([InlineKeyboardButton(

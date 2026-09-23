@@ -558,7 +558,7 @@ def test_options_serves_the_schema_and_scope_defaults_for_the_form(server, run_a
             fields = {g["field"] for g in body["schema"]}
             assert fields == {
                 "layout", "simple_formatting", "answer_length", "language_level",
-                "diff_preview",
+                "diff_preview", "card_age_decay",
             }
             assert set(body["scope_defaults"]) == fields
         finally:

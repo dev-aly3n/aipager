@@ -230,6 +230,7 @@ class CallbackDispatchMixin:
     _SETTINGS_VALUE_TOKENS = {
         "formatting": {"on": True, "off": False},
         "diffs": {"on": True, "off": False},
+        "cadence": {"on": True, "off": False},
     }
 
     async def _dispatch_settings_action(self, update: Update, query, action: str) -> None:
@@ -303,6 +304,7 @@ class CallbackDispatchMixin:
             # can never raise KeyError.
             field = {
                 "layout": "layout", "diffs": "diff_preview",
+                "cadence": "card_age_decay",
                 "formatting": "simple_formatting",
                 "length": "answer_length", "level": "language_level",
             }[section]

@@ -101,7 +101,7 @@ def test_get_preferences_returns_schema_and_values(server, run_async):
             # the schema is shared, not a second hand-written list.
             assert fields == {
                 "layout", "simple_formatting", "answer_length", "language_level",
-                "diff_preview",
+                "diff_preview", "card_age_decay",
             }
             assert set(body["values"]) == fields
             assert body["can_edit"] is True

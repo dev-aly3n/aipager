@@ -325,7 +325,7 @@ def test_unknown_field_on_get_all_values_still_only_lists_real_fields(server, ru
             values = (await resp.json())["values"]
             assert set(values) == {
                 "layout", "simple_formatting", "answer_length", "language_level",
-                "diff_preview",
+                "diff_preview", "card_age_decay",
             }
         finally:
             await client.close()

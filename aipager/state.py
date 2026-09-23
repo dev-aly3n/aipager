@@ -178,6 +178,7 @@ PREFERENCE_OVERRIDE_FIELDS: dict[str, str] = {
     "answer_length": "override_answer_length",
     "language_level": "override_language_level",
     "diff_preview": "override_diff_preview",
+    "card_age_decay": "override_card_age_decay",
 }
 
 
@@ -410,7 +411,8 @@ class TrackedSession:
     # `None` means unset/inherit the scope's own /settings value — never a
     # legal value for any of these: layout/answer_length/
     # language_level are closed enumerations that never include None, and
-    # the booleans' (simple_formatting, diff_preview) own legal `False`
+    # the booleans' (simple_formatting, diff_preview, card_age_decay) own
+    # legal `False`
     # must not be confused with
     # "unset", which is exactly why `None` alone (not `False`, not a
     # missing-key sentinel) is the unset marker — it is disjoint from
@@ -426,6 +428,7 @@ class TrackedSession:
     override_answer_length: str | None = None
     override_language_level: str | None = None
     override_diff_preview: bool | None = None
+    override_card_age_decay: bool | None = None
     # Multi-scope (Phase B): which Telegram chat this session belongs to.
     # All outbound notifications for the session route here instead of the
     # global CHAT_ID. `scope_chat_id == 0` means "not yet stamped" — the
@@ -1622,7 +1625,7 @@ class SessionRegistry:
         # Per-session preference overrides — see TrackedSession docstring.
         "override_layout", "override_simple_formatting",
         "override_answer_length", "override_language_level",
-        "override_diff_preview",
+        "override_diff_preview", "override_card_age_decay",
         # NOT here, and not by oversight: `active_subagents` /
         # `finished_subagents` / `tool_history` are per-turn state, and the
         # subagent rows carry `started_at` / `last_seen` as
@@ -1784,6 +1787,7 @@ class SessionRegistry:
                 override_answer_length=sd.get("override_answer_length"),
                 override_language_level=sd.get("override_language_level"),
                 override_diff_preview=sd.get("override_diff_preview"),
+                override_card_age_decay=sd.get("override_card_age_decay"),
             )
             # busy_msg_id is a @property (Decision 1) and cannot also be a
             # dataclass __init__ parameter name — set it post-construction

@@ -660,6 +660,7 @@ class MiniAppServer:
                 "answer_length": prefs.answer_length,
                 "language_level": prefs.language_level,
                 "diff_preview": prefs.diff_preview,
+                "card_age_decay": prefs.card_age_decay,
             },
             "can_create": bool(self.bot._can_prompt_user(user_id, scope_chat_id)),
             "can_use_auto": bool(self.bot._is_admin_user(user_id, scope_chat_id)),
@@ -688,6 +689,7 @@ class MiniAppServer:
                 "answer_length": prefs.answer_length,
                 "language_level": prefs.language_level,
                 "diff_preview": prefs.diff_preview,
+                "card_age_decay": prefs.card_age_decay,
             },
             # Lets the UI disable controls it knows will be refused rather
             # than offering a button that always 403s. The server still
@@ -753,6 +755,7 @@ class MiniAppServer:
                 "answer_length": prefs.answer_length,
                 "language_level": prefs.language_level,
                 "diff_preview": prefs.diff_preview,
+                "card_age_decay": prefs.card_age_decay,
             },
             "changed": after != before,
         })

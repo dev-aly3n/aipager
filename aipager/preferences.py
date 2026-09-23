@@ -56,6 +56,7 @@ _FIELD_VALIDATORS = {
     "layout": lambda v: v in _VALID_LAYOUT,
     "simple_formatting": lambda v: isinstance(v, bool),
     "diff_preview": lambda v: isinstance(v, bool),
+    "card_age_decay": lambda v: isinstance(v, bool),
     "answer_length": lambda v: v in _VALID_ANSWER_LENGTH,
     "language_level": lambda v: v in _VALID_LANGUAGE_LEVEL,
 }
@@ -77,6 +78,12 @@ class Preferences:
     # would land between the busy card and the job's single answer).
     # Defaulted here so every existing keyword construction stays valid.
     diff_preview: bool = False
+    # Slow the busy card as a turn gets long (roadmap 8.30): from 2 / 10 /
+    # 60 minutes the card is refreshed at most every 10 / 30 / 60 s and
+    # counts in minutes, then hours. ON by default — it is what keeps a
+    # four-hour turn from editing one message thousands of times. Off is
+    # 0.7.13's cadence for the whole turn.
+    card_age_decay: bool = True
 
 
 # In-memory cache: None means "not loaded yet" (distinct from a loaded-
@@ -137,6 +144,7 @@ def _default_layout() -> str:
 _FIELD_DEFAULTS = {
     "simple_formatting": False,
     "diff_preview": False,
+    "card_age_decay": True,
     "answer_length": "none",
     "language_level": "none",
 }
@@ -187,6 +195,9 @@ def get_preferences(chat_id: int) -> Preferences:
         ),
         diff_preview=_resolve_field(
             scope_raw, "diff_preview", _FIELD_DEFAULTS["diff_preview"],
+        ),
+        card_age_decay=_resolve_field(
+            scope_raw, "card_age_decay", _FIELD_DEFAULTS["card_age_decay"],
         ),
     )
 

@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 
 from telegram.error import RetryAfter
 
-from aipager import flood_policy
+from aipager import flood_policy, preferences
 from aipager.config import (
     BUSY_EDIT_INTERVAL, CARD_CADENCE_FLOOR_GROUP, CARD_CADENCE_FLOOR_PRIVATE,
     CARD_CADENCE_MARGIN, CARD_RETRY_WAKE, CARD_STATE_BYPASS_MIN_GAP,
@@ -221,11 +221,20 @@ def _log_typing_429_once(chat, label: str, exc: Exception, *,
 def card_age_decay_enabled(sess: TrackedSession) -> bool:
     """Does this session's busy card decay with turn age (8.30 R4)?
 
+    The ``card_age_decay`` preference, resolved per call — the scope's
+    /settings value with this session's own override applied
+    (``resolve_preferences``, never ``get_preferences``, so a per-session
+    choice takes effect), like ``NotifyMixin._diff_preview_enabled``. On
+    by default. Never cached, so a toggle flipped mid-turn takes effect on
+    the next edit.
+
     The ONE place the answer comes from, so the animator's edit gate, the
-    card's elapsed unit and the session monitor's stale-card watchdog can
-    never disagree about a card's tier.
+    card's elapsed unit, the typing loop's fit check and the session
+    monitor's stale-card watchdog can never disagree about a card's tier.
     """
-    return True
+    return preferences.resolve_preferences(
+        sess.scope_chat_id or 0, sess.preference_overrides(),
+    ).card_age_decay
 
 
 def card_age(sess: TrackedSession, now: float) -> float:

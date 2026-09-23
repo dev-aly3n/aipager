@@ -28,9 +28,10 @@ def test_root_has_four_sections_then_per_session_then_close():
     """
     _text, kb = sm.render_settings_root(1)
     data = _all_callback_data(kb)
+    # 8.30 added "cadence" (Long-turn card updates) after "diffs".
     assert data == [
-        "_:set:layout", "_:set:diffs", "_:set:formatting", "_:set:length",
-        "_:set:level", "_:spref", "_:set:close",
+        "_:set:layout", "_:set:diffs", "_:set:cadence", "_:set:formatting",
+        "_:set:length", "_:set:level", "_:spref", "_:set:close",
     ]
 
 
@@ -54,9 +55,10 @@ def test_root_marks_customized_sections():
     _text, kb = sm.render_settings_root(1)
     texts = _all_texts(kb)
     assert "✅" not in texts[1]  # diffs still default
-    assert "✅" in texts[2]  # formatting
-    assert "✅" in texts[3]  # length
-    assert "✅" not in texts[4]  # level still default
+    assert "✅" not in texts[2]  # cadence still default (on) — 8.30
+    assert "✅" in texts[3]  # formatting
+    assert "✅" in texts[4]  # length
+    assert "✅" not in texts[5]  # level still default
 
 
 def test_root_returns_markup_and_text():
