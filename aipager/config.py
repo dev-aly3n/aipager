@@ -599,6 +599,50 @@ FLOOD_SUSTAINED_WINDOW: float = 60.0
 # slower) -> a second 429 -> 0.125 (below it; pixels stop, answers do not).
 FLOOD_MINIMAL_MODE_RATE_FLOOR: float = 0.2
 
+# ── the long-run volume budget (roadmap 8.30) ──────────────────────────
+# Non-env like everything above, and for the same reason.
+#
+# Every window above is a minute or shorter, and a minute is not what got
+# the vm3 DM banned on 2026-09-23. Two sessions streamed into it for
+# 3 h 23 min at a rate every short window allowed, ~57 calls a minute with
+# the typing bubble included, with no 429 and no warning until a straight
+# 7-hour ban. Telegram meters long-run VOLUME and does not publish the
+# window it meters it over, so this is a window of our own, chosen
+# conservatively: a rolling hour per chat.
+#
+# 1200 an hour is 20 a minute, ~2.9x below the volume that earned the ban.
+# The last 120 of them belong to ESSENTIAL calls (answers, replies,
+# prompts): ornaments — the card, the typing bubble — stop at 1080, and
+# the chat enters minimal mode until the hour frees. Essentials are never
+# refused by this window; if they overflow it, that is logged.
+FLOOD_HOURLY_MAX: int = 1200
+FLOOD_HOURLY_WINDOW: float = 3600.0
+FLOOD_HOURLY_ESSENTIAL_RESERVE: int = 120
+# The typing bubble is the LOWEST ornament: it stops once the hour's
+# ornament share is 75 % used, so the cards keep flowing, and comes back
+# only once use falls under 60 % — hysteresis, so it does not flicker on
+# and off every time one minute ages out of the window.
+FLOOD_HOURLY_TYPING_SHED_AT: float = 0.75
+FLOOD_HOURLY_TYPING_RESUME_BELOW: float = 0.60
+# Minimal mode entered on a spent ornament share lifts only at 80 % of it.
+# Every entry and every exit costs one ESSENTIAL edit per live card (the
+# "updates paused" line, then the resume), so a latch that flapped on each
+# freed slot would spend the essential reserve announcing itself.
+FLOOD_HOURLY_MINIMAL_EXIT_AT: float = 0.80
+# Any 429, on any endpoint — the typing bubble included — puts the chat in
+# a WARNING REGIME for this long: the earned rate may not climb past
+# FLOOD_WARNED_CEILING and recovers on the slow, post-ban schedule. Before
+# 8.30 a 429 was forgiven in about five minutes; on vm3 the one warning
+# Telegram gave came 3 h 23 min before the ban, and the rate was back at
+# the ceiling within minutes of it.
+FLOOD_WARNING_HOURS: float = 6.0
+FLOOD_WARNED_CEILING: float = 0.5
+# How long a ban is remembered. While a chat has N bans within this many
+# days, its rate ceiling AND its hourly budget are divided by (1 + N): one
+# ban in a week halves both, two third them. A 24-hour memory (0.7.13)
+# had already forgotten vm3's 2026-09-19 ban when the 2026-09-23 one came.
+FLOOD_BAN_MEMORY_DAYS: float = 7.0
+
 # Busy-card cadence (roadmap 8.21 §4.3). The card interval is
 # `max(BASE, N * floor) * MARGIN * backoff`, where N is the number of
 # BUSY sessions sharing the chat: the cards of a chat share its budget
@@ -607,6 +651,25 @@ FLOOD_MINIMAL_MODE_RATE_FLOOR: float = 0.2
 CARD_CADENCE_MARGIN: float = 1.1
 CARD_CADENCE_FLOOR_PRIVATE: float = 1.0
 CARD_CADENCE_FLOOR_GROUP: float = 3.0
+
+# Busy-card cadence DECAYS WITH TURN AGE (roadmap 8.30). The cadence above
+# is constant for the life of a turn, so on vm3 one card was edited every
+# few seconds for four hours. From these turn ages on, the card is edited
+# no more often than the paired interval, and its elapsed counter switches
+# to a matching unit — minutes from 10 min, hours and minutes from 1 h —
+# so a slow card never looks frozen: it shows a counter that moves at its
+# own granularity. Below the first age the cadence is exactly as before.
+# A STATE change (busy -> waiting, a permission prompt) is shown at once,
+# at most once per CARD_STATE_BYPASS_MIN_GAP; new tool rows and prose wait
+# for the next due edit. Per-session opt-out: the `card_age_decay`
+# preference.
+CARD_AGE_TIER1_AT: float = 120.0
+CARD_AGE_TIER1_INTERVAL: float = 10.0
+CARD_AGE_TIER2_AT: float = 600.0
+CARD_AGE_TIER2_INTERVAL: float = 30.0
+CARD_AGE_TIER3_AT: float = 3600.0
+CARD_AGE_TIER3_INTERVAL: float = 60.0
+CARD_STATE_BYPASS_MIN_GAP: float = 10.0
 
 # A small 429 (retry_after <= TELEGRAM_MAX_RETRY_AFTER) doubles that
 # chat's card interval, up to this ceiling, and one quiet window halves

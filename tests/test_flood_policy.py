@@ -1,0 +1,204 @@
+"""The pure long-run flood policy (roadmap 8.30, ``aipager.flood_policy``).
+
+Every rule here is shared by the daemon's limiter, the busy-card animator
+and ``aipager status`` (another process), so each is pinned once, as
+arithmetic, before any of those readers are. Every docstring names the
+mutation that makes its row fail.
+"""
+
+from __future__ import annotations
+
+import math
+
+import pytest
+
+from aipager import config, flood_policy
+from aipager.flood_policy import (
+    bans_within,
+    card_age_floor,
+    effective_ceiling,
+    elapsed_unit,
+    format_elapsed,
+    hourly_limits,
+)
+
+WEEK = config.FLOOD_BAN_MEMORY_DAYS * 86400.0
+NOW = 1_800_000_000.0
+
+
+# ── the constants the contract fixes ─────────────────────────────────────────
+
+def test_the_contract_numbers_are_the_configured_ones():
+    """§8 Q1 / R5 / R6 / R4. A change to any of these is a change to the
+    contract, so it has to be deliberate: this row names the one that
+    moved."""
+    assert config.FLOOD_HOURLY_MAX == 1200
+    assert config.FLOOD_HOURLY_WINDOW == 3600.0
+    assert config.FLOOD_HOURLY_ESSENTIAL_RESERVE == 120
+    assert config.FLOOD_HOURLY_TYPING_SHED_AT == 0.75
+    assert config.FLOOD_HOURLY_TYPING_RESUME_BELOW == 0.60
+    assert config.FLOOD_HOURLY_MINIMAL_EXIT_AT == 0.80
+    assert config.FLOOD_WARNING_HOURS == 6.0
+    assert config.FLOOD_WARNED_CEILING == 0.5
+    assert config.FLOOD_BAN_MEMORY_DAYS == 7.0
+    assert (config.CARD_AGE_TIER1_AT, config.CARD_AGE_TIER1_INTERVAL) == (120.0, 10.0)
+    assert (config.CARD_AGE_TIER2_AT, config.CARD_AGE_TIER2_INTERVAL) == (600.0, 30.0)
+    assert (config.CARD_AGE_TIER3_AT, config.CARD_AGE_TIER3_INTERVAL) == (3600.0, 60.0)
+    assert config.CARD_STATE_BYPASS_MIN_GAP == 10.0
+
+
+def test_the_module_has_no_bot_dependency():
+    """``aipager status`` imports this in a process with no daemon; it
+    must stay free of ``aipager.bot`` (and so of telegram/httpx).
+
+    Mutation: import anything from ``aipager.bot`` here and this names it.
+    """
+    import ast
+
+    tree = ast.parse(open(flood_policy.__file__, encoding="utf-8").read())
+    modules = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            modules.add(node.module or "")
+    assert modules <= {"__future__", "math", "aipager.config"}, modules
+
+
+# ── bans_within ──────────────────────────────────────────────────────────────
+
+def test_a_ban_four_days_old_is_remembered_for_a_week():
+    """R6: the memory is days, not hours. Mutation: pass 86400 as the
+    window and the four-day-old stamp is forgotten."""
+    stamps = [NOW - 4 * 86400.0]
+    assert bans_within(stamps, NOW, WEEK) == 1
+    assert bans_within(stamps, NOW, 86400.0) == 0
+
+
+def test_a_ban_ages_out_after_the_window():
+    """The memory decays by itself. Mutation: drop the upper bound and a
+    ban from last month still divides the ceiling."""
+    assert bans_within([NOW - WEEK - 1.0], NOW, WEEK) == 0
+    assert bans_within([NOW - WEEK], NOW, WEEK) == 1
+
+
+def test_a_future_stamp_is_not_a_ban():
+    """A clock that moved is not a ban that happened. Mutation: drop the
+    ``0 <=`` bound and a skewed file counts a ban nobody took."""
+    assert bans_within([NOW + 60.0], NOW, WEEK) == 0
+
+
+@pytest.mark.parametrize("junk", [
+    "1800000000", None, True, float("nan"), float("inf"), [NOW], {"t": NOW},
+])
+def test_junk_stamps_are_skipped_not_raised_on(junk):
+    """The status command feeds this straight out of a file. Mutation:
+    drop the type check and a string stamp raises TypeError out of
+    ``aipager status``."""
+    assert bans_within([junk, NOW - 10.0], NOW, WEEK) == 1
+
+
+def test_a_non_list_is_zero_bans():
+    assert bans_within(None, NOW, WEEK) == 0
+    assert bans_within("x", NOW, WEEK) == 0
+
+
+# ── effective_ceiling ────────────────────────────────────────────────────────
+
+def _ceiling(bans=0, warned=False):
+    return effective_ceiling(
+        max_rate=config.TELEGRAM_PRIVATE_MAX_RATE, min_rate=config.FLOOD_MIN_RATE,
+        bans=bans, warned=warned, warned_ceiling=config.FLOOD_WARNED_CEILING)
+
+
+def test_the_ceiling_is_divided_by_one_plus_bans():
+    """R6. Mutation: a fixed half (0.7.13's ``_BANNED_CEILING_FRACTION``)
+    and two bans leave the ceiling at 0.5, not a third."""
+    assert _ceiling(0) == 1.0
+    assert _ceiling(1) == 0.5
+    assert _ceiling(2) == pytest.approx(1.0 / 3.0)
+
+
+def test_the_warning_regime_caps_the_ceiling():
+    """R5. Mutation: ignore ``warned`` and a chat that just took a 429
+    may climb straight back to 1.0."""
+    assert _ceiling(0, warned=True) == 0.5
+    # The stricter of the two wins.
+    assert _ceiling(2, warned=True) == pytest.approx(1.0 / 3.0)
+
+
+def test_the_ceiling_never_drops_under_the_floor():
+    """Five bans a week is 1/6 — under nothing, still above MIN. Twenty
+    would be under it. Mutation: drop the ``max(min_rate, …)`` and the
+    ceiling inverts under the floor."""
+    assert _ceiling(100) == config.FLOOD_MIN_RATE
+
+
+def test_a_negative_ban_count_is_none():
+    assert _ceiling(-3) == 1.0
+
+
+# ── hourly_limits ────────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("bans,expected", [
+    (0, (1200, 1080)), (1, (600, 540)), (2, (400, 360)), (3, (300, 270)),
+])
+def test_the_hourly_budget_is_divided_by_one_plus_bans(bans, expected):
+    """R6 and row H/I, as arithmetic. Mutation: divide only the total and
+    a banned chat's ornaments keep 1080 of its 600."""
+    assert hourly_limits(bans) == expected
+
+
+def test_the_hourly_limits_follow_the_arguments():
+    """A limiter built with other limits is answered with ITS limits."""
+    assert hourly_limits(0, hourly_max=100, reserve=10) == (100, 90)
+    assert hourly_limits(1, hourly_max=101, reserve=10) == (50, 45)
+
+
+# ── card_age_floor / elapsed_unit ────────────────────────────────────────────
+
+@pytest.mark.parametrize("age,floor,unit", [
+    (0.0, 0.0, "s"), (30.0, 0.0, "s"), (119.9, 0.0, "s"),
+    (120.0, 10.0, "s"), (300.0, 10.0, "s"), (599.9, 10.0, "s"),
+    (600.0, 30.0, "m"), (1800.0, 30.0, "m"), (3599.9, 30.0, "m"),
+    (3600.0, 60.0, "h"), (7200.0, 60.0, "h"), (86400.0, 60.0, "h"),
+])
+def test_the_age_tiers(age, floor, unit):
+    """R4's table, at and around each breakpoint. Mutation: move any
+    breakpoint or interval and the row names the age."""
+    assert card_age_floor(age, True) == floor
+    assert elapsed_unit(age, True) == unit
+
+
+@pytest.mark.parametrize("age", [30.0, 300.0, 1800.0, 7200.0])
+def test_decay_off_is_today_at_every_age(age):
+    """The ``card_age_decay`` preference, off: no floor, seconds for
+    ever. Mutation: ignore ``enabled`` and the opt-out does nothing."""
+    assert card_age_floor(age, False) == 0.0
+    assert elapsed_unit(age, False) == "s"
+
+
+@pytest.mark.parametrize("age", [-5.0, float("nan"), float("inf") * -1, None, "x"])
+def test_no_age_is_not_an_old_age(age):
+    assert card_age_floor(age, True) == 0.0
+    assert elapsed_unit(age, True) == "s"
+
+
+# ── format_elapsed ───────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("seconds,unit,text", [
+    (0, "s", "0s"), (45, "s", "45s"), (250, "s", "4m 10s"), (7200, "s", "120m 0s"),
+    (30, "m", "<1m"), (59.9, "m", "<1m"), (60, "m", "1m"), (1380, "m", "23m"),
+    (30, "h", "<1m"), (1380, "h", "23m"), (3600, "h", "1h 0m"),
+    (4980, "h", "1h 23m"), (7200, "h", "2h 0m"), (3780, "h", "1h 3m"),
+])
+def test_the_formats(seconds, unit, text):
+    """Seconds is today's rule unchanged; minutes and hours drop the
+    seconds the card is no longer refreshed often enough to show."""
+    assert format_elapsed(seconds, unit) == text
+
+
+def test_format_is_total_on_bad_input():
+    assert format_elapsed(-4, "s") == "0s"
+    assert format_elapsed(math.nan, "m") == "<1m"
+    assert format_elapsed(90, "?") == "1m 30s"
