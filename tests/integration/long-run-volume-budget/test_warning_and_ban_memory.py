@@ -220,3 +220,22 @@ def test_the_regime_runs_on_the_injected_wall_clock(monkeypatch):
     assert lim.warning_remaining(CHAT) == 0.0
     assert lim.ceiling_for(CHAT) == pytest.approx(config.TELEGRAM_PRIVATE_MAX_RATE)
     lim.reset()
+
+
+def test_g_the_warned_climb_is_the_slow_one(limiter, flood_clock, run_async):
+    """R5's recovery half, pinned on its own: under the ceiling, a warned
+    chat earns +0.1 per SLOW window (``FLOOD_RATE_RECOVERY_HOURS`` / 10 =
+    36 min), not per minute. The rows above only assert "≤ 0.5", which a
+    fast climb capped at 0.5 would also satisfy.
+
+    Mutation: drop the warned branch from ``_success_window_for`` and the
+    chat is back at 0.5 in three minutes.
+    """
+    run_async(send(limiter))
+    limiter.note_retry_after(CHAT, 5)               # 0.5 -> 0.25, warned
+    assert limiter.earned_rate(CHAT) == pytest.approx(0.25)
+    slow = config.FLOOD_RATE_RECOVERY_HOURS * 3600.0 / 10
+    assert _climb(limiter, flood_clock, run_async, hours=30 / 60) == \
+        pytest.approx(0.25), "a warned chat climbed per minute"
+    flood_clock.advance(slow - 30 * MINUTE)
+    assert limiter.earned_rate(CHAT) == pytest.approx(0.35)

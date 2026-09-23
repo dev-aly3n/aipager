@@ -391,3 +391,25 @@ def test_the_bubble_flows_beside_a_long_running_card(
                                                 age=10 * MIN)
     assert len(bubbles) >= 12, bubbles
     assert limiter.snapshot()["chats"][0]["skipped"] == 0
+
+
+def test_an_unclassified_bubble_is_still_suspended_in_minimal_mode(
+    limiter, flood_clock, run_async,
+):
+    """The bubble is an ORNAMENT whatever its caller declared: in minimal
+    mode entered through the RATE (two 429s, 0.125/s — no hourly latch
+    involved) a ``sendChatAction`` with no ``rate_limit_args`` at all is
+    suspended like any ornament, and counted as one.
+
+    Mutation: take the declared class for the chat action (unclassified =
+    ESSENTIAL) and it goes out in minimal mode.
+    """
+    run_async(_req(limiter))
+    limiter.note_retry_after(CHAT, 5)
+    limiter.note_retry_after(CHAT, 5)
+    flood_clock.advance(30.0)                       # a full bucket, rate still low
+    assert limiter.minimal_mode(CHAT) is True
+    assert limiter.hourly_usage(CHAT)["typing_shed"] is False
+    with pytest.raises(FloodSkipped):
+        run_async(_req(limiter, endpoint="sendChatAction", args=None))
+    assert limiter.snapshot()["chats"][0]["ornaments_suspended"] == 1
