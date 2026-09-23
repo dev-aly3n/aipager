@@ -20,9 +20,10 @@ from typing import TYPE_CHECKING
 
 from telegram.error import RetryAfter
 
+from aipager import flood_policy
 from aipager.config import (
     BUSY_EDIT_INTERVAL, CARD_CADENCE_FLOOR_GROUP, CARD_CADENCE_FLOOR_PRIVATE,
-    CARD_RETRY_WAKE,
+    CARD_RETRY_WAKE, CARD_STATE_BYPASS_MIN_GAP,
     CARD_STARVATION_BLOCK_TIMEOUT, CHAT_ID, COMPACT_ANIMATE_INTERVAL_SECONDS,
     COMPACT_ANIMATE_MAX_TICKS, SPINNER_VERBS,
     STREAM_EDIT_INTERVAL, TELEGRAM_MAX_RETRY_AFTER,
@@ -209,6 +210,29 @@ def _log_typing_429_once(chat, label: str, exc: Exception, *,
         "it; the busy card's own cadence is unaffected",
         label, "BANNED" if ban else "rate-limited", chat, exc,
     )
+
+
+def card_age_decay_enabled(sess: TrackedSession) -> bool:
+    """Does this session's busy card decay with turn age (8.30 R4)?
+
+    The ONE place the answer comes from, so the animator's edit gate, the
+    card's elapsed unit and the session monitor's stale-card watchdog can
+    never disagree about a card's tier.
+    """
+    return True
+
+
+def card_age(sess: TrackedSession, now: float) -> float:
+    """Seconds this card's turn has been running at *now*, or ``0.0``.
+
+    Anchored on ``busy_started_at`` — the elapsed counter's own anchor,
+    shifted forward while a permission prompt waits — so the tier a card
+    is in and the counter it shows are measured from the same instant.
+    """
+    started = sess.busy_started_at
+    if not started:
+        return 0.0
+    return max(now - started, 0.0)
 
 
 # ── Module-level pure helpers ────────────────────────────────────────────────
@@ -589,7 +613,8 @@ def _build_sections(
                 # agent it represents is still active. Once settled it is
                 # pushed as "agent-settled" above (the `elif done:` branch),
                 # not merged into an ordinary run.
-                _push("agent-run", f"⏳ {_mono(_agent_live_row(info))}",
+                _push("agent-run",
+                      f"⏳ {_mono(_agent_live_row(info, _card_unit(sess, final)))}",
                       list(info.get("tools", [])))
             else:
                 _push("run", f"⏳ {_mono(summary)}")
@@ -904,16 +929,15 @@ def _assemble_card(body: str, status: str) -> str:
     return f"{body}\n\n{status}" if body else status
 
 
-def _elapsed_str(started_at: float) -> str:
-    """``"45s"`` under a minute, else ``"2m 5s"``. One formatter so every
-    card surface agrees on how elapsed time reads."""
-    elapsed_s = max(0, int(time.monotonic() - started_at))
-    if elapsed_s >= 60:
-        return f"{elapsed_s // 60}m {elapsed_s % 60}s"
-    return f"{elapsed_s}s"
+def _elapsed_str(started_at: float, unit: str = "s") -> str:
+    """``"45s"`` under a minute, else ``"2m 5s"`` — or, in a decayed
+    card's unit (8.30), ``"23m"`` / ``"1h 23m"``. One formatter
+    (``flood_policy.format_elapsed``) so every card surface agrees on how
+    elapsed time reads."""
+    return flood_policy.format_elapsed(time.monotonic() - started_at, unit)
 
 
-def _agent_live_row(info: dict) -> str:
+def _agent_live_row(info: dict, unit: str = "s") -> str:
     """``"🤖 <type> · <activity or 'starting'> · <elapsed>"`` — the LIVE
     agent row text ("agent activity rows on the busy card"), shared
     verbatim by both card renderers. Each caller applies its OWN
@@ -922,10 +946,14 @@ def _agent_live_row(info: dict) -> str:
     :func:`_mono` (a code span — `_md_escape` would show literal
     backslashes inside one, not protect anything), the legacy card wraps
     it in ``html.escape``. Pure — no I/O, no mutation.
+
+    ``unit`` is the card's elapsed unit (8.30 "other counters"): at a 30 s
+    or 60 s tier an agent row counting seconds would look frozen for most
+    of every refresh, exactly like the status line would.
     """
     agent_type = info.get("type") or "agent"
     activity = info.get("activity") or "starting"
-    elapsed = _elapsed_str(info.get("started_at", time.monotonic()))
+    elapsed = _elapsed_str(info.get("started_at", time.monotonic()), unit)
     return f"{_SUBAGENT_MARK}{agent_type} · {activity} · {elapsed}"
 
 
@@ -947,6 +975,16 @@ def _agent_phrase(sess: TrackedSession) -> str:
     return phrase
 
 
+def _card_unit(sess: TrackedSession, final: bool) -> str:
+    """The unit this render's live counters use: the card's current tier
+    unit, or seconds for the settled final card, whose format is as it
+    always was."""
+    if final:
+        return "s"
+    unit = getattr(sess, "card_elapsed_unit", "s")
+    return unit if unit in ("s", "m", "h") else "s"
+
+
 def _status_line(
     sess: TrackedSession, verb: str, *, final: bool = False,
     waiting: bool = False,
@@ -966,12 +1004,16 @@ def _status_line(
     tail this line sits at the end of.
     """
     label = _md_escape(sess.label)
+    # The card's tier unit (8.30): seconds for the first ten minutes of a
+    # turn, then minutes, then hours — matching how often the card is now
+    # refreshed, so a slow card still shows a counter that MOVES.
+    unit = _card_unit(sess, final)
     if waiting and not final:
         phrase = _agent_phrase(sess)
         line = (f"🔄 **{label}** · {phrase}" if phrase == "finishing up"
                 else f"🔄 **{label}** · {phrase} still working")
         if sess.busy_started_at:
-            line += f" · {_elapsed_str(sess.busy_started_at)}"
+            line += f" · {_elapsed_str(sess.busy_started_at, unit)}"
         return line
 
     # ── Segments: state, label, verb, then the turn's live stats ──
@@ -979,7 +1021,7 @@ def _status_line(
     if sess.busy_started_at:
         # Shown from the first second. Hiding it below 2s left the card
         # reading "⏳" with no number, then jumping straight to "5s".
-        parts.append(_elapsed_str(sess.busy_started_at))
+        parts.append(_elapsed_str(sess.busy_started_at, unit))
 
     if sess.cost_baseline is not None and sess.last_cost_usd > 0:
         delta = sess.last_cost_usd - sess.cost_baseline
@@ -1414,8 +1456,13 @@ class AnimationMixin:
         """Build the animated busy message text with tool history."""
         elapsed = ""
         if sess.busy_started_at:
-            secs = int(time.monotonic() - sess.busy_started_at)
-            if secs >= 2:
+            now = time.monotonic()
+            secs = int(now - sess.busy_started_at)
+            unit = self._card_elapsed_unit(sess, now)
+            if unit != "s":
+                # A decayed card (8.30): the same tier unit as the rich card.
+                elapsed = f" {flood_policy.format_elapsed(secs, unit)}"
+            elif secs >= 2:
                 elapsed = f" {secs}s"
         text = f"⚙️ <b>{html_mod.escape(label)}</b> · {html_mod.escape(verb)}…{elapsed}"
         # Live cost delta this turn (item 4.6) + subagent count (item 4.5).
@@ -1458,7 +1505,8 @@ class AnimationMixin:
                 text += f"\n✅ <code>{html_mod.escape(summary)}</code>"
             else:
                 info = _subagent_live.get(_vis_offset + i)
-                display = _agent_live_row(info) if info is not None else summary
+                display = (_agent_live_row(info, self._card_elapsed_unit(sess))
+                           if info is not None else summary)
                 text += f"\n⏳ <code>{html_mod.escape(display)}</code>"
         # Append inline permission display if active
         if sess.pending_permission:
@@ -1602,6 +1650,10 @@ class AnimationMixin:
             sess._stream_edit_lock = lock
 
         async with lock:
+            # The tier unit every live counter renders in (8.30), set
+            # BEFORE the build so the renderer itself stays pure.
+            sess.card_elapsed_unit = (
+                "s" if final else self._card_elapsed_unit(sess))
             markdown, hid = build_stream_card_ex(
                 sess, verb, final=final, waiting=waiting,
             )
@@ -1712,6 +1764,9 @@ class AnimationMixin:
             sess.stream_dirty = False
             # An edit landed, so the run of refusals (if any) is over.
             sess.card_skipped_since = 0.0
+            # The frame state this edit showed: the next STATE change is
+            # measured against it (8.30 Q2, `_card_edit_due`).
+            sess.card_frame_state = self._card_frame_state(sess)
             return True
 
     async def _reanchor_busy_card(
@@ -1782,6 +1837,68 @@ class AnimationMixin:
             except Exception:
                 log.debug("[%s] re-anchor: old card delete failed (left behind)",
                           sess.label, exc_info=True)
+
+    @staticmethod
+    def _card_elapsed_unit(sess: TrackedSession, now: float | None = None) -> str:
+        """The elapsed unit this card's tier renders in right now (8.30)."""
+        if now is None:
+            now = time.monotonic()
+        return flood_policy.elapsed_unit(card_age(sess, now),
+                                         card_age_decay_enabled(sess))
+
+    @staticmethod
+    def _card_frame_state(sess: TrackedSession) -> tuple:
+        """What a card's frame SAYS, as opposed to what it shows: the
+        session's status, whether it is waiting on a background job, and
+        whether a prompt is open. A change here is a STATE change — the
+        one kind of event allowed to bypass the age decay (8.30 Q2)."""
+        waiting = sess.status is not Status.BUSY and sess.job_background_open()
+        return (sess.status, bool(waiting), bool(sess.pending_permission))
+
+    def _card_edit_due(
+        self, sess: TrackedSession, now: float | None = None, *,
+        base_gap: float,
+    ) -> bool:
+        """THE busy-card edit gate (8.30 R4/Q2/Q3): may this card be edited
+        at *now*? Every card edit path asks it — the animator's tick with
+        its chat interval, notify's hook-driven edits with
+        ``STREAM_EDIT_INTERVAL``, the job interim and continuation with 0.
+
+        The required gap is ``max(base_gap, age floor)``, where the floor
+        grows with the turn's age (0 / 10 / 30 / 60 s from 0 / 2 / 10 /
+        60 min, ``flood_policy.card_age_floor``). Below two minutes it is
+        0 and every path paces exactly as it did before 8.30.
+
+        One exception, and only one: a STATE change — the card's frame
+        state differs from the one its last landed edit showed — may go
+        out before the floor, at most once per
+        ``CARD_STATE_BYPASS_MIN_GAP``, and never faster than
+        ``base_gap``. A new tool row, prose or a subagent event is NOT a
+        state change: it marks the card dirty and rides the next due
+        edit. On vm3 676 phantom SubagentStops reached this path in three
+        hours; a bypass for events would have kept a four-hour card at a
+        10 s cadence for its whole life.
+
+        Stamps ``card_bypass_at`` when it grants a bypass, so the caller
+        must call it only when it is about to edit.
+        """
+        if now is None:
+            now = time.monotonic()
+        floor = flood_policy.card_age_floor(card_age(sess, now),
+                                            card_age_decay_enabled(sess))
+        since = now - sess.last_tool_edit_at
+        if since >= max(base_gap, floor):
+            return True
+        if floor <= base_gap or since < base_gap:
+            # The age decay is not what is holding this edit back.
+            return False
+        stamped = sess.card_frame_state
+        if stamped is None or stamped == self._card_frame_state(sess):
+            return False
+        if now - sess.card_bypass_at < CARD_STATE_BYPASS_MIN_GAP:
+            return False
+        sess.card_bypass_at = now
+        return True
 
     def _card_interval(self, sess: TrackedSession, *, streaming: bool) -> float:
         """Seconds this session's busy card may take per edit (design §4.3).
@@ -1883,8 +2000,12 @@ class AnimationMixin:
                 # costs no Telegram call now that nothing but the edit
                 # itself is sent from here — so the loop keeps the
                 # STREAMING interval while the edits themselves are paced
-                # by `_animate_tick`'s debounce. Both read the same
-                # function, so they cannot drift.
+                # by `_animate_tick`'s gate. Both derive from the same
+                # `_card_interval`, so they cannot drift; the TURN-AGE
+                # floor (8.30) is applied at the gate only, so a card in
+                # its 60 s tier still wakes every few seconds to read the
+                # transcript, sync anchors and notice a state flip — none
+                # of which is a Telegram call.
                 #
                 # A card whose last edit was REFUSED by the budget wakes
                 # sooner (`CARD_RETRY_WAKE`) instead of sitting out a whole
@@ -2087,9 +2208,10 @@ class AnimationMixin:
                 priority=PRIORITY_ESSENTIAL,
             )
             return None if result is None else True
-        if now - sess.last_tool_edit_at < interval:
-            # Debounced — and that means NO Telegram call at all, of any
-            # kind. Until 8.21 this branch still fired a `sendChatAction`,
+        if not self._card_edit_due(sess, now, base_gap=interval):
+            # Debounced — by the chat's interval, or by the turn-age tier
+            # on top of it (8.30) — and that means NO Telegram call at
+            # all, of any kind. Until 8.21 this branch still fired a `sendChatAction`,
             # once per loop wake per BUSY session, which the debounce never
             # suppressed: at 0.9 s wakes it roughly DOUBLED the daemon's
             # real call rate into the chat and was the single most frequent
@@ -2516,6 +2638,10 @@ class AnimationMixin:
             sess.job_interim_buffer.clear()
             sess.last_card_truncated = False
             sess.busy_started_at = time.monotonic()
+            # A new turn is a new card: tier 0, seconds, no frame stamped.
+            sess.card_elapsed_unit = "s"
+            sess.card_frame_state = None
+            sess.card_bypass_at = 0.0
             # Seed streaming state for this turn.  stream_offset is set to
             # the current transcript size so the previous turn's text is
             # never re-streamed as this turn's (analogous to the

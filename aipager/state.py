@@ -534,6 +534,19 @@ class TrackedSession:
     # reason as `card_skipped_since`: it describes a limiter state a
     # restart does not have.
     card_resume_due: bool = False
+    # roadmap 8.30 — the busy card's cadence DECAYS WITH TURN AGE. All three
+    # transient, like `card_skipped_since`: they describe the card on
+    # screen right now, and a restart restarts the age anchor anyway.
+    # `card_elapsed_unit` is the unit ("s" / "m" / "h") every live counter
+    # on the card renders in, set by `_edit_busy_rich` before it builds so
+    # the renderer stays pure. `card_frame_state` is the card's frame
+    # state (status, waiting, prompt) at the last LANDED edit — a state
+    # change against it is what may bypass the age decay — and
+    # `card_bypass_at` stamps the last bypass, at most one per
+    # CARD_STATE_BYPASS_MIN_GAP.
+    card_elapsed_unit: str = "s"
+    card_frame_state: tuple | None = None
+    card_bypass_at: float = 0.0
     # roadmap 8.24: the "typing…" task for this session's busy card —
     # `animation._animate_typing`, started and cancelled alongside
     # `animate_task` by `_start_animation` / `_stop_animation`. A SECOND

@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 import types
 
 import httpx
@@ -192,9 +193,24 @@ class _HttpRecorder:
     def __init__(self) -> None:
         #: ``(endpoint, chat_id, payload)``
         self.requests: list[tuple[str, object, dict]] = []
+        #: ``t`` per request, on :attr:`clock` when a row sets one.
+        self.stamps: list[float] = []
+        self.clock = None
 
     def endpoints(self) -> list[str]:
         return [m for m, _chat, _p in self.requests]
+
+    def edits(self, message_id=None) -> list[tuple[float, str]]:
+        """``(t, markdown)`` for every rich ``editMessageText``."""
+        out = []
+        for (endpoint, _chat, payload), t in zip(self.requests, self.stamps):
+            if endpoint != "editMessageText":
+                continue
+            if message_id is not None and payload.get("message_id") != message_id:
+                continue
+            rich = payload.get("rich_message") or {}
+            out.append((t, rich.get("markdown") or payload.get("text") or ""))
+        return out
 
 
 @pytest.fixture
@@ -209,6 +225,7 @@ def rich_http(monkeypatch):
         payload = json.loads(request.content)
         endpoint = request.url.path.rsplit("/", 1)[-1]
         recorder.requests.append((endpoint, payload.get("chat_id"), payload))
+        recorder.stamps.append(recorder.clock() if recorder.clock else 0.0)
         return httpx.Response(200, json={
             "ok": True,
             "result": {"message_id": payload.get("message_id", 4242)},
@@ -219,3 +236,88 @@ def rich_http(monkeypatch):
         rm, "_client", httpx.AsyncClient(transport=httpx.MockTransport(handler)))
     yield recorder
     monkeypatch.setattr(rm, "_client", None)
+
+
+# ── a virtual event loop (copied from the 0.7.13 harness) ────────────────────
+#
+# The card loop and the typing loop sleep on the global `asyncio.sleep`,
+# and patching that through a module path is forbidden. So these rows get
+# an event LOOP whose `time()` is virtual and which jumps to the next timer
+# when nothing is ready: hours of virtual time cost milliseconds, and
+# NOTHING in `asyncio` is patched — only the loop object is ours.
+
+_LATENCY = 1e-6
+#: The wall clock at virtual-loop time 1_000_000.0.
+_WALL0 = 1_800_000_000.0
+
+
+class _VirtualLoop(asyncio.SelectorEventLoop):
+    """An event loop whose clock jumps to the next timer instead of
+    waiting for it."""
+
+    def __init__(self, real_seconds: float = 60.0) -> None:
+        super().__init__()
+        self._virtual = 1_000_000.0
+        self._real_deadline = time.monotonic() + real_seconds
+
+    def time(self) -> float:
+        return self._virtual
+
+    def wall(self) -> float:
+        return _WALL0 + (self._virtual - 1_000_000.0)
+
+    def _run_once(self) -> None:
+        if time.monotonic() > self._real_deadline:
+            raise AssertionError(
+                "the virtual loop spun for too many REAL seconds — something "
+                "is polling without a timer")
+        if self._scheduled and not self._ready:
+            when = self._scheduled[0]._when
+            if when > self._virtual:
+                self._virtual = when + _LATENCY
+        super()._run_once()
+
+
+@pytest.fixture
+def vloop(monkeypatch):
+    """A virtual-time loop with every module that reads time for this
+    feature bound to it — each module's OWN ``time`` reference, never the
+    global module and never ``asyncio``: the animator (card cadence, typing
+    stamps), notify (the hook-driven edit gate), and the flood modules
+    (the mute deadline, ban stamps, the warning regime)."""
+    from aipager.bot import animation, notify
+
+    loop = _VirtualLoop()
+    fake = types.SimpleNamespace(monotonic=loop.time, time=loop.wall,
+                                 sleep=time.sleep)
+    for module in (animation, notify, flood, flood_budget):
+        monkeypatch.setattr(module, "time", fake)
+    yield loop
+    try:
+        pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
+        for task in pending:
+            task.cancel()
+        if pending:
+            loop.run_until_complete(
+                asyncio.gather(*pending, return_exceptions=True))
+        loop.run_until_complete(loop.shutdown_default_executor())
+    finally:
+        loop.close()
+
+
+@pytest.fixture
+def vlimiter(vloop):
+    """The daemon's limiter on the virtual loop — monotonic AND wall clock
+    — installed the way ``lifecycle._make_builder`` installs it."""
+    lim = BudgetRateLimiter(clock=vloop.time, sleep=asyncio.sleep,
+                            wall_clock=vloop.wall,
+                            signal_path=config.FLOOD_BACKOFF_FILE)
+    rm.set_rate_limiter(lim)
+    yield lim
+    lim.reset()
+
+
+@pytest.fixture
+def vbot(vloop, vlimiter):
+    """A PTB double on the virtual loop's clock, gated by ``vlimiter``."""
+    return _GatedBot(vlimiter, vloop.time)

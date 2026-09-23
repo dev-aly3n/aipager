@@ -832,10 +832,15 @@ class NotifyMixin:
             self._record_job_interim(sess, content)
         if sess.busy_msg_id and sess.busy_msg_id > 0:
             sess.stream_dirty = True
-            if await self._edit_busy_rich(
-                sess, "Working", waiting=True,
-            ) is None:
-                self._stop_animation(sess)
+            # A STATE change (busy -> waiting): the gate lets it out at
+            # once in a young turn, and in an old one takes the one
+            # debounced bypass of the age decay (8.30 Q2). Refused, the
+            # card is dirty and the animator's next due tick shows it.
+            if self._card_edit_due(sess, time.monotonic(), base_gap=0.0):
+                if await self._edit_busy_rich(
+                    sess, "Working", waiting=True,
+                ) is None:
+                    self._stop_animation(sess)
         await self._drain_next_queued(sess)
 
     async def _drain_next_queued(self, sess: TrackedSession) -> None:
@@ -1062,10 +1067,13 @@ class NotifyMixin:
             if sess.busy_msg_id and sess.busy_msg_id > 0:
                 sess.stream_dirty = True
                 waiting = sess.status != Status.BUSY
-                if await self._edit_busy_rich(
-                    sess, "Working", waiting=waiting,
-                ) is None:
-                    self._stop_animation(sess)
+                # A state change (waiting -> busy): same gate and same
+                # single bypass as the interim above (8.30 Q2).
+                if self._card_edit_due(sess, time.monotonic(), base_gap=0.0):
+                    if await self._edit_busy_rich(
+                        sess, "Working", waiting=waiting,
+                    ) is None:
+                        self._stop_animation(sess)
             return
 
         if event == "job_grace_expired":
@@ -1210,7 +1218,11 @@ class NotifyMixin:
                 return
             sess.stream_dirty = True
             now = time.monotonic()
-            if now - sess.last_tool_edit_at >= STREAM_EDIT_INTERVAL:
+            # Every hook-driven edit goes through the card's one gate
+            # (8.30 Q3): the 1.2 s debounce in a young turn, the turn-age
+            # tier in an old one. A tool row is not a state change, so it
+            # never bypasses the tier — it rides the next due edit.
+            if self._card_edit_due(sess, now, base_gap=STREAM_EDIT_INTERVAL):
                 if await self._edit_busy_rich(sess, "Working") is None:
                     self._stop_animation(sess)
                     return
@@ -1392,7 +1404,8 @@ class NotifyMixin:
             if not sess.busy_msg_id or sess.busy_msg_id < 0:
                 return
             sess.stream_dirty = True
-            if time.monotonic() - sess.last_tool_edit_at >= STREAM_EDIT_INTERVAL:
+            if self._card_edit_due(sess, time.monotonic(),
+                                   base_gap=STREAM_EDIT_INTERVAL):
                 if await self._edit_busy_rich(sess, "Working") is None:
                     self._stop_animation(sess)
             return
@@ -1423,7 +1436,8 @@ class NotifyMixin:
             # Update display (debounced — animation picks up state if skipped)
             if sess.busy_msg_id and sess.busy_msg_id > 0:
                 sess.stream_dirty = True
-                if time.monotonic() - sess.last_tool_edit_at >= STREAM_EDIT_INTERVAL:
+                if self._card_edit_due(sess, time.monotonic(),
+                                       base_gap=STREAM_EDIT_INTERVAL):
                     if await self._edit_busy_rich(sess, "Working") is None:
                         self._stop_animation(sess)
             return
@@ -1445,7 +1459,8 @@ class NotifyMixin:
             # Edit busy message if ready (debounced)
             if sess.busy_msg_id and sess.busy_msg_id > 0:
                 sess.stream_dirty = True
-                if time.monotonic() - sess.last_tool_edit_at >= STREAM_EDIT_INTERVAL:
+                if self._card_edit_due(sess, time.monotonic(),
+                                       base_gap=STREAM_EDIT_INTERVAL):
                     if await self._edit_busy_rich(sess, "Working") is None:
                         self._stop_animation(sess)
             return
@@ -1483,7 +1498,8 @@ class NotifyMixin:
             # Edit busy message if ready (debounced)
             if sess.busy_msg_id and sess.busy_msg_id > 0:
                 sess.stream_dirty = True
-                if time.monotonic() - sess.last_tool_edit_at >= STREAM_EDIT_INTERVAL:
+                if self._card_edit_due(sess, time.monotonic(),
+                                       base_gap=STREAM_EDIT_INTERVAL):
                     if await self._edit_busy_rich(sess, "Working") is None:
                         self._stop_animation(sess)
             return

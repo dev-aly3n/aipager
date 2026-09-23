@@ -140,6 +140,7 @@ CARD_STALE_SECONDS: float = 20.0
 
 def busy_card_watchdog_action(
     sess: TrackedSession, now: float, *, suppressed: bool = False,
+    stale_after: float = CARD_STALE_SECONDS,
 ) -> tuple[str, float] | None:
     """What the busy-card watchdog should do for *sess* at *now*, if anything.
 
@@ -161,7 +162,14 @@ def busy_card_watchdog_action(
     Returns ``("restart", 0.0)`` when
     the card should be ticking but no animate task is alive, ``("refresh",
     seconds_since_last_edit)`` when a task is alive but the card has gone
-    ``CARD_STALE_SECONDS`` without a successful edit, and ``None`` otherwise.
+    ``stale_after`` without a successful edit, and ``None`` otherwise.
+
+    ``stale_after`` defaults to ``CARD_STALE_SECONDS``; the scan passes
+    ``max(CARD_STALE_SECONDS, 2 x the card's turn-age floor)`` (8.30), so a
+    card that is SUPPOSED to be edited once a minute is not force-refreshed
+    every 20 s — which is what the log showed on vm3: "forced stale-card
+    refresh (63s since last edit)", an extra edit per cycle on exactly the
+    long-running card the decay exists to slow down.
 
     Never acts on a session that has no card, is INTERACTIVE (the card is
     the permission prompt), has a compacting card on top, is mid
@@ -191,9 +199,25 @@ def busy_card_watchdog_action(
     if not baseline:
         return None
     since = now - baseline
-    if since < CARD_STALE_SECONDS:
+    if since < stale_after:
         return None
     return "refresh", since
+
+
+def card_stale_after(sess: TrackedSession, now: float) -> float:
+    """How long *sess*'s card may go without an edit before the watchdog
+    forces one: ``CARD_STALE_SECONDS``, or twice the card's turn-age floor
+    once that is larger (8.30). Late imports — ``aipager.bot`` imports
+    back into this package — and never raises."""
+    try:
+        from aipager.bot.animation import card_age, card_age_decay_enabled
+        from aipager.flood_policy import card_age_floor
+
+        floor = card_age_floor(card_age(sess, now), card_age_decay_enabled(sess))
+    except Exception:  # pragma: no cover - defensive
+        log.debug("could not read the card age floor", exc_info=True)
+        return CARD_STALE_SECONDS
+    return max(CARD_STALE_SECONDS, 2.0 * floor)
 
 
 def _session_chat_id(sess):
@@ -605,8 +629,9 @@ class SessionMonitor:
                 log.info("[%s] busy-card updates resumed", sess.label)
             card_action = (
                 None if name in compact_swept
-                else busy_card_watchdog_action(sess, now,
-                                               suppressed=suppressed)
+                else busy_card_watchdog_action(
+                    sess, now, suppressed=suppressed,
+                    stale_after=card_stale_after(sess, now))
             )
             if card_action is not None:
                 action_kind, since = card_action

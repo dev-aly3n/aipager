@@ -682,6 +682,7 @@ def is_group_chat(chat_id) -> bool:
 def card_interval(
     *, base: float, busy_sessions: int, is_group: bool, backoff: float = 1.0,
     chat_rate: float | None = None, sustained_min_gap: float | None = None,
+    age_floor: float = 0.0,
 ) -> float:
     """Seconds between busy-card edits for one session (design §4.3).
 
@@ -705,16 +706,24 @@ def card_interval(
     the N predicate does not count (``_animate_busy`` keeps ticking
     through an open background job, which is wider than ``Status.BUSY``)
     must still be paced.
+
+    ``age_floor`` (8.30) is the turn-age tier's minimum gap
+    (``flood_policy.card_age_floor``): the result is never below it. The
+    default of 0 is today's value exactly, so every pure cadence row keeps
+    its numbers; the animator applies the floor at its edit GATE rather
+    than here, so its loop keeps waking on the un-aged interval for the
+    transcript reads that cost no Telegram call.
     """
     floor = CARD_CADENCE_FLOOR_GROUP if is_group else CARD_CADENCE_FLOOR_PRIVATE
     if chat_rate is not None and chat_rate > 0:
         floor = max(floor, 1.0 / chat_rate)
     if sustained_min_gap is not None:
         floor = max(floor, sustained_min_gap)
-    return (
+    return max(
         max(base, max(busy_sessions, 1) * floor)
         * CARD_CADENCE_MARGIN
-        * max(backoff, 1.0)
+        * max(backoff, 1.0),
+        float(age_floor),
     )
 
 

@@ -565,11 +565,14 @@ def test_tool_use_leaves_a_running_animation_alone(mk_bot, run_async):
 
 
 def test_tool_use_does_not_resume_after_permanent_edit_failure(mk_bot, run_async):
-    # `edited_ago` must clear notify.py's STREAM_EDIT_INTERVAL debounce, or
-    # no edit is attempted and there is no permanent failure to react to.
-    # The default rose from 0.9 to 1.2 in 8.21 (design §11 U5).
+    # `edited_ago` must clear notify.py's edit gate, or no edit is
+    # attempted and there is no permanent failure to react to. The default
+    # debounce rose from 0.9 to 1.2 in 8.21 (design §11 U5); AMENDED for
+    # 8.30 Q3, where a hook-driven edit also waits out the turn-age tier —
+    # this card's turn is two minutes old, the 10 s tier, so 5 s since the
+    # last edit is no longer "due" and the row moved to 15.
     bot = mk_bot()
-    sess = _bot_session(task="none", edited_ago=5)
+    sess = _bot_session(task="none", edited_ago=15)
     bot.registry._sessions["claude-jim"] = sess
     bot._edit_busy_rich = AsyncMock(return_value=None)
     bot._start_animation = MagicMock()
