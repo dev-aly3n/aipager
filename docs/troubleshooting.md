@@ -47,13 +47,9 @@ aipager service start
 Telegram allows roughly one message a second into any one chat (and 20 a
 minute into a group). Every message and every edit counts. The daemon
 gives each chat its own budget of about 1 call a second, with a small
-burst, and the busy cards of that chat **share** it. (The "typing…"
-indicator is *not* in that budget — Telegram does not count chat actions
-with messages, which is measured, not assumed — so a working session
-shows the bubble in your chat list without ever slowing its card. It is
-refreshed on its own schedule, every 4.5 seconds per working session,
-because Telegram clears a typing status after 5; `TYPING_INDICATOR_INTERVAL`
-tunes that, and `0` turns the bubble off.)
+burst, and the busy cards of that chat **share** it. The "typing…"
+indicator is in that budget too, as the **lowest** thing the chat sends
+(see "The typing bubble" below).
 
 So with two sessions working in the same chat, each card refreshes about
 every 2.2 seconds instead of every 1.2; with three, about every 3.3. **A
@@ -75,13 +71,52 @@ quiet) in your config. Setting either *below* the per-chat floor is
 harmless and changes nothing — the floor wins, which is what keeps the
 chat under Telegram's limit whatever you put in the file.
 
-None of this affects the "typing…" bubble. It has a schedule of its own,
-one refresh every `TYPING_INDICATOR_INTERVAL` seconds (default 4.5) for as
-long as a session is working, however slow that session's card happens to
-be — so a chat with three busy sessions refreshes the bubble exactly as
-often as a chat with one, while its cards refresh every 3.3 seconds.
-Telegram clears a typing status after 5 seconds, which is why the default
-sits just under that; setting it higher leaves gaps between refreshes.
+### A long turn's card refreshes less often
+
+The cadence above is for the first two minutes of a turn. After that the
+card **slows down as the turn gets older**, and its elapsed counter
+switches unit so it never looks frozen:
+
+| turn age | card refreshes at most every | counter reads |
+|---|---|---|
+| 0–2 min | as above (2.2–4.4 s) | `45s` |
+| 2–10 min | 10 s | `4m 10s` |
+| 10–60 min | 30 s | `23m` |
+| over 60 min | 60 s | `1h 23m` |
+
+A new tool row or a new sentence waits for the next refresh; a **state
+change** — the session going from working to waiting on a background
+agent, and back — is shown at once, at most once every 10 seconds. The
+live agent rows and the waiting line use the same unit. The finished card
+still shows its duration as it always has.
+
+This is what keeps a four-hour turn from editing one message thousands of
+times: on 2026-09-23 one card did exactly that, and the chat was banned
+for seven hours. To keep the fast cadence for a whole turn, switch off
+**`/settings` → ⏱ Long-turn card updates** (for the chat, or per session
+from the Mini App or `👤 Per-session preferences`).
+
+### The typing bubble
+
+The "typing…" bubble is sent by **one** loop per chat, however many
+sessions are working in it (the bubble is per chat in every Telegram
+client), every `TYPING_INDICATOR_INTERVAL` seconds (default 4.5 —
+Telegram clears a typing status after 5; `0` turns the bubble off). It
+counts in the chat's budget as the lowest thing the chat sends:
+
+- it goes out only when it fits beside the chat's cards, so it **does not
+  show beside a card in its first two minutes** — the card animating is
+  the signal then — and shows steadily beside a long-running card, when
+  the card is slow;
+- it is the first thing dropped when the chat's hourly volume gets high
+  (below);
+- a 429 on the bubble itself blocks only the bubble, for as long as
+  Telegram asked — the cards carry on — but it does start the chat's
+  six-hour warning regime.
+
+It used to be free (one loop per working session, outside every budget),
+until on 2026-09-23 two sessions in one DM had sent it ~5,400 times in
+three hours and Telegram rate-limited the bubble itself.
 
 ## The bot slowed down: a rate limit (429)
 
@@ -99,13 +134,43 @@ What you see:
   `flood: chat … 429 retry_after=5s → cadence ×2`.
 - Nothing is muted, and **no answer is lost** — it is deferred, not
   dropped.
-- The chat's **earned send rate halves**, and `aipager status` shows it:
-  `Telegram chat 123: rate 0.25/s, 7/30 in the last minute`.
+- The chat's **earned send rate halves**, and the chat enters a
+  **six-hour warning regime** (`FLOOD_WARNING_HOURS`): its rate may not
+  climb past 0.5 calls/s (`FLOOD_WARNED_CEILING`), and it climbs back
+  slowly. `aipager status` shows it:
+  `Telegram chat 123: rate 0.25/s (ceiling 0.50/s), 212/1200 calls in the
+  last hour (as of 18s ago), 7/30 in the last minute — warning regime,
+  5h 52m left`.
 
-Nothing to do. It clears itself. The rate climbs back by 0.1 calls/s for
-every quiet minute, the backoff line disappears once the chat has been
-quiet for a minute or two, and `aipager doctor` keeps the daemon row
-green throughout: a chat backing off is normal operation.
+Nothing to do. It clears itself. The backoff line disappears once the
+chat has been quiet for a minute or two; the rate climbs back by 0.1
+calls/s per quiet window — a minute normally, 36 minutes during the
+warning regime — and the full ceiling returns when the regime ends.
+`aipager doctor` keeps the daemon row green throughout: a chat backing off
+is normal operation. (A 429 used to be forgiven in about five
+minutes. Telegram's one warning before the 2026-09-23 ban came 3 h 23 min
+earlier, and the chat was back at full speed within minutes of it.)
+
+### The hourly budget
+
+Every chat also has a rolling **hour**: at most `FLOOD_HOURLY_MAX` (1200)
+calls in any 60 minutes — typing bubbles, card edits and answers alike;
+only reactions are exempt. The last 120 (`FLOOD_HOURLY_ESSENTIAL_RESERVE`)
+are kept for answers, replies and prompts:
+
+- at 810 calls in the hour the typing bubble pauses (it comes back under
+  648);
+- at 1080 the chat enters **minimal mode** (below) until the hour frees
+  to 864;
+- answers are never refused by the hour; if they ever go past 1200, the
+  log says so once an hour.
+
+`aipager status` shows the chat's calls in the last hour against its
+budget. The figure comes from the state file, which the daemon rewrites
+at most once a minute while calls flow, so it is labelled with its age.
+Two busy sessions streaming into one DM for hours stay well under the
+budget (the 2026-09-23 incident, replayed: ~900 calls in the busiest
+hour, against a modelled ~3,400 for the same work without it).
 
 ### The earned rate, and why your cards may be slower than they were
 
@@ -117,9 +182,10 @@ ceiling of 1/s, halves it on a 429 and drops it to 0.05 after a ban. A
 bot that has just been banned is therefore paced far more carefully than
 one that has not, and it earns its speed back over the following hours.
 
-If a chat's rate falls below 0.2 calls/s it enters **minimal mode**: busy
-cards stop animating and show one static `⏳ working — updates paused`
-line, the typing bubble stops, and the pinned dashboard stops refreshing.
+If a chat's rate falls below 0.2 calls/s — or its hourly budget's share
+for cards and bubbles is spent — it enters **minimal mode**: busy cards
+stop animating and show one static `⏳ working — updates paused` line,
+the typing bubble stops, and the pinned dashboard stops refreshing.
 **Answers, replies and permission prompts keep flowing** — that is the
 point. The card is about 95 % of what this bot sends and the answer about
 5 %, so under pressure it sheds pixels rather than work. `aipager doctor`
@@ -141,8 +207,10 @@ What you see:
   for Ns (until HH:MM) …`, then silence for that chat. Later, one
   `flood mute on chat … lifted` line.
 - `aipager status` also shows the chat's state in full:
-  `Telegram chat 123: rate 0.05/s — MINIMAL MODE, card updates paused —
-  flood-muted until 09:41 (1 ban(s) in the last 24 h)`.
+  `Telegram chat 123: rate 0.05/s (ceiling 0.50/s), 431/600 calls in the
+  last hour (as of 12s ago) — MINIMAL MODE, card updates paused —
+  flood-muted until 09:41 — warning regime, 5h 59m left (1 ban(s) in the
+  last 7 days)`.
 
 The daemon mutes the chat for exactly the time Telegram asked and makes
 **no call of any kind** to it — answers, busy-card edits, attachments,
@@ -169,15 +237,22 @@ log naming what it was.)
 **A ban makes the chat slower afterwards, not faster.** The moment a ban
 is armed the chat's learned rate drops to the floor and the ban is
 counted; the muted hours earn nothing back, the climb restarts from the
-moment the ban lifts, and for 24 hours after a ban the chat may climb to
-only half its normal ceiling. `aipager status` shows all of it.
+moment the ban lifts, and **for seven days** (`FLOOD_BAN_MEMORY_DAYS`)
+the chat's rate ceiling *and* its hourly budget are divided by one plus
+the number of bans in that week: one ban halves both, two third them.
+`aipager status` shows all of it. (The memory used to be 24 hours
+and only halved the ceiling; a chat banned on 2026-09-19 was back at full
+speed — and banned for seven hours — on 2026-09-23.) Five or more bans in
+a week keep the chat in minimal mode until they age out: answers still
+flow, the cards stay paused.
 
 What NOT to do:
 
 - Don't restart the daemon to "fix" it. The mute self-clears at the time
   shown. Since 0.7.13 a restart no longer forgets the ban — the deadline,
   the chat's earned rate and its ban history are persisted to
-  `~/.claude/aipager-flood-state.json` and restored on start — so
+  `~/.claude/aipager-flood-state.json` and restored on start, and so are
+  the chat's last hour of calls and its warning regime — so
   restarting no longer extends it either. But it will throw away any
   answers still held, and it fixes nothing.
 - Don't lower `TELEGRAM_MAX_RETRY_AFTER` below the default 90 s hoping

@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **A chat can no longer be banned for long-run volume that every
+  short window allowed.** On 2026-09-23 two sessions streamed into one DM
+  for 3 h 23 min — about 57 calls a minute, under the 1-per-second and
+  30-per-minute limits the whole time — and Telegram answered with a
+  straight 7-hour ban and no warning first. Every chat now also has a
+  rolling **hour**: at most `FLOOD_HOURLY_MAX` (1200) calls in any 60
+  minutes, of which the last `FLOOD_HOURLY_ESSENTIAL_RESERVE` (120) are
+  kept for answers, replies and prompts. The card and the typing bubble
+  stop at 1080 and the chat enters minimal mode until the hour frees to
+  864; answers are never refused by the hour. The same timeline, replayed
+  against the real daemon code: about 900 calls in the busiest hour,
+  2,600 in total, where the old code is modelled at ~11,500.
+- **The "typing…" bubble is sent once per chat, and it is budgeted
+  again.** It ran one loop per working session, outside every budget: two
+  sessions in one DM sent it twice every 4.5 seconds, ~5,400 uncounted
+  calls in the incident window, until Telegram rate-limited the bubble
+  itself. Now one loop per chat sends it, as the lowest thing the chat
+  sends: it needs more budget to spare than a card edit, it goes out only
+  when it fits beside the chat's cards (so it does not show beside a card
+  in its first two minutes, and shows steadily beside a long-running
+  one), it is the first thing dropped at 75 % of the hour, and a 429 on it
+  blocks only the bubble for as long as Telegram asked.
+- **A 429 is a warning worth hours, not minutes.** Any 429 — the typing
+  bubble's included — now starts a six-hour warning regime
+  (`FLOOD_WARNING_HOURS`): the chat's rate may not climb past 0.5 calls/s
+  (`FLOOD_WARNED_CEILING`) and earns rate back slowly. A 429 used to be
+  forgiven in about five minutes; the incident's only warning came 3 h 23
+  min before its ban.
+- **Bans are remembered for a week, and each one counts.** For
+  `FLOOD_BAN_MEMORY_DAYS` (7) after a ban, a chat's rate ceiling and its
+  hourly budget are divided by one plus the number of bans in that week —
+  one ban halves both, two third them. The memory used to be 24 hours and
+  only halved the ceiling: the chat banned on 2026-09-23 had been banned
+  four days earlier, and that ban no longer counted.
+
+### Changed
+- **A long turn's busy card refreshes less often, and says so in its
+  counter.** From 2 / 10 / 60 minutes into a turn the card is edited at
+  most every 10 / 30 / 60 seconds, and its elapsed counter — on the status
+  line, the live agent rows and the waiting line — switches from seconds
+  to minutes (`23m`) and then hours (`1h 23m`), so a slow card never looks
+  frozen. A new tool row or sentence waits for the next refresh; a state
+  change (working ↔ waiting on a background agent) still shows at once,
+  at most once every 10 seconds. The first two minutes are unchanged, and
+  so is the finished card. Every path that edits a card follows it,
+  including the hook-driven edits for tool calls and subagent events, and
+  the stale-card watchdog no longer forces a refresh on a card that is on
+  schedule. A four-hour turn's card used to be edited every few seconds
+  for all four hours. New `/settings` toggle **⏱ Long-turn card updates**
+  (on by default; per session from the Mini App or 👤 Per-session
+  preferences) keeps the old pace for the whole turn.
+- **`aipager status` and `aipager doctor` show each chat's long-run
+  state**: `Telegram chat 123: rate 0.25/s (ceiling 0.50/s), 212/1200
+  calls in the last hour (as of 18s ago), 7/30 in the last minute —
+  warning regime, 5h 52m left (1 ban(s) in the last 7 days)`. The hour is
+  read from `~/.claude/aipager-flood-state.json`, which the daemon now
+  also rewrites at most once a minute while calls flow
+  (`FLOOD_STATE_VOLUME_REFRESH_SECONDS`), so it is labelled with its age.
+  The hour and the warning regime survive a restart like the rest of the
+  file; the file keeps schema version 1 (every new field is additive), so
+  an older `aipager status` still reads it. `status --json` carries
+  `hourly_used`, `hourly_budget`, `hourly_age`, `warning_remaining`,
+  `bans_7d` and `ceiling` per chat; `bans_today` is still the 24-hour
+  count.
+
 ## [0.7.13] - 2026-09-16
 
 ### Fixed
