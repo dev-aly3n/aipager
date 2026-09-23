@@ -114,10 +114,14 @@ def test_a_stale_document_is_flagged_so_its_volume_figures_are_ignored():
 # ── the lines ────────────────────────────────────────────────────────────────
 
 def test_the_line_reads_as_a_sentence_for_a_healthy_chat():
+    """AMENDED by 8.30 §4.6: the sentence also carries the ceiling the
+    rate may climb to and the chat's calls in the last hour against its
+    hourly budget, labelled with the file's age."""
     _write([_row(rate=0.5, sustained_used=7)])
     (line,) = status.flood_chat_lines(status.read_flood_chats())
-    assert line == (f"Telegram chat {CHAT}: rate 0.50/s, "
-                    "7/30 in the last minute")
+    assert line == (f"Telegram chat {CHAT}: rate 0.50/s (ceiling 1.00/s), "
+                    f"0/{config.FLOOD_HOURLY_MAX} calls in the last hour "
+                    "(as of 0s ago), 7/30 in the last minute")
 
 
 def test_the_line_names_minimal_mode_and_the_mute():
@@ -127,7 +131,8 @@ def test_the_line_names_minimal_mode_and_the_mute():
     (line,) = status.flood_chat_lines(status.read_flood_chats())
     assert "MINIMAL MODE, card updates paused" in line
     assert "flood-muted until" in line
-    assert "1 ban(s) in the last 24 h" in line
+    # AMENDED by 8.30 R6: the ban memory the line reports is seven days.
+    assert "1 ban(s) in the last 7 days" in line
 
 
 def test_the_lines_are_sorted_so_the_output_is_stable():

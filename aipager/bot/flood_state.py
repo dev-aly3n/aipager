@@ -53,6 +53,9 @@ SCHEMA_VERSION = 1
 
 _dirty: bool = False
 _last_write_at: float = 0.0
+# Calls are flowing (8.30): the rolling hour in the file is going stale.
+# Weaker than `_dirty` — it earns a write only once a minute.
+_volume: bool = False
 
 
 def mark_dirty() -> None:
@@ -61,6 +64,16 @@ def mark_dirty() -> None:
     chat. The write itself happens on the next monitor tick."""
     global _dirty
     _dirty = True
+
+
+def mark_volume() -> None:
+    """Note that calls are flowing (8.30): the per-chat rolling hour the
+    file carries for `aipager status` has moved. Unlike :func:`mark_dirty`
+    this earns a write at most once per
+    ``config.FLOOD_STATE_VOLUME_REFRESH_SECONDS`` — every counted call
+    sets it, and a file rewritten per call would be its own flood."""
+    global _volume
+    _volume = True
 
 
 def is_dirty() -> bool:
@@ -112,19 +125,23 @@ def save_if_dirty(*, path=None, force: bool = False) -> bool:
     """Write the state file when something changed. Returns whether it did.
 
     Debounced by ``config.FLOOD_STATE_MIN_INTERVAL`` unless *force* —
-    ``lifecycle.stop()`` forces, because there is no next tick.
+    ``lifecycle.stop()`` forces, because there is no next tick. When only
+    the VOLUME flag is set (calls flowing, nothing material), the floor is
+    ``config.FLOOD_STATE_VOLUME_REFRESH_SECONDS`` instead: the rolling hour
+    `aipager status` shows is at most a minute old while a chat is busy.
 
     Atomic: ``tmp.write_text`` then ``os.replace``, the same shape
     ``SessionRegistry.save`` and both signal writers use, so a reader in
     another process never sees a half-written document.
     """
-    global _dirty, _last_write_at
+    global _dirty, _last_write_at, _volume
 
-    if not _dirty and not force:
+    if not _dirty and not _volume and not force:
         return False
     now = time.monotonic()
+    floor = _min_interval() if _dirty else _volume_interval()
     if (not force and _last_write_at
-            and (now - _last_write_at) < _min_interval()):
+            and (now - _last_write_at) < floor):
         return False
     target = _path(path)
     try:
@@ -145,6 +162,7 @@ def save_if_dirty(*, path=None, force: bool = False) -> bool:
         log.debug("could not serialise the flood state", exc_info=True)
         return False
     _dirty = False
+    _volume = False
     _last_write_at = now
     return True
 
@@ -153,6 +171,12 @@ def _min_interval() -> float:
     from aipager import config
 
     return config.FLOOD_STATE_MIN_INTERVAL
+
+
+def _volume_interval() -> float:
+    from aipager import config
+
+    return config.FLOOD_STATE_VOLUME_REFRESH_SECONDS
 
 
 def _reject_non_finite(constant: str):
@@ -259,10 +283,11 @@ def load(*, path=None) -> bool:
 
 
 def clear(*, path=None) -> None:
-    """Unlink the state file and forget the dirty flag. Idempotent."""
-    global _dirty, _last_write_at
+    """Unlink the state file and forget both flags. Idempotent."""
+    global _dirty, _last_write_at, _volume
 
     _dirty = False
+    _volume = False
     _last_write_at = 0.0
     try:
         _path(path).unlink(missing_ok=True)
@@ -276,6 +301,7 @@ __all__ = [
     "is_dirty",
     "load",
     "mark_dirty",
+    "mark_volume",
     "read",
     "save_if_dirty",
 ]

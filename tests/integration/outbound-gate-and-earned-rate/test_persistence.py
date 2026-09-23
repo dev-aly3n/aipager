@@ -271,7 +271,14 @@ def test_the_earned_rate_keeps_recovering_across_the_restart(flood_clock):
     Mutation: restore `rate_earned_at` as stored (a monotonic value from
     another boot) and the anchor lands in the far past or the far future,
     so the chat either jumps to the ceiling or never climbs again.
+
+    AMENDED by 8.30 R5 / row J: the 429 starts a six-hour warning regime
+    that now SURVIVES the restart too, so the windows the chat keeps
+    earning across it are the slow ones (``FLOOD_RATE_RECOVERY_HOURS`` /
+    10 each), not 60 s — 0.7.13 forgot the 429 at the restart. Two slow
+    windows, so the climb stays under the warned ceiling.
     """
+    slow = config.FLOOD_RATE_RECOVERY_HOURS * 3600.0 / 10
     first = _install(BudgetRateLimiter(clock=flood_clock,
                                        sleep=flood_clock.sleep))
     first.note_retry_after(CHAT, 5)
@@ -279,13 +286,13 @@ def test_the_earned_rate_keeps_recovering_across_the_restart(flood_clock):
     flood_state.save_if_dirty(force=True)
 
     first.reset()
-    flood_clock.advance(config.FLOOD_SUCCESS_WINDOW_SECONDS * 3)
+    flood_clock.advance(slow * 2)
 
     second = _install(BudgetRateLimiter(clock=flood_clock,
                                         sleep=flood_clock.sleep))
     flood_state.load()
     assert second.earned_rate(CHAT) == pytest.approx(
-        reduced + 3 * config.FLOOD_RATE_INCREASE)
+        reduced + 2 * config.FLOOD_RATE_INCREASE)
 
 
 # ── D-7: the clamp ───────────────────────────────────────────────────────────

@@ -777,6 +777,18 @@ def _mark_state_dirty() -> None:
         log.debug("could not mark flood state dirty", exc_info=True)
 
 
+def _mark_volume() -> None:
+    """Tell the durable store calls are flowing (8.30): the rolling hour
+    it carries for `aipager status` is refreshed at most once a minute
+    while they do. Never raises, like :func:`_mark_state_dirty`."""
+    try:
+        from aipager.bot import flood_state
+
+        flood_state.mark_volume()
+    except Exception:  # pragma: no cover - defensive
+        log.debug("could not mark flood volume", exc_info=True)
+
+
 def _finite(value) -> float | None:
     """*value* as a finite float, or ``None`` if it is not one.
 
@@ -1441,6 +1453,7 @@ class BudgetRateLimiter(BaseRateLimiter):
                         "flood: chat %s essential calls over the hourly "
                         "budget (%d/%d)", budget.chat_id, used + 1, total)
         budget.hourly.record(ornament=ornament)
+        _mark_volume()
 
     # ── the earned rate, as a public surface ─────────────────────────────
 
@@ -2069,6 +2082,7 @@ class BudgetRateLimiter(BaseRateLimiter):
             self._decay(budget, now)
             self._earn(budget, now)
             self._hourly_eval(budget)
+            hourly_total, hourly_share = self._hourly_limits(budget, wall_now)
             chats.append({
                 "chat_id": budget.chat_id,
                 "rate": budget.rate,
@@ -2093,8 +2107,36 @@ class BudgetRateLimiter(BaseRateLimiter):
                 "sustained_used": budget.window.used(),
                 "sustained_limit": budget.window.limit,
                 "minimal": self._minimal(budget),
+                # ── 8.30 ──
+                # The rolling hour, one ``[wall minute start, ornament,
+                # essential]`` per live bucket: restored (a restart must
+                # not hand a chat a fresh hour it has already spent) and
+                # summed by `aipager status`. The totals beside it are for
+                # that reader only and are NOT restored.
+                "hourly": self._hourly_wall_buckets(budget, now, wall_now),
+                "hourly_used": budget.hourly.used(),
+                "hourly_budget": hourly_total,
+                "hourly_ornament_budget": hourly_share,
+                "hourly_minimal": budget.hourly_minimal,
+                "typing_shed": budget.typing_shed,
+                # WALL clock already, like `muted_until`.
+                "warned_until": budget.warned_until,
+                "ceiling": self.max_rate_for(budget, wall_now),
+                "bans_7d": self._bans_7d(budget, wall_now),
             })
         return chats
+
+    def _hourly_wall_buckets(self, budget: ChatBudget, now: float,
+                             wall_now: float) -> list[list]:
+        """The hour's buckets rebased to WALL minute starts, oldest first,
+        younger than the window plus the partial minute."""
+        width = budget.hourly.bucket_seconds
+        out = []
+        for key, ornament, essential in budget.hourly.buckets():
+            age = now - key * width
+            if age < FLOOD_HOURLY_WINDOW + width:
+                out.append([round(wall_now - age, 3), ornament, essential])
+        return out
 
     def restore(self, chats) -> int:
         """Reinstate per-chat state from a loaded document.
@@ -2139,6 +2181,22 @@ class BudgetRateLimiter(BaseRateLimiter):
                         )
                         if stamp is not None and stamp >= 0.0
                     ]
+                # THEN THE WARNING REGIME (8.30), before the rate: the
+                # ceiling the rate is clamped to reads it too. Clamped to
+                # at most one full regime from now — a file written before
+                # a clock jump must not pin a chat warned for a year.
+                warned = _finite(entry.get("warned_until"))
+                if warned is not None and warned > 0.0:
+                    budget.warned_until = max(
+                        budget.warned_until,
+                        min(warned, wall_now + self._warning_seconds))
+                self._restore_hourly(budget, entry.get("hourly"), wall_now)
+                for latch in ("hourly_minimal", "typing_shed"):
+                    value = entry.get(latch)
+                    # A real bool or nothing: "yes", 1 and null are not a
+                    # latch state any writer of ours produced.
+                    if isinstance(value, bool):
+                        setattr(budget, latch, value)
                 for field, attr in (("ban_seen_until", "ban_seen_until"),
                                     ("muted_until", "muted_until")):
                     value = _finite(entry.get(field))
@@ -2164,12 +2222,52 @@ class BudgetRateLimiter(BaseRateLimiter):
                 last_429 = _finite(entry.get("last_429_at"))
                 if last_429:
                     budget.last_429_at = self.mono_equiv(last_429)
+                # The latches as stored, then re-read against the restored
+                # hour: inside a hysteresis band they hold, outside it the
+                # window decides.
+                self._hourly_eval(budget)
             except (TypeError, ValueError):
                 log.debug("flood state: skipping malformed chat entry %r",
                           entry, exc_info=True)
                 continue
             restored += 1
         return restored
+
+    def _restore_hourly(self, budget: ChatBudget, buckets, wall_now: float) -> None:
+        """Put a persisted hour back into *budget*'s window. Never raises.
+
+        UNTRUSTED INPUT, like every field here (8.29 T2): an entry that is
+        not ``[finite start, finite count, finite count]`` is skipped; a
+        start in the future is a clock that moved and is clamped to NOW
+        (dropping it would forget calls, the unsafe direction); a bucket
+        older than the window is dropped; counts are clamped to whole
+        calls in ``[0, 2 x FLOOD_HOURLY_MAX]`` — never negative, never a
+        number that could wrap into "unlimited".
+
+        Rebased CONSERVATIVELY onto this limiter's clock: a bucket's calls
+        happened somewhere inside its minute, so it goes into the bucket
+        holding the END of that minute — kept up to a minute too long,
+        never counted out too early.
+        """
+        if not isinstance(buckets, list):
+            return
+        window = budget.hourly
+        width = window.bucket_seconds
+        cap = 2 * max(self._hourly_max, 0)
+        now = self._clock()
+        current = window.key_for(now)
+        for item in buckets[-2 * window.slots:]:
+            if not isinstance(item, (list, tuple)) or len(item) != 3:
+                continue
+            start, ornament, essential = (_finite(v) for v in item)
+            if start is None or ornament is None or essential is None:
+                continue
+            age = max(wall_now - start, 0.0)
+            if age >= FLOOD_HOURLY_WINDOW + width:
+                continue
+            key = min(window.key_for(now - age + width - 1e-6), current)
+            window.load(key, int(min(max(ornament, 0.0), cap)),
+                        int(min(max(essential, 0.0), cap)))
 
     # ── observability ────────────────────────────────────────────────────
 

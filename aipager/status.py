@@ -26,6 +26,7 @@ import time
 from pathlib import Path
 
 from aipager.config import BOT_TOKEN, CHAT_ID, SESSION_STATE_FILE, SOCKET_PATH
+from aipager.flood_policy import bans_within, effective_ceiling, hourly_limits
 from aipager.errors import friendly_error, friendly_warn
 from aipager.ui import console
 
@@ -123,7 +124,14 @@ def read_flood_chats(path: str | None = None) -> list[dict]:
     Each row: ``chat_id``, ``rate`` (the learned calls/s), ``sustained_used``
     / ``sustained_limit`` (the rolling volume window), ``minimal``,
     ``bans_today``, ``muted_until`` (wall clock, omitted once lapsed) and
-    ``stale``.
+    ``stale``. Since 8.30 also: ``hourly_used`` / ``hourly_budget`` (calls
+    in the last hour, summed here from the persisted per-minute buckets
+    against NOW, and the chat's hourly budget), ``hourly_age`` (seconds
+    since the file was written — the hour is at most a minute stale while
+    calls flow; ``None`` when unknown), ``warning_remaining`` (seconds left
+    in the post-429 warning regime), ``bans_7d`` and ``ceiling`` (the rate
+    ceiling those imply). The last three are computed through
+    ``aipager.flood_policy``, the daemon's own arithmetic.
 
     ``stale`` is True when the document is older than the sustained
     window, in which case the sustained figures describe a window that has
@@ -156,6 +164,11 @@ def read_flood_chats(path: str | None = None) -> list[dict]:
     for entry in entries:
         if not isinstance(entry, dict) or "chat_id" not in entry:
             continue
+        stamps = entry.get("ban_stamps")
+        bans_7d = bans_within(stamps, now, config.FLOOD_BAN_MEMORY_DAYS * 86400.0)
+        warned = max(_float_or(entry.get("warned_until"), 0.0) - now, 0.0)
+        if warned != warned or warned == float("inf"):
+            warned = 0.0
         row = {
             "chat_id": entry.get("chat_id"),
             "rate": _float_or(entry.get("rate"), config.FLOOD_START_RATE),
@@ -164,8 +177,18 @@ def read_flood_chats(path: str | None = None) -> list[dict]:
                 _float_or(entry.get("sustained_limit"),
                           config.FLOOD_SUSTAINED_MAX)),
             "minimal": bool(entry.get("minimal")),
-            "bans_today": _bans_today(entry.get("ban_stamps"), now),
+            "bans_today": _bans_today(stamps, now),
             "stale": stale,
+            "hourly_used": _hourly_used(entry.get("hourly"), now),
+            "hourly_budget": hourly_limits(bans_7d)[0],
+            "hourly_age": age if age != float("inf") else None,
+            "warning_remaining": warned,
+            "bans_7d": bans_7d,
+            "ceiling": effective_ceiling(
+                max_rate=config.TELEGRAM_PRIVATE_MAX_RATE,
+                min_rate=config.FLOOD_MIN_RATE, bans=bans_7d,
+                warned=warned > 0.0,
+                warned_ceiling=config.FLOOD_WARNED_CEILING),
         }
         muted_until = _float_or(entry.get("muted_until"), 0.0)
         if muted_until > now:
@@ -181,13 +204,36 @@ def _float_or(value, default: float) -> float:
         return float(default)
 
 
+def _hourly_used(buckets, now: float) -> int:
+    """Calls in the last hour, from the persisted ``[wall minute start,
+    ornament, essential]`` buckets — summed HERE, against the reader's
+    own clock, so a file written a minute ago still reports the hour
+    ending now. Tolerant of anything a file can hold: junk entries are
+    skipped, counts are floored at zero."""
+    import math
+
+    if not isinstance(buckets, list):
+        return 0
+    total = 0
+    for item in buckets:
+        if not isinstance(item, (list, tuple)) or len(item) != 3:
+            continue
+        try:
+            start, ornament, essential = (float(v) for v in item)
+        except (TypeError, ValueError):
+            continue
+        if not all(math.isfinite(v) for v in (start, ornament, essential)):
+            continue
+        if now - start < 3600.0:
+            total += int(max(ornament, 0.0)) + int(max(essential, 0.0))
+    return total
+
+
 def _bans_today(stamps, now: float) -> int:
     """The 24-hour DISPLAY count, through the same arithmetic the daemon
     uses (``flood_policy.bans_within``) rather than a private copy of it —
     the copy that used to live here would have silently disagreed with
     the daemon the day its memory moved to seven days (8.30)."""
-    from aipager.flood_policy import bans_within
-
     return bans_within(stamps, now, 86400.0)
 
 
@@ -195,15 +241,24 @@ def flood_chat_lines(chats: list[dict]) -> list[str]:
     """One line per chat, sorted by chat id so the output is stable.
 
     Reads as a sentence rather than a dump, because the audience is an
-    operator asking "why is my bot slow": the rate first, then the volume,
-    then whatever is wrong. The sustained figures are omitted entirely
-    when the document is stale — showing a window that has already rolled
-    is worse than showing nothing.
+    operator asking "why is my bot slow": the rate and the ceiling it may
+    climb to, then the volume — the last hour against the chat's hourly
+    budget (8.30), labelled with how old the figure is, then the last
+    minute — then whatever is wrong. The minute figures are omitted
+    entirely when the document is stale — showing a window that has
+    already rolled is worse than showing nothing.
     """
     lines: list[str] = []
     for chat in sorted(chats, key=lambda c: str(c.get("chat_id"))):
         parts = [f"Telegram chat {chat['chat_id']}: "
                  f"rate {chat['rate']:.2f}/s"]
+        if chat.get("ceiling") is not None:
+            parts.append(f" (ceiling {chat['ceiling']:.2f}/s)")
+        if chat.get("hourly_budget") is not None:
+            parts.append(f", {chat.get('hourly_used', 0)}/{chat['hourly_budget']} "
+                         "calls in the last hour")
+            if chat.get("hourly_age") is not None:
+                parts.append(f" (as of {int(chat['hourly_age'])}s ago)")
         if not chat.get("stale"):
             parts.append(
                 f", {chat['sustained_used']}/{chat['sustained_limit']} "
@@ -214,8 +269,12 @@ def flood_chat_lines(chats: list[dict]) -> list[str]:
             parts.append(
                 " — flood-muted until "
                 f"{_dt.datetime.fromtimestamp(chat['muted_until']).strftime('%H:%M')}")
-        if chat.get("bans_today"):
-            parts.append(f" ({chat['bans_today']} ban(s) in the last 24 h)")
+        remaining = chat.get("warning_remaining") or 0.0
+        if remaining > 0.0:
+            minutes = int(remaining // 60)
+            parts.append(f" — warning regime, {minutes // 60}h {minutes % 60}m left")
+        if chat.get("bans_7d"):
+            parts.append(f" ({chat['bans_7d']} ban(s) in the last 7 days)")
         lines.append("".join(parts))
     return lines
 

@@ -302,17 +302,22 @@ FLOOD_STATE_FILE = Path.home() / ".claude" / "aipager-flood-state.json"
 # under that, so a burst of 429s costs one write rather than twenty.
 FLOOD_STATE_MIN_INTERVAL: float = 5.0
 
-# There is deliberately no periodic-refresh constant here (review
-# rev-iter1-008). `FLOOD_STATE_REFRESH_SECONDS = 30.0` was defined in
-# iteration 1 with a docstring describing behaviour nothing implemented,
-# and a documented constant wired to nothing is worse than an honest
-# limitation: the file is written when something MATERIAL changes (a 429,
-# a ban, a mute arming or lifting), so the volatile figures in it —
-# sustained usage, minimal mode — are only fresh for
-# `FLOOD_SUSTAINED_WINDOW` after a flood event, and `status.py` omits them
-# as stale outside that. A healthy chat that has never been rate-limited
-# produces no file and no line at all, which is the correct reading of
-# "nothing is wrong".
+# While calls flow, the file is ALSO rewritten this often even when
+# nothing material changed (roadmap 8.30). It carries each chat's rolling
+# HOUR now — the volume that got vm3 banned — and `aipager status`, a
+# different process, has no other way to read it; `status` labels the
+# figure with the file's age ("as of 42s ago"). Wired: every call the
+# limiter counts sets `flood_state.mark_volume()`, and the session
+# monitor's existing 2 s tick writes when that flag is set and this long
+# has passed since the last write — so a busy chat's file is at most a
+# minute (and one tick) old, and a quiet install writes nothing.
+#
+# (0.7.13 had deliberately NO periodic refresh — review rev-iter1-008: a
+# `FLOOD_STATE_REFRESH_SECONDS` had been defined with nothing behind it.
+# This one is behind `flood_state.save_if_dirty` and its tests.) The
+# sustained-minute figures are still only shown while the file is younger
+# than `FLOOD_SUSTAINED_WINDOW`; a chat with no calls produces no file.
+FLOOD_STATE_VOLUME_REFRESH_SECONDS: float = 60.0
 
 # Sanity clamp on ANY mute deadline, armed or restored (8.28 D-7). Making
 # the deadline wall-clock is what lets it survive a restart; it also makes
