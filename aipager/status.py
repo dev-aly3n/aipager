@@ -182,10 +182,13 @@ def _float_or(value, default: float) -> float:
 
 
 def _bans_today(stamps, now: float) -> int:
-    if not isinstance(stamps, list):
-        return 0
-    return sum(1 for s in stamps
-               if isinstance(s, (int, float)) and 0.0 <= now - s <= 86400.0)
+    """The 24-hour DISPLAY count, through the same arithmetic the daemon
+    uses (``flood_policy.bans_within``) rather than a private copy of it —
+    the copy that used to live here would have silently disagreed with
+    the daemon the day its memory moved to seven days (8.30)."""
+    from aipager.flood_policy import bans_within
+
+    return bans_within(stamps, now, 86400.0)
 
 
 def flood_chat_lines(chats: list[dict]) -> list[str]:

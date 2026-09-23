@@ -207,15 +207,21 @@ def test_the_post_ban_climb_completes_at_the_reduced_ceiling(
 def test_the_full_ceiling_returns_only_once_the_ban_is_a_day_old(
     limiter, qa_clock, run_async,
 ):
-    """The second half of the amendment above (ruling 5's decay).
+    """The second half of the amendment above (ruling 5's decay),
+    AMENDED by 8.30 R6: the memory is seven days, not one.
 
-    The reduced ceiling is not permanent — it lapses 24 h after the last
-    ban. Asserting only the reduction would let a permanent half-speed
-    daemon pass, which is the opposite failure.
+    The reduced ceiling is not permanent — it lapses once the last ban
+    leaves the memory window. Asserting only the reduction would let a
+    permanent half-speed daemon pass, which is the opposite failure. The
+    0.7.13 row asserted the lapse at 24 h; a day-old ban is now still
+    remembered (vm3's four-day-old ban was not, and should have been).
     """
     _seed(limiter, run_async)
     limiter.note_ban(CHAT, BAN)
     qa_clock.advance(24 * 3600 + WINDOW)
+    assert limiter.earned_rate(CHAT) == pytest.approx(
+        config.TELEGRAM_PRIVATE_MAX_RATE * 0.5)
+    qa_clock.advance(config.FLOOD_BAN_MEMORY_DAYS * 86400 + 6 * WINDOW)
     assert limiter.earned_rate(CHAT) == pytest.approx(
         config.TELEGRAM_PRIVATE_MAX_RATE)
 

@@ -104,6 +104,7 @@ from pathlib import Path
 from telegram.error import RetryAfter
 from telegram.ext import BaseRateLimiter
 
+from aipager import flood_policy
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.config import (
     CARD_CADENCE_FLOOR_GROUP,
@@ -111,6 +112,7 @@ from aipager.config import (
     CARD_CADENCE_MARGIN,
     FLOOD_BACKOFF_DECAY_SECONDS,
     FLOOD_BACKOFF_MAX,
+    FLOOD_BAN_MEMORY_DAYS,
     FLOOD_MIN_RATE,
     FLOOD_MINIMAL_MODE_RATE_FLOOR,
     FLOOD_MUTE_MAX_SECONDS,
@@ -166,19 +168,14 @@ CHAT_ACTION_ENDPOINT: str = "sendChatAction"
 _CHAT_BUDGET_EXEMPT: frozenset = frozenset({REACTION_ENDPOINT,
                                            CHAT_ACTION_ENDPOINT})
 
-# How long one ban stays in a chat's memory (8.29 R5 / rev-iter1-005).
-# 24 hours, matching `config.FLOOD_MUTE_MAX_SECONDS`: within this window a
-# chat's rate CEILING is halved, so "a ban today means a reduced start
-# tomorrow" is a rule rather than a hope. Telegram's own memory is
-# measured in hours; ours used to be measured in process lifetimes.
-_BAN_MEMORY_SECONDS: float = 86400.0
-
-# The fraction of the normal ceiling a chat with a ban in the last 24 h
-# may climb to. Half: enough to keep one session's card animating, not
-# enough to repeat yesterday's volume. Recovering FULLY six hours after a
-# 9.5-hour ban is how the 2026-09-15 ladder was earned three times in one
-# day.
-_BANNED_CEILING_FRACTION: float = 0.5
+# The window ``bans_today`` DISPLAYS (``snapshot()``, ``aipager status``).
+# Display only since 8.30: the POLICY reads the ban memory over
+# ``config.FLOOD_BAN_MEMORY_DAYS`` (7 days) through ``flood_policy``, and
+# divides the ceiling by one plus that count. 0.7.13 remembered a ban for
+# 24 hours and halved the ceiling while it did — and on 2026-09-23 the vm3
+# chat's 2026-09-19 ban no longer counted, so the chat ran at the full
+# ceiling into a straight 7-hour ban four days later.
+_BANS_TODAY_SECONDS: float = 86400.0
 
 # Tokens a chat must have before a SKIP-kind caller may spend one. The
 # extra token is the reserve: an answer, a reply or any other blocking
@@ -523,18 +520,25 @@ class ChatBudget:
         if len(self.ban_stamps) > self.MAX_BAN_STAMPS:
             del self.ban_stamps[:-self.MAX_BAN_STAMPS]
 
+    def bans_within(self, wall_now: float, seconds: float) -> int:
+        """How many bans this chat has taken in the last *seconds*.
+
+        It decays by itself — a stamp simply ages out of the window —
+        which is why there is no counter to keep in step with the list.
+        The arithmetic is ``flood_policy.bans_within``, the same function
+        ``aipager status`` counts the persisted stamps with.
+        """
+        return flood_policy.bans_within(self.ban_stamps, wall_now, seconds)
+
     def bans_in_last_24h(self, wall_now: float) -> int:
         """How many bans this chat has taken in the last 24 hours.
 
-        The durable memory R5 asks for, read two ways: ``status`` displays
-        it (as ``bans_today``), and the limiter HALVES this chat's rate
-        ceiling while it is non-zero, so "a ban today means a reduced
-        start tomorrow" is literally true rather than an aspiration. It
-        decays by itself — a stamp simply ages out of the window — which
-        is why there is no counter to keep in step with the list.
+        DISPLAY ONLY since 8.30 (``bans_today`` in ``snapshot()``). The
+        limiter's policy reads the 7-day memory instead — see
+        :meth:`BudgetRateLimiter.bans_remembered` — because a day-long
+        memory had forgotten the ban that predicted vm3's.
         """
-        return sum(1 for stamp in self.ban_stamps
-                   if 0.0 <= wall_now - stamp <= _BAN_MEMORY_SECONDS)
+        return self.bans_within(wall_now, _BANS_TODAY_SECONDS)
 
     def bans_today(self, wall_now: float) -> int:
         """The display name for :meth:`bans_in_last_24h`; what
@@ -767,6 +771,7 @@ class BudgetRateLimiter(BaseRateLimiter):
         sustained_max: float = FLOOD_SUSTAINED_MAX,
         sustained_window: float = FLOOD_SUSTAINED_WINDOW,
         minimal_floor: float = FLOOD_MINIMAL_MODE_RATE_FLOOR,
+        ban_memory_days: float = FLOOD_BAN_MEMORY_DAYS,
         clock=time.monotonic,
         sleep=None,
         signal_path: str | None = None,
@@ -792,6 +797,8 @@ class BudgetRateLimiter(BaseRateLimiter):
         self._sustained_max = float(sustained_max)
         self._sustained_window = float(sustained_window)
         self._minimal_floor = float(minimal_floor)
+        # How far back a ban still divides this chat's ceiling (8.30 R6).
+        self._ban_memory_seconds = float(ban_memory_days) * 86400.0
         self._signal_path = signal_path
         # Only the DAEMON may write beside the daemon's socket. An
         # explicit path means the caller owns it (tests, tools);
@@ -935,28 +942,33 @@ class BudgetRateLimiter(BaseRateLimiter):
         steps = max(math.ceil(span / self._rate_increase), 1)
         return (self._recovery_hours * 3600.0) / steps
 
+    def _bans_7d(self, budget: ChatBudget, wall_now: float) -> int:
+        """Bans inside this limiter's memory window (``ban_memory_days``,
+        7 days by default) — the count every POLICY decision reads."""
+        return budget.bans_within(wall_now, self._ban_memory_seconds)
+
     def max_rate_for(self, budget: ChatBudget, wall_now: float) -> float:
-        """The ceiling THIS chat may climb to, right now (R5).
+        """The ceiling THIS chat may climb to, right now (R5, 8.30 R6).
 
-        ``TELEGRAM_PRIVATE_MAX_RATE`` for a chat with a clean day, HALF of
-        it while it has a ban in the last 24 hours (:data:`_BAN_MEMORY_SECONDS`),
-        decaying out by itself as the stamp ages past the window.
+        ``TELEGRAM_PRIVATE_MAX_RATE / (1 + bans)``, where ``bans`` counts
+        the chat's bans in the last ``FLOOD_BAN_MEMORY_DAYS`` (7): one ban
+        in a week halves it, two third it, and it recovers by itself as
+        each stamp ages out. The arithmetic is
+        ``flood_policy.effective_ceiling``, shared with ``aipager status``.
 
-        This is "a ban today means a reduced start tomorrow", made
-        arithmetic. Without it the post-ban regime alone returns a chat to
-        the full ceiling six hours after a 9.5-hour ban — a memory shorter
-        than the incident it is supposed to remember, and the shape that
-        earned three bans in one day on 2026-09-15.
+        0.7.13 halved the ceiling for 24 hours after a ban. Four days after
+        vm3's 2026-09-19 ban that memory was gone, the chat was back at the
+        full ceiling, and Telegram — whose memory is plainly longer —
+        answered the next long stretch with a straight 7-hour ban.
 
         Never below ``FLOOD_MIN_RATE``: a ceiling under the floor would
         invert the two and pin a chat at a rate it can never leave.
         """
-        if not budget.ban_stamps:
-            return self._chat_max_rate
-        if budget.bans_in_last_24h(wall_now) <= 0:
-            return self._chat_max_rate
-        return max(self._chat_max_rate * _BANNED_CEILING_FRACTION,
-                   self._min_rate)
+        return flood_policy.effective_ceiling(
+            max_rate=self._chat_max_rate, min_rate=self._min_rate,
+            bans=self._bans_7d(budget, wall_now), warned=False,
+            warned_ceiling=self._chat_max_rate,
+        )
 
     def _earn_floor(self, budget: ChatBudget, now: float) -> float:
         """The earliest instant a success window may be measured from —
@@ -1019,6 +1031,15 @@ class BudgetRateLimiter(BaseRateLimiter):
         if floor > budget.rate_earned_at:
             budget.rate_earned_at = floor
         ceiling = self.max_rate_for(budget, time.time())
+        if budget.rate > ceiling:
+            # CLAMPED DOWN, not merely frozen (8.30). The ceiling can FALL
+            # under a rate the chat already has — a ban stamp restored
+            # from the file, a second ban inside the week — and a chat
+            # that has been told its ceiling is lower must not keep
+            # spending at the old one until the next 429 halves it.
+            budget.set_rate(ceiling, now)
+            budget.rate_earned_at = now
+            return
         if budget.rate >= ceiling:
             budget.rate_earned_at = now
             return
@@ -1149,6 +1170,26 @@ class BudgetRateLimiter(BaseRateLimiter):
             return False
         self._earn(budget, self._clock())
         return self._minimal(budget)
+
+    def bans_remembered(self, chat_id) -> int:
+        """This chat's bans inside the memory window (7 days by default) —
+        the ``bans`` in every ``/(1 + bans)`` the limiter applies. Zero for
+        a chat never seen, reported without allocating a budget."""
+        key = self._key(chat_id)
+        budget = self._budgets.get(key) if key is not None else None
+        if budget is None:
+            return 0
+        return self._bans_7d(budget, time.time())
+
+    def ceiling_for(self, chat_id) -> float:
+        """The rate ceiling this chat's earned rate may climb to, right
+        now: ``MAX_RATE / (1 + bans)``, capped while a warning regime runs.
+        A chat never seen reports the clean ceiling without allocating."""
+        key = self._key(chat_id)
+        budget = self._budgets.get(key) if key is not None else None
+        if budget is None:
+            return self._chat_max_rate
+        return self.max_rate_for(budget, time.time())
 
     def sustained_used(self, chat_id) -> int:
         """Calls this chat has made inside the current rolling window."""
@@ -1753,6 +1794,8 @@ class BudgetRateLimiter(BaseRateLimiter):
                 "muted_refusals": budget.muted_refusals,
                 "ornaments_suspended": budget.ornaments_suspended,
                 "bans_today": budget.bans_today(wall_now),
+                "bans_7d": self._bans_7d(budget, wall_now),
+                "ceiling": self.max_rate_for(budget, wall_now),
                 "waiters": len(budget.waiters),
             })
         return {"overall_tokens": self._overall.tokens(), "chats": chats}

@@ -23,7 +23,8 @@ opposite. Three mechanisms answer it, and there is a row for each:
 * **(c)** the first window after a lift is a FULL one, so the rate cannot
   climb back seconds after a ban.
 
-Plus ruling 5's durable half: while a chat has a ban in the last 24 hours
+Plus ruling 5's durable half, lengthened by 8.30 R6: while a chat has a
+ban in the last SEVEN DAYS (it was 24 hours in 0.7.13)
 its CEILING is halved, so recovering fully six hours after a 9.5-hour ban
 is no longer possible.
 
@@ -254,13 +255,21 @@ def test_the_four_ban_replay_ends_at_the_floor_not_at_the_ceiling(
 def test_a_ban_today_halves_the_ceiling_until_tomorrow(
     live_limiter, run_async, flood_clock,
 ):
-    """Ruling 5. A chat with a ban in the last 24 h may climb to HALF the
-    normal ceiling however long it waits; a day after the ban it is an
-    ordinary chat again.
+    """Ruling 5, AMENDED by 8.30 R6 (the ban memory is SEVEN DAYS, not
+    24 hours). A chat with a ban in the memory window may climb to HALF the
+    normal ceiling however long it waits — a day after the ban included,
+    which is exactly where 0.7.13 let it go; only once the ban is a week
+    old is it an ordinary chat again.
+
+    As written for 0.7.13 this row asserted the full ceiling a day after
+    the ban. vm3's 2026-09-19 ban was four days old on 2026-09-23 and no
+    longer counted, and the chat ran at the full ceiling into a straight
+    7-hour ban — the 24-hour lapse is what R6 reverses.
 
     Mutation: return `_chat_max_rate` unconditionally from
     `max_rate_for` and a 9.5-hour ban is fully forgotten six hours later,
-    which is how three bans were earned in one day.
+    which is how three bans were earned in one day; count bans over 24 h
+    again and the day-old assertion fails.
     """
     _seed(live_limiter, run_async)
     MUTE.mute(CHAT, 1.0)
@@ -272,11 +281,20 @@ def test_a_ban_today_halves_the_ceiling_until_tomorrow(
     assert live_limiter.earned_rate(CHAT) == pytest.approx(
         config.TELEGRAM_PRIVATE_MAX_RATE * 0.5)
 
-    # A full day after the ban, the memory ages out and so does the cap.
+    # A full day after the ban: still remembered, still capped.
     flood_clock.advance(86400.0)
     assert live_limiter.earned_rate(CHAT) == pytest.approx(
-        config.TELEGRAM_PRIVATE_MAX_RATE)
+        config.TELEGRAM_PRIVATE_MAX_RATE * 0.5)
     assert _rate_row(live_limiter)["bans_today"] == 0
+    assert _rate_row(live_limiter)["bans_7d"] == 1
+
+    # A week after the ban the memory ages out; the climb from the reduced
+    # ceiling back to the full one is five ordinary 60 s windows.
+    flood_clock.advance(config.FLOOD_BAN_MEMORY_DAYS * 86400.0)
+    flood_clock.advance(6 * config.FLOOD_SUCCESS_WINDOW_SECONDS)
+    assert live_limiter.earned_rate(CHAT) == pytest.approx(
+        config.TELEGRAM_PRIVATE_MAX_RATE)
+    assert _rate_row(live_limiter)["bans_7d"] == 0
 
 
 def test_a_chat_with_no_ban_in_a_day_reaches_the_full_ceiling(
