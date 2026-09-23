@@ -18,18 +18,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   kept for answers, replies and prompts. The card and the typing bubble
   stop at 1080 and the chat enters minimal mode until the hour frees to
   864; answers are never refused by the hour. The same timeline, replayed
-  against the real daemon code: about 900 calls in the busiest hour,
+  against the real daemon code: under 1,000 calls in the busiest hour,
   2,600 in total, where the old code is modelled at ~11,500.
 - **The "typing…" bubble is sent once per chat, and it is budgeted
   again.** It ran one loop per working session, outside every budget: two
   sessions in one DM sent it twice every 4.5 seconds, ~5,400 uncounted
   calls in the incident window, until Telegram rate-limited the bubble
   itself. Now one loop per chat sends it, as the lowest thing the chat
-  sends: it needs more budget to spare than a card edit, it goes out only
-  when it fits beside the chat's cards (so it does not show beside a card
-  in its first two minutes, and shows steadily beside a long-running
-  one), it is the first thing dropped at 75 % of the hour, and a 429 on it
-  blocks only the bubble for as long as Telegram asked.
+  sends. Typing… shows from the start of every turn; a young card
+  refreshes slightly slower to make room: the bubble's share of the chat
+  is set aside before the cards divide the rest, so in a DM a card in its
+  first two minutes refreshes about every 4.8 seconds instead of 2.2, and
+  the two together stay inside the chat's limits. It never takes a token
+  a card edit needs, it is the first thing dropped at 75 % of the hour,
+  and a 429 on it blocks only the bubble for as long as Telegram asked. A
+  **ban** on the bubble now mutes the chat like a ban on any other call,
+  so the next answer is held and delivered when the ban lifts instead of
+  being sent into it.
 - **A 429 is a warning worth hours, not minutes.** Any 429 — the typing
   bubble's included — now starts a six-hour warning regime
   (`FLOOD_WARNING_HOURS`): the chat's rate may not climb past 0.5 calls/s
@@ -51,8 +56,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to minutes (`23m`) and then hours (`1h 23m`), so a slow card never looks
   frozen. A new tool row or sentence waits for the next refresh; a state
   change (working ↔ waiting on a background agent) still shows at once,
-  at most once every 10 seconds. The first two minutes are unchanged, and
-  so is the finished card. Every path that edits a card follows it,
+  at most once every 10 seconds. In the first two minutes the card keeps
+  its pace, less the typing bubble's share (see above), and the finished
+  card is unchanged. Every path that edits a card follows it,
   including the hook-driven edits for tool calls and subagent events, and
   the stale-card watchdog no longer forces a refresh on a card that is on
   schedule. A four-hour turn's card used to be edited every few seconds
@@ -71,7 +77,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an older `aipager status` still reads it. `status --json` carries
   `hourly_used`, `hourly_budget`, `hourly_age`, `warning_remaining`,
   `bans_7d` and `ceiling` per chat; `bans_today` is still the 24-hour
-  count.
+  count. A file written before this release has no hour, and the line
+  shows none (`hourly_budget` is `null`) rather than a "0/1200" it never
+  measured; a warning regime is never shown longer than the six hours the
+  daemon itself would hold.
 
 ## [0.7.13] - 2026-09-16
 

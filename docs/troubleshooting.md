@@ -51,8 +51,11 @@ burst, and the busy cards of that chat **share** it. The "typing…"
 indicator is in that budget too, as the **lowest** thing the chat sends
 (see "The typing bubble" below).
 
-So with two sessions working in the same chat, each card refreshes about
-every 2.2 seconds instead of every 1.2; with three, about every 3.3. **A
+The bubble's share is set aside first (one call every 4.5 seconds while
+any session in the chat is working), and the cards divide what is left.
+So a single card in a DM refreshes about every 4.8 seconds; with two
+sessions working in the same chat, each card about every 9.7 seconds;
+with three, about every 14.5. **A
 slower card is the budget working, not a bug.** Answers, replies and
 button responses are never slowed to make room for a card — they keep a
 reserved token, and a card edit that cannot afford a call is simply
@@ -60,8 +63,10 @@ skipped and retried on the next tick rather than queued in front of your
 answer.
 
 In a **group** the limit is 20 calls a minute however many sessions are
-in it, so a card there refreshes every 3.3 seconds whatever else is going
-on.
+in it, and the bubble alone would use two thirds of that. The group's
+cards together keep one refresh every 10 seconds (11 s for one card), and
+the bubble takes the rest — so in a group it can lapse for a second or
+two now and then.
 
 To speed the cards up: run fewer simultaneous sessions per chat, or give
 the busiest ones a chat of their own (`aipager config`). You can also
@@ -79,7 +84,7 @@ switches unit so it never looks frozen:
 
 | turn age | card refreshes at most every | counter reads |
 |---|---|---|
-| 0–2 min | as above (2.2–4.4 s) | `45s` |
+| 0–2 min | as above (about 4.8 s for one card in a DM) | `45s` |
 | 2–10 min | 10 s | `4m 10s` |
 | 10–60 min | 30 s | `23m` |
 | over 60 min | 60 s | `1h 23m` |
@@ -104,15 +109,22 @@ client), every `TYPING_INDICATOR_INTERVAL` seconds (default 4.5 —
 Telegram clears a typing status after 5; `0` turns the bubble off). It
 counts in the chat's budget as the lowest thing the chat sends:
 
-- it goes out only when it fits beside the chat's cards, so it **does not
-  show beside a card in its first two minutes** — the card animating is
-  the signal then — and shows steadily beside a long-running card, when
-  the card is slow;
+- it **shows from the start of every turn**; a young card refreshes
+  slightly slower to make room — the bubble's share of the chat is set
+  aside before the cards divide the rest (above), so the two together
+  never exceed the chat's limits;
+- it never takes a token a card edit needs: a bubble due just after a
+  card edit waits half a second (`TYPING_RETRY_WAKE`) and tries again, so
+  it is at most a second or two late, never missing;
 - it is the first thing dropped when the chat's hourly volume gets high
   (below);
 - a 429 on the bubble itself blocks only the bubble, for as long as
   Telegram asked — the cards carry on — but it does start the chat's
-  six-hour warning regime.
+  six-hour warning regime (the rate is capped at 0.5 calls/s, so the
+  cards slow down too);
+- a **ban** on the bubble (a `retry_after` past the cap below) mutes the
+  chat exactly like a ban on any other call: nothing more goes into it,
+  and the turn's answer is held and delivered when the ban lifts.
 
 It used to be free (one loop per working session, outside every budget),
 until on 2026-09-23 two sessions in one DM had sent it ~5,400 times in
