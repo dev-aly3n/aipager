@@ -16,6 +16,7 @@ from aipager import config, flood_policy
 from aipager.flood_policy import (
     bans_within,
     card_age_floor,
+    card_floor_beside_typing,
     clamp_warned_until,
     effective_ceiling,
     elapsed_unit,
@@ -236,3 +237,59 @@ def test_a_numeric_string_reads_as_its_number():
 ])
 def test_an_unreadable_regime_is_no_regime(junk):
     assert clamp_warned_until(junk, NOW) == 0.0
+
+
+# ── typing's share of a chat (operator ruling 2026-09-23) ──────────────────
+
+DM_TYPING_GAP = 60.0 / 27        # the DM window less the bubble's 3 slots
+GROUP_TYPING_GAP = 60.0 / 17     # the group's 20 less the same 3
+
+
+def test_a_dm_reserves_the_bubble_before_the_cards_divide_it():
+    """0.45 calls/s less one bubble per 4.5 s leaves 0.2278/s for the
+    cards: a floor of 4.39 s. Mutation: do not subtract the bubble and
+    this reads 2.22 s."""
+    assert card_floor_beside_typing(DM_TYPING_GAP, 4.5) == pytest.approx(
+        1.0 / (27 / 60 - 1 / 4.5))
+
+
+def test_a_chat_too_slow_for_both_keeps_the_cards_at_one_edit_per_tier_one():
+    """A group (0.283/s) or a chat penalised to 0.25/s cannot fit a 4.5 s
+    bubble beside a useful card: the cards keep one edit per
+    ``CARD_AGE_TIER1_INTERVAL`` together and the bubble takes the rest.
+    Mutation: drop the floor and a group card edits once every 16 s — a
+    penalised DM's once every 36 s."""
+    tier1 = config.CARD_AGE_TIER1_INTERVAL
+    assert card_floor_beside_typing(GROUP_TYPING_GAP, 4.5) == pytest.approx(tier1)
+    assert card_floor_beside_typing(4.0, 4.5) == pytest.approx(tier1)
+
+
+def test_a_chat_slower_than_the_floor_keeps_its_own_pace():
+    """A chat at 0.05/s cannot give its cards 0.1/s: the floor is capped
+    at the chat's own capacity, never faster than the chat."""
+    assert card_floor_beside_typing(20.0, 4.5) == pytest.approx(20.0)
+
+
+@pytest.mark.parametrize("floor,interval", [
+    (2.0, 0.0), (2.0, -1.0), (0.0, 4.5), (float("nan"), 4.5),
+    (2.0, float("inf")), ("x", 4.5),
+])
+def test_nothing_is_reserved_for_a_bubble_that_is_not_there(floor, interval):
+    """The input floor comes back untouched (``is``: NaN is not ``==``
+    itself)."""
+    assert card_floor_beside_typing(floor, interval) is floor
+
+
+def test_the_card_interval_carries_the_reservation():
+    """``card_interval(typing_interval=)`` is the ONE place the animator
+    reads it: 4.83 s for a DM card planned against the window less the
+    bubble's reserve, and exactly today's 2.2 s without it."""
+    from aipager.bot.flood_budget import card_interval
+
+    kw = dict(base=1.2, busy_sessions=1, is_group=False, chat_rate=1.0)
+    assert card_interval(sustained_min_gap=2.0, **kw) == pytest.approx(2.2)
+    assert card_interval(sustained_min_gap=DM_TYPING_GAP, typing_interval=4.5,
+                         **kw) == pytest.approx(4.83, abs=0.01)
+    assert card_interval(sustained_min_gap=DM_TYPING_GAP, typing_interval=4.5,
+                         **{**kw, "busy_sessions": 2}) == pytest.approx(
+        9.66, abs=0.01)

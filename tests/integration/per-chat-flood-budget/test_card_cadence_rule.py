@@ -239,13 +239,20 @@ def _ext_bot(bot, telegram, limiter, chat_id):
     return bot
 
 
-def _aged(vloop, sess, seconds: float = 600.0):
-    """Put *sess*'s turn *seconds* old (8.30): a card ten minutes in is on
-    its 30 s tier and leaves the chat room for the typing bubble, which
-    (as the chat's lowest ornament) does not go out beside a card in its
-    first two minutes."""
-    sess.busy_started_at = vloop.time() - seconds
-    return sess
+def _yielded(pacing: dict, sessions: int, *, group: bool = False) -> float:
+    """The card interval with the typing bubble's share reserved (8.30,
+    operator ruling 2026-09-23: "typing always shows, the young card
+    yields"): planned against the sustained window LESS the bubble's
+    reserve (``typing_min_gap``), with one bubble per
+    ``TYPING_INDICATOR_INTERVAL`` taken out before the cards divide the
+    rest. Written with ``card_interval`` itself, like every derived
+    expectation in this file. One DM card: 4.83 s (was 2.2)."""
+    return card_interval(
+        base=an.STREAM_EDIT_INTERVAL, busy_sessions=sessions, is_group=group,
+        chat_rate=pacing["rate"],
+        sustained_min_gap=max(pacing["sustained_min_gap"],
+                              pacing["typing_min_gap"]),
+        typing_interval=_config.TYPING_INDICATOR_INTERVAL)
 
 
 def _gaps(stamps: list[float]) -> list[float]:
@@ -336,16 +343,20 @@ def test_a_single_streaming_card_edits_once_per_computed_interval(
     written as a literal: this row's whole point is that the loop's
     realized gap matches the one function the rule is written in.
     Mutation: drop the margin, the floor or the sustained term and the two
-    stop agreeing."""
+    stop agreeing.
+
+    AMENDED by 8.30 (operator ruling 2026-09-23): the typing bubble is
+    budgeted and shows from the turn's first second, and its share is
+    reserved out of the chat before the card's interval is computed
+    (``_yielded``) — 4.83 s rather than 2.2 s. Run for 20 s rather than 8
+    so the slower card still yields three gaps."""
     bot = _ext_bot(mk_bot(), telegram, limiter, PRIVATE)
     sess = _card(bot, "a", 10, PRIVATE)
-    _run_cards(vloop, bot, [sess], 8.0)
-    pacing = limiter.pacing_for(PRIVATE)
-    expected = card_interval(base=an.STREAM_EDIT_INTERVAL, busy_sessions=1,
-                             is_group=False, chat_rate=pacing["rate"],
-                             sustained_min_gap=pacing["sustained_min_gap"])
-    assert _gaps(_card_calls(telegram, PRIVATE)) == \
-        [pytest.approx(expected)] * len(_gaps(_card_calls(telegram, PRIVATE)))
+    _run_cards(vloop, bot, [sess], 20.0)
+    expected = _yielded(limiter.pacing_for(PRIVATE), 1)
+    gaps = _gaps(_card_calls(telegram, PRIVATE))
+    assert len(gaps) >= 3, gaps
+    assert gaps == [pytest.approx(expected)] * len(gaps)
 
 
 def test_a_single_card_keeps_its_chat_under_one_call_per_second(
@@ -389,18 +400,19 @@ def test_two_sessions_in_one_private_chat_each_slow_to_two_point_two_seconds(
     cards were being refused by the budget half the time and the
     assertion could not see it. With no other traffic in the chat the
     cadence rule, not the limiter's reserve, must be what paces a card:
-    mean within 10% of the interval, and no single gap past twice it."""
+    mean within 10% of the interval, and no single gap past twice it.
+
+    AMENDED by 8.30 (operator ruling): the bubble's share is reserved
+    before the two cards divide the chat (``_yielded``), so each ticks at
+    9.66 s rather than 4.4 s; run for 40 s rather than 20 for the gaps."""
     bot = _ext_bot(mk_bot(), telegram, limiter, PRIVATE)
     cards = [_card(bot, "a", 10, PRIVATE),
              _card(bot, "b", 11, PRIVATE)]
-    _run_cards(vloop, bot, cards, 20.0)
+    _run_cards(vloop, bot, cards, 40.0)
     # Derived from the rule itself, with the chat's live pacing (8.27):
     # the sustained gap is part of the floor now, so a literal here would
     # be asserting last release's tuning rather than this one's rule.
-    _pacing = limiter.pacing_for(PRIVATE)
-    interval = card_interval(base=an.STREAM_EDIT_INTERVAL, busy_sessions=2,
-                             is_group=False, chat_rate=_pacing["rate"],
-                             sustained_min_gap=_pacing["sustained_min_gap"])
+    interval = _yielded(limiter.pacing_for(PRIVATE), 2)
     for mid in (10, 11):
         gaps = _gaps(_card_calls(telegram, PRIVATE, mid))
         assert gaps, f"card {mid} never edited twice"
@@ -431,19 +443,19 @@ def test_three_sessions_in_one_chat_stay_inside_the_chats_budget(
     every card must actually GET its interval, not merely stay legal.
     Mutation: cap N at two and three sessions overrun the chat again; make
     the cards contend for tokens instead of pacing themselves and the mean
-    gap runs past the interval while `violations` stays empty."""
+    gap runs past the interval while `violations` stays empty.
+
+    AMENDED by 8.30 (operator ruling): the bubble's share is reserved
+    first (``_yielded``) — 14.49 s a card; run for 60 s rather than 30."""
     bot = _ext_bot(mk_bot(), telegram, limiter, PRIVATE)
     cards = [_card(bot, name, 10 + i, PRIVATE)
              for i, name in enumerate(("a", "b", "c"))]
-    _run_cards(vloop, bot, cards, 30.0)
+    _run_cards(vloop, bot, cards, 60.0)
     assert telegram.violations == []
     # Derived from the rule itself, with the chat's live pacing (8.27):
     # the sustained gap is part of the floor now, so a literal here would
     # be asserting last release's tuning rather than this one's rule.
-    _pacing = limiter.pacing_for(PRIVATE)
-    interval = card_interval(base=an.STREAM_EDIT_INTERVAL, busy_sessions=3,
-                             is_group=False, chat_rate=_pacing["rate"],
-                             sustained_min_gap=_pacing["sustained_min_gap"])
+    interval = _yielded(limiter.pacing_for(PRIVATE), 3)
     for mid in (10, 11, 12):
         gaps = _gaps(_card_calls(telegram, PRIVATE, mid))
         assert gaps, f"card {mid} never edited twice"
@@ -459,7 +471,12 @@ def test_a_sibling_going_idle_speeds_every_other_card_up_on_its_next_tick(
     """Row B2 / R4: three BUSY sessions tick at 6.6 s; the moment one goes
     IDLE the survivors' NEXT tick is 4.4 s later, with no rescheduling.
     Mutation: cache N per session at loop start and the card keeps the
-    stale interval for the rest of the turn."""
+    stale interval for the rest of the turn.
+
+    AMENDED by 8.30 (operator ruling): with the bubble's share reserved
+    first the three tick at 14.49 s and the two at 9.66 s (``_yielded``);
+    the retirement moves to 10 s — inside the first 14.49 s gap, as 6 s
+    was inside the first 6.6 s one — and the run to 40 s."""
     bot = _ext_bot(mk_bot(), telegram, limiter, PRIVATE)
     cards = [_card(bot, name, 10 + i, PRIVATE)
              for i, name in enumerate(("a", "b", "c"))]
@@ -467,12 +484,14 @@ def test_a_sibling_going_idle_speeds_every_other_card_up_on_its_next_tick(
     def _retire():
         cards[2].status = Status.IDLE
 
-    _run_cards(vloop, bot, [cards[0]], 14.0, at=(6.0, _retire))
+    _run_cards(vloop, bot, [cards[0]], 40.0, at=(10.0, _retire))
     gaps = _gaps(_card_calls(telegram, PRIVATE))
     # 8.27: the per-session floor is the chat's 2.0 s sustained gap, so
     # three sessions tick at 6.6 s and two at 4.4 s (was 3.3 / 2.2).
-    assert gaps[0] == pytest.approx(6.6)
-    assert gaps[-1] == pytest.approx(4.4)
+    # 8.30: the bubble's share is reserved first — 14.49 s and 9.66 s.
+    pacing = limiter.pacing_for(PRIVATE)
+    assert gaps[0] == pytest.approx(_yielded(pacing, 3))
+    assert gaps[-1] == pytest.approx(_yielded(pacing, 2))
 
 
 # ── row B3: a group chat ─────────────────────────────────────────────────────
@@ -483,11 +502,19 @@ def test_a_card_in_a_group_chat_ticks_on_the_group_floor(
     """Row B3 / R4: the group floor is 3.0 s per BUSY session, so one
     session ticks every 3.3 s — Telegram's group limit is 20/minute.
     Mutation: use the private floor everywhere and a group card sends 54
-    edits a minute."""
+    edits a minute.
+
+    AMENDED by 8.30: the CARD ALONE (``typing=False``), which is what this
+    row is about — the group floor. With the bubble running, its share is
+    reserved first and a group card edits every 11 s (the minute row
+    below pins that); left running here, the 14 s run held one edit and
+    the row passed on an empty list of gaps. ``assert gaps`` now forbids
+    that."""
     bot = _ext_bot(mk_bot(), telegram, limiter, GROUP)
     sess = _card(bot, "g", 10, GROUP)
-    _run_cards(vloop, bot, [sess], 14.0)
+    _run_cards(vloop, bot, [sess], 14.0, typing=False)
     gaps = _gaps(_card_calls(telegram, GROUP))
+    assert gaps, "the card never edited twice"
     assert gaps == [pytest.approx(3.3)] * len(gaps)
 
 
@@ -517,13 +544,27 @@ def test_two_cards_in_one_group_stay_inside_the_groups_minute(
     s, and the whole minute must still fit. The one-session row cannot see
     an N-blind group floor. Mutation: compute the group interval per
     session instead of per chat and the two cards ask for 36 calls a
-    minute — the window then refuses a third of them."""
+    minute — the window then refuses a third of them.
+
+    AMENDED by 8.30 (operator ruling): the bubble is in the group's window
+    again, and two cards plus a bubble do not fit 20 a minute beside each
+    other — so the cards keep the floor ``card_floor_beside_typing``
+    guarantees (the chat's cards together at least once per 10 s: 22 s a
+    card here) and the bubble takes the rest, refused now and then.
+    ``skipped == 0`` was the "no card refused" claim; the budget's skip
+    counter now counts those bubbles too, so the claim is asserted on the
+    cards directly: every gap is exactly the interval. And the WHOLE
+    minute — bubbles included — fits the group's 20."""
     bot = _ext_bot(mk_bot(), telegram, limiter, GROUP)
     cards = [_card(bot, "g1", 10, GROUP), _card(bot, "g2", 11, GROUP)]
     _run_cards(vloop, bot, cards, 61.0)
     assert telegram.violations == []
     assert _most_in_window(telegram.metered_stamps_for(GROUP), 60.0) <= 20
-    assert limiter.snapshot()["chats"][0]["skipped"] == 0
+    assert _most_in_window(telegram.stamps_for(GROUP), 60.0) <= 20
+    interval = _yielded(limiter.pacing_for(GROUP), 2, group=True)
+    for mid in (10, 11):
+        gaps = _gaps(_card_calls(telegram, GROUP, mid))
+        assert gaps and gaps == [pytest.approx(interval)] * len(gaps), gaps
 
 
 def test_the_strict_telegram_does_refuse_a_daemon_that_paces_itself_badly(
@@ -558,10 +599,16 @@ def test_a_legacy_session_without_a_stamped_chat_still_counts_towards_n(
     stamped = _card(bot, "a", 10, PRIVATE)
     legacy = _card(bot, "old", 11, PRIVATE)
     legacy.scope_chat_id = 0
-    _run_cards(vloop, bot, [stamped], 10.0)
+    _run_cards(vloop, bot, [stamped], 30.0)
     gaps = _gaps(_card_calls(telegram, PRIVATE))
     # Two sessions in one DM: 8.27's 2.0 s sustained gap per session.
-    assert gaps == [pytest.approx(4.4)] * len(gaps)
+    # AMENDED by 8.30 (operator ruling): the bubble's share is reserved
+    # first, so the pair ticks at 9.66 s (a lone card would be 4.83 s);
+    # 30 s rather than 10 so the gaps exist — at 10 s the list was empty
+    # and the row passed on nothing.
+    assert gaps, "the card never edited twice"
+    assert gaps == [pytest.approx(_yielded(limiter.pacing_for(PRIVATE), 2))] \
+        * len(gaps)
 
 
 def test_a_legacy_session_never_creates_a_phantom_chat_zero(
@@ -598,10 +645,13 @@ def test_the_typing_indicator_holds_its_own_interval_while_a_card_is_live(
     never visibly drops.
 
     AMENDED by 8.30: the bubble is budgeted again, as the lowest ornament,
-    and goes out only when it fits beside the chat's cards — never beside
-    a card in its first two minutes. So the card here is ten minutes into
-    its turn (``_aged``); what the row pins — the bubble's own clock, not
-    the card's wake grid — is unchanged. Review iteration 1 caught
+    and — by operator ruling 2026-09-23 — shows beside a card from the
+    turn's first second, its share reserved out of the chat before the
+    card's cadence is computed. So the card here is a young one again
+    (iteration 1 of 8.30 had moved it ten minutes into its turn, when the
+    bubble was withheld beside young cards); what the row pins — the
+    bubble's own clock, not the card's wake grid (4.83 s now) — is
+    unchanged. Review iteration 1 caught
     the first draft failing precisely here: offered from inside the card
     tick, the 4.5 s interval realized as ``ceil(4.5 / wake) * wake`` =
     5.28 s with one session and 6.6 s with two, above the expiry in every
@@ -612,7 +662,7 @@ def test_the_typing_indicator_holds_its_own_interval_while_a_card_is_live(
     send and this counts none.
     """
     bot = _ext_bot(mk_bot(), telegram, limiter, PRIVATE)
-    sess = _aged(vloop, _card(bot, "a", 10, PRIVATE))
+    sess = _card(bot, "a", 10, PRIVATE)
     _run_cards(vloop, bot, [sess], 20.0)
     actions = telegram.actions_for(PRIVATE)
     assert len(actions) >= 4, [round(a - 1_000_000.0, 3) for a in actions]
@@ -632,8 +682,8 @@ def test_a_slow_chat_action_does_not_stretch_the_refresh_interval(
 
     Mutation: ``await asyncio.sleep(TYPING_INDICATOR_INTERVAL)`` after the
     send instead of sleeping the remainder, and this row's gaps become
-    4.5 + 0.8 = 5.3 s — past the expiry. (AMENDED by 8.30: the card is ten
-    minutes into its turn, so the bubble fits beside it — see ``_aged``.)
+    4.5 + 0.8 = 5.3 s — past the expiry. (AMENDED by 8.30: the bubble is
+    budgeted, and shows beside a young card by operator ruling.)
     """
     bot = _ext_bot(mk_bot(), telegram, limiter, PRIVATE)
     real = bot._app.bot.send_chat_action
@@ -643,7 +693,7 @@ def test_a_slow_chat_action_does_not_stretch_the_refresh_interval(
         return await real(*a, **kw)
 
     bot._app.bot.send_chat_action = slow
-    sess = _aged(vloop, _card(bot, "a", 10, PRIVATE))
+    sess = _card(bot, "a", 10, PRIVATE)
     _run_cards(vloop, bot, [sess], 20.0)
     gaps = _gaps(telegram.actions_for(PRIVATE))
     assert gaps, "the bubble was never lit"
@@ -655,13 +705,13 @@ def test_every_budgeted_call_a_live_card_makes_is_a_card_edit(
 ):
     """Row M's other arm: a live card makes the edit itself and, as the one
     permitted extra, the typing bubble. AMENDED by 8.30: the bubble is
-    budgeted again — the lowest ornament, going out only when it fits
-    beside the card, so the card is ten minutes in (``_aged``) — and this
-    strict fake still does not meter it (``EXEMPT``). Mutation: send
+    budgeted again — the lowest ornament, beside a young card from its
+    first second by operator ruling — and this strict fake still does not
+    meter it (``EXEMPT``). Mutation: send
     anything else from the loop — a second edit shape, a stray
     sendMessage — and this names the endpoint."""
     bot = _ext_bot(mk_bot(), telegram, limiter, PRIVATE)
-    sess = _aged(vloop, _card(bot, "a", 10, PRIVATE))
+    sess = _card(bot, "a", 10, PRIVATE)
     _run_cards(vloop, bot, [sess], 12.0)
     assert {endpoint for endpoint, _, _, _ in telegram.calls} == \
         {"editMessageText", "sendChatAction"}
@@ -674,9 +724,9 @@ def test_a_group_card_sends_the_typing_indicator_too(
 ):
     """Row M as amended, on the OTHER chat kind — the one where 8.21
     reckoned a typing bubble cost 18 of the group's 20 calls a minute.
-    AMENDED by 8.30: it does cost a slot of the group's window again, so it
-    goes out only once the group's card leaves room for it — ten minutes
-    into the turn here (``_aged``), when the card edits every 30 s. The DM
+    AMENDED by 8.30: it does cost a slot of the group's window again, and
+    by operator ruling it shows beside a young card from the turn's first
+    second, the card yielding its share. The DM
     row above cannot see a group-only regression, and 8.21's own
     intermediate design (§11 U3) was exactly a group-only suppression, so
     this row is the one that would catch its return.
@@ -687,7 +737,7 @@ def test_a_group_card_sends_the_typing_indicator_too(
     ``tests/test_typing_indicator.py::test_the_typing_action_never_spends_a_group_window_slot``
     — here it would only show up as a delay, which this row cannot see.)"""
     bot = _ext_bot(mk_bot(), telegram, limiter, GROUP)
-    sess = _aged(vloop, _card(bot, "g", 10, GROUP))
+    sess = _card(bot, "g", 10, GROUP)
     _run_cards(vloop, bot, [sess], 20.0)
     actions = telegram.actions_for(GROUP)
     assert actions, "no bubble in a group"
@@ -775,7 +825,13 @@ def test_a_refused_card_comes_back_in_a_second_not_in_an_interval(
     whole interval. The chat's burst is spent just before the first tick,
     so that tick is certainly refused and a token is back 1 s later.
     Mutation: set ``CARD_RETRY_WAKE`` to the interval (0.7.10's behaviour)
-    and the first edit slips past 5 s."""
+    and the first edit slips past 5 s.
+
+    AMENDED by 8.30: the CARD ALONE (``typing=False``). By operator ruling
+    the bubble that lights a dark chat goes at a card's reserve, so in
+    this deliberately starved group the bubble takes the token back at
+    5.0 s and the card lands at 6.0 — the young card yielding, which is
+    the ruling, not the retry wake this row is about."""
     bot = _ext_bot(mk_bot(), telegram, limiter, GROUP)
     sess = _card(bot, "g", 10, GROUP)
 
@@ -791,7 +847,7 @@ def test_a_refused_card_comes_back_in_a_second_not_in_an_interval(
     # tick is certainly refused and two tokens are back at 4.9 s. A card
     # retrying on the wake lands at 5.0; one retrying on its interval not
     # before 6.3.
-    _run_cards(vloop, bot, [sess], 9.0, at=(2.9, _spend))
+    _run_cards(vloop, bot, [sess], 9.0, at=(2.9, _spend), typing=False)
     edits = _card_calls(telegram, GROUP, 10)
     assert edits, "the card never edited at all"
     assert edits[0] - 1_000_000.0 < 5.5, [round(e - 1_000_000.0, 3) for e in edits]
@@ -816,12 +872,25 @@ def test_a_refused_card_comes_back_in_a_second_not_in_an_interval(
 # The GROUP row is UNCHANGED at 3.30 s / 18 edits: a group's window was
 # always 20/60 s, whose 3.0 s gap the 3.0 s group cadence floor already
 # dominated. That it did not move is a useful control on the change.
+# 8.30 RETUNED EVERY ROW AGAIN, by operator ruling (2026-09-23): "typing
+# always shows, the young card yields". The bubble is budgeted with the
+# chat's messages, one per chat per `TYPING_INDICATOR_INTERVAL` from the
+# turn's first second, and its share is reserved out of the chat BEFORE
+# the cards divide it — planned against the sustained window less the
+# bubble's reserve (27 of 30 in a DM, 17 of 20 in a group). So a young DM
+# card edits every 4.83 s (13 a minute, was 28) beside 13-14 bubbles, and
+# the minute's TOTAL, bubbles included, stays inside the window. A group
+# cannot fit a 4.5 s bubble and a card at its 3.0 s floor in 20 a minute,
+# so there the cards keep one edit per 10 s together
+# (`flood_policy.card_floor_beside_typing`) and the bubble takes the rest.
 @pytest.mark.parametrize("sessions,chat,edits,actions,skipped,gap", [
-    # ``actions`` AMENDED by 8.30: 0 in every row (see the docstring).
-    (1, GROUP, 18, 0, 0, 3.30),
-    (1, PRIVATE, 28, 0, 0, 2.20),
-    (2, PRIVATE, 28, 0, 0, 4.40),
-    (3, PRIVATE, 29, 0, 1, 6.60),
+    # AMENDED by 8.30 (operator ruling): 8.27's numbers were
+    # (1, GROUP, 18, 0|13, 0, 3.30), (1, PRIVATE, 28, 0|14, 0, 2.20),
+    # (2, PRIVATE, 28, 0|28, 0, 4.40), (3, PRIVATE, 29, 0|42, 1, 6.60).
+    (1, GROUP, 6, 14, 3, 11.0),
+    (1, PRIVATE, 13, 14, 4, 4.829),
+    (2, PRIVATE, 14, 13, 5, 9.659),
+    (3, PRIVATE, 15, 13, 6, 14.488),
 ])
 def test_a_minute_of_card_traffic_costs_exactly_what_was_promised(
     mk_bot, vloop, telegram, limiter, sessions, chat, edits, actions,
@@ -834,31 +903,20 @@ def test_a_minute_of_card_traffic_costs_exactly_what_was_promised(
     budget refuse a card in an otherwise quiet chat, moves one of these
     numbers.
 
-    ``edits``, ``skipped`` and ``gap`` were 8.21's own acceptance numbers;
-    the PRIVATE rows were retuned by 8.27 (see the table above) and the
-    GROUP row is unchanged. They are reproduced here with the typing
-    indicator switched back ON (roadmap 8.24) — that is the whole claim of
-    8.24 and this is where it is checked. The standing invariant across
-    both tunings: ``edits <= FLOOD_SUSTAINED_MAX`` for the chat, asserted
-    explicitly below so a future retune cannot quietly exceed the cap. ``actions`` is the new column: the bubble refreshes on the
-    animator's own ≤4.5 s schedule and costs the chat's budget nothing
-    (``admitted`` counts them, since the limiter counts every callback it
-    runs, but ``skipped`` and the gaps do not move and ``violations`` stays
-    empty). Mutation: route the action through the chat budget and the
-    private rows lose edits to skips; await it in the tick instead of
-    spawning it and every gap grows.
+    AMENDED by 8.30 (operator ruling 2026-09-23 — see the table above).
+    ``actions`` is one bubble per chat per 4.5 s, from the first second,
+    whatever the number of sessions. ``skipped`` is now the BUBBLES the
+    budget refused for a token a card edit had just taken (the bubble
+    needs one more than a card, so it never takes a card's); each is
+    retried ``TYPING_RETRY_WAKE`` later, so the bubble is late, not
+    missing. ``gaps`` is still ONE value per row — no card edit was
+    refused, whatever the bubble did. And the standing invariant is now
+    stated for the whole minute: cards AND bubbles inside the chat's
+    window, and inside it less the bubble's reserve.
 
-    ``actions`` was ``sessions x 14`` until 8.30, when the bubble went
-    back into the budget as the chat's LOWEST ornament. It is now 0 in
-    every row, and the card columns are unchanged — which is the claim
-    this row now checks: these cards are in their first minute and use
-    their chat's pacing to the margin (27 of the sustained window's 30 a
-    minute for one DM card), so the bubble does not fit beside them and
-    does not go out. Measured before the fit check existed: the bubble
-    admitted on a spare token alone cost one DM card 5 of its 28 edits,
-    the 8.21 regression. The bubble's own clock (4.5 s, independent of
-    the card's wake grid) is asserted beside long-running cards, where it
-    fits, in the row-M rows above.
+    Mutation: plan the card without the bubble's share
+    (``typing_interval`` 0 in ``_card_pacing``) and the cards run at the
+    8.27 numbers while the bubble is refused for most of the minute.
     """
     bot = _ext_bot(mk_bot(), telegram, limiter, chat)
     cards = [_card(bot, f"s{i}", 10 + i, chat) for i in range(sessions)]
@@ -886,10 +944,17 @@ def test_a_minute_of_card_traffic_costs_exactly_what_was_promised(
         "gaps": [gap],
     }
     # The invariant behind the numbers, stated so a retune cannot break it
-    # silently: the METERED calls (chat actions are exempt) stay inside the
-    # chat's own rolling ceiling. This is what 8.21's private rows, at
-    # 46-56 edits a minute, did not do.
-    assert edits <= snap["sustained_limit"], (edits, snap["sustained_limit"])
+    # silently: EVERY call — card edits and bubbles alike — stays inside
+    # the chat's own rolling ceiling. In a DM, where both fit, inside it
+    # less the bubble's three-slot reserve too, which is what keeps the
+    # bubble admitted; a group sits at the cards' 10 s floor instead.
+    everything = telegram.stamps_for(chat)
+    assert _most_in_window(everything, 60.0) <= snap["sustained_limit"]
+    if chat == PRIVATE:
+        assert _most_in_window(everything, 60.0) <= snap["sustained_limit"] - 3
+    # And the bubble is never later than one retry past a token's refill.
+    assert max(_gaps(telegram.actions_for(chat))) <= \
+        _config.TYPING_INDICATOR_INTERVAL + 1.0 / _FIXED_RATE + 1e-3
 
 
 # ── row C2: the starvation guard ─────────────────────────────────────────────
@@ -1006,13 +1071,18 @@ def test_a_backed_off_chat_slows_its_card_by_the_backoff_factor(
     2.2/6.6 s alternation hide in row B1 through iteration 1, and the same
     hiding place must not exist here. Mutation: read the backoff nowhere in
     the cadence and a chat Telegram just pushed back on keeps its old
-    rhythm."""
+    rhythm.
+
+    AMENDED by 8.30 (operator ruling): the bubble's share is reserved
+    first, so ×2 doubles 4.83 s to 9.66 s rather than 2.2 to 4.4; run for
+    30 s rather than 14 for the gaps."""
     bot = _ext_bot(mk_bot(), telegram, limiter, PRIVATE)
     sess = _card(bot, "a", 10, PRIVATE)
     limiter.note_retry_after(PRIVATE, 1)
-    _run_cards(vloop, bot, [sess], 14.0)
+    _run_cards(vloop, bot, [sess], 30.0)
     gaps = _gaps(_card_calls(telegram, PRIVATE, 10))
-    assert gaps and gaps == [pytest.approx(4.4)] * len(gaps)
+    assert gaps and gaps == [pytest.approx(
+        2 * _yielded(limiter.pacing_for(PRIVATE), 1))] * len(gaps)
 
 
 # ── R9: the two env-configurable bases ───────────────────────────────────────

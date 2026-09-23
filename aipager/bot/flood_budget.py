@@ -203,13 +203,25 @@ _SKIP_RESERVE: float = 2.0
 
 # The typing bubble's reserve: ONE MORE token and window slot than a card
 # edit's (8.30). The bubble is the lowest ornament, so it goes out only
-# when a card edit would still find room after it — which keeps the
-# tier-0 card cadence exactly as it was when typing was exempt (8.21
-# measured half the card edits refused once typing shared the card's
-# reserve). It lapses while cards are busy, when the animating card is
-# the signal anyway, and flows freely in a long turn, when the card is
-# slow and the bubble is what the chat list shows.
+# when a card edit would still find room after it: it can never take the
+# token a card needs (8.21 measured half the card edits refused once
+# typing shared the card's reserve). Room for it is planned, not raced
+# for: the card cadence reserves the bubble's share of the chat
+# (`pacing_for`'s `typing_min_gap`, `card_interval(typing_interval=)`),
+# so the bubble shows from a turn's first second and is refused only in
+# the second after a card edit — and then retried half a second later.
 _TYPING_RESERVE: float = _SKIP_RESERVE + 1.0
+
+# ...except for the bubble that LIGHTS the chat: none admitted in the last
+# `_TYPING_STATUS_SECONDS` (Telegram shows a typing status "for 5 seconds
+# or less"), so the chat list shows nothing. That one goes at a card's
+# reserve (operator ruling 2026-09-23: the bubble shows from the first
+# second of every turn). At a turn's start the card message and its first
+# render take two of the three tokens, and at a full-bucket reserve the
+# bubble would wait for both to refill — measured 4 s into every turn on
+# the vm3 replay. It still leaves a card its own reserve behind; only a
+# REFRESH of a lit bubble needs the extra token.
+_TYPING_STATUS_SECONDS: float = 5.0
 
 # Floor on how often the backoff signal file is rewritten. It is a
 # diagnostic for `aipager status` in ANOTHER process, not daemon state.
@@ -605,6 +617,9 @@ class ChatBudget:
         # MONOTONIC instant a typing 429's own retry_after runs out: the
         # bubble is refused until then, cards are not (8.30 Q5).
         self.typing_blocked_until: float = 0.0
+        # When the last bubble was admitted, on the limiter's clock (8.30):
+        # a bubble that LIGHTS a dark chat goes at a card's reserve.
+        self.typing_lit_at: float = float("-inf")
         # Monotonic stamp of the last essential-overflow WARNING, so it is
         # one line per chat per rolling hour (``None`` = never logged).
         self.overflow_logged_at: float | None = None
@@ -703,7 +718,7 @@ def is_group_chat(chat_id) -> bool:
 def card_interval(
     *, base: float, busy_sessions: int, is_group: bool, backoff: float = 1.0,
     chat_rate: float | None = None, sustained_min_gap: float | None = None,
-    age_floor: float = 0.0,
+    age_floor: float = 0.0, typing_interval: float = 0.0,
 ) -> float:
     """Seconds between busy-card edits for one session (design §4.3).
 
@@ -734,12 +749,23 @@ def card_interval(
     its numbers; the animator applies the floor at its edit GATE rather
     than here, so its loop keeps waking on the un-aged interval for the
     transcript reads that cost no Telegram call.
+
+    ``typing_interval`` (8.30, operator ruling 2026-09-23): when the chat's
+    typing bubble is live, one bubble per ``typing_interval`` is RESERVED
+    out of the chat's pacing before the cards divide what is left
+    (``flood_policy.card_floor_beside_typing``), so the cards and the
+    bubble together fit the chat's window and bucket — the young card
+    edits slower rather than the bubble being dropped or the two racing
+    for the same slots. ``0`` (the default) reserves nothing and is the
+    pre-ruling value exactly.
     """
     floor = CARD_CADENCE_FLOOR_GROUP if is_group else CARD_CADENCE_FLOOR_PRIVATE
     if chat_rate is not None and chat_rate > 0:
         floor = max(floor, 1.0 / chat_rate)
     if sustained_min_gap is not None:
         floor = max(floor, sustained_min_gap)
+    if typing_interval > 0:
+        floor = flood_policy.card_floor_beside_typing(floor, typing_interval)
     return max(
         max(base, max(busy_sessions, 1) * floor)
         * CARD_CADENCE_MARGIN
@@ -1546,12 +1572,23 @@ class BudgetRateLimiter(BaseRateLimiter):
         budget = self._budgets.get(key) if key is not None else None
         return budget.window.used() if budget is not None else 0
 
+    def _sustained_limits(self, chat_id) -> tuple[float, float]:
+        """``(limit, period)`` of the sustained window a budget for
+        *chat_id* would have."""
+        if is_group_chat(chat_id):
+            return (min(self._sustained_max, self._group_max_calls),
+                    self._group_window)
+        return self._sustained_max, self._sustained_window
+
     def _sustained_gap(self, chat_id) -> float:
         """The sustained gap a budget for *chat_id* would have."""
-        if is_group_chat(chat_id):
-            return _window_gap(min(self._sustained_max, self._group_max_calls),
-                               self._group_window)
-        return _window_gap(self._sustained_max, self._sustained_window)
+        return _window_gap(*self._sustained_limits(chat_id))
+
+    def _typing_gap(self, chat_id) -> float:
+        """``pacing_for``'s ``typing_min_gap`` for a chat with no budget
+        yet: its window less the bubble's reserve."""
+        limit, period = self._sustained_limits(chat_id)
+        return _window_gap(max(limit - _TYPING_RESERVE, 1.0), period)
 
     def pacing_for(self, chat_id) -> dict:
         """Everything the busy-card cadence needs, in one read.
@@ -1560,6 +1597,17 @@ class BudgetRateLimiter(BaseRateLimiter):
         them LATE and together: caching any of them — or reading the rate
         one tick and the backoff the next — is how two budgets drift
         apart (the 8.17 failure, repeated).
+
+        ``typing`` (8.30): whether this chat would admit the typing bubble
+        at all right now — not shed by the rolling hour, not blocked by a
+        429 on it, not in minimal mode. The card cadence reserves the
+        bubble's share of the chat only while it is ``True``: a bubble the
+        chat will refuse anyway must not slow the card.
+        ``typing_min_gap``: the average gap at which the sustained window
+        still leaves the bubble its reserve (``_TYPING_RESERVE`` slots —
+        the bubble is admitted only with that many free). Planning the
+        cards and the bubble against the full window would fill it to
+        within two slots, where every bubble is refused.
         """
         key = self._key(chat_id)
         budget = self._budgets.get(key) if key is not None else None
@@ -1572,17 +1620,24 @@ class BudgetRateLimiter(BaseRateLimiter):
             # known, which is the opposite of what the cap is for.
             return {"rate": self._start_rate,
                     "sustained_min_gap": self._sustained_gap(chat_id),
-                    "backoff": 1.0, "minimal": False}
+                    "typing_min_gap": self._typing_gap(chat_id),
+                    "backoff": 1.0, "minimal": False, "typing": True}
         now = self._clock()
         self._decay(budget, now)
         self._earn(budget, now)
         self._hourly_eval(budget)
+        minimal = self._minimal(budget)
         return {
             "rate": budget.rate,
             "sustained_min_gap": _window_gap(budget.window.limit,
                                              budget.window.period),
+            "typing_min_gap": _window_gap(
+                max(budget.window.limit - _TYPING_RESERVE, 1.0),
+                budget.window.period),
             "backoff": max(budget.backoff, 1.0),
-            "minimal": self._minimal(budget),
+            "minimal": minimal,
+            "typing": not (minimal or budget.typing_shed
+                           or now < budget.typing_blocked_until),
         }
 
     def note_retry_after(self, chat_id, seconds: float) -> None:
@@ -1911,15 +1966,21 @@ class BudgetRateLimiter(BaseRateLimiter):
         # ── THE TYPING BUBBLE (8.30 R1/R2) ───────────────────────────────
         # The lowest ornament, whatever class its caller declared: skip,
         # never a wait; refused while the hour has shed it or a 429 on it
-        # is still running; and admitted only with `_TYPING_RESERVE` left,
-        # one more token than a card edit needs. Counted in the hour as an
-        # ORNAMENT like the card it rides on.
+        # is still running; and a REFRESH is admitted only with
+        # `_TYPING_RESERVE` left, one more token than a card edit needs —
+        # the bubble that lights a dark chat only a card's reserve
+        # (`_TYPING_STATUS_SECONDS`). Counted in the hour as an ORNAMENT
+        # like the card it rides on.
         if endpoint == CHAT_ACTION_ENDPOINT and budget is not None:
             if budget.typing_shed or self._clock() < budget.typing_blocked_until:
                 budget.typing_shed_refusals += 1
                 raise FloodSkipped(chat_id, endpoint)
-            self._acquire_skip(budget, endpoint, cls=PRIORITY_ORNAMENT,
-                               reserve=_TYPING_RESERVE)
+            now = self._clock()
+            dark = now - budget.typing_lit_at >= _TYPING_STATUS_SECONDS
+            self._acquire_skip(
+                budget, endpoint, cls=PRIORITY_ORNAMENT,
+                reserve=_SKIP_RESERVE if dark else _TYPING_RESERVE)
+            budget.typing_lit_at = now
             budget.chat_actions += 1
             return await self._run(
                 budget, callback, args, kwargs, endpoint, chat_id,

@@ -113,6 +113,40 @@ def clamp_warned_until(
     return min(value, float(wall_now) + max(float(warning_seconds), 0.0))
 
 
+def card_floor_beside_typing(
+    chat_floor: float, typing_interval: float, *,
+    card_min_rate: float = 1.0 / CARD_AGE_TIER1_INTERVAL,
+) -> float:
+    """The seconds-per-call floor a chat's CARDS share once its typing
+    bubble's share is reserved (8.30, operator ruling 2026-09-23: "typing
+    always shows, the young card yields").
+
+    *chat_floor* is the chat's own floor — the tightest of its cadence
+    floor, its earned rate and its sustained window — so ``1 / chat_floor``
+    is what the chat can take per second. The bubble costs
+    ``1 / typing_interval`` of it; the cards divide the rest. In a healthy
+    DM that is 0.5/s less 0.22/s, a floor of 3.6 s instead of 2.0 s.
+
+    Never below *card_min_rate* per second for the cards together (one
+    edit per ``CARD_AGE_TIER1_INTERVAL``, the pace a two-minute-old card
+    has anyway): in a chat too slow for both — just penalised by a 429 —
+    the reservation shrinks rather than the card stopping, and the bubble,
+    the chat's lowest ornament, is what the limiter's extra reserve
+    refuses. Non-positive or non-finite input reserves nothing.
+    """
+    try:
+        floor = float(chat_floor)
+        interval = float(typing_interval)
+    except (TypeError, ValueError):
+        return chat_floor
+    if not (math.isfinite(floor) and math.isfinite(interval)) \
+            or floor <= 0.0 or interval <= 0.0:
+        return chat_floor
+    capacity = 1.0 / floor
+    cards = max(capacity - 1.0 / interval, min(capacity, card_min_rate))
+    return 1.0 / cards
+
+
 def hourly_limits(
     bans: int, *, hourly_max: int = FLOOD_HOURLY_MAX,
     reserve: int = FLOOD_HOURLY_ESSENTIAL_RESERVE,
@@ -210,6 +244,7 @@ __all__ = [
     "UNIT_SECONDS",
     "bans_within",
     "card_age_floor",
+    "card_floor_beside_typing",
     "clamp_warned_until",
     "effective_ceiling",
     "elapsed_unit",

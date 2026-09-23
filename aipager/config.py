@@ -722,13 +722,25 @@ CARD_STARVATION_BLOCK_TIMEOUT: float = 5.0
 # On 2026-09-23 one loop per busy SESSION had sent ~5,400 uncounted
 # bubbles into the vm3 DM when a 429 on the bubble itself came, and a
 # straight 7-hour ban followed. Now it needs a token more than a card
-# edit, stops first when the rolling hour fills, is refused for a 429's
-# retry_after, and goes out only when it fits beside the chat's cards —
-# see `bot/flood_budget.CHAT_ACTION_ENDPOINT` and
-# `bot/animation._typing_fits_cards`.
+# edit, stops first when the rolling hour fills, and is refused for a
+# 429's retry_after; a ban on it mutes the chat like a ban on anything.
+# It shows from the first second of every turn (operator ruling,
+# 2026-09-23): its share is RESERVED out of the chat before the busy
+# cards divide it, so a young card edits a little slower rather than the
+# bubble being dropped — see `bot/flood_budget.CHAT_ACTION_ENDPOINT`,
+# `flood_policy.card_floor_beside_typing` and
+# `bot/animation._card_pacing`.
 TYPING_INDICATOR_INTERVAL: float = float(
     os.environ.get("TYPING_INDICATOR_INTERVAL", "4.5")
 )
+# How soon a bubble the budget refused for want of a token THIS second is
+# tried again, instead of a whole TYPING_INDICATOR_INTERVAL later (8.30).
+# The bubble needs one token and one window slot more than a card edit, so
+# a card edit a moment before it is enough to refuse it; half a second
+# later the token is back (at 1 call/s) and the bubble has lapsed for at
+# most that long. Never used for a refusal that lasts — a shed, a 429's
+# block, minimal mode, a mute.
+TYPING_RETRY_WAKE: float = 0.5
 
 # Signal file the daemon drops beside its control socket while a chat is
 # flood-muted (`{"muted": [{"chat_id", "until", "retry_after"}]}`), so

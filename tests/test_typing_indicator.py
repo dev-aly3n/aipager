@@ -292,8 +292,8 @@ def test_the_typing_action_spends_a_group_window_slot(run_async):
     chat-scoped call but a reaction counts in the rolling window now, the
     bubble included: a group's 20-per-60 s window loses one slot per
     admitted action. (The card is protected by the bubble's higher
-    reserve and by the typing loop's fit check, not by the bubble being
-    free.)
+    reserve and by the bubble's share being reserved in the card's own
+    cadence, not by the bubble being free.)
 
     Mutation: skip the window take on the typing path and
     ``sustained_free`` does not move.

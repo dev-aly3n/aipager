@@ -39,8 +39,7 @@ TYPING = rate_limit_args(kind="skip", priority=PRIORITY_ORNAMENT)
 
 def _session(bot, vloop, label: str, *, age: float = 5 * MIN, msg_id: int = 70):
     """A BUSY session with a live card whose turn is *age* seconds old —
-    by default five minutes in, a 10 s-tier card that leaves the chat room
-    for the bubble (a card in its first two minutes does not)."""
+    by default five minutes in, a 10 s-tier card."""
     sess = bot.registry.get_or_create(f"claude-{label}")
     sess.label = label
     sess.status = Status.BUSY
@@ -117,22 +116,57 @@ def test_b_typing_is_refused_below_its_reserve_when_a_card_is_not(
     limiter, gated_bot, run_async,
 ):
     """Row B (R1/R2). The chat's bucket drained below the typing reserve:
-    ``sendChatAction`` raises ``FloodSkipped`` and nothing reaches the
-    wire — on 0.7.13 it went out, exempt. With the bucket EXACTLY at the
-    card's reserve, a card edit is admitted while the bubble is still
-    refused: the bubble needs one token more than a card.
+    ``sendChatAction`` raises ``FloodSkipped`` and nothing more reaches
+    the wire — on 0.7.13 it went out, exempt. With the bucket EXACTLY at
+    the card's reserve, a card edit is admitted while the bubble REFRESH
+    is still refused: a lit bubble needs one token more than a card.
 
-    Mutation: give typing the card's ``_SKIP_RESERVE`` and it is admitted
-    at the card's threshold.
+    AMENDED by 8.30's operator ruling: the bubble that LIGHTS a dark chat
+    goes at a card's reserve (see the next row), so the chat is lit first
+    here — that bubble takes the bucket from 3 to 2, the card's reserve.
+
+    Mutation: give the refresh the card's ``_SKIP_RESERVE`` and it is
+    admitted at the card's threshold.
     """
-    run_async(_req(limiter))                        # 3 tokens -> 2 (card reserve)
+    run_async(gated_bot.send_chat_action(chat_id=CHAT, action="typing",
+                                         rate_limit_args=TYPING))  # 3 -> 2
     with pytest.raises(FloodSkipped):
         run_async(gated_bot.send_chat_action(chat_id=CHAT, action="typing",
                                              rate_limit_args=TYPING))
-    assert gated_bot.stamps("sendChatAction") == []
+    assert len(gated_bot.stamps("sendChatAction")) == 1
     run_async(gated_bot.edit_message_text("card", chat_id=CHAT, message_id=5,
                                           rate_limit_args=SKIP_CARD))
     assert gated_bot.stamps("editMessageText"), "the card was refused too"
+
+
+def test_the_bubble_that_lights_a_dark_chat_goes_at_a_cards_reserve(
+    limiter, gated_bot, flood_clock, run_async,
+):
+    """Operator ruling 2026-09-23: the bubble shows from the first second
+    of every turn. At a turn's start the card message takes a token (3 →
+    2), so at the refresh reserve the first bubble would wait for it to
+    refill — 4 s into every turn on the vm3 replay. A bubble into a DARK
+    chat (none admitted in Telegram's 5 s) goes at a card's reserve and
+    leaves the card its own; the refresh 4.5 s later needs the extra
+    token again, and once the chat has been dark for 5 s the next bubble
+    lights it at the card's reserve again.
+
+    Mutation: drop the dark-chat case and the first bubble is refused.
+    """
+    run_async(_req(limiter))                        # the card message: 3 -> 2
+    run_async(gated_bot.send_chat_action(chat_id=CHAT, action="typing",
+                                         rate_limit_args=TYPING))  # lit: 2 -> 1
+    flood_clock.advance(2.0)                        # 1 -> 2 at 0.5/s
+    run_async(gated_bot.edit_message_text("card", chat_id=CHAT, message_id=5,
+                                          rate_limit_args=SKIP_CARD))  # 2 -> 1
+    flood_clock.advance(2.5)                        # 4.5 s on: 1 -> 2.25
+    with pytest.raises(FloodSkipped):               # a refresh needs 3
+        run_async(gated_bot.send_chat_action(chat_id=CHAT, action="typing",
+                                             rate_limit_args=TYPING))
+    flood_clock.advance(0.5)                        # 5 s dark: 2.5
+    run_async(gated_bot.send_chat_action(chat_id=CHAT, action="typing",
+                                         rate_limit_args=TYPING))
+    assert len(gated_bot.stamps("sendChatAction")) == 2
 
 
 # ── G (typing half) and U: a typing 429 is a warning, not a card penalty ─────
@@ -325,16 +359,16 @@ def test_z_a_muted_chat_gets_no_bubble_from_its_loop(mk_bot, vbot, vloop):
     from the per-chat loop, however long it runs — and not even an attempt
     at the gate.
 
-    What this row pins is the END-TO-END fact, which three layers hold up:
-    arming the mute drops the chat's earned rate to the floor (8.29), so
-    the loop's fit check (``_typing_fits_cards``) already withholds the
-    bubble; ``_typing_chat`` and ``_send_typing`` each check the mute; and
-    the limiter's gate refuses it. Removing the two loop-side mute checks
-    together does NOT fail this row — verified, the fit check holds — so
-    those checks are pinned on their own by
+    What this row pins is the END-TO-END fact: ``_typing_chat`` and
+    ``_send_typing`` each check the mute, so the loop never asks, and the
+    limiter's gate would refuse it if it did. Removing the two loop-side
+    checks together fails this row (the gate counts a ``muted_refusal``);
+    each alone is pinned by
     ``tests/test_typing_indicator.py::test_no_bubble_into_a_flood_muted_chat``
     and ``::test_a_mute_armed_after_the_gate_still_stops_the_send``, and
-    the gate by row K.
+    the gate by row K. (Iteration 1's fit check used to withhold the
+    bubble first and hid the double removal; the operator ruling removed
+    the fit check.)
     """
     bot = _typing_bot(mk_bot, vbot)
     s1 = _session(bot, vloop, "one", msg_id=71)
@@ -352,53 +386,142 @@ def test_z_a_muted_chat_gets_no_bubble_from_its_loop(mk_bot, vbot, vloop):
     assert all(c["muted_refusals"] == 0 for c in chats), chats
 
 
-# ── the fit check: the bubble never costs a card an edit ─────────────────────
+# ── typing always shows; the young card yields (operator ruling) ────────────
 
-def _card_and_bubble(mk_bot, vbot, vloop, rich_http, *, age: float):
+def _card_and_bubble(mk_bot, vbot, vloop, rich_http, *, age: float,
+                     seconds: float = 60.0):
     rich_http.clock = vloop.time
     bot = _typing_bot(mk_bot, vbot)
     sess = _session(bot, vloop, "dev", age=age, msg_id=77)
     sess.last_tool_edit_at = 0.0
+    marks: dict = {}
 
     async def _drive():
+        marks["start"] = vloop.time()
         bot._start_animation(sess)
-        await asyncio.sleep(60.0)
+        await asyncio.sleep(seconds / 2)
+        marks["planned"] = bot._card_interval(sess, streaming=True)
+        await asyncio.sleep(seconds / 2)
         bot._stop_animation(sess)
         await asyncio.sleep(0)
 
     vloop.run_until_complete(_drive())
-    return vbot.stamps("sendChatAction"), rich_http.edits(), vbot._limiter
+    return (marks["start"], vbot.stamps("sendChatAction"),
+            [t for t, _md in rich_http.edits()], vbot._limiter,
+            marks["planned"])
 
 
-def test_the_bubble_waits_beside_a_card_in_its_first_two_minutes(
+#: The longest a bubble may be late: one ``TYPING_RETRY_WAKE`` step past
+#: the time a card edit's token takes to refill at the chat's START rate
+#: (every fresh chat's, and the warned ceiling). The bubble needs a full
+#: bucket (``_TYPING_RESERVE``) so that it never takes a card's token; a
+#: card edit a moment before it costs it at most that refill.
+LATE = 1.0 / config.FLOOD_START_RATE
+
+
+def _most_in(stamps, window: float) -> int:
+    return max((sum(1 for t in stamps if s <= t < s + window) for s in stamps),
+               default=0)
+
+
+def test_the_bubble_shows_from_the_first_second_and_the_young_card_yields(
     mk_bot, vbot, vloop, rich_http,
 ):
-    """Q1's "lowest ornament", made exact. A card 30 s into its turn plans
-    the chat's pacing to the margin, so the bubble does not go out and the
-    card loses NOTHING to it: not one refused edit. (Admitted on a spare
-    token alone, the bubble cost one DM card 5 of its 28 edits a minute.)
+    """Operator ruling 2026-09-23, which REVERSES iteration 1's fit check
+    (a bubble withheld beside a card in its first two minutes). A DM card
+    30 s into its turn — tier 0 for the whole minute measured:
 
-    Mutation: drop ``_typing_fits_cards`` from the loop and the bubble
-    goes out and the card starts losing edits to it.
+    * the bubble goes out in the turn's first second, at least 12 times a
+      minute, and is never later than one token's refill (``LATE``) — the
+      price of it never taking a card's token;
+    * the card yields: it edits on the cadence planned with the bubble's
+      share reserved — max(1.2, 60/27 → 1/(0.45 − 1/4.5)) × 1.1 = 4.83 s,
+      12–13 edits a minute instead of 28 — and on that cadence exactly, so
+      it never lost an edit to the bubble racing it;
+    * together they stay inside the chat's 60 s window (30), and inside
+      it LESS the bubble's reserve (27), which is what keeps the bubble
+      admitted.
+
+    Mutation: plan the card without the reservation (``typing_interval``
+    0 in ``_card_pacing``) and the card edits at 2.2 s, the window fills,
+    and the bubble lapses for seconds at a time.
     """
-    bubbles, edits, limiter = _card_and_bubble(mk_bot, vbot, vloop, rich_http,
-                                               age=30.0)
-    assert bubbles == []
-    assert limiter.snapshot()["chats"][0]["skipped"] == 0
-    assert len(edits) >= 12
+    start, bubbles, edits, limiter, planned = _card_and_bubble(
+        mk_bot, vbot, vloop, rich_http, age=30.0)
+    assert bubbles and bubbles[0] - start < 1.0, "no bubble in the first second"
+    gaps = [b - a for a, b in zip(bubbles, bubbles[1:])]
+    assert max(gaps) <= INTERVAL + LATE + 1e-3, gaps
+    assert len(bubbles) >= 12, len(bubbles)
+    card_gaps = [b - a for a, b in zip(edits, edits[1:])]
+    assert 11 <= len(edits) <= 14, len(edits)
+    assert planned == pytest.approx(4.83, abs=0.01)
+    assert card_gaps == [pytest.approx(planned, abs=1e-3)] * len(card_gaps)
+    everything = sorted(bubbles + edits)
+    assert _most_in(everything, 60.0) <= 27
+    assert limiter.snapshot()["chats"][0]["muted_refusals"] == 0
+
+
+def test_the_card_plans_the_bubble_only_while_the_bubble_is_live(
+    mk_bot, vbot, vloop,
+):
+    """The reservation follows the bubble, not the card: a card with no
+    typing loop, a chat whose bubble the hour has shed (850 of 1,080
+    ornaments spent, past the 75 % latch), and a chat whose bubble a 429
+    blocks all keep the whole chat — 2.2 s, today's tier-0 cadence — and
+    the reservation comes back when the block ends. Mutation: reserve
+    whenever a card animates and each of the three reads 4.83 s.
+    """
+    bot = _typing_bot(mk_bot, vbot)
+    sess = _session(bot, vloop, "dev", age=30.0, msg_id=77)
+    limiter = vbot._limiter
+    out: dict = {}
+
+    async def _drive():
+        out["no loop"] = bot._card_interval(sess, streaming=True)
+        bot._start_typing(sess)
+        await asyncio.sleep(0)
+        out["live"] = bot._card_interval(sess, streaming=True)
+        limiter.restore([{"chat_id": CHAT,
+                          "hourly": [[vloop.wall() - 60.0, 850, 0]]}])
+        assert limiter.hourly_usage(CHAT)["typing_shed"] is True
+        out["shed"] = bot._card_interval(sess, streaming=True)
+        limiter.reset()
+        limiter.note_typing_429(CHAT, 5)
+        out["blocked"] = bot._card_interval(sess, streaming=True)
+        await asyncio.sleep(6.0)
+        out["unblocked"] = bot._card_interval(sess, streaming=True)
+        bot._stop_typing(sess)
+        await asyncio.sleep(0)
+
+    vloop.run_until_complete(_drive())
+    young = pytest.approx(2.2)
+    assert out["no loop"] == young
+    assert out["live"] == pytest.approx(4.83, abs=0.01)
+    assert out["shed"] == young
+    assert out["blocked"] == young
+    assert out["unblocked"] == pytest.approx(4.83, abs=0.01)
 
 
 def test_the_bubble_flows_beside_a_long_running_card(
     mk_bot, vbot, vloop, rich_http,
 ):
-    """The other side: a card ten minutes in edits every 30 s, which leaves
-    the chat room, so the bubble refreshes on its own 4.5 s clock — where
-    it matters most, with the card slow. Mutation: withhold the bubble
-    whenever any card animates and this counts none."""
-    bubbles, _edits, limiter = _card_and_bubble(mk_bot, vbot, vloop, rich_http,
-                                                age=10 * MIN)
-    assert len(bubbles) >= 12, bubbles
-    assert limiter.snapshot()["chats"][0]["skipped"] == 0
+    """Tiers 1–3 are unchanged: a card ten minutes in edits every 30 s,
+    which is slower than anything the reservation asks, so its cadence is
+    the tier's and the bubble refreshes on its own 4.5 s clock beside it,
+    nothing refused. Mutation: withhold the bubble whenever any card
+    animates and this counts none."""
+    _start, bubbles, edits, limiter, _planned = _card_and_bubble(
+        mk_bot, vbot, vloop, rich_http, age=10 * MIN, seconds=91.0)
+    assert len(bubbles) >= 20, bubbles
+    gaps = [b - a for a, b in zip(bubbles, bubbles[1:])]
+    assert max(gaps) <= INTERVAL + LATE + 1e-3, gaps
+    card_gaps = [b - a for a, b in zip(edits, edits[1:])]
+    assert card_gaps, edits
+    # Every card gap is the tier's 30 s (plus the loop's 10 ms wake
+    # slack): no card edit was refused, and none waited for a wake grid —
+    # either would show as a longer gap.
+    assert all(30.0 <= g <= 30.05 for g in card_gaps), card_gaps
+    assert limiter.snapshot()["chats"][0]["muted_refusals"] == 0
 
 
 def test_an_unclassified_bubble_is_still_suspended_in_minimal_mode(
@@ -483,3 +606,65 @@ def test_g_a_ban_on_the_bubble_mutes_the_chat_and_holds_the_answer(
     assert out["delivered"] == 1
     assert [c[0] for c in volume_telegram.calls] == ["sendRichMessage"]
     assert HELD.count(CHAT) == 0
+
+
+# ── the pacing the reservation reads ─────────────────────────────────────────
+
+def test_pacing_reports_whether_the_bubble_is_open_and_its_window(
+    limiter, flood_clock, run_async,
+):
+    """``pacing_for``'s ``typing`` is True for a healthy chat and False
+    while the hour has shed the bubble, a 429 blocks it, or the chat is in
+    minimal mode — the three refusals that last. ``typing_min_gap`` is the
+    window less the bubble's reserve: 60/27 in a DM. Mutation: report
+    ``typing`` True whatever the chat's state and a blocked bubble's
+    share is still reserved, slowing the card for nothing."""
+    assert limiter.pacing_for(CHAT)["typing"] is True           # no budget yet
+    run_async(_req(limiter))
+    pacing = limiter.pacing_for(CHAT)
+    assert pacing["typing"] is True
+    assert pacing["typing_min_gap"] == pytest.approx(60.0 / 27)
+    limiter.note_typing_429(CHAT, 5)
+    assert limiter.pacing_for(CHAT)["typing"] is False           # blocked
+    flood_clock.advance(6.0)
+    assert limiter.pacing_for(CHAT)["typing"] is True
+    limiter.note_retry_after(CHAT, 5)
+    limiter.note_retry_after(CHAT, 5)                            # 0.125/s
+    assert limiter.pacing_for(CHAT)["minimal"] is True
+    assert limiter.pacing_for(CHAT)["typing"] is False           # minimal
+
+
+def test_a_hook_edit_in_a_young_turn_waits_for_the_yielded_cadence(
+    mk_bot, vbot, vloop,
+):
+    """The hook paths' own 1.2 s debounce is faster than the card's
+    cadence. While the bubble's share is reserved, a hook-driven edit
+    waits for the yielded interval too — else a busy hook stream spends
+    the very slots reserved for the bubble. Without a bubble the 1.2 s
+    debounce is today's. Mutation: drop the raise in ``_card_edit_due``
+    and a hook edit 2 s after the last goes out beside a live bubble."""
+    from aipager.config import STREAM_EDIT_INTERVAL
+
+    bot = _typing_bot(mk_bot, vbot)
+    sess = _session(bot, vloop, "dev", age=30.0)
+    out: dict = {}
+
+    async def _drive():
+        now = vloop.time()
+        sess.last_tool_edit_at = now - 2.0
+        out["alone"] = bot._card_edit_due(sess, now, base_gap=STREAM_EDIT_INTERVAL)
+        bot._start_typing(sess)
+        await asyncio.sleep(0)
+        now = vloop.time()
+        sess.last_tool_edit_at = now - 2.0
+        out["beside"] = bot._card_edit_due(sess, now, base_gap=STREAM_EDIT_INTERVAL)
+        sess.last_tool_edit_at = now - 4.9
+        out["later"] = bot._card_edit_due(sess, now, base_gap=STREAM_EDIT_INTERVAL)
+        # A state-change path (base 0) is not held to the cadence.
+        sess.last_tool_edit_at = now - 2.0
+        out["state"] = bot._card_edit_due(sess, now, base_gap=0.0)
+        bot._stop_typing(sess)
+        await asyncio.sleep(0)
+
+    vloop.run_until_complete(_drive())
+    assert out == {"alone": True, "beside": False, "later": True, "state": True}

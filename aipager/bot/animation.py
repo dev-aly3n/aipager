@@ -23,12 +23,12 @@ from telegram.error import RetryAfter
 from aipager import flood_policy, preferences
 from aipager.config import (
     BUSY_EDIT_INTERVAL, CARD_CADENCE_FLOOR_GROUP, CARD_CADENCE_FLOOR_PRIVATE,
-    CARD_CADENCE_MARGIN, CARD_RETRY_WAKE, CARD_STATE_BYPASS_MIN_GAP,
+    CARD_RETRY_WAKE, CARD_STATE_BYPASS_MIN_GAP,
     CARD_STARVATION_BLOCK_TIMEOUT, CHAT_ID, COMPACT_ANIMATE_INTERVAL_SECONDS,
     COMPACT_ANIMATE_MAX_TICKS, FLOOD_WARNED_CEILING, FLOOD_WARNING_HOURS,
     SPINNER_VERBS,
     STREAM_EDIT_INTERVAL, TELEGRAM_MAX_RETRY_AFTER,
-    TYPING_INDICATOR_INTERVAL,
+    TYPING_INDICATOR_INTERVAL, TYPING_RETRY_WAKE,
 )
 from aipager.bot.flood import MUTE, FloodMuted, _key as _chat_key
 from aipager.bot.flood_budget import (
@@ -231,12 +231,17 @@ def card_age_decay_enabled(sess: TrackedSession) -> bool:
     the next edit.
 
     The ONE place the answer comes from, so the animator's edit gate, the
-    card's elapsed unit, the typing loop's fit check and the session
-    monitor's stale-card watchdog can never disagree about a card's tier.
+    card's elapsed unit, the loop's wake and the session monitor's
+    stale-card watchdog can never disagree about a card's tier.
     """
     return preferences.resolve_preferences(
         sess.scope_chat_id or 0, sess.preference_overrides(),
     ).card_age_decay
+
+
+#: How far past an age-tier edit's due time the card loop wakes for it
+#: (`_card_wake`): a timer that fires a hair early must find the gate open.
+_WAKE_SLACK = 0.01
 
 
 def card_age(sess: TrackedSession, now: float) -> float:
@@ -1364,47 +1369,40 @@ class AnimationMixin:
                 out.append(other)
         return out
 
-    def _typing_fits_cards(self, sess: TrackedSession, members: list) -> bool:
-        """Is there room for the bubble on top of this chat's CARDS?
+    def _typing_retry_soon(self, sess: TrackedSession) -> bool:
+        """After a bubble that did not go out: is it worth retrying in
+        ``TYPING_RETRY_WAKE`` rather than a whole interval?
 
-        The bubble is the chat's LOWEST ornament (8.30 Q1), so it may only
-        spend what the cards leave. The limiter's extra reserve
-        (``_TYPING_RESERVE``) keeps it from taking the token a card needs
-        THIS second; it cannot see the cards' demand over the next minute.
-        Measured: with the reserve alone, one tier-0 card in a DM lost 5 of
-        its 28 edits a minute to the bubble in the sustained window (30
-        calls per 60 s, of which the card's 2.2 s cadence plans 27) — the
-        8.21 regression the reserve was meant to prevent.
-
-        So: every live card in the chat plans at most one edit per
-        ``max(card interval, turn-age floor)``, the bubble one per
-        ``TYPING_INDICATOR_INTERVAL``, and their sum — with the card
-        cadence's own margin left over for answers — must fit the chat's
-        pacing (its earned rate and its sustained window) or the bubble
-        waits. In practice: no bubble beside a card in its first two
-        minutes in a DM (the animating card is the signal then), a steady
-        bubble beside long-running cards, which is where it matters.
+        Only when the refusal was the budget's MOMENT, not its POLICY: the
+        session is still BUSY, the chat is not muted, and the limiter
+        would admit a bubble at all (``pacing_for``'s ``typing`` — not
+        shed by the hour, not blocked by a 429 on it, not in minimal
+        mode). A refusal on any of those lasts minutes, and retrying it
+        every half second would only count refusals.
         """
+        if sess.status is not Status.BUSY:
+            return False
         chat = resolve_chat_id_int(sess)
+        if chat is None or MUTE.is_muted(chat):
+            return False
         limiter = get_rate_limiter()
-        pacing = limiter.pacing_for(chat) if limiter is not None else {}
-        rate = pacing.get("rate")
-        capacity = float(rate) if rate else float("inf")
-        gap = pacing.get("sustained_min_gap")
-        if gap:
-            capacity = min(capacity, 1.0 / gap)
-        now = time.monotonic()
-        demand = 1.0 / TYPING_INDICATOR_INTERVAL
-        for member in members:
-            if not member.busy_card_should_animate():
-                continue
-            planned = max(
-                self._card_interval(member, streaming=True),
-                flood_policy.card_age_floor(card_age(member, now),
-                                            card_age_decay_enabled(member)),
-            )
-            demand += 1.0 / planned
-        return demand * CARD_CADENCE_MARGIN <= capacity
+        if limiter is None:
+            return False
+        return bool(limiter.pacing_for(chat).get("typing", False))
+
+    def _typing_live(self, sess: TrackedSession) -> bool:
+        """Is this session's chat's typing loop running right now?
+
+        The card cadence reserves the bubble's share only for a chat that
+        has a bubble (:meth:`_card_pacing`): a card started without one —
+        or after it ended — keeps the whole chat to itself.
+        """
+        key = self._typing_key(sess)
+        if key is None:
+            return False
+        tasks, _sent = self._typing_state()
+        task = tasks.get(key)
+        return task is not None and not task.done()
 
     async def _animate_typing(self, sess: TrackedSession) -> None:
         """Background task: keep a CHAT's "typing…" bubble lit for as long
@@ -1418,8 +1416,12 @@ class AnimationMixin:
         returns at once: calling this once per session yields one loop per
         chat. The loop outlives the session that started it for as long as
         ANY session in the chat keeps a live card, and it sends while at
-        least one of them is BUSY and the bubble fits beside the chat's
-        cards (:meth:`_typing_fits_cards`).
+        least one of them is BUSY — from the first second of the turn
+        (operator ruling 2026-09-23): the cards reserve the bubble's share
+        of the chat in their own cadence (:meth:`_card_pacing`) rather
+        than the bubble waiting for room beside them. A bubble the budget
+        refuses for a token a card edit just took is retried
+        ``TYPING_RETRY_WAKE`` later (:meth:`_typing_retry_soon`).
 
         Its OWN task and its OWN clock, deliberately not the card's. The
         first version of 8.24 offered the indicator from inside
@@ -1465,17 +1467,28 @@ class AnimationMixin:
                 sender = next(
                     (m for m in members if self._typing_chat(m) is not None),
                     None)
-                if sender is not None and self._typing_fits_cards(sender, members):
+                sent = False
+                if sender is not None:
                     chat = self._typing_chat(sender)
                     if chat is not None and await self._send_typing(sender, chat):
                         sent_at[key] = started
+                        sent = True
                 # Sleep the REMAINDER of the interval, so a slow round trip
                 # cannot push the next refresh past Telegram's 5 s expiry.
                 # Never negative, and it cannot spin: the send awaits.
-                await asyncio.sleep(max(
+                pause = max(
                     TYPING_INDICATOR_INTERVAL - (time.monotonic() - started),
                     0.0,
-                ))
+                )
+                if not sent and sender is not None and self._typing_retry_soon(sender):
+                    # Refused for want of a token or a window slot THIS
+                    # second — a card edit landed just before (the bubble
+                    # needs one more of each than a card, `_TYPING_RESERVE`).
+                    # The cadence has reserved the bubble's share, so the
+                    # room is back within a token's refill: try again then,
+                    # not a whole interval later with the bubble dark.
+                    pause = min(pause, TYPING_RETRY_WAKE)
+                await asyncio.sleep(pause)
         except asyncio.CancelledError:
             pass
         finally:
@@ -2072,6 +2085,16 @@ class AnimationMixin:
             # lands — two edits for one due slot. The in-flight edit IS
             # this slot; whatever is new rides the next due edit.
             return False
+        if base_gap > 0.0:
+            # The hook paths' 1.2 s debounce is faster than the card's own
+            # cadence. While typing's share is reserved in that cadence
+            # (8.30 ruling, :meth:`_card_pacing`), a hook edit waits for
+            # it too — otherwise a busy hook stream spends the very slots
+            # reserved for the bubble. The state-change paths (base 0) are
+            # untouched.
+            interval, reserved = self._card_pacing(sess, streaming=True)
+            if reserved:
+                base_gap = max(base_gap, interval)
         floor = flood_policy.card_age_floor(card_age(sess, now),
                                             card_age_decay_enabled(sess))
         since = now - sess.last_tool_edit_at
@@ -2116,11 +2139,34 @@ class AnimationMixin:
         refused: without it a chat at 0.1 calls/s would ask for an edit
         every 1.3 s and be turned down twelve times out of thirteen.
         """
+        return self._card_pacing(sess, streaming=streaming)[0]
+
+    def _card_pacing(self, sess: TrackedSession, *,
+                     streaming: bool) -> tuple[float, bool]:
+        """``(the card interval, whether typing's share is reserved in
+        it)`` — :meth:`_card_interval`'s one computation, with the second
+        half the hook gate needs (:meth:`_card_edit_due`).
+
+        TYPING ALWAYS SHOWS; THE YOUNG CARD YIELDS (8.30, operator ruling
+        2026-09-23). While the chat's typing bubble is live — its loop is
+        running, some session in the chat is BUSY (the bubble is sent for
+        nothing else), the feature is on, and the limiter would admit a
+        bubble at all (not shed by the hour, not blocked by a 429 on it,
+        not in minimal mode) — one bubble per
+        ``TYPING_INDICATOR_INTERVAL`` is reserved out of the chat's pacing
+        before the cards divide it (``card_interval(typing_interval=)``).
+        The cards and the bubble together then fit the chat's window, and
+        a card never loses its slot to a bubble racing it. In a DM that
+        slows a card in its first two minutes from 2.2 s to about 4 s;
+        from two minutes on the turn-age floor (10 s and up) is slower
+        still, so an older card's cadence is unchanged.
+        """
         chat = resolve_chat_id_int(sess)
         base = STREAM_EDIT_INTERVAL if streaming else BUSY_EDIT_INTERVAL
         if chat is None:
             # Unresolvable chat: pace it as a lone private session rather
-            # than not at all.
+            # than not at all. No bubble goes to a chat that does not
+            # resolve, so none is reserved.
             busy, group = 1, False
         else:
             busy = sum(
@@ -2130,12 +2176,48 @@ class AnimationMixin:
             group = is_group_chat(chat)
         limiter = get_rate_limiter()
         pacing = limiter.pacing_for(chat) if limiter is not None else {}
+        reserved = (
+            chat is not None and busy > 0 and TYPING_INDICATOR_INTERVAL > 0
+            and pacing.get("typing", True) and self._typing_live(sess)
+        )
+        gap = pacing.get("sustained_min_gap")
+        if reserved and pacing.get("typing_min_gap") is not None:
+            # Planned against the window LESS the bubble's reserve: the
+            # bubble is admitted only with `_TYPING_RESERVE` slots free, so
+            # a plan that fills the window to its last two slots is a plan
+            # in which every bubble is refused.
+            gap = max(gap or 0.0, pacing["typing_min_gap"])
         return card_interval(
             base=base, busy_sessions=busy, is_group=group,
             backoff=pacing.get("backoff", 1.0),
             chat_rate=pacing.get("rate"),
-            sustained_min_gap=pacing.get("sustained_min_gap"),
-        )
+            sustained_min_gap=gap,
+            typing_interval=TYPING_INDICATOR_INTERVAL if reserved else 0.0,
+        ), reserved
+
+    def _card_wake(self, sess: TrackedSession) -> float:
+        """Seconds until the animator's next ordinary wake.
+
+        The card's streaming interval — the loop's wake also drives the
+        transcript reads, which cost no Telegram call — EXCEPT that when
+        the turn-age floor (8.30) is what holds the next edit back and it
+        falls due sooner than a whole interval, the loop wakes when it
+        falls due. Without that, a tier's gap is rounded UP to the wake
+        grid: once typing's share is reserved in the interval (4.83 s in a
+        DM), a 10 s tier would edit every 14.5 s and a 30 s one every
+        33.8 s. ``_WAKE_SLACK`` past the due time, so a timer that fires a
+        hair early (the loop's clock resolution) does not meet a gate that
+        is not yet open and sleep again.
+        """
+        interval = self._card_interval(sess, streaming=True)
+        now = time.monotonic()
+        floor = flood_policy.card_age_floor(card_age(sess, now),
+                                            card_age_decay_enabled(sess))
+        if floor > interval:
+            due = sess.last_tool_edit_at + floor - now + _WAKE_SLACK
+            if 0.0 < due < interval:
+                return due
+        return interval
 
     def _first_tick_delay(self, sess: TrackedSession) -> float:
         """Delay before the animate task's first tick.
@@ -2211,7 +2293,7 @@ class AnimationMixin:
                     self._first_tick_delay(sess) if first_tick
                     else min(self._card_interval(sess, streaming=True),
                              CARD_RETRY_WAKE) if sess.card_skipped_since
-                    else self._card_interval(sess, streaming=True),
+                    else self._card_wake(sess),
                 )
                 first_tick = False
                 if not _alive():
@@ -2458,10 +2540,11 @@ class AnimationMixin:
         # window) — and on 2026-09-23 the uncounted bubble, one loop per
         # busy SESSION, earned the vm3 DM a 429 of its own before a
         # 7-hour ban. Since 8.30 it is budgeted again as the chat's LOWEST
-        # ornament, from ONE loop per chat, and only when it fits beside
-        # the chat's cards (`_typing_fits_cards`) — so the card cadence
-        # the 8.21 rows measure is unchanged, and the bubble lapses beside
-        # a card in its first two minutes, when the card is the signal.
+        # ornament, from ONE loop per chat, and shows from the first
+        # second of every turn (operator ruling 2026-09-23): the card's
+        # interval is computed with the bubble's share reserved out of the
+        # chat (`_card_pacing`), so a young card edits a little slower and
+        # the two together fit the chat's window.
         #
         # Why it is worth a call at all: the bubble is the one signal the
         # operator sees in the chat LIST without opening the chat.
