@@ -113,6 +113,12 @@ from aipager.config import (
     FLOOD_BACKOFF_DECAY_SECONDS,
     FLOOD_BACKOFF_MAX,
     FLOOD_BAN_MEMORY_DAYS,
+    FLOOD_HOURLY_ESSENTIAL_RESERVE,
+    FLOOD_HOURLY_MAX,
+    FLOOD_HOURLY_MINIMAL_EXIT_AT,
+    FLOOD_HOURLY_TYPING_RESUME_BELOW,
+    FLOOD_HOURLY_TYPING_SHED_AT,
+    FLOOD_HOURLY_WINDOW,
     FLOOD_MIN_RATE,
     FLOOD_MINIMAL_MODE_RATE_FLOOR,
     FLOOD_MUTE_MAX_SECONDS,
@@ -394,6 +400,88 @@ class SlidingWindow:
         return wait
 
 
+class HourlyWindow:
+    """A chat's calls in the last hour, in per-minute buckets (8.30 R1/R3).
+
+    The third window per chat, beside the 1/s bucket and the 60 s
+    :class:`SlidingWindow`, and the only one long enough to see what got
+    the vm3 DM banned: 3 h 23 min of volume every short window allowed.
+
+    Buckets, not stamps. A stamp deque would hold up to 1200 floats per
+    chat and persist them on every write; one bucket a minute holds two
+    counters — ORNAMENT and ESSENTIAL calls, apart, because only one of
+    the two may ever be refused — and is also the compact form the durable
+    file carries.
+
+    **Sixty-ONE buckets, not sixty.** Keyed by ``floor(clock / 60)``, the
+    current (partial) minute plus the sixty before it always span AT LEAST
+    3600 s, so the count here is never less than the count in the true
+    rolling hour ending now. Admitting only while this count is under a
+    cap therefore keeps EVERY true rolling hour under that cap — strictly,
+    which is what the Q7 invariant asks for — at the cost of holding a
+    call up to 59 s longer than an exact window would. Sixty buckets would
+    span as little as 3540 s and let a call that is still inside the hour
+    fall out of the count.
+
+    ``clock`` is the limiter's injected monotonic clock; nothing here reads
+    time on its own.
+    """
+
+    __slots__ = ("bucket_seconds", "slots", "_clock", "_buckets")
+
+    def __init__(self, *, period: float = FLOOD_HOURLY_WINDOW,
+                 bucket_seconds: float = 60.0, clock=time.monotonic) -> None:
+        self.bucket_seconds: float = float(bucket_seconds)
+        # Every minute the period covers, PLUS the current partial one.
+        self.slots: int = int(math.ceil(float(period) / self.bucket_seconds)) + 1
+        self._clock = clock
+        #: bucket key -> [ornament calls, essential calls]
+        self._buckets: dict = {}
+
+    def key_for(self, instant: float) -> int:
+        """The bucket an instant on this window's clock falls in."""
+        return int(math.floor(instant / self.bucket_seconds))
+
+    def _evict(self, now: float) -> None:
+        oldest = self.key_for(now) - (self.slots - 1)
+        for key in [k for k in self._buckets if k < oldest]:
+            del self._buckets[key]
+
+    def record(self, *, ornament: bool, n: int = 1) -> None:
+        """Count *n* calls of one class in the current minute."""
+        now = self._clock()
+        self._evict(now)
+        bucket = self._buckets.setdefault(self.key_for(now), [0, 0])
+        bucket[0 if ornament else 1] += int(n)
+
+    def used(self) -> int:
+        """Every counted call in the window, both classes."""
+        self._evict(self._clock())
+        return sum(o + e for o, e in self._buckets.values())
+
+    def ornament_used(self) -> int:
+        self._evict(self._clock())
+        return sum(o for o, _e in self._buckets.values())
+
+    def essential_used(self) -> int:
+        self._evict(self._clock())
+        return sum(e for _o, e in self._buckets.values())
+
+    def buckets(self) -> list[tuple[int, int, int]]:
+        """``(key, ornament, essential)`` for every live bucket, oldest
+        first — the persisted form (rebased to wall time by the caller)."""
+        self._evict(self._clock())
+        return [(k, v[0], v[1]) for k, v in sorted(self._buckets.items())]
+
+    def load(self, key: int, ornament: int, essential: int) -> None:
+        """Add restored counts into bucket *key* (merged, never replacing:
+        a restore must not be able to LOWER what this process counted)."""
+        bucket = self._buckets.setdefault(int(key), [0, 0])
+        bucket[0] += max(int(ornament), 0)
+        bucket[1] += max(int(essential), 0)
+        self._evict(self._clock())
+
+
 class ChatBudget:
     """Everything the limiter knows about one chat.
 
@@ -482,6 +570,23 @@ class ChatBudget:
         # which ``_decay`` advances by whole backoff windows and so drifts
         # (vm3's persisted ``last_429_at`` is a minute after the real 429).
         self.warned_until: float = 0.0
+        # The rolling HOUR (8.30 R1/R3), and the two latches read from it.
+        # ``hourly_minimal`` is minimal mode entered because the hour's
+        # ORNAMENT share is spent (entered at 100 %, left at
+        # FLOOD_HOURLY_MINIMAL_EXIT_AT); ``typing_shed`` stops the typing
+        # bubble, the lowest ornament, at FLOOD_HOURLY_TYPING_SHED_AT and
+        # brings it back under FLOOD_HOURLY_TYPING_RESUME_BELOW. Latches,
+        # not predicates: each entry and exit costs ESSENTIAL edits, so a
+        # predicate would flap on every minute that ages out.
+        self.hourly: HourlyWindow = HourlyWindow(clock=clock)
+        self.hourly_minimal: bool = False
+        self.typing_shed: bool = False
+        # MONOTONIC instant a typing 429's own retry_after runs out: the
+        # bubble is refused until then, cards are not (8.30 Q5).
+        self.typing_blocked_until: float = 0.0
+        # Monotonic stamp of the last essential-overflow WARNING, so it is
+        # one line per chat per rolling hour (``None`` = never logged).
+        self.overflow_logged_at: float | None = None
         self.waiters: collections.deque = collections.deque()
         self.calls: int = 0
         self.skipped: int = 0
@@ -489,6 +594,10 @@ class ChatBudget:
         self.chat_actions: int = 0
         self.muted_refusals: int = 0
         self.ornaments_suspended: int = 0
+        # 8.30: typing calls refused by the shed latch or a typing 429, and
+        # ESSENTIAL calls admitted while the hour was already over budget.
+        self.typing_shed_refusals: int = 0
+        self.hourly_essential_overflow: int = 0
 
     def set_rate(self, new_rate: float, now: float) -> None:
         """Move the chat to *new_rate*, crediting the elapsed span first.
@@ -784,6 +893,8 @@ class BudgetRateLimiter(BaseRateLimiter):
         ban_memory_days: float = FLOOD_BAN_MEMORY_DAYS,
         warning_hours: float = FLOOD_WARNING_HOURS,
         warned_ceiling: float = FLOOD_WARNED_CEILING,
+        hourly_max: int = FLOOD_HOURLY_MAX,
+        hourly_reserve: int = FLOOD_HOURLY_ESSENTIAL_RESERVE,
         clock=time.monotonic,
         sleep=None,
         signal_path: str | None = None,
@@ -821,6 +932,10 @@ class BudgetRateLimiter(BaseRateLimiter):
         # The warning regime a 429 starts (8.30 R5).
         self._warning_seconds = float(warning_hours) * 3600.0
         self._warned_ceiling = float(warned_ceiling)
+        # The rolling-hour budget (8.30 R1/R3), before the (1 + bans)
+        # divisor ``flood_policy.hourly_limits`` applies.
+        self._hourly_max = int(hourly_max)
+        self._hourly_reserve = int(hourly_reserve)
         self._signal_path = signal_path
         # Only the DAEMON may write beside the daemon's socket. An
         # explicit path means the caller owns it (tests, tools);
@@ -1211,7 +1326,91 @@ class BudgetRateLimiter(BaseRateLimiter):
         """
         if budget is None:
             return False
-        return budget.rate < self._minimal_floor
+        # Two ways in (8.30 R3): the earned rate under the floor, or the
+        # rolling hour's ornament share spent (``_hourly_eval``'s latch).
+        # Every consumer of minimal mode — `pacing_for`, `minimal_mode`,
+        # the watchdog's `cards_suppressed`, the ESSENTIAL "updates
+        # paused" line and its single resume edit — follows either one
+        # with no code of its own.
+        return budget.rate < self._minimal_floor or budget.hourly_minimal
+
+    # ── the rolling hour (8.30) ──────────────────────────────────────────
+
+    def _hourly_limits(self, budget: ChatBudget, wall_now: float) -> tuple[int, int]:
+        """``(total, ornament share)`` for this chat's hour, divided by
+        one plus its remembered bans (R6)."""
+        return flood_policy.hourly_limits(
+            self._bans_7d(budget, wall_now),
+            hourly_max=self._hourly_max, reserve=self._hourly_reserve,
+        )
+
+    def _hourly_eval(self, budget: ChatBudget) -> None:
+        """Move the two hourly latches to match the window. Lazy — run in
+        `process_request` before the minimal-mode check and on every
+        public read — so there is no timer to leak.
+
+        "Used" is EVERY counted call in the hour, essentials included.
+        That is what makes the essential reserve real: ornaments stop once
+        the hour holds ``total - reserve`` calls of any kind, so the last
+        ``reserve`` slots are always left for answers.
+
+        Each edge is one INFO line and a durable-state write.
+        """
+        _total, share = self._hourly_limits(budget, self._wall_now())
+        used = budget.hourly.used()
+        if budget.hourly_minimal:
+            if used <= share * FLOOD_HOURLY_MINIMAL_EXIT_AT:
+                budget.hourly_minimal = False
+                log.info("flood: chat %s hourly volume back to %d/%d → "
+                         "minimal mode lifted", budget.chat_id, used, share)
+                _mark_state_dirty()
+        elif used >= share:
+            budget.hourly_minimal = True
+            log.info("flood: chat %s hourly ornament share spent (%d/%d) → "
+                     "minimal mode", budget.chat_id, used, share)
+            _mark_state_dirty()
+        if budget.typing_shed:
+            if used < share * FLOOD_HOURLY_TYPING_RESUME_BELOW:
+                budget.typing_shed = False
+                log.info("flood: chat %s typing resumed — hourly volume %d/%d",
+                         budget.chat_id, used, share)
+                _mark_state_dirty()
+        elif used >= share * FLOOD_HOURLY_TYPING_SHED_AT:
+            budget.typing_shed = True
+            log.info("flood: chat %s typing paused — hourly volume %d/%d",
+                     budget.chat_id, used, share)
+            _mark_state_dirty()
+
+    def _ornament_share_spent(self, budget: ChatBudget) -> bool:
+        """Is the hour's ornament share used up RIGHT NOW? The strict
+        check, independent of the latch (see `_acquire_blocking`)."""
+        _total, share = self._hourly_limits(budget, self._wall_now())
+        return budget.hourly.used() >= share
+
+    def _record(self, budget: ChatBudget, cls: str) -> None:
+        """Count one admitted call in the chat's hour, by class.
+
+        Called in the SAME synchronous block that takes the token and the
+        sustained slot, so no await can separate "admitted" from
+        "counted". An ESSENTIAL call that lands while the hour is already
+        at its total is still admitted — answers are never refused by this
+        window (R3/Q7) — and is counted as overflow, with one WARNING per
+        chat per rolling hour.
+        """
+        ornament = cls == PRIORITY_ORNAMENT
+        if not ornament:
+            total, _share = self._hourly_limits(budget, self._wall_now())
+            used = budget.hourly.used()
+            if used >= total:
+                budget.hourly_essential_overflow += 1
+                now = self._clock()
+                last = budget.overflow_logged_at
+                if last is None or now - last >= FLOOD_HOURLY_WINDOW:
+                    budget.overflow_logged_at = now
+                    log.warning(
+                        "flood: chat %s essential calls over the hourly "
+                        "budget (%d/%d)", budget.chat_id, used + 1, total)
+        budget.hourly.record(ornament=ornament)
 
     # ── the earned rate, as a public surface ─────────────────────────────
 
@@ -1237,6 +1436,7 @@ class BudgetRateLimiter(BaseRateLimiter):
         if budget is None:
             return False
         self._earn(budget, self._clock())
+        self._hourly_eval(budget)
         return self._minimal(budget)
 
     def bans_remembered(self, chat_id) -> int:
@@ -1248,6 +1448,35 @@ class BudgetRateLimiter(BaseRateLimiter):
         if budget is None:
             return 0
         return self._bans_7d(budget, self._wall_now())
+
+    def hourly_usage(self, chat_id) -> dict:
+        """This chat's rolling hour, in one read: ``used`` (both classes),
+        ``ornament_used``, ``essential_used``, ``budget`` and
+        ``ornament_budget`` (divided by one plus remembered bans), the two
+        latches ``typing_shed`` and ``minimal`` (hourly minimal mode), and
+        ``essential_overflow``. A chat never seen reports zeros against
+        the full budget, without allocating one."""
+        key = self._key(chat_id)
+        budget = self._budgets.get(key) if key is not None else None
+        if budget is None:
+            total, share = flood_policy.hourly_limits(
+                0, hourly_max=self._hourly_max, reserve=self._hourly_reserve)
+            return {"used": 0, "ornament_used": 0, "essential_used": 0,
+                    "budget": total, "ornament_budget": share,
+                    "typing_shed": False, "minimal": False,
+                    "essential_overflow": 0}
+        self._hourly_eval(budget)
+        total, share = self._hourly_limits(budget, self._wall_now())
+        return {
+            "used": budget.hourly.used(),
+            "ornament_used": budget.hourly.ornament_used(),
+            "essential_used": budget.hourly.essential_used(),
+            "budget": total,
+            "ornament_budget": share,
+            "typing_shed": budget.typing_shed,
+            "minimal": budget.hourly_minimal,
+            "essential_overflow": budget.hourly_essential_overflow,
+        }
 
     def warning_remaining(self, chat_id) -> float:
         """Seconds left in this chat's warning regime; ``0.0`` when none
@@ -1304,6 +1533,7 @@ class BudgetRateLimiter(BaseRateLimiter):
         now = self._clock()
         self._decay(budget, now)
         self._earn(budget, now)
+        self._hourly_eval(budget)
         return {
             "rate": budget.rate,
             "sustained_min_gap": _window_gap(budget.window.limit,
@@ -1390,7 +1620,9 @@ class BudgetRateLimiter(BaseRateLimiter):
                 return
             await self._sleep(wait)
 
-    def _acquire_skip(self, budget: ChatBudget, endpoint: str) -> None:
+    def _acquire_skip(self, budget: ChatBudget, endpoint: str, *,
+                      cls: str = PRIORITY_ESSENTIAL,
+                      reserve: float = _SKIP_RESERVE) -> None:
         """Spend one token, or raise :class:`FloodSkipped`. Synchronous —
         a skip caller must never await, or the "cheap when refused"
         property that lets a card be skipped at all is gone.
@@ -1405,17 +1637,19 @@ class BudgetRateLimiter(BaseRateLimiter):
         """
         now = self._clock()
         if (now < budget.retry_until
-                or budget.chat.tokens() < _SKIP_RESERVE
-                or budget.window.free() < _SKIP_RESERVE
+                or budget.chat.tokens() < reserve
+                or budget.window.free() < reserve
                 or self._overall.tokens() < 1.0):
             budget.skipped += 1
             raise FloodSkipped(budget.chat_id, endpoint)
         budget.chat.take(1.0)
         budget.window.take(1.0)
         self._overall.take(1.0)
+        self._record(budget, cls)
 
     async def _acquire_blocking(
         self, budget: ChatBudget | None, *, reserve: float = 0.0,
+        cls: str = PRIORITY_ESSENTIAL, endpoint: str = "",
     ) -> None:
         """Wait until every limit that applies has room, then spend it.
 
@@ -1437,6 +1671,16 @@ class BudgetRateLimiter(BaseRateLimiter):
         twice and escalated to blocking could take it — which is the
         priority inversion R3 exists to end. It is a WAIT, never a
         refusal: the ornament simply queues until the chat is comfortable.
+
+        THE ONE EXCEPTION IS THE HOUR (8.30 Q7). An ORNAMENT that reaches
+        the take block and finds the hour's ornament share spent raises
+        :class:`FloodSkipped` instead of taking — it would otherwise wait
+        up to an hour for a slot, or, worse, take one: the latch in
+        `process_request` was evaluated before this caller queued, and
+        other callers may have spent the share while it waited. Checking
+        again HERE, in the synchronous block that takes, is what keeps
+        "ornaments ≤ share in every rolling hour" strictly true. Card
+        callers already read `FloodSkipped` as "nothing sent".
         """
         if budget is None:
             await self._wait_for_overall()
@@ -1480,9 +1724,14 @@ class BudgetRateLimiter(BaseRateLimiter):
                     self._overall.time_until(1.0),
                 )
                 if wait <= 0:
+                    if (cls == PRIORITY_ORNAMENT
+                            and self._ornament_share_spent(budget)):
+                        budget.ornaments_suspended += 1
+                        raise FloodSkipped(budget.chat_id, endpoint)
                     budget.chat.take(1.0)
                     budget.window.take(1.0)
                     self._overall.take(1.0)
+                    self._record(budget, cls)
                     return
                 await self._sleep(wait)
         finally:
@@ -1534,6 +1783,9 @@ class BudgetRateLimiter(BaseRateLimiter):
             self._decay(budget, now)
             self._sync_mute(budget, now)
             self._earn(budget, now)
+            # The rolling hour's latches (8.30), BEFORE the minimal-mode
+            # check below reads one of them.
+            self._hourly_eval(budget)
 
         # ── THE GATE (R1) ────────────────────────────────────────────────
         # Placed here, above the exempt branch, so a mute covers BOTH
@@ -1614,7 +1866,7 @@ class BudgetRateLimiter(BaseRateLimiter):
 
         kind = _kind_of(rate_limit_args)
         if kind == "skip" and budget is not None:
-            self._acquire_skip(budget, endpoint)
+            self._acquire_skip(budget, endpoint, cls=cls)
         else:
             # No resolvable chat (answerCallbackQuery, getMe, …) meets the
             # overall bucket and nothing else, and is never skipped (R7).
@@ -1625,15 +1877,17 @@ class BudgetRateLimiter(BaseRateLimiter):
             await self._acquire_blocking(
                 budget,
                 reserve=(_SKIP_RESERVE if cls == PRIORITY_ORNAMENT else 0.0),
+                cls=cls, endpoint=endpoint,
             )
         return await self._run(
             budget, callback, args, kwargs, endpoint, chat_id, kind=kind,
+            cls=cls,
         )
 
     async def _run(
         self, budget, callback, args, kwargs, endpoint, chat_id,
         *, kind: str = "blocking", allow_retry: bool = True,
-        note_429: bool = True,
+        note_429: bool = True, cls: str = PRIORITY_ESSENTIAL,
     ):
         """Run the callback whose budget has already been paid.
 
@@ -1691,10 +1945,13 @@ class BudgetRateLimiter(BaseRateLimiter):
                 # Wait out what it asked for, once. Bounded: anything past
                 # TELEGRAM_MAX_RETRY_AFTER was re-raised above as a ban.
                 await self._sleep(max(seconds, 0.0))
-            await self._acquire_blocking(budget)
+            # The retry is a call like any other: it counts in the hour
+            # under its OWN class, and an ornament retry is refused if the
+            # hour's ornament share went while it waited (8.30 Q7).
+            await self._acquire_blocking(budget, cls=cls, endpoint=endpoint)
             return await self._run(
                 budget, callback, args, kwargs, endpoint, chat_id,
-                kind=kind, allow_retry=False,
+                kind=kind, allow_retry=False, cls=cls,
             )
 
     # ── persistence (8.28) ───────────────────────────────────────────────
@@ -1729,6 +1986,7 @@ class BudgetRateLimiter(BaseRateLimiter):
         for budget in self._budgets.values():
             self._decay(budget, now)
             self._earn(budget, now)
+            self._hourly_eval(budget)
             chats.append({
                 "chat_id": budget.chat_id,
                 "rate": budget.rate,
@@ -1856,6 +2114,8 @@ class BudgetRateLimiter(BaseRateLimiter):
         for budget in self._budgets.values():
             self._decay(budget, now)
             self._earn(budget, now)
+            self._hourly_eval(budget)
+            hourly_total, hourly_share = self._hourly_limits(budget, wall_now)
             chats.append({
                 "chat_id": budget.chat_id,
                 "kind": "group" if budget.is_group else "private",
@@ -1877,6 +2137,12 @@ class BudgetRateLimiter(BaseRateLimiter):
                 "bans_7d": self._bans_7d(budget, wall_now),
                 "ceiling": self.max_rate_for(budget, wall_now),
                 "warning_remaining": max(budget.warned_until - wall_now, 0.0),
+                "hourly_used": budget.hourly.used(),
+                "hourly_budget": hourly_total,
+                "hourly_ornament_budget": hourly_share,
+                "typing_shed": budget.typing_shed,
+                "typing_shed_refusals": budget.typing_shed_refusals,
+                "hourly_essential_overflow": budget.hourly_essential_overflow,
                 "waiters": len(budget.waiters),
             })
         return {"overall_tokens": self._overall.tokens(), "chats": chats}

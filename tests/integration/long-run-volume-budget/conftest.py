@@ -24,15 +24,22 @@ monotonic clock alone advances neither.
 from __future__ import annotations
 
 import asyncio
+import json
 import types
 
+import httpx
 import pytest
 
+import aipager.bot.rich_message as rm
 from aipager import config
 from aipager.bot import flood, flood_budget
 from aipager.bot.flood_budget import BudgetRateLimiter
 
 CHAT = 256113222
+
+#: The REAL ``_post``, captured before conftest's autouse
+#: ``_block_real_telegram_http`` swaps in its refusing stub.
+_REAL_POST = rm._post
 
 
 @pytest.fixture
@@ -175,3 +182,40 @@ class _GatedBot:
 @pytest.fixture
 def gated_bot(limiter, flood_clock):
     return _GatedBot(limiter, flood_clock)
+
+
+class _HttpRecorder:
+    """Every HTTP request the rich path actually issued, recorded at the
+    transport — below the limiter and below ``_post`` — so nothing between
+    them can fake "no HTTP happened"."""
+
+    def __init__(self) -> None:
+        #: ``(endpoint, chat_id, payload)``
+        self.requests: list[tuple[str, object, dict]] = []
+
+    def endpoints(self) -> list[str]:
+        return [m for m, _chat, _p in self.requests]
+
+
+@pytest.fixture
+def rich_http(monkeypatch):
+    """The REAL ``rich_message._post`` over an ``httpx.MockTransport``, so
+    a rich card edit is metered by the limiter exactly as in the daemon
+    and nothing can reach ``api.telegram.org`` even if a guard fails."""
+    recorder = _HttpRecorder()
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "TESTTOKEN")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content)
+        endpoint = request.url.path.rsplit("/", 1)[-1]
+        recorder.requests.append((endpoint, payload.get("chat_id"), payload))
+        return httpx.Response(200, json={
+            "ok": True,
+            "result": {"message_id": payload.get("message_id", 4242)},
+        })
+
+    monkeypatch.setattr(rm, "_post", _REAL_POST)
+    monkeypatch.setattr(
+        rm, "_client", httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    yield recorder
+    monkeypatch.setattr(rm, "_client", None)
