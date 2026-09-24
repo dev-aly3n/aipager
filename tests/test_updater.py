@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import argparse
 import os
-import subprocess
 import sys
 
-from aipager import updater
+from aipager import install_source, self_update, updater
+from aipager.install_source import InstallSource
 
 
 def _ns(**kw):
@@ -15,103 +15,98 @@ def _ns(**kw):
 
 
 # ----- installer detection -----
+#
+# Detection is by the RUNNING interpreter now (aipager.install_source; see
+# tests/test_install_source.py for the matrix). `_detect_installer` is the
+# compat wrapper everything else still calls.
 
-def test_detect_uv(monkeypatch):
-    monkeypatch.setattr(updater, "_uv_has_aipager", lambda: True)
-    monkeypatch.setattr(updater, "_pipx_has_aipager", lambda: False)
-    monkeypatch.setattr(updater, "_brew_has_aipager", lambda: False)
-    assert updater._detect_installer() == "uv"
-
-
-def test_detect_pipx(monkeypatch):
-    monkeypatch.setattr(updater, "_uv_has_aipager", lambda: False)
-    monkeypatch.setattr(updater, "_pipx_has_aipager", lambda: True)
-    monkeypatch.setattr(updater, "_brew_has_aipager", lambda: False)
-    assert updater._detect_installer() == "pipx"
+def _source(kind="pipx", *, upgradable=True, origin="index", detail=None):
+    return InstallSource(kind=kind, prefix="/venvs/aipager",
+                         python="/venvs/aipager/bin/python", origin=origin,
+                         origin_detail=detail, upgradable=upgradable,
+                         reason=None if upgradable else "refused for the test")
 
 
-def test_detect_brew(monkeypatch):
-    monkeypatch.setattr(updater, "_uv_has_aipager", lambda: False)
-    monkeypatch.setattr(updater, "_pipx_has_aipager", lambda: False)
-    monkeypatch.setattr(updater, "_brew_has_aipager", lambda: True)
-    assert updater._detect_installer() == "brew"
+def test_detect_installer_follows_the_running_interpreter(monkeypatch):
+    for kind in ("uv", "pipx", "brew", "pip"):
+        monkeypatch.setattr(install_source, "detect_install_source",
+                            lambda k=kind: _source(k))
+        assert updater._detect_installer() == kind
 
 
-def test_detect_none(monkeypatch):
-    monkeypatch.setattr(updater, "_uv_has_aipager", lambda: False)
-    monkeypatch.setattr(updater, "_pipx_has_aipager", lambda: False)
-    monkeypatch.setattr(updater, "_brew_has_aipager", lambda: False)
+def test_detect_installer_none_for_refused_install(monkeypatch):
+    monkeypatch.setattr(install_source, "detect_install_source",
+                        lambda: _source("editable", upgradable=False))
     assert updater._detect_installer() is None
 
 
-def test_uv_has_aipager_when_binary_missing(monkeypatch):
-    monkeypatch.setattr(updater, "_has_binary", lambda name: False)
-    assert updater._uv_has_aipager() is False
-
-
-def test_uv_has_aipager_parses_stdout(monkeypatch):
-    monkeypatch.setattr(updater, "_has_binary", lambda name: True)
-
-    class _R:
-        returncode = 0
-        stdout = "aipager v0.3.11\nfoo v1.0.0\n"
-
-    monkeypatch.setattr(updater.subprocess, "run", lambda *a, **k: _R())
-    assert updater._uv_has_aipager() is True
-
-
-def test_uv_has_aipager_handles_timeout(monkeypatch):
-    monkeypatch.setattr(updater, "_has_binary", lambda name: True)
-
-    def _boom(*a, **k):
-        raise subprocess.TimeoutExpired(cmd="uv", timeout=10)
-
-    monkeypatch.setattr(updater.subprocess, "run", _boom)
-    assert updater._uv_has_aipager() is False
+def test_detect_installer_never_shells_out(monkeypatch):
+    """The old probes ran `uv tool list` / `pipx list` / `brew list`."""
+    monkeypatch.setattr(install_source, "detect_install_source", lambda: _source("uv"))
+    monkeypatch.setattr(updater, "_has_binary", lambda n: (_ for _ in ()).throw(
+        AssertionError("detection must not probe PATH")))
+    assert updater._detect_installer() == "uv"
 
 
 # ----- cmd_update -----
 
-def test_update_no_installer(monkeypatch, capsys):
-    monkeypatch.setattr(updater, "_detect_installer", lambda: None)
+def _fake_seam(monkeypatch, *, upgrade_rc=0, probe_version="0.7.14",
+               running="0.7.13", timed_out=False):
+    calls: list = []
+
+    def _run(argv, *, timeout, env=None, capture=True):
+        calls.append((list(argv), timeout, capture))
+        if "-I" in argv:  # the fresh-interpreter version probe
+            return self_update.CommandResult(
+                0, f"AIPAGER_VERSION={probe_version}", False, None)
+        if argv[1:3] == ["--user", "show"]:
+            return self_update.CommandResult(0, "KillMode=process", False, None)
+        if timed_out:
+            return self_update.CommandResult(None, "", True, "timed out after 600s")
+        return self_update.CommandResult(upgrade_rc, "", False, None)
+    monkeypatch.setattr(self_update, "_run_command", _run)
+    monkeypatch.setattr(self_update, "running_version", lambda: running)
+    monkeypatch.setattr(install_source, "resolve_tool", lambda n: f"/abs/bin/{n}")
+    return calls
+
+
+def test_update_refused_install(monkeypatch, capsys):
+    monkeypatch.setattr(install_source, "detect_install_source",
+                        lambda: _source("editable", upgradable=False))
     rc = updater.cmd_update()
     assert rc == 1
-    err = capsys.readouterr().err
-    assert "could not detect" in err
+    assert "can't update this install" in capsys.readouterr().err
 
 
 def test_update_uv_adds_refresh(monkeypatch):
-    monkeypatch.setattr(updater, "_detect_installer", lambda: "uv")
-    seen: list = []
-    monkeypatch.setattr(
-        updater.subprocess, "run",
-        lambda cmd, *a, **k: seen.append(cmd) or subprocess.CompletedProcess(cmd, 0),
-    )
-    rc = updater.cmd_update()
-    assert rc == 0
-    assert seen[0] == ["uv", "tool", "upgrade", "aipager", "--refresh"]
+    monkeypatch.setattr(install_source, "detect_install_source", lambda: _source("uv"))
+    calls = _fake_seam(monkeypatch)
+    assert updater.cmd_update() == 0
+    assert calls[0][0] == ["/abs/bin/uv", "tool", "upgrade", "aipager", "--refresh"]
+    assert calls[0][1] == self_update.UPGRADE_TIMEOUT_SECONDS
+    assert calls[0][2] is False  # live installer output in the terminal
 
 
 def test_update_pipx_command(monkeypatch):
-    monkeypatch.setattr(updater, "_detect_installer", lambda: "pipx")
-    seen: list = []
-    monkeypatch.setattr(
-        updater.subprocess, "run",
-        lambda cmd, *a, **k: seen.append(cmd) or subprocess.CompletedProcess(cmd, 0),
-    )
+    monkeypatch.setattr(install_source, "detect_install_source", lambda: _source("pipx"))
+    calls = _fake_seam(monkeypatch)
     updater.cmd_update()
-    assert seen[0] == ["pipx", "upgrade", "aipager"]
+    assert calls[0][0] == ["/abs/bin/pipx", "upgrade", "aipager"]
 
 
 def test_update_brew_command(monkeypatch):
-    monkeypatch.setattr(updater, "_detect_installer", lambda: "brew")
-    seen: list = []
-    monkeypatch.setattr(
-        updater.subprocess, "run",
-        lambda cmd, *a, **k: seen.append(cmd) or subprocess.CompletedProcess(cmd, 0),
-    )
+    monkeypatch.setattr(install_source, "detect_install_source", lambda: _source("brew"))
+    calls = _fake_seam(monkeypatch)
     updater.cmd_update()
-    assert seen[0] == ["brew", "upgrade", "aipager"]
+    assert calls[0][0] == ["/abs/bin/brew", "upgrade", "aipager"]
+
+
+def test_update_pip_venv_uses_its_own_interpreter(monkeypatch):
+    monkeypatch.setattr(install_source, "detect_install_source", lambda: _source("pip"))
+    calls = _fake_seam(monkeypatch)
+    updater.cmd_update()
+    assert calls[0][0] == ["/venvs/aipager/bin/python", "-m", "pip", "install",
+                           "--upgrade", "aipager"]
 
 
 # ----- cmd_uninstall -----
@@ -153,14 +148,16 @@ def test_uninstall_calls_binary_uninstall(monkeypatch, tmp_path):
     monkeypatch.setattr(updater, "_detect_installer", lambda: "uv")
     monkeypatch.setattr(updater, "_stop_daemon", lambda: None)
     monkeypatch.setattr(updater, "_remove_tmp_sockets", lambda: None)
+    monkeypatch.setattr(install_source, "resolve_tool", lambda n: f"/abs/bin/{n}")
     seen: list = []
-    monkeypatch.setattr(
-        updater.subprocess, "run",
-        lambda cmd, *a, **k: seen.append(cmd) or subprocess.CompletedProcess(cmd, 0),
-    )
+
+    def _run(argv, *, timeout, env=None, capture=True):
+        seen.append(list(argv))
+        return self_update.CommandResult(0, "", False, None)
+    monkeypatch.setattr(self_update, "_run_command", _run)
     rc = updater.cmd_uninstall(_ns(force=True))
     assert rc == 0
-    assert ["uv", "tool", "uninstall", "aipager"] in seen
+    assert ["/abs/bin/uv", "tool", "uninstall", "aipager"] in seen
 
 
 # ----- _remove_path -----
@@ -186,15 +183,17 @@ def test_remove_path_missing_returns_false(tmp_path):
 
 # ----- install_extra_cmd (5.3 follow-up) -----
 
-def test_install_extra_cmd_uv():
+def test_install_extra_cmd_uv(monkeypatch):
+    monkeypatch.setattr(install_source, "resolve_tool", lambda n: f"/abs/bin/{n}")
     assert updater.install_extra_cmd("uv", "voice") == [
-        "uv", "tool", "install", "--reinstall", "aipager[voice]",
+        "/abs/bin/uv", "tool", "install", "--reinstall", "aipager[voice]",
     ]
 
 
-def test_install_extra_cmd_pipx():
+def test_install_extra_cmd_pipx(monkeypatch):
+    monkeypatch.setattr(install_source, "resolve_tool", lambda n: f"/abs/bin/{n}")
     assert updater.install_extra_cmd("pipx", "voice") == [
-        "pipx", "install", "--force", "aipager[voice]",
+        "/abs/bin/pipx", "install", "--force", "aipager[voice]",
     ]
 
 

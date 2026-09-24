@@ -71,13 +71,8 @@ def reinstall_with_miniapp_hint() -> str:
         installer = _detect_installer()
     except Exception:
         installer = None
-    if installer == "uv":
-        return "uv tool install --reinstall aipager"
-    if installer == "pipx":
-        return "pipx install --force aipager"
-    if installer == "brew":
-        return "brew reinstall aipager"
-    return "pip install --force-reinstall aipager"
+    from aipager.install_source import reinstall_hint
+    return reinstall_hint(installer)
 
 
 def miniapp_extra_available() -> bool:
