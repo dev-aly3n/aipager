@@ -113,7 +113,9 @@ _CHANNELS = ("latest", "stable", "rc")
 
 # Bare bot token (the URL form is handled by errors.redact_token) and an
 # Anthropic key/OAuth token.
-_BARE_BOT_TOKEN_RE = re.compile(r"\b\d{6,12}:[A-Za-z0-9_-]{30,}")
+# No leading ``\b``: installer output can glue a token to a word character
+# ("p987654321:AA…"), and a missed token is then cut in half by the tail.
+_BARE_BOT_TOKEN_RE = re.compile(r"\d{6,12}:[A-Za-z0-9_-]{30,}")
 _ANTHROPIC_TOKEN_RE = re.compile(r"sk-ant-[A-Za-z0-9_-]+")
 
 # The post-upgrade probe runs in a FRESH interpreter (``-I``: no cwd on
@@ -143,6 +145,16 @@ def redact_output(text: str) -> str:
         if install_source._is_secret_key(key) and len(value or "") >= 8:
             out = out.replace(value, "<redacted>")
     return out
+
+
+def redacted_tail(text, limit: int | None = None) -> str:
+    """The last ``limit`` (default ``OUTPUT_TAIL_CHARS``) characters of
+    ``text`` AFTER redacting all of it. Redacting first matters: a cut that
+    lands inside a token leaves a fragment the patterns no longer match."""
+    if not text:
+        return ""
+    n = OUTPUT_TAIL_CHARS if limit is None else limit
+    return redact_output(str(text).strip())[-n:]
 
 
 def _scrub_env(extra: dict[str, str] | None = None) -> dict[str, str]:
@@ -221,7 +233,7 @@ def _tail(raw: bytes | str | None) -> str:
     if raw is None:
         return ""
     text = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else raw
-    return redact_output(text.strip())[-OUTPUT_TAIL_CHARS:]
+    return redacted_tail(text)
 
 
 def _run_command(argv, *, timeout, env=None, capture=True) -> CommandResult:
@@ -472,7 +484,7 @@ def probe_installed_version(python: str) -> tuple[str | None, bool, str | None]:
             break
     if res.returncode == 0 and version:
         return version, True, None
-    err = res.error or (res.output_tail[-300:] if res.output_tail else
+    err = res.error or (redacted_tail(res.output_tail, 300) if res.output_tail else
                         f"exit {res.returncode}")
     return version, False, err
 
@@ -907,6 +919,7 @@ __all__ = [
     "current_claude", "installed_version", "is_newer",
     "latest_aipager_version", "latest_claude_version", "parse_version",
     "probe_installed_version", "read_and_clear_marker", "redact_output",
+    "redacted_tail",
     "restart_blockers", "restart_plan", "run_claude_update", "run_command",
     "running_command_count", "running_version", "schedule_restart",
     "terminate_running_commands", "write_marker",

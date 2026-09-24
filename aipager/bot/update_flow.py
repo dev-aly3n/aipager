@@ -287,10 +287,9 @@ def _show_detail(chat_id) -> bool:
 
 def _safe_tail(text) -> str:
     """Defence in depth: the seam already redacts and trims output, but
-    whatever reaches a chat is redacted and capped again right here."""
-    if not text:
-        return ""
-    return self_update.redact_output(str(text))[-self_update.OUTPUT_TAIL_CHARS:]
+    whatever reaches a chat is redacted (all of it, THEN cut) and capped
+    again right here."""
+    return self_update.redacted_tail(text)
 
 
 def _pre_tail(text, chat_id) -> str:

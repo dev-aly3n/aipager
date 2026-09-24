@@ -89,3 +89,22 @@ def test_cli_import_failure_output_is_redacted(env, capsys, monkeypatch):
     err = capsys.readouterr().err
     assert "fails to import" in err
     assert token not in err
+
+
+def test_cli_import_failure_redacts_a_token_the_cut_would_split(env, capsys, monkeypatch):
+    """tester-iter2-001: the probe's error is redacted in full BEFORE it is
+    cut to 300 chars, so a token straddling the cut leaves no secret half."""
+    token = "987654321:AAHfakeFAKEfakeFAKEfakeFAKEfake1234"
+    secret = token.split(":", 1)[1]
+    output = "p" * 6000 + token + "q" * (300 - len(secret) - 2)
+    original = env._run
+
+    def _seam(argv, *, timeout, env=None, capture=True):
+        if "-I" in [str(a) for a in argv]:
+            return self_update.CommandResult(1, output, False, None)
+        return original(argv, timeout=timeout, env=env, capture=capture)
+    monkeypatch.setattr(self_update, "_run_command", _seam)
+    assert updater.cmd_update() == 1
+    err = capsys.readouterr().err
+    assert "fails to import" in err
+    assert secret not in err.replace("\n", "").replace(" ", "")

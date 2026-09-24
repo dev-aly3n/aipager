@@ -106,7 +106,7 @@ def cmd_update(_args=None) -> int:
         if not importable:
             friendly_error(
                 "the upgrade finished but the new version fails to import.",
-                (f"  {self_update.redact_output(err)[-self_update.OUTPUT_TAIL_CHARS:]}"
+                (f"  {self_update.redacted_tail(err)}"
                  if err else ""),
                 "  Reinstall with: " + install_source.reinstall_hint(source.kind),
             )

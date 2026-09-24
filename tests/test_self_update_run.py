@@ -157,3 +157,22 @@ def test_shutdown_kills_a_running_child_group(real_seam, tmp_path):
         except (ProcessLookupError, PermissionError, OSError):
             pass
         t.join(10)
+
+
+TOKEN_IN_OUTPUT = "987654321:AAHfakeFAKEfakeFAKEfakeFAKEfake1234"
+
+
+def test_seam_redacts_the_whole_output_before_cutting_the_tail(real_seam):
+    """tester-iter2-001, at the seam with a real child: a token glued to a
+    word character and straddling the tail cut leaves no secret half."""
+    secret = TOKEN_IN_OUTPUT.split(":", 1)[1]
+    n = self_update.OUTPUT_TAIL_CHARS
+    text = "p" * 6000 + TOKEN_IN_OUTPUT + "q" * (n - len(secret) - 2)
+    res = self_update.run_command(
+        [sys.executable, "-c", "import sys; sys.stdout.write(sys.argv[1])", text],
+        timeout=10)
+    assert res.returncode == 0
+    assert secret not in res.output_tail
+    assert "<redacted>" in res.output_tail
+    assert len(res.output_tail) <= n
+
