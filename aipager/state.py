@@ -19,6 +19,7 @@ import logging
 import os
 import time
 from collections import deque
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pathlib import Path
@@ -628,12 +629,34 @@ class TrackedSession:
     # in the transcript belonging to an EARLIER turn (this one ended on
     # tool calls, or was a missed-Stop recovery) and coming back around as
     # "this turn's answer". An identical body is therefore never re-posted
-    # within the session's lifetime in this daemon. Bounded by
-    # DELIVERED_DIGEST_RING. Transient, never persisted.
+    # within the session's lifetime. Bounded by DELIVERED_DIGEST_RING.
+    #
+    # PERSISTED (roadmap 8.39), but only the digests of bodies that really
+    # LANDED: a restart between a delivered Stop and Claude Code's idle
+    # notification 60 s later used to find an empty ring, and the
+    # already-IDLE late path re-posted the answer. The finish path records
+    # a digest BEFORE it sends (so a concurrent re-run in this process is
+    # refused); such a digest sits in `pending_digests` until the send is
+    # confirmed, and `persisted_digests()` leaves it out — otherwise a
+    # shutdown mid-send, or a failed or held send (held answers are not
+    # persisted either), would write "delivered" for an answer the chat
+    # never got, and the restart could no longer deliver it.
     delivered_digests: deque = field(
         default_factory=lambda: deque(maxlen=DELIVERED_DIGEST_RING),
         repr=False,
     )
+    pending_digests: set[str] = field(default_factory=set, repr=False)
+    # Wall-clock moment the finish path received the turn end of the last
+    # CONFIRMED answer (roadmap 8.39 R2). Persisted. A transcript text entry
+    # written before it already existed when that answer went out, so the
+    # already-IDLE late path, which reads the transcript's newest text,
+    # refuses it: it is the delivered answer or something older still. A
+    # genuinely undelivered answer (the daemon died between its Stop and
+    # the send) was written AFTER the previous confirmed delivery and
+    # still goes out. Stamped when the finish path receives the turn end,
+    # not at landing, so a fast next turn's answer written during a slow
+    # card render or send is not mistaken for old.
+    answer_delivered_wall: float = 0.0
     # Background-job endgame state (all transient, never persisted):
     # `job_interim_seen` — an idle-transition happened while this job's
     # background agents were open (the waiting card went up); the signal
@@ -1113,12 +1136,49 @@ class TrackedSession:
         during this session's lifetime (see ``delivered_digests``)."""
         return bool(digest) and digest in self.delivered_digests
 
-    def remember_delivered(self, digest: str) -> None:
+    def remember_delivered(self, digest: str, *, pending: bool = False) -> None:
         """Record a body as delivered so ``was_delivered`` can refuse a
         later identical re-send. A repeat is not re-appended, so one body
-        cannot push the others out of the ring by being sent twice."""
-        if digest and digest not in self.delivered_digests:
+        cannot push the others out of the ring by being sent twice.
+
+        ``pending=True`` records a body that is ABOUT to be sent: it is
+        refused in this process at once, but not written to the state
+        file until ``confirm_delivered`` says the send landed."""
+        if not digest:
+            return
+        if digest not in self.delivered_digests:
+            if len(self.delivered_digests) == self.delivered_digests.maxlen:
+                self.pending_digests.discard(self.delivered_digests[0])
             self.delivered_digests.append(digest)
+        if pending:
+            self.pending_digests.add(digest)
+        else:
+            self.pending_digests.discard(digest)
+
+    def confirm_delivered(self, digests: Iterable[str],
+                          selected_wall: float) -> None:
+        """The send of these pending digests landed: make them persistable
+        and stamp ``answer_delivered_wall`` (see the field)."""
+        for digest in digests:
+            self.pending_digests.discard(digest)
+        if selected_wall > self.answer_delivered_wall:
+            self.answer_delivered_wall = selected_wall
+
+    def persisted_digests(self) -> list[str]:
+        """The ring as written to the state file: confirmed digests only,
+        oldest first."""
+        return [d for d in self.delivered_digests
+                if d not in self.pending_digests]
+
+    def restore_delivered_digests(self, raw: object) -> None:
+        """Refill the ring from a state file's value. Anything that is not
+        a list of strings is ignored (an old or hand-edited file), and only
+        the newest DELIVERED_DIGEST_RING entries survive."""
+        if not isinstance(raw, list):
+            return
+        for digest in raw:  # the deque's maxlen keeps the newest
+            if isinstance(digest, str) and digest:
+                self.remember_delivered(digest)
 
     def model_switch_pending(self) -> bool:
         """Is a typed ``/model`` still unaccounted for (roadmap 8.35)?
@@ -1720,6 +1780,11 @@ class SessionRegistry:
         "override_layout", "override_simple_formatting",
         "override_answer_length", "override_language_level",
         "override_diff_preview", "override_card_age_decay",
+        # Roadmap 8.39 — what already reached the chat, so a restart
+        # cannot re-post it. `delivered_digests` is written through
+        # `persisted_digests()` (confirmed sends only) and read back
+        # through `restore_delivered_digests`.
+        "delivered_digests", "answer_delivered_wall",
         # NOT here, and not by oversight: `active_subagents` /
         # `finished_subagents` / `tool_history` are per-turn state, and the
         # subagent rows carry `started_at` / `last_seen` as
@@ -1769,6 +1834,8 @@ class SessionRegistry:
                 elif f == "busy_msg_id":
                     # Never persist sentinel (-1) or None
                     val = val if val and val > 0 else None
+                elif f == "delivered_digests":
+                    val = sess.persisted_digests()
                 d[f] = val
             sessions[name] = d
 
@@ -1910,6 +1977,18 @@ class SessionRegistry:
             # window this doesn't cover.
             if sess.busy_msg_id:
                 sess.busy_card_trigger = sess.trigger_msg_id
+            # Roadmap 8.39: an entry saved before this field existed has
+            # neither key and restores to an empty ring / zero stamp.
+            sess.restore_delivered_digests(sd.get("delivered_digests"))
+            try:
+                sess.answer_delivered_wall = float(
+                    sd.get("answer_delivered_wall") or 0.0)
+            except (TypeError, ValueError):
+                sess.answer_delivered_wall = 0.0
+            # A stamp in the future (a hand edit, or the clock stepped back
+            # since the save) would make every late answer "predate" it.
+            if not 0.0 <= sess.answer_delivered_wall <= time.time():
+                sess.answer_delivered_wall = 0.0
             # Multi-scope backfill: stamp legacy sessions (scope_chat_id == 0)
             # with the single configured chat so notify routing is explicit.
             if sess.scope_chat_id == 0 and _default is not None:

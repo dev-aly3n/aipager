@@ -211,6 +211,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `update` is now a reserved session name, like the other commands.
 
 ### Fixed
+- **A restart no longer re-posts the answer you already got.** If the
+  daemon restarted in the minute after a turn finished, Claude Code's
+  "waiting for your input" nudge reached the new daemon, which posted
+  the same answer a second time (without its duration). aipager now
+  remembers across a restart which answers reached the chat. If the
+  restart falls in that minute, an answer that never reached the chat
+  (for example, a send the restart cut off, a failed send, or one held
+  back while the chat was flood-muted) is delivered then, once.
 - **Button taps show their messages again.** Every tap on an inline
   button was acknowledged with an empty answer before its handler ran, and
   Telegram accepts only one answer per tap, so the handler's own message

@@ -190,12 +190,23 @@ def extract_last_response(
     empty result is the safe direction. Callers distinguish it from None
     to suppress their own cached-summary fallbacks.
     """
+    return extract_last_response_entry(transcript_path, since=since)[0]
+
+
+def extract_last_response_entry(
+    transcript_path: str, *, since: float | None = None,
+) -> tuple[str | None, float | None]:
+    """``extract_last_response`` plus the wall-clock timestamp of the
+    entry the text came from (None when there is no such text, or the
+    entry carries no usable timestamp). The already-IDLE late-answer path
+    needs it to tell an answer written before the last confirmed delivery
+    from a genuinely undelivered one (roadmap 8.39)."""
     try:
         with open(transcript_path, "r") as f:
             tail = deque(f, maxlen=20)
     except (FileNotFoundError, PermissionError, OSError) as e:
         log.debug("Cannot read transcript %s: %s", transcript_path, e)
-        return None
+        return None, None
 
     for line in reversed(tail):
         line = line.strip()
@@ -210,7 +221,7 @@ def extract_last_response(
             continue
 
         if is_no_response_entry(entry):
-            return ""
+            return "", None
 
         content = entry.get("message", {}).get("content", [])
         texts = []
@@ -227,10 +238,11 @@ def extract_last_response(
                     "turn — treating the turn as having produced none",
                     entry.get("timestamp"),
                 )
-                return ""
-            return _strip_leaked_tool_xml("\n\n".join(texts))
+                return "", None
+            return (_strip_leaked_tool_xml("\n\n".join(texts)),
+                    _entry_timestamp(entry))
 
-    return None
+    return None, None
 
 
 def _content_text(content) -> str:

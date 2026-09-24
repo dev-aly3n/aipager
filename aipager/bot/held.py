@@ -112,6 +112,11 @@ class HeldAnswer:
     held_at: float = field(default_factory=time.time)
     attempts: int = 0
     key: str = ""
+    # Roadmap 8.39: the finish path's pending delivery record, confirmed
+    # on the session when this entry finally lands. Empty for holds that
+    # are not a turn's answer.
+    digests: tuple[str, ...] = ()
+    selected_wall: float = 0.0
 
     def held_seconds(self, now: float | None = None) -> float:
         return max(0.0, (time.time() if now is None else now) - self.held_at)
@@ -129,7 +134,8 @@ class HeldAnswers:
 
     def hold(self, *, chat_id, session: str, label: str, rich_text: str,
              plain_text: str, reply_to: int | None = None,
-             at: float | None = None) -> HeldAnswer:
+             at: float | None = None, digests: tuple[str, ...] = (),
+             selected_wall: float = 0.0) -> HeldAnswer:
         """Keep one answer. Every call is a NEW entry (8.29 T4).
 
         Nothing is replaced. A session can finish two turns inside one
@@ -151,6 +157,7 @@ class HeldAnswers:
             rich_text=rich_text, plain_text=plain_text, reply_to=reply_to,
             held_at=time.time() if at is None else at,
             key=f"{session}#{self._seq}",
+            digests=digests, selected_wall=selected_wall,
         )
         per_chat[entry.key] = entry
         self.expire(at)

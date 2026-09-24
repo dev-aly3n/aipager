@@ -34,6 +34,7 @@ from aipager.state import (
 from aipager.transcript import (
     _strip_leaked_tool_xml,
     extract_last_response,
+    extract_last_response_entry,
     NO_RESPONSE_TEXT,
 )
 
@@ -1217,18 +1218,48 @@ class HookReceiver:
                 late_msg = _strip_leaked_tool_xml(
                     msg.get("last_assistant_message", "") or ""
                 )
+                # When the text had to come from the transcript: the
+                # timestamp of the entry it was read from (roadmap 8.39).
+                late_written_at: float | None = None
                 if not late_msg and tracked:
                     # Some hook variants omit last_assistant_message; the
                     # normal Stop path below falls back to the transcript,
-                    # and so must this one (review rev-iter1-004).
+                    # and so must this one (review rev-iter1-004). Claude
+                    # Code's idle Notification (`idle_prompt`, 60 s after
+                    # a Stop) is one of them — the event behind the
+                    # 2026-09-24 re-send after a restart.
                     late_tp = transcript_path or tracked.transcript_path
                     if late_tp:
                         try:
-                            late_msg = extract_last_response(
-                                late_tp, since=tracked.turn_entered_wall or None,
-                            ) or ""
+                            late_msg, late_written_at = (
+                                extract_last_response_entry(
+                                    late_tp,
+                                    since=tracked.turn_entered_wall or None,
+                                )
+                            )
+                            late_msg = late_msg or ""
                         except Exception:
                             late_msg = ""
+                # Written before the last confirmed delivery was selected:
+                # that text already existed when an answer went out, so it
+                # IS that answer or something older — never an undelivered
+                # one. Survives a restart where a digest mismatch (the
+                # transcript's text vs the hook's) would not.
+                predates_delivery = bool(
+                    tracked and late_written_at is not None
+                    and tracked.answer_delivered_wall
+                    and late_written_at < tracked.answer_delivered_wall
+                )
+                if predates_delivery:
+                    # INFO only when the stamp is what refused it (the ring
+                    # did not): that is the case worth seeing in the journal.
+                    log.log(
+                        logging.DEBUG if tracked.was_delivered(
+                            hashlib.md5(late_msg.encode("utf-8")).hexdigest()
+                        ) else logging.INFO,
+                        "[%s] the transcript's newest answer predates the "
+                        "last delivered one — not re-sending", tracked.label,
+                    )
                 late_digest = (
                     hashlib.md5(late_msg.encode("utf-8")).hexdigest()
                     if late_msg else ""
@@ -1239,6 +1270,7 @@ class HookReceiver:
                     < _STOP_SUPPRESS_SECONDS
                 )
                 if (tracked and late_msg and not just_stopped
+                        and not predates_delivery
                         and late_msg.strip() != NO_RESPONSE_TEXT
                         and not tracked.was_delivered(late_digest)):
                     sess = tracked  # bypass debounce — an answer is waiting

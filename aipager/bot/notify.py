@@ -687,8 +687,15 @@ class NotifyMixin:
             )
 
     def _hold_answer(self, sess: TrackedSession, rich_text: str,
-                     plain_text: str, reply_to: int | None) -> None:
+                     plain_text: str, reply_to: int | None, *,
+                     digests: list[str] | None = None,
+                     selected_wall: float = 0.0) -> None:
         """Keep an answer a flood mute refused (8.29 R6). Never raises.
+
+        ``digests`` / ``selected_wall`` are the finish path's pending
+        delivery record (roadmap 8.39): ``flush_held_answers`` confirms
+        them once the held answer finally lands, so a restart after that
+        does not re-post it.
 
         One INFO where "not delivered, no fallback" used to be — the
         operator is told the answer is coming, not that it is gone.
@@ -704,7 +711,8 @@ class NotifyMixin:
                 chat_id=resolve_chat_id_int(sess) or resolve_chat_id(sess),
                 session=sess.name, label=sess.label,
                 rich_text=rich_text, plain_text=plain_text,
-                reply_to=reply_to,
+                reply_to=reply_to, digests=tuple(digests or ()),
+                selected_wall=selected_wall,
             )
             log.info(
                 "[%s] answer held — the chat is flood-muted; it will be "
@@ -743,6 +751,14 @@ class NotifyMixin:
                 log.warning("[%s] held answer: plain-text chunk failed",
                             entry.label, exc_info=True)
         return landed
+
+    def _confirm_held(self, sess: TrackedSession, entry) -> None:
+        """A held answer landed: its digests become persistable and the
+        delivery stamp moves (roadmap 8.39) — the finish path left both
+        pending when the mute refused it."""
+        if entry.digests:
+            sess.confirm_delivered(entry.digests, entry.selected_wall)
+            self.registry.mark_dirty()
 
     async def flush_held_answers(self, sess: TrackedSession) -> int:
         """Deliver everything held for this session's chat. Returns how
@@ -819,6 +835,7 @@ class NotifyMixin:
                 HELD.drop(entry.chat_id, entry.key)
                 if await self._deliver_held_as_plain_text(entry, marker):
                     delivered += 1
+                    self._confirm_held(sess, entry)
                     log.info(
                         "[%s] held answer delivered as plain text after %d "
                         "failed rich attempts", entry.label, entry.attempts,
@@ -832,6 +849,7 @@ class NotifyMixin:
                 continue
             HELD.drop(entry.chat_id, entry.key)
             delivered += 1
+            self._confirm_held(sess, entry)
             if isinstance(sent, dict) and sent.get("message_id"):
                 self.registry.track_message(
                     sent["message_id"], sess.name,
@@ -879,10 +897,14 @@ class NotifyMixin:
         # SENT or HELD. Any other failure keeps today's behaviour, because
         # the plain-text fallback below owns it and clearing after a
         # successful fallback is correct.
-        def _consume() -> None:
+        # `landed` (roadmap 8.39): a held, blocked or wholly failed send is
+        # remembered in this process but kept out of the state file, so a
+        # restart does not count it as delivered. No delivery stamp either:
+        # a flushed interim is not the transcript's newest answer.
+        def _consume(landed: bool = True) -> None:
             sess.job_interim_buffer.clear()
             sess.last_idle_summary_hash = digest
-            sess.remember_delivered(digest)
+            sess.remember_delivered(digest, pending=not landed)
 
         try:
             if chat_id is None:
@@ -896,7 +918,7 @@ class NotifyMixin:
                     sent["message_id"], sess.name, chat_id or 0,
                 )
         except RichMessageBlocked:
-            _consume()
+            _consume(landed=False)
             _log_blocked_once(Exception("sendRichMessage 403"))
         except RichMessageFloodBanned:
             # HELD (8.29 R6). Still no plain-text fallback — that is a
@@ -904,19 +926,21 @@ class NotifyMixin:
             # delivered once the mute lifts. The buffer is cleared ONLY
             # because the hold now owns the only copy.
             self._hold_answer(sess, rich_text, plain_text,
-                              sess.trigger_msg_id)
-            _consume()
+                              sess.trigger_msg_id, digests=[digest])
+            _consume(landed=False)
         except (RichMessageFallbackRequired, Exception):
             log.warning(
                 "[%s] job buffer sendRichMessage failed — falling back to "
                 "plain text", sess.label, exc_info=True,
             )
+            any_landed = False
             for chunk in _plain_text_chunks(plain_text):
                 try:
                     fallback = await self._app.bot.send_message(
                         resolve_chat_id(sess), chunk,
                         reply_to_message_id=sess.trigger_msg_id,
                     )
+                    any_landed = True
                     self.registry.track_message(
                         fallback.message_id, sess.name,
                         resolve_chat_id_int(sess) or 0,
@@ -926,7 +950,7 @@ class NotifyMixin:
                         "[%s] job buffer plain-text fallback chunk send "
                         "failed", sess.label, exc_info=True,
                     )
-            _consume()
+            _consume(landed=any_landed)
         else:
             _consume()
 
@@ -1957,6 +1981,11 @@ class NotifyMixin:
             return
 
         if sess.status == Status.IDLE:
+            # The delivery stamp's moment (roadmap 8.39 R2), taken on
+            # arrival — before the awaited final card render, which the
+            # outbound gate can pace by seconds. A next turn's answer
+            # written during that render must not look older than it.
+            turn_end_wall = time.time()
             # Every turn end, before the job-interim and API-error returns
             # below: Claude Code has just run whatever it had queued.
             await self._mark_ran_commands(sess)
@@ -2274,6 +2303,12 @@ class NotifyMixin:
             # transcript's newest text is an EARLIER turn's exactly when
             # this one produced none, and that is the case a per-turn
             # reset cannot see.
+            #
+            # Recorded PENDING (roadmap 8.39): refused in this process from
+            # here on, but written to the state file only once the send
+            # below is known to have landed — see `_answer_landed`.
+            _answer_digests: list[str] = []
+            _answer_landed = False
             if content:
                 _digest = hashlib.md5(content.encode("utf-8")).hexdigest()
                 if (_digest == sess.last_idle_summary_hash
@@ -2286,7 +2321,8 @@ class NotifyMixin:
                     content = ""
                 else:
                     sess.last_idle_summary_hash = _digest
-                    sess.remember_delivered(_digest)
+                    sess.remember_delivered(_digest, pending=True)
+                    _answer_digests.append(_digest)
 
             # Reset streaming state — the turn is over.
             sess.stream_commentary = []
@@ -2369,9 +2405,9 @@ class NotifyMixin:
                     composed_with_interim = True
                     # The composed text is what actually goes out — remember
                     # it too, so a stray re-run cannot re-post the composition.
-                    sess.remember_delivered(
-                        hashlib.md5(content.encode("utf-8")).hexdigest(),
-                    )
+                    _composed = hashlib.md5(content.encode("utf-8")).hexdigest()
+                    sess.remember_delivered(_composed, pending=True)
+                    _answer_digests.append(_composed)
 
             # Compute elapsed time since BUSY started
             elapsed_str = ""
@@ -2661,6 +2697,7 @@ class NotifyMixin:
                         is_rtl=is_rtl,
                         reply_to_message_id=reply_to,
                     )
+                    _answer_landed = True
                     if body_is_the_message and isinstance(sent, dict):
                         msg_id = sent.get("message_id") or 0
                 except RichMessageBlocked:
@@ -2676,7 +2713,9 @@ class NotifyMixin:
                     # What changes is that "cannot send now" stops meaning
                     # "cannot send": the text is kept and delivered once
                     # the mute lifts, with an honest late marker.
-                    self._hold_answer(sess, rich_text, plain_text, reply_to)
+                    self._hold_answer(sess, rich_text, plain_text, reply_to,
+                                      digests=_answer_digests,
+                                      selected_wall=turn_end_wall)
                 except (RichMessageFallbackRequired, Exception):
                     # Plain-text fallback — split into ≤4096-char chunks at
                     # markdown-safe boundaries so the send cannot fail to parse.
@@ -2693,6 +2732,7 @@ class NotifyMixin:
                                     reply_to if not msg_id else None
                                 ),
                             )
+                            _answer_landed = True
                             # With no header, the first chunk that lands takes
                             # over as the tracked message for this reply.
                             if body_is_the_message and not msg_id:
@@ -2700,6 +2740,13 @@ class NotifyMixin:
                         except Exception:
                             log.warning("[%s] plain-text fallback chunk send failed",
                                         label, exc_info=True)
+
+            # Roadmap 8.39: only an answer that reached the chat is
+            # remembered ACROSS a restart. A held one (not persisted), a
+            # blocked or failed one, or one a shutdown cut off stays out of
+            # the state file, so the next daemon can still deliver it.
+            if _answer_digests and (_answer_landed or merged_delivered):
+                sess.confirm_delivered(_answer_digests, turn_end_wall)
 
             # The tool-less card goes only now that the answer is out (or
             # held) — roadmap 8.32 R1.
