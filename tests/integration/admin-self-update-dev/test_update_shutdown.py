@@ -183,3 +183,41 @@ def test_daemon_shutdown_helper_never_raises(env, run):
         await daemon._shutdown_updates(_Bot())
         await daemon._shutdown_updates(object())
     run(scenario)
+
+
+def test_shutdown_mid_claude_update_kills_it_and_says_run_it_again(env, run):
+    release = threading.Event()
+    killed: list = []
+    child = _StandIn()
+
+    def _claude_update():
+        with self_update._LIVE_LOCK:
+            self_update._LIVE_CHILDREN.add(child)
+        release.wait(10)
+        return self_update.ClaudeUpdateResult("2.1.281", "2.1.281", -15, False, "",
+                                              None, env.claude_path)
+
+    def _kill_group(proc):
+        killed.append(proc)
+        with self_update._LIVE_LOCK:
+            self_update._LIVE_CHILDREN.discard(proc)
+        release.set()
+
+    env.monkeypatch.setattr(self_update, "run_claude_update", _claude_update)
+    env.monkeypatch.setattr(self_update, "_kill_group", _kill_group)
+    env.monkeypatch.setattr(update_flow, "SHUTDOWN_GRACE_SECONDS", 0.3)
+
+    async def scenario():
+        await env.start("claude")
+        await env.until(lambda: env.manager.snapshot()["phase"] == "claude_updating"
+                        and self_update.running_command_count() == 1)
+        await env.manager.shutdown()
+    try:
+        run(scenario)
+    finally:
+        self_update._LIVE_CHILDREN.discard(child)
+    assert killed == [child]
+    assert env.manager.snapshot()["phase"] == "cancelled"
+    assert "run <code>claude update</code> again" in env.last_text()
+    marker = json.loads(self_update.UPDATE_MARKER_PATH.read_text())
+    assert marker["interrupted"] == "claude_updating"

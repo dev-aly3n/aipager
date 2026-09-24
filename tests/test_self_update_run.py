@@ -151,5 +151,9 @@ def test_shutdown_kills_a_running_child_group(real_seam, tmp_path):
         assert _gone(grandchild), "the grandchild outlived the shutdown kill"
         assert self_update.running_command_count() == 0
     finally:
-        if not _gone(grandchild):
-            os.kill(grandchild, 9)
+        # Never leave the child group behind, even when the kill failed.
+        try:
+            os.killpg(os.getpgid(grandchild), 9)
+        except (ProcessLookupError, PermissionError, OSError):
+            pass
+        t.join(10)

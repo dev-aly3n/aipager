@@ -79,7 +79,7 @@ def test_voice_restart_refuses_while_an_update_job_runs(env, run):
     # The only schedule is the update's own, after its installer finished.
     assert len(env.schedule_calls()) == 1
     texts = [c.args[0] for c in q.edit_message_text.await_args_list]
-    assert texts and "Not restarting: an aipager update" in texts[0]
+    assert texts and "about to restart the daemon" in texts[0]
 
 
 def test_voice_restart_refuses_while_an_update_restart_is_pending(env, run):
@@ -92,7 +92,7 @@ def test_voice_restart_refuses_while_an_update_restart_is_pending(env, run):
         await env.bot._restart_daemon(q)
     run(scenario)
     assert len(env.schedule_calls()) == 1
-    assert "Not restarting: an aipager update" in q.edit_message_text.await_args.args[0]
+    assert "about to restart the daemon" in q.edit_message_text.await_args.args[0]
 
 
 def test_voice_restart_refuses_while_the_cli_holds_the_update_lock(env, run):
