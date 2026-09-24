@@ -25,6 +25,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   daemon restarts; a bar you delete is re-created at most once an hour.
   See [commands → the pinned status bar](docs/commands.md#the-pinned-status-bar).
 
+### Changed
+- **A long turn's busy card refreshes less often, and says so in its
+  counter.** From 2 / 10 / 60 minutes into a turn the card is edited at
+  most every 10 / 30 / 60 seconds, and its elapsed counter — on the status
+  line, the live agent rows and the waiting line — switches from seconds
+  to minutes (`23m`) and then hours (`1h 23m`), so a slow card never looks
+  frozen. A new tool row or sentence waits for the next refresh; a state
+  change (working ↔ waiting on a background agent) still shows at once,
+  at most once every 10 seconds. In the first two minutes the card keeps
+  its pace, less the typing bubble's share (see above), and the finished
+  card is unchanged. Every path that edits a card follows it,
+  including the hook-driven edits for tool calls and subagent events, and
+  the stale-card watchdog no longer forces a refresh on a card that is on
+  schedule. A four-hour turn's card used to be edited every few seconds
+  for all four hours. New `/settings` toggle **⏱ Long-turn card updates**
+  (on by default; per session from the Mini App or 👤 Per-session
+  preferences) keeps the old pace for the whole turn.
+- **The pinned status message is now a "needs you" bar, and it is edited
+  a few times an hour, not on every hook.** It used to exist only on
+  single-chat installs without `aipager.yaml`, headed by whichever session
+  sent the last hook, with model, cost and context % on every line: two
+  sessions working at once made it the chat's biggest caller. It now
+  carries no clock, cost, context % or model, is refreshed on state
+  changes (a session working, waiting, idle, gone or new, a prompt shown
+  or answered, a flood regime entered or left) instead of hooks, and is
+  edited only when what it shows changed — at most once every 30 s per
+  chat (`PINNED_MIN_EDIT_GAP`), with a change inside that gap shown when
+  it ends, never lost, and never while the chat is flood-muted. Replayed
+  over the 2026-09-23 timeline (two sessions streaming for 3 h 24 min) it
+  made 20 edits, one per state change, 14 in its busiest hour.
+  `PINNED_REFRESH_INTERVAL` and `PINNED_REFRESH_BUSY_INTERVAL` are gone.
+- **`aipager status` and `aipager doctor` show each chat's long-run
+  state**: `Telegram chat 123: rate 0.25/s (ceiling 0.50/s), 212/1200
+  calls in the last hour (as of 18s ago), 7/30 in the last minute —
+  warning regime, 5h 52m left (1 ban(s) in the last 7 days)`. The hour is
+  read from `~/.claude/aipager-flood-state.json`, which the daemon now
+  also rewrites at most once a minute while calls flow
+  (`FLOOD_STATE_VOLUME_REFRESH_SECONDS`), so it is labelled with its age.
+  The hour and the warning regime survive a restart like the rest of the
+  file; the file keeps schema version 1 (every new field is additive), so
+  an older `aipager status` still reads it. `status --json` carries
+  `hourly_used`, `hourly_budget`, `hourly_age`, `warning_remaining`,
+  `bans_7d` and `ceiling` per chat; `bans_today` is still the 24-hour
+  count. A file written before this release has no hour, and the line
+  shows none (`hourly_budget` is `null`) rather than a "0/1200" it never
+  measured; a warning regime is never shown longer than the six hours the
+  daemon itself would hold.
+
 ### Fixed
 - **Button taps show their messages again.** Every tap on an inline
   button was acknowledged with an empty answer before its handler ran, and
@@ -87,54 +135,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one ban halves both, two third them. The memory used to be 24 hours and
   only halved the ceiling: the chat banned on 2026-09-23 had been banned
   four days earlier, and that ban no longer counted.
-
-### Changed
-- **A long turn's busy card refreshes less often, and says so in its
-  counter.** From 2 / 10 / 60 minutes into a turn the card is edited at
-  most every 10 / 30 / 60 seconds, and its elapsed counter — on the status
-  line, the live agent rows and the waiting line — switches from seconds
-  to minutes (`23m`) and then hours (`1h 23m`), so a slow card never looks
-  frozen. A new tool row or sentence waits for the next refresh; a state
-  change (working ↔ waiting on a background agent) still shows at once,
-  at most once every 10 seconds. In the first two minutes the card keeps
-  its pace, less the typing bubble's share (see above), and the finished
-  card is unchanged. Every path that edits a card follows it,
-  including the hook-driven edits for tool calls and subagent events, and
-  the stale-card watchdog no longer forces a refresh on a card that is on
-  schedule. A four-hour turn's card used to be edited every few seconds
-  for all four hours. New `/settings` toggle **⏱ Long-turn card updates**
-  (on by default; per session from the Mini App or 👤 Per-session
-  preferences) keeps the old pace for the whole turn.
-- **The pinned status message is now a "needs you" bar, and it is edited
-  a few times an hour, not on every hook.** It used to exist only on
-  single-chat installs without `aipager.yaml`, headed by whichever session
-  sent the last hook, with model, cost and context % on every line: two
-  sessions working at once made it the chat's biggest caller. It now
-  carries no clock, cost, context % or model, is refreshed on state
-  changes (a session working, waiting, idle, gone or new, a prompt shown
-  or answered, a flood regime entered or left) instead of hooks, and is
-  edited only when what it shows changed — at most once every 30 s per
-  chat (`PINNED_MIN_EDIT_GAP`), with a change inside that gap shown when
-  it ends, never lost, and never while the chat is flood-muted. Replayed
-  over the 2026-09-23 timeline (two sessions streaming for 3 h 24 min) it
-  made 20 edits, one per state change, 14 in its busiest hour.
-  `PINNED_REFRESH_INTERVAL` and `PINNED_REFRESH_BUSY_INTERVAL` are gone.
-- **`aipager status` and `aipager doctor` show each chat's long-run
-  state**: `Telegram chat 123: rate 0.25/s (ceiling 0.50/s), 212/1200
-  calls in the last hour (as of 18s ago), 7/30 in the last minute —
-  warning regime, 5h 52m left (1 ban(s) in the last 7 days)`. The hour is
-  read from `~/.claude/aipager-flood-state.json`, which the daemon now
-  also rewrites at most once a minute while calls flow
-  (`FLOOD_STATE_VOLUME_REFRESH_SECONDS`), so it is labelled with its age.
-  The hour and the warning regime survive a restart like the rest of the
-  file; the file keeps schema version 1 (every new field is additive), so
-  an older `aipager status` still reads it. `status --json` carries
-  `hourly_used`, `hourly_budget`, `hourly_age`, `warning_remaining`,
-  `bans_7d` and `ceiling` per chat; `bans_today` is still the 24-hour
-  count. A file written before this release has no hour, and the line
-  shows none (`hourly_budget` is `null`) rather than a "0/1200" it never
-  measured; a warning regime is never shown longer than the six hours the
-  daemon itself would hold.
+- **The Mini App's "Last message" shows a live session's actual latest
+  reply.** It used to render the snapshot taken when a session last went
+  away — kept after the session came back and persisted across restarts —
+  so a healthy session could show a week-old
+  `Please run /login · API Error: 401 …`. A live session's last message
+  now comes from its transcript (a tail read, re-done only when the file
+  changes); a finished session still shows its snapshot. A stale snapshot
+  already saved on a live session is dropped on upgrade, and one is
+  cleared whenever a session comes back.
+- **API errors are never shown as a session's last reply.** Claude Code
+  records a failed request (expired login, rate limit, server error), and
+  a turn that produced no text ("No response requested."), as synthetic
+  assistant messages. The Mini App, the `/resume` picker, the post-resume
+  recap and the `/new` "previously used" prompt now skip both and show
+  the real reply before them. The error card for a failed turn is
+  unchanged.
+- A session closed with `/exit` now shows its last reply in the Mini App
+  too, instead of an empty "Last message".
 
 ## [0.7.13] - 2026-09-16
 

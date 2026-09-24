@@ -128,9 +128,11 @@ def _sess(registry, **kw):
 
 def test_detail_payload_carries_preview_and_facts():
     registry = SessionRegistry()
+    # GONE: the snapshot is what a finished session shows. A live one
+    # reads its transcript instead (tests/test_live_last_message.py).
     sess = _sess(
         registry,
-        status=Status.IDLE,
+        status=Status.GONE,
         model_name="Opus 4.6",
         last_assistant_preview="Done — the tests pass.",
         cwd="/home/aly/aipager",

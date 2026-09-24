@@ -16,6 +16,7 @@ which then reached Telegram. When no stamped path exists, callers fail closed.
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 import logging
 import re
@@ -474,21 +475,174 @@ def read_turn_text(transcript_path: str, offset: int) -> tuple[str, int]:
     return ("\n\n".join(texts), new_offset)
 
 
-def last_assistant_preview(transcript_path: str, max_chars: int = 200) -> str:
-    """Return a single-line, length-capped preview of the last assistant text.
+def is_synthetic_entry(entry: dict) -> bool:
+    """True for an assistant entry no model produced (``message.model ==
+    "<synthetic>"``): an API error (``isApiErrorMessage`` true — expired
+    auth, rate limit, 5xx) or the no-response placeholder. Neither is
+    something Claude *said*, so a "where did it leave off" preview must
+    look past them (roadmap 8.34). The turn-summary path
+    (:func:`extract_last_response`) deliberately does NOT use this: there
+    an API error is the turn's outcome and raises the error card."""
+    message = entry.get("message")
+    return isinstance(message, dict) and message.get("model") == SYNTHETIC_MODEL
 
-    Used by the /resume picker and the post-resume confirmation to remind
-    the user where they left off. Whitespace is collapsed to single spaces;
-    if the text exceeds ``max_chars`` an ellipsis is appended. Returns
-    "" on any error (missing transcript, no assistant entries, etc.) so
-    callers can render "no preview" unconditionally.
+
+# Backward tail read for :func:`last_real_assistant_text`. A reply can sit
+# behind a long run of tool traffic (tool results carry whole files), so
+# the reader walks back chunk by chunk, but never past the byte cap — a
+# transcript with no real reply in its last few MiB gets the empty state
+# rather than a full-file scan.
+_TAIL_CHUNK_BYTES = 64 * 1024
+_TAIL_MAX_BYTES = 4 * 1024 * 1024
+
+
+def _entry_text(entry: dict) -> str:
+    message = entry.get("message")
+    if not isinstance(message, dict):
+        return ""
+    content = message.get("content", [])
+    if isinstance(content, str):
+        content = [content]
+    elif not isinstance(content, list):
+        return ""
+    texts = []
+    for block in content:
+        if isinstance(block, dict) and block.get("type") == "text":
+            text = block.get("text", "")
+            if isinstance(text, str):
+                texts.append(text)
+        elif isinstance(block, str):
+            texts.append(block)
+    return "\n\n".join(t for t in texts if t)
+
+
+def last_real_assistant_text(transcript_path: str) -> str | None:
+    """Return the newest assistant text a model actually wrote, or None.
+
+    Walks the file backwards from its end in ``_TAIL_CHUNK_BYTES`` steps
+    (seek-based: cost is bounded by how far back the reply sits, capped
+    at ``_TAIL_MAX_BYTES``, not by the file's size). Synthetic entries
+    (:func:`is_synthetic_entry`) and text-less assistant entries are
+    skipped, so a trailing API error falls back to the reply before it.
+    A trailing line with no newline yet is still being written and is
+    ignored. Returns None on any error or when nothing real is found.
+
+    A line longer than a chunk is assembled from its pieces once, when
+    its start is found — never re-split per chunk — so a multi-MiB tool
+    result in front of the reply costs one pass over its bytes.
     """
     if not transcript_path:
+        return None
+    try:
+        with open(transcript_path, "rb") as fh:
+            fh.seek(0, 2)
+            end = fh.tell()
+            pos = end
+            # Pieces of the line being assembled, in reverse file order.
+            pending: list[bytes] = []
+            tail_dropped = False
+            while pos > 0 and end - pos < _TAIL_MAX_BYTES:
+                step = min(_TAIL_CHUNK_BYTES, pos)
+                pos -= step
+                fh.seek(pos)
+                parts = fh.read(step).split(b"\n")
+                if len(parts) == 1:
+                    pending.append(parts[0])
+                    continue
+                # parts[-1] + pending ends where the previously seen
+                # newline was — or, before any newline was seen, it is
+                # the half-written last line: never a complete record.
+                last = parts[-1] + b"".join(reversed(pending))
+                candidates = parts[1:-1]
+                if tail_dropped:
+                    candidates.append(last)
+                tail_dropped = True
+                # parts[0] may start mid-line unless this is the file's start.
+                if pos > 0:
+                    pending = [parts[0]]
+                else:
+                    pending = []
+                    candidates.insert(0, parts[0])
+                for raw in reversed(candidates):
+                    text = _real_text_of_line(raw)
+                    if text:
+                        return text
+            if pos == 0 and pending and tail_dropped:
+                return _real_text_of_line(b"".join(reversed(pending))) or None
+    except (FileNotFoundError, PermissionError, OSError) as e:
+        log.debug("Cannot read transcript %s: %s", transcript_path, e)
+    return None
+
+
+def _real_text_of_line(raw: bytes) -> str:
+    """The model-written text of one JSONL line, or "" — never raises: a
+    malformed line must not break the Mini App's poll or the picker."""
+    line = raw.strip()
+    if not line or b'"assistant"' not in line:
         return ""
-    raw = extract_last_response(transcript_path)
+    try:
+        entry = json.loads(line)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return ""
+    if not isinstance(entry, dict) or entry.get("type") != "assistant":
+        return ""
+    if is_synthetic_entry(entry):
+        return ""
+    return _strip_leaked_tool_xml(_entry_text(entry)).strip()
+
+
+def _collapse_preview(raw: str | None, max_chars: int) -> str:
     if not raw:
         return ""
     collapsed = " ".join(raw.split())
     if len(collapsed) <= max_chars:
         return collapsed
     return collapsed[: max_chars - 1].rstrip() + "…"
+
+
+def last_assistant_preview(transcript_path: str, max_chars: int = 200) -> str:
+    """Return a single-line, length-capped preview of the last assistant text.
+
+    Used by the /resume picker, the post-resume confirmation and the GONE
+    snapshot to remind the user where they left off. Built on
+    :func:`last_real_assistant_text`, so a synthetic API error or
+    no-response placeholder is never the preview — the real reply before
+    it is. Whitespace is collapsed to single spaces; if the text exceeds
+    ``max_chars`` an ellipsis is appended. Returns "" on any error
+    (missing transcript, no real assistant text, etc.) so callers can
+    render "no preview" unconditionally.
+    """
+    if not transcript_path:
+        return ""
+    return _collapse_preview(last_real_assistant_text(transcript_path), max_chars)
+
+
+# (path, max_chars) → (size, mtime_ns, preview). The Mini App polls a
+# session's detail every 2.5 s per open page; one os.stat per poll is the
+# whole cost while the transcript is unchanged. Bounded: cleared whole
+# when it outgrows the cap (entries are cheap to rebuild).
+_PREVIEW_CACHE_MAX = 256
+_preview_cache: dict[tuple[str, int], tuple[int, int, str]] = {}
+
+
+def cached_last_assistant_preview(
+    transcript_path: str, max_chars: int = 200,
+) -> str:
+    """:func:`last_assistant_preview`, re-read only when the transcript's
+    (size, mtime) changed since the last call for the same path."""
+    if not transcript_path:
+        return ""
+    try:
+        st = os.stat(transcript_path)
+    except OSError:
+        _preview_cache.pop((transcript_path, max_chars), None)
+        return ""
+    key = (transcript_path, max_chars)
+    hit = _preview_cache.get(key)
+    if hit is not None and hit[0] == st.st_size and hit[1] == st.st_mtime_ns:
+        return hit[2]
+    preview = _collapse_preview(last_real_assistant_text(transcript_path), max_chars)
+    if len(_preview_cache) >= _PREVIEW_CACHE_MAX and key not in _preview_cache:
+        _preview_cache.clear()
+    _preview_cache[key] = (st.st_size, st.st_mtime_ns, preview)
+    return preview
