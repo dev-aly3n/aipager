@@ -110,8 +110,14 @@ def test_update_cmd_allows_scope_admin(env, run):
     assert "<b>aipager</b> 0.7.13" in env.last_text()
 
 
-def test_is_update_admin_rejects_missing_user(env):
+def test_is_update_admin_rejects_missing_user(env, monkeypatch):
     assert env.bot._is_update_admin(None, env.chat_id) is False
+    # A bool is an int in Python: with an operator whose id is 1, `True`
+    # would otherwise pass the personal-mode operator check.
+    monkeypatch.setattr("aipager.config.CHAT_ID", "1")
+    assert env.bot._is_update_admin(True, 1) is False
+    assert env.bot._is_update_admin(1, 1) is True
+    monkeypatch.setattr("aipager.config.CHAT_ID", str(env.chat_id))
     assert env.bot._is_update_admin(True, env.chat_id) is False
     assert env.bot._is_update_admin(env.chat_id, env.chat_id) is True
     _scoped(env)

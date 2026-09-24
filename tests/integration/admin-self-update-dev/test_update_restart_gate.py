@@ -139,12 +139,12 @@ def test_unanswered_gate_prompt_auto_cancels_and_releases_lock(env, run, monkeyp
     async def scenario():
         await env.start("aipager")
         await env.finish(timeout=5)
+        lock = self_update.UpdateLock()   # before the harness's own release
+        assert lock.try_acquire()
+        lock.release()
     run(scenario)
     assert env.manager.snapshot()["phase"] == "cancelled"
     assert env.upgrade_calls() == []
-    lock = self_update.UpdateLock()
-    assert lock.try_acquire()
-    lock.release()
 
 
 def test_gate_needs_two_consecutive_open_readings(env, run, monkeypatch):

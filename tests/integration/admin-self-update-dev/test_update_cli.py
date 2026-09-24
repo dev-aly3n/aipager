@@ -21,7 +21,8 @@ def test_cli_update_refuses_editable_install(env, capsys):
     env.source = InstallSource(kind="editable", prefix="/src", python="/src/python",
                                reason="this is an editable (development) install")
     assert updater.cmd_update() == 1
-    assert "editable" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "can't update this install" in err and "editable" in err
     assert env.calls == []
 
 

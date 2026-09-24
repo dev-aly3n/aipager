@@ -172,15 +172,12 @@ def test_schedule_failure_removes_marker(env, run):
     async def scenario():
         await env.start("aipager")
         await env.finish()
+        assert _lock_free()   # and the lock is back
     run(scenario)
     assert env.manager.snapshot()["phase"] == "failed"
     assert len(env.schedule_calls()) == 1
     assert not self_update.UPDATE_MARKER_PATH.exists()
     assert "scheduling the restart failed" in env.last_text()
-    # And the lock is back.
-    lock = UpdateLock()
-    assert lock.try_acquire()
-    lock.release()
 
 
 def test_second_update_refused_while_first_runs(env, run):
@@ -195,6 +192,13 @@ def test_second_update_refused_while_first_runs(env, run):
         second = await env.start("claude")
         assert (second.ok, second.error) == (False, "update_in_progress")
         assert second.job["id"] == first.job["id"]
+        # "Already running" wins over any other refusal while a job runs.
+        running_source = env.source
+        env.source = InstallSource(kind="editable", prefix="/s", python="/s/p",
+                                   reason="editable")
+        third = await env.start("aipager")
+        assert (third.ok, third.error) == (False, "update_in_progress")
+        env.source = running_source
         env.upgrade_release.set()
         await env.finish()
     run(scenario)
@@ -207,15 +211,19 @@ def _lock_free() -> bool:
     return free
 
 
+# Each of these checks the lock INSIDE the scenario: the harness's own
+# teardown releases the manager's lock, so a check after `run()` would
+# pass even if the job never released it.
+
 def test_lock_released_after_success(env, run):
     env.set_under_unit(False)  # manual restart: the job simply ends
 
     async def scenario():
         await env.start("aipager")
         await env.finish()
+        assert _lock_free()
     run(scenario)
     assert env.manager.snapshot()["phase"] == "done"
-    assert _lock_free()
 
 
 def test_lock_released_after_failure(env, run):
@@ -224,8 +232,8 @@ def test_lock_released_after_failure(env, run):
     async def scenario():
         await env.start("aipager")
         await env.finish()
+        assert _lock_free()
     run(scenario)
-    assert _lock_free()
 
 
 def test_lock_released_after_cancel(env, run):
@@ -238,9 +246,9 @@ def test_lock_released_after_cancel(env, run):
         await env.until(lambda: env.manager.snapshot()["phase"] == "waiting_for_idle")
         assert env.manager.control("cancel", res.job["id"]).ok
         await env.finish()
+        assert _lock_free()
     run(scenario)
     assert env.manager.snapshot()["phase"] == "cancelled"
-    assert _lock_free()
 
 
 def test_lock_released_after_exception(env, run, monkeypatch):
@@ -251,10 +259,10 @@ def test_lock_released_after_exception(env, run, monkeypatch):
     async def scenario():
         await env.start("aipager")
         await env.finish()
+        assert _lock_free()
     run(scenario)
     assert env.manager.snapshot()["phase"] == "failed"
     assert "unexpected error" in env.last_text()
-    assert _lock_free()
 
 
 def test_both_runs_claude_first_then_aipager(env, run):

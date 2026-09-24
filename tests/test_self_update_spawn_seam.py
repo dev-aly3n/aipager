@@ -113,20 +113,28 @@ def test_sweep_allows_the_seams_themselves():
 
 # ----- the conftest refusers actually refuse ----------------------------------
 
+# Each meta-test below is written so that, were its guard REMOVED (as the
+# mutation check does), the call would reach nothing real: a binary path
+# that does not exist, and a URL on the local discard port. Removing a
+# guard must turn these red, never run a real installer or fetch PyPI.
+
 def test_conftest_refuses_real_update_spawn(_no_real_self_update_io):
     from aipager import self_update
 
+    argv = ["/nonexistent/aipager-test/pipx", "upgrade", "aipager"]
     with pytest.raises(AssertionError, match="spawn a real process"):
-        self_update.run_command(["/usr/bin/pipx", "upgrade", "aipager"], timeout=1)
-    assert _no_real_self_update_io.refused == [["/usr/bin/pipx", "upgrade", "aipager"]]
+        self_update.run_command(argv, timeout=1)
+    assert _no_real_self_update_io.refused == [argv]
     _no_real_self_update_io.refused.clear()  # tripped on purpose
 
 
-def test_conftest_blocks_release_fetch(_no_real_self_update_io):
+def test_conftest_blocks_release_fetch(_no_real_self_update_io, monkeypatch):
     from aipager import self_update
 
+    monkeypatch.setattr(self_update, "PYPI_URL", "http://127.0.0.1:9/aipager/json")
+    monkeypatch.setattr(self_update, "HTTP_TIMEOUT_SECONDS", 0.5)
     assert self_update.latest_aipager_version() is None
-    assert _no_real_self_update_io.reached == [self_update.PYPI_URL]
+    assert _no_real_self_update_io.reached == ["http://127.0.0.1:9/aipager/json"]
     _no_real_self_update_io.reached.clear()  # tripped on purpose
 
 
@@ -134,7 +142,7 @@ def test_conftest_refuses_systemd_run_via_service_run():
     from aipager import service
 
     with pytest.raises(AssertionError, match="real service manager"):
-        service._run(["/usr/bin/systemd-run", "--user", "true"])
+        service._run(["/nonexistent/aipager-test/systemd-run", "--user", "true"])
 
 
 def test_conftest_sees_no_real_cgroup():
