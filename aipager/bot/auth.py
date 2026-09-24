@@ -534,6 +534,26 @@ class AuthMixin:
         # Personal mode — the operator is always admin.
         return True
 
+    def _is_update_admin(self, user_id: int | None, chat_id: int | None) -> bool:
+        """Who may update aipager / Claude Code (``/update``, its buttons,
+        and the Mini App's ``/api/update`` routes) — one rule for every
+        surface.
+
+        :meth:`_is_admin_user`, AND — in personal mode, where that rule is
+        True for any sender because command handlers are not chat-filtered
+        — the caller must be the operator (:meth:`_is_personal_mode_operator`),
+        mirroring ``/app`` and the Mini App's own gate. An update installs
+        software and restarts the daemon for everyone, so an unidentified
+        caller fails closed.
+        """
+        if not isinstance(user_id, int) or isinstance(user_id, bool):
+            return False
+        if not self._is_admin_user(user_id, chat_id):
+            return False
+        if self.scopes is None and self.team is None:
+            return self._is_personal_mode_operator(user_id)
+        return True
+
     def _can_prompt_user(self, user_id: int | None, chat_id: int | None) -> bool:
         """The bar for a SESSION-level preference override (PUT/DELETE on
         the Mini App's ``/api/sessions/{label}/preferences/{field}``) —

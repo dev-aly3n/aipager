@@ -51,6 +51,10 @@ class TelegramBot(
     def __init__(self, registry: SessionRegistry):
         self.registry = registry
         self._app: Application | None = None
+        # Self-update (`/update` + the Mini App's Updates block): at most one
+        # job at a time, shared by both surfaces. See bot/update_flow.py.
+        from aipager.bot.update_flow import UpdateManager
+        self.updates = UpdateManager(self)
         self.observers = None  # ObserverBroadcaster | None, injected by __main__
         self._registered_labels: set[str] | None = None  # None = never synced this run
         # Multi-scope: per-chat command-list state (chat_id → last labels set)

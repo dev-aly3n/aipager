@@ -30,7 +30,7 @@ from telegram.ext import (
     ContextTypes,
 )
 
-from aipager.bot import new_flow, session_parity
+from aipager.bot import new_flow, session_parity, update_flow
 from aipager.dtach import hook_reply, inject
 
 from aipager import preferences
@@ -380,8 +380,11 @@ class CallbackDispatchMixin:
             return
         session_name, action = resolved
 
-        # Both return False unless the callback belongs to their own
+        # All three return False unless the callback belongs to their own
         # namespace, so every pre-existing callback below is unaffected.
+        # `_:up:` (self-update) re-checks the admin rule on every tap.
+        if await update_flow.handle_callback(self, update, query, session_name, action):
+            return
         if await new_flow.handle_callback(self, update, query, session_name, action):
             return
         if await session_parity.handle_callback(self, update, query, session_name, action):

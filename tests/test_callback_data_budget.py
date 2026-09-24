@@ -135,6 +135,12 @@ ALLOWED_JOINEDSTR_SIGNATURES = frozenset({
     # a session name.
     "_:resume_page:{page - 1}",
     "_:resume_page:{page + 1}",
+    # bot/update_flow.py's self-update job controls (roadmap 8.36) —
+    # interpolate the JOB id, an int epoch (10 digits for centuries), never
+    # a session name: "_:up:stop:" + 10 digits = 20 bytes.
+    "_:up:now:{job.id}",
+    "_:up:wait:{job.id}",
+    "_:up:stop:{job.id}",
 })
 
 # verb= arguments to session_cb(...) that are f-strings rather than a

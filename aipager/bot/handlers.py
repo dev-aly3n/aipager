@@ -524,6 +524,7 @@ class CommandHandlersMixin:
             "  /delete — drop a finished session from the list\n"
             "  /settings — message layout, formatting and language\n"
             "  /perms — switch a session between Ask and Auto\n"
+            "  /update — update aipager and Claude Code (admin)\n"
         )
         try:
             await send_text(self._app.bot,

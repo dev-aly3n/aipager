@@ -1044,7 +1044,7 @@ APP_JS = r"""
     "help": true, "kill": true, "list": true, "ls": true, "new": true,
     "perms": true, "rename": true, "restart": true, "resume": true,
     "settings": true, "start": true, "status": true, "stop": true,
-    "whoami": true
+    "update": true, "whoami": true
   };
 
   function renameValidationError(value) {
