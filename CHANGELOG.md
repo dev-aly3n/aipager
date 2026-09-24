@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **`aipager service install` works outside an interactive shell.** Run
+  from a systemd timer, cron or a script with a bare `PATH`, it stopped
+  with "aipager not on PATH". It now falls back to the `aipager` that is
+  running, then `~/.local/bin/aipager`, then the one beside its Python.
 - **A prompt sent during a Telegram flood ban now gets its busy card
   after the ban.** Since 0.7.13 no request reaches a banned chat, but the
   refused card was then dropped, so the turn ran with no card even when

@@ -37,8 +37,11 @@ def test_resolve_aipager_bin_found(monkeypatch):
     assert service._resolve_aipager_bin() == "/usr/bin/aipager"
 
 
-def test_resolve_aipager_bin_missing_raises(monkeypatch):
-    monkeypatch.setattr(service.shutil, "which", lambda n: None)
+def test_resolve_aipager_bin_missing_raises(monkeypatch, tmp_path):
+    monkeypatch.setattr(service.shutil, "which", lambda name: None)
+    monkeypatch.setattr(service.Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.setattr(service.sys, "argv", ["python"])
+    monkeypatch.setattr(service.sys, "executable", str(tmp_path / "py" / "python"))
     with pytest.raises(FileNotFoundError):
         service._resolve_aipager_bin()
 

@@ -19,6 +19,7 @@ import platform
 import re
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -113,14 +114,36 @@ def _platform() -> str:
     return s
 
 
+def _is_exe(path: Path) -> bool:
+    return path.is_file() and os.access(path, os.X_OK)
+
+
 def _resolve_aipager_bin() -> str:
+    """The absolute path of the ``aipager`` console script for the unit.
+
+    PATH first. A non-interactive caller — a ``systemd-run`` timer, cron,
+    the daemon's own restart helper — usually has no ``~/.local/bin`` on
+    PATH (roadmap 8.38), so fall back to the script actually running
+    (``argv[0]``), the pipx/uv default ``~/.local/bin/aipager``, and the
+    script beside the running interpreter, in that order. ``argv[0]`` is
+    kept unresolved so a pipx symlink stays the path the unit names.
+    """
     p = shutil.which("aipager")
-    if not p:
-        raise FileNotFoundError(
-            "aipager not on PATH — install via pipx/brew/pip before running "
-            "`aipager service install`"
-        )
-    return p
+    if p:
+        return p
+    argv0 = Path(sys.argv[0]) if sys.argv and sys.argv[0] else None
+    candidates = []
+    if argv0 is not None and argv0.name == "aipager":
+        candidates.append(argv0 if argv0.is_absolute() else Path.cwd() / argv0)
+    candidates.append(Path.home() / ".local" / "bin" / "aipager")
+    candidates.append(Path(sys.executable).parent / "aipager")
+    for cand in candidates:
+        if _is_exe(cand):
+            return str(cand)
+    raise FileNotFoundError(
+        "aipager not on PATH — install via pipx/brew/pip before running "
+        "`aipager service install`"
+    )
 
 
 def _resolved_path_value() -> str:

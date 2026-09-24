@@ -86,8 +86,11 @@ def test_macos_plist_renders_with_resolved_path(monkeypatch):
     assert "<true/>" in out
 
 
-def test_resolve_bin_raises_when_not_on_path(monkeypatch):
+def test_resolve_bin_raises_when_not_on_path(monkeypatch, tmp_path):
     monkeypatch.setattr(service.shutil, "which", lambda name: None)
+    monkeypatch.setattr(service.Path, "home", classmethod(lambda cls: tmp_path))
+    monkeypatch.setattr(service.sys, "argv", ["python"])
+    monkeypatch.setattr(service.sys, "executable", str(tmp_path / "py" / "python"))
     with pytest.raises(FileNotFoundError):
         service._resolve_aipager_bin()
 
