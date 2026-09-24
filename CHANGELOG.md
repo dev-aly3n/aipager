@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **The Mini App's "Last message" shows a live session's actual latest
+  reply.** It used to render the snapshot taken when a session last went
+  away — kept after the session came back and persisted across restarts —
+  so a healthy session could show a week-old
+  `Please run /login · API Error: 401 …`. A live session's last message
+  now comes from its transcript (a tail read, re-done only when the file
+  changes); a finished session still shows its snapshot. A stale snapshot
+  already saved on a live session is dropped on upgrade, and one is
+  cleared whenever a session comes back.
+- **API errors are never shown as a session's last reply.** Claude Code
+  records a failed request (expired login, rate limit, server error), and
+  a turn that produced no text ("No response requested."), as synthetic
+  assistant messages. The Mini App, the `/resume` picker, the post-resume
+  recap and the `/new` "previously used" prompt now skip both and show
+  the real reply before them. The error card for a failed turn is
+  unchanged.
+- A session closed with `/exit` now shows its last reply in the Mini App
+  too, instead of an empty "Last message".
+
 ## [0.7.13] - 2026-09-16
 
 ### Fixed

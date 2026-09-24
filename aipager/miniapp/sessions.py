@@ -15,6 +15,10 @@ how many prompts sit behind a session's turn. No registry, subprocess or
 network access is added; the file-shaping contract above still holds for
 everything else in this module.
 
+A second exception: ``last_message`` stats a live session's transcript
+and tail-reads it when it changed (roadmap 8.34), cached by (size, mtime)
+in ``transcript.cached_last_assistant_preview``.
+
 See design.md Decision 1 for why "waiting on permission" is derived here
 rather than becoming a new ``Status`` enum member, and Decision 3 for why
 the timeline is a new, simpler function rather than a reuse of
@@ -30,6 +34,7 @@ from typing import TYPE_CHECKING, Any
 
 from aipager.policy_snapshot import combined_queue_depth
 from aipager.state import QUEUE_CAP, Status
+from aipager.transcript import cached_last_assistant_preview
 
 if TYPE_CHECKING:
     from aipager.state import TrackedSession
@@ -287,10 +292,9 @@ def session_detail(
         "skip_perms": bool(sess.skip_perms),
         "queue_depth": queue_depth,
         # The page's headline content. Unlike `timeline`, this survives a
-        # daemon restart (`last_assistant_preview` is in state.py's
-        # _PERSIST_FIELDS, tool_history/stream_commentary are not), so it
-        # is the one thing that reliably has content for an older session.
-        "last_message": preview_lines(sess.last_assistant_preview),
+        # daemon restart, so it is the one thing that reliably has content
+        # for an older session. See last_message() for where it comes from.
+        "last_message": preview_lines(last_message(sess)),
         "timeline": build_timeline(sess),
     }
     detail["facts"] = display_facts(detail)
@@ -300,6 +304,31 @@ def session_detail(
         context_pct=detail["context_pct"],
     )
     return detail
+
+
+def last_message(sess: "TrackedSession") -> str:
+    """The session's latest real assistant reply, for the detail page.
+
+    A GONE session shows its snapshot (``last_assistant_preview``, taken
+    at the GONE transition and persisted for /resume), or its transcript
+    when no snapshot was taken. Any other session
+    reads its transcript — the snapshot is never consulted, because on a
+    live session it can only be a leftover from an earlier death (roadmap
+    8.34: a week-old API-error snapshot shown for a healthy session).
+
+    The second exception to this module's I/O-free contract: a stat per
+    call, plus a backward tail read only when the transcript's (size,
+    mtime) changed since the last call (``cached_last_assistant_preview``)
+    — so the page's 2.5 s poll costs one stat while nothing is happening.
+    """
+    if sess.status == Status.GONE:
+        # A session ended by Claude's own SessionEnd hook (every /exit)
+        # goes GONE without a snapshot; read what the picker and the
+        # resume recap would. A GONE transcript no longer changes, so
+        # the cache holds it for good.
+        return (sess.last_assistant_preview
+                or cached_last_assistant_preview(sess.transcript_path))
+    return cached_last_assistant_preview(sess.transcript_path)
 
 
 # Roughly three phone-width lines. `last_assistant_preview` is already a

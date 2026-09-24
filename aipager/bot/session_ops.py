@@ -1047,6 +1047,10 @@ class SessionOpsMixin:
             if update is not None and update.effective_user is not None
             else None
         )
+        # The GONE snapshot, read before the core resumes the session:
+        # leaving GONE clears it (state.transition, roadmap 8.34), and it
+        # is still the right "where you left off" for the recap below.
+        snapshot = sess.last_assistant_preview
         outcome = await self._do_resume_core(
             sess, skip_perms_override=skip_perms_override,
             driver_user_id=driver_user_id,
@@ -1084,7 +1088,7 @@ class SessionOpsMixin:
         # preview is empty (e.g. SessionEnd hook was dropped at GONE
         # time) re-derive from the transcript file on disk. A longer
         # cap here gives enough context to remember the conversation.
-        preview = sess.last_assistant_preview or _read_preview(
+        preview = snapshot or _read_preview(
             sess.transcript_path, max_chars=500,
         )
         header = f"♻️ Resumed <b>{html_mod.escape(label)}</b>"

@@ -1333,6 +1333,15 @@ class SessionRegistry:
         if sess.status == new_status:
             return None  # no-op
 
+        # The preview is a GONE-time snapshot for /resume. Leaving GONE —
+        # by the monitor seeing the socket again, a resume, a /new
+        # replace, a hook — makes it a leftover that froze at the old
+        # death and leaked into every reader (roadmap 8.34). Cleared here,
+        # the one gate every path out of GONE passes, before the debounce
+        # below can return early.
+        if sess.status == Status.GONE:
+            sess.last_assistant_preview = ""
+
         # Debounce: suppress rapid re-IDLE (e.g. user sends quick command,
         # Claude responds in <1s, triggers another idle notification)
         if new_status == Status.IDLE:
@@ -1754,7 +1763,15 @@ class SessionRegistry:
                 claude_session_id=sd.get("claude_session_id", ""),
                 cwd=sd.get("cwd", ""),
                 gone_at=gone_at,
-                last_assistant_preview=sd.get("last_assistant_preview", ""),
+                # The preview is a GONE-time snapshot, stamped together
+                # with gone_at. On an entry saved without gone_at (a live
+                # session — backfilled above or not) it is a leftover from
+                # an earlier death that was never cleared (pre-0.7.14
+                # state, roadmap 8.34) — drop it.
+                last_assistant_preview=(
+                    sd.get("last_assistant_preview", "")
+                    if gone_at is not None and not backfilled else ""
+                ),
                 hidden_from_status=sd.get("hidden_from_status", False),
                 skip_perms=sd.get("skip_perms", False),
                 scope_chat_id=int(sd.get("scope_chat_id", 0) or 0),
