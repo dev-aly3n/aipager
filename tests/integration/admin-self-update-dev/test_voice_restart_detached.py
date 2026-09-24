@@ -59,3 +59,67 @@ def test_voice_restart_reports_schedule_failure(env, run):
         await env.bot._restart_daemon(q)
     run(scenario)
     assert "Couldn't schedule the restart" in q.edit_message_text.await_args.args[0]
+
+
+# ----- never during an update (review rev-iter1-004) ---------------------------------
+
+def test_voice_restart_refuses_while_an_update_job_runs(env, run):
+    import threading
+
+    env.upgrade_release = threading.Event()
+    q = _query(env)
+
+    async def scenario():
+        await env.start("aipager")
+        await env.until(lambda: env.upgrade_calls())
+        await env.bot._restart_daemon(q)
+        env.upgrade_release.set()
+        await env.finish()
+    run(scenario)
+    # The only schedule is the update's own, after its installer finished.
+    assert len(env.schedule_calls()) == 1
+    texts = [c.args[0] for c in q.edit_message_text.await_args_list]
+    assert texts and "Not restarting: an aipager update" in texts[0]
+
+
+def test_voice_restart_refuses_while_an_update_restart_is_pending(env, run):
+    q = _query(env)
+
+    async def scenario():
+        await env.start("aipager")
+        await env.finish()
+        assert env.manager.snapshot()["phase"] == "restart_scheduled"
+        await env.bot._restart_daemon(q)
+    run(scenario)
+    assert len(env.schedule_calls()) == 1
+    assert "Not restarting: an aipager update" in q.edit_message_text.await_args.args[0]
+
+
+def test_voice_restart_refuses_while_the_cli_holds_the_update_lock(env, run):
+    from aipager.self_update import UpdateLock
+
+    cli = UpdateLock()
+    assert cli.try_acquire()
+    q = _query(env)
+
+    async def scenario():
+        await env.bot._restart_daemon(q)
+    try:
+        run(scenario)
+    finally:
+        cli.release()
+    assert env.schedule_calls() == []
+    assert "update lock is held" in q.edit_message_text.await_args.args[0]
+
+
+def test_voice_restart_leaves_the_update_lock_free(env, run):
+    from aipager.self_update import UpdateLock
+
+    q = _query(env)
+
+    async def scenario():
+        await env.bot._restart_daemon(q)
+    run(scenario)
+    probe = UpdateLock()
+    assert probe.try_acquire() is True
+    probe.release()

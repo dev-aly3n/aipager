@@ -417,6 +417,28 @@ class CommandHandlersMixin:
         from aipager import self_update
         from aipager.service import MACOS_LABEL, MACOS_PLIST_PATH, _run
 
+        # A restart mid-update would import a half-written venv (or drop a
+        # pending update restart): refuse while this daemon runs an update
+        # job or awaits its restart, or while anyone (the CLI) holds the
+        # update lock.
+        updates = getattr(self, "updates", None)
+        if updates is not None and updates.busy:
+            await self._safe_edit_callback(
+                query,
+                "⏳ Not restarting: an aipager update is running or about to "
+                "restart the daemon. Try again once it has finished.",
+            )
+            return
+        probe = self_update.UpdateLock()
+        if not probe.try_acquire():
+            await self._safe_edit_callback(
+                query,
+                "⏳ Not restarting: an aipager update is running "
+                "(the update lock is held). Try again once it has finished.",
+            )
+            return
+        probe.release()
+
         sysname = platform.system().lower()
         if sysname == "linux":
             plan = await asyncio.to_thread(self_update.restart_plan, self.registry)
