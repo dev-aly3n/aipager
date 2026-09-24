@@ -1590,6 +1590,8 @@ APP_JS = r"""
           showNotice(why === "update_in_progress"
             ? "An update is already running."
             : "That update already finished.", "err");
+        } else if (r.status === 503 && r.data && r.data.error === "shutting_down") {
+          showNotice("aipager is shutting down — try again once it is back.", "err");
         } else if (r.status === 429) {
           showNotice("Too many requests — try again in a minute.", "err");
         } else if (!r.ok) {

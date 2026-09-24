@@ -245,3 +245,15 @@ def test_update_api_refuses_a_start_while_a_restart_is_pending(env, run):
         r = await c.post("/api/update/claude", headers=_hdr(env.chat_id))
         return r.status, await r.json()
     assert _call(env, run, fn) == (409, {"error": "update_in_progress"})
+
+
+def test_update_api_start_during_shutdown_is_503_shutting_down(env, run):
+    """Review rev-iter2-002: once the daemon began to stop, a start is a 503
+    ``shutting_down`` (try again once it is back), and nothing runs."""
+    async def fn(c, srv):
+        await env.manager.shutdown()
+        r = await c.post("/api/update/claude", headers=_hdr(env.chat_id))
+        return r.status, await r.json()
+    assert _call(env, run, fn) == (503, {"error": "shutting_down"})
+    assert env.manager.snapshot() is None
+    assert env.calls == []

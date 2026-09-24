@@ -1164,7 +1164,25 @@ function driveUpdatesRestartPending() {
   }, 10);
 }
 
+// ---- a start refused because the daemon is stopping (503) -------------
+function driveUpdatesShuttingDown() {
+  api.loadSettings();
+  setTimeoutReal(() => {
+    POST_STATUS_OVERRIDE = { path: "/api/update/claude", method: "POST", status: 503,
+                             body: { error: "shutting_down" } };
+    byId["updates-actions"].children[0].click();
+    setTimeoutReal(() => {
+      const notice = byId["notice"].textContent || "";
+      if (notice.indexOf("shutting down") === -1)
+        fail("a 503 shutting_down did not say so: " + JSON.stringify(notice));
+      console.log("ok: 503 shutting_down -> notice says aipager is shutting down");
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
 const DRIVERS = {
+  updates_shutting_down: driveUpdatesShuttingDown,
   updates_poll_running: driveUpdatesPollRunning,
   updates_no_poll_terminal: driveUpdatesNoPollTerminal,
   updates_restart_pending: driveUpdatesRestartPending,

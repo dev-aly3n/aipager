@@ -761,7 +761,10 @@ class MiniAppServer:
         res = await manager.start(kind, chat_id=scope_chat_id, user_id=user_id,
                                   origin="miniapp")
         if not res.ok:
-            return web.json_response({"error": res.error}, status=409)
+            # 503: the daemon is stopping, try again once it is back; every
+            # other refusal is a conflict with the current state (409).
+            status = 503 if res.error == "shutting_down" else 409
+            return web.json_response({"error": res.error}, status=status)
         return web.json_response({"job": res.job}, status=202)
 
     async def _handle_preferences_put(self, request):
