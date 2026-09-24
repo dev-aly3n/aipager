@@ -205,7 +205,9 @@ one that has not, and it earns its speed back over the following hours.
 If a chat's rate falls below 0.2 calls/s — or its hourly budget's share
 for cards and bubbles is spent — it enters **minimal mode**: busy cards
 stop animating and show one static `⏳ working — updates paused` line,
-the typing bubble stops, and the pinned dashboard stops refreshing.
+the typing bubble stops, and the pinned status bar shows
+`⏸ card updates paused — hourly limit` (or `— rate limit` when the rate
+is what put the chat there) and otherwise stops changing until it lifts.
 **Answers, replies and permission prompts keep flowing** — that is the
 point. The card is about 95 % of what this bot sends and the answer about
 5 %, so under pressure it sheds pixels rather than work. `aipager doctor`
@@ -281,7 +283,7 @@ What NOT to do:
 To avoid it: run fewer simultaneous sessions per chat, or give the
 busiest ones a chat of their own (`aipager config`).
 
-## Session shows GONE in pinned status
+## A session dropped off the pinned status bar (it is GONE)
 
 The dtach process for that session exited (machine reboot,
 `pkill claude`, user typed `exit` in the dtach attach session).

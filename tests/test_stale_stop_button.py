@@ -113,10 +113,13 @@ def test_a_stale_tap_says_something(running, run_async):
     bot, _sess, _keys = running
 
     answers = _tap_stop(bot, run_async, message_id=BUSY_CARD - 200)
+    # Only the toasts: since 8.31 the dispatcher's own empty ack (text "")
+    # comes AFTER the handler, instead of before it.
+    toasts = [a for a in answers if a]
 
-    assert answers, "a stale tap produced no feedback at all"
-    assert "finished" in answers[-1].lower() or "current" in answers[-1].lower(), (
-        f"feedback does not explain the refusal: {answers[-1]!r}")
+    assert toasts, "a stale tap produced no feedback at all"
+    assert "finished" in toasts[-1].lower() or "current" in toasts[-1].lower(), (
+        f"feedback does not explain the refusal: {toasts[-1]!r}")
 
 
 # ── the live path must be untouched ────────────────────────────────────

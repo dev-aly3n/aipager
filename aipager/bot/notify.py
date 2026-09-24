@@ -25,6 +25,7 @@ from telegram import (
 )
 from telegram.error import Forbidden
 
+from aipager.bot.dashboard import new_prompt_token
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot.flood_budget import (
     PRIORITY_SIGNAL,
@@ -228,6 +229,37 @@ def _plain_text_chunks(body_content: str) -> list[str]:
 
 class NotifyMixin:
     """Mixin for TelegramBot — see :mod:`aipager.bot` overview."""
+
+    def _pending_prompt_keyboard(self, sess: TrackedSession):
+        """The answer keyboard for *sess*'s inline prompt, from
+        ``pending_permission``: the option buttons of an AskUserQuestion
+        (with any multi-select ticks), else Allow/Deny."""
+        perm = sess.pending_permission or {}
+        if perm.get("ask_question"):
+            return self._build_inline_ask_keyboard(
+                sess, perm.get("options", []),
+                multi_select=perm.get("multi_select", False),
+                selected=perm.get("selected") or None)
+        return self._build_permission_keyboard(sess)
+
+    def _pending_prompt_markup(self, sess: TrackedSession):
+        """``(text, keyboard)`` of the prompt *sess* is waiting on, as the
+        chat was shown it — for the pinned bar's "Answer" button (8.31).
+        ``None`` when there is none to show (a prompt that never reached
+        the chat and left nothing behind).
+
+        Inline prompts are re-rendered from ``pending_permission`` with the
+        same builders the busy card uses; a separate-message prompt is
+        re-sent exactly as it was sent."""
+        if sess.pending_permission:
+            text = _safe_truncate(
+                self._build_busy_text(sess.label, "Waiting", sess),
+                TELEGRAM_MAX_TEXT_LEN, True)
+            return text, self._pending_prompt_keyboard(sess)
+        if sess.pending_prompt_msg:
+            return (sess.pending_prompt_msg.get("text", ""),
+                    sess.pending_prompt_msg.get("keyboard"))
+        return None
 
     async def _send_merged_final(
         self, sess: TrackedSession, answer: str, *,
@@ -897,15 +929,17 @@ class NotifyMixin:
         if not self._app:
             return
 
-        # Keep pinned message current on every notification
-        asyncio.create_task(self._maybe_update_bot_name(sess.name))
+        # No pinned-bar refresh here (8.31). This ran on EVERY hook, and a
+        # hook is not a state change: the bar is refreshed at transitions
+        # and on the session monitor's tick instead (dashboard.py).
 
         bot = self._app.bot
         label = sess.label
 
-        # ── Pinned message refresh (e.g. model changed) ──
+        # ── The model changed (hook_receiver's statusline) ──
+        # The bar no longer shows the model (8.31 R6): nothing to do.
         if event == "pinned_update":
-            return  # _maybe_update_bot_name already fired at top
+            return
 
         # ── A mute lifted and this session has an answer waiting (8.29) ──
         # Dispatched by `SessionMonitor._scan` on the 2 s tick it already
@@ -2550,9 +2584,6 @@ class NotifyMixin:
                             "tool_info": tool_info,
                             "wait_started_at": time.monotonic(),
                         }
-                        keyboard = self._build_inline_ask_keyboard(
-                            sess, options,
-                            multi_select=is_multi)
                     else:
                         # AskUserQuestion detected but no questions data (transcript
                         # not flushed). Degrade to Allow/Deny — Allow sends Enter.
@@ -2561,7 +2592,6 @@ class NotifyMixin:
                             "tool_info": tool_info,
                             "wait_started_at": time.monotonic(),
                         }
-                        keyboard = self._build_permission_keyboard(sess)
                 else:
                     tool_summary = tool_info["summary"] if tool_info else "Permission needed"
                     sess.pending_permission = {
@@ -2575,7 +2605,10 @@ class NotifyMixin:
                         # callbacks.py's own tool-name guard.
                         "hook_reply": context.get("hook_reply"),
                     }
-                    keyboard = self._build_permission_keyboard(sess)
+                # The one inline-prompt keyboard builder, shared with the
+                # pinned bar's "Answer" re-send (8.31).
+                keyboard = self._pending_prompt_keyboard(sess)
+                sess.pending_prompt_msg = None
 
                 text = self._build_busy_text(label, "Waiting", sess)
                 result = await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard, chat_id=resolve_chat_id(sess))
@@ -2591,9 +2624,13 @@ class NotifyMixin:
 
                 if tool_info and tool_info["name"] == "AskUserQuestion":
                     text, keyboard = self._build_ask_keyboard(sess, label, tool_info["input"])
+                    questions = (tool_info.get("input") or {}).get("questions") or []
+                    prompt_summary = (questions[0].get("question", "")
+                                      if questions else "")
                 elif selector_options:
                     text, keyboard = self._build_selector_keyboard(sess, label,
                                                                     selector_text, selector_options)
+                    prompt_summary = selector_text or "Needs input"
                 else:
                     tool_summary = tool_info["summary"] if tool_info else ""
                     text = f"🔐 <b>{html_mod.escape(label)}</b> · Permission needed"
@@ -2623,6 +2660,19 @@ class NotifyMixin:
                             "❌ Deny",
                             callback_data=session_parity.session_cb(self, chat_id, sess, "deny")),
                     ]])
+                    prompt_summary = tool_summary or "Permission needed"
+
+                # Kept as SENT, before the send: the pinned bar summarises
+                # it and its "Answer" button re-sends it (8.31) — also after
+                # a ban that ate this send.
+                # Its identity is stamped NOW, while this prompt is the one
+                # pending, and kept in a local: the send below can wait in
+                # the limiter while the prompt is answered and another one
+                # shown, and the message must be bound to THIS prompt.
+                prompt_token = new_prompt_token()
+                sess.pending_prompt_msg = {"text": text, "keyboard": keyboard,
+                                           "summary": prompt_summary,
+                                           "prompt_token": prompt_token}
 
                 # Wrapped for the gate (8.26 R2, the tolerance sweep). This
                 # is a DIRECT send inside `notify`, a 1726-line method: an
@@ -2645,6 +2695,11 @@ class NotifyMixin:
                 else:
                     self.registry.track_message(
                         msg.message_id, sess.name, resolve_chat_id_int(sess) or 0)
+                    # Bound to THIS prompt: a tap on it after the prompt is
+                    # answered elsewhere is refused (8.31, callbacks.py).
+                    self.register_prompt_surface(
+                        resolve_chat_id_int(sess) or 0, msg.message_id, sess,
+                        prompt_token)
                     await self._maybe_update_bot_name(sess.name)
 
         elif sess.status == Status.BUSY:

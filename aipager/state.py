@@ -286,6 +286,12 @@ class TrackedSession:
     # Inline permission context (tool_info, question, etc.) — set when permission
     # is displayed inside the busy message instead of as a separate message
     pending_permission: dict | None = None
+    # The prompt as it was SENT when it could not go inline into the busy
+    # card (the separate-message fallback leaves ``pending_permission``
+    # None): ``{"text", "keyboard", "summary"}``. What the pinned bar's
+    # "Answer" button re-sends (8.31). Meaningful only while ``status`` is
+    # INTERACTIVE; transient, never in _PERSIST_FIELDS.
+    pending_prompt_msg: dict | None = None
     # Active subagents — keyed by agent_id ("agent activity rows on the
     # busy card"). Format: {agent_id: {"type": str, "started_at": float,
     # "last_seen": float, "history_idx": int | None, "activity": str,
@@ -1219,6 +1225,38 @@ def _derive_label(name: str) -> str:
     return strip_scope_suffix(core)
 
 
+def _load_pinned_msg_ids(data: dict) -> dict[int, int]:
+    """The per-chat pinned-bar ids from a state file (8.31).
+
+    A file written before 8.31 has one ``pinned_msg_id``: the legacy
+    single-chat dashboard's, which only ever lived in ``config.CHAT_ID``.
+    It is migrated into that chat's slot. With no parseable ``CHAT_ID``
+    there is no chat it could belong to, and it is dropped: the next
+    refresh then sends (and pins) a fresh bar instead of editing a
+    message in the wrong chat.
+    """
+    out: dict[int, int] = {}
+    raw = data.get("pinned_msg_ids")
+    if isinstance(raw, dict):
+        for chat, msg in raw.items():
+            try:
+                chat_i, msg_i = int(chat), int(msg)
+            except (TypeError, ValueError):
+                continue
+            if msg_i > 0:
+                out[chat_i] = msg_i
+    legacy = data.get("pinned_msg_id")
+    if isinstance(legacy, int) and legacy > 0:
+        from aipager import config
+        try:
+            chat_i = int(config.CHAT_ID)
+        except (TypeError, ValueError):
+            chat_i = None
+        if chat_i is not None:
+            out.setdefault(chat_i, legacy)
+    return out
+
+
 class SessionRegistry:
     """Single source of truth for all tracked Claude sessions."""
 
@@ -1229,7 +1267,12 @@ class SessionRegistry:
         # `remove(remember_label=True)`.
         self._remembered_labels: dict[str, str] = {}
         self.last_active_session: str = ""  # last session that sent a notification
-        self.pinned_msg_id: int = 0  # pinned status message in Telegram
+        # The pinned "needs you" bar's message in each chat that has one
+        # (8.31): chat_id → message_id. Persisted, so a restart edits the
+        # same message instead of pinning a new one. Replaces the single
+        # ``pinned_msg_id`` of the legacy one-chat dashboard, which
+        # ``load()`` migrates into this map.
+        self.pinned_msg_ids: dict[int, int] = {}
         self._dirty: bool = False
 
     def get(self, name: str) -> TrackedSession | None:
@@ -1687,7 +1730,7 @@ class SessionRegistry:
         data = {
             "version": 1,
             "last_active_session": self.last_active_session,
-            "pinned_msg_id": self.pinned_msg_id,
+            "pinned_msg_ids": {str(c): m for c, m in self.pinned_msg_ids.items()},
             "msg_map": {f"{cid}:{mid}": v for (cid, mid), v in msg_map.items()},
             "sessions": sessions,
         }
@@ -1721,7 +1764,7 @@ class SessionRegistry:
             return
 
         self.last_active_session = data.get("last_active_session", "")
-        self.pinned_msg_id = data.get("pinned_msg_id", 0)
+        self.pinned_msg_ids = _load_pinned_msg_ids(data)
 
         # Resolve the default scope once (for backfilling legacy sessions).
         _default = _default_scope()

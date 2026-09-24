@@ -678,7 +678,7 @@ def test_opt_multi_select_toggles_checkbox(mk_bot, mk_query, run_async, monkeypa
     bot._build_inline_ask_keyboard = MagicMock(return_value=MagicMock())
     async def _no_sleep(_): pass
     monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
-    update, query = mk_query("claude-jim:opt1")
+    update, query = mk_query("claude-jim:opt1", message_id=100)
     run_async(bot._handle_callback(update, MagicMock()))
     # Down once to opt1, then Enter to toggle
     keys = [c.args[1] for c in sent.await_args_list]
@@ -702,7 +702,7 @@ def test_opt_multi_select_send_fail_toasts(mk_bot, mk_query, run_async, monkeypa
     _setup_alive_session(bot, monkeypatch, pending_permission=perm)
     monkeypatch.setattr("aipager.dtach.inject.send_keys",
                         AsyncMock(return_value=False))
-    update, query = mk_query("claude-jim:opt1")
+    update, query = mk_query("claude-jim:opt1", message_id=100)
     run_async(bot._handle_callback(update, MagicMock()))
     answers = [c.args[0] for c in query.answer.await_args_list if c.args]
     assert any("Failed to send keys" in (a or "") for a in answers)
@@ -735,7 +735,7 @@ def test_submit_multi_select_advances_question(mk_bot, mk_query, run_async, monk
     bot._build_inline_ask_keyboard = MagicMock(return_value=MagicMock())
     async def _no_sleep(_): pass
     monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
-    update, query = mk_query("claude-jim:submit")
+    update, query = mk_query("claude-jim:submit", message_id=100)
     run_async(bot._handle_callback(update, MagicMock()))
     # After submit on a non-last question, pending_permission advances to next
     assert bot.registry.get("claude-jim").pending_permission["current_idx"] == 1
@@ -768,7 +768,7 @@ def test_submit_multi_select_last_question_finishes(mk_bot, mk_query, run_async,
     bot._start_animation = MagicMock()
     async def _no_sleep(_): pass
     monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
-    update, query = mk_query("claude-jim:submit")
+    update, query = mk_query("claude-jim:submit", message_id=100)
     run_async(bot._handle_callback(update, MagicMock()))
     # On last question: pending_permission cleared, session transitions to BUSY
     sess = bot.registry.get("claude-jim")
@@ -793,7 +793,7 @@ def test_allow_with_pending_permission_records_tool(mk_bot, mk_query, run_async,
     bot._start_animation = MagicMock()
     async def _no_sleep(_): pass
     monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
-    update, query = mk_query("claude-jim:allow")
+    update, query = mk_query("claude-jim:allow", message_id=100)
     run_async(bot._handle_callback(update, MagicMock()))
     sess = bot.registry.get("claude-jim")
     # tool_history got a "Allowed" entry

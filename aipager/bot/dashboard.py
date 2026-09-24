@@ -11,25 +11,34 @@ from __future__ import annotations
 
 import asyncio
 import html as html_mod
+import itertools
+import json
 import logging
 import time
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    WebAppInfo,
 )
+from telegram.error import BadRequest, Forbidden
 
 
 from aipager.config import (
+    APP_BUTTON,
     CHAT_ID,
-    FLOOD_HOURLY_TYPING_RESUME_BELOW,
-    PINNED_REFRESH_BUSY_INTERVAL,
-    PINNED_REFRESH_INTERVAL,
+    PINNED_MIN_EDIT_GAP,
+    PINNED_RECREATE_MIN_INTERVAL,
 )
 from aipager.bot import session_parity
+from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot.flood_budget import (
+    PRIORITY_ESSENTIAL,
     PRIORITY_ORNAMENT,
+    FloodSkipped,
+    is_group_chat,
     rate_limit_args as _rl_args,
 )
 from aipager.bot.rich_message import get_rate_limiter
@@ -44,6 +53,7 @@ from aipager.transcript import last_assistant_preview as _read_preview
 from aipager.bot.transport import (  # noqa: F401
     MUTED,
     SKIPPED,
+    _message_chat_id,
     edit_text_at,
     send_text,
     ACTION_VERBS,
@@ -73,6 +83,89 @@ if TYPE_CHECKING:
     pass
 
 log = logging.getLogger(__name__)
+
+#: The callback verb of the pinned bar's "Answer <label>" button, sent as
+#: ``_:sx:<idx>:pin_answer`` (session_parity's short form, ≤ 64 bytes).
+PINNED_ANSWER_VERB = "pin_answer"
+PINNED_SLOW_LINE = "🐢 slow mode after a Telegram warning"
+PINNED_PAUSED_LINE = "⏸ card updates paused — hourly limit"
+PINNED_PAUSED_RATE_LINE = "⏸ card updates paused — rate limit"
+#: At most this many "Answer" buttons on a bar.
+PINNED_MAX_ANSWER_BUTTONS = 3
+#: Working sessions named on the first line before "+N".
+PINNED_WORKING_LABELS = 3
+#: The waiting prompt's summary on the first line is cut to this.
+PINNED_SUMMARY_MAX = 40
+#: A trailing refresh wakes this long after its deadline, so a timer that
+#: fires a hair early (asyncio allows up to the clock's resolution) never
+#: lands inside the gap it waited out.
+_TRAILING_MARGIN = 0.05
+#: How soon an edit the budget skipped is tried again. A skip made no
+#: call, so it does not open a PINNED_MIN_EDIT_GAP.
+_SKIP_RETRY = 5.0
+#: How long a transient failure (network, timeout, 5xx) of the bar's
+#: first send waits before the trailing refresh tries again.
+_TRANSIENT_RETRY = 60.0
+
+_prompt_tokens = itertools.count(1)
+
+
+def current_prompt_token(sess: TrackedSession, *, create: bool = False):
+    """The identity of the prompt *sess* is waiting on right now, or
+    ``None``. Stamped lazily on the prompt's own dict (``pending_permission``
+    for an inline prompt, ``pending_prompt_msg`` for a separate message):
+    every new prompt, and every next question of a multi-question form, is
+    a NEW dict, so it can never carry an older prompt's token. Only while
+    the session is INTERACTIVE."""
+    if sess.status != Status.INTERACTIVE:
+        return None
+    holder = sess.pending_permission or sess.pending_prompt_msg
+    if not holder:
+        return None
+    token = holder.get("prompt_token")
+    if token is None and create:
+        token = holder["prompt_token"] = new_prompt_token()
+    return token
+
+
+def new_prompt_token() -> int:
+    """A fresh prompt identity. notify stamps one on a separate-message
+    prompt the moment it RECORDS it — before the send, which may wait in
+    the limiter while the prompt is answered and another one shown."""
+    return next(_prompt_tokens)
+
+
+@dataclass
+class PinnedChat:
+    """One chat's pinned-bar bookkeeping (8.31), on the event loop's clock.
+
+    ``shown``: ``(text, keyboard signature)`` the bar last showed, and
+    ``shown_flood`` the flood lines on it.
+    ``attempt_at``: the last edit or send attempt (the gap runs from it).
+    ``created_at``: when this daemon last sent and pinned a new bar here.
+    ``trailing``: the pending trailing refresh, if any.
+    ``disabled``: a group where the pin was refused — no bar until restart.
+    ``pin_pending``: the pin was held back by a ban or the budget.
+    ``hold_until``: a transient send failure's back-off, on the same clock.
+    """
+
+    shown: tuple | None = None
+    shown_flood: tuple = ()
+    attempt_at: float | None = None
+    created_at: float | None = None
+    trailing: asyncio.Task | None = None
+    in_flight: bool = False
+    again: bool = False
+    hold_until: float = 0.0
+    disabled: bool = False
+    pin_pending: bool = False
+
+
+def _keyboard_sig(keyboard) -> str:
+    """A comparable form of an inline keyboard (buttons are objects)."""
+    if keyboard is None:
+        return ""
+    return json.dumps(keyboard.to_dict(), sort_keys=True)
 
 
 
@@ -122,177 +215,482 @@ class DashboardMixin:
         except Exception:
             log.debug("[%s] diff preview send failed", sess.label, exc_info=True)
 
-    def _build_pinned_text(self, active_name: str) -> str:
-        """Compose the pinned-message text (item 4.3).
+    # ---- the pinned "needs you" bar (roadmap 8.31) -----------------------
+    #
+    # One pinned message per scope chat. Telegram shows only its FIRST line
+    # in the bar at the top of the chat, so that line says what most needs
+    # the user; the rest lists the chat's live sessions. It is rendered in
+    # full from state every time and edited only when the rendering
+    # changed, at most once per PINNED_MIN_EDIT_GAP per chat. Nothing on it
+    # moves without a state change: no clock, cost, context % or model,
+    # which is what made 8.30's hook-driven dashboard 75 % of all calls.
+    #
+    # What drives it: `refresh_pinned`, called at state transitions
+    # (`_maybe_update_bot_name`'s call sites: a prompt shown or answered, a
+    # turn's end, a session launched, stopped or killed) and on the session
+    # monitor's 2 s tick, which is what notices every other transition —
+    # a status changed by a hook, a session gone, a flood regime entered or
+    # left — without a call site of its own. Either way a refresh that
+    # renders what is already shown costs nothing.
 
-        Top line is the currently-active session with full context;
-        remaining lines are other live sessions (status, model, cost)
-        so the user has an at-a-glance dashboard right at the top of
-        the chat. Limits to the active session if there are no other
-        live ones.
-        """
-        active = self.registry.get(active_name)
-        if not active:
-            return ""
+    def _pinned_chats(self) -> list[int]:
+        """Every chat that may carry a bar: each scope's chat on a v2
+        install, the one CHAT_ID on a legacy personal install. Legacy team
+        mode keeps its opt-out (a group dashboard nobody asked for)."""
+        if not self._app:
+            return []
+        if self.scopes is not None:
+            return [s.chat_id for s in self.scopes]
+        if self.team is not None:
+            return []
+        try:
+            return [int(CHAT_ID)]
+        except (TypeError, ValueError):
+            return []
 
-        def _state_word(sess: TrackedSession) -> str:
-            if sess.status == Status.BUSY:
-                return "busy"
-            if sess.status == Status.INTERACTIVE:
-                return "waiting"
-            if sess.status == Status.IDLE:
-                return "idle"
-            return ""
+    @staticmethod
+    def _pinned_chat_of(sess: TrackedSession) -> int | None:
+        """The chat a session's notifications go to — `resolve_chat_id`'s
+        rule, without its warning for an unresolvable id (asked every tick)."""
+        if sess.scope_chat_id:
+            return sess.scope_chat_id
+        try:
+            return int(CHAT_ID)
+        except (TypeError, ValueError):
+            return None
 
-        def _session_line(sess: TrackedSession, prefix: str) -> str:
-            parts = [f"<b>{html_mod.escape(sess.label)}</b>"]
-            if sess.model_name:
-                parts.append(html_mod.escape(sess.model_name))
-            state = _state_word(sess)
-            if state and sess.name != active_name:
-                parts.append(state)
-            if sess.last_token_pct:
-                parts.append(f"{int(sess.last_token_pct)}% ctx")
-            if sess.last_cost_usd > 0:
-                parts.append(f"${sess.last_cost_usd:.2f}")
-            return f"{prefix} {' · '.join(parts)}"
-
-        lines = [_session_line(active, "📌")]
-        # Other live sessions, alphabetical
-        others = sorted(
+    def _pinned_sessions(self, chat: int) -> list[TrackedSession]:
+        """The live sessions whose scope resolves to *chat*, by label."""
+        return sorted(
             (s for s in self.registry.all_sessions().values()
-             if s.name != active_name and s.status != Status.GONE and s.label),
-            key=lambda s: s.label,
+             if s.status != Status.GONE and s.label
+             and self._pinned_chat_of(s) == chat),
+            key=lambda s: (s.label, s.name),
         )
-        for s in others:
-            lines.append(_session_line(s, "  •"))
-        return "\n".join(lines)
+
+    @staticmethod
+    def _pinned_summary(sess: TrackedSession) -> str:
+        """A one-line, short summary of what *sess* is waiting on."""
+        _kind, summary = sess.waiting_on_human()
+        if not summary and sess.pending_prompt_msg:
+            summary = sess.pending_prompt_msg.get("summary") or ""
+        summary = " ".join(str(summary or "").split())
+        if len(summary) > PINNED_SUMMARY_MAX:
+            summary = summary[:PINNED_SUMMARY_MAX - 1].rstrip() + "…"
+        return summary
+
+    @staticmethod
+    def _pinned_flood_lines(chat: int) -> list[str]:
+        """The bar's flood lines for *chat*, only while they apply: the
+        8.30 warning regime, and hourly-minimal mode."""
+        limiter = get_rate_limiter()
+        if limiter is None:
+            return []
+        lines = []
+        if limiter.warning_remaining(chat) > 0:
+            lines.append(PINNED_SLOW_LINE)
+        if limiter.hourly_usage(chat).get("minimal"):
+            lines.append(PINNED_PAUSED_LINE)
+        elif limiter.minimal_mode(chat):
+            # Minimal mode's other way in: the earned rate under the floor
+            # (after a ban, or a run of 429s). Same effect on the chat, so
+            # the bar says so too — and its regime-edge edit is what gets
+            # through while every ornament is refused.
+            lines.append(PINNED_PAUSED_RATE_LINE)
+        return lines
+
+    def _render_pinned(
+        self, chat: int, sessions: list[TrackedSession] | None = None,
+    ) -> tuple[str, InlineKeyboardMarkup | None]:
+        """The bar for *chat*: ``(html text, keyboard or None)``. Pure: a
+        function of session state, the chat's flood regime and the Mini App
+        URL, and nothing that moves by itself."""
+        if sessions is None:
+            sessions = self._pinned_sessions(chat)
+        esc = html_mod.escape
+        waiting = [s for s in sessions if s.status == Status.INTERACTIVE]
+        working = [s for s in sessions if s.status == Status.BUSY]
+        if waiting:
+            first = f"⏳ {esc(waiting[0].label)} needs you"
+            summary = self._pinned_summary(waiting[0])
+            if summary:
+                first += f" — {esc(summary)}"
+            if len(waiting) > 1:
+                first += f" (+{len(waiting) - 1} more)"
+        elif working:
+            shown = working[:PINNED_WORKING_LABELS]
+            first = (f"⚙️ {len(working)} working — "
+                     + ", ".join(esc(s.label) for s in shown))
+            if len(working) > len(shown):
+                first += f" +{len(working) - len(shown)}"
+        else:
+            first = "💤 all idle"
+        lines = [first] + self._pinned_flood_lines(chat)
+        words = {Status.BUSY: "working", Status.INTERACTIVE: "needs you",
+                 Status.IDLE: "idle"}
+        for s in sessions:
+            lines.append(f"• <b>{esc(s.label)}</b> — "
+                         f"{words.get(s.status, 'starting')}")
+
+        rows: list[list[InlineKeyboardButton]] = []
+        for s in waiting[:PINNED_MAX_ANSWER_BUTTONS]:
+            rows.append([InlineKeyboardButton(
+                f"Answer {s.label}",
+                # A literal verb (== PINNED_ANSWER_VERB): the 64-byte
+                # guard in test_callback_data_budget.py proves literals.
+                callback_data=session_parity.session_cb(
+                    self, chat, s, "pin_answer"),
+            )])
+        # The Mini App URL goes only where the menu button may go: an
+        # explicit list of private chats (a web_app button in a group gets
+        # the WHOLE keyboard rejected, and the URL is a credential).
+        url = getattr(self, "_miniapp_url", "")
+        if url and chat in self._miniapp_button_chats():
+            rows.append([InlineKeyboardButton(
+                APP_BUTTON, web_app=WebAppInfo(url=url))])
+        return "\n".join(lines), (InlineKeyboardMarkup(rows) if rows else None)
 
     async def _maybe_update_bot_name(self, session_name: str) -> None:
-        """Update the pinned status message (compatibility alias).
+        """A state transition happened: refresh the pinned bars.
 
-        Name kept for back-compat with the many call sites scattered
-        through the file. Behaviour now: builds a multi-line summary
-        of all live sessions with the named one as the header.
-
-        Skipped entirely in team mode — group chats don't want a
-        status dashboard cluttering scroll-back (and the bot usually
-        can't pin in groups anyway without admin perms).
+        The name is historical (and kept for its many call sites and test
+        doubles). *session_name* is no longer used: the bar has no header
+        session, and every chat is re-rendered from state. Returns at once:
+        the refresh runs as its own task (see :meth:`pinned_tick`), so a
+        turn's answer path never waits behind an ornament.
         """
+        await self.pinned_tick()
+
+    async def pinned_tick(self) -> None:
+        """Start a refresh of every bar as a task, unless one is running
+        (it renders at each chat's turn, so it sees this change too, or
+        leaves it to its trailing refresh). The session monitor calls this
+        every scan; a blocking first send + pin must never hold up the
+        scan's own work (held answers, GONE detection)."""
+        task = self._pinned_task
+        if task is not None and not task.done():
+            return
+        self._pinned_task = asyncio.get_running_loop().create_task(
+            self.refresh_pinned())
+
+    async def refresh_pinned(self) -> None:
+        """Bring every chat's bar up to date with the current state — or
+        schedule it, when the chat's gap has not passed. Never raises."""
         if not self._app:
             return
-        if self.team is not None:
-            return  # team mode: no pinned dashboard
-        # The pinned dashboard targets a single chat (CHAT_ID). It makes
-        # no sense — and CHAT_ID is empty — under multi-scope (v2 retires
-        # config.env) or any install without a configured single chat.
-        if self.scopes is not None or not CHAT_ID:
+        chats = self._pinned_chats()
+        # A chat removed from the scopes keeps no bar id: nothing edits
+        # that message any more, and forgetting it costs no call. (It stays
+        # pinned there, frozen, until someone unpins it; unpinning would be
+        # a call into a chat the operator just dropped.)
+        stale = [c for c in self.registry.pinned_msg_ids if c not in chats]
+        for chat in stale:
+            self.registry.pinned_msg_ids.pop(chat, None)
+            st = self._pinned.pop(chat, None)
+            if st is not None and st.trailing is not None:
+                st.trailing.cancel()
+            log.info("Forgot the pinned status bar of chat %s — no longer "
+                     "a scope", chat)
+        if stale:
+            self.registry.mark_dirty()
+        for chat in chats:
+            try:
+                await self._refresh_pinned_chat(chat)
+            except Exception:
+                log.debug("pinned bar refresh failed for %s", chat,
+                          exc_info=True)
+
+    async def _refresh_pinned_chat(self, chat: int) -> None:
+        if chat not in self._pinned_chats():
+            return  # e.g. a trailing refresh for a chat no longer a scope
+        st = self._pinned.setdefault(chat, PinnedChat())
+        if st.disabled:
             return
-        text = self._build_pinned_text(session_name)
-        if not text or text == self._last_pinned_text:
-            return  # skip redundant edit
-        # DEBOUNCE (8.30). `notify` asks for a refresh on EVERY hook,
-        # headed by whichever session sent it, so two sessions streaming at
-        # once flipped the header ("📌 s0" / "📌 s1") on nearly every hook
-        # and the dashboard became the chat's biggest caller. A change of
-        # STATE (a session's status, a session added or gone) still goes
-        # out at once; anything else (the header, cost, context %) waits
-        # until PINNED_REFRESH_INTERVAL has passed since the last refresh
-        # actually shown (PINNED_REFRESH_BUSY_INTERVAL while a session is
-        # busy), AND it YIELDS to the typing bubble: it waits while the
-        # chat's rolling hour is past the bubble's resume mark
-        # (FLOOD_HOURLY_TYPING_RESUME_BELOW of the ornament share), so the
-        # dashboard is never what pushes the bubble into its shed. On the
-        # vm3 replay with the dashboard live, the 60 s debounce alone
-        # still added 44 calls to the busiest hour, one past the shed
-        # line, and the bubble went dark for 13 minutes. Loop time, not
-        # `time`, so it follows the loop's clock. Nothing is lost by
-        # waiting: the text is re-derived in full from the registry by
-        # whichever refresh goes out next.
-        chat = int(CHAT_ID)
-        state = self._pinned_state()
-        now = asyncio.get_running_loop().time()
-        if state == self._last_pinned_state and self._last_pinned_at is not None:
-            busy = any(status == Status.BUSY.value for _name, status in state)
-            interval = (PINNED_REFRESH_BUSY_INTERVAL if busy
-                        else PINNED_REFRESH_INTERVAL)
-            if now - self._last_pinned_at < interval:
-                return
-            limiter = get_rate_limiter()
-            if limiter is not None:
-                hour = limiter.hourly_usage(chat)
-                if (hour["ornament_used"] >= FLOOD_HOURLY_TYPING_RESUME_BELOW
-                        * hour["ornament_budget"]):
-                    return
+        if st.in_flight:
+            # One refresh per chat at a time. The one in flight rendered
+            # before this change; run once more when it is done (it will
+            # usually land in the gap and become the trailing edit).
+            st.again = True
+            return
+        st.in_flight = True
         try:
-            if self.registry.pinned_msg_id:
-                edited = await edit_text_at(self._app.bot,
-                    text, chat, self.registry.pinned_msg_id,
-                    parse_mode="HTML",
-                    rate_limit_args=_rl_args(
-                        kind="skip", priority=PRIORITY_ORNAMENT),
-                )
-                if edited is MUTED or edited is SKIPPED:
-                    # Nothing went out — flood-muted, or the chat's budget
-                    # was momentarily short and this refresh was skipped
-                    # (roadmap 8.21). Either way, don't record this text as
-                    # shown: the next state change must try again. The
-                    # dashboard is a summary that is always re-derivable,
-                    # which is exactly what makes it skippable while an
-                    # answer is not.
-                    return
-            else:
-                msg = await send_text(self._app.bot,
-                    chat, text, parse_mode="HTML",
-                    # ORNAMENT (8.26 R3): the pinned dashboard is a
-                    # summary that is always re-derivable — which is
-                    # exactly what makes it sheddable while an answer is
-                    # not. Blocking rather than skip, because the FIRST
-                    # send is what creates the message every later refresh
-                    # edits in place.
+            await self._refresh_pinned_once(chat, st)
+        finally:
+            st.in_flight = False
+        if st.again:
+            st.again = False
+            await self._refresh_pinned_chat(chat)
+
+    async def _refresh_pinned_once(self, chat: int, st: "PinnedChat") -> None:
+        msg_id = self.registry.pinned_msg_ids.get(chat)
+        sessions = self._pinned_sessions(chat)
+        if not msg_id and not sessions and st.shown is None:
+            return  # nothing to show, and never shown: no bar yet
+        text, keyboard = self._render_pinned(chat, sessions)
+        sig = (text, _keyboard_sig(keyboard))
+        if msg_id and sig == st.shown:
+            return  # what the bar already shows: no call
+        now = asyncio.get_running_loop().time()
+        # MUTE: never a call into a ban. Wake up exactly when it lifts and
+        # catch up then, with the state as it is at that moment.
+        if MUTE.is_muted(chat):
+            self._schedule_pinned_trailing(chat, MUTE.remaining(chat))
+            return
+        # A transient failure's back-off (see `_pinned_create`).
+        if now < st.hold_until:
+            self._schedule_pinned_trailing(chat, st.hold_until - now)
+            return
+        # THE GAP: at most one attempt per PINNED_MIN_EDIT_GAP per chat.
+        # A change inside it is coalesced into one trailing refresh at its
+        # end, which re-renders from state, so it is never lost.
+        if (st.attempt_at is not None
+                and now - st.attempt_at < PINNED_MIN_EDIT_GAP):
+            self._schedule_pinned_trailing(
+                chat, st.attempt_at + PINNED_MIN_EDIT_GAP - now)
+            return
+        if not msg_id:
+            await self._pinned_create(chat, st, text, keyboard, sig, now)
+            return
+        if st.pin_pending:
+            await self._pinned_pin(chat, st, msg_id)
+            if st.disabled:
+                return
+        # ORNAMENT, skip class (8.26 R3, 8.30): the bar is a summary that
+        # is always re-derivable, so it counts in the hourly budget as an
+        # ornament and is dropped when the budget is tight. A drop is
+        # rescheduled below, never lost.
+        #
+        # EXCEPT the edit that puts a flood line on the bar or takes one
+        # off (a chat entering or leaving slow or minimal mode): that one
+        # is ESSENTIAL, like the busy card's single "updates paused" line
+        # and its single resume edit (8.29 T3). As an ornament it would be
+        # refused by the very minimal mode it announces, and the "⏸" line
+        # could never be shown, or never taken down. Still gapped and
+        # never into a mute; at most one per regime edge.
+        flood = tuple(self._pinned_flood_lines(chat))
+        regime_edge = st.shown is not None and flood != st.shown_flood
+        rl = (_rl_args(priority=PRIORITY_ESSENTIAL) if regime_edge
+              else _rl_args(kind="skip", priority=PRIORITY_ORNAMENT))
+        previous_attempt, st.attempt_at = st.attempt_at, now
+        try:
+            edited = await edit_text_at(self._app.bot,
+                text, chat, msg_id,
+                parse_mode="HTML",
+                reply_markup=keyboard,
+                rate_limit_args=rl,
+            )
+        except Forbidden as e:
+            # Kicked from the group, or blocked in the DM: every later call
+            # would be refused the same way. No bar here until restart.
+            self._pinned_disable(chat, st, f"the bot can't post there ({e})")
+            return
+        except BadRequest as e:
+            low = str(e).lower()
+            if "not modified" in low:
+                st.shown, st.shown_flood = sig, flood
+                return
+            if "chat not found" in low:
+                self._pinned_disable(chat, st, f"the chat is gone ({e})")
+                return
+            if "message to edit not found" in low or low.endswith(
+                    "message not found"):
+                # The user deleted the pinned message. Forget it and pin a
+                # new one: at most once per PINNED_RECREATE_MIN_INTERVAL.
+                log.info("Pinned status bar in chat %s is gone (%s) — "
+                         "will pin a new one", chat, e)
+                self.registry.pinned_msg_ids.pop(chat, None)
+                self.registry.mark_dirty()
+                st.attempt_at = None
+                await self._refresh_pinned_once(chat, st)
+                return
+            log.debug("Pinned status bar edit refused in %s: %s", chat, e)
+            return
+        if edited is SKIPPED:
+            # The budget was short for a skip-class call: nothing went out,
+            # so it does not open a gap. The trailing refresh retries soon
+            # (and the tick may get there first); never dropped.
+            st.attempt_at = previous_attempt
+            self._schedule_pinned_trailing(chat, _SKIP_RETRY)
+            return
+        if edited is MUTED:
+            # A ban armed under the call: the next refresh sees the mute
+            # and waits for the lift.
+            self._schedule_pinned_trailing(chat, PINNED_MIN_EDIT_GAP)
+            return
+        st.shown, st.shown_flood = sig, flood
+
+    async def _pinned_create(self, chat: int, st: "PinnedChat", text: str,
+                             keyboard, sig: tuple, now: float) -> None:
+        """Send and pin a new bar in *chat* (R5): once per chat, and again
+        only when the user deleted it — then at most once an hour."""
+        if (st.created_at is not None
+                and now - st.created_at < PINNED_RECREATE_MIN_INTERVAL):
+            self._schedule_pinned_trailing(
+                chat, st.created_at + PINNED_RECREATE_MIN_INTERVAL - now)
+            return
+        st.attempt_at = now
+        try:
+            msg = await send_text(self._app.bot,
+                chat, text, parse_mode="HTML",
+                reply_markup=keyboard,
+                # Silent: a status message is not news. (The pin is silent
+                # too; this covers the send itself, and a group's message
+                # that is deleted again when the pin is refused.)
+                disable_notification=True,
+                # ORNAMENT, blocking (8.26 R3): a summary, but the FIRST
+                # send is what creates the message every later refresh
+                # edits.
+                rate_limit_args=_rl_args(priority=PRIORITY_ORNAMENT),
+            )
+        except Forbidden as e:
+            self._pinned_disable(chat, st, f"the bot can't post there ({e})")
+            return
+        except BadRequest as e:
+            if "chat not found" in str(e).lower():
+                self._pinned_disable(chat, st, f"the chat is gone ({e})")
+                return
+            # Telegram refused THIS message (not the network): sending the
+            # same thing again in a minute would be refused the same way.
+            # Back off for the recreate interval.
+            st.created_at = now
+            log.info("Couldn't send the status bar to chat %s: %s", chat, e)
+            return
+        except Exception as e:
+            # Transient — a network error, a timeout, a 5xx: the next try
+            # may well work. A short back-off on the trailing refresh, not
+            # the hour (which would leave the chat with no bar for an hour
+            # after one blip).
+            st.hold_until = now + _TRANSIENT_RETRY
+            self._schedule_pinned_trailing(chat, _TRANSIENT_RETRY)
+            log.info("Couldn't send the status bar to chat %s (%s) — "
+                     "retrying in %.0fs", chat, e, _TRANSIENT_RETRY)
+            return
+        if msg is MUTED or msg is SKIPPED:
+            self._schedule_pinned_trailing(chat, PINNED_MIN_EDIT_GAP)
+            return
+        # Stamped when the send came BACK: a blocking ornament may have
+        # waited in the limiter, and both clocks run from what went out.
+        st.created_at = st.attempt_at = asyncio.get_running_loop().time()
+        st.shown = sig
+        st.shown_flood = tuple(self._pinned_flood_lines(chat))
+        self.registry.pinned_msg_ids[chat] = msg.message_id
+        self.registry.mark_dirty()
+        await self._pinned_pin(chat, st, msg.message_id)
+
+    async def _pinned_pin(self, chat: int, st: "PinnedChat",
+                          msg_id: int) -> None:
+        """Pin *msg_id* silently. In a GROUP a refused pin (the bot is not
+        an admin) deletes the message and turns the bar off for this chat
+        for the daemon's lifetime: an unpinned status message would sit in
+        the group's scroll-back and be edited there forever. In a DM the
+        message stays and is edited in place."""
+        st.pin_pending = False
+        try:
+            await self._app.bot.pin_chat_message(
+                chat, msg_id,
+                disable_notification=True,
+                rate_limit_args=_rl_args(priority=PRIORITY_ORNAMENT),
+            )
+        except (FloodMuted, FloodSkipped):
+            # Not a refusal: the budget or a ban. Pin it on the next
+            # refresh that gets through.
+            st.pin_pending = True
+        except Exception as e:
+            if not is_group_chat(chat):
+                log.info("Couldn't pin the status bar in chat %s: %s — "
+                         "will edit it in place.", chat, e)
+                return
+            self._pinned_disable(
+                chat, st, f"the bot needs admin rights to pin ({e}); "
+                "the unpinned message is deleted")
+            try:
+                await self._app.bot.delete_message(
+                    chat_id=chat, message_id=msg_id,
                     rate_limit_args=_rl_args(priority=PRIORITY_ORNAMENT),
                 )
-                if msg is MUTED or msg is SKIPPED:
-                    return  # no message to remember or pin; see above
-                # Store the message id IMMEDIATELY — before attempting
-                # to pin. In groups where the bot isn't an admin (no
-                # pin permission), the pin call fails but we still
-                # want to edit this message in place on every refresh
-                # rather than send a fresh status line each time
-                # (which spammed the chat with repeated "📌 …" notices).
-                self.registry.pinned_msg_id = msg.message_id
-                self.registry.mark_dirty()
-                try:
-                    await self._app.bot.pin_chat_message(
-                        chat, msg.message_id,
-                        disable_notification=True,
-                        # ORNAMENT (8.26 R3): pinning is decoration on
-                        # decoration — this call already fails harmlessly
-                        # whenever the bot is not a group admin.
-                        rate_limit_args=_rl_args(priority=PRIORITY_ORNAMENT),
-                    )
-                except Exception as e:
-                    log.info(
-                        "Couldn't pin the status dashboard (bot likely "
-                        "isn't a group admin): %s — will edit in place "
-                        "instead.", e,
-                    )
-            self._last_pinned_text = text
-            self._last_pinned_state = state
-            self._last_pinned_at = now
-        except Exception:
-            log.debug("Pinned message update failed", exc_info=True)
+            except Exception:
+                log.warning("Couldn't delete the unpinned status bar in "
+                            "group %s", chat, exc_info=True)
 
-    def _pinned_state(self) -> tuple:
-        """What about the sessions is worth an immediate dashboard refresh:
-        each live session's status, and which sessions there are. Not the
-        header (which session notified last), nor cost or context %. Those
-        change on nearly every hook and ride the debounced refresh."""
-        return tuple(sorted(
-            (s.name, s.status.value)
-            for s in self.registry.all_sessions().values()
-            if s.status != Status.GONE and s.label
-        ))
+    def _pinned_disable(self, chat: int, st: "PinnedChat", why: str) -> None:
+        """No bar in *chat* for the rest of this daemon's life: every call
+        to it would be refused the same way. Forgets its message id."""
+        log.info("No pinned status bar in chat %s until the daemon "
+                 "restarts: %s", chat, why)
+        st.disabled = True
+        if st.trailing is not None and not st.trailing.done():
+            st.trailing.cancel()
+        if self.registry.pinned_msg_ids.pop(chat, None) is not None:
+            self.registry.mark_dirty()
+
+    def _schedule_pinned_trailing(self, chat: int, delay: float) -> None:
+        """One trailing refresh per chat, *delay* seconds from now. One
+        already pending stays: when it fires it re-renders and, if it is
+        still too early, schedules the next."""
+        st = self._pinned.setdefault(chat, PinnedChat())
+        if st.trailing is not None and not st.trailing.done():
+            return
+        st.trailing = asyncio.get_running_loop().create_task(
+            self._pinned_trailing(chat, max(delay, 0.0) + _TRAILING_MARGIN))
+
+    async def _pinned_trailing(self, chat: int, delay: float) -> None:
+        await asyncio.sleep(delay)
+        st = self._pinned.get(chat)
+        if st is not None:
+            st.trailing = None
+        await self._refresh_pinned_chat(chat)
+
+    async def _pinned_answer(self, query, sess: TrackedSession) -> None:
+        """The bar's "Answer <label>" button: re-send *sess*'s pending
+        prompt, with its answer keyboard, as a fresh message at the bottom
+        of the chat the tap came from. "already answered" when it is not
+        waiting any more.
+
+        The copy is registered as a prompt surface bound to THIS prompt
+        (:meth:`register_prompt_surface`), so a tap on it after the prompt
+        was answered — even with the session already waiting on the next
+        one — is refused instead of answering a prompt it never showed."""
+        message = getattr(query, "message", None)
+        chat = _message_chat_id(message)
+        if message is None or chat is None:
+            await self._safe_answer(query, "Open the chat to answer")
+            return
+        if sess.status != Status.INTERACTIVE:
+            await self._safe_answer(query, "already answered")
+            return
+        markup = self._pending_prompt_markup(sess)
+        if markup is None:
+            await self._safe_answer(
+                query, "The prompt can't be re-sent — answer it in the terminal")
+            return
+        token = current_prompt_token(sess, create=True)
+        text, keyboard = markup
+        msg = await send_text(self._app.bot,
+            chat, text, parse_mode="HTML", reply_markup=keyboard,
+        )
+        if msg is SKIPPED:
+            await self._safe_answer(query, "Busy — try again in a moment")
+            return
+        if msg is MUTED or msg is None:
+            return
+        msg_id = getattr(msg, "message_id", None)
+        if not isinstance(msg_id, int):
+            return
+        self.registry.track_message(msg_id, sess.name, chat)
+        self.register_prompt_surface(chat, msg_id, sess, token)
+
+    def register_prompt_surface(self, chat, msg_id: int,
+                                sess: TrackedSession, token: int) -> None:
+        """Remember that message *msg_id* in *chat* carries answer buttons
+        for *sess*'s prompt *token*: a separate-message prompt, or a copy
+        the bar re-sent. `_handle_callback` refuses an answer tapped on it
+        once that prompt is no longer the one pending.
+
+        Unbounded on purpose — an entry is added per prompt that could not
+        go inline and per "Answer" tap, both human-paced, about 100 bytes
+        each, and a restart clears it. Evicting an entry would take the
+        guard off a message that still has live-looking buttons."""
+        self._resent_prompts[(chat or 0, msg_id)] = (sess.name, token)
 
     def _build_session_dashboard(self, sess: TrackedSession) -> str:
         """Build a rich HTML dashboard for a session (used on switch)."""

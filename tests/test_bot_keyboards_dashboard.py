@@ -408,34 +408,38 @@ def test_build_session_dashboard_gone(mk_bot):
     assert "🔴" in dashboard or "gone" in dashboard.lower()
 
 
-# ---- _build_pinned_text ------------------------------------------------
+# ---- _render_pinned (the pinned bar, 8.31) ------------------------------
 
-def test_build_pinned_text_with_no_sessions(mk_bot):
+def test_render_pinned_with_no_sessions_is_all_idle(mk_bot, monkeypatch):
+    monkeypatch.setattr("aipager.bot.dashboard.CHAT_ID", "12345")
     bot = mk_bot()
-    out = bot._build_pinned_text("")
-    # Single message (or empty)
-    assert isinstance(out, str)
+    text, keyboard = bot._render_pinned(12345)
+    assert text == "💤 all idle"
+    assert keyboard is None
 
 
-def test_build_pinned_text_lists_alive_sessions(mk_bot):
+def test_render_pinned_lists_alive_sessions_without_cost(mk_bot, monkeypatch):
+    monkeypatch.setattr("aipager.bot.dashboard.CHAT_ID", "12345")
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
     sess.last_cost_usd = 0.42
     bot.registry._sessions["claude-jim"] = sess
-    out = bot._build_pinned_text("claude-jim")
-    assert "jim" in out
+    text, _kb = bot._render_pinned(12345)
+    assert "jim" in text
+    assert "0.42" not in text
 
 
-def test_build_pinned_text_marks_active_session(mk_bot):
+def test_render_pinned_has_no_header_session(mk_bot, monkeypatch):
+    """8.31 R6: no "📌 <last session to send a hook>" header any more."""
+    monkeypatch.setattr("aipager.bot.dashboard.CHAT_ID", "12345")
     bot = mk_bot()
     s1 = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
     s2 = TrackedSession(name="claude-dev", label="dev", status=Status.IDLE)
     bot.registry._sessions["claude-jim"] = s1
     bot.registry._sessions["claude-dev"] = s2
-    out = bot._build_pinned_text("claude-jim")
-    # Both listed
-    assert "jim" in out
-    assert "dev" in out
+    text, _kb = bot._render_pinned(12345)
+    assert "jim" in text and "dev" in text
+    assert "📌" not in text
 
 
 # ---- _maybe_update_bot_name --------------------------------------------

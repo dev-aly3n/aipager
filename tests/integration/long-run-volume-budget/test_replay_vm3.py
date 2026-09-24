@@ -195,16 +195,19 @@ def test_c_the_vm3_timeline_stays_inside_the_long_run_budget(
     * bigdog's four-hour card: at most 60 edits in any hour after its
       first (it has no state change to bypass on);
     * total calls ≤ 4,080 — the modelled 0.7.13 figure is ~11,500;
-    * with the pinned dashboard LIVE (tester-iter2-001), both sessions
+    * with the pinned "needs you" bar LIVE (8.31, refreshed by the
+      session monitor's 2 s tick exactly as in the daemon), both sessions
       streaming at once: zero dark minutes, the bubble never shed, and
-      minimal mode never entered, sampled every minute.
+      minimal mode never entered, sampled every minute;
+    * the bar is edited no more often than what it shows changes (the
+      state transitions, sampled on every tick) and never more than 120
+      times in any rolling hour.
 
-    The pinned dashboard is off on every install the daemon has started
-    since v2 (``aipager.yaml`` sets ``scopes``). vm3 did not have one.
-    It is switched on here as a worst case: ``notify`` refreshes it on
-    every hook, headed by the session that sent it. Before its debounce,
-    this replay made 2,203 dashboard edits, the bubble was dark for 164
-    minutes, and minimal mode ran for 48.
+    History: 8.30's pinned dashboard was refreshed by ``notify`` on every
+    hook, headed by the session that sent it. Before its debounce this
+    replay made 2,203 dashboard edits, the bubble was dark for 164
+    minutes, and minimal mode ran for 48. 8.31 replaced it with the bar,
+    which no hook refreshes and which is live on every install.
 
     On 0.7.13 this is two typing loops, a card on a 2–4 s cadence for the
     whole run and every hook racing a 1.2 s debounce.
@@ -213,8 +216,11 @@ def test_c_the_vm3_timeline_stays_inside_the_long_run_budget(
     monkeypatch.setattr("aipager.bot.dashboard.CHAT_ID", str(CHAT))
     bot = mk_bot()
     bot._app.bot = volume_bot
-    bot.registry.pinned_msg_id = PINNED
+    bot.registry.pinned_msg_ids[CHAT] = PINNED
     samples: list[tuple[bool, bool]] = []
+    #: What the bar would show, on every tick: its changes are the state
+    #: transitions an edit may follow.
+    renders: list[str] = []
 
     async def _sample():
         while True:
@@ -222,9 +228,22 @@ def test_c_the_vm3_timeline_stays_inside_the_long_run_budget(
             hour = vlimiter.hourly_usage(CHAT)
             samples.append((vlimiter.minimal_mode(CHAT), hour["typing_shed"]))
 
+    async def _tick():
+        # The session monitor's scan: SessionMonitor.on_tick = pinned_tick.
+        # The monitor starts with the daemon, long before a turn; here its
+        # first scan lands just after the replay's first turn began.
+        await asyncio.sleep(2.0)
+        while True:
+            text, keyboard = bot._render_pinned(CHAT)
+            renders.append(text + repr(keyboard and keyboard.to_dict()))
+            await bot.pinned_tick()
+            await asyncio.sleep(2.0)
+
     sampler = vloop.create_task(_sample())
+    ticker = vloop.create_task(_tick())
     run = _replay(bot, vloop)
     sampler.cancel()
+    ticker.cancel()
 
     calls = volume_telegram.calls
     everything = [t for _e, c, _m, t, _x in calls if c == CHAT]
@@ -274,7 +293,10 @@ def test_c_the_vm3_timeline_stays_inside_the_long_run_budget(
     assert report["dark_minutes"] == 0, report
     assert report["shed_minutes"] == 0, report
     assert report["minimal_minutes"] == 0, report
-    assert 0 < report["dashboard"] <= 60, report
+    transitions = 1 + sum(1 for a, b in zip(renders, renders[1:]) if a != b)
+    report["transitions"] = transitions
+    assert 0 < report["dashboard"] <= transitions, report
+    assert _most_in_window(dashboard) <= 120, report
     # Both sessions really stream (rev-iter3-001). Until 8.30's iteration
     # 3 the replay passed `T` as `_work`'s absolute deadline on a loop
     # that starts at 1,000,000, so bigdog made no hook at all and catfish's

@@ -7,7 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **A pinned "needs you" status bar in every chat.** Each chat aipager
+  talks in — your DM and every group scope, on every install — gets one
+  pinned message listing that chat's sessions. Its first line, the one
+  Telegram shows in the bar at the top of the chat, says what most needs
+  you: `⏳ jim needs you — Bash: make deploy` (with `(+N more)`), else
+  `⚙️ 2 working — jim, dev`, else `💤 all idle`; a `🐢` or `⏸` line below
+  it says when the chat is in slow mode after a Telegram warning or has
+  paused card updates (for the hourly limit or the rate limit). **Answer &lt;label&gt;** buttons (up
+  to three) send a waiting session's prompt again at the bottom of the
+  chat, with its answer buttons ("already answered" if it was; a copy
+  never answers a later prompt, and after a restart any stale copy is
+  refused with "this prompt has expired"), and
+  **📱 App** opens the Mini App in your DM. In a group where the bot may
+  not pin, the message is deleted and the group gets no bar until the
+  daemon restarts; a bar you delete is re-created at most once an hour.
+  See [commands → the pinned status bar](docs/commands.md#the-pinned-status-bar).
+
 ### Fixed
+- **Button taps show their messages again.** Every tap on an inline
+  button was acknowledged with an empty answer before its handler ran, and
+  Telegram accepts only one answer per tap, so the handler's own message
+  ("Session not found", "That task already finished — …", "Killing jim…",
+  "already answered", …; about 80 of them) was refused and never shown.
+  The handler now answers first, with its message; the empty
+  acknowledgement goes out only when nothing answered, at the latest one
+  second after the tap (`CALLBACK_ACK_BOUND`), so the button's spinner
+  still never hangs. A message a slow handler sends after that second is
+  dropped.
 - **A chat can no longer be banned for long-run volume that every
   short window allowed.** On 2026-09-23 two sessions streamed into one DM
   for 3 h 23 min — about 57 calls a minute, under the 1-per-second and
@@ -77,17 +105,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for all four hours. New `/settings` toggle **⏱ Long-turn card updates**
   (on by default; per session from the Mini App or 👤 Per-session
   preferences) keeps the old pace for the whole turn.
-- **The pinned status message refreshes on a change of state, not on
-  every hook** (single-chat installs without `aipager.yaml` only; it is
-  off everywhere else). It used to be re-edited on nearly every hook,
-  headed by whichever session sent it. Two sessions working at once
-  flipped its first line back and forth, and it became the chat's
-  biggest caller. It now refreshes at once when a session's status
-  changes or a session appears or goes. Anything else waits a minute
-  (`PINNED_REFRESH_INTERVAL`), or ten while a session is working
-  (`PINNED_REFRESH_BUSY_INTERVAL`), and waits longer still while the
-  chat's hour is close to the point where the typing bubble would be
-  dropped.
+- **The pinned status message is now a "needs you" bar, and it is edited
+  a few times an hour, not on every hook.** It used to exist only on
+  single-chat installs without `aipager.yaml`, headed by whichever session
+  sent the last hook, with model, cost and context % on every line: two
+  sessions working at once made it the chat's biggest caller. It now
+  carries no clock, cost, context % or model, is refreshed on state
+  changes (a session working, waiting, idle, gone or new, a prompt shown
+  or answered, a flood regime entered or left) instead of hooks, and is
+  edited only when what it shows changed — at most once every 30 s per
+  chat (`PINNED_MIN_EDIT_GAP`), with a change inside that gap shown when
+  it ends, never lost, and never while the chat is flood-muted. Replayed
+  over the 2026-09-23 timeline (two sessions streaming for 3 h 24 min) it
+  made 20 edits, one per state change, 14 in its busiest hour.
+  `PINNED_REFRESH_INTERVAL` and `PINNED_REFRESH_BUSY_INTERVAL` are gone.
 - **`aipager status` and `aipager doctor` show each chat's long-run
   state**: `Telegram chat 123: rate 0.25/s (ceiling 0.50/s), 212/1200
   calls in the last hour (as of 18s ago), 7/30 in the last minute —

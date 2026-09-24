@@ -518,7 +518,7 @@ class _SkippedSend:
     out AND THE CHAT IS HEALTHY. There is no ban to wait out; the budget
     was momentarily short, so the next refresh simply tries again. A
     caller that records what it showed the user must not record this one
-    (``dashboard._maybe_update_bot_name``)."""
+    (``dashboard._refresh_pinned_once``)."""
 
     __slots__ = ()
 
@@ -736,8 +736,14 @@ def _md_safe_boundaries(md: str) -> list[int]:
 
 
 def _safe_truncate(text: str, limit: int, is_html: bool) -> str:
-    """Truncate text to limit, ensuring HTML tags aren't split mid-tag."""
-    if not is_html or len(text) <= limit:
+    """Truncate text to limit, ensuring HTML tags aren't split mid-tag.
+
+    Text that already fits is returned unchanged: the "…" marks a cut, so
+    it is added only when something was cut (8.31 — it used to be appended
+    to every short text too)."""
+    if len(text) <= limit:
+        return text
+    if not is_html:
         return text[:limit] + "…"
     # Cut at limit, then back up to avoid splitting an HTML tag
     cut = text[:limit]

@@ -473,46 +473,48 @@ def test_perms_busy_prompt_muted_leaves_nothing_pending_and_does_not_raise(
 def test_pinned_dashboard_muted_remembers_nothing_and_retries_after_the_lift(
     mk_bot, run_async, clock, caplog, monkeypatch,
 ):
-    """The pinned status line stores ``msg.message_id`` and records the
-    text as shown. Mutation: drop the send's ``is MUTED`` return and the
-    sentinel raises ``AttributeError`` into the method's own catch-all
-    (hence the "no exception logged" assertion); drop the edit's and a
-    text that never went out is recorded as shown, so the first refresh
-    after the lift is skipped as "redundant"."""
+    """The pinned bar (8.31) stores the message id and records what it
+    showed. During a mute nothing is sent, nothing is recorded, and the
+    first refresh after the lift sends. Mutation: drop the send's ``is
+    MUTED`` return and the sentinel raises ``AttributeError`` into the
+    refresh's own catch-all (hence the "no exception logged" assertion);
+    record a muted edit as shown and the refresh after the lift is
+    skipped as "redundant"."""
     # dashboard.py keeps its own import-time copy of CHAT_ID, empty on a
     # runner with no .env; pin it like conftest pins config.CHAT_ID.
     monkeypatch.setattr("aipager.bot.dashboard.CHAT_ID", "256113222")
     bot = mk_bot()
     bot._app.bot.pin_chat_message = AsyncMock()
     bot._app.bot.edit_message_text = AsyncMock()
-    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY,
+                          scope_chat_id=256113222)
     bot.registry._sessions["claude-jim"] = sess
     MUTE.mute(256113222, BAN)  # the str CHAT_ID above lands on this int entry
 
     with caplog.at_level(logging.DEBUG):
-        run_async(bot._maybe_update_bot_name("claude-jim"))
+        run_async(bot.refresh_pinned())
     bot._app.bot.send_message.assert_not_awaited()
     bot._app.bot.pin_chat_message.assert_not_awaited()
-    assert not bot.registry.pinned_msg_id
-    assert bot._last_pinned_text != bot._build_pinned_text("claude-jim")
+    assert not bot.registry.pinned_msg_ids
+    assert bot._pinned[256113222].shown is None
     assert not any(r.exc_info for r in caplog.records), \
         "a skipped send is not an error: " + str(
             [r.getMessage() for r in caplog.records if r.exc_info])
 
     clock(BAN + 1)
     bot._app.bot.send_message.return_value = MagicMock(message_id=77)
-    run_async(bot._maybe_update_bot_name("claude-jim"))
+    run_async(bot.refresh_pinned())
     bot._app.bot.send_message.assert_awaited_once()
-    assert bot.registry.pinned_msg_id == 77
+    assert bot.registry.pinned_msg_ids == {256113222: 77}
+    shown = bot._pinned[256113222].shown
 
-    # And an edit of the existing pinned line during a later mute records
-    # nothing either, so the next refresh tries again. (The line changes
-    # with the model name; the active session's status is not shown.)
+    # And an edit of the existing pinned bar during a later mute records
+    # nothing either, so the next refresh tries again.
     MUTE.mute(256113222, BAN)
-    sess.model_name = "Opus 4.7"
-    run_async(bot._maybe_update_bot_name("claude-jim"))
+    sess.status = Status.IDLE
+    run_async(bot.refresh_pinned())
     bot._app.bot.edit_message_text.assert_not_awaited()
-    assert bot._last_pinned_text != bot._build_pinned_text("claude-jim")
+    assert bot._pinned[256113222].shown == shown
 
 
 # ── the seam's markup helper + the settings "Close" tap ──────────────────────
@@ -627,7 +629,7 @@ def test_permission_answer_tap_makes_no_card_edit_while_muted_and_another_chat_d
         sess.pending_permission = {"tool_summary": "Bash: x",
                                    "tool_info": {"name": "Bash"}}
         bot.registry._sessions["claude-dev"] = sess
-        update, query = _tap("claude-dev:allow", chat)
+        update, query = _tap("claude-dev:allow", chat, message_id=4242)
         run_async(bot._handle_callback(update, MagicMock()))
         assert bot._app.bot.edit_message_text.await_count == expected, chat
         # 8.26 D-1: the toast follows the edit. It used to fire either

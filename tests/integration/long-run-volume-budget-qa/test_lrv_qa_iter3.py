@@ -6,13 +6,12 @@
    (``MUTE.mute``). Calls already queued in the limiter at that moment must
    never reach the wire once the mute is armed. PTB callers get
    ``FloodMuted`` and an answer is held.
-2. **The pinned dashboard**: a session status change, or a session
-   appearing or going, refreshes it at once. Hook-only changes (the header
-   flipping between the sessions that notify) wait the idle interval,
-   or the busy interval while a session is BUSY.
-3. **Two sessions stream for 2 h with the dashboard live**: the bubble
-   never goes dark, the chat never enters minimal mode, and every rolling
-   hour stays within 1080 ornament calls.
+2. **The pinned dashboard** (amended for 8.31's "needs you" bar): a hook
+   never refreshes it; a session status change, or a session appearing or
+   going, is shown within one monitor tick plus the bar's 30 s gap, once.
+3. **Two sessions stream for 2 h with the bar live**: the bubble never
+   goes dark, the chat never enters minimal mode, and every rolling hour
+   stays within 1080 ornament calls.
 4. **Iteration 4**: a ban on any chat-scoped call mutes the chat (section
    1 also covers a button tap's edit and a PTB ``sendMessage``); the same
    ban armed twice logs one warning; a shorter later ban (a 30 s 429 or a
@@ -23,9 +22,9 @@ real limiter (a ``_GatedBot`` subclass that also records message ids).
 Rich calls go through the REAL ``rich_message._post`` over an
 ``httpx.MockTransport``. Nothing in ``asyncio`` is patched.
 
-The pinned dashboard exists only on a legacy single-chat install, so these
-rows set ``aipager.bot.dashboard.CHAT_ID``. That is configuration, not a
-mock of the code under test.
+These rows run a legacy single-chat install (``scopes`` None), where the
+bar's chat is ``aipager.bot.dashboard.CHAT_ID``, so they set it. That is
+configuration, not a mock of the code under test.
 """
 
 from __future__ import annotations
@@ -56,8 +55,8 @@ HOUR = 3600.0
 EPS = 1e-3
 SLOW = config.TYPING_AGE_TIER2_INTERVAL                       # 15
 SHARE = config.FLOOD_HOURLY_MAX - config.FLOOD_HOURLY_ESSENTIAL_RESERVE  # 1080
-IDLE_GAP = config.PINNED_REFRESH_INTERVAL                    # 60
-BUSY_GAP = config.PINNED_REFRESH_BUSY_INTERVAL               # 600
+PIN_GAP = config.PINNED_MIN_EDIT_GAP                         # 30
+TICK = 2.0                                  # the session monitor's scan
 ANSWER = "queued answer the ban must not eat"
 
 
@@ -178,7 +177,7 @@ def dash_on(monkeypatch):
 def _bot(mk_bot, pbot):
     bot = mk_bot()
     bot._app.bot = pbot
-    bot.registry.pinned_msg_id = PINNED
+    bot.registry.pinned_msg_ids[CHAT] = PINNED
     return bot
 
 
@@ -298,8 +297,10 @@ def _queued_ban(mk_bot, pbot, http, vloop, monkeypatch, carrier, *,
                 await bot.notify(a, "idle_prompt", {"summary": "a's answer"})
             return asyncio.ensure_future(_a_answers())
         if carrier == "dashboard":
+            # 8.31: the bar is refreshed at a state transition (or on the
+            # monitor's tick), no longer by a hook.
             pbot.slow_ban["editMessageText"] = 1.0
-            return asyncio.ensure_future(bot.notify(a, "tool_use", _tool(1)))
+            return asyncio.ensure_future(bot.refresh_pinned())
         if carrier == "callback_edit":
             pbot.slow_ban["editMessageText"] = 1.0
             context = MagicMock()
@@ -471,7 +472,13 @@ def test_q_a_ban_in_one_chat_does_not_refuse_anothers_queue(
     assert len(sent) == 5
 
 
-# ── 2. the pinned dashboard: state at once, hooks wait ───────────────────────
+# ── 2. the pinned bar: hooks never refresh it, state changes do ─────────────
+#
+# Amended for 8.31. The 8.30 rows here pinned a debounce of the per-hook
+# refresh (60 s idle, 600 s busy, a yield to the bubble's resume mark).
+# 8.31 removed the per-hook refresh: the bar is re-rendered on the
+# monitor's 2 s tick and edited only when what it shows changed, at most
+# once per PINNED_MIN_EDIT_GAP. `_ticking` runs that tick.
 
 def _dash(mk_bot, pbot, vloop, *, status=Status.BUSY):
     bot = _bot(mk_bot, pbot)
@@ -480,16 +487,26 @@ def _dash(mk_bot, pbot, vloop, *, status=Status.BUSY):
     return bot, s0, s1
 
 
-def _steps(vloop, steps):
+def _steps(vloop, steps, bot=None):
     """Run ``(delay, coroutine factory)`` steps; return each step's start
-    time."""
+    time. With *bot*, the session monitor's tick runs alongside."""
     marks: list[float] = []
 
+    async def _tick():
+        while True:
+            await bot.pinned_tick()
+            await asyncio.sleep(TICK)
+
     async def main():
+        ticker = asyncio.ensure_future(_tick()) if bot is not None else None
         for delay, step in steps:
             await asyncio.sleep(delay)
             marks.append(vloop.time())
             await step()
+        await asyncio.sleep(PIN_GAP + TICK)
+        if ticker is not None:
+            ticker.cancel()
+            await asyncio.gather(ticker, return_exceptions=True)
     vloop.run_until_complete(main())
     return marks
 
@@ -501,68 +518,34 @@ def _flips(bot, s0, s1, n, every):
             for i in range(n)]
 
 
-def test_d_the_first_hook_shows_the_dashboard(
+def test_d_the_first_tick_shows_the_bar(
     mk_bot, pbot, vloop, vlimiter, rich_http, dash_on,
 ):
-    """Setup check: the dashboard is live in these rows."""
+    """Setup check: the bar is live in these rows."""
     bot, s0, _s1 = _dash(mk_bot, pbot, vloop)
-    _steps(vloop, [(0.0, lambda: bot.notify(s0, "tool_use", _tool(0)))])
+    _steps(vloop, [(0.0, lambda: bot.notify(s0, "tool_use", _tool(0)))], bot)
     assert len(pbot.dashboard()) == 1
 
 
-def test_d_busy_header_flips_do_not_refresh_inside_the_busy_interval(
+def test_d_busy_hooks_never_refresh_the_bar(
     mk_bot, pbot, vloop, vlimiter, rich_http, dash_on,
 ):
-    """Both sessions BUSY. After the first refresh, 118 hooks alternate
-    s0/s1 every 5 s (590 s). Only the header flips, so nothing goes
-    out."""
+    """Both sessions BUSY. 118 hooks alternate s0/s1 every 5 s with the
+    tick running: nothing on the bar changes, so nothing goes out after
+    the first edit."""
     bot, s0, s1 = _dash(mk_bot, pbot, vloop)
     _steps(vloop, [(0.0, lambda: bot.notify(s0, "tool_use", _tool(0)))]
-           + _flips(bot, s0, s1, 118, 5.0))
+           + _flips(bot, s0, s1, 118, 5.0), bot)
     assert len(pbot.dashboard()) == 1, pbot.dashboard()
 
 
-def test_d_a_busy_header_flip_after_the_busy_interval_refreshes(
+def test_d_waiting_hooks_never_refresh_the_bar(
     mk_bot, pbot, vloop, vlimiter, rich_http, dash_on,
 ):
-    bot, s0, s1 = _dash(mk_bot, pbot, vloop)
-    _steps(vloop, [(0.0, lambda: bot.notify(s0, "tool_use", _tool(0))),
-                   (BUSY_GAP + 1.0, lambda: bot.notify(s1, "tool_use",
-                                                       _tool(1)))])
-    assert len(pbot.dashboard()) == 2, pbot.dashboard()
-
-
-def test_d_busy_refreshes_are_never_closer_than_the_busy_interval(
-    mk_bot, pbot, vloop, vlimiter, rich_http, dash_on,
-):
-    """30 min of alternating hooks every 3 s with both BUSY: every gap
-    between dashboard refreshes is at least 600 s."""
-    bot, s0, s1 = _dash(mk_bot, pbot, vloop)
-    _steps(vloop, _flips(bot, s0, s1, 600, 3.0))
-    stamps = pbot.dashboard()
-    gaps = [y - x for x, y in zip(stamps, stamps[1:])]
-    assert len(stamps) >= 2 and min(gaps) >= BUSY_GAP - EPS, gaps
-
-
-def test_d_idle_header_flips_wait_the_idle_interval(
-    mk_bot, pbot, vloop, vlimiter, rich_http, dash_on,
-):
-    """No session BUSY. Hooks alternate every 5 s for 55 s after the first
-    refresh; no refresh goes out."""
     bot, s0, s1 = _dash(mk_bot, pbot, vloop, status=Status.INTERACTIVE)
     _steps(vloop, [(0.0, lambda: bot.notify(s0, "tool_use", _tool(0)))]
-           + _flips(bot, s0, s1, 11, 5.0))
+           + _flips(bot, s0, s1, 30, 5.0), bot)
     assert len(pbot.dashboard()) == 1, pbot.dashboard()
-
-
-def test_d_an_idle_header_flip_after_the_idle_interval_refreshes(
-    mk_bot, pbot, vloop, vlimiter, rich_http, dash_on,
-):
-    bot, s0, s1 = _dash(mk_bot, pbot, vloop, status=Status.INTERACTIVE)
-    _steps(vloop, [(0.0, lambda: bot.notify(s0, "tool_use", _tool(0))),
-                   (IDLE_GAP + 1.0, lambda: bot.notify(s1, "tool_use",
-                                                       _tool(1)))])
-    assert len(pbot.dashboard()) == 2, pbot.dashboard()
 
 
 def test_d_phantom_subagent_stops_do_not_refresh(
@@ -576,15 +559,14 @@ def test_d_phantom_subagent_stops_do_not_refresh(
     steps = [(0.0, lambda: bot.notify(s0, "tool_use", _tool(0)))]
     steps += [(1.0, (lambda s=(s0, s1)[i % 2]: bot.notify(
         s, "subagent_stop", dict(phantom)))) for i in range(300)]
-    _steps(vloop, steps)
+    _steps(vloop, steps, bot)
     assert len(pbot.dashboard()) == 1, pbot.dashboard()
 
 
 def _status_change_then_hook(mk_bot, pbot, vloop, change):
-    """Both BUSY. A first refresh at 0; 30 s of flips; at 30 s *change*
-    is applied; then the sessions keep notifying, one ``tool_use`` a
-    second for 5 s (a skip-kind refresh may lose one slot to the card
-    edit its own hook caused). Returns ``(dashboard stamps, time of the
+    """Both BUSY, the tick running. The first edit at 0; 30 s of hooks;
+    at 30 s *change* is applied; then the sessions keep notifying, one
+    ``tool_use`` a second for 5 s. Returns ``(bar stamps, time of the
     change)``."""
     bot, s0, s1 = _dash(mk_bot, pbot, vloop)
 
@@ -597,7 +579,7 @@ def _status_change_then_hook(mk_bot, pbot, vloop, change):
                    + [(0.0, _change)]
                    + [(1.0, (lambda i=i: bot.notify(s0 if i % 2 else s1,
                                                     "tool_use", _tool(90 + i))))
-                      for i in range(5)])
+                      for i in range(5)], bot)
     return pbot.dashboard(), marks[-6]
 
 
@@ -627,27 +609,26 @@ def _s1_removed(bot, s0, s1, vloop):
                          ids=["busy-to-idle", "busy-to-interactive",
                               "busy-to-gone", "session-appears",
                               "session-removed"])
-def test_d_a_state_change_refreshes_at_once(
+def test_d_a_state_change_is_shown_within_a_tick(
     mk_bot, pbot, vloop, vlimiter, rich_http, dash_on, change,
 ):
-    """Inside the 600 s busy wait, a status change (or a session appearing
-    or going) is shown at once: within the 5 s of hooks that follow it,
-    not 600 s later."""
+    """A status change (or a session appearing or going) 30 s after the
+    first edit — the gap has passed — is shown on the next tick."""
     stamps, change_at = _status_change_then_hook(mk_bot, pbot, vloop, change)
-    assert [t for t in stamps if change_at <= t <= change_at + 5.0 + EPS], \
+    assert [t for t in stamps if change_at <= t <= change_at + TICK + EPS], \
         [t - change_at for t in stamps]
 
 
 def test_d_a_state_change_is_shown_once_not_on_every_later_hook(
     mk_bot, pbot, vloop, vlimiter, rich_http, dash_on,
 ):
-    """After the state change is shown, the header flips go back to
-    waiting: 2 min of further hooks add nothing."""
+    """After the state change is shown, 2 min of further hooks add
+    nothing."""
     bot, s0, s1 = _dash(mk_bot, pbot, vloop)
     steps = [(0.0, lambda: bot.notify(s0, "tool_use", _tool(0)))]
     steps += [(10.0, lambda: _as_coro(_s1_interactive(bot, s0, s1, vloop)))]
     steps += _flips(bot, s0, s1, 25, 5.0)
-    _steps(vloop, steps)
+    _steps(vloop, steps, bot)
     assert len(pbot.dashboard()) == 2, pbot.dashboard()
 
 
@@ -662,9 +643,9 @@ def _as_coro(_value):
 def test_d_a_status_change_goes_out_even_with_the_hour_near_the_shed(
     mk_bot, pbot, vloop, vlimiter, rich_http, dash_on,
 ):
-    """The routine refresh yields to the hourly budget; a status change
-    does not. The chat's hour stands at 700 ornament calls (between the
-    60 % resume and 75 % shed marks)."""
+    """The chat's hour stands at 700 ornament calls (between the 60 %
+    resume and 75 % shed marks). A status change still reaches the bar
+    within the gap."""
     bot, s0, s1 = _dash(mk_bot, pbot, vloop)
 
     async def _fill():
@@ -676,17 +657,22 @@ def test_d_a_status_change_goes_out_even_with_the_hour_near_the_shed(
         (1.0, _fill),
         (20.0, lambda: _as_coro(_s1_interactive(bot, s0, s1, vloop)))]
         + [(1.0, (lambda i=i: bot.notify(s0 if i % 2 else s1, "tool_use",
-                                         _tool(10 + i)))) for i in range(5)])
-    assert [t for t in pbot.dashboard() if marks[2] <= t <= marks[2] + 5.0 + EPS]
+                                         _tool(10 + i)))) for i in range(5)],
+        bot)
+    assert [t for t in pbot.dashboard()
+            if marks[2] <= t <= marks[2] + PIN_GAP + TICK + EPS], \
+        ([t - marks[2] for t in pbot.dashboard()],
+         vlimiter.hourly_usage(CHAT))
 
 
-# ── 3. two sessions stream for 2 h with the dashboard live ───────────────────
+# ── 3. two sessions stream for 2 h with the bar live ─────────────────────────
 
 def _two_hour_dash(mk_bot, pbot, vloop, vlimiter, rich_http):
     """Two sessions, both BUSY from turn start, in one DM with the pinned
-    dashboard live. Each gets a ``tool_use`` hook every 2 to 8 s (seeded).
-    The cards and the chat's one bubble run for two hours. Sampled once a
-    minute: ``minimal_mode`` and ``hourly_usage``."""
+    bar live (the monitor's tick refreshing it every 2 s). Each gets a
+    ``tool_use`` hook every 2 to 8 s (seeded). The cards and the chat's
+    one bubble run for two hours. Sampled once a minute: ``minimal_mode``
+    and ``hourly_usage``."""
     rich_http.clock = vloop.time
     bot = _bot(mk_bot, pbot)
     ss = [_session(bot, vloop, f"s{i}", msg_id=71 + i) for i in range(2)]
@@ -706,11 +692,17 @@ def _two_hour_dash(mk_bot, pbot, vloop, vlimiter, rich_http):
             u = vlimiter.hourly_usage(CHAT)
             samples.append({"minimal": vlimiter.minimal_mode(CHAT), **u})
 
+    async def _tick():
+        while True:
+            await bot.pinned_tick()
+            await asyncio.sleep(TICK)
+
     async def main():
         for s in ss:
             bot._start_animation(s)
         feeders = [asyncio.ensure_future(_hooks(s)) for s in ss]
         feeders.append(asyncio.ensure_future(_sampler()))
+        feeders.append(asyncio.ensure_future(_tick()))
         await asyncio.sleep(2 * HOUR)
         for f in feeders:
             f.cancel()
@@ -738,19 +730,16 @@ def two_hours(mk_bot, pbot, vloop, vlimiter, rich_http, dash_on):
     return _two_hour_dash(mk_bot, pbot, vloop, vlimiter, rich_http)
 
 
-def test_s_the_dashboard_is_live_in_the_run(two_hours):
-    """Setup check: the pinned dashboard really is refreshed during the
-    run, so the rows below include its traffic."""
-    assert len(two_hours["dashboard"]) >= 2, two_hours["dashboard"]
+def test_s_the_bar_is_live_in_the_run(two_hours):
+    """Setup check: the pinned bar really is refreshed during the run."""
+    assert len(two_hours["dashboard"]) >= 1, two_hours["dashboard"]
 
 
-def test_s_the_dashboard_is_refreshed_about_once_per_busy_interval(
-    two_hours,
-):
-    """At most one refresh per 600 s while both sessions are BUSY (12 in
-    2 h), plus the first."""
-    assert len(two_hours["dashboard"]) <= 2 * HOUR / BUSY_GAP + 1, \
-        len(two_hours["dashboard"])
+def test_s_the_bar_is_edited_once_in_two_hours_of_hooks(two_hours):
+    """Both sessions stay BUSY for the whole run, so nothing the bar shows
+    changes after its first edit: two hours of hooks and 3,600 ticks are
+    one edit. (8.30's debounce allowed one per 600 s here.)"""
+    assert len(two_hours["dashboard"]) == 1, len(two_hours["dashboard"])
 
 
 def test_s_the_bubble_never_goes_dark(two_hours):

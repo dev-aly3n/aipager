@@ -674,40 +674,38 @@ def test_an_answer_runs_while_two_cards_are_being_refused(run_async):
 def test_a_skipped_pinned_refresh_is_retried_on_the_next_change(mk_bot,
                                                                 run_async,
                                                                 monkeypatch):
-    """Row I / G21. The dashboard is a summary that is always
-    re-derivable, which is what makes it skippable — but a skipped refresh
-    must NOT be recorded as shown, or the next state change compares equal
-    to text the user never saw and skips the edit as redundant.
+    """Row I / G21, amended for the pinned bar (8.31). The bar is a summary
+    that is always re-derivable, which is what makes it skippable — but a
+    skipped refresh must NOT be recorded as shown, or the next change
+    compares equal to text the user never saw and skips the edit as
+    redundant. 8.31 also schedules the trailing refresh that retries it
+    (tests/integration/long-run-volume-budget/test_pinned_bar.py runs it).
 
-    Mutation: keep ``if edited is MUTED:`` alone and the pinned card
-    silently freezes at whatever it last really showed.
+    Mutation: treat SKIPPED like a success and ``shown`` is set.
     """
     bot = mk_bot()
-    bot.registry.pinned_msg_id = 77
+    bot.registry.pinned_msg_ids[PRIVATE] = 77
     monkeypatch.setattr("aipager.bot.dashboard.CHAT_ID", str(PRIVATE))
-    texts = iter(["first", "second"])
-    monkeypatch.setattr(bot, "_build_pinned_text", lambda name: next(texts))
+    sess = bot.registry.get_or_create("claude-jim")
+    sess.label = "jim"
+    sess.status = Status.BUSY
+    sess.scope_chat_id = PRIVATE
 
     calls: list[dict] = []
 
     async def _edit(*args, **kwargs):
         calls.append(kwargs)
-        if len(calls) == 1:
-            raise FloodSkipped(PRIVATE, "editMessageText")
-        return MagicMock()
+        raise FloodSkipped(PRIVATE, "editMessageText")
 
     bot._app.bot.edit_message_text = AsyncMock(side_effect=_edit)
 
-    run_async(bot._maybe_update_bot_name("claude-jim"))
-    assert bot._last_pinned_text != "first", "a skipped refresh was never shown"
-    # 8.26 R3: the pinned dashboard is an ORNAMENT — a summary that is
-    # always re-derivable, which is what makes it sheddable while an
-    # answer is not. `kind` is unchanged.
+    run_async(bot.refresh_pinned())
+    st = bot._pinned[PRIVATE]
+    assert st.shown is None, "a skipped refresh was recorded as shown"
+    assert st.trailing is not None, "a skipped refresh was never retried"
+    # 8.26 R3: the pinned bar is an ORNAMENT, skip class.
     assert calls[0]["rate_limit_args"] == {"kind": "skip", "class": "ornament"}
-
-    run_async(bot._maybe_update_bot_name("claude-jim"))
-    assert bot._last_pinned_text == "second"
-    assert len(calls) == 2
+    st.trailing.cancel()
 
 
 def test_the_seam_turns_a_refused_skip_into_the_skipped_sentinel(run_async):

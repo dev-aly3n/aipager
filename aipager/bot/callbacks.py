@@ -51,6 +51,7 @@ from aipager.team import (
 # now. Re-export the names this module uses internally so the
 # TelegramBot class body below (and any external consumers like the
 # tests) keeps working without changes.
+from aipager.bot.dashboard import PINNED_ANSWER_VERB, current_prompt_token
 from aipager.bot.flood import MUTE
 from aipager.bot.transport import (  # noqa: F401
     _message_chat_id,
@@ -88,6 +89,32 @@ if TYPE_CHECKING:
     pass
 
 log = logging.getLogger(__name__)
+
+#: Seconds a tap waits for its handler to answer (with a toast) before the
+#: dispatcher sends the empty ack that stops the button's spinner.
+CALLBACK_ACK_BOUND = 1.0
+
+
+class _QueryAck:
+    """Whether a callback query has had its one answer yet."""
+
+    __slots__ = ("query", "answered")
+
+    def __init__(self, query) -> None:
+        self.query = query          # held so id(query) is not reused
+        self.answered = False
+
+
+#: id(query) → its answer state, for the taps in flight.
+_ACKS: dict[int, _QueryAck] = {}
+
+
+async def _send_empty_answer(query) -> None:
+    """The bare empty ``answerCallbackQuery``; the caller has claimed it."""
+    try:
+        await query.answer()
+    except Exception:
+        log.debug("answerCallbackQuery failed", exc_info=True)
 
 
 # Claude Code renders its permission prompt as a cursor menu whose shape
@@ -147,10 +174,10 @@ class CallbackDispatchMixin:
         """Call ``query.answer(text, **kwargs)`` swallowing any "query is
         too old" or "already answered" errors.
 
-        Used everywhere we want to set a toast text after the eager
-        ack at the top of ``_handle_callback`` — Telegram refuses a
-        second answer for the same query, so without this wrapper the
-        whole handler would crash on the second ``answer`` call.
+        Used for every toast. Telegram refuses a second answer for the
+        same query, so inside ``_handle_callback`` only the first call
+        answers; a later one is dropped (see ``_QueryAck``). Outside it
+        (a query with no ``_ACKS`` entry) every call is sent.
         ``kwargs`` forwards e.g. ``show_alert=True`` for a modal toast.
 
         Skipped outright while the tapped message's chat is flood-muted
@@ -163,10 +190,21 @@ class CallbackDispatchMixin:
         """
         if MUTE.is_muted(_message_chat_id(getattr(query, "message", None))):
             return
+        # One answer per query (Telegram refuses a second). Inside
+        # `_handle_callback` the first caller takes it; a later one is
+        # dropped here rather than sent to be refused.
+        ack = _ACKS.get(id(query))
+        if ack is not None:
+            if ack.answered:
+                if text is not None:
+                    log.debug("callback toast dropped, the query was "
+                              "already answered: %r", text)
+                return
+            ack.answered = True
         try:
             await query.answer(text, **kwargs)
         except Exception:
-            pass
+            log.debug("answerCallbackQuery failed", exc_info=True)
 
     async def _do_perms_switch_via_fn(self, sess, target_skip_perms: bool,
                                       edit_fn, *,
@@ -335,13 +373,18 @@ class CallbackDispatchMixin:
     async def _handle_callback(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle inline keyboard button tap.
 
-        Acknowledges the callback query immediately (with no toast text)
-        so Telegram clears the button-spinner within a few hundred
-        milliseconds even when the handler does long work. Subsequent
-        toast calls go through :py:meth:`_safe_answer` which swallows
-        the resulting error — toasts are a nice-to-have here; the
-        actual outcome (message edits, status updates) is what the
-        user really sees.
+        EXACTLY ONE ``answerCallbackQuery`` per tap: Telegram refuses a
+        second one. The handler answers first, with its toast, through
+        :py:meth:`_safe_answer`. The dispatcher sends the empty ack that
+        clears the button's spinner only if nothing has answered yet —
+        once the handler returns (or raises), or after
+        ``CALLBACK_ACK_BOUND`` seconds, whichever is first, so a slow
+        handler never leaves the spinner turning. A toast a handler sends
+        after the bound's ack is dropped (logged at debug), not refused.
+
+        Until 8.31 this sent the empty ack BEFORE the handler ran, so every
+        toast after it ("Session not found", "Unknown: …", …) was refused
+        by Telegram and never shown; the mocks recorded them anyway.
         """
         query = update.callback_query
         # Team mode: reject taps from users not on the allow-list with a
@@ -352,9 +395,41 @@ class CallbackDispatchMixin:
         cb_data = query.data or ""
         original_text = query.message.text or "" if query.message else ""
 
-        # Eager ack — clear the spinner before any slow work.
-        await self._safe_answer(query)
+        _ACKS[id(query)] = _QueryAck(query)
+        bound = asyncio.ensure_future(self._ack_after_bound(query))
+        try:
+            await self._dispatch_callback(
+                update, query, member, cb_data, original_text)
+        finally:
+            # Cancels the bound only while it sleeps: an answer it already
+            # started is shielded (see `_ack_after_bound`) and completes.
+            bound.cancel()
+            try:
+                # The empty ack, unless the handler (or the bound) answered.
+                await self._safe_answer(query)
+            finally:
+                # Even if this task is cancelled mid-answer (shutdown).
+                _ACKS.pop(id(query), None)
 
+    async def _ack_after_bound(self, query) -> None:
+        await asyncio.sleep(CALLBACK_ACK_BOUND)
+        # Claim the query HERE, synchronously, in the step the bound wakes
+        # in: a claim made inside a new (shielded) task would run a loop
+        # step later, when the handler may already have answered and
+        # dropped the entry — and a missing entry means "send".
+        ack = _ACKS.get(id(query))
+        if ack is None or ack.answered:
+            return
+        if MUTE.is_muted(_message_chat_id(getattr(query, "message", None))):
+            return
+        ack.answered = True
+        # Shielded: the handler finishing must not cancel an answer that
+        # is already on the wire, or the tap would end with none at all.
+        await asyncio.shield(_send_empty_answer(query))
+
+    async def _dispatch_callback(self, update: Update, query, member,
+                                 cb_data: str, original_text: str) -> None:
+        """The body of :meth:`_handle_callback`, after authorization."""
         if ":" not in cb_data:
             await self._safe_answer(query, "Invalid callback")
             return
@@ -387,6 +462,19 @@ class CallbackDispatchMixin:
         if await new_flow.handle_callback(self, update, query, session_name, action):
             return
         if await session_parity.handle_callback(self, update, query, session_name, action):
+            return
+
+        # The pinned bar's "Answer <label>" (8.31): re-send the session's
+        # pending prompt at the bottom of the chat. Same gate as answering
+        # the prompt itself (`allow`/`deny`/`opt<N>`): `_authorize_callback`
+        # above, then the session resolved from this chat's short-form
+        # index (or the long form), exactly as those verbs resolve it.
+        if action == PINNED_ANSWER_VERB:
+            sess = self.registry.get(session_name)
+            if sess is None:
+                await self._safe_answer(query, "Session not found")
+                return
+            await self._pinned_answer(query, sess)
             return
 
         if action == "stop":
@@ -930,6 +1018,56 @@ class CallbackDispatchMixin:
             await self._safe_answer(query, "Session not found")
             return
 
+        # A message carrying answer buttons outside the busy card — a
+        # separate-message prompt, or a copy the pinned bar's "Answer"
+        # button re-sent (8.31) — is bound to the prompt it showed. Tapped
+        # once that prompt is answered (in the terminal, on the card, on
+        # another copy), the session may be working, or already waiting on
+        # a DIFFERENT prompt: either way the tap must not type into it.
+        resent_key = (
+            _message_chat_id(getattr(query, "message", None)) or 0,
+            getattr(getattr(query, "message", None), "message_id", None),
+        )
+        surface = self._resent_prompts.get(resent_key)
+        is_resent_copy = surface is not None
+        current_token = current_prompt_token(sess)
+        refusal = None
+        if is_resent_copy:
+            # Kept, not popped: the entry IS the guard, and the message
+            # keeps its buttons if the edit below does not land. A missing
+            # token on either side never matches (fail closed).
+            if (surface[1] is None or current_token is None
+                    or surface[1] != current_token):
+                refusal = "already answered"
+        elif (sess.status == Status.INTERACTIVE
+                and (sess.pending_permission or sess.pending_prompt_msg)):
+            # A prompt is pending, and this tap is on a message that is
+            # neither the busy card it is shown in nor registered to it: a
+            # copy or a separate prompt from before a restart (the map is
+            # not persisted), or any other stale surface. Fail closed.
+            #
+            # Fails OPEN, like `tap_is_for_this_turn`, when there is nothing
+            # to compare against: a tap with no message id, or an inline
+            # prompt with no busy card id (it cannot be shown inline without
+            # one, so that is not a state a real tap meets).
+            tapped_id = resent_key[1]
+            card = sess.busy_msg_id
+            if isinstance(tapped_id, int) and not isinstance(tapped_id, bool):
+                if sess.pending_permission:
+                    if card and card > 0 and tapped_id != card:
+                        refusal = "this prompt has expired"
+                else:
+                    # A separate-message prompt is always registered when
+                    # it is sent; an unregistered message is not it.
+                    refusal = "this prompt has expired"
+        if refusal is not None:
+            await self._safe_answer(query, refusal)
+            try:
+                await edit_markup(query, reply_markup=None)
+            except Exception:
+                pass
+            return
+
         if not await inject.is_alive(session_name):
             await self._safe_answer(query, f"Session '{session_name}' not found")
             return
@@ -1242,6 +1380,18 @@ class CallbackDispatchMixin:
 
         if ok:
             await self._safe_answer(query, answer_text or f"{verb} [{sess.label}]")
+
+            if is_resent_copy and sess.pending_permission:
+                # Answered from the bar's copy of an inline prompt: the
+                # busy card is updated below as usual, and the copy shows
+                # the verdict instead of its buttons. (A separate message
+                # is edited by its own branch below.) Its registry entry
+                # stays: the prompt it was bound to is over, so any later
+                # tap on it is refused above.
+                try:
+                    await edit_text(query, f"{original_text}\n\n→ {verb}")
+                except Exception:
+                    pass
 
             if sess.pending_permission:
                 # Collapse current question into tool_history

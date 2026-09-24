@@ -125,8 +125,8 @@ Session lifecycle.
 
 - `SessionStart` registers the session if it wasn't already tracked
   (e.g. a session started outside aipager's `aipager session new`).
-- `SessionEnd` marks it GONE in the pinned status. The user can
-  recreate via `aipager session <name>` or `/new <name>`.
+- `SessionEnd` marks it GONE, which drops it off the pinned status bar.
+  The user can recreate via `aipager session <name>` or `/new <name>`.
 
 ### `PreCompact` / `PostCompact`
 

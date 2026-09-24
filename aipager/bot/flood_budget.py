@@ -253,7 +253,7 @@ _TOKEN_EPS: float = 1e-6
 #   never suspended, and it never waits behind an ORNAMENT: an ornament
 #   acquires against `_SKIP_RESERVE` on the BLOCKING path too, where
 #   before 8.26 only skip-kind callers respected it.
-# ORNAMENT  — the busy card, the typing bubble, the pinned dashboard.
+# ORNAMENT  — the busy card, the typing bubble, the pinned status bar.
 #   Refused with `FloodSkipped` in minimal mode; every caller already
 #   treats that as "nothing sent, chat healthy, stamps untouched".
 # SIGNAL    — reactions and the consumed-👍. Exempt from the per-chat

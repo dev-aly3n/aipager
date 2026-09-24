@@ -95,10 +95,10 @@ def _bot(mk_bot, vbot, rich_http, vloop):
     rich_http.clock = vloop.time
     bot = mk_bot()
     bot._app.bot = vbot
-    # A DM that already has its pinned dashboard, as every live one does:
-    # on a fresh bot ``notify`` creates it, and the gated double's answer
-    # makes it do so repeatedly — ornament traffic no real chat has.
-    bot.registry.pinned_msg_id = 9999
+    # A DM that already has its pinned bar, as every live one does. (Since
+    # 8.31 ``notify`` no longer refreshes it, so this only keeps a later
+    # transition from creating one with the gated double.)
+    bot.registry.pinned_msg_ids[CHAT] = 9999
     return bot
 
 

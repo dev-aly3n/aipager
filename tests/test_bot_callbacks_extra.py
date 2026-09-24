@@ -66,7 +66,7 @@ def test_allow_advances_to_next_question(mk_bot, mk_query, run_async, monkeypatc
     async def _no_sleep(_): pass
     monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
 
-    update, query = mk_query("claude-jim:allow")
+    update, query = mk_query("claude-jim:allow", message_id=100)
     run_async(bot._handle_callback(update, MagicMock()))
     # Pending advanced to Q2
     assert sess.pending_permission["current_idx"] == 1
@@ -97,7 +97,7 @@ def test_allow_last_question_completes(mk_bot, mk_query, run_async, monkeypatch)
     async def _no_sleep(_): pass
     monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
 
-    update, query = mk_query("claude-jim:allow")
+    update, query = mk_query("claude-jim:allow", message_id=100)
     run_async(bot._handle_callback(update, MagicMock()))
     # Cleared + transitioned to BUSY
     assert sess.pending_permission is None
@@ -124,7 +124,7 @@ def test_audit_send_failure_swallowed(mk_bot, mk_query, run_async, monkeypatch):
     async def _no_sleep(_): pass
     monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
 
-    update, query = mk_query("claude-jim:allow")
+    update, query = mk_query("claude-jim:allow", message_id=100)
     # MUST NOT raise
     run_async(bot._handle_callback(update, MagicMock()))
 
@@ -154,7 +154,7 @@ def test_multi_select_submit_no_options_selected(mk_bot, mk_query, run_async, mo
     async def _no_sleep(_): pass
     monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
 
-    update, query = mk_query("claude-jim:submit")
+    update, query = mk_query("claude-jim:submit", message_id=100)
     run_async(bot._handle_callback(update, MagicMock()))
     # Successfully completed
     assert sess.pending_permission is None
@@ -178,7 +178,7 @@ def test_multi_select_submit_send_keys_fails(mk_bot, mk_query, run_async, monkey
     monkeypatch.setattr("aipager.dtach.inject.send_keys",
                         AsyncMock(return_value=False))  # send fails
 
-    update, query = mk_query("claude-jim:submit")
+    update, query = mk_query("claude-jim:submit", message_id=100)
     run_async(bot._handle_callback(update, MagicMock()))
     answers = [c.args[0] for c in query.answer.await_args_list if c.args]
     assert any("Failed to send" in (a or "") for a in answers)
@@ -212,7 +212,7 @@ def test_allow_multi_question_final_submit_sends_extra_enter(mk_bot, mk_query, r
     async def _no_sleep(_): pass
     monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
 
-    update, query = mk_query("claude-jim:allow")
+    update, query = mk_query("claude-jim:allow", message_id=100)
     run_async(bot._handle_callback(update, MagicMock()))
     # Multiple Enter calls expected: one for allow + one for submit
     enter_count = sum(
@@ -245,7 +245,7 @@ def test_allow_discounts_wait_time_from_busy_started_at(mk_bot, mk_query, run_as
     async def _no_sleep(_): pass
     monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
 
-    update, query = mk_query("claude-jim:allow")
+    update, query = mk_query("claude-jim:allow", message_id=100)
     run_async(bot._handle_callback(update, MagicMock()))
     # busy_started_at should have been bumped forward (later)
     assert sess.busy_started_at > original_started

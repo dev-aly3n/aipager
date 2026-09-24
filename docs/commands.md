@@ -57,6 +57,53 @@ verified against Telegram's `initData` signature — see
 Everything in the Mini App is also reachable from chat: the ⋮ menu on
 a session's dashboard carries the same actions.
 
+## The pinned status bar
+
+Each chat aipager talks in (your DM, and every group scope) gets one
+pinned message: the status bar. Telegram shows only its **first line**
+in the bar at the top of the chat, so that line says what most needs you:
+
+| First line | When |
+|---|---|
+| `⏳ jim needs you — Bash: make deploy` | a session is waiting on a permission prompt, a question or an interactive prompt; `(+2 more)` when others are waiting too |
+| `⚙️ 2 working — jim, dev` | sessions are working (three names at most, then `+N`) |
+| `💤 all idle` | nothing is running |
+
+Below it, only while it applies, a flood line — `🐢 slow mode after a
+Telegram warning` (the six hours after a 429) or `⏸ card updates paused
+— hourly limit` / `— rate limit` (minimal mode, see
+[troubleshooting](troubleshooting.md#the-hourly-budget)) — and then one
+line per live session with its state: `working`, `needs you` or `idle`.
+Tap the bar to jump to the message.
+
+Buttons on the pinned message:
+
+- **Answer &lt;label&gt;** (one per waiting session, three at most) sends
+  that session's prompt again, with its answer buttons, at the bottom of
+  the chat, so you can answer it without scrolling. If it was answered in
+  the meantime you get an "already answered" toast instead, and a copy
+  (or the original prompt) tapped after its prompt was answered elsewhere
+  is refused the same way — it never answers a later prompt. After a
+  daemon restart aipager no longer knows which prompt an old copy showed,
+  so while a prompt is waiting, a tap on anything but its own message is
+  refused with "this prompt has expired". Anyone who
+  may answer the prompt may use it; nobody else.
+- **📱 App** opens the Mini App, in your DM, while the Mini App is up.
+
+The bar carries no clock, cost, context % or model, so it changes only
+when a session's state does. aipager edits it (silently, no
+notification) only when what it shows changed, at most once every 30 s
+per chat (`PINNED_MIN_EDIT_GAP`); a change inside that gap is shown when
+the gap ends, never lost. It is never edited while the chat is
+flood-muted, and catches up when the mute lifts.
+
+In a group the bot needs admin rights to pin. If the pin is refused,
+aipager deletes the status message it just sent (so it never sits
+unpinned in the group's history) and shows no bar in that group until
+the daemon restarts; the same goes for a chat that refuses the bot
+altogether (kicked, blocked). If you delete the pinned message, aipager sends and
+pins a new one, at most once an hour per chat.
+
 ## Persistent keyboard
 
 A persistent keyboard sits below the chat input. Rows, top to bottom:

@@ -648,7 +648,7 @@ def test_telegram_permission_answer_resumes_animation(
     # the global asyncio module for every caller in the process (see this
     # file's module docstring). The "deny" branch's real overshoot delay
     # (_DENY_OVERSHOOT * 0.1s ~= 0.5s) is accepted instead.
-    update, _query = _mk_query(f"claude-jim:{answer}")
+    update, _query = _mk_query(f"claude-jim:{answer}", message_id=100)
     run_async(bot._handle_callback(update, MagicMock()))
 
     assert sess.status == Status.BUSY

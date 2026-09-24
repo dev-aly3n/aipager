@@ -71,12 +71,18 @@ class TelegramBot(
         self._template_map: dict[str, str] = {label: prompt for label, prompt in QUICK_TEMPLATES}
         self._command_map: dict[str, str] = {label: cmd for label, cmd in QUICK_COMMANDS}
         self._model_map: dict[str, str] = {label: cmd for label, cmd in MODEL_CHOICES}
-        self._last_pinned_text: str = ""  # dedup pinned message edits
-        # What the pinned dashboard last SHOWED about each session (its
-        # status, and which sessions there are) and when (loop time) —
-        # the debounce in `_maybe_update_bot_name` (8.30).
-        self._last_pinned_state: tuple = ()
-        self._last_pinned_at: float | None = None
+        # The pinned "needs you" bar's per-chat state (8.31): what each
+        # chat's bar last showed, when it was last attempted, its pending
+        # trailing refresh. See `dashboard.PinnedChat`.
+        self._pinned: dict = {}
+        # The running all-chats refresh started by `pinned_tick`, if any.
+        self._pinned_task = None
+        # (chat_id, message_id) → (session name, prompt token) for every
+        # message carrying answer buttons outside the busy card: a
+        # separate-message prompt, or a copy the pinned bar's "Answer"
+        # button re-sent (8.31). A tap on one whose prompt is no longer the
+        # one pending is refused. See `register_prompt_surface`.
+        self._resent_prompts: dict[tuple[int, int], tuple[str, int]] = {}
         # `/new <name>` collision state. Keyed by session_name; value is
         # {"prompt": str, "skip_perms": bool, "user_id": int, "msg_id": int}.
         # Populated when /new hits an existing name, drained when the user

@@ -451,6 +451,12 @@ class SessionMonitor:
         self.notify_fn = notify_fn
         self._task: asyncio.Task | None = None
         self.on_sessions_changed = None  # optional async callback
+        # Optional async callback run at the end of every scan: the pinned
+        # "needs you" bar's refresh (8.31). It re-renders from state and
+        # sends nothing unless what the bar shows changed, so this tick is
+        # what notices a transition no call site announces — a status set
+        # by a hook, a flood regime entered or left.
+        self.on_tick = None
         # Session names whose busy card was suppressed on the PREVIOUS
         # tick, so `card_suppression_transition` can emit exactly one INFO
         # when suppression starts and one when it lifts (8.29 R7) rather
@@ -481,6 +487,11 @@ class SessionMonitor:
                 self.registry.save_if_dirty()
             except Exception:
                 log.exception("Session monitor error")
+            if self.on_tick is not None:
+                try:
+                    await self.on_tick()
+                except Exception:
+                    log.warning("on_tick callback failed", exc_info=True)
             await asyncio.sleep(PANE_POLL_INTERVAL)
 
     async def _scan(self) -> None:
