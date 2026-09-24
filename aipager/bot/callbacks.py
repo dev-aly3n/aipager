@@ -850,6 +850,12 @@ class CallbackDispatchMixin:
                     return
                 # Kill alive socket first, then launch fresh (no resume_id).
                 if sess and sess.status != Status.GONE:
+                    # The replaced session's turn will never earn a card
+                    # (roadmap 8.32): stand a self-woken turn's deferral
+                    # down before the kill, or its timer could put a card
+                    # up for the dead turn before the new session starts.
+                    # (No card lock: nothing below settles a card.)
+                    self._cancel_lazy_card(sess)
                     await inject.kill_session(session_name)
                     # Wait briefly for socket to disappear so the next
                     # launch_session's "already exists" check passes.

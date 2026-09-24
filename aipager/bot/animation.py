@@ -24,7 +24,7 @@ from aipager.config import (
     BUSY_EDIT_INTERVAL, CARD_CADENCE_FLOOR_GROUP, CARD_CADENCE_FLOOR_PRIVATE,
     CARD_RETRY_WAKE,
     CARD_STARVATION_BLOCK_TIMEOUT, CHAT_ID, COMPACT_ANIMATE_INTERVAL_SECONDS,
-    COMPACT_ANIMATE_MAX_TICKS, SPINNER_VERBS,
+    COMPACT_ANIMATE_MAX_TICKS, SELF_WOKEN_CARD_DELAY, SPINNER_VERBS,
     STREAM_EDIT_INTERVAL, TELEGRAM_MAX_RETRY_AFTER,
     TYPING_INDICATOR_INTERVAL,
 )
@@ -143,6 +143,13 @@ FINAL_VERB = "Done"
 # Delay before the animate task's first tick: short so a fresh card gets
 # its first real render quickly, before the regular stream cadence.
 FIRST_TICK_DELAY = 1.5
+
+# The wait a self-woken turn's deferred card sleeps before it is sent
+# anyway (roadmap 8.32, `SELF_WOKEN_CARD_DELAY`). A module attribute so
+# tests replace THIS and never patch asyncio.sleep, which is the global
+# module — patching it through a module path has hung this suite twice
+# (see CLAUDE.md). Same pattern as notify._finish_sleep.
+_lazy_card_sleep = asyncio.sleep
 
 # The sentinel `stream_last_rendered` carries while a chat is in minimal
 # mode (8.27 R3). It is deliberately NOT the rendered text: the text
@@ -1064,6 +1071,33 @@ def build_stream_card_ex(
 
 
 
+def final_card_has_timeline(sess: TrackedSession) -> bool:
+    """Would the FINISHED card show anything above its status line?
+
+    The card model's own answer, not a re-derivation: true exactly when
+    :func:`_build_sections` (``final=True``) yields at least one section
+    for the card to keep. That counts
+
+    * a tool row of the parent turn (done, failed or still in flight),
+    * a subagent row (``🤖 …``, live or settled — it lives in
+      ``tool_history`` too), with its nested tool calls,
+    * a prose row the card would keep: with the MessageDisplay hook live,
+      a sentence anchored ABOVE a tool row (a sentence with no row after
+      it is the answer, and is filtered out); on the transcript fallback,
+      any commentary block still left after the finish path's
+      ``_drop_answer_tail`` has trimmed the trailing blocks that merely
+      repeat the answer.
+
+    Nothing else is a row: the status line's stats (elapsed, cost, the
+    tool tally), a compaction, a permission prompt or the paused-card line
+    are not timeline content. A turn for which this is False leaves a card
+    that says only "✅ label · Done · Ns" — the same fact the answer's own
+    first line can carry (roadmap 8.32). Pure; call it AFTER
+    ``_drop_answer_tail`` so it sees what the final render would.
+    """
+    return bool(_build_sections(sess, final=True))
+
+
 def build_stream_card(
     sess: TrackedSession, verb: str, *, final: bool = False,
     waiting: bool = False,
@@ -1273,7 +1307,9 @@ class AnimationMixin:
         Liveness is ``busy_card_should_animate()`` — the SAME rule the
         animator, the watchdog and the resume path share, so a compacting
         or INTERACTIVE card (whose message is not the animator's to poke)
-        and the ``-1`` claim sentinel are all excluded by construction.
+        and the ``-1`` claim sentinel are all excluded by construction —
+        widened only by a self-woken turn's armed deferral (roadmap 8.32),
+        whose card does not exist yet but whose session is working.
         The task deliberately outlives an interim IDLE while a background
         job is open, exactly as ``_animate_busy`` does: the send gate
         (BUSY-only) keeps the waiting card dark, and the continuation's
@@ -1281,7 +1317,9 @@ class AnimationMixin:
         the task.
         """
         try:
-            while sess.busy_card_should_animate():
+            # A self-woken turn's deferred card (roadmap 8.32) keeps the
+            # bubble lit before the card exists.
+            while sess.busy_card_should_animate() or sess.lazy_card_at:
                 started = time.monotonic()
                 chat = self._typing_chat(sess)
                 if chat is not None:
@@ -2388,7 +2426,83 @@ class AnimationMixin:
             log.info("[%s] superseded card %s: full-log attachment failed",
                      label, old_msg_id, exc_info=True)
 
-    async def _send_busy_and_animate(self, sess: TrackedSession) -> None:
+    def _cancel_lazy_card(self, sess: TrackedSession) -> None:
+        """Forget a self-woken turn's deferred card (roadmap 8.32): clear
+        the mark and cancel its timer — unless the caller IS that timer,
+        which must not cancel itself mid-send.
+
+        A cancel can never land in the middle of the card's send: the
+        timer clears itself from ``lazy_card_task`` (through this very
+        method, under ``sess.animate_lock``) before it sends. Callers that
+        settle the card afterwards — the finish path, session_end, /stop,
+        the safety halt, /kill — take ``animate_lock`` first, so a send
+        already in flight lands and is then settled like any card; the
+        /perms relaunch and /new Replace settle nothing and call it bare."""
+        sess.lazy_card_at = 0.0
+        task = sess.lazy_card_task
+        sess.lazy_card_task = None
+        if (task is not None and not task.done()
+                and task is not asyncio.current_task()):
+            task.cancel()
+
+    async def _lazy_card_timer(self, sess: TrackedSession) -> None:
+        """Send the deferred card once the self-woken turn has run
+        ``SELF_WOKEN_CARD_DELAY`` without using a tool (roadmap 8.32)."""
+        try:
+            await _lazy_card_sleep(SELF_WOKEN_CARD_DELAY)
+            await self._send_lazy_card(sess, reason="delay")
+        except asyncio.CancelledError:
+            return  # stood down: the turn ended, or the card went up
+
+    async def _send_lazy_card(self, sess: TrackedSession, *, reason: str) -> None:
+        """Send a self-woken turn's deferred busy card now — its first tool
+        use, or the delay ran out (roadmap 8.32). A no-op unless one is
+        pending.
+
+        The card is sent through the SAME ``send_busy`` an immediate card
+        uses, so it replies to ``sess.trigger_msg_id`` as read NOW and
+        records ``busy_card_trigger`` from that send — the target an
+        immediate card would have been re-anchored to by this point, with
+        nothing left for ``_consume_and_reanchor`` to fix. None of the
+        turn-start resets run again: they ran when the turn began, and the
+        rows and prose recorded since belong on this card.
+
+        Only while BUSY: a turn that ended, died or is waiting on a
+        permission answer gets no card from here. INTERACTIVE keeps the
+        mark, so the tool call that follows the answer still sends it.
+        """
+        if not sess.lazy_card_at:
+            return
+        async with sess.animate_lock:
+            if not sess.lazy_card_at:
+                return
+            if sess.status is not Status.BUSY:
+                if sess.status is not Status.INTERACTIVE:
+                    self._cancel_lazy_card(sess)
+                return
+            self._cancel_lazy_card(sess)
+            if sess.busy_msg_id:
+                # Something else put a card up meanwhile (a compaction
+                # card, or a claim in flight) — that is this turn's card.
+                return
+            sess.busy_msg_id = -1  # claim, as _send_busy_and_animate does
+            msg_id = await self.send_busy(sess)
+            if msg_id:
+                sess.busy_msg_id = msg_id
+                sess.last_tool_edit_at = 0.0
+                sess.last_tool_name = ""
+                self.registry.track_message(
+                    msg_id, sess.name, resolve_chat_id_int(sess) or 0,
+                )
+                self._start_animation(sess)
+                log.info("[%s] Busy message sent late (msg_id=%d, trigger=%s, "
+                         "%s)", sess.label, msg_id, sess.trigger_msg_id, reason)
+            else:
+                sess.busy_msg_id = None
+
+    async def _send_busy_and_animate(
+        self, sess: TrackedSession, *, lazy: bool = False,
+    ) -> None:
         """Send 'Working...' message and start spinner animation.
 
         Serializes concurrent callers via ``sess.animate_lock`` so two
@@ -2397,7 +2511,34 @@ class AnimationMixin:
         ``busy_msg_id is None`` and both send. The synchronous-sentinel
         pattern below ``-1 claim then None on failure`` is kept as a
         secondary defence inside the lock.
+
+        ``lazy`` (roadmap 8.32) is for a turn Claude woke itself for: every
+        turn-start decision and reset below runs exactly as for any other
+        turn — the stale-card reclaim, the per-turn stats, the transcript
+        offset — but the card itself is DEFERRED. ``_send_lazy_card`` sends
+        it on the turn's first tool use or after ``SELF_WOKEN_CARD_DELAY``,
+        whichever comes first; a turn that ends before either sends only
+        its answer.
         """
+        if (not lazy and sess.lazy_card_at and sess.status is Status.BUSY
+                and not sess.job_reclaim_pending):
+            # A message sent into a self-woken turn that has not earned its
+            # card yet (roadmap 8.32). Before 8.32 the live card made this
+            # call a no-op; with no card on the stack it would fall into the
+            # full turn-start reset below and restart the SAME turn's clock,
+            # prose and cost. The turn is running and now has a reader
+            # waiting on it: that earns the card, and nothing is reset.
+            #
+            # "The same turn" is `job_reclaim_pending` being clear.
+            # `transition()` sets it on every genuinely new BUSY entry — not
+            # on a BUSY→BUSY no-op (a message absorbed mid-turn), not on
+            # INTERACTIVE→BUSY (a permission answer resuming the turn), not
+            # on a background job's preserved re-entry — and the deferral's
+            # own reset clears it. A mark that outlived its turn (ended by a
+            # path that never reached the finish) therefore never lets the
+            # NEXT turn skip its reset (review rev-iter2-001).
+            await self._send_lazy_card(sess, reason="message mid-turn")
+            return
         async with sess.animate_lock:
             # Stale-reset/bail decision, keyed on the stack's TOP KIND
             # (design.md Decision 8) rather than raw task liveness — this
@@ -2551,6 +2692,28 @@ class AnimationMixin:
                     sess.stream_offset = os.path.getsize(tp)
                 except OSError:
                     sess.stream_offset = 0
+            # A new turn starts clean: any earlier turn's deferred card is
+            # void, whether or not this one defers its own.
+            self._cancel_lazy_card(sess)
+            if lazy:
+                # Roadmap 8.32: the reset above is this turn's; the card
+                # waits until it is earned. The -1 claim is released so
+                # the tool/prose handlers read "no card yet", exactly as
+                # after a failed send.
+                sess.busy_msg_id = None
+                sess.lazy_card_at = time.monotonic()
+                sess.lazy_card_task = asyncio.create_task(
+                    self._lazy_card_timer(sess))
+                # The "typing…" bubble is not deferred with the card: it is
+                # budget-exempt, and it is the one sign in the chat LIST
+                # that the session is working (R3). `_animate_typing` keeps
+                # it lit while the deferral is armed; the card, once sent,
+                # restarts it through `_start_animation`.
+                self._start_typing(sess)
+                log.info("[%s] self-woken turn — busy card deferred until "
+                         "the first tool use or %.0fs", sess.label,
+                         SELF_WOKEN_CARD_DELAY)
+                return
             msg_id = await self.send_busy(sess)
             if msg_id:
                 sess.busy_msg_id = msg_id

@@ -50,6 +50,9 @@ def test_b6_card_layout_resends_finished_card_and_answer_under_m2(
     bot, sess, injected = wired
     prefs.set_preference(sess.scope_chat_id, "layout", "card")
     c1 = _absorb_m2_with_no_tick(bot, mk_update, run_async, append_queue_op, sess)
+    # A card with a timeline to re-send (a tool-less one is not re-sent
+    # since roadmap 8.32 — the answer goes out alone under M2).
+    sess.tool_history = [("Read: /a.py", True)]
 
     sess.status = Status.IDLE
     run_async(bot.notify(sess, "idle_prompt", {

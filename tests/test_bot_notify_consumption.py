@@ -307,6 +307,9 @@ def _idle_sess(*, layout, busy_msg_id=100, trigger_msg_id=2,
     s.trigger_msg_id = trigger_msg_id
     s.busy_card_trigger = busy_card_trigger
     s.busy_started_at = time.monotonic() - 5
+    # A card with a timeline: a tool-less `card`-layout card is not kept or
+    # re-anchored at all since roadmap 8.32 (tests/test_quiet_toolless_turns.py).
+    s.tool_history = [("Read: /a.py", True)]
     preferences.set_preference(chat_id, "layout", layout)
     return s
 

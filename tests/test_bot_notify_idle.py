@@ -136,6 +136,7 @@ def test_idle_renders_final_card_and_clears_busy_msg(mk_bot, run_async, monkeypa
     monkeypatch.setattr("aipager.preferences.KEEP_FINISHED_CARD", True)
     bot = mk_bot()
     sess = _sess(status=Status.IDLE, busy_msg_id=42)
+    sess.tool_history = [("Read: /a.py", True)]  # a card to keep (8.32)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._app.bot.delete_message = AsyncMock()
     bot._maybe_update_bot_name = AsyncMock()
@@ -153,6 +154,7 @@ def test_idle_final_render_failure_never_breaks_the_turn(
     monkeypatch.setattr("aipager.preferences.KEEP_FINISHED_CARD", True)
     bot = mk_bot()
     sess = _sess(status=Status.IDLE, busy_msg_id=42)
+    sess.tool_history = [("Read: /a.py", True)]  # a card to keep (8.32)
     sess.scope_chat_id = 4242
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._maybe_update_bot_name = AsyncMock()
@@ -219,6 +221,7 @@ def test_idle_stored_card_preference_overrides_keep_finished_card_off(
     preferences.set_preference(0, "layout", "card")
     bot = mk_bot()
     sess = _sess(status=Status.IDLE, busy_msg_id=42)
+    sess.tool_history = [("Read: /a.py", True)]  # a card to keep (8.32)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._app.bot.delete_message = AsyncMock()
     bot._maybe_update_bot_name = AsyncMock()
@@ -241,6 +244,7 @@ def test_idle_session_override_wins_over_scope_layout(mk_bot, run_async, monkeyp
     monkeypatch.setattr("aipager.preferences.KEEP_FINISHED_CARD", False)
     bot = mk_bot()
     sess = _sess(status=Status.IDLE, busy_msg_id=42)
+    sess.tool_history = [("Read: /a.py", True)]  # a card to keep (8.32)
     sess.override_layout = "card"  # THIS session keeps the card
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))
     bot._app.bot.delete_message = AsyncMock()
@@ -562,6 +566,7 @@ def test_idle_skips_the_finished_header_when_the_card_stays(
     """The card above the answer already says ✅ label · Done · elapsed."""
     bot = _finished_card_bot(mk_bot, monkeypatch)
     sess = _sess(status=Status.IDLE, busy_msg_id=42)
+    sess.tool_history = [("Read: /a.py", True)]  # a card to keep (8.32)
     run_async(bot.notify(sess, "idle_prompt", {"summary": "the answer"}))
     assert _headers(bot) == []
 
@@ -574,6 +579,7 @@ def test_idle_answer_carries_the_reply_link_when_the_header_is_skipped(
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", sent)
     bot = _finished_card_bot(mk_bot, monkeypatch)
     sess = _sess(status=Status.IDLE, busy_msg_id=42)
+    sess.tool_history = [("Read: /a.py", True)]  # a card to keep (8.32)
     sess.trigger_msg_id = 7
     # A real card always has busy_card_trigger seeded by send_busy at
     # send time — this hand-built session skips send_busy entirely, so
@@ -631,6 +637,9 @@ def test_idle_composes_the_header_when_the_card_was_not_kept(
     so the header rides inside the answer message, not as its own."""
     bot = _finished_card_bot(mk_bot, monkeypatch, card_kept=False)
     sess = _sess(status=Status.IDLE, busy_msg_id=42)
+    # A card with a timeline, so the final render is attempted (a tool-less
+    # one is deleted without a render since 8.32).
+    sess.tool_history = [("Read: /a.py", True)]
     sess.scope_chat_id = 4242
     run_async(bot.notify(sess, "idle_prompt", {"summary": "the answer"}))
     assert _headers(bot) == []
@@ -661,6 +670,7 @@ def test_idle_keeps_the_header_when_the_answer_overflows(
     bot = _finished_card_bot(mk_bot, monkeypatch)
     bot._app.bot.send_document = AsyncMock()
     sess = _sess(status=Status.IDLE, busy_msg_id=42)
+    sess.tool_history = [("Read: /a.py", True)]  # a card to keep (8.32)
     run_async(bot.notify(sess, "idle_prompt", {"summary": "x" * 40_000}))
     assert len(_headers(bot)) == 1
     assert "attached below" in _headers(bot)[0]

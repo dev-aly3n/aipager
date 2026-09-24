@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **A turn that ran no tools no longer leaves a bare Done card next to
+  its answer.** In the card layout the finished card is the turn's
+  timeline; a turn with nothing on it (no tool call, no agent, no
+  commentary besides the answer) used to keep a card reading only
+  `✅ name · Done · Ns` directly above an answer. It is now one message:
+  the answer, opening with `💬 name · Finished (Ns)`, sent as a normal
+  notifying message, with the busy card deleted once the answer is out —
+  two Telegram calls instead of three, which matters on a chat held to
+  one call every 20 s. Turns with tool rows, a turn with no new answer
+  text, and the merged and replace layouts are unchanged; long answers,
+  attachments and answers held during a flood ban work as before.
+- **A turn Claude wakes itself for only gets a busy card if it does
+  something.** When a background agent's `<task-notification>` starts a
+  fresh turn, the card now waits for that turn's first tool call or
+  15 s, whichever comes first; a wake-up that just says "nothing new"
+  arrives as its answer alone. The "typing…" indicator still shows
+  while it runs, and nothing is suppressed — the answer is always
+  delivered. Turns you start keep their card at once.
+
 ## [0.7.13] - 2026-09-16
 
 ### Fixed

@@ -37,6 +37,9 @@ def test_card_layout_resends_finished_card_under_m2_not_edits_in_place(
     bot, injected = wire_transport
     sess, c1 = _absorbed_at_stop(bot, mid_turn, append_queue_op)
     prefs.set_preference(sess.scope_chat_id, "layout", "card")
+    # A card with a timeline to re-send: a tool-less one is not re-sent
+    # at all since roadmap 8.32 — the answer goes out alone under M2.
+    sess.tool_history = [("Read: /a.py", True)]
 
     run_async(bot.notify(sess, "idle_prompt", {"summary": "it was a test"}))
 

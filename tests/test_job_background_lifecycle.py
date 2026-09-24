@@ -594,8 +594,19 @@ def test_task_notification_after_restart_still_sends_a_busy_card(
 
     assert sess.status == Status.BUSY
     assert sess.job_continuation_active is False  # a fresh turn, not a continuation
+    # The stale, pre-restart card is settled and forgotten as before...
+    assert sess.busy_msg_id is None
+    # ...but a self-woken turn's own card is DEFERRED until it is earned
+    # (roadmap 8.32): nothing is sent at the prompt.
+    assert not any("Thinking" in t for t in sent)
+    assert sess.lazy_card_at > 0
+
+    # The turn's first tool call earns it: the real busy card goes out.
+    _send(recv, run_async, hook_event_name="PreToolUse", tool_name="Bash",
+          tool_input={"command": "ls"}, transcript_path="")
     assert any("Thinking" in t for t in sent)  # a real busy card went out
     assert sess.busy_msg_id == 9999  # superseded the stale, pre-restart one
+    assert sess.lazy_card_at == 0.0
 
 
 def test_job_grace_expired_finalizes_card_as_plain_finished(

@@ -545,6 +545,16 @@ class TrackedSession:
     # Transient, like `animate_task`: never in _PERSIST_FIELDS (a Task is
     # not serialisable, and a restart has no bubble lit to resume).
     typing_task: Any = field(default=None, repr=False)
+    # roadmap 8.32: a self-woken turn's DEFERRED busy card. Non-zero (the
+    # monotonic time it was armed) while the turn is running without a
+    # card it has not earned yet — `_send_busy_and_animate(lazy=True)`
+    # did every turn-start reset but held the send back. The first tool
+    # use, or `lazy_card_task` after `SELF_WOKEN_CARD_DELAY`, sends it
+    # (`_send_lazy_card`); a turn that ends first sends only its answer.
+    # Transient, never in _PERSIST_FIELDS: a restart has no turn to defer
+    # a card for.
+    lazy_card_at: float = 0.0
+    lazy_card_task: Any = field(default=None, repr=False)
     # A scratch outbox: notes matched-and-already-deleted by
     # _sync_anchors_from_transcript's absorption detection, staged here
     # rather than returned (that function's bool return — "did an

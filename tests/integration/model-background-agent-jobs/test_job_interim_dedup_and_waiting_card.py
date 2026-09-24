@@ -95,6 +95,9 @@ def test_idle_once_agents_close_finished_is_produced(
     _wire_common_mocks(bot)
     sess = mk_job_session(status=Status.IDLE, busy_msg_id=42,
                           active_subagents={})
+    # The job's card carries its settled agent row — a card with nothing
+    # on it is not kept at all since roadmap 8.32.
+    sess.tool_history = [("\U0001f916 general-purpose · 3 tool calls · 20s", True)]
 
     run_async(bot.notify(sess, "idle_prompt", {"summary": "final answer"}))
 
