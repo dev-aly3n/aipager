@@ -290,6 +290,20 @@ def resolve_claude_binary(*, force: bool = False) -> ResolvedClaude:
     return result
 
 
+def refresh_claude_binary() -> ResolvedClaude | None:
+    """Drop the memo, re-resolve, and memoise the fresh result.
+
+    For after ``claude update``: ``resolve_claude_binary(force=True)``
+    deliberately does NOT write the memo, so without this the daemon would
+    keep logging (and reporting) the pre-update version for the rest of
+    its life. Returns None when nothing verifies.
+    """
+    global _memo, _memo_error
+    _memo = None
+    _memo_error = None
+    return try_resolve_claude_binary()
+
+
 def try_resolve_claude_binary(*, force: bool = False) -> ResolvedClaude | None:
     """Same as :func:`resolve_claude_binary` but returns ``None`` instead
     of raising."""
@@ -625,6 +639,6 @@ __all__ = [
     "AuthStatus", "ClaudeInstall", "ClaudeNotFoundError", "ResolvedClaude",
     "CredentialCheck", "detect_auth", "format_auth_notice",
     "format_provenance", "validate_credential",
-    "resolve_claude_binary",
+    "refresh_claude_binary", "resolve_claude_binary",
     "try_resolve_claude_binary",
 ]

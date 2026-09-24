@@ -198,6 +198,14 @@ def _isolate_home_paths(tmp_path, monkeypatch):
             home / "Library" / "LaunchAgents" / "com.aipager.daemon.plist",
         "aipager.service.MACOS_LOG_PATH":
             home / "Library" / "Logs" / "aipager.log",
+        # Self-update (roadmap 8.36): the cross-process update lock and the
+        # post-restart marker. Both are read LATE by aipager.self_update,
+        # so one entry each covers every reader. `_guard_real_home` watches
+        # ~/.local/share/aipager, so a missed redirect fails the run.
+        "aipager.self_update.UPDATE_LOCK_PATH":
+            home / ".local" / "share" / "aipager" / "update.lock",
+        "aipager.self_update.UPDATE_MARKER_PATH":
+            home / ".local" / "share" / "aipager" / "update-restart.json",
         # Wizard constants + every by-value re-import of them.
         "aipager.wizard._constants.CLAUDE_SETTINGS": settings,
         "aipager.wizard.settings_patch.CLAUDE_SETTINGS": settings,
@@ -487,7 +495,8 @@ def _no_real_service_manager(request, monkeypatch):
 
     def _guarded(cmd, *a, **kw):
         head = str(cmd[0]) if cmd else ""
-        if head.rsplit("/", 1)[-1] in ("systemctl", "launchctl", "journalctl", "tail"):
+        if head.rsplit("/", 1)[-1] in ("systemctl", "launchctl", "journalctl",
+                                       "tail", "systemd-run"):
             raise AssertionError(
                 f"test invoked the real service manager: {cmd!r}. This can "
                 "enable/restart the operator's live aipager.service, and "
@@ -951,4 +960,66 @@ def _isolate_webapp_sdk(tmp_path, monkeypatch):
     assert not reached, (
         f"test reached the Mini App SDK download path for {reached!r} without "
         "faking it. Mock aipager.miniapp.webapp_sdk._download_sync in the test."
+    )
+
+
+@pytest.fixture(autouse=True)
+def _no_real_self_update_io(tmp_path, monkeypatch):
+    """Make it impossible for a test to run a real installer, `claude update`,
+    `systemctl`/`systemd-run`, or fetch PyPI/npm/downloads.claude.ai.
+
+    ``aipager.self_update._run_command`` is the ONLY process spawner of the
+    self-update path (installers, ``claude update``/``--version``,
+    ``systemctl show``, ``systemd-run``, the post-upgrade version probe) and
+    ``_http_get`` its ONLY non-Telegram fetch — an AST sweep
+    (``tests/test_self_update_spawn_seam.py``) keeps it that way. Both are
+    replaced here:
+
+    * the spawner by a refuser that RECORDS the argv and raises. Recording
+      matters: the update code catches broadly in places ("never raises"),
+      so a raise alone could be swallowed into a plausible-looking
+      "unknown"; the teardown assertion catches that case too;
+    * the fetch by an "offline" recorder (the ``_isolate_webapp_sdk``
+      shape) that fails the test at teardown if anything reached it.
+
+    ``_PROC_SELF_CGROUP`` points at a tmp file reading ``0::/`` so no test
+    sees the host's real cgroup — on the operator's machine the suite may
+    well run inside ``aipager.service``'s own cgroup.
+
+    Tests fake these seams themselves; a later monkeypatch wins.
+    """
+    from aipager import self_update
+
+    refused: list = []
+    reached: list = []
+
+    def _refuse(argv, *, timeout, env=None, capture=True):
+        refused.append(list(argv))
+        raise AssertionError(
+            f"test tried to spawn a real process via self_update._run_command: "
+            f"{list(argv)!r}. That could run a real installer, `claude update`, "
+            "or restart the live aipager.service. Fake "
+            "aipager.self_update._run_command in your test."
+        )
+
+    def _offline(url, *, timeout, max_bytes):
+        reached.append(url)
+        return None
+
+    cgroup = tmp_path / "self-update-proc-self-cgroup"
+    cgroup.write_text("0::/\n")
+    monkeypatch.setattr(self_update, "_run_command", _refuse)
+    monkeypatch.setattr(self_update, "_http_get", _offline)
+    monkeypatch.setattr(self_update, "_PROC_SELF_CGROUP", str(cgroup))
+    # Yielded so the meta-tests of this guard (which trip it on purpose)
+    # can request the fixture by name and clear what they recorded.
+    import types
+    yield types.SimpleNamespace(refused=refused, reached=reached)
+    assert not refused, (
+        f"test reached the real self-update spawner for {refused!r} without "
+        "faking it. Mock aipager.self_update._run_command in the test."
+    )
+    assert not reached, (
+        f"test reached a release-version fetch for {reached!r} without faking "
+        "it. Mock aipager.self_update._http_get in the test."
     )
