@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.14] - 2026-09-24
+
 ### Added
 - **Say when a turn ends with background agents still running.** An
   answer that goes out while agents Claude launched in the background are
