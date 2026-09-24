@@ -32,7 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     the reinstall command. Installer output is shown only in private
     chats. If the daemon shuts down mid-install, the installer is stopped
     after 3 s rather than left running, and the next daemon tells you the
-    update was interrupted.
+    update was interrupted. Once a shutdown has begun, no update starts
+    and no restart is scheduled, so `aipager service stop` during an
+    update stays stopped; an update that finished installing is announced
+    by the next start. The update's part of the shutdown takes at most
+    8 s, well inside systemd's 15 s stop timeout.
 - **Mini App → Settings → Updates**, for the admin: the same versions and
   buttons, driving the same update job the chat shows.
 

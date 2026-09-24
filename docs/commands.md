@@ -312,6 +312,15 @@ the install while the next daemon starts). The status message and,
 after the restart, a new message say the install may be partial and how
 to repair it.
 
+Once a shutdown has begun, nothing is restarted and nothing new starts:
+`/update` buttons answer that aipager is shutting down, the Mini App
+answers 503, and no installer or version check is spawned. An installer
+that finishes within its 3 s still counts. The status message says the new
+version is installed and nothing was restarted, and the next start
+announces `aipager updated A → B`. A daemon you stopped with
+`aipager service stop` stays stopped. The update's part of the shutdown
+takes at most 8 s in total.
+
 ## Free messages
 
 ### Text
