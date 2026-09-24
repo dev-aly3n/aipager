@@ -51,9 +51,12 @@ def test_send_busy_makes_no_call_returns_none_and_raises_nothing_while_muted(
     ``RetryAfter: Retry in 33147 seconds``.
 
     Three assertions, and only these three (D-4): no HTTP, the caller
-    survives, and the card is simply absent. No new ``TrackedSession``
-    field, no pending flag, no retry loop — when the mute lifts the next
-    tick creates the card normally.
+    survives, and the card is absent. (D-4 said no pending flag was
+    needed because "the next tick creates the card normally"; no tick
+    did, and the turn ran to its end with no card. Since 8.17c the
+    CALLER owes it — ``busy_card_owed``, sent after the lift; see
+    ``tests/integration/no-card-into-ban``. ``send_busy`` itself is
+    unchanged, which is what this row pins.)
 
     Mutation: delete the gate from ``process_request`` and ``calls`` grows
     a ``sendMessage`` into the ban.

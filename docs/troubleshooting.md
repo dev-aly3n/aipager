@@ -245,6 +245,29 @@ acknowledged either** — up to 0.7.12 the toast still fired, on the theory
 that Telegram meters it separately. It does, for pacing; it does not for
 bans. Other chats are unaffected.
 
+**Messaging the bot during a ban is safe, and nothing is lost.** Nothing
+you do in the chat makes the bot call Telegram while the chat is muted,
+so it cannot extend the ban:
+
+- A prompt you send (text, voice, a file, a quick template) still
+  reaches Claude and the session works on it. Its busy card is held
+  back, not dropped: if the turn is still running when the ban lifts,
+  the card appears then. A ban leaves the chat in minimal mode for a
+  while afterwards, so the card can take a few minutes longer than the
+  ban itself. If the turn finished during the ban you get its answer
+  and no card.
+- **🔄 Retry** does nothing during a ban. The prompt is not re-sent and
+  the button stays, so you can tap it again after the ban lifts. Up to
+  and including 0.7.14 the prompt went to Claude while the error
+  message and its button stayed, so a second tap sent it again.
+- The main keyboard is held back too, including the one a restart sends
+  (up to 0.7.14 it was lost until something else refreshed it). It is
+  sent after the ban lifts.
+
+After the ban lifts, things arrive in this order: held answers, then
+cards for turns still running, then the keyboard. A card that has to
+wait for minimal mode to end comes after the keyboard.
+
 **Answers are not lost.** An answer produced while the chat is muted is
 held and delivered once the ban lifts, within a couple of seconds, with
 its first line reading `⏳ delivered late (held 42 min during a Telegram

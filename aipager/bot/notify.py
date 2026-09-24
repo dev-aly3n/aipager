@@ -1114,6 +1114,13 @@ class NotifyMixin:
             await self.flush_held_answers(sess)
             return
 
+        # ── the card a flood mute refused, owed while the turn runs (8.17c) ──
+        # Dispatched by the same tick, AFTER this chat's held answers are
+        # all out, and only once the chat can afford the ornament again.
+        if event == "owed_card_flush":
+            await self._send_owed_card(sess, reason="mute lifted")
+            return
+
         # ── the answer's ⏳ line is owed its ✅ (roadmap 8.41) ──
         # Dispatched by `SessionMonitor._scan` once every agent the line
         # named has been gone for the settle window.

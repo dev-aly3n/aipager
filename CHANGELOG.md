@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **A prompt sent during a Telegram flood ban now gets its busy card
+  after the ban.** Since 0.7.13 no request reaches a banned chat, but the
+  refused card was then dropped, so the turn ran with no card even when
+  the ban lifted a minute in. The card is now held and sent once the ban
+  has lifted and the chat can afford it, if the turn is still running.
+  If the turn finished during the ban, only its answer arrives. The same
+  applies to the late card of a turn Claude woke itself for. A prompt
+  sent in the minutes after a ban no longer logs a stack trace for its
+  refused card either.
+- **🔄 Retry during a ban no longer half-applies.** It used to send the
+  prompt to Claude while the error message and its Retry button stayed,
+  so tapping it again after the ban sent the prompt twice. During a ban
+  the tap now does nothing, and you can tap it again once the ban lifts.
+- **The keyboard is no longer lost to a ban.** A main keyboard the ban
+  refused, including the one a restart during a ban sends, is sent once
+  the ban lifts, after the held answers. See
+  [troubleshooting → flood control](docs/troubleshooting.md#the-bot-went-quiet-flood-control).
+
 ## [0.7.14] - 2026-09-24
 
 ### Added

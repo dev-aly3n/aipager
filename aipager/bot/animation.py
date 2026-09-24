@@ -1685,6 +1685,17 @@ class AnimationMixin:
             # missing mute check cost 9.5 hours on 2026-09-15.
             log.debug("[%s] busy card not sent — chat flood-muted", sess.label)
             return None
+        except FloodSkipped:
+            # The budget's refusal (roadmap 8.17c): the chat is in minimal
+            # mode — which a ban always leaves it in for a while after the
+            # lift — and the card is an ornament. As expected as the mute
+            # above and just as transient, so no stack trace either: the
+            # generic arm below logged one per prompt for the whole
+            # post-ban recovery. The caller owes the card
+            # (`_open_busy_card`).
+            log.debug("[%s] busy card not sent — ornaments suspended",
+                      sess.label)
+            return None
         except Exception:
             log.warning("Failed to send busy message", exc_info=True)
             return None
@@ -2870,8 +2881,15 @@ class AnimationMixin:
         settle the card afterwards — the finish path, session_end, /stop,
         the safety halt, /kill — take ``animate_lock`` first, so a send
         already in flight lands and is then settled like any card; the
-        /perms relaunch and /new Replace settle nothing and call it bare."""
+        /perms relaunch and /new Replace settle nothing and call it bare.
+
+        It also forgets a card the flood gate refused (roadmap 8.17c,
+        ``busy_card_owed``). Every caller above is a path that ends the
+        turn, which is exactly when that debt must lapse: a turn that
+        finished inside a ban is answered by its HELD answer alone, and a
+        card sent for it after the lift would be a stray."""
         sess.lazy_card_at = 0.0
+        sess.busy_card_owed = False
         task = sess.lazy_card_task
         sess.lazy_card_task = None
         if (task is not None and not task.done()
@@ -2919,19 +2937,123 @@ class AnimationMixin:
                 # card, or a claim in flight) — that is this turn's card.
                 return
             sess.busy_msg_id = -1  # claim, as _send_busy_and_animate does
-            msg_id = await self.send_busy(sess)
+            msg_id = await self._open_busy_card(sess)
             if msg_id:
-                sess.busy_msg_id = msg_id
-                sess.last_tool_edit_at = 0.0
-                sess.last_tool_name = ""
-                self.registry.track_message(
-                    msg_id, sess.name, resolve_chat_id_int(sess) or 0,
-                )
-                self._start_animation(sess)
                 log.info("[%s] Busy message sent late (msg_id=%d, trigger=%s, "
                          "%s)", sess.label, msg_id, sess.trigger_msg_id, reason)
-            else:
-                sess.busy_msg_id = None
+
+    def _card_refused_now(self, sess: TrackedSession) -> bool:
+        """Would the flood gate refuse this session's card right now?
+
+        True while the chat is flood-muted, or in minimal mode — the two
+        states in which ``send_busy``'s ornament is refused without a
+        request (``FloodMuted`` / ``FloodSkipped``). The same two that
+        ``session_monitor.cards_suppressed`` reads for the watchdog.
+        Never raises: a limiter problem reads as "not refused", which only
+        means a card is attempted and, if refused, not owed — the 0.7.14
+        behaviour.
+        """
+        chat = resolve_chat_id_int(sess) or resolve_chat_id(sess)
+        if not chat:
+            return False
+        if MUTE.is_muted(chat):
+            return True
+        try:
+            limiter = get_rate_limiter()
+            return bool(limiter is not None
+                        and hasattr(limiter, "minimal_mode")
+                        and limiter.minimal_mode(chat))
+        except Exception:  # pragma: no cover - defensive
+            log.debug("[%s] could not read minimal mode", sess.label,
+                      exc_info=True)
+            return False
+
+    async def _open_busy_card(self, sess: TrackedSession) -> int | None:
+        """Send this turn's busy card and start its animation — the one
+        send every card-opening path shares (``_send_busy_and_animate``,
+        the 8.32 late card, the 8.17c owed card). The caller holds
+        ``sess.animate_lock`` and has claimed the slot (``busy_msg_id =
+        -1``); on return the slot holds the card or ``None``.
+
+        A card the flood gate REFUSED is owed, not lost (roadmap 8.17c):
+        ``busy_card_owed`` is set and the session monitor's tick sends it
+        through :meth:`_send_owed_card` once the chat can take it. Before
+        this, a prompt sent during a ban ran its whole turn with no card
+        even when the ban lifted a minute in. A send that failed for any
+        other reason — the chat is healthy — is not owed, as before: there
+        is no event to retry it on, and the watchdog never acts on a
+        session with no card.
+        """
+        msg_id = await self.send_busy(sess)
+        if msg_id:
+            sess.busy_msg_id = msg_id
+            sess.last_tool_edit_at = 0.0
+            sess.last_tool_name = ""
+            # Track the busy message so replies to it route back to this
+            # session, even hours later or after a daemon restart.
+            self.registry.track_message(
+                msg_id, sess.name, resolve_chat_id_int(sess) or 0,
+            )
+            self._start_animation(sess)
+            return msg_id
+        sess.busy_msg_id = None  # release the slot
+        if self._card_refused_now(sess):
+            sess.busy_card_owed = True
+            log.info("[%s] busy card held back — the chat is flood-muted or "
+                     "in minimal mode; it is sent when the chat can take it, "
+                     "if the turn is still running", sess.label)
+        return None
+
+    async def _send_owed_card(self, sess: TrackedSession, *, reason: str) -> None:
+        """Send the busy card the flood gate refused (roadmap 8.17c) — the
+        session monitor's tick once the mute has lifted and the chat can
+        afford an ornament again, or a second turn-start call for the same
+        turn. A no-op unless one is owed, and while the chat still cannot
+        take it (the debt is kept: no request is made to find that out).
+
+        The rules, each the same as 8.32's late card for the same reason:
+
+        * **Only while the turn runs.** BUSY sends it; INTERACTIVE keeps
+          the debt (the permission prompt is what belongs on screen, and
+          the turn resumes); anything else — the turn ended — forgets it.
+          The finish path forgets it too (``_cancel_lazy_card``).
+        * **Anchor.** Sent through the same ``send_busy``, so it replies
+          to ``sess.trigger_msg_id`` as read NOW — wherever consumption
+          has moved the anchor during the ban — and records
+          ``busy_card_trigger`` from that send. Re-anchoring had nothing
+          to move while the card was owed, and has nothing to fix now.
+        * **No reset.** The turn-start resets ran when the turn began; the
+          rows, prose and clock recorded since belong on this card.
+        * **Animation and typing** start with the card, through
+          ``_start_animation``, as for any card.
+        """
+        if not sess.busy_card_owed:
+            return
+        async with sess.animate_lock:
+            if not sess.busy_card_owed:
+                return
+            if sess.status is not Status.BUSY:
+                if sess.status is not Status.INTERACTIVE:
+                    sess.busy_card_owed = False
+                return
+            if sess.job_reclaim_pending:
+                # A NEW turn has been entered and its own turn start is
+                # about to run: this debt is the previous turn's, and the
+                # new turn's reset forgets it (or owes its own card).
+                return
+            if sess.busy_msg_id:
+                # A card is up already (a compaction card, a claim in
+                # flight): that is this turn's card.
+                sess.busy_card_owed = False
+                return
+            if self._card_refused_now(sess):
+                return
+            sess.busy_card_owed = False
+            sess.busy_msg_id = -1  # claim, as _send_busy_and_animate does
+            msg_id = await self._open_busy_card(sess)
+            if msg_id:
+                log.info("[%s] Busy message sent late (msg_id=%d, trigger=%s, "
+                         "%s)", sess.label, msg_id, sess.trigger_msg_id, reason)
 
     async def _send_busy_and_animate(
         self, sess: TrackedSession, *, lazy: bool = False,
@@ -2971,6 +3093,20 @@ class AnimationMixin:
             # path that never reached the finish) therefore never lets the
             # NEXT turn skip its reset (review rev-iter2-001).
             await self._send_lazy_card(sess, reason="message mid-turn")
+            return
+        if (sess.busy_card_owed and sess.status is Status.BUSY
+                and not sess.job_reclaim_pending):
+            # The same turn, whose card the flood gate refused (roadmap
+            # 8.17c) — typically the prompt's own UserPromptSubmit hook
+            # arriving after the Telegram path already started the turn.
+            # With a live card this call is the "already showing busy"
+            # no-op below; with the card owed there is nothing on the
+            # stack, and it would fall into the full turn-start reset and
+            # restart this turn's clock, rows and transcript offset. Pay
+            # the debt instead if the chat can take it now; otherwise
+            # nothing. "The same turn" is `job_reclaim_pending` clear, as
+            # for the 8.32 branch above.
+            await self._send_owed_card(sess, reason="turn start repeated")
             return
         async with sess.animate_lock:
             # Stale-reset/bail decision, keyed on the stack's TOP KIND
@@ -3152,16 +3288,7 @@ class AnimationMixin:
                          "the first tool use or %.0fs", sess.label,
                          SELF_WOKEN_CARD_DELAY)
                 return
-            msg_id = await self.send_busy(sess)
+            msg_id = await self._open_busy_card(sess)
             if msg_id:
-                sess.busy_msg_id = msg_id
-                sess.last_tool_edit_at = 0.0
-                sess.last_tool_name = ""
-                # Track the busy message so replies to it route back to this session,
-                # even hours later or after a daemon restart.
-                self.registry.track_message(msg_id, sess.name, resolve_chat_id_int(sess) or 0)
-                self._start_animation(sess)
                 log.info("[%s] Busy message sent (msg_id=%d, trigger=%s)",
                          sess.label, msg_id, sess.trigger_msg_id)
-            else:
-                sess.busy_msg_id = None  # release slot on failure

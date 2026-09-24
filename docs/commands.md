@@ -254,7 +254,10 @@ claude's last message is long enough to spill past Telegram's 4 KB
 limit it's sent as a `.txt` attachment with a `📎 Full response
 attached below ↓` footer. Buttons:
 
-- **🔄 Retry** — re-send the last prompt to the same session.
+- **🔄 Retry** — re-send the last prompt to the same session. While
+  the chat is [flood-muted](troubleshooting.md#the-bot-went-quiet-flood-control)
+  a tap does nothing at all — the prompt is not re-sent and the button
+  stays — so tap it again once the ban has lifted.
 
 In the card layout the finished card stays above the answer as the
 record of how it was reached — its tool rows, agent rows and what Claude

@@ -33,6 +33,7 @@ from aipager.config import (
 # now. Re-export the names this module uses internally so the
 # TelegramBot class body below (and any external consumers like the
 # tests) keeps working without changes.
+from aipager.bot.flood import _key as _chat_key
 from aipager.bot.transport import (  # noqa: F401
     MUTED,
     send_text,
@@ -180,6 +181,9 @@ class KeyboardMixin:
         # that fires a second one later.
         if level == "main":
             self._keyboard_deferred = False
+            # And whatever a mute owed this chat (8.17c): this send is
+            # the one that pays it — or re-owes it, just below.
+            self._keyboard_owed.pop(_chat_key(target), None)
 
         try:
             sent = await send_text(self._app.bot,
@@ -196,6 +200,18 @@ class KeyboardMixin:
                 # Restore both flags so the next trigger sends it once.
                 self._keyboard_level = prev_level
                 self._keyboard_deferred = prev_deferred
+                # Restoring the flags is not enough on its own (8.17c):
+                # with no hold armed — a commands refresh, a Back to the
+                # main keyboard — nothing would ever send this keyboard
+                # again, and a restored URL hold is not released by the
+                # lift either (it waits for the Mini App URL). A MAIN
+                # keyboard the mute refused is owed to this chat, and the
+                # session monitor's tick sends it after the lift
+                # (`flush_owed_keyboards`). A sub-menu is the reply to a
+                # tap made during the ban, withheld like any command
+                # reply, and not worth re-sending hours later.
+                if level == "main":
+                    self._keyboard_owed[_chat_key(target)] = chat_id
                 return
         except Forbidden as e:
             _log_blocked_once(e)

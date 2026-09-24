@@ -406,6 +406,36 @@ def _has_held_answer(sess) -> bool:
         return False
 
 
+def _held_chat_key(sess):
+    """The chat key ``_hold_answer`` files this session's answers under:
+    the numeric chat, else the raw one. Never raises."""
+    try:
+        from aipager.bot.transport import resolve_chat_id, resolve_chat_id_int
+
+        return resolve_chat_id_int(sess) or resolve_chat_id(sess)
+    except Exception:  # pragma: no cover - defensive
+        return None
+
+
+def _chat_holds_answers(chat_id) -> bool:
+    """Is anything still held for *chat_id*? Never raises.
+
+    The order gate of the 8.17c catch-up: a chat's held answers go first,
+    and an owed card or keyboard waits behind any that are still there —
+    one that failed a delivery attempt for a non-mute reason stays held
+    for a few ticks, and nothing may overtake it. Keyed the way
+    ``_hold_answer`` keys it (the session's numeric chat).
+    """
+    if not chat_id:
+        return False
+    try:
+        from aipager.bot.held import HELD
+
+        return HELD.count(chat_id) > 0
+    except Exception:  # pragma: no cover - defensive
+        return False
+
+
 def _sweep_flood_backoff() -> None:
     """Let every chat's 429 backoff decay on the clock, not only while a
     busy card happens to be ticking (roadmap 8.21).
@@ -457,6 +487,12 @@ class SessionMonitor:
         # what notices a transition no call site announces — a status set
         # by a hook, a flood regime entered or left.
         self.on_tick = None
+        # Optional async callback run after every scan, BEFORE `on_tick`:
+        # the flood-mute catch-up that is not per session (8.17c) — today
+        # the main keyboard a mute refused. After the scan because the
+        # scan is what flushes held answers and owed cards, and the
+        # keyboard goes after both.
+        self.on_mute_catchup = None
         # Session names whose busy card was suppressed on the PREVIOUS
         # tick, so `card_suppression_transition` can emit exactly one INFO
         # when suppression starts and one when it lifts (8.29 R7) rather
@@ -482,17 +518,31 @@ class SessionMonitor:
 
     async def _loop(self) -> None:
         while True:
-            try:
-                await self._scan()
-                self.registry.save_if_dirty()
-            except Exception:
-                log.exception("Session monitor error")
-            if self.on_tick is not None:
-                try:
-                    await self.on_tick()
-                except Exception:
-                    log.warning("on_tick callback failed", exc_info=True)
+            await self.tick()
             await asyncio.sleep(PANE_POLL_INTERVAL)
+
+    async def tick(self) -> None:
+        """One pass of the loop: scan, save, the mute catch-up, the bar.
+
+        The order is the 8.17c catch-up order: ``_scan`` flushes each
+        session's held answers and then its owed card, and only then does
+        ``on_mute_catchup`` send an owed keyboard. Never raises.
+        """
+        try:
+            await self._scan()
+            self.registry.save_if_dirty()
+        except Exception:
+            log.exception("Session monitor error")
+        if self.on_mute_catchup is not None:
+            try:
+                await self.on_mute_catchup()
+            except Exception:
+                log.warning("on_mute_catchup callback failed", exc_info=True)
+        if self.on_tick is not None:
+            try:
+                await self.on_tick()
+            except Exception:
+                log.warning("on_tick callback failed", exc_info=True)
 
     async def _scan(self) -> None:
         _sweep_flood_backoff()
@@ -944,6 +994,30 @@ class SessionMonitor:
                     await self.notify_fn(sess, "stale_busy", {"minutes": stale_mins})
                 except Exception:
                     log.warning("Failed to notify stale_busy for %s", name)
+
+        # The busy cards a flood mute refused (8.17c), owed while their
+        # turns run. A pass of its own AFTER the loop above, because that
+        # loop is what flushes every session's held answers: an owed card
+        # never overtakes an answer — another session's, or one whose
+        # delivery failed and stays held for a retry — and the owed
+        # keyboard (`on_mute_catchup`, after this scan) never overtakes a
+        # card. Whether the chat can afford the card yet — the mute, and
+        # the minimal mode a ban leaves behind — is `_send_owed_card`'s
+        # call: it keeps the debt without asking the limiter, so the
+        # catch-up never spends the budget the answers need.
+        await self._flush_owed_cards()
+
+    async def _flush_owed_cards(self) -> None:
+        for name, sess in list(self.registry.all_sessions().items()):
+            if not sess.busy_card_owed:
+                continue
+            if _chat_holds_answers(_held_chat_key(sess)):
+                continue
+            try:
+                await self.notify_fn(sess, "owed_card_flush", {})
+            except Exception:
+                log.warning("Failed to send the owed busy card for %s", name,
+                            exc_info=True)
 
     def stop(self) -> None:
         if self._task:

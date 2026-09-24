@@ -52,9 +52,10 @@ from aipager.team import (
 # TelegramBot class body below (and any external consumers like the
 # tests) keeps working without changes.
 from aipager.bot.dashboard import PINNED_ANSWER_VERB, current_prompt_token
-from aipager.bot.flood import MUTE
+from aipager.bot.flood import MUTE, clear_time
 from aipager.bot.transport import (  # noqa: F401
     _message_chat_id,
+    resolve_chat_id,
     edit_message,
     edit_markup,
     edit_text,
@@ -574,6 +575,32 @@ class CallbackDispatchMixin:
                 return
             if not sess.last_prompt:
                 await self._safe_answer(query, "Nothing to retry")
+                return
+            # Roadmap 8.17c R3: not during a flood mute — neither the
+            # tapped card's chat nor the session's. Retry is three steps
+            # (inject the prompt, delete this error card, open a busy
+            # card) and the ban refuses the two Telegram ones, so on
+            # 0.7.14 the prompt went to Claude while the card, and its
+            # Retry button, stayed: half applied, and a second tap after
+            # the lift injected the prompt again. Refusing all of it keeps
+            # `last_prompt` and the button exactly as they were, and the
+            # tap can simply be repeated after the ban. The toast goes
+            # through the dispatcher, which withholds it while the ban
+            # runs (8.26 D-1) — so this tap makes no request of any kind.
+            chat_muted = next(
+                (chat for chat in (
+                    _message_chat_id(getattr(query, "message", None)),
+                    resolve_chat_id(sess),
+                ) if chat and MUTE.is_muted(chat)),
+                None,
+            )
+            if chat_muted is not None:
+                until = clear_time(MUTE.until(chat_muted))
+                log.info("[%s] Retry refused — chat %s is flood-muted until %s",
+                         sess.label, chat_muted, until)
+                await self._safe_answer(
+                    query, "Telegram is rate-limiting this chat — try again "
+                    f"after {until}")
                 return
             if not await inject.is_alive(session_name):
                 await self._safe_answer(query, f"Session '{session_name}' not alive")

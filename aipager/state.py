@@ -610,6 +610,15 @@ class TrackedSession:
     # a card for.
     lazy_card_at: float = 0.0
     lazy_card_task: Any = field(default=None, repr=False)
+    # roadmap 8.17c: this turn's busy card was REFUSED by the flood gate —
+    # the chat is muted, or in minimal mode and cannot afford an ornament
+    # (a ban always leaves it there for a while). The card is owed, not
+    # lost: the session monitor's tick sends it (`_send_owed_card`) once
+    # the chat can take it, if the turn is still running then. Cleared
+    # with the 8.32 mark by `_cancel_lazy_card`, i.e. by every path that
+    # ends the turn, so a finished turn never gets a stray card. Transient,
+    # never in _PERSIST_FIELDS: a restart has no running turn to owe.
+    busy_card_owed: bool = False
     # A scratch outbox: notes matched-and-already-deleted by
     # _sync_anchors_from_transcript's absorption detection, staged here
     # rather than returned (that function's bool return — "did an

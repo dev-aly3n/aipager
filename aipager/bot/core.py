@@ -73,6 +73,16 @@ class TelegramBot(
         # Hold the very first keyboard until the Mini App URL is known —
         # see lifecycle.defer_first_keyboard.
         self._keyboard_deferred: bool = False
+        # Main keyboards a flood mute refused (roadmap 8.17c), per target
+        # chat: normalised chat key -> the ``chat_id`` argument to re-send
+        # with. Owed until a send succeeds; paid by
+        # ``flush_owed_keyboards`` on the session monitor's tick once the
+        # chat's mute has lifted and its held answers are out. A separate
+        # debt from ``_keyboard_deferred`` (the Mini App URL wait), which
+        # a lift must NOT release early on its own. When a keyboard is
+        # ALSO owed, paying it clears the URL hold too — correctly: that
+        # keyboard was already sent (into the mute) after the hold ended.
+        self._keyboard_owed: dict[int | str, int | None] = {}
         self._template_map: dict[str, str] = {label: prompt for label, prompt in QUICK_TEMPLATES}
         self._command_map: dict[str, str] = {label: cmd for label, cmd in QUICK_COMMANDS}
         self._model_map: dict[str, str] = {label: cmd for label, cmd in MODEL_CHOICES}

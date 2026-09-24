@@ -158,6 +158,20 @@ def test_run_daemon_wires_the_pinned_bar_to_the_monitor_tick(monkeypatch):
     assert monitor.on_tick is bot.pinned_tick
 
 
+def test_run_daemon_wires_the_keyboard_catch_up_to_the_monitor_tick(monkeypatch):
+    """8.17c: a main keyboard a flood mute refused is sent after the lift
+    by the monitor's tick. Mutation: drop the wiring and
+    ``on_mute_catchup`` stays unset — the keyboard is owed for ever."""
+    monkeypatch.setattr("aipager.config.BOT_TOKEN", "tok")
+    monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
+    monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
+    bot, _hook, monitor, _registry, _, _ = _patch_components(monkeypatch)
+    monitor.on_mute_catchup = None
+    asyncio.new_event_loop().run_until_complete(
+        daemon._run_daemon("bot_username"))
+    assert monitor.on_mute_catchup is bot.flush_owed_keyboards
+
+
 def test_run_daemon_fires_startup_notice_after_bot_start(monkeypatch):
     """The provenance notice is fire-and-forget, scheduled only AFTER
     bot.start() — bootstrap_claude_settings() itself runs before

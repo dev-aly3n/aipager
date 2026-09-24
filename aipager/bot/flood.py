@@ -294,6 +294,13 @@ class FloodMute:
             return 0.0
         return max(0.0, entry[0] - time.time())
 
+    def until(self, chat_id) -> float:
+        """Wall-clock time the chat's mute lifts; ``0.0`` when not muted.
+        Non-destructive, like :meth:`remaining` — pair it with
+        :func:`clear_time` for the ``HH:MM`` a user is shown."""
+        entry = self._entries.get(_key(chat_id))
+        return entry[0] if entry is not None else 0.0
+
     def check(self, chat_id) -> None:
         """Raise :class:`FloodMuted` if *chat_id* is muted; otherwise return."""
         if self.is_muted(chat_id):

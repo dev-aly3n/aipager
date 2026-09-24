@@ -32,7 +32,7 @@ from telegram.error import BadRequest, Forbidden, RetryAfter
 from aipager.dtach import inject
 
 from aipager.bot import session_parity, update_flow
-from aipager.bot.flood import MUTE, FloodMuted
+from aipager.bot.flood import MUTE, FloodMuted, _key as _chat_key
 from aipager.bot import flood_state
 from aipager.bot.flood_budget import BudgetRateLimiter, clear_backoff_signal
 from aipager.bot.rich_message import set_rate_limiter
@@ -675,13 +675,61 @@ class LifecycleMixin:
         """
         if not self._keyboard_deferred:
             return
-        self._keyboard_deferred = False
         if self.scopes is not None or not self._app:
+            self._keyboard_deferred = False
             return
+        # Not cleared here (roadmap 8.17c R4): `_send_keyboard` clears the
+        # hold itself, synchronously before its first await — so a second
+        # concurrent release still finds nothing to do — and puts it back
+        # when a flood mute refuses the send, recording the keyboard as
+        # owed for the monitor's catch-up. Clearing it first, as this did
+        # until 0.7.14, made that restore put back `False`: a restart
+        # during a ban consumed the startup keyboard into the mute.
         try:
             await self._send_keyboard(level="main")
         except Exception:
+            # A failure that is not the mute is an attempt, as it always
+            # was: drop the hold rather than keep it blocking every later
+            # commands refresh's keyboard.
+            self._keyboard_deferred = False
             log.warning("Could not send the deferred keyboard", exc_info=True)
+
+    async def flush_owed_keyboards(self) -> int:
+        """Send the main keyboards a flood mute refused (roadmap 8.17c).
+        Returns how many went out. Never raises.
+
+        The session monitor runs this after every scan (``tick``), which
+        makes it the LAST step of the post-ban catch-up: the scan has just
+        flushed each session's held answers and sent any owed card. A
+        chat still muted, or with an answer still held (a delivery that
+        failed for a non-mute reason stays held for a few ticks), keeps
+        its keyboard owed — nothing overtakes an answer. The keyboard is
+        an answer-class send, so minimal mode does not hold it back; the
+        limiter paces it like any other.
+        """
+        if not self._keyboard_owed or not self._app:
+            return 0
+        from aipager.bot.held import HELD
+
+        sent = 0
+        for key, chat_id in list(self._keyboard_owed.items()):
+            if key not in self._keyboard_owed:
+                continue  # paid meanwhile, by a send awaited above
+            target = chat_id if chat_id is not None else CHAT_ID
+            if MUTE.is_muted(target) or HELD.count(_chat_key(target)):
+                continue
+            log.info("sending chat %s the main keyboard its flood mute "
+                     "held back", key)
+            try:
+                await self._send_keyboard(level="main", chat_id=chat_id)
+            except Exception:
+                self._keyboard_owed.pop(key, None)
+                log.warning("Could not send the owed keyboard", exc_info=True)
+                continue
+            # `_send_keyboard` re-owes it only if a mute refused it again.
+            if key not in self._keyboard_owed:
+                sent += 1
+        return sent
 
     def prime_miniapp_url(self, url: str) -> None:
         """Record the launch URL before the first keyboard goes out.

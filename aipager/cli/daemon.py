@@ -366,6 +366,7 @@ async def _run_daemon(bot_username: str) -> None:
     await hook_receiver.start()
     await bot.recover_sessions()
     session_monitor.on_sessions_changed = bot._update_bot_commands
+    session_monitor.on_mute_catchup = bot.flush_owed_keyboards
     session_monitor.on_tick = bot.pinned_tick
     await session_monitor.start()
 
