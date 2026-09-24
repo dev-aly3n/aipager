@@ -713,11 +713,6 @@ class UpdateManager:
                          + _pre_tail(res.output_tail or res.error, job.chat_id))
             return False
 
-        if self._shutting_down:
-            # Installed within the shutdown grace: start no probe (nothing
-            # new is spawned now) and never a restart.
-            self._installed_unprobed_at_shutdown(job, running)
-            return False
         new, importable, err = await asyncio.to_thread(
             self_update.probe_installed_version, source.python)
         if job.interrupted:
@@ -725,7 +720,8 @@ class UpdateManager:
             self._finish(job, "cancelled", self._shutdown_section(job))
             return False
         if self._shutting_down and err == self_update.SHUTTING_DOWN_ERROR:
-            # The shutdown began just before the probe could spawn.
+            # Installed within the shutdown grace: the seam spawned no probe
+            # (nothing new starts now), and no restart follows.
             self._installed_unprobed_at_shutdown(job, running)
             return False
         if not importable:
