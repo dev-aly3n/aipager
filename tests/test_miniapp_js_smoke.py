@@ -1193,3 +1193,68 @@ def test_updates_start_refused_while_shutting_down_says_so(node_bin, tmp_path):
     proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_shutting_down")
     assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
     assert "ok: 503 shutting_down -> notice says aipager is shutting down" in proc.stdout
+
+
+# ===== Settings tab: chat-wide preferences (roadmap 8.40) =================
+#
+# `savePreference` lost its `saveSeq` declaration in 6a82ec5 and every tap
+# on the Settings tab threw ReferenceError before the fetch — shipped from
+# 0.7.0 on. The per-session flow above never touched this handler.
+
+def test_settings_tab_tap_sends_the_put_and_paints_optimistically(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "scope_save")
+    assert proc.returncode == 0, (
+        f"settings-tab save failed when driven:\nstdout: {proc.stdout}\n"
+        f"stderr: {proc.stderr}"
+    )
+    assert "ok: scope tap -> PUT /api/preferences/answer_length -> optimistic -> saved" \
+        in proc.stdout, proc.stdout
+
+
+def test_settings_tab_failed_put_restores_the_previous_value(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "scope_save_fails")
+    assert proc.returncode == 0, (
+        f"settings-tab failed-save scenario failed:\nstdout: {proc.stdout}\n"
+        f"stderr: {proc.stderr}"
+    )
+    assert "ok: scope tap -> PUT /api/preferences/answer_length -> optimistic -> " \
+        "restored on failure" in proc.stdout, proc.stdout
+
+
+@pytest.mark.parametrize("scenario", ["scope_save", "scope_save_fails"])
+def test_the_harness_detects_the_missing_save_seq(node_bin, tmp_path, scenario):
+    """Guard the guard: the exact shipped bug — no `saveSeq` declaration —
+    must fail both Settings-tab scenarios."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    broken = INDEX_HTML.replace("var saveSeq = Object.create(null);", "", 1)
+    assert broken != INDEX_HTML, "saveSeq declaration not found — page changed shape"
+
+    proc = _drive_controls(
+        node_bin, tmp_path, broken, scenario, name="broken-saveseq.html",
+    )
+    assert proc.returncode != 0, (
+        "harness passed a Settings tab whose save handler throws on every tap"
+    )
+
+
+def test_the_harness_detects_a_failed_put_that_keeps_the_optimistic_value(
+    node_bin, tmp_path,
+):
+    """Guard the guard: drop the rollback and a failed write must fail the
+    scenario rather than leave a button that lies about what is stored."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    broken = INDEX_HTML.replace("settingsData.values[field] = previous;", "", 1)
+    assert broken != INDEX_HTML, "rollback code not found — page changed shape"
+
+    proc = _drive_controls(
+        node_bin, tmp_path, broken, "scope_save_fails", name="broken-rollback.html",
+    )
+    assert proc.returncode != 0, (
+        "harness passed a Settings tab that keeps an unsaved value after a failed PUT"
+    )

@@ -1550,6 +1550,7 @@ APP_JS = r"""
     });
   }
 
+  var saveSeq = Object.create(null);
   function savePreference(field, value) {
     if (!settingsData || settingsData.values[field] === value) { return; }
     // Optimistic: paint the choice immediately, but keep the previous

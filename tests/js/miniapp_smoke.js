@@ -387,6 +387,23 @@ if (SCENARIO.indexOf("updates_") === 0) {
   }
 }
 
+// ---- Settings tab: chat-wide preferences (roadmap 8.40) ---------------
+// The scope-wide Settings tab keeps plain values (not the per-session
+// {effective, scope_default, ...} shape) and saves via savePreference.
+if (SCENARIO.indexOf("scope_save") === 0) {
+  FIXTURES["/api/preferences"] = {
+    schema: SCHEMA, values: { answer_length: "none" }, can_edit: true,
+  };
+  FIXTURES["/api/preferences/answer_length"] = {
+    values: { answer_length: "short" },
+  };
+  if (SCENARIO === "scope_save_fails") {
+    POST_STATUS_OVERRIDE = { path: "/api/preferences/answer_length",
+                             method: "PUT", status: 500,
+                             body: { error: "boom" } };
+  }
+}
+
 // extract and run the page script
 let script = page.match(/<script>([\s\S]*?)<\/script>/g)
   .map(s => s.replace(/<\/?script>/g, "")).join("\n");
@@ -1276,7 +1293,67 @@ function driveUpdatesShuttingDown() {
   }, 10);
 }
 
+// ---- scenario: Settings tab -> tap a different option -> PUT ----------
+// Renders the chat-wide Settings tab from /api/preferences, expands the
+// group, taps "Short" and checks the PUT, the optimistic paint, and what
+// the screen settles on once the write answers (ok -> Short stays;
+// failure -> the previous value comes back).
+function scopeGroup() { return byId["settings-groups"].children[0]; }
+function scopeHeaderValue() { return scopeGroup().children[0].children[1].textContent; }
+function scopeActiveLabels() {
+  const body = scopeGroup().children[1];
+  return body.children.filter(c => c.classList.contains("is-active"))
+    .map(c => c.children[0].textContent);
+}
+function driveScopeSave() {
+  const failing = SCENARIO === "scope_save_fails";
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    const host = byId["settings-groups"];
+    if (host.children.length !== 1) fail("settings group did not render: " + host.children.length);
+    if (scopeHeaderValue() !== "Don't apply any rule")
+      fail("initial value not rendered: " + JSON.stringify(scopeHeaderValue()));
+    scopeGroup().children[0].click();                     // expand
+    const body = scopeGroup().children[1];
+    if (!body || body.children.length !== 3) fail("group did not expand to 3 choices");
+    const choice = body.children[1];
+    if (choice.disabled || !choice.listeners.click) fail("choice not tappable despite can_edit");
+
+    const before = fetchCalls.length;
+    try { choice.click(); } catch (e) { fail("tapping a Settings option threw: " + e); }
+    const put = fetchCalls.slice(before).find(f => f.method === "PUT");
+    if (!put) fail("tapping a Settings option sent no PUT");
+    if (put.url !== "/api/preferences/answer_length") fail("wrong PUT url: " + put.url);
+    if (JSON.stringify(JSON.parse(put.body)) !== JSON.stringify({ value: "short" }))
+      fail("wrong PUT body: " + put.body);
+    // optimistic: painted before the write has answered
+    if (scopeHeaderValue() !== "Short") fail("no optimistic render: " + scopeHeaderValue());
+    if (JSON.stringify(scopeActiveLabels()) !== JSON.stringify(["Short"]))
+      fail("optimistic active row wrong: " + JSON.stringify(scopeActiveLabels()));
+
+    setTimeoutReal(() => {
+      const notice = byId["notice"].textContent || "";
+      if (failing) {
+        if (scopeHeaderValue() !== "Don't apply any rule")
+          fail("failed PUT left the optimistic value: " + scopeHeaderValue());
+        if (JSON.stringify(scopeActiveLabels()) !== JSON.stringify(["Don't apply any rule"]))
+          fail("failed PUT: active row not restored: " + JSON.stringify(scopeActiveLabels()));
+        if (notice.indexOf("Couldn't save") === -1) fail("failed PUT said nothing: " + notice);
+        console.log("ok: scope tap -> PUT /api/preferences/answer_length -> optimistic -> restored on failure");
+      } else {
+        if (scopeHeaderValue() !== "Short") fail("saved value not kept: " + scopeHeaderValue());
+        if (notice.indexOf("Saved") === -1) fail("no Saved notice: " + notice);
+        console.log("ok: scope tap -> PUT /api/preferences/answer_length -> optimistic -> saved");
+      }
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
 const DRIVERS = {
+  scope_save: driveScopeSave,
+  scope_save_fails: driveScopeSave,
   updates_shutting_down: driveUpdatesShuttingDown,
   updates_poll_running: driveUpdatesPollRunning,
   updates_no_poll_terminal: driveUpdatesNoPollTerminal,

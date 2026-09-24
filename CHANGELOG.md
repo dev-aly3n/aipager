@@ -214,6 +214,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `update` is now a reserved session name, like the other commands.
 
 ### Fixed
+- **Mini App settings: choosing an option did nothing (broken since 0.7.0).**
+  Every tap on a chat-wide setting in the Settings tab failed before the
+  save request was sent, so nothing was stored. Taps save again, and a
+  save that fails puts the previous value back on screen.
 - **A restart no longer re-posts the answer you already got.** If the
   daemon restarted in the minute after a turn finished, Claude Code's
   "waiting for your input" nudge reached the new daemon, which posted
