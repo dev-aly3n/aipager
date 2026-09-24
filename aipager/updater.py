@@ -91,7 +91,9 @@ def cmd_update(_args=None) -> int:
         if res.timed_out:
             friendly_error(
                 f"the upgrade timed out after {self_update.UPGRADE_TIMEOUT_SECONDS}s "
-                "and was stopped."
+                "and was stopped; the install may be partial.",
+                "",
+                "  Reinstall with: " + install_source.reinstall_hint(source.kind),
             )
             return 1
         if res.error:
@@ -104,7 +106,8 @@ def cmd_update(_args=None) -> int:
         if not importable:
             friendly_error(
                 "the upgrade finished but the new version fails to import.",
-                f"  {err}" if err else "",
+                (f"  {self_update.redact_output(err)[-self_update.OUTPUT_TAIL_CHARS:]}"
+                 if err else ""),
                 "  Reinstall with: " + install_source.reinstall_hint(source.kind),
             )
             return 1

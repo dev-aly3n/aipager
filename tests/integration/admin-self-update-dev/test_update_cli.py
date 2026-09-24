@@ -71,3 +71,21 @@ def test_cli_update_already_current(env, capsys):
     env.probe_version = "0.7.13"
     assert updater.cmd_update() == 0
     assert "already at 0.7.13" in capsys.readouterr().out
+
+
+def test_cli_update_timeout_warns_partial_and_gives_the_reinstall(env, capsys):
+    env.upgrade_timeout = True
+    assert updater.cmd_update() == 1
+    err = capsys.readouterr().err
+    assert "may be partial" in err
+    assert "pipx install --force aipager" in err
+
+
+def test_cli_import_failure_output_is_redacted(env, capsys, monkeypatch):
+    token = "123456789:AAHfakefakefakefakefakefakefakefake12"
+    monkeypatch.setattr(self_update, "probe_installed_version",
+                        lambda python: (None, False, f"ImportError {token}"))
+    assert updater.cmd_update() == 1
+    err = capsys.readouterr().err
+    assert "fails to import" in err
+    assert token not in err
