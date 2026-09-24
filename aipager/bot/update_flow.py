@@ -873,7 +873,9 @@ class UpdateManager:
                 if not task.done():
                     task.cancel()
                     await asyncio.wait({task}, timeout=SHUTDOWN_GRACE_SECONDS)
-            others = [t for t in self._tasks if not t.done()]
+            # The watchdog and any status lookups (the job task is handled
+            # above, with its own grace).
+            others = [t for t in self._tasks if not t.done() and t is not task]
             for t in others:
                 t.cancel()
             if others:
