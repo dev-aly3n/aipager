@@ -509,13 +509,17 @@ def test_merge_hooks_includes_tool_matcher_for_tool_events(monkeypatch):
 # "answer PermissionRequest hooks with a decision instead of keystrokes")
 
 def test_merge_hooks_fresh_install_permission_request_gets_timeout_others_dont(monkeypatch):
+    """PermissionRequest (30 s) and PreModelSwitch (5 s, roadmap 8.35)
+    carry their own timeouts; no other event gets one."""
     monkeypatch.setattr("shutil.which", lambda name: f"/usr/bin/{name}")
     settings = {}
     settings_patch._merge_hooks(settings)
     perm_hook = settings["hooks"]["PermissionRequest"][0]["hooks"][0]
     assert perm_hook["timeout"] == 30
+    switch_hook = settings["hooks"]["PreModelSwitch"][0]["hooks"][0]
+    assert switch_hook["timeout"] == 5
     for event in settings_patch.HOOK_EVENTS:
-        if event == "PermissionRequest":
+        if event in ("PermissionRequest", "PreModelSwitch"):
             continue
         for block in settings["hooks"][event]:
             for hook in block["hooks"]:

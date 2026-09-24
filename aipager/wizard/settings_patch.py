@@ -15,7 +15,7 @@ from aipager.ui import console, ok, step
 from aipager.wizard._constants import (
     CLAUDE_SETTINGS,
     HOOK_CMD, STATUSLINE_CMD, HOOK_EVENTS, TOOL_MATCHER_EVENTS,
-    PERMISSION_REQUEST_HOOK_TIMEOUT_SECONDS,
+    PERMISSION_REQUEST_HOOK_TIMEOUT_SECONDS, MODEL_SWITCH_HOOK_TIMEOUT_SECONDS,
 )
 
 
@@ -146,8 +146,9 @@ def _repoint_hook_cmds(entries: list, bare_name: str, resolved: str) -> int:
 
 
 def _ensure_permission_timeout(entries: list, bare_name: str, timeout_seconds: int) -> int:
-    """Backfill ``timeout`` onto an already-wired ``PermissionRequest``
-    hook entry — a wizard re-run against a ``settings.json`` written
+    """Backfill ``timeout`` onto an already-wired aipager hook entry of an
+    event that carries one (``PermissionRequest``, and ``PreModelSwitch``
+    since roadmap 8.35) — a wizard re-run against a ``settings.json`` written
     before this ship (design.md "answer PermissionRequest hooks with a
     decision instead of keystrokes"). Mirrors :func:`_repoint_hook_cmds`'s
     shape (same malformed-entry tolerance, same "count of hook dicts
@@ -206,6 +207,11 @@ def _merge_hooks(settings: dict) -> int:
         "type": "command", "command": hook_path,
         "timeout": PERMISSION_REQUEST_HOOK_TIMEOUT_SECONDS,
     }
+    # Same separate-dict rule as permission_entry above.
+    model_switch_entry = {
+        "type": "command", "command": hook_path,
+        "timeout": MODEL_SWITCH_HOOK_TIMEOUT_SECONDS,
+    }
     repointed = 0
     for event in HOOK_EVENTS:
         entries = hooks.setdefault(event, [])
@@ -217,9 +223,15 @@ def _merge_hooks(settings: dict) -> int:
                 repointed += _ensure_permission_timeout(
                     entries, HOOK_CMD, PERMISSION_REQUEST_HOOK_TIMEOUT_SECONDS,
                 )
+            elif event == "PreModelSwitch":
+                repointed += _ensure_permission_timeout(
+                    entries, HOOK_CMD, MODEL_SWITCH_HOOK_TIMEOUT_SECONDS,
+                )
             continue
         if event == "PermissionRequest":
             entries.append({"matcher": "*", "hooks": [permission_entry]})
+        elif event == "PreModelSwitch":
+            entries.append({"hooks": [model_switch_entry]})
         elif event in TOOL_MATCHER_EVENTS:
             entries.append({"matcher": "*", "hooks": [entry]})
         else:

@@ -414,8 +414,118 @@ APP_JS = r"""
     }
 
     renderDetailActions(data);
+    renderModelControl(data);
     renderTimeline(data.timeline);
     updateSectionHeaders(data);
+  }
+
+  // ---- running-session model picker (roadmap 8.35) ---------------------
+  //
+  // The rows come from /api/session-options — the same shared list the
+  // launch picker and the chat's Models keyboard use — so this page never
+  // keeps a model list of its own. Picking one POSTs the row's label; the
+  // server types `/model <id>` into the session and holds the request
+  // open until the statusline reports the new model (or gives up), which
+  // is exactly how long "switching…" shows.
+  var modelChoices = null;        // [{label, hint}] once fetched
+  var modelChoicesLoading = false;
+  // {label, previous, text, pending} for the switch in flight or
+  // unconfirmed, or null. Keyed by label so it never paints on another
+  // session's page.
+  var modelSwitch = null;
+  var MODEL_SWITCHING_TEXT = "switching…";
+  var MODEL_UNCONFIRMED_TEXT = "not confirmed — check the session";
+
+  function loadModelChoices() {
+    if (modelChoices || modelChoicesLoading) { return; }
+    modelChoicesLoading = true;
+    apiFetch("/api/session-options").then(function (data) {
+      modelChoices = (data && data.models) || [];
+      modelChoicesLoading = false;
+      if (lastDetailData) { renderModelControl(lastDetailData); }
+    }).catch(function () {
+      modelChoicesLoading = false;
+    });
+  }
+
+  function renderModelControl(data) {
+    var host = document.getElementById("detail-model");
+    var note = document.getElementById("detail-model-note");
+    host.innerHTML = "";
+    var state = data && data.model_switch;
+    if (!state) {
+      host.hidden = true;
+      note.hidden = true;
+      return;
+    }
+    host.hidden = false;
+    loadModelChoices();
+    var sw = (modelSwitch && modelSwitch.label === data.label) ? modelSwitch : null;
+    // An unconfirmed switch settles as soon as a later poll shows the
+    // model really changed (the operator answered Claude Code's own
+    // confirmation in the terminal, say).
+    if (sw && !sw.pending && data.model && data.model !== sw.previous) {
+      modelSwitch = null;
+      sw = null;
+    }
+    var options = (modelChoices || []).map(function (m) {
+      return { value: m.label, label: m.label, help: m.hint || "" };
+    });
+    renderOptionGroup(host, {
+      key: "session-model",
+      title: "Model",
+      options: options,
+      current: null,
+      valueText: sw ? sw.text : (data.model || "—"),
+      disabled: !state.available || !!(sw && sw.pending),
+      onPick: function (value) {
+        switchSessionModel(data.label, value, data.model || "");
+      },
+      rerender: function () { renderModelControl(lastDetailData || data); }
+    });
+    var reason = state.available ? "" : (state.reason || "");
+    note.textContent = reason;
+    note.hidden = !reason;
+  }
+
+  function switchSessionModel(label, model, previous) {
+    openGroups["session-model"] = false;
+    modelSwitch = { label: label, previous: previous,
+                    text: MODEL_SWITCHING_TEXT, pending: true };
+    if (lastDetailData) { renderModelControl(lastDetailData); }
+    fetch("/api/sessions/" + encodeURIComponent(label) + "/model", {
+      method: "POST",
+      headers: { "X-Telegram-Init-Data": initData,
+                 "Content-Type": "application/json" },
+      body: JSON.stringify({ model: model })
+    }).then(function (res) {
+      return res.json().then(function (d) { return { status: res.status, data: d }; });
+    }).then(function (r) {
+      if (!modelSwitch || modelSwitch.label !== label) { return; }
+      if (r.status === 200 && r.data && r.data.status === "switched") {
+        modelSwitch = null;
+        if (lastDetailData && lastDetailData.label === label) {
+          lastDetailData.model = r.data.model;
+        }
+        showNotice("Model is now " + r.data.model + ".", "ok");
+      } else if (r.status === 200) {
+        modelSwitch = { label: label, previous: previous,
+                        text: MODEL_UNCONFIRMED_TEXT, pending: false };
+        showNotice((r.data && r.data.detail) || MODEL_UNCONFIRMED_TEXT, "err");
+      } else {
+        modelSwitch = null;
+        showNotice((r.data && r.data.detail) || "Couldn't switch the model.", "err");
+      }
+      if (lastDetailData && lastDetailData.label === label) {
+        renderModelControl(lastDetailData);
+      }
+    }).catch(function () {
+      if (modelSwitch && modelSwitch.label === label) { modelSwitch = null; }
+      showNotice("Couldn't reach the server — check the session's model.", "err");
+      if (lastDetailData && lastDetailData.label === label) {
+        renderModelControl(lastDetailData);
+      }
+    });
   }
 
   // Section headers double as the toggle, and say what is inside before
@@ -1224,6 +1334,10 @@ APP_JS = r"""
       st.textContent = "";
     }
     document.getElementById("detail-waiting").hidden = true;
+    // The previous session's Model picker must not linger on this page
+    // until the first poll lands.
+    document.getElementById("detail-model").hidden = true;
+    document.getElementById("detail-model-note").hidden = true;
     skeleton(document.getElementById("detail-facts"), 3);
     skeleton(document.getElementById("detail-preview"), 2);
     skeleton(document.getElementById("session-settings-groups"), 4, "skel-row");

@@ -208,6 +208,31 @@ def _match_and_promote(session: str, prompt_text: str) -> tuple[list[dict], list
     return consumed, expired
 
 
+def _answer_model_switch(session: str, data: dict) -> None:
+    """PreModelSwitch (roadmap 8.35): allow — skipping Claude Code's
+    "Switch model?" cache confirmation — only a switch aipager itself
+    typed into this session, to that exact model, moments ago. Anything
+    else gets no output at all, so Claude Code does exactly what it does
+    without aipager.
+
+    Local file checks only (``model_switch_marker``): no socket, no wait,
+    nothing forwarded to the daemon — a switch is not turn evidence, and
+    this hook runs inside Claude Code's model-switch path. Never raises.
+    """
+    try:
+        from aipager.dtach import model_switch_marker
+
+        decision = model_switch_marker.decide(
+            os.path.dirname(SOCKET_PATH) or "/tmp", session, data,
+        )
+        if decision is not None:
+            print(json.dumps(decision))
+    except MemoryError:
+        raise
+    except Exception as e:  # never wedge claude — no decision is the safe answer
+        _debug(f"model switch marker error (no decision): {e}")
+
+
 def _prepare_cap_notifier(session: str) -> tuple[socket.socket | None, bytes]:
     """Pre-open the daemon socket + pre-serialize the cap-hit payload.
 
@@ -286,6 +311,10 @@ def _run(session: str, cap_slot: list[bytes]) -> None:
         data = json.loads(raw)
     except json.JSONDecodeError:
         sys.exit(0)
+
+    if isinstance(data, dict) and data.get("hook_event_name") == "PreModelSwitch":
+        _answer_model_switch(session, data)
+        return
 
     # Enrich the cap-hit payload with the tool name now that we know it.
     # If the balloon fires later (typically inside the enforce path),

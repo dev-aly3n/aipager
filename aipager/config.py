@@ -853,12 +853,45 @@ _DEFAULT_COMMANDS: list[tuple[str, str]] = [
 
 # Model submenu — accessible from Commands → Model
 MODELS_BUTTON = "Model \u203a"
+
+# The ONE model list. Three pickers read it: the Telegram Models keyboard
+# (through _DEFAULT_MODELS below, so keyboard.json can still replace it),
+# the Mini App launch picker and the Mini App running-session picker
+# (both through MODEL_CHOICES + model_hint()). Rows are
+# (label, model, hint).
+#
+# Aliases resolve to the latest of their family, so their hints say what
+# the family is FOR and never name a version — a baked-in version
+# would be wrong on the next release. The pinned rows carry their version
+# in the label only and have no hint. Names checked against the installed
+# Claude Code's own model table (`claude --help` and its binary); `[1m]`
+# is its 1M-context suffix ("append [1m] to the model name").
+MODEL_CATALOG: tuple[tuple[str, str, str], ...] = (
+    ("Sonnet", "sonnet", "Balanced — the everyday default"),
+    ("Opus", "opus", "Most capable — deep reasoning, hardest problems"),
+    ("Haiku", "haiku", "Fastest and cheapest — quick edits and lookups"),
+    ("Fable", "fable", "Newest family alias"),
+    ("OpusPlan", "opusplan", "Opus for planning, Sonnet to execute"),
+    ("Opus 5.5", "claude-opus-5-5", ""),
+    ("Opus 5.5 1M", "claude-opus-5-5[1m]", ""),
+    ("Sonnet 5", "claude-sonnet-5", ""),
+    ("Fable 5.1", "claude-fable-5-1", ""),
+    ("Haiku 4.5", "claude-haiku-4-5", ""),
+)
 _DEFAULT_MODELS: list[tuple[str, str]] = [
-    ("Sonnet", "/model sonnet"),
-    ("Opus", "/model opus"),
-    ("Haiku", "/model haiku"),
-    ("OpusPlan", "/model opusplan"),
+    (label, f"/model {model}") for label, model, _hint in MODEL_CATALOG
 ]
+
+
+def model_hint(label: str) -> str:
+    """The catalog's "what is this for" line for a picker row, matched on
+    the label case-insensitively. A keyboard.json label the catalog does
+    not know gets no hint rather than a wrong one."""
+    key = label.strip().lower()
+    for cat_label, _model, hint in MODEL_CATALOG:
+        if cat_label.lower() == key:
+            return hint
+    return ""
 
 # ---- Customizable keyboard layout (item 4.1) -------------------------
 #

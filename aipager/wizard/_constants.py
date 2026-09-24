@@ -39,7 +39,7 @@ HOOK_EVENTS = (
     "SessionStart", "SessionEnd", "UserPromptSubmit",
     "PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest",
     "Notification", "Stop", "StopFailure", "SubagentStart", "SubagentStop",
-    "PreCompact", "PostCompact", "MessageDisplay",
+    "PreCompact", "PostCompact", "MessageDisplay", "PreModelSwitch",
 )
 TOOL_MATCHER_EVENTS = {"PreToolUse", "PostToolUse", "PermissionRequest"}
 
@@ -51,6 +51,12 @@ TOOL_MATCHER_EVENTS = {"PreToolUse", "PostToolUse", "PermissionRequest"}
 # tight budget. Applies ONLY to the PermissionRequest hook entry; every
 # other HOOK_EVENTS entry is left with no `timeout` key at all.
 PERMISSION_REQUEST_HOOK_TIMEOUT_SECONDS = 30
+
+# PreModelSwitch (roadmap 8.35): the hook only reads one small local file
+# and answers, so a hard 5 s ceiling is ample and bounds how long a
+# wedged hook could ever hold up a model switch. Mirrored in
+# claude_bootstrap.py, which cannot import this module.
+MODEL_SWITCH_HOOK_TIMEOUT_SECONDS = 5
 
 _TOKEN_RE = re.compile(r"\d{6,12}:[A-Za-z0-9_-]{20,80}")
 _CHAT_NOT_FOUND_RE = re.compile(r"chat\s*[\s_-]*not\s*[\s_-]*found", re.I)

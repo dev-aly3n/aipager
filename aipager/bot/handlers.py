@@ -37,6 +37,12 @@ from telegram.ext import (
 from aipager.dtach import inject
 
 from aipager.bot import new_flow, reactions, session_parity
+from aipager.bot.session_ops import (
+    await_model_change,
+    clear_model_switch_pending,
+    mark_model_switch_sent,
+    model_switch_refusal,
+)
 from aipager.bot.settings_menu import render_settings_root
 from aipager.config import (
     APP_BUTTON, BACK_BUTTON, COMMANDS_BUTTON,
@@ -85,6 +91,15 @@ if TYPE_CHECKING:
     pass
 
 log = logging.getLogger(__name__)
+
+MODEL_SWITCH_OTHER_SENDER_REASON = (
+    "another member's message is still waiting to be picked up — "
+    "switch the model after it."
+)
+
+# Strong references to the /model feedback follow-ups, so a pending one
+# is not garbage-collected mid-wait (asyncio keeps only weak ones).
+_MODEL_CONFIRM_TASKS: set[asyncio.Task] = set()
 
 
 # ---- File uploads: download policy ---------------------------------------
@@ -1928,10 +1943,42 @@ class CommandHandlersMixin:
             await reply_text(update.message, "⚠️ Can't clear while session is busy")
             return
 
+        # /model follows the Mini App picker's rule exactly (roadmap 8.35
+        # R2): refused while a turn runs or a prompt is open, not held.
+        # Claude Code runs /model mid-turn rather than after it.
+        is_model_switch = command_text.startswith("/model ")
+        if is_model_switch:
+            refusal = model_switch_refusal(sess)
+            if refusal is not None:
+                await reply_text(
+                    update.message,
+                    f"⚠️ [{sess.label}] {refusal[1]}",
+                )
+                return
+
+        # A /model is never HELD for later: queued, it would be typed at
+        # drain time with none of the checks above. The hold's other
+        # condition — another member's message still outstanding (team
+        # mode) — therefore refuses it too.
+        if is_model_switch and mixed_sender_note_outstanding(sess, update):
+            await reply_text(
+                update.message,
+                f"⚠️ [{sess.label}] {MODEL_SWITCH_OTHER_SENDER_REASON}",
+            )
+            return
+
         if await self._hold_for_open_dialog(update, sess, command_text):
             return
 
         was_busy = sess.status == Status.BUSY
+        previous_model = sess.model_name or ""
+        if is_model_switch:
+            # No re-check needed here, unlike _switch_model_core: the
+            # refusal above already ran after the liveness probe, and the
+            # hold check does not yield unless it holds.
+            previous_model = mark_model_switch_sent(
+                sess, command_text.split(" ", 1)[1].strip(),
+            )
         ok = await self._inject_prompt(
             sess, command_text,
             msg_id=update.message.message_id, chat_id=calling_chat_id(update),
@@ -1948,15 +1995,50 @@ class CommandHandlersMixin:
             await self._react(update, reactions.HANDED_OFF if was_busy
                               else reactions.ACK)
             # Explicit feedback for model changes
-            if command_text.startswith("/model "):
+            if is_model_switch:
                 model_arg = command_text.split(" ", 1)[1]
-                await reply_text(update.message,
-                    f"🔄 <b>{html_mod.escape(sess.label)}</b> → {html_mod.escape(model_arg)}",
-                    parse_mode="HTML",
+                header = (
+                    f"🔄 <b>{html_mod.escape(sess.label)}</b> → "
+                    f"{html_mod.escape(model_arg)}"
                 )
+                sent = await reply_text(update.message, header, parse_mode="HTML")
+                # The same message then shows the model the session
+                # actually reports, once its statusline says so.
+                task = asyncio.create_task(
+                    self._confirm_model_feedback(sent, sess, previous_model, header),
+                )
+                _MODEL_CONFIRM_TASKS.add(task)
+                task.add_done_callback(_MODEL_CONFIRM_TASKS.discard)
             log.info("[%s] Command sent: %s", sess.label, command_text)
         else:
+            if is_model_switch:
+                clear_model_switch_pending(sess)
             await reply_text(update.message, f"❌ Failed to send to [{sess.label}]")
+
+    async def _confirm_model_feedback(
+        self, message, sess, previous_model: str, header: str,
+        *, timeout: float | None = None,
+    ) -> None:
+        """Edit a ``/model`` feedback message once the switch is known.
+
+        Appends the model the statusline now reports, or — when nothing
+        changed within the wait — says it was not confirmed. One edit,
+        through the same flood-aware helper every other edit uses; a
+        muted chat or a reply that was never sent simply skips it.
+        """
+        from aipager.miniapp.sessions import MODEL_SWITCH_UNCONFIRMED
+
+        if message is None or message is MUTED:
+            return
+        new_model = await await_model_change(sess, previous_model, timeout=timeout)
+        if new_model:
+            text = f"{header}\n🧠 now {html_mod.escape(new_model)}"
+        else:
+            text = f"{header}\n⚠️ {html_mod.escape(MODEL_SWITCH_UNCONFIRMED)}"
+        try:
+            await edit_message(message, text, parse_mode="HTML")
+        except Exception:
+            log.debug("[%s] model feedback edit failed", sess.label, exc_info=True)
 
     async def _session_for_typed_label(
         self, update: Update, label: str,

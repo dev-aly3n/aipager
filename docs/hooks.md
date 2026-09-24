@@ -143,6 +143,51 @@ chunks. This is the only *current* source of what claude is saying —
 the transcript file lags until each tool round finishes — and is what
 streams commentary into the busy message live.
 
+### `PreModelSwitch`
+
+Claude Code 2.1.251 and later fires this before it switches model. The
+payload carries `from_model`, `to_model`, `requested_model` and `source`
+(`command` for a typed `/model`, or `picker` or `sdk`). Claude Code
+usually asks "Switch model?" before a switch, because the next reply has
+to re-read the whole conversation. A hook that answers
+`permissionDecision: "allow"` lets the switch go ahead without that
+question.
+
+`aipager-hook` answers `allow` only for a switch that aipager typed
+itself, from the Mini App's Model control or the Models keyboard.
+Every other switch gets no answer, so Claude Code asks as it always
+has. That covers the operator's own `/model` in the terminal, the
+picker, and an SDK switch.
+
+aipager recognises its own switches with a marker file. Just before it
+types `/model <name>`, the daemon writes
+`aipager-modelswitch-<session>.json`:
+- it goes in the directory that holds the control socket (normally
+  `$XDG_RUNTIME_DIR`);
+- it is written atomically, with mode 0600;
+- it names the model and the Claude session id;
+- it expires after 30 seconds.
+
+The hook answers `allow` only when all of these hold:
+- the marker is a file you own, and not a symlink;
+- it has not expired;
+- it is for the same dtach session and the same Claude session id;
+- its model equals `requested_model` or `to_model`, ignoring case;
+- `source` is `command`.
+
+The hook then claims the marker with an atomic rename, so it is used
+exactly once. The check reads one local file, with no socket and no
+wait. The event is not forwarded to the daemon. The settings entry has
+a 5-second timeout.
+
+The entry is added on daemon start (and by `aipager config`) like every
+other hook event. Claude Code 2.1.101 and later ignore hook events they
+don't know, so older versions without `PreModelSwitch` are unaffected.
+
+One case can still show the question. A switch to or from `opusplan` can
+make Claude Code ask the hook twice, and only the first ask finds the
+marker, so Claude Code asks "Switch model?" in the terminal.
+
 ### `statusline`
 
 Special — not a real hook. It's emitted by the `aipager-statusline`

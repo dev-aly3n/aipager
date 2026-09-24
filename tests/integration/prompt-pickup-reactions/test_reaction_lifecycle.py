@@ -258,12 +258,14 @@ def test_a_command_queued_behind_a_turn_follows_the_queue_lifecycle(
 def test_a_local_command_queued_behind_a_turn_is_done_when_the_turn_ends(
         wired, run_async, mk_update, send_text, pickup, reactions,
         rich_calls):
-    """``/model`` sent while a turn runs: Claude Code runs it when the
-    turn ends and fires no hook for it. 👀, then 👌 at the turn's end."""
+    """``/plan`` sent while a turn runs: Claude Code runs it when the
+    turn ends and fires no hook for it. 👀, then 👌 at the turn's end.
+    (``/model`` is refused while a turn runs since 8.35 — it is
+    ``immediate`` in Claude Code — so the local command here is ``/plan``.)"""
     bot, sess, _inj, _keys = wired
     _busy_with_m1(bot, sess, run_async, send_text, pickup)
-    update = mk_update("Sonnet", message_id=7, chat_id=CHAT_ID)
-    run_async(bot._send_command(update, "/model sonnet"))
+    update = mk_update("Plan mode", message_id=7, chat_id=CHAT_ID)
+    run_async(bot._send_command(update, "/plan"))
     assert reactions(bot).get(7) == [EYES]
     _finish_turn(bot, sess, run_async)
     assert reactions(bot).get(7) == [EYES, "👌"]
@@ -471,8 +473,9 @@ def test_clear_is_not_the_end_of_claudes_queue(
 # ── rev-iter1-004/005/006 ───────────────────────────────────────────────────
 
 def _busy_command(bot, sess, run_async, mk_update, send_text, pickup,
-                  command="/model sonnet", msg_id=7):
-    """A command button tapped while a turn runs: Claude Code queues it."""
+                  command="/plan", msg_id=7):
+    """A command button tapped while a turn runs: Claude Code queues it.
+    (Not ``/model``: 8.35 refuses it while a turn runs.)"""
     from aipager.bot.reactions import ledger_of
     _busy_with_m1(bot, sess, run_async, send_text, pickup)
     update = mk_update("Cmd", message_id=msg_id, chat_id=CHAT_ID)
@@ -705,11 +708,28 @@ def test_a_keyboard_command_is_done_at_injection(
         wired, run_async, mk_update, reactions):
     """``/model`` and friends run without any prompt hook: nothing would
     ever move them off 👀. Enter on Claude Code's prompt runs the command,
-    so the injection is where it is done: 👌, one call."""
-    bot, _sess, _inj, _keys = wired
+    so the injection is where it is done: 👌, one call. (8.35 types
+    ``/model`` only into an IDLE session.)"""
+    bot, sess, _inj, _keys = wired
+    sess.status = Status.IDLE
+    bot._confirm_model_feedback = AsyncMock()   # 8.35's statusline wait
     update = mk_update("Sonnet", message_id=7, chat_id=CHAT_ID)
     run_async(bot._send_command(update, "/model sonnet"))
     assert reactions(bot) == {7: ["👌"]}
+
+
+def test_a_model_switch_refused_mid_turn_is_not_left_on_eyes(
+        wired, run_async, mk_update, send_text, pickup, reactions):
+    """8.35 refuses ``/model`` while a turn runs, with a reply saying
+    so. Nothing was handed off, so the message gets no 👀 that nothing
+    would ever move on (8.33)."""
+    bot, sess, injected, _keys = wired
+    _busy_with_m1(bot, sess, run_async, send_text, pickup)
+    before = list(injected)
+    update = mk_update("Sonnet", message_id=7, chat_id=CHAT_ID)
+    run_async(bot._send_command(update, "/model sonnet"))
+    assert injected == before
+    assert 7 not in reactions(bot)
 
 
 def test_a_slash_command_turn_with_no_hook_ends_on_ok_not_shrug(

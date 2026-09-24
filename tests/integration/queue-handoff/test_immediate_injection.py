@@ -124,9 +124,12 @@ def test_direct_send_injects_while_busy(wired, mk_update, run_async):
 def test_send_command_injects_while_busy(wired, mk_update, run_async):
     bot, sess, injected, keys = wired
     _in_state(bot, sess, Status.BUSY)
-    update = _update(mk_update, "/model sonnet")
+    # /compact, not /model: a /model is refused while busy since roadmap
+    # 8.35 (Claude Code runs it mid-turn); every other command still
+    # injects immediately, which is what this pins.
+    update = _update(mk_update, "/compact")
 
-    run_async(bot._send_command(update, "/model sonnet"))
+    run_async(bot._send_command(update, "/compact"))
 
-    assert injected == ["/model sonnet"]
+    assert injected == ["/compact"]
     assert sess.pending_queue == []

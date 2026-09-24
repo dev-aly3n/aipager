@@ -680,6 +680,32 @@ def _isolate_notes_dir(tmp_path, monkeypatch):
     )
 
 
+@pytest.fixture(autouse=True)
+def _isolate_model_switch_marker(tmp_path, monkeypatch):
+    """Redirect the PreModelSwitch marker (``aipager-modelswitch-*.json``,
+    normally beside the daemon's control socket in $XDG_RUNTIME_DIR or
+    /tmp) into ``tmp_path`` for every test. A model switch in any test
+    writes one, and a real one could pre-approve a real session's switch."""
+    from aipager.dtach import model_switch_marker
+
+    base = tmp_path / "modelswitch"
+    base.mkdir(exist_ok=True)
+    real = model_switch_marker.marker_path
+    monkeypatch.setattr(
+        model_switch_marker, "marker_path",
+        lambda _base_dir, session: base / f"aipager-modelswitch-{session}.json",
+    )
+    return real
+
+
+@pytest.fixture
+def real_marker_path(_isolate_model_switch_marker):
+    """The unredirected ``model_switch_marker.marker_path`` — for the one
+    test that checks the daemon and the hook agree on the directory. Use
+    it only with a ``base_dir`` under ``tmp_path``."""
+    return _isolate_model_switch_marker
+
+
 @pytest.fixture
 def run_async():
     """Run a coroutine to completion in a fresh event loop.

@@ -52,9 +52,13 @@ _VALID_DIR_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 # the admin gate on Auto mode. `shlex.quote` does not help with that at
 # all — it makes a value shell-safe, not argv-safe.
 #
-# `:` is allowed for Bedrock/Vertex-style ids (`...-v1:0`).
+# `:` is allowed for Bedrock/Vertex-style ids (`...-v1:0`). One exact
+# trailing `[1m]` is allowed too: it is Claude Code's own 1M-context
+# suffix (`claude-opus-5-5[1m]`, `opus[1m]`). Only that literal — `[` and
+# `]` are glob characters, so the allow-list stays as narrow as the one
+# form Claude Code documents rather than admitting brackets in general.
 MAX_MODEL_LENGTH = 64
-_VALID_MODEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
+_VALID_MODEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*(?:\[1m\])?$")
 
 
 def validate_session_name(name: object) -> tuple[str, str]:

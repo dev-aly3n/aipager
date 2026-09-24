@@ -93,7 +93,7 @@ let DETAIL_OVERRIDE = null;   // see driveMenuDriftCloses
 let POST_STATUS_OVERRIDE = null; // { path, method, status, body }
 global.fetch = (url, opts) => {
   const method = (opts && opts.method) || "GET";
-  fetchCalls.push({ url, method });
+  fetchCalls.push({ url, method, body: opts && opts.body });
   const path = url.split("?")[0];
   if (POST_STATUS_OVERRIDE && path === POST_STATUS_OVERRIDE.path
       && method === POST_STATUS_OVERRIDE.method) {
@@ -276,6 +276,22 @@ Object.assign(SESSION_DETAIL_FIXTURES, {
   menu_grouping_divider: fullDetailFor("busy", { isAdmin: true, queueDepth: 3 }),
 });
 
+// ---- running-session model picker (roadmap 8.35) ---------------------
+// Mirrors aipager.miniapp.sessions.MODEL_SWITCH_BUSY_REASON verbatim.
+const MODEL_SWITCH_BUSY_REASON =
+  "Claude is working — switch the model when this turn ends.";
+function modelDetailFor(status, modelSwitch) {
+  return Object.assign(fullDetailFor(status, { isAdmin: true }), {
+    model: "Sonnet 5", model_switch: modelSwitch,
+  });
+}
+Object.assign(SESSION_DETAIL_FIXTURES, {
+  model_switch: modelDetailFor("idle", { available: true, reason: null }),
+  model_unconfirmed: modelDetailFor("idle", { available: true, reason: null }),
+  model_busy: modelDetailFor("busy", {
+    available: false, reason: MODEL_SWITCH_BUSY_REASON }),
+});
+
 const SCHEMA = [
   { section: "length", field: "answer_length", title: "Answer length",
     options: [
@@ -323,6 +339,17 @@ const FIXTURES = {
   "/api/sessions/dev/clearqueue": { status: "cleared", label: "dev", dropped: 3 },
   "/api/sessions/dev/compact": { status: "queued", label: "dev" },
   "/api/sessions/dev/restart": { status: "restarted", label: "dev" },
+  "/api/session-options": {
+    models: [
+      { label: "Opus", hint: "Most capable" },
+      { label: "Opus 5.5", hint: "" },
+    ],
+  },
+  "/api/sessions/dev/model": SCENARIO === "model_unconfirmed"
+    ? { status: "unconfirmed", label: "dev", model: "Sonnet 5",
+        requested: "claude-opus-5-5", detail: "not confirmed — check the session." }
+    : { status: "switched", label: "dev", model: "Opus 5.5",
+        previous_model: "Sonnet 5" },
   "/api/sessions/dev/rename": {
     status: "renamed", label: "frontend", previous_label: "dev", changed: true,
   },
@@ -1037,7 +1064,78 @@ function driveMenuGroupingDivider() {
   }, 10);
 }
 
+// ---- scenario: switch a running session's model ----------------------
+function modelHead() {
+  const host = byId["detail-model"];
+  if (host.hidden) fail("the Model control is hidden on a live session's page");
+  if (!host.children.length) fail("the Model control rendered nothing");
+  return host.children[0].children[0];
+}
+function modelRows() {
+  const grp = byId["detail-model"].children[0];
+  const body = grp.children[1];
+  if (!body) fail("the Model group did not expand when its header was tapped");
+  return body.children;
+}
+function driveModelSwitch() {
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    if (modelHead().textContent.indexOf("Sonnet 5") === -1)
+      fail("the Model header does not show the current model: " +
+           JSON.stringify(modelHead().textContent));
+    modelHead().click();
+    const row = modelRows().find(r => r.children[0] &&
+                                      r.children[0].textContent === "Opus 5.5");
+    if (!row) fail("no Opus 5.5 row from /api/session-options");
+    if (row.disabled) fail("the Opus 5.5 row is disabled on an idle session");
+
+    const before = fetchCalls.length;
+    row.click();
+    const posts = fetchCalls.slice(before).filter(f => f.method === "POST");
+    if (posts.length !== 1)
+      fail("picking a model sent " + posts.length + " POSTs, expected one");
+    if (!/\/api\/sessions\/dev\/model$/.test(posts[0].url))
+      fail("wrong model url: " + posts[0].url);
+    if (JSON.parse(posts[0].body).model !== "Opus 5.5")
+      fail("wrong model body: " + posts[0].body);
+    if (modelHead().textContent.indexOf("switching…") === -1)
+      fail("no \"switching…\" while the request is open: " +
+           JSON.stringify(modelHead().textContent));
+
+    setTimeoutReal(() => {
+      const want = SCENARIO === "model_unconfirmed"
+        ? "not confirmed — check the session" : "Opus 5.5";
+      if (modelHead().textContent.indexOf(want) === -1)
+        fail("after the answer the header should read " + JSON.stringify(want) +
+             ", got " + JSON.stringify(modelHead().textContent));
+      console.log("ok: model pick -> POST /api/sessions/dev/model -> switching… -> " + want);
+      process.exit(0);
+    }, 20);
+  }, 10);
+}
+function driveModelBusy() {
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    const note = byId["detail-model-note"];
+    if (note.hidden || note.textContent !== MODEL_SWITCH_BUSY_REASON)
+      fail("a busy session's Model control does not say why: " +
+           JSON.stringify(note.textContent));
+    modelHead().click();
+    const rows = modelRows();
+    if (!rows.length) fail("no model rows rendered");
+    const before = fetchCalls.length;
+    rows.forEach(r => r.click());
+    if (fetchCalls.slice(before).some(f => f.method === "POST"))
+      fail("a busy session's Model picker still sent a switch");
+    console.log("ok: model picker inert while busy, with the reason");
+    process.exit(0);
+  }, 10);
+}
+
 const DRIVERS = {
+  model_switch: driveModelSwitch,
+  model_unconfirmed: driveModelSwitch,
+  model_busy: driveModelBusy,
   settings: driveSettings,
   stop_busy: driveStopBusy,
   kill_idle: driveKillIdle,

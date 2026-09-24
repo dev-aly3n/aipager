@@ -125,6 +125,8 @@ MIRRORS = [
     ("_mirror_session_killed", (SCOPE_CHAT, "dev")),
     ("_mirror_session_resumed", (SCOPE_CHAT, "dev")),
     ("_mirror_session_deleted", (SCOPE_CHAT, "dev")),
+    # A fourteenth, added with the running-session model picker (8.35).
+    ("_mirror_session_model", (SCOPE_CHAT, "dev", "claude-opus-5-5")),
 ]
 
 _KWARGS = {"_mirror_session_preference_change": {"reset": False}}

@@ -57,6 +57,36 @@ verified against Telegram's `initData` signature — see
 Everything in the Mini App is also reachable from chat: the ⋮ menu on
 a session's dashboard carries the same actions.
 
+### Switching a running session's model
+
+A live session's page has a **Model** control showing the model the
+session reports (from Claude Code's statusline) and the same list the
+launch picker and the chat's Models keyboard offer. Picking one types
+exactly `/model <name>` into that session — the same injection the
+chat's Models keyboard uses, with the same rule on who may do it
+(anyone who can prompt the session). The control reads **switching…**
+until the statusline reports a different model, then shows it; if
+nothing changes within 15 seconds it reads **not confirmed — check the
+session**.
+
+- **Only while the session is idle, not while Claude is working or a
+  prompt is open.**
+  Claude Code runs `/model` straight away, even mid-turn, rather than
+  after the turn, so the switch is refused until the turn ends. The chat
+  keyboard refuses in the same states, with the same words.
+- **Claude Code's "Switch model?" question.** Claude Code usually asks
+  this before a switch, because the next reply has to re-read the whole
+  conversation. With Claude Code 2.1.251 or later, aipager's
+  `PreModelSwitch` hook approves the switch aipager just typed, so the
+  question is not asked (see [hooks](hooks.md#premodelswitch)). Every
+  other switch still asks. With an older Claude Code, or on a switch to
+  or from `opusplan`, the question can still appear. The switch then
+  shows as *not confirmed* and the question waits in the terminal.
+  Answer it there before you send the session anything else, or your
+  next message would be typed into it. For the same reason, aipager
+  refuses another switch of that session for a minute after an
+  unconfirmed one, or until the session reports a new model.
+
 ## The pinned status bar
 
 Each chat aipager talks in (your DM, and every group scope) gets one
@@ -122,8 +152,16 @@ entry sends a canned prompt or slash command:
   making changes`, `Update CLAUDE.md with what you learned`.
 - **Commands** — slash commands claude code natively handles
   (`/compact`, `/clear`, etc.), injected instantly.
-- **Models** — quick model switches (`/model sonnet`, `/model opus`,
-  `/model haiku`, `/model opusplan`).
+- **Models** — quick model switches for the active session. There
+  are the family aliases (`sonnet`, `opus`, `haiku`, `fable`,
+  `opusplan`), which always mean the latest model in that family, and
+  pinned models (`claude-opus-5-5`, `claude-opus-5-5[1m]` with the 1M
+  context window, `claude-sonnet-5`, `claude-fable-5-1`,
+  `claude-haiku-4-5`). The Mini App's launch and session pickers use
+  the same list. A switch is refused while the session is working or a
+  prompt is open. The `🔄` reply then changes to show the model the
+  session reports, or says the switch was not confirmed (see
+  [Switching a running session's model](#switching-a-running-sessions-model)).
 
 Override the default layout by writing
 `~/.config/aipager/keyboard.json`:
@@ -333,7 +371,9 @@ newest messages it drops.
 Command buttons (`Compact`, `/model …`): tapped while the session is
 idle, the command is 👌 at once — Claude Code runs it on Enter, and a
 local command such as `/model` fires no hook that could say so later.
-Tapped while a turn runs, it is 👀 until that turn ends — normally, as
+Tapped while a turn runs (not `/model`: it is refused until the turn ends,
+see [switching a running session's model](#switching-a-running-sessions-model)),
+it is 👀 until that turn ends — normally, as
 a background job's interim stop, or on an API error — and then 👌;
 dropped before that by `/stop`, `/clearqueue`, `/kill` or the session
 ending, it never ran: 🤷. When Claude Code queues it as a prompt instead,
