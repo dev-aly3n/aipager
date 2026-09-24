@@ -716,6 +716,14 @@ class MiniAppServer:
             return web.json_response({"error": "forbidden"}, status=403)
         manager = self.bot.updates
         payload = dict(await manager.status())
+        if not (isinstance(scope_chat_id, int) and scope_chat_id > 0):
+            # A group scope: no install paths, as in the chat's /update.
+            ap = dict(payload.get("aipager") or {})
+            src = dict(ap.get("source") or {})
+            src["describe"] = src.get("describe_short")
+            src["detail"] = None
+            ap["source"] = src
+            payload["aipager"] = ap
         payload["job"] = manager.snapshot()
         return web.json_response(payload)
 

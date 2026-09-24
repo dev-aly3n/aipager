@@ -205,3 +205,43 @@ def test_preferences_carry_can_update(env, run):
         m = await (await c.get("/api/preferences", headers=_hdr(MEMBER))).json()
         return a["can_update"], m["can_update"]
     assert _call(env, run, fn) == (True, False)
+
+
+def test_update_api_hides_install_paths_for_a_group_scope(env, run):
+    from aipager.install_source import InstallSource
+
+    _scoped(env)
+    env.source = InstallSource(kind="pipx", prefix="/p", python="/p/bin/python",
+                               origin="local", origin_detail="/home/op/aipager",
+                               upgradable=True)
+
+    async def fn(c, srv):
+        r = await c.get("/api/update", headers=_hdr(ADMIN))
+        return r.status, await r.text()
+    status, raw = _call(env, run, fn)
+    assert status == 200
+    assert "/home/op/aipager" not in raw
+    assert "pipx, from a local path" in raw
+
+
+def test_update_api_keeps_install_paths_in_a_private_scope(env, run):
+    from aipager.install_source import InstallSource
+
+    env.source = InstallSource(kind="pipx", prefix="/p", python="/p/bin/python",
+                               origin="local", origin_detail="/home/op/aipager",
+                               upgradable=True)
+
+    async def fn(c, srv):
+        r = await c.get("/api/update", headers=_hdr(env.chat_id))
+        return await r.json()
+    body = _call(env, run, fn)
+    assert "/home/op/aipager" in body["aipager"]["source"]["describe"]
+
+
+def test_update_api_refuses_a_start_while_a_restart_is_pending(env, run):
+    async def fn(c, srv):
+        await env.start("aipager")
+        await env.finish()
+        r = await c.post("/api/update/claude", headers=_hdr(env.chat_id))
+        return r.status, await r.json()
+    assert _call(env, run, fn) == (409, {"error": "update_in_progress"})

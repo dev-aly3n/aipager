@@ -1108,3 +1108,29 @@ def test_updates_403_hides_block_not_expired(node_bin, tmp_path):
     proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_forbidden")
     assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
     assert "ok: 403 -> updates block hidden, app not expired" in proc.stdout
+
+
+def test_updates_poll_only_while_a_job_runs(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_poll_running")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: running job -> polls every 3 s, no start buttons" in proc.stdout
+
+
+def test_updates_stop_polling_once_the_job_finished(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_no_poll_terminal")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: finished job -> no poll, start buttons back" in proc.stdout
+
+
+def test_updates_offer_nothing_while_a_restart_is_pending(node_bin, tmp_path):
+    """Review rev-iter1-001: the pending restart holds the update lock, so
+    the block must not re-offer Update buttons in that window."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_restart_pending")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: pending restart -> no buttons, no poll" in proc.stdout

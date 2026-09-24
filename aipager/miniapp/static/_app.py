@@ -1647,6 +1647,8 @@ APP_JS = r"""
       jobEl.textContent = "";
     }
 
+    // A pending restart holds the update lock: offer nothing to start.
+    if (job && job.phase === "restart_scheduled") { return; }
     if (running) {
       var id = job.id;
       if (job.phase === "gate_timeout") {
