@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 from telegram.ext import Application
 
+from aipager.bot import reactions
 from aipager.bot.animation import AnimationMixin
 from aipager.bot.auth import AuthMixin
 from aipager.bot.callbacks import CallbackDispatchMixin
@@ -83,6 +84,9 @@ class TelegramBot(
         # button re-sent (8.31). A tap on one whose prompt is no longer the
         # one pending is refused. See `register_prompt_surface`.
         self._resent_prompts: dict[tuple[int, int], tuple[str, int]] = {}
+        # Last reaction per user message (aipager.bot.reactions): keeps each
+        # message's lifecycle monotonic and its calls to at most three.
+        self._reaction_ledger = reactions.ReactionLedger()
         # `/new <name>` collision state. Keyed by session_name; value is
         # {"prompt": str, "skip_perms": bool, "user_id": int, "msg_id": int}.
         # Populated when /new hits an existing name, drained when the user

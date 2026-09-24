@@ -437,9 +437,9 @@ def _sync_anchors_from_transcript(sess: TrackedSession) -> bool:
             # design.md "turn anchor follows consumption" R4: a message
             # absorbed mid-turn, or delivered to a running background
             # agent, is the ONLY thing that moves the reply target here —
-            # `enqueue`/`dequeue`/bare `remove` (discarded)/`popAll` are
-            # ignored on purpose (R7: a discard is handled by the stop
-            # path; a `dequeue` — the message popped as the NEXT turn —
+            # `enqueue`/`dequeue`/bare `remove` are ignored on purpose (R7:
+            # an aipager-side discard is handled by the stop path; a
+            # `dequeue` — the message popped as the NEXT turn —
             # fires no hook at all, so the finish path starts that turn
             # itself from the still-queued target, R8, and the line is
             # confirmation only).
@@ -467,6 +467,17 @@ def _sync_anchors_from_transcript(sess: TrackedSession) -> bool:
                     )
                     if consumed:
                         sess.stream_consumed_notes.extend(consumed)
+            elif operation == "popAll":
+                # Escape pulled Claude Code's queue back into the input
+                # box: this message is no longer queued, so it is not the
+                # next turn's prompt — drop the target, or the finish path
+                # starts a phantom turn for it. Its reaction stays 👀: the
+                # text can be edited and resubmitted from the terminal
+                # (measured: the one popAll on record was re-enqueued
+                # 4.5 s later), and no hook would then name it. A bare
+                # `remove` stays ignored: older Claude Code wrote it for
+                # an absorption too.
+                _pop_queued_target(sess, content or "")
             continue
         if kind == "text":
             pending = mid if mid and mid not in sess.stream_exact_anchor else None

@@ -592,10 +592,13 @@ def test_stale_busy_swallows_failure(mk_bot, run_async):
 # ---- queue_pickup (design.md "queue handoff") ---------------------------
 
 def test_queue_pickup_reacts_thumbs_up_on_every_consumed_message(mk_bot, run_async):
+    """A pick-up that STARTS a turn: every message it names was taken.
+    (While BUSY the same pick-up only means Claude queued them — see
+    tests/integration/prompt-pickup-reactions.)"""
     from aipager.state import SessionRegistry
 
     bot = mk_bot(registry=SessionRegistry())
-    sess = _sess()
+    sess = _sess(status=Status.IDLE)
     sess.scope_chat_id = -1001
     bot.registry._sessions[sess.name] = sess
     bot._app.bot.set_message_reaction = AsyncMock()

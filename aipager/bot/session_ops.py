@@ -24,6 +24,7 @@ from telegram import (
 
 from aipager.config import RESUME_GUARD_SECONDS
 from aipager.dtach import inject
+from aipager.bot import reactions
 
 # Single source of truth for the poll timing (design.md ORCHESTRATOR
 # OVERRIDE) — callbacks.py does not import this module, so this is not
@@ -73,6 +74,11 @@ if TYPE_CHECKING:
     pass
 
 log = logging.getLogger(__name__)
+
+#: How long aipager remembers the Claude Code session id its own /kill
+#: ended, so that process's SessionEnd is not announced (the operator
+#: already has "💀 Killed"). Only prunes: the id itself decides.
+KILL_NOTICE_QUIET_SECONDS: float = 60.0
 
 
 @dataclass
@@ -679,6 +685,13 @@ class SessionOpsMixin:
             # running afterward.
             return StopOutcome(ok=False, label=sess.label)
 
+        # 0. Read Claude's queue BEFORE the Escapes below: the first one
+        # makes Claude Code pull it into the input box and write
+        # `popAll`, and a later read would see that line, forget the
+        # message and skip wiping the input box (see 1b).
+        queued_targets = await self._settle_queued_targets(
+            sess, reanchor=False)
+
         # 1. Send Escape twice to Claude Code — proven interrupt
         # behaviour this change does not touch.
         await inject.send_keys(sess.name, "Escape")
@@ -694,7 +707,11 @@ class SessionOpsMixin:
         # drop count below agree on the same snapshot.
         from aipager.policy_snapshot import clear_notes_dir, list_outstanding_notes
         outstanding_notes = list_outstanding_notes(sess.name)
-        if outstanding_notes:
+        # A message Claude queued mid-turn has no note any more (the
+        # submit-time pick-up consumed it) but is still in Claude's queue:
+        # it counts as outstanding exactly like a note — when that is
+        # known (`queued_targets`, read in step 0).
+        if outstanding_notes or queued_targets:
             await inject.discard_queued_input(sess.name)
 
         # 2. Cancel animation — and a self-woken turn's deferred card
@@ -715,7 +732,12 @@ class SessionOpsMixin:
         sess.busy_msg_id = None
 
         # 4. Transition to IDLE directly (skip notify — we handle UI here)
-        dropped = len(sess.pending_queue) + len(outstanding_notes)
+        dropped = (len(sess.pending_queue) + len(outstanding_notes)
+                   + len(queued_targets))
+        # Every one of them is now never going to be taken (R3).
+        await self._mark_not_delivered(
+            sess, reactions.held_entries(sess.pending_queue)
+            + outstanding_notes + queued_targets)
         sess.pending_queue.clear()
         clear_notes_dir(sess.name)
         sess.pending_permission = None
@@ -787,16 +809,17 @@ class SessionOpsMixin:
             except Exception:
                 pass
         elif update:
-            # The ✅ reaction stays — it's the same instant, low-effort
+            # The 👌 reaction stays — it's the same instant, low-effort
             # acknowledgement every other command-driven action gets, and
-            # is gone as soon as the operator looks away. The count itself
+            # is gone as soon as the operator looks away. (It was ✅,
+            # which Telegram refuses as a bot reaction: 8.33.) The count itself
             # needs a durable, chat-visible message: tester-iter1-001
             # found /stop discarding Claude's own held-but-not-picked-up
             # queue (this feature's whole point) with the count nowhere
             # the operator could see it — a reaction alone is closer to a
             # vanishing toast than the "chat acknowledgement" entrypoints.md
             # promises (see intent.md's own open question #1).
-            await self._react(update, "✅")
+            await self._react(update, reactions.ACK)
             if getattr(update, "message", None) is not None:
                 try:
                     await reply_text(update.message, ack)
@@ -843,8 +866,12 @@ class SessionOpsMixin:
         except Exception:
             log.debug("[%s] safety halt notice failed", sess.label,
                       exc_info=True)
-        # 4. Return to IDLE.
+        # 4. Return to IDLE. Held messages are dropped (R3); what Claude
+        # had queued is only pulled back into its input box by the
+        # Escapes, not wiped, so its fate stays unknown and its 👀 stays.
         sess.busy_msg_id = None
+        await self._mark_not_delivered(
+            sess, reactions.held_entries(sess.pending_queue))
         sess.pending_queue.clear()
         sess.pending_permission = None
         sess.status = Status.IDLE
@@ -896,8 +923,44 @@ class SessionOpsMixin:
                 self._cancel_lazy_card(sess)
             self._stop_animation(sess)
 
+        # Recorded BEFORE the kill: killing the dtach host closes Claude
+        # Code's pty, and the SessionEnd it then fires (reason "other") can
+        # be handled while kill_session is still waiting for the host to
+        # exit. Keyed by this process's Claude session id, not the name:
+        # session_end skips the notice only for a SessionEnd carrying that
+        # id, so a new process under the same name — however it was
+        # launched — has a new id and is announced. No known id: nothing
+        # is recorded and the notice goes out (fail open).
+        killed_sessions = self.registry.killed_sessions
+        now = time.monotonic()
+        for sid in [s for s, t in killed_sessions.items()
+                    if now - t >= KILL_NOTICE_QUIET_SECONDS]:
+            del killed_sessions[sid]
+        killed_sid = sess.claude_session_id if sess is not None else ""
+        if killed_sid:
+            killed_sessions[killed_sid] = now
+
         # Kill the dtach process
-        killed = await inject.kill_session(session_name)
+        try:
+            killed = await inject.kill_session(session_name)
+        except BaseException:
+            # It may still be running: nothing to hide (fail open).
+            if killed_sid:
+                killed_sessions.pop(killed_sid, None)
+            raise
+        if not killed and killed_sid:
+            # It is still running (or was never there): nothing to hide.
+            killed_sessions.pop(killed_sid, None)
+        if killed and sess is not None:
+            # Held messages, notes and Claude's own queue all die with the
+            # session: none of them will be taken (R3).
+            from aipager.policy_snapshot import list_outstanding_notes
+            queued_targets = await self._settle_queued_targets(
+                sess, reanchor=False)
+            await self._mark_not_delivered(
+                sess, reactions.held_entries(sess.pending_queue)
+                + list_outstanding_notes(session_name) + queued_targets)
+            sess.queued_targets.clear()
         if killed:
             # remember_label: the entry is about to be re-created by the
             # monitor's next scan (the socket outlives SIGTERM briefly), and
@@ -1397,12 +1460,21 @@ class SessionOpsMixin:
         from aipager.policy_snapshot import clear_notes_dir, list_outstanding_notes
 
         outstanding_notes = list_outstanding_notes(sess.name)
-        dropped = len(sess.pending_queue) + len(outstanding_notes)
+        # Messages Claude queued mid-turn: their notes went at the
+        # submit-time pick-up, but they are still in Claude's queue — when
+        # that is known (see _settle_queued_targets; an Escape into an
+        # empty Claude Code queue would interrupt the turn).
+        queued_targets = await self._settle_queued_targets(sess)
+        dropped = (len(sess.pending_queue) + len(outstanding_notes)
+                   + len(queued_targets))
         if not dropped:
             return ClearQueueOutcome(ok=False, label=sess.label, dropped=0)
+        await self._mark_not_delivered(
+            sess, reactions.held_entries(sess.pending_queue)
+            + outstanding_notes + queued_targets)
         sess.pending_queue.clear()
         clear_notes_dir(sess.name)
-        if outstanding_notes:
+        if outstanding_notes or queued_targets:
             await inject.discard_queued_input(sess.name)
         sess.queued_targets.clear()
         self.registry.mark_dirty()

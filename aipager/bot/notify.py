@@ -25,11 +25,11 @@ from telegram import (
 )
 from telegram.error import Forbidden
 
+from aipager.bot import reactions
 from aipager.bot.dashboard import new_prompt_token
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot.flood_budget import (
     PRIORITY_ORNAMENT,
-    PRIORITY_SIGNAL,
     rate_limit_args as _rl_args,
 )
 from aipager.bot.rich_message import (
@@ -53,8 +53,8 @@ from aipager.config import (
 )
 from aipager.state import Status, TrackedSession
 from aipager.bot.animation import (
-    FINAL_VERB, _RICH_LIMIT, _expire_tool_batch, _md_escape,
-    _sync_anchors_from_transcript, build_full_log,
+    FINAL_VERB, _RICH_LIMIT, _exact_anchors_available, _expire_tool_batch,
+    _md_escape, _sync_anchors_from_transcript, build_full_log,
     build_stream_card_ex, final_card_has_timeline,
 )
 
@@ -442,7 +442,9 @@ class NotifyMixin:
         """
         if not consumed:
             return
-        await self._mark_consumed(sess, consumed)
+        self._track_consumed(sess, consumed)
+        await reactions.mark_all(self, consumed, reactions.TAKEN,
+                                 resolve_chat_id(sess))
         last = consumed[-1]
         last_msg_id = last.get("msg_id")
         if last_msg_id is not None:
@@ -450,16 +452,15 @@ class NotifyMixin:
             sess.last_prompt = last.get("raw_text", "") or ""
             self.registry.mark_dirty()
 
-    async def _mark_consumed(
+    def _track_consumed(
         self, sess: TrackedSession, notes: list[dict],
     ) -> None:
-        """The per-message side of consumption that does NOT depend on
-        the message's fate: 👍 on each message (Claude has it) and
-        ``track_message`` so a later reply routes back here. Shared by
-        ``_apply_consumption`` (a message that moves the reply target)
-        and the queued-while-busy branch of the ``queue_pickup`` handler
-        (a message whose fate is not known yet)."""
-        bot = self._app.bot
+        """``track_message`` for each message the hook's pick-up named,
+        so a later reply to it routes back here. Shared by
+        ``_apply_consumption`` (a message Claude took) and the
+        queued-while-busy branch of the ``queue_pickup`` handler (a
+        message Claude only QUEUED — its fate is not known yet, so it
+        gets no 👍 there; see :mod:`aipager.bot.reactions`)."""
         default_chat_id = resolve_chat_id(sess)
         for note in notes:
             note_msg_id = note.get("msg_id")
@@ -472,17 +473,34 @@ class NotifyMixin:
                 )
             except Exception:
                 log.debug("consumption track_message failed", exc_info=True)
-            try:
-                await bot.set_message_reaction(
-                    note_chat_id, note_msg_id, "👍",
-                    # SIGNAL (8.26 R3): the 👍 marking a queued message as
-                    # delivered to the agent. Budget-exempt by endpoint,
-                    # never suspended by minimal mode, never exempt from
-                    # the mute.
-                    rate_limit_args=_rl_args(priority=PRIORITY_SIGNAL),
-                )
-            except Exception:
-                log.debug("consumption reaction failed", exc_info=True)
+
+    async def _mark_not_delivered(
+        self, sess: TrackedSession, entries: list[dict],
+    ) -> None:
+        """🤷 on each message that will never be taken — the moment its
+        fate is known (queue cleared, session gone, input refused).
+        ``entries`` are ``{msg_id, chat_id?}`` dicts; see
+        :func:`aipager.bot.reactions.held_entries` for held messages.
+
+        At most the newest :data:`aipager.bot.reactions.BULK_CAP` are
+        marked (a teardown can name 50+ held messages)."""
+        await reactions.mark_all(self, entries, reactions.NOT_DELIVERED,
+                                 resolve_chat_id(sess),
+                                 cap=reactions.BULK_CAP)
+
+    async def _mark_ran_commands(self, sess: TrackedSession) -> None:
+        """👌 on every slash command still outstanding when a turn ends —
+        any turn end: the normal finish, a background job's interim Stop,
+        an API error. Claude Code runs its queue as soon as a run ends,
+        and a local command (``/model``) fires no hook when it runs —
+        nothing else would ever move it off 👀. A prompt-type command
+        queued the same way was named by its pick-up and is a queued
+        target instead. (A teardown before the turn ends drops it: 🤷.)"""
+        from aipager.policy_snapshot import list_outstanding_notes
+        ran = [n for n in list_outstanding_notes(sess.name)
+               if reactions.is_slash_command(n.get("raw_text"))]
+        await reactions.mark_all(self, ran, reactions.ACK,
+                                 resolve_chat_id(sess))
 
     async def _start_queued_turn(self, sess: TrackedSession) -> None:
         """Start the turn for the oldest message Claude queued during the
@@ -499,6 +517,9 @@ class NotifyMixin:
         card sits until /stop, /kill or the stale-BUSY warning.
         """
         nxt = sess.queued_targets.pop(0)
+        # Claude popped it as this turn's prompt: taken (R2).
+        await reactions.mark_all(self, [nxt], reactions.TAKEN,
+                                 resolve_chat_id(sess))
         sess.trigger_msg_id = nxt.get("msg_id")
         sess.last_prompt = nxt.get("raw_text") or ""
         self.registry.mark_dirty()
@@ -506,6 +527,37 @@ class NotifyMixin:
         await self._send_busy_and_animate(sess)
         log.info("[%s] next turn started for queued message %s",
                  sess.label, nxt.get("msg_id"))
+
+    async def _settle_queued_targets(
+        self, sess: TrackedSession, *, reanchor: bool = True,
+    ) -> list[dict]:
+        """The messages Claude Code really still holds in its queue, for a
+        teardown (``/stop``, ``/clearqueue``, ``/kill``, a session ending)
+        about to discard them — or ``[]`` when that cannot be known.
+
+        ``sess.queued_targets`` only loses an absorbed message when the
+        transcript scan reads its ``absorbed_mid_turn`` line. So first run
+        that scan (an absorption since the last tick is applied — 👍 and,
+        with ``reanchor``, the card follows it). Then trust the list only
+        when the scan is live (``_exact_anchors_available``) and no
+        background job is waiting: without the hook the scan never runs,
+        and in a job's waiting window the targets are kept on purpose
+        while Claude Code has already started the next prompt. An
+        untrusted target gets no 🤷 and no discard keystroke — an Escape
+        into an empty Claude Code queue interrupts the running turn."""
+        if not sess.queued_targets:
+            return []
+        if not _exact_anchors_available(sess) or sess.job_background_open():
+            return []
+        _sync_anchors_from_transcript(sess)
+        if reanchor:
+            await self._consume_and_reanchor(sess)
+        else:
+            consumed = sess.stream_consumed_notes
+            sess.stream_consumed_notes = []
+            if consumed:
+                await self._apply_consumption(sess, consumed)
+        return list(sess.queued_targets)
 
     async def _consume_and_reanchor(self, sess: TrackedSession) -> None:
         """Drain ``sess.stream_consumed_notes`` (staged by
@@ -965,6 +1017,9 @@ class NotifyMixin:
             await self._send_busy_and_animate(sess)
         if ok:
             log.info("[%s] Flushed queued: %s", sess.label, queued_text[:80])
+        else:
+            # Popped and not sent: this held message is gone (R3).
+            await self._mark_not_delivered(sess, [{"msg_id": queued_trigger}])
 
     async def notify(self, sess: TrackedSession, event: str, context: dict) -> None:
         """Send appropriate Telegram notification for a state change."""
@@ -1023,7 +1078,7 @@ class NotifyMixin:
             # outstanding notes (design.md "queue handoff"). 👍 is the
             # signal that distinguishes "sent" (👀, at send time) from
             # "Claude actually started on this one" — set on every
-            # consumed message, never just the last. Expired notes keep
+            # message that started this turn, never just the last. Expired notes keep
             # their 👀 (no reaction change — Claude may still process a
             # TTL-lapsed one after aipager stops watching) and get one
             # best-effort notice instead of per-message noise.
@@ -1041,12 +1096,14 @@ class NotifyMixin:
             # Claude Code fires this pick-up at SUBMIT time for a message
             # typed while a turn runs — before its fate is known
             # (measured 2026-09-05, "anchor-on-transcript-consumption").
-            # Such a message is "queued, fate unknown": it keeps its 👍
-            # and routing, but the reply target does not move and no
+            # Such a message is "queued, fate unknown": it gets routing
+            # but keeps its 👀 (Claude Code shows it grey), the reply
+            # target does not move and no
             # card re-anchors until the transcript says the turn absorbed
             # it (_sync_anchors_from_transcript) — or, if it is still
             # queued when this turn ends, it becomes the next turn's
-            # prompt (the finish path's _start_queued_turn).
+            # prompt (the finish path's _start_queued_turn). Either is
+            # the moment it turns 👍.
             if sess.status == Status.BUSY:
                 queued = [n for n in consumed
                           if n.get("msg_id") is not None
@@ -1055,7 +1112,7 @@ class NotifyMixin:
                 queued = []
             own = [n for n in consumed if n not in queued]
             if queued:
-                await self._mark_consumed(sess, queued)
+                self._track_consumed(sess, queued)
                 sess.queued_targets.extend({
                     "msg_id": n.get("msg_id"),
                     "chat_id": n.get("chat_id"),
@@ -1400,6 +1457,7 @@ class NotifyMixin:
                     log.debug("[%s] prompt_not_taken notice failed", label,
                               exc_info=True)
             if msg_id is not None:
+                own: list[dict] = []
                 try:
                     from aipager.policy_snapshot import (
                         delete_notes, list_outstanding_notes,
@@ -1413,6 +1471,17 @@ class NotifyMixin:
                         delete_notes(sess.name, own)
                 except Exception:
                     log.debug("[%s] note drop failed", label, exc_info=True)
+                text = own[0].get("raw_text") if own else sess.last_prompt
+                # Claude Code refused a prompt outright: never taken (R3),
+                # and final — the note is gone, so even a merely late hook
+                # cannot name it. A slash command is different: a
+                # built-in that opens a dialog or runs locally fires no
+                # hook either, so silence is not a refusal — 👌, never 🤷.
+                await reactions.mark_all(
+                    self, [{"msg_id": msg_id, "chat_id": msg_chat}],
+                    reactions.ACK if reactions.is_slash_command(text)
+                    else reactions.NOT_DELIVERED,
+                    resolve_chat_id(sess))
             sess.busy_msg_id = None
             sess.status = Status.IDLE
             sess.trigger_msg_id = None
@@ -1822,6 +1891,18 @@ class NotifyMixin:
             # the card lock, and is then deleted below like any card.
             async with sess.animate_lock:
                 self._cancel_lazy_card(sess)
+            # Claude Code's input queue dies with the process, restart
+            # included (the relaunch starts empty): nothing still queued
+            # there will be taken (R3). `/clear` and `/resume` also fire
+            # SessionEnd, but the process lives on — leave its queue alone.
+            if context.get("source") not in ("clear", "resume"):
+                lost = await self._settle_queued_targets(sess, reanchor=False)
+                sess.queued_targets.clear()
+                # `notes`: what was still outstanding just before the GONE
+                # transition deleted the notes dir (captured by the caller)
+                # — a command or message Claude never got to run.
+                await self._mark_not_delivered(
+                    sess, list(context.get("notes") or []) + lost)
             self._stop_animation(sess)
             if sess.busy_msg_id and sess.busy_msg_id > 0:
                 try:
@@ -1832,11 +1913,15 @@ class NotifyMixin:
             source = context.get("source", "unknown")
             source_labels = {
                 "clear": "cleared",
+                "resume": "switched to another conversation",
                 "logout": "logged out",
                 "prompt_input_exit": "exited",
                 "bypass_permissions_disabled": "permissions error",
                 "disappeared": "crashed or killed",
-                "other": "exited unexpectedly",
+                # Claude Code's default reason — a signal among others —
+                # not evidence of a crash ("disappeared" is the one with
+                # evidence: the socket vanished).
+                "other": "exited",
                 "unknown": "exited",
             }
             if sess.is_restarting():
@@ -1846,6 +1931,20 @@ class NotifyMixin:
                 # session was both fine and dead in the same breath.
                 log.info("[%s] session_end during a deliberate restart (%s)"
                          " — not alerting", label, source)
+                return
+            from aipager.bot.session_ops import KILL_NOTICE_QUIET_SECONDS
+            ended_sid = context.get("session_id") or ""
+            killed_sessions = self.registry.killed_sessions
+            now = time.monotonic()
+            for stale in [k for k, t in killed_sessions.items()
+                          if now - t >= KILL_NOTICE_QUIET_SECONDS]:
+                del killed_sessions[stale]
+            if ended_sid and ended_sid in killed_sessions:
+                # This very process was ended by aipager's own /kill moments
+                # ago; the operator already has "💀 Killed" — a second
+                # notice is noise.
+                log.info("[%s] session_end right after /kill (%s) — not "
+                         "alerting", label, source)
                 return
             reason = source_labels.get(source, "exited")
             text = f"🔴 <b>{html_mod.escape(label)}</b> · Session {reason}"
@@ -1858,6 +1957,9 @@ class NotifyMixin:
             return
 
         if sess.status == Status.IDLE:
+            # Every turn end, before the job-interim and API-error returns
+            # below: Claude Code has just run whatever it had queued.
+            await self._mark_ran_commands(sess)
             if sess.job_continuation_active and not sess.active_subagents:
                 # The <task-notification> continuation turn's own Stop —
                 # the job's one true Finished ("close the background-job

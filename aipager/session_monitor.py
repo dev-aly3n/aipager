@@ -508,6 +508,16 @@ class SessionMonitor:
                     # Marking it GONE here would race the relaunch and alarm
                     # the user about a session that is coming right back.
                     continue
+                # The GONE transition deletes the notes dir: capture what
+                # was still outstanding for the not-delivered reaction.
+                try:
+                    from aipager.policy_snapshot import list_outstanding_notes
+                    gone_notes = [
+                        {"msg_id": n.get("msg_id"), "chat_id": n.get("chat_id"),
+                         "raw_text": n.get("raw_text", "")}
+                        for n in list_outstanding_notes(name)]
+                except Exception:
+                    gone_notes = []
                 self.registry.transition(name, Status.GONE)
                 # Stamp the GONE moment + capture a last-message preview
                 # so /resume can show "where you left off" without
@@ -522,7 +532,8 @@ class SessionMonitor:
                               exc_info=True)
                 self.registry.mark_dirty()
                 try:
-                    await self.notify_fn(sess, "session_end", {"source": "disappeared"})
+                    await self.notify_fn(sess, "session_end", {
+                        "source": "disappeared", "notes": gone_notes})
                 except Exception:
                     log.warning("Failed to notify session_end for %s", name)
 
