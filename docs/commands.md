@@ -277,7 +277,11 @@ session is restarted for you. New sessions use the new version.
    --upgrade aipager`), by absolute path, with a 10 min timeout. There
    is no Cancel while the installer runs.
 4. It checks the new version imports in a fresh interpreter. A failed,
-   timed-out or unimportable upgrade restarts nothing.
+   timed-out or unimportable upgrade restarts nothing. A timed-out
+   upgrade was stopped part-way, so the message warns the install may be
+   partial and gives the reinstall command to run before the next
+   restart. Installer output is shown only in a private chat; a group
+   gets "output in the daemon log".
 5. If a turn started during the upgrade, it waits again.
 6. It schedules a detached `systemctl --user restart aipager.service`
    5 s later: `aipager A → B installed. Restarting in 5 s…`. The new
@@ -294,7 +298,19 @@ kill), the `launchctl kickstart` command on macOS, or "restart your
 
 Only one update runs at a time, across `/update`, the Mini App's
 **Settings → Updates** block (same data, same buttons, same job) and
-`aipager update` on the command line.
+`aipager update` on the command line. That includes the seconds between
+"Restarting in 5 s…" and the restart itself: `/update` answers that
+aipager is about to restart, the Mini App offers no buttons, and the
+voice extra's **Restart daemon now** refuses while an update runs or
+waits to restart. If the daemon is still alive two minutes after
+scheduling its restart, it stops the pending restart timer, frees the
+update lock, and tells you to restart it yourself.
+
+If the daemon shuts down while an installer is running, the installer
+gets 3 s to finish and is then stopped (it would otherwise keep writing
+the install while the next daemon starts). The status message and,
+after the restart, a new message say the install may be partial and how
+to repair it.
 
 ## Free messages
 

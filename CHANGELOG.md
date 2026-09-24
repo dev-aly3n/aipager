@@ -24,7 +24,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     detached `systemctl --user restart aipager.service` 5 s later. The new
     daemon posts `✅ aipager updated A → B, N sessions re-adopted`.
   - Only the admin may use it, and in personal mode only the operator.
-    One update runs at a time, across Telegram, the Mini App and the CLI.
+    One update runs at a time, across Telegram, the Mini App and the CLI,
+    including the seconds while a restart is pending. If the restart never
+    happens, the daemon cancels the pending restart after two minutes and
+    tells you to restart it yourself.
+  - A timed-out upgrade warns that the install may be partial and gives
+    the reinstall command. Installer output is shown only in private
+    chats. If the daemon shuts down mid-install, the installer is stopped
+    after 3 s rather than left running, and the next daemon tells you the
+    update was interrupted.
 - **Mini App → Settings → Updates**, for the admin: the same versions and
   buttons, driving the same update job the chat shows.
 
@@ -47,7 +55,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sessions on a restart; that is expected.
 - The voice extra's **Restart daemon now** button schedules a detached
   restart instead of restarting the daemon from inside itself, and refuses
-  (with the fix) while the unit would still kill sessions. A daemon started
+  (with the fix) while the unit would still kill sessions, and while an
+  update is running or waiting to restart. A daemon started
   by hand no longer goes through `systemctl` just because a unit file
   exists.
 - `update` is now a reserved session name, like the other commands.

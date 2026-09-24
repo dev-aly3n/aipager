@@ -466,6 +466,16 @@ the old commit. If a stale announcement is pending, remove it with
 24 h anyway); `~/.local/share/aipager/update.lock` is only a lock file
 and is safe to delete when no update is running.
 
+## "An update was interrupted when aipager shut down"
+
+The daemon stopped (or was restarted) while `/update` was installing, and
+the installer was stopped with it, so the install may be half-written. If
+aipager or Claude Code misbehaves, repair it: for aipager, run the
+reinstall command from the message (for example
+`pipx install --force aipager`) and then
+`systemctl --user restart aipager.service`; for Claude Code, run
+`claude update` again.
+
 ## Still stuck?
 
 Open an issue at
