@@ -276,3 +276,20 @@ def test_both_runs_claude_first_then_aipager(env, run):
     text = env.last_text()
     assert "Claude Code</b> 2.1.281 → 2.1.290" in text
     assert "Restarting in 5 s" in text
+
+
+def test_core_log_lines_carry_the_job_id(env, run, caplog):
+    import logging
+
+    caplog.set_level(logging.INFO, logger="aipager.self_update")
+
+    async def scenario():
+        res = await env.start("both")
+        await env.finish()
+        return res.job["id"]
+    job_id = run(scenario)
+    lines = [r.getMessage() for r in caplog.records if r.name == "aipager.self_update"]
+    tagged = [ln for ln in lines if ln.startswith(("update.spawn", "update.claude.",
+                                                   "update.restart."))]
+    assert tagged, lines
+    assert all(f" job={job_id} " in ln + " " for ln in tagged), tagged

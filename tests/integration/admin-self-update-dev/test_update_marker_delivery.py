@@ -104,3 +104,28 @@ def test_daemon_schedules_and_cancels_marker_delivery():
     assert "update_flow.deliver_update_marker(bot, registry)" in src
     assert src.index("session_monitor.start()") < src.index("deliver_update_marker")
     assert "marker_task.cancel()" in src
+
+
+def test_interrupted_update_is_announced_with_the_repair(env, run):
+    """A shutdown killed the installer: the next daemon says so, once."""
+    self_update.write_marker({
+        "interrupted": "upgrading", "kind": "aipager", "chat_id": env.chat_id,
+        "user_id": env.chat_id, "job_id": 1, "from": "0.7.13",
+        "source_kind": "pipx", "scheduled_at": time.time()})
+    _deliver(env, run)
+    (sent,) = env.sent
+    assert sent["chat_id"] == env.chat_id
+    assert "interrupted" in sent["text"] and "may be partial" in sent["text"]
+    assert "pipx install --force aipager" in sent["text"]
+    assert "updated" not in sent["text"]
+    assert not self_update.UPDATE_MARKER_PATH.exists()
+
+
+def test_interrupted_claude_update_suggests_claude_update(env, run):
+    self_update.write_marker({
+        "interrupted": "claude_updating", "kind": "claude", "chat_id": env.chat_id,
+        "job_id": 1, "from": "0.7.13", "source_kind": "pipx",
+        "scheduled_at": time.time()})
+    _deliver(env, run)
+    (sent,) = env.sent
+    assert "run `claude update` again" in sent["text"]

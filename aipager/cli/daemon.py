@@ -465,6 +465,11 @@ async def _run_daemon(bot_username: str) -> None:
     # before this was tracked and cancelled.
     keyboard_release_task.cancel()
     marker_task.cancel()
+    # Before bot.stop(): a running self-update gets a short grace, then its
+    # installer's process group is killed (it would otherwise outlive us
+    # under KillMode=process and write the venv while the next daemon
+    # starts); its final status edit still goes out.
+    await _shutdown_updates(bot)
     registry.save()
     if manager is not None:
         # Before miniapp_server.stop(): stop accepting the world's
@@ -479,6 +484,17 @@ async def _run_daemon(bot_username: str) -> None:
         await observers.stop()
     await bot.stop()
     log.info("Goodbye")
+
+
+async def _shutdown_updates(bot) -> None:
+    updates = getattr(bot, "updates", None)
+    shutdown = getattr(updates, "shutdown", None)
+    if shutdown is None:
+        return
+    try:
+        await shutdown()
+    except Exception:
+        log.warning("self-update shutdown failed", exc_info=True)
 
 
 def _cmd_start(args: argparse.Namespace) -> int:

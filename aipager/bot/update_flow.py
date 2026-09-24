@@ -55,11 +55,16 @@ CONTROLS = ("restart-now", "wait-more", "cancel")
 TERMINAL_PHASES = frozenset({"done", "failed", "cancelled", "restart_scheduled"})
 # Phases in which "Cancel" is still offered: nothing is being installed.
 _CANCELLABLE = frozenset({"starting", "waiting_for_idle", "gate_timeout"})
+# Phases in which an installer (or ``claude update``) may be writing to disk.
+_INSTALLING = frozenset({"claude_updating", "upgrading"})
 # A bound on each status lookup, beyond the per-request HTTP timeout.
 STATUS_STEP_TIMEOUT_SECONDS = 20.0
 # If we are still alive this long after scheduling a restart, it did not
 # happen: release the lock and say so.
 RESTART_WATCHDOG_SECONDS = 120.0
+# At daemon shutdown, how long a running installer gets to finish before its
+# process group is killed (systemd's TimeoutStopSec is 15 s in total).
+SHUTDOWN_GRACE_SECONDS = 3.0
 
 DENIED_TEXT = "🚫 Only the admin can update aipager."
 STALE_TEXT = "That update already finished"
@@ -103,6 +108,10 @@ class _Job:
     restart_now: bool = False
     wait_more: bool = False
     cancel_requested: bool = False
+    # The transient systemd unit carrying the scheduled restart.
+    restart_unit: str | None = None
+    # The daemon shut down mid-install and killed the installer.
+    interrupted: bool = False
     event: asyncio.Event | None = None
     reporter: "_Reporter | None" = None
 
@@ -271,6 +280,30 @@ def _job_text(job: _Job) -> str:
     return "\n\n".join(parts) or "⏳ Starting the update…"
 
 
+def _show_detail(chat_id) -> bool:
+    """Paths and command output only go to a private chat (positive id)."""
+    return isinstance(chat_id, int) and not isinstance(chat_id, bool) and chat_id > 0
+
+
+def _safe_tail(text) -> str:
+    """Defence in depth: the seam already redacts and trims output, but
+    whatever reaches a chat is redacted and capped again right here."""
+    if not text:
+        return ""
+    return self_update.redact_output(str(text))[-self_update.OUTPUT_TAIL_CHARS:]
+
+
+def _pre_tail(text, chat_id) -> str:
+    """``\n<pre>tail</pre>`` for a private chat; a pointer to the daemon log
+    in a group (installer output can carry home-directory paths)."""
+    tail = _safe_tail(text)
+    if not tail:
+        return ""
+    if not _show_detail(chat_id):
+        return "\n(output in the daemon log)"
+    return f"\n<pre>{_esc(tail)}</pre>"
+
+
 def _plain(text: str) -> str:
     import re
     return html_mod.unescape(re.sub(r"<[^>]+>", "", text))
@@ -301,12 +334,26 @@ class UpdateManager:
         self._tasks: set[asyncio.Task] = set()
         self._job_task: asyncio.Task | None = None
         self._last_job_id = 0
+        # The job id that owns ``self._lock``: only that job may release it,
+        # so a stale watchdog or a late ``finally`` cannot free a lock a
+        # later job holds.
+        self._lock_owner: int | None = None
+        self._shutting_down = False
 
     # ---- read side -------------------------------------------------------
 
     @property
+    def restart_pending(self) -> bool:
+        """A restart is scheduled and has not happened (nor been given up on
+        by the watchdog). The lock stays held throughout."""
+        return self._job is not None and self._job.phase == "restart_scheduled"
+
+    @property
     def busy(self) -> bool:
-        return self._job is not None and not self._job.terminal
+        """A job is running OR its restart is still pending: no second
+        update, no voice restart, and no start buttons meanwhile."""
+        return self._job is not None and (not self._job.terminal
+                                          or self.restart_pending)
 
     def snapshot(self) -> dict | None:
         return self._job.snapshot() if self._job is not None else None
@@ -396,11 +443,12 @@ class UpdateManager:
                          user_id, chat_id, source.kind, source.reason)
                 return StartResult(False, "not_upgradable", None)
         if not self._lock.try_acquire():
-            log.info("update.lock_busy user=%s chat=%s (held by another process)",
+            log.info("update.lock_busy user=%s chat=%s (held elsewhere)",
                      user_id, chat_id)
             return StartResult(False, "update_in_progress", self.snapshot())
         job_id = max(int(time.time()), self._last_job_id + 1)
         self._last_job_id = job_id
+        self._lock_owner = job_id
         job = _Job(id=job_id, kind=kind, chat_id=chat_id, user_id=user_id,
                    origin=origin, started_at=time.time(), event=asyncio.Event())
         job.reporter = _Reporter(self.bot, chat_id, status_message)
@@ -443,6 +491,14 @@ class UpdateManager:
         if job.reporter is not None:
             await job.reporter.show(_job_text(job), _job_markup(job), ornament=ornament)
 
+    def _release_lock(self, job: _Job) -> None:
+        """Release the update lock iff ``job`` owns it."""
+        if self._lock_owner != job.id:
+            log.info("update.lock.not_owner job=%s owner=%s", job.id, self._lock_owner)
+            return
+        self._lock_owner = None
+        self._lock.release()
+
     def _finish(self, job: _Job, phase: str, section: str | None) -> None:
         if section:
             job.sections.append(section)
@@ -451,6 +507,9 @@ class UpdateManager:
         job.phase = phase
 
     async def _run_job(self, job: _Job) -> None:
+        # Tags every self_update log line (spawns, claude, restart) with
+        # this job; to_thread copies the context into the worker thread.
+        self_update.CURRENT_JOB_ID.set(job.id)
         restart_scheduled = False
         try:
             await self._report(job)
@@ -462,7 +521,8 @@ class UpdateManager:
                 job.phase = "done"
                 job.live = None
         except asyncio.CancelledError:
-            self._finish(job, "cancelled", None)
+            self._finish(job, "cancelled",
+                         self._shutdown_section(job) if self._shutting_down else None)
             raise
         except Exception:
             log.exception("update.failed job=%s", job.id)
@@ -470,7 +530,7 @@ class UpdateManager:
                                         "(see the daemon log).")
         finally:
             if not restart_scheduled:
-                self._lock.release()
+                self._release_lock(job)
             self._status_cache = None
             try:
                 await self._report(job)
@@ -522,8 +582,11 @@ class UpdateManager:
         res = await self._await_with_heartbeat(job, "Updating Claude Code",
                                                self_update.run_claude_update)
         job.live = None
+        if job.interrupted:
+            self._finish(job, "cancelled", self._shutdown_section(job))
+            return
         if res.error and res.before is None:
-            section = f"❌ <b>Claude Code</b>: {_esc(res.error)}"
+            section = f"❌ <b>Claude Code</b>: {_esc(_safe_tail(res.error))}"
         else:
             if res.timed_out:
                 head = (f"⏱ <b>Claude Code</b> update timed out after "
@@ -536,8 +599,8 @@ class UpdateManager:
             else:
                 head = (f"✅ <b>Claude Code</b> is already up to date "
                         f"({_esc(res.after or res.before)})")
-            if not res.ok and res.output_tail:
-                head += f"\n<pre>{_esc(res.output_tail)}</pre>"
+            if not res.ok:
+                head += _pre_tail(res.output_tail, job.chat_id)
             section = head + "\n" + self._session_note(job, res.after or res.before)
         job.sections.append(section)
         job.summary = _plain(section)
@@ -596,22 +659,27 @@ class UpdateManager:
                 argv, timeout=self_update.UPGRADE_TIMEOUT_SECONDS,
                 env=install_source.upgrade_env(source)))
         job.live = None
+        if job.interrupted:
+            self._finish(job, "cancelled", self._shutdown_section(job))
+            return False
         if res.timed_out:
             log.info("update.aipager.timeout job=%s", job.id)
-            tail = f"\n<pre>{_esc(res.output_tail)}</pre>" if res.output_tail else ""
+            hint = install_source.reinstall_hint(source.kind)
             self._finish(job, "failed",
                          f"⏱ <b>aipager</b> upgrade timed out after "
-                         f"{self_update.UPGRADE_TIMEOUT_SECONDS}s — nothing restarted, "
-                         f"still running {_esc(running)}.{tail}")
+                         f"{self_update.UPGRADE_TIMEOUT_SECONDS}s and was stopped — "
+                         f"nothing restarted, still running {_esc(running)}. The "
+                         f"install on disk may be partial: reinstall with "
+                         f"<code>{_esc(hint)}</code> before the next restart."
+                         + _pre_tail(res.output_tail, job.chat_id))
             return False
         if res.returncode != 0 or res.error:
             log.info("update.aipager.failed job=%s rc=%s", job.id, res.returncode)
-            detail = res.output_tail or res.error or ""
-            tail = f"\n<pre>{_esc(detail)}</pre>" if detail else ""
             self._finish(job, "failed",
                          f"❌ <b>aipager</b> upgrade failed (exit "
                          f"{res.returncode if res.returncode is not None else '?'}) — "
-                         f"nothing restarted.{tail}")
+                         f"nothing restarted."
+                         + _pre_tail(res.output_tail or res.error, job.chat_id))
             return False
 
         new, importable, err = await asyncio.to_thread(
@@ -623,7 +691,7 @@ class UpdateManager:
                          f"❌ The new version failed to import — still running "
                          f"{_esc(running)}, nothing restarted. Reinstall with "
                          f"<code>{_esc(hint)}</code>"
-                         + (f"\n<pre>{_esc(err)}</pre>" if err else ""))
+                         + _pre_tail(err, job.chat_id))
             return False
         if new == running:
             log.info("update.aipager.unchanged job=%s version=%s origin=%s",
@@ -687,6 +755,7 @@ class UpdateManager:
                          f"scheduling the restart failed: {_esc(detail)}. Restart it "
                          f"yourself: <code>{_esc(plan.manual_command)}</code>")
             return False
+        job.restart_unit = detail
         self._finish(job, "restart_scheduled",
                      f"✅ <b>aipager</b> {_esc(running)} → {_esc(new)} installed. "
                      f"Restarting in {self_update.RESTART_DELAY_SECONDS} s…")
@@ -757,6 +826,73 @@ class UpdateManager:
             except asyncio.TimeoutError:
                 pass
 
+    def _shutdown_section(self, job: _Job) -> str:
+        if job.interrupted:
+            if job.phase == "claude_updating":
+                fix = "run <code>claude update</code> again"
+            else:
+                src = install_source.detect_install_source()
+                fix = (f"reinstall with <code>"
+                       f"{_esc(install_source.reinstall_hint(src.kind))}</code>")
+            return ("⚠️ The daemon shut down while the update was installing; the "
+                    "installer was stopped, so the install may be partial. If "
+                    f"anything misbehaves, {fix}.")
+        return "⚠️ The daemon shut down before the update finished."
+
+    async def shutdown(self) -> None:
+        """Daemon shutdown: never leave an installer orphaned.
+
+        Called before ``bot.stop()`` so the final status edit can still go
+        out. A job in a gate wait is simply cancelled (nothing installed
+        yet, or the install finished and the shutdown restarts us anyway).
+        A job whose installer is running gets ``SHUTDOWN_GRACE_SECONDS`` to
+        finish; after that its process group is killed — with
+        KillMode=process it would otherwise survive us and keep writing the
+        venv while the next daemon imports it — the kill is logged, and an
+        "interrupted" marker makes the next daemon tell the admin. A
+        pending restart's marker is left alone: that restart IS this
+        shutdown. Never raises.
+        """
+        self._shutting_down = True
+        job, task = self._job, self._job_task
+        try:
+            if job is not None and task is not None and not task.done():
+                if job.phase in _INSTALLING:
+                    done, _ = await asyncio.wait({task}, timeout=SHUTDOWN_GRACE_SECONDS)
+                    if not done and self_update.running_command_count():
+                        phase = job.phase
+                        job.interrupted = True
+                        killed = await asyncio.to_thread(
+                            self_update.terminate_running_commands)
+                        log.warning("update.shutdown.interrupted job=%s phase=%s killed=%d "
+                                    "— the install may be partial", job.id, phase, killed)
+                        self._write_interrupted_marker(job, phase)
+                        # The killed installer returns promptly: let the job
+                        # post its own "interrupted" outcome.
+                        await asyncio.wait({task}, timeout=SHUTDOWN_GRACE_SECONDS)
+                if not task.done():
+                    task.cancel()
+                    await asyncio.wait({task}, timeout=SHUTDOWN_GRACE_SECONDS)
+            others = [t for t in self._tasks if not t.done()]
+            for t in others:
+                t.cancel()
+            if others:
+                await asyncio.wait(others, timeout=1.0)
+        except Exception:
+            log.warning("update shutdown failed", exc_info=True)
+
+    def _write_interrupted_marker(self, job: _Job, phase: str) -> None:
+        try:
+            self_update.write_marker({
+                "interrupted": phase, "kind": job.kind, "chat_id": job.chat_id,
+                "user_id": job.user_id, "job_id": job.id,
+                "from": self_update.running_version(),
+                "source_kind": install_source.detect_install_source().kind,
+                "scheduled_at": time.time(),
+            })
+        except Exception:
+            log.warning("update.shutdown.marker_failed job=%s", job.id, exc_info=True)
+
     @staticmethod
     def _gate_live(job: _Job) -> str:
         if job.phase == "gate_timeout":
@@ -771,11 +907,23 @@ class UpdateManager:
 
     async def _restart_watchdog(self, job: _Job) -> None:
         await asyncio.sleep(self_update.RESTART_DELAY_SECONDS + RESTART_WATCHDOG_SECONDS)
+        if (self._job is not job or job.phase != "restart_scheduled"
+                or self._lock_owner != job.id):
+            # Superseded: another job owns the lock (and maybe a marker).
+            log.info("update.restart.watchdog_stale job=%s current=%s owner=%s", job.id,
+                     self._job.id if self._job else None, self._lock_owner)
+            return
         # Still alive: the scheduled restart never happened.
         log.warning("update.restart.failed job=%s reason=still-running-after-schedule",
                     job.id)
+        # Stop the timer first, so it cannot fire in the middle of a later
+        # job once the lock is free.
+        try:
+            await asyncio.to_thread(self_update.cancel_scheduled_restart, job.restart_unit)
+        except Exception:
+            log.warning("update.restart.timer_stop_failed job=%s", job.id, exc_info=True)
         self_update.clear_marker()
-        self._lock.release()
+        self._release_lock(job)
         job.sections.append("⚠️ The scheduled restart did not happen — the new version "
                             "is installed but the old one is still running. Restart it "
                             f"yourself: <code>systemctl --user restart "
@@ -832,10 +980,14 @@ async def handle_update_cmd(bot: "TelegramBot", update, ctx) -> None:
     mgr = bot.updates
     if mgr.busy:
         snap = mgr.snapshot() or {}
+        busy_text = (
+            "⏳ aipager is about to restart for an update — try /update again "
+            "once it is back."
+            if mgr.restart_pending else
+            f"⏳ An update is already running ({snap.get('phase', '…')}). "
+            "Its status message shows the progress.")
         try:
-            await reply_text(update.message,
-                             f"⏳ An update is already running ({snap.get('phase', '…')}). "
-                             "Its status message shows the progress.")
+            await reply_text(update.message, busy_text)
         except Exception:
             log.debug("update busy reply failed", exc_info=True)
         return
@@ -933,7 +1085,16 @@ async def deliver_update_marker(bot: "TelegramBot", registry) -> None:
             return
         frm, to = str(marker.get("from", "?")), str(marker.get("to", "?"))
         running = self_update.running_version()
-        if running != to:
+        if marker.get("interrupted"):
+            if marker.get("interrupted") == "claude_updating":
+                fix = "run `claude update` again"
+            else:
+                fix = ("reinstall with `" + install_source.reinstall_hint(
+                    str(marker.get("source_kind") or "")) + "`")
+            text = (f"⚠️ An update was interrupted when aipager shut down; the "
+                    f"install may be partial. Now running {running}. If anything "
+                    f"misbehaves, {fix}.")
+        elif running != to:
             text = f"⚠️ aipager restarted but is running {running}, not {to}."
         else:
             back, missing = 0, []

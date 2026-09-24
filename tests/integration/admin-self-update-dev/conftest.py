@@ -62,6 +62,7 @@ class Env:
         self.main_pid = os.getpid()
         self.schedule_rc = 0
         self.schedule_hook = None
+        self.timer_stop_rc = 0
         # claude
         self.claude_path = "/home/op/.local/bin/claude"
         self.claude_version = "2.1.281"
@@ -70,6 +71,7 @@ class Env:
         self.claude_timeout = False
         self.claude_latest: str | None = "2.1.290"
         self.claude_found = True
+        self.claude_output = "update output"
 
         mp = monkeypatch
         mp.setattr(self_update, "_run_command", self._run)
@@ -170,6 +172,8 @@ class Env:
                 km = self.killmodes.pop(0)
             return R(0, f"MainPID={self.main_pid}\nKillMode={km}\n"
                         f"ControlGroup={UNIT_CGROUP}\n", False, None)
+        if argv[1:3] == ["--user", "stop"]:
+            return R(self.timer_stop_rc, "", False, None)
         if argv[0].endswith("systemd-run"):
             if self.schedule_hook:
                 self.schedule_hook(argv)
@@ -186,7 +190,7 @@ class Env:
                 return R(None, "downloading…", True, f"timed out after {timeout}s")
             if self.claude_rc == 0:
                 self.claude_version = self.claude_new
-            return R(self.claude_rc, "update output", False, None)
+            return R(self.claude_rc, self.claude_output, False, None)
         if argv[0].startswith("/abs/bin/") or argv[1:3] == ["-m", "pip"]:
             if self.upgrade_hook:
                 self.upgrade_hook()
@@ -209,6 +213,9 @@ class Env:
 
     def schedule_calls(self):
         return [c for c in self.calls if c[0].endswith("systemd-run")]
+
+    def timer_stop_calls(self):
+        return [c for c in self.calls if c[1:3] == ["--user", "stop"]]
 
     def last_text(self) -> str:
         return self.edits[-1]["text"] if self.edits else ""
