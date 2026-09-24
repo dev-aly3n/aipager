@@ -1073,3 +1073,52 @@ def test_every_notice_states_whether_it_worked():
         idx = INDEX_HTML.index(phrase)
         tail = INDEX_HTML[idx:idx + 120]
         assert f'"{kind}"' in tail, f"{phrase} is not classified as {kind}"
+
+
+# ===== running-session model picker (roadmap 8.35) ==========================
+
+def test_picking_a_model_posts_it_and_shows_switching_then_the_new_model(
+    node_bin, tmp_path,
+):
+    """The session page's Model control: tap a row, exactly one POST to
+    this session's model route carrying the row's label, "switching…"
+    while the request is open, the new model once the server confirms."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "model_switch")
+    assert proc.returncode == 0, (
+        f"model_switch scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: model pick -> POST /api/sessions/dev/model -> switching… -> Opus 5.5" \
+        in proc.stdout, proc.stdout
+
+
+def test_an_unconfirmed_switch_says_so(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "model_unconfirmed")
+    assert proc.returncode == 0, (
+        f"model_unconfirmed scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "-> not confirmed — check the session" in proc.stdout, proc.stdout
+
+
+def test_the_model_picker_is_inert_while_busy_with_the_reason(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_controls(node_bin, tmp_path, INDEX_HTML, "model_busy")
+    assert proc.returncode == 0, (
+        f"model_busy scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
+    )
+    assert "ok: model picker inert while busy, with the reason" in proc.stdout, proc.stdout
+
+
+def test_the_model_harness_detects_a_missing_switching_state(node_bin, tmp_path):
+    """Guard the guard: a page that never shows "switching…" must fail."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    broken = INDEX_HTML.replace('var MODEL_SWITCHING_TEXT = "switching…";',
+                                'var MODEL_SWITCHING_TEXT = "";', 1)
+    assert broken != INDEX_HTML, "switching text not found — page changed shape"
+    proc = _drive_controls(node_bin, tmp_path, broken, "model_switch")
+    assert proc.returncode != 0, "harness passed a page with no switching state"

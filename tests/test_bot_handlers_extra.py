@@ -319,6 +319,9 @@ def test_send_command_model_change_acks(mk_bot, mk_update, run_async, monkeypatc
     monkeypatch.setattr("aipager.dtach.inject.send_text_and_enter",
                         AsyncMock(return_value=True))
     bot._react = AsyncMock()
+    # The follow-up that edits this reply once the model changes waits up
+    # to 15 s; stubbed so no task outlives this test's loop.
+    bot._confirm_model_feedback = AsyncMock()
     update = mk_update("/model opus")
     run_async(bot._send_command(update, "/model opus"))
     text = update.message.reply_text.await_args.args[0]

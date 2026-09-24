@@ -50,6 +50,42 @@ NO_PERMISSION_REASON = "You don't have permission to control this session."
 # as the two constants above — one string, not two that could drift apart.
 PERMS_ADMIN_REQUIRED_REASON = "Switching to Auto mode requires admin."
 QUEUE_EMPTY_REASON = "Nothing queued to clear."
+# Switching a running session's model (roadmap 8.35). Shared verbatim by
+# the detail payload's `model_switch` entry, the Mini App route's 409 body
+# and the chat's own refusal (bot/session_ops.model_switch_refusal), so
+# both surfaces say the same thing.
+#
+# Refused while BUSY rather than queued: Claude Code's `/model` is an
+# `immediate` command — it runs mid-turn instead of waiting for the turn
+# to end — so typing it into a running turn would swap the model under
+# that turn and can raise Claude Code's "Switch model?" confirmation on
+# top of it, where the daemon cannot see it.
+MODEL_SWITCH_BUSY_REASON = (
+    "Claude is working — switch the model when this turn ends."
+)
+MODEL_SWITCH_PROMPT_OPEN_REASON = (
+    "A prompt is open in the terminal — answer it before switching the model."
+)
+MODEL_SWITCH_NOT_LIVE_REASON = "Session isn't running."
+# UNKNOWN is the state right after a daemon restart, before the monitor
+# has looked: aipager does not yet know whether a turn is running.
+MODEL_SWITCH_UNKNOWN_REASON = (
+    "aipager hasn't seen this session's state yet — try again in a moment."
+)
+MODEL_SWITCH_PENDING_REASON = (
+    "The last model switch isn't confirmed yet — check the terminal for "
+    "Claude Code's \"Switch model?\" question before switching again."
+)
+# What the page and the chat say when the statusline never reported a new
+# model within the wait. The likely cause is Claude Code's own "Switch
+# model?" confirmation still being up: aipager's PreModelSwitch hook
+# pre-approves the switches it types (dtach/model_switch_marker.py), but
+# a Claude Code older than 2.1.251, or an `opusplan` switch that asks the
+# hook twice, still shows it — and keystrokes are never guessed at it.
+MODEL_SWITCH_UNCONFIRMED = (
+    "not confirmed — check the session. Claude Code may be asking "
+    "\"Switch model?\" in the terminal, or it was already on that model."
+)
 QUEUE_FULL_REASON = (
     f"Queue is full ({QUEUE_CAP} pending) — clear it or wait for it to drain."
 )
@@ -244,6 +280,30 @@ def session_actions(
     return actions
 
 
+def model_switch_state(
+    status: str, *, can_act: bool, switch_pending: bool = False,
+) -> dict[str, Any] | None:
+    """Whether the session page's Model picker is live, and why not.
+
+    ``None`` for a session that is not running at all (``gone``/
+    ``unknown``): there is no model to switch, so no control is drawn.
+    Otherwise ``{"available", "reason"}`` in the same shape as
+    :func:`session_actions` entries, with the same precedence — a caller
+    who cannot prompt is told that, never some other reason.
+    """
+    if status not in ("idle", "busy", _WAITING_STATUS):
+        return None
+    if not can_act:
+        return {"available": False, "reason": NO_PERMISSION_REASON}
+    if status == "busy":
+        return {"available": False, "reason": MODEL_SWITCH_BUSY_REASON}
+    if status == _WAITING_STATUS:
+        return {"available": False, "reason": MODEL_SWITCH_PROMPT_OPEN_REASON}
+    if switch_pending:
+        return {"available": False, "reason": MODEL_SWITCH_PENDING_REASON}
+    return {"available": True, "reason": None}
+
+
 def session_detail(
     sess: "TrackedSession", now: float, *,
     can_act: bool = True, is_admin: bool = False,
@@ -294,6 +354,10 @@ def session_detail(
         "timeline": build_timeline(sess),
     }
     detail["facts"] = display_facts(detail)
+    detail["model_switch"] = model_switch_state(
+        detail["status"], can_act=can_act,
+        switch_pending=sess.model_switch_pending(),
+    )
     detail["actions"] = session_actions(
         detail["status"], resumable=bool(sess.claude_session_id), can_act=can_act,
         is_admin=is_admin, skip_perms=bool(sess.skip_perms), queue_depth=queue_depth,
@@ -415,6 +479,12 @@ def build_timeline(sess: "TrackedSession") -> list[dict[str, Any]]:
 
 
 __all__ = [
+    "MODEL_SWITCH_BUSY_REASON",
+    "MODEL_SWITCH_NOT_LIVE_REASON",
+    "MODEL_SWITCH_PENDING_REASON",
+    "MODEL_SWITCH_PROMPT_OPEN_REASON",
+    "MODEL_SWITCH_UNCONFIRMED",
+    "MODEL_SWITCH_UNKNOWN_REASON",
     "NO_PERMISSION_REASON",
     "NO_TRANSCRIPT_REASON",
     "PERMS_ADMIN_REQUIRED_REASON",
@@ -424,6 +494,7 @@ __all__ = [
     "display_facts",
     "preview_lines",
     "grid_totals",
+    "model_switch_state",
     "session_actions",
     "session_detail",
     "session_summary",

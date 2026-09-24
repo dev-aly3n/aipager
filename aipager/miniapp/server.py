@@ -35,18 +35,6 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-# Short "what is this for" lines for the model picker. Keyed by the alias
-# label, lowercased; an alias with no entry simply shows no hint rather
-# than a wrong one. Deliberately no version numbers — see the comment at
-# the /api/session-options payload.
-_MODEL_HINTS = {
-    "opus": "Most capable — deep reasoning, hardest problems",
-    "sonnet": "Balanced — the everyday default",
-    "haiku": "Fastest and cheapest — quick edits and lookups",
-    "opusplan": "Opus for planning, Sonnet to execute",
-    "fable": "Newest family alias",
-}
-
 def reinstall_with_miniapp_hint() -> str:
     """The command that repairs an install missing the Mini App.
 
@@ -172,6 +160,11 @@ class MiniAppServer:
         # per-caller: an unauthenticated request has no identity to key on.
         self._auth_log_hits: list = []
         self._auth_log_suppressed = 0
+        # How long POST /api/sessions/{label}/model waits for the
+        # statusline to report the new model before answering
+        # "unconfirmed". An attribute so tests can shorten it.
+        from aipager.bot.session_ops import MODEL_SWITCH_CONFIRM_SECONDS
+        self.model_confirm_seconds = MODEL_SWITCH_CONFIRM_SECONDS
         # Lazily created so constructing the server needs no running loop
         # (tests build it outside asyncio).
         self._diff_sem = None
@@ -236,6 +229,12 @@ class MiniAppServer:
         )
         app.router.add_post(
             "/api/sessions/{label}/rename", self._handle_session_rename,
+        )
+        # Switch a RUNNING session's model (roadmap 8.35). Same shape as
+        # the actions above; types `/model <name>` through the same
+        # injection helper the chat's Models keyboard uses.
+        app.router.add_post(
+            "/api/sessions/{label}/model", self._handle_session_model,
         )
         app.router.add_get("/api/preferences", self._handle_preferences_get)
         # The Mini App's first mutating route. PUT (not POST) because
@@ -621,7 +620,7 @@ class MiniAppServer:
         scope_chat_id, user_id = result
 
         prefs = get_preferences(scope_chat_id)
-        from aipager.config import MODEL_CHOICES
+        from aipager.config import MODEL_CHOICES, model_hint
 
         roots = allowed_roots(self.registry, scope_chat_id)
         # Which entry is the one a session lands in when nobody picks. The
@@ -650,7 +649,7 @@ class MiniAppServer:
             # session reports its actual version via the statusline, and
             # that is what the grid and session page display.
             "models": [
-                {"label": label, "hint": _MODEL_HINTS.get(label.lower(), "")}
+                {"label": label, "hint": model_hint(label)}
                 for label, _send in MODEL_CHOICES
             ],
             "schema": settings_schema(),
@@ -1521,6 +1520,80 @@ class MiniAppServer:
         await self._mirror_session_restarted(scope_chat_id, outcome.label)
         return web.json_response({"status": "restarted", "label": outcome.label})
 
+    async def _handle_session_model(self, request):
+        """``POST /api/sessions/{label}/model {"model": ...}``.
+
+        The model is a picker label or a free-typed name, validated by the
+        launch picker's own :func:`~aipager.miniapp.launch.validate_model`
+        (same list, same pattern check). The answer waits for the proof:
+        ``switched`` with the model the statusline now reports, or
+        ``unconfirmed`` when it did not change within
+        :attr:`model_confirm_seconds` — the page shows "switching…" for
+        exactly as long as this request is open.
+        """
+        from aiohttp import web
+
+        from aipager.bot.session_ops import await_model_change
+        from aipager.config import MODEL_CHOICES
+        from aipager.miniapp.launch import validate_model
+        from aipager.miniapp.sessions import MODEL_SWITCH_UNCONFIRMED
+
+        result = await self._resolve_own_scope_session(
+            request, "POST /api/sessions/{label}/model",
+        )
+        if isinstance(result, web.Response):
+            return result
+        sess, scope_chat_id, user_id = result
+
+        if not self.bot._can_prompt_user(user_id, scope_chat_id):
+            log.info(
+                "miniapp: session model rejected (403) — "
+                "caller cannot prompt this session",
+            )
+            return web.json_response({"error": "forbidden"}, status=403)
+        if not self._allow_write(user_id):
+            log.info("miniapp: session model rejected (429) — rate limited")
+            return web.json_response({"error": "too_many_requests"}, status=429)
+
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"error": "bad_request"}, status=400)
+        if not isinstance(body, dict):
+            return web.json_response({"error": "bad_request"}, status=400)
+        model, err = validate_model(body.get("model"), MODEL_CHOICES)
+        if err or not model:
+            return web.json_response({
+                "error": "bad_request", "detail": err or "Pick a model.",
+            }, status=400)
+
+        outcome = await self.bot._switch_model_core(
+            sess, model, driver_user_id=user_id,
+        )
+        if not outcome.ok:
+            if outcome.reason == "send_failed":
+                return web.json_response({
+                    "error": "send_failed", "detail": "Couldn't send /model.",
+                }, status=400)
+            return web.json_response(
+                {"error": outcome.reason, "detail": outcome.detail}, status=409,
+            )
+
+        await self._mirror_session_model(scope_chat_id, outcome.label, model)
+        new_model = await await_model_change(
+            sess, outcome.previous_model, timeout=self.model_confirm_seconds,
+        )
+        if new_model:
+            return web.json_response({
+                "status": "switched", "label": outcome.label,
+                "model": new_model, "previous_model": outcome.previous_model,
+            })
+        return web.json_response({
+            "status": "unconfirmed", "label": outcome.label,
+            "model": sess.model_name or "", "requested": model,
+            "detail": MODEL_SWITCH_UNCONFIRMED,
+        })
+
     async def _handle_session_rename(self, request):
         from aiohttp import web
 
@@ -1618,6 +1691,15 @@ class MiniAppServer:
             )
         except Exception:
             log.debug("miniapp: session-compacted mirror failed", exc_info=True)
+
+    async def _mirror_session_model(self, scope_chat_id, label, model) -> None:
+        try:
+            await self.bot._app.bot.send_message(
+                chat_id=scope_chat_id,
+                text=f"🔄 [{label}] → {model} from the Mini App",
+            )
+        except Exception:
+            log.debug("miniapp: session-model mirror failed", exc_info=True)
 
     async def _mirror_session_restarted(self, scope_chat_id, label) -> None:
         try:

@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import html as html_mod
 import logging
+import os
 import re
 import time
 from dataclasses import dataclass
@@ -152,6 +153,158 @@ class CompactOutcome:
     ok: bool
     reason: str
     label: str
+
+
+@dataclass
+class ModelSwitchOutcome:
+    """Result of :meth:`SessionOpsMixin._switch_model_core`.
+
+    ``reason`` is one of ``"not_live"``, ``"busy"``, ``"prompt_open"``,
+    ``"unknown"``, ``"switch_pending"``, ``"send_failed"``, ``"sent"``.
+    ``detail`` is the operator-facing reason for a refusal.
+    ``previous_model`` is the statusline's model name at the moment
+    ``/model`` was typed — what :func:`await_model_change` compares
+    against.
+    """
+
+    ok: bool
+    reason: str
+    label: str
+    previous_model: str = ""
+    detail: str = ""
+
+
+# How long a switch waits for the statusline to report the new model
+# before it is reported as "not confirmed". A switch that is still
+# unconfirmed after this long is most likely waiting behind Claude Code's
+# own "Switch model?" confirmation in the terminal (or the statusline had
+# nothing new to say — the same model under another name).
+MODEL_SWITCH_CONFIRM_SECONDS = 15.0
+# How long an unconfirmed switch blocks the next one (see
+# TrackedSession.model_switch_pending_until). Must be at least the
+# PreModelSwitch marker's TTL (model_switch_marker.MARKER_TTL_SECONDS):
+# a marker must never outlive the refusal that stops a second /model.
+MODEL_SWITCH_PENDING_SECONDS = 60.0
+_MODEL_SWITCH_POLL_SECONDS = 0.25
+
+
+def model_switch_refusal(sess) -> tuple[str, str] | None:
+    """Why ``/model`` must not be typed into ``sess`` right now, as
+    ``(reason_code, operator_text)``, or ``None`` when it may.
+
+    The single rule both surfaces apply (roadmap 8.35 R2): the chat's
+    Models keyboard and the Mini App's picker refuse in exactly the same
+    states with exactly the same words. An allow-list — only an IDLE
+    session with no switch outstanding may take one:
+
+    - GONE: nothing to type into.
+    - BUSY: Claude Code's ``/model`` is an ``immediate`` command — it runs
+      mid-turn rather than queueing behind the turn — so it would change
+      the model under the running turn and can open Claude Code's
+      "Switch model?" confirmation where nobody in chat can see it.
+    - INTERACTIVE: a dialog is open, and keystrokes would answer it.
+    - UNKNOWN (and anything else): aipager does not know yet.
+    - a switch still pending: its "Switch model?" dialog may be up.
+    """
+    from aipager.miniapp.sessions import (
+        MODEL_SWITCH_BUSY_REASON,
+        MODEL_SWITCH_NOT_LIVE_REASON,
+        MODEL_SWITCH_PENDING_REASON,
+        MODEL_SWITCH_PROMPT_OPEN_REASON,
+        MODEL_SWITCH_UNKNOWN_REASON,
+    )
+
+    if sess.status == Status.GONE:
+        return "not_live", MODEL_SWITCH_NOT_LIVE_REASON
+    if sess.status == Status.BUSY:
+        return "busy", MODEL_SWITCH_BUSY_REASON
+    if sess.dialog_is_open():
+        return "prompt_open", MODEL_SWITCH_PROMPT_OPEN_REASON
+    if sess.status != Status.IDLE:
+        return "unknown", MODEL_SWITCH_UNKNOWN_REASON
+    if sess.model_switch_pending():
+        return "switch_pending", MODEL_SWITCH_PENDING_REASON
+    return None
+
+
+def _marker_dir() -> str:
+    """Where the PreModelSwitch marker lives: beside the daemon's control
+    socket, the same directory ``aipager-hook`` derives from the same
+    precedence (``notify_hook.SOCKET_PATH``)."""
+    from aipager import config
+    return os.path.dirname(config.SOCKET_PATH) or "/tmp"
+
+
+def mark_model_switch_sent(sess, model: str) -> str:
+    """Record that ``/model <model>`` is about to be typed into ``sess``;
+    return the model the statusline reported before it (the confirmation
+    baseline).
+
+    Also leaves the marker ``aipager-hook`` checks on PreModelSwitch, so
+    Claude Code (2.1.251+) switches without its "Switch model?" cache
+    confirmation — for this switch only. Best-effort: without the marker
+    the dialog simply appears, as it would without aipager. The marker
+    only ever matches a known Claude session id; SessionStart reports it
+    at launch, long before any switch."""
+    from aipager.dtach import model_switch_marker
+
+    previous = sess.model_name or ""
+    sess.model_switch_pending_until = time.monotonic() + MODEL_SWITCH_PENDING_SECONDS
+    sess.model_switch_pending_from = previous
+    if not model_switch_marker.write_marker(
+        _marker_dir(), sess.name, model, sess.claude_session_id or "",
+    ):
+        log.debug("[%s] model switch marker not written", sess.label)
+    return previous
+
+
+def clear_model_switch_pending(sess) -> None:
+    """The typed ``/model`` is accounted for (confirmed, or never sent)."""
+    from aipager.dtach import model_switch_marker
+
+    sess.model_switch_pending_until = 0.0
+    sess.model_switch_pending_from = ""
+    model_switch_marker.clear_marker(_marker_dir(), sess.name)
+
+
+async def await_model_change(
+    sess, previous: str, *, timeout: float | None = None,
+    interval: float = _MODEL_SWITCH_POLL_SECONDS,
+) -> str | None:
+    """Wait for the statusline to report a model other than ``previous``.
+
+    Returns the new ``sess.model_name``, or ``None`` if it did not change
+    within ``timeout`` (default :data:`MODEL_SWITCH_CONFIRM_SECONDS`).
+    ``model_name`` is Claude Code's own display name for the model
+    (``Opus 5.5``), fed by the statusline hook — the only evidence the
+    daemon gets that a switch really happened. An empty reading is not
+    evidence of anything, and neither is any reading when there was no
+    baseline: a session that had not reported a model yet would count
+    its FIRST report — possibly the old model — as the switch. That
+    case returns ``None`` at once.
+
+    The session's pending-switch mark needs no clearing here: it stops
+    counting as soon as the statusline reports a model other than the one
+    it recorded (``TrackedSession.model_switch_pending``), so the next
+    switch is allowed straight away.
+    """
+    if timeout is None:
+        timeout = MODEL_SWITCH_CONFIRM_SECONDS
+    if not previous:
+        return None
+    deadline = time.monotonic() + timeout
+    while True:
+        current = sess.model_name or ""
+        if current and current != previous:
+            # The marker should already be claimed by the hook; tidy up
+            # in case Claude Code never asked (no PreModelSwitch support).
+            from aipager.dtach import model_switch_marker
+            model_switch_marker.clear_marker(_marker_dir(), sess.name)
+            return current
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return None
+        await asyncio.sleep(min(interval, remaining))
 
 
 @dataclass
@@ -1403,6 +1556,50 @@ class SessionOpsMixin:
         if not ok:
             return CompactOutcome(ok=False, reason="send_failed", label=label)
         return CompactOutcome(ok=True, reason="sent", label=label)
+
+    async def _switch_model_core(
+        self, sess: TrackedSession, model: str, *,
+        driver_user_id: int | None = None,
+    ) -> ModelSwitchOutcome:
+        """Type exactly ``/model <model>`` into a running session.
+
+        ``model`` must already be validated (``launch.validate_model``).
+        Nothing is ever typed after it. The "Switch model?" confirmation
+        is pre-approved through the PreModelSwitch hook marker written by
+        :func:`mark_model_switch_sent`, not by keystrokes; where that does
+        not apply (older Claude Code), the dialog is the operator's to
+        answer in the terminal.
+        """
+        label = sess.label
+        refusal = model_switch_refusal(sess)
+        if refusal is not None:
+            return ModelSwitchOutcome(
+                ok=False, reason=refusal[0], label=label, detail=refusal[1],
+            )
+        if not await inject.is_alive(sess.name):
+            from aipager.miniapp.sessions import MODEL_SWITCH_NOT_LIVE_REASON
+            return ModelSwitchOutcome(
+                ok=False, reason="not_live", label=label,
+                detail=MODEL_SWITCH_NOT_LIVE_REASON,
+            )
+        # Again, after the await above: a chat message can have started a
+        # turn while the liveness probe ran.
+        refusal = model_switch_refusal(sess)
+        if refusal is not None:
+            return ModelSwitchOutcome(
+                ok=False, reason=refusal[0], label=label, detail=refusal[1],
+            )
+        previous = mark_model_switch_sent(sess, model)
+        ok = await self._inject_prompt(
+            sess, f"/model {model}", driver_user_id=driver_user_id,
+        )
+        if not ok:
+            clear_model_switch_pending(sess)
+            return ModelSwitchOutcome(ok=False, reason="send_failed", label=label)
+        log.info("[%s] model switch sent: /model %s", label, model)
+        return ModelSwitchOutcome(
+            ok=True, reason="sent", label=label, previous_model=previous,
+        )
 
     async def _rename_session_core(
         self, sess: TrackedSession, new_label: str,

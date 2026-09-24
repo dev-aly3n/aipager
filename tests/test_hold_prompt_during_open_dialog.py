@@ -82,7 +82,11 @@ def _drive(bot, path, update, run_async):
     elif path == "direct":
         run_async(bot._direct_send(update, "x", update.message.text))
     elif path == "command":
-        run_async(bot._send_command(update, "/model sonnet"))
+        # /compact, not /model: since roadmap 8.35 a /model is REFUSED
+        # while busy or while a prompt is open (tests/
+        # test_session_model_switch.py), so it no longer exercises the
+        # generic command path's hold/inject behaviour these tests pin.
+        run_async(bot._send_command(update, "/compact"))
     else:                                            # pragma: no cover
         raise AssertionError(f"unknown path {path}")
 

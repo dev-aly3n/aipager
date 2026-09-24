@@ -342,6 +342,17 @@ class TrackedSession:
     # SubagentStop.
     prompt_sent_at: float = 0.0
     prompt_sent_msg: tuple[int, int] | None = None
+    # Monotonic deadline of an outstanding `/model` switch (roadmap
+    # 8.35): set when one is typed, cleared when the statusline reports
+    # the new model. While it holds, a second switch is refused — the
+    # first may be sitting behind Claude Code's "Switch model?" dialog,
+    # which aipager cannot see, and a second `/model` would be typed into
+    # it. Transient, never persisted.
+    model_switch_pending_until: float = 0.0
+    # The statusline's model when that switch was typed. The mark stops
+    # counting as soon as the session reports anything else — whoever
+    # (or whatever) observed it.
+    model_switch_pending_from: str = ""
     turn_hook_at: float = 0.0
     # One "still waiting for your answer" reminder per INTERACTIVE wait
     # (roadmap 8.4): set by the hook receiver when Claude Code's idle
@@ -1076,6 +1087,20 @@ class TrackedSession:
         cannot push the others out of the ring by being sent twice."""
         if digest and digest not in self.delivered_digests:
             self.delivered_digests.append(digest)
+
+    def model_switch_pending(self) -> bool:
+        """Is a typed ``/model`` still unaccounted for (roadmap 8.35)?
+
+        True until its window runs out, or until the statusline reports a
+        model other than the one recorded when it was typed — a change the
+        confirmation wait may never have seen (the operator answered Claude
+        Code's dialog after the wait gave up, or the chat reply the wait
+        would have edited was never sent)."""
+        if self.model_switch_pending_until <= time.monotonic():
+            return False
+        current = self.model_name or ""
+        baseline = self.model_switch_pending_from
+        return not (baseline and current and current != baseline)
 
     def dialog_is_open(self) -> bool:
         """True while the terminal is showing a permission/question prompt.

@@ -198,6 +198,10 @@ HTML_BODY = """\
   </div>
   <div id="detail-waiting" class="waiting-note" hidden></div>
   <dl id="detail-facts" class="facts"></dl>
+  <!-- Switch the RUNNING session's model (roadmap 8.35). Drawn only for a
+       live session; the note says why the picker is greyed out. -->
+  <div id="detail-model" hidden></div>
+  <div id="detail-model-note" class="muted" hidden></div>
 
   <h2 class="sect-title">Last message</h2>
   <div id="detail-preview" class="preview"></div>

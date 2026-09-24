@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Switch a running session's model without going to the terminal.**
+  A live session's page in the Mini App has a **Model** control. It
+  shows the model the session reports and offers the same list as the
+  launch picker. Picking one types `/model <name>` into that session.
+  The control reads *switching…* until the session's statusline reports
+  the new model, and *not confirmed — check the session* if nothing
+  changes within 15 seconds. The chat's `🔄` reply to a Models-keyboard
+  switch now changes the same way to show the model the session reports.
+  Claude Code usually asks "Switch model?" in the terminal before a
+  switch, because the next reply has to re-read the whole conversation.
+  With Claude Code 2.1.251 or later, aipager's new `PreModelSwitch` hook
+  approves a switch that aipager itself typed, so that question is not
+  asked. Every other switch, including your own `/model` in the
+  terminal, still asks as before. With an older Claude Code, or if the
+  question appears anyway, the switch shows as not confirmed. Another
+  switch of that session is then refused for a minute, or until the
+  session reports a new model, so that it is not typed into the open
+  question. See
+  [docs/commands.md](docs/commands.md#switching-a-running-sessions-model)
+  and [docs/hooks.md](docs/hooks.md#premodelswitch).
+- **A `PreModelSwitch` hook entry.** It is added to
+  `~/.claude/settings.json` on the next daemon start (and by
+  `aipager config`), with a 5-second timeout. Claude Code 2.1.101 and
+  later ignore hook events they don't know, so older versions are
+  unaffected.
+- **The model list is current and shared.** The Models keyboard, the
+  Mini App launch picker and the new session picker now read one list.
+  It has the aliases `sonnet`, `opus`, `haiku`, `fable` and `opusplan`,
+  plus the pinned `claude-opus-5-5`, `claude-opus-5-5[1m]` (1M context),
+  `claude-sonnet-5`, `claude-fable-5-1` and `claude-haiku-4-5`.
+  A `models` section in `keyboard.json` still replaces it. A model
+  name typed into the launch picker may now end in `[1m]`.
+
+### Changed
+- **A model switch from the chat's Models keyboard is refused unless the
+  session is idle.** Claude Code runs `/model` mid-turn rather than after
+  the turn, so a switch sent while the session was working used to change
+  the model under the running turn. A switch sent while a prompt was open
+  used to be held and typed in later. Both now get a reply saying why,
+  with the same wording the Mini App uses. In team mode, a switch sent
+  while another member's message is still waiting is refused too,
+  instead of being queued.
+
 ## [0.7.13] - 2026-09-16
 
 ### Fixed

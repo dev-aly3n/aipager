@@ -113,9 +113,12 @@ _HOOK_EVENTS = (
     "SessionStart", "SessionEnd", "UserPromptSubmit",
     "PreToolUse", "PostToolUse", "PostToolUseFailure", "PermissionRequest",
     "Notification", "Stop", "StopFailure", "SubagentStart", "SubagentStop",
-    "PreCompact", "PostCompact", "MessageDisplay",
+    "PreCompact", "PostCompact", "MessageDisplay", "PreModelSwitch",
 )
 _TOOL_MATCHER_EVENTS = {"PreToolUse", "PostToolUse", "PermissionRequest"}
+# Hard ceiling on the PreModelSwitch hook (roadmap 8.35); mirrors
+# ``aipager.wizard._constants.MODEL_SWITCH_HOOK_TIMEOUT_SECONDS``.
+_MODEL_SWITCH_HOOK_TIMEOUT_SECONDS = 5
 
 
 def _load(path: Path) -> dict:
@@ -237,7 +240,14 @@ def _ensure_hooks_and_statusline() -> bool:
             changed = True
         if _has_hook_cmd(entries, _HOOK_CMD):
             continue
-        if event in _TOOL_MATCHER_EVENTS:
+        if event == "PreModelSwitch":
+            # Its own dict: `entry` is shared by reference with every
+            # other event, and only this one gets a timeout.
+            entries.append({"hooks": [{
+                "type": "command", "command": hook_path,
+                "timeout": _MODEL_SWITCH_HOOK_TIMEOUT_SECONDS,
+            }]})
+        elif event in _TOOL_MATCHER_EVENTS:
             entries.append({"matcher": "*", "hooks": [entry]})
         else:
             entries.append({"hooks": [entry]})
