@@ -100,3 +100,43 @@ def test_fresh_install_environment_path_is_non_empty_and_includes_local_bin(
     assert "/.local/bin" in path_value, (
         f"design.md: '~/.local/bin ensured first' -- got PATH={path_value!r}"
     )
+
+
+def test_fresh_install_unit_contains_killmode_process(tmp_path):
+    """Roadmap 8.20/8.36: restarting the unit (an `/update`, `service stop`,
+    a plain `systemctl --user restart`) must signal the daemon ONLY, never
+    the dtach sessions it launched into the same cgroup. The default
+    KillMode=control-group killed every one of them."""
+    service_mod._install_linux(yes=True)
+    sections = _parse_unit_sections(service_mod.LINUX_UNIT_PATH.read_text())
+    assert "KillMode=process" in sections["[Service]"]
+    assert not any(line.startswith("KillMode=") for line in sections["[Unit]"])
+
+
+def test_install_changed_unit_daemon_reload_precedes_restart(tmp_path, monkeypatch):
+    """An existing unit WITHOUT KillMode gets rewritten, and systemd must
+    reload it BEFORE the running daemon is restarted — otherwise that very
+    restart still runs under the old control-group KillMode."""
+    service_mod.LINUX_UNIT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    service_mod.LINUX_UNIT_PATH.write_text("[Unit]\nDescription=old\n")
+    calls: list = []
+
+    def _fake(cmd, *, capture=True, check=False):
+        calls.append(list(cmd))
+        if cmd[:3] == ["systemctl", "--user", "is-system-running"]:
+            return 0, "running\n", ""
+        if cmd[:3] == ["systemctl", "--user", "is-active"]:
+            return 0, "active\n", ""
+        if cmd[:1] == ["loginctl"]:
+            return 0, "Linger=yes\n", ""
+        return 0, "", ""
+    monkeypatch.setattr("aipager.service._run", _fake)
+    monkeypatch.setattr("aipager.service._post_install_probe", lambda: None,
+                        raising=False)
+
+    service_mod._install_linux(yes=True)
+
+    assert "KillMode=process" in service_mod.LINUX_UNIT_PATH.read_text()
+    reload_at = calls.index(["systemctl", "--user", "daemon-reload"])
+    restart_at = calls.index(["systemctl", "--user", "restart", "aipager.service"])
+    assert reload_at < restart_at

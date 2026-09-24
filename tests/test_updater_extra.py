@@ -1,14 +1,15 @@
-"""Additional updater.py tests covering _has_binary, _uv_has_aipager,
+"""Additional updater.py tests covering _has_binary,
 cmd_update, _remove_path, _uninstall_binary, cmd_uninstall."""
 
 from __future__ import annotations
 
 import argparse
 import subprocess
-from unittest.mock import MagicMock
 
+import pytest
 
-from aipager import updater
+from aipager import install_source, self_update, updater
+from aipager.install_source import InstallSource
 
 
 # ---- _has_binary --------------------------------------------------------
@@ -23,141 +24,58 @@ def test_has_binary_absent(monkeypatch):
     assert updater._has_binary("uv") is False
 
 
-# ---- _uv_has_aipager ---------------------------------------------------
-
-def test_uv_has_aipager_no_uv(monkeypatch):
-    monkeypatch.setattr(updater, "_has_binary", lambda n: False)
-    assert updater._uv_has_aipager() is False
-
-
-def test_uv_has_aipager_yes(monkeypatch):
-    monkeypatch.setattr(updater, "_has_binary", lambda n: True)
-    monkeypatch.setattr(subprocess, "run",
-                        lambda *a, **k: MagicMock(returncode=0,
-                                                   stdout="aipager 0.3.20\n",
-                                                   stderr=""))
-    assert updater._uv_has_aipager() is True
-
-
-def test_uv_has_aipager_not_in_list(monkeypatch):
-    monkeypatch.setattr(updater, "_has_binary", lambda n: True)
-    monkeypatch.setattr(subprocess, "run",
-                        lambda *a, **k: MagicMock(returncode=0,
-                                                   stdout="other-tool 1.0\n",
-                                                   stderr=""))
-    assert updater._uv_has_aipager() is False
-
-
-def test_uv_has_aipager_subprocess_error(monkeypatch):
-    monkeypatch.setattr(updater, "_has_binary", lambda n: True)
-    def _boom(*a, **k):
-        raise OSError("fork failed")
-    monkeypatch.setattr(subprocess, "run", _boom)
-    assert updater._uv_has_aipager() is False
-
-
-def test_uv_has_aipager_timeout(monkeypatch):
-    monkeypatch.setattr(updater, "_has_binary", lambda n: True)
-    def _boom(*a, **k):
-        raise subprocess.TimeoutExpired(cmd="uv", timeout=10)
-    monkeypatch.setattr(subprocess, "run", _boom)
-    assert updater._uv_has_aipager() is False
-
-
-# ---- _pipx_has_aipager / _brew_has_aipager ----------------------------
-
-def test_pipx_has_aipager_yes(monkeypatch):
-    monkeypatch.setattr(updater, "_has_binary", lambda n: True)
-    monkeypatch.setattr(subprocess, "run",
-                        lambda *a, **k: MagicMock(returncode=0,
-                                                   stdout="aipager",
-                                                   stderr=""))
-    assert updater._pipx_has_aipager() is True
-
-
-def test_pipx_has_aipager_no_pipx(monkeypatch):
-    monkeypatch.setattr(updater, "_has_binary", lambda n: False)
-    assert updater._pipx_has_aipager() is False
-
-
-def test_brew_has_aipager_yes(monkeypatch):
-    monkeypatch.setattr(updater, "_has_binary", lambda n: True)
-    monkeypatch.setattr(subprocess, "run",
-                        lambda *a, **k: MagicMock(returncode=0,
-                                                   stdout="",
-                                                   stderr=""))
-    assert updater._brew_has_aipager() is True
-
-
-def test_brew_has_aipager_nonzero(monkeypatch):
-    monkeypatch.setattr(updater, "_has_binary", lambda n: True)
-    monkeypatch.setattr(subprocess, "run",
-                        lambda *a, **k: MagicMock(returncode=1,
-                                                   stdout="",
-                                                   stderr=""))
-    assert updater._brew_has_aipager() is False
-
-
-def test_brew_has_aipager_timeout(monkeypatch):
-    monkeypatch.setattr(updater, "_has_binary", lambda n: True)
-    def _boom(*a, **k):
-        raise subprocess.TimeoutExpired(cmd="brew", timeout=10)
-    monkeypatch.setattr(subprocess, "run", _boom)
-    assert updater._brew_has_aipager() is False
-
-
 # ---- cmd_update ---------------------------------------------------------
+#
+# Detection by PATH probing (`_uv_has_aipager` & co.) is gone: it picked
+# whichever installer listed a package containing "aipager" rather than the
+# one owning the running interpreter, and failed outright off-PATH.
 
-def test_cmd_update_no_installer_detected(monkeypatch, capsys):
-    monkeypatch.setattr(updater, "_detect_installer", lambda: None)
-    rc = updater.cmd_update()
-    assert rc == 1
-    err = capsys.readouterr().err
-    assert "could not detect" in err
+def _src(kind="uv", upgradable=True):
+    return InstallSource(kind=kind, prefix="/venvs/aipager",
+                         python="/venvs/aipager/bin/python", origin="index",
+                         upgradable=upgradable,
+                         reason=None if upgradable else "refused for the test")
+
+
+def _seam(monkeypatch, result):
+    runs: list = []
+
+    def _run(argv, *, timeout, env=None, capture=True):
+        runs.append(list(argv))
+        if "-I" in argv:
+            return self_update.CommandResult(0, "AIPAGER_VERSION=9.9.9", False, None)
+        return result
+    monkeypatch.setattr(self_update, "_run_command", _run)
+    monkeypatch.setattr(install_source, "resolve_tool", lambda n: f"/abs/{n}")
+    return runs
+
+
+def test_cmd_update_missing_installer_binary(monkeypatch, capsys):
+    monkeypatch.setattr(install_source, "detect_install_source", lambda: _src("uv"))
+    monkeypatch.setattr(install_source, "resolve_tool", lambda n: None)
+    assert updater.cmd_update() == 1
+    assert "could not find `uv`" in capsys.readouterr().err
 
 
 def test_cmd_update_uv(monkeypatch):
-    monkeypatch.setattr(updater, "_detect_installer", lambda: "uv")
-    runs = []
-    monkeypatch.setattr(subprocess, "run",
-                        lambda *a, **k: runs.append(a) or MagicMock(returncode=0))
-    rc = updater.cmd_update()
-    assert rc == 0
-    # Verify the uv command was used
-    assert any("uv" in str(r) and "upgrade" in str(r) for r in runs)
-
-
-def test_cmd_update_pipx(monkeypatch):
-    monkeypatch.setattr(updater, "_detect_installer", lambda: "pipx")
-    runs = []
-    monkeypatch.setattr(subprocess, "run",
-                        lambda *a, **k: runs.append(a) or MagicMock(returncode=0))
+    monkeypatch.setattr(install_source, "detect_install_source", lambda: _src("uv"))
+    runs = _seam(monkeypatch, self_update.CommandResult(0, "", False, None))
     assert updater.cmd_update() == 0
+    assert runs[0][:3] == ["/abs/uv", "tool", "upgrade"]
 
 
-def test_cmd_update_brew(monkeypatch):
-    monkeypatch.setattr(updater, "_detect_installer", lambda: "brew")
-    runs = []
-    monkeypatch.setattr(subprocess, "run",
-                        lambda *a, **k: runs.append(a) or MagicMock(returncode=0))
-    assert updater.cmd_update() == 0
-
-
-def test_cmd_update_subprocess_failure(monkeypatch, capsys):
-    monkeypatch.setattr(updater, "_detect_installer", lambda: "uv")
-    def _boom(*a, **k):
-        raise OSError("perm denied")
-    monkeypatch.setattr(subprocess, "run", _boom)
-    rc = updater.cmd_update()
-    assert rc == 1
+def test_cmd_update_spawn_failure(monkeypatch, capsys):
+    monkeypatch.setattr(install_source, "detect_install_source", lambda: _src("uv"))
+    _seam(monkeypatch, self_update.CommandResult(None, "", False, "OSError: perm denied"))
+    assert updater.cmd_update() == 1
     assert "upgrade failed" in capsys.readouterr().err
 
 
-def test_cmd_update_nonzero_returncode_propagates(monkeypatch):
-    monkeypatch.setattr(updater, "_detect_installer", lambda: "uv")
-    monkeypatch.setattr(subprocess, "run",
-                        lambda *a, **k: MagicMock(returncode=42))
-    assert updater.cmd_update() == 42
+def test_cmd_update_nonzero_returncode_fails(monkeypatch, capsys):
+    monkeypatch.setattr(install_source, "detect_install_source", lambda: _src("uv"))
+    _seam(monkeypatch, self_update.CommandResult(42, "", False, None))
+    assert updater.cmd_update() == 1
+    assert "exit 42" in capsys.readouterr().err
 
 
 # ---- _stop_daemon -------------------------------------------------------
@@ -204,11 +122,14 @@ def test_stop_daemon_runs_pkill_when_available(monkeypatch):
 
     monkeypatch.setattr(service, "cmd_service", lambda args: 0)
     runs = []
-    monkeypatch.setattr(subprocess, "run",
-                        lambda *a, **k: runs.append(a) or MagicMock(returncode=0))
+
+    def _run(argv, *, timeout, env=None, capture=True):
+        runs.append(list(argv))
+        return self_update.CommandResult(0, "", False, None)
+    monkeypatch.setattr(self_update, "_run_command", _run)
     _isolate_pkill(monkeypatch, available=True)
     updater._stop_daemon()
-    assert any("pkill" in str(r) for r in runs)
+    assert any("pkill" in r[0] and r[1:] == ["-f", "aipager start"] for r in runs)
 
 
 def test_stop_daemon_swallows_errors(monkeypatch):
@@ -261,31 +182,19 @@ def test_uninstall_binary_no_installer(monkeypatch):
     assert updater._uninstall_binary(None) == 0
 
 
-def test_uninstall_binary_uv(monkeypatch):
-    runs = []
-    monkeypatch.setattr(subprocess, "run",
-                        lambda *a, **k: runs.append(a) or MagicMock(returncode=0))
-    assert updater._uninstall_binary("uv") == 0
+@pytest.mark.parametrize("installer,tail", [
+    ("uv", ["tool", "uninstall", "aipager"]),
+    ("pipx", ["uninstall", "aipager"]),
+    ("brew", ["uninstall", "aipager"]),
+])
+def test_uninstall_binary_goes_through_the_seam(installer, tail, monkeypatch):
+    runs = _seam(monkeypatch, self_update.CommandResult(0, "", False, None))
+    assert updater._uninstall_binary(installer) == 0
+    assert runs == [[f"/abs/{installer}", *tail]]
 
 
-def test_uninstall_binary_pipx(monkeypatch):
-    runs = []
-    monkeypatch.setattr(subprocess, "run",
-                        lambda *a, **k: runs.append(a) or MagicMock(returncode=0))
-    assert updater._uninstall_binary("pipx") == 0
-
-
-def test_uninstall_binary_brew(monkeypatch):
-    runs = []
-    monkeypatch.setattr(subprocess, "run",
-                        lambda *a, **k: runs.append(a) or MagicMock(returncode=0))
-    assert updater._uninstall_binary("brew") == 0
-
-
-def test_uninstall_binary_swallows_subprocess_error(monkeypatch):
-    def _boom(*a, **k):
-        raise OSError("perm")
-    monkeypatch.setattr(subprocess, "run", _boom)
+def test_uninstall_binary_reports_spawn_error(monkeypatch):
+    _seam(monkeypatch, self_update.CommandResult(None, "", False, "OSError: perm"))
     assert updater._uninstall_binary("uv") == 1
 
 

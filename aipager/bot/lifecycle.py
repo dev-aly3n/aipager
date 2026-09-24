@@ -31,7 +31,7 @@ from telegram.error import BadRequest, Forbidden, RetryAfter
 
 from aipager.dtach import inject
 
-from aipager.bot import session_parity
+from aipager.bot import session_parity, update_flow
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot import flood_state
 from aipager.bot.flood_budget import BudgetRateLimiter, clear_backoff_signal
@@ -347,6 +347,9 @@ class LifecycleMixin:
         self._app.add_handler(CommandHandler("perms", self._handle_perms_cmd))
         self._app.add_handler(CommandHandler("settings", self._handle_settings_cmd))
         self._app.add_handler(CommandHandler("app", self._handle_app_cmd))
+        # Admin-only self-update (roadmap 8.36); the handler gates itself.
+        self._app.add_handler(CommandHandler(
+            "update", functools.partial(update_flow.handle_update_cmd, self)))
         # Chat parity with the Mini App — each of these mirrors a route
         # the Mini App already exposes. Handlers live in session_parity
         # so this file stays a registration table.
@@ -572,6 +575,7 @@ class LifecycleMixin:
             BotCommand("rename", "Rename a session"),
             BotCommand("delete", "Remove a finished session from the list"),
             BotCommand("diff", "Show a session's working-directory diff"),
+            BotCommand("update", "Update aipager and Claude Code (admin)"),
         ]
         # Read late (not module-level) so a live `aipager miniapp enable`
         # + restart is reflected without re-importing this module.

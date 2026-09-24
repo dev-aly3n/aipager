@@ -488,6 +488,91 @@ Only this one socket moved; per-session dtach sockets
 (`/tmp/claude-dtach-*.sock`) are unaffected. Override with
 `AIPAGER_SOCKET_PATH` if you need a specific location.
 
+## `/update` says the restart would kill sessions (KillMode)
+
+Service units written before this version have no `KillMode=` line, so
+systemd uses `control-group`: stopping or restarting `aipager.service`
+kills every Claude session the daemon launched. `/update` therefore
+installs the new version but does not restart the daemon, and lists the
+sessions a restart would take down. Fix it once:
+
+```
+aipager service install
+```
+
+It rewrites the unit with `KillMode=process`, reloads systemd, and
+restarts the daemon — and that restart already runs under the new
+setting. Check with
+`systemctl --user show -p KillMode aipager.service` (`KillMode=process`).
+With it, systemd logs "left-over process" lines for your sessions on
+every restart; that is expected.
+
+## `aipager update` can't find uv / pipx
+
+`aipager update` finds the installer by absolute path in your `PATH`
+plus `~/.local/bin`, `~/.cargo/bin`, the Homebrew prefixes, `/usr/bin`
+and `/bin`. If it still says it could not find `pipx`, the installer
+that created this aipager is gone or lives elsewhere; reinstall with the
+tool you have (`pipx install --force aipager`,
+`uv tool install --reinstall aipager`).
+
+## Update refused: editable / not your install
+
+`/update` and `aipager update` only upgrade an install owned and
+writable by your own user, through the installer that created it. They
+refuse, and name the reason, for:
+
+- an editable (development) checkout — update it with `git pull`;
+- a Nix, Snap, Docker or OS-package install — use that system's own
+  update;
+- an install owned by another user (for example a root-owned venv under
+  `/opt`) — update it as that user.
+
+## Updated, but the version didn't change
+
+A pipx install made from a local path (`pipx install /path/to/aipager`)
+upgrades from that same path, not from PyPI. `/update` says
+`already at A — this pipx install upgrades from the local path …`. Pull
+or check out the new version there first, or switch to PyPI with
+`pipx install --force aipager`. (The voice extra's install button uses
+`pipx install --force aipager[voice]`, which also switches a local-path
+install to PyPI.)
+
+## The daemon didn't come back after an update
+
+The upgrade checks that the new version imports before any restart, but
+if the new daemon still fails to start, systemd keeps retrying every
+5 s. Look at why:
+
+```
+journalctl --user -u aipager.service -n 50
+```
+
+Reinstall the previous version with the same installer, then restart:
+
+```
+pipx install --force aipager==<previous>        # or:
+uv tool install --force aipager==<previous>     # or:
+<venv>/bin/python -m pip install aipager==<previous>
+systemctl --user restart aipager.service
+```
+
+A local-path pipx install: `pipx install --force /path/to/aipager` at
+the old commit. If a stale announcement is pending, remove it with
+`rm -f ~/.local/share/aipager/update-restart.json` (it is ignored after
+24 h anyway); `~/.local/share/aipager/update.lock` is only a lock file
+and is safe to delete when no update is running.
+
+## "An update was interrupted when aipager shut down"
+
+The daemon stopped (or was restarted) while `/update` was installing, and
+the installer was stopped with it, so the install may be half-written. If
+aipager or Claude Code misbehaves, repair it: for aipager, run the
+reinstall command from the message (for example
+`pipx install --force aipager`) and then
+`systemctl --user restart aipager.service`; for Claude Code, run
+`claude update` again.
+
 ## Still stuck?
 
 Open an issue at

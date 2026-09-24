@@ -45,6 +45,9 @@ MACOS_LOG_PATH = Path.home() / "Library" / "Logs" / "aipager.log"
 #    [Unit] (systemd v229+; under [Service] it's `Unknown key name` and
 #    silently keeps the default).
 #  - Environment=PATH= added — see the inline comment below for why.
+#  - KillMode=process added (roadmap 8.20): the default control-group mode
+#    killed every daemon-launched session on each restart. The daemon's
+#    self-update refuses to restart automatically until the live unit has it.
 LINUX_UNIT_TEMPLATE = """\
 [Unit]
 Description=AIPager Telegram Bot Daemon
@@ -60,6 +63,10 @@ LoadCredential=claude_oauth:%h/.config/aipager/daemon.env
 Restart=always
 RestartSec=5
 TimeoutStopSec=15
+# Stop/restart signals the daemon ONLY, never the dtach sessions it launched
+# (they share this cgroup). Without it every `/update` restart, `service
+# stop` or `systemctl --user restart` killed those sessions (roadmap 8.20).
+KillMode=process
 StandardOutput=journal
 StandardError=journal
 

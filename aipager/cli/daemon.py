@@ -369,6 +369,14 @@ async def _run_daemon(bot_username: str) -> None:
     session_monitor.on_tick = bot.pinned_tick
     await session_monitor.start()
 
+    # A self-update (roadmap 8.36) that restarted the daemon left a marker:
+    # announce "aipager updated A → B, N sessions re-adopted" once the
+    # monitor's first scans have re-adopted the dtach sockets. Fire-and-
+    # forget, flood-safe, never raises; cancelled at shutdown below.
+    from aipager.bot import update_flow
+    marker_task = asyncio.create_task(
+        update_flow.deliver_update_marker(bot, registry))
+
     # Mini App server — newest and highest-risk component, so it starts
     # last and (below) stops first. Behind a lazy import to keep
     # aiohttp (the largest dependency in the tree) off cold start-up
@@ -457,6 +465,12 @@ async def _run_daemon(bot_username: str) -> None:
     # tasks sit for the full 45s — the suite went from 100s to 413s
     # before this was tracked and cancelled.
     keyboard_release_task.cancel()
+    marker_task.cancel()
+    # Before bot.stop(): a running self-update gets a short grace, then its
+    # installer's process group is killed (it would otherwise outlive us
+    # under KillMode=process and write the venv while the next daemon
+    # starts); its final status edit still goes out.
+    await _shutdown_updates(bot)
     registry.save()
     if manager is not None:
         # Before miniapp_server.stop(): stop accepting the world's
@@ -471,6 +485,27 @@ async def _run_daemon(bot_username: str) -> None:
         await observers.stop()
     await bot.stop()
     log.info("Goodbye")
+
+
+# Slack on top of update_flow.SHUTDOWN_DEADLINE_SECONDS: the updates'
+# shutdown bounds itself, and this bounds it again so the registry save and
+# bot stop below it always run before systemd's TimeoutStopSec=15.
+_UPDATES_SHUTDOWN_SLACK_SECONDS = 1.0
+
+
+async def _shutdown_updates(bot) -> None:
+    updates = getattr(bot, "updates", None)
+    shutdown = getattr(updates, "shutdown", None)
+    if shutdown is None:
+        return
+    from aipager.bot import update_flow
+    limit = update_flow.SHUTDOWN_DEADLINE_SECONDS + _UPDATES_SHUTDOWN_SLACK_SECONDS
+    try:
+        await asyncio.wait_for(shutdown(), timeout=limit)
+    except asyncio.TimeoutError:
+        log.warning("self-update shutdown overran %.0fs; going on with the stop", limit)
+    except Exception:
+        log.warning("self-update shutdown failed", exc_info=True)
 
 
 def _cmd_start(args: argparse.Namespace) -> int:

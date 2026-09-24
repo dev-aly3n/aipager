@@ -1122,3 +1122,74 @@ def test_the_model_harness_detects_a_missing_switching_state(node_bin, tmp_path)
     assert broken != INDEX_HTML, "switching text not found — page changed shape"
     proc = _drive_controls(node_bin, tmp_path, broken, "model_switch")
     assert proc.returncode != 0, "harness passed a page with no switching state"
+
+
+# ----- Settings -> Updates (admin self-update, roadmap 8.36) ------------------
+
+def _drive_smoke(node_bin, tmp_path, html, scenario):
+    page = tmp_path / f"{scenario}.html"
+    page.write_text(html, encoding="utf-8")
+    return subprocess.run(
+        [node_bin, str(HARNESS), str(page), scenario],
+        capture_output=True, text=True, timeout=60,
+    )
+
+
+def test_updates_block_hidden_without_can_update(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_hidden")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: no can_update -> updates block hidden" in proc.stdout
+
+
+def test_updates_block_renders_and_posts_an_action(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_render")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "POST /api/update/claude" in proc.stdout
+
+
+def test_updates_403_hides_block_not_expired(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_forbidden")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: 403 -> updates block hidden, app not expired" in proc.stdout
+
+
+def test_updates_poll_only_while_a_job_runs(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_poll_running")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: running job -> polls every 3 s, no start buttons" in proc.stdout
+
+
+def test_updates_stop_polling_once_the_job_finished(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_no_poll_terminal")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: finished job -> no poll, start buttons back" in proc.stdout
+
+
+def test_updates_offer_nothing_while_a_restart_is_pending(node_bin, tmp_path):
+    """Review rev-iter1-001: the pending restart holds the update lock, so
+    the block must not re-offer Update buttons in that window."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_restart_pending")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: pending restart -> no buttons, no poll" in proc.stdout
+
+
+def test_updates_start_refused_while_shutting_down_says_so(node_bin, tmp_path):
+    """Review rev-iter2-002: a start during a daemon shutdown is a 503
+    ``shutting_down``, and the page tells the admin why."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_shutting_down")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: 503 shutting_down -> notice says aipager is shutting down" in proc.stdout

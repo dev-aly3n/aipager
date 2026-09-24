@@ -56,6 +56,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `claude-sonnet-5`, `claude-fable-5-1` and `claude-haiku-4-5`.
   A `models` section in `keyboard.json` still replaces it. A model
   name typed into the launch picker may now end in `[1m]`.
+- **`/update`: update aipager and Claude Code from Telegram (admin only).**
+  It shows the running and latest aipager (PyPI) and Claude Code versions,
+  how aipager was installed, and whether the daemon can restart itself,
+  then offers **Update Claude Code**, **Update aipager**, **Both** and
+  **Cancel**. A lookup that fails shows "unknown", never an error.
+  - *Claude Code* runs `claude update` (absolute path, 5 min timeout) and
+    reports the new version. Running sessions keep the old version until
+    you restart them; the reply lists them and restarts none.
+  - *aipager* first waits until no session is running a turn, holds a
+    busy card, a background agent, an open permission prompt or an
+    undelivered held answer (**Restart now** skips the wait; after 10 min
+    it asks again). It then upgrades through the installer that owns the
+    running daemon, checks the new version imports, and schedules a
+    detached `systemctl --user restart aipager.service` 5 s later. The new
+    daemon posts `✅ aipager updated A → B, N sessions re-adopted`.
+  - Only the admin may use it, and in personal mode only the operator.
+    One update runs at a time, across Telegram, the Mini App and the CLI,
+    including the seconds while a restart is pending. If the restart never
+    happens, the daemon cancels the pending restart after two minutes and
+    tells you to restart it yourself.
+  - A timed-out upgrade warns that the install may be partial and gives
+    the reinstall command. Installer output is shown only in private
+    chats. If the daemon shuts down mid-install, the installer is stopped
+    after 3 s rather than left running, and the next daemon tells you the
+    update was interrupted. Once a shutdown has begun, no update starts
+    and no restart is scheduled, so `aipager service stop` during an
+    update stays stopped; an update that finished installing is announced
+    by the next start. The update's part of the shutdown takes at most
+    8 s, well inside systemd's 15 s stop timeout.
+- **Mini App → Settings → Updates**, for the admin: the same versions and
+  buttons, driving the same update job the chat shows.
 
 ### Changed
 - **A long turn's busy card refreshes less often, and says so in its
@@ -165,6 +196,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the same wording the Mini App uses. In team mode, a switch sent
   while another member's message is still waiting is refused too,
   instead of being queued.
+- **The service unit now sets `KillMode=process`**, so restarting or
+  stopping the daemon no longer kills the Claude sessions it launched.
+  **Re-run `aipager service install`** to pick it up: until you do,
+  `/update` installs the new version but will not restart the daemon for
+  you, and says why. systemd logs "left-over process" lines for those
+  sessions on a restart; that is expected.
+- The voice extra's **Restart daemon now** button schedules a detached
+  restart instead of restarting the daemon from inside itself, and refuses
+  (with the fix) while the unit would still kill sessions, and while an
+  update is running or waiting to restart. A daemon started
+  by hand no longer goes through `systemctl` just because a unit file
+  exists.
+- `update` is now a reserved session name, like the other commands.
 
 ### Fixed
 - **Button taps show their messages again.** Every tap on an inline
@@ -267,6 +311,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Code's default reason, which a plain signal also gets) says "exited".
   The session aipager's own `/kill` just ended gets no second notice after
   "💀 Killed".
+- **`aipager update` works outside an interactive shell.** It finds the
+  installer that owns the running aipager from the interpreter itself
+  (pipx, uv, Homebrew, or a pip venv you own) instead of asking whichever
+  `uv`/`pipx`/`brew` happens to be on `PATH`, runs it by absolute path
+  (so `~/.local/bin` missing from `PATH` no longer breaks it), stops it
+  after 10 minutes, and prints how to restart the daemon. It refuses
+  editable, Nix, Snap, system-package, container and other users' installs
+  instead of guessing.
 
 ## [0.7.13] - 2026-09-16
 

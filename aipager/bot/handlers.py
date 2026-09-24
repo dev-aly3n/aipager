@@ -405,32 +405,83 @@ class CommandHandlersMixin:
     async def _restart_daemon(self, query) -> None:
         """Trigger a clean restart.
 
-        Service-managed daemons (systemd-user / launchd) go through
-        their respective managers. Foreground / editable daemons spawn
-        a detached replacement that waits for us to die, then we
-        SIGTERM ourselves — so users on their phone don't need
-        terminal access to pick up a code change.
+        A daemon that IS the systemd-user unit's main process schedules a
+        detached, delayed ``systemctl --user restart`` through
+        :func:`aipager.self_update.schedule_restart` (a transient unit
+        outside our cgroup, so it survives our exit) — never a blocking
+        ``systemctl restart`` from inside our own cgroup on the event loop.
+        It refuses when the unit's KillMode would take every
+        daemon-launched session down with it. launchd goes through
+        ``launchctl kickstart`` in a thread. Everything else — including a
+        foreground daemon on a machine that also has a unit file installed,
+        which the old ``LINUX_UNIT_PATH.exists()`` check sent to systemctl
+        and so started a second daemon — spawns a detached replacement that
+        waits for us to die, then we SIGTERM ourselves.
         """
         import platform
-        from aipager.service import (
-            LINUX_UNIT_PATH, MACOS_LABEL, MACOS_PLIST_PATH, _run,
-        )
+        from aipager import self_update
+        from aipager.service import MACOS_LABEL, MACOS_PLIST_PATH, _run
+
+        # A restart mid-update would import a half-written venv (or drop a
+        # pending update restart): refuse while this daemon runs an update
+        # job or awaits its restart, or while anyone (the CLI) holds the
+        # update lock.
+        updates = getattr(self, "updates", None)
+        if updates is not None and updates.busy:
+            await self._safe_edit_callback(
+                query,
+                "⏳ Not restarting: an aipager update is running or about to "
+                "restart the daemon. Try again once it has finished.",
+            )
+            return
+        probe = self_update.UpdateLock()
+        if not probe.try_acquire():
+            await self._safe_edit_callback(
+                query,
+                "⏳ Not restarting: an aipager update is running "
+                "(the update lock is held). Try again once it has finished.",
+            )
+            return
+        probe.release()
 
         sysname = platform.system().lower()
-        if sysname == "linux" and LINUX_UNIT_PATH.exists():
-            await self._safe_edit_callback(
-                query, "🔄 Restarting via systemctl --user…",
-            )
-            # systemctl will kill us; the unit's Restart=on-failure /
-            # the service definition handles relaunch.
-            _run(["systemctl", "--user", "restart", "aipager.service"])
-            return
+        if sysname == "linux":
+            plan = await asyncio.to_thread(self_update.restart_plan, self.registry)
+            if plan.mode == "systemd":
+                if not plan.automatic:
+                    at_risk = (
+                        "\nSessions a restart would kill: "
+                        + ", ".join(plan.at_risk)
+                        if plan.at_risk else ""
+                    )
+                    await self._safe_edit_callback(
+                        query,
+                        "⚠️ Not restarting: "
+                        f"{plan.reason or 'the service KillMode would stop your sessions'}."
+                        f"{at_risk}",
+                    )
+                    return
+                ok, detail = await asyncio.to_thread(self_update.schedule_restart, plan)
+                if not ok:
+                    await self._safe_edit_callback(
+                        query,
+                        "⚠️ Couldn't schedule the restart: "
+                        f"{detail}\nPlease restart manually.",
+                    )
+                    return
+                await self._safe_edit_callback(
+                    query,
+                    f"🔄 Restarting in {self_update.RESTART_DELAY_SECONDS} s — "
+                    "send your voice message again in a few seconds.",
+                )
+                return
         if sysname == "darwin" and MACOS_PLIST_PATH.exists():
             await self._safe_edit_callback(
                 query, "🔄 Restarting via launchctl kickstart…",
             )
-            _run(["launchctl", "kickstart", "-k",
-                  f"gui/{os.getuid()}/{MACOS_LABEL}"])
+            await asyncio.to_thread(
+                _run, ["launchctl", "kickstart", "-k",
+                       f"gui/{os.getuid()}/{MACOS_LABEL}"])
             return
 
         # No service unit — spawn a detached replacement and self-kill.
@@ -529,6 +580,7 @@ class CommandHandlersMixin:
             "  /delete — drop a finished session from the list\n"
             "  /settings — message layout, formatting and language\n"
             "  /perms — switch a session between Ask and Auto\n"
+            "  /update — update aipager and Claude Code (admin)\n"
         )
         try:
             await send_text(self._app.bot,

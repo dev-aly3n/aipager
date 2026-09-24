@@ -116,7 +116,10 @@ global.fetch = (url, opts) => {
   });
 };
 global.setInterval = () => 0;
-global.setTimeout = (f) => { return 0; };
+// Recorded (never run): a scenario can assert what the page SCHEDULED,
+// e.g. the Updates block's 3 s poll.
+const timeoutCalls = [];
+global.setTimeout = (f, ms) => { timeoutCalls.push(ms); return 0; };
 global.clearTimeout = () => {};
 global.clearInterval = () => {};
 global.Telegram = undefined;
@@ -355,13 +358,42 @@ const FIXTURES = {
   },
 };
 
+// ---- Settings -> Updates (admin self-update) fixtures ------------------
+if (SCENARIO.indexOf("updates_") === 0) {
+  FIXTURES["/api/preferences"] = {
+    schema: [], values: {}, can_edit: true,
+    can_update: SCENARIO !== "updates_hidden",
+  };
+  FIXTURES["/api/update"] = {
+    aipager: { running: "0.7.13", installed: "0.7.13", latest: "0.7.14",
+               update_available: true,
+               source: { kind: "pipx", origin: "index", detail: null,
+                         upgradable: true, reason: null,
+                         describe: "pipx, from PyPI" } },
+    claude: { current: "2.1.281", latest: "2.1.290", update_available: true,
+              method: "native", channel: "latest" },
+    restart: { mode: "systemd", automatic: true, reason: null },
+    job: null,
+  };
+  FIXTURES["/api/update/claude"] = { job: { id: 1, kind: "claude",
+    phase: "claude_updating", blockers: [], summary: "", started_at: 1 } };
+  const JOB_PHASE = { updates_poll_running: "upgrading",
+                      updates_no_poll_terminal: "done",
+                      updates_restart_pending: "restart_scheduled" }[SCENARIO];
+  if (JOB_PHASE) {
+    FIXTURES["/api/update"].job = { id: 7, kind: "aipager", phase: JOB_PHASE,
+      blockers: [], summary: JOB_PHASE === "done" ? "aipager is already up to date" : "",
+      started_at: 1 };
+  }
+}
+
 // extract and run the page script
 let script = page.match(/<script>([\s\S]*?)<\/script>/g)
   .map(s => s.replace(/<\/?script>/g, "")).join("\n");
 // unwrap the IIFE so the internals are reachable, and export what we drive
 // keep the IIFE (it contains top-level `return`s) but export its internals
 script = script.replace(/\}\)\(\);\s*$/,
-  "\n  global.__api = { openDetail, renderSessionSettings, loadSessionSettings, saveSessionPreference, renderOptionGroup, openGroups, pollTick };\n})();");
+  "\n  global.__api = { openDetail, renderSessionSettings, loadSessionSettings, saveSessionPreference, renderOptionGroup, openGroups, pollTick, loadSettings, loadUpdates, showView };\n})();");
 eval(script);
 
 function fail(msg) { console.error("FAIL: " + msg); process.exit(1); }
@@ -1132,7 +1164,126 @@ function driveModelBusy() {
   }, 10);
 }
 
+// ---- scenario: no can_update -> the Updates block never appears ------
+function driveUpdatesHidden() {
+  api.loadSettings();
+  setTimeoutReal(() => {
+    if (!byId["updates-block"].hidden) fail("updates block shown without can_update");
+    if (fetchCalls.some(f => f.url === "/api/update"))
+      fail("asked /api/update although can_update is false");
+    console.log("ok: no can_update -> updates block hidden, /api/update never asked");
+    process.exit(0);
+  }, 10);
+}
+
+// ---- scenario: can_update -> rendered, and a tap POSTs the action -----
+function driveUpdatesRender() {
+  api.loadSettings();
+  setTimeoutReal(() => {
+    if (byId["updates-block"].hidden) fail("updates block hidden despite can_update");
+    const ap = byId["updates-aipager"].textContent;
+    if (!ap.includes("0.7.13") || !ap.includes("0.7.14"))
+      fail("aipager versions not rendered: " + JSON.stringify(ap));
+    if (!byId["updates-claude"].textContent.includes("2.1.290"))
+      fail("claude versions not rendered");
+    const labels = byId["updates-actions"].children.map(c => c.textContent);
+    if (JSON.stringify(labels) !== JSON.stringify(["Update Claude Code", "Update aipager", "Both"]))
+      fail("unexpected update buttons: " + JSON.stringify(labels));
+    const before = fetchCalls.length;
+    byId["updates-actions"].children[0].click();
+    const post = fetchCalls.slice(before).find(f => f.method === "POST");
+    if (!post || post.url !== "/api/update/claude")
+      fail("Update Claude Code sent " + JSON.stringify(post));
+    console.log("ok: can_update -> versions + three buttons -> POST /api/update/claude");
+    process.exit(0);
+  }, 10);
+}
+
+// ---- scenario: a 403 hides the block and does NOT expire the app ------
+function driveUpdatesForbidden() {
+  POST_STATUS_OVERRIDE = { path: "/api/update", method: "GET", status: 403,
+                           body: { error: "forbidden" } };
+  api.loadSettings();
+  setTimeoutReal(() => {
+    if (!byId["updates-block"].hidden) fail("a 403 left the updates block visible");
+    if (byId["conn-badge"].textContent === "expired")
+      fail("a 403 from /api/update put the whole app into the expired state");
+    if ((byId["error"].textContent || "").indexOf("expired") !== -1)
+      fail("a 403 from /api/update showed the session-expired message");
+    console.log("ok: 403 -> updates block hidden, app not expired");
+    process.exit(0);
+  }, 10);
+}
+
+// ---- the Updates poll: only while a job is still running ----------------
+function updatePolls() { return timeoutCalls.filter(ms => ms === 3000).length; }
+function startLabels() {
+  return byId["updates-actions"].children.map(c => c.textContent)
+    .filter(l => l === "Update Claude Code" || l === "Update aipager" || l === "Both");
+}
+
+function driveUpdatesPollRunning() {
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    if (updatePolls() !== 1) fail("a running job scheduled " + updatePolls() + " polls, want 1");
+    if (startLabels().length) fail("start buttons offered mid-job: " + JSON.stringify(startLabels()));
+    console.log("ok: running job -> polls every 3 s, no start buttons");
+    process.exit(0);
+  }, 10);
+}
+
+function driveUpdatesNoPollTerminal() {
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    if (updatePolls() !== 0) fail("a finished job still polls");
+    if (startLabels().length !== 3) fail("finished job hid the start buttons: " + JSON.stringify(startLabels()));
+    console.log("ok: finished job -> no poll, start buttons back");
+    process.exit(0);
+  }, 10);
+}
+
+function driveUpdatesRestartPending() {
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    if (updatePolls() !== 0) fail("a pending restart still polls");
+    if (byId["updates-actions"].children.length)
+      fail("buttons offered while a restart is pending: " +
+           JSON.stringify(byId["updates-actions"].children.map(c => c.textContent)));
+    if (!byId["updates-job"].textContent.includes("Restarting"))
+      fail("pending restart not shown: " + JSON.stringify(byId["updates-job"].textContent));
+    console.log("ok: pending restart -> no buttons, no poll");
+    process.exit(0);
+  }, 10);
+}
+
+// ---- a start refused because the daemon is stopping (503) -------------
+function driveUpdatesShuttingDown() {
+  api.loadSettings();
+  setTimeoutReal(() => {
+    POST_STATUS_OVERRIDE = { path: "/api/update/claude", method: "POST", status: 503,
+                             body: { error: "shutting_down" } };
+    byId["updates-actions"].children[0].click();
+    setTimeoutReal(() => {
+      const notice = byId["notice"].textContent || "";
+      if (notice.indexOf("shutting down") === -1)
+        fail("a 503 shutting_down did not say so: " + JSON.stringify(notice));
+      console.log("ok: 503 shutting_down -> notice says aipager is shutting down");
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
 const DRIVERS = {
+  updates_shutting_down: driveUpdatesShuttingDown,
+  updates_poll_running: driveUpdatesPollRunning,
+  updates_no_poll_terminal: driveUpdatesNoPollTerminal,
+  updates_restart_pending: driveUpdatesRestartPending,
+  updates_hidden: driveUpdatesHidden,
+  updates_render: driveUpdatesRender,
+  updates_forbidden: driveUpdatesForbidden,
   model_switch: driveModelSwitch,
   model_unconfirmed: driveModelSwitch,
   model_busy: driveModelBusy,

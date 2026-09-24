@@ -482,7 +482,7 @@ _RESERVED = {
     # Telegram bot commands (see bot/lifecycle.py::_command_list)
     "status", "stop", "kill", "new", "help", "start", "settings",
     "restart", "rename", "delete", "diff",
-    "app", "clearqueue", "perms", "resume", "whoami",
+    "app", "clearqueue", "perms", "resume", "whoami", "update",
     # `aipager session` subcommand verbs (see cli/session.py) — these are
     # matched before the name is treated as a session at all.
     "ls", "list",

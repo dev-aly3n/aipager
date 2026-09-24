@@ -1,24 +1,29 @@
 """Implementation of `aipager update` / `aipager uninstall`.
 
-Detects how aipager was installed (uv tool, pipx, or Homebrew) and
-runs the matching upgrade / removal command. Falls back to a friendly
-error when no known installer is in charge.
+Which installer owns the running aipager (uv tool, pipx, Homebrew, or a
+user-owned pip venv) is decided by :mod:`aipager.install_source` from the
+running interpreter itself, and every command comes from its one
+installer table with an absolute binary path — so this works from a
+non-interactive ssh shell or a systemd unit whose PATH lacks
+``~/.local/bin``. Every spawn goes through
+:func:`aipager.self_update.run_command` (argv lists, a timeout, never a
+shell).
 
-The replacement of the running ``aipager`` binary by uv/pipx/brew is
-safe: each one writes the new file in place, but the current Python
-process already has its modules in memory.
+Upgrading replaces files under the running venv. This CLI process exits
+right after, but a running daemon does NOT have its modules in memory —
+it imports lazily on hot paths — so ``aipager update`` prints how to
+restart it and never restarts anything itself. ``/update`` in Telegram
+does the restart safely.
 """
 
 from __future__ import annotations
 
-import os
 import platform
 import shutil
-import subprocess
-import sys
 from pathlib import Path
 
 from aipager.errors import friendly_error, friendly_warn
+from aipager.install_source import _EXTRA_PACKAGES  # noqa: F401  (re-export)
 from aipager.ui import console, ok as ui_ok
 
 
@@ -30,54 +35,11 @@ def _has_binary(name: str) -> bool:
     return shutil.which(name) is not None
 
 
-def _uv_has_aipager() -> bool:
-    if not _has_binary("uv"):
-        return False
-    try:
-        r = subprocess.run(
-            ["uv", "tool", "list"],
-            capture_output=True, text=True, timeout=10,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-    return r.returncode == 0 and "aipager" in r.stdout
-
-
-def _pipx_has_aipager() -> bool:
-    if not _has_binary("pipx"):
-        return False
-    try:
-        r = subprocess.run(
-            ["pipx", "list", "--short"],
-            capture_output=True, text=True, timeout=10,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-    return r.returncode == 0 and "aipager" in r.stdout
-
-
-def _brew_has_aipager() -> bool:
-    if not _has_binary("brew"):
-        return False
-    try:
-        r = subprocess.run(
-            ["brew", "list", "aipager"],
-            capture_output=True, text=True, timeout=10,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-    return r.returncode == 0
-
-
 def _detect_installer() -> str | None:
-    """Return the name of the installer that owns this aipager, or None."""
-    if _uv_has_aipager():
-        return "uv"
-    if _pipx_has_aipager():
-        return "pipx"
-    if _brew_has_aipager():
-        return "brew"
-    return None
+    """``"uv"|"pipx"|"brew"|"pip"`` for the install that owns THIS
+    interpreter, or None when it is not upgradable from here."""
+    from aipager import install_source
+    return install_source.installer_kind()
 
 
 # ---------------------------------------------------------------------------
@@ -85,39 +47,84 @@ def _detect_installer() -> str | None:
 # ---------------------------------------------------------------------------
 
 def cmd_update(_args=None) -> int:
-    """Upgrade aipager via the installer that owns it."""
-    installer = _detect_installer()
-    if installer is None:
+    """Upgrade aipager via the installer that owns the running interpreter.
+
+    0 on success or when already current; 1 on a refused install, a
+    missing installer binary, a busy lock, a failure or a timeout. Never
+    restarts anything.
+    """
+    from aipager import install_source, self_update
+
+    source = install_source.detect_install_source()
+    if not source.upgradable:
         friendly_error(
-            "could not detect how aipager was installed.",
+            f"can't update this install: {source.reason}.",
             "",
-            "  Tried `uv tool list`, `pipx list`, `brew list aipager` — none",
-            "  reported aipager. If you installed via `pip install --user` or",
-            "  in a project venv, upgrade that manually:",
-            "      pip install --upgrade aipager",
+            f"  Install: {source.describe()}",
+        )
+        return 1
+    argv = install_source.upgrade_argv(source)
+    if argv is None:
+        friendly_error(
+            f"could not find `{source.kind}`, which owns this aipager.",
+            "",
+            "  Searched: " + install_source.augmented_path(),
         )
         return 1
 
-    if installer == "uv":
-        # --refresh forces uv to bypass its index cache, which has bitten
-        # users when a fresh PyPI release was minutes old.
-        cmd = ["uv", "tool", "upgrade", "aipager", "--refresh"]
-    elif installer == "pipx":
-        cmd = ["pipx", "upgrade", "aipager"]
-    elif installer == "brew":
-        cmd = ["brew", "upgrade", "aipager"]
-    else:  # defensive — _detect_installer only returns one of the above
+    lock = self_update.UpdateLock()
+    if not lock.try_acquire():
+        friendly_error(
+            "another update is already running (the daemon's /update or a "
+            "second `aipager update`). Try again when it finishes."
+        )
         return 1
-
-    console.print(f"[step]→[/step] upgrading aipager via [path]{installer}[/path]")
     try:
-        rc = subprocess.run(cmd).returncode
-    except (OSError, subprocess.SubprocessError) as e:
-        friendly_error(f"upgrade failed: {e}")
-        return 1
-    if rc == 0:
-        ui_ok("upgrade complete")
-    return rc
+        running = self_update.running_version()
+        console.print(
+            f"[step]→[/step] upgrading aipager via [path]{source.describe()}[/path]"
+        )
+        res = self_update.run_command(
+            argv, timeout=self_update.UPGRADE_TIMEOUT_SECONDS,
+            env=install_source.upgrade_env(source), capture=False,
+        )
+        if res.timed_out:
+            friendly_error(
+                f"the upgrade timed out after {self_update.UPGRADE_TIMEOUT_SECONDS}s "
+                "and was stopped; the install may be partial.",
+                "",
+                "  Reinstall with: " + install_source.reinstall_hint(source.kind),
+            )
+            return 1
+        if res.error:
+            friendly_error(f"upgrade failed: {res.error}")
+            return 1
+        if res.returncode != 0:
+            friendly_error(f"upgrade failed (exit {res.returncode}).")
+            return 1
+        new, importable, err = self_update.probe_installed_version(source.python)
+        if not importable:
+            friendly_error(
+                "the upgrade finished but the new version fails to import.",
+                (f"  {self_update.redacted_tail(err)}"
+                 if err else ""),
+                "  Reinstall with: " + install_source.reinstall_hint(source.kind),
+            )
+            return 1
+        if new == running:
+            ui_ok(f"already at {running}")
+            if source.origin == "local":
+                console.print(
+                    f"  [muted]This install upgrades from the local path "
+                    f"{source.origin_detail}, which has the same version.[/muted]"
+                )
+            return 0
+        ui_ok(f"aipager {running} → {new}")
+        for line in self_update.cli_restart_instruction():
+            console.print(f"  {line}")
+        return 0
+    finally:
+        lock.release()
 
 
 # ---------------------------------------------------------------------------
@@ -161,8 +168,9 @@ def _stop_daemon() -> None:
         pass
     # Belt and braces: also kill any foreground daemon.
     if _has_binary("pkill"):
-        subprocess.run(["pkill", "-f", "aipager start"],
-                       capture_output=True, check=False)
+        from aipager import self_update
+        pkill = shutil.which("pkill") or "pkill"
+        self_update.run_command([pkill, "-f", "aipager start"], timeout=10)
 
 
 def _remove_path(path: Path) -> bool:
@@ -238,20 +246,18 @@ def _remove_tmp_sockets() -> None:
 
 
 def _uninstall_binary(installer: str | None) -> int:
-    if installer == "uv":
-        cmd = ["uv", "tool", "uninstall", "aipager"]
-    elif installer == "pipx":
-        cmd = ["pipx", "uninstall", "aipager"]
-    elif installer == "brew":
-        cmd = ["brew", "uninstall", "aipager"]
-    else:
+    from aipager import install_source, self_update
+
+    cmd = install_source.uninstall_argv(installer)
+    if cmd is None:
         return 0  # nothing to do
     console.print(f"[step]→[/step] uninstalling aipager via [path]{installer}[/path]")
-    try:
-        return subprocess.run(cmd, check=False).returncode
-    except (OSError, subprocess.SubprocessError) as e:
-        friendly_warn(f"binary uninstall failed: {e}")
+    res = self_update.run_command(cmd, timeout=300,
+                                  env=install_source.spawn_env(), capture=False)
+    if res.error or res.returncode is None:
+        friendly_warn(f"binary uninstall failed: {res.error or 'timed out'}")
         return 1
+    return res.returncode
 
 
 def cmd_uninstall(args=None) -> int:
@@ -320,42 +326,24 @@ def cmd_uninstall(args=None) -> int:
 # Install / reinstall with an optional extra (driven from Telegram for 5.3)
 # ---------------------------------------------------------------------------
 
-# Map each optional extra to the concrete packages we need pip to install
-# when the installer-aware path isn't available (brew formulas don't
-# expose pip extras, editable / unknown installs have no installer to
-# go through). Keep in sync with the [project.optional-dependencies]
-# table in pyproject.toml.
-_EXTRA_PACKAGES: dict[str, list[str]] = {
-    "voice": ["faster-whisper>=1.0"],
-}
-
-
 def install_extra_cmd(installer: str | None, extra: str) -> list[str] | None:
     """Build the command to (re)install aipager with an optional extra.
 
     For uv / pipx we go through the installer so the extra is recorded
-    and survives a later ``aipager update``. For brew / editable /
+    and survives a later ``aipager update``. For brew / pip / editable /
     unknown installs we fall back to installing the extra's packages
     directly into the daemon's Python interpreter — works uniformly
     across brew formulas, project venvs, ``pip --user`` and editable
     installs, at the cost that a future ``brew upgrade aipager`` may
     rebuild the formula's venv and require a re-install.
 
-    Returns ``None`` only for genuinely unsupported extras.
+    Installer binaries are absolute when resolvable (bare otherwise).
+    Built from :func:`aipager.install_source.extra_install_argv`, the one
+    installer table. Returns ``None`` only for genuinely unsupported
+    extras.
     """
-    if installer == "uv":
-        return ["uv", "tool", "install", "--reinstall", f"aipager[{extra}]"]
-    if installer == "pipx":
-        return ["pipx", "install", "--force", f"aipager[{extra}]"]
-    packages = _EXTRA_PACKAGES.get(extra)
-    if packages is None:
-        return None
-    return [sys.executable, "-m", "pip", "install", "--upgrade", *packages]
+    from aipager import install_source
+    return install_source.extra_install_argv(installer, extra)
 
 
 __all__ = ["cmd_update", "cmd_uninstall", "install_extra_cmd"]
-
-# Keep the `os` import referenced; some platforms may need it for future
-# Windows additions, but right now it's only used transitively. Silence
-# the unused-import lint without weakening it elsewhere.
-_ = os
