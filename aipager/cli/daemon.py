@@ -486,13 +486,23 @@ async def _run_daemon(bot_username: str) -> None:
     log.info("Goodbye")
 
 
+# Slack on top of update_flow.SHUTDOWN_DEADLINE_SECONDS: the updates'
+# shutdown bounds itself, and this bounds it again so the registry save and
+# bot stop below it always run before systemd's TimeoutStopSec=15.
+_UPDATES_SHUTDOWN_SLACK_SECONDS = 1.0
+
+
 async def _shutdown_updates(bot) -> None:
     updates = getattr(bot, "updates", None)
     shutdown = getattr(updates, "shutdown", None)
     if shutdown is None:
         return
+    from aipager.bot import update_flow
+    limit = update_flow.SHUTDOWN_DEADLINE_SECONDS + _UPDATES_SHUTDOWN_SLACK_SECONDS
     try:
-        await shutdown()
+        await asyncio.wait_for(shutdown(), timeout=limit)
+    except asyncio.TimeoutError:
+        log.warning("self-update shutdown overran %.0fs; going on with the stop", limit)
     except Exception:
         log.warning("self-update shutdown failed", exc_info=True)
 

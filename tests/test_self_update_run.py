@@ -176,3 +176,68 @@ def test_seam_redacts_the_whole_output_before_cutting_the_tail(real_seam):
     assert "<redacted>" in res.output_tail
     assert len(res.output_tail) <= n
 
+
+def test_seam_spawns_nothing_once_shutdown_began(real_seam, tmp_path):
+    """rev-iter2-003: after begin_shutdown() the seam starts no process."""
+    touched = tmp_path / "spawned"
+    self_update.begin_shutdown()
+    res = self_update.run_command(
+        [sys.executable, "-c", "import sys; open(sys.argv[1], 'w').close()",
+         str(touched)], timeout=10)
+    assert res.error == self_update.SHUTTING_DOWN_ERROR
+    assert res.returncode is None
+    assert not touched.exists()
+    assert self_update.running_command_count() == 0
+
+
+def test_a_child_registered_after_the_kill_began_kills_itself(real_seam):
+    """tester-iter2-003: a spawn already inside the seam when the shutdown
+    kill takes its snapshot must not outlive the kill."""
+    assert self_update.terminate_running_commands() == 0   # snapshot: nothing yet
+    started = time.monotonic()
+    res = self_update.run_command(
+        [sys.executable, "-c", "import time; time.sleep(60)"], timeout=8)
+    assert res.timed_out is False
+    assert res.returncode is not None and res.returncode < 0
+    assert time.monotonic() - started < 5
+
+
+def test_the_shutdown_kill_fits_the_shutdown_deadline(real_seam, tmp_path, monkeypatch):
+    """rev-iter2-003: a child that ignores SIGTERM is SIGKILLed within the
+    deadline given to begin_shutdown(), not after KILL_GRACE_SECONDS."""
+    import threading
+
+    monkeypatch.setattr(self_update, "KILL_GRACE_SECONDS", 10)
+    ready = tmp_path / "ready"
+    script = (
+        "import signal, sys, time\n"
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        "open(sys.argv[1], 'w').close()\n"
+        "time.sleep(60)\n"
+    )
+    out: dict = {}
+    t = threading.Thread(target=lambda: out.setdefault(
+        "res", self_update.run_command([sys.executable, "-c", script, str(ready)],
+                                       timeout=60)))
+    t.start()
+    try:
+        deadline = time.monotonic() + 10
+        while not ready.exists() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert ready.exists()
+        self_update.begin_shutdown(time.monotonic() + 0.6)
+        t0 = time.monotonic()
+        assert self_update.terminate_running_commands() == 1
+        assert time.monotonic() - t0 < 3
+        t.join(10)
+        assert not t.is_alive()
+        assert out["res"].returncode == -9
+    finally:
+        with self_update._LIVE_LOCK:
+            procs = list(self_update._LIVE_CHILDREN)
+        for p in procs:
+            try:
+                os.killpg(p.pid, 9)
+            except (ProcessLookupError, PermissionError, OSError):
+                pass
+        t.join(10)

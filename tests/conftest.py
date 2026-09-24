@@ -1011,10 +1011,15 @@ def _no_real_self_update_io(tmp_path, monkeypatch):
     monkeypatch.setattr(self_update, "_run_command", _refuse)
     monkeypatch.setattr(self_update, "_http_get", _offline)
     monkeypatch.setattr(self_update, "_PROC_SELF_CGROUP", str(cgroup))
+    # A test that runs UpdateManager.shutdown() puts the seam into "the
+    # daemon is stopping" (it refuses every spawn from then on); the next
+    # test starts with a daemon that is not stopping.
+    self_update._reset_shutdown_state()
     # Yielded so the meta-tests of this guard (which trip it on purpose)
     # can request the fixture by name and clear what they recorded.
     import types
     yield types.SimpleNamespace(refused=refused, reached=reached)
+    self_update._reset_shutdown_state()
     assert not refused, (
         f"test reached the real self-update spawner for {refused!r} without "
         "faking it. Mock aipager.self_update._run_command in the test."

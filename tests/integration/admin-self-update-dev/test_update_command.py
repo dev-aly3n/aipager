@@ -294,3 +294,19 @@ def test_resolve_tool_patch_point_is_used(env, run, monkeypatch):
         await env.finish()
     run(scenario)
     assert "pipx" in seen
+
+
+def test_update_callback_during_shutdown_says_shutting_down(env, run):
+    """Review rev-iter2-002: a start tap after the daemon began to stop is
+    refused as such, not reported as an update already running."""
+    update, query = _tap(env, "_:up:cc", env.chat_id, env.chat_id)
+
+    async def scenario():
+        await env.manager.shutdown()
+        await env.bot._handle_callback(update, MagicMock())
+    run(scenario)
+    assert env.manager.snapshot() is None
+    assert env.calls == []
+    text = query.edit_message_text.await_args.args[0]
+    assert "shutting down" in text
+    assert "already running" not in text

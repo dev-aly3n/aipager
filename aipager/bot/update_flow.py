@@ -65,6 +65,10 @@ RESTART_WATCHDOG_SECONDS = 120.0
 # At daemon shutdown, how long a running installer gets to finish before its
 # process group is killed (systemd's TimeoutStopSec is 15 s in total).
 SHUTDOWN_GRACE_SECONDS = 3.0
+# The whole of UpdateManager.shutdown() — grace, kill, the job's last word,
+# the helpers — fits in this, well under TimeoutStopSec=15, so the daemon's
+# own registry save and bot stop still run before systemd's SIGKILL.
+SHUTDOWN_DEADLINE_SECONDS = 8.0
 
 DENIED_TEXT = "🚫 Only the admin can update aipager."
 STALE_TEXT = "That update already finished"
@@ -112,6 +116,9 @@ class _Job:
     restart_unit: str | None = None
     # The daemon shut down mid-install and killed the installer.
     interrupted: bool = False
+    # ``(from, to)`` once the new aipager is on disk and proven, so a
+    # shutdown after that point still leaves the normal A→B marker.
+    installed: tuple[str, str] | None = None
     event: asyncio.Event | None = None
     reporter: "_Reporter | None" = None
 
@@ -348,6 +355,10 @@ class UpdateManager:
         return self._job is not None and self._job.phase == "restart_scheduled"
 
     @property
+    def shutting_down(self) -> bool:
+        return self._shutting_down
+
+    @property
     def busy(self) -> bool:
         """A job is running OR its restart is still pending: no second
         update, no voice restart, and no start buttons meanwhile."""
@@ -431,6 +442,11 @@ class UpdateManager:
                     origin: str, status_message=None) -> StartResult:
         if kind not in KINDS:
             raise ValueError(f"unknown update kind {kind!r}")
+        if self._shutting_down:
+            # Nothing started now could be seen through: its installer
+            # would not be in shutdown()'s snapshot and would be orphaned.
+            log.info("update.refused user=%s chat=%s reason=shutting-down", user_id, chat_id)
+            return StartResult(False, "shutting_down", self.snapshot())
         if self.busy:
             log.info("update.lock_busy user=%s chat=%s job=%s", user_id, chat_id,
                      self._job.id if self._job else None)
@@ -515,13 +531,23 @@ class UpdateManager:
             if job.kind in ("claude", "both"):
                 await self._claude_step(job)
             if job.kind in ("aipager", "both") and not job.terminal:
-                restart_scheduled = await self._aipager_step(job)
+                if self._shutting_down:
+                    # "both": Claude Code finished inside the shutdown grace;
+                    # do not begin the aipager half now.
+                    self._finish(job, "cancelled", self._shutdown_section(job))
+                else:
+                    restart_scheduled = await self._aipager_step(job)
             if not job.terminal:
                 job.phase = "done"
                 job.live = None
         except asyncio.CancelledError:
-            self._finish(job, "cancelled",
-                         self._shutdown_section(job) if self._shutting_down else None)
+            if self._shutting_down and job.installed is not None:
+                # Cancelled in the post-install gate: B is on disk and the
+                # next start runs it, so say so (and leave the A→B marker).
+                self._installed_at_shutdown(job, *job.installed)
+            else:
+                self._finish(job, "cancelled",
+                             self._shutdown_section(job) if self._shutting_down else None)
             raise
         except Exception:
             log.exception("update.failed job=%s", job.id)
@@ -581,7 +607,8 @@ class UpdateManager:
         res = await self._await_with_heartbeat(job, "Updating Claude Code",
                                                self_update.run_claude_update)
         job.live = None
-        if job.interrupted:
+        if job.interrupted or (self._shutting_down
+                               and res.error == self_update.SHUTTING_DOWN_ERROR):
             self._finish(job, "cancelled", self._shutdown_section(job))
             return
         if res.error and res.before is None:
@@ -595,6 +622,10 @@ class UpdateManager:
                         f"(exit {res.returncode if res.returncode is not None else '?'})")
             elif res.after and res.before and res.after != res.before:
                 head = f"✅ <b>Claude Code</b> {_esc(res.before)} → {_esc(res.after)}"
+            elif res.after is None and self._shutting_down:
+                # The version probe is not started during a shutdown.
+                head = ("✅ <b>Claude Code</b> update finished; aipager is shutting "
+                        "down, so /update shows the new version once it is back")
             else:
                 head = (f"✅ <b>Claude Code</b> is already up to date "
                         f"({_esc(res.after or res.before)})")
@@ -658,7 +689,8 @@ class UpdateManager:
                 argv, timeout=self_update.UPGRADE_TIMEOUT_SECONDS,
                 env=install_source.upgrade_env(source)))
         job.live = None
-        if job.interrupted:
+        if job.interrupted or (self._shutting_down
+                               and res.error == self_update.SHUTTING_DOWN_ERROR):
             self._finish(job, "cancelled", self._shutdown_section(job))
             return False
         if res.timed_out:
@@ -681,8 +713,21 @@ class UpdateManager:
                          + _pre_tail(res.output_tail or res.error, job.chat_id))
             return False
 
+        if self._shutting_down:
+            # Installed within the shutdown grace: start no probe (nothing
+            # new is spawned now) and never a restart.
+            self._installed_unprobed_at_shutdown(job, running)
+            return False
         new, importable, err = await asyncio.to_thread(
             self_update.probe_installed_version, source.python)
+        if job.interrupted:
+            # The shutdown killed the probe: the install may be partial.
+            self._finish(job, "cancelled", self._shutdown_section(job))
+            return False
+        if self._shutting_down and err == self_update.SHUTTING_DOWN_ERROR:
+            # The shutdown began just before the probe could spawn.
+            self._installed_unprobed_at_shutdown(job, running)
+            return False
         if not importable:
             log.info("update.aipager.smoke_failed job=%s error=%s", job.id, err)
             hint = install_source.reinstall_hint(source.kind)
@@ -699,6 +744,10 @@ class UpdateManager:
                                       f"{_origin_explanation(source, job.chat_id)}")
             return False
         log.info("update.aipager.done job=%s from=%s to=%s", job.id, running, new)
+        job.installed = (running, new)
+        if self._shutting_down:
+            self._installed_at_shutdown(job, running, new)
+            return False
 
         if not plan.automatic:
             log.info("update.restart.refused job=%s mode=%s", job.id, plan.mode)
@@ -720,6 +769,10 @@ class UpdateManager:
             job.sections.pop()
 
         plan = await asyncio.to_thread(self_update.restart_plan, registry)
+        if self._shutting_down:
+            # The gate or the re-read can span the start of a shutdown.
+            self._installed_at_shutdown(job, running, new)
+            return False
         if not plan.automatic:
             log.info("update.restart.refused job=%s mode=%s (re-read)", job.id, plan.mode)
             self._finish(job, "done",
@@ -727,18 +780,8 @@ class UpdateManager:
                          + self._manual_restart_text(plan))
             return False
 
-        marker = {
-            "from": running, "to": new, "chat_id": job.chat_id,
-            "user_id": job.user_id, "job_id": job.id,
-            "sessions": [
-                {"name": s.name, "label": s.label}
-                for s in registry.all_sessions().values()
-                if s.status.name != "GONE"
-            ],
-            "scheduled_at": time.time(),
-        }
         try:
-            self_update.write_marker(marker)
+            self_update.write_marker(self._update_marker(job, running, new))
         except OSError as e:
             log.info("update.restart.failed job=%s marker: %s", job.id, e)
             self._finish(job, "failed",
@@ -747,6 +790,14 @@ class UpdateManager:
                          f"yourself: <code>{_esc(plan.manual_command)}</code>")
             return False
         ok, detail = await asyncio.to_thread(self_update.schedule_restart, plan)
+        if self._shutting_down:
+            # Shutdown began while systemd-run ran. A timer that did get
+            # made must not bring a stopped daemon back 5 s later.
+            if ok:
+                await asyncio.to_thread(self_update.cancel_scheduled_restart, detail,
+                                        during_shutdown=True)
+            self._installed_at_shutdown(job, running, new)
+            return False
         if not ok:
             self_update.clear_marker()
             self._finish(job, "failed",
@@ -825,6 +876,48 @@ class UpdateManager:
             except asyncio.TimeoutError:
                 pass
 
+    def _update_marker(self, job: _Job, running: str, new: str) -> dict:
+        return {
+            "from": running, "to": new, "chat_id": job.chat_id,
+            "user_id": job.user_id, "job_id": job.id,
+            "sessions": [
+                {"name": s.name, "label": s.label}
+                for s in self.bot.registry.all_sessions().values()
+                if s.status.name != "GONE"
+            ],
+            "scheduled_at": time.time(),
+        }
+
+    def _installed_unprobed_at_shutdown(self, job: _Job, running: str) -> None:
+        """The installer finished but the daemon is stopping before the
+        import probe: read the version on disk in-process, leave the A→B
+        marker, and let the next start run it."""
+        new = self_update.installed_version()
+        if not new or new == running:
+            log.info("update.restart.skipped job=%s reason=shutting-down to=%s",
+                     job.id, new)
+            self._finish(job, "done",
+                         "✅ <b>aipager</b> upgrade finished; the daemon is shutting "
+                         "down, so nothing was restarted — the next start runs what "
+                         "is installed.")
+            return
+        self._installed_at_shutdown(job, running, new)
+
+    def _installed_at_shutdown(self, job: _Job, running: str, new: str) -> None:
+        """B is installed but the daemon is stopping: never schedule a
+        restart (it would undo an operator's stop). Leave the normal A→B
+        marker so the next start announces B."""
+        log.info("update.restart.skipped job=%s reason=shutting-down from=%s to=%s",
+                 job.id, running, new)
+        try:
+            self_update.write_marker(self._update_marker(job, running, new))
+        except OSError:
+            log.warning("update.shutdown.marker_failed job=%s", job.id, exc_info=True)
+        self._finish(job, "done",
+                     f"✅ <b>aipager</b> {_esc(running)} → {_esc(new)} installed; the "
+                     f"daemon is shutting down, so nothing was restarted — the next "
+                     f"start runs {_esc(new)}.")
+
     def _shutdown_section(self, job: _Job) -> str:
         if job.interrupted:
             if job.phase == "claude_updating":
@@ -839,48 +932,69 @@ class UpdateManager:
         return "⚠️ The daemon shut down before the update finished."
 
     async def shutdown(self) -> None:
-        """Daemon shutdown: never leave an installer orphaned.
+        """Daemon shutdown: never leave an installer orphaned, never start
+        anything new, and never schedule a restart.
 
         Called before ``bot.stop()`` so the final status edit can still go
-        out. A job in a gate wait is simply cancelled (nothing installed
-        yet, or the install finished and the shutdown restarts us anyway).
-        A job whose installer is running gets ``SHUTDOWN_GRACE_SECONDS`` to
-        finish; after that its process group is killed — with
-        KillMode=process it would otherwise survive us and keep writing the
-        venv while the next daemon imports it — the kill is logged, and an
-        "interrupted" marker makes the next daemon tell the admin. A
-        pending restart's marker is left alone: that restart IS this
-        shutdown. Never raises.
+        out, and bounded as a whole by ``SHUTDOWN_DEADLINE_SECONDS``. From
+        the first line on, :meth:`start` refuses and the spawn seam starts
+        nothing. A job in a gate wait is cancelled (if B is already
+        installed it leaves the normal A→B marker). A job whose installer
+        is running gets ``SHUTDOWN_GRACE_SECONDS`` to finish; if it does,
+        the job leaves the A→B marker and schedules no restart. Otherwise
+        its process group is killed — with KillMode=process it would
+        survive us and keep writing the venv while the next daemon imports
+        it — the kill is logged, and an "interrupted" marker makes the next
+        daemon tell the admin. A pending restart's marker is left alone:
+        that restart IS this shutdown. Never raises.
         """
         self._shutting_down = True
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + SHUTDOWN_DEADLINE_SECONDS
+        mono_deadline = time.monotonic() + SHUTDOWN_DEADLINE_SECONDS
+
+        def left(cap: float) -> float:
+            return max(0.0, min(cap, deadline - loop.time()))
+
         job, task = self._job, self._job_task
         try:
+            self_update.begin_shutdown(mono_deadline)
             if job is not None and task is not None and not task.done():
                 if job.phase in _INSTALLING:
-                    done, _ = await asyncio.wait({task}, timeout=SHUTDOWN_GRACE_SECONDS)
+                    done, _ = await asyncio.wait(
+                        {task}, timeout=left(SHUTDOWN_GRACE_SECONDS))
                     if not done and self_update.running_command_count():
                         phase = job.phase
                         job.interrupted = True
-                        killed = await asyncio.to_thread(
-                            self_update.terminate_running_commands)
+                        # Keep a slice of the budget for the job's last word
+                        # and the cancel below.
+                        kill = asyncio.ensure_future(asyncio.to_thread(
+                            self_update.terminate_running_commands))
+                        killed_done, _ = await asyncio.wait(
+                            {kill}, timeout=left(SHUTDOWN_DEADLINE_SECONDS) * 0.75)
+                        killed = kill.result() if killed_done and not kill.exception() \
+                            else -1
                         log.warning("update.shutdown.interrupted job=%s phase=%s killed=%d "
                                     "— the install may be partial", job.id, phase, killed)
                         self._write_interrupted_marker(job, phase)
                         # The killed installer returns promptly: let the job
                         # post its own "interrupted" outcome.
-                        await asyncio.wait({task}, timeout=SHUTDOWN_GRACE_SECONDS)
+                        await asyncio.wait({task}, timeout=left(SHUTDOWN_GRACE_SECONDS))
                 if not task.done():
                     task.cancel()
-                    await asyncio.wait({task}, timeout=SHUTDOWN_GRACE_SECONDS)
+                    await asyncio.wait({task}, timeout=left(SHUTDOWN_GRACE_SECONDS))
             # The watchdog and any status lookups (the job task is handled
             # above, with its own grace).
             others = [t for t in self._tasks if not t.done() and t is not task]
             for t in others:
                 t.cancel()
             if others:
-                await asyncio.wait(others, timeout=1.0)
+                await asyncio.wait(others, timeout=left(1.0))
         except Exception:
             log.warning("update shutdown failed", exc_info=True)
+        if loop.time() > deadline:
+            log.warning("update.shutdown.deadline_exceeded by=%.1fs",
+                        loop.time() - deadline)
 
     def _write_interrupted_marker(self, job: _Job, phase: str) -> None:
         try:
@@ -1037,6 +1151,8 @@ async def handle_callback(bot: "TelegramBot", update, query, session_name: str,
                 src = install_source.detect_install_source()
                 text = (f"🚫 aipager can't be updated from here: "
                         f"{_esc(src.reason or 'unknown install')}")
+            elif res.error == "shutting_down":
+                text = "⏳ aipager is shutting down — try again once it is back."
             else:
                 phase = (res.job or {}).get("phase", "…")
                 text = f"⏳ An update is already running ({_esc(phase)})."

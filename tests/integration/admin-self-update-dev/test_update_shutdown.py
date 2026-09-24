@@ -46,7 +46,7 @@ def _live_installer(env, *, finishes_after: float | None = None):
         if finishes_after is not None:
             threading.Timer(finishes_after, env.upgrade_release.set).start()
 
-    def _kill_group(proc):
+    def _kill_group(proc, grace=None):
         killed.append(proc)
         with self_update._LIVE_LOCK:
             self_update._LIVE_CHILDREN.discard(proc)
@@ -101,6 +101,10 @@ def test_shutdown_lets_an_installer_that_finishes_in_the_grace_finish(env, run):
         _hook_done()
     env.upgrade_hook = _hook
 
+    # What the finished installer left on disk (read in-process: no probe
+    # is spawned once the shutdown has begun).
+    env.monkeypatch.setattr(self_update, "installed_version", lambda: "0.7.14")
+
     async def scenario():
         await env.start("aipager")
         await env.until(lambda: env.upgrade_calls())
@@ -110,16 +114,22 @@ def test_shutdown_lets_an_installer_that_finishes_in_the_grace_finish(env, run):
     finally:
         self_update._LIVE_CHILDREN.discard(child)
     assert killed == []
-    # It went on and scheduled the restart; that marker is a normal one.
-    assert env.manager.snapshot()["phase"] == "restart_scheduled"
+    # Review rev-iter2-001: once shutdown has begun, NO restart is scheduled
+    # (it would bring a stopped daemon back); the normal A→B marker stays so
+    # the next start announces the new version.
+    assert env.schedule_calls() == []
+    assert env.manager.snapshot()["phase"] == "done"
+    assert "nothing was restarted" in env.last_text()
     marker = json.loads(self_update.UPDATE_MARKER_PATH.read_text())
-    assert "interrupted" not in marker and marker["to"] == "0.7.14"
+    assert "interrupted" not in marker
+    assert marker["from"] == "0.7.13" and marker["to"] == "0.7.14"
+    assert _lock_free() is True
 
 
 def test_shutdown_during_the_gate_wait_cancels_cleanly(env, run):
     env.add_session(status=Status.BUSY)
     killed: list = []
-    env.monkeypatch.setattr(self_update, "_kill_group", lambda p: killed.append(p))
+    env.monkeypatch.setattr(self_update, "_kill_group", lambda p, grace=None: killed.append(p))
 
     async def scenario():
         await env.start("aipager")
@@ -166,7 +176,7 @@ def test_daemon_shuts_updates_down_before_the_bot_stops():
     assert "await _shutdown_updates(bot)" in src
     assert src.index("await _shutdown_updates(bot)") < src.index("await bot.stop()")
     helper = inspect.getsource(daemon._shutdown_updates)
-    assert "await shutdown()" in helper
+    assert "await asyncio.wait_for(shutdown()" in helper
 
 
 def test_daemon_shutdown_helper_never_raises(env, run):
@@ -197,7 +207,7 @@ def test_shutdown_mid_claude_update_kills_it_and_says_run_it_again(env, run):
         return self_update.ClaudeUpdateResult("2.1.281", "2.1.281", -15, False, "",
                                               None, env.claude_path)
 
-    def _kill_group(proc):
+    def _kill_group(proc, grace=None):
         killed.append(proc)
         with self_update._LIVE_LOCK:
             self_update._LIVE_CHILDREN.discard(proc)

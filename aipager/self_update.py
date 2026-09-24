@@ -178,14 +178,16 @@ class CommandResult:
         return self.returncode == 0 and not self.timed_out and self.error is None
 
 
-def _kill_group(proc: subprocess.Popen) -> None:
-    """SIGTERM the child's process group, then SIGKILL after a grace."""
+def _kill_group(proc: subprocess.Popen, grace: float | None = None) -> None:
+    """SIGTERM the child's process group, then SIGKILL after ``grace``
+    (default ``KILL_GRACE_SECONDS``)."""
+    wait = KILL_GRACE_SECONDS if grace is None else max(0.0, grace)
     try:
         os.killpg(proc.pid, signal.SIGTERM)
     except (ProcessLookupError, PermissionError, OSError):
         pass
     try:
-        proc.wait(timeout=KILL_GRACE_SECONDS)
+        proc.wait(timeout=wait)
         return
     except subprocess.TimeoutExpired:
         pass
@@ -194,7 +196,7 @@ def _kill_group(proc: subprocess.Popen) -> None:
     except (ProcessLookupError, PermissionError, OSError):
         pass
     try:
-        proc.wait(timeout=KILL_GRACE_SECONDS)
+        proc.wait(timeout=wait)
     except subprocess.TimeoutExpired:
         pass
 
@@ -204,29 +206,76 @@ def _kill_group(proc: subprocess.Popen) -> None:
 # venv while the next daemon starts (see terminate_running_commands).
 _LIVE_CHILDREN: set = set()
 _LIVE_LOCK = threading.Lock()
+# Seam calls in flight, counted on ENTRY to run_command (before any child
+# exists), so a shutdown never misses a spawn that is on its way.
+_in_flight = 0
+# Once the daemon's shutdown has begun the seam spawns nothing new; once the
+# kill has begun, a child registered after the kill's snapshot kills itself.
+_shutting_down = False
+_terminating = False
+# time.monotonic() by which a shutdown kill must be over (None: no bound).
+_shutdown_deadline: float | None = None
+
+
+def begin_shutdown(deadline: float | None = None) -> None:
+    """The daemon is stopping: from now on :func:`run_command` refuses to
+    spawn. ``deadline`` (``time.monotonic()``) bounds a later
+    :func:`terminate_running_commands`."""
+    global _shutting_down, _shutdown_deadline
+    with _LIVE_LOCK:
+        _shutting_down = True
+        _shutdown_deadline = deadline
+    log.info("update.shutdown.begin in_flight=%d", _in_flight)
+
+
+def shutting_down() -> bool:
+    with _LIVE_LOCK:
+        return _shutting_down
+
+
+def _reset_shutdown_state() -> None:
+    """For tests: forget a shutdown (the daemon never un-stops)."""
+    global _shutting_down, _terminating, _shutdown_deadline
+    with _LIVE_LOCK:
+        _shutting_down = False
+        _terminating = False
+        _shutdown_deadline = None
 
 
 def terminate_running_commands() -> int:
     """Kill the process group of every child the seam is waiting on.
 
-    Blocking (up to two ``KILL_GRACE_SECONDS`` per child): call it from a
-    thread. Returns how many children were signalled. Never raises.
+    Blocking: call it from a thread. The per-child grace shrinks to fit the
+    deadline given to :func:`begin_shutdown`. A child the seam registers
+    after this snapshot kills itself. Returns how many children were
+    signalled. Never raises.
     """
+    global _terminating
     with _LIVE_LOCK:
+        _terminating = True
         procs = list(_LIVE_CHILDREN)
+        deadline = _shutdown_deadline
     for proc in procs:
         log.warning("update.shutdown.kill pid=%s argv=%s", getattr(proc, "pid", None),
                     getattr(proc, "args", None))
+        grace = None
+        if deadline is not None:
+            # Two waits per child (after SIGTERM, after SIGKILL).
+            grace = min(KILL_GRACE_SECONDS,
+                        max(0.05, (deadline - time.monotonic()) / 2))
         try:
-            _kill_group(proc)
+            _kill_group(proc, grace=grace)
         except Exception:
             log.warning("could not kill update child", exc_info=True)
     return len(procs)
 
 
 def running_command_count() -> int:
+    """Seam calls in flight: every call entered and not yet returned,
+    whether or not its child exists yet (never below the registered
+    children)."""
     with _LIVE_LOCK:
-        return len(_LIVE_CHILDREN)
+        return max(_in_flight, len(_LIVE_CHILDREN))
 
 
 def _tail(raw: bytes | str | None) -> str:
@@ -260,6 +309,12 @@ def _run_command(argv, *, timeout, env=None, capture=True) -> CommandResult:
                              time.monotonic() - started)
     with _LIVE_LOCK:
         _LIVE_CHILDREN.add(proc)
+        late = _terminating
+    if late:
+        # The shutdown kill already took its snapshot: do not outlive it.
+        log.warning("update.shutdown.kill pid=%s argv=%s (spawned during the kill)",
+                    proc.pid, argv)
+        _kill_group(proc, grace=0.5)
     try:
         return _wait_child(proc, started, timeout)
     finally:
@@ -289,11 +344,30 @@ def _wait_child(proc: subprocess.Popen, started: float, timeout) -> CommandResul
                          time.monotonic() - started)
 
 
-def run_command(argv, *, timeout, env=None, capture=True) -> CommandResult:
+SHUTTING_DOWN_ERROR = "not started: aipager is shutting down"
+
+
+def run_command(argv, *, timeout, env=None, capture=True,
+                during_shutdown: bool = False) -> CommandResult:
     """Public entry to the seam: logs argv (absolute paths, no secrets),
-    return code and duration."""
+    return code and duration. Counts the call as in flight from entry (see
+    :func:`running_command_count`) and spawns nothing once
+    :func:`begin_shutdown` has run, unless ``during_shutdown`` (only for
+    undoing something, e.g. stopping a restart timer)."""
+    global _in_flight
     argv = [str(a) for a in argv]
-    result = _run_command(argv, timeout=timeout, env=env, capture=capture)
+    with _LIVE_LOCK:
+        refused = _shutting_down and not during_shutdown
+        if not refused:
+            _in_flight += 1
+    if refused:
+        log.info("update.spawn.refused%s argv=%s reason=shutting-down", _job_tag(), argv)
+        return CommandResult(None, "", False, SHUTTING_DOWN_ERROR)
+    try:
+        result = _run_command(argv, timeout=timeout, env=env, capture=capture)
+    finally:
+        with _LIVE_LOCK:
+            _in_flight -= 1
     log.info("update.spawn%s argv=%s rc=%s timed_out=%s duration=%.1fs%s",
              _job_tag(), argv, result.returncode, result.timed_out, result.duration,
              f" error={result.error}" if result.error else "")
@@ -508,6 +582,9 @@ def run_claude_update() -> ClaudeUpdateResult:
     """``<absolute claude> update`` with a timeout; never restarts a session."""
     from aipager import claude_resolve
 
+    if shutting_down():
+        # Not even the resolver's own probes: the daemon is stopping.
+        return ClaudeUpdateResult(None, None, None, False, "", error=SHUTTING_DOWN_ERROR)
     cur = current_claude()
     if cur is None:
         log.info("update.claude.failed%s reason=claude-not-found", _job_tag())
@@ -517,13 +594,20 @@ def run_claude_update() -> ClaudeUpdateResult:
     log.info("update.claude.start%s path=%s before=%s", _job_tag(), path, before)
     res = run_command([path, "update"], timeout=CLAUDE_UPDATE_TIMEOUT_SECONDS,
                       env=_scrub_env())
-    after = _claude_version_at(path)
-    try:
-        # New sessions must launch (and log) the new binary, and the memo
-        # is not refreshed by resolve_claude_binary(force=True).
-        claude_resolve.refresh_claude_binary()
-    except Exception:
-        log.debug("claude resolver refresh failed", exc_info=True)
+    after = None
+    if shutting_down():
+        # The daemon is stopping (and may have just killed `claude update`):
+        # start no version probe, and no resolver re-probe, that the exit
+        # would then have to wait for.
+        log.info("update.claude.skip_probe%s reason=shutting-down", _job_tag())
+    else:
+        after = _claude_version_at(path)
+        try:
+            # New sessions must launch (and log) the new binary, and the memo
+            # is not refreshed by resolve_claude_binary(force=True).
+            claude_resolve.refresh_claude_binary()
+        except Exception:
+            log.debug("claude resolver refresh failed", exc_info=True)
     if res.timed_out:
         log.info("update.claude.timeout%s path=%s", _job_tag(), path)
     elif res.returncode != 0 or res.error:
@@ -830,17 +914,19 @@ def schedule_restart(plan: RestartPlan) -> tuple[bool, str]:
     return False, detail
 
 
-def cancel_scheduled_restart(unit: str | None) -> bool:
+def cancel_scheduled_restart(unit: str | None, *, during_shutdown: bool = False) -> bool:
     """Best-effort stop of the transient timer :func:`schedule_restart`
     created, so a late-firing timer cannot restart the daemon in the middle
-    of a later job. Absolute ``systemctl``, bounded. Never raises."""
+    of a later job (or bring back a daemon that is being stopped:
+    ``during_shutdown``). Absolute ``systemctl``, bounded. Never raises."""
     if not unit or not unit.startswith("aipager-update-restart-"):
         return False
     systemctl = install_source.resolve_tool("systemctl")
     if systemctl is None:
         return False
     res = run_command([systemctl, "--user", "stop", f"{unit}.timer"],
-                      timeout=SYSTEMCTL_TIMEOUT_SECONDS, env=_scrub_env())
+                      timeout=SYSTEMCTL_TIMEOUT_SECONDS, env=_scrub_env(),
+                      during_shutdown=during_shutdown)
     log.info("update.restart.timer_stopped%s unit=%s ok=%s", _job_tag(), unit, res.ok)
     return res.ok
 
@@ -915,11 +1001,11 @@ def read_and_clear_marker() -> dict | None:
 
 __all__ = [
     "CURRENT_JOB_ID", "CommandResult", "ClaudeUpdateResult", "RestartPlan",
-    "UpdateLock", "cancel_scheduled_restart", "claude_channel_info", "clear_marker", "cli_restart_instruction",
+    "UpdateLock", "begin_shutdown", "cancel_scheduled_restart", "claude_channel_info", "clear_marker", "cli_restart_instruction",
     "current_claude", "installed_version", "is_newer",
     "latest_aipager_version", "latest_claude_version", "parse_version",
     "probe_installed_version", "read_and_clear_marker", "redact_output",
-    "redacted_tail",
+    "redacted_tail", "shutting_down",
     "restart_blockers", "restart_plan", "run_claude_update", "run_command",
     "running_command_count", "running_version", "schedule_restart",
     "terminate_running_commands", "write_marker",
