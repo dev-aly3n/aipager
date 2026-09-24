@@ -233,6 +233,12 @@ class MiniAppServer:
             "/api/sessions/{label}/rename", self._handle_session_rename,
         )
         app.router.add_get("/api/preferences", self._handle_preferences_get)
+        # Self-update (roadmap 8.36): admin-only, and — in personal mode —
+        # operator-only, via the same `_is_update_admin` rule `/update` uses.
+        # Both drive the bot's one UpdateManager, so the chat and the app
+        # always show the same job.
+        app.router.add_get("/api/update", self._handle_update_get)
+        app.router.add_post("/api/update/{action}", self._handle_update_post)
         # The Mini App's first mutating route. PUT (not POST) because
         # setting a field to a value is idempotent by construction — the
         # same request twice leaves the same state. The field lives in the
@@ -688,7 +694,67 @@ class MiniAppServer:
             # than offering a button that always 403s. The server still
             # enforces it — this is a hint, not the gate.
             "can_edit": bool(self.bot._is_admin_user(user_id, scope_chat_id)),
+            # Whether to show the Updates block. A hint only: /api/update
+            # enforces the same rule itself.
+            "can_update": bool(self.bot._is_update_admin(user_id, scope_chat_id)),
         })
+
+    # ---- self-update -----------------------------------------------------
+
+    _UPDATE_STARTS = {"claude": "claude", "aipager": "aipager", "both": "both"}
+    _UPDATE_CONTROLS = ("restart-now", "wait-more", "cancel")
+
+    async def _handle_update_get(self, request):
+        from aiohttp import web
+
+        result = await self._authenticate_user(request, "/api/update")
+        if isinstance(result, web.Response):
+            return result
+        scope_chat_id, user_id = result
+        if not self.bot._is_update_admin(user_id, scope_chat_id):
+            log.info("miniapp: update status rejected (403) — not an admin")
+            return web.json_response({"error": "forbidden"}, status=403)
+        manager = self.bot.updates
+        payload = dict(await manager.status())
+        payload["job"] = manager.snapshot()
+        return web.json_response(payload)
+
+    async def _handle_update_post(self, request):
+        from aiohttp import web
+
+        result = await self._authenticate_user(request, "POST /api/update/{action}")
+        if isinstance(result, web.Response):
+            return result
+        scope_chat_id, user_id = result
+        if not self.bot._is_update_admin(user_id, scope_chat_id):
+            log.info("miniapp: update action rejected (403) — not an admin")
+            return web.json_response({"error": "forbidden"}, status=403)
+        if not self._allow_write(user_id):
+            log.info("miniapp: update action rejected (429) — rate limited")
+            return web.json_response({"error": "too_many_requests"}, status=429)
+
+        action = request.match_info["action"]
+        manager = self.bot.updates
+        if action in self._UPDATE_CONTROLS:
+            try:
+                body = await request.json()
+            except Exception:
+                return web.json_response({"error": "bad_request"}, status=400)
+            job_id = body.get("job_id") if isinstance(body, dict) else None
+            if not isinstance(job_id, int) or isinstance(job_id, bool):
+                return web.json_response({"error": "bad_request"}, status=400)
+            res = manager.control(action, job_id)
+            if not res.ok:
+                return web.json_response({"error": res.error}, status=409)
+            return web.json_response({"job": res.job})
+        kind = self._UPDATE_STARTS.get(action)
+        if kind is None:
+            return web.json_response({"error": "bad_request"}, status=400)
+        res = await manager.start(kind, chat_id=scope_chat_id, user_id=user_id,
+                                  origin="miniapp")
+        if not res.ok:
+            return web.json_response({"error": res.error}, status=409)
+        return web.json_response({"job": res.job}, status=202)
 
     async def _handle_preferences_put(self, request):
         from aiohttp import web

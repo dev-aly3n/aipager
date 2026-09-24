@@ -970,6 +970,17 @@ CSS = """\
   }
   .primary[disabled] { opacity: 0.5; cursor: default; }
 
+  /* Settings -> Updates (admin only). */
+  .updates { margin-top: 20px; }
+  .updates-title { font-size: 1rem; margin: 0 0 8px; }
+  .updates-row { margin: 4px 0; line-height: 1.4; }
+  .updates-job {
+    margin: 10px 0; padding: 10px 12px; border-radius: 8px;
+    background: var(--tg-theme-secondary-bg-color, rgba(127, 127, 127, 0.08));
+    white-space: pre-wrap; font-size: 0.9rem;
+  }
+  .updates-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+
   /* Loading placeholders. A blank panel that fills in a moment later
      reads as broken; a shaped skeleton reads as "coming". */
   .skel {

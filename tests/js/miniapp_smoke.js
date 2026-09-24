@@ -328,13 +328,34 @@ const FIXTURES = {
   },
 };
 
+// ---- Settings -> Updates (admin self-update) fixtures ------------------
+if (SCENARIO.indexOf("updates_") === 0) {
+  FIXTURES["/api/preferences"] = {
+    schema: [], values: {}, can_edit: true,
+    can_update: SCENARIO !== "updates_hidden",
+  };
+  FIXTURES["/api/update"] = {
+    aipager: { running: "0.7.13", installed: "0.7.13", latest: "0.7.14",
+               update_available: true,
+               source: { kind: "pipx", origin: "index", detail: null,
+                         upgradable: true, reason: null,
+                         describe: "pipx, from PyPI" } },
+    claude: { current: "2.1.281", latest: "2.1.290", update_available: true,
+              method: "native", channel: "latest" },
+    restart: { mode: "systemd", automatic: true, reason: null },
+    job: null,
+  };
+  FIXTURES["/api/update/claude"] = { job: { id: 1, kind: "claude",
+    phase: "claude_updating", blockers: [], summary: "", started_at: 1 } };
+}
+
 // extract and run the page script
 let script = page.match(/<script>([\s\S]*?)<\/script>/g)
   .map(s => s.replace(/<\/?script>/g, "")).join("\n");
 // unwrap the IIFE so the internals are reachable, and export what we drive
 // keep the IIFE (it contains top-level `return`s) but export its internals
 script = script.replace(/\}\)\(\);\s*$/,
-  "\n  global.__api = { openDetail, renderSessionSettings, loadSessionSettings, saveSessionPreference, renderOptionGroup, openGroups, pollTick };\n})();");
+  "\n  global.__api = { openDetail, renderSessionSettings, loadSessionSettings, saveSessionPreference, renderOptionGroup, openGroups, pollTick, loadSettings, loadUpdates };\n})();");
 eval(script);
 
 function fail(msg) { console.error("FAIL: " + msg); process.exit(1); }
@@ -1037,7 +1058,61 @@ function driveMenuGroupingDivider() {
   }, 10);
 }
 
+// ---- scenario: no can_update -> the Updates block never appears ------
+function driveUpdatesHidden() {
+  api.loadSettings();
+  setTimeoutReal(() => {
+    if (!byId["updates-block"].hidden) fail("updates block shown without can_update");
+    if (fetchCalls.some(f => f.url === "/api/update"))
+      fail("asked /api/update although can_update is false");
+    console.log("ok: no can_update -> updates block hidden, /api/update never asked");
+    process.exit(0);
+  }, 10);
+}
+
+// ---- scenario: can_update -> rendered, and a tap POSTs the action -----
+function driveUpdatesRender() {
+  api.loadSettings();
+  setTimeoutReal(() => {
+    if (byId["updates-block"].hidden) fail("updates block hidden despite can_update");
+    const ap = byId["updates-aipager"].textContent;
+    if (!ap.includes("0.7.13") || !ap.includes("0.7.14"))
+      fail("aipager versions not rendered: " + JSON.stringify(ap));
+    if (!byId["updates-claude"].textContent.includes("2.1.290"))
+      fail("claude versions not rendered");
+    const labels = byId["updates-actions"].children.map(c => c.textContent);
+    if (JSON.stringify(labels) !== JSON.stringify(["Update Claude Code", "Update aipager", "Both"]))
+      fail("unexpected update buttons: " + JSON.stringify(labels));
+    const before = fetchCalls.length;
+    byId["updates-actions"].children[0].click();
+    const post = fetchCalls.slice(before).find(f => f.method === "POST");
+    if (!post || post.url !== "/api/update/claude")
+      fail("Update Claude Code sent " + JSON.stringify(post));
+    console.log("ok: can_update -> versions + three buttons -> POST /api/update/claude");
+    process.exit(0);
+  }, 10);
+}
+
+// ---- scenario: a 403 hides the block and does NOT expire the app ------
+function driveUpdatesForbidden() {
+  POST_STATUS_OVERRIDE = { path: "/api/update", method: "GET", status: 403,
+                           body: { error: "forbidden" } };
+  api.loadSettings();
+  setTimeoutReal(() => {
+    if (!byId["updates-block"].hidden) fail("a 403 left the updates block visible");
+    if (byId["conn-badge"].textContent === "expired")
+      fail("a 403 from /api/update put the whole app into the expired state");
+    if ((byId["error"].textContent || "").indexOf("expired") !== -1)
+      fail("a 403 from /api/update showed the session-expired message");
+    console.log("ok: 403 -> updates block hidden, app not expired");
+    process.exit(0);
+  }, 10);
+}
+
 const DRIVERS = {
+  updates_hidden: driveUpdatesHidden,
+  updates_render: driveUpdatesRender,
+  updates_forbidden: driveUpdatesForbidden,
   settings: driveSettings,
   stop_busy: driveStopBusy,
   kill_idle: driveKillIdle,

@@ -1494,8 +1494,197 @@ APP_JS = r"""
       .then(function (data) {
         settingsData = data;
         renderSettings();
+        loadUpdates();
       })
       .catch(handleFetchError);
+  }
+
+  // ---- updates (admin only) -------------------------------------------
+  //
+  // Same data and actions as /update in chat: both drive the daemon's one
+  // update job. Shown only when /api/preferences says `can_update`; the
+  // server enforces the rule itself on every /api/update request.
+
+  var updatesData = null;     // GET /api/update payload
+  var updatesTimer = null;
+  var UPDATE_TERMINAL = { done: 1, failed: 1, cancelled: 1, restart_scheduled: 1 };
+
+  // A dedicated fetch, NOT apiFetch: a 401/403 here means "you are not the
+  // admin" and must hide this block — apiFetch would turn it into the
+  // terminal "session expired" state for the whole app.
+  function updatesFetch(path, method, body) {
+    var headers = { "X-Telegram-Init-Data": initData };
+    var opts = { method: method || "GET", headers: headers };
+    if (body !== undefined) {
+      headers["Content-Type"] = "application/json";
+      opts.body = JSON.stringify(body);
+    }
+    return fetch(path, opts).then(function (res) {
+      if (res.status === 401 || res.status === 403) {
+        var err = new Error("forbidden");
+        err.forbidden = true;
+        throw err;
+      }
+      return res.json().then(function (data) {
+        return { ok: res.ok, status: res.status, data: data };
+      });
+    });
+  }
+
+  function stopUpdatesPoll() {
+    if (updatesTimer) { clearTimeout(updatesTimer); updatesTimer = null; }
+  }
+
+  function hideUpdates() {
+    updatesData = null;
+    stopUpdatesPoll();
+    document.getElementById("updates-block").hidden = true;
+  }
+
+  function loadUpdates() {
+    stopUpdatesPoll();
+    if (!settingsData || !settingsData.can_update) { hideUpdates(); return; }
+    updatesFetch("/api/update")
+      .then(function (r) {
+        if (!r.ok) { return; }
+        updatesData = r.data;
+        renderUpdates();
+        var job = updatesData.job;
+        if (job && !UPDATE_TERMINAL[job.phase] && currentView.type === "settings"
+            && document.visibilityState !== "hidden") {
+          updatesTimer = setTimeout(loadUpdates, 3000);
+        }
+      })
+      .catch(function (err) {
+        if (err && err.forbidden) { hideUpdates(); }
+      });
+  }
+
+  function updateButton(label, onTap) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "primary";
+    b.textContent = label;
+    b.addEventListener("click", onTap);
+    return b;
+  }
+
+  function confirmThen(message, fn) {
+    if (tg && typeof tg.showConfirm === "function") {
+      try { tg.showConfirm(message, function (ok) { if (ok) { fn(); } }); return; }
+      catch (e) { /* older client: fall through */ }
+    }
+    if (typeof window.confirm === "function") {
+      if (window.confirm(message)) { fn(); }
+      return;
+    }
+    fn();
+  }
+
+  function postUpdate(action, body) {
+    updatesFetch("/api/update/" + encodeURIComponent(action), "POST",
+                 body === undefined ? {} : body)
+      .then(function (r) {
+        if (r.status === 409) {
+          var why = (r.data && r.data.error) || "conflict";
+          showNotice(why === "update_in_progress"
+            ? "An update is already running."
+            : "That update already finished.", "err");
+        } else if (r.status === 429) {
+          showNotice("Too many requests — try again in a minute.", "err");
+        } else if (!r.ok) {
+          showNotice("Couldn't start that — try again.", "err");
+        }
+        loadUpdates();
+      })
+      .catch(function (err) {
+        if (err && err.forbidden) { hideUpdates(); return; }
+        showNotice("Couldn't reach aipager — try again.", "err");
+      });
+  }
+
+  function renderUpdates() {
+    var block = document.getElementById("updates-block");
+    if (!updatesData) { block.hidden = true; return; }
+    block.hidden = false;
+    var ap = updatesData.aipager || {};
+    var cl = updatesData.claude || {};
+    var rs = updatesData.restart || {};
+    var src = ap.source || {};
+    document.getElementById("updates-aipager").textContent =
+      "aipager " + ap.running + " · latest " + (ap.latest || "unknown") +
+      (ap.update_available ? " — update available" : "") +
+      " (" + (src.describe || src.kind || "unknown install") + ")";
+    document.getElementById("updates-claude").textContent =
+      "Claude Code " + (cl.current || "unknown") + " · latest " +
+      (cl.latest || "unknown") + (cl.update_available ? " — update available" : "");
+    document.getElementById("updates-restart").textContent = rs.automatic
+      ? "Restart: automatic, once no turn is running."
+      : "Restart: manual — " + (rs.reason || "restart it yourself");
+
+    var jobEl = document.getElementById("updates-job");
+    var actions = document.getElementById("updates-actions");
+    actions.innerHTML = "";
+    var job = updatesData.job;
+    var running = job && !UPDATE_TERMINAL[job.phase];
+    if (job) {
+      jobEl.hidden = false;
+      var lines = [];
+      if (job.phase === "restart_scheduled") {
+        lines.push("Restarting — reopen the app in a minute.");
+      } else if (job.phase === "waiting_for_idle") {
+        lines.push("Waiting for every session to go idle before the restart.");
+      } else if (job.phase === "gate_timeout") {
+        lines.push("Sessions are still busy. Wait more, restart now, or cancel?");
+      } else if (running) {
+        lines.push("Working… (" + job.phase.replace(/_/g, " ") + ")");
+      }
+      if (job.summary) { lines.push(job.summary); }
+      (job.blockers || []).forEach(function (b) { lines.push("• " + b); });
+      jobEl.textContent = lines.join("\n");
+    } else {
+      jobEl.hidden = true;
+      jobEl.textContent = "";
+    }
+
+    if (running) {
+      var id = job.id;
+      if (job.phase === "gate_timeout") {
+        actions.appendChild(updateButton("Wait 10 more min", function () {
+          postUpdate("wait-more", { job_id: id });
+        }));
+      }
+      if (job.phase === "waiting_for_idle" || job.phase === "gate_timeout") {
+        actions.appendChild(updateButton("Restart now", function () {
+          confirmThen("Restart now interrupts the running turns listed here.",
+                      function () { postUpdate("restart-now", { job_id: id }); });
+        }));
+        actions.appendChild(updateButton("Cancel", function () {
+          postUpdate("cancel", { job_id: id });
+        }));
+      }
+      return;
+    }
+    var canClaude = !!cl.current;
+    var canAipager = !!src.upgradable;
+    var restartNote = "aipager restarts when no turn is running.";
+    if (canClaude) {
+      actions.appendChild(updateButton("Update Claude Code", function () {
+        postUpdate("claude");
+      }));
+    }
+    if (canAipager) {
+      actions.appendChild(updateButton("Update aipager", function () {
+        confirmThen("Update aipager? " + restartNote,
+                    function () { postUpdate("aipager"); });
+      }));
+    }
+    if (canClaude && canAipager) {
+      actions.appendChild(updateButton("Both", function () {
+        confirmThen("Update Claude Code and aipager? " + restartNote,
+                    function () { postUpdate("both"); });
+      }));
+    }
   }
 
 

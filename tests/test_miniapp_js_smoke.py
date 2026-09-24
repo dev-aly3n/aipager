@@ -1073,3 +1073,38 @@ def test_every_notice_states_whether_it_worked():
         idx = INDEX_HTML.index(phrase)
         tail = INDEX_HTML[idx:idx + 120]
         assert f'"{kind}"' in tail, f"{phrase} is not classified as {kind}"
+
+
+# ----- Settings -> Updates (admin self-update, roadmap 8.36) ------------------
+
+def _drive_smoke(node_bin, tmp_path, html, scenario):
+    page = tmp_path / f"{scenario}.html"
+    page.write_text(html, encoding="utf-8")
+    return subprocess.run(
+        [node_bin, str(HARNESS), str(page), scenario],
+        capture_output=True, text=True, timeout=60,
+    )
+
+
+def test_updates_block_hidden_without_can_update(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_hidden")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: no can_update -> updates block hidden" in proc.stdout
+
+
+def test_updates_block_renders_and_posts_an_action(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_render")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "POST /api/update/claude" in proc.stdout
+
+
+def test_updates_403_hides_block_not_expired(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_forbidden")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: 403 -> updates block hidden, app not expired" in proc.stdout

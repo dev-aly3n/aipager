@@ -180,6 +180,14 @@ HTML_BODY = """\
   <div id="settings-readonly" class="muted" hidden>
     Only an admin can change these.
   </div>
+  <div id="updates-block" class="updates" hidden>
+    <h3 class="updates-title">Updates</h3>
+    <div id="updates-aipager" class="updates-row"></div>
+    <div id="updates-claude" class="updates-row"></div>
+    <div id="updates-restart" class="muted"></div>
+    <div id="updates-job" class="updates-job" hidden></div>
+    <div id="updates-actions" class="updates-actions"></div>
+  </div>
 </section>
 
 <section id="view-detail" hidden>
