@@ -92,20 +92,26 @@ session**.
 ## The pinned status bar
 
 Each chat aipager talks in (your DM, and every group scope) gets one
-pinned message: the status bar. Telegram shows only its **first line**
-in the bar at the top of the chat, so that line says what most needs you:
+pinned message: the status bar. Telegram's bar at the top of the chat
+shows the message from its **first line** on, with the lines run
+together, so that line says what most needs you:
 
 | First line | When |
 |---|---|
 | `⏳ jim needs you — Bash: make deploy` | a session is waiting on a permission prompt, a question or an interactive prompt; `(+2 more)` when others are waiting too |
-| `⚙️ 2 working — jim, dev` | sessions are working (three names at most, then `+N`) |
-| `💤 all idle` | nothing is running |
+| `⚙️ jim — working` / `💤 jim — idle` | the chat has one live session and it is working / idle (`🔄 jim — starting` while it starts): this line is the whole bar, apart from a flood line |
+| `⚙️ 2 working · 1 idle` | several sessions, none waiting: how many are in each state (`working`, `idle`, `starting`); `🔄` when none is working and one is starting, `💤` when all are idle |
+| `💤 all idle` | no live session |
 
 Below it, only while it applies, a flood line — `🐢 slow mode after a
 Telegram warning` (the six hours after a 429) or `⏸ card updates paused
 — hourly limit` / `— rate limit` (minimal mode, see
-[troubleshooting](troubleshooting.md#the-hourly-budget)) — and then one
-line per live session with its state: `working`, `needs you` or `idle`.
+[troubleshooting](troubleshooting.md#the-hourly-budget)) — and then,
+when the chat has more than one live session, one line per session with
+its state: `working`, `needs you`, `idle` or `starting`. The bar names
+each session once: the waiting session the first line names gets no
+line of its own, and the first line never lists names the lines below
+repeat.
 Tap the bar to jump to the message.
 
 Buttons on the pinned message:

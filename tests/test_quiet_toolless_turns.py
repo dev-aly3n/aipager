@@ -1260,6 +1260,6 @@ def test_the_pinned_bar_follows_a_turn_whose_card_was_never_sent(
 
     during, before, total, after = run_async(_bounded(_scenario()))
     assert _cards(wire) == []
-    assert during == "⚙️ 1 working — cat"
+    assert during == "⚙️ cat — working"
     assert total > before
-    assert after == "💤 all idle"
+    assert after == "💤 cat — idle"

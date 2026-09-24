@@ -92,8 +92,15 @@ PINNED_PAUSED_LINE = "⏸ card updates paused — hourly limit"
 PINNED_PAUSED_RATE_LINE = "⏸ card updates paused — rate limit"
 #: At most this many "Answer" buttons on a bar.
 PINNED_MAX_ANSWER_BUTTONS = 3
-#: Working sessions named on the first line before "+N".
-PINNED_WORKING_LABELS = 3
+#: A session's state word on the bar, and the order of the first line's
+#: counts when several sessions share the chat.
+_PINNED_WORDS = {Status.BUSY: "working", Status.INTERACTIVE: "needs you",
+                 Status.IDLE: "idle"}
+_PINNED_COUNT_ORDER = ("working", "idle", "starting")
+#: The first line's glyph when no session is waiting: that of the first
+#: state in _PINNED_GLYPH_ORDER any session is in.
+_PINNED_GLYPHS = {"working": "⚙️", "starting": "🔄", "idle": "💤"}
+_PINNED_GLYPH_ORDER = ("working", "starting", "idle")
 #: The waiting prompt's summary on the first line is cut to this.
 PINNED_SUMMARY_MAX = 40
 #: A trailing refresh wakes this long after its deadline, so a timer that
@@ -108,6 +115,15 @@ _SKIP_RETRY = 5.0
 _TRANSIENT_RETRY = 60.0
 
 _prompt_tokens = itertools.count(1)
+
+
+def _pinned_word(sess: TrackedSession) -> str:
+    return _PINNED_WORDS.get(sess.status, "starting")
+
+
+def _pinned_glyph(words) -> str:
+    return next((_PINNED_GLYPHS[w] for w in _PINNED_GLYPH_ORDER if w in words),
+                "💤")
 
 
 def current_prompt_token(sess: TrackedSession, *, create: bool = False):
@@ -217,9 +233,11 @@ class DashboardMixin:
 
     # ---- the pinned "needs you" bar (roadmap 8.31) -----------------------
     #
-    # One pinned message per scope chat. Telegram shows only its FIRST line
-    # in the bar at the top of the chat, so that line says what most needs
-    # the user; the rest lists the chat's live sessions. It is rendered in
+    # One pinned message per scope chat. Telegram's bar at the top of the
+    # chat shows the message from its first line on, lines run together, so
+    # that line says what most needs the user; below it come any flood
+    # lines and, with several sessions, one line per session not already
+    # named above (see `_render_pinned`). It is rendered in
     # full from state every time and edited only when the rendering
     # changed, at most once per PINNED_MIN_EDIT_GAP per chat. Nothing on it
     # moves without a state change: no clock, cost, context % or model,
@@ -309,28 +327,40 @@ class DashboardMixin:
             sessions = self._pinned_sessions(chat)
         esc = html_mod.escape
         waiting = [s for s in sessions if s.status == Status.INTERACTIVE]
-        working = [s for s in sessions if s.status == Status.BUSY]
+        # Each fact once. Telegram's pinned preview runs the lines together,
+        # so a first line that names sessions above a list that names them
+        # again read "⚙️ 1 working — x • x — working" (2026-09-24). The
+        # first line therefore never lists names a session line repeats: it
+        # says the one thing that most needs the user (a waiting session,
+        # named, whose own line is then left out), else the counts; a lone
+        # session is the whole bar, flood lines aside.
+        named = None
         if waiting:
-            first = f"⏳ {esc(waiting[0].label)} needs you"
-            summary = self._pinned_summary(waiting[0])
+            named = waiting[0]
+            first = f"⏳ {esc(named.label)} needs you"
+            summary = self._pinned_summary(named)
             if summary:
                 first += f" — {esc(summary)}"
             if len(waiting) > 1:
                 first += f" (+{len(waiting) - 1} more)"
-        elif working:
-            shown = working[:PINNED_WORKING_LABELS]
-            first = (f"⚙️ {len(working)} working — "
-                     + ", ".join(esc(s.label) for s in shown))
-            if len(working) > len(shown):
-                first += f" +{len(working) - len(shown)}"
+        elif len(sessions) == 1:
+            only = sessions[0]
+            word = _pinned_word(only)
+            first = f"{_pinned_glyph((word,))} {esc(only.label)} — {word}"
+            named = only
+        elif sessions:
+            counts: dict[str, int] = {}
+            for s in sessions:
+                word = _pinned_word(s)
+                counts[word] = counts.get(word, 0) + 1
+            first = f"{_pinned_glyph(counts)} " + " · ".join(
+                f"{counts[w]} {w}" for w in _PINNED_COUNT_ORDER if w in counts)
         else:
             first = "💤 all idle"
         lines = [first] + self._pinned_flood_lines(chat)
-        words = {Status.BUSY: "working", Status.INTERACTIVE: "needs you",
-                 Status.IDLE: "idle"}
         for s in sessions:
-            lines.append(f"• <b>{esc(s.label)}</b> — "
-                         f"{words.get(s.status, 'starting')}")
+            if s is not named:
+                lines.append(f"• <b>{esc(s.label)}</b> — {_pinned_word(s)}")
 
         rows: list[list[InlineKeyboardButton]] = []
         for s in waiting[:PINNED_MAX_ANSWER_BUTTONS]:

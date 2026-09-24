@@ -17,6 +17,7 @@ zero calls on the wire. Nothing in ``asyncio`` is patched.
 from __future__ import annotations
 
 import asyncio
+import itertools
 import json
 from unittest.mock import MagicMock
 
@@ -243,11 +244,11 @@ def test_first_line_priority_waiting_then_working_then_idle(
     s0 = _session(bot, "s0", Status.IDLE)
     s1 = _session(bot, "s1", Status.IDLE)
     s2 = _session(bot, "s2", Status.IDLE)
-    assert _first(bot._render_pinned(CHAT)[0]) == "💤 all idle"
+    assert _first(bot._render_pinned(CHAT)[0]) == "💤 3 idle"
 
     s0.status = Status.BUSY
     s2.status = Status.BUSY
-    assert _first(bot._render_pinned(CHAT)[0]) == "⚙️ 2 working — s0, s2"
+    assert _first(bot._render_pinned(CHAT)[0]) == "⚙️ 2 working · 1 idle"
 
     _wait(s1)
     assert (_first(bot._render_pinned(CHAT)[0])
@@ -258,23 +259,27 @@ def test_first_line_priority_waiting_then_working_then_idle(
             == "⏳ s1 needs you — Bash: rm -rf build (+1 more)")
 
 
-def test_working_labels_truncate_with_plus_n(mk_bot, pbot, legacy):
+def test_many_working_sessions_are_counted_not_named(mk_bot, pbot, legacy):
+    """The names are on the session lines below; the first line counts."""
     bot = _bot(mk_bot, pbot)
     for label in ("a", "b", "c", "d", "e"):
         _session(bot, label, Status.BUSY)
-    assert _first(bot._render_pinned(CHAT)[0]) == "⚙️ 5 working — a, b, c +2"
+    assert _first(bot._render_pinned(CHAT)[0]) == "⚙️ 5 working"
 
 
 def test_one_line_per_live_session_with_its_state_word(mk_bot, pbot, legacy):
+    """In label order, GONE left out — and the waiting session the first
+    line already names is not listed a second time."""
     bot = _bot(mk_bot, pbot)
     _session(bot, "s0", Status.BUSY)
     _wait(_session(bot, "s1"))
     _session(bot, "s2", Status.IDLE)
+    _session(bot, "s3", Status.UNKNOWN)
     _session(bot, "gone", Status.GONE)
     lines = bot._render_pinned(CHAT)[0].split("\n")[1:]
     assert [ln for ln in lines if ln] == ["• <b>s0</b> — working",
-                                          "• <b>s1</b> — needs you",
-                                          "• <b>s2</b> — idle"]
+                                          "• <b>s2</b> — idle",
+                                          "• <b>s3</b> — starting"]
 
 
 def test_only_this_chats_sessions_are_listed(mk_bot, pbot, legacy):
@@ -283,7 +288,7 @@ def test_only_this_chats_sessions_are_listed(mk_bot, pbot, legacy):
     _session(bot, "elsewhere", Status.BUSY, chat=111222333)
     text = bot._render_pinned(CHAT)[0]
     assert "here" in text and "elsewhere" not in text
-    assert _first(text) == "⚙️ 1 working — here"
+    assert _first(text) == "⚙️ here — working"
 
 
 def test_flood_lines_follow_the_warning_regime_and_hourly_minimal(
@@ -351,7 +356,7 @@ def test_the_paused_line_reaches_the_bar_in_minimal_mode(
     edits = pbot.pinned_edits()
     assert len(edits) == 2, [(e[3], e[5]) for e in edits]
     assert paused in edits[1][3].split("\n")
-    assert _first(edits[1][3]) == "⚙️ 1 working — s0"
+    assert _first(edits[1][3]) == "⚙️ s0 — working"
 
 
 def test_no_volatile_fields_a_cost_ctx_model_change_is_zero_edits(
@@ -430,8 +435,8 @@ def test_three_transitions_in_five_seconds_are_one_edit_plus_one_trailing(
     assert len(edits) == 2, [(e[3], e[5]) for e in edits]
     assert edits[1][5] - edits[0][5] >= GAP - EPS
     assert edits[1][5] - edits[0][5] <= GAP + 1.0
-    assert _first(edits[0][3]) == "⚙️ 1 working — s0"
-    assert _first(edits[1][3]) == "💤 all idle"
+    assert _first(edits[0][3]) == "⚙️ s0 — working"
+    assert _first(edits[1][3]) == "💤 s0 — idle"
 
 
 def test_the_trailing_edit_carries_the_final_state(mk_bot, pbot, vloop, legacy):
@@ -470,7 +475,7 @@ def test_a_skipped_edit_is_retried_by_the_trailing_refresh(
     _run(vloop, [(0.0, bot.refresh_pinned)])
     edits = pbot.pinned_edits()
     assert len(edits) == 1, edits
-    assert _first(edits[0][3]) == "⚙️ 1 working — s0"
+    assert _first(edits[0][3]) == "⚙️ s0 — working"
     assert s0.status == Status.BUSY
 
 
@@ -526,7 +531,7 @@ def test_no_edit_while_muted_and_a_catch_up_at_the_lift(
     lift = out["from"] + 100.0
     assert not [e for e in pbot.calls if out["from"] <= e[5] < lift]
     assert lift <= edits[1][5] <= lift + 2.0, (edits[1][5] - lift)
-    assert _first(edits[1][3]) == "💤 all idle"
+    assert _first(edits[1][3]) == "💤 s0 — idle"
 
 
 # ── R1/R5: group pin failure, a deleted pin ─────────────────────────────────
@@ -854,8 +859,8 @@ def test_the_monitor_tick_refreshes_the_bar_after_every_scan(
 
     vloop.run_until_complete(main())
     edits = pbot.pinned_edits()
-    assert [_first(e[3]) for e in edits] == ["⚙️ 1 working — s0",
-                                             "💤 all idle"], edits
+    assert [_first(e[3]) for e in edits] == ["⚙️ s0 — working",
+                                             "💤 s0 — idle"], edits
 
 
 def test_pinned_tick_never_runs_two_refreshes_at_once(
@@ -1047,8 +1052,8 @@ def test_a_change_during_an_edit_in_flight_is_not_lost(
 
     vloop.run_until_complete(main())
     edits = pbot.pinned_edits()
-    assert [_first(e[3]) for e in edits] == ["⚙️ 1 working — s0",
-                                             "💤 all idle"], edits
+    assert [_first(e[3]) for e in edits] == ["⚙️ s0 — working",
+                                             "💤 s0 — idle"], edits
 
 
 def test_a_pin_held_back_by_the_budget_is_retried(
@@ -1436,3 +1441,118 @@ def test_a_pending_trailing_refresh_never_recreates_a_removed_chats_bar(
     to_group = [c for c in pbot.calls if c[1] == GROUP]
     assert len(to_group) == 1, to_group          # the first edit only
     assert GROUP not in bot.registry.pinned_msg_ids
+
+
+# ── each fact once (8.31 follow-up, 2026-09-24) ─────────────────────────────
+#
+# Telegram's pinned preview runs the bar's lines together. A first line
+# naming the working sessions above a list that names them again read
+# "⚙️ 1 working — aipager_boss • aipager_boss — working" live.
+
+@pytest.mark.parametrize("status, expected", [
+    (Status.BUSY, "⚙️ solo — working"),
+    (Status.IDLE, "💤 solo — idle"),
+    (Status.UNKNOWN, "🔄 solo — starting"),
+    (Status.INTERACTIVE, "⏳ solo needs you — Bash: rm -rf build"),
+])
+def test_one_live_session_is_a_single_line(mk_bot, pbot, legacy,
+                                           status, expected):
+    bot = _bot(mk_bot, pbot)
+    sess = _session(bot, "solo", status)
+    if status == Status.INTERACTIVE:
+        _wait(sess)
+    _session(bot, "old", Status.GONE)
+    assert bot._render_pinned(CHAT)[0] == expected
+
+
+def test_one_waiting_session_with_no_summary_is_still_one_line(
+    mk_bot, pbot, legacy,
+):
+    bot = _bot(mk_bot, pbot)
+    _session(bot, "solo", Status.INTERACTIVE)
+    assert bot._render_pinned(CHAT)[0] == "⏳ solo needs you"
+
+
+def test_two_sessions_count_on_top_and_name_below(mk_bot, pbot, legacy):
+    bot = _bot(mk_bot, pbot)
+    _session(bot, "a", Status.BUSY)
+    _session(bot, "b", Status.IDLE)
+    assert bot._render_pinned(CHAT)[0] == (
+        "⚙️ 1 working · 1 idle\n"
+        "• <b>a</b> — working\n"
+        "• <b>b</b> — idle")
+
+
+def test_three_sessions_count_every_state_in_a_fixed_order(
+    mk_bot, pbot, legacy,
+):
+    bot = _bot(mk_bot, pbot)
+    _session(bot, "a", Status.IDLE)
+    _session(bot, "b", Status.UNKNOWN)
+    _session(bot, "c", Status.BUSY)
+    assert bot._render_pinned(CHAT)[0] == (
+        "⚙️ 1 working · 1 idle · 1 starting\n"
+        "• <b>a</b> — idle\n"
+        "• <b>b</b> — starting\n"
+        "• <b>c</b> — working")
+
+    bot.registry.get("claude-c").status = Status.IDLE
+    assert _first(bot._render_pinned(CHAT)[0]) == "🔄 2 idle · 1 starting"
+
+    for s in bot.registry.all_sessions().values():
+        s.status = Status.IDLE
+    assert _first(bot._render_pinned(CHAT)[0]) == "💤 3 idle"
+
+
+def test_needs_you_with_several_sessions_names_the_waiting_one_once(
+    mk_bot, pbot, legacy,
+):
+    bot = _bot(mk_bot, pbot)
+    _wait(_session(bot, "a"))
+    _wait(_session(bot, "b"), "Edit: main.py")
+    _session(bot, "c", Status.BUSY)
+    assert bot._render_pinned(CHAT)[0] == (
+        "⏳ a needs you — Bash: rm -rf build (+1 more)\n"
+        "• <b>b</b> — needs you\n"
+        "• <b>c</b> — working")
+
+
+_STATES = (Status.BUSY, Status.IDLE, Status.INTERACTIVE, Status.UNKNOWN)
+_LABELS = ("alpha", "bravo", "charlie")
+
+
+@pytest.mark.parametrize("states", [
+    combo for n in (1, 2, 3) for combo in itertools.product(_STATES, repeat=n)
+])
+def test_no_label_is_repeated_for_any_combination_of_states(
+    mk_bot, pbot, legacy, states,
+):
+    """Every live session is on the bar exactly once, whatever the mix —
+    counted over the lines run together, as Telegram's preview shows them.
+    The labels share no substring with each other, the state words or the
+    summary, so a count is an exact occurrence count."""
+    bot = _bot(mk_bot, pbot)
+    for label, status in zip(_LABELS, states):
+        sess = _session(bot, label, status)
+        if status == Status.INTERACTIVE:
+            _wait(sess, "Bash: ls")
+    text = bot._render_pinned(CHAT)[0]
+    preview = text.replace("\n", " ")
+    for label in _LABELS[:len(states)]:
+        assert preview.count(label) == 1, preview
+    if len(states) == 1:
+        assert "\n" not in text
+
+
+def test_an_unchanged_render_of_several_sessions_is_never_edited(
+    mk_bot, pbot, vloop, legacy,
+):
+    """The volume guard under the new first line: refreshes that render
+    what the bar already shows cost nothing."""
+    bot = _bot(mk_bot, pbot)
+    _session(bot, "a", Status.BUSY)
+    _session(bot, "b", Status.IDLE)
+    _wait(_session(bot, "c"))
+    _run(vloop, [(0.0, bot.refresh_pinned), (GAP * 2, bot.refresh_pinned),
+                 (GAP * 2, bot.refresh_pinned)])
+    assert len(pbot.pinned_edits()) == 1

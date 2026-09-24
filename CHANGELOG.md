@@ -13,7 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pinned message listing that chat's sessions. Its first line, the one
   Telegram shows in the bar at the top of the chat, says what most needs
   you: `⏳ jim needs you — Bash: make deploy` (with `(+N more)`), else
-  `⚙️ 2 working — jim, dev`, else `💤 all idle`; a `🐢` or `⏸` line below
+  the counts, `⚙️ 2 working · 1 idle`; with one live session it is the
+  whole bar, `⚙️ jim — working` or `💤 jim — idle`. Every session is
+  named once, never in both the first line and the list below it
+  (Telegram's pinned preview shows all the lines joined). A `🐢` or `⏸` line below
   it says when the chat is in slow mode after a Telegram warning or has
   paused card updates (for the hourly limit or the rate limit). **Answer &lt;label&gt;** buttons (up
   to three) send a waiting session's prompt again at the bottom of the
