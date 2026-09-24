@@ -30,6 +30,7 @@ and on every session change.
 | `/perms [label]` | optional | Switch a session between Ask and Auto permission modes. On a busy session, offers `Stop task & switch` / `Not now`. |
 | `/settings` | — | Message layout, diff previews (off by default), formatting and language preferences. Whatever the layout, every busy card ends with its session's status line (`⏳`/`✅ name · …`) and every answer starts with its result line (`💬 name`, plus `· Finished (…)` when no finished card is left to show the stats); the merged layout stacks the two, each line in its own section. In the card layout the answer deliberately follows the finished card by a moment, so the card is seen to say Finished before the answer lands under it — tune or disable that head start with `FINISH_CARD_GRACE_SECONDS` (seconds, default 0.8; 0 sends both at once). |
 | `/whoami` | — | Show your Telegram id and (in team mode) your role. |
+| `/update` | — | Admin only. Show the running and latest aipager and Claude Code versions and update either or both — see [Update](#update). |
 
 ### Per-session dynamic commands
 
@@ -55,7 +56,8 @@ verified against Telegram's `initData` signature — see
 [security → Mini App tunnel](security.md#mini-app-tunnel).
 
 Everything in the Mini App is also reachable from chat: the ⋮ menu on
-a session's dashboard carries the same actions.
+a session's dashboard carries the same actions. For the admin,
+**Settings → Updates** mirrors [`/update`](#update).
 
 ## Persistent keyboard
 
@@ -214,15 +216,85 @@ success.
 
 ### Restart
 
-`🔄 Restart daemon now` always works:
+`🔄 Restart daemon now`:
 
-- Service-managed daemons: `systemctl --user restart aipager.service`
-  on Linux, `launchctl kickstart -k` on macOS.
-- Foreground / editable daemons: spawn a detached replacement that
-  waits for the parent PID to die, then `exec aipager start`. The
+- A daemon running as the systemd-user service schedules a detached
+  `systemctl --user restart aipager.service` 5 s later, in a transient
+  unit outside the daemon's own cgroup, so it survives the daemon's
+  exit. It refuses while the service unit would kill your sessions
+  (`KillMode` other than `process`), and tells you to run
+  `aipager service install` first.
+- macOS: `launchctl kickstart -k gui/<uid>/com.aipager.daemon`.
+- A daemon you started yourself (`aipager start`), even on a machine
+  that also has the service installed: spawn a detached replacement
+  that waits for the parent PID to die, then `exec aipager start`. The
   current daemon SIGTERMs itself once the spawn is alive.
 
 No SSH required.
+
+## Update
+
+`/update` (admin only; in personal mode, only the operator) replies
+`🔎 Checking versions…` and then edits that message to show:
+
+- **aipager** — the running version, the latest on PyPI, and how it was
+  installed (e.g. `pipx, from PyPI` or `pipx, from local path …`; group
+  chats never show paths);
+- **Claude Code** — the installed version, the latest on its own update
+  channel (`autoUpdatesChannel`: latest, stable or rc), and the install
+  method;
+- **Restart** — `automatic (systemd)`, or `manual` with the reason.
+
+A version that cannot be looked up (network down, 5 s timeout) shows as
+`unknown`.
+
+Buttons: **⬆️ Update Claude Code**, **⬆️ Update aipager**, **Both**,
+**Cancel**. The aipager and Both buttons are missing when this install
+cannot be updated from here (editable, Nix, Snap, a system package, a
+container, or another user's install); the Claude Code buttons are
+missing when `claude` is not found. Every tap re-checks the admin rule.
+
+**Update Claude Code** runs `claude update` (by absolute path, 5 min
+timeout) and reports `Claude Code A → B`, "already up to date", or the
+failure with the tail of its output. Running sessions keep the old
+version until you restart them (`/restart`); the reply lists them. No
+session is restarted for you. New sessions use the new version.
+
+**Update aipager**:
+
+1. On a PyPI install that is already current, it says so and stops.
+2. If the daemon can restart itself, it first **waits until nothing is
+   in flight**: no session running a turn, waiting on a question,
+   running a background agent, showing a live busy card, running a
+   tool, or holding an open permission prompt, and no held answers
+   waiting for a rate limit to lift. The message lists what it is
+   waiting for, with **Restart now** (skip the wait) and **Cancel**.
+   After 10 minutes it asks again: **Wait 10 more min**, **Restart
+   now**, **Cancel**. Unanswered for an hour, it cancels itself.
+3. It upgrades through the installer that owns the running daemon
+   (`pipx upgrade aipager`, `uv tool upgrade aipager --refresh`,
+   `brew upgrade aipager`, or `<venv>/bin/python -m pip install
+   --upgrade aipager`), by absolute path, with a 10 min timeout. There
+   is no Cancel while the installer runs.
+4. It checks the new version imports in a fresh interpreter. A failed,
+   timed-out or unimportable upgrade restarts nothing.
+5. If a turn started during the upgrade, it waits again.
+6. It schedules a detached `systemctl --user restart aipager.service`
+   5 s later: `aipager A → B installed. Restarting in 5 s…`. The new
+   daemon then posts `✅ aipager updated A → B, N sessions re-adopted`
+   (and `⚠️ Not back: …` for any session that did not come back) to the
+   chat that asked.
+
+The daemon restarts itself only when it runs as the systemd-user
+service **and** that unit has `KillMode=process`. Otherwise aipager is
+still upgraded, and the message tells you how to restart: run
+`aipager service install` first (it lists the sessions a restart would
+kill), the `launchctl kickstart` command on macOS, or "restart your
+`aipager start`" for a daemon you started yourself.
+
+Only one update runs at a time, across `/update`, the Mini App's
+**Settings → Updates** block (same data, same buttons, same job) and
+`aipager update` on the command line.
 
 ## Free messages
 
