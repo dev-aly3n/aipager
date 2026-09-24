@@ -368,6 +368,14 @@ async def _run_daemon(bot_username: str) -> None:
     session_monitor.on_sessions_changed = bot._update_bot_commands
     await session_monitor.start()
 
+    # A self-update (roadmap 8.36) that restarted the daemon left a marker:
+    # announce "aipager updated A → B, N sessions re-adopted" once the
+    # monitor's first scans have re-adopted the dtach sockets. Fire-and-
+    # forget, flood-safe, never raises; cancelled at shutdown below.
+    from aipager.bot import update_flow
+    marker_task = asyncio.create_task(
+        update_flow.deliver_update_marker(bot, registry))
+
     # Mini App server — newest and highest-risk component, so it starts
     # last and (below) stops first. Behind a lazy import to keep
     # aiohttp (the largest dependency in the tree) off cold start-up
@@ -456,6 +464,7 @@ async def _run_daemon(bot_username: str) -> None:
     # tasks sit for the full 45s — the suite went from 100s to 413s
     # before this was tracked and cancelled.
     keyboard_release_task.cancel()
+    marker_task.cancel()
     registry.save()
     if manager is not None:
         # Before miniapp_server.stop(): stop accepting the world's
