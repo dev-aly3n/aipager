@@ -68,11 +68,14 @@ def test_pickup_while_busy_moves_nothing_and_absorption_reanchors(
     assert sess.trigger_msg_id == 1, "a pick-up at submit time is not consumption"
     assert sess.busy_msg_id == c1 and not _reanchor_sends(bot)
     assert [t["msg_id"] for t in sess.queued_targets] == [2]
-    assert any(c.args[1] == 2 and c.args[2] == "👍"
-               for c in bot._app.bot.set_message_reaction.await_args_list)
+    # Claude only QUEUED it: it keeps its 👀 until the absorption.
+    assert not any(c.args[1] == 2 and c.args[2] == "👍"
+                   for c in bot._app.bot.set_message_reaction.await_args_list)
 
     append_queue_op(sess, "remove", "absorbed_mid_turn", PREFIX + "second")
     run_async(bot.notify(sess, "assistant_text", {"delta": "going on", "message_id": "m1"}))
+    assert any(c.args[1] == 2 and c.args[2] == "👍"
+               for c in bot._app.bot.set_message_reaction.await_args_list)
 
     assert sess.trigger_msg_id == 2
     assert sess.busy_card_trigger == 2 and sess.busy_msg_id != c1

@@ -1215,6 +1215,13 @@ class SessionRegistry:
         self.last_active_session: str = ""  # last session that sent a notification
         self.pinned_msg_id: int = 0  # pinned status message in Telegram
         self._dirty: bool = False
+        # Claude Code session id -> monotonic time aipager's own /kill
+        # ended that process (bot.session_ops._kill_session_core). Its
+        # SessionEnd is not announced; a new process under the same name
+        # has a new id. Shared here because both the bot (kill, notice)
+        # and the hook receiver (SessionStart of a resumed id) touch it.
+        # Transient: never persisted.
+        self.killed_sessions: dict[str, float] = {}
 
     def get(self, name: str) -> TrackedSession | None:
         return self._sessions.get(name)

@@ -234,10 +234,41 @@ even while a turn is running — exactly like typing into the terminal.
 Send several and they queue inside Claude itself, which picks each up
 at a natural boundary:
 
-- 👀 on your message — sent to the session.
-- 👍 — Claude has taken it in. For a message sent while a turn runs
-  this happens at once: Claude queues it, and only later either folds
-  it into the turn already running or starts a new turn for it.
+The reaction on your message follows it, the way Claude Code's own
+queued prompt turns from grey to white:
+
+- 👀 — handed to the session (or held, see below), but Claude has not
+  taken it yet. A message sent while a turn runs stays 👀 while it
+  waits in Claude's queue.
+- 👍 — Claude took it: it started a turn, or Claude folded it into the
+  turn already running, or handed it to a running background agent.
+- 🤷 — it will never be taken: a held message dropped by `/stop`,
+  `/clearqueue` or `/kill`, or one that could not be sent on release; a
+  message or command still waiting when `/stop`, `/clearqueue`, `/kill`
+  or the session ending (not `/clear` or `/resume`) dropped it; or a
+  prompt Claude Code refused (see below). Messages Claude had already
+  queued are only marked while aipager can see that queue — the live
+  transcript scan is running and no background job is waiting; otherwise
+  they keep 👀. Escape in the
+  terminal pulls Claude's queue back into its input box, where it may be
+  sent again, so a message dropped that way keeps 👀 too.
+- 👌 — a Claude Code command that has run (see below), or aipager
+  acknowledging `/stop`.
+
+A reaction only ever moves forward, so a message gets at most three,
+each once. A reaction that falls inside a Telegram rate-limit ban is
+skipped, not replayed later, and one teardown marks at most the ten
+newest messages it drops.
+
+Command buttons (`Compact`, `/model …`): tapped while the session is
+idle, the command is 👌 at once — Claude Code runs it on Enter, and a
+local command such as `/model` fires no hook that could say so later.
+Tapped while a turn runs, it is 👀 until that turn ends — normally, as
+a background job's interim stop, or on an API error — and then 👌;
+dropped before that by `/stop`, `/clearqueue`, `/kill` or the session
+ending, it never ran: 🤷. When Claude Code queues it as a prompt instead,
+it follows the 👀 → 👍 lifecycle. A voice note gets the same reactions as
+text once its transcript is sent.
 
 The busy card and the eventual answer follow whichever message Claude
 actually consumed for a turn — the one it started on if the session
@@ -255,9 +286,11 @@ so nothing would ever end the turn the daemon just announced. After
 8 s without any hook (`PROMPT_HOOK_GRACE_SECONDS`) the busy card
 becomes `⚠️ name · Not taken by Claude Code` with a one-line
 explanation and the session is idle again; the reason is on the
-terminal. Only a message that started a turn is judged this way — one
-queued behind a running turn just keeps its 👀 reaction, which never
-turns into 👍 if Claude did not take it.
+terminal, and the message gets 🤷 (a slash command gets 👌 instead: a
+built-in that opens a dialog fires no hook either). Only a message that
+started a turn
+is judged this way — one queued behind a running turn keeps its 👀
+until Claude takes it or it is dropped.
 
 Two cases are held back instead of sent, and delivered automatically
 once resolved:

@@ -50,7 +50,7 @@ It then tells the daemon which messages were consumed.
 
 | Aipager does | User sees |
 |---|---|
-| Marks the session BUSY; sends the busy message if one isn't already up (Telegram-injected prompts get theirs at send time). Reacts 👍 on each Telegram message the prompt accounted for. | The 👀 on their message flips to 👍; a live "Working…" reply. |
+| Marks the session BUSY; sends the busy message if one isn't already up (Telegram-injected prompts get theirs at send time). Reacts 👍 on each Telegram message the prompt started a turn with; a message sent while a turn runs only gets its 👍 once Claude absorbs it or starts the next turn with it. | The 👀 on their message flips to 👍; a live "Working…" reply. |
 
 ### `PreToolUse`
 

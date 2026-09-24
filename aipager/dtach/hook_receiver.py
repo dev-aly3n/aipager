@@ -923,12 +923,28 @@ class HookReceiver:
 
         elif event == "SessionEnd":
             sess = self.registry.get_or_create(session_name)
-            source = msg.get("source", "unknown")
+            # Claude Code's SessionEnd carries `reason` (clear, resume,
+            # logout, prompt_input_exit, other — its hook schema in
+            # 2.1.272 and 2.1.281); `source` is SessionStart's field and is
+            # kept only as a fallback for a hand-built datagram.
+            source = msg.get("reason") or msg.get("source") or "unknown"
+            # The GONE transition deletes the notes dir: capture what was
+            # still outstanding for the not-delivered reaction.
+            notes = [{"msg_id": n.get("msg_id"), "chat_id": n.get("chat_id"),
+                      "raw_text": n.get("raw_text", "")}
+                     for n in list_outstanding_notes(session_name)]
+            # Which Claude Code process ended — the /kill notice
+            # suppression matches on it (the transcript is named by it too).
+            ended_sid = (msg.get("session_id")
+                         or (Path(transcript_path).stem if transcript_path
+                             else ""))
             self.registry.transition(session_name, Status.GONE)
             sess.last_prompt_origin = "telegram"  # fail-closed between turns
             sess.pending_tool_started_at = None
             sess.compact_started_at = None
-            await self.notify_fn(sess, "session_end", {"source": source})
+            await self.notify_fn(sess, "session_end",
+                                 {"source": source, "notes": notes,
+                                  "session_id": ended_sid})
 
         elif event == "PreCompact":
             # Compaction is about to start — save context % for delta display
@@ -971,6 +987,12 @@ class HookReceiver:
             source = msg.get("source", "")
             if source != "compact":
                 self.registry.get_or_create(session_name)
+                # A process (re)starting under this id — `--resume` of a
+                # conversation /kill just ended keeps its id — is not the
+                # killed one: its exit must be announced again.
+                started_sid = msg.get("session_id") or ""
+                if started_sid:
+                    self.registry.killed_sessions.pop(started_sid, None)
                 return
             sess = self.registry.get_or_create(session_name)
             # Compaction finished — clear the in-flight marker regardless

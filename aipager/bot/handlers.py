@@ -36,11 +36,7 @@ from telegram.ext import (
 
 from aipager.dtach import inject
 
-from aipager.bot import new_flow, session_parity
-from aipager.bot.flood_budget import (
-    PRIORITY_SIGNAL,
-    rate_limit_args as _rl_args,
-)
+from aipager.bot import new_flow, reactions, session_parity
 from aipager.bot.settings_menu import render_settings_root
 from aipager.config import (
     APP_BUTTON, BACK_BUTTON, COMMANDS_BUTTON,
@@ -254,10 +250,9 @@ class CommandHandlersMixin:
         the session-level field can still describe the PREVIOUS sender.
 
         The reaction is the same 👀 a busy-queued message gets, deliberately:
-        the state really is the same one (queued for delivery), Telegram only
-        permits a fixed set of reaction emoji, and the sent-versus-picked-up
-        distinction that would justify a second signal is the 👍 this same
-        change adds at pick-up time, not here.
+        the state really is the same one (handed off, not yet taken). It
+        turns 👍 when Claude takes the message after its release, or 🤷
+        if it is discarded first (:mod:`aipager.bot.reactions`).
         """
         held_reason = ""
         if sess.dialog_is_open():
@@ -277,25 +272,20 @@ class CommandHandlersMixin:
             )
             return True
         self.registry.mark_dirty()
-        await self._react(update, "👀")
+        await self._react(update, reactions.HANDED_OFF)
         log.info("[%s] Held (%s): %s", sess.label, held_reason, text[:80])
         return True
 
     async def _react(self, update: Update, emoji: str) -> None:
-        """React to the user's message with an emoji."""
+        """React to the user's message — one lifecycle edge
+        (:mod:`aipager.bot.reactions`: allowed emoji only, never repeated,
+        never backwards, SIGNAL class, mute-gated)."""
         try:
-            await self._app.bot.set_message_reaction(
-                update.effective_chat.id, update.message.message_id, emoji,
-                # SIGNAL (8.26 R3): the 👀 that tells the user their
-                # message was seen. Already exempt from the per-chat
-                # BUDGET by endpoint; the class is what keeps it out of
-                # minimal-mode suspension, so a chat under pressure still
-                # acknowledges input. It is NOT exempt from the mute —
-                # nothing is (D-1).
-                rate_limit_args=_rl_args(priority=PRIORITY_SIGNAL),
-            )
+            chat_id = update.effective_chat.id
+            msg_id = update.message.message_id
         except Exception:
-            pass  # reaction API may not be available in all contexts
+            return  # no message to react to in this context
+        await reactions.set_reaction(self, chat_id, msg_id, emoji)
 
     async def _install_voice_extra(self, query) -> None:
         """Run the install subprocess and edit the prompt message with
@@ -1470,7 +1460,7 @@ class CommandHandlersMixin:
             driver_user_id=driver_id_from_update(update),
         )
         if ok:
-            await self._react(update, "👀")
+            await self._react(update, reactions.HANDED_OFF)
             self.registry.transition(sess.name, Status.BUSY)
             await self._send_busy_and_animate(sess)
             log.info("[%s] Sent text: %s", sess.label, text[:80])
@@ -1636,7 +1626,10 @@ class CommandHandlersMixin:
             driver_user_id=driver_id_from_update(update),
         )
         if ok:
-            await self._react(update, "🎙️")
+            # The same lifecycle as typed text: 👀 now, 👍 when Claude takes
+            # it. The "🎙️ Transcribing…" reply already covers the stage
+            # before this; a reaction for it would cost a fourth call.
+            await self._react(update, reactions.HANDED_OFF)
             self.registry.transition(sess.name, Status.BUSY)
             await self._send_busy_and_animate(sess)
             log.info("[%s] Voice injected: %r", sess.label, transcript[:80])
@@ -1787,7 +1780,7 @@ class CommandHandlersMixin:
             driver_user_id=driver_id_from_update(update),
         )
         if ok:
-            await self._react(update, "👀")
+            await self._react(update, reactions.HANDED_OFF)
             self.registry.transition(sess.name, Status.BUSY)
             await self._send_busy_and_animate(sess)
             log.info("[%s] File sent: %s", sess.label, log_name)
@@ -1905,7 +1898,7 @@ class CommandHandlersMixin:
             driver_user_id=driver_id_from_update(update),
         )
         if ok:
-            await self._react(update, "👀")
+            await self._react(update, reactions.HANDED_OFF)
             self.registry.transition(sess.name, Status.BUSY)
             await self._send_busy_and_animate(sess)
             log.info("[%s] Template sent: %s", sess.label, prompt_text[:80])
@@ -1938,13 +1931,22 @@ class CommandHandlersMixin:
         if await self._hold_for_open_dialog(update, sess, command_text):
             return
 
+        was_busy = sess.status == Status.BUSY
         ok = await self._inject_prompt(
             sess, command_text,
             msg_id=update.message.message_id, chat_id=calling_chat_id(update),
             driver_user_id=driver_id_from_update(update),
         )
         if ok:
-            await self._react(update, "✅")
+            # Enter on Claude Code's idle prompt runs the command there and
+            # then, and a local one (`/model`) fires no hook that could
+            # ever say so: the injection is where it is done — 👌, one
+            # call. While a turn runs Claude Code queues it instead: 👀,
+            # then 👌 when that turn ends (`_mark_ran_commands`), or 👍 /
+            # 🤷 if its pick-up named it. (✅ was never an allowed bot
+            # reaction — it silently failed, 8.33.)
+            await self._react(update, reactions.HANDED_OFF if was_busy
+                              else reactions.ACK)
             # Explicit feedback for model changes
             if command_text.startswith("/model "):
                 model_arg = command_text.split(" ", 1)[1]
@@ -2006,7 +2008,7 @@ class CommandHandlersMixin:
                 driver_user_id=driver_id_from_update(update),
             )
             if ok:
-                await self._react(update, "👀")
+                await self._react(update, reactions.HANDED_OFF)
                 self.registry.transition(name, Status.BUSY)
                 await self._send_busy_and_animate(sess)
                 log.info("[%s] Direct send: %s", target_label, prompt_text[:80])
@@ -2035,7 +2037,7 @@ class CommandHandlersMixin:
                 driver_user_id=driver_id_from_update(update),
             )
             if ok:
-                await self._react(update, "👀")
+                await self._react(update, reactions.HANDED_OFF)
                 self.registry.transition(session_name, Status.BUSY)
                 await self._send_busy_and_animate(new_sess)
             else:

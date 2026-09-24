@@ -7,6 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **The reaction on your message now says where it is.** 👀 means
+  aipager handed it to the session but Claude has not taken it yet; 👍
+  means Claude took it — the way Claude Code's own queued prompt turns
+  from grey to white. A message sent while a turn runs used to get 👍
+  the moment Claude merely *queued* it; it now stays 👀 until Claude
+  folds it into the running turn, hands it to a background agent, or
+  starts the next turn with it.
+- **A message that will never be taken gets 🤷** instead of keeping 👀
+  forever: a held message dropped by `/stop`, `/clearqueue` or `/kill`,
+  or one that could not be sent on release; a message or command still
+  waiting when `/stop`, `/clearqueue`, `/kill` or the session ending (not
+  `/clear` or `/resume`) dropped it — for a message Claude had already
+  queued, only while aipager can see that queue (the live transcript
+  scan is running and no background job is waiting); or a prompt Claude
+  Code refused outright. One teardown marks at most the ten newest
+  messages it drops; the rest keep 👀.
+- **Claude Code commands get 👌 once they have run.** A command button
+  tapped while the session is idle is 👌 at once: Claude Code runs it on
+  Enter, and a local command such as `/model` fires no hook that could
+  say so later. Tapped while a turn runs, it is 👀 until that turn ends —
+  normally, as a background job's interim stop, or on an API error — and
+  then 👌; dropped before that by `/stop`, `/clearqueue`, `/kill` or the
+  session ending, it never ran: 🤷. When Claude Code queues it as a
+  prompt instead, it follows the 👀 → 👍 lifecycle. A command sent as a
+  prompt that gets no hook within 8 s ends on 👌 rather than 🤷: a
+  built-in may have opened a dialog or run locally.
+- A reaction only moves forward, so a message costs at most three
+  reaction calls, each sent once; one that falls inside a flood mute is
+  skipped, not replayed.
+- **Escape in the terminal no longer leaves a phantom turn** while the
+  live transcript scan is running. A message Escape pulled out of
+  Claude's queue was still treated as the next turn's prompt: a card
+  appeared for a turn that never ran. It keeps its 👀, since it may be
+  sent again from the terminal.
+
+### Fixed
+- **Reactions on commands, `/stop` and voice notes appear again**
+  (roadmap 8.33). They used ✅ and 🎙️, which Telegram does not allow as
+  bot reactions, so every one failed silently. Voice notes now follow the
+  👀 → 👍 lifecycle, commands the one above, and `/stop` is acknowledged
+  with 👌. A test pins every emoji aipager reacts with against Telegram's
+  list.
+- **`/clearqueue` and `/stop` see messages Claude has queued.** A message
+  sent while a turn ran was invisible to both once Claude queued it:
+  `/clearqueue` answered that nothing was queued and left it to run as
+  the next turn, and `/stop` left it in Claude's input box, where it was
+  sent along with your next prompt. Both now count it and wipe it — only
+  while aipager can see Claude's queue, as above, so a message Claude
+  already took is never mistaken for a queued one and an Escape never
+  lands on an empty queue, where it would interrupt the running turn.
+- **"Session ended" notices name the real reason.** Claude Code reports
+  it as `reason`; aipager read a field SessionEnd never carries, so every
+  exit said "exited". `/clear` now reads "cleared", `/resume` "switched to
+  another conversation", a logout "logged out"; any other exit (Claude
+  Code's default reason, which a plain signal also gets) says "exited".
+  The session aipager's own `/kill` just ended gets no second notice after
+  "💀 Killed".
+
 ## [0.7.13] - 2026-09-16
 
 ### Fixed
