@@ -161,14 +161,10 @@ def test_kill_refuses_while_a_resume_is_in_flight(mk_bot, run_async, monkeypatch
     bot = _bot(mk_bot, registry)
     killer = AsyncMock(return_value=True)
     monkeypatch.setattr(inject, "kill_session", killer)
-    flushed = AsyncMock()
-    monkeypatch.setattr(type(bot), "_flush_job_buffer", flushed, raising=False)
-
     outcome = run_async(bot._kill_session_core(NAME, "proj"))
 
     assert outcome.result == "resuming"
     killer.assert_not_awaited()
-    flushed.assert_not_awaited()
     assert registry.get(NAME) is sess, "the kill removed a resuming session"
 
 

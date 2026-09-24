@@ -121,6 +121,16 @@ def _pinned_word(sess: TrackedSession) -> str:
     return _PINNED_WORDS.get(sess.status, "starting")
 
 
+def _pinned_agents(sess: TrackedSession) -> str:
+    """`` · ⏳ N agent(s) running`` while *sess* has background agents
+    running (roadmap 8.41), else ``""``. A count, never their names: the
+    bar then moves only when the count does."""
+    n = len(sess.bg_agents)
+    if not n:
+        return ""
+    return f" · ⏳ {n} agent{'' if n == 1 else 's'} running"
+
+
 def _pinned_glyph(words) -> str:
     return next((_PINNED_GLYPHS[w] for w in _PINNED_GLYPH_ORDER if w in words),
                 "💤")
@@ -341,12 +351,14 @@ class DashboardMixin:
             summary = self._pinned_summary(named)
             if summary:
                 first += f" — {esc(summary)}"
+            first += _pinned_agents(named)
             if len(waiting) > 1:
                 first += f" (+{len(waiting) - 1} more)"
         elif len(sessions) == 1:
             only = sessions[0]
             word = _pinned_word(only)
-            first = f"{_pinned_glyph((word,))} {esc(only.label)} — {word}"
+            first = (f"{_pinned_glyph((word,))} {esc(only.label)} — {word}"
+                     f"{_pinned_agents(only)}")
             named = only
         elif sessions:
             counts: dict[str, int] = {}
@@ -360,7 +372,8 @@ class DashboardMixin:
         lines = [first] + self._pinned_flood_lines(chat)
         for s in sessions:
             if s is not named:
-                lines.append(f"• <b>{esc(s.label)}</b> — {_pinned_word(s)}")
+                lines.append(f"• <b>{esc(s.label)}</b> — {_pinned_word(s)}"
+                             f"{_pinned_agents(s)}")
 
         rows: list[list[InlineKeyboardButton]] = []
         for s in waiting[:PINNED_MAX_ANSWER_BUTTONS]:

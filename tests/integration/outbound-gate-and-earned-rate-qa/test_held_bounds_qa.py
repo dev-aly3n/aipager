@@ -10,10 +10,9 @@ Ruling 7: a held answer whose rich delivery fails for a non-mute reason
 falls back to the stored plain text "rather than losing the answer a
 second time".
 
-Criterion 20: ``_flush_job_buffer`` holds the buffer's contents BEFORE it
-clears them — a sanctioned seam since iteration 2 (tester-iter1-005),
-because the close paths that drive it in production run on timers this
-suite cannot run.
+Criterion 20: a background job's interim answer that meets a mute is held,
+not lost. Asserted on ``_deliver_job_interim`` since roadmap 8.42 removed
+the interim buffer (and ``_flush_job_buffer``) that it used to cover.
 """
 
 from __future__ import annotations
@@ -325,105 +324,100 @@ def test_a_mute_never_uses_up_the_answers_attempts(
     assert HELD.count() == 1
 
 
-# ===== criterion 20 — the job buffer is HELD before it is cleared =======
+# ===== criterion 20 — a muted interim answer is HELD, not lost ===========
+#
+# Until roadmap 8.42 this section drove ``_flush_job_buffer``, the close
+# paths' delivery of a background job's buffered interim answers. 8.42
+# (operator decision 2026-09-24) removed the buffer: an interim answer goes
+# out the moment its turn ends, through ``_deliver_job_interim``. The
+# criterion is unchanged — a mute holds the answer rather than losing it —
+# and is now asserted on that seam.
 
-def _seeded(sess, *chunks):
-    sess.job_interim_buffer = list(chunks)
-    return sess
+def _interim(bot, sess, text="the interim answer"):
+    return bot._deliver_job_interim(sess, text, time.time())
 
 
-def test_a_muted_job_buffer_is_held(
+def test_a_muted_job_interim_is_held(
     mk_bot, run_async, rich_http, qa_clock,
 ):
-    """Criterion 20, through the sanctioned seam. The buffer is the only
-    full copy of a background job's answers on the close paths that never
-    reach the Finished composition."""
     bot = _answer_bot(mk_bot)
     MUTE.mute(CHAT, BAN)
-    sess = _seeded(_sess(), "the interim answer")
-    run_async(bot._flush_job_buffer(sess))
+    run_async(_interim(bot, _sess()))
     assert HELD.pending(CHAT)
 
 
-def test_what_was_held_is_what_the_buffer_contained(
+def test_what_was_held_is_the_interim_answer(
     mk_bot, run_async, rich_http, qa_clock,
 ):
-    """The ORDERING *is* the criterion: cleared first, the hold would
-    capture an empty buffer and the answer would be gone with a held
-    entry to prove it was handled."""
     bot = _answer_bot(mk_bot)
     MUTE.mute(CHAT, BAN)
-    sess = _seeded(_sess(), "the interim answer")
-    run_async(bot._flush_job_buffer(sess))
+    run_async(_interim(bot, _sess()))
     assert any("the interim answer" in entry.rich_text
                for entry in HELD.pending(CHAT))
 
 
-def test_the_buffer_is_cleared_once_it_has_been_held(
+def test_a_held_interim_is_held_only_once(
     mk_bot, run_async, rich_http, qa_clock,
 ):
-    """The other side of the same ordering: held AND cleared, so a second
-    close path cannot hold it twice."""
+    """A stray idle re-running the same interim inside the ban cannot hold
+    it twice: the pending digest refuses it."""
     bot = _answer_bot(mk_bot)
     MUTE.mute(CHAT, BAN)
-    sess = _seeded(_sess(), "the interim answer")
-    run_async(bot._flush_job_buffer(sess))
-    assert sess.job_interim_buffer == []
+    sess = _sess()
+    run_async(_interim(bot, sess))
+    run_async(_interim(bot, sess))
+    assert HELD.count() == 1
 
 
-def test_a_muted_job_buffer_puts_nothing_on_the_wire(
+def test_a_muted_job_interim_puts_nothing_on_the_wire(
     mk_bot, run_async, rich_http, qa_clock,
 ):
     bot = _answer_bot(mk_bot)
     MUTE.mute(CHAT, BAN)
-    sess = _seeded(_sess(), "the interim answer")
-    run_async(bot._flush_job_buffer(sess))
+    run_async(_interim(bot, _sess()))
     assert rich_http.requests == []
 
 
-def test_a_healthy_job_buffer_is_delivered_not_held(
+def test_a_healthy_job_interim_is_delivered_not_held(
     mk_bot, run_async, rich_http, qa_clock,
 ):
     """The control: with no mute the same call delivers and holds
     nothing, so the rows above are about the mute and not about a seam
     that never does anything."""
     bot = _answer_bot(mk_bot)
-    sess = _seeded(_sess(), "the interim answer")
-    run_async(bot._flush_job_buffer(sess))
+    run_async(_interim(bot, _sess()))
     assert HELD.count() == 0
 
 
-def test_a_healthy_job_buffer_really_reaches_telegram(
+def test_a_healthy_job_interim_really_reaches_telegram(
     mk_bot, run_async, rich_http, qa_clock,
 ):
     """…and it goes out, so "nothing held" above is a delivery and not a
     silent drop."""
     bot = _answer_bot(mk_bot)
-    sess = _seeded(_sess(), "the interim answer")
-    run_async(bot._flush_job_buffer(sess))
+    run_async(_interim(bot, _sess()))
     assert any("the interim answer" in json.dumps(payload)
                for _e, _c, payload in rich_http.requests)
 
 
-def test_an_empty_job_buffer_holds_nothing(
+def test_an_empty_job_interim_holds_nothing(
     mk_bot, run_async, rich_http, qa_clock,
 ):
-    """Error guessing: the close paths fire on every job, most of which
-    have nothing buffered. A held empty answer would be delivered later
-    as a blank message."""
+    """Error guessing: an interim Stop with no text of its own. A held
+    empty answer would be delivered later as a blank message."""
     bot = _answer_bot(mk_bot)
     MUTE.mute(CHAT, BAN)
-    run_async(bot._flush_job_buffer(_seeded(_sess())))
+    run_async(_interim(bot, _sess(), ""))
     assert HELD.count() == 0
 
 
-def test_a_held_job_buffer_is_delivered_when_the_ban_lifts(
+def test_a_held_job_interim_is_delivered_when_the_ban_lifts(
     mk_bot, run_async, rich_http, qa_clock,
 ):
     """End to end: holding it is only worth anything if it comes back."""
     bot = _answer_bot(mk_bot)
     MUTE.mute(CHAT, 600.0)
-    run_async(bot._flush_job_buffer(_seeded(_sess(), "the interim answer")))
+    run_async(_interim(bot, _sess()))
     qa_clock.advance(601.0)
     run_async(bot.flush_held_answers(_sess()))
     assert any("the interim answer" in body for body in _bodies(rich_http))

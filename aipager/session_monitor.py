@@ -688,6 +688,22 @@ class SessionMonitor:
                         exc_info=True,
                     )
 
+            # Roadmap 8.41: the running-agents set gets the same silence
+            # bound as the job's table — a lost SubagentStop can pin
+            # "still running" for at most one window — and an answer whose
+            # ⏳ line is owed its ✅ gets it once its agents are all gone.
+            for aid in sess.sweep_bg_agents(now, SUBAGENT_SILENCE_SECONDS):
+                log.info("[%s] background agent %s silent for %d min — no "
+                         "longer counted as running", sess.label, aid,
+                         int(SUBAGENT_SILENCE_SECONDS / 60))
+            if sess.agents_lines_due(now):
+                try:
+                    await self.notify_fn(sess, "agents_line_done",
+                                         {"now": now})
+                except Exception:
+                    log.warning("Failed to settle the agents line for %s",
+                                name, exc_info=True)
+
             # Subagent silence sweep (roadmap 8.22; was item 2.4's age TTL)
             if sess.active_subagents:
                 # Captured BEFORE popping (design.md "model Claude Code

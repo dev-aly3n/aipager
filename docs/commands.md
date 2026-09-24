@@ -112,6 +112,10 @@ its state: `working`, `needs you`, `idle` or `starting`. The bar names
 each session once: the waiting session the first line names gets no
 line of its own, and the first line never lists names the lines below
 repeat.
+A session with agents still running in the background says how many on
+its own line (or on the one line, with a single session):
+`💤 jim — idle · ⏳ 1 agent running`. It is a count, never their names,
+so the bar moves only when the count does.
 Tap the bar to jump to the message.
 
 Buttons on the pinned message:
@@ -299,6 +303,59 @@ one thing standing between the timeline and the ceiling. Only if the
 timeline is so large that even every fold together still can't fit does
 content get genuinely dropped from the card — in that case the `.txt`
 attachment above carries the complete record.
+
+#### Agents still running when the answer goes out
+
+Claude Code can run agents in the background, and the turn that launched
+them can end while they work. The answer then ends with one line saying
+so:
+
+```
+⏳ 1 agent still running — pipeline-runner · results will follow here
+⏳ 2 agents still running — pipeline-runner, ship-reviewer · results will follow here
+```
+
+That answer goes out the moment the turn ends, as a normal (notifying)
+message threaded to your prompt — the same text the terminal shows. The
+busy card stays above it as the job's live status, in every layout:
+`🔄 name · 1 agent (general-purpose) still working · 1m 18s`, with its
+**Stop** button. When the agents report back, Claude's answer to that
+arrives as a new message of its own; the earlier answer is never sent
+again, a daemon restart included. A job whose agents report back more
+than once produces one answer per report, each sent as it is written.
+
+Labels are the agents' types, cut at 32 characters, three at most
+(`+N more` for the rest). An agent that stopped while background work of
+its own is still running counts as running, since it resumes later —
+aipager learns this from Claude's `<task-notification>` for it, when that
+notification starts a turn. The line is added in every layout, and on
+the one-message answer of a tool-less turn.
+
+Once every agent a line named has finished, aipager edits that line
+once, silently, to `✅ pipeline-runner — done (6m)` (or `✅ 2 agents done
+(6m)`, with the time since the answer went out); the results themselves
+arrive as their own message. Each answer that carried the line is edited
+this way (up to five pending per session). The edit is a low-priority
+one: it is never made while the chat is flood-muted, is tried once more
+after the mute lifts or the budget refuses it, and is then dropped. It
+is never made into a deleted answer or for a session that has ended or
+been killed.
+
+The line is left as sent, never turned into ✅, when aipager cannot know
+the agents finished:
+
+- an agent aipager hears nothing from for 30 minutes
+  (`AIPAGER_SUBAGENT_SILENCE`) is no longer counted as running, but
+  silence is not completion;
+- a daemon restart forgets which answers are pending.
+
+An answer held back by a flood mute, or delivered as plain text after
+the formatted send failed, goes out without the line, as does a turn
+that ends with no answer text (only a header). If Claude takes
+an agent's notification in the middle of a running turn, aipager does
+not see it; an agent that stopped with work still running can then be
+marked done too early, and the pinned bar shows it running again when it
+resumes.
 
 ### Kill confirmation
 

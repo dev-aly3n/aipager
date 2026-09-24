@@ -13,7 +13,6 @@ import asyncio
 import hashlib
 import html as html_mod
 import logging
-import re
 import tempfile
 import time
 from pathlib import Path
@@ -25,11 +24,13 @@ from telegram import (
 )
 from telegram.error import Forbidden
 
+from aipager.bot import agents_line as _agents_line
 from aipager.bot import reactions
 from aipager.bot.dashboard import new_prompt_token
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot.flood_budget import (
     PRIORITY_ORNAMENT,
+    FloodSkipped,
     rate_limit_args as _rl_args,
 )
 from aipager.bot.rich_message import (
@@ -51,10 +52,11 @@ from aipager.config import (
     STALE_BUSY_TIMEOUT,
     STREAM_EDIT_INTERVAL,
 )
-from aipager.state import Status, TrackedSession
+from aipager.state import BG_AGENTS_RETRY_SECONDS, Status, TrackedSession
 from aipager.bot.animation import (
     FINAL_VERB, _RICH_LIMIT, _exact_anchors_available, _expire_tool_batch,
-    _md_escape, _sync_anchors_from_transcript, build_full_log,
+    _md_escape, _read_stream_text, _sync_anchors_from_transcript,
+    build_full_log,
     build_stream_card_ex, final_card_has_timeline,
 )
 
@@ -105,26 +107,6 @@ _finish_sleep = asyncio.sleep
 # card's delete, roadmap 8.32): the event loop only keeps weak ones, and a
 # task collected mid-flight is a delete that silently never happened.
 _BACKGROUND_TASKS: set = set()
-
-# "I'll send it the moment it lands" — a promise to deliver separately,
-# which the single-response job model makes false (see
-# NotifyMixin._strip_promise_lines). Both patterns must hit for a line to
-# be dropped: the future-delivery phrase AND the work it defers to.
-_PROMISE_FUTURE_RE = re.compile(
-    r"(\b(i'?ll|i will|we'?ll|we will)\b[^.]{0,80}?"
-    r"\b(send|share|post|deliver|follow|drop)\b)"
-    r"|\b(will follow|coming next|follows? (below|next|shortly))\b",
-    re.IGNORECASE,
-)
-# Markdown structure: a promise dressed as a list item, table row,
-# heading, quote or code line is far more likely to be real content
-# describing something than a sign-off (review rev-iter1-001).
-_STRUCTURAL_LINE_RE = re.compile(r"\s*([-*+>#|]|\d+[.)]|    )")
-_PROMISE_SUBJECT_RE = re.compile(
-    r"\b(agent|analys\w*|briefing|report|background|results?|breakdown|"
-    r"summary)\b",
-    re.IGNORECASE,
-)
 
 # Separator row between the finished timeline and the answer in `merged`
 # layout — a literal row, not a second "✅ Finished" header (that would be
@@ -270,6 +252,7 @@ class NotifyMixin:
     async def _send_merged_final(
         self, sess: TrackedSession, answer: str, *,
         send_as_new: bool = False, reply_to: int | None = None,
+        agents: dict | None = None,
     ) -> bool:
         """Try to deliver a finished turn as ONE message: the finished
         timeline (exactly what ``card`` mode renders) with the answer
@@ -317,6 +300,11 @@ class NotifyMixin:
             f"{_result_line_md(sess.label)}\n\n{answer}"
             if answer else card_md
         )
+        # The held copy (a mute below) never carries the ⏳ line: it goes
+        # out late, and a line frozen into it could not be settled.
+        held = combined
+        if agents:
+            combined = f"{combined}\n\n{agents['line']}"
         if len(combined.encode("utf-8")) > _RICH_LIMIT:
             log.info("[%s] merged: combined card+answer over the byte ceiling "
                      "— falling back to replace", sess.label)
@@ -351,7 +339,7 @@ class NotifyMixin:
                 # both refused — but the answer is still worth reading once
                 # the ban lifts. `return False` is unchanged, so the
                 # caller's control flow is exactly as before.
-                self._hold_answer(sess, combined, combined, reply_to)
+                self._hold_answer(sess, held, held, reply_to)
                 return False
             except (RichMessageFallbackRequired, Exception):
                 log.debug("[%s] merged: send-as-new failed", sess.label,
@@ -363,6 +351,10 @@ class NotifyMixin:
                 self.registry.track_message(
                     sent["message_id"], sess.name, chat_id or 0,
                 )
+                if agents:
+                    self._remember_agents_line(
+                        sess, chat_id, sent["message_id"], combined,
+                        agents, is_rtl)
                 return True
             return False
         try:
@@ -379,9 +371,95 @@ class NotifyMixin:
             return False
         except RichMessageFloodBanned:
             # HELD, not dropped (8.29 R6) — see the send-as-new arm above.
-            self._hold_answer(sess, combined, combined, reply_to)
+            self._hold_answer(sess, held, held, reply_to)
             return False
+        if result is not None and agents:
+            self._remember_agents_line(
+                sess, chat_id, int(sess.busy_msg_id), combined, agents,
+                is_rtl)
         return result is not None
+
+    # ── roadmap 8.41: background agents still running ─────────────────────
+
+    def _agents_snapshot(self, sess: TrackedSession) -> dict | None:
+        """The agents running as an answer goes out — ONE snapshot, taken
+        once, so the line shown, the ids it waits for and the labels the ✅
+        repeats all describe the same agents — or ``None`` with none."""
+        labels = sess.bg_agent_labels()
+        if not labels:
+            return None
+        return {"line": _agents_line.running_line(labels, markdown=True),
+                "ids": list(sess.bg_agents), "labels": labels}
+
+    def _remember_agents_line(
+        self, sess: TrackedSession, chat_id: int, msg_id: int, text: str,
+        agents: dict, is_rtl: bool,
+    ) -> None:
+        """An answer carrying the ⏳ line landed as *msg_id*: keep exactly
+        what went out, so the ✅ edit rebuilds it rather than re-rendering."""
+        sess.add_agents_line({
+            "chat_id": chat_id, "msg_id": msg_id, "text": text,
+            "line": agents["line"], "ids": list(agents["ids"]),
+            "labels": list(agents["labels"]), "is_rtl": is_rtl,
+            "sent_wall": time.time(), "attempts": 0, "next_try": 0.0,
+            "gone_at": 0.0,
+        })
+
+    async def _settle_agents_lines(self, sess: TrackedSession,
+                                   now: float) -> None:
+        """Edit each due answer's ⏳ line to ✅, once (roadmap 8.41 R3).
+
+        An ORNAMENT, skip-class edit: the flood gate may refuse it, never
+        queue an answer behind it. Each answer gets two attempts at most:
+        a refused or muted one (a muted try makes no call) is followed by
+        ONE more — after the mute lifts when there is one — and then the
+        line is left as sent: a courtesy, never worth more pressure. A
+        deleted message (or a blocked bot) ends it at once. A gone session
+        has none to settle: the GONE transition clears them
+        (SessionRegistry.transition), and /kill drops the whole entry.
+        """
+        for rec in sess.agents_lines_due(now):
+            if await self._settle_agents_line(sess, rec, now):
+                sess.agents_lines = [
+                    r for r in sess.agents_lines if r is not rec]
+
+    async def _settle_agents_line(self, sess: TrackedSession, rec: dict,
+                                  now: float) -> bool:
+        """One attempt at one answer's ✅ edit. True when that answer is
+        finished with (settled, gone, or given up)."""
+        done = _agents_line.done_line(
+            rec["labels"], time.time() - rec["sent_wall"], markdown=True)
+        text = rec["text"][: -len(rec["line"])] + done
+        rec["attempts"] += 1
+        chat_id = rec["chat_id"]
+        try:
+            result = await edit_message_text_rich(
+                chat_id, rec["msg_id"], text, is_rtl=rec["is_rtl"],
+                kind="skip", priority=PRIORITY_ORNAMENT,
+            )
+        except (RichMessageGone, RichMessageBlocked):
+            log.info("[%s] agents line: the answer is gone — not edited",
+                     sess.label)
+            return True
+        except (FloodSkipped, FloodMuted):
+            # RichMessageFloodBanned is a FloodMuted: the chat is muted.
+            result = None
+        except Exception:
+            log.debug("[%s] agents line edit failed", sess.label,
+                      exc_info=True)
+            result = None
+        if result is not None:
+            log.info("[%s] agents line settled: %s", sess.label, done)
+            return True
+        if rec["attempts"] >= 2:
+            log.info("[%s] agents line left as sent — the edit was refused "
+                     "twice", sess.label)
+            return True
+        wait = BG_AGENTS_RETRY_SECONDS
+        if MUTE.is_muted(chat_id):
+            wait = max(wait, MUTE.remaining(chat_id) + 1.0)
+        rec["next_try"] = now + wait
+        return False
 
     def _delete_card_later(self, sess: TrackedSession, msg_id: int) -> None:
         """Delete a finished turn's tool-less busy card once its answer is
@@ -601,91 +679,6 @@ class NotifyMixin:
             sess.scope_chat_id or 0, sess.preference_overrides(),
         ).diff_preview
 
-    def _strip_promise_lines(self, text: str, label: str) -> str:
-        """Drop "I'll send the briefing when it lands"-style lines from an
-        interim answer being composed into the job's SINGLE final message
-        ("status-line-at-card-bottom"): the thing they promise sits a few
-        lines below them in the same message, so they read as broken.
-
-        Line-based, not tail-only: the observed instance sat in the MIDDLE
-        of the interim (between the folder-structure section and the
-        Canary Islands section), not at its end. Deliberately narrow, so
-        real content is never silently deleted (review rev-iter1-001) — a
-        line qualifies only when ALL of these hold:
-
-        * it carries a first-person future-delivery phrase AND names the
-          work it defers to (the two regexes below),
-        * it is at most 240 characters,
-        * it is ORDINARY PROSE — not a list item, table row, heading,
-          block quote or indented code line, and not inside a ``` fence,
-        * it ENDS a paragraph (the next line is blank, or it is the last
-          line), which is how a sign-off is written and is not how a
-          sentence buried in a paragraph of real content is,
-        * and stripping it does not empty the text.
-
-        Residual risk, accepted knowingly: a standalone prose paragraph
-        that genuinely promises to send a deliverable later is
-        indistinguishable from the sign-off this removes — in the interim
-        answer of a background job those are the same sentence. The
-        prompt-side instruction (:data:`aipager.preferences._DELIVERY_LINE`)
-        is the primary fix; this is the backstop for when the model says
-        it anyway. Only ever called at composition time, never on the
-        final answer and never on a flush with no final answer to follow
-        it (there the promise is simply true).
-        """
-        lines = text.split("\n")
-        in_fence = False
-        drop: set[int] = set()
-        for i, ln in enumerate(lines):
-            stripped = ln.strip()
-            if stripped.startswith("```"):
-                in_fence = not in_fence
-                continue
-            if in_fence or len(ln) > 240:
-                continue
-            if _STRUCTURAL_LINE_RE.match(ln):
-                continue
-            nxt = lines[i + 1].strip() if i + 1 < len(lines) else ""
-            if nxt:
-                continue  # mid-paragraph: real content, not a sign-off
-            if (_PROMISE_FUTURE_RE.search(ln)
-                    and _PROMISE_SUBJECT_RE.search(ln)):
-                drop.add(i)
-        if not drop:
-            return text
-        kept = [ln for i, ln in enumerate(lines) if i not in drop]
-        if not any(ln.strip() for ln in kept):
-            return text
-        log.info(
-            "[%s] stripped %d orphaned delivery-promise line(s) (%d chars) "
-            "from an interim answer", label, len(drop),
-            sum(len(lines[i]) for i in drop),
-        )
-        return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
-
-    def _record_job_interim(
-        self, sess: TrackedSession, content: str,
-    ) -> None:
-        """Hold an interim answer for the job's SINGLE final message ("one
-        response per background job" requirement 1/3) instead of sending
-        it standalone — a standalone interim pushed the card (and its
-        waiting status) off-screen and made the chat bottom read as
-        finished. The prose still reaches the operator live via the
-        card's own timeline; this buffer exists so the content is also
-        delivered in full, once, at close. Byte-identical strays are
-        deduped by membership; the buffer is bounded (drop-oldest) so a
-        pathological stray-idle storm cannot grow it without limit.
-        """
-        if not content or content in sess.job_interim_buffer:
-            return
-        sess.job_interim_buffer.append(content)
-        while len(sess.job_interim_buffer) > 20:
-            dropped = sess.job_interim_buffer.pop(0)
-            log.warning(
-                "[%s] job interim buffer over cap — dropping oldest "
-                "entry (%d chars)", sess.label, len(dropped),
-            )
-
     def _hold_answer(self, sess: TrackedSession, rich_text: str,
                      plain_text: str, reply_to: int | None, *,
                      digests: list[str] | None = None,
@@ -860,126 +853,176 @@ class NotifyMixin:
                      sess.label, delivered)
         return delivered
 
-    async def _flush_job_buffer(self, sess: TrackedSession) -> None:
-        """Deliver the accumulated interim content as the job's final
-        message on the close paths that never reach the Finished
-        composition (grace expiry, agents lost, Stop during the wait) —
-        the buffer is the only full copy of those answers, so silently
-        dropping it would lose work the operator paid for ("one response
-        per background job" requirement 4). No-op on an empty buffer;
-        dedup against the last DELIVERED content so a stray double-close
-        cannot double-send.
+    async def _deliver_job_interim(
+        self, sess: TrackedSession, content: str, turn_end_wall: float,
+    ) -> None:
+        """Send a background job's interim answer NOW, as its own message
+        (roadmap 8.42, operator decision 2026-09-24).
+
+        Until 8.42 an interim answer was held in a buffer and merged into
+        the job's final message, so for the minutes an agent ran the
+        terminal showed Claude's answer and Telegram showed only the
+        waiting card. Now it goes out like any answer: the result line,
+        the text, threaded to the prompt, notifying — and ending with
+        8.41's "⏳ N agents still running" line, which that feature settles
+        to ✅ once the agents it named have stopped.
+
+        The waiting card is NOT touched: it stays the job's live status
+        and carries its Stop button, in every layout — merged and replace
+        included, where a normal finish would consume the card.
+
+        Exactly once: the digest of the bare text goes into the delivered
+        ring (8.39) before the send, pending, and is confirmed — persisted,
+        with the delivery stamp moved to this turn's end — only once the
+        send landed. A stray idle event re-running this with the same text
+        is refused here; the job's continuation reading this text back from
+        the transcript is refused by the finish path's check of the same
+        ring, and a restarted daemon's idle Notification by the hook
+        receiver's (ring + delivery stamp) — this confirm is what feeds
+        both.
+
+        A flood mute HOLDS the answer (8.29 R6) without the ⏳ line: a held
+        copy goes out late, and a line frozen into it could not be settled.
+        Neither does the plain-text fallback carry it (it is chunked).
         """
-        if not sess.job_interim_buffer:
+        if not content:
             return
-        content = "\n\n———\n\n".join(sess.job_interim_buffer)
+        label = sess.label
         digest = hashlib.md5(content.encode("utf-8")).hexdigest()
-        if digest == sess.last_idle_summary_hash or sess.was_delivered(digest):
-            sess.job_interim_buffer.clear()
+        if sess.was_delivered(digest):
+            log.info("[%s] job interim answer already delivered — not "
+                     "re-sending", label)
             return
+        sess.remember_delivered(digest, pending=True)
+        agents = self._agents_snapshot(sess)
+        lead_md = _result_line_md(label)
+        lead_plain = _result_line_plain(label)
+        # The same byte budget as the finish path: an answer over the
+        # ceiling keeps its head at a markdown-safe cut, with the ⏳ line
+        # still last, and the full text follows as an attachment.
+        body_limit = _RICH_LIMIT - len(f"{lead_md}\n\n".encode("utf-8"))
+        if agents:
+            body_limit -= len(f"\n\n{agents['line']}".encode("utf-8"))
+        body = content
+        overflow = len(content.encode("utf-8")) > body_limit
+        if overflow:
+            cut = 0
+            for b in _md_safe_boundaries(content):
+                if len(content[:b].encode("utf-8")) <= body_limit:
+                    cut = b
+            body = (content[:cut] if cut else content.encode("utf-8")[
+                :body_limit].decode("utf-8", errors="ignore"))
+        held_rich = f"{lead_md}\n\n{body}"
+        rich_text = held_rich
+        if agents:
+            rich_text = f"{rich_text}\n\n{agents['line']}"
+        plain_text = f"{lead_plain}\n\n{content}"
         is_rtl = detect_rtl(content)
         chat_id = resolve_chat_id_int(sess)
-        # A flushed interim answer is a result: it opens with the result
-        # line like every other one ("session-name-on-every-message").
-        # The dedup digest above is over the bare content on purpose.
-        rich_text = f"{_result_line_md(sess.label)}\n\n{content}"
-        plain_text = f"{_result_line_plain(sess.label)}\n\n{content}"
-
-        # ORDERING (8.29 R6, research gotcha 6). The buffer used to be
-        # CLEARED and the digest recorded as DELIVERED right here, before
-        # the send. On a flood ban that lost a background job's entire
-        # output twice over: the only copy was gone, and the digest said
-        # it had already been delivered, so even a later retry would be
-        # deduped away. Nothing in this method is retried today, which is
-        # why nobody noticed.
-        #
-        # The new rule: clear and remember only once the content is either
-        # SENT or HELD. Any other failure keeps today's behaviour, because
-        # the plain-text fallback below owns it and clearing after a
-        # successful fallback is correct.
-        # `landed` (roadmap 8.39): a held, blocked or wholly failed send is
-        # remembered in this process but kept out of the state file, so a
-        # restart does not count it as delivered. No delivery stamp either:
-        # a flushed interim is not the transcript's newest answer.
-        def _consume(landed: bool = True) -> None:
-            sess.job_interim_buffer.clear()
-            sess.last_idle_summary_hash = digest
-            sess.remember_delivered(digest, pending=not landed)
-
+        reply_to = sess.trigger_msg_id
+        landed = False
+        msg_id = 0
+        sent = None
         try:
             if chat_id is None:
+                # An unscoped session on an install with no CHAT_ID: no
+                # numeric destination for the rich API — straight to the
+                # plain-text fallback, which addresses the chat as it can.
                 raise RichMessageFallbackRequired("no numeric chat id resolved")
             sent = await send_rich_message(
                 chat_id, rich_text, is_rtl=is_rtl,
-                reply_to_message_id=sess.trigger_msg_id,
+                reply_to_message_id=reply_to,
             )
-            if isinstance(sent, dict) and sent.get("message_id"):
-                self.registry.track_message(
-                    sent["message_id"], sess.name, chat_id or 0,
-                )
+            landed = True
         except RichMessageBlocked:
-            _consume(landed=False)
             _log_blocked_once(Exception("sendRichMessage 403"))
+            return
         except RichMessageFloodBanned:
-            # HELD (8.29 R6). Still no plain-text fallback — that is a
-            # second violation into the ban — but the content is kept and
-            # delivered once the mute lifts. The buffer is cleared ONLY
-            # because the hold now owns the only copy.
-            self._hold_answer(sess, rich_text, plain_text,
-                              sess.trigger_msg_id, digests=[digest])
-            _consume(landed=False)
+            # HELD (8.29 R6); confirmed by flush_held_answers once it lands.
+            self._hold_answer(sess, held_rich, plain_text, reply_to,
+                              digests=[digest], selected_wall=turn_end_wall)
+            return
         except (RichMessageFallbackRequired, Exception):
-            log.warning(
-                "[%s] job buffer sendRichMessage failed — falling back to "
-                "plain text", sess.label, exc_info=True,
-            )
-            any_landed = False
+            log.warning("[%s] job interim sendRichMessage failed — falling "
+                        "back to plain text", label, exc_info=True)
+            overflow = False  # the plain chunks carry the whole text
             for chunk in _plain_text_chunks(plain_text):
                 try:
                     fallback = await self._app.bot.send_message(
                         resolve_chat_id(sess), chunk,
-                        reply_to_message_id=sess.trigger_msg_id,
+                        reply_to_message_id=reply_to if not landed else None,
                     )
-                    any_landed = True
+                    landed = True
                     self.registry.track_message(
                         fallback.message_id, sess.name,
                         resolve_chat_id_int(sess) or 0,
                     )
                 except Exception:
-                    log.warning(
-                        "[%s] job buffer plain-text fallback chunk send "
-                        "failed", sess.label, exc_info=True,
+                    log.warning("[%s] job interim plain-text chunk failed",
+                                label, exc_info=True)
+        if not landed:
+            return
+        # Bookkeeping only once the send is settled, outside the try: a
+        # failure here must never fall into the plain-text fallback and
+        # send the same answer a second time.
+        sess.confirm_delivered([digest], turn_end_wall)
+        self.registry.mark_dirty()
+        if isinstance(sent, dict) and sent.get("message_id"):
+            msg_id = sent["message_id"]
+            self.registry.track_message(msg_id, sess.name, chat_id or 0)
+            if agents:
+                self._remember_agents_line(
+                    sess, chat_id, msg_id, rich_text, agents, is_rtl)
+        log.info("[%s] job interim answer delivered (%d chars, agents=%d)",
+                 label, len(content), len(agents["ids"]) if agents else 0)
+        if overflow:
+            # The rich send just landed, so the chat is not muted; a text
+            # a hook carried is far below Telegram's document limit.
+            try:
+                tmp = Path(tempfile.mktemp(suffix=".txt", prefix=f"{label}_"))
+                tmp.write_text(content, encoding="utf-8")
+                with open(tmp, "rb") as f:
+                    await self._app.bot.send_document(
+                        resolve_chat_id(sess), document=f,
+                        filename=f"{label}_answer.txt",
+                        reply_to_message_id=msg_id or None,
                     )
-            _consume(landed=any_landed)
-        else:
-            _consume()
+                tmp.unlink(missing_ok=True)
+            except Exception:
+                log.warning("[%s] job interim attachment failed", label,
+                            exc_info=True)
 
     async def _handle_job_interim(
-        self, sess: TrackedSession, context: dict,
+        self, sess: TrackedSession, context: dict, turn_end_wall: float,
     ) -> None:
         """The ``idle_prompt`` path when ``sess.job_background_open()`` is
         True — an interim Stop/Notification/StopFailure while a background
         agent this job launched is still running (design.md "model Claude
         Code background-agent jobs", requirement 1).
 
-        Never produces a "Finished" card and never sends a standalone
-        message: records Claude's interim answer for the job's single
-        final message (see :meth:`_record_job_interim` — the prose is
-        already live in the card's own timeline), re-renders the live
-        card to the waiting frame in place (rather than waiting for the
-        animator's next natural tick), and drains one queued prompt if
-        any is waiting — the exact same
-        :meth:`_drain_next_queued` the real Finished path uses, so a
-        message queued during the wait is not stranded until the job's
-        eventual real end.
+        Never produces a "Finished" card: re-renders the live card to the
+        waiting frame in place (rather than waiting for the animator's next
+        natural tick), sends Claude's interim answer now (roadmap 8.42 —
+        :meth:`_deliver_job_interim`), and drains one queued prompt if any
+        is waiting — the exact same :meth:`_drain_next_queued` the real
+        Finished path uses, so a message queued during the wait is not
+        stranded until the job's eventual real end.
         """
         sess.job_interim_seen = True
         raw_md = context.get("raw_md", "")
         # Only what THIS interim turn produced — never sess.summary, which
         # is the previous answer (see the idle branch's content selection).
         content = raw_md or context.get("summary", "") or ""
-        if content:
-            self._record_job_interim(sess, content)
+        # The answer now goes out as its own message (roadmap 8.42), so
+        # the card must not quote it too (review rev-iter1-001). Read the
+        # transcript fallback's text now (a no-op while the MessageDisplay
+        # hook is live) and trim the trailing commentary that is just this
+        # answer: otherwise the continuation turn's first tick would read
+        # it onto the card, and the job's finished card would quote it.
+        # The trim compares text, so where anchors place the prose does
+        # not matter to it.
+        _read_stream_text(sess)
+        _drop_answer_tail(sess, content)
         if sess.busy_msg_id and sess.busy_msg_id > 0:
             sess.stream_dirty = True
             # A STATE change (busy -> waiting): the gate lets it out at
@@ -991,6 +1034,7 @@ class NotifyMixin:
                     sess, "Working", waiting=True,
                 ) is None:
                     self._stop_animation(sess)
+        await self._deliver_job_interim(sess, content, turn_end_wall)
         await self._drain_next_queued(sess)
 
     async def _drain_next_queued(self, sess: TrackedSession) -> None:
@@ -1068,6 +1112,14 @@ class NotifyMixin:
         # with no busy-wait, no timer and no new task.
         if event == "held_answer_flush":
             await self.flush_held_answers(sess)
+            return
+
+        # ── the answer's ⏳ line is owed its ✅ (roadmap 8.41) ──
+        # Dispatched by `SessionMonitor._scan` once every agent the line
+        # named has been gone for the settle window.
+        if event == "agents_line_done":
+            await self._settle_agents_lines(
+                sess, context.get("now") or time.monotonic())
             return
 
         if event == "hook_memory_cap_hit":
@@ -1265,14 +1317,6 @@ class NotifyMixin:
             name = html_mod.escape(label)
             text = f"✅ <b>{name}</b> · Finished{suffix}"
             text_alone = f"{_RESULT_GLYPH} <b>{name}</b> · Finished{suffix}"
-            # The accumulated interim is the only full copy of what this
-            # job produced — deliver it before the card resolves ("one
-            # response per background job" requirement 4). Best-effort.
-            try:
-                await self._flush_job_buffer(sess)
-            except Exception:
-                log.debug("[%s] buffer flush on grace expiry failed",
-                          label, exc_info=True)
             target_msg_id = sess.busy_msg_id
             if target_msg_id and target_msg_id > 0:
                 await self._edit_busy_raw(
@@ -1318,14 +1362,6 @@ class NotifyMixin:
             suffix = f" after {elapsed_str}" if elapsed_str else ""
             text = (f"⚠️ <b>{html_mod.escape(label)}</b> · Finished "
                     f"(background agent lost{suffix})")
-            # Whatever the job produced before the agent vanished is only
-            # in the buffer — deliver it ("one response per background
-            # job" requirement 4). Best-effort.
-            try:
-                await self._flush_job_buffer(sess)
-            except Exception:
-                log.debug("[%s] buffer flush on agents-lost failed",
-                          label, exc_info=True)
             target_msg_id = sess.busy_msg_id
             if target_msg_id and target_msg_id > 0:
                 await self._edit_busy_raw(
@@ -1901,16 +1937,7 @@ class NotifyMixin:
             return
 
         if event == "session_end":
-            # Session exited — clean up busy state and alert user. A job's
-            # buffered interim answers are the only full copy of its
-            # output — deliver them even when the session died out from
-            # under the job (review rev-iter1-002). Best-effort: a failed
-            # flush must never block the exit handling.
-            try:
-                await self._flush_job_buffer(sess)
-            except Exception:
-                log.debug("[%s] buffer flush on session_end failed",
-                          sess.label, exc_info=True)
+            # Session exited — clean up busy state and alert user.
             # A deferred card whose send is in flight lands first, under
             # the card lock, and is then deleted below like any card.
             async with sess.animate_lock:
@@ -2012,7 +2039,7 @@ class NotifyMixin:
                     # agents has ended — back to plain waiting; the next
                     # continuation cycle re-arms via SubagentStop + grace.
                     sess.job_continuation_active = False
-                await self._handle_job_interim(sess, context)
+                await self._handle_job_interim(sess, context, turn_end_wall)
                 return
             # The last round flushes right before Stop; no tick may have
             # run in between. Place its sentence exactly before anything
@@ -2187,11 +2214,8 @@ class NotifyMixin:
                     _cand_digest == sess.last_idle_summary_hash
                     or sess.was_delivered(_cand_digest)
                 )
-            _fresh_interim = any(
-                b and b != _candidate for b in sess.job_interim_buffer
-            )
             if (layout == "card" and sess.busy_msg_id and sess.busy_msg_id > 0
-                    and (_fresh_answer or _fresh_interim)
+                    and _fresh_answer
                     and not final_card_has_timeline(sess)):
                 toolless_card_msg_id = sess.busy_msg_id
                 sess.busy_msg_id = None
@@ -2369,45 +2393,11 @@ class NotifyMixin:
                     log.warning("Failed to send error notification", exc_info=True)
                 if self.observers:
                     asyncio.create_task(self.observers.broadcast(text))
-                # The buffered interim answers are real, completed work —
-                # an API error on the FINAL turn must not eat them
-                # (review rev-iter1-001).
-                try:
-                    await self._flush_job_buffer(sess)
-                except Exception:
-                    log.debug("[%s] buffer flush on api-error failed",
-                              label, exc_info=True)
                 if toolless_card_msg_id:
                     self._delete_card_later(sess, toolless_card_msg_id)
                 # Don't clear trigger_msg_id — retry needs it
                 # Don't flush pending queue — nothing was processed
                 return
-
-            # The job's single response carries everything undelivered
-            # ("one response per background job" requirement 3): interim
-            # answers accumulated during the background window join the
-            # final answer, oldest first, separated clearly. An interim
-            # byte-identical to the final is skipped. Composed AFTER the
-            # API-error branch above (review rev-iter1-001) so an error
-            # return path can still flush the untouched buffer. Cleared
-            # here so a stray re-entry cannot resend.
-            composed_with_interim = False
-            if sess.job_interim_buffer:
-                _parts = [
-                    self._strip_promise_lines(b, label)
-                    for b in sess.job_interim_buffer if b and b != content
-                ]
-                _parts = [b for b in _parts if b]
-                sess.job_interim_buffer.clear()
-                if _parts:
-                    _tail = [content] if content else []
-                    content = "\n\n———\n\n".join(_parts + _tail)
-                    composed_with_interim = True
-                    # The composed text is what actually goes out — remember
-                    # it too, so a stray re-run cannot re-post the composition.
-                    _composed = hashlib.md5(content.encode("utf-8")).hexdigest()
-                    sess.remember_delivered(_composed, pending=True)
-                    _answer_digests.append(_composed)
 
             # Compute elapsed time since BUSY started
             elapsed_str = ""
@@ -2449,6 +2439,9 @@ class NotifyMixin:
             # card is still live; if it isn't (e.g. it was already lost) there
             # is nothing to merge into, so the turn falls through to the
             # ordinary send below — the exact same path "replace" uses.
+            # Roadmap 8.41: agents this turn launched in the background are
+            # still running — the answer ends by saying so, in every layout.
+            agents = self._agents_snapshot(sess)
             merged_delivered = False
             if layout == "merged" and sess.busy_msg_id and sess.busy_msg_id > 0:
                 pre_merge_busy_msg_id = sess.busy_msg_id
@@ -2474,7 +2467,7 @@ class NotifyMixin:
                 if merged_send_as_new:
                     merged_delivered = await self._send_merged_final(
                         sess, content, send_as_new=True,
-                        reply_to=sess.trigger_msg_id,
+                        reply_to=sess.trigger_msg_id, agents=agents,
                     )
                     if merged_delivered and pre_merge_busy_msg_id and pre_merge_busy_msg_id > 0:
                         try:
@@ -2486,7 +2479,8 @@ class NotifyMixin:
                             log.debug("[%s] stale merged card delete failed",
                                       sess.label, exc_info=True)
                 else:
-                    merged_delivered = await self._send_merged_final(sess, content)
+                    merged_delivered = await self._send_merged_final(
+                        sess, content, agents=agents)
                 if not merged_delivered:
                     # Losing the timeline is acceptable; losing the answer is
                     # never acceptable — fall back to the replace-style send
@@ -2526,23 +2520,13 @@ class NotifyMixin:
             lead_md = _result_line_md(label) if card_kept else header_md
             lead_plain = _result_line_plain(label) if card_kept else header_plain
             body_limit = _RICH_LIMIT - len(f"{lead_md}\n\n".encode("utf-8"))
+            if agents:
+                body_limit -= len(f"\n\n{agents['line']}".encode("utf-8"))
             if not merged_delivered and content:
                 content_utf8 = content.encode("utf-8")
                 if len(content_utf8) > body_limit:
-                    if composed_with_interim:
-                        # A composed message puts old interim text FIRST
-                        # and the actual answer LAST — head-keeping
-                        # truncation would show stale interim and hide
-                        # the answer (review rev-iter1-003). Keep the
-                        # TAIL instead; the .txt attachment below still
-                        # carries the full chronological text.
-                        # body_limit total INCLUDING the 3-byte ellipsis.
-                        body_content = ("…" + content_utf8[-(body_limit - 3):]
-                                        .decode("utf-8", errors="ignore"))
-                        send_file = True
-                        content_utf8 = b""  # handled; skip the head path
                     # Truncate at the last markdown-safe boundary under the limit.
-                    bounds = _md_safe_boundaries(content) if content_utf8 else []
+                    bounds = _md_safe_boundaries(content)
                     cut = 0
                     for b in bounds:
                         b_bytes = len(content[:b].encode("utf-8"))
@@ -2550,7 +2534,7 @@ class NotifyMixin:
                             cut = b
                     if cut:
                         body_content = content[:cut]
-                    elif content_utf8:
+                    else:
                         # No safe boundary found — truncate at byte limit.
                         body_content = content_utf8[:body_limit].decode("utf-8", errors="ignore")
                     send_file = True
@@ -2634,6 +2618,13 @@ class NotifyMixin:
                     # `lead_md` picked above.
                     rich_text = f"{lead_md}\n\n{body_content}"
                     plain_text = f"{lead_plain}\n\n{body_content}"
+                # Only the rich send carries the ⏳ line: it is the one whose
+                # exact text is kept to settle it. A held copy goes out late
+                # and a plain-text fallback is chunked — a line frozen into
+                # either could never be settled, so neither carries it.
+                held_rich = rich_text
+                if agents:
+                    rich_text = f"{rich_text}\n\n{agents['line']}"
                 is_rtl = detect_rtl(body_content)
                 log.info("[%s] sendRichMessage: %d chars, rtl=%s, overflow=%s, "
                          "lead=%s",
@@ -2700,6 +2691,11 @@ class NotifyMixin:
                     _answer_landed = True
                     if body_is_the_message and isinstance(sent, dict):
                         msg_id = sent.get("message_id") or 0
+                    if (agents and isinstance(sent, dict)
+                            and sent.get("message_id")):
+                        self._remember_agents_line(
+                            sess, chat_id, sent["message_id"], rich_text,
+                            agents, is_rtl)
                 except RichMessageBlocked:
                     _log_blocked_once(Exception("sendRichMessage 403"))
                 except RichMessageFloodBanned:
@@ -2713,7 +2709,7 @@ class NotifyMixin:
                     # What changes is that "cannot send now" stops meaning
                     # "cannot send": the text is kept and delivered once
                     # the mute lifts, with an honest late marker.
-                    self._hold_answer(sess, rich_text, plain_text, reply_to,
+                    self._hold_answer(sess, held_rich, plain_text, reply_to,
                                       digests=_answer_digests,
                                       selected_wall=turn_end_wall)
                 except (RichMessageFallbackRequired, Exception):

@@ -899,15 +899,8 @@ class SessionOpsMixin:
         # background-agent jobs") rather than leaving job_background_open()
         # true underneath the now-"Stopped" card — the operator asked for
         # this to be over, background agents included.
-        # An operator stopping a waiting job still receives what it
-        # produced — the buffer is the only full copy ("one response per
-        # background job" requirement 4). Best-effort: a failed flush must
-        # never block the stop itself.
-        try:
-            await self._flush_job_buffer(sess)
-        except Exception:
-            log.debug("[%s] job buffer flush on stop failed", sess.label,
-                      exc_info=True)
+        # Nothing of the job is owed here: its interim answers went out
+        # as they were written (roadmap 8.42).
         sess.active_subagents.clear()
         sess.job_interim_seen = False
         sess.job_continuation_active = False
@@ -1058,14 +1051,6 @@ class SessionOpsMixin:
                 result="resuming", label=label, session_name=session_name,
             )
         if sess:
-            # Deliver any buffered interim answers before the session (and
-            # its card) is destroyed — the buffer is the only full copy
-            # (review rev-iter1-002). Best-effort, never blocks the kill.
-            try:
-                await self._flush_job_buffer(sess)
-            except Exception:
-                log.debug("[%s] buffer flush on kill failed", sess.label,
-                          exc_info=True)
             # A self-woken turn's deferred card (roadmap 8.32) dies with the
             # session: the entry is dropped from the registry below, out of
             # reach of every later cleanup, and its timer would otherwise

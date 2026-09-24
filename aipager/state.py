@@ -97,6 +97,27 @@ FINISHED_SUBAGENTS_CAP: int = 100
 # subagent stopping mid-turn never arms it, so ordinary turns close
 # exactly as before.
 JOB_CONTINUATION_GRACE_SECONDS: float = 60.0
+# Roadmap 8.41 — the background agents a session has running, for the
+# "⏳ N agents still running" line on an answer and the pinned bar.
+# How long the agents an answer's ⏳ line named must have stayed gone before
+# the line is settled to ✅. An agent that stops with background work of its
+# own still running is followed by the parent's <task-notification> saying
+# so within tens of milliseconds (live 2026-09-24 18:03:29.4); that note
+# puts the agent back, and this window is what lets it land first. Short
+# enough that nobody watching the chat notices the wait.
+BG_AGENTS_SETTLE_SECONDS: float = 5.0
+# How long a SKIPPED settle edit (flood budget refused it, or the chat was
+# muted with no deadline known) waits before its one retry. A mute with a
+# known deadline waits for the lift instead, whichever is later.
+BG_AGENTS_RETRY_SECONDS: float = 60.0
+# Stopped agents remembered (id -> label) so the still-running note can
+# restore one. Same bound as the table the ids come from.
+BG_AGENTS_RECENT_CAP: int = 20
+# Answers whose ⏳ line is still owed its ✅, per session. Each is settled on
+# its own (at most one edit + one retry each). Several can be pending when a
+# job's agent reports back more than once or the operator asks something
+# while agents run; five is well above that, and bounds a runaway.
+AGENTS_LINES_CAP: int = 5
 # Max GONE entries retained for `/resume` history. When a new session is
 # created and the GONE count exceeds this, the oldest-by-`gone_at` entry
 # is evicted. Lives on disk in aipager-sessions.json — kept here so
@@ -614,16 +635,17 @@ class TrackedSession:
     # already-IDLE delivery guard must not send that partial answer under
     # a card that already says Stopped (review rev-iter1-003). Transient.
     user_stopped_at: float = 0.0
-    # MD5 hex digest of the last DELIVERED job-open interim summary's raw
-    # (pre-HTML) text — design.md "model Claude Code background-agent
-    # jobs", requirement 2. Transient (never in _PERSIST_FIELDS): a job
+    # MD5 hex digest of the last DELIVERED Finished body's raw (pre-HTML)
+    # text — design.md "model Claude Code background-agent jobs",
+    # requirement 2 (a job's interim answers are deduped by the ring below
+    # since roadmap 8.42). Transient (never in _PERSIST_FIELDS): a job
     # never spans a daemon restart (Decision 2/6), so there is nothing to
     # persist. Cleared only where a genuinely NEW job starts
     # (_send_busy_and_animate's existing per-turn reset) so a duplicate
     # answer in the NEXT job is never mistaken for a repeat of this one.
     last_idle_summary_hash: str = ""
     # Digests of the last few bodies actually sent to the chat as a turn's
-    # answer (a Finished body, or a flushed interim buffer). Unlike the
+    # answer (a Finished body, or a job's interim answer). Unlike the
     # single hash above, this ring is never cleared by a new turn: it is
     # for exactly the case the per-turn reset cannot see — the newest text
     # in the transcript belonging to an EARLIER turn (this one ended on
@@ -678,22 +700,28 @@ class TrackedSession:
     # this, which is exactly the mid-continuation case that must be
     # swallowed). Transient, never persisted.
     job_reclaim_pending: bool = False
+    # Roadmap 8.41 — live background agents, apart from `active_subagents`
+    # on purpose: that table is per-TURN card bookkeeping (a new card
+    # clears it, /stop clears it, and job_background_open() reads it), while
+    # this one follows the AGENT until its own SubagentStop, whatever the
+    # turns in between do. Entry: {"label": str, "last_seen": float
+    # (monotonic)}. `bg_agents_recent` remembers stopped ones (id -> label,
+    # capped at BG_AGENTS_RECENT_CAP) for the still-running note.
+    # `agents_lines` holds what each answer that carried the ⏳ line needs
+    # to settle it, oldest first, capped at AGENTS_LINES_CAP: {"chat_id",
+    # "msg_id", "text" (the exact rich markdown sent), "line", "ids",
+    # "labels", "is_rtl", "sent_wall", "attempts", "next_try", "gone_at"}.
+    # All transient: monotonic stamps are meaningless across a restart
+    # (never in _PERSIST_FIELDS), so a restart leaves pending lines as sent.
+    bg_agents: dict = field(default_factory=dict)
+    bg_agents_recent: dict = field(default_factory=dict)
+    agents_lines: list = field(default_factory=list)
     # Whether the most recent card render had to hide anything (collapsed
     # runs, folded sections, or byte truncation) — stashed by
     # _edit_busy_rich from build_stream_card_ex's report and read by the
     # close path to decide the full-log .txt attachment
     # ("layered-card-shedding" requirement 2). Transient.
     last_card_truncated: bool = False
-    # Interim answers produced while this job's background work was still
-    # open, held for the job's SINGLE final message ("one response per
-    # background job"): the interim never goes out standalone — it lives
-    # in the card's timeline and in here, delivered once at close joined
-    # with the final answer. Transient, never persisted — a daemon
-    # restart mid-job drops it; the card's last rendered state in the
-    # chat scrollback is then the only surviving surface (accepted, same
-    # degrade-to-today rule as the rest of the job state). Bounded by
-    # the append site (notify._record_job_interim).
-    job_interim_buffer: list = field(default_factory=list, repr=False)
 
     # -- Live message stack (design.md "Live Message Stack") ---------------
 
@@ -1063,6 +1091,113 @@ class TrackedSession:
             or (self.job_grace_until
                 and time.monotonic() < self.job_grace_until)
         )
+
+    # ── roadmap 8.41: background agents still running ─────────────────────
+    #
+    # Pure set bookkeeping: hook_receiver calls these per hook, and nothing
+    # here sends, renders or reads a file.
+
+    def bg_agent_started(self, agent_id: str, agent_type: str,
+                         now: float) -> bool:
+        """SubagentStart: *agent_id* is running. An empty id or type is not
+        an agent (the phantom shape) and adds nothing. A restart of a known
+        id (an agent resuming itself) refreshes it."""
+        agent_type = (agent_type or "").strip()
+        if not agent_id or not agent_type:
+            return False
+        self.bg_agents[agent_id] = {"label": agent_type, "last_seen": now}
+        self.bg_agents_recent.pop(agent_id, None)
+        while len(self.bg_agents) > ACTIVE_SUBAGENTS_CAP:
+            oldest = min(self.bg_agents,
+                         key=lambda a: self.bg_agents[a]["last_seen"])
+            self.bg_agents.pop(oldest)
+        return True
+
+    def bg_agent_stopped(self, agent_id: str, now: float) -> bool:
+        """SubagentStop: the matching agent stopped. An id never started
+        (the constant phantom SubagentStops) matches nothing."""
+        info = self.bg_agents.pop(agent_id, None)
+        if info is None:
+            return False
+        self.bg_agents_recent[agent_id] = info["label"]
+        while len(self.bg_agents_recent) > BG_AGENTS_RECENT_CAP:
+            self.bg_agents_recent.pop(next(iter(self.bg_agents_recent)))
+        return True
+
+    def bg_agent_touch(self, agent_id: str, now: float) -> None:
+        """Any hook carrying *agent_id*: that agent is alive."""
+        info = self.bg_agents.get(agent_id)
+        if info is not None:
+            info["last_seen"] = now
+
+    def bg_agent_still_running(self, agent_id: str, now: float) -> bool:
+        """The parent's <task-notification> says *agent_id* stopped with
+        background work of its own still running: it resumes later, so it
+        is still one of this session's running agents. Only an id this
+        session saw start can come back — a background shell's task id
+        never had a SubagentStart."""
+        if agent_id in self.bg_agents:
+            self.bg_agents[agent_id]["last_seen"] = now
+            return True
+        label = self.bg_agents_recent.pop(agent_id, None)
+        if label is None:
+            return False
+        self.bg_agents[agent_id] = {"label": label, "last_seen": now}
+        return True
+
+    def sweep_bg_agents(self, now: float, window: float) -> list[str]:
+        """Drop agents not heard from in *window* seconds (a lost
+        SubagentStop) and return their ids.
+
+        Silence is not completion: an agent parked on long background work
+        of its own emits nothing. So an answer whose ⏳ line named an
+        expired agent is left exactly as sent — never settled to ✅ on no
+        evidence."""
+        silent = [a for a, info in self.bg_agents.items()
+                  if now - info["last_seen"] > window]
+        for agent_id in silent:
+            self.bg_agents.pop(agent_id, None)
+        if silent:
+            self.agents_lines = [
+                rec for rec in self.agents_lines
+                if not set(rec["ids"]) & set(silent)
+            ]
+        return silent
+
+    def clear_bg_agents(self) -> None:
+        """The session is gone: no agent of it is running, and no line of
+        it is owed an edit."""
+        self.bg_agents.clear()
+        self.bg_agents_recent.clear()
+        self.agents_lines = []
+
+    def add_agents_line(self, rec: dict) -> None:
+        """Remember an answer that carried the ⏳ line, capped at
+        AGENTS_LINES_CAP (the oldest is then left as sent)."""
+        self.agents_lines.append(rec)
+        if len(self.agents_lines) > AGENTS_LINES_CAP:
+            del self.agents_lines[:len(self.agents_lines) - AGENTS_LINES_CAP]
+
+    def bg_agent_labels(self) -> list[str]:
+        return [info["label"] for info in self.bg_agents.values()]
+
+    def agents_lines_due(self, now: float) -> list[dict]:
+        """The answers whose ⏳ line is owed its ✅ edit at *now*: every
+        agent the line named has been gone for BG_AGENTS_SETTLE_SECONDS,
+        and any retry's wait has passed. Called by the monitor's scan; it
+        stamps the moment the last of a line's agents left, and resets it
+        if one comes back."""
+        due = []
+        for rec in self.agents_lines:
+            if any(agent_id in self.bg_agents for agent_id in rec["ids"]):
+                rec["gone_at"] = 0.0
+                continue
+            if not rec["gone_at"]:
+                rec["gone_at"] = now
+            if (now - rec["gone_at"] >= BG_AGENTS_SETTLE_SECONDS
+                    and now >= rec["next_try"]):
+                due.append(rec)
+        return due
 
     def work_in_flight_reason(self, now: float) -> tuple[str, float] | None:
         """Why a "gone quiet" reading of this session would be a false
@@ -1565,11 +1700,6 @@ class SessionRegistry:
                 sess.job_continuation_active = False
                 sess.job_grace_until = 0.0
                 sess.job_reclaim_pending = True
-                # Cleared WITHOUT a flush on supersede, deliberately: the
-                # superseded card's last rendered state stays in the chat
-                # scrollback, and the operator chose to move on ("one
-                # response per background job" requirement 4).
-                sess.job_interim_buffer.clear()
 
         old = sess.status
         sess.status = new_status
@@ -1586,6 +1716,9 @@ class SessionRegistry:
         if new_status == Status.GONE:
             if sess.gone_at is None:
                 sess.gone_at = time.time()
+            # Roadmap 8.41: a gone session runs no agents and is owed no
+            # ✅ edit into its chat.
+            sess.clear_bg_agents()
             # Best-effort cleanup of this session's /tmp policy + reply-
             # context files (design.md Part 5). Both GONE-inducing paths
             # (socket-vanish via session_monitor, Claude's SessionEnd hook

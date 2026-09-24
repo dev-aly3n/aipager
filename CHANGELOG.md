@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Say when a turn ends with background agents still running.** An
+  answer that goes out while agents Claude launched in the background are
+  still working ends with `⏳ 1 agent still running — pipeline-runner ·
+  results will follow here` (every layout, and the one-message answer of
+  a tool-less turn). When they have all finished, that line is edited
+  once, silently, to `✅ pipeline-runner — done (6m)` or `✅ 2 agents done
+  (6m)`. Each answer that carried the line gets that edit. An agent that
+  stopped with background work of its own still running counts as
+  running when Claude's notification for it starts a turn (one taken
+  mid-turn is not seen, and its line may read done early). That is how a `/deliver` pipeline's answer read "Finished"
+  while its test run went on. An agent that is silent for 30 minutes, or a
+  daemon restart, leaves the line as sent rather than claiming it is done.
+  The pinned status bar says
+  `· ⏳ 1 agent running` on the session's line. See [commands → idle
+  responses](docs/commands.md#agents-still-running-when-the-answer-goes-out).
 - **A pinned "needs you" status bar in every chat.** Each chat aipager
   talks in — your DM and every group scope, on every install — gets one
   pinned message listing that chat's sessions. Its first line, the one
@@ -92,6 +107,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   buttons, driving the same update job the chat shows.
 
 ### Changed
+- **An answer written while background agents run goes out at once.**
+  When Claude's turn ends with agents it launched still running, its
+  answer is sent right away as its own message — the one the terminal
+  already shows — ending with the `⏳ … still running` line, instead of
+  being held until the agents finish and merged into one combined
+  message. The busy card stays above it as the job's status with its
+  **Stop** button, in every layout. The agents' results arrive later as a
+  new message, and an answer already sent is never sent again (a daemon
+  restart included). The reply guidance aipager adds to every Telegram
+  prompt now tells Claude its reply is delivered now and the agents'
+  results follow separately. See [commands → idle
+  responses](docs/commands.md#agents-still-running-when-the-answer-goes-out).
 - **A long turn's busy card refreshes less often, and says so in its
   counter.** From 2 / 10 / 60 minutes into a turn the card is edited at
   most every 10 / 30 / 60 seconds, and its elapsed counter — on the status

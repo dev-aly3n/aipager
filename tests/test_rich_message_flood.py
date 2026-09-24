@@ -592,13 +592,14 @@ def test_idle_answer_with_no_ban_is_untouched(mk_bot, run_async, monkeypatch):
     assert [m for m, _ in post.calls] == ["sendRichMessage"]
 
 
-def test_job_buffer_flush_hit_by_a_ban_does_not_fall_back(mk_bot, run_async, monkeypatch, no_sleep):
+def test_job_interim_hit_by_a_ban_does_not_fall_back(mk_bot, run_async, monkeypatch, no_sleep):
+    """Was the job buffer's flush until roadmap 8.42 sent an interim answer
+    at once; the no-fallback-into-a-ban rule is the same."""
     bot = _idle_bot(mk_bot)
     sess = _sess()
-    sess.job_interim_buffer.append("interim answer")
     post = _scripted_post(_429(BAN))
     monkeypatch.setattr(rm, "_post", post)
-    run_async(bot._flush_job_buffer(sess))
+    run_async(bot._deliver_job_interim(sess, "interim answer", 0.0))
     assert [m for m, _ in post.calls] == ["sendRichMessage"]
     bot._app.bot.send_message.assert_not_awaited()
 

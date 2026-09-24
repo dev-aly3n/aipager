@@ -411,24 +411,24 @@ def test_a_re_mute_mid_flush_postpones_rather_than_spending_an_attempt(
     assert HELD.pending(CHAT)[0].attempts == 0
 
 
-# ── criterion 20: _flush_job_buffer's ordering ───────────────────────────────
+# ── criterion 20: a banned job interim is held, not lost ─────────────────────
+#
+# These drove `_flush_job_buffer` until roadmap 8.42 (operator decision
+# 2026-09-24) removed the interim buffer: an interim answer now goes out the
+# moment its turn ends, through `_deliver_job_interim`, and the same
+# criteria are asserted there.
 
-def test_a_banned_job_buffer_is_held_before_it_is_cleared(
+def test_a_banned_job_interim_is_held_not_lost(
     mk_bot, limiter, flood_clock, run_async, monkeypatch,
 ):
-    """Criterion 20, and the worst of the four drop paths (research
-    gotcha 6).
+    """Criterion 20: a ban at the moment a background job's interim answer
+    goes out holds it, and its digest stays PENDING — so it is neither lost
+    nor counted as delivered across a restart until it lands.
 
-    `_flush_job_buffer` used to CLEAR the buffer and record the digest as
-    DELIVERED before the send. On a ban that lost a background job's
-    entire output twice over: the only copy was gone, AND the digest said
-    it had already been delivered, so even a later retry would be deduped
-    away.
-
-    Mutation: move the clear back above the send and `HELD.count()` is 1
-    but with nothing in it worth delivering — or, with the hold removed
-    too, 0.
+    Mutation: drop the hold and `HELD.count()` is 0.
     """
+    import hashlib
+
     import aipager.bot.rich_message as rm
     from aipager.bot.flood import MUTE
     from aipager.bot.rich_message import RichMessageFloodBanned
@@ -441,28 +441,31 @@ def test_a_banned_job_buffer_is_held_before_it_is_cleared(
 
     bot = mk_bot()
     sess = _sess(bot)
-    sess.job_interim_buffer = ["the background job's whole output"]
     MUTE.mute(CHAT, BAN)
 
-    run_async(bot._flush_job_buffer(sess))
+    run_async(bot._deliver_job_interim(
+        sess, "the background job's interim answer", 0.0))
 
-    assert HELD.count(CHAT) == 1, "the job's output was lost"
+    assert HELD.count(CHAT) == 1, "the interim answer was lost"
     held = HELD.pending(CHAT)[0]
-    assert "the background job's whole output" in held.rich_text
+    assert "the background job's interim answer" in held.rich_text
+    digest = hashlib.md5(b"the background job's interim answer").hexdigest()
+    assert digest not in sess.persisted_digests()
 
 
-def test_a_deduped_job_buffer_still_clears(mk_bot, limiter, run_async):
-    """The ordering fix must not leak the buffer on the dedup path: a
-    stray double-close still empties it, it just does not re-send."""
+def test_a_deduped_job_interim_is_neither_sent_nor_held(
+    mk_bot, limiter, run_async,
+):
+    """A stray re-run of an interim already delivered sends and holds
+    nothing."""
     bot = mk_bot()
     sess = _sess(bot)
-    sess.job_interim_buffer = ["x"]
     import hashlib
-    sess.last_idle_summary_hash = hashlib.md5(b"x").hexdigest()
+    sess.remember_delivered(hashlib.md5(b"x").hexdigest())
 
-    run_async(bot._flush_job_buffer(sess))
-    assert sess.job_interim_buffer == []
+    run_async(bot._deliver_job_interim(sess, "x", 0.0))
     assert HELD.count() == 0
+    bot._app.bot.send_message.assert_not_called()
 
 
 # ── criterion 19: belt and braces ────────────────────────────────────────────
@@ -495,10 +498,9 @@ def test_even_a_broad_except_fallback_makes_no_http_during_a_mute(
     bot = mk_bot()
     bot._app.bot = gated_bot
     sess = _sess(bot)
-    sess.job_interim_buffer = ["output"]
     MUTE.mute(CHAT, BAN)
 
-    run_async(bot._flush_job_buffer(sess))
+    run_async(bot._deliver_job_interim(sess, "output", 0.0))
 
     assert gated_bot.calls == [], "the plain-text fallback fired into the ban"
     assert rich_http.requests == []

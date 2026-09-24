@@ -113,12 +113,12 @@ def test_idle_once_agents_close_finished_is_produced(
 
 # ---- content-dedup: identical vs different content ------------------------
 
-def test_identical_interim_content_recorded_only_once(
+def test_identical_interim_content_sent_only_once(
         mk_bot, run_async, mk_job_session, all_sent_texts):
-    """Contract change ("one response per background job" requirement 1):
-    interim content is never sent standalone — it is recorded once in the
-    job buffer for the single final message; identical strays dedup by
-    membership."""
+    """Roadmap 8.42 (operator decision 2026-09-24) replaced "one response
+    per background job" requirement 1: interim content goes out at once,
+    as its own message — and an identical stray is refused by the
+    delivered-digest ring, so it goes out exactly once."""
     bot = mk_bot()
     sess = _job_open_sess(mk_job_session)
     content = "the exact same 2122-char interim answer"
@@ -130,17 +130,14 @@ def test_identical_interim_content_recorded_only_once(
     run_async(_twice())
 
     texts = all_sent_texts(bot)
-    assert not any(content in t for t in texts), (
-        f"interim content must never go out standalone: {texts!r}")
-    assert sess.job_interim_buffer == [content]
+    assert sum(content in t for t in texts) == 1, texts
 
 
-def test_different_interim_content_recorded_both_in_order(
+def test_different_interim_content_sent_both_in_order(
         mk_bot, run_async, mk_job_session, all_sent_texts):
-    """The complement of the dedup test under the one-response contract:
-    two DIFFERENT interim payloads while the same job stays open are BOTH
-    held for the final message, oldest first — dedup is content-keyed,
-    not a blanket 'only one interim ever' rule."""
+    """The complement of the dedup test: two DIFFERENT interim payloads
+    while the same job stays open are BOTH sent, oldest first — dedup is
+    content-keyed, not a blanket 'only one interim ever' rule."""
     bot = mk_bot()
     sess = _job_open_sess(mk_job_session)
 
@@ -150,11 +147,11 @@ def test_different_interim_content_recorded_both_in_order(
 
     run_async(_twice())
 
-    texts = all_sent_texts(bot)
-    assert not any("interim answer" in t for t in texts)
-    assert sess.job_interim_buffer == [
-        "first interim answer", "second, different answer",
-    ]
+    texts = [t for t in all_sent_texts(bot)
+             if "interim answer" in t or "different answer" in t]
+    assert len(texts) == 2
+    assert "first interim answer" in texts[0]
+    assert "second, different answer" in texts[1]
 
 
 def test_empty_interim_summary_does_not_crash_and_still_renders_waiting(

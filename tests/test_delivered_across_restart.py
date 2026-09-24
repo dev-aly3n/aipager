@@ -327,18 +327,22 @@ def test_a_confirmed_resend_clears_an_earlier_pending_mark():
     assert sess.persisted_digests() == ["ccc"]
 
 
-# ---- the job-buffer flush ----------------------------------------------
+# ---- a background job's interim answer (roadmap 8.42) --------------------
+#
+# Until 8.42 these covered the job buffer's flush and the finish path's
+# interim+final composition. 8.42 (operator decision 2026-09-24) sends an
+# interim answer the moment its turn ends, so it is that turn's answer: its
+# digest persists and it moves the delivery stamp, once it has landed.
 
 @pytest.mark.parametrize("outcome", ["sent", "fallback", "held", "blocked",
                                      "all_failed"])
-def test_a_flushed_job_buffer_persists_only_when_it_landed(
+def test_a_job_interim_answer_persists_only_when_it_landed(
     mk_bot, run_async, rich, outcome,
 ):
     from aipager.bot.rich_message import RichMessageBlocked
     registry, bot, _recv = _daemon(mk_bot)
     sess = registry.get_or_create(SESSION)
     sess.scope_chat_id = CHAT
-    sess.job_interim_buffer = ["an interim answer"]
     if outcome == "fallback":
         rich.side_effect = RuntimeError("parse error")
     elif outcome == "held":
@@ -348,39 +352,40 @@ def test_a_flushed_job_buffer_persists_only_when_it_landed(
     elif outcome == "all_failed":
         rich.side_effect = RuntimeError("parse error")
         bot._app.bot.send_message = AsyncMock(side_effect=RuntimeError("down"))
-    run_async(bot._flush_job_buffer(sess))
+    turn_end = time.time() - 5
+    run_async(bot._deliver_job_interim(sess, "an interim answer", turn_end))
 
     digest = hashlib.md5(b"an interim answer").hexdigest()
     assert sess.was_delivered(digest)  # refused in-process either way
     landed = outcome in ("sent", "fallback")
     assert sess.persisted_digests() == ([digest] if landed else [])
-    assert sess.answer_delivered_wall == 0.0  # an interim is not the answer
+    assert sess.answer_delivered_wall == (turn_end if landed else 0.0)
 
     if outcome == "held":  # the mute lifts and the held interim lands
         rich.side_effect = None
         assert run_async(bot.flush_held_answers(sess)) == 1
         assert sess.persisted_digests() == [digest]
-        assert sess.answer_delivered_wall == 0.0
+        assert sess.answer_delivered_wall == turn_end
 
 
-def test_a_composed_interim_and_final_answer_that_never_landed_is_not_persisted(
-    mk_bot, run_async, rich,
+def test_a_restart_after_a_job_interim_does_not_resend_it(
+    mk_bot, run_async, rich, transcript, tmp_state_file,
 ):
-    """The finish path's composition (buffered interims + the answer) is
-    remembered too; like the answer's own digest it stays pending until a
-    send lands."""
-    registry, bot, _recv = _daemon(mk_bot)
+    """The 8.39 incident's shape, mid-job: the interim went out, the daemon
+    restarted, and Claude Code's idle Notification read the transcript's
+    newest text — the interim."""
+    _write_transcript(transcript, (ANSWER, time.time() - 1))
+    registry, bot, recv = _daemon(mk_bot)
     sess = registry.get_or_create(SESSION)
+    sess.label = "boss"
     sess.scope_chat_id = CHAT
     sess.status = Status.IDLE
-    sess.job_interim_buffer = ["an interim answer"]
-    rich.side_effect = RuntimeError("parse error")
-    bot._app.bot.send_message = AsyncMock(side_effect=RuntimeError("down"))
-    run_async(bot.notify(sess, "idle_prompt", {"summary": "the final answer"}))
+    run_async(bot._deliver_job_interim(sess, ANSWER, time.time()))
+    assert len(_bodies(rich)) == 1
 
-    assert len(sess.delivered_digests) == 2  # the answer + the composition
-    assert sess.persisted_digests() == []
-    assert sess.answer_delivered_wall == 0.0
+    registry, bot, recv = _restart(mk_bot, registry)
+    _idle_notification(recv, run_async, transcript)
+    assert len(_bodies(rich)) == 1
 
 
 # ---- held answers delivered after the mute lifts (review rev-iter1-001) --

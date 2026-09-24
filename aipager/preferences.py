@@ -291,14 +291,14 @@ _STYLE_LEAD_IN = (
     "do not mention or quote it:"
 )
 
-# Always injected, independent of /settings ("status-line-at-card-bottom"):
-# aipager delivers a background job's interim answer and its final answer
-# as ONE combined Telegram message, so a promise to send the rest later
-# ends up sitting directly above the thing it promised.
+# Always injected, independent of /settings ("status-line-at-card-bottom";
+# reworded by roadmap 8.42): aipager delivers a background job's interim
+# answer the moment the turn ends, and the agents' results arrive later as
+# a message of their own — so saying they will follow is true, and the
+# model should not hold anything back for a combined reply.
 _DELIVERY_LINE = (
-    "If you start background agents, your interim reply and your final "
-    "reply reach the user as ONE message — never promise to send results "
-    "separately, and never say a briefing or report will follow."
+    "If you start background agents, your reply is delivered now; results "
+    "from those agents arrive later as a separate message."
 )
 
 _FORMATTING_LINE = (

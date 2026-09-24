@@ -163,8 +163,7 @@ def test_exactly_the_cap_worth_of_sessions_is_kept(caplog):
 
 
 def test_one_past_the_cap_drops_the_oldest(caplog):
-    """Boundary, just-outside: bounded, drop-oldest — the shape of
-    ``_record_job_interim``."""
+    """Boundary, just-outside: bounded, drop-oldest."""
     for i in range(HELD_ANSWER_MAX_PER_CHAT + 1):
         _hold(session=f"claude-{i}")
     assert HELD.count() == HELD_ANSWER_MAX_PER_CHAT

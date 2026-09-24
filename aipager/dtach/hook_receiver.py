@@ -14,6 +14,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import socket
 import time
 from pathlib import Path
@@ -76,6 +77,30 @@ _CTX_WINDOW_SIZE = 200_000  # all current Claude models use 200k context
 # since personal mode has no role/snapshot separation to leak. See
 # enforce.py's own copy of this note for the full reasoning.
 _TASK_NOTIFICATION_PREFIX = "<task-notification>"
+# Roadmap 8.41. A <task-notification> for an agent carries a <note>; this
+# wording (Claude Code 2.1.280) marks an agent that stopped while background
+# work of its own still runs, and so will resume and notify again.
+_TASK_ID_RE = re.compile(r"<task-id>\s*([A-Za-z0-9_-]+)\s*</task-id>")
+_NOTE_RE = re.compile(r"<note>(.*?)</note>", re.DOTALL)
+_STILL_RUNNING_NOTE = "background work of its own still running"
+
+
+def _still_running_task_ids(prompt: str) -> list[str]:
+    """The task ids of the notifications in *prompt* whose agent stopped
+    with background work still running. One prompt can carry several
+    notifications (a background shell's, which has no note, then an
+    agent's), so each is read on its own. Only a notification's own <note>
+    counts: the agent's <result> after it is free text and may quote
+    anything."""
+    ids = []
+    for block in prompt.split(_TASK_NOTIFICATION_PREFIX)[1:]:
+        note = _NOTE_RE.search(block)
+        if note is None or _STILL_RUNNING_NOTE not in note.group(1):
+            continue
+        match = _TASK_ID_RE.search(block[:note.start()])
+        if match:
+            ids.append(match.group(1))
+    return ids
 
 
 def _read_statusline(session_name: str) -> dict | None:
@@ -433,6 +458,7 @@ class HookReceiver:
         hook_agent_id = msg.get("agent_id") or ""
         if hook_agent_id:
             sess_ref.touch_subagent(hook_agent_id, now_mono)
+            sess_ref.bg_agent_touch(hook_agent_id, now_mono)
         # Evidence that a turn is alive, for the "prompt not taken"
         # watchdog (session_monitor.prompt_not_taken): every datagram
         # counts except the two that arrive without any turn behind them.
@@ -595,6 +621,13 @@ class HookReceiver:
         elif event == "UserPromptSubmit":
             prompt = msg.get("prompt", "")
             if prompt.startswith(_TASK_NOTIFICATION_PREFIX):
+                # Roadmap 8.41: an agent that stopped with background work
+                # of its own still running resumes later — its SubagentStop
+                # (a moment ago) did not end it. Claude Code says so in this
+                # notification's <note>, the one exact signal for it.
+                for still_running in _still_running_task_ids(prompt):
+                    self.registry.get_or_create(session_name) \
+                        .bg_agent_still_running(still_running, now_mono)
                 # Continuation turn: the SAME job waking itself up, not a
                 # new human prompt. Origin-tagging is skipped entirely — the
                 # ORIGINAL prompt's origin (read from the transcript by
@@ -832,6 +865,10 @@ class HookReceiver:
             agent_type = msg.get("agent_type", "unknown")
             if agent_id:
                 sess = self.registry.get_or_create(session_name)
+                # Roadmap 8.41's running set; the raw type, so a start
+                # with none (the phantom shape) adds nothing there.
+                sess.bg_agent_started(agent_id, msg.get("agent_type") or "",
+                                      now_mono)
                 # The cap lives inside add_subagent (state.py), enforced
                 # by the data structure itself so a future second caller
                 # cannot bypass it. Eviction keeps the newest agents; the
@@ -871,6 +908,7 @@ class HookReceiver:
                 sess = self.registry.get_or_create(session_name)
                 # Compute elapsed time if we have a matching start
                 elapsed = 0.0
+                sess.bg_agent_stopped(agent_id, now_mono)
                 info = sess.active_subagents.pop(agent_id, None)
                 if info:
                     elapsed = time.monotonic() - info["started_at"]

@@ -2801,10 +2801,9 @@ class AnimationMixin:
         it could wake during the final edit's POST, still see the old
         ``busy_msg_id``, and re-arm the Stop button over the settled card.
 
-        Nothing else goes out for the superseded job — its interim text is
-        already inside the card (transition() clears the interim buffer
-        without a flush on supersede, deliberately) — except the full-log
-        attachment, threaded under the old card, when the final render had
+        Nothing else goes out for the superseded job — its interim answers
+        already went out as their own messages (roadmap 8.42) — except the
+        full-log attachment, threaded under the old card, when the final render had
         to hide anything: the same ``last_card_truncated`` rule as the idle
         close ("layered-card-shedding" requirement 2).
 
@@ -3088,7 +3087,6 @@ class AnimationMixin:
             sess.job_continuation_active = False
             sess.job_grace_until = 0.0
             sess.job_reclaim_pending = False
-            sess.job_interim_buffer.clear()
             sess.last_card_truncated = False
             sess.busy_started_at = time.monotonic()
             # A new turn is a new card: tier 0, seconds, no frame stamped.

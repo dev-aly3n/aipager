@@ -1521,27 +1521,41 @@ _STATES = (Status.BUSY, Status.IDLE, Status.INTERACTIVE, Status.UNKNOWN)
 _LABELS = ("alpha", "bravo", "charlie")
 
 
+@pytest.mark.parametrize("agents", [0, 2])
 @pytest.mark.parametrize("states", [
     combo for n in (1, 2, 3) for combo in itertools.product(_STATES, repeat=n)
 ])
 def test_no_label_is_repeated_for_any_combination_of_states(
-    mk_bot, pbot, legacy, states,
+    mk_bot, pbot, legacy, states, agents,
 ):
     """Every live session is on the bar exactly once, whatever the mix —
     counted over the lines run together, as Telegram's preview shows them.
     The labels share no substring with each other, the state words or the
-    summary, so a count is an exact occurrence count."""
+    summary, so a count is an exact occurrence count.
+
+    With background agents running (roadmap 8.41) each session says its
+    count once, on its own line, and no agent is ever named."""
     bot = _bot(mk_bot, pbot)
     for label, status in zip(_LABELS, states):
         sess = _session(bot, label, status)
         if status == Status.INTERACTIVE:
             _wait(sess, "Bash: ls")
+        for i in range(agents):
+            sess.bg_agent_started(f"{label}-{i}", "pipeline-runner", 1.0)
     text = bot._render_pinned(CHAT)[0]
     preview = text.replace("\n", " ")
     for label in _LABELS[:len(states)]:
         assert preview.count(label) == 1, preview
     if len(states) == 1:
         assert "\n" not in text
+    assert "pipeline-runner" not in preview
+    if agents:
+        assert preview.count(f"⏳ {agents} agents running") == len(states)
+        # Each count sits on its own session's line, never on another's.
+        for line in text.split("\n"):
+            assert line.count("agents running") <= 1, text
+    else:
+        assert "agents running" not in preview
 
 
 def test_an_unchanged_render_of_several_sessions_is_never_edited(
@@ -1556,3 +1570,68 @@ def test_an_unchanged_render_of_several_sessions_is_never_edited(
     _run(vloop, [(0.0, bot.refresh_pinned), (GAP * 2, bot.refresh_pinned),
                  (GAP * 2, bot.refresh_pinned)])
     assert len(pbot.pinned_edits()) == 1
+
+
+# ── background agents still running (roadmap 8.41) ──────────────────────────
+
+def test_a_waiting_lone_session_says_its_agents_on_the_one_line(
+    mk_bot, pbot, legacy,
+):
+    bot = _bot(mk_bot, pbot)
+    sess = _session(bot, "solo")
+    _wait(sess)
+    sess.bg_agent_started("a1", "pipeline-runner", 1.0)
+    assert bot._render_pinned(CHAT)[0] == (
+        "⏳ solo needs you — Bash: rm -rf build · ⏳ 1 agent running")
+
+
+def test_background_agents_move_the_bar_only_when_their_count_does(
+    mk_bot, pbot, vloop, legacy,
+):
+    """0 → 1 is an edit, one agent swapped for another is none (the bar
+    counts, never names), 1 → 0 is an edit. Every step is a gap apart."""
+    bot = _bot(mk_bot, pbot)
+    sess = _session(bot, "solo", Status.IDLE)
+
+    def _step(start=(), stop=()):
+        async def _go():
+            for aid in stop:
+                sess.bg_agent_stopped(aid, 1.0)
+            for aid in start:
+                sess.bg_agent_started(aid, aid.upper(), 1.0)
+            await bot.refresh_pinned()
+        return _go
+
+    _run(vloop, [(0.0, bot.refresh_pinned),
+                 (GAP * 2, _step(start=("a1",))),
+                 (GAP * 2, _step(start=("a2",), stop=("a1",))),
+                 (GAP * 2, _step(stop=("a2",)))])
+    assert [e[3] for e in pbot.pinned_edits()] == [
+        "💤 solo — idle",
+        "💤 solo — idle · ⏳ 1 agent running",
+        "💤 solo — idle",
+    ]
+
+
+def test_agents_starting_inside_the_gap_coalesce_into_one_trailing_edit(
+    mk_bot, pbot, vloop, legacy,
+):
+    """Three agents launched within five seconds: the first count goes out
+    at once, the rest ride ONE trailing edit showing the final count."""
+    bot = _bot(mk_bot, pbot)
+    sess = _session(bot, "solo", Status.IDLE)
+
+    def _start(aid):
+        async def _go():
+            sess.bg_agent_started(aid, "pipeline-runner", 1.0)
+            await bot.refresh_pinned()
+        return _go
+
+    _run(vloop, [(0.0, _start("a1")), (2.0, _start("a2")),
+                 (1.5, _start("a3"))])
+    edits = pbot.pinned_edits()
+    assert [e[3] for e in edits] == [
+        "💤 solo — idle · ⏳ 1 agent running",
+        "💤 solo — idle · ⏳ 3 agents running",
+    ]
+    assert edits[1][5] - edits[0][5] >= GAP - EPS

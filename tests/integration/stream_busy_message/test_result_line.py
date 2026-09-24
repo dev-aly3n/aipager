@@ -178,17 +178,18 @@ def test_overflow_standalone_header_uses_the_result_glyph(
     assert not body.startswith("💬")
 
 
-def test_interim_buffer_flush_starts_with_the_result_line(
+def test_a_job_interim_answer_starts_with_the_result_line(
     mk_bot, run_async, rich_calls,
 ):
-    """An interim answer flushed on a job's close path is a result too."""
+    """A background job's interim answer is a result too. (It was flushed
+    from a buffer on the job's close path until roadmap 8.42 — operator
+    decision 2026-09-24 — sent it at once.)"""
     bot = _wire_bot(mk_bot)
     sess = _sess()
-    sess.job_interim_buffer = ["first interim", "second interim"]
-    run_async(bot._flush_job_buffer(sess))
+    run_async(bot._deliver_job_interim(sess, "first interim", 0.0))
 
-    (flushed,) = _md(rich_calls, "sendRichMessage")
-    assert flushed == "💬 **dev**\n\nfirst interim\n\n———\n\nsecond interim"
+    (sent,) = _md(rich_calls, "sendRichMessage")
+    assert sent == "💬 **dev**\n\nfirst interim"
 
 
 def test_plain_text_fallback_first_chunk_starts_with_the_plain_result_line(
@@ -211,18 +212,17 @@ def test_plain_text_fallback_first_chunk_starts_with_the_plain_result_line(
     assert bot._app.bot.send_message.await_args.args[1] == "💬 dev\n\nthe answer"
 
 
-def test_interim_flush_plain_fallback_starts_with_the_plain_result_line(
+def test_job_interim_plain_fallback_starts_with_the_plain_result_line(
     mk_bot, run_async, monkeypatch,
 ):
     bot = _wire_bot(mk_bot)
     sess = _sess()
-    sess.job_interim_buffer = ["interim"]
 
     async def _fake_post(method, payload, **_kw):
         return {"ok": False, "error_code": 400, "description": "nope"}
 
     monkeypatch.setattr("aipager.bot.rich_message._post", _fake_post)
-    run_async(bot._flush_job_buffer(sess))
+    run_async(bot._deliver_job_interim(sess, "interim", 0.0))
 
     bot._app.bot.send_message.assert_awaited_once()
     assert bot._app.bot.send_message.await_args.args[1] == "💬 dev\n\ninterim"
