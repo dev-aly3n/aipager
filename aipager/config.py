@@ -368,6 +368,15 @@ FINISH_CARD_GRACE_SECONDS: float = float(
     os.environ.get("FINISH_CARD_GRACE_SECONDS", "0.8")
 )
 
+# Seconds a turn Claude woke ITSELF for (a background agent's
+# `<task-notification>` arriving with no job open) runs before it gets a
+# busy card, unless it uses a tool first (roadmap 8.32). Most such wake-ups
+# are a few seconds of "nothing new" with no tool call; a card for them was
+# a busy send, a final edit and then the answer — three calls for one line,
+# on a chat that may be down to one call every 20 s. A human-started turn
+# always gets its card at once; this delay applies to self-woken turns only.
+SELF_WOKEN_CARD_DELAY: float = 15.0
+
 # Seconds a session can stay BUSY with no hook activity before the bot
 # posts an informational "still working" note in chat. Nothing is wrong
 # when this fires — a session running a long tool call, generating

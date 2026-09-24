@@ -75,6 +75,9 @@ def test_card_layout_answer_starts_with_the_result_line(mk_bot, run_async, rich_
     answer carries the SHORT line: name and glyph, nothing repeated."""
     bot = _wire_bot(mk_bot)
     sess = _sess()
+    # A card with a timeline to keep (a tool-less one goes alone since
+    # roadmap 8.32 — tests/test_quiet_toolless_turns.py).
+    sess.tool_history = [("Read: /a.py", True)]
     prefs.set_preference(sess.scope_chat_id, "layout", "card")
     _finish(bot, run_async, sess)
 
@@ -193,6 +196,7 @@ def test_plain_text_fallback_first_chunk_starts_with_the_plain_result_line(
 ):
     bot = _wire_bot(mk_bot)
     sess = _sess()
+    sess.tool_history = [("Read: /a.py", True)]  # a kept card (8.32)
     prefs.set_preference(sess.scope_chat_id, "layout", "card")
 
     async def _fake_post(method, payload, **_kw):

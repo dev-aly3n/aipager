@@ -105,6 +105,9 @@ def test_card_mode_produces_two_outbound_messages(mk_bot, run_async, monkeypatch
     set_preference(chat_id, "layout", "card")
     bot, post_calls = _wire_bot(mk_bot, monkeypatch)
     sess = _sess(chat_id)
+    # A card with a timeline to keep: a tool-less card is delivered as the
+    # answer alone since roadmap 8.32 (tests/test_quiet_toolless_turns.py).
+    sess.tool_history = [("Read: /a.py", True)]
     run_async(bot.notify(sess, "idle_prompt", {"summary": "A short finished answer."}))
     edit_calls = [m for m, _p in post_calls if m == "editMessageText"]
     answer_calls = [m for m, _p in post_calls if m == "sendRichMessage"]

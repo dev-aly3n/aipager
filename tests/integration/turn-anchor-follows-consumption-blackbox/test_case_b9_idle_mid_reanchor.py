@@ -31,6 +31,10 @@ def test_absorption_immediately_followed_by_finish_settles_on_one_final_answer(
     bot, injected = wire_transport
     sess, tp, c1 = mid_turn(bot, "hello?", M1, ("second", M2))
     prefs.set_preference(sess.scope_chat_id, "layout", "card")
+    # A card with a timeline, which the finish path renders final. The
+    # tool-less variant (the card is deleted instead, roadmap 8.32) is
+    # tests/test_quiet_toolless_turns.py's race test.
+    sess.tool_history = [("Read: /a.py", True)]
     append_queue_op(sess, "remove", "absorbed_mid_turn", "second")
 
     async def _scenario():

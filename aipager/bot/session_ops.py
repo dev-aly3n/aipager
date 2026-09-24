@@ -697,7 +697,13 @@ class SessionOpsMixin:
         if outstanding_notes:
             await inject.discard_queued_input(sess.name)
 
-        # 2. Cancel animation
+        # 2. Cancel animation — and a self-woken turn's deferred card
+        # (roadmap 8.32): this path ends the turn without the finish path,
+        # which is where the deferral is otherwise stood down. Under the
+        # card lock, so a late card whose send is in flight lands first
+        # and is settled as "Stopped" below like any card.
+        async with sess.animate_lock:
+            self._cancel_lazy_card(sess)
         self._stop_animation(sess)
 
         # 3. Edit busy message to show "Stopped" (no keyboard)
@@ -818,7 +824,11 @@ class SessionOpsMixin:
         except Exception:
             log.debug("[%s] safety halt interrupt failed", sess.label,
                       exc_info=True)
-        # 2. Cancel the spinner (the piece whose absence wedged "thinking").
+        # 2. Cancel the spinner (the piece whose absence wedged "thinking"),
+        # and a self-woken turn's deferred card with it (roadmap 8.32) —
+        # same reasoning, and the same card lock, as `_stop_session_core`.
+        async with sess.animate_lock:
+            self._cancel_lazy_card(sess)
         self._stop_animation(sess)
         # 3. Replace the busy message with the block notice (or send fresh).
         notice = (f"🛑 <b>{html_mod.escape(sess.label)}</b> · Blocked by "
@@ -876,6 +886,14 @@ class SessionOpsMixin:
             except Exception:
                 log.debug("[%s] buffer flush on kill failed", sess.label,
                           exc_info=True)
+            # A self-woken turn's deferred card (roadmap 8.32) dies with the
+            # session: the entry is dropped from the registry below, out of
+            # reach of every later cleanup, and its timer would otherwise
+            # put a live card up for a dead session. Under the card lock,
+            # as `_stop_session_core` does, so a send already in flight
+            # lands as the session's known card before the animation stops.
+            async with sess.animate_lock:
+                self._cancel_lazy_card(sess)
             self._stop_animation(sess)
 
         # Kill the dtach process
@@ -1259,6 +1277,14 @@ class SessionOpsMixin:
         # SessionEnd hook — which can arrive before kill_session/send_keys
         # returns — is covered too.
         sess.restarting_until = time.monotonic() + _PERMS_RESTART_QUIET
+
+        # The turn being killed will never earn a card (roadmap 8.32):
+        # stand its deferral down before the kill, because the monitor
+        # skips a restarting session and a timer firing between the kill
+        # and the relaunch would put a card up for a turn that is gone.
+        # No card lock needed: nothing here settles a card afterwards, and
+        # a send already in flight is past the point a cancel can reach.
+        self._cancel_lazy_card(sess)
 
         if interrupt_first:
             await inject.send_keys(session_name, "C-c")

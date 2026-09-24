@@ -65,6 +65,9 @@ def _wire_bot(mk_bot):
 def test_card_layout_edits_card_then_sends_answer(mk_bot, run_async, rich_calls):
     bot = _wire_bot(mk_bot)
     sess = _sess()
+    # A card with a timeline to keep (a tool-less one goes alone since
+    # roadmap 8.32 — tests/test_quiet_toolless_turns.py).
+    sess.tool_history = [("Read: /a.py", True)]
     prefs.set_preference(sess.scope_chat_id, "layout", "card")
     run_async(bot.notify(sess, "idle_prompt", {"summary": "the answer"}))
 

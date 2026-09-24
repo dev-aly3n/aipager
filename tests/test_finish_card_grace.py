@@ -95,6 +95,10 @@ def _sess(chat_id: int, clock: _Clock, *, busy_msg_id: int = 42,
     # On the fake clock's timeline, not the real one.
     s.busy_started_at = clock.now - 5
     s.trigger_msg_id = 7
+    # The grace is owed to a KEPT card, and a card is kept only with a
+    # timeline on it — a tool-less one is deleted and the answer goes out
+    # alone since roadmap 8.32 (tests/test_quiet_toolless_turns.py).
+    s.tool_history = [("Read: /a.py", True)]
     # A real card always has busy_card_trigger seeded at send time ("turn
     # anchor follows consumption"). Seeding it equal to trigger_msg_id
     # keeps the re-anchor branch out of the way; the re-anchor test sets

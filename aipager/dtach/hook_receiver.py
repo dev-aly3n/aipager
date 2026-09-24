@@ -634,13 +634,20 @@ class HookReceiver:
                 # and the ordinary card send, which also settles any stale
                 # card restored from disk. Origin tagging is still skipped
                 # — this is not a human prompt.
+                #
+                # Nor is its card owed up front (roadmap 8.32): most such
+                # wake-ups are a few tool-less seconds of "nothing new", and
+                # a card for them was three calls for one line. The card
+                # waits for the turn's first tool use or
+                # SELF_WOKEN_CARD_DELAY, whichever comes first.
                 log.info(
                     "[%s] <task-notification> with no open job — starting "
                     "a fresh turn", cont_sess.label,
                 )
                 fresh = self.registry.transition(session_name, Status.BUSY)
                 if fresh:
-                    await self.notify_fn(fresh, "user_prompt_submit", {})
+                    await self.notify_fn(fresh, "user_prompt_submit",
+                                         {"self_woken": True})
                 return
             transitioned = self.registry.transition(session_name, Status.BUSY)
             # Origin tagging (Phase D): the daemon prefixes Telegram prompts

@@ -28,6 +28,7 @@ from telegram.error import Forbidden
 from aipager.bot.dashboard import new_prompt_token
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot.flood_budget import (
+    PRIORITY_ORNAMENT,
     PRIORITY_SIGNAL,
     rate_limit_args as _rl_args,
 )
@@ -54,7 +55,7 @@ from aipager.state import Status, TrackedSession
 from aipager.bot.animation import (
     FINAL_VERB, _RICH_LIMIT, _expire_tool_batch, _md_escape,
     _sync_anchors_from_transcript, build_full_log,
-    build_stream_card_ex,
+    build_stream_card_ex, final_card_has_timeline,
 )
 
 # Pure-function helpers and constants live in aipager.bot.transport
@@ -99,6 +100,11 @@ log = logging.getLogger(__name__)
 # which is the global module — patching it through a module path has hung
 # this suite twice (see CLAUDE.md). Same pattern as rich_message._sleep.
 _finish_sleep = asyncio.sleep
+
+# Strong references to fire-and-forget housekeeping tasks (the tool-less
+# card's delete, roadmap 8.32): the event loop only keeps weak ones, and a
+# task collected mid-flight is a delete that silently never happened.
+_BACKGROUND_TASKS: set = set()
 
 # "I'll send it the moment it lands" — a promise to deliver separately,
 # which the single-response job model makes false (see
@@ -376,6 +382,42 @@ class NotifyMixin:
             self._hold_answer(sess, combined, combined, reply_to)
             return False
         return result is not None
+
+    def _delete_card_later(self, sess: TrackedSession, msg_id: int) -> None:
+        """Delete a finished turn's tool-less busy card once its answer is
+        out (roadmap 8.32 R1). Never raises, never waits.
+
+        Card housekeeping, so an ORNAMENT, like the re-anchor's own delete:
+        leaving a stale card behind is cosmetic, taking an answer's token to
+        remove it is not. A background task because a blocking ornament
+        waits for the chat's reserve, and nothing after the answer — the
+        attachment, the next queued prompt — should wait with it.
+
+        Skipped outright while the chat is flood-muted: the gate would
+        refuse it anyway, and a refused call is still counted against the
+        chat. In minimal mode the limiter refuses it (ornaments are
+        suspended) and the card stays as last rendered — the paused line —
+        which is what that card showed before this change too.
+        """
+        if not self._app or MUTE.is_muted(resolve_chat_id(sess)):
+            return
+        bot = self._app.bot
+        chat_id = resolve_chat_id(sess)
+        label = sess.label
+
+        async def _delete() -> None:
+            try:
+                await bot.delete_message(
+                    chat_id=chat_id, message_id=msg_id,
+                    rate_limit_args=_rl_args(priority=PRIORITY_ORNAMENT),
+                )
+            except Exception:
+                log.debug("[%s] tool-less card delete failed (left behind)",
+                          label, exc_info=True)
+
+        task = asyncio.create_task(_delete())
+        _BACKGROUND_TASKS.add(task)
+        task.add_done_callback(_BACKGROUND_TASKS.discard)
 
     async def _apply_consumption(
         self, sess: TrackedSession, consumed: list[dict],
@@ -1080,7 +1122,16 @@ class NotifyMixin:
             # from here too. Delegate instead: that function is the single
             # authority on whether a fresh card is warranted, and it bails
             # on its own when one is genuinely live.
-            await self._send_busy_and_animate(sess)
+            #
+            # A turn Claude woke ITSELF for (hook_receiver's fresh
+            # <task-notification> path, context["self_woken"]) defers its
+            # card until it is earned — the first tool use or
+            # SELF_WOKEN_CARD_DELAY (roadmap 8.32). A human prompt, from
+            # Telegram or the terminal, keeps the immediate card.
+            if context.get("self_woken"):
+                await self._send_busy_and_animate(sess, lazy=True)
+            else:
+                await self._send_busy_and_animate(sess)
             return
 
         if event == "job_continuation":
@@ -1236,6 +1287,19 @@ class NotifyMixin:
                     # Append new tool as in-progress (PostToolUse marks it done)
                     sess.record_tool(tool_summary, False)
                 sess.last_tool_summary = tool_summary
+            # A self-woken turn's deferred card is earned by its first
+            # tool use (roadmap 8.32). Sent after the row is recorded, so
+            # the card's first animation tick already carries it — no
+            # edit straight after the send (below), which would be a
+            # second call for the same row.
+            card_just_sent = False
+            if sess.lazy_card_at:
+                card_before = sess.busy_msg_id
+                await self._send_lazy_card(sess, reason="first tool use")
+                card_just_sent = bool(
+                    sess.busy_msg_id and sess.busy_msg_id > 0
+                    and sess.busy_msg_id != card_before
+                )
             # Item 4.4: a separate diff-preview message for Write/Edit —
             # OFF by default, on via the /settings "Diff previews" toggle
             # (the scope value, or this session's own override). Resolved
@@ -1248,7 +1312,8 @@ class NotifyMixin:
                     self._send_diff_preview(sess, tool_name, tool_input_full)
                 )
             # Skip edit if busy msg not ready yet (animation will pick up cached stats)
-            if not sess.busy_msg_id or sess.busy_msg_id < 0 or not tool_summary:
+            if (not sess.busy_msg_id or sess.busy_msg_id < 0 or not tool_summary
+                    or card_just_sent):
                 return
             sess.stream_dirty = True
             now = time.monotonic()
@@ -1490,6 +1555,11 @@ class NotifyMixin:
             # Store index in active_subagents so SubagentStop can find it
             if agent_id and agent_id in sess.active_subagents:
                 sess.active_subagents[agent_id]["history_idx"] = history_idx
+            # An agent is work too: a self-woken turn's deferred card goes
+            # up now if its Agent call's own PreToolUse did not already
+            # send it (roadmap 8.32).
+            if sess.lazy_card_at:
+                await self._send_lazy_card(sess, reason="subagent start")
             # Edit busy message if ready (debounced)
             if sess.busy_msg_id and sess.busy_msg_id > 0:
                 sess.stream_dirty = True
@@ -1748,6 +1818,10 @@ class NotifyMixin:
             except Exception:
                 log.debug("[%s] buffer flush on session_end failed",
                           sess.label, exc_info=True)
+            # A deferred card whose send is in flight lands first, under
+            # the card lock, and is then deleted below like any card.
+            async with sess.animate_lock:
+                self._cancel_lazy_card(sess)
             self._stop_animation(sess)
             if sess.busy_msg_id and sess.busy_msg_id > 0:
                 try:
@@ -1861,6 +1935,21 @@ class NotifyMixin:
 
             # Mark all tools as done
             sess.tool_history = [(s, True) for s, _ in sess.tool_history]
+            # A self-woken turn that ends before earning its deferred card
+            # never gets one: only the answer goes out, and with no card
+            # its first line carries the stats (roadmap 8.32). Under the
+            # card lock, and before the animation is stopped: a deferred
+            # card whose send is already in flight lands first and is then
+            # finished like any other card, instead of arriving after this
+            # path and being stranded mid-animation. The same wait covers a
+            # live re-anchor in flight (a tick's `_consume_and_reanchor`),
+            # which swaps `busy_msg_id` to its new card under this lock:
+            # everything below reads the card it leaves, never the old one
+            # it is deleting — for a tool-less card (8.32 R1) that is the
+            # difference between deleting the live card and stranding it on
+            # "Working" for good.
+            async with sess.animate_lock:
+                self._cancel_lazy_card(sess)
             # Stop animation and clean up busy message
             self._stop_animation(sess)
             sess.pending_permission = None  # clear stale inline permission if any
@@ -1922,6 +2011,61 @@ class NotifyMixin:
                 _drop_answer_tail(
                     sess, context.get("raw_md") or context.get("summary") or "",
                 )
+            # ── a card with nothing on it (roadmap 8.32 R1) ────────────────
+            # In `card` layout the kept card is the turn's timeline record.
+            # A turn with NO timeline content — `final_card_has_timeline`
+            # names exactly what counts: tool rows, subagent rows, and prose
+            # the card would keep — would leave only "✅ label · Done · Ns"
+            # above an answer that is about to say the same. Such a turn is
+            # delivered as ONE message instead: the answer, opening with
+            # the STATS result line, the way `replace` delivers every turn.
+            #
+            # Not an edit of the card into the answer (what `merged` does):
+            # an edit is silent in Telegram, and a card-layout answer has
+            # always notified. The answer is a fresh send under the turn's
+            # target, and the card is deleted AFTER it (`_delete_card_later`)
+            # — two calls, where the kept card cost three, and the answer
+            # never waits behind card housekeeping.
+            #
+            # Only with something to deliver: a turn with no answer keeps
+            # its card as the one record that it ended, exactly as today.
+            # Checked after the `_drop_answer_tail` trim above, so a prose
+            # block that merely repeats the answer does not count as
+            # timeline. A re-anchor is moot for such a card — the answer
+            # replies to the turn's current target — so none is made.
+            # (With `busy_msg_id` cleared here, the `card` re-anchor just
+            # below finds no card and does nothing.)
+            #
+            # The id read here is the settled one: the `animate_lock` taken
+            # above waited out any re-anchor still in flight, and nothing
+            # between there and here yields.
+            #
+            # "Something to deliver" is judged the way the content
+            # selection below will judge it, read-only: an answer whose
+            # digest already went out is suppressed there (a turn with no
+            # text of its own reads an EARLIER turn's from the transcript),
+            # and such a turn has nothing to deliver — it keeps its card
+            # rather than trading it for a bare header, or, on the
+            # recovered path, for nothing at all.
+            toolless_card_msg_id = 0
+            _candidate = context.get("raw_md") or context.get("summary") or ""
+            _fresh_answer = False
+            if _candidate:
+                _cand_digest = hashlib.md5(_candidate.encode("utf-8")).hexdigest()
+                _fresh_answer = not (
+                    _cand_digest == sess.last_idle_summary_hash
+                    or sess.was_delivered(_cand_digest)
+                )
+            _fresh_interim = any(
+                b and b != _candidate for b in sess.job_interim_buffer
+            )
+            if (layout == "card" and sess.busy_msg_id and sess.busy_msg_id > 0
+                    and (_fresh_answer or _fresh_interim)
+                    and not final_card_has_timeline(sess)):
+                toolless_card_msg_id = sess.busy_msg_id
+                sess.busy_msg_id = None
+                log.info("[%s] finished card has no timeline — the answer "
+                         "goes out alone, with the stats", label)
             card_already_final = False
             merged_send_as_new = False
             if reanchor_needed and layout == "card":
@@ -2095,6 +2239,8 @@ class NotifyMixin:
                 except Exception:
                     log.debug("[%s] buffer flush on api-error failed",
                               label, exc_info=True)
+                if toolless_card_msg_id:
+                    self._delete_card_later(sess, toolless_card_msg_id)
                 # Don't clear trigger_msg_id — retry needs it
                 # Don't flush pending queue — nothing was processed
                 return
@@ -2288,7 +2434,10 @@ class NotifyMixin:
             #                           blank line, body (`replace`, and
             #                           `merged` falling back to it): the
             #                           card is gone, so this line carries
-            #                           the elapsed time.
+            #                           the elapsed time. A `card`-layout
+            #                           card with no timeline (roadmap 8.32)
+            #                           takes this row too: it is deleted
+            #                           once this message is out.
             # no card + body          → the same stats-line message. "No
             #                           card" covers a turn that never had
             #                           one and a final render that failed.
@@ -2449,6 +2598,11 @@ class NotifyMixin:
                         except Exception:
                             log.warning("[%s] plain-text fallback chunk send failed",
                                         label, exc_info=True)
+
+            # The tool-less card goes only now that the answer is out (or
+            # held) — roadmap 8.32 R1.
+            if toolless_card_msg_id:
+                self._delete_card_later(sess, toolless_card_msg_id)
 
             sess.trigger_msg_id = None  # reply cycle complete
             sess.busy_card_trigger = None

@@ -28,7 +28,7 @@ and on every session change.
 | `/diff [label]` | optional | Show the session's working-directory git diff. |
 | `/clearqueue` | — | Drop every not-yet-picked-up message for the active session — both messages aipager is holding and messages already queued inside Claude — without interrupting the running turn. Replies with the count cleared. |
 | `/perms [label]` | optional | Switch a session between Ask and Auto permission modes. On a busy session, offers `Stop task & switch` / `Not now`. |
-| `/settings` | — | Message layout, diff previews (off by default), long-turn card updates (on by default: a busy card refreshes every 10 s after 2 minutes of a turn, 30 s after 10, once a minute after an hour, counting in minutes then hours — switch off to keep the first-minutes pace for the whole turn; see [troubleshooting](troubleshooting.md#a-long-turns-card-refreshes-less-often)), formatting and language preferences. Whatever the layout, every busy card ends with its session's status line (`⏳`/`✅ name · …`) and every answer starts with its result line (`💬 name`, plus `· Finished (…)` when no finished card is left to show the stats); the merged layout stacks the two, each line in its own section. In the card layout the answer deliberately follows the finished card by a moment, so the card is seen to say Finished before the answer lands under it — tune or disable that head start with `FINISH_CARD_GRACE_SECONDS` (seconds, default 0.8; 0 sends both at once). |
+| `/settings` | — | Message layout, diff previews (off by default), long-turn card updates (on by default: a busy card refreshes every 10 s after 2 minutes of a turn, 30 s after 10, once a minute after an hour, counting in minutes then hours — switch off to keep the first-minutes pace for the whole turn; see [troubleshooting](troubleshooting.md#a-long-turns-card-refreshes-less-often)), formatting and language preferences. Whatever the layout, every busy card ends with its session's status line (`⏳`/`✅ name · …`) and every answer starts with its result line (`💬 name`, plus `· Finished (…)` when no finished card is left to show the stats); the merged layout stacks the two, each line in its own section. In the card layout the answer deliberately follows the finished card by a moment, so the card is seen to say Finished before the answer lands under it — tune or disable that head start with `FINISH_CARD_GRACE_SECONDS` (seconds, default 0.8; 0 sends both at once). A card-layout turn that ran no tools keeps no card: its card would only repeat `✅ name · Done · Ns`, so the answer arrives alone with the stats in its `💬` line (see [Idle responses](#idle-responses)). |
 | `/whoami` | — | Show your Telegram id and (in team mode) your role. |
 
 ### Per-session dynamic commands
@@ -205,6 +205,29 @@ limit it's sent as a `.txt` attachment with a `📎 Full response
 attached below ↓` footer. Buttons:
 
 - **🔄 Retry** — re-send the last prompt to the same session.
+
+In the card layout the finished card stays above the answer as the
+record of how it was reached — its tool rows, agent rows and what Claude
+said between them. A turn with none of those (no tool call, no agent,
+no commentary besides the answer itself) has nothing to record, and a
+card left behind would say only `✅ name · Done · Ns` right above an
+answer saying the same. Such a turn ends as **one** message instead: the
+answer, opening with `💬 name · Finished (Ns)`, sent as a normal
+(notifying) message threaded to the prompt that started the turn, if
+any; the busy card is deleted once the answer is out. A tool-less turn with no new answer text (none at all,
+or only text already delivered) keeps its card, as the one sign it
+ended. The merged and replace layouts are
+unchanged.
+
+A turn Claude starts **by itself** — a background agent reporting back
+with a `<task-notification>` when no job is open — gets its busy card
+only once it does something: at its first tool call, or after 15 s,
+whichever comes first. Most such wake-ups are a few seconds of "nothing
+new"; those now show just the answer.
+The "typing…" indicator still shows while it runs, and the answer itself
+is always delivered — nothing is filtered as trivial.
+Turns you start, from Telegram or the terminal, still get their card at
+once.
 
 While a session is busy, each background agent Claude launches (via
 `Task`) gets its own line on the busy card: `🤖 <type> · <activity> ·
