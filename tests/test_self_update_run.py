@@ -36,9 +36,10 @@ def _gone(pid: int) -> bool:
 
 
 def test_run_command_timeout_kills_group(real_seam, tmp_path):
-    # The child starts a grandchild in its own process group and prints its
-    # pid; a timeout must take BOTH down — killing only the direct child
-    # would leave an installer's worker running on the operator's box.
+    # The child starts a grandchild, which shares the child's process group
+    # (that is the point), and prints its pid; a timeout must take BOTH
+    # down — killing only the direct child would leave an installer's
+    # worker running on the operator's box.
     script = (
         "import subprocess, sys, time\n"
         "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
@@ -111,3 +112,44 @@ def test_run_command_argv_is_never_a_shell_string(real_seam, tmp_path):
         timeout=10)
     assert res.returncode == 0
     assert not marker.exists()
+
+
+def test_shutdown_kills_a_running_child_group(real_seam, tmp_path):
+    """terminate_running_commands() (the daemon-shutdown path) takes down a
+    child the seam is still waiting on, grandchild included, so the
+    waiting thread returns instead of blocking the daemon's exit."""
+    import threading
+
+    script = (
+        "import subprocess, sys, time\n"
+        "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
+        "open(sys.argv[1], 'w').write(str(p.pid))\n"
+        "time.sleep(60)\n"
+    )
+    pidfile = str(tmp_path / "grandchild.pid")
+    open(pidfile, "w").close()
+    out: dict = {}
+    t = threading.Thread(target=lambda: out.setdefault(
+        "res", self_update.run_command([sys.executable, "-c", script, pidfile],
+                                       timeout=60)))
+    started = time.monotonic()
+    t.start()
+    deadline = time.monotonic() + 10
+    while (self_update.running_command_count() == 0
+           or not open(pidfile).read().strip()) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    grandchild = int(open(pidfile).read().strip())
+    try:
+        assert self_update.terminate_running_commands() == 1
+        t.join(10)
+        assert not t.is_alive(), "the seam kept waiting after the shutdown kill"
+        assert time.monotonic() - started < 20
+        assert out["res"].returncode is not None and out["res"].returncode < 0
+        deadline = time.monotonic() + 5
+        while not _gone(grandchild) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert _gone(grandchild), "the grandchild outlived the shutdown kill"
+        assert self_update.running_command_count() == 0
+    finally:
+        if not _gone(grandchild):
+            os.kill(grandchild, 9)

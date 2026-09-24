@@ -24,12 +24,17 @@ def test_second_acquire_refused_same_process():
     second.release()
 
 
-def test_acquire_is_idempotent_for_the_holder():
+def test_acquire_is_not_reentrant_for_the_holder():
+    """A holder asking again is refused and keeps the lock: a second job on
+    the manager's own lock object must not slip in (review rev-iter1-001)."""
     lock = UpdateLock()
     assert lock.try_acquire() is True
-    assert lock.try_acquire() is True
+    assert lock.try_acquire() is False
+    assert lock.held is True
+    assert UpdateLock().try_acquire() is False   # still held for everyone else
     lock.release()
     lock.release()  # a second release is harmless
+    assert UpdateLock().try_acquire() is True
 
 
 def test_lock_lives_at_the_redirected_path():

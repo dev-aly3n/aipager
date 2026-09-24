@@ -298,3 +298,53 @@ def test_cli_instruction_without_a_unit_says_restart_yourself(monkeypatch):
     monkeypatch.setattr(self_update, "_system", lambda: "Linux")
     assert self_update.cli_restart_instruction() == [
         "restart your `aipager start` to run the new version"]
+
+
+def test_two_restarts_in_the_same_second_get_distinct_units(monkeypatch):
+    """A voice restart and an update restart in one second must not collide
+    on the transient unit name (the second schedule would fail)."""
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(install_source, "resolve_tool", lambda n: f"/usr/bin/{n}")
+    monkeypatch.setattr(self_update, "time",
+                        SimpleNamespace(time=lambda: 1_700_000_000.0,
+                                        monotonic=lambda: 0.0))
+    monkeypatch.setattr(self_update, "_run_command",
+                        lambda argv, **k: CommandResult(0, "", False, None))
+    ok1, unit1 = schedule_restart(RestartPlan("systemd", True))
+    ok2, unit2 = schedule_restart(RestartPlan("systemd", True))
+    assert ok1 and ok2
+    assert unit1 != unit2
+    assert unit1.startswith("aipager-update-restart-1700000000-")
+
+
+def test_cancel_scheduled_restart_stops_the_timer_by_absolute_path(monkeypatch):
+    monkeypatch.setattr(install_source, "resolve_tool", lambda n: f"/usr/bin/{n}")
+    seen: list = []
+
+    def _run(argv, *, timeout, env=None, capture=True):
+        seen.append((list(argv), timeout))
+        return CommandResult(0, "", False, None)
+    monkeypatch.setattr(self_update, "_run_command", _run)
+    assert self_update.cancel_scheduled_restart("aipager-update-restart-1-2-3") is True
+    assert seen == [(["/usr/bin/systemctl", "--user", "stop",
+                      "aipager-update-restart-1-2-3.timer"],
+                     self_update.SYSTEMCTL_TIMEOUT_SECONDS)]
+    # Never a unit it did not create, and never without a name.
+    assert self_update.cancel_scheduled_restart("aipager.service") is False
+    assert self_update.cancel_scheduled_restart(None) is False
+    assert len(seen) == 1
+
+
+def test_missing_main_pid_fails_closed_to_manual(tmp_path, monkeypatch):
+    """systemctl printing no MainPID must not count as "this is the main
+    PID": fail closed, like an unreadable KillMode."""
+    _under_unit(tmp_path, monkeypatch)
+
+    def _run(argv, *, timeout, env=None, capture=True):
+        return CommandResult(0, f"KillMode=process\nControlGroup={UNIT_CGROUP}\n",
+                             False, None)
+    monkeypatch.setattr(self_update, "_run_command", _run)
+    plan = restart_plan(_registry())
+    assert plan.automatic is False
+    assert plan.mode == "foreground"

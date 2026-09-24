@@ -19,8 +19,10 @@ installer or reach the network.
 
 from __future__ import annotations
 
+import contextvars
 import fcntl
 import http.client
+import itertools
 import json
 import logging
 import os
@@ -28,6 +30,7 @@ import platform
 import re
 import signal
 import subprocess
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -92,6 +95,18 @@ _BARE_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 _PYPI_VERSION_RE = re.compile(r"^[0-9A-Za-z.+!-]{1,40}$")
 _DTACH_SOCK_RE = re.compile(r"claude-dtach-(.+)\.sock$")
 _PROBE_LINE_RE = re.compile(r"AIPAGER_VERSION=(\S+)")
+
+# The update job whose work is running in this context. The daemon's job
+# task sets it; ``asyncio.to_thread`` copies the context into the worker
+# thread, so every spawn/claude/restart log line carries the job id.
+CURRENT_JOB_ID: contextvars.ContextVar[int | None] = contextvars.ContextVar(
+    "aipager_update_job_id", default=None)
+
+
+def _job_tag() -> str:
+    job = CURRENT_JOB_ID.get()
+    return f" job={job}" if job is not None else ""
+
 
 _NPM_TAG = {"latest": "latest", "stable": "stable", "rc": "next"}
 _CHANNELS = ("latest", "stable", "rc")
@@ -172,6 +187,36 @@ def _kill_group(proc: subprocess.Popen) -> None:
         pass
 
 
+# Children the real seam is waiting on right now, so a daemon shutdown can
+# take them down instead of leaving an installer orphaned and writing the
+# venv while the next daemon starts (see terminate_running_commands).
+_LIVE_CHILDREN: set = set()
+_LIVE_LOCK = threading.Lock()
+
+
+def terminate_running_commands() -> int:
+    """Kill the process group of every child the seam is waiting on.
+
+    Blocking (up to two ``KILL_GRACE_SECONDS`` per child): call it from a
+    thread. Returns how many children were signalled. Never raises.
+    """
+    with _LIVE_LOCK:
+        procs = list(_LIVE_CHILDREN)
+    for proc in procs:
+        log.warning("update.shutdown.kill pid=%s argv=%s", getattr(proc, "pid", None),
+                    getattr(proc, "args", None))
+        try:
+            _kill_group(proc)
+        except Exception:
+            log.warning("could not kill update child", exc_info=True)
+    return len(procs)
+
+
+def running_command_count() -> int:
+    with _LIVE_LOCK:
+        return len(_LIVE_CHILDREN)
+
+
 def _tail(raw: bytes | str | None) -> str:
     if raw is None:
         return ""
@@ -201,6 +246,16 @@ def _run_command(argv, *, timeout, env=None, capture=True) -> CommandResult:
     except (OSError, ValueError) as e:
         return CommandResult(None, "", False, f"{type(e).__name__}: {e}",
                              time.monotonic() - started)
+    with _LIVE_LOCK:
+        _LIVE_CHILDREN.add(proc)
+    try:
+        return _wait_child(proc, started, timeout)
+    finally:
+        with _LIVE_LOCK:
+            _LIVE_CHILDREN.discard(proc)
+
+
+def _wait_child(proc: subprocess.Popen, started: float, timeout) -> CommandResult:
     try:
         out, _ = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -227,8 +282,8 @@ def run_command(argv, *, timeout, env=None, capture=True) -> CommandResult:
     return code and duration."""
     argv = [str(a) for a in argv]
     result = _run_command(argv, timeout=timeout, env=env, capture=capture)
-    log.info("update.spawn argv=%s rc=%s timed_out=%s duration=%.1fs%s",
-             argv, result.returncode, result.timed_out, result.duration,
+    log.info("update.spawn%s argv=%s rc=%s timed_out=%s duration=%.1fs%s",
+             _job_tag(), argv, result.returncode, result.timed_out, result.duration,
              f" error={result.error}" if result.error else "")
     return result
 
@@ -443,11 +498,11 @@ def run_claude_update() -> ClaudeUpdateResult:
 
     cur = current_claude()
     if cur is None:
-        log.info("update.claude.failed reason=claude-not-found")
+        log.info("update.claude.failed%s reason=claude-not-found", _job_tag())
         return ClaudeUpdateResult(None, None, None, False, "",
                                   error="Claude Code was not found")
     path, before = cur
-    log.info("update.claude.start path=%s before=%s", path, before)
+    log.info("update.claude.start%s path=%s before=%s", _job_tag(), path, before)
     res = run_command([path, "update"], timeout=CLAUDE_UPDATE_TIMEOUT_SECONDS,
                       env=_scrub_env())
     after = _claude_version_at(path)
@@ -458,11 +513,12 @@ def run_claude_update() -> ClaudeUpdateResult:
     except Exception:
         log.debug("claude resolver refresh failed", exc_info=True)
     if res.timed_out:
-        log.info("update.claude.timeout path=%s", path)
+        log.info("update.claude.timeout%s path=%s", _job_tag(), path)
     elif res.returncode != 0 or res.error:
-        log.info("update.claude.failed rc=%s error=%s", res.returncode, res.error)
+        log.info("update.claude.failed%s rc=%s error=%s", _job_tag(), res.returncode,
+                 res.error)
     else:
-        log.info("update.claude.done before=%s after=%s", before, after)
+        log.info("update.claude.done%s before=%s after=%s", _job_tag(), before, after)
     return ClaudeUpdateResult(before, after, res.returncode, res.timed_out,
                               res.output_tail, res.error, path)
 
@@ -489,8 +545,11 @@ class UpdateLock:
         return self._fd is not None
 
     def try_acquire(self) -> bool:
+        """Take the lock, or return False. NOT re-entrant: a holder asking
+        again is refused, so a second job on the same object cannot slip
+        in while the first still owns the lock (e.g. a pending restart)."""
         if self._fd is not None:
-            return True
+            return False
         path = Path(self._path if self._path is not None else UPDATE_LOCK_PATH)
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -702,8 +761,9 @@ def _restart_plan(registry) -> RestartPlan:
     system = _system()
     if system == "Linux" and _under_unit_cgroup():
         show = _systemctl_show("MainPID", "KillMode", "ControlGroup")
-        if show is not None and show.get("MainPID") not in (None, "", str(os.getpid())):
-            # A unit exists, but this process is not its main PID.
+        if show is not None and show.get("MainPID") != str(os.getpid()):
+            # A unit exists, but this process is not (or cannot be shown
+            # to be) its main PID: fail closed, like KillMode.
             return RestartPlan(
                 "foreground", False,
                 "no service unit is running this daemon; restart it yourself")
@@ -729,6 +789,9 @@ def _restart_plan(registry) -> RestartPlan:
         "no service unit is running this daemon; restart it yourself")
 
 
+_UNIT_SEQ = itertools.count(1)
+
+
 def schedule_restart(plan: RestartPlan) -> tuple[bool, str]:
     """Schedule ONE detached ``systemctl --user restart aipager.service``
     ``RESTART_DELAY_SECONDS`` from now, in a transient unit outside this
@@ -740,18 +803,34 @@ def schedule_restart(plan: RestartPlan) -> tuple[bool, str]:
     systemctl = install_source.resolve_tool("systemctl")
     if systemd_run is None or systemctl is None:
         return False, "systemd-run or systemctl not found"
-    unit = f"aipager-update-restart-{int(time.time())}"
+    unit = (f"aipager-update-restart-{int(time.time())}-{os.getpid()}-"
+            f"{next(_UNIT_SEQ)}")
     argv = [systemd_run, "--user", f"--on-active={RESTART_DELAY_SECONDS}s",
             f"--unit={unit}", "--collect", "--quiet",
             systemctl, "--user", "restart", UNIT_NAME]
     res = run_command(argv, timeout=SCHEDULE_TIMEOUT_SECONDS, env=_scrub_env())
     if res.ok:
-        log.info("update.restart.scheduled unit=%s delay=%ss", unit,
+        log.info("update.restart.scheduled%s unit=%s delay=%ss", _job_tag(), unit,
                  RESTART_DELAY_SECONDS)
         return True, unit
     detail = res.error or res.output_tail or f"exit {res.returncode}"
-    log.info("update.restart.failed detail=%s", detail)
+    log.info("update.restart.failed%s detail=%s", _job_tag(), detail)
     return False, detail
+
+
+def cancel_scheduled_restart(unit: str | None) -> bool:
+    """Best-effort stop of the transient timer :func:`schedule_restart`
+    created, so a late-firing timer cannot restart the daemon in the middle
+    of a later job. Absolute ``systemctl``, bounded. Never raises."""
+    if not unit or not unit.startswith("aipager-update-restart-"):
+        return False
+    systemctl = install_source.resolve_tool("systemctl")
+    if systemctl is None:
+        return False
+    res = run_command([systemctl, "--user", "stop", f"{unit}.timer"],
+                      timeout=SYSTEMCTL_TIMEOUT_SECONDS, env=_scrub_env())
+    log.info("update.restart.timer_stopped%s unit=%s ok=%s", _job_tag(), unit, res.ok)
+    return res.ok
 
 
 def cli_restart_instruction() -> list[str]:
@@ -823,11 +902,12 @@ def read_and_clear_marker() -> dict | None:
 
 
 __all__ = [
-    "CommandResult", "ClaudeUpdateResult", "RestartPlan", "UpdateLock",
-    "claude_channel_info", "clear_marker", "cli_restart_instruction",
+    "CURRENT_JOB_ID", "CommandResult", "ClaudeUpdateResult", "RestartPlan",
+    "UpdateLock", "cancel_scheduled_restart", "claude_channel_info", "clear_marker", "cli_restart_instruction",
     "current_claude", "installed_version", "is_newer",
     "latest_aipager_version", "latest_claude_version", "parse_version",
     "probe_installed_version", "read_and_clear_marker", "redact_output",
     "restart_blockers", "restart_plan", "run_claude_update", "run_command",
-    "running_version", "schedule_restart", "write_marker",
+    "running_command_count", "running_version", "schedule_restart",
+    "terminate_running_commands", "write_marker",
 ]
