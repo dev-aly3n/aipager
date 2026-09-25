@@ -137,6 +137,12 @@ const SCENARIO = process.argv[3] || "settings";
 // below, never silently.
 const NO_TRANSCRIPT_REASON =
   "No resumable transcript — start a fresh session instead.";
+// The page shows server strings with " - " in place of an em dash
+// (roadmap 8.44: no em dash in page text), so every mirrored reason is
+// compared through the same normalisation.
+function plain(s) {
+  return String(s).replace(/ \u2014 /g, " - ").replace(/\u2014/g, "-");
+}
 
 function actionsFor(status, resumable) {
   if (status === "busy" || status === "waiting") {
@@ -582,7 +588,7 @@ function driveResumeGoneNoTranscript() {
     if (!item.disabled) fail("Resume must be disabled with no resumable transcript");
 
     const note = menu.children.find(c => c.className === "menu-note");
-    if (!note || note.textContent !== NO_TRANSCRIPT_REASON)
+    if (!note || note.textContent !== plain(NO_TRANSCRIPT_REASON))
       fail("Resume's disabled reason does not match NO_TRANSCRIPT_REASON: " +
            JSON.stringify(note && note.textContent));
 
@@ -591,7 +597,7 @@ function driveResumeGoneNoTranscript() {
     if (fetchCalls.length !== before)
       fail("an inert Resume still sent a request");
 
-    console.log('ok: resume inert with reason "' + NO_TRANSCRIPT_REASON + '"');
+    console.log('ok: resume inert with reason "' + plain(NO_TRANSCRIPT_REASON) + '"');
     process.exit(0);
   }, 10);
 }
@@ -1161,7 +1167,7 @@ function driveModelSwitch() {
 
     setTimeoutReal(() => {
       const want = SCENARIO === "model_unconfirmed"
-        ? "not confirmed — check the session" : "Opus 5.5";
+        ? "not confirmed (check the session)" : "Opus 5.5";
       if (modelHead().textContent.indexOf(want) === -1)
         fail("after the answer the header should read " + JSON.stringify(want) +
              ", got " + JSON.stringify(modelHead().textContent));
@@ -1174,7 +1180,7 @@ function driveModelBusy() {
   api.openDetail("dev");
   setTimeoutReal(() => {
     const note = byId["detail-model-note"];
-    if (note.hidden || note.textContent !== MODEL_SWITCH_BUSY_REASON)
+    if (note.hidden || note.textContent !== plain(MODEL_SWITCH_BUSY_REASON))
       fail("a busy session's Model control does not say why: " +
            JSON.stringify(note.textContent));
     modelHead().click();

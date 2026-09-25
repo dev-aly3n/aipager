@@ -333,7 +333,7 @@ def test_the_harness_detects_a_dead_resume_button_with_no_reason(node_bin, tmp_p
     from aipager.miniapp.static import INDEX_HTML
 
     broken = INDEX_HTML.replace(
-        'note.className = "menu-note";\n        note.textContent = spec.reason;',
+        'note.className = "menu-note";\n        note.textContent = plain(spec.reason);',
         'note.className = "menu-note";\n        note.textContent = "";', 1,
     )
     assert broken != INDEX_HTML, "reason-rendering code not found — page changed shape"
@@ -617,7 +617,7 @@ def test_the_harness_detects_a_menu_that_ignores_a_changed_session(
         "    if (overlayCloser && menuSignature &&\n"
         "        actionsSignature(data) !== menuSignature) {\n"
         "      closeOverlay();\n"
-        '      showNotice("This session changed — reopen the menu.");\n'
+        '      showNotice("This session changed. Reopen the menu.");\n'
         "    }", "", 1,
     )
     assert broken != INDEX_HTML, "drift-guard code not found — page changed shape"
@@ -937,7 +937,9 @@ def test_the_harness_detects_a_dropped_server_detail_on_rename_failure(node_bin,
     rename was refused (which label is already taken, etc.)."""
     from aipager.miniapp.static import INDEX_HTML
 
-    old = ('      showNotice((r.data && r.data.detail) || "Couldn\'t rename.", '
+    # The detail goes through plain() since roadmap 8.44 (em dashes in
+    # server strings are shown as " - ").
+    old = ('      showNotice(plain((r.data && r.data.detail) || "Couldn\'t rename."), '
            '"err");\n')
     new = '      showNotice("Couldn\'t rename.", "err");\n'
     assert old in INDEX_HTML, "rename failure-notice line not found — page changed shape"
@@ -1067,7 +1069,9 @@ def test_every_notice_states_whether_it_worked():
 
     for phrase, kind in [
         ('"Saved."', "ok"),
-        ('"Couldn\'t reach the server — nothing changed."', "err"),
+        # Was "... server — nothing changed.": the page carries no em
+        # dash (operator text rule, roadmap 8.44).
+        ('"Couldn\'t reach the server. Nothing changed."', "err"),
         ('"Couldn\'t rename."', "err"),
     ]:
         idx = INDEX_HTML.index(phrase)
@@ -1100,7 +1104,9 @@ def test_an_unconfirmed_switch_says_so(node_bin, tmp_path):
     assert proc.returncode == 0, (
         f"model_unconfirmed scenario failed:\nstdout: {proc.stdout}\nstderr: {proc.stderr}"
     )
-    assert "-> not confirmed — check the session" in proc.stdout, proc.stdout
+    # Was "not confirmed — check the session": no em dash in page text
+    # (roadmap 8.44); the header now reads "not confirmed (check the session)".
+    assert "-> not confirmed (check the session)" in proc.stdout, proc.stdout
 
 
 def test_the_model_picker_is_inert_while_busy_with_the_reason(node_bin, tmp_path):
@@ -1291,4 +1297,46 @@ def test_the_harness_detects_a_failed_put_that_keeps_the_optimistic_value(
     )
     assert proc.returncode != 0, (
         "harness passed a Settings tab that keeps an unsaved value after a failed PUT"
+    )
+
+
+# ===== em dashes in server strings (roadmap 8.44) ==========================
+
+def test_the_harness_detects_a_reason_shown_with_its_em_dash(node_bin, tmp_path):
+    """Guard the guard for plain(): the page shows server reasons (shared
+    with the chat, where they keep their em dash) with " - " instead. Drop
+    the normalisation on the menu note and the no-transcript scenario,
+    which compares against plain(NO_TRANSCRIPT_REASON), must fail."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    broken = INDEX_HTML.replace(
+        "        note.textContent = plain(spec.reason);",
+        "        note.textContent = spec.reason;", 1,
+    )
+    assert broken != INDEX_HTML, "menu-note normalisation not found"
+
+    proc = _drive_controls(
+        node_bin, tmp_path, broken, "resume_gone_no_transcript",
+        name="broken-plain.html",
+    )
+    assert proc.returncode != 0, (
+        "harness passed a page that shows a server reason with its em dash"
+    )
+
+
+def test_the_harness_detects_a_model_reason_shown_with_its_em_dash(node_bin, tmp_path):
+    """Same guard for the model control's disabled reason."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    broken = INDEX_HTML.replace(
+        'var reason = state.available ? "" : plain(state.reason || "");',
+        'var reason = state.available ? "" : (state.reason || "");', 1,
+    )
+    assert broken != INDEX_HTML, "model-note normalisation not found"
+
+    proc = _drive_controls(
+        node_bin, tmp_path, broken, "model_busy", name="broken-plain-model.html",
+    )
+    assert proc.returncode != 0, (
+        "harness passed a page that shows the model reason with its em dash"
     )

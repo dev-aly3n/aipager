@@ -111,7 +111,7 @@ HTML_BODY = """\
 </section>
 
 <!--
-  Backdrop + confirm dialog. The MENU is not here — it lives next to the ⋮
+  Backdrop + confirm dialog. The MENU is not here - it lives next to the ⋮
   in the detail header so it stays anchored to the button when the page
   scrolls. Only one layer is ever open (opening the confirm closes the
   menu), which keeps "what does Back close?" a single question with a
@@ -124,7 +124,7 @@ HTML_BODY = """\
     <p id="confirm-body" class="modal-body"></p>
     <!--
       Rename's field. Present in the SAME dialog every other session
-      action confirms through — see design.md "Rename input UX": the
+      action confirms through - see design.md "Rename input UX": the
       confirm modal is already the page's general "this tap needs one
       more deliberate step" surface, so this is one optional input on
       it rather than a second parallel overlay. Hidden for every other
@@ -145,7 +145,7 @@ HTML_BODY = """\
 <!--
   Conditional reveals for the new-session form. They live here, outside any
   group, because the group hosts are rebuilt wholesale on every structural
-  render — a reveal built inside one would lose its value and its focus on
+  render - a reveal built inside one would lose its value and its focus on
   the next tap. renderOptionGroup MOVES the node into place under the row
   that revealed it, and renderNewForm parks it back here before clearing.
   The node identity is what makes the text survive; see GOV.UK's finding
@@ -229,8 +229,7 @@ HTML_BODY = """\
 
   <button type="button" class="sect-toggle" id="tab-timeline"></button>
   <div id="timeline-note" class="sect-note" hidden>
-    The timeline only covers the current daemon run — it isn't saved across
-    restarts, so an older session shows nothing here.
+    The timeline only covers the current daemon run. It isn't saved across restarts, so an older session shows nothing here.
   </div>
   <div id="panel-timeline" class="panel" hidden></div>
 </section>

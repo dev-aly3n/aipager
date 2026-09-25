@@ -60,7 +60,7 @@ CSS = """\
 
     /* Blur, used by exactly four selectors: .menu, .modal, #notice,
        .overlay. Every scrolling or repeating surface (the grid, the
-       kebab, form controls, …) gets flat glass instead — see the
+       kebab, form controls, …) gets flat glass instead - see the
        ADOPTION block below for why. */
     --glass-blur:         22px;
     --glass-blur-scrim:   10px;
@@ -81,7 +81,7 @@ CSS = """\
   }
 
   /* Real tokens. color-mix landed in Chrome 111 (Mar 2023) and Safari
-     16.2 (Dec 2022) — every Telegram client shipped since mid-2023 —
+     16.2 (Dec 2022) - every Telegram client shipped since mid-2023 -
      and this file already bet on it twice before this change (the
      rgba-then-color-mix fallback pair at .choice.is-active's `background`
      was the same bet in a plain-property form; this is that bet extended
@@ -96,7 +96,7 @@ CSS = """\
         var(--glass-alpha-raised), transparent);
       /* 46%: the lowest alpha whose composite clears 3:1 against the
          page AND against the glass interior, in BOTH default themes.
-         42% lands exactly on 3.00:1 against the light glass interior —
+         42% lands exactly on 3.00:1 against the light glass interior -
          tests/test_miniapp_styles.py encodes this arithmetic as a hard
          gate, not a comment. */
       --glass-edge:        color-mix(in srgb, var(--tg-theme-text-color, #000000) 46%, transparent);
@@ -109,14 +109,14 @@ CSS = """\
          The theme's own destructive colour is not legible enough on
          glass at body size: 3.23:1 on Telegram light, and 2.96:1 on dark
          for clients that never set the variable and fall back to
-         #dc2626 — against AA's 4.5:1. Mixing 60% of it with the theme's
+         #dc2626 - against AA's 4.5:1. Mixing 60% of it with the theme's
          own text colour lifts every combination to 4.79:1 or better
          while keeping the hue unmistakably red. Same technique
          --glass-dim uses, and tests/test_miniapp_styles.py reads this
          percentage back out of the stylesheet as a hard gate. */
       --glass-danger-text: color-mix(in srgb, var(--tg-theme-destructive-text-color, #dc2626) 60%, var(--tg-theme-text-color, #000000));
       /* Secondary text. --tg-theme-hint-color measures 2.85:1 on
-         Telegram light and 4.23:1 on Telegram dark against the page —
+         Telegram light and 4.23:1 on Telegram dark against the page -
          it fails AA for body-sized text in light. 62% of the theme's
          own text colour measures 6.01:1 / 6.45:1 on glass instead.
          hint-color stays correct for BORDERS and large text; it was
@@ -158,7 +158,7 @@ CSS = """\
               backdrop-filter: none;
     }
     .overlay { background: rgba(0, 0, 0, 0.62); }
-    /* `background: none`, not `display: none` — this file has exactly
+    /* `background: none`, not `display: none` - this file has exactly
        one `display: … !important` and it stays that way
        (test_no_id_rule_can_outrank_the_hidden_guard). */
     body::before { background: none; }
@@ -168,7 +168,7 @@ CSS = """\
   /* The browser's own `[hidden] { display: none }` is a USER-AGENT rule, so
      any author `display:` beats it. Every element the script hides carries a
      class with an explicit display (.tabbar is flex, .badge is inline-block,
-     .grid is grid), which silently defeated `el.hidden = true` — the tab bar
+     .grid is grid), which silently defeated `el.hidden = true` - the tab bar
      stayed on sub-pages, the waiting badge never cleared, and the finished
      list never collapsed. One author-level rule with !important settles it
      for every element, present and future, instead of another per-selector
@@ -182,7 +182,7 @@ CSS = """\
     color: var(--tg-theme-text-color, #000000);
   }
   /* The page is one flat colour, and backdrop-filter: blur() over a flat
-     colour is a visual no-op — blurring a solid #ffffff returns solid
+     colour is a visual no-op - blurring a solid #ffffff returns solid
      #ffffff. Two very soft accent blooms give the glass something behind
      it, at the cost of one paint, once.
 
@@ -190,7 +190,7 @@ CSS = """\
      carrying filter / backdrop-filter / transform becomes the containing
      block for position: fixed descendants, which would silently
      reposition #notice (z-index 70) and .overlay (z-index 50) relative to
-     body instead of the viewport — the exact "toast below the fold" bug
+     body instead of the viewport - the exact "toast below the fold" bug
      the comment further down this file was written to fix. A fixed
      PSEUDO-element does not do that to its own parent, so body keeps
      nothing that would trap its fixed children.
@@ -210,12 +210,12 @@ CSS = """\
   }
 
   /* ==========================================================
-     GLASS SURFACES — the reusable system.
+     GLASS SURFACES - the reusable system.
      .glass / .glass-btn / .glass-raised are the general-purpose classes
      any future control can opt into directly. The sixteen selectors this
      stylesheet already ships (.card, .kebab, .modal-btn, …) get the SAME
      declarations applied to their own existing selectors in the ADOPTION
-     block near the end of this file instead of gaining a class here — that
+     block near the end of this file instead of gaining a class here - that
      keeps this a zero-markup-churn change (no _app.py / _shell.py edit),
      while still leaving one designed vocabulary for the next surface that
      is added straight into the markup.
@@ -248,7 +248,7 @@ CSS = """\
       transform        var(--glass-motion);
   }
 
-  /* Hover only where a pointer exists — on a phone :hover sticks after a
+  /* Hover only where a pointer exists - on a phone :hover sticks after a
      tap and leaves the last-tapped control lit. */
   @media (hover: hover) {
     .glass-btn:hover {
@@ -269,7 +269,7 @@ CSS = """\
      removed the user-agent ring with no replacement. :focus-visible, so a
      tap never draws a ring but a keyboard / switch / Telegram-Desktop user
      always gets one. `outline` rather than `box-shadow` because `outline`
-     is not clipped by an ancestor's `overflow: hidden` — .grp, .prefix-field,
+     is not clipped by an ancestor's `overflow: hidden` - .grp, .prefix-field,
      .diff-file and .menu all clip, and a box-shadow ring would vanish on
      exactly the controls that most need it. */
   .glass-btn:focus-visible,
@@ -295,7 +295,7 @@ CSS = """\
     border-color: var(--tg-theme-button-color, #2481cc);
   }
 
-  /* The only tier of this system that blurs — see the ADOPTION block for
+  /* The only tier of this system that blurs - see the ADOPTION block for
      why just four selectors (.menu, .modal, #notice, .overlay) use this
      and everything else stays flat. */
   .glass-raised {
@@ -329,7 +329,7 @@ CSS = """\
     border-bottom-color: var(--tg-theme-button-color, #2481cc);
   }
   /* Waiting count rides the tab so the state is visible without reading
-     the grid — it is the only status that costs the operator time. */
+     the grid - it is the only status that costs the operator time. */
   .badge {
     display: inline-block;
     min-width: 18px;
@@ -344,7 +344,7 @@ CSS = """\
 
   .totals { margin: 10px 0 2px; }
 
-  /* Exactly two columns — a phone held in one hand, not a responsive
+  /* Exactly two columns - a phone held in one hand, not a responsive
      many-column grid (design §2). */
   .grid {
     display: grid;
@@ -408,7 +408,7 @@ CSS = """\
 
      A floating toast, NOT an in-flow banner: as an in-flow element it
      appeared and vanished 3.5s later, shoving the whole page down and
-     then yanking it back up — so tapping "Kill" made the list jump under
+     then yanking it back up - so tapping "Kill" made the list jump under
      the finger just as you were reading the result. Fixed positioning
      takes it out of flow entirely, so nothing below it ever moves.
 
@@ -426,7 +426,7 @@ CSS = """\
        visible in a Telegram Mini App: the webview's layout viewport can
        extend BELOW the visible sheet when the app is not fully expanded,
        so the toast renders past the fold and the operator sees nothing at
-       all — which is exactly what happened with `bottom: 16px`. Telegram
+       all - which is exactly what happened with `bottom: 16px`. Telegram
        exposes viewportStableHeight for this reason. The top edge is always
        on screen, whatever height the sheet is at. */
     top: calc(12px + env(safe-area-inset-top, 0px));
@@ -451,7 +451,7 @@ CSS = """\
   }
 
   /* Toast card: an icon disc plus the message, on a coloured accent so the
-     outcome reads before the words do. Literal characters throughout — a
+     outcome reads before the words do. Literal characters throughout - a
      CSS `content:` escape in this same non-raw Python string was once
      mangled into the text "F480" on screen, so icons live in the DOM. */
   #notice {
@@ -474,7 +474,7 @@ CSS = """\
     line-height: 1;
     /* Hardcoded background paired with hardcoded text, deliberately. A
        theme-derived background here would be unreadable against #ffffff
-       on any theme with a light accent — the exact fault
+       on any theme with a light accent - the exact fault
        test_no_theme_background_is_paired_with_hardcoded_white_text
        exists to catch, and which this rule tripped on first writing. */
     color: #ffffff;
@@ -490,14 +490,14 @@ CSS = """\
     border-left-color: var(--tg-theme-link-color, #3390ec);
   }
   #notice.toast-info .toast-icon { background: #3390ec; }
-  /* Nothing below it moves — the whole point — but it must also not sit
+  /* Nothing below it moves - the whole point - but it must also not sit
      under the sticky header it now overlaps. */
   #notice { pointer-events: none; }
   @media (prefers-reduced-motion: reduce) {
     #notice { transition: none; }
   }
 
-  /* "Reset to default" (design §4) — a one-way door without it, so it
+  /* "Reset to default" (design §4) - a one-way door without it, so it
      gets its own always-visible control rather than living inside the
      collapsed sections below. */
   .session-settings-reset {
@@ -532,7 +532,7 @@ CSS = """\
   }
 
   /* Session detail-page write actions (Stop/Kill/Resume/Delete). At most
-     one row for busy/idle, at most two for gone — never a wall of
+     one row for busy/idle, at most two for gone - never a wall of
      buttons. Reuses .choice's block/full-width/padding/border-radius
      shape (same family of control as the settings rows above it), with
      an explicit min-height the way .choice-new already sets one. */
@@ -559,7 +559,7 @@ CSS = """\
      with .overlay's `z-index: 50` in the ROOT stacking context. Giving
      .kebab-wrap a stacking context (which backdrop-filter, like filter
      and transform, always does) would trap .menu inside it at the
-     wrapper's own z-index: auto — the menu would render BEHIND its own
+     wrapper's own z-index: auto - the menu would render BEHIND its own
      backdrop, a silent total break of the (open) session menu. */
   .kebab-wrap { position: relative; flex: 0 0 auto; margin-left: auto; display: flex; }
   .kebab {
@@ -637,7 +637,7 @@ CSS = """\
     border-radius: 0;
     cursor: pointer;
   }
-  /* Hairline between rows, never above the first — the same treatment
+  /* Hairline between rows, never above the first - the same treatment
      Telegram uses inside a grouped section. */
   .menu-item + .menu-item,
   .menu-note + .menu-item {
@@ -672,7 +672,7 @@ CSS = """\
     color: var(--tg-theme-subtitle-text-color, var(--tg-theme-hint-color, #888888));
   }
   /* Separates the "session control" group from the "destructive" one
-     (design.md: menu order and grouping) — the same hairline treatment
+     (design.md: menu order and grouping) - the same hairline treatment
      .menu-item + .menu-item already uses, with a little extra vertical
      space so it reads as a section break rather than just another row
      boundary. Non-interactive: no padding-left icon gutter, no hover
@@ -684,7 +684,7 @@ CSS = """\
   }
 
   /* Centred, so the confirm button is nowhere near the menu row that
-     opened it — a double-tap on "Delete" must not land on "Delete". */
+     opened it - a double-tap on "Delete" must not land on "Delete". */
   .modal {
     width: 100%;
     max-width: 320px;
@@ -702,7 +702,7 @@ CSS = """\
     color: var(--tg-theme-subtitle-text-color, var(--tg-theme-hint-color, #888888));
   }
   /* Rename's field, inside the confirm modal (design.md "Rename input
-     UX") — reuses .field-input's own look, just left-aligned against
+     UX") - reuses .field-input's own look, just left-aligned against
      the otherwise centred modal text since a text field reads oddly
      centred. */
   #confirm-rename-input { margin: 0 0 6px; text-align: left; }
@@ -720,7 +720,7 @@ CSS = """\
     border-radius: 10px;
     cursor: pointer;
   }
-  /* Danger as the theme's own destructive colour on a tinted ground —
+  /* Danger as the theme's own destructive colour on a tinted ground -
      never white-on-accent, per .choice.is-active's note. */
   .modal-btn.is-danger {
     color: var(--glass-danger-text);
@@ -791,7 +791,7 @@ CSS = """\
     cursor: pointer;
   }
   /* Hierarchy: the heading is the label, the value is the answer, the
-     caret is the affordance — three distinct weights, not three equals. */
+     caret is the affordance - three distinct weights, not three equals. */
   .grp-title { font-weight: 600; flex: 0 0 auto; }
   .grp-value {
     flex: 1 1 auto;
@@ -822,7 +822,7 @@ CSS = """\
   /* Unmistakable rather than a subtle tint: a filled bar with a check. */
   /* Selection never inverts the text. Painting the accent behind
      white text depends on the accent being dark, and a theme may pick a
-     pale blue — which is exactly what the operator kept seeing. Text
+     pale blue - which is exactly what the operator kept seeing. Text
      stays the theme's own on the theme's own background (readable by
      construction); the accent shows as a left bar, a faint tint and a
      check. colour-mix keeps the tint proportional to whatever accent the
@@ -860,7 +860,7 @@ CSS = """\
   }
   .choice.is-active .tag { color: var(--tg-theme-hint-color, #888888); }
 
-  /* "Make something new" rows — the dashed ＋ of the New session card, so
+  /* "Make something new" rows - the dashed ＋ of the New session card, so
      the same intent looks the same wherever it appears (Telegram's own
      guidance: mimic components that already exist). An action, not a
      value: it never takes the selected-choice check. */
@@ -881,7 +881,7 @@ CSS = """\
   /* A conditional reveal: exactly one input, directly beneath the row
      that revealed it, tied to it by an indent and a rule. GOV.UK's
      research is explicit that reveals test well when they hold a single
-     input and nothing more — a panel of fields belongs in its own step. */
+     input and nothing more - a panel of fields belongs in its own step. */
   .reveal {
     margin: 2px 4px 8px 14px;
     padding: 8px 0 2px 12px;
@@ -947,7 +947,7 @@ CSS = """\
     cursor: pointer;
   }
   .prefix-go[disabled] { opacity: 0.45; cursor: default; }
-  /* Launching a process should never be a surprise — say what will
+  /* Launching a process should never be a surprise - say what will
      happen, in words, directly above the button that does it. */
   .new-summary {
     margin: 20px 0 10px;
@@ -1103,15 +1103,15 @@ CSS = """\
      GLASS ADOPTION
      Must stay at the END of this stylesheet: every rule below is the
      SAME specificity as the rule it supersedes, so it is source order
-     alone that makes it win. Applying the glass system this way — to
+     alone that makes it win. Applying the glass system this way - to
      the selectors that already exist, rather than adding a class at
-     each of the ~30 `className =` sites in _app.py — is what keeps this
+     each of the ~30 `className =` sites in _app.py - is what keeps this
      a CSS-only change: zero markup or JS edits, and zero chances to
      miss one of those sites.
      ========================================================== */
 
   /* tier 1: flat glass, no blur. See "why only four elements blur"
-     below tier 2 — a 24-session grid that scrolls, plus two elements
+     below tier 2 - a 24-session grid that scrolls, plus two elements
      that animate forever (.status-waiting, .skel), make a per-card
      backdrop-filter a guaranteed jank source for near-zero visual
      payoff on an already-smooth ambient gradient. */
@@ -1170,7 +1170,7 @@ CSS = """\
     background-image: linear-gradient(var(--glass-scrim-press), var(--glass-scrim-press));
     box-shadow: var(--el-press);
     transform: translateY(1px);
-    /* kills the earlier `.card:active { opacity: 0.7 }` — fading an
+    /* kills the earlier `.card:active { opacity: 0.7 }` - fading an
        element fades its border and shadow too, and creates a stacking
        context that would fight backdrop-filter elsewhere on the page. */
     opacity: 1;
@@ -1207,7 +1207,7 @@ CSS = """\
     color: var(--glass-dim);
   }
 
-  /* internal dividers stay hairline — they are decorative, the rows are
+  /* internal dividers stay hairline - they are decorative, the rows are
      identified by their own text and tap target, not by the rule
      between them. */
   .menu-item + .menu-item,
@@ -1216,7 +1216,7 @@ CSS = """\
   .grp-body              { border-top: 1px solid var(--glass-hairline); }
   .timeline-row          { border-bottom: 1px solid var(--glass-hairline); }
 
-  /* selected state, unified — one tint recipe instead of two */
+  /* selected state, unified - one tint recipe instead of two */
   .choice.is-active {
     background-color: var(--glass-bg);
     background-image: linear-gradient(var(--glass-accent), var(--glass-accent));
@@ -1236,7 +1236,7 @@ CSS = """\
      high-emphasis action, and Telegram guarantees the button-color /
      button-text-color pair is readable. It takes the glass SHAPE
      (elevation, larger text) but not the glass fill. 1.2rem bold =
-     19.2px, which is WCAG "large text" (>=18.66px bold) — so the
+     19.2px, which is WCAG "large text" (>=18.66px bold) - so the
      4.13:1 (light) / 3.72:1 (dark) of white-on-accent is judged
      against 3:1 and passes; at the previous 1rem it was judged against
      4.5:1 and failed in both themes. */
@@ -1261,7 +1261,7 @@ CSS = """\
   .diff-body { border-top: 1px solid var(--glass-hairline); }
 
   /* tier 2: the only other blurred surfaces. Bounded at <=2 on screen
-     at once, and the page is not scrolling while either is open — the
+     at once, and the page is not scrolling while either is open - the
      conditions under which backdrop-filter is cheap. */
   .menu, .modal {
     background-color: var(--glass-bg-raised);
@@ -1274,7 +1274,7 @@ CSS = """\
   /* tier 3: the scrim. One full-viewport blur, only while a layer is
      open, at a smaller radius than tier 2 because it covers the whole
      screen. Safe here specifically because .overlay is not an ancestor
-     of .menu (which hangs off .kebab-wrap instead, a sibling structure —
+     of .menu (which hangs off .kebab-wrap instead, a sibling structure -
      see .kebab-wrap's own comment above for the placement that WOULD
      break the menu). .modal IS inside .overlay, but .modal has no
      descendant with its own fixed/absolute z-index, so nothing is
@@ -1284,7 +1284,7 @@ CSS = """\
             backdrop-filter: blur(var(--glass-blur-scrim)) saturate(120%);
   }
 
-  /* Glass on the toast — PAINT ONLY, appended (never prepended) after
+  /* Glass on the toast - PAINT ONLY, appended (never prepended) after
      every rule already targeting #notice above. The very first #notice
      block still owns position / top / transform / z-index / opacity /
      transition / pointer-events untouched, which is what
@@ -1294,7 +1294,7 @@ CSS = """\
      earlier in the file. */
   #notice {
     background-color: var(--glass-bg-raised);
-    /* NOT `border-color:` — that shorthand repaints border-LEFT too and
+    /* NOT `border-color:` - that shorthand repaints border-LEFT too and
        would wipe the 4px accent bar set earlier in this file. The
        .toast-ok / .toast-err / .toast-info rules are more specific
        (0,1,1,0 via the .toast-* class) and would survive a shorthand
@@ -1306,7 +1306,7 @@ CSS = """\
     -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
             backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
   }
-  /* The coloured discs keep their hardcoded fill+glyph pair — that
+  /* The coloured discs keep their hardcoded fill+glyph pair - that
      pairing is deliberate and enforced by
      test_no_theme_background_is_paired_with_hardcoded_white_text. They
      gain only a ring: on a translucent ground the disc's own boundary
@@ -1317,7 +1317,7 @@ CSS = """\
   .toast-icon { box-shadow: 0 0 0 1px var(--glass-edge); }
 
   /* backdrop-filter is not motion and carries no vestibular risk, so it
-     is deliberately NOT disabled here — prefers-reduced-transparency
+     is deliberately NOT disabled here - prefers-reduced-transparency
      (near the top of this file) is the channel for opting out of it.
      This block only flattens the transitions and press displacements
      the glass system itself introduced, extending the two

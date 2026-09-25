@@ -55,6 +55,13 @@ APP_JS = r"""
 
   function statusClass(s) { return "status status-" + s; }
 
+  // Server strings (reasons, details, hints, summaries) are shared with
+  // the chat and may carry an em dash; the page shows a plain hyphen.
+  function plain(s) {
+    if (s === null || s === undefined) { return ""; }
+    return String(s).replace(/ \u2014 /g, " - ").replace(/\u2014/g, "-");
+  }
+
   // ---- connectivity / staleness (spec: never a spinner-forever, never
   // a raw fetch error) --------------------------------------------------
 
@@ -72,10 +79,10 @@ APP_JS = r"""
       errorEl.style.display = "none";
     } else if (state === "offline") {
       badge.textContent = "offline";
-      showFatal("Can't reach the server — check the tunnel.");
+      showFatal("Can't reach the server. Check the tunnel.");
     } else if (state === "expired") {
       badge.textContent = "expired";
-      showFatal("Session expired — reopen from /app in Telegram.");
+      showFatal("Session expired. Reopen it from /app in Telegram.");
     }
   }
 
@@ -85,7 +92,7 @@ APP_JS = r"""
     el.style.display = "block";
   }
 
-  // Transient note that clears itself — used for "not built yet" taps.
+  // Transient note that clears itself - used for "not built yet" taps.
   // Deliberately its OWN element, not #error: sharing one would let a
   // 3.5s self-clearing notice wipe a fatal message that must stay put.
   // The concrete case: initData expires after 5 minutes with no refresh
@@ -94,7 +101,7 @@ APP_JS = r"""
   // the operator with no explanation.
   var noticeTimer = null;
   // kind: "ok" (it worked), "err" (it did not), or omitted for neutral.
-  // The icon is a real DOM node, not CSS `content:` — a previous CSS emoji
+  // The icon is a real DOM node, not CSS `content:` - a previous CSS emoji
   // in this file was mangled by Python's escape handling in the non-raw
   // stylesheet string, and building it here keeps the message itself
   // going through textContent so server-supplied detail can never be
@@ -151,7 +158,7 @@ APP_JS = r"""
   }
 
   // A signed-but-now-rejected initData (401) or a caller who's fallen
-  // out of scope membership (403) will never succeed by retrying —
+  // out of scope membership (403) will never succeed by retrying -
   // Telegram's WebApp SDK exposes no way to mint a fresh initData short
   // of a full reload, so both are treated as one terminal state rather
   // than looping a doomed retry. Any other non-2xx or a fetch-level
@@ -159,8 +166,8 @@ APP_JS = r"""
   function handleFetchError(err) {
     // Once expired, the fatal message is the only thing worth showing.
     // Without this, a later non-auth failure (a tunnel 502, a DNS blip)
-    // on a fetch that skipped the authExpired gate — loadDiffIfNeeded is
-    // one — would route into setConnState and either hide the fatal
+    // on a fetch that skipped the authExpired gate - loadDiffIfNeeded is
+    // one - would route into setConnState and either hide the fatal
     // message ("reconnecting" clears #error) or overwrite it with the
     // wrong explanation ("offline"). Same class as the notice/fatal
     // clobbering fixed above, reached by a narrower path.
@@ -189,7 +196,7 @@ APP_JS = r"""
         try {
           tg.HapticFeedback.notificationOccurred(s.status === "waiting" ? "warning" : "success");
         } catch (e) {
-          // Older Telegram client without this API — no-op.
+          // Older Telegram client without this API - no-op.
         }
       }
       lastStatuses[s.label] = s.status;
@@ -359,7 +366,7 @@ APP_JS = r"""
       panel.innerHTML = '<div class="muted">No activity yet.</div>';
       return;
     }
-    // Only auto-scroll if the reader was already at the bottom — never
+    // Only auto-scroll if the reader was already at the bottom - never
     // yank the view out from under someone reading an earlier row.
     var wasAtBottom = (panel.scrollTop + panel.clientHeight >= panel.scrollHeight - 4);
     panel.innerHTML = rows.map(renderTimelineRow).join("");
@@ -374,13 +381,13 @@ APP_JS = r"""
     statusEl.textContent = (data.status === "waiting" && data.waiting_kind)
       ? data.status + " (" + data.waiting_kind + ")" : (data.status || "");
 
-    // What it is blocked on, prominently — this is the reason the
+    // What it is blocked on, prominently - this is the reason the
     // operator opened the page at all. The API has returned these two
     // fields since stage 2; the old tab-strip page ignored them.
     var waitEl = document.getElementById("detail-waiting");
     if (data.status === "waiting") {
       var what = data.waiting_summary
-        ? data.waiting_summary
+        ? plain(data.waiting_summary)
         : (data.waiting_kind === "question" ? "a question" : "a permission prompt");
       waitEl.textContent = "Waiting on you: " + what;
       waitEl.hidden = false;
@@ -389,7 +396,7 @@ APP_JS = r"""
     }
 
     // `facts` is built server-side (sessions.display_facts) and already
-    // omits what would be noise — a finished session has no model, cost
+    // omits what would be noise - a finished session has no model, cost
     // or context to report, and "0% ctx · $0.00" reads like a fault.
     var dl = document.getElementById("detail-facts");
     dl.innerHTML = "";
@@ -410,7 +417,7 @@ APP_JS = r"""
       prev.className = "preview is-empty";
       prev.textContent = data.status === "gone"
         ? "Nothing was captured before this session ended."
-        : "Nothing captured yet — it arrives once Claude replies.";
+        : "Nothing captured yet. It arrives once Claude replies.";
     }
 
     renderDetailActions(data);
@@ -421,8 +428,8 @@ APP_JS = r"""
 
   // ---- running-session model picker (roadmap 8.35) ---------------------
   //
-  // The rows come from /api/session-options — the same shared list the
-  // launch picker and the chat's Models keyboard use — so this page never
+  // The rows come from /api/session-options - the same shared list the
+  // launch picker and the chat's Models keyboard use - so this page never
   // keeps a model list of its own. Picking one POSTs the row's label; the
   // server types `/model <id>` into the session and holds the request
   // open until the statusline reports the new model (or gives up), which
@@ -434,7 +441,7 @@ APP_JS = r"""
   // session's page.
   var modelSwitch = null;
   var MODEL_SWITCHING_TEXT = "switching…";
-  var MODEL_UNCONFIRMED_TEXT = "not confirmed — check the session";
+  var MODEL_UNCONFIRMED_TEXT = "not confirmed (check the session)";
 
   function loadModelChoices() {
     if (modelChoices || modelChoicesLoading) { return; }
@@ -469,21 +476,21 @@ APP_JS = r"""
       sw = null;
     }
     var options = (modelChoices || []).map(function (m) {
-      return { value: m.label, label: m.label, help: m.hint || "" };
+      return { value: m.label, label: m.label, help: plain(m.hint || "") };
     });
     renderOptionGroup(host, {
       key: "session-model",
       title: "Model",
       options: options,
       current: null,
-      valueText: sw ? sw.text : (data.model || "—"),
+      valueText: sw ? sw.text : (data.model || "-"),
       disabled: !state.available || !!(sw && sw.pending),
       onPick: function (value) {
         switchSessionModel(data.label, value, data.model || "");
       },
       rerender: function () { renderModelControl(lastDetailData || data); }
     });
-    var reason = state.available ? "" : (state.reason || "");
+    var reason = state.available ? "" : plain(state.reason || "");
     note.textContent = reason;
     note.hidden = !reason;
   }
@@ -511,17 +518,17 @@ APP_JS = r"""
       } else if (r.status === 200) {
         modelSwitch = { label: label, previous: previous,
                         text: MODEL_UNCONFIRMED_TEXT, pending: false };
-        showNotice((r.data && r.data.detail) || MODEL_UNCONFIRMED_TEXT, "err");
+        showNotice(plain((r.data && r.data.detail) || MODEL_UNCONFIRMED_TEXT), "err");
       } else {
         modelSwitch = null;
-        showNotice((r.data && r.data.detail) || "Couldn't switch the model.", "err");
+        showNotice(plain((r.data && r.data.detail) || "Couldn't switch the model."), "err");
       }
       if (lastDetailData && lastDetailData.label === label) {
         renderModelControl(lastDetailData);
       }
     }).catch(function () {
       if (modelSwitch && modelSwitch.label === label) { modelSwitch = null; }
-      showNotice("Couldn't reach the server — check the session's model.", "err");
+      showNotice("Couldn't reach the server. Check the session's model.", "err");
       if (lastDetailData && lastDetailData.label === label) {
         renderModelControl(lastDetailData);
       }
@@ -529,18 +536,18 @@ APP_JS = r"""
   }
 
   // Section headers double as the toggle, and say what is inside before
-  // you open it — a count, or why there is nothing to see.
+  // you open it - a count, or why there is nothing to see.
   function updateSectionHeaders(data) {
     var tl = document.getElementById("tab-timeline");
     var rows = (data && data.timeline) ? data.timeline.length : 0;
     tl.textContent = (timelineOpen ? "▾ " : "▸ ") +
-      (rows ? "Timeline (" + rows + ")" : "Timeline — empty");
+      (rows ? "Timeline (" + rows + ")" : "Timeline (empty)");
 
     var note = document.getElementById("timeline-note");
     if (note) {
       // The honest explanation: tool_history/stream_commentary are not
       // persisted, so a restart empties this for every older session.
-      // Only while the section is open — collapsed sections must not
+      // Only while the section is open - collapsed sections must not
       // push the last message off the screen with an explanation.
       note.hidden = !(timelineOpen && rows === 0);
     }
@@ -555,11 +562,11 @@ APP_JS = r"""
       return;
     }
     if (!lastDiffData.available) {
-      btn.textContent = caret + "Changed files — none";
+      btn.textContent = caret + "Changed files (none)";
       return;
     }
     var n = (lastDiffData.files || []).length;
-    btn.textContent = caret + (n ? "Changed files (" + n + ")" : "Changed files — none");
+    btn.textContent = caret + (n ? "Changed files (" + n + ")" : "Changed files (none)");
   }
 
   // ---- per-session settings (design §4 default-vs-override mechanic) --
@@ -567,7 +574,7 @@ APP_JS = r"""
   // {schema, values, can_edit} from GET /api/sessions/{label}/preferences,
   // or null before the first fetch resolves / while switching sessions.
   var sessionSettingsData = null;
-  // Which session sessionSettingsData is *for* — every callback below
+  // Which session sessionSettingsData is *for* - every callback below
   // checks this before touching shared state, so a slow response for a
   // session the operator has already navigated away from can never paint
   // (or, worse, silently roll back) the session on screen now.
@@ -575,7 +582,7 @@ APP_JS = r"""
   // Per-field write counter, so a slow PUT that resolves after a newer one
   // cannot roll the field back. Declared here rather than beside its only
   // reader: it was previously declared inside the block that rendered the
-  // settings, and a rewrite of that block deleted it — every tap then threw
+  // settings, and a rewrite of that block deleted it - every tap then threw
   // `sessionSaveSeq is not defined` on the first line of the save handler,
   // which aborts the click silently. Nothing repainted, nothing was sent,
   // and the option simply did not respond.
@@ -588,7 +595,7 @@ APP_JS = r"""
     var canEdit = !!sessionSettingsData.can_edit;
     document.getElementById("session-settings-readonly").hidden = canEdit;
 
-    // The label the LOADED DATA belongs to, not whatever view is current —
+    // The label the LOADED DATA belongs to, not whatever view is current -
     // those can diverge mid-navigation, and a write must target the session
     // whose values are on screen.
     var label = sessionSettingsLabel;
@@ -628,7 +635,7 @@ APP_JS = r"""
     // Optimistic: paint this session as now overriding `field` to
     // `value` immediately; keep `previous` so a failed write can put the
     // truth back instead of leaving a button that lies about what is
-    // stored — same pattern as the scope-wide savePreference.
+    // stored - same pattern as the scope-wide savePreference.
     sessionSettingsData.values[field] = {
       effective: value,
       scope_default: previous ? previous.scope_default : value,
@@ -672,12 +679,12 @@ APP_JS = r"""
       if (sessionSaveSeq[field] !== seq || sessionSettingsLabel !== label) { return; }
       sessionSettingsData.values[field] = previous;
       renderSessionSettings();
-      showNotice("Couldn't save — the value on screen is what's stored.", "err");
+      showNotice("Couldn't save. The value on screen is what's stored.", "err");
     });
   }
 
   // "Reset to default" (design §4): one DELETE per overridden field. A
-  // mid-sequence failure leaves some fields reset and some not — each
+  // mid-sequence failure leaves some fields reset and some not - each
   // DELETE is independently idempotent, so the next tap (or the next
   // page load) self-heals; there is no invalid intermediate state.
   function resetSessionSettings() {
@@ -717,7 +724,7 @@ APP_JS = r"""
         resetBtn.disabled = false;
         renderSessionSettings();
         showNotice(hadError
-          ? "Some settings could not be reset — reopen to retry."
+          ? "Some settings could not be reset. Reopen to retry."
           : "Reset to defaults.", hadError ? "err" : "ok");
       });
     });
@@ -774,7 +781,7 @@ APP_JS = r"""
     var body = document.createElement("div");
     body.className = "diff-body";
     if (f.binary) {
-      body.innerHTML = '<div class="diff-binary">Binary file — no preview.</div>';
+      body.innerHTML = '<div class="diff-binary">Binary file (no preview).</div>';
     } else if (!f.patch) {
       body.innerHTML = '<div class="diff-truncated">' +
         (f.truncated ? "Diff too large to show." : "No changes.") + '</div>';
@@ -818,7 +825,7 @@ APP_JS = r"""
     if (data.files_truncated) {
       var note = document.createElement("div");
       note.className = "diff-truncated";
-      note.textContent = "Showing a partial set of changed files — the full diff is larger than this viewer renders.";
+      note.textContent = "Showing a partial set of changed files. The full diff is larger than this viewer renders.";
       panel.appendChild(note);
     }
     files.forEach(function (f) { panel.appendChild(renderDiffFile(f)); });
@@ -849,18 +856,18 @@ APP_JS = r"""
   //
   // `data.actions` is built server-side (sessions.session_actions) and
   // already omits what the current status makes irrelevant, and marks
-  // what the caller cannot do right now — this only renders exactly the
+  // what the caller cannot do right now - this only renders exactly the
   // keys it is given, disabling a present-but-unavailable entry and
   // showing its `reason` verbatim (design.md: "the client renders what
   // it's given").
   //
-  // Stop/Resume/Clear-queue/Compact act on a single tap from the menu —
+  // Stop/Resume/Clear-queue/Compact act on a single tap from the menu -
   // all four are recoverable. Kill/Delete/Perms/Restart are destructive
   // or disruptive and route through a confirm modal, which is the
   // phone-side equivalent of chat's deliberate two-tap for /kill: "one
   // mistype on a phone shouldn't wipe a session". The modal's confirm
   // sits centre-screen, nowhere near the menu row that opened it, so a
-  // double-tap cannot reach it. Rename is neither — it opens the SAME
+  // double-tap cannot reach it. Rename is neither - it opens the SAME
   // modal (see design.md "Rename input UX") but with an input field
   // instead of a plain yes/no.
   var overlayCloser = null;   // set while the menu OR the modal is open
@@ -872,11 +879,11 @@ APP_JS = r"""
     stop: "Stop", kill: "Kill", resume: "Resume", delete: "Delete",
     clearqueue: "Clear queue", compact: "Compact now", restart: "Restart",
     rename: "Rename"
-    // perms has no static title — computed from data.skip_perms, see
+    // perms has no static title - computed from data.skip_perms, see
     // permsMenuLabel() below.
   };
   // path segment appended to /api/sessions/{label} for each action; Delete
-  // has none — it IS that resource, via the DELETE verb.
+  // has none - it IS that resource, via the DELETE verb.
   var ACTION_PATHS = {
     stop: "stop", kill: "kill", resume: "resume", delete: "",
     clearqueue: "clearqueue", compact: "compact", perms: "perms",
@@ -888,7 +895,7 @@ APP_JS = r"""
     rename: "POST"
   };
   var CONFIRM_ACTIONS = { kill: true, delete: true, perms: true, restart: true };
-  // Canonical, stable order — matches aipager.miniapp.sessions.
+  // Canonical, stable order - matches aipager.miniapp.sessions.
   // _CANONICAL_ACTION_ORDER exactly: the first five are the "session
   // control" menu group, the last four are "destructive/disruptive"
   // (confirm-modal). Filtering this by presence is what produces both
@@ -918,7 +925,7 @@ APP_JS = r"""
     document.getElementById("action-menu").hidden = true;
     document.getElementById("confirm-modal").hidden = true;
     // Rename's field is part of the same modal every other action
-    // shares — reset it here too, so Back/Escape/backdrop can never
+    // shares - reset it here too, so Back/Escape/backdrop can never
     // leave it visibly stuck open behind a future non-rename dialog.
     document.getElementById("confirm-rename-input").hidden = true;
     document.getElementById("confirm-rename-error").hidden = true;
@@ -952,7 +959,7 @@ APP_JS = r"""
       });
   }
 
-  // Success toast per action — every one of these shows a notice and
+  // Success toast per action - every one of these shows a notice and
   // pollTick()s rather than navigating away (design.md: "they don't
   // remove the session"). Kill/Delete are handled separately below,
   // since they DO navigate back to the grid; Rename is handled
@@ -969,13 +976,13 @@ APP_JS = r"""
       if (action === "kill" || action === "delete") {
         if (r.status === 200 || (r.status === 404 && action === "kill")) {
           // Kill's post-lookup race (socket already gone) reads the
-          // session as gone either way — same reaction as a clean 200.
+          // session as gone either way - same reaction as a clean 200.
           showNotice(r.status === 404 ? "Already gone."
             : (action === "kill" ? "Killed." : "Deleted."), "ok");
           showGrid();
           return;
         }
-        showNotice((r.data && r.data.detail) || "Couldn't complete that.", "err");
+        showNotice(plain((r.data && r.data.detail) || "Couldn't complete that."), "err");
         return;
       }
       // stop / resume / clearqueue / compact / perms / restart
@@ -984,9 +991,9 @@ APP_JS = r"""
         pollTick();
         return;
       }
-      showNotice((r.data && r.data.detail) || "Couldn't complete that.", "err");
+      showNotice(plain((r.data && r.data.detail) || "Couldn't complete that."), "err");
     }).catch(function () {
-      showNotice("Couldn't reach the server — nothing changed.", "err");
+      showNotice("Couldn't reach the server. Nothing changed.", "err");
     });
   }
 
@@ -1006,7 +1013,7 @@ APP_JS = r"""
 
       // One hairline between the "session control" group and the
       // "destructive/disruptive" one (design.md: menu order and
-      // grouping) — inserted right before the FIRST destructive item,
+      // grouping) - inserted right before the FIRST destructive item,
       // and only when at least one control item rendered before it. A
       // menu that is all-control or all-destructive gets no divider.
       if (CONFIRM_ACTIONS[key] && !dividerInserted && controlRendered > 0) {
@@ -1038,7 +1045,7 @@ APP_JS = r"""
       if (!spec.available && spec.reason) {
         var note = document.createElement("div");
         note.className = "menu-note";
-        note.textContent = spec.reason;
+        note.textContent = plain(spec.reason);
         menu.appendChild(note);
       }
     });
@@ -1108,11 +1115,11 @@ APP_JS = r"""
   }
 
   // The one confirm dialog, shared by the destructive/disruptive session
-  // actions and by "Reset to defaults" — anything that discards state
+  // actions and by "Reset to defaults" - anything that discards state
   // (or interrupts a turn) without a natural undo should pass through
   // here rather than fire on one tap. Rename uses the SAME modal but its
   // own entry point (openRenameModal) since it needs a text field, not
-  // a plain yes/no — this function always resets the rename field back
+  // a plain yes/no - this function always resets the rename field back
   // to hidden so it can never leak into a non-rename dialog.
   function openConfirm(opts) {
     confirmAction = opts.label ? { label: opts.label, action: opts.action } : null;
@@ -1142,12 +1149,12 @@ APP_JS = r"""
   // Client-side validation mirrors, but does not replace, the server's
   // (miniapp.launch.validate_session_name): non-empty, <=64 chars,
   // letters/digits/hyphen/underscore starting with a letter or digit,
-  // not a reserved command word. Purely a UX nicety — the server call
+  // not a reserved command word. Purely a UX nicety - the server call
   // is the only gate that actually matters.
   var RENAME_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
   // Mirrors aipager.dtach.inject._RESERVED. Kept in sync by
   // tests/test_reserved_name_reconciliation.py, which fails if the two
-  // drift — this list went stale once already, missing every command
+  // drift - this list went stale once already, missing every command
   // added after it was written.
   var RENAME_RESERVED = {
     "app": true, "clearqueue": true, "delete": true, "diff": true,
@@ -1188,11 +1195,11 @@ APP_JS = r"""
     confirmRun = null;
     document.getElementById("confirm-title").textContent = "Rename " + label + "?";
     document.getElementById("confirm-body").textContent =
-      "The session keeps its history and working directory — only the "
+      "The session keeps its history and working directory. Only the "
       + "name changes.";
     var ok = document.getElementById("confirm-ok");
     ok.textContent = "Save";
-    ok.className = "modal-btn";   // rename isn't destructive — no red.
+    ok.className = "modal-btn";   // rename isn't destructive - no red.
     document.getElementById("confirm-cancel").textContent = "Cancel";
 
     var input = document.getElementById("confirm-rename-input");
@@ -1231,14 +1238,14 @@ APP_JS = r"""
         var body = r.data || {};
         showNotice(body.changed === false ? "No change." : "Renamed.", "ok");
         // The poll target is keyed by the now-stale OLD label and
-        // would 404 — navigate to the (possibly unchanged) new one
+        // would 404 - navigate to the (possibly unchanged) new one
         // instead of pollTick()ing the old page.
         openDetail(body.label || newLabel);
         return;
       }
-      showNotice((r.data && r.data.detail) || "Couldn't rename.", "err");
+      showNotice(plain((r.data && r.data.detail) || "Couldn't rename."), "err");
     }).catch(function () {
-      showNotice("Couldn't reach the server — nothing changed.", "err");
+      showNotice("Couldn't reach the server. Nothing changed.", "err");
     });
   }
 
@@ -1246,7 +1253,7 @@ APP_JS = r"""
     // A disabled Confirm must refuse to submit even if something still
     // manages to dispatch a click at it (a real browser never fires
     // click on a disabled button; belt-and-braces here rather than
-    // trusting that alone) — this is the only thing standing between a
+    // trusting that alone) - this is the only thing standing between a
     // client-side-invalid rename name and a POST the server would just
     // 400 anyway.
     if (document.getElementById("confirm-ok").disabled) { return; }
@@ -1278,7 +1285,7 @@ APP_JS = r"""
     if (overlayCloser && menuSignature &&
         actionsSignature(data) !== menuSignature) {
       closeOverlay();
-      showNotice("This session changed — reopen the menu.");
+      showNotice("This session changed. Reopen the menu.");
     }
   }
 
@@ -1347,7 +1354,7 @@ APP_JS = r"""
   }
 
   function showGrid() {
-    // Leaving the detail page — the same rule as openDetail.
+    // Leaving the detail page - the same rule as openDetail.
     closeOverlay();
     // Back from a sub-page returns to whichever top-level tab was active.
     showView(mainTab === "settings" ? "settings" : "grid");
@@ -1359,8 +1366,8 @@ APP_JS = r"""
   // ---- settings group rendering (shared by all three surfaces) --------
   //
   // Collapsed by default, showing only the heading and the value in
-  // force. Every alternative on screen at once — four groups x up to five
-  // options — was what the operator meant by "make user lost in there".
+  // force. Every alternative on screen at once - four groups x up to five
+  // options - was what the operator meant by "make user lost in there".
   var openGroups = Object.create(null);
 
   function renderOptionGroup(host, opts) {
@@ -1372,13 +1379,13 @@ APP_JS = r"""
     // before. `valueText` overrides what the collapsed header shows, for a
     // group whose value is typed rather than picked (the option's own label
     // would say "Other model…" forever). `reveal` is
-    // {after: <option value>, node: <element>} — a PERSISTENT element moved
+    // {after: <option value>, node: <element>} - a PERSISTENT element moved
     // into place beneath that row, so what is typed into it survives the
     // next structural render.
     //
     // An option may also carry `create: true` (render as the dashed ＋ row)
     // and `active: <bool>` (drive the selected state from something other
-    // than `current` — a row that performs an action rather than being a
+    // than `current` - a row that performs an action rather than being a
     // value cannot use `current`, which has to keep holding the value).
     var wrap = document.createElement("div");
     wrap.className = "grp";
@@ -1400,7 +1407,7 @@ APP_JS = r"""
     });
     value.textContent = opts.valueText !== undefined
       ? opts.valueText
-      : (currentOpt ? currentOpt.label : "—");
+      : (currentOpt ? currentOpt.label : "-");
 
     var caret = document.createElement("span");
     caret.className = "grp-caret";
@@ -1434,7 +1441,7 @@ APP_JS = r"""
         row.appendChild(main);
 
         // The tag marks the SCOPE's value and never follows the
-        // selection — see the per-session settings mechanic.
+        // selection - see the per-session settings mechanic.
         if (opts.defaultValue !== undefined && o.value === opts.defaultValue) {
           var tag = document.createElement("span");
           tag.className = "tag";
@@ -1451,7 +1458,7 @@ APP_JS = r"""
           row.addEventListener("click", function () { opts.onPick(o.value); });
         }
         list.appendChild(row);
-        // Immediately after the row that revealed it — the whole point of
+        // Immediately after the row that revealed it - the whole point of
         // a conditional reveal is that the two read as one thing.
         if (opts.reveal && opts.reveal.after === o.value) {
           list.appendChild(opts.reveal.node);
@@ -1461,14 +1468,14 @@ APP_JS = r"""
     }
     host.appendChild(wrap);
     // Handed back so a caller can update the collapsed header without a
-    // structural render — the new-session form needs the header to track
+    // structural render - the new-session form needs the header to track
     // what is being typed into a reveal, keystroke by keystroke.
     return { wrap: wrap, value: value };
   }
 
 
   // A shaped placeholder while a fetch is in flight. An empty panel that
-  // fills in half a second later reads as broken — which is what the
+  // fills in half a second later reads as broken - which is what the
   // operator reported as "comes in with a delay".
   function skeleton(host, rows, cls) {
     host.innerHTML = "";
@@ -1488,7 +1495,7 @@ APP_JS = r"""
   // pollTick treat it as a session detail: it fetched
   // /api/sessions/undefined, got a 404, and the 404 handler sent the
   // operator back to the grid ~2.5s after opening the form. A table means
-  // a new view cannot be half-added — it either has an entry or it does
+  // a new view cannot be half-added - it either has an entry or it does
   // not render at all.
   //
   //   section  - the DOM section this view shows
@@ -1578,7 +1585,7 @@ APP_JS = r"""
       if (!res.ok) { throw new Error("HTTP " + res.status); }
       return res.json();
     }).then(function (data) {
-      if (saveSeq[field] !== seq) { return; }   // superseded — ignore
+      if (saveSeq[field] !== seq) { return; }   // superseded - ignore
       settingsData.values = data.values;
       renderSettings();
       showNotice("Saved.", "ok");
@@ -1592,10 +1599,10 @@ APP_JS = r"""
         handleFetchError(err);
         return;
       }
-      if (saveSeq[field] !== seq) { return; }   // superseded — ignore
+      if (saveSeq[field] !== seq) { return; }   // superseded - ignore
       settingsData.values[field] = previous;
       renderSettings();
-      showNotice("Couldn't save — the value on screen is what's stored.", "err");
+      showNotice("Couldn't save. The value on screen is what's stored.", "err");
     });
   }
 
@@ -1632,7 +1639,7 @@ APP_JS = r"""
   var UPDATE_TERMINAL = { done: 1, failed: 1, cancelled: 1, restart_scheduled: 1 };
 
   // A dedicated fetch, NOT apiFetch: a 401/403 here means "you are not the
-  // admin" and must hide this block — apiFetch would turn it into the
+  // admin" and must hide this block - apiFetch would turn it into the
   // terminal "session expired" state for the whole app.
   function updatesFetch(path, method, body) {
     var headers = { "X-Telegram-Init-Data": initData };
@@ -1798,8 +1805,8 @@ APP_JS = r"""
       } else if (running) {
         lines.push("Working… (" + job.phase.replace(/_/g, " ") + ")");
       }
-      if (job.summary) { lines.push(job.summary); }
-      (job.blockers || []).forEach(function (b) { lines.push("• " + b); });
+      if (job.summary) { lines.push(plain(job.summary)); }
+      (job.blockers || []).forEach(function (b) { lines.push("• " + plain(b)); });
       jobEl.textContent = lines.join("\n");
     } else {
       jobEl.hidden = true;
@@ -1841,13 +1848,13 @@ APP_JS = r"""
     (check.lines || []).forEach(function (line) {
       var row = document.createElement("div");
       row.className = "updates-row";
-      row.textContent = line;
+      row.textContent = plain(line);
       linesEl.appendChild(row);
     });
-    setLine("updates-source", [check.source].concat(check.notes || [])
-      .filter(function (t) { return !!t; }).join("\n"));
+    setLine("updates-source", plain([check.source].concat(check.notes || [])
+      .filter(function (t) { return !!t; }).join("\n")));
     // The restart note comes only with an offered aipager update.
-    setLine("updates-restart", check.restart || "");
+    setLine("updates-restart", plain(check.restart || ""));
     var offer = check.offer;
     if (offer && offer.kind) {
       var kind = offer.kind;
@@ -1858,7 +1865,7 @@ APP_JS = r"""
       }));
       return;
     }
-    setLine("updates-summary", check.summary || "Everything is up to date.");
+    setLine("updates-summary", plain(check.summary || "Everything is up to date."));
     actions.appendChild(updateButton("Check again", checkUpdates, "updates-again"));
   }
 
@@ -1868,7 +1875,7 @@ APP_JS = r"""
   var newOptions = null;      // /api/session-options payload
   // prefs: field -> chosen value, only for fields the operator diverged on.
   // folderOpen: the New folder reveal is showing. Deliberately NOT stored in
-  // `cwd` — the folder is created *inside* whatever is selected, so the
+  // `cwd` - the folder is created *inside* whatever is selected, so the
   // selection has to keep holding a real directory while the reveal is open.
   // folderError / folderBusy make the folder reveal's note a pure function
   // of state in refreshNewForm, rather than something three places poke at
@@ -1878,7 +1885,7 @@ APP_JS = r"""
     folderOpen: false, folderError: "", folderBusy: false
   };
   // Sentinel for "I'll type a full model name". Not a value the server
-  // ever sees — chosenModel() resolves it to the typed text, and Create
+  // ever sees - chosenModel() resolves it to the typed text, and Create
   // stays disabled while that text is empty or malformed.
   var MODEL_CUSTOM = "custom:free-text";
   // Same rule the server applies (miniapp/launch.py _VALID_MODEL), so the
@@ -1904,14 +1911,14 @@ APP_JS = r"""
 
   // What the collapsed Model header shows. Rendering the option's own
   // label would leave it reading "Other model" forever, no matter what
-  // was typed — the header would name the row, not the answer.
+  // was typed - the header would name the row, not the answer.
   function modelValueText() {
     if (newState.model === MODEL_CUSTOM) { return typedModel() || "Not set yet"; }
     var found = null;
     modelOptions().forEach(function (o) {
       if (o.value === newState.model) { found = o; }
     });
-    return found ? found.label : "—";
+    return found ? found.label : "-";
   }
 
   function basename(path) {
@@ -1928,7 +1935,7 @@ APP_JS = r"""
   }
 
   // Park a reveal back in the stash before its host is cleared. The node
-  // is reused rather than rebuilt so the text in it — and the caret —
+  // is reused rather than rebuilt so the text in it - and the caret -
   // survive a structural render.
   function stashNode(id) {
     document.getElementById("node-stash")
@@ -1942,7 +1949,7 @@ APP_JS = r"""
     // The real version shows on the session once it reports one.
     var opts = [{ value: "", label: "Default", help: "Whatever the CLI is configured to use" }];
     ((newOptions && newOptions.models) || []).forEach(function (m) {
-      opts.push({ value: m.label, label: m.label, help: m.hint || "" });
+      opts.push({ value: m.label, label: m.label, help: plain(m.hint || "") });
     });
     // An alias means "the latest of that family"; a full name pins one.
     // The CLI accepts both, so the form has to as well.
@@ -2005,7 +2012,7 @@ APP_JS = r"""
       }
     }).value;
 
-    // Directories come from the server's allow-list — the same list
+    // Directories come from the server's allow-list - the same list
     // validate_cwd checks against, so the picker can never offer a path
     // the server would refuse.
     var dirOpts = directoryOptions();
@@ -2021,10 +2028,10 @@ APP_JS = r"""
       title: "Working directory",
       options: dirOpts,
       current: newState.cwd,
-      // The tag marks the daemon's own directory — the one a session lands
+      // The tag marks the daemon's own directory - the one a session lands
       // in when nobody picks.
       defaultValue: (newOptions && newOptions.default_directory) || undefined,
-      valueText: currentDir ? currentDir.label : "—",
+      valueText: currentDir ? currentDir.label : "-",
       reveal: newState.folderOpen
         ? { after: CWD_NEW_FOLDER, node: document.getElementById("new-folder-reveal") }
         : null,
@@ -2111,7 +2118,7 @@ APP_JS = r"""
     var modelBad = isCustomModel && !!typed && !MODEL_RE.test(typed);
 
     // The disabled Create button always has a reason on screen next to the
-    // field that caused it — a dead button with no explanation is the same
+    // field that caused it - a dead button with no explanation is the same
     // as a broken one.
     if (modelValueNode) { modelValueNode.textContent = modelValueText(); }
 
@@ -2138,7 +2145,7 @@ APP_JS = r"""
 
     // Same rule as the model note: a control that cannot be used says why.
     // "Default" is a selection with no path behind it, so it cannot be a
-    // parent — and without this the reveal would open onto an empty field
+    // parent - and without this the reveal would open onto an empty field
     // and a dead button.
     var folderNote = document.getElementById("new-folder-note");
     if (!newState.cwd) {
@@ -2158,7 +2165,7 @@ APP_JS = r"""
     var name = document.getElementById("new-name").value.trim();
     var where = newState.cwd ? newState.cwd : "the daemon's own directory";
     // The summary promises "what will happen", so a typed model name has
-    // to appear in it — it is the one setting the operator can get wrong
+    // to appear in it - it is the one setting the operator can get wrong
     // by a keystroke and not otherwise see again before Create.
     var model = chosenModel();
     document.getElementById("new-summary").textContent =
@@ -2182,7 +2189,7 @@ APP_JS = r"""
       .then(function (data) {
         newOptions = data;
         // Land on the directory a session would use anyway, so something
-        // real is always selected — which is what lets "New folder" know
+        // real is always selected - which is what lets "New folder" know
         // where to create without a separate step.
         if (!newState.cwd && data.default_directory) {
           newState.cwd = data.default_directory;
@@ -2214,7 +2221,7 @@ APP_JS = r"""
       newState.folderBusy = false;
       btn.disabled = false;
       if (r.status !== 200 || !r.data || !r.data.path) {
-        newState.folderError = (r.data && r.data.detail) ||
+        newState.folderError = plain((r.data && r.data.detail) || "") ||
           (r.status === 403 ? "You're not allowed to create folders here."
                             : "Couldn't create that folder.");
         refreshNewForm();
@@ -2223,7 +2230,7 @@ APP_JS = r"""
       // The server has just sanctioned this exact path, and it sits
       // inside an allowed root, so validate_cwd will accept it on
       // Create. Adding it locally is what lets the operator see it
-      // selected before committing — it is not in allowed_roots() yet,
+      // selected before committing - it is not in allowed_roots() yet,
       // which only lists directories a session has actually run in.
       var path = r.data.path;
       if (!newOptions) { newOptions = {}; }
@@ -2235,13 +2242,13 @@ APP_JS = r"""
       newState.folderOpen = false;
       newState.folderError = "";
       nameEl.value = "";
-      showNotice(r.data.existed ? "That folder already existed — selected it."
+      showNotice(r.data.existed ? "That folder already existed, so it is selected."
                                 : "Folder created.", "ok");
       renderNewForm();
     }).catch(function () {
       newState.folderBusy = false;
       btn.disabled = false;
-      newState.folderError = "Couldn't reach the server — no folder was created.";
+      newState.folderError = "Couldn't reach the server. No folder was created.";
       refreshNewForm();
     });
   }
@@ -2277,17 +2284,17 @@ APP_JS = r"""
         }
         // Say so in words, not just a buzz. Creating a session navigates
         // straight to its page, so without this the only confirmation was
-        // a haptic tick — nothing at all on a device with haptics off, and
+        // a haptic tick - nothing at all on a device with haptics off, and
         // nothing to read if the new page took a moment to populate. The
         // toast is fixed-position, so it survives the navigation.
         showNotice("Session created.", "ok");
         // Chosen reply-style settings become per-session overrides through
-        // batch 4's existing route — no second write path for the same data.
+        // batch 4's existing route - no second write path for the same data.
         var label = r.data.label;
         // Await the overrides before navigating. The session page loads its
         // settings once, with no re-poll, so racing these against that GET
         // would land the operator on a page showing scope defaults for
-        // settings they just chose — a silent lie with no self-correction.
+        // settings they just chose - a silent lie with no self-correction.
         var writes = Object.keys(newState.prefs).map(function (field) {
           return fetch("/api/sessions/" + encodeURIComponent(label) +
                 "/preferences/" + encodeURIComponent(field), {
@@ -2304,14 +2311,14 @@ APP_JS = r"""
         return;
       }
       // A name collision or a rejected directory is answered inline, next
-      // to the field that caused it — not as a generic failure toast.
-      errEl.textContent = (r.data && r.data.detail) ||
+      // to the field that caused it - not as a generic failure toast.
+      errEl.textContent = plain((r.data && r.data.detail) || "") ||
         (r.status === 403 ? "You're not allowed to create sessions here."
                           : "Couldn't create that session.");
       errEl.hidden = false;
       create.disabled = false;
     }).catch(function () {
-      errEl.textContent = "Couldn't reach the server — the session was not created.";
+      errEl.textContent = "Couldn't reach the server. The session was not created.";
       errEl.hidden = false;
       create.disabled = false;
     });
@@ -2347,7 +2354,7 @@ APP_JS = r"""
 
   function setMainTab(name) {
     mainTab = name;
-    // Switching tabs from inside a sub-page returns to the top level —
+    // Switching tabs from inside a sub-page returns to the top level -
     // the back button is for going back, the tab bar is for switching.
     showView(name === "settings" ? "settings" : "grid");
     document.getElementById("maintab-sessions")
@@ -2360,7 +2367,7 @@ APP_JS = r"""
   if (tg && tg.BackButton) {
     // Back closes whatever layer is open before it navigates. Without
     // this, backing out of a confirm dialog would drop the operator on
-    // the grid — a trapdoor, not a dismissal.
+    // the grid - a trapdoor, not a dismissal.
     tg.BackButton.onClick(function () {
       if (overlayCloser) { overlayCloser(); return; }
       showGrid();
@@ -2406,7 +2413,7 @@ APP_JS = r"""
   document.getElementById("tab-timeline").addEventListener("click", toggleTimeline);
   document.getElementById("tab-diff").addEventListener("click", toggleDiff);
   document.getElementById("session-settings-reset").addEventListener("click", function () {
-    // Discards every per-session override with no undo — it earns the
+    // Discards every per-session override with no undo - it earns the
     // same confirmation the destructive session actions get.
     openConfirm({
       title: "Reset settings to defaults?",
@@ -2427,11 +2434,11 @@ APP_JS = r"""
   function pollTick() {
     if (authExpired) { return; }
     if (document.visibilityState !== "visible") { return; }
-    // The Settings tab is a real view now — polling the grid behind it is
+    // The Settings tab is a real view now - polling the grid behind it is
     // pure battery and tunnel traffic for something nobody is looking at.
     // What (if anything) this view polls is declared in VIEWS, not
-    // inferred. A view with polls:null — the settings tab, the new-session
-    // form — is left alone entirely.
+    // inferred. A view with polls:null - the settings tab, the new-session
+    // form - is left alone entirely.
     var spec = VIEWS[currentView.type];
     var mode = spec ? spec.polls : null;
     if (mode === null || mode === undefined) { return; }
@@ -2457,7 +2464,7 @@ APP_JS = r"""
         .catch(function (err) {
           if (err && err.httpStatus === 404) {
             // The session left the caller's own scope (cleared, or
-            // never existed) — go back to the grid rather than
+            // never existed) - go back to the grid rather than
             // reporting a connectivity problem that isn't one.
             showGrid();
             return;
