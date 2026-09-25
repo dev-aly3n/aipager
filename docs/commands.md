@@ -47,17 +47,15 @@ the CLI; no Telegram round-trip for the session list itself.
 
 ## The Mini App
 
-`/app` (and the Telegram menu button) opens a dashboard served by the
-daemon itself: live session list with per-session actions (stop,
-kill, restart, rename, perms, clear queue), a diff viewer for
-`Write`/`Edit` changes, and settings. It is on by default; manage it
-with `aipager miniapp enable|disable|status`. Every request is
-verified against Telegram's `initData` signature — see
-[security → Mini App tunnel](security.md#mini-app-tunnel).
+`/app` (and the Telegram menu button) opens a dashboard served by the daemon itself. It is on by default; manage it with `aipager miniapp enable|disable|status`. Every request is verified against Telegram's `initData` signature (see [security → Mini App tunnel](security.md#mini-app-tunnel)). The page loads nothing from anywhere else: no fonts, images or scripts from other sites.
 
-Everything in the Mini App is also reachable from chat: the ⋮ menu on
-a session's dashboard carries the same actions. For the admin,
-**Settings → Updates** mirrors [`/update`](#update).
+- **Sessions.** One sentence sums up the chat, for example "1 needs you, 2 working, 3 resting", with what has been spent beneath it. Each live session is a tile with a context ring, its folder, model and cost; working ones glow in the accent colour. Finished sessions rest on a collapsible **Finished** shelf. The **+** button starts a new session.
+- **Needs you.** A session waiting on a permission prompt or a question sits in an amber tray at the top, showing what it is asking. **Answer in chat** re-sends that prompt, with its buttons, to the bottom of the chat, the same as the pinned bar's **Answer** button, and you answer it there. If it was the only session waiting, the app closes so the prompt is right in front of you; otherwise it stays open and says "Sent to the chat". It needs the right to prompt the session, and a copy tapped after the prompt was answered or replaced says "already answered".
+- **A session's page.** The header shows the context ring, the state ("Working for 3m 12s", "Needs you (permission)", "Resting, last active 5m ago", "Finished") and a one-tap **Stop** (while working or waiting) or **Resume** (once finished). Below it: the waiting prompt with **Answer in chat**, the last few tool calls as a strip (tap it for the full timeline), the latest reply, the facts, the model control, the session's own settings, and the changed files and timeline. The ⋮ menu carries every action, with the same confirmations as before.
+- **New session.** A guided card: name, then where (with **Recent** chips for the folders your sessions use, newest first), then model (with **Suggested** chips), then **More options** for the permission mode and reply style. Telegram's own button at the bottom reads **Start session**.
+- **Settings.** The chat's preferences and, for the admin, **Updates**, which mirrors [`/update`](#update).
+
+The app follows Telegram's light or dark theme as you switch it, and stops its gentle animations when your phone asks for reduced motion. Everything in the Mini App is also reachable from chat: the ⋮ menu on a session's dashboard carries the same actions.
 
 ### Switching a running session's model
 
@@ -68,8 +66,8 @@ exactly `/model <name>` into that session — the same injection the
 chat's Models keyboard uses, with the same rule on who may do it
 (anyone who can prompt the session). The control reads **switching…**
 until the statusline reports a different model, then shows it; if
-nothing changes within 15 seconds it reads **not confirmed — check the
-session**.
+nothing changes within 15 seconds it reads **not confirmed (check the
+session)**.
 
 - **Only while the session is idle, not while Claude is working or a
   prompt is open.**

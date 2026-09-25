@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **The Mini App is redesigned as "Lanterns".** Every session reads at a glance as a light: a session that needs you is an amber beacon, a working one a lit lantern with a soft breath, a resting one a steady lantern, and a finished one an unlit lantern on a collapsible "Finished" shelf. Each lantern carries a context ring (its fuel gauge), with model and cost as quiet small print, and the Sessions tab opens with one sentence such as "1 needs you, 2 working, 3 resting" over what has been spent. Polls no longer rebuild the page: a poll that changes nothing touches nothing, tiles keep their place and focus, and a reorder glides. The session page has a live header (context ring, "Working for 3m 12s", a one-tap **Stop** or **Resume**), a strip of the last few tool calls, the latest reply with code shown as code, and tidy settings. The new-session form is a guided card with **Recent** folder chips (from your sessions, newest first) and **Suggested** model chips. Telegram's own main button carries **Start session**, the page follows Telegram's theme live, and a downward swipe no longer closes the form. Motion stops when the phone asks for reduced motion. Server messages shared with the chat keep their wording there and show a plain "-" in the app.
+- **Answer a waiting prompt from the Mini App.** Sessions that need you sit in a **Needs you** tray at the top of the Sessions tab and on their own page, with the prompt and an **Answer in chat** button. It re-sends the prompt with its buttons to the bottom of the chat, exactly like the pinned bar's **Answer** button, so you answer it there. With one session waiting the app closes onto the chat; with several it stays open. Only members who can prompt the session can use it, and a copy tapped after the prompt changed says "already answered".
+
 ## [0.7.17] - 2026-09-25
 
 ### Changed
