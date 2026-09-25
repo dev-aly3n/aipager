@@ -354,6 +354,24 @@ Object.assign(SESSION_DETAIL_FIXTURES, {
     available: false, reason: MODEL_SWITCH_BUSY_REASON }),
 });
 
+// ---- the session page header and activity strip (roadmap 8.44) ------
+Object.assign(SESSION_DETAIL_FIXTURES, {
+  detail_activity: Object.assign(fullDetailFor("busy", { isAdmin: true, queueDepth: 2 }), {
+    context_pct: 57, busy_elapsed_seconds: 192,
+    last_message: "Ran `pytest` and <b>fixed</b> it.",
+    timeline: [
+      { kind: "commentary", text: "Reading first." },
+      { kind: "tool", text: "Read a.py", state: "done", elapsed_seconds: null },
+      { kind: "tool", text: "Bash: pytest", state: "failed", elapsed_seconds: null },
+      { kind: "tool", text: "Edit a.py", state: "done", elapsed_seconds: null },
+      { kind: "tool", text: "Bash: pytest -q", state: "running", elapsed_seconds: 14 },
+    ],
+  }),
+  detail_quick_stop: detailFor("busy", false),
+  detail_quick_resume: detailFor("gone", true),
+  detail_unchanged: fullDetailFor("busy", { isAdmin: true }),
+});
+
 const SCHEMA = [
   { section: "length", field: "answer_length", title: "Answer length",
     options: [
@@ -1822,5 +1840,71 @@ Object.assign(DRIVERS, {
   answer_403: driveAnswer403,
   answer_viewer: driveAnswerViewer,
   detail_answer: driveDetailAnswer,
+});
+
+// ===== the session page (roadmap 8.44) =================================
+
+function driveDetailActivity() {
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    if (byId["detail-state"].textContent !== "Working for 3m 12s")
+      fail("state line: " + JSON.stringify(byId["detail-state"].textContent));
+    if (byId["detail-status"].textContent !== "working") fail("status chip: " + byId["detail-status"].textContent);
+    if (byId["detail-ring"].attrs.style !== "--pct:57") fail("header ring: " + byId["detail-ring"].attrs.style);
+    const strip = byId["detail-activity"];
+    if (strip.hidden) fail("the activity strip is hidden on a working session");
+    const beads = strip.children.find(c => c.className === "beads");
+    if (!beads || beads.children.length !== 4) fail("want 4 beads (tool rows only)");
+    const classes = beads.children.map(c => c.className);
+    if (classes.join(",") !== "bead bead-done,bead bead-failed,bead bead-done,bead bead-running")
+      fail("bead states: " + JSON.stringify(classes));
+    if (strip.textContent.indexOf("2 queued") === -1) fail("no queue chip: " + strip.textContent);
+    if (strip.textContent.indexOf("Bash: pytest -q (running 14s)") === -1)
+      fail("no latest-tool line: " + strip.textContent);
+    const html = byId["detail-preview"].innerHTML;
+    if (html.indexOf("<code>pytest</code>") === -1 || html.indexOf("<b>") !== -1)
+      fail("the reply is not escaped-then-coded: " + html);
+    strip.click();
+    if (byId["panel-timeline"].hidden) fail("tapping the strip did not open the timeline");
+    console.log("ok: session page -> ring, state line, 4 beads, running last");
+    process.exit(0);
+  }, 10);
+}
+
+function driveDetailQuick(key, title) {
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    const pill = byId["detail-quick"];
+    if (pill.hidden) fail("no " + title + " pill");
+    if (pill.textContent !== title) fail("pill reads " + JSON.stringify(pill.textContent));
+    const before = fetchCalls.length;
+    pill.click();
+    const sent = fetchCalls.slice(before);
+    if (sent.length !== 1 || sent[0].method !== "POST" || sent[0].url !== "/api/sessions/dev/" + key)
+      fail("the pill sent " + JSON.stringify(sent));
+    if (!byId["overlay"].hidden) fail("the pill asked for confirmation");
+    console.log("ok: quick " + key + " -> one POST /api/sessions/dev/" + key);
+    process.exit(0);
+  }, 10);
+}
+
+function driveDetailUnchanged() {
+  api.openDetail("dev");
+  setTimeoutReal(() => {
+    global.__writes = 0;
+    api.pollTick();
+    setTimeoutReal(() => {
+      if (global.__writes !== 0) fail("an unchanged detail poll made " + global.__writes + " writes");
+      console.log("ok: an unchanged detail poll touches nothing");
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
+Object.assign(DRIVERS, {
+  detail_activity: driveDetailActivity,
+  detail_quick_stop: () => driveDetailQuick("stop", "Stop"),
+  detail_quick_resume: () => driveDetailQuick("resume", "Resume"),
+  detail_unchanged: driveDetailUnchanged,
 });
 (DRIVERS[SCENARIO] || (() => fail("unknown scenario: " + SCENARIO)))();

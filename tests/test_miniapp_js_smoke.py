@@ -1430,3 +1430,56 @@ def test_the_harness_rejects_a_fetch_outside_the_api(node_bin, tmp_path):
     proc = _drive_smoke(node_bin, tmp_path, broken, "settings")
     assert proc.returncode != 0, proc.stdout
     assert "outside /api/" in proc.stderr
+
+
+# ===== the session page (roadmap 8.44) ====================================
+
+@pytest.mark.parametrize("scenario, expected", [
+    ("detail_activity", "ok: session page -> ring, state line, 4 beads, running last"),
+    ("detail_quick_stop", "ok: quick stop -> one POST /api/sessions/dev/stop"),
+    ("detail_quick_resume", "ok: quick resume -> one POST /api/sessions/dev/resume"),
+    ("detail_unchanged", "ok: an unchanged detail poll touches nothing"),
+])
+def test_session_page_scenarios(node_bin, tmp_path, scenario, expected):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, scenario)
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert expected in proc.stdout, proc.stdout
+
+
+_DETAIL_MUTANTS = [
+    pytest.param(
+        '    var tools = (data.timeline || []).filter(function (r) { return r.kind === "tool"; });',
+        "    var tools = data.timeline || [];",
+        "detail_activity", id="beads-are-tools-only"),
+    pytest.param(
+        "    var recent = tools.slice(-8);",
+        "    var recent = tools.slice(0, 2);",
+        "detail_activity", id="beads-are-the-latest"),
+    pytest.param(
+        "      prev.innerHTML = escapeHtml(data.last_message)",
+        "      prev.innerHTML = String(data.last_message)",
+        "detail_activity", id="reply-escaped"),
+    pytest.param(
+        '    var key = (a.stop && a.stop.available) ? "stop"',
+        '    var key = (a.stop) ? "kill"',
+        "detail_quick_stop", id="quick-is-stop"),
+    pytest.param(
+        '    if (detailChanged("facts", data.facts)) { renderFacts(data.facts || []); }',
+        "    renderFacts(data.facts || []);",
+        "detail_unchanged", id="detail-section-gate"),
+]
+
+
+@pytest.mark.parametrize("old, new, scenario", _DETAIL_MUTANTS)
+def test_the_session_page_harness_detects_a_broken_mechanism(
+        node_bin, tmp_path, old, new, scenario):
+    from aipager.miniapp.static import INDEX_HTML
+
+    assert INDEX_HTML.count(old) == 1, f"mutation site not found once: {old!r}"
+    broken = INDEX_HTML.replace(old, new, 1)
+    proc = _drive_smoke(node_bin, tmp_path, broken, scenario)
+    assert proc.returncode != 0, (
+        f"harness passed a page with {old!r} broken\nstdout: {proc.stdout}"
+    )

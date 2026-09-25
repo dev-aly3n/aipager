@@ -689,7 +689,8 @@ CSS = """
   .skel-row + .skel-row { border-top: 1px solid var(--line); }
 
   /* ---- session page ---------------------------------------------------- */
-  .d-head { display: flex; align-items: center; gap: var(--s3); padding: var(--s2) 0 var(--s4); }
+  .d-head { display: flex; align-items: flex-start; gap: var(--s4); padding: var(--s2) 0 var(--s4); }
+  .d-head .kebab-wrap { margin-left: auto; }
   .d-title { flex: 1 1 auto; min-width: 0; }
   .d-title-row { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
   .detail-label {
@@ -721,7 +722,16 @@ CSS = """
   .status-busy::before { background: var(--lamp-work); }
   .status-waiting { color: var(--need-ink); background: var(--need-soft); }
   .status-gone { color: var(--ink-3); }
-  .d-state { margin-top: 2px; font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--ink-2); }
+  .d-state-row { display: flex; align-items: center; gap: var(--s2); margin-top: 2px; min-width: 0; }
+  .d-state { min-width: 0; font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--ink-2); }
+  /* In the header the status is a dot leading the state sentence; its
+     word stays in the DOM for screen readers. */
+  .d-state-row .status { gap: 0; padding: 0; font-size: 0; line-height: 0; background: none; }
+  .d-state-row .status::before { width: 8px; height: 8px; background: var(--lamp-rest); }
+  .d-state-row .status-busy::before { background: var(--lamp-work); box-shadow: 0 0 0 3px var(--lamp-work-soft); }
+  .d-state-row .status-waiting::before { background: var(--lamp-need); box-shadow: 0 0 0 3px var(--need-soft); }
+  .d-state-row .status-gone::before { background: var(--lamp-out); }
+  .d-title .pill { margin-top: var(--s2); }
   .pill {
     flex: 0 0 auto;
     display: inline-flex;

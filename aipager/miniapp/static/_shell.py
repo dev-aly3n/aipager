@@ -238,13 +238,13 @@ HTML_BODY = """\
   <div id="detail-header" class="d-head">
     <div id="detail-ring" class="lamp lamp-lg" aria-hidden="true"></div>
     <div class="d-title">
-      <div class="d-title-row">
-        <span id="detail-label" class="detail-label"></span>
+      <div id="detail-label" class="detail-label"></div>
+      <div class="d-state-row">
         <span id="detail-status" class="status"></span>
+        <span id="detail-state" class="d-state"></span>
       </div>
-      <div id="detail-state" class="d-state"></div>
+      <button type="button" id="detail-quick" class="pill" hidden></button>
     </div>
-    <button type="button" id="detail-quick" class="pill" hidden></button>
     <span class="kebab-wrap">
       <button type="button" id="detail-menu-btn" class="kebab"
               aria-haspopup="menu" aria-expanded="false"

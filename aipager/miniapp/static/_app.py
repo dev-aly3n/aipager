@@ -86,13 +86,13 @@ APP_JS = r"""
     var errorEl = document.getElementById("error");
     // Only a problem is worth a badge: while live there is none.
     badge.hidden = state === "live";
-    badge.className = "conn conn-" + (state === "live" ? "live"
-      : state === "reconnecting" ? "reconnecting" : "offline");
+    setClass(badge, "conn conn-" + (state === "live" ? "live"
+      : state === "reconnecting" ? "reconnecting" : "offline"));
     if (state === "live") {
-      badge.textContent = "live";
+      setText(badge, "live");
       errorEl.style.display = "none";
     } else if (state === "reconnecting") {
-      badge.textContent = "reconnecting…";
+      setText(badge, "reconnecting…");
       errorEl.style.display = "none";
     } else if (state === "offline") {
       clearGridSkeleton();
@@ -768,13 +768,152 @@ APP_JS = r"""
     if (wasAtBottom) { panel.scrollTop = panel.scrollHeight; }
   }
 
+  // ---- session page: a live header, then calm sections -----------------
+  //
+  // Each section is re-rendered only when its own slice of the payload
+  // changed, so a 2.5 s poll that changes nothing leaves the page alone.
+  var detailSig = Object.create(null);
+
+  function detailChanged(key, value) {
+    var sig = JSON.stringify(value === undefined ? null : value);
+    if (detailSig[key] === sig) { return false; }
+    detailSig[key] = sig;
+    return true;
+  }
+
+  // "3m 12s", "45s", "1h 4m".
+  function duration(seconds) {
+    var sec = Math.max(0, Math.round(Number(seconds) || 0));
+    if (sec < 60) { return sec + "s"; }
+    var min = Math.floor(sec / 60);
+    if (min < 60) { return min + "m " + (sec % 60) + "s"; }
+    return Math.floor(min / 60) + "h " + (min % 60) + "m";
+  }
+
+  function stateLine(d) {
+    if (d.status === "busy") {
+      return typeof d.busy_elapsed_seconds === "number"
+        ? "Working for " + duration(d.busy_elapsed_seconds) : "Working";
+    }
+    if (d.status === "waiting") {
+      return d.waiting_kind ? "Needs you (" + d.waiting_kind + ")" : "Needs you";
+    }
+    if (d.status === "idle") {
+      var age = ageFor(d);
+      return age ? "Resting, last active " + age : "Resting";
+    }
+    if (d.status === "gone") { return "Finished"; }
+    return "Not reported yet";
+  }
+
+  // The header ring: the context as the lantern's fuel, in the state's
+  // colour; an unlit lantern once the session has finished.
+  function paintRing(status, pct) {
+    var ring = document.getElementById("detail-ring");
+    var lamp = status === "busy" ? "lamp-work" : status === "waiting" ? "lamp-need"
+      : status === "gone" ? "lamp-out" : "lamp-rest";
+    setClass(ring, "lamp lamp-lg " + lamp);
+    if (status === "gone") {
+      setAttr(ring, "style", "--pct:0");
+      setHtml(ring, icon("lantern"));
+    } else {
+      setAttr(ring, "style", "--pct:" + pct);
+      setHtml(ring, '<span class="lamp-num">' + pct + "</span>");
+    }
+  }
+
+  function paintHeader(d) {
+    setText(document.getElementById("detail-label"), d.label || "");
+    var statusEl = document.getElementById("detail-status");
+    setClass(statusEl, statusClass(d.status));
+    setText(statusEl, stateWord(d.status));
+    setText(document.getElementById("detail-state"), stateLine(d));
+    paintRing(d.status, pctOf(d));
+  }
+
+  // The two most frequent recoverable actions, one tap away: Stop while
+  // Claude works or waits, Resume once it finished. Same request as the
+  // menu item, and like it, no confirmation.
+  function renderQuick(data) {
+    var btn = document.getElementById("detail-quick");
+    var a = data.actions || {};
+    var key = (a.stop && a.stop.available) ? "stop"
+      : (a.resume && a.resume.available) ? "resume" : "";
+    btn.hidden = !key;
+    if (!key) { return; }
+    setAttr(btn, "data-action", key);
+    setClass(btn, "pill" + (key === "resume" ? " pill-resume" : ""));
+    btn.innerHTML = icon(key);
+    var text = make("span");
+    text.textContent = ACTION_TITLES[key];
+    btn.appendChild(text);
+  }
+
+  // The last few tool calls as lanterns on a string: done, failed, or
+  // still running. Built only from the timeline the page already has.
+  function renderActivity(data) {
+    var btn = document.getElementById("detail-activity");
+    var tools = (data.timeline || []).filter(function (r) { return r.kind === "tool"; });
+    var recent = tools.slice(-8);
+    var chips = [];
+    if (data.queue_depth) { chips.push(data.queue_depth + " queued"); }
+    if (data.status === "busy" && typeof data.busy_elapsed_seconds === "number") {
+      chips.push(duration(data.busy_elapsed_seconds));
+    }
+    if (!recent.length && !chips.length) { btn.hidden = true; btn.innerHTML = ""; return; }
+    btn.hidden = false;
+    btn.innerHTML = "";
+    var head = make("div", "act-head");
+    var title = make("span", "act-title");
+    title.textContent = recent.length ? "Recent activity" : "Activity";
+    head.appendChild(title);
+    var chipRow = make("span", "act-chips");
+    chips.forEach(function (c) {
+      var chip = make("span", "act-chip");
+      chip.textContent = c;
+      chipRow.appendChild(chip);
+    });
+    head.appendChild(chipRow);
+    btn.appendChild(head);
+    if (!recent.length) { return; }
+    var beads = make("div", "beads");
+    recent.forEach(function (r) {
+      var state = r.state === "failed" ? "failed" : r.state === "running" ? "running" : "done";
+      var bead = make("span", "bead bead-" + state);
+      bead.setAttribute("title", r.text || "");
+      beads.appendChild(bead);
+    });
+    btn.appendChild(beads);
+    var last = recent[recent.length - 1];
+    var line = make("div", "act-last");
+    line.textContent = (last.text || "") + (last.state === "running"
+      ? (typeof last.elapsed_seconds === "number" ? " (running " + duration(last.elapsed_seconds) + ")" : " (running)")
+      : last.state === "failed" ? " (failed)" : "");
+    btn.appendChild(line);
+    btn.setAttribute("aria-label", "Recent activity: " + recent.length +
+      " tool calls. Open the timeline.");
+  }
+
+  // The latest reply, with `code` spans shown as code. Escaped first, so
+  // nothing in the reply can become markup.
+  function renderPreview(data) {
+    var prev = document.getElementById("detail-preview");
+    if (data.last_message) {
+      setClass(prev, "preview");
+      prev.innerHTML = escapeHtml(data.last_message)
+        .replace(/`([^`\n]+)`/g, "<code>$1</code>");
+    } else {
+      setClass(prev, "preview is-empty");
+      prev.textContent = data.status === "gone"
+        ? "Nothing was captured before this session ended."
+        : "Nothing captured yet. It arrives once Claude replies.";
+    }
+  }
+
   function renderDetailData(data) {
     lastDetailData = data;
-    document.getElementById("detail-label").textContent = data.label || "";
-    var statusEl = document.getElementById("detail-status");
-    statusEl.className = statusClass(data.status);
-    statusEl.textContent = (data.status === "waiting" && data.waiting_kind)
-      ? data.status + " (" + data.waiting_kind + ")" : (data.status || "");
+    paintHeader(data);
+    if (detailChanged("quick", data.actions)) { renderQuick(data); }
 
     // What it is blocked on, prominently - this is the reason the
     // operator opened the page at all. The API has returned these two
@@ -805,22 +944,22 @@ APP_JS = r"""
     // `facts` is built server-side (sessions.display_facts) and already
     // omits what would be noise - a finished session has no model, cost
     // or context to report, and "0% ctx · $0.00" reads like a fault.
-    renderFacts(data.facts || []);
-
-    var prev = document.getElementById("detail-preview");
-    if (data.last_message) {
-      prev.className = "preview";
-      prev.textContent = data.last_message;
-    } else {
-      prev.className = "preview is-empty";
-      prev.textContent = data.status === "gone"
-        ? "Nothing was captured before this session ended."
-        : "Nothing captured yet. It arrives once Claude replies.";
+    if (detailChanged("facts", data.facts)) { renderFacts(data.facts || []); }
+    if (detailChanged("preview", [data.last_message, data.status === "gone"])) {
+      renderPreview(data);
+    }
+    if (detailChanged("activity", [data.timeline, data.queue_depth, data.status,
+                                   data.busy_elapsed_seconds])) {
+      renderActivity(data);
     }
 
-    renderDetailActions(data);
-    renderModelControl(data);
-    renderTimeline(data.timeline);
+    renderDetailActions(data);     // every poll: it guards an open menu
+    if (detailChanged("model", [data.label, data.model, data.model_switch, modelSwitch,
+                                !!openGroups["session-model"],
+                                modelChoices ? modelChoices.length : -1])) {
+      renderModelControl(data);
+    }
+    if (detailChanged("timeline", data.timeline)) { renderTimeline(data.timeline); }
     updateSectionHeaders(data);
   }
 
@@ -980,7 +1119,7 @@ APP_JS = r"""
     var html = '<span class="dis-title">' + escapeHtml(title) + "</span>" +
       icon("chevron", "chev" + (open ? " is-open" : ""));
     if (btn.innerHTML !== html) { btn.innerHTML = html; }
-    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    setAttr(btn, "aria-expanded", open ? "true" : "false");
   }
 
   function updateDiffHeader() {
@@ -1766,21 +1905,28 @@ APP_JS = r"""
     // while the detail request is in flight. The poll overwrites this with
     // the authoritative payload a moment later.
     var known = lastSessionsByLabel[label];
-    document.getElementById("detail-label").textContent = label;
-    var st = document.getElementById("detail-status");
+    detailSig = Object.create(null);
     if (known) {
-      st.className = statusClass(known.status);
-      st.textContent = known.status;
+      paintHeader(known);
     } else {
-      st.className = "status";
-      st.textContent = "";
+      paintHeader({ label: label, status: "unknown", context_pct: 0 });
+      setText(document.getElementById("detail-status"), "");
+      setText(document.getElementById("detail-state"), "");
     }
+    document.getElementById("detail-quick").hidden = true;
+    document.getElementById("detail-activity").hidden = true;
     document.getElementById("detail-waiting").hidden = true;
     // The previous session's Model picker must not linger on this page
     // until the first poll lands.
     document.getElementById("detail-model").hidden = true;
     document.getElementById("detail-model-note").hidden = true;
-    skeleton(document.getElementById("detail-facts"), 3);
+    var facts = document.getElementById("detail-facts");
+    facts.innerHTML = "";
+    for (var i = 0; i < 4; i++) {
+      var cell = make("div", "fact");
+      skeleton(cell, 2);
+      facts.appendChild(cell);
+    }
     skeleton(document.getElementById("detail-preview"), 2);
     skeleton(document.getElementById("session-settings-groups"), 4, "skel-row");
 
@@ -2785,6 +2931,17 @@ APP_JS = r"""
     btn.classList.toggle("is-open", !adv.hidden);
   });
   document.getElementById("new-session-btn").addEventListener("click", openNewSession);
+  document.getElementById("detail-quick").addEventListener("click", function () {
+    var key = this.getAttribute("data-action");
+    if (key && currentView.label) { runDetailAction(currentView.label, key); }
+  });
+  document.getElementById("detail-activity").addEventListener("click", function () {
+    if (!timelineOpen) { toggleTimeline(); }
+    var tl = document.getElementById("tab-timeline");
+    if (tl.scrollIntoView) {
+      try { tl.scrollIntoView({ behavior: "smooth", block: "start" }); } catch (e) { /* old webview */ }
+    }
+  });
   document.getElementById("detail-answer").addEventListener("click", function () {
     if (currentView.label) { answerPrompt(currentView.label); }
   });

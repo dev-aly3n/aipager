@@ -35,7 +35,9 @@ def _root_block() -> str:
 
 def _block(selector: str, css: str = _CODE) -> str:
     """Body of the FIRST rule whose selector list is exactly `selector`."""
-    m = re.search(r"(?:^|[}\s])" + re.escape(selector) + r"\s*\{([^}]*)\}", css)
+    # The selector must start its own rule (after a newline or a brace),
+    # so ".pill" never matches the descendant rule ".d-title .pill".
+    m = re.search(r"(?:^|[}\n])\s*" + re.escape(selector) + r"\s*\{([^}]*)\}", css)
     assert m, f"no rule for {selector}"
     return m.group(1)
 
