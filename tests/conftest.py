@@ -40,6 +40,15 @@ for _var in ("FORCE_COLOR", "CLICOLOR_FORCE", "CLICOLOR", "NO_COLOR"):
 
 
 @pytest.fixture(autouse=True)
+def _reactions_send_at_once(monkeypatch):
+    """Reactions wait a settle window before they are sent (so an idle
+    prompt's 👀 does not blink into 👍). Tests assert each lifecycle edge
+    as it happens, so the window is 0 here; test_reaction_settle.py
+    exercises the real window."""
+    monkeypatch.setattr("aipager.bot.reactions.REACTION_SETTLE_SECONDS", 0)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_audit_log(tmp_path, monkeypatch):
     """Redirect the audit log to tmp for every test, so exercising the
     bot's audit path never appends to the operator's real
