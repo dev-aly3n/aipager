@@ -254,6 +254,63 @@ def test_telegram_refusing_the_send_is_502_send_failed_not_a_bare_500(
                     "detail": "Couldn't post the prompt to the chat."}
 
 
+SEND_FAILED_BODY = {"error": "send_failed",
+                    "detail": "Couldn't post the prompt to the chat."}
+
+
+@pytest.mark.parametrize("exc", [
+    OSError(104, "Connection reset by peer: secret-internal-path"),
+    RuntimeError("gate invariant broken: secret-internal-state"),
+    asyncio.TimeoutError(),
+], ids=["os_error", "runtime_error", "asyncio_timeout"])
+def test_any_other_send_error_is_502_send_failed_with_a_fixed_sentence(
+        server, run_async, exc, caplog):
+    """A non-Telegram exception out of the send (a transport OSError, a
+    bug, an asyncio timeout) still answers the JSON 502, not aiohttp's
+    plain-text 500 or empty 504. The detail is a fixed sentence: the
+    exception text never reaches the page, but it is logged in full."""
+    _mk_session(server)
+    server.bot._app.bot.send_message = AsyncMock(side_effect=exc)
+    with caplog.at_level("ERROR", logger="aipager.miniapp.server"):
+        status, body, _send = _post(server, run_async)
+    assert status == 502
+    assert body == SEND_FAILED_BODY
+    assert "secret" not in json.dumps(body)
+    logged = [r for r in caplog.records if r.exc_info
+              and r.exc_info[1] is exc]
+    assert logged, "the unexpected send error must be logged with its traceback"
+
+
+def test_telegram_retry_after_is_503_chat_busy(server, run_async):
+    """Telegram's own flood wait (a RetryAfter that escaped the outbound
+    gate) is the same "throttled" outcome as the gate's skip: 503
+    chat_busy, not 502 send_failed."""
+    from telegram.error import RetryAfter
+    _mk_session(server)
+    server.bot._app.bot.send_message = AsyncMock(side_effect=RetryAfter(7))
+    status, body, _send = _post(server, run_async)
+    assert status == 503
+    assert body == {"error": "chat_busy",
+                    "detail": "Telegram is busy. Try again in a moment."}
+
+
+def test_cancelling_the_send_still_propagates(server, run_async, monkeypatch):
+    """The catch-all is ``Exception``: a cancelled request (client gone,
+    daemon shutting down) must cancel the handler, not answer a 502."""
+    sess = _mk_session(server)
+
+    async def _resolved(_request, _what):
+        return sess, SCOPE_CHAT_ID, ADMIN_ID
+    monkeypatch.setattr(server, "_resolve_own_scope_session", _resolved)
+    server.bot._app.bot.send_message = AsyncMock(
+        side_effect=asyncio.CancelledError())
+
+    async def _run():
+        with pytest.raises(asyncio.CancelledError):
+            await server._handle_session_answer(MagicMock())
+    run_async(_run())
+
+
 # ===== success ==============================================================
 
 def test_success_sends_the_prompt_to_the_scope_chat_and_registers_it(

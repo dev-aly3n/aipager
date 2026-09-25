@@ -23,7 +23,7 @@ from telegram import (
     InlineKeyboardMarkup,
     WebAppInfo,
 )
-from telegram.error import BadRequest, Forbidden, TelegramError
+from telegram.error import BadRequest, Forbidden, RetryAfter, TelegramError
 
 
 from aipager.config import (
@@ -99,6 +99,10 @@ RESEND_DROPPED = "dropped"
 #: Mini App route catches it here because aipager/miniapp never imports
 #: telegram itself (see test_flood_budget_paths).
 RESEND_SEND_ERRORS = (TelegramError,)
+#: The subset of those that mean Telegram throttled the send (a flood
+#: wait that escaped the outbound gate); the Mini App route answers it as
+#: 503 ``chat_busy``, like the gate's own skip.
+RESEND_THROTTLE_ERRORS = (RetryAfter,)
 PINNED_SLOW_LINE = "🐢 slow mode after a Telegram warning"
 PINNED_PAUSED_LINE = "⏸ card updates paused (hourly limit)"
 PINNED_PAUSED_RATE_LINE = "⏸ card updates paused (rate limit)"
