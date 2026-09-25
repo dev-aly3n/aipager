@@ -240,6 +240,20 @@ def test_a_send_with_no_message_back_is_502_send_failed(server, run_async):
     assert body["error"] == "send_failed"
 
 
+def test_telegram_refusing_the_send_is_502_send_failed_not_a_bare_500(
+        server, run_async):
+    """A Telegram error out of the send (network, timeout, bad request)
+    answers a JSON 502 the page can show, not aiohttp's HTML 500."""
+    from telegram.error import NetworkError
+    _mk_session(server)
+    server.bot._app.bot.send_message = AsyncMock(
+        side_effect=NetworkError("connection reset"))
+    status, body, _send = _post(server, run_async)
+    assert status == 502
+    assert body == {"error": "send_failed",
+                    "detail": "Couldn't post the prompt to the chat."}
+
+
 # ===== success ==============================================================
 
 def test_success_sends_the_prompt_to_the_scope_chat_and_registers_it(

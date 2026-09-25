@@ -140,6 +140,10 @@ _ANSWER_NOT_WAITING_BODY = {
     "error": "not_waiting",
     "detail": "This session isn't waiting on you any more.",
 }
+_ANSWER_SEND_FAILED_BODY = {
+    "error": "send_failed",
+    "detail": "Couldn't post the prompt to the chat.",
+}
 
 
 class MiniAppServer:
@@ -1308,6 +1312,7 @@ class MiniAppServer:
             RESEND_BUSY,
             RESEND_NOT_RESENDABLE,
             RESEND_NOT_WAITING,
+            RESEND_SEND_ERRORS,
             RESEND_SENT,
         )
         from aipager.state import Status
@@ -1331,7 +1336,15 @@ class MiniAppServer:
         if sess.status != Status.INTERACTIVE:
             return web.json_response(_ANSWER_NOT_WAITING_BODY, status=409)
 
-        outcome = await self.bot._resend_pending_prompt(scope_chat_id, sess)
+        try:
+            outcome = await self.bot._resend_pending_prompt(scope_chat_id, sess)
+        except RESEND_SEND_ERRORS as e:
+            # Telegram refused the send (network, timeout, bad request).
+            # Caught here, not in the shared helper, so the pinned bar's
+            # tap keeps its behaviour byte-identical.
+            log.info("miniapp: session answer send failed (502): %s",
+                     type(e).__name__)
+            return web.json_response(_ANSWER_SEND_FAILED_BODY, status=502)
         if outcome == RESEND_SENT:
             return web.json_response({"status": "sent", "label": sess.label})
         if outcome == RESEND_NOT_WAITING:
@@ -1346,10 +1359,7 @@ class MiniAppServer:
                 "error": "chat_busy",
                 "detail": "Telegram is busy. Try again in a moment.",
             }, status=503)
-        return web.json_response({
-            "error": "send_failed",
-            "detail": "Couldn't post the prompt to the chat.",
-        }, status=502)
+        return web.json_response(_ANSWER_SEND_FAILED_BODY, status=502)
 
     async def _handle_session_kill(self, request):
         from aiohttp import web

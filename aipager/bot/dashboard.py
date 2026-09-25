@@ -23,7 +23,7 @@ from telegram import (
     InlineKeyboardMarkup,
     WebAppInfo,
 )
-from telegram.error import BadRequest, Forbidden
+from telegram.error import BadRequest, Forbidden, TelegramError
 
 
 from aipager.config import (
@@ -94,6 +94,11 @@ RESEND_NOT_WAITING = "not_waiting"
 RESEND_NOT_RESENDABLE = "not_resendable"
 RESEND_BUSY = "busy"
 RESEND_DROPPED = "dropped"
+#: What the resend's send can raise when Telegram refuses it (network,
+#: timeout, bad request). The pinned bar lets it propagate as before; the
+#: Mini App route catches it here because aipager/miniapp never imports
+#: telegram itself (see test_flood_budget_paths).
+RESEND_SEND_ERRORS = (TelegramError,)
 PINNED_SLOW_LINE = "🐢 slow mode after a Telegram warning"
 PINNED_PAUSED_LINE = "⏸ card updates paused (hourly limit)"
 PINNED_PAUSED_RATE_LINE = "⏸ card updates paused (rate limit)"
