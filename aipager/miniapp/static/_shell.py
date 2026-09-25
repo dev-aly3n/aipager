@@ -59,7 +59,7 @@ HTML_BODY = """\
 </head>
 <body>
 <svg class="sprite" aria-hidden="true" width="0" height="0" focusable="false">
-  <symbol id="i-lantern" viewBox="0 0 24 24"><path d="M9.5 5.5a2.5 2.5 0 0 1 5 0"/><rect x="6.5" y="7" width="11" height="12.5" rx="3"/><path d="M9 22h6"/><path d="M12 10.3c1.4 1.4 2.1 2.5 2.1 3.6a2.1 2.1 0 0 1-4.2 0c0-1.1.7-2.2 2.1-3.6z"/></symbol>
+  <symbol id="i-lantern" viewBox="0 0 24 24"><path d="M10 4.2a2 2 0 0 1 4 0"/><path d="M7.5 7.2h9M8 20.5h8"/><path d="M8.5 7.2l-.8 2.3v8.2c0 1.5 1 2.8 2.5 2.8h3.6c1.5 0 2.5-1.3 2.5-2.8V9.5l-.8-2.3"/><path d="M12 11.2c1.3 1.3 1.9 2.3 1.9 3.3a1.9 1.9 0 0 1-3.8 0c0-1 .6-2 1.9-3.3z"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
   <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
   <symbol id="i-dots" viewBox="0 0 24 24"><circle cx="12" cy="5.5" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="18.5" r="1.7" fill="currentColor" stroke="none"/></symbol>

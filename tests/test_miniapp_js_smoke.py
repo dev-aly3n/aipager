@@ -1337,3 +1337,96 @@ def test_the_harness_detects_a_model_reason_shown_with_its_em_dash(node_bin, tmp
     assert proc.returncode != 0, (
         "harness passed a page that shows the model reason with its em dash"
     )
+
+
+# ===== the lantern grid and Answer in chat (roadmap 8.44) ==================
+
+@pytest.mark.parametrize("scenario, expected", [
+    ("grid_render", "ok: grid -> 2 beacons, 3 lanterns, 3 on the shelf, pulse sentence"),
+    ("grid_keyed", "ok: a changed poll reuses the tile and moves its ring"),
+    ("grid_unchanged", "ok: an unchanged poll touches nothing"),
+    ("grid_reorder", "ok: reorder moves the same tiles, no FLIP without its APIs"),
+    ("grid_reorder_flip", "ok: reorder animates with one requestAnimationFrame"),
+    ("answer_single", "ok: answer -> POST /api/sessions/alpha/answer -> close"),
+    ("answer_multi", "ok: answer with two waiting -> stays and says Sent to the chat"),
+    ("answer_double", "ok: a double tap sends one request"),
+    ("answer_409", "ok: a refused answer shows the server's reason, plain"),
+    ("answer_403", "ok: 403 -> can't answer here, app not expired"),
+    ("answer_viewer", "ok: viewer -> Answer in chat disabled with a reason"),
+    ("detail_answer",
+     "ok: session page -> Answer in chat -> POST /api/sessions/alpha/answer"),
+])
+def test_lantern_grid_and_answer_scenarios(node_bin, tmp_path, scenario, expected):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, scenario)
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert expected in proc.stdout, proc.stdout
+
+
+# Guard the guard for each mechanism above: break it in the page and the
+# scenario that names it must fail.
+_GRID_MUTANTS = [
+    pytest.param(
+        "      if (item) { update(item, s); } else { item = map[s.label] = build(s); }",
+        "      item = map[s.label] = build(s);",
+        "grid_keyed", id="keyed-reuse"),
+    pytest.param(
+        "  function canFlip(sample) {",
+        "  function canFlip(sample) { return true;",
+        "grid_reorder", id="flip-feature-check"),
+    pytest.param(
+        '    if (sig === gridSig) { return; }     // nothing on screen would change',
+        "",
+        "grid_unchanged", id="unchanged-poll-gate"),
+    pytest.param(
+        '        if (others <= 1 && tg && typeof tg.close === "function") {',
+        '        if (tg && typeof tg.close === "function") {',
+        "answer_multi", id="close-only-when-alone"),
+    pytest.param(
+        '    postSessionAction(label, "answer", "POST").then(function (r) {',
+        '    apiFetch("/api/sessions/" + encodeURIComponent(label) + "/answer")'
+        '.then(function (r) {',
+        "answer_403", id="answer-not-through-apiFetch"),
+    pytest.param(
+        "    if (answering[label]) { return; }     // one request per tap, never two\n",
+        "",
+        "answer_double", id="in-flight-guard"),
+    pytest.param(
+        "    b.answer.disabled = !gridCanAct || !!answering[s.label];",
+        "    b.answer.disabled = false;",
+        "answer_viewer", id="viewer-disabled"),
+    pytest.param(
+        "    setText(b.summary, plain(s.waiting_summary) ||",
+        "    setText(b.summary, s.waiting_summary ||",
+        "grid_render", id="tray-summary-plain"),
+    pytest.param(
+        "      if (s.status === \"waiting\") { waiting.push(s); }",
+        "      if (false) { waiting.push(s); }",
+        "grid_render", id="waiting-to-the-tray"),
+]
+
+
+@pytest.mark.parametrize("old, new, scenario", _GRID_MUTANTS)
+def test_the_grid_harness_detects_a_broken_mechanism(node_bin, tmp_path, old, new, scenario):
+    from aipager.miniapp.static import INDEX_HTML
+
+    assert INDEX_HTML.count(old) == 1, f"mutation site not found once: {old!r}"
+    broken = INDEX_HTML.replace(old, new, 1)
+    proc = _drive_smoke(node_bin, tmp_path, broken, scenario)
+    assert proc.returncode != 0, (
+        f"harness passed a page with {old!r} broken\nstdout: {proc.stdout}"
+    )
+
+
+def test_the_harness_rejects_a_fetch_outside_the_api(node_bin, tmp_path):
+    """The page may only talk to /api/ on its own origin. Point one fetch
+    somewhere else and even an unrelated, passing scenario must fail."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    old = '      apiFetch("/api/sessions")\n'
+    assert INDEX_HTML.count(old) == 1
+    broken = INDEX_HTML.replace(old, '      apiFetch("/elsewhere/sessions")\n', 1)
+    proc = _drive_smoke(node_bin, tmp_path, broken, "settings")
+    assert proc.returncode != 0, proc.stdout
+    assert "outside /api/" in proc.stderr

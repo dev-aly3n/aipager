@@ -446,6 +446,7 @@ CSS = """
     line-height: var(--lh-title);
     font-weight: 700;
     letter-spacing: -0.01em;
+    text-wrap: balance;
   }
   .pulse-need { color: var(--need-ink); }
   .pulse-rest { color: var(--ink-2); }
@@ -588,7 +589,19 @@ CSS = """
   .tile-project { font-size: var(--fs-sm); line-height: 18px; color: var(--ink-2); }
   .tile-meta { margin-top: 2px; font-size: var(--fs-cap); line-height: var(--lh-cap); color: var(--ink-3); }
   .is-new { animation: rise-in var(--t-enter) var(--ease); }
-  .skel-tile { height: 132px; border-radius: var(--r-card); background: var(--surface); border: 1px solid var(--line); }
+  .skel.skel-tile {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    height: 132px;
+    padding: var(--s3) 14px;
+    border-radius: var(--r-card);
+    background: var(--surface);
+    border: 1px solid var(--line);
+  }
+  .skel-ring { width: 44px; height: 44px; margin-bottom: auto; border-radius: 50%; background: var(--fill); }
+  .skel-bar { height: 12px; border-radius: 6px; background: var(--fill); }
+  .pulse .skel { height: 22px; background: var(--track); }
 
   /* ---- finished: the shelf --------------------------------------------- */
   .shelf { margin-top: var(--s5); }
@@ -1067,7 +1080,7 @@ CSS = """
   .disclosures > * + .sect-toggle { border-top: 1px solid var(--line); }
   .dis-title { flex: 1 1 auto; }
   .chev { width: 16px; height: 16px; color: var(--ink-3); transition: transform var(--t-base) var(--ease); }
-  .chev.is-open { transform: rotate(90deg); }
+  .chev.is-open, .is-open > .chev { transform: rotate(90deg); }
   .panel { max-height: 380px; overflow: auto; padding: var(--s1) 0; border-top: 1px solid var(--line); }
   .disclosures .sect-note { margin: 0; padding: var(--s3) var(--s4) 0; border-top: 1px solid var(--line); }
   .timeline-row { position: relative; padding: 7px var(--s4) 7px 40px; font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }

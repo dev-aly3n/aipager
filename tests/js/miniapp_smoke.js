@@ -2,6 +2,11 @@ const setTimeoutReal = setTimeout;
 // Minimal DOM shim: enough to run the Mini App's script and simulate taps.
 const fs = require("fs");
 const page = fs.readFileSync(process.argv[2], "utf8");
+const SCENARIO_ARG = process.argv[3] || "settings";
+
+// Every DOM write the page makes through this shim, so a scenario can
+// assert that an unchanged poll touches nothing at all.
+global.__writes = 0;
 
 class El {
   constructor(tag) {
@@ -22,7 +27,7 @@ class El {
     };
   }
   get className() { return this._class; }
-  set className(v) { this._class = v; }
+  set className(v) { global.__writes++; this._class = v; }
   // Real textContent is the concatenation of ALL descendant text, and
   // assigning it REPLACES the children. The shim used to return only the
   // node's own text, so any element built from child spans (the notice
@@ -34,20 +39,48 @@ class El {
     }
     return this._text;
   }
-  set textContent(v) { this._text = String(v); this.children = []; }
+  set textContent(v) {
+    global.__writes++;
+    for (const c of this.children) { c.parent = null; }
+    this._text = String(v); this.children = [];
+  }
   get innerHTML() { return this._html; }
-  set innerHTML(v) { this._html = v; this.children = []; }
+  set innerHTML(v) {
+    global.__writes++;
+    for (const c of this.children) { c.parent = null; }
+    this._html = v; this.children = [];
+  }
+  get parentNode() { return this.parent || null; }
   // Real appendChild MOVES a node that already has a parent. The page
   // relies on that: reveals are parked in a stash and moved into place.
   appendChild(c) {
+    global.__writes++;
     if (c.parent) {
       const i = c.parent.children.indexOf(c);
       if (i >= 0) { c.parent.children.splice(i, 1); }
     }
     this.children.push(c); c.parent = this; return c;
   }
+  insertBefore(c, ref) {
+    if (!ref) { return this.appendChild(c); }
+    global.__writes++;
+    if (c.parent) {
+      const i = c.parent.children.indexOf(c);
+      if (i >= 0) { c.parent.children.splice(i, 1); }
+    }
+    const at = this.children.indexOf(ref);
+    this.children.splice(at < 0 ? this.children.length : at, 0, c);
+    c.parent = this; return c;
+  }
+  removeChild(c) {
+    global.__writes++;
+    const i = this.children.indexOf(c);
+    if (i < 0) { throw new Error("removeChild: not a child"); }
+    this.children.splice(i, 1); c.parent = null; return c;
+  }
+  remove() { if (this.parent) { this.parent.removeChild(this); } }
   focus() { this.focused = true; }
-  setAttribute(k, v) { this.attrs[k] = v; }
+  setAttribute(k, v) { global.__writes++; this.attrs[k] = v; }
   getAttribute(k) { return this.attrs[k]; }
   addEventListener(ev, fn) { (this.listeners[ev] = this.listeners[ev] || []).push(fn); }
   click() { (this.listeners.click || []).forEach(f => f.call(this, {})); }
@@ -74,8 +107,10 @@ global.document = {
   addEventListener: () => {},
   querySelectorAll: () => [],
   visibilityState: "visible",
+  documentElement: new El("html"),
+  body: new El("body"),
 };
-global.window = { Telegram: { WebApp: {
+const webApp = {
   initData: "auth_date=1&user=%7B%22id%22%3A1%7D&hash=x",
   ready(){}, expand(){},
   // Capture the handler so a scenario can press Back for real. The
@@ -83,7 +118,25 @@ global.window = { Telegram: { WebApp: {
   // back-button behaviour untestable.
   BackButton: { show(){}, hide(){}, onClick(fn){ global.__back = fn; } },
   HapticFeedback: { notificationOccurred(){} },
-} } };
+};
+// The default mock stays exactly the old, minimal one: every newer
+// Telegram API the page uses must be optional. Scenarios that need more
+// opt in by name.
+if (SCENARIO_ARG.indexOf("answer_") === 0) {
+  webApp.close = () => { global.__closed = true; };
+  webApp.HapticFeedback.impactOccurred = () => {};
+}
+global.window = { Telegram: { WebApp: webApp } };
+// FLIP needs all three of these; only one scenario provides them.
+global.__raf = 0;
+if (SCENARIO_ARG === "grid_reorder_flip") {
+  global.window.requestAnimationFrame = (fn) => { global.__raf++; fn(); return 1; };
+  global.window.matchMedia = () => ({ matches: false });
+  El.prototype.getBoundingClientRect = function () {
+    const i = this.parent ? this.parent.children.indexOf(this) : 0;
+    return { left: (i % 2) * 200, top: Math.floor(i / 2) * 150, width: 190, height: 132 };
+  };
+}
 global.Telegram = global.window.Telegram;
 const fetchCalls = [];
 let DETAIL_OVERRIDE = null;   // see driveMenuDriftCloses
@@ -129,7 +182,7 @@ global.Telegram = undefined;
 // every pre-existing invocation of this harness needs no changes), plus
 // one per session detail-page write action (design.md: "Mini App session
 // controls").
-const SCENARIO = process.argv[3] || "settings";
+const SCENARIO = SCENARIO_ARG;
 
 // Mirrors aipager.miniapp.sessions.NO_TRANSCRIPT_REASON verbatim — this
 // harness has no Python import, so the string is duplicated here on
@@ -418,13 +471,80 @@ if (SCENARIO.indexOf("scope_save") === 0) {
   }
 }
 
+// ---- the lantern grid and Answer in chat (roadmap 8.44) ---------------
+function row(label, status, extra) {
+  return Object.assign({
+    label, status, waiting_kind: null, waiting_summary: null, model: "Opus 4.6",
+    context_pct: 40, cost_usd: 0.5, last_active_seconds_ago: 30, project: "proj",
+  }, extra || {});
+}
+function gridOf(rows, extra) {
+  const live = rows.filter(r => r.status !== "gone");
+  return Object.assign({
+    daemon: { version: "0.7.17", bot_username: "aipager_bot", uptime_seconds: 600 },
+    totals: { total: rows.length, live: live.length, gone: rows.length - live.length,
+              waiting: rows.filter(r => r.status === "waiting").length, cost_usd: 4.21 },
+    sessions: rows, can_act: true,
+  }, extra || {});
+}
+function mixedRows() {
+  return [
+    row("alpha", "waiting", { waiting_kind: "permission", waiting_summary: "Bash: npm test" }),
+    row("bravo", "waiting", { waiting_kind: "question",
+                              waiting_summary: "Which one — the red or the blue?" }),
+    row("charlie", "busy", { context_pct: 64 }),
+    row("delta", "busy"),
+    row("echo", "idle"),
+    row("old1", "gone"), row("old2", "gone"), row("old3", "gone"),
+  ];
+}
+const GRID_FIXTURES = {
+  answer_single: () => gridOf([
+    row("alpha", "waiting", { waiting_kind: "permission", waiting_summary: "Bash: ls" }),
+    row("charlie", "busy"),
+  ]),
+  answer_viewer: () => gridOf(mixedRows(), { can_act: false }),
+};
+if (SCENARIO.indexOf("grid_") === 0 || SCENARIO.indexOf("answer_") === 0 ||
+    SCENARIO === "detail_answer") {
+  FIXTURES["/api/sessions"] = (GRID_FIXTURES[SCENARIO] || (() => gridOf(mixedRows())))();
+  FIXTURES["/api/sessions/alpha/answer"] = { status: "sent", label: "alpha" };
+  FIXTURES["/api/sessions/alpha"] = Object.assign(fullDetailFor("waiting", { isAdmin: true }), {
+    label: "alpha", waiting_kind: "permission", waiting_summary: "Bash: ls",
+    answer: { available: true, reason: null },
+  });
+}
+if (SCENARIO === "answer_409") {
+  POST_STATUS_OVERRIDE = { path: "/api/sessions/alpha/answer", method: "POST", status: 409,
+    body: { error: "not_waiting", detail: "This session isn't waiting — it moved on." } };
+}
+if (SCENARIO === "answer_403") {
+  POST_STATUS_OVERRIDE = { path: "/api/sessions/alpha/answer", method: "POST", status: 403,
+    body: { error: "forbidden" } };
+}
+
+// The page may only ever talk to its own API. The Telegram SDK arrives
+// through the page's <script src>, never through fetch.
+const realExit = process.exit;
+process.exit = (code) => {
+  if (!code) {
+    const stray = fetchCalls.filter(f => f.url.indexOf("/api/") !== 0);
+    if (stray.length) {
+      console.error("FAIL: the page fetched outside /api/: " +
+                    JSON.stringify(stray.map(f => f.url)));
+      realExit(1);
+    }
+  }
+  realExit(code);
+};
+
 // extract and run the page script
 let script = page.match(/<script>([\s\S]*?)<\/script>/g)
   .map(s => s.replace(/<\/?script>/g, "")).join("\n");
 // unwrap the IIFE so the internals are reachable, and export what we drive
 // keep the IIFE (it contains top-level `return`s) but export its internals
 script = script.replace(/\}\)\(\);\s*$/,
-  "\n  global.__api = { openDetail, renderSessionSettings, loadSessionSettings, saveSessionPreference, renderOptionGroup, openGroups, pollTick, loadSettings, loadUpdates, showView };\n})();");
+  "\n  global.__api = { openDetail, renderSessionSettings, loadSessionSettings, saveSessionPreference, renderOptionGroup, openGroups, pollTick, loadSettings, loadUpdates, showView, renderGrid, answerPrompt, showGrid };\n})();");
 eval(script);
 
 function fail(msg) { console.error("FAIL: " + msg); process.exit(1); }
@@ -1490,4 +1610,217 @@ const DRIVERS = {
   rename_server_conflict: driveRenameServerConflict,
   menu_grouping_divider: driveMenuGroupingDivider,
 };
+
+// ===== the lantern grid (roadmap 8.44) =================================
+
+function trayCards() { return byId["needs-you-list"].children; }
+function answerBtn(card) { return card.children[1].children[0]; }
+function tiles() { return byId["sessions"].children; }
+function tileLabel(t) { return t.children[1].textContent; }
+function tileLamp(t) { return t.children[0].children[0]; }
+function pulseText() {
+  const main = byId["grid-totals"].children[0];
+  return main ? main.textContent : "";
+}
+function clone(x) { return JSON.parse(JSON.stringify(x)); }
+function posts() { return fetchCalls.filter(f => f.method === "POST"); }
+
+function driveGridRender() {
+  setTimeoutReal(() => {
+    if (byId["needs-you"].hidden) fail("the Needs you tray is hidden with two sessions waiting");
+    if (trayCards().length !== 2) fail("tray has " + trayCards().length + " cards, want 2");
+    if (tiles().length !== 3) fail("grid has " + tiles().length + " tiles, want 3 live");
+    if (tiles().some(t => /skel/.test(t.className))) fail("a skeleton tile survived the first render");
+    if (JSON.stringify(tiles().map(tileLabel)) !== JSON.stringify(["charlie", "delta", "echo"]))
+      fail("tiles out of server order: " + JSON.stringify(tiles().map(tileLabel)));
+    if (byId["sessions-gone"].children.length !== 3) fail("shelf does not hold the 3 finished");
+    if (!byId["sessions-gone"].hidden) fail("the shelf starts open");
+    if (byId["gone-wrap"].hidden) fail("the shelf is hidden");
+    if (pulseText() !== "2 need you, 2 working, 1 resting")
+      fail("pulse sentence: " + JSON.stringify(pulseText()));
+    if (byId["waiting-badge"].hidden || byId["waiting-badge"].textContent !== "2")
+      fail("waiting badge does not read 2");
+    const labels = trayCards().map(c => answerBtn(c).textContent);
+    if (labels.some(l => l !== "Answer in chat")) fail("answer buttons: " + JSON.stringify(labels));
+    const summary = trayCards()[1].children[0].children[1].children[1].textContent;
+    if (summary !== "Which one - the red or the blue?")
+      fail("the tray summary is not shown plain: " + JSON.stringify(summary));
+    if (tileLamp(tiles()[0]).attrs.style !== "--pct:64") fail("ring does not carry the context");
+    console.log("ok: grid -> 2 beacons, 3 lanterns, 3 on the shelf, pulse sentence");
+    process.exit(0);
+  }, 10);
+}
+
+function driveGridKeyed() {
+  setTimeoutReal(() => {
+    const before = tiles()[0];
+    if (tileLamp(before).attrs.style !== "--pct:64") fail("first ring wrong");
+    const next = clone(FIXTURES["/api/sessions"]);
+    next.sessions[2].context_pct = 81;
+    api.renderGrid(next);
+    if (tiles()[0] !== before) fail("a changed poll rebuilt the tile instead of updating it");
+    if (tileLamp(before).attrs.style !== "--pct:81")
+      fail("the ring did not follow the context: " + tileLamp(before).attrs.style);
+    console.log("ok: a changed poll reuses the tile and moves its ring");
+    process.exit(0);
+  }, 10);
+}
+
+function driveGridUnchanged() {
+  setTimeoutReal(() => {
+    global.__writes = 0;
+    const same = clone(FIXTURES["/api/sessions"]);
+    same.sessions.forEach(r => { r.last_active_seconds_ago += 7; });   // ages only
+    api.renderGrid(same);
+    if (global.__writes !== 0) fail("an unchanged poll made " + global.__writes + " DOM writes");
+    console.log("ok: an unchanged poll touches nothing");
+    process.exit(0);
+  }, 10);
+}
+
+function reorderedGrid() {
+  const next = clone(FIXTURES["/api/sessions"]);
+  const live = next.sessions.filter(r => r.status === "busy" || r.status === "idle").reverse();
+  next.sessions = next.sessions.filter(r => r.status === "waiting")
+    .concat(live, next.sessions.filter(r => r.status === "gone"));
+  return next;
+}
+
+function driveGridReorder() {
+  setTimeoutReal(() => {
+    const byLabel = {};
+    tiles().forEach(t => { byLabel[tileLabel(t)] = t; });
+    try { api.renderGrid(reorderedGrid()); } catch (e) { fail("reorder threw: " + e); }
+    const order = tiles().map(tileLabel);
+    if (JSON.stringify(order) !== JSON.stringify(["echo", "delta", "charlie"]))
+      fail("reorder: " + JSON.stringify(order));
+    if (tiles().some(t => byLabel[tileLabel(t)] !== t)) fail("reorder rebuilt tiles");
+    if (global.__raf !== 0) fail("FLIP ran without its APIs");
+    console.log("ok: reorder moves the same tiles, no FLIP without its APIs");
+    process.exit(0);
+  }, 10);
+}
+
+function driveGridReorderFlip() {
+  setTimeoutReal(() => {
+    api.renderGrid(reorderedGrid());
+    if (global.__raf !== 1) fail("FLIP used " + global.__raf + " animation frames, want exactly 1");
+    const stuck = tiles().filter(t => t.style.transform);
+    if (stuck.length) fail("FLIP left a transform behind");
+    console.log("ok: reorder animates with one requestAnimationFrame");
+    process.exit(0);
+  }, 10);
+}
+
+function answerCallsFor(label) {
+  return posts().filter(f => f.url === "/api/sessions/" + label + "/answer");
+}
+
+function driveAnswerSingle() {
+  setTimeoutReal(() => {
+    answerBtn(trayCards()[0]).click();
+    if (answerCallsFor("alpha").length !== 1) fail("tap did not POST the answer route once");
+    setTimeoutReal(() => {
+      if (global.__closed !== true) fail("one session waiting: the app should close onto the chat");
+      console.log("ok: answer -> POST /api/sessions/alpha/answer -> close");
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
+function driveAnswerMulti() {
+  setTimeoutReal(() => {
+    answerBtn(trayCards()[0]).click();
+    setTimeoutReal(() => {
+      if (global.__closed) fail("closed with another session still waiting");
+      if (byId["notice"].textContent.indexOf("Sent to the chat") === -1)
+        fail("no confirmation: " + JSON.stringify(byId["notice"].textContent));
+      console.log("ok: answer with two waiting -> stays and says Sent to the chat");
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
+function driveAnswerDouble() {
+  setTimeoutReal(() => {
+    const btn = answerBtn(trayCards()[0]);
+    btn.click();
+    btn.click();
+    if (answerCallsFor("alpha").length !== 1)
+      fail("a double tap sent " + answerCallsFor("alpha").length + " requests");
+    if (!btn.disabled) fail("the button is not disabled while its request runs");
+    console.log("ok: a double tap sends one request");
+    process.exit(0);
+  }, 10);
+}
+
+function driveAnswer409() {
+  setTimeoutReal(() => {
+    answerBtn(trayCards()[0]).click();
+    setTimeoutReal(() => {
+      const n = byId["notice"].textContent;
+      if (n.indexOf("This session isn't waiting - it moved on.") === -1)
+        fail("the server detail is not shown plain: " + JSON.stringify(n));
+      console.log("ok: a refused answer shows the server's reason, plain");
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
+function driveAnswer403() {
+  setTimeoutReal(() => {
+    answerBtn(trayCards()[0]).click();
+    setTimeoutReal(() => {
+      if (byId["notice"].textContent.indexOf("can't answer") === -1)
+        fail("403 did not say why: " + JSON.stringify(byId["notice"].textContent));
+      if (byId["conn-badge"].textContent === "expired") fail("a 403 expired the whole app");
+      if ((byId["error"].textContent || "").indexOf("expired") !== -1) fail("expired message shown");
+      console.log("ok: 403 -> can't answer here, app not expired");
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
+function driveAnswerViewer() {
+  setTimeoutReal(() => {
+    const card = trayCards()[0];
+    if (!answerBtn(card).disabled) fail("a viewer's Answer in chat is enabled");
+    const note = card.children[2];
+    if (note.hidden || note.textContent.indexOf("can't answer") === -1)
+      fail("a disabled Answer in chat gives no reason");
+    answerBtn(card).click();
+    console.log("ok: viewer -> Answer in chat disabled with a reason");
+    process.exit(0);
+  }, 10);
+}
+
+function driveDetailAnswer() {
+  setTimeoutReal(() => {
+    api.openDetail("alpha");
+    setTimeoutReal(() => {
+      const btn = byId["detail-answer"];
+      if (byId["detail-waiting"].hidden) fail("the waiting card is hidden");
+      if (btn.hidden || btn.disabled) fail("Answer in chat is not offered on the session page");
+      btn.click();
+      if (answerCallsFor("alpha").length !== 1) fail("the detail button did not POST once");
+      console.log("ok: session page -> Answer in chat -> POST /api/sessions/alpha/answer");
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
+Object.assign(DRIVERS, {
+  grid_render: driveGridRender,
+  grid_keyed: driveGridKeyed,
+  grid_unchanged: driveGridUnchanged,
+  grid_reorder: driveGridReorder,
+  grid_reorder_flip: driveGridReorderFlip,
+  answer_single: driveAnswerSingle,
+  answer_multi: driveAnswerMulti,
+  answer_double: driveAnswerDouble,
+  answer_409: driveAnswer409,
+  answer_403: driveAnswer403,
+  answer_viewer: driveAnswerViewer,
+  detail_answer: driveDetailAnswer,
+});
 (DRIVERS[SCENARIO] || (() => fail("unknown scenario: " + SCENARIO)))();

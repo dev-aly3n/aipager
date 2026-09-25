@@ -19,6 +19,15 @@ APP_JS = r"""
 (function () {
   var tg = window.Telegram && window.Telegram.WebApp;
   if (tg) { tg.ready(); tg.expand(); }
+
+  // The stylesheet takes every colour from Telegram's theme variables
+  // except the amber pair, which it picks by <html data-scheme>.
+  function applyScheme() {
+    var root = document.documentElement;
+    if (!root || !root.setAttribute) { return; }
+    root.setAttribute("data-scheme", tg && tg.colorScheme === "dark" ? "dark" : "light");
+  }
+  applyScheme();
   var initData = tg ? tg.initData : "";
 
   // Poll while the tab is visible; visibilitychange below both stops
@@ -75,7 +84,8 @@ APP_JS = r"""
   function setConnState(state) {
     var badge = document.getElementById("conn-badge");
     var errorEl = document.getElementById("error");
-    badge.hidden = false;
+    // Only a problem is worth a badge: while live there is none.
+    badge.hidden = state === "live";
     badge.className = "conn conn-" + (state === "live" ? "live"
       : state === "reconnecting" ? "reconnecting" : "offline");
     if (state === "live") {
@@ -85,9 +95,11 @@ APP_JS = r"""
       badge.textContent = "reconnecting…";
       errorEl.style.display = "none";
     } else if (state === "offline") {
+      clearGridSkeleton();
       badge.textContent = "offline";
       showFatal("Can't reach the server. Check the tunnel.");
     } else if (state === "expired") {
+      clearGridSkeleton();
       badge.textContent = "expired";
       showFatal("Session expired. Reopen it from /app in Telegram.");
     }
@@ -195,6 +207,21 @@ APP_JS = r"""
 
   // ---- haptics ----------------------------------------------------------
 
+  // Every call feature-checked: older Telegram clients lack some of these.
+  function haptic(kind, arg) {
+    var h = tg && tg.HapticFeedback;
+    if (!h) { return; }
+    try {
+      if (kind === "impact" && typeof h.impactOccurred === "function") {
+        h.impactOccurred(arg);
+      } else if (kind === "select" && typeof h.selectionChanged === "function") {
+        h.selectionChanged();
+      } else if (kind === "notify" && typeof h.notificationOccurred === "function") {
+        h.notificationOccurred(arg);
+      }
+    } catch (e) { /* older client */ }
+  }
+
   function pulseForStatusChanges(sessions) {
     if (!tg || !tg.HapticFeedback) { return; }
     sessions.forEach(function (s) {
@@ -239,43 +266,359 @@ APP_JS = r"""
     return formatAge(s.last_active_seconds_ago + drift);
   }
 
-  function buildCard(s) {
-    var card = document.createElement("div");
-    card.className = "card" + (s.status === "gone" ? " card-gone" : "");
-    var statusText = (s.status === "waiting" && s.waiting_kind)
-      ? s.status + " · " + s.waiting_kind : s.status;
+  // ---- the lanterns: keyed rendering ----------------------------------
+  //
+  // Three buckets, each a label -> node map: waiting sessions are beacons
+  // in the Needs you tray, live ones are tiles in the lantern grid, and
+  // finished ones rest on the shelf. A poll updates the nodes it already
+  // has, writing a text or class only when it changed, so an unchanged
+  // poll touches nothing and a tile never flickers, loses focus or jumps.
 
-    var name = document.createElement("div");
-    name.className = "card-name";
-    name.textContent = s.label;
+  var STATE_WORDS = {
+    busy: "working", idle: "resting", waiting: "needs you",
+    gone: "finished", unknown: "unknown"
+  };
 
-    var foot = document.createElement("div");
-    foot.className = "card-foot";
-    var st = document.createElement("span");
-    st.className = statusClass(s.status);
-    st.textContent = statusText;
-    var age = document.createElement("span");
-    age.className = "card-age";
-    age.setAttribute("data-age-for", s.label);
-    age.textContent = ageFor(s);
-    foot.appendChild(st);
-    foot.appendChild(age);
+  function stateWord(status) { return STATE_WORDS[status] || String(status || ""); }
 
-    card.appendChild(name);
-    card.appendChild(foot);
-    card.addEventListener("click", function () { openDetail(s.label); });
-    return card;
+  function money(v) { return "$" + (Number(v) || 0).toFixed(2); }
+
+  function pctOf(s) {
+    var p = Math.round(Number(s && s.context_pct) || 0);
+    return Math.max(0, Math.min(100, p));
+  }
+
+  // Each writes only when the value differs.
+  function setText(node, text) { if (node.textContent !== text) { node.textContent = text; } }
+  function setClass(node, cls) { if (node.className !== cls) { node.className = cls; } }
+  function setAttr(node, key, value) {
+    if (node.getAttribute(key) !== value) { node.setAttribute(key, value); }
+  }
+  function setHtml(node, html) { if (node.innerHTML !== html) { node.innerHTML = html; } }
+
+  function make(tag, cls) {
+    var node = document.createElement(tag);
+    if (cls) { node.className = cls; }
+    if (tag === "button") { node.type = "button"; }
+    return node;
+  }
+
+  // The enter animation plays once, when the node is new. It is a class so
+  // a later re-append (a reorder) does not replay it.
+  function markNew(node) {
+    node.classList.add("is-new");
+    node.addEventListener("animationend", function () { node.classList.remove("is-new"); });
+  }
+
+  function openFromGrid(label) {
+    haptic("impact", "light");
+    openDetail(label);
+  }
+
+  function buildTile(s) {
+    var t = { el: make("button", "tile"), sig: "" };
+    var top = make("span", "tile-top");
+    t.lamp = make("span", "lamp");
+    t.num = make("span", "lamp-num");
+    t.lamp.appendChild(t.num);
+    var side = make("span", "tile-side");
+    t.state = make("span", "tile-state");
+    t.age = make("span", "tile-age");
+    t.age.setAttribute("data-age-for", s.label);
+    side.appendChild(t.state);
+    side.appendChild(t.age);
+    top.appendChild(t.lamp);
+    top.appendChild(side);
+    t.label = make("span", "tile-label");
+    t.project = make("span", "tile-project");
+    t.meta = make("span", "tile-meta");
+    t.el.appendChild(top);
+    t.el.appendChild(t.label);
+    t.el.appendChild(t.project);
+    t.el.appendChild(t.meta);
+    var label = s.label;
+    t.el.addEventListener("click", function () { openFromGrid(label); });
+    updateTile(t, s);
+    markNew(t.el);
+    return t;
+  }
+
+  function updateTile(t, s) {
+    var pct = pctOf(s);
+    var sig = [s.label, s.status, pct, s.model, s.cost_usd, s.project].join("|");
+    if (t.sig === sig) { return; }
+    t.sig = sig;
+    var word = stateWord(s.status);
+    setClass(t.el, "tile tile-" + s.status);
+    setClass(t.lamp, "lamp " + (s.status === "busy" ? "lamp-work" : "lamp-rest"));
+    setAttr(t.lamp, "style", "--pct:" + pct);
+    setText(t.num, String(pct));
+    setText(t.state, word);
+    setText(t.label, s.label);
+    setText(t.project, s.project || "no folder");
+    setText(t.meta, (s.model ? s.model + " · " : "") + money(s.cost_usd));
+    setAttr(t.el, "aria-label", s.label + ", " + word + ", context " + pct + "%" +
+      (s.model ? ", " + s.model : "") + ", " + money(s.cost_usd));
+  }
+
+  function buildBeacon(s) {
+    var b = { el: make("div", "beacon"), sig: "" };
+    var body = make("button", "beacon-body");
+    b.lamp = make("span", "lamp lamp-need");
+    var text = make("span", "beacon-text");
+    var top = make("span", "beacon-top");
+    b.label = make("span", "beacon-label");
+    b.kind = make("span", "kind-chip");
+    b.age = make("span", "beacon-age");
+    b.age.setAttribute("data-age-for", s.label);
+    top.appendChild(b.label);
+    top.appendChild(b.kind);
+    top.appendChild(b.age);
+    b.summary = make("span", "beacon-summary");
+    text.appendChild(top);
+    text.appendChild(b.summary);
+    body.appendChild(b.lamp);
+    body.appendChild(text);
+    var actions = make("div", "beacon-actions");
+    b.answer = make("button", "primary btn-need answer-btn");
+    b.answer.innerHTML = icon("chat");
+    var answerText = make("span");
+    answerText.textContent = "Answer in chat";
+    b.answer.appendChild(answerText);
+    b.open = make("button", "icon-btn");
+    b.open.innerHTML = icon("open");
+    b.open.setAttribute("aria-label", "Open " + s.label);
+    actions.appendChild(b.answer);
+    actions.appendChild(b.open);
+    b.note = make("div", "note");
+    b.note.hidden = true;
+    b.el.appendChild(body);
+    b.el.appendChild(actions);
+    b.el.appendChild(b.note);
+    var label = s.label;
+    body.addEventListener("click", function () { openFromGrid(label); });
+    b.open.addEventListener("click", function () { openFromGrid(label); });
+    b.answer.addEventListener("click", function () { answerPrompt(label); });
+    updateBeacon(b, s);
+    markNew(b.el);
+    return b;
+  }
+
+  function updateBeacon(b, s) {
+    var sig = [s.label, s.waiting_kind, s.waiting_summary, gridCanAct ? 1 : 0].join("|");
+    if (b.sig === sig) { return; }
+    b.sig = sig;
+    var question = s.waiting_kind === "question";
+    setHtml(b.lamp, icon(question ? "question" : "lock"));
+    setText(b.label, s.label);
+    setText(b.kind, question ? "Question" : "Permission");
+    setText(b.summary, plain(s.waiting_summary) ||
+      (question ? "Claude is asking you something." : "Claude wants to use a tool."));
+    b.answer.disabled = !gridCanAct || !!answering[s.label];
+    setText(b.note, gridCanAct ? "" : NO_ANSWER_TEXT);
+    b.note.hidden = gridCanAct;
+  }
+
+  function buildShelfRow(s) {
+    var r = { el: make("button", "shelf-row"), sig: "" };
+    r.lamp = make("span", "lamp lamp-out lamp-sm");
+    r.lamp.innerHTML = icon("lantern");
+    var text = make("span", "shelf-text");
+    r.label = make("span", "shelf-label");
+    r.meta = make("span", "shelf-meta");
+    text.appendChild(r.label);
+    text.appendChild(r.meta);
+    r.age = make("span", "shelf-age");
+    r.age.setAttribute("data-age-for", s.label);
+    r.el.appendChild(r.lamp);
+    r.el.appendChild(text);
+    r.el.appendChild(r.age);
+    var label = s.label;
+    r.el.addEventListener("click", function () { openFromGrid(label); });
+    updateShelfRow(r, s);
+    return r;
+  }
+
+  function updateShelfRow(r, s) {
+    var sig = [s.label, s.project, s.model, s.cost_usd].join("|");
+    if (r.sig === sig) { return; }
+    r.sig = sig;
+    setText(r.label, s.label);
+    setText(r.meta, [s.project, s.model, s.cost_usd ? money(s.cost_usd) : ""]
+      .filter(function (x) { return !!x; }).join(" · ") || "finished");
+  }
+
+  // Reorders are felt, not seen twice: FLIP, but only when every API it
+  // needs exists and the operator has not asked for less motion. One
+  // requestAnimationFrame per reorder, never a loop.
+  function canFlip(sample) {
+    var w = window;
+    if (!sample || typeof sample.getBoundingClientRect !== "function") { return false; }
+    if (typeof w.requestAnimationFrame !== "function" || typeof w.matchMedia !== "function") {
+      return false;
+    }
+    try {
+      return !w.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function sameOrder(host, nodes) {
+    var kids = host.children;
+    if (!kids || kids.length !== nodes.length) { return false; }
+    for (var i = 0; i < nodes.length; i++) {
+      if (kids[i] !== nodes[i]) { return false; }
+    }
+    return true;
+  }
+
+  function placeChildren(host, nodes, animate) {
+    if (sameOrder(host, nodes)) { return; }
+    var flip = animate && canFlip(nodes[0]);
+    var before = [];
+    if (flip) {
+      nodes.forEach(function (n) {
+        before.push(n.parentNode === host ? n.getBoundingClientRect() : null);
+      });
+    }
+    nodes.forEach(function (n) { host.appendChild(n); });
+    if (!flip) { return; }
+    var moved = [];
+    nodes.forEach(function (n, i) {
+      var a = before[i];
+      if (!a) { return; }
+      var b = n.getBoundingClientRect();
+      var dx = a.left - b.left;
+      var dy = a.top - b.top;
+      if (!dx && !dy) { return; }
+      n.style.transition = "none";
+      n.style.transform = "translate(" + dx + "px, " + dy + "px)";
+      moved.push(n);
+    });
+    if (!moved.length) { return; }
+    moved[0].getBoundingClientRect();     // commit the inverted positions
+    window.requestAnimationFrame(function () {
+      moved.forEach(function (n) {
+        n.style.transition = "";
+        n.style.transform = "";
+      });
+    });
+  }
+
+  // Update what exists, build what is new, drop what left, then fix the
+  // order (only if it actually changed).
+  function syncBucket(host, map, rows, build, update, animate) {
+    var keep = Object.create(null);
+    var nodes = [];
+    rows.forEach(function (s) {
+      keep[s.label] = true;
+      var item = map[s.label];
+      if (item) { update(item, s); } else { item = map[s.label] = build(s); }
+      setText(item.age, ageFor(s));
+      nodes.push(item.el);
+    });
+    Object.keys(map).forEach(function (label) {
+      if (keep[label]) { return; }
+      var node = map[label].el;
+      if (node.parentNode) { node.parentNode.removeChild(node); }
+      delete map[label];
+    });
+    placeChildren(host, nodes, animate);
+  }
+
+  // "1 needs you, 2 working, 3 resting" over "$4.21 spent · 2 finished":
+  // the room in one sentence, with the one clause that costs the operator
+  // time in the beacon's colour.
+  function renderPulse(sessions, totals) {
+    var host = document.getElementById("grid-totals");
+    var count = { waiting: 0, busy: 0, idle: 0, other: 0 };
+    sessions.forEach(function (s) {
+      if (s.status === "gone") { return; }
+      if (count[s.status] !== undefined && s.status !== "other") { count[s.status] += 1; } else { count.other += 1; }
+    });
+    var clauses = [];
+    if (count.waiting) {
+      clauses.push(["pulse-need", count.waiting + (count.waiting === 1 ? " needs you" : " need you")]);
+    }
+    if (count.busy) { clauses.push(["pulse-work", count.busy + " working"]); }
+    if (count.idle) { clauses.push(["pulse-rest", count.idle + " resting"]); }
+    if (count.other) { clauses.push(["pulse-rest", count.other + " unknown"]); }
+    if (!clauses.length) { clauses.push(["pulse-rest", sessions.length ? "All quiet" : ""]); }
+    var sub = [money(totals.cost_usd) + " spent"];
+    if (totals.gone) { sub.push(totals.gone + " finished"); }
+    var key = JSON.stringify([clauses, sub, sessions.length]);
+    if (host.getAttribute("data-key") === key) { return; }
+    host.setAttribute("data-key", key);
+    host.innerHTML = "";
+    if (!sessions.length) { return; }
+    var main = make("span", "pulse-main");
+    clauses.forEach(function (c, i) {
+      if (i) {
+        var sep = make("span");
+        sep.textContent = ", ";
+        main.appendChild(sep);
+      }
+      var part = make("span", c[0]);
+      part.textContent = c[1];
+      main.appendChild(part);
+    });
+    var line = make("span", "pulse-sub");
+    line.textContent = sub.join(" · ");
+    host.appendChild(main);
+    host.appendChild(line);
   }
 
   var goneCollapsed = true;
   var lastGridData = null;   // so the gone-toggle can re-render without a fetch
+  var gridSig = null;        // what the grid on screen was built from
+  var gridCanAct = true;     // may this caller answer prompts (GET /api/sessions can_act)
+  var gridSkeleton = false;  // the first-load placeholders are up
+  var tileMap = Object.create(null);
+  var beaconMap = Object.create(null);
+  var shelfMap = Object.create(null);
+
+  // Everything the grid shows except the ages, which tickAges re-stamps,
+  // and the uptime, which only the daemon line shows.
+  function gridSignature(data) {
+    var rows = (data.sessions || []).map(function (s) {
+      return [s.label, s.status, s.waiting_kind, s.waiting_summary, s.model,
+              pctOf(s), s.cost_usd, s.project].join("|");
+    });
+    var t = data.totals || {};
+    return JSON.stringify([rows, t.cost_usd, data.can_act === false, goneCollapsed]);
+  }
+
+  function showGridSkeleton() {
+    var host = document.getElementById("sessions");
+    host.innerHTML = "";
+    // Shaped like a tile: a ring, a name, a caption.
+    for (var i = 0; i < 4; i++) {
+      var tile = make("div", "skel skel-tile");
+      tile.appendChild(make("span", "skel-ring"));
+      tile.appendChild(make("span", "skel-bar w70"));
+      tile.appendChild(make("span", "skel-bar w40"));
+      host.appendChild(tile);
+    }
+    skeleton(document.getElementById("grid-totals"), 1);
+    gridSkeleton = true;
+  }
+
+  // A first load that fails leaves nothing to wait for: drop the shapes.
+  function clearGridSkeleton() {
+    if (!gridSkeleton) { return; }
+    document.getElementById("sessions").innerHTML = "";
+    document.getElementById("grid-totals").innerHTML = "";
+    document.getElementById("daemon-line").textContent = "";
+    gridSkeleton = false;
+  }
 
   function renderGrid(data) {
     lastGridData = data;
     var d = data.daemon || {};
-    document.getElementById("daemon-line").textContent =
+    setText(document.getElementById("daemon-line"),
       "@" + (d.bot_username || "?") + " · v" + (d.version || "?") +
-      " · up " + Math.floor((d.uptime_seconds || 0) / 60) + "m";
+      " · up " + Math.floor((d.uptime_seconds || 0) / 60) + "m");
 
     var sessions = data.sessions || [];
     var totals = data.totals || {};
@@ -284,55 +627,117 @@ APP_JS = r"""
     sessions.forEach(function (s) { lastSessionsByLabel[s.label] = s; });
     pulseForStatusChanges(sessions);
 
+    var sig = gridSignature(data);
+    if (sig === gridSig) { return; }     // nothing on screen would change
+    gridSig = sig;
+    gridCanAct = data.can_act !== false;
+
+    if (gridSkeleton) {
+      document.getElementById("sessions").innerHTML = "";
+      gridSkeleton = false;
+    }
+
     // Waiting count rides the Sessions tab so the one state that costs
     // the operator time is visible without reading the grid.
     var badge = document.getElementById("waiting-badge");
     if (totals.waiting) {
-      badge.textContent = totals.waiting;
+      setText(badge, String(totals.waiting));
       badge.hidden = false;
     } else {
       badge.hidden = true;
     }
+    renderPulse(sessions, totals);
 
-    var bits = [];
-    if (totals.live) { bits.push(totals.live + " live"); }
-    if (totals.gone) { bits.push(totals.gone + " finished"); }
-    if (totals.cost_usd) { bits.push("$" + totals.cost_usd.toFixed(2) + " total"); }
-    document.getElementById("grid-totals").textContent = bits.join(" · ");
-
+    var waiting = [];
     var live = [];
     var gone = [];
     sessions.forEach(function (s) {
-      (s.status === "gone" ? gone : live).push(s);
+      if (s.status === "waiting") { waiting.push(s); } else if (s.status === "gone") { gone.push(s); } else { live.push(s); }
     });
 
-    var el = document.getElementById("sessions");
-    el.innerHTML = "";
-    live.forEach(function (s) { el.appendChild(buildCard(s)); });
-
+    syncBucket(document.getElementById("needs-you-list"), beaconMap, waiting,
+               buildBeacon, updateBeacon, false);
+    document.getElementById("needs-you").hidden = waiting.length === 0;
+    syncBucket(document.getElementById("sessions"), tileMap, live,
+               buildTile, updateTile, true);
     document.getElementById("empty-state").hidden = sessions.length !== 0;
 
     var wrap = document.getElementById("gone-wrap");
     var goneEl = document.getElementById("sessions-gone");
     var toggle = document.getElementById("gone-toggle");
     wrap.hidden = gone.length === 0;
+    syncBucket(goneEl, shelfMap, gone, buildShelfRow, updateShelfRow, false);
     if (gone.length) {
-      toggle.textContent = (goneCollapsed ? "Show " : "Hide ") +
-        gone.length + " finished session" + (gone.length === 1 ? "" : "s");
+      setDisclosure(toggle, "Finished (" + gone.length + ")", !goneCollapsed);
       goneEl.hidden = goneCollapsed;
-      goneEl.innerHTML = "";
-      gone.forEach(function (s) { goneEl.appendChild(buildCard(s)); });
     }
   }
 
   // Re-stamp only the age labels, so "2m ago" becomes "3m ago" without
-  // refetching or rebuilding the cards.
+  // refetching or rebuilding anything.
   function tickAges() {
     var nodes = document.querySelectorAll("[data-age-for]");
     for (var i = 0; i < nodes.length; i++) {
       var s = lastSessionsByLabel[nodes[i].getAttribute("data-age-for")];
-      if (s) { nodes[i].textContent = ageFor(s); }
+      if (s) { setText(nodes[i], ageFor(s)); }
     }
+  }
+
+  // ---- Answer in chat (8.31 parity) ------------------------------------
+  //
+  // Re-sends the pending prompt, with its buttons, into the chat through
+  // the pinned bar's own path; the answer itself happens there. Through
+  // postSessionAction, never apiFetch: a 403 here means "you can't answer
+  // prompts", not "your session expired".
+  var NO_ANSWER_TEXT = "You can't answer prompts in this chat.";
+  var answering = Object.create(null);   // label -> a request is in flight
+
+  function waitingCount() {
+    var rows = (lastGridData && lastGridData.sessions) || [];
+    return rows.filter(function (s) { return s.status === "waiting"; }).length;
+  }
+
+  function setAnswerBusy(label, busy) {
+    var b = beaconMap[label];
+    if (b) { b.answer.disabled = busy || !gridCanAct; }
+    var detailBtn = document.getElementById("detail-answer");
+    if (currentView.label === label) {
+      detailBtn.disabled = busy || !(lastDetailData && lastDetailData.answer &&
+                                     lastDetailData.answer.available);
+    }
+  }
+
+  function answerPrompt(label) {
+    if (answering[label]) { return; }     // one request per tap, never two
+    answering[label] = true;
+    setAnswerBusy(label, true);
+    var others = waitingCount();
+    postSessionAction(label, "answer", "POST").then(function (r) {
+      answering[label] = false;
+      setAnswerBusy(label, false);
+      if (r.status === 200) {
+        haptic("notify", "success");
+        // The Mini App is a sheet over the chat: closing it shows the
+        // prompt just posted, one tap from its buttons. With other
+        // sessions still waiting, closing would strand them, so stay.
+        if (others <= 1 && tg && typeof tg.close === "function") {
+          try { tg.close(); return; } catch (e) { /* stay open */ }
+        }
+        showNotice("Sent to the chat. Answer it there.", "ok");
+        pollTick();
+        return;
+      }
+      if (r.status === 403) {
+        showNotice(NO_ANSWER_TEXT, "err");
+        return;
+      }
+      showNotice(plain((r.data && r.data.detail) || "Couldn't send the prompt to the chat."), "err");
+      pollTick();
+    }).catch(function () {
+      answering[label] = false;
+      setAnswerBusy(label, false);
+      showNotice("Couldn't reach the server. Nothing was sent.", "err");
+    });
   }
 
   // ---- drill-down: timeline ------------------------------------------
@@ -384,6 +789,14 @@ APP_JS = r"""
       document.getElementById("detail-waiting-text").textContent = data.waiting_summary
         ? plain(data.waiting_summary)
         : (isQuestion ? "A question is open in the chat." : "A permission prompt is open in the chat.");
+      var answer = data.answer;
+      var answerBtn = document.getElementById("detail-answer");
+      var answerNote = document.getElementById("detail-answer-note");
+      answerBtn.hidden = !answer;
+      answerBtn.disabled = !answer || !answer.available || !!answering[data.label];
+      var why = answer && !answer.available ? plain(answer.reason || NO_ANSWER_TEXT) : "";
+      answerNote.textContent = why;
+      answerNote.hidden = !why;
       waitEl.hidden = false;
     } else {
       waitEl.hidden = true;
@@ -2372,6 +2785,9 @@ APP_JS = r"""
     btn.classList.toggle("is-open", !adv.hidden);
   });
   document.getElementById("new-session-btn").addEventListener("click", openNewSession);
+  document.getElementById("detail-answer").addEventListener("click", function () {
+    if (currentView.label) { answerPrompt(currentView.label); }
+  });
   document.getElementById("empty-new").addEventListener("click", openNewSession);
 
   // ---- top-level tabs -------------------------------------------------
@@ -2510,6 +2926,7 @@ APP_JS = r"""
     return;
   }
 
+  showGridSkeleton();
   pollTick();
   pollTimer = setInterval(pollTick, POLL_INTERVAL_MS);
 })();
