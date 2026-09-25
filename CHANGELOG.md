@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.16] - 2026-09-25
+
 ### Changed
 - **Plainer punctuation on the pinned bar and the agents line.** A session's state is in parentheses and a normal dash replaces the long one: `bigdog (working)`, `catfish (working, 3 agents running)`, `⏳ jim needs you - Bash: make deploy`, `⏸ card updates paused (hourly limit)`, and on an answer `⏳ 1 agent still running (pipeline-runner) - results will follow here`, later `✅ pipeline-runner done (6m)`.
 
