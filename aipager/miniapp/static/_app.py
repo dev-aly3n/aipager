@@ -96,7 +96,19 @@ APP_JS = r"""
   // ---- connectivity / staleness (spec: never a spinner-forever, never
   // a raw fetch error) --------------------------------------------------
 
+  // Both "New session" buttons open a form that needs the server, so
+  // while offline or expired they are hidden (a dead end otherwise), and
+  // the "+" steps aside while the empty state offers its own button.
+  var unreachable = false;
+  var gridEmpty = false;
+  function syncNewButtons() {
+    document.getElementById("empty-state").hidden = !gridEmpty || unreachable;
+    document.getElementById("new-session-btn").hidden = unreachable || gridEmpty;
+  }
+
   function setConnState(state) {
+    unreachable = state === "offline" || state === "expired";
+    syncNewButtons();
     var badge = document.getElementById("conn-badge");
     var errorEl = document.getElementById("error");
     // Only a problem is worth a badge: while live there is none.
@@ -675,7 +687,8 @@ APP_JS = r"""
     document.getElementById("needs-you").hidden = waiting.length === 0;
     syncBucket(document.getElementById("sessions"), tileMap, live,
                buildTile, updateTile, true);
-    document.getElementById("empty-state").hidden = sessions.length !== 0;
+    gridEmpty = sessions.length === 0;
+    syncNewButtons();
 
     var wrap = document.getElementById("gone-wrap");
     var goneEl = document.getElementById("sessions-gone");

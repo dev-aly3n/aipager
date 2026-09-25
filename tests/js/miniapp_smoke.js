@@ -564,6 +564,7 @@ const GRID_FIXTURES = {
     row("charlie", "busy"),
   ]),
   answer_viewer: () => gridOf(mixedRows(), { can_act: false }),
+  grid_empty: () => gridOf([]),
 };
 if (SCENARIO.indexOf("grid_") === 0 || SCENARIO.indexOf("answer_") === 0 ||
     SCENARIO === "detail_answer" || SCENARIO === "detail_waiting_mainbutton") {
@@ -577,6 +578,10 @@ if (SCENARIO.indexOf("grid_") === 0 || SCENARIO.indexOf("answer_") === 0 ||
 if (SCENARIO === "answer_409") {
   POST_STATUS_OVERRIDE = { path: "/api/sessions/alpha/answer", method: "POST", status: 409,
     body: { error: "not_waiting", detail: "This session isn't waiting — it moved on." } };
+}
+if (SCENARIO === "grid_expired") {
+  POST_STATUS_OVERRIDE = { path: "/api/sessions", method: "GET", status: 401,
+    body: { error: "unauthorized" } };
 }
 if (SCENARIO === "answer_403") {
   POST_STATUS_OVERRIDE = { path: "/api/sessions/alpha/answer", method: "POST", status: 403,
@@ -1751,6 +1756,27 @@ function driveGridRender() {
   }, 10);
 }
 
+// Empty: one "New session" (the empty state's own), not two.
+function driveGridEmpty() {
+  setTimeoutReal(() => {
+    if (byId["empty-state"].hidden) fail("the empty state is hidden with no sessions");
+    if (!byId["new-session-btn"].hidden) fail("the + stays beside the empty state's button");
+    console.log("ok: empty grid -> empty state with one New session button");
+    process.exit(0);
+  }, 10);
+}
+
+// Expired: the form cannot load, so no button may lead to it.
+function driveGridExpired() {
+  setTimeoutReal(() => {
+    if (byId["conn-badge"].textContent !== "expired") fail("a 401 did not expire the app");
+    if (!byId["new-session-btn"].hidden) fail("the + is offered while expired");
+    if (!byId["empty-state"].hidden) fail("the empty state is offered while expired");
+    console.log("ok: expired -> no New session button");
+    process.exit(0);
+  }, 10);
+}
+
 function driveGridKeyed() {
   setTimeoutReal(() => {
     const before = tiles()[0];
@@ -1911,6 +1937,8 @@ function driveDetailAnswer() {
 
 Object.assign(DRIVERS, {
   grid_render: driveGridRender,
+  grid_empty: driveGridEmpty,
+  grid_expired: driveGridExpired,
   grid_keyed: driveGridKeyed,
   grid_unchanged: driveGridUnchanged,
   grid_reorder: driveGridReorder,
