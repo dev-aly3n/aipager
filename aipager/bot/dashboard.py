@@ -87,6 +87,13 @@ log = logging.getLogger(__name__)
 #: The callback verb of the pinned bar's "Answer <label>" button, sent as
 #: ``_:sx:<idx>:pin_answer`` (session_parity's short form, ≤ 64 bytes).
 PINNED_ANSWER_VERB = "pin_answer"
+
+#: Outcomes of :meth:`DashboardMixin._resend_pending_prompt`.
+RESEND_SENT = "sent"
+RESEND_NOT_WAITING = "not_waiting"
+RESEND_NOT_RESENDABLE = "not_resendable"
+RESEND_BUSY = "busy"
+RESEND_DROPPED = "dropped"
 PINNED_SLOW_LINE = "🐢 slow mode after a Telegram warning"
 PINNED_PAUSED_LINE = "⏸ card updates paused (hourly limit)"
 PINNED_PAUSED_RATE_LINE = "⏸ card updates paused (rate limit)"
@@ -695,40 +702,57 @@ class DashboardMixin:
         """The bar's "Answer <label>" button: re-send *sess*'s pending
         prompt, with its answer keyboard, as a fresh message at the bottom
         of the chat the tap came from. "already answered" when it is not
-        waiting any more.
-
-        The copy is registered as a prompt surface bound to THIS prompt
-        (:meth:`register_prompt_surface`), so a tap on it after the prompt
-        was answered — even with the session already waiting on the next
-        one — is refused instead of answering a prompt it never showed."""
+        waiting any more. The work is :meth:`_resend_pending_prompt`; this
+        maps its outcome to the tap's toast."""
         message = getattr(query, "message", None)
         chat = _message_chat_id(message)
         if message is None or chat is None:
             await self._safe_answer(query, "Open the chat to answer")
             return
-        if sess.status != Status.INTERACTIVE:
+        outcome = await self._resend_pending_prompt(chat, sess)
+        if outcome == RESEND_NOT_WAITING:
             await self._safe_answer(query, "already answered")
-            return
-        markup = self._pending_prompt_markup(sess)
-        if markup is None:
+        elif outcome == RESEND_NOT_RESENDABLE:
             await self._safe_answer(
                 query, "The prompt can't be re-sent — answer it in the terminal")
-            return
+        elif outcome == RESEND_BUSY:
+            await self._safe_answer(query, "Busy — try again in a moment")
+
+    async def _resend_pending_prompt(self, chat: int,
+                                     sess: TrackedSession) -> str:
+        """Re-send *sess*'s pending prompt, with its answer keyboard, as a
+        fresh message in *chat*. Shared by the pinned bar's Answer button
+        and the Mini App's "Answer in chat".
+
+        Returns one of the ``RESEND_*`` codes: ``sent``, ``not_waiting``
+        (the session is not on a prompt), ``not_resendable`` (nothing
+        stored to re-render), ``busy`` (the outbound gate skipped the
+        send) or ``dropped`` (muted, failed, or no message id came back).
+
+        The copy is registered as a prompt surface bound to THIS prompt
+        (:meth:`register_prompt_surface`), so a tap on it after the prompt
+        was answered — even with the session already waiting on the next
+        one — is refused instead of answering a prompt it never showed."""
+        if sess.status != Status.INTERACTIVE:
+            return RESEND_NOT_WAITING
+        markup = self._pending_prompt_markup(sess)
+        if markup is None:
+            return RESEND_NOT_RESENDABLE
         token = current_prompt_token(sess, create=True)
         text, keyboard = markup
         msg = await send_text(self._app.bot,
             chat, text, parse_mode="HTML", reply_markup=keyboard,
         )
         if msg is SKIPPED:
-            await self._safe_answer(query, "Busy — try again in a moment")
-            return
+            return RESEND_BUSY
         if msg is MUTED or msg is None:
-            return
+            return RESEND_DROPPED
         msg_id = getattr(msg, "message_id", None)
         if not isinstance(msg_id, int):
-            return
+            return RESEND_DROPPED
         self.registry.track_message(msg_id, sess.name, chat)
         self.register_prompt_surface(chat, msg_id, sess, token)
+        return RESEND_SENT
 
     def register_prompt_surface(self, chat, msg_id: int,
                                 sess: TrackedSession, token: int) -> None:
