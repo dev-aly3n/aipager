@@ -59,15 +59,7 @@ The app follows Telegram's light or dark theme as you switch it, and stops its g
 
 ### Switching a running session's model
 
-A live session's page has a **Model** control showing the model the
-session reports (from Claude Code's statusline) and the same list the
-launch picker and the chat's Models keyboard offer. Picking one types
-exactly `/model <name>` into that session — the same injection the
-chat's Models keyboard uses, with the same rule on who may do it
-(anyone who can prompt the session). The control reads **switching…**
-until the statusline reports a different model, then shows it; if
-nothing changes within 15 seconds it reads **not confirmed (check the
-session)**.
+A live session's page has a **Model** control showing the model the session reports (from Claude Code's statusline) and the same list the launch picker and the chat's Models keyboard offer. Picking one types exactly `/model <name>` into that session, the same injection the chat's Models keyboard uses, with the same rule on who may do it (anyone who can prompt the session). The control reads **switching…** until the statusline reports a different model, then shows it; if nothing changes within 15 seconds it reads **not confirmed (check the session)**.
 
 - **Only while the session is idle, not while Claude is working or a
   prompt is open.**
