@@ -1483,3 +1483,38 @@ def test_the_session_page_harness_detects_a_broken_mechanism(
     assert proc.returncode != 0, (
         f"harness passed a page with {old!r} broken\nstdout: {proc.stdout}"
     )
+
+
+# ===== new-session quick chips (roadmap 8.44) ==============================
+
+def test_the_quick_chips_choose_exactly_what_their_rows_choose(node_bin, tmp_path):
+    """"Recent" offers the directories behind the grid's sessions, newest
+    first; "Suggested" offers the catalog models that carry a hint. A chip
+    selects through the same path as its group row, and the create
+    request carries what the chips chose."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_form(node_bin, tmp_path, INDEX_HTML, "chips.html", scenario="chips")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: Recent chip -> proj, Suggested chip -> Opus, POST carries both" \
+        in proc.stdout, proc.stdout
+
+
+@pytest.mark.parametrize("old, new", [
+    pytest.param("                 pick: function () { pickCwd(d); } };",
+                 "                 pick: function () {} };", id="dir-chip-wiring"),
+    pytest.param("                   pick: function () { pickModel(m.label); } };",
+                 "                   pick: function () {} };", id="model-chip-wiring"),
+    pytest.param("    return ranked.slice(0, 4);", "    return dirs.slice(0, 4);",
+                 id="recent-order"),
+    pytest.param("      ((newOptions && newOptions.models) || []).filter(function (m) { return !!m.hint; })",
+                 "      ((newOptions && newOptions.models) || [])",
+                 id="suggested-have-hints"),
+])
+def test_the_form_harness_detects_broken_chips(node_bin, tmp_path, old, new):
+    from aipager.miniapp.static import INDEX_HTML
+
+    assert INDEX_HTML.count(old) == 1, f"mutation site not found once: {old!r}"
+    broken = INDEX_HTML.replace(old, new, 1)
+    proc = _drive_form(node_bin, tmp_path, broken, "broken-chips.html", scenario="chips")
+    assert proc.returncode != 0, f"harness passed broken chips: {old!r}"

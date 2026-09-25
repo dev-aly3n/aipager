@@ -90,7 +90,11 @@ global.fetch = (url, opts) => {
   });
   return Promise.resolve({
     ok: true, status: 200,
-    json: () => Promise.resolve(FIXTURES[url.split("?")[0]] || {}),
+    json: () => {
+      const path = url.split("?")[0];
+      const method = (opts && opts.method) || "GET";
+      return Promise.resolve(FIXTURES[method + " " + path] || FIXTURES[path] || {});
+    },
   });
 };
 global.setInterval = () => 0;
@@ -108,6 +112,8 @@ const SCENARIOS = {
               default_directory: "/home/aly/daemon-dir" },
   empty:    { directories: [], default_directory: "" },
   noparent: { directories: ["/home/aly/proj"], default_directory: "" },
+  chips:    { directories: ["/home/aly/proj", "/home/aly/daemon-dir", "/home/aly/other"],
+              default_directory: "/home/aly/daemon-dir" },
 };
 function fatal(msg) { console.error("FAIL: " + msg); process.exit(1); }
 
@@ -121,13 +127,19 @@ const SCHEMA = [
 ];
 const FIXTURES = {
   "/api/session-options": Object.assign({
-    models: [{ label: "Opus", hint: "Most capable" }],
+    models: [{ label: "Opus", hint: "Most capable" }, { label: "Opus 5.5", hint: "" }],
     schema: SCHEMA,
     scope_defaults: { answer_length: "none" },
     can_create: true,
     can_use_auto: true,
   }, SCENARIOS[SCENARIO] || fatal("unknown scenario: " + SCENARIO)),
   "/api/sessions": { label: "made", session_name: "claude-made__d1" },
+  // GET /api/sessions (the grid behind the form): the recency the
+  // "Recent" chips are ordered by. POST answers with the create body.
+  "GET /api/sessions": { daemon: {}, totals: {}, can_act: true, sessions: [
+    { label: "old", status: "idle", project: "daemon-dir", last_active_seconds_ago: 900 },
+    { label: "new", status: "busy", project: "proj", last_active_seconds_ago: 5 },
+  ] },
   "/api/directories": { path: "/home/aly/proj/sub", existed: false },
   "/api/sessions/made/preferences/answer_length": {
     values: { answer_length: { effective: "short", scope_default: "none",
@@ -430,5 +442,46 @@ function driveNoParent() {
   }, 10);
 }
 
-const DRIVERS = { full: driveFull, empty: driveEmpty, noparent: driveNoParent };
+// ---- scenario: the quick chips (roadmap 8.44) -------------------------
+function chipsIn(id) {
+  return byId[id].children.filter(c => c.className.split(" ")[0] === "chip");
+}
+function chipLabel(c) { return c.children[0].textContent; }
+function driveChips() {
+  api.openNewSession();
+  setTimeoutReal(() => {
+    const dirs = chipsIn("new-cwd-chips");
+    if (byId["new-cwd-chips"].hidden) fail("no Recent chips");
+    if (JSON.stringify(dirs.map(chipLabel)) !== JSON.stringify(["proj", "daemon-dir"]))
+      fail("Recent chips should be the grid's projects, newest first: " +
+           JSON.stringify(dirs.map(chipLabel)));
+    if (!dirs[1].className.includes("is-active")) fail("the selected directory's chip is not active");
+    dirs[0].click();
+    if (headValue("new-cwd") !== "proj") fail("the chip did not select its directory: " + headValue("new-cwd"));
+    const again = chipsIn("new-cwd-chips");
+    if (!again[0].className.includes("is-active") || again[1].className.includes("is-active"))
+      fail("chip state did not follow the selection");
+
+    const models = chipsIn("new-model-chips");
+    if (JSON.stringify(models.map(chipLabel)) !== JSON.stringify(["Opus"]))
+      fail("Suggested chips should be the models with a hint: " + JSON.stringify(models.map(chipLabel)));
+    models[0].click();
+    if (headValue("new-model") !== "Opus") fail("the model chip did not pick Opus: " + headValue("new-model"));
+
+    byId["new-name"].value = "made";
+    fireInput(byId["new-name"]);
+    const before = fetchCalls.length;
+    byId["new-create"].click();
+    setTimeoutReal(() => {
+      const post = fetchCalls.slice(before).find(f => f.method === "POST" && /\/api\/sessions$/.test(f.url));
+      if (!post) fail("no POST /api/sessions");
+      if (post.body.cwd !== "/home/aly/proj" || post.body.model !== "Opus")
+        fail("the chips did not reach the create request: " + JSON.stringify(post.body));
+      console.log("ok: Recent chip -> proj, Suggested chip -> Opus, POST carries both");
+      process.exit(0);
+    }, 20);
+  }, 10);
+}
+
+const DRIVERS = { full: driveFull, empty: driveEmpty, noparent: driveNoParent, chips: driveChips };
 (DRIVERS[SCENARIO] || (() => fail("unknown scenario: " + SCENARIO)))();

@@ -1180,12 +1180,11 @@ CSS = """
   .chips {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: var(--s2);
     margin: 0 0 10px;
-    overflow-x: auto;
-    scrollbar-width: none;
   }
-  .chips-cap { flex: 0 0 auto; font-size: var(--fs-cap); font-weight: 600; color: var(--ink-3); }
+  .chips-cap { flex: 0 0 auto; margin-right: 2px; font-size: var(--fs-cap); font-weight: 600; color: var(--ink-3); }
   .chip {
     flex: 0 0 auto;
     display: inline-flex;

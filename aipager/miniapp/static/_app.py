@@ -2566,6 +2566,91 @@ APP_JS = r"""
     return opts;
   }
 
+  // Picking a directory or a model: one path for the group rows and the
+  // quick chips, so a chip is exactly the same choice as its row.
+  function pickCwd(value) {
+    haptic("select");
+    newState.cwd = value;
+    newState.folderOpen = false;
+    renderNewForm();
+  }
+
+  function pickModel(value) {
+    haptic("select");
+    newState.model = value;
+    if (value === MODEL_CUSTOM) { pendingFocus = "new-model-name"; }
+    renderNewForm();
+  }
+
+  // Recent directories: the offered directories whose folder name matches
+  // a session in the grid, most recently active first, at most four.
+  function recentDirectories() {
+    var dirs = (newOptions && newOptions.directories) || [];
+    var rows = (lastGridData && lastGridData.sessions) || [];
+    var seen = Object.create(null);
+    var ranked = [];
+    rows.slice().sort(function (a, b) {
+      var x = a.last_active_seconds_ago;
+      var y = b.last_active_seconds_ago;
+      return (x === null || x === undefined ? Infinity : x) -
+             (y === null || y === undefined ? Infinity : y);
+    }).forEach(function (row) {
+      dirs.forEach(function (d) {
+        if (!seen[d] && row.project && basename(d) === row.project) {
+          seen[d] = true;
+          ranked.push(d);
+        }
+      });
+    });
+    return ranked.slice(0, 4);
+  }
+
+  function buildChips(host, caption, items) {
+    host.innerHTML = "";
+    host.hidden = !items.length;
+    if (!items.length) { return; }
+    var cap = make("span", "chips-cap");
+    cap.textContent = caption;
+    host.appendChild(cap);
+    items.forEach(function (it) {
+      var chip = make("button", "chip" + (it.active ? " is-active" : ""));
+      chip.setAttribute("aria-pressed", it.active ? "true" : "false");
+      if (it.hint) {
+        chip.setAttribute("aria-label", it.label + ", " + it.hint);
+        chip.setAttribute("title", it.hint);
+      }
+      chip.innerHTML = icon(it.icon);
+      var main = make("span");
+      main.textContent = it.label;
+      chip.appendChild(main);
+      if (it.sub) {
+        var sub = make("span", "chip-sub");
+        sub.textContent = it.sub;
+        chip.appendChild(sub);
+      }
+      chip.addEventListener("click", it.pick);
+      host.appendChild(chip);
+    });
+  }
+
+  // Quick chips over the two choices people make most: where, and which
+  // model. Built from data the page already has (the grid and the
+  // session options); nothing new is stored.
+  function renderChips() {
+    buildChips(document.getElementById("new-cwd-chips"), "Recent",
+      recentDirectories().map(function (d) {
+        return { icon: "folder", label: basename(d), active: newState.cwd === d,
+                 pick: function () { pickCwd(d); } };
+      }));
+    buildChips(document.getElementById("new-model-chips"), "Suggested",
+      ((newOptions && newOptions.models) || []).filter(function (m) { return !!m.hint; })
+        .map(function (m) {
+          return { icon: "spark", label: m.label, hint: plain(m.hint),
+                   active: newState.model === m.label,
+                   pick: function () { pickModel(m.label); } };
+        }));
+  }
+
   // ---- structural render: rebuilds the option groups ------------------
   //
   // Split from refreshNewForm deliberately. Typing used to run this, so
@@ -2587,11 +2672,7 @@ APP_JS = r"""
         ? { after: MODEL_CUSTOM, node: document.getElementById("new-model-reveal") }
         : null,
       rerender: renderNewForm,
-      onPick: function (value) {
-        newState.model = value;
-        if (value === MODEL_CUSTOM) { pendingFocus = "new-model-name"; }
-        renderNewForm();
-      }
+      onPick: pickModel
     }).value;
 
     // Directories come from the server's allow-list - the same list
@@ -2627,9 +2708,7 @@ APP_JS = r"""
           renderNewForm();
           return;
         }
-        newState.cwd = value;
-        newState.folderOpen = false;
-        renderNewForm();
+        pickCwd(value);
       }
     });
 
@@ -2681,6 +2760,7 @@ APP_JS = r"""
       });
     });
 
+    renderChips();
     refreshNewForm();
 
     if (pendingFocus) {
