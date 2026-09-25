@@ -47,7 +47,7 @@ CARD = 42
 INTERIM = "Launched the full test run in the background; the fix itself is in."
 INTERIM_2 = "The first run found one failure; a second agent is re-running it."
 FINAL = "All 9597 tests pass. The fix is ready to commit."
-RUNNING_1 = ("⏳ 1 agent still running — general-purpose · results will "
+RUNNING_1 = ("⏳ 1 agent still running (general-purpose) - results will "
              "follow here")
 
 
@@ -312,7 +312,7 @@ def test_the_job_end_settles_the_interim_line_to_done(mk_bot, run_async, wire):
     edit = new[0][1]
     assert edit["message_id"] == rec["msg_id"]
     assert _last_line(_markdown(edit)).startswith(
-        "✅ general-purpose — done (")
+        "✅ general-purpose done (")
     assert _markdown(edit)[: -len(_last_line(_markdown(edit)))] == \
         rec["text"][: -len(RUNNING_1)]
     assert edit["_kw"] == {"kind": "skip", "priority": "ornament"}

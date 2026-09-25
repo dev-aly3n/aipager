@@ -15,7 +15,7 @@ R1  the session keeps a set of live background agents from exact signals:
     keeps a just-stopped agent live, a silence window expires a lost one,
     GONE clears it. Phantoms (unknown id, empty type) change nothing.
 R2  an answer delivered while the set is non-empty ends with one line
-    "⏳ N agent(s) still running — <labels> · results will follow here",
+    "⏳ N agent(s) still running (<labels>) - results will follow here",
     in every layout and on 8.32's tool-less one-message path.
 R3  once every agent that line named is gone (and stayed gone for the
     settle window), the line is edited ONCE to "✅ … done (Nm)": an
@@ -50,7 +50,7 @@ CHAT = 555
 TRIGGER = 7
 CARD = 42
 ANSWER = "The settings fix is still running its final full test run."
-RUNNING_1 = ("⏳ 1 agent still running — pipeline-runner · results will "
+RUNNING_1 = ("⏳ 1 agent still running (pipeline-runner) - results will "
              "follow here")
 
 
@@ -383,7 +383,7 @@ def test_two_agents_are_counted_and_named(mk_bot, run_async, wire):
     _finish(run_async, bot, sess, summary=ANSWER, raw_md=ANSWER)
     (answer,) = wire.of("sendRichMessage")
     assert _last_line(_markdown(answer)) == (
-        "⏳ 2 agents still running — pipeline-runner, ship-reviewer · "
+        "⏳ 2 agents still running (pipeline-runner, ship-reviewer) - "
         "results will follow here")
 
 
@@ -520,8 +520,8 @@ def test_the_agents_stop_edits_the_line_once_to_done(mk_bot, run_async, wire):
     assert [m for m, _p in new] == ["editMessageText"]
     edit = new[0][1]
     assert edit["message_id"] == rec["msg_id"]
-    assert _last_line(_markdown(edit)) == "✅ pipeline-runner — done (6m)"
-    assert _markdown(edit)[: -len("✅ pipeline-runner — done (6m)")] == \
+    assert _last_line(_markdown(edit)) == "✅ pipeline-runner done (6m)"
+    assert _markdown(edit)[: -len("✅ pipeline-runner done (6m)")] == \
         rec["text"][: -len(RUNNING_1)]
     # ORNAMENT, skip-class: the flood gate may refuse it, never queue it.
     assert edit["_kw"] == {"kind": "skip", "priority": "ornament"}
@@ -656,7 +656,7 @@ def test_the_monitor_scan_makes_the_edit(mk_bot, run_async, wire, monkeypatch):
     run_async(_bounded(SessionMonitor(bot.registry, _notify)._scan()))
     assert seen.count("agents_line_done") == 1
     assert _last_line(_markdown(wire.of("editMessageText")[-1])) == \
-        "✅ pipeline-runner — done (6m)"
+        "✅ pipeline-runner done (6m)"
 
 
 def test_a_deleted_answer_is_never_retried(mk_bot, run_async, wire, monkeypatch):
@@ -749,16 +749,16 @@ def test_the_bar_shows_and_clears_the_count(mk_bot, monkeypatch):
     monkeypatch.setattr("aipager.bot.dashboard.CHAT_ID", str(CHAT))
     bot = mk_bot()
     sess = _sess(bot, label="aipager_boss")
-    assert bot._render_pinned(CHAT)[0] == "💤 aipager_boss — idle"
+    assert bot._render_pinned(CHAT)[0] == "💤 aipager_boss (idle)"
     _agents(sess, ("a1", "pipeline-runner"))
     assert bot._render_pinned(CHAT)[0] == \
-        "💤 aipager_boss — idle · ⏳ 1 agent running"
+        "💤 aipager_boss (idle, 1 agent running)"
     _agents(sess, ("a2", "ship-reviewer"))
     assert bot._render_pinned(CHAT)[0] == \
-        "💤 aipager_boss — idle · ⏳ 2 agents running"
+        "💤 aipager_boss (idle, 2 agents running)"
     sess.bg_agent_stopped("a1", time.monotonic())
     sess.bg_agent_stopped("a2", time.monotonic())
-    assert bot._render_pinned(CHAT)[0] == "💤 aipager_boss — idle"
+    assert bot._render_pinned(CHAT)[0] == "💤 aipager_boss (idle)"
 
 
 def test_the_bar_puts_the_count_on_the_sessions_own_line(mk_bot, monkeypatch):
@@ -770,8 +770,8 @@ def test_the_bar_puts_the_count_on_the_sessions_own_line(mk_bot, monkeypatch):
     _agents(b, ("a1", "pipeline-runner"))
     assert bot._render_pinned(CHAT)[0] == (
         "⚙️ 1 working · 1 idle\n"
-        "• <b>a</b> — working\n"
-        "• <b>b</b> — idle · ⏳ 1 agent running")
+        "• <b>a</b> (working)\n"
+        "• <b>b</b> (idle, 1 agent running)")
 
 
 def test_the_bar_never_names_the_agents(mk_bot, monkeypatch):
@@ -793,8 +793,8 @@ def test_the_bar_never_names_the_agents(mk_bot, monkeypatch):
 def test_done_line_durations():
     from aipager.bot.agents_line import done_line
 
-    assert done_line(["x"], 45) == "✅ x — done (45s)"
-    assert done_line(["x"], 6 * 60 + 59) == "✅ x — done (6m)"
+    assert done_line(["x"], 45) == "✅ x done (45s)"
+    assert done_line(["x"], 6 * 60 + 59) == "✅ x done (6m)"
     assert done_line(["x", "y"], 3 * 3600 + 5 * 60) == "✅ 2 agents done (3h 5m)"
 
 
@@ -802,7 +802,7 @@ def test_the_running_line_names_at_most_three_and_counts_the_rest():
     from aipager.bot.agents_line import running_line
 
     line = running_line(["a", "b", "c", "d", "e"])
-    assert line == ("⏳ 5 agents still running — a, b, c +2 more · results "
+    assert line == ("⏳ 5 agents still running (a, b, c +2 more) - results "
                     "will follow here")
 
 
@@ -846,7 +846,7 @@ def test_two_answers_carrying_the_line_are_each_settled_once(
     _settle(run_async, bot, sess, later)
     edits = [p for m, p in wire.calls[before:] if m == "editMessageText"]
     assert sorted(e["message_id"] for e in edits) == sorted(ids)
-    assert all(_last_line(_markdown(e)).startswith("✅ pipeline-runner — done")
+    assert all(_last_line(_markdown(e)).startswith("✅ pipeline-runner done")
                for e in edits)
     assert sess.agents_lines == []
     _settle(run_async, bot, sess, later + 3600)

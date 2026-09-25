@@ -35,14 +35,14 @@ def _agents(n: int) -> str:
 
 
 def running_line(labels: list[str], *, markdown: bool = False) -> str:
-    """``⏳ 2 agents still running — a, b · results will follow here``."""
+    """``⏳ 2 agents still running (a, b) - results will follow here``."""
     names = [_label(x) for x in labels[:LABELS_SHOWN]]
     if markdown:
         names = [_md_escape(x) for x in names]
     shown = ", ".join(names)
     if len(labels) > LABELS_SHOWN:
         shown += f" +{len(labels) - LABELS_SHOWN} more"
-    return (f"⏳ {_agents(len(labels))} still running — {shown} · "
+    return (f"⏳ {_agents(len(labels))} still running ({shown}) - "
             "results will follow here")
 
 
@@ -58,10 +58,10 @@ def duration(seconds: float) -> str:
 
 def done_line(labels: list[str], seconds: float, *,
               markdown: bool = False) -> str:
-    """``✅ pipeline-runner — done (6m)``, or ``✅ 2 agents done (6m)``."""
+    """``✅ pipeline-runner done (6m)``, or ``✅ 2 agents done (6m)``."""
     if len(labels) == 1:
         name = _label(labels[0])
         if markdown:
             name = _md_escape(name)
-        return f"✅ {name} — done ({duration(seconds)})"
+        return f"✅ {name} done ({duration(seconds)})"
     return f"✅ {_agents(len(labels))} done ({duration(seconds)})"

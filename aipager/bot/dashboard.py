@@ -88,8 +88,8 @@ log = logging.getLogger(__name__)
 #: ``_:sx:<idx>:pin_answer`` (session_parity's short form, ≤ 64 bytes).
 PINNED_ANSWER_VERB = "pin_answer"
 PINNED_SLOW_LINE = "🐢 slow mode after a Telegram warning"
-PINNED_PAUSED_LINE = "⏸ card updates paused — hourly limit"
-PINNED_PAUSED_RATE_LINE = "⏸ card updates paused — rate limit"
+PINNED_PAUSED_LINE = "⏸ card updates paused (hourly limit)"
+PINNED_PAUSED_RATE_LINE = "⏸ card updates paused (rate limit)"
 #: At most this many "Answer" buttons on a bar.
 PINNED_MAX_ANSWER_BUTTONS = 3
 #: A session's state word on the bar, and the order of the first line's
@@ -122,13 +122,20 @@ def _pinned_word(sess: TrackedSession) -> str:
 
 
 def _pinned_agents(sess: TrackedSession) -> str:
-    """`` · ⏳ N agent(s) running`` while *sess* has background agents
-    running (roadmap 8.41), else ``""``. A count, never their names: the
-    bar then moves only when the count does."""
+    """``, N agent(s) running`` while *sess* has background agents
+    running (roadmap 8.41), else ``""``: the tail of the parenthesised
+    state, as in ``catfish (working, 3 agents running)``. A count, never
+    their names: the bar then moves only when the count does."""
     n = len(sess.bg_agents)
     if not n:
         return ""
-    return f" · ⏳ {n} agent{'' if n == 1 else 's'} running"
+    return f", {n} agent{'' if n == 1 else 's'} running"
+
+
+def _pinned_state(sess: TrackedSession) -> str:
+    """``(working)`` / ``(idle, 1 agent running)``: a session's state as
+    the bar shows it. Parentheses, never a dash (operator, 2026-09-25)."""
+    return f"({_pinned_word(sess)}{_pinned_agents(sess)})"
 
 
 def _pinned_glyph(words) -> str:
@@ -348,17 +355,19 @@ class DashboardMixin:
         if waiting:
             named = waiting[0]
             first = f"⏳ {esc(named.label)} needs you"
+            agents = _pinned_agents(named)
+            if agents:
+                first += f" ({agents[2:]})"
             summary = self._pinned_summary(named)
             if summary:
-                first += f" — {esc(summary)}"
-            first += _pinned_agents(named)
+                first += f" - {esc(summary)}"
             if len(waiting) > 1:
                 first += f" (+{len(waiting) - 1} more)"
         elif len(sessions) == 1:
             only = sessions[0]
             word = _pinned_word(only)
-            first = (f"{_pinned_glyph((word,))} {esc(only.label)} — {word}"
-                     f"{_pinned_agents(only)}")
+            first = (f"{_pinned_glyph((word,))} {esc(only.label)} "
+                     f"{_pinned_state(only)}")
             named = only
         elif sessions:
             counts: dict[str, int] = {}
@@ -372,8 +381,7 @@ class DashboardMixin:
         lines = [first] + self._pinned_flood_lines(chat)
         for s in sessions:
             if s is not named:
-                lines.append(f"• <b>{esc(s.label)}</b> — {_pinned_word(s)}"
-                             f"{_pinned_agents(s)}")
+                lines.append(f"• <b>{esc(s.label)}</b> {_pinned_state(s)}")
 
         rows: list[list[InlineKeyboardButton]] = []
         for s in waiting[:PINNED_MAX_ANSWER_BUTTONS]:

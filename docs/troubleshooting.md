@@ -206,7 +206,7 @@ If a chat's rate falls below 0.2 calls/s — or its hourly budget's share
 for cards and bubbles is spent — it enters **minimal mode**: busy cards
 stop animating and show one static `⏳ working — updates paused` line,
 the typing bubble stops, and the pinned status bar shows
-`⏸ card updates paused — hourly limit` (or `— rate limit` when the rate
+`⏸ card updates paused (hourly limit)` (or `(rate limit)` when the rate
 is what put the chat there) and otherwise stops changing until it lifts.
 **Answers, replies and permission prompts keep flowing** — that is the
 point. The card is about 95 % of what this bot sends and the answer about

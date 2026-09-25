@@ -98,8 +98,8 @@ together, so that line says what most needs you:
 
 | First line | When |
 |---|---|
-| `⏳ jim needs you — Bash: make deploy` | a session is waiting on a permission prompt, a question or an interactive prompt; `(+2 more)` when others are waiting too |
-| `⚙️ jim — working` / `💤 jim — idle` | the chat has one live session and it is working / idle (`🔄 jim — starting` while it starts): this line is the whole bar, apart from a flood line |
+| `⏳ jim needs you - Bash: make deploy` | a session is waiting on a permission prompt, a question or an interactive prompt; `(+2 more)` when others are waiting too |
+| `⚙️ jim (working)` / `💤 jim (idle)` | the chat has one live session and it is working / idle (`🔄 jim (starting)` while it starts): this line is the whole bar, apart from a flood line |
 | `⚙️ 2 working · 1 idle` | several sessions, none waiting: how many are in each state (`working`, `idle`, `starting`); `🔄` when none is working and one is starting, `💤` when all are idle |
 | `💤 all idle` | no live session |
 
@@ -114,7 +114,7 @@ line of its own, and the first line never lists names the lines below
 repeat.
 A session with agents still running in the background says how many on
 its own line (or on the one line, with a single session):
-`💤 jim — idle · ⏳ 1 agent running`. It is a count, never their names,
+`💤 jim (idle, 1 agent running)`. It is a count, never their names,
 so the bar moves only when the count does.
 Tap the bar to jump to the message.
 
@@ -314,8 +314,8 @@ them can end while they work. The answer then ends with one line saying
 so:
 
 ```
-⏳ 1 agent still running — pipeline-runner · results will follow here
-⏳ 2 agents still running — pipeline-runner, ship-reviewer · results will follow here
+⏳ 1 agent still running (pipeline-runner) - results will follow here
+⏳ 2 agents still running (pipeline-runner, ship-reviewer) - results will follow here
 ```
 
 That answer goes out the moment the turn ends, as a normal (notifying)
@@ -335,7 +335,7 @@ notification starts a turn. The line is added in every layout, and on
 the one-message answer of a tool-less turn.
 
 Once every agent a line named has finished, aipager edits that line
-once, silently, to `✅ pipeline-runner — done (6m)` (or `✅ 2 agents done
+once, silently, to `✅ pipeline-runner done (6m)` (or `✅ 2 agents done
 (6m)`, with the time since the answer went out); the results themselves
 arrive as their own message. Each answer that carried the line is edited
 this way (up to five pending per session). The edit is a low-priority

@@ -252,11 +252,11 @@ def test_first_line_priority_waiting_then_working_then_idle(
 
     _wait(s1)
     assert (_first(bot._render_pinned(CHAT)[0])
-            == "⏳ s1 needs you — Bash: rm -rf build")
+            == "⏳ s1 needs you - Bash: rm -rf build")
 
     _wait(s2, "Edit: main.py")
     assert (_first(bot._render_pinned(CHAT)[0])
-            == "⏳ s1 needs you — Bash: rm -rf build (+1 more)")
+            == "⏳ s1 needs you - Bash: rm -rf build (+1 more)")
 
 
 def test_many_working_sessions_are_counted_not_named(mk_bot, pbot, legacy):
@@ -277,9 +277,9 @@ def test_one_line_per_live_session_with_its_state_word(mk_bot, pbot, legacy):
     _session(bot, "s3", Status.UNKNOWN)
     _session(bot, "gone", Status.GONE)
     lines = bot._render_pinned(CHAT)[0].split("\n")[1:]
-    assert [ln for ln in lines if ln] == ["• <b>s0</b> — working",
-                                          "• <b>s2</b> — idle",
-                                          "• <b>s3</b> — starting"]
+    assert [ln for ln in lines if ln] == ["• <b>s0</b> (working)",
+                                          "• <b>s2</b> (idle)",
+                                          "• <b>s3</b> (starting)"]
 
 
 def test_only_this_chats_sessions_are_listed(mk_bot, pbot, legacy):
@@ -288,7 +288,7 @@ def test_only_this_chats_sessions_are_listed(mk_bot, pbot, legacy):
     _session(bot, "elsewhere", Status.BUSY, chat=111222333)
     text = bot._render_pinned(CHAT)[0]
     assert "here" in text and "elsewhere" not in text
-    assert _first(text) == "⚙️ here — working"
+    assert _first(text) == "⚙️ here (working)"
 
 
 def test_flood_lines_follow_the_warning_regime_and_hourly_minimal(
@@ -300,7 +300,7 @@ def test_flood_lines_follow_the_warning_regime_and_hourly_minimal(
     bot = _bot(mk_bot, pbot)
     _session(bot, "s0", Status.BUSY)
     slow = "🐢 slow mode after a Telegram warning"
-    paused = "⏸ card updates paused — hourly limit"
+    paused = "⏸ card updates paused (hourly limit)"
     seen: dict = {}
 
     def _lines():
@@ -338,7 +338,7 @@ def test_the_paused_line_reaches_the_bar_in_minimal_mode(
     never reaches the bar."""
     bot = _bot(mk_bot, pbot)
     s0 = _session(bot, "s0", Status.BUSY)
-    paused = "⏸ card updates paused — hourly limit"
+    paused = "⏸ card updates paused (hourly limit)"
 
     async def _minimal():
         share = vlimiter.hourly_usage(CHAT)["ornament_budget"]
@@ -356,7 +356,7 @@ def test_the_paused_line_reaches_the_bar_in_minimal_mode(
     edits = pbot.pinned_edits()
     assert len(edits) == 2, [(e[3], e[5]) for e in edits]
     assert paused in edits[1][3].split("\n")
-    assert _first(edits[1][3]) == "⚙️ s0 — working"
+    assert _first(edits[1][3]) == "⚙️ s0 (working)"
 
 
 def test_no_volatile_fields_a_cost_ctx_model_change_is_zero_edits(
@@ -435,8 +435,8 @@ def test_three_transitions_in_five_seconds_are_one_edit_plus_one_trailing(
     assert len(edits) == 2, [(e[3], e[5]) for e in edits]
     assert edits[1][5] - edits[0][5] >= GAP - EPS
     assert edits[1][5] - edits[0][5] <= GAP + 1.0
-    assert _first(edits[0][3]) == "⚙️ s0 — working"
-    assert _first(edits[1][3]) == "💤 s0 — idle"
+    assert _first(edits[0][3]) == "⚙️ s0 (working)"
+    assert _first(edits[1][3]) == "💤 s0 (idle)"
 
 
 def test_the_trailing_edit_carries_the_final_state(mk_bot, pbot, vloop, legacy):
@@ -450,7 +450,7 @@ def test_the_trailing_edit_carries_the_final_state(mk_bot, pbot, vloop, legacy):
     _run(vloop, [(0.0, bot.refresh_pinned), (3.0, _waiting)])
     edits = pbot.pinned_edits()
     assert len(edits) == 2, edits
-    assert _first(edits[1][3]) == "⏳ s0 needs you — Bash: rm -rf build"
+    assert _first(edits[1][3]) == "⏳ s0 needs you - Bash: rm -rf build"
 
 
 def test_an_unchanged_render_is_never_edited(mk_bot, pbot, vloop, legacy):
@@ -475,7 +475,7 @@ def test_a_skipped_edit_is_retried_by_the_trailing_refresh(
     _run(vloop, [(0.0, bot.refresh_pinned)])
     edits = pbot.pinned_edits()
     assert len(edits) == 1, edits
-    assert _first(edits[0][3]) == "⚙️ s0 — working"
+    assert _first(edits[0][3]) == "⚙️ s0 (working)"
     assert s0.status == Status.BUSY
 
 
@@ -531,7 +531,7 @@ def test_no_edit_while_muted_and_a_catch_up_at_the_lift(
     lift = out["from"] + 100.0
     assert not [e for e in pbot.calls if out["from"] <= e[5] < lift]
     assert lift <= edits[1][5] <= lift + 2.0, (edits[1][5] - lift)
-    assert _first(edits[1][3]) == "💤 s0 — idle"
+    assert _first(edits[1][3]) == "💤 s0 (idle)"
 
 
 # ── R1/R5: group pin failure, a deleted pin ─────────────────────────────────
@@ -704,7 +704,7 @@ def test_the_answer_button_resends_a_separate_message_prompt(
     s0.pending_prompt_msg = {"text": "🔐 <b>s0</b> · Permission needed",
                              "keyboard": kb, "summary": "Bash: ls"}
     assert (_first(bot._render_pinned(CHAT)[0])
-            == "⏳ s0 needs you — Bash: ls")
+            == "⏳ s0 needs you - Bash: ls")
     update, _toasts = _tap(pbot, _answer_button(bot, "s0").callback_data)
     vloop.run_until_complete(bot._handle_callback(update, MagicMock()))
     sends = pbot.of("sendMessage")
@@ -859,8 +859,8 @@ def test_the_monitor_tick_refreshes_the_bar_after_every_scan(
 
     vloop.run_until_complete(main())
     edits = pbot.pinned_edits()
-    assert [_first(e[3]) for e in edits] == ["⚙️ s0 — working",
-                                             "💤 s0 — idle"], edits
+    assert [_first(e[3]) for e in edits] == ["⚙️ s0 (working)",
+                                             "💤 s0 (idle)"], edits
 
 
 def test_pinned_tick_never_runs_two_refreshes_at_once(
@@ -1027,7 +1027,7 @@ def test_rate_floor_minimal_mode_shows_a_paused_line(
     assert vlimiter.minimal_mode(CHAT) is True
     assert vlimiter.hourly_usage(CHAT)["minimal"] is False
     lines = bot._render_pinned(CHAT)[0].split("\n")
-    assert "⏸ card updates paused — rate limit" in lines
+    assert "⏸ card updates paused (rate limit)" in lines
 
 
 def test_a_change_during_an_edit_in_flight_is_not_lost(
@@ -1052,8 +1052,8 @@ def test_a_change_during_an_edit_in_flight_is_not_lost(
 
     vloop.run_until_complete(main())
     edits = pbot.pinned_edits()
-    assert [_first(e[3]) for e in edits] == ["⚙️ s0 — working",
-                                             "💤 s0 — idle"], edits
+    assert [_first(e[3]) for e in edits] == ["⚙️ s0 (working)",
+                                             "💤 s0 (idle)"], edits
 
 
 def test_a_pin_held_back_by_the_budget_is_retried(
@@ -1450,10 +1450,10 @@ def test_a_pending_trailing_refresh_never_recreates_a_removed_chats_bar(
 # "⚙️ 1 working — aipager_boss • aipager_boss — working" live.
 
 @pytest.mark.parametrize("status, expected", [
-    (Status.BUSY, "⚙️ solo — working"),
-    (Status.IDLE, "💤 solo — idle"),
-    (Status.UNKNOWN, "🔄 solo — starting"),
-    (Status.INTERACTIVE, "⏳ solo needs you — Bash: rm -rf build"),
+    (Status.BUSY, "⚙️ solo (working)"),
+    (Status.IDLE, "💤 solo (idle)"),
+    (Status.UNKNOWN, "🔄 solo (starting)"),
+    (Status.INTERACTIVE, "⏳ solo needs you - Bash: rm -rf build"),
 ])
 def test_one_live_session_is_a_single_line(mk_bot, pbot, legacy,
                                            status, expected):
@@ -1479,8 +1479,8 @@ def test_two_sessions_count_on_top_and_name_below(mk_bot, pbot, legacy):
     _session(bot, "b", Status.IDLE)
     assert bot._render_pinned(CHAT)[0] == (
         "⚙️ 1 working · 1 idle\n"
-        "• <b>a</b> — working\n"
-        "• <b>b</b> — idle")
+        "• <b>a</b> (working)\n"
+        "• <b>b</b> (idle)")
 
 
 def test_three_sessions_count_every_state_in_a_fixed_order(
@@ -1492,9 +1492,9 @@ def test_three_sessions_count_every_state_in_a_fixed_order(
     _session(bot, "c", Status.BUSY)
     assert bot._render_pinned(CHAT)[0] == (
         "⚙️ 1 working · 1 idle · 1 starting\n"
-        "• <b>a</b> — idle\n"
-        "• <b>b</b> — starting\n"
-        "• <b>c</b> — working")
+        "• <b>a</b> (idle)\n"
+        "• <b>b</b> (starting)\n"
+        "• <b>c</b> (working)")
 
     bot.registry.get("claude-c").status = Status.IDLE
     assert _first(bot._render_pinned(CHAT)[0]) == "🔄 2 idle · 1 starting"
@@ -1512,9 +1512,9 @@ def test_needs_you_with_several_sessions_names_the_waiting_one_once(
     _wait(_session(bot, "b"), "Edit: main.py")
     _session(bot, "c", Status.BUSY)
     assert bot._render_pinned(CHAT)[0] == (
-        "⏳ a needs you — Bash: rm -rf build (+1 more)\n"
-        "• <b>b</b> — needs you\n"
-        "• <b>c</b> — working")
+        "⏳ a needs you - Bash: rm -rf build (+1 more)\n"
+        "• <b>b</b> (needs you)\n"
+        "• <b>c</b> (working)")
 
 
 _STATES = (Status.BUSY, Status.IDLE, Status.INTERACTIVE, Status.UNKNOWN)
@@ -1550,7 +1550,7 @@ def test_no_label_is_repeated_for_any_combination_of_states(
         assert "\n" not in text
     assert "pipeline-runner" not in preview
     if agents:
-        assert preview.count(f"⏳ {agents} agents running") == len(states)
+        assert preview.count(f"{agents} agents running") == len(states)
         # Each count sits on its own session's line, never on another's.
         for line in text.split("\n"):
             assert line.count("agents running") <= 1, text
@@ -1582,7 +1582,7 @@ def test_a_waiting_lone_session_says_its_agents_on_the_one_line(
     _wait(sess)
     sess.bg_agent_started("a1", "pipeline-runner", 1.0)
     assert bot._render_pinned(CHAT)[0] == (
-        "⏳ solo needs you — Bash: rm -rf build · ⏳ 1 agent running")
+        "⏳ solo needs you (1 agent running) - Bash: rm -rf build")
 
 
 def test_background_agents_move_the_bar_only_when_their_count_does(
@@ -1607,9 +1607,9 @@ def test_background_agents_move_the_bar_only_when_their_count_does(
                  (GAP * 2, _step(start=("a2",), stop=("a1",))),
                  (GAP * 2, _step(stop=("a2",)))])
     assert [e[3] for e in pbot.pinned_edits()] == [
-        "💤 solo — idle",
-        "💤 solo — idle · ⏳ 1 agent running",
-        "💤 solo — idle",
+        "💤 solo (idle)",
+        "💤 solo (idle, 1 agent running)",
+        "💤 solo (idle)",
     ]
 
 
@@ -1631,7 +1631,7 @@ def test_agents_starting_inside_the_gap_coalesce_into_one_trailing_edit(
                  (1.5, _start("a3"))])
     edits = pbot.pinned_edits()
     assert [e[3] for e in edits] == [
-        "💤 solo — idle · ⏳ 1 agent running",
-        "💤 solo — idle · ⏳ 3 agents running",
+        "💤 solo (idle, 1 agent running)",
+        "💤 solo (idle, 3 agents running)",
     ]
     assert edits[1][5] - edits[0][5] >= GAP - EPS
