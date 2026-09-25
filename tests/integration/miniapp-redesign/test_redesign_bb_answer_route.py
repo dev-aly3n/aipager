@@ -18,6 +18,7 @@ from aipager.state import Status
 
 from miniapp_redesign_bb import (  # noqa: E402 - alias set by conftest
     ADMIN_ID,
+    BOT_TOKEN,
     DEVELOPER_ID,
     FOREIGN_MEMBER_ID,
     FOREIGN_SCOPE_CHAT_ID,
@@ -244,6 +245,128 @@ def test_a_dropped_send_is_502_send_failed(server, tg, run_async):
     [(code, body)] = _post(server, run_async, "alpha", hdr(ADMIN_ID))
     assert (code, body.get("error") if isinstance(body, dict) else body) == (
         502, "send_failed")
+
+
+# ── error guessing: every other way the send can fail ──────────────────────
+# entrypoints.md lists exactly two outcomes for a send that does not go
+# through: 503 chat_busy ("Telegram send throttled") and 502 send_failed.
+# So any other refusal or crash of the send is 502 send_failed with a string
+# detail, and the body is always JSON (never aiohttp's bare 500 page).
+
+def _other_send_error(kind):
+    import asyncio
+    import errno
+
+    from telegram.error import ChatMigrated, Forbidden, TelegramError
+    return {
+        "forbidden": Forbidden("Forbidden: bot was kicked from the supergroup chat"),
+        "chat_migrated": ChatMigrated(-1001234),
+        "telegram_error": TelegramError("Unknown error"),
+        "os_error": OSError(errno.ECONNRESET, "Connection reset by peer"),
+        "asyncio_timeout": asyncio.TimeoutError(),
+        "runtime_error": RuntimeError("event loop is closed"),
+    }[kind]
+
+
+OTHER_SEND_ERRORS = ["forbidden", "chat_migrated", "telegram_error", "os_error",
+                     "asyncio_timeout", "runtime_error"]
+ALL_SEND_ERRORS = ["network", "timeout", "bad_request"] + OTHER_SEND_ERRORS
+
+
+def _failing_send(kind):
+    if kind in ("network", "timeout", "bad_request"):
+        return _telegram_error(kind)
+    return _other_send_error(kind)
+
+
+@pytest.mark.parametrize("kind", ALL_SEND_ERRORS)
+def test_a_failed_send_answers_json(server, tg, run_async, kind):
+    put_on_permission(mk_session(server, "alpha"))
+    tg.raise_on_send = _failing_send(kind)
+    [(_code, body)] = _post(server, run_async, "alpha", hdr(ADMIN_ID))
+    assert isinstance(body, dict), body
+
+
+@pytest.mark.parametrize("kind", OTHER_SEND_ERRORS)
+def test_other_send_errors_are_502_send_failed(server, tg, run_async, kind):
+    put_on_permission(mk_session(server, "alpha"))
+    tg.raise_on_send = _other_send_error(kind)
+    [(code, body)] = _post(server, run_async, "alpha", hdr(ADMIN_ID))
+    assert (code, body.get("error") if isinstance(body, dict) else body) == (
+        502, "send_failed")
+
+
+@pytest.mark.parametrize("kind", ALL_SEND_ERRORS)
+def test_send_failed_carries_a_string_detail(server, tg, run_async, kind):
+    put_on_permission(mk_session(server, "alpha"))
+    tg.raise_on_send = _failing_send(kind)
+    [(_code, body)] = _post(server, run_async, "alpha", hdr(ADMIN_ID))
+    detail = body.get("detail") if isinstance(body, dict) else None
+    assert isinstance(detail, str) and detail.strip(), body
+
+
+def test_send_failed_detail_never_echoes_the_bot_token(server, tg, run_async):
+    """Error guess: an HTTP-layer error message can carry the request URL,
+    which holds the bot token. The Mini App must not show it."""
+    from telegram.error import NetworkError
+    put_on_permission(mk_session(server, "alpha"))
+    tg.raise_on_send = NetworkError(
+        f"POST https://api.telegram.org/bot{BOT_TOKEN}/sendMessage failed")
+    [(_code, body)] = _post(server, run_async, "alpha", hdr(ADMIN_ID))
+    assert BOT_TOKEN.split(":")[1] not in str(body)
+
+
+def test_telegram_retry_after_is_json(server, tg, run_async):
+    from datetime import timedelta
+
+    from telegram.error import RetryAfter
+    put_on_permission(mk_session(server, "alpha"))
+    tg.raise_on_send = RetryAfter(timedelta(seconds=1))
+    [(code, body)] = _post(server, run_async, "alpha", hdr(ADMIN_ID))
+    assert isinstance(body, dict) and code in (502, 503), (code, body)
+
+
+def test_telegram_retry_after_is_503_chat_busy(server, tg, run_async):
+    """RetryAfter is Telegram's own throttle: the documented outcome for a
+    throttled send is 503 chat_busy."""
+    from datetime import timedelta
+
+    from telegram.error import RetryAfter
+    put_on_permission(mk_session(server, "alpha"))
+    tg.raise_on_send = RetryAfter(timedelta(seconds=1))
+    [(code, body)] = _post(server, run_async, "alpha", hdr(ADMIN_ID))
+    assert (code, body.get("error") if isinstance(body, dict) else body) == (
+        503, "chat_busy")
+
+
+@pytest.mark.parametrize("kind", ["network", "forbidden", "runtime_error"])
+def test_a_failed_send_leaves_the_session_waiting(server, tg, run_async, kind):
+    sess = put_on_permission(mk_session(server, "alpha"))
+    tg.raise_on_send = _failing_send(kind)
+    _post(server, run_async, "alpha", hdr(ADMIN_ID))
+    assert sess.status == Status.INTERACTIVE
+
+
+@pytest.mark.parametrize("kind", ["network", "forbidden", "runtime_error"])
+def test_a_retry_after_a_failed_send_goes_through(server, tg, run_async, kind):
+    """Error guess: a failure must not leave the prompt marked as re-sent
+    (or the route stuck), so the next tap works."""
+    put_on_permission(mk_session(server, "alpha"))
+    tg.raise_on_send = _failing_send(kind)
+    _post(server, run_async, "alpha", hdr(ADMIN_ID))
+    tg.raise_on_send = None
+    [(code, _body)] = _post(server, run_async, "alpha", hdr(ADMIN_ID))
+    assert (code, len(tg.sends)) == (200, 1)
+
+
+def test_a_failed_send_records_no_message_for_the_session(server, tg, run_async):
+    from telegram.error import NetworkError
+    put_on_permission(mk_session(server, "alpha"))
+    tg.raise_on_send = NetworkError("connection reset")
+    _post(server, run_async, "alpha", hdr(ADMIN_ID))
+    tg.raise_on_send = None
+    # the next id the recorder would hand out was never registered
+    assert server.registry.get_session_by_msg(tg._next_id + 1, SCOPE_CHAT_ID) is None
 
 
 # ── 429: write rate limit, boundary at 30 per 60 s ─────────────────────────

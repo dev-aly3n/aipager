@@ -129,6 +129,28 @@ for (const m of page.matchAll(/<([a-zA-Z0-9]+)[^>]*\bid="([^"]+)"[^>]*>/g)) {
   el.disabled = /\sdisabled(\s|>|=)/.test(m[0]);
   byId[m[2]] = el;
 }
+// Static nesting of the id'd elements (the shim keeps them flat, so the
+// page's own DOM calls are unaffected); used only to judge "on screen".
+{
+  const VOID = new Set(["input", "br", "img", "meta", "link", "hr", "use", "source", "path", "circle", "rect"]);
+  const stack = [];
+  for (const m of page.slice(page.indexOf("<body")).matchAll(/<(\/?)([a-zA-Z0-9]+)([^>]*?)(\/?)>/g)) {
+    const [, close, tag, attrs, selfClose] = m;
+    const t = tag.toLowerCase();
+    if (t === "script") break;
+    if (close) {
+      const at = stack.map(x => x.tag).lastIndexOf(t);
+      if (at >= 0) stack.length = at;
+      continue;
+    }
+    const idm = /\bid="([^"]+)"/.exec(attrs);
+    if (idm && byId[idm[1]]) {
+      const up = stack.slice().reverse().find(x => x.id);
+      byId[idm[1]].staticParent = up ? byId[up.id] : null;
+    }
+    if (!selfClose && !VOID.has(t)) stack.push({ tag: t, id: idm ? idm[1] : null });
+  }
+}
 const docEl = new El("html");
 global.document = {
   getElementById: (id) => byId[id] || null,
@@ -296,6 +318,15 @@ if (S === "answer_single" || S === "answer_no_close_api" || S === "answer_double
 if (S === "answer_viewer") FIX["GET /api/sessions"] = grid(MIXED, { can_act: false });
 if (S === "answer_409") FIX["POST /api/sessions/alpha/answer"] = { status: 409,
   body: { error: "not_waiting", detail: "This session isn't waiting — it moved on." } };
+if (S === "answer_502") FIX["POST /api/sessions/alpha/answer"] = { status: 502,
+  body: { error: "send_failed", detail: "Telegram refused the message \u2014 try again." } };
+if (S === "answer_503") FIX["POST /api/sessions/alpha/answer"] = { status: 503,
+  body: { error: "chat_busy", detail: "The chat is busy \u2014 try again in a minute." } };
+if (S === "answer_500_html") FIX["POST /api/sessions/alpha/answer"] = { status: 500,
+  raw: "500 Internal Server Error\n\nServer got itself in trouble" };
+if (S === "answer_504_empty") FIX["POST /api/sessions/alpha/answer"] = { status: 504, raw: "" };
+if (S === "answer_network_down") FIX["POST /api/sessions/alpha/answer"] = { reject: true };
+if (/^answer_(502|503|500_html|504_empty|network_down)$/.test(S)) FIX["GET /api/sessions"] = grid([MIXED[0], MIXED[2]]);
 if (S === "answer_403") FIX["POST /api/sessions/alpha/answer"] = { status: 403, body: { error: "forbidden" } };
 if (S === "detail_waiting_viewer") FIX["GET /api/sessions/alpha"] = Object.assign({}, WAIT_ALPHA,
   { answer: { available: false, reason: "You don't have permission to control this session." } });
@@ -303,6 +334,16 @@ if (S === "detail_gone") FIX["GET /api/sessions/dev"] = detail("dev", "gone", {
   actions: { resume: { available: true, reason: null }, delete: { available: true, reason: null } } });
 if (S === "detail_idle") FIX["GET /api/sessions/dev"] = detail("dev", "idle", {
   actions: { kill: { available: true, reason: null } } });
+
+// offline / expired from the very first request (set before the page boots).
+const REJECT = { reject: true };
+const EXPIRED = { status: 401, body: { error: "unauthorized" } };
+if (S === "offline_boot" || S === "offline_boot_long") FIX["GET /api/sessions"] = REJECT;
+if (S === "expired_boot") FIX["GET /api/sessions"] = EXPIRED;
+
+// Optional third argument: a JSON file of FIX entries (real server payloads
+// with server-owned text, supplied by the Python side) merged over the above.
+if (process.argv[4]) Object.assign(FIX, JSON.parse(fs.readFileSync(process.argv[4], "utf8")));
 
 const calls = [];
 let holdAnswer = null;   // answer_double: keep the POST in flight
@@ -312,11 +353,19 @@ global.fetch = (url, opts) => {
   calls.push({ url: String(url), method, path, body: opts && opts.body });
   const key = method + " " + path;
   let spec = FIX[key];
+  // {reject: true}: the network is down (fetch itself rejects).
+  if (spec && spec.reject) return Promise.reject(new TypeError("Failed to fetch"));
   let status = 200; let body = {};
   if (spec && spec.status !== undefined && spec.body !== undefined) { status = spec.status; body = spec.body; }
   else if (spec) { body = spec; }
-  const resp = { ok: status < 400, status, json: () => Promise.resolve(JSON.parse(JSON.stringify(body))),
-                 text: () => Promise.resolve(JSON.stringify(body)) };
+  let resp = { ok: status < 400, status, json: () => Promise.resolve(JSON.parse(JSON.stringify(body))),
+               text: () => Promise.resolve(JSON.stringify(body)) };
+  // {status, raw}: a non-JSON body (aiohttp's bare error page).
+  if (spec && spec.raw !== undefined) {
+    status = spec.status;
+    resp = { ok: status < 400, status, json: () => Promise.resolve().then(() => JSON.parse(spec.raw)),
+             text: () => Promise.resolve(spec.raw) };
+  }
   if (S === "answer_double" && key === "POST /api/sessions/alpha/answer") {
     return new Promise((res) => { holdAnswer = () => res(resp); });
   }
@@ -356,6 +405,17 @@ function posts(path) { return calls.filter(c => c.method === "POST" && (!path ||
 function gets(path) { return calls.filter(c => c.method === "GET" && c.path === path); }
 function visible(id) { return byId[id] && !byId[id].hidden; }
 function noticeText() { return text(byId["notice"]); }
+
+function dumpTree(el, d) {
+  d = d || 0; if (!el) return "";
+  const a = Object.entries(el.attrs).map(([k, v]) => k + "=" + v).join(" ");
+  let out = " ".repeat(d * 2) + el.tagName + (el._class ? "." + el._class.replace(/ /g, ".") : "") + (a ? " [" + a + "]" : "") +
+    (el.hidden ? " HIDDEN" : "") + (el.disabled ? " DISABLED" : "") + (el.listeners.click ? " CLICK" : "") +
+    (!el.children.length && el._text ? " '" + el._text.slice(0, 80) + "'" : "") + "\n";
+  for (const c of el.children) out += dumpTree(c, d + 1);
+  return out;
+}
+if (process.env.BB_DUMP) process.on("exit", () => { for (const id of process.env.BB_DUMP.split(",")) process.stderr.write("## " + id + "\n" + dumpTree(byId[id])); });
 
 async function finish() {
   const stray = calls.filter(c => c.path.indexOf("/api/") !== 0);
@@ -601,6 +661,27 @@ SCEN.answer_403 = async () => {
   await finish();
 };
 
+// A failed answer: a toast says so, the button works again, the app stays.
+async function answerFails(detailPlain) {
+  await tapAnswer("alpha");
+  await wait(40);
+  check("one_post", posts("/api/sessions/alpha/answer").length === 1);
+  check("notice_shown", noticeText().trim() !== "" && !byId["notice"].hidden, noticeText());
+  if (detailPlain) check("notice_shows_detail_plain", noticeText().indexOf(detailPlain) !== -1, noticeText());
+  check("notice_no_em_dash", noticeText().indexOf("\u2014") === -1, noticeText());
+  check("no_success_haptic", !tg.haptic.some(h => h[0] === "notification" && h[1] === "success"), tg.haptic);
+  check("not_closed", tg.closed === 0);
+  check("button_reenabled", (() => { const b = answerButtonIn(cardFor(byId["needs-you-list"], "alpha")); return !!b && !b.disabled; })());
+  check("not_expired", !/expired/i.test(text(byId["conn-badge"]) + text(byId["error"])),
+        { badge: text(byId["conn-badge"]), error: text(byId["error"]) });
+  await finish();
+}
+SCEN.answer_502 = () => answerFails("Telegram refused the message - try again.");
+SCEN.answer_503 = () => answerFails("The chat is busy - try again in a minute.");
+SCEN.answer_500_html = () => answerFails(null);
+SCEN.answer_504_empty = () => answerFails(null);
+SCEN.answer_network_down = () => answerFails(null);
+
 SCEN.answer_viewer = async () => {
   await wait(30);
   const bs = buttonsNamed(byId["needs-you-list"], "Answer in chat");
@@ -828,6 +909,257 @@ SCEN.theme_changed = async () => {
   if (tg.events.themeChanged) tg.events.themeChanged();
   const back = docEl.getAttribute("data-scheme") || docEl.dataset.scheme;
   check("scheme_light_again", back === "light", back);
+  await finish();
+};
+
+// ---- server-owned text: no em dash may reach the displayed DOM -------------
+const EM = "—";
+const SHOWN_ATTRS = ["aria-label", "title", "placeholder", "data-tip", "alt"];
+function shownText(ids) {
+  const out = [];
+  for (const id of ids) {
+    for (const e of all(byId[id])) {
+      if (!e.children.length && e._text) out.push(e._text);
+      for (const a of SHOWN_ATTRS) { const v = e.getAttribute(a); if (v) out.push(v); }
+    }
+  }
+  return out.join("\n");
+}
+function idsWith(prefix) { return Object.keys(byId).filter(id => id.indexOf(prefix) === 0); }
+function emDashFree(name, ids) {
+  const t = shownText(ids);
+  const hits = t.split("\n").filter(l => l.indexOf(EM) !== -1);
+  check(name, hits.length === 0, hits.slice(0, 5));
+  return t;
+}
+function contains(name, ids, needle) {
+  const t = shownText(ids);
+  check(name, t.indexOf(needle) !== -1, t.slice(0, 600));
+}
+// Open every collapsed group (aria-expanded="false") under the given ids, so
+// its choices are rendered; each header is tapped once, keyed by its text.
+async function expandAll(ids) {
+  const done = new Set();
+  for (let round = 0; round < 40; round++) {
+    const head = ids.map(id => all(byId[id])).flat().find(e =>
+      e.getAttribute("aria-expanded") === "false" && e.listeners.click && !done.has(text(e)));
+    if (!head) return done.size;
+    done.add(text(head));
+    head.click();
+    await wait(5);
+  }
+  return done.size;
+}
+const SETTINGS_IDS = ["settings-intro", "settings-groups", "settings-readonly"];
+const DETAIL_IDS = idsWith("detail-").concat(["action-menu", "session-settings-groups",
+  "session-settings-readonly", "session-settings-reset", "notice", "error"]);
+const NEW_IDS = idsWith("new-").concat(["notice", "error"]);
+
+SCEN.emdash_settings = async () => {
+  await wait(30);
+  byId["maintab-settings"].click();
+  await wait(40);
+  check("settings_visible", visible("view-settings"));
+  check("groups_expanded", (await expandAll(["settings-groups"])) >= 6);
+  contains("schema_label_shown_plain", SETTINGS_IDS, "Off - busy card only");
+  contains("schema_help_shown_plain", SETTINGS_IDS, "no tables or code blocks");
+  emDashFree("settings_no_em_dash", SETTINGS_IDS);
+  await finish();
+};
+
+SCEN.emdash_settings_save_error = async () => {
+  await wait(30);
+  byId["maintab-settings"].click();
+  await wait(40);
+  await expandAll(["settings-groups"]);
+  const opt = all(byId["settings-groups"]).find(e => e.listeners.click &&
+    text(e).indexOf("Merged into busy message") !== -1 &&
+    !e.children.some(c => c.listeners.click && text(c).indexOf("Merged into busy message") !== -1));
+  check("option_found", !!opt);
+  if (opt) opt.click();
+  await wait(40);
+  check("put_sent", calls.some(c => c.method === "PUT" && c.path === "/api/preferences/layout"),
+        calls.map(c => c.method + " " + c.path));
+  emDashFree("no_em_dash", ["notice", "error"].concat(SETTINGS_IDS));
+  await finish();
+};
+
+async function emdashDetail(label, menu) {
+  await wait(30);
+  api.openDetail(label);
+  await wait(60);
+  check("detail_visible", visible("view-detail"));
+  check("groups_expanded", (await expandAll(["session-settings-groups"])) >= 6);
+  if (menu) { byId["detail-menu-btn"].click(); await wait(10); }
+}
+
+SCEN.emdash_detail_waiting = async () => {
+  await emdashDetail("alpha", true);
+  contains("summary_shown_plain", DETAIL_IDS, "rm -rf build - then deploy");
+  contains("model_reason_shown_plain", DETAIL_IDS, "open in the terminal - answer it before switching the model");
+  contains("session_schema_shown_plain", DETAIL_IDS, "Off - busy card only");
+  emDashFree("detail_no_em_dash", DETAIL_IDS);
+  await finish();
+};
+
+SCEN.emdash_detail_viewer = async () => {
+  await emdashDetail("alpha", true);
+  contains("answer_reason_shown_plain", DETAIL_IDS, "Read-only - ask an admin");
+  emDashFree("detail_no_em_dash", DETAIL_IDS);
+  await finish();
+};
+
+SCEN.emdash_detail_busy_menu = async () => {
+  await emdashDetail("bravo", true);
+  check("menu_open", !byId["action-menu"].hidden);
+  contains("action_reason_shown_plain", DETAIL_IDS, "Nothing to compact - context is already empty.");
+  emDashFree("detail_no_em_dash", DETAIL_IDS);
+  await finish();
+};
+
+async function emdashNew() {
+  await wait(30);
+  api.openNewSession();
+  await wait(40);
+  const adv = byId["new-advanced-toggle"];
+  if (adv && !adv.hidden && adv.getAttribute("aria-expanded") !== "true") { adv.click(); await wait(20); }
+  check("groups_expanded", (await expandAll(NEW_IDS)) >= 1);
+  check("form_visible", visible("view-new"));
+}
+
+SCEN.emdash_new = async () => {
+  await emdashNew();
+  contains("model_hint_shown_plain", NEW_IDS, "Balanced - the everyday default");
+  contains("schema_label_shown_plain", NEW_IDS, "Off - busy card only");
+  emDashFree("new_no_em_dash", NEW_IDS);
+  await finish();
+};
+
+SCEN.emdash_new_create_error = async () => {
+  await emdashNew();
+  setName("frontend");
+  await wait(10);
+  byId["new-create"].click();
+  await wait(40);
+  check("create_sent", posts("/api/sessions").length === 1, posts().map(c => c.url));
+  contains("detail_shown_plain", NEW_IDS, "Name taken - pick another");
+  emDashFree("no_em_dash", NEW_IDS);
+  await finish();
+};
+
+// ---- offline / expired: no "+" New session action ---------------------------
+// "Offered" = present, not hidden, not disabled, no hidden ancestor.
+function onScreen(id) {
+  if (!byId[id]) return false;
+  for (let e = byId[id]; e; e = e.parent || e.staticParent) if (e.hidden) return false;
+  return true;
+}
+function offered(id) { return onScreen(id) && !byId[id].disabled; }
+async function tapNew() {
+  // Tap whatever a user could reach (on screen; a disabled one ignores taps):
+  // the form must not open.
+  for (const id of ["new-session-btn", "empty-new"]) if (onScreen(id)) byId[id].click();
+  await wait(20);
+}
+function newActionChecks() {
+  check("plus_not_offered", !offered("new-session-btn"),
+        { hidden: byId["new-session-btn"].hidden, disabled: byId["new-session-btn"].disabled });
+  check("empty_new_not_offered", !offered("empty-new"),
+        { hidden: byId["empty-new"].hidden, empty_visible: visible("empty-state") });
+}
+// A poll that fails ``n`` times in a row (the page's timers never run here,
+// so each retry is driven through the pollTick hook).
+async function failPolls(n) {
+  for (let i = 0; i < n; i++) { if (api.pollTick) api.pollTick(); await wait(15); }
+}
+
+// Offline = the badge reads "offline" (the page shows "reconnecting…" for the
+// first failures and "offline" once they persist); four failures reach it.
+const OFFLINE_AFTER = 4;
+function offlineCheck() {
+  check("state_offline", /offline/i.test(text(byId["conn-badge"])),
+        { badge: text(byId["conn-badge"]), error: text(byId["error"]) });
+}
+
+SCEN.offline_boot = async () => {
+  await wait(40);
+  await failPolls(OFFLINE_AFTER - 1);
+  offlineCheck();
+  newActionChecks();
+  await tapNew();
+  check("tap_does_not_open_form", !visible("view-new"));
+  await finish();
+};
+SCEN.offline_boot_empty = async () => {
+  // Offline with an empty last-known list: the empty state's own button too.
+  FIX["GET /api/sessions"] = grid([]);
+  if (api.pollTick) api.pollTick();
+  await wait(30);
+  check("empty_new_offered_when_online", offered("empty-new"));
+  FIX["GET /api/sessions"] = REJECT;
+  await failPolls(OFFLINE_AFTER);
+  offlineCheck();
+  newActionChecks();
+  await tapNew();
+  check("tap_does_not_open_form", !visible("view-new"));
+  await finish();
+};
+SCEN.offline_after_load = async () => {
+  await wait(30);
+  check("plus_offered_when_online", offered("new-session-btn"));
+  FIX["GET /api/sessions"] = REJECT;
+  await failPolls(OFFLINE_AFTER);
+  offlineCheck();
+  newActionChecks();
+  await tapNew();
+  check("tap_does_not_open_form", !visible("view-new"));
+  await finish();
+};
+SCEN.offline_recover = async () => {
+  await wait(30);
+  const good = FIX["GET /api/sessions"];
+  FIX["GET /api/sessions"] = REJECT;
+  await failPolls(OFFLINE_AFTER);
+  offlineCheck();
+  FIX["GET /api/sessions"] = good;
+  if (api.pollTick) api.pollTick();
+  await wait(40);
+  check("plus_offered_again", offered("new-session-btn"),
+        { hidden: byId["new-session-btn"].hidden, disabled: byId["new-session-btn"].disabled });
+  await finish();
+};
+SCEN.expired_boot = async () => {
+  await wait(40);
+  check("state_expired", /expired/i.test(text(byId["conn-badge"]) + " " + text(byId["error"])),
+        { badge: text(byId["conn-badge"]), error: text(byId["error"]) });
+  newActionChecks();
+  await tapNew();
+  check("tap_does_not_open_form", !visible("view-new"));
+  await finish();
+};
+SCEN.expired_empty = async () => {
+  FIX["GET /api/sessions"] = grid([]);
+  if (api.pollTick) api.pollTick();
+  await wait(30);
+  check("empty_new_offered_when_online", offered("empty-new"));
+  FIX["GET /api/sessions"] = EXPIRED;
+  if (api.pollTick) api.pollTick();
+  await wait(40);
+  newActionChecks();
+  await tapNew();
+  check("tap_does_not_open_form", !visible("view-new"));
+  await finish();
+};
+SCEN.expired_after_load = async () => {
+  await wait(30);
+  FIX["GET /api/sessions"] = EXPIRED;
+  if (api.pollTick) api.pollTick();
+  await wait(40);
+  check("state_expired", /expired/i.test(text(byId["conn-badge"]) + " " + text(byId["error"])),
+        { badge: text(byId["conn-badge"]), error: text(byId["error"]) });
+  newActionChecks();
+  await tapNew();
+  check("tap_does_not_open_form", !visible("view-new"));
   await finish();
 };
 

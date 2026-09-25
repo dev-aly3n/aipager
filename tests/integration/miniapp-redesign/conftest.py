@@ -195,3 +195,41 @@ async def client_for(srv):
     client = TestClient(TestServer(srv._build_app()))
     await client.start_server()
     return client
+
+
+# ── node page harness (bb_page.js) ──────────────────────────────────────────
+
+HARNESS = __import__("pathlib").Path(__file__).parent / "bb_page.js"
+
+
+@pytest.fixture(scope="module")
+def node_bin():
+    import shutil
+    exe = shutil.which("node") or shutil.which("nodejs")
+    if not exe:
+        pytest.skip("node not available; page behaviour tests skipped")
+    return exe
+
+
+@pytest.fixture(scope="module")
+def served_page(tmp_path_factory):
+    from aipager.miniapp.static import index_html
+    path = tmp_path_factory.mktemp("bbpage") / "page.html"
+    path.write_text(index_html(sdk_from_self=True), encoding="utf-8")
+    return path
+
+
+def drive(node_bin, page_path, scenario, fix_path=None):
+    """Run one bb_page.js scenario; ``fix_path`` is an optional JSON file of
+    API fixtures merged over the harness defaults."""
+    import subprocess
+    argv = [node_bin, str(HARNESS), str(page_path), scenario]
+    if fix_path is not None:
+        argv.append(str(fix_path))
+    proc = subprocess.run(argv, capture_output=True, text=True, timeout=60)
+    for line in proc.stdout.splitlines():
+        if line.startswith("RESULT "):
+            return json.loads(line[len("RESULT "):])
+    raise AssertionError(
+        f"scenario {scenario} produced no result (exit {proc.returncode})\n"
+        f"stdout: {proc.stdout[-2000:]}\nstderr: {proc.stderr[-2000:]}")
