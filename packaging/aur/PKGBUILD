@@ -1,6 +1,6 @@
 # Maintainer: dev-aly3n <dev.aly3n@gmail.com>
 pkgname=aipager
-pkgver=0.7.17
+pkgver=0.7.18
 pkgrel=1
 pkgdesc="Telegram remote-control daemon for Claude Code CLI sessions"
 arch=('any')
@@ -34,7 +34,7 @@ optdepends=(
   'faster-whisper: optional voice input transcription'
 )
 source=("https://files.pythonhosted.org/packages/source/${pkgname:0:1}/${pkgname}/${pkgname}-${pkgver}.tar.gz")
-sha256sums=('f98f042ccff1c15f9f1aff4407ac6d7ec47270f0835d91bab7d1445e69f524e4')
+sha256sums=('3dcb03f548c3d638f8125ea9d7fce743c5bb9624e7bfafe5ee203b95cb7c9250')
 
 build() {
   cd "${pkgname}-${pkgver}"
