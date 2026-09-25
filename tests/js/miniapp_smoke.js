@@ -168,10 +168,16 @@ let DETAIL_OVERRIDE = null;   // see driveMenuDriftCloses
 // than its default FIXTURES entry — used by driveRenameServerConflict
 // to model the server refusing a rename with a 409.
 let POST_STATUS_OVERRIDE = null; // { path, method, status, body }
+// A scenario can make every fetch of one path fail at the network level
+// (the tunnel dropped), the way a real fetch rejects with a TypeError.
+let FETCH_REJECT_PATH = null;
 global.fetch = (url, opts) => {
   const method = (opts && opts.method) || "GET";
   fetchCalls.push({ url, method, body: opts && opts.body });
   const path = url.split("?")[0];
+  if (FETCH_REJECT_PATH && path === FETCH_REJECT_PATH) {
+    return Promise.reject(new TypeError("Failed to fetch"));
+  }
   if (POST_STATUS_OVERRIDE && path === POST_STATUS_OVERRIDE.path
       && method === POST_STATUS_OVERRIDE.method) {
     const override = POST_STATUS_OVERRIDE;
@@ -565,6 +571,8 @@ const GRID_FIXTURES = {
   ]),
   answer_viewer: () => gridOf(mixedRows(), { can_act: false }),
   grid_empty: () => gridOf([]),
+  grid_empty_then_expired: () => gridOf([]),
+  grid_empty_then_offline: () => gridOf([]),
 };
 if (SCENARIO.indexOf("grid_") === 0 || SCENARIO.indexOf("answer_") === 0 ||
     SCENARIO === "detail_answer" || SCENARIO === "detail_waiting_mainbutton") {
@@ -1777,6 +1785,37 @@ function driveGridExpired() {
   }, 10);
 }
 
+// An empty grid that loaded, then lost the server: the empty state's
+// "New session" leads to a form that cannot load, so it goes too. The
+// first check proves the empty state really was on screen before.
+function emptyThenUnreachable(breakPoll, polls, badge, ok) {
+  setTimeoutReal(() => {
+    if (byId["empty-state"].hidden) fail("the empty grid did not show its empty state");
+    breakPoll();
+    for (let i = 0; i < polls; i++) { api.pollTick(); }
+    setTimeoutReal(() => {
+      if (byId["conn-badge"].textContent !== badge)
+        fail("the failed poll did not reach " + badge + ": " + byId["conn-badge"].textContent);
+      if (!byId["empty-state"].hidden)
+        fail("the empty state and its New session button stay while " + badge);
+      if (!byId["new-session-btn"].hidden) fail("the + is offered while " + badge);
+      console.log(ok);
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+function driveGridEmptyThenExpired() {
+  emptyThenUnreachable(() => {
+    POST_STATUS_OVERRIDE = { path: "/api/sessions", method: "GET", status: 401,
+      body: { error: "unauthorized" } };
+  }, 1, "expired", "ok: empty grid then 401 -> no New session button");
+}
+function driveGridEmptyThenOffline() {
+  // Three straight failures after a success is the page's offline line.
+  emptyThenUnreachable(() => { FETCH_REJECT_PATH = "/api/sessions"; }, 3, "offline",
+    "ok: empty grid then offline -> no New session button");
+}
+
 function driveGridKeyed() {
   setTimeoutReal(() => {
     const before = tiles()[0];
@@ -1939,6 +1978,8 @@ Object.assign(DRIVERS, {
   grid_render: driveGridRender,
   grid_empty: driveGridEmpty,
   grid_expired: driveGridExpired,
+  grid_empty_then_expired: driveGridEmptyThenExpired,
+  grid_empty_then_offline: driveGridEmptyThenOffline,
   grid_keyed: driveGridKeyed,
   grid_unchanged: driveGridUnchanged,
   grid_reorder: driveGridReorder,

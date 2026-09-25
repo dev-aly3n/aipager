@@ -1350,6 +1350,8 @@ def test_the_harness_detects_a_model_reason_shown_with_its_em_dash(node_bin, tmp
     ("grid_reorder_flip", "ok: reorder animates with one requestAnimationFrame"),
     ("grid_empty", "ok: empty grid -> empty state with one New session button"),
     ("grid_expired", "ok: expired -> no New session button"),
+    ("grid_empty_then_expired", "ok: empty grid then 401 -> no New session button"),
+    ("grid_empty_then_offline", "ok: empty grid then offline -> no New session button"),
     ("answer_single", "ok: answer -> POST /api/sessions/alpha/answer -> close"),
     ("answer_multi", "ok: answer with two waiting -> stays and says Sent to the chat"),
     ("answer_double", "ok: a double tap sends one request"),
@@ -1415,6 +1417,14 @@ _GRID_MUTANTS = [
         "    document.getElementById(\"new-session-btn\").hidden = unreachable || gridEmpty;",
         "    document.getElementById(\"new-session-btn\").hidden = unreachable;",
         "grid_empty", id="one-new-session-when-empty"),
+    pytest.param(
+        '    document.getElementById("empty-state").hidden = !gridEmpty || unreachable;',
+        '    document.getElementById("empty-state").hidden = !gridEmpty;',
+        "grid_empty_then_expired", id="no-empty-state-while-expired"),
+    pytest.param(
+        '    document.getElementById("empty-state").hidden = !gridEmpty || unreachable;',
+        '    document.getElementById("empty-state").hidden = !gridEmpty;',
+        "grid_empty_then_offline", id="no-empty-state-while-offline"),
 ]
 
 
