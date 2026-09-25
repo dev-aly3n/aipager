@@ -7,13 +7,17 @@ plain dict/list, so these are constructed directly.
 
 import time
 
+import pytest
+
 from aipager.miniapp.sessions import (
+    GRID_WAITING_SUMMARY_MAX,
     NO_PERMISSION_REASON,
     NO_TRANSCRIPT_REASON,
     PERMS_ADMIN_REQUIRED_REASON,
     QUEUE_EMPTY_REASON,
     QUEUE_FULL_REASON,
     _derive_status,
+    answer_state,
     build_timeline,
     session_actions,
     session_detail,
@@ -113,7 +117,8 @@ def test_session_summary_shape_and_no_cwd():
     assert row["last_active_seconds_ago"] is not None
     assert row["project"] == "myproject"
     assert "cwd" not in row
-    assert "waiting_summary" not in row
+    # Present since the needs-you tray (8.44), null unless waiting.
+    assert row["waiting_summary"] is None
 
 
 def test_session_summary_last_active_none_when_never_hooked():
@@ -136,6 +141,87 @@ def test_session_summary_waiting_kind_populated_for_interactive():
     row = session_summary(sess, time.monotonic())
     assert row["status"] == "waiting"
     assert row["waiting_kind"] == "question"
+
+
+def test_session_summary_waiting_summary_for_a_waiting_row():
+    sess = _sess(
+        status=Status.INTERACTIVE,
+        pending_permission={"tool_summary": "Write: main.py"},
+    )
+    row = session_summary(sess, time.monotonic())
+    assert row["waiting_summary"] == "Write: main.py"
+    assert "cwd" not in row
+
+
+@pytest.mark.parametrize("status", [Status.IDLE, Status.BUSY, Status.GONE,
+                                    Status.UNKNOWN])
+def test_session_summary_waiting_summary_is_null_unless_waiting(status):
+    sess = _sess(status=status,
+                 pending_permission={"tool_summary": "Write: main.py"})
+    row = session_summary(sess, time.monotonic())
+    assert row["waiting_summary"] is None
+
+
+def test_session_summary_waiting_summary_collapses_newlines():
+    sess = _sess(
+        status=Status.INTERACTIVE,
+        pending_permission={"ask_question": True,
+                            "question": "Pick one\n\n  of   these:\tA or B"},
+    )
+    row = session_summary(sess, time.monotonic())
+    assert row["waiting_summary"] == "Pick one of these: A or B"
+
+
+def test_session_summary_waiting_summary_is_capped_at_160_with_an_ellipsis():
+    sess = _sess(
+        status=Status.INTERACTIVE,
+        pending_permission={"tool_summary": "Bash: " + "x" * 400},
+    )
+    line = session_summary(sess, time.monotonic())["waiting_summary"]
+    assert len(line) == GRID_WAITING_SUMMARY_MAX == 160
+    assert line.endswith("…")
+    assert line.startswith("Bash: xxx")
+
+
+def test_session_summary_waiting_summary_at_the_cap_is_not_cut():
+    text = "y" * 160
+    sess = _sess(status=Status.INTERACTIVE,
+                 pending_permission={"tool_summary": text})
+    assert session_summary(sess, time.monotonic())["waiting_summary"] == text
+
+
+def test_session_summary_waiting_summary_empty_when_nothing_recorded():
+    sess = _sess(status=Status.INTERACTIVE)
+    assert session_summary(sess, time.monotonic())["waiting_summary"] == ""
+
+
+# ===== answer_state =========================================================
+
+def test_answer_state_is_none_unless_waiting():
+    for status in ("idle", "busy", "gone", "unknown"):
+        assert answer_state(status, can_act=True) is None
+        assert answer_state(status, can_act=False) is None
+
+
+def test_answer_state_available_for_a_caller_who_can_prompt():
+    assert answer_state("waiting", can_act=True) == {
+        "available": True, "reason": None}
+
+
+def test_answer_state_names_the_permission_reason_for_a_viewer():
+    assert answer_state("waiting", can_act=False) == {
+        "available": False, "reason": NO_PERMISSION_REASON}
+
+
+def test_session_detail_carries_answer():
+    waiting = _sess(status=Status.INTERACTIVE,
+                    pending_permission={"tool_summary": "Bash: ls"})
+    assert session_detail(waiting, time.monotonic())["answer"] == {
+        "available": True, "reason": None}
+    assert session_detail(waiting, time.monotonic(), can_act=False)["answer"] == {
+        "available": False, "reason": NO_PERMISSION_REASON}
+    idle = _sess(status=Status.IDLE)
+    assert session_detail(idle, time.monotonic())["answer"] is None
 
 
 # ===== session_detail =====================================================

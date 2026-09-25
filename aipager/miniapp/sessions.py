@@ -171,21 +171,43 @@ def grid_totals(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+#: The grid row's ``waiting_summary`` cap, in characters (ellipsis included).
+GRID_WAITING_SUMMARY_MAX = 160
+
+
+def grid_waiting_summary(summary: str | None) -> str:
+    """One line of at most :data:`GRID_WAITING_SUMMARY_MAX` characters for
+    the grid's "needs you" tray: every whitespace run (newlines included)
+    collapses to one space, and a longer text is cut and ends in "…".
+    ``""`` when there is nothing to say."""
+    line = " ".join((summary or "").split())
+    if len(line) > GRID_WAITING_SUMMARY_MAX:
+        line = line[:GRID_WAITING_SUMMARY_MAX - 1].rstrip() + "…"
+    return line
+
+
 def session_summary(sess: "TrackedSession", now: float) -> dict[str, Any]:
     """Shape one grid-row entry for ``GET /api/sessions``.
 
     Deliberately excludes ``cwd`` (never sent to the polled grid — see
-    design.md Decision 5) and ``waiting_summary`` (a drill-down-only
-    detail field). ``now`` is a caller-supplied ``time.monotonic()``
-    reading so every row in one response is measured against the same
-    instant, and so this stays a pure function for testing.
+    design.md Decision 5). ``waiting_summary`` used to be drill-down only;
+    the grid's "needs you" tray shows the pending prompt without a fetch
+    per waiting session, so a waiting row now carries it too, collapsed
+    to one line and capped by :func:`grid_waiting_summary`. The detail
+    route already sends the same text to the same members, so nothing new
+    is exposed. ``now`` is a caller-supplied ``time.monotonic()`` reading
+    so every row in one response is measured against the same instant,
+    and so this stays a pure function for testing.
     """
-    status, waiting_kind, _summary = _derive_status(sess)
+    status, waiting_kind, summary = _derive_status(sess)
     last_active = round(now - sess.last_hook_at) if sess.last_hook_at else None
     return {
         "label": sess.label,
         "status": status,
         "waiting_kind": waiting_kind,
+        "waiting_summary": (
+            grid_waiting_summary(summary) if status == _WAITING_STATUS else None
+        ),
         "model": sess.model_name or "",
         "context_pct": sess.last_token_pct or 0,
         "cost_usd": round(sess.last_cost_usd or 0.0, 4),
@@ -309,6 +331,21 @@ def model_switch_state(
     return {"available": True, "reason": None}
 
 
+def answer_state(status: str, *, can_act: bool) -> dict[str, Any] | None:
+    """Whether the page may offer "Answer in chat" (re-send the pending
+    prompt into the chat), and why not.
+
+    ``None`` unless the session is waiting on a prompt. Otherwise
+    ``{"available", "reason"}`` in the same shape and precedence as
+    :func:`model_switch_state`: a caller who cannot prompt is told that.
+    """
+    if status != _WAITING_STATUS:
+        return None
+    if not can_act:
+        return {"available": False, "reason": NO_PERMISSION_REASON}
+    return {"available": True, "reason": None}
+
+
 def session_detail(
     sess: "TrackedSession", now: float, *,
     can_act: bool = True, is_admin: bool = False,
@@ -362,6 +399,7 @@ def session_detail(
         detail["status"], can_act=can_act,
         switch_pending=sess.model_switch_pending(),
     )
+    detail["answer"] = answer_state(detail["status"], can_act=can_act)
     detail["actions"] = session_actions(
         detail["status"], resumable=bool(sess.claude_session_id), can_act=can_act,
         is_admin=is_admin, skip_perms=bool(sess.skip_perms), queue_depth=queue_depth,

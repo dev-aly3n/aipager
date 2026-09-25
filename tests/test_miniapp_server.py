@@ -337,7 +337,9 @@ def test_sessions_returns_scoped_grid_with_project_and_no_cwd(scoped_server, run
             assert row["waiting_kind"] is None
             assert row["project"] == "myproject"
             assert "cwd" not in row
-            assert "waiting_summary" not in row
+            # Present since the needs-you tray (8.44), null unless waiting.
+            assert row["waiting_summary"] is None
+            assert isinstance(body["can_act"], bool)
         finally:
             await client.close()
     run_async(_run())

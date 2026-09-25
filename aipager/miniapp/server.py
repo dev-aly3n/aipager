@@ -133,6 +133,15 @@ _DIFF_MAX_CONCURRENCY = 1
 _DIFF_QUEUE_WAIT_SECONDS = 10.0
 
 
+# The answer route's refusal when the session is not on a prompt. One
+# body for both places it can be detected (the route's own status guard
+# and the shared resend core racing an answer).
+_ANSWER_NOT_WAITING_BODY = {
+    "error": "not_waiting",
+    "detail": "This session isn't waiting on you any more.",
+}
+
+
 class MiniAppServer:
     """``GET /`` (static shell) + read-only authenticated JSON routes.
 
@@ -230,6 +239,13 @@ class MiniAppServer:
         # injection helper the chat's Models keyboard uses.
         app.router.add_post(
             "/api/sessions/{label}/model", self._handle_session_model,
+        )
+        # "Answer in chat" (roadmap 8.44, 8.31 parity): re-send the pending
+        # prompt with its answer keyboard into the chat, exactly as the
+        # pinned bar's Answer button does. Nothing is typed into the PTY;
+        # the answer itself still goes through the chat's own buttons.
+        app.router.add_post(
+            "/api/sessions/{label}/answer", self._handle_session_answer,
         )
         app.router.add_get("/api/preferences", self._handle_preferences_get)
         # Self-update (roadmap 8.36): admin-only, and — in personal mode —
@@ -429,10 +445,16 @@ class MiniAppServer:
     async def _handle_sessions(self, request):
         from aiohttp import web
 
-        result = await self._authenticate(request, "/api/sessions")
+        result = await self._authenticate_user(request, "/api/sessions")
         if isinstance(result, web.Response):
             return result
-        return web.json_response(self._build_sessions_payload(result))
+        scope_chat_id, user_id = result
+        payload = self._build_sessions_payload(scope_chat_id)
+        # Whether this caller may act (prompt) in this chat, so the grid's
+        # "needs you" tray can grey out "Answer in chat" with a reason
+        # instead of offering a tap that would only 403.
+        payload["can_act"] = bool(self.bot._can_prompt_user(user_id, scope_chat_id))
+        return web.json_response(payload)
 
     async def _handle_session_create(self, request):
         from aiohttp import web
@@ -1273,6 +1295,61 @@ class MiniAppServer:
         return web.json_response({
             "status": "stopped", "label": outcome.label, "dropped": outcome.dropped,
         })
+
+    async def _handle_session_answer(self, request):
+        """``POST /api/sessions/{label}/answer``: re-send the session's
+        pending prompt into the caller's chat through the pinned bar's own
+        path (``DashboardMixin._resend_pending_prompt``), which registers
+        the copy as a prompt surface so a stale copy refuses. No chat
+        mirror line: the re-sent prompt IS the visible effect."""
+        from aiohttp import web
+
+        from aipager.bot.dashboard import (
+            RESEND_BUSY,
+            RESEND_NOT_RESENDABLE,
+            RESEND_NOT_WAITING,
+            RESEND_SENT,
+        )
+        from aipager.state import Status
+
+        result = await self._resolve_own_scope_session(
+            request, "POST /api/sessions/{label}/answer",
+        )
+        if isinstance(result, web.Response):
+            return result
+        sess, scope_chat_id, user_id = result
+
+        if not self.bot._can_prompt_user(user_id, scope_chat_id):
+            log.info(
+                "miniapp: session answer rejected (403) — "
+                "caller cannot prompt this session",
+            )
+            return web.json_response({"error": "forbidden"}, status=403)
+        if not self._allow_write(user_id):
+            log.info("miniapp: session answer rejected (429) — rate limited")
+            return web.json_response({"error": "too_many_requests"}, status=429)
+        if sess.status != Status.INTERACTIVE:
+            return web.json_response(_ANSWER_NOT_WAITING_BODY, status=409)
+
+        outcome = await self.bot._resend_pending_prompt(scope_chat_id, sess)
+        if outcome == RESEND_SENT:
+            return web.json_response({"status": "sent", "label": sess.label})
+        if outcome == RESEND_NOT_WAITING:
+            return web.json_response(_ANSWER_NOT_WAITING_BODY, status=409)
+        if outcome == RESEND_NOT_RESENDABLE:
+            return web.json_response({
+                "error": "not_resendable",
+                "detail": "This prompt can't be re-sent. Answer it in the terminal.",
+            }, status=409)
+        if outcome == RESEND_BUSY:
+            return web.json_response({
+                "error": "chat_busy",
+                "detail": "Telegram is busy. Try again in a moment.",
+            }, status=503)
+        return web.json_response({
+            "error": "send_failed",
+            "detail": "Couldn't post the prompt to the chat.",
+        }, status=502)
 
     async def _handle_session_kill(self, request):
         from aiohttp import web
