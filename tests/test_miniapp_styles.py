@@ -426,3 +426,16 @@ def test_the_view_entry_leaves_no_transform_behind():
 
 def test_the_page_carries_the_stylesheet():
     assert CSS in INDEX_HTML
+
+
+def test_every_pulse_clause_keeps_its_count_and_noun_on_one_line():
+    """The pulse sentence may wrap only at its commas: "2 need you, 2
+    working" must never split into "2" / "working" (rev-iter1-005)."""
+    from aipager.miniapp.static._app import APP_JS
+
+    classes = set(re.findall(r'clauses\.push\(\["(pulse-[\w-]+)"', APP_JS))
+    assert classes >= {"pulse-need", "pulse-work", "pulse-rest"}, classes
+    rules = re.findall(r"([^{}]+)\{([^}]*)\}", _CODE)
+    nowrap = {sel.strip().lstrip(".") for sels, body in rules
+              if "white-space: nowrap" in body for sel in sels.split(",")}
+    assert classes <= nowrap, classes - nowrap

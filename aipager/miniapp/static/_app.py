@@ -892,7 +892,7 @@ APP_JS = r"""
     if (!recent.length && !chips.length) { btn.hidden = true; btn.innerHTML = ""; return; }
     btn.hidden = false;
     btn.innerHTML = "";
-    var head = make("div", "act-head");
+    var head = make("span", "act-head");     // spans: a <button> takes phrasing content only
     var title = make("span", "act-title");
     title.textContent = recent.length ? "Recent activity" : "Activity";
     head.appendChild(title);
@@ -905,7 +905,7 @@ APP_JS = r"""
     head.appendChild(chipRow);
     btn.appendChild(head);
     if (!recent.length) { return; }
-    var beads = make("div", "beads");
+    var beads = make("span", "beads");
     recent.forEach(function (r) {
       var state = r.state === "failed" ? "failed" : r.state === "running" ? "running" : "done";
       var bead = make("span", "bead bead-" + state);
@@ -914,7 +914,7 @@ APP_JS = r"""
     });
     btn.appendChild(beads);
     var last = recent[recent.length - 1];
-    var line = make("div", "act-last");
+    var line = make("span", "act-last");
     line.textContent = (last.text || "") + (last.state === "running"
       ? (typeof last.elapsed_seconds === "number" ? " (running " + duration(last.elapsed_seconds) + ")" : " (running)")
       : last.state === "failed" ? " (failed)" : "");

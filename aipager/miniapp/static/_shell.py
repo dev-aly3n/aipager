@@ -125,7 +125,6 @@ HTML_BODY = """\
 
 <section id="view-new" hidden>
   <div class="view-hero">
-    <div class="hero-lamp" aria-hidden="true"><svg class="ic"><use href="#i-lantern"></use></svg></div>
     <div>
       <h2 class="view-title">New session</h2>
       <p class="view-sub">Name it, pick a folder, and Claude starts there.</p>

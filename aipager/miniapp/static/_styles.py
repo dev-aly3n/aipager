@@ -154,6 +154,7 @@ CSS = """
     border-radius: 13px;
     color: var(--accent);
     background: var(--lamp-work-soft);
+    border: 1px solid var(--line);
   }
   .brand-text { min-width: 0; }
   h1 {
@@ -240,15 +241,27 @@ CSS = """
   /* ---- fatal line and toast ------------------------------------------ */
   #error {
     display: none;
+    position: relative;
     margin: 0 0 var(--s4);
-    padding: var(--s3) var(--s4);
+    padding: var(--s3) var(--s4) var(--s3) 22px;
     border-radius: var(--r-ctl);
     font-size: var(--fs-sm);
     line-height: var(--lh-sm);
     color: var(--ink);
     background: var(--surface);
     border: 1px solid var(--line);
-    box-shadow: inset 4px 0 0 var(--lamp-need);
+  }
+  /* An inset bar, not a border or inset shadow: either follows the
+     corner radius and draws a crescent. */
+  #error::before {
+    content: "";
+    position: absolute;
+    left: 8px;
+    top: 10px;
+    bottom: 10px;
+    width: 4px;
+    border-radius: 2px;
+    background: var(--lamp-need);
   }
   /* A floating toast, never an in-flow banner (an in-flow one shoved the
      page down and back under the finger). TOP-anchored: a bottom-anchored
@@ -450,6 +463,8 @@ CSS = """
   }
   .pulse-need { color: var(--need-ink); }
   .pulse-rest { color: var(--ink-2); }
+  /* a line breaks only at a comma, never between "2" and "working" */
+  .pulse-need, .pulse-work, .pulse-rest { white-space: nowrap; }
   .pulse-sub {
     display: block;
     margin-top: 2px;
@@ -669,6 +684,7 @@ CSS = """
     font-size: var(--fs-sm);
     line-height: var(--lh-sm);
     color: var(--ink-2);
+    text-wrap: balance;
   }
 
   /* ---- skeletons: the shape of what is coming ------------------------ */
@@ -747,7 +763,7 @@ CSS = """
     border: 1px solid var(--line);
   }
   .pill .ic { width: 18px; height: 18px; }
-  .pill-resume { background: var(--lamp-work-soft); border-color: transparent; }
+  .pill-resume { background: var(--lamp-work-soft); }
   /* Positioning context for the menu, which hangs off the button. No
      filter, transform or backdrop-filter here: any of them would trap the
      menu's z-index under its own scrim. */
@@ -850,6 +866,7 @@ CSS = """
   .bead-failed { background: var(--surface); border-color: var(--danger-ink); }
   .bead-running { background: var(--surface); animation: swell 1.6s ease-in-out infinite alternate; }
   .act-last {
+    display: block;
     margin-top: 12px;
     font-family: var(--mono);
     font-size: 13px;
@@ -874,11 +891,11 @@ CSS = """
   .preview::before {
     content: "";
     position: absolute;
-    left: 0;
-    top: 16px;
-    bottom: 16px;
+    left: 8px;
+    top: 14px;
+    bottom: 14px;
     width: 3px;
-    border-radius: 0 3px 3px 0;
+    border-radius: 2px;
     background: var(--accent);
   }
   .preview.is-empty { color: var(--ink-3); }
@@ -939,11 +956,17 @@ CSS = """
     flex: 1 1 auto;
     min-width: 0;
     text-align: right;
+    padding: 4px 0;
     font-size: 15px;
+    line-height: 20px;
     color: var(--ink-2);
-    white-space: nowrap;
+    /* Real labels ("Don't apply any rule") outgrow the narrow form
+       column: two balanced lines, then an ellipsis. */
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
     overflow: hidden;
-    text-overflow: ellipsis;
+    text-wrap: balance;
   }
   .grp-caret { flex: 0 0 auto; display: grid; place-items: center; width: 16px; height: 16px; }
   .grp-caret::before {
@@ -1135,16 +1158,6 @@ CSS = """
 
   /* ---- new session: a guided card ------------------------------------ */
   .view-hero { display: flex; align-items: center; gap: var(--s4); padding: var(--s1) 0 var(--s5); }
-  .hero-lamp {
-    display: grid;
-    place-items: center;
-    width: 56px;
-    height: 56px;
-    border-radius: 18px;
-    color: var(--accent);
-    background: var(--lamp-work-soft);
-  }
-  .hero-lamp .ic { width: 28px; height: 28px; }
   .view-title { margin: 0; font-size: var(--fs-title); line-height: var(--lh-title); font-weight: 700; }
   .view-sub { margin: 2px 0 0; font-size: var(--fs-sm); line-height: var(--lh-sm); color: var(--ink-2); }
   .steps { display: flex; flex-direction: column; gap: var(--s5); margin: 0; padding: 0; list-style: none; }
