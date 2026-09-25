@@ -1,11 +1,16 @@
 """Admin self-update from Telegram and the Mini App (roadmap 8.36).
 
-``/update`` shows the running and latest versions of aipager and Claude
-Code and offers Update Claude Code / Update aipager / Both / Cancel. The
-Mini App's Updates block drives the SAME :class:`UpdateManager` methods, so
-the two surfaces cannot drift. All real work (spawning, fetching, the lock,
-the restart gate, the restart plan, the marker) lives in
-:mod:`aipager.self_update`; this module is orchestration and text.
+``/update`` offers one "Check for updates" button (roadmap 8.43). Tapping
+it looks up both products and shows one line each, then ONE button that
+updates only what has an update (Update aipager / Update Claude Code /
+Update both). The Mini App's Updates block drives the SAME
+:class:`UpdateManager` methods, and both surfaces take the offer from the
+one function :func:`update_offer`, so the two cannot drift. A start always
+goes through :meth:`UpdateManager.start_offer`, which re-derives the offer
+from the last check rather than trusting the button. All real work
+(spawning, fetching, the lock, the restart gate, the restart plan, the
+marker) lives in :mod:`aipager.self_update`; this module is orchestration
+and text.
 
 Flood discipline: one status message per job, edited in place. Outcome
 edits are ESSENTIAL; heartbeat and blocker edits are skippable ORNAMENTs,
@@ -13,9 +18,10 @@ sent only when their content changed and at most once per
 ``PROGRESS_EDIT_MIN_SECONDS``. Everything goes through the transport
 seams, so a flood-muted chat receives nothing.
 
-Callback data (short-callback family ``_``): ``_:up:cc``, ``_:up:ap``,
-``_:up:both``, ``_:up:x``, ``_:up:now:<job>``, ``_:up:wait:<job>``,
-``_:up:stop:<job>``.
+Callback data (short-callback family ``_``): ``_:up:chk``,
+``_:up:go:<cc|ap|both>``, ``_:up:x``, ``_:up:now:<job>``,
+``_:up:wait:<job>``, ``_:up:stop:<job>``. The pre-8.43 ``_:up:cc``,
+``_:up:ap`` and ``_:up:both`` only answer that the menu is out of date.
 """
 
 from __future__ import annotations
@@ -72,10 +78,31 @@ SHUTDOWN_DEADLINE_SECONDS = 8.0
 
 DENIED_TEXT = "🚫 Only the admin can update aipager."
 STALE_TEXT = "That update already finished"
+# The pre-8.43 per-product buttons (``_:up:cc`` / ``ap`` / ``both``) and
+# Mini App routes: they start nothing any more.
+MENU_OUT_OF_DATE_TEXT = "This menu is out of date, send /update again"
+CHECK_PROMPT_TEXT = ("⬆️ <b>Updates</b>\n\nCheck whether aipager or Claude Code "
+                     "has a newer version.")
+CHECK_BUTTON_TEXT = "🔄 Check for updates"
+CHECKING_TEXT = "Checking…"
+UP_TO_DATE_TEXT = "Everything is up to date."
+CHECK_FAILED_TEXT = "Nothing newer found, but a check failed. Try again later."
+OFFER_STALE_TEXT = "⚠️ This check is out of date. Check again before updating."
+# How long an Update button (or the Mini App's) stays good after its check.
+# Past this, or once any job has run, the tap asks for a fresh check.
+OFFER_MAX_AGE_SECONDS = 600.0
+# Callback verb <-> job kind for the one Update button.
+_GO_CODES = {"cc": "claude", "ap": "aipager", "both": "both"}
+_GO_VERBS = {kind: code for code, kind in _GO_CODES.items()}
 
 
 def _esc(value) -> str:
     return html_mod.escape(str(value))
+
+
+def _esc_text(value) -> str:
+    """Escape for HTML message TEXT (not attributes): keeps "couldn't"."""
+    return html_mod.escape(str(value), quote=False)
 
 
 # ---------------------------------------------------------------------------
@@ -209,58 +236,132 @@ def _source_dict(source: install_source.InstallSource) -> dict:
     }
 
 
-def render_status(status: dict, *, show_paths: bool) -> tuple[str, InlineKeyboardMarkup | None]:
+@dataclass(frozen=True)
+class UpdateOffer:
+    """What a check found and the ONE update it offers (roadmap 8.43).
+
+    ``kind`` is ``"aipager"``, ``"claude"``, ``"both"`` or None (nothing
+    to offer); ``lines`` holds one plain-text line per product."""
+
+    kind: str | None
+    label: str | None
+    lines: list[str]
+    summary: str | None
+    restart: str | None
+    notes: list[str]
+
+
+def update_offer(status: dict) -> UpdateOffer:
+    """THE decision both surfaces show: which products have an update this
+    install can apply. A product is offered only when its lookup succeeded
+    and found a strictly newer version (aipager also needs an install that
+    can be upgraded from here)."""
     ap = status["aipager"]
     cl = status["claude"]
     rs = status["restart"]
     src = ap["source"]
+    lines: list[str] = []
+    notes: list[str] = []
+    failed = False
 
-    lines = ["⬆️ <b>Updates</b>", ""]
+    running = ap["running"]
     latest = ap.get("latest")
-    tag = ""
-    if latest and ap.get("update_available"):
-        tag = " — update available"
-    elif latest:
-        tag = " — up to date"
-    lines.append(f"<b>aipager</b> {_esc(ap['running'])} · latest "
-                 f"{_esc(latest) if latest else 'unknown'}{tag}")
-    lines.append(f"<i>{_esc(src['describe'] if show_paths else src['describe_short'])}</i>")
+    offer_ap = False
+    if not latest:
+        failed = True
+        lines.append(f"aipager {running} (couldn't check)")
+    elif ap.get("update_available"):
+        line = f"aipager {running} → {latest}"
+        if src["upgradable"]:
+            offer_ap = True
+        else:
+            line += f" (can't update from here: {src.get('reason') or 'unknown install'})"
+        lines.append(line)
+    else:
+        lines.append(f"aipager {running} (up to date)")
     installed = ap.get("installed")
-    if installed and installed != ap["running"]:
-        lines.append(f"installed on disk {_esc(installed)} (not running yet)")
-    if not src["upgradable"]:
-        lines.append(f"can't update from here: {_esc(src['reason'] or 'unknown install')}")
-    lines.append("")
+    if installed and installed != running:
+        notes.append(f"aipager {installed} is installed but not running yet.")
 
     cur = cl.get("current")
     cl_latest = cl.get("latest")
-    tag = ""
-    if cur and cl_latest and cl.get("update_available"):
-        tag = " — update available"
-    elif cur and cl_latest:
-        tag = " — up to date"
-    lines.append(f"<b>Claude Code</b> {_esc(cur) if cur else 'unknown'} · latest "
-                 f"{_esc(cl_latest) if cl_latest else 'unknown'}{tag}")
-    lines.append(f"<i>{_esc(cl['method'])} install, channel {_esc(cl['channel'])}</i>")
-    lines.append("")
-    if rs["automatic"]:
-        lines.append("<b>Restart:</b> automatic (systemd), once no turn is running")
+    offer_cc = False
+    if not cur:
+        failed = True
+        lines.append("Claude Code (couldn't check)")
+    elif not cl_latest:
+        failed = True
+        lines.append(f"Claude Code {cur} (couldn't check)")
+    elif cl.get("update_available"):
+        offer_cc = True
+        lines.append(f"Claude Code {cur} → {cl_latest}")
     else:
-        lines.append(f"<b>Restart:</b> manual — {_esc(rs.get('reason') or 'unknown')}")
+        lines.append(f"Claude Code {cur} (up to date)")
 
-    can_ap = bool(src["upgradable"])
-    can_cc = bool(cur)
-    row1 = []
-    if can_cc:
-        row1.append(InlineKeyboardButton("⬆️ Update Claude Code", callback_data="_:up:cc"))
-    if can_ap:
-        row1.append(InlineKeyboardButton("⬆️ Update aipager", callback_data="_:up:ap"))
-    row2 = []
-    if can_cc and can_ap:
-        row2.append(InlineKeyboardButton("Both", callback_data="_:up:both"))
-    row2.append(InlineKeyboardButton("Cancel", callback_data="_:up:x"))
-    rows = [r for r in (row1, row2) if r]
-    return "\n".join(lines), InlineKeyboardMarkup(rows)
+    if offer_ap and offer_cc:
+        kind, label = "both", "Update both"
+    elif offer_ap:
+        kind, label = "aipager", "Update aipager"
+    elif offer_cc:
+        kind, label = "claude", "Update Claude Code"
+    else:
+        kind = label = None
+    summary = None
+    if kind is None:
+        summary = CHECK_FAILED_TEXT if failed else UP_TO_DATE_TEXT
+    restart = None
+    if offer_ap:
+        restart = ("Restart: automatic, once no turn is running." if rs["automatic"]
+                   else f"Restart: manual ({rs.get('reason') or 'restart it yourself'})")
+    return UpdateOffer(kind=kind, label=label, lines=lines, summary=summary,
+                       restart=restart, notes=notes)
+
+
+def _source_text(status: dict, show_paths: bool) -> str:
+    src = status["aipager"]["source"]
+    return str(src["describe"] if show_paths else src["describe_short"])
+
+
+def check_payload(status: dict, *, show_paths: bool) -> dict:
+    """The Mini App's view of a check: the same offer the chat shows."""
+    offer = update_offer(status)
+    return {
+        "lines": list(offer.lines),
+        "offer": ({"kind": offer.kind, "label": offer.label}
+                  if offer.kind is not None else None),
+        "summary": offer.summary,
+        "restart": offer.restart,
+        "notes": list(offer.notes),
+        "source": _source_text(status, show_paths),
+    }
+
+
+def check_prompt_markup() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton(CHECK_BUTTON_TEXT, callback_data="_:up:chk")]])
+
+
+def render_check(status: dict, *, show_paths: bool) -> tuple[str, InlineKeyboardMarkup]:
+    """The chat's view of a check: the offer's lines, then ONE Update
+    button and Cancel, or "Everything is up to date." and Check again."""
+    offer = update_offer(status)
+    lines = ["⬆️ <b>Updates</b>", ""]
+    lines += [_esc_text(line) for line in offer.lines]
+    lines.append(f"<i>{_esc_text(_source_text(status, show_paths))}</i>")
+    lines += [_esc_text(n) for n in offer.notes]
+    if offer.restart:
+        lines.append(_esc_text(offer.restart))
+    if offer.kind is None:
+        lines += ["", _esc_text(offer.summary)]
+        kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton("Check again", callback_data="_:up:chk")]])
+    else:
+        kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton(offer.label,
+                                 callback_data=f"_:up:go:{_GO_VERBS[offer.kind]}"),
+            InlineKeyboardButton("Cancel", callback_data="_:up:x"),
+        ]])
+    return "\n".join(lines), kb
 
 
 def _job_markup(job: _Job) -> InlineKeyboardMarkup | None:
@@ -337,6 +438,12 @@ class UpdateManager:
         self._job: _Job | None = None
         self._lock = self_update.UpdateLock()
         self._status_cache: tuple[float, dict] | None = None
+        # The last "Check for updates" result, ``(monotonic, status)``: the
+        # only thing an Update button may start from (see start_offer).
+        self._checked: tuple[float, dict] | None = None
+        # Bumped whenever a job starts or ends: a check that spans either
+        # is not remembered (its versions may predate the job).
+        self._job_epoch = 0
         self._tasks: set[asyncio.Task] = set()
         self._job_task: asyncio.Task | None = None
         self._last_job_id = 0
@@ -379,6 +486,17 @@ class UpdateManager:
             return cached[1]
         data = await self._collect_status()
         self._status_cache = (time.monotonic(), data)
+        return data
+
+    async def check(self) -> dict:
+        """"Check for updates": a fresh lookup of both products, remembered
+        as the basis every Update button starts from."""
+        epoch = self._job_epoch
+        data = await self.status(force=True)
+        if epoch == self._job_epoch and not self.busy:
+            self._checked = (time.monotonic(), data)
+        else:
+            log.info("update.check.discarded reason=job-started-or-ended")
         return data
 
     async def _collect_status(self) -> dict:
@@ -438,6 +556,36 @@ class UpdateManager:
 
     # ---- write side ------------------------------------------------------
 
+    async def start_offer(self, kind: str, *, chat_id: int, user_id: int | None,
+                          origin: str, status_message=None) -> StartResult:
+        """The ONE entry point for an Update button, in chat or the Mini App.
+
+        ``kind`` is what the tapped button said. It starts only if the last
+        check, still fresh and taken since the last job, offers exactly
+        that: a stale button, a hand-made request or a product with nothing
+        newer starts nothing. No lookup happens here."""
+        if kind not in KINDS:
+            raise ValueError(f"unknown update kind {kind!r}")
+        # start() repeats these two refusals; they are here too so a
+        # refused tap never reads (or reports on) the stored check.
+        if self._shutting_down:
+            return StartResult(False, "shutting_down", self.snapshot())
+        if self.busy:
+            log.info("update.lock_busy user=%s chat=%s job=%s", user_id, chat_id,
+                     self._job.id if self._job else None)
+            return StartResult(False, "update_in_progress", self.snapshot())
+        checked = self._checked
+        if checked is None or time.monotonic() - checked[0] > OFFER_MAX_AGE_SECONDS:
+            log.info("update.offer.expired user=%s chat=%s kind=%s", user_id, chat_id, kind)
+            return StartResult(False, "check_expired", None)
+        offer = update_offer(checked[1])
+        if offer.kind != kind:
+            log.info("update.offer.changed user=%s chat=%s asked=%s offered=%s",
+                     user_id, chat_id, kind, offer.kind)
+            return StartResult(False, "offer_changed", None)
+        return await self.start(kind, chat_id=chat_id, user_id=user_id,
+                                origin=origin, status_message=status_message)
+
     async def start(self, kind: str, *, chat_id: int, user_id: int | None,
                     origin: str, status_message=None) -> StartResult:
         if kind not in KINDS:
@@ -468,6 +616,7 @@ class UpdateManager:
                    origin=origin, started_at=time.time(), event=asyncio.Event())
         job.reporter = _Reporter(self.bot, chat_id, status_message)
         self._job = job
+        self._job_epoch += 1
         log.info("update.start job=%s kind=%s user=%s chat=%s origin=%s",
                  job.id, kind, user_id, chat_id, origin)
         self._job_task = self._spawn(self._run_job(job))
@@ -557,6 +706,10 @@ class UpdateManager:
             if not restart_scheduled:
                 self._release_lock(job)
             self._status_cache = None
+            # The versions have moved: a button from before this job must
+            # not start another one.
+            self._checked = None
+            self._job_epoch += 1
             try:
                 await self._report(job)
             except Exception:
@@ -1061,17 +1214,28 @@ def _origin_explanation(source: install_source.InstallSource, chat_id) -> str:
 # Telegram entry points
 # ---------------------------------------------------------------------------
 
-async def _show_status(bot: "TelegramBot", message, chat_id) -> None:
+def _busy_text(mgr: "UpdateManager") -> str:
+    if mgr.restart_pending:
+        return ("⏳ aipager is about to restart for an update. Try /update again "
+                "once it is back.")
+    snap = mgr.snapshot() or {}
+    return (f"⏳ An update is already running ({_esc(snap.get('phase', '…'))}). "
+            "Its status message shows the progress.")
+
+
+async def _show_check(bot: "TelegramBot", message, chat_id) -> None:
+    """Run the check and edit the tapped message into its result."""
     try:
-        status = await bot.updates.status(force=True)
-        text, kb = render_status(status, show_paths=isinstance(chat_id, int) and chat_id > 0)
+        status = await bot.updates.check()
+        text, kb = render_check(status, show_paths=_show_detail(chat_id))
     except Exception:
-        log.warning("update status failed", exc_info=True)
-        text, kb = "⚠️ Couldn't read the versions right now — try /update again.", None
+        log.warning("update check failed", exc_info=True)
+        text = "⚠️ Couldn't check for updates right now. Try again."
+        kb = check_prompt_markup()
     try:
         await edit_message(message, text, parse_mode="HTML", reply_markup=kb)
     except Exception:
-        log.debug("update status edit failed", exc_info=True)
+        log.debug("update check edit failed", exc_info=True)
 
 
 async def handle_update_cmd(bot: "TelegramBot", update, ctx) -> None:
@@ -1090,27 +1254,17 @@ async def handle_update_cmd(bot: "TelegramBot", update, ctx) -> None:
         return
     mgr = bot.updates
     if mgr.busy:
-        snap = mgr.snapshot() or {}
-        busy_text = (
-            "⏳ aipager is about to restart for an update — try /update again "
-            "once it is back."
-            if mgr.restart_pending else
-            f"⏳ An update is already running ({snap.get('phase', '…')}). "
-            "Its status message shows the progress.")
         try:
-            await reply_text(update.message, busy_text)
+            await reply_text(update.message, _busy_text(mgr), parse_mode="HTML")
         except Exception:
             log.debug("update busy reply failed", exc_info=True)
         return
+    # No lookup yet: the versions are checked only when the button is tapped.
     try:
-        msg = await reply_text(update.message, "🔎 Checking versions…")
+        await reply_text(update.message, CHECK_PROMPT_TEXT, parse_mode="HTML",
+                         reply_markup=check_prompt_markup())
     except Exception:
         log.debug("update reply failed", exc_info=True)
-        return
-    if msg is MUTED or msg is SKIPPED or msg is None:
-        return
-    # PTB handles updates one at a time: never block it on the lookups.
-    mgr._spawn(_show_status(bot, msg, chat_id))
 
 
 async def handle_callback(bot: "TelegramBot", update, query, session_name: str,
@@ -1139,21 +1293,46 @@ async def handle_callback(bot: "TelegramBot", update, query, session_name: str,
             log.debug("update cancel edit failed", exc_info=True)
         return True
     if verb in ("cc", "ap", "both") and len(parts) == 1:
-        kind = {"cc": "claude", "ap": "aipager", "both": "both"}[verb]
-        res = await mgr.start(kind, chat_id=chat_id, user_id=user_id, origin="chat",
-                              status_message=message)
+        # A pre-8.43 per-product button: never start from it.
+        log.info("update.stale_menu user=%s chat=%s action=%s", user_id, chat_id, action)
+        await bot._safe_answer(query, MENU_OUT_OF_DATE_TEXT, show_alert=True)
+        return True
+    if verb == "chk" and len(parts) == 1:
+        if mgr.busy or mgr.shutting_down:
+            text = ("⏳ aipager is shutting down. Try again once it is back."
+                    if mgr.shutting_down and not mgr.busy else _busy_text(mgr))
+            try:
+                await edit_text(query, text, parse_mode="HTML")
+            except Exception:
+                log.debug("update check refusal edit failed", exc_info=True)
+            return True
+        await bot._safe_answer(query, CHECKING_TEXT)
+        try:
+            await edit_text(query, f"🔎 {CHECKING_TEXT}")
+        except Exception:
+            log.debug("update checking edit failed", exc_info=True)
+        # PTB handles updates one at a time: never block it on the lookups.
+        mgr._spawn(_show_check(bot, message, chat_id))
+        return True
+    if verb == "go" and len(parts) == 2 and parts[1] in _GO_CODES:
+        kind = _GO_CODES[parts[1]]
+        res = await mgr.start_offer(kind, chat_id=chat_id, user_id=user_id,
+                                    origin="chat", status_message=message)
         if not res.ok:
-            if res.error == "not_upgradable":
+            markup = None
+            if res.error in ("check_expired", "offer_changed"):
+                text, markup = OFFER_STALE_TEXT, check_prompt_markup()
+            elif res.error == "not_upgradable":
                 src = install_source.detect_install_source()
                 text = (f"🚫 aipager can't be updated from here: "
                         f"{_esc(src.reason or 'unknown install')}")
             elif res.error == "shutting_down":
-                text = "⏳ aipager is shutting down — try again once it is back."
+                text = "⏳ aipager is shutting down. Try again once it is back."
             else:
                 phase = (res.job or {}).get("phase", "…")
                 text = f"⏳ An update is already running ({_esc(phase)})."
             try:
-                await edit_text(query, text, parse_mode="HTML")
+                await edit_text(query, text, parse_mode="HTML", reply_markup=markup)
             except Exception:
                 log.debug("update refusal edit failed", exc_info=True)
         return True
@@ -1236,6 +1415,7 @@ async def deliver_update_marker(bot: "TelegramBot", registry) -> None:
 
 
 __all__ = [
-    "ControlResult", "StartResult", "UpdateManager", "deliver_update_marker",
-    "handle_callback", "handle_update_cmd", "render_status",
+    "ControlResult", "StartResult", "UpdateManager", "UpdateOffer", "check_payload",
+    "deliver_update_marker", "handle_callback", "handle_update_cmd", "render_check",
+    "update_offer",
 ]

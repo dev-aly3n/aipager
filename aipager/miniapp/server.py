@@ -702,10 +702,13 @@ class MiniAppServer:
 
     # ---- self-update -----------------------------------------------------
 
-    _UPDATE_STARTS = {"claude": "claude", "aipager": "aipager", "both": "both"}
     _UPDATE_CONTROLS = ("restart-now", "wait-more", "cancel")
+    # The pre-8.43 per-product start routes: they start nothing any more.
+    _UPDATE_RETIRED = ("claude", "aipager", "both")
 
     async def _handle_update_get(self, request):
+        """The running job only. No version lookup: the Updates block does
+        not touch the network until "Check for updates" is tapped."""
         from aiohttp import web
 
         result = await self._authenticate_user(request, "/api/update")
@@ -715,21 +718,12 @@ class MiniAppServer:
         if not self.bot._is_update_admin(user_id, scope_chat_id):
             log.info("miniapp: update status rejected (403) — not an admin")
             return web.json_response({"error": "forbidden"}, status=403)
-        manager = self.bot.updates
-        payload = dict(await manager.status())
-        if not (isinstance(scope_chat_id, int) and scope_chat_id > 0):
-            # A group scope: no install paths, as in the chat's /update.
-            ap = dict(payload.get("aipager") or {})
-            src = dict(ap.get("source") or {})
-            src["describe"] = src.get("describe_short")
-            src["detail"] = None
-            ap["source"] = src
-            payload["aipager"] = ap
-        payload["job"] = manager.snapshot()
-        return web.json_response(payload)
+        return web.json_response({"job": self.bot.updates.snapshot()})
 
     async def _handle_update_post(self, request):
         from aiohttp import web
+
+        from aipager.bot.update_flow import KINDS, check_payload
 
         result = await self._authenticate_user(request, "POST /api/update/{action}")
         if isinstance(result, web.Response):
@@ -744,11 +738,37 @@ class MiniAppServer:
 
         action = request.match_info["action"]
         manager = self.bot.updates
+        if action in self._UPDATE_RETIRED:
+            log.info("miniapp: retired update route %s refused (410)", action)
+            return web.json_response({"error": "menu_out_of_date"}, status=410)
+        if action == "check":
+            if manager.shutting_down:
+                return web.json_response({"error": "shutting_down"}, status=503)
+            if manager.busy:
+                # As in chat: no lookup while an update runs or its
+                # restart is pending.
+                return web.json_response({"error": "update_in_progress"}, status=409)
+            status = await manager.check()
+            # A group scope: no install paths, as in the chat's /update.
+            private = isinstance(scope_chat_id, int) and scope_chat_id > 0
+            payload = dict(status)
+            if not private:
+                ap = dict(payload.get("aipager") or {})
+                src = dict(ap.get("source") or {})
+                src["describe"] = src.get("describe_short")
+                src["detail"] = None
+                ap["source"] = src
+                payload["aipager"] = ap
+            # `check` is what the page shows (the shared offer); the raw
+            # versions stay alongside it for diagnostics.
+            payload["check"] = check_payload(status, show_paths=private)
+            payload["job"] = manager.snapshot()
+            return web.json_response(payload)
+        try:
+            body = await request.json()
+        except Exception:
+            return web.json_response({"error": "bad_request"}, status=400)
         if action in self._UPDATE_CONTROLS:
-            try:
-                body = await request.json()
-            except Exception:
-                return web.json_response({"error": "bad_request"}, status=400)
             job_id = body.get("job_id") if isinstance(body, dict) else None
             if not isinstance(job_id, int) or isinstance(job_id, bool):
                 return web.json_response({"error": "bad_request"}, status=400)
@@ -756,11 +776,13 @@ class MiniAppServer:
             if not res.ok:
                 return web.json_response({"error": res.error}, status=409)
             return web.json_response({"job": res.job})
-        kind = self._UPDATE_STARTS.get(action)
-        if kind is None:
+        if action != "start":
             return web.json_response({"error": "bad_request"}, status=400)
-        res = await manager.start(kind, chat_id=scope_chat_id, user_id=user_id,
-                                  origin="miniapp")
+        kind = body.get("kind") if isinstance(body, dict) else None
+        if not isinstance(kind, str) or kind not in KINDS:
+            return web.json_response({"error": "bad_request"}, status=400)
+        res = await manager.start_offer(kind, chat_id=scope_chat_id, user_id=user_id,
+                                        origin="miniapp")
         if not res.ok:
             # 503: the daemon is stopping, try again once it is back; every
             # other refusal is a conflict with the current state (409).

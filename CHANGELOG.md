@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **One "Check for updates" button, then one "Update" button.** `/update` and the Mini App's **Settings → Updates** no longer show three update buttons all the time. They start with one button, **🔄 Check for updates**, and look nothing up until you tap it (opening Settings no longer queries PyPI or the Claude Code release channel). The check shows one line per product, `aipager 0.7.15 → 0.7.16`, `aipager 0.7.15 (up to date)` or `Claude Code 2.1.282 (couldn't check)`, and then ONE button that updates only what has an update: **Update aipager**, **Update Claude Code** or **Update both**. If nothing is newer it says "Everything is up to date." with a small **Check again**. The restart note appears only when an aipager update is offered, and the install source is small print. The update itself is unchanged (one update at a time, admin only, restart once no turn is running, running sessions keep the old Claude Code until restarted). Buttons from an older `/update` message answer "This menu is out of date, send /update again" and do nothing. See [commands → Update](docs/commands.md#update).
+
 ## [0.7.16] - 2026-09-25
 
 ### Changed

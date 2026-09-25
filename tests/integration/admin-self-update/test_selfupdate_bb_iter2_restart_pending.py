@@ -28,7 +28,10 @@ from aipager.bot.flood import MUTE
 from aipager.miniapp.server import MiniAppServer
 from aipager.state import SessionRegistry, Status
 
-START_BUTTONS = ("_:up:cc", "_:up:ap", "_:up:both")
+# 8.43: the Check button and the one Update button, plus the retired
+# per-product buttons (which must fail safe too).
+START_BUTTONS = ("_:up:chk", "_:up:go:cc", "_:up:go:ap", "_:up:go:both",
+                 "_:up:cc", "_:up:ap", "_:up:both")
 
 
 def _marker():
@@ -254,7 +257,7 @@ def test_start_button_tap_while_pending_runs_nothing(world, personal_bot, h, run
 def test_start_button_tap_while_pending_keeps_the_lock_held(world, personal_bot, h, run_async):
     async def go():
         await _to_pending(personal_bot, h)
-        update, _q = _tap("_:up:cc", h)
+        update, _q = _tap("_:up:go:cc", h)
         await personal_bot._handle_callback(update, MagicMock())
         await h.wait_for(lambda: False, 0.2)
         return h.lock_is_free()
@@ -332,10 +335,35 @@ def _http(srv, run_async, h, method, path, body=None):
     return run_async(go())
 
 
-@pytest.mark.parametrize("action", ["claude", "aipager", "both"])
-def test_miniapp_start_while_restart_pending_is_409(server, run_async, h, action):
-    status, body = _http(server, run_async, h, "post", f"/api/update/{action}")
+@pytest.mark.parametrize("kind", ["claude", "aipager", "both"])
+def test_miniapp_start_while_restart_pending_is_409(server, run_async, h, kind):
+    """8.43: the one start route (`/api/update/start`) replaced the
+    per-product `/api/update/{claude,aipager,both}`."""
+    status, body = _http(server, run_async, h, "post", "/api/update/start", {"kind": kind})
     assert (status, body) == (409, {"error": "update_in_progress"})
+
+
+def test_miniapp_check_while_restart_pending_is_409_and_looks_nothing_up(server, run_async, h,
+                                                                        world):
+    """As in chat: no version lookup while the restart holds the lock."""
+    def check_after_pending():
+        before = {}
+
+        async def go():
+            client = TestClient(TestServer(server._build_app()))
+            await client.start_server()
+            try:
+                await _to_pending(server.bot, h)
+                before["urls"] = len(world.urls)
+                resp = await client.post(
+                    "/api/update/check",
+                    headers={"X-Telegram-Init-Data": _init_data(h.OPERATOR)}, json={})
+                return resp.status, await resp.json(), len(world.urls) - before["urls"]
+            finally:
+                await client.close()
+        return run_async(go())
+    status, body, fetched = check_after_pending()
+    assert (status, body, fetched) == (409, {"error": "update_in_progress"}, 0)
 
 
 def test_miniapp_get_while_pending_reports_restart_scheduled(server, run_async, h):
@@ -344,7 +372,7 @@ def test_miniapp_get_while_pending_reports_restart_scheduled(server, run_async, 
 
 
 def test_miniapp_refusal_while_pending_runs_no_second_installer(server, run_async, h, world):
-    _http(server, run_async, h, "post", "/api/update/aipager")
+    _http(server, run_async, h, "post", "/api/update/start", {"kind": "aipager"})
     assert len(world.upgrade_calls()) == 1
 
 

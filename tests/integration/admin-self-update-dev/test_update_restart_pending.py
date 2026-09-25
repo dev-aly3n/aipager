@@ -68,7 +68,8 @@ def test_update_cmd_while_restart_pending_says_restarting(env, run):
     replies = [c.args[0] for c in update.message.reply_text.await_args_list]
     assert len(replies) == 1
     assert "about to restart" in replies[0]
-    assert not any("Checking versions" in r for r in replies)
+    assert not any("Check for updates" in r for r in replies)
+    assert update.message.reply_text.await_args.kwargs.get("reply_markup") is None
 
 
 # ----- the watchdog ---------------------------------------------------------------

@@ -1616,11 +1616,18 @@ APP_JS = r"""
 
   // ---- updates (admin only) -------------------------------------------
   //
-  // Same data and actions as /update in chat: both drive the daemon's one
-  // update job. Shown only when /api/preferences says `can_update`; the
-  // server enforces the rule itself on every /api/update request.
+  // Same flow as /update in chat (roadmap 8.43): one "Check for updates"
+  // button, then ONE Update button for whatever has an update. Both surfaces
+  // drive the daemon's one update job, and the offer (lines, label, which
+  // products) comes from the server's shared update_offer(), so the page
+  // never decides it. Opening Settings only asks for the running job
+  // (GET /api/update): nothing is looked up until Check is tapped. Shown
+  // only when /api/preferences says `can_update`; the server enforces the
+  // rule itself on every /api/update request.
 
-  var updatesData = null;     // GET /api/update payload
+  var updatesData = null;     // GET /api/update payload: { job }
+  var updatesCheck = null;    // POST /api/update/check result, or null
+  var updatesChecking = false;
   var updatesTimer = null;
   var UPDATE_TERMINAL = { done: 1, failed: 1, cancelled: 1, restart_scheduled: 1 };
 
@@ -1652,6 +1659,7 @@ APP_JS = r"""
 
   function hideUpdates() {
     updatesData = null;
+    updatesCheck = null;
     stopUpdatesPoll();
     document.getElementById("updates-block").hidden = true;
   }
@@ -1675,10 +1683,10 @@ APP_JS = r"""
       });
   }
 
-  function updateButton(label, onTap) {
+  function updateButton(label, onTap, className) {
     var b = document.createElement("button");
     b.type = "button";
-    b.className = "primary";
+    b.className = className || "primary";
     b.textContent = label;
     b.addEventListener("click", onTap);
     return b;
@@ -1696,59 +1704,93 @@ APP_JS = r"""
     fn();
   }
 
+  function checkUpdates() {
+    if (updatesChecking) { return; }
+    updatesChecking = true;
+    updatesCheck = null;
+    renderUpdates();
+    updatesFetch("/api/update/check", "POST", {})
+      .then(function (r) {
+        updatesChecking = false;
+        if (r.ok && r.data && r.data.check) {
+          updatesCheck = r.data.check;
+          updatesData = { job: r.data.job || null };
+        } else if (r.status === 409) {
+          showNotice("An update is already running.", "err");
+          loadUpdates();
+        } else if (r.status === 429) {
+          showNotice("Too many requests. Try again in a minute.", "err");
+        } else if (r.status === 503) {
+          showNotice("aipager is shutting down. Try again once it is back.", "err");
+        } else {
+          showNotice("Couldn't check for updates. Try again.", "err");
+        }
+        renderUpdates();
+      })
+      .catch(function (err) {
+        updatesChecking = false;
+        if (err && err.forbidden) { hideUpdates(); return; }
+        showNotice("Couldn't reach aipager. Try again.", "err");
+        renderUpdates();
+      });
+  }
+
   function postUpdate(action, body) {
     updatesFetch("/api/update/" + encodeURIComponent(action), "POST",
                  body === undefined ? {} : body)
       .then(function (r) {
         if (r.status === 409) {
           var why = (r.data && r.data.error) || "conflict";
-          showNotice(why === "update_in_progress"
-            ? "An update is already running."
-            : "That update already finished.", "err");
+          if (why === "check_expired" || why === "offer_changed") {
+            showNotice("That check is out of date. Check again.", "err");
+          } else {
+            showNotice(why === "update_in_progress"
+              ? "An update is already running."
+              : "That update already finished.", "err");
+          }
         } else if (r.status === 503 && r.data && r.data.error === "shutting_down") {
-          showNotice("aipager is shutting down — try again once it is back.", "err");
+          showNotice("aipager is shutting down. Try again once it is back.", "err");
         } else if (r.status === 429) {
-          showNotice("Too many requests — try again in a minute.", "err");
+          showNotice("Too many requests. Try again in a minute.", "err");
         } else if (!r.ok) {
-          showNotice("Couldn't start that — try again.", "err");
+          showNotice("Couldn't start that. Try again.", "err");
         }
+        // A started (or refused) update voids the check it came from.
+        if (action === "start") { updatesCheck = null; }
         loadUpdates();
       })
       .catch(function (err) {
         if (err && err.forbidden) { hideUpdates(); return; }
-        showNotice("Couldn't reach aipager — try again.", "err");
+        showNotice("Couldn't reach aipager. Try again.", "err");
       });
+  }
+
+  function setLine(id, text) {
+    var el = document.getElementById(id);
+    el.textContent = text || "";
+    el.hidden = !text;
   }
 
   function renderUpdates() {
     var block = document.getElementById("updates-block");
-    if (!updatesData) { block.hidden = true; return; }
+    if (!updatesData && !updatesChecking && !updatesCheck) { block.hidden = true; return; }
     block.hidden = false;
-    var ap = updatesData.aipager || {};
-    var cl = updatesData.claude || {};
-    var rs = updatesData.restart || {};
-    var src = ap.source || {};
-    document.getElementById("updates-aipager").textContent =
-      "aipager " + ap.running + " · latest " + (ap.latest || "unknown") +
-      (ap.update_available ? " — update available" : "") +
-      " (" + (src.describe || src.kind || "unknown install") + ")";
-    document.getElementById("updates-claude").textContent =
-      "Claude Code " + (cl.current || "unknown") + " · latest " +
-      (cl.latest || "unknown") + (cl.update_available ? " — update available" : "");
-    document.getElementById("updates-restart").textContent = rs.automatic
-      ? "Restart: automatic, once no turn is running."
-      : "Restart: manual — " + (rs.reason || "restart it yourself");
+    var job = (updatesData && updatesData.job) || null;
+    var running = job && !UPDATE_TERMINAL[job.phase];
 
     var jobEl = document.getElementById("updates-job");
     var actions = document.getElementById("updates-actions");
+    var linesEl = document.getElementById("updates-lines");
     actions.innerHTML = "";
-    var job = updatesData.job;
-    var running = job && !UPDATE_TERMINAL[job.phase];
+    linesEl.innerHTML = "";
+    setLine("updates-source", "");
+    setLine("updates-restart", "");
+    setLine("updates-summary", "");
     if (job) {
       jobEl.hidden = false;
       var lines = [];
       if (job.phase === "restart_scheduled") {
-        lines.push("Restarting — reopen the app in a minute.");
+        lines.push("Restarting. Reopen the app in a minute.");
       } else if (job.phase === "waiting_for_idle") {
         lines.push("Waiting for every session to go idle before the restart.");
       } else if (job.phase === "gate_timeout") {
@@ -1784,26 +1826,40 @@ APP_JS = r"""
       }
       return;
     }
-    var canClaude = !!cl.current;
-    var canAipager = !!src.upgradable;
-    var restartNote = "aipager restarts when no turn is running.";
-    if (canClaude) {
-      actions.appendChild(updateButton("Update Claude Code", function () {
-        postUpdate("claude");
-      }));
+
+    if (updatesChecking) {
+      var busy = updateButton("Checking…", function () {});
+      busy.disabled = true;
+      actions.appendChild(busy);
+      return;
     }
-    if (canAipager) {
-      actions.appendChild(updateButton("Update aipager", function () {
-        confirmThen("Update aipager? " + restartNote,
-                    function () { postUpdate("aipager"); });
-      }));
+    if (!updatesCheck) {
+      actions.appendChild(updateButton("Check for updates", checkUpdates));
+      return;
     }
-    if (canClaude && canAipager) {
-      actions.appendChild(updateButton("Both", function () {
-        confirmThen("Update Claude Code and aipager? " + restartNote,
-                    function () { postUpdate("both"); });
+    var check = updatesCheck;
+    (check.lines || []).forEach(function (line) {
+      var row = document.createElement("div");
+      row.className = "updates-row";
+      row.textContent = line;
+      linesEl.appendChild(row);
+    });
+    setLine("updates-source", [check.source].concat(check.notes || [])
+      .filter(function (t) { return !!t; }).join("\n"));
+    // The restart note comes only with an offered aipager update.
+    setLine("updates-restart", check.restart || "");
+    var offer = check.offer;
+    if (offer && offer.kind) {
+      var kind = offer.kind;
+      actions.appendChild(updateButton(offer.label, function () {
+        var go = function () { postUpdate("start", { kind: kind }); };
+        if (kind === "claude") { go(); return; }
+        confirmThen(offer.label + "? aipager restarts when no turn is running.", go);
       }));
+      return;
     }
+    setLine("updates-summary", check.summary || "Everything is up to date.");
+    actions.appendChild(updateButton("Check again", checkUpdates, "updates-again"));
   }
 
 

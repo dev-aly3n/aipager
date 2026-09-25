@@ -527,14 +527,18 @@ def _tap_after_shutdown(bot, h, run_async, data):
     return query
 
 
-@pytest.mark.parametrize("data", ["_:up:cc", "_:up:ap", "_:up:both"])
+@pytest.mark.parametrize("data", ["_:up:chk", "_:up:go:cc", "_:up:go:ap", "_:up:go:both",
+                                  "_:up:cc", "_:up:ap", "_:up:both"])
 def test_tap_after_shutdown_runs_nothing(world, personal_bot, h, run_async, data):
     _tap_after_shutdown(personal_bot, h, run_async, data)
     assert world.calls == []
 
 
-def test_tap_after_shutdown_says_aipager_is_shutting_down(world, personal_bot, h, run_async):
-    query = _tap_after_shutdown(personal_bot, h, run_async, "_:up:cc")
+@pytest.mark.parametrize("data", ["_:up:chk", "_:up:go:cc"])
+def test_tap_after_shutdown_says_aipager_is_shutting_down(world, personal_bot, h, run_async,
+                                                          data):
+    """8.43: the Check and Update buttons (was the retired `_:up:cc`)."""
+    query = _tap_after_shutdown(personal_bot, h, run_async, data)
     text = "\n".join(h.texts_of(personal_bot._app.bot, query, query.message))
     assert "shutting down" in text.lower()
 
@@ -612,34 +616,48 @@ def _post(srv, run_async, path, user_id, body=None, *, shutdown=True):
     return run_async(go())
 
 
-@pytest.mark.parametrize("action", ["claude", "aipager", "both"])
-def test_miniapp_start_after_shutdown_is_503(team_server, run_async, action):
-    status, _ = _post(team_server, run_async, f"/api/update/{action}", ADMIN)
+# 8.43: the one start route (`/api/update/start {"kind": ...}`) and the
+# check replaced the per-product `/api/update/{claude,aipager,both}`.
+_STARTS = [("/api/update/start", {"kind": "claude"}),
+           ("/api/update/start", {"kind": "aipager"}),
+           ("/api/update/start", {"kind": "both"}),
+           ("/api/update/check", {})]
+
+
+@pytest.mark.parametrize("path,body", _STARTS)
+def test_miniapp_start_after_shutdown_is_503(team_server, run_async, path, body):
+    status, _ = _post(team_server, run_async, path, ADMIN, body)
     assert status == 503
 
 
-@pytest.mark.parametrize("action", ["claude", "aipager", "both"])
-def test_miniapp_start_after_shutdown_body_is_shutting_down(team_server, run_async, action):
-    _, body = _post(team_server, run_async, f"/api/update/{action}", ADMIN)
-    assert body == {"error": "shutting_down"}
+@pytest.mark.parametrize("path,body", _STARTS)
+def test_miniapp_start_after_shutdown_body_is_shutting_down(team_server, run_async, path, body):
+    _, payload = _post(team_server, run_async, path, ADMIN, body)
+    assert payload == {"error": "shutting_down"}
 
 
-@pytest.mark.parametrize("action", ["claude", "aipager", "both"])
-def test_miniapp_start_after_shutdown_runs_nothing(team_server, run_async, world, action):
-    _post(team_server, run_async, f"/api/update/{action}", ADMIN)
-    assert world.calls == []
+@pytest.mark.parametrize("path,body", _STARTS)
+def test_miniapp_start_after_shutdown_runs_nothing(team_server, run_async, world, path, body):
+    _post(team_server, run_async, path, ADMIN, body)
+    assert world.calls == [] and world.urls == []
 
 
 def test_miniapp_non_admin_after_shutdown_is_still_403(team_server, run_async):
     """Auth comes first: a shutdown does not tell a non-admin anything new."""
-    status, _ = _post(team_server, run_async, "/api/update/claude", MEMBER)
+    status, _ = _post(team_server, run_async, "/api/update/start", MEMBER, {"kind": "claude"})
     assert status == 403
 
 
 def test_miniapp_refused_source_without_shutdown_stays_409(team_server, run_async, world):
+    """8.43: an editable install is never offered, so a start for aipager
+    after a check is a 409 (the offer does not include it); was a direct
+    POST /api/update/aipager answering not_upgradable."""
     world.origin = "editable"
-    status, body = _post(team_server, run_async, "/api/update/aipager", ADMIN, shutdown=False)
-    assert (status, body) == (409, {"error": "not_upgradable"})
+    _post(team_server, run_async, "/api/update/check", ADMIN, {}, shutdown=False)
+    status, body = _post(team_server, run_async, "/api/update/start", ADMIN,
+                         {"kind": "aipager"}, shutdown=False)
+    assert (status, body) == (409, {"error": "offer_changed"})
+    assert world.upgrade_calls() == []
 
 
 def test_miniapp_control_without_job_after_shutdown_is_not_a_success(team_server, run_async):

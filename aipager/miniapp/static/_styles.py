@@ -980,6 +980,12 @@ CSS = """\
     white-space: pre-wrap; font-size: 0.9rem;
   }
   .updates-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .updates-small { font-size: 0.85rem; margin: 2px 0; white-space: pre-line; }
+  .updates-again {
+    align-self: flex-start; padding: 4px 0; font: inherit; font-size: 0.9rem;
+    color: var(--tg-theme-link-color, #2481cc); background: none; border: 0;
+    cursor: pointer;
+  }
 
   /* Loading placeholders. A blank panel that fills in a moment later
      reads as broken; a shaped skeleton reads as "coming". */

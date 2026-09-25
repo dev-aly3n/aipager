@@ -1,4 +1,10 @@
-"""GET /api/update and POST /api/update/{action}: auth, 4xx, and wiring."""
+"""GET /api/update and POST /api/update/{action}: auth, 4xx, and wiring.
+
+Roadmap 8.43 (operator decision 2026-09-25): GET carries the job only (no
+lookup), POST /api/update/check looks versions up, and POST
+/api/update/start {"kind": ...} is the one start route; the per-product
+POST /api/update/{claude,aipager,both} are retired. Tests that drove the
+retired routes now check, then start."""
 
 from __future__ import annotations
 
@@ -76,7 +82,7 @@ def _call(env, run, fn):
 def test_update_api_rejects_missing_initdata(env, run):
     async def fn(c, srv):
         a = await c.get("/api/update")
-        b = await c.post("/api/update/claude")
+        b = await c.post("/api/update/start")
         return a.status, b.status, await b.json()
     assert _call(env, run, fn) == (401, 401, {"error": "unauthorized"})
     assert env.calls == [] and env.fetches == []
@@ -86,7 +92,7 @@ def test_update_api_forbids_non_admin_member(env, run):
     _scoped(env)
 
     async def fn(c, srv):
-        r = await c.post("/api/update/aipager", headers=_hdr(MEMBER))
+        r = await c.post("/api/update/start", headers=_hdr(MEMBER), json={"kind": "aipager"})
         return r.status, await r.json()
     assert _call(env, run, fn) == (403, {"error": "forbidden"})
     assert env.manager.snapshot() is None
@@ -104,7 +110,7 @@ def test_update_status_api_forbids_non_admin(env, run):
 def test_update_api_forbids_non_operator_personal_mode(env, run):
     async def fn(c, srv):
         a = await c.get("/api/update", headers=_hdr(STRANGER))
-        b = await c.post("/api/update/claude", headers=_hdr(STRANGER))
+        b = await c.post("/api/update/start", headers=_hdr(STRANGER), json={"kind": "claude"})
         return a.status, b.status
     assert _call(env, run, fn) == (403, 403)
     assert env.manager.snapshot() is None
@@ -114,7 +120,8 @@ def test_update_api_rate_limits_writes(env, run, monkeypatch):
     monkeypatch.setattr(MiniAppServer, "_allow_write", lambda self, uid: False)
 
     async def fn(c, srv):
-        r = await c.post("/api/update/claude", headers=_hdr(env.chat_id))
+        r = await c.post("/api/update/start", headers=_hdr(env.chat_id),
+                         json={"kind": "claude"})
         return r.status, await r.json()
     assert _call(env, run, fn) == (429, {"error": "too_many_requests"})
     assert env.manager.snapshot() is None
@@ -135,11 +142,16 @@ def test_update_api_rejects_unknown_action(env, run):
 
 def test_update_api_conflict_while_job_running(env, run):
     env.add_session(status=Status.BUSY)   # the aipager job waits on the gate
+    env.claude_latest = env.claude_version  # only aipager is newer
 
     async def fn(c, srv):
-        first = await c.post("/api/update/aipager", headers=_hdr(env.chat_id))
+        await c.post("/api/update/check", headers=_hdr(env.chat_id))
+        first = await c.post("/api/update/start", headers=_hdr(env.chat_id),
+                             json={"kind": "aipager"})
         body = await first.json()
-        second = await c.post("/api/update/claude", headers=_hdr(env.chat_id))
+        await env.until(lambda: env.manager.snapshot()["phase"] == "waiting_for_idle")
+        second = await c.post("/api/update/start", headers=_hdr(env.chat_id),
+                              json={"kind": "aipager"})
         stale = await c.post("/api/update/restart-now", headers=_hdr(env.chat_id),
                              json={"job_id": body["job"]["id"] + 1})
         cancel = await c.post("/api/update/cancel", headers=_hdr(env.chat_id),
@@ -153,12 +165,18 @@ def test_update_api_conflict_while_job_running(env, run):
 
 
 def test_update_api_not_upgradable(env, run):
+    """8.43: a check never offers an install that can't be upgraded here,
+    and start_offer still refuses one that stopped being upgradable after
+    the check (the not_upgradable guard in start())."""
     from aipager.install_source import InstallSource
-    env.source = InstallSource(kind="editable", prefix="/s", python="/s/p",
-                               reason="editable")
+    env.claude_latest = env.claude_version  # only aipager is newer
 
     async def fn(c, srv):
-        r = await c.post("/api/update/aipager", headers=_hdr(env.chat_id))
+        await c.post("/api/update/check", headers=_hdr(env.chat_id))
+        env.source = InstallSource(kind="editable", prefix="/s", python="/s/p",
+                                   reason="editable")
+        r = await c.post("/api/update/start", headers=_hdr(env.chat_id),
+                         json={"kind": "aipager"})
         return r.status, await r.json()
     assert _call(env, run, fn) == (409, {"error": "not_upgradable"})
 
@@ -166,8 +184,9 @@ def test_update_api_not_upgradable(env, run):
 # ----- the happy path ----------------------------------------------------------------
 
 def test_update_api_status_shape(env, run):
+    """8.43: the version payload moved from GET to POST /api/update/check."""
     async def fn(c, srv):
-        r = await c.get("/api/update", headers=_hdr(env.chat_id))
+        r = await c.post("/api/update/check", headers=_hdr(env.chat_id))
         return r.status, await r.json()
     status, body = _call(env, run, fn)
     assert status == 200
@@ -183,8 +202,12 @@ def test_update_api_status_shape(env, run):
 
 
 def test_mini_app_drives_the_same_job_the_chat_shows(env, run):
+    env.pypi_latest = env.running           # only Claude Code is newer
+
     async def fn(c, srv):
-        r = await c.post("/api/update/claude", headers=_hdr(env.chat_id))
+        await c.post("/api/update/check", headers=_hdr(env.chat_id))
+        r = await c.post("/api/update/start", headers=_hdr(env.chat_id),
+                         json={"kind": "claude"})
         body = await r.json()
         await env.finish()
         s = await c.get("/api/update", headers=_hdr(env.chat_id))
@@ -216,7 +239,7 @@ def test_update_api_hides_install_paths_for_a_group_scope(env, run):
                                upgradable=True)
 
     async def fn(c, srv):
-        r = await c.get("/api/update", headers=_hdr(ADMIN))
+        r = await c.post("/api/update/check", headers=_hdr(ADMIN))
         return r.status, await r.text()
     status, raw = _call(env, run, fn)
     assert status == 200
@@ -232,7 +255,7 @@ def test_update_api_keeps_install_paths_in_a_private_scope(env, run):
                                upgradable=True)
 
     async def fn(c, srv):
-        r = await c.get("/api/update", headers=_hdr(env.chat_id))
+        r = await c.post("/api/update/check", headers=_hdr(env.chat_id))
         return await r.json()
     body = _call(env, run, fn)
     assert "/home/op/aipager" in body["aipager"]["source"]["describe"]
@@ -240,9 +263,11 @@ def test_update_api_keeps_install_paths_in_a_private_scope(env, run):
 
 def test_update_api_refuses_a_start_while_a_restart_is_pending(env, run):
     async def fn(c, srv):
+        await env.manager.check()
         await env.start("aipager")
         await env.finish()
-        r = await c.post("/api/update/claude", headers=_hdr(env.chat_id))
+        r = await c.post("/api/update/start", headers=_hdr(env.chat_id),
+                         json={"kind": "claude"})
         return r.status, await r.json()
     assert _call(env, run, fn) == (409, {"error": "update_in_progress"})
 
@@ -252,7 +277,8 @@ def test_update_api_start_during_shutdown_is_503_shutting_down(env, run):
     ``shutting_down`` (try again once it is back), and nothing runs."""
     async def fn(c, srv):
         await env.manager.shutdown()
-        r = await c.post("/api/update/claude", headers=_hdr(env.chat_id))
+        r = await c.post("/api/update/start", headers=_hdr(env.chat_id),
+                         json={"kind": "claude"})
         return r.status, await r.json()
     assert _call(env, run, fn) == (503, {"error": "shutting_down"})
     assert env.manager.snapshot() is None

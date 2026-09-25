@@ -30,7 +30,7 @@ and on every session change.
 | `/perms [label]` | optional | Switch a session between Ask and Auto permission modes. On a busy session, offers `Stop task & switch` / `Not now`. |
 | `/settings` | — | Message layout, diff previews (off by default), long-turn card updates (on by default: a busy card refreshes every 10 s after 2 minutes of a turn, 30 s after 10, once a minute after an hour, counting in minutes then hours — switch off to keep the first-minutes pace for the whole turn; see [troubleshooting](troubleshooting.md#a-long-turns-card-refreshes-less-often)), formatting and language preferences. Whatever the layout, every busy card ends with its session's status line (`⏳`/`✅ name · …`) and every answer starts with its result line (`💬 name`, plus `· Finished (…)` when no finished card is left to show the stats); the merged layout stacks the two, each line in its own section. In the card layout the answer deliberately follows the finished card by a moment, so the card is seen to say Finished before the answer lands under it — tune or disable that head start with `FINISH_CARD_GRACE_SECONDS` (seconds, default 0.8; 0 sends both at once). A card-layout turn that ran no tools keeps no card: its card would only repeat `✅ name · Done · Ns`, so the answer arrives alone with the stats in its `💬` line (see [Idle responses](#idle-responses)). |
 | `/whoami` | — | Show your Telegram id and (in team mode) your role. |
-| `/update` | — | Admin only. Show the running and latest aipager and Claude Code versions and update either or both — see [Update](#update). |
+| `/update` | — | Admin only. Check aipager and Claude Code for newer versions, then update whatever has one with a single button. See [Update](#update). |
 
 ### Per-session dynamic commands
 
@@ -408,33 +408,25 @@ No SSH required.
 
 ## Update
 
-`/update` (admin only; in personal mode, only the operator) replies
-`🔎 Checking versions…` and then edits that message to show:
+`/update` (admin only; in personal mode, only the operator) replies with one button, **🔄 Check for updates**. Nothing is looked up until you tap it. The tap edits that message into one line per product:
 
-- **aipager** — the running version, the latest on PyPI, and how it was
-  installed (e.g. `pipx, from PyPI` or `pipx, from local path …`; group
-  chats never show paths);
-- **Claude Code** — the installed version, the latest on its own update
-  channel (`autoUpdatesChannel`: latest, stable or rc), and the install
-  method;
-- **Restart** — `automatic (systemd)`, or `manual` with the reason.
+- `aipager 0.7.15 → 0.7.16` when a newer version exists (the latest on PyPI);
+- `aipager 0.7.15 (up to date)` when it does not;
+- `Claude Code 2.1.282 (couldn't check)` when the lookup failed (network down, 5 s timeout, or `claude` not found).
 
-A version that cannot be looked up (network down, 5 s timeout) shows as
-`unknown`.
+Claude Code is compared with the latest on its own update channel (`autoUpdatesChannel`: latest, stable or rc). Below the lines, in small text, is how aipager was installed (e.g. `pipx, from PyPI` or `pipx, from local path …`; group chats never show paths).
 
-Buttons: **⬆️ Update Claude Code**, **⬆️ Update aipager**, **Both**,
-**Cancel**. The aipager and Both buttons are missing when this install
-cannot be updated from here (editable, Nix, Snap, a system package, a
-container, or another user's install); the Claude Code buttons are
-missing when `claude` is not found. Every tap re-checks the admin rule.
+If anything is newer, there is ONE button that updates only the products that have an update: **Update aipager**, **Update Claude Code** or **Update both**, plus **Cancel**. When aipager is offered, the message also says how the restart happens: `Restart: automatic, once no turn is running.` or `Restart: manual (reason)`. A newer aipager on an install that cannot be updated from here (editable, Nix, Snap, a system package, a container, or another user's install) is shown with the reason and is not offered. If nothing is newer, the message reads "Everything is up to date." (or says a check failed) with a **Check again** button and no update button.
 
-**Update Claude Code** runs `claude update` (by absolute path, 5 min
+The Update button starts only what the check offered. If the check is more than 10 minutes old, another update has run since, or the versions no longer match the button, it asks you to check again instead. Buttons from an older `/update` menu (the per-product **Update Claude Code** / **Update aipager** / **Both**) answer "This menu is out of date, send /update again" and do nothing. Every tap re-checks the admin rule.
+
+Updating Claude Code runs `claude update` (by absolute path, 5 min
 timeout) and reports `Claude Code A → B`, "already up to date", or the
 failure with the tail of its output. Running sessions keep the old
 version until you restart them (`/restart`); the reply lists them. No
 session is restarted for you. New sessions use the new version.
 
-**Update aipager**:
+Updating aipager (**Update aipager**, or the second half of **Update both**, which updates Claude Code first):
 
 1. On a PyPI install that is already current, it says so and stops.
 2. If the daemon can restart itself, it first **waits until nothing is
@@ -471,7 +463,7 @@ kill), the `launchctl kickstart` command on macOS, or "restart your
 `aipager start`" for a daemon you started yourself.
 
 Only one update runs at a time, across `/update`, the Mini App's
-**Settings → Updates** block (same data, same buttons, same job) and
+**Settings → Updates** block (the same Check for updates button, the same one Update button, the same job) and
 `aipager update` on the command line. That includes the seconds between
 "Restarting in 5 s…" and the restart itself: `/update` answers that
 aipager is about to restart, the Mini App offers no buttons, and the

@@ -1,7 +1,14 @@
 """SC-2 (Mini App half) and SC-11: both /api/update routes refuse
 non-admins and personal-mode non-operators (401/403) and run nothing;
 POST adds 429/400/409; the admin's actions drive the same job the chat
-shows. (design.md Success criteria #2, #11; entrypoints.md "HTTP routes")."""
+shows. (design.md Success criteria #2, #11; entrypoints.md "HTTP routes").
+
+Roadmap 8.43 (operator decision 2026-09-25): GET /api/update carries the
+job only and looks nothing up; the versions come from POST
+/api/update/check, and the one start route is POST /api/update/start
+{"kind": ...}, which starts only what the last check offered. The
+per-product POST /api/update/{claude,aipager,both} are retired (410). The
+payload tests below moved from GET to the check for that reason."""
 
 from __future__ import annotations
 
@@ -151,91 +158,111 @@ def test_get_by_operator_in_personal_mode_is_200(personal_server, run_async, h):
     assert status == 200
 
 
-def test_get_payload_has_documented_shape(team_server, run_async):
-    _, body = _call(team_server, run_async, "get", "/api/update", _hdr(ADMIN))
-    assert {"aipager", "claude", "restart", "job"} <= set(body)
+def test_check_payload_has_documented_shape(team_server, run_async):
+    _, body = _call(team_server, run_async, "post", "/api/update/check", _hdr(ADMIN))
+    assert {"aipager", "claude", "restart", "check", "job"} <= set(body)
 
 
-def test_get_payload_versions(team_server, run_async, h):
+def test_get_payload_is_the_job_only_and_looks_nothing_up(team_server, run_async, world):
     _, body = _call(team_server, run_async, "get", "/api/update", _hdr(ADMIN))
+    assert body == {"job": None}
+    assert world.urls == [] and world.calls == []
+
+
+def test_check_payload_versions(team_server, run_async, h):
+    _, body = _call(team_server, run_async, "post", "/api/update/check", _hdr(ADMIN))
     assert (body["aipager"]["running"], body["aipager"]["latest"],
             body["claude"]["current"], body["claude"]["latest"]) == \
         (h.RUNNING, h.LATEST, h.CLAUDE_OLD, h.CLAUDE_NEW)
 
 
-def test_get_payload_update_available_flags(team_server, run_async):
-    _, body = _call(team_server, run_async, "get", "/api/update", _hdr(ADMIN))
+def test_check_payload_update_available_flags(team_server, run_async):
+    _, body = _call(team_server, run_async, "post", "/api/update/check", _hdr(ADMIN))
     assert body["aipager"]["update_available"] is True and body["claude"]["update_available"] is True
 
 
-def test_get_payload_source_fields(team_server, run_async):
-    _, body = _call(team_server, run_async, "get", "/api/update", _hdr(ADMIN))
+def test_check_payload_source_fields(team_server, run_async):
+    _, body = _call(team_server, run_async, "post", "/api/update/check", _hdr(ADMIN))
     assert {"kind", "origin", "detail", "upgradable", "reason"} <= set(body["aipager"]["source"])
 
 
-def test_get_payload_restart_mode(team_server, run_async):
-    _, body = _call(team_server, run_async, "get", "/api/update", _hdr(ADMIN))
+def test_check_payload_restart_mode(team_server, run_async):
+    _, body = _call(team_server, run_async, "post", "/api/update/check", _hdr(ADMIN))
     assert (body["restart"]["mode"], body["restart"]["automatic"]) == ("systemd", True)
 
 
-def test_get_payload_network_down_is_null_not_error(team_server, run_async, world):
+def test_check_payload_network_down_is_null_not_error(team_server, run_async, world):
     world.latest_pypi = None
     world.claude_latest = None
-    status, body = _call(team_server, run_async, "get", "/api/update", _hdr(ADMIN))
+    status, body = _call(team_server, run_async, "post", "/api/update/check", _hdr(ADMIN))
     assert (status, body["aipager"]["latest"], body["claude"]["latest"]) == (200, None, None)
 
 
-def test_get_payload_network_down_is_not_update_available(team_server, run_async, world):
+def test_check_payload_network_down_is_not_update_available(team_server, run_async, world):
     world.latest_pypi = None
-    _, body = _call(team_server, run_async, "get", "/api/update", _hdr(ADMIN))
+    _, body = _call(team_server, run_async, "post", "/api/update/check", _hdr(ADMIN))
     assert body["aipager"]["update_available"] is False
 
 
-def test_get_payload_prerelease_is_not_update_available(team_server, run_async, world):
+def test_check_payload_prerelease_is_not_update_available(team_server, run_async, world):
     world.latest_pypi = "0.9.0rc1"
-    _, body = _call(team_server, run_async, "get", "/api/update", _hdr(ADMIN))
+    _, body = _call(team_server, run_async, "post", "/api/update/check", _hdr(ADMIN))
     assert body["aipager"]["update_available"] is False
 
 
-def test_get_payload_equal_version_is_not_update_available(team_server, run_async, world, h):
+def test_check_payload_equal_version_is_not_update_available(team_server, run_async, world, h):
     world.latest_pypi = h.RUNNING
-    _, body = _call(team_server, run_async, "get", "/api/update", _hdr(ADMIN))
+    _, body = _call(team_server, run_async, "post", "/api/update/check", _hdr(ADMIN))
     assert body["aipager"]["update_available"] is False
 
 
-def test_get_payload_older_latest_is_not_update_available(team_server, run_async, world):
+def test_check_payload_older_latest_is_not_update_available(team_server, run_async, world):
     world.latest_pypi = "0.7.12"
-    _, body = _call(team_server, run_async, "get", "/api/update", _hdr(ADMIN))
+    _, body = _call(team_server, run_async, "post", "/api/update/check", _hdr(ADMIN))
     assert body["aipager"]["update_available"] is False
 
 
 # ---- auth: POST ----------------------------------------------------------
 
-@pytest.mark.parametrize("action", ["claude", "aipager", "both"])
+NEW_ACTIONS = ["check", "start"]
+RETIRED_ACTIONS = ["claude", "aipager", "both"]
+
+
+@pytest.mark.parametrize("action", NEW_ACTIONS + RETIRED_ACTIONS)
 def test_post_without_initdata_is_401(team_server, run_async, action):
     status, _ = _call(team_server, run_async, "post", f"/api/update/{action}")
     assert status == 401
 
 
-@pytest.mark.parametrize("action", ["claude", "aipager", "both", "restart-now",
-                                    "wait-more", "cancel"])
+@pytest.mark.parametrize("action", NEW_ACTIONS + RETIRED_ACTIONS + [
+    "restart-now", "wait-more", "cancel"])
 def test_post_by_non_admin_member_is_403(team_server, run_async, action):
     status, _ = _call(team_server, run_async, "post", f"/api/update/{action}",
                       _hdr(MEMBER), {"job_id": 1})
     assert status == 403
 
 
-@pytest.mark.parametrize("action", ["claude", "aipager", "both"])
+@pytest.mark.parametrize("action", NEW_ACTIONS + RETIRED_ACTIONS)
 def test_post_by_non_admin_runs_nothing(team_server, run_async, world, action):
-    _call(team_server, run_async, "post", f"/api/update/{action}", _hdr(MEMBER))
-    assert world.calls == [] and team_server.bot.updates.snapshot() is None
+    _call(team_server, run_async, "post", f"/api/update/{action}", _hdr(MEMBER),
+          {"kind": "both"})
+    assert world.calls == [] and world.urls == [] \
+        and team_server.bot.updates.snapshot() is None
 
 
-@pytest.mark.parametrize("action", ["claude", "aipager", "both"])
+@pytest.mark.parametrize("action", NEW_ACTIONS + RETIRED_ACTIONS)
 def test_post_by_personal_mode_stranger_runs_nothing(personal_server, run_async, world, action):
     status, _ = _call(personal_server, run_async, "post", f"/api/update/{action}",
-                      _hdr(OUTSIDER))
-    assert status in (401, 403) and world.calls == []
+                      _hdr(OUTSIDER), {"kind": "both"})
+    assert status in (401, 403) and world.calls == [] and world.urls == []
+
+
+@pytest.mark.parametrize("action", RETIRED_ACTIONS)
+def test_retired_start_routes_are_410_and_run_nothing(team_server, run_async, world, action):
+    status, body = _call(team_server, run_async, "post", f"/api/update/{action}",
+                         _hdr(ADMIN))
+    assert (status, body) == (410, {"error": "menu_out_of_date"})
+    assert world.calls == [] and world.urls == []
 
 
 def test_post_unknown_action_is_400(team_server, run_async):
@@ -263,31 +290,51 @@ def test_post_control_without_job_is_409_no_matching_job(team_server, run_async)
     assert (status, body) == (409, {"error": "no_matching_job"})
 
 
-def test_post_aipager_on_refused_source_is_409_not_upgradable(team_server, run_async, world):
+def test_start_aipager_on_refused_source_is_409_and_runs_nothing(team_server, run_async,
+                                                                 world):
+    """8.43: an editable install is never offered by the check, so asking
+    to start aipager is refused (was: POST /api/update/aipager answering
+    not_upgradable)."""
     world.origin = "editable"
-    status, body = _call(team_server, run_async, "post", "/api/update/aipager", _hdr(ADMIN))
-    assert (status, body) == (409, {"error": "not_upgradable"})
+
+    async def before():
+        await team_server.bot.updates.check()
+    status, body = _call(team_server, run_async, "post", "/api/update/start", _hdr(ADMIN),
+                         {"kind": "aipager"}, before=before)
+    assert (status, body) == (409, {"error": "offer_changed"})
+    assert world.upgrade_calls() == []
 
 
-def test_post_claude_by_admin_is_202_with_job(team_server, run_async, h):
+def _check_claude_only(team_server, world):
+    world.latest_pypi = world.running      # only Claude Code is newer
+
+    async def before():
+        await team_server.bot.updates.check()
+    return before
+
+
+def test_post_claude_by_admin_is_202_with_job(team_server, run_async, h, world):
     async def after():
         await h.wait_phase(team_server.bot, h.TERMINAL)
-    status, body = _call(team_server, run_async, "post", "/api/update/claude",
-                         _hdr(ADMIN), after=after)
+    status, body = _call(team_server, run_async, "post", "/api/update/start",
+                         _hdr(ADMIN), {"kind": "claude"},
+                         before=_check_claude_only(team_server, world), after=after)
     assert status == 202 and body["job"]["kind"] == "claude"
 
 
 def test_post_claude_by_admin_runs_the_same_claude_update(team_server, run_async, world, h):
     async def after():
         await h.wait_phase(team_server.bot, h.TERMINAL)
-    _call(team_server, run_async, "post", "/api/update/claude", _hdr(ADMIN), after=after)
+    _call(team_server, run_async, "post", "/api/update/start", _hdr(ADMIN), {"kind": "claude"},
+          before=_check_claude_only(team_server, world), after=after)
     assert [c["argv"] for c in world.claude_update_calls()] == [[world.claude_path, "update"]]
 
 
-def test_miniapp_job_posts_status_message_to_scope_chat(team_server, run_async, h):
+def test_miniapp_job_posts_status_message_to_scope_chat(team_server, run_async, h, world):
     async def after():
         await h.wait_phase(team_server.bot, h.TERMINAL)
-    _call(team_server, run_async, "post", "/api/update/claude", _hdr(ADMIN), after=after)
+    _call(team_server, run_async, "post", "/api/update/start", _hdr(ADMIN), {"kind": "claude"},
+          before=_check_claude_only(team_server, world), after=after)
     call = team_server.bot._app.bot.send_message.await_args
     assert call.kwargs.get("chat_id", call.args[0] if call.args else None) == GROUP
 
@@ -300,8 +347,8 @@ def test_post_while_job_running_is_409_update_in_progress(team_server, run_async
                                             origin="chat",
                                             status_message=h.status_message(GROUP))
         await h.wait_phase(team_server.bot, "waiting_for_idle")
-    status, body = _call(team_server, run_async, "post", "/api/update/claude",
-                         _hdr(ADMIN), before=before)
+    status, body = _call(team_server, run_async, "post", "/api/update/start",
+                         _hdr(ADMIN), {"kind": "claude"}, before=before)
     assert (status, body) == (409, {"error": "update_in_progress"})
 
 

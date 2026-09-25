@@ -182,9 +182,10 @@ HTML_BODY = """\
   </div>
   <div id="updates-block" class="updates" hidden>
     <h3 class="updates-title">Updates</h3>
-    <div id="updates-aipager" class="updates-row"></div>
-    <div id="updates-claude" class="updates-row"></div>
-    <div id="updates-restart" class="muted"></div>
+    <div id="updates-lines"></div>
+    <div id="updates-source" class="muted updates-small" hidden></div>
+    <div id="updates-restart" class="muted updates-small" hidden></div>
+    <div id="updates-summary" class="updates-row" hidden></div>
     <div id="updates-job" class="updates-job" hidden></div>
     <div id="updates-actions" class="updates-actions"></div>
   </div>

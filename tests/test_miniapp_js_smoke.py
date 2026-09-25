@@ -1143,12 +1143,44 @@ def test_updates_block_hidden_without_can_update(node_bin, tmp_path):
     assert "ok: no can_update -> updates block hidden" in proc.stdout
 
 
-def test_updates_block_renders_and_posts_an_action(node_bin, tmp_path):
+def test_updates_block_renders_one_check_button_and_looks_nothing_up(node_bin, tmp_path):
+    """Roadmap 8.43 (operator decision 2026-09-25): opening Settings shows
+    ONE "Check for updates" button and asks only for the running job; no
+    version lookup until the button is tapped. Replaces the 8.36 test that
+    pinned the three always-on buttons (Update Claude Code / Update aipager
+    / Both)."""
     from aipager.miniapp.static import INDEX_HTML
 
     proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_render")
     assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
-    assert "POST /api/update/claude" in proc.stdout
+    assert "ok: can_update -> one Check for updates button, no version lookup" in proc.stdout
+
+
+def test_updates_check_then_one_update_button_posts_start(node_bin, tmp_path):
+    """Tap Check, see the Checking… state, the result lines and ONE button
+    for only the product that has an update, then tap it: the requests are
+    exactly GET /api/update, POST check, POST start {"kind": "claude"}."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_check_then_update")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: Check -> Checking… -> lines + one button -> POST start" in proc.stdout
+
+
+def test_updates_check_with_an_aipager_update_shows_the_restart_note(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_check_aipager")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: aipager newer -> one Update aipager button + restart note" in proc.stdout
+
+
+def test_updates_check_with_nothing_newer_offers_no_update(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_check_nothing_newer")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: nothing newer -> summary + Check again, no update button" in proc.stdout
 
 
 def test_updates_403_hides_block_not_expired(node_bin, tmp_path):
@@ -1164,15 +1196,17 @@ def test_updates_poll_only_while_a_job_runs(node_bin, tmp_path):
 
     proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_poll_running")
     assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
-    assert "ok: running job -> polls every 3 s, no start buttons" in proc.stdout
+    assert "ok: running job -> polls every 3 s, no check or start buttons" in proc.stdout
 
 
 def test_updates_stop_polling_once_the_job_finished(node_bin, tmp_path):
+    """Roadmap 8.43: a finished job brings back "Check for updates" (was:
+    the three start buttons, retired by the operator's 2026-09-25 request)."""
     from aipager.miniapp.static import INDEX_HTML
 
     proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_no_poll_terminal")
     assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
-    assert "ok: finished job -> no poll, start buttons back" in proc.stdout
+    assert "ok: finished job -> no poll, Check for updates back" in proc.stdout
 
 
 def test_updates_offer_nothing_while_a_restart_is_pending(node_bin, tmp_path):

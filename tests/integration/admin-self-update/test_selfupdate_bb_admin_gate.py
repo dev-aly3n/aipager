@@ -122,8 +122,13 @@ def test_group_admin_gets_status(world, team_bot, mk_update, h, run_async):
 
     async def go():
         await update_flow.handle_update_cmd(team_bot, upd, MagicMock())
+        # 8.43: the versions appear once "Check for updates" is tapped.
+        tap, query = _tap("_:up:chk", user_id=ADMIN, chat_id=GROUP, h=h)
+        query.message = msg
+        await team_bot._handle_callback(tap, MagicMock())
         await h.wait_for(lambda: msg.edit_text.await_count > 0, 5)
     run_async(go())
+    assert msg.edit_text.await_count > 0
     assert h.LATEST in "\n".join(h.texts_of(msg, upd.message, team_bot._app.bot))
 
 
@@ -133,8 +138,13 @@ def test_group_status_omits_install_path(world, team_bot, mk_update, h, run_asyn
 
     async def go():
         await update_flow.handle_update_cmd(team_bot, upd, MagicMock())
+        # 8.43: the versions appear once "Check for updates" is tapped.
+        tap, query = _tap("_:up:chk", user_id=ADMIN, chat_id=GROUP, h=h)
+        query.message = msg
+        await team_bot._handle_callback(tap, MagicMock())
         await h.wait_for(lambda: msg.edit_text.await_count > 0, 5)
     run_async(go())
+    assert msg.edit_text.await_count > 0
     text = "\n".join(h.texts_of(msg, upd.message, team_bot._app.bot))
     assert world.local_path not in text and world.prefix not in text
 
@@ -153,7 +163,11 @@ def test_is_update_admin_rejects_stranger_in_personal_mode(personal_bot, h):
 
 # ---- callbacks -----------------------------------------------------------
 
-@pytest.mark.parametrize("data", ["_:up:cc", "_:up:ap", "_:up:both"])
+START_TAPS = ["_:up:cc", "_:up:ap", "_:up:both", "_:up:chk",
+              "_:up:go:cc", "_:up:go:ap", "_:up:go:both"]
+
+
+@pytest.mark.parametrize("data", START_TAPS)
 def test_stranger_start_tap_runs_nothing(world, personal_bot, h, run_async, data):
     update, _ = _tap(data, user_id=h.STRANGER, chat_id=h.DM, h=h)
 
@@ -165,7 +179,7 @@ def test_stranger_start_tap_runs_nothing(world, personal_bot, h, run_async, data
         and not world.claude_update_calls()
 
 
-@pytest.mark.parametrize("data", ["_:up:cc", "_:up:ap", "_:up:both"])
+@pytest.mark.parametrize("data", START_TAPS)
 def test_group_member_start_tap_runs_nothing(world, team_bot, h, run_async, data):
     update, _ = _tap(data, user_id=MEMBER, chat_id=GROUP, h=h)
 
@@ -176,11 +190,17 @@ def test_group_member_start_tap_runs_nothing(world, team_bot, h, run_async, data
     assert team_bot.updates.snapshot() is None and world.calls == []
 
 
-def test_operator_cc_tap_starts_the_claude_update(world, personal_bot, h, run_async):
-    """Positive control for the refusals above."""
-    update, _ = _tap("_:up:cc", user_id=h.OPERATOR, chat_id=h.DM, h=h)
+def test_operator_check_then_update_starts_the_claude_update(world, personal_bot, h,
+                                                            run_async):
+    """Positive control for the refusals above. 8.43: was a single `_:up:cc`
+    tap; the operator now checks first and taps the one Update button."""
+    world.latest_pypi = world.running          # only Claude Code is newer
+    check, _ = _tap("_:up:chk", user_id=h.OPERATOR, chat_id=h.DM, h=h)
+    update, _ = _tap("_:up:go:cc", user_id=h.OPERATOR, chat_id=h.DM, h=h)
 
     async def go():
+        await personal_bot._handle_callback(check, MagicMock())
+        await h.wait_for(lambda: personal_bot.updates._checked is not None, 5)
         await personal_bot._handle_callback(update, MagicMock())
         await h.wait_phase(personal_bot, h.TERMINAL)
     run_async(go())
@@ -229,6 +249,7 @@ def test_menu_cancel_tap_marks_message_cancelled(world, personal_bot, h, run_asy
 
 
 @pytest.mark.parametrize("data", ["_:up:cc", "_:up:ap", "_:up:both", "_:up:x",
+                                  "_:up:chk", "_:up:go:cc", "_:up:go:ap", "_:up:go:both",
                                   "_:up:now:9999999999", "_:up:wait:9999999999",
                                   "_:up:stop:9999999999"])
 def test_callback_data_fits_telegram_limit(data):

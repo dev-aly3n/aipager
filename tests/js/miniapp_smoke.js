@@ -364,19 +364,27 @@ if (SCENARIO.indexOf("updates_") === 0) {
     schema: [], values: {}, can_edit: true,
     can_update: SCENARIO !== "updates_hidden",
   };
-  FIXTURES["/api/update"] = {
-    aipager: { running: "0.7.13", installed: "0.7.13", latest: "0.7.14",
-               update_available: true,
-               source: { kind: "pipx", origin: "index", detail: null,
-                         upgradable: true, reason: null,
-                         describe: "pipx, from PyPI" } },
-    claude: { current: "2.1.281", latest: "2.1.290", update_available: true,
-              method: "native", channel: "latest" },
-    restart: { mode: "systemd", automatic: true, reason: null },
-    job: null,
+  // Opening Settings asks only for the running job (roadmap 8.43): the
+  // versions come from POST /api/update/check, after "Check for updates".
+  FIXTURES["/api/update"] = { job: null };
+  const CHECKS = {
+    claude: { lines: ["aipager 0.7.13 (up to date)", "Claude Code 2.1.281 → 2.1.290"],
+              offer: { kind: "claude", label: "Update Claude Code" },
+              summary: null, restart: null, notes: [], source: "pipx, from PyPI" },
+    aipager: { lines: ["aipager 0.7.13 → 0.7.14", "Claude Code 2.1.281 (up to date)"],
+               offer: { kind: "aipager", label: "Update aipager" }, summary: null,
+               restart: "Restart: automatic, once no turn is running.", notes: [],
+               source: "pipx, from local path /home/op/aipager" },
+    none: { lines: ["aipager 0.7.13 (up to date)", "Claude Code 2.1.281 (couldn't check)"],
+            offer: null, summary: "Everything is up to date.", restart: null,
+            notes: [], source: "pipx, from PyPI" },
   };
-  FIXTURES["/api/update/claude"] = { job: { id: 1, kind: "claude",
-    phase: "claude_updating", blockers: [], summary: "", started_at: 1 } };
+  const CHECK = { updates_check_aipager: "aipager",
+                  updates_check_nothing_newer: "none" }[SCENARIO] || "claude";
+  FIXTURES["/api/update/check"] = { check: CHECKS[CHECK], job: null };
+  FIXTURES["/api/update/start"] = { job: { id: 1, kind: CHECKS[CHECK].offer
+    ? CHECKS[CHECK].offer.kind : "claude",
+    phase: "starting", blockers: [], summary: "", started_at: 1 } };
   const JOB_PHASE = { updates_poll_running: "upgrading",
                       updates_no_poll_terminal: "done",
                       updates_restart_pending: "restart_scheduled" }[SCENARIO];
@@ -1193,26 +1201,105 @@ function driveUpdatesHidden() {
   }, 10);
 }
 
-// ---- scenario: can_update -> rendered, and a tap POSTs the action -----
+// ---- scenario: can_update -> ONE "Check for updates" button, no lookup --
+function actionLabels() {
+  return byId["updates-actions"].children.map(c => c.textContent);
+}
+function lineTexts() {
+  return byId["updates-lines"].children.map(c => c.textContent);
+}
+function updateRequests() {
+  return fetchCalls.filter(f => f.url.indexOf("/api/update") === 0)
+    .map(f => f.method + " " + f.url + (f.body && f.body !== "{}" ? " " + f.body : ""));
+}
+
 function driveUpdatesRender() {
   api.loadSettings();
   setTimeoutReal(() => {
     if (byId["updates-block"].hidden) fail("updates block hidden despite can_update");
-    const ap = byId["updates-aipager"].textContent;
-    if (!ap.includes("0.7.13") || !ap.includes("0.7.14"))
-      fail("aipager versions not rendered: " + JSON.stringify(ap));
-    if (!byId["updates-claude"].textContent.includes("2.1.290"))
-      fail("claude versions not rendered");
-    const labels = byId["updates-actions"].children.map(c => c.textContent);
-    if (JSON.stringify(labels) !== JSON.stringify(["Update Claude Code", "Update aipager", "Both"]))
-      fail("unexpected update buttons: " + JSON.stringify(labels));
-    const before = fetchCalls.length;
-    byId["updates-actions"].children[0].click();
-    const post = fetchCalls.slice(before).find(f => f.method === "POST");
-    if (!post || post.url !== "/api/update/claude")
-      fail("Update Claude Code sent " + JSON.stringify(post));
-    console.log("ok: can_update -> versions + three buttons -> POST /api/update/claude");
+    if (JSON.stringify(actionLabels()) !== JSON.stringify(["Check for updates"]))
+      fail("page load should offer only Check for updates: " + JSON.stringify(actionLabels()));
+    if (lineTexts().length) fail("versions shown before any check: " + JSON.stringify(lineTexts()));
+    if (JSON.stringify(updateRequests()) !== JSON.stringify(["GET /api/update"]))
+      fail("page load looked versions up: " + JSON.stringify(updateRequests()));
+    console.log("ok: can_update -> one Check for updates button, no version lookup");
     process.exit(0);
+  }, 10);
+}
+
+// ---- scenario: tap Check, then the ONE Update button -----------------
+function driveUpdatesCheckThenUpdate() {
+  api.loadSettings();
+  setTimeoutReal(() => {
+    byId["updates-actions"].children[0].click();
+    // Synchronously after the tap: the Checking state.
+    const busy = byId["updates-actions"].children;
+    if (busy.length !== 1 || busy[0].textContent !== "Checking…" || !busy[0].disabled)
+      fail("no disabled Checking… state: " + JSON.stringify(actionLabels()));
+    setTimeoutReal(() => {
+      const want = ["aipager 0.7.13 (up to date)", "Claude Code 2.1.281 → 2.1.290"];
+      if (JSON.stringify(lineTexts()) !== JSON.stringify(want))
+        fail("check lines: " + JSON.stringify(lineTexts()));
+      if (JSON.stringify(actionLabels()) !== JSON.stringify(["Update Claude Code"]))
+        fail("want exactly one Update Claude Code button: " + JSON.stringify(actionLabels()));
+      if (!byId["updates-restart"].hidden)
+        fail("restart note shown without an aipager update");
+      if (byId["updates-source"].hidden ||
+          byId["updates-source"].textContent !== "pipx, from PyPI")
+        fail("install source not shown as muted text");
+      byId["updates-actions"].children[0].click();
+      setTimeoutReal(() => {
+        const want = ["GET /api/update", "POST /api/update/check",
+                      'POST /api/update/start {"kind":"claude"}', "GET /api/update"];
+        if (JSON.stringify(updateRequests()) !== JSON.stringify(want))
+          fail("requests: " + JSON.stringify(updateRequests()));
+        console.log("ok: Check -> Checking… -> lines + one button -> POST start {kind: claude}");
+        process.exit(0);
+      }, 10);
+    }, 10);
+  }, 10);
+}
+
+function driveUpdatesCheckAipager() {
+  api.loadSettings();
+  setTimeoutReal(() => {
+    byId["updates-actions"].children[0].click();
+    setTimeoutReal(() => {
+      if (JSON.stringify(actionLabels()) !== JSON.stringify(["Update aipager"]))
+        fail("want exactly one Update aipager button: " + JSON.stringify(actionLabels()));
+      if (byId["updates-restart"].hidden ||
+          byId["updates-restart"].textContent !== "Restart: automatic, once no turn is running.")
+        fail("restart note missing with an aipager update");
+      console.log("ok: aipager newer -> one Update aipager button + restart note");
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
+function driveUpdatesCheckNothingNewer() {
+  api.loadSettings();
+  setTimeoutReal(() => {
+    byId["updates-actions"].children[0].click();
+    setTimeoutReal(() => {
+      if (lineTexts()[1] !== "Claude Code 2.1.281 (couldn't check)")
+        fail("failed lookup line: " + JSON.stringify(lineTexts()));
+      if (byId["updates-summary"].hidden ||
+          byId["updates-summary"].textContent !== "Everything is up to date.")
+        fail("no up-to-date summary");
+      if (JSON.stringify(actionLabels()) !== JSON.stringify(["Check again"]))
+        fail("nothing newer must offer only Check again: " + JSON.stringify(actionLabels()));
+      if (byId["updates-actions"].children[0].className === "primary")
+        fail("Check again should be small, not a big primary button");
+      byId["updates-actions"].children[0].click();
+      setTimeoutReal(() => {
+        const checks = updateRequests().filter(r => r === "POST /api/update/check");
+        if (checks.length !== 2) fail("Check again did not re-check: " + JSON.stringify(updateRequests()));
+        if (updateRequests().some(r => r.indexOf("/api/update/start") !== -1))
+          fail("an update started although nothing was newer");
+        console.log("ok: nothing newer -> summary + Check again, no update button");
+        process.exit(0);
+      }, 10);
+    }, 10);
   }, 10);
 }
 
@@ -1236,7 +1323,7 @@ function driveUpdatesForbidden() {
 function updatePolls() { return timeoutCalls.filter(ms => ms === 3000).length; }
 function startLabels() {
   return byId["updates-actions"].children.map(c => c.textContent)
-    .filter(l => l === "Update Claude Code" || l === "Update aipager" || l === "Both");
+    .filter(l => l === "Check for updates" || l.indexOf("Update") === 0);
 }
 
 function driveUpdatesPollRunning() {
@@ -1244,8 +1331,8 @@ function driveUpdatesPollRunning() {
   api.loadSettings();
   setTimeoutReal(() => {
     if (updatePolls() !== 1) fail("a running job scheduled " + updatePolls() + " polls, want 1");
-    if (startLabels().length) fail("start buttons offered mid-job: " + JSON.stringify(startLabels()));
-    console.log("ok: running job -> polls every 3 s, no start buttons");
+    if (startLabels().length) fail("check/start buttons offered mid-job: " + JSON.stringify(startLabels()));
+    console.log("ok: running job -> polls every 3 s, no check or start buttons");
     process.exit(0);
   }, 10);
 }
@@ -1255,8 +1342,9 @@ function driveUpdatesNoPollTerminal() {
   api.loadSettings();
   setTimeoutReal(() => {
     if (updatePolls() !== 0) fail("a finished job still polls");
-    if (startLabels().length !== 3) fail("finished job hid the start buttons: " + JSON.stringify(startLabels()));
-    console.log("ok: finished job -> no poll, start buttons back");
+    if (JSON.stringify(startLabels()) !== JSON.stringify(["Check for updates"]))
+      fail("finished job should offer Check for updates again: " + JSON.stringify(startLabels()));
+    console.log("ok: finished job -> no poll, Check for updates back");
     process.exit(0);
   }, 10);
 }
@@ -1280,9 +1368,12 @@ function driveUpdatesRestartPending() {
 function driveUpdatesShuttingDown() {
   api.loadSettings();
   setTimeoutReal(() => {
-    POST_STATUS_OVERRIDE = { path: "/api/update/claude", method: "POST", status: 503,
+    byId["updates-actions"].children[0].click();     // Check for updates
+  }, 10);
+  setTimeoutReal(() => {
+    POST_STATUS_OVERRIDE = { path: "/api/update/start", method: "POST", status: 503,
                              body: { error: "shutting_down" } };
-    byId["updates-actions"].children[0].click();
+    byId["updates-actions"].children[0].click();     // Update Claude Code
     setTimeoutReal(() => {
       const notice = byId["notice"].textContent || "";
       if (notice.indexOf("shutting down") === -1)
@@ -1360,6 +1451,9 @@ const DRIVERS = {
   updates_restart_pending: driveUpdatesRestartPending,
   updates_hidden: driveUpdatesHidden,
   updates_render: driveUpdatesRender,
+  updates_check_then_update: driveUpdatesCheckThenUpdate,
+  updates_check_aipager: driveUpdatesCheckAipager,
+  updates_check_nothing_newer: driveUpdatesCheckNothingNewer,
   updates_forbidden: driveUpdatesForbidden,
   model_switch: driveModelSwitch,
   model_unconfirmed: driveModelSwitch,

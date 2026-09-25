@@ -156,9 +156,13 @@ def test_two_simultaneous_starts_yield_one_job(world, personal_bot, h, run_async
 
 
 def test_double_tap_update_aipager_runs_one_installer(world, personal_bot, h, run_async):
-    def tap():
+    """8.43: the tap is now the one Update button (`_:up:go:ap`) after a
+    check; was the retired per-product `_:up:ap`."""
+    world.claude_latest = world.claude_version     # only aipager is newer
+
+    def tap(data="_:up:go:ap"):
         q = MagicMock()
-        q.data = "_:up:ap"
+        q.data = data
         q.answer = AsyncMock()
         q.edit_message_text = AsyncMock()
         q.edit_message_reply_markup = AsyncMock()
@@ -175,6 +179,8 @@ def test_double_tap_update_aipager_runs_one_installer(world, personal_bot, h, ru
         return u
 
     async def go():
+        await personal_bot._handle_callback(tap("_:up:chk"), MagicMock())
+        await h.wait_for(lambda: personal_bot.updates._checked is not None, 5)
         await personal_bot._handle_callback(tap(), MagicMock())
         await personal_bot._handle_callback(tap(), MagicMock())
         await h.wait_phase(personal_bot, h.TERMINAL)
@@ -245,7 +251,7 @@ def test_group_outcome_omits_local_source_path(world, two_scope_bot, h, run_asyn
 
 def test_admin_of_one_scope_is_refused_in_a_scope_where_not_admin(world, two_scope_bot, h, run_async):
     q = MagicMock()
-    q.data = "_:up:cc"
+    q.data = "_:up:go:cc"
     q.answer = AsyncMock()
     q.edit_message_text = AsyncMock()
     q.message = h.status_message(-200, 42)

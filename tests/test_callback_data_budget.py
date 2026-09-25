@@ -141,6 +141,9 @@ ALLOWED_JOINEDSTR_SIGNATURES = frozenset({
     "_:up:now:{job.id}",
     "_:up:wait:{job.id}",
     "_:up:stop:{job.id}",
+    # The one Update button (roadmap 8.43): `_GO_VERBS` maps the offered
+    # kind to "cc" / "ap" / "both", so at most "_:up:go:both" = 12 bytes.
+    "_:up:go:{_GO_VERBS[offer.kind]}",
 })
 
 # verb= arguments to session_cb(...) that are f-strings rather than a

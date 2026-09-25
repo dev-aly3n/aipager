@@ -1,4 +1,10 @@
-"""`/update` and its buttons: the admin gate, status text, menu (8.36)."""
+"""`/update` and its buttons: the admin gate, status text, menu (8.36).
+
+Roadmap 8.43 (operator decision 2026-09-25): `/update` sends one "Check
+for updates" button; the versions and ONE Update button appear once it is
+tapped. The status-text tests below therefore tap Check (`_status_text`),
+and the tests that pinned the old buttons (`_:up:cc` / `_:up:ap` /
+`_:up:both`, "Checking versions", "latest unknown") pin the new ones."""
 
 from __future__ import annotations
 
@@ -106,8 +112,8 @@ def test_update_cmd_allows_scope_admin(env, run):
         await update_flow.handle_update_cmd(env.bot, update, MagicMock())
         await _drain(env)
     run(scenario)
-    assert _replies(update) == ["🔎 Checking versions…"]
-    assert "<b>aipager</b> 0.7.13" in env.last_text()
+    assert _replies(update) == [update_flow.CHECK_PROMPT_TEXT]
+    assert env.fetches == []
 
 
 def test_is_update_admin_rejects_missing_user(env, monkeypatch):
@@ -128,7 +134,8 @@ def test_is_update_admin_rejects_missing_user(env, monkeypatch):
 
 # ----- the gate on every button -------------------------------------------------
 
-@pytest.mark.parametrize("verb", ["cc", "ap", "both", "now", "wait", "stop"])
+@pytest.mark.parametrize("verb", ["chk", "go:cc", "go:ap", "go:both", "cc", "ap", "both",
+                                  "now", "wait", "stop"])
 def test_update_callback_refuses_non_admin(verb, env, run):
     _scoped(env)
     data = f"_:up:{verb}" + (":123" if verb in ("now", "wait", "stop") else "")
@@ -154,9 +161,11 @@ def test_update_callback_refuses_stranger_in_personal_mode(env, run):
 
 
 def test_update_callback_starts_a_job_for_the_operator(env, run):
-    update, query = _tap(env, "_:up:cc", env.chat_id, env.chat_id)
+    env.pypi_latest = env.running           # only Claude Code is newer
+    update, query = _tap(env, "_:up:go:cc", env.chat_id, env.chat_id)
 
     async def scenario():
+        await env.manager.check()
         await env.bot._handle_callback(update, MagicMock())
         await env.finish()
     run(scenario)
@@ -177,12 +186,16 @@ def test_menu_cancel_changes_nothing(env, run):
 
 # ----- status text ---------------------------------------------------------------
 
-def _status_text(env, run, chat_id=None):
+def _status_text(env, run, chat_id=None, user_id=None):
+    """/update, then tap Check; the text and buttons of the result."""
     chat = env.chat_id if chat_id is None else chat_id
-    update = _cmd_update(env, env.chat_id, chat)
+    user = env.chat_id if user_id is None else user_id
+    update = _cmd_update(env, user, chat)
+    tap, _ = _tap(env, "_:up:chk", user, chat)
 
     async def scenario():
         await update_flow.handle_update_cmd(env.bot, update, MagicMock())
+        await env.bot._handle_callback(tap, MagicMock())
         await _drain(env)
     run(scenario)
     return env.last_text(), env.last_markup_data()
@@ -193,33 +206,34 @@ def test_update_status_shows_versions_source_restart_and_buttons(env, run):
                                origin="local", origin_detail="/home/op/aipager",
                                upgradable=True)
     text, buttons = _status_text(env, run)
-    assert "<b>aipager</b> 0.7.13 · latest 0.7.14 — update available" in text
-    assert "pipx, from local path /home/op/aipager" in text
-    assert "<b>Claude Code</b> 2.1.281 · latest 2.1.290 — update available" in text
-    assert "automatic (systemd)" in text
-    assert buttons == ["_:up:cc", "_:up:ap", "_:up:both", "_:up:x"]
+    assert "aipager 0.7.13 → 0.7.14" in text
+    assert "<i>pipx, from local path /home/op/aipager</i>" in text
+    assert "Claude Code 2.1.281 → 2.1.290" in text
+    assert "Restart: automatic, once no turn is running." in text
+    assert buttons == ["_:up:go:both", "_:up:x"]
 
 
-def test_update_status_renders_unknown_not_error(env, run, monkeypatch):
+def test_update_status_renders_couldnt_check_not_error(env, run, monkeypatch):
     env.pypi_latest = None        # PyPI unreachable
     env.claude_latest = None      # release channel unreachable
     env.claude_found = False
     env.set_under_unit(False)
     text, buttons = _status_text(env, run)
-    assert "latest unknown" in text
-    assert "<b>Claude Code</b> unknown · latest unknown" in text
+    assert "aipager 0.7.13 (couldn't check)" in text
+    assert "Claude Code (couldn't check)" in text
     assert "Traceback" not in text and "Error" not in text
-    assert buttons == ["_:up:ap", "_:up:x"]
+    assert "Everything is up to date." not in text
+    assert buttons == ["_:up:chk"]
 
 
-def test_status_lookup_exception_still_renders_unknown(env, run, monkeypatch):
+def test_status_lookup_exception_still_renders_couldnt_check(env, run, monkeypatch):
     from aipager import self_update
 
     def _boom():
         raise RuntimeError("network stack on fire")
     monkeypatch.setattr(self_update, "latest_aipager_version", _boom)
     text, _ = _status_text(env, run)
-    assert "latest unknown" in text
+    assert "aipager 0.7.13 (couldn't check)" in text
     assert "on fire" not in text
 
 
@@ -228,21 +242,16 @@ def test_group_chat_hides_install_path(env, run):
     env.source = InstallSource(kind="pipx", prefix="/p", python="/p/bin/python",
                                origin="local", origin_detail="/home/op/aipager",
                                upgradable=True)
-    update = _cmd_update(env, ADMIN, GROUP)
-
-    async def scenario():
-        await update_flow.handle_update_cmd(env.bot, update, MagicMock())
-        await _drain(env)
-    run(scenario)
-    assert "/home/op/aipager" not in env.last_text()
-    assert "pipx, from a local path" in env.last_text()
+    text, _ = _status_text(env, run, chat_id=GROUP, user_id=ADMIN)
+    assert "/home/op/aipager" not in text
+    assert "pipx, from a local path" in text
 
 
 def test_refused_source_hides_aipager_and_both(env, run, monkeypatch):
     env.source = InstallSource(kind="editable", prefix="/src", python="/src/python",
                                reason="this is an editable (development) install")
     text, buttons = _status_text(env, run)
-    assert buttons == ["_:up:cc", "_:up:x"]
+    assert buttons == ["_:up:go:cc", "_:up:x"]
     assert "can't update from here" in text
 
 
@@ -298,8 +307,9 @@ def test_resolve_tool_patch_point_is_used(env, run, monkeypatch):
 
 def test_update_callback_during_shutdown_says_shutting_down(env, run):
     """Review rev-iter2-002: a start tap after the daemon began to stop is
-    refused as such, not reported as an update already running."""
-    update, query = _tap(env, "_:up:cc", env.chat_id, env.chat_id)
+    refused as such, not reported as an update already running. 8.43: the
+    tap is the one Update button (was the retired `_:up:cc`)."""
+    update, query = _tap(env, "_:up:go:cc", env.chat_id, env.chat_id)
 
     async def scenario():
         await env.manager.shutdown()
