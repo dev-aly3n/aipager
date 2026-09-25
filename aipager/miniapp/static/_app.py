@@ -22,12 +22,27 @@ APP_JS = r"""
 
   // The stylesheet takes every colour from Telegram's theme variables
   // except the amber pair, which it picks by <html data-scheme>.
+  // Also asks Telegram to paint its own header and background in the
+  // page's canvas colour, so the chrome meets the page. Every call is
+  // feature-checked: older clients lack them.
+  function tgAtLeast(version) {
+    return !(tg && typeof tg.isVersionAtLeast === "function") || tg.isVersionAtLeast(version);
+  }
   function applyScheme() {
     var root = document.documentElement;
-    if (!root || !root.setAttribute) { return; }
-    root.setAttribute("data-scheme", tg && tg.colorScheme === "dark" ? "dark" : "light");
+    if (root && root.setAttribute) {
+      root.setAttribute("data-scheme", tg && tg.colorScheme === "dark" ? "dark" : "light");
+    }
+    if (!tg || !tgAtLeast("6.1")) { return; }
+    try {
+      if (typeof tg.setHeaderColor === "function") { tg.setHeaderColor("secondary_bg_color"); }
+      if (typeof tg.setBackgroundColor === "function") { tg.setBackgroundColor("secondary_bg_color"); }
+    } catch (e) { /* older client */ }
   }
   applyScheme();
+  if (tg && typeof tg.onEvent === "function") {
+    try { tg.onEvent("themeChanged", applyScheme); } catch (e) { /* older client */ }
+  }
   var initData = tg ? tg.initData : "";
 
   // Poll while the tab is visible; visibilitychange below both stops
@@ -698,6 +713,7 @@ APP_JS = r"""
   }
 
   function setAnswerBusy(label, busy) {
+    syncMainButton();
     var b = beaconMap[label];
     if (b) { b.answer.disabled = busy || !gridCanAct; }
     var detailBtn = document.getElementById("detail-answer");
@@ -961,6 +977,7 @@ APP_JS = r"""
     }
     if (detailChanged("timeline", data.timeline)) { renderTimeline(data.timeline); }
     updateSectionHeaders(data);
+    syncMainButton();
   }
 
   // Facts as a quiet two-column grid; the directory takes a whole row, and
@@ -1494,6 +1511,7 @@ APP_JS = r"""
     // leave it visibly stuck open behind a future non-rename dialog.
     document.getElementById("confirm-rename-input").hidden = true;
     document.getElementById("confirm-rename-error").hidden = true;
+    syncChrome();
     var kebab = document.getElementById("detail-menu-btn");
     kebab.setAttribute("aria-expanded", "false");
     if (kebab.focus) { try { kebab.focus(); } catch (e) { /* older webview */ } }
@@ -1631,6 +1649,7 @@ APP_JS = r"""
     document.getElementById("confirm-modal").hidden = true;
     document.getElementById("detail-menu-btn").setAttribute("aria-expanded", "true");
     overlayCloser = closeOverlay;
+    syncChrome();
   }
 
   function onMenuItemTap(label, action) {
@@ -1713,6 +1732,7 @@ APP_JS = r"""
     document.getElementById("confirm-modal").hidden = false;
     document.getElementById("detail-menu-btn").setAttribute("aria-expanded", "false");
     overlayCloser = closeOverlay;
+    syncChrome();
     // Focus lands on Cancel, not the destructive button.
     if (cancel.focus) { try { cancel.focus(); } catch (e) { /* older webview */ } }
   }
@@ -1785,6 +1805,7 @@ APP_JS = r"""
     document.getElementById("confirm-modal").hidden = false;
     document.getElementById("detail-menu-btn").setAttribute("aria-expanded", "false");
     overlayCloser = closeOverlay;
+    syncChrome();
 
     refreshRenameValidity();
     // Focus lands IN the input, not on Cancel: rename is "start
@@ -2037,7 +2058,10 @@ APP_JS = r"""
           row.appendChild(help);
         }
         if (!opts.disabled) {
-          row.addEventListener("click", function () { opts.onPick(o.value); });
+          row.addEventListener("click", function () {
+            haptic("select");
+            opts.onPick(o.value);
+          });
         }
         list.appendChild(row);
         // Immediately after the row that revealed it - the whole point of
@@ -2092,6 +2116,79 @@ APP_JS = r"""
     "new":    { section: "view-new",      topLevel: false, polls: null }
   };
 
+  // ---- Telegram chrome: MainButton and vertical swipes ------------------
+  //
+  // One place decides both, from the view and the overlay. MainButton
+  // carries the primary action where there is one ("Start session" on the
+  // new form, "Answer in chat" on a waiting session) and is hidden
+  // everywhere else and whenever a menu or dialog is open. The in-page
+  // buttons stay the source of truth: MainButton only mirrors them.
+  var mainAction = null;       // what a MainButton tap does right now
+  var mainKey = "";            // the params last sent, to skip repeats
+  var mainWired = false;
+  var swipesOff = false;
+  var submitting = false;      // the new-session POST is in flight
+
+  function mainButton() {
+    var mb = tg && tg.MainButton;
+    return mb && typeof mb.setParams === "function" ? mb : null;
+  }
+
+  function syncMainButton() {
+    var mb = mainButton();
+    if (!mb) { return; }
+    var root = document.documentElement;
+    if (root && root.classList) { root.classList.add("has-mainbutton"); }
+    if (!mainWired && typeof mb.onClick === "function") {
+      mb.onClick(function () { if (mainAction) { mainAction(); } });
+      mainWired = true;
+    }
+    var params = { is_visible: false };
+    var action = null;
+    var label = currentView.label;
+    if (!overlayCloser && currentView.type === "new") {
+      params = { text: "Start session", is_visible: true,
+                 is_active: !document.getElementById("new-create").disabled };
+      action = function () {
+        if (!document.getElementById("new-create").disabled) { submitNewSession(); }
+      };
+    } else if (!overlayCloser && currentView.type === "detail" && lastDetailData &&
+               lastDetailData.label === label && lastDetailData.answer &&
+               lastDetailData.answer.available) {
+      params = { text: "Answer in chat", is_visible: true, is_active: !answering[label] };
+      action = function () { answerPrompt(label); };
+    }
+    mainAction = action;
+    var busy = submitting || (currentView.type === "detail" && !!answering[label]);
+    var key = JSON.stringify([params, busy && params.is_visible]);
+    if (key === mainKey) { return; }
+    mainKey = key;
+    try {
+      mb.setParams(params);
+      if (busy && params.is_visible && typeof mb.showProgress === "function") {
+        mb.showProgress(false);
+      } else if (typeof mb.hideProgress === "function") {
+        mb.hideProgress();
+      }
+    } catch (e) { /* older client */ }
+  }
+
+  // A downward swipe must not dismiss the sheet while the operator is
+  // typing a new session or deciding in a dialog.
+  function syncSwipes() {
+    var off = currentView.type === "new" || !!overlayCloser;
+    if (off === swipesOff || !tg || !tgAtLeast("7.7")) { return; }
+    var fn = off ? tg.disableVerticalSwipes : tg.enableVerticalSwipes;
+    if (typeof fn !== "function") { return; }
+    swipesOff = off;
+    try { fn.call(tg); } catch (e) { /* older client */ }
+  }
+
+  function syncChrome() {
+    syncMainButton();
+    syncSwipes();
+  }
+
   function showView(name, extra) {
     var spec = VIEWS[name];
     if (!spec) { return; }            // unknown view: change nothing
@@ -2112,6 +2209,7 @@ APP_JS = r"""
     if (tg && tg.BackButton) {
       if (spec.topLevel) { tg.BackButton.hide(); } else { tg.BackButton.show(); }
     }
+    syncChrome();
   }
 
   // ---- settings -------------------------------------------------------
@@ -2569,14 +2667,12 @@ APP_JS = r"""
   // Picking a directory or a model: one path for the group rows and the
   // quick chips, so a chip is exactly the same choice as its row.
   function pickCwd(value) {
-    haptic("select");
     newState.cwd = value;
     newState.folderOpen = false;
     renderNewForm();
   }
 
   function pickModel(value) {
-    haptic("select");
     newState.model = value;
     if (value === MODEL_CUSTOM) { pendingFocus = "new-model-name"; }
     renderNewForm();
@@ -2628,7 +2724,10 @@ APP_JS = r"""
         sub.textContent = it.sub;
         chip.appendChild(sub);
       }
-      chip.addEventListener("click", it.pick);
+      chip.addEventListener("click", function () {
+        haptic("select");
+        it.pick();
+      });
       host.appendChild(chip);
     });
   }
@@ -2836,8 +2935,9 @@ APP_JS = r"""
       (model || "the CLI's own default model") + ".";
 
     var create = document.getElementById("new-create");
-    create.disabled = !name || !canCreate ||
+    create.disabled = submitting || !name || !canCreate ||
       (isCustomModel && (!typed || modelBad));
+    syncMainButton();
   }
 
   function openNewSession() {
@@ -2923,6 +3023,8 @@ APP_JS = r"""
     if (!name) { return; }
     errEl.hidden = true;
     create.disabled = true;
+    submitting = true;
+    syncMainButton();
 
     fetch("/api/sessions", {
       method: "POST",
@@ -2969,7 +3071,10 @@ APP_JS = r"""
           }).catch(function () { /* session exists; page will show truth */ });
         });
         newState.prefs = {};
-        Promise.all(writes).then(function () { openDetail(label); });
+        Promise.all(writes).then(function () {
+          submitting = false;
+          openDetail(label);
+        });
         return;
       }
       // A name collision or a rejected directory is answered inline, next
@@ -2978,11 +3083,15 @@ APP_JS = r"""
         (r.status === 403 ? "You're not allowed to create sessions here."
                           : "Couldn't create that session.");
       errEl.hidden = false;
+      submitting = false;
       create.disabled = false;
+      syncMainButton();
     }).catch(function () {
       errEl.textContent = "Couldn't reach the server. The session was not created.";
       errEl.hidden = false;
+      submitting = false;
       create.disabled = false;
+      syncMainButton();
     });
   }
 
@@ -3164,6 +3273,7 @@ APP_JS = r"""
   }
 
   showGridSkeleton();
+  syncChrome();
   pollTick();
   pollTimer = setInterval(pollTick, POLL_INTERVAL_MS);
 })();

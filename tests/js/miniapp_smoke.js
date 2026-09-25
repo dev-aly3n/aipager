@@ -126,6 +126,30 @@ if (SCENARIO_ARG.indexOf("answer_") === 0) {
   webApp.close = () => { global.__closed = true; };
   webApp.HapticFeedback.impactOccurred = () => {};
 }
+
+// Opt-in: the newer Telegram APIs (MainButton, theme events, swipes).
+global.__mbParams = {};
+global.__events = {};
+global.__swOff = 0;
+global.__swOn = 0;
+function withFullTelegram(w) {
+  w.colorScheme = "light";
+  w.isVersionAtLeast = () => true;
+  w.onEvent = (name, fn) => { global.__events[name] = fn; };
+  w.setHeaderColor = (c) => { global.__header = c; };
+  w.setBackgroundColor = (c) => { global.__background = c; };
+  w.disableVerticalSwipes = () => { global.__swOff++; };
+  w.enableVerticalSwipes = () => { global.__swOn++; };
+  w.MainButton = {
+    setParams(p) { global.__mbParams = Object.assign({}, global.__mbParams, p); },
+    onClick(fn) { global.__main = fn; },
+    showProgress() { global.__mbProgress = true; },
+    hideProgress() { global.__mbProgress = false; },
+  };
+}
+if (SCENARIO_ARG === "detail_waiting_mainbutton" || SCENARIO_ARG === "theme_changed") {
+  withFullTelegram(webApp);
+}
 global.window = { Telegram: { WebApp: webApp } };
 // FLIP needs all three of these; only one scenario provides them.
 global.__raf = 0;
@@ -524,7 +548,7 @@ const GRID_FIXTURES = {
   answer_viewer: () => gridOf(mixedRows(), { can_act: false }),
 };
 if (SCENARIO.indexOf("grid_") === 0 || SCENARIO.indexOf("answer_") === 0 ||
-    SCENARIO === "detail_answer") {
+    SCENARIO === "detail_answer" || SCENARIO === "detail_waiting_mainbutton") {
   FIXTURES["/api/sessions"] = (GRID_FIXTURES[SCENARIO] || (() => gridOf(mixedRows())))();
   FIXTURES["/api/sessions/alpha/answer"] = { status: "sent", label: "alpha" };
   FIXTURES["/api/sessions/alpha"] = Object.assign(fullDetailFor("waiting", { isAdmin: true }), {
@@ -1906,5 +1930,56 @@ Object.assign(DRIVERS, {
   detail_quick_stop: () => driveDetailQuick("stop", "Stop"),
   detail_quick_resume: () => driveDetailQuick("resume", "Resume"),
   detail_unchanged: driveDetailUnchanged,
+});
+
+// ===== the Telegram layer (roadmap 8.44) ================================
+
+function driveDetailWaitingMainButton() {
+  setTimeoutReal(() => {
+    if (!document.documentElement.classList.contains("has-mainbutton"))
+      fail("no has-mainbutton class with a MainButton present");
+    if (global.__mbParams.is_visible) fail("MainButton shown on the grid");
+    api.openDetail("alpha");
+    setTimeoutReal(() => {
+      const p = global.__mbParams;
+      if (p.text !== "Answer in chat" || !p.is_visible || !p.is_active)
+        fail("MainButton on a waiting session: " + JSON.stringify(p));
+      global.__main();
+      if (answerCallsFor("alpha").length !== 1) fail("MainButton did not POST the answer once");
+      setTimeoutReal(() => {
+        byId["detail-menu-btn"].click();
+        if (byId["overlay"].hidden) fail("menu did not open");
+        if (global.__mbParams.is_visible) fail("MainButton stayed up under the open menu");
+        if (global.__swOff !== 1) fail("swipes not disabled while the menu is open");
+        global.__back();
+        if (!global.__mbParams.is_visible) fail("MainButton did not come back after the menu");
+        if (global.__swOn !== 1) fail("swipes not re-enabled after the menu");
+        global.__back();
+        if (global.__mbParams.is_visible) fail("MainButton stayed up on the grid");
+        console.log("ok: waiting session -> MainButton Answer in chat, hidden under the menu");
+        process.exit(0);
+      }, 10);
+    }, 10);
+  }, 10);
+}
+
+function driveThemeChanged() {
+  setTimeoutReal(() => {
+    const root = document.documentElement;
+    if (root.getAttribute("data-scheme") !== "light") fail("no data-scheme at start");
+    if (global.__header !== "secondary_bg_color") fail("header colour not set");
+    const handler = global.__events.themeChanged;
+    if (typeof handler !== "function") fail("no themeChanged handler registered");
+    window.Telegram.WebApp.colorScheme = "dark";
+    handler();
+    if (root.getAttribute("data-scheme") !== "dark") fail("themeChanged did not switch data-scheme");
+    console.log("ok: themeChanged -> data-scheme dark");
+    process.exit(0);
+  }, 10);
+}
+
+Object.assign(DRIVERS, {
+  detail_waiting_mainbutton: driveDetailWaitingMainButton,
+  theme_changed: driveThemeChanged,
 });
 (DRIVERS[SCENARIO] || (() => fail("unknown scenario: " + SCENARIO)))();

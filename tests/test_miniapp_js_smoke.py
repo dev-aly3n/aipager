@@ -1518,3 +1518,66 @@ def test_the_form_harness_detects_broken_chips(node_bin, tmp_path, old, new):
     broken = INDEX_HTML.replace(old, new, 1)
     proc = _drive_form(node_bin, tmp_path, broken, "broken-chips.html", scenario="chips")
     assert proc.returncode != 0, f"harness passed broken chips: {old!r}"
+
+
+# ===== the Telegram layer: MainButton, theme, swipes (roadmap 8.44) =======
+
+@pytest.mark.parametrize("scenario, expected", [
+    ("detail_waiting_mainbutton",
+     "ok: waiting session -> MainButton Answer in chat, hidden under the menu"),
+    ("theme_changed", "ok: themeChanged -> data-scheme dark"),
+])
+def test_telegram_layer_scenarios(node_bin, tmp_path, scenario, expected):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, scenario)
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert expected in proc.stdout, proc.stdout
+
+
+def test_mainbutton_carries_start_session_on_the_form(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_form(node_bin, tmp_path, INDEX_HTML, "mb.html", scenario="mainbutton")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: MainButton Start session -> POST /api/sessions, swipes restored" \
+        in proc.stdout, proc.stdout
+
+
+def test_the_harness_detects_an_unguarded_mainbutton(node_bin, tmp_path):
+    """Guard the guard: the default mock has no MainButton (an older
+    Telegram client). Drop the feature check and ordinary scenarios,
+    which never touch the new API, must fail."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    old = "    var mb = mainButton();\n    if (!mb) { return; }\n"
+    assert INDEX_HTML.count(old) == 1
+    broken = INDEX_HTML.replace(old, "    var mb = tg.MainButton;\n", 1)
+    for scenario in ("stop_busy", "grid_render"):
+        proc = _drive_smoke(node_bin, tmp_path, broken, scenario)
+        assert proc.returncode != 0, f"{scenario} passed with an unguarded MainButton"
+
+
+@pytest.mark.parametrize("old, new, scenario, form", [
+    pytest.param("                 is_active: !document.getElementById(\"new-create\").disabled };",
+                 "                 is_active: true };",
+                 "mainbutton", True, id="mainbutton-mirrors-validity"),
+    pytest.param("    } else if (!overlayCloser && currentView.type === \"detail\" && lastDetailData &&",
+                 "    } else if (currentView.type === \"detail\" && lastDetailData &&",
+                 "detail_waiting_mainbutton", False, id="mainbutton-hidden-under-overlay"),
+    pytest.param("    var off = currentView.type === \"new\" || !!overlayCloser;",
+                 "    var off = false;",
+                 "mainbutton", True, id="swipes-off-on-the-form"),
+    pytest.param("    try { tg.onEvent(\"themeChanged\", applyScheme); } catch (e) { /* older client */ }",
+                 "", "theme_changed", False, id="theme-event"),
+])
+def test_the_harness_detects_a_broken_telegram_layer(node_bin, tmp_path, old, new, scenario, form):
+    from aipager.miniapp.static import INDEX_HTML
+
+    assert INDEX_HTML.count(old) == 1, f"mutation site not found once: {old!r}"
+    broken = INDEX_HTML.replace(old, new, 1)
+    if form:
+        proc = _drive_form(node_bin, tmp_path, broken, "broken-tg.html", scenario=scenario)
+    else:
+        proc = _drive_smoke(node_bin, tmp_path, broken, scenario)
+    assert proc.returncode != 0, f"harness passed a broken Telegram layer: {old!r}"

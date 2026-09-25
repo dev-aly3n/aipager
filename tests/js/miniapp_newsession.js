@@ -74,6 +74,7 @@ global.document = {
   addEventListener: () => {},
   querySelectorAll: () => [],
   visibilityState: "visible",
+  documentElement: new El("html"),
 };
 global.window = { Telegram: { WebApp: {
   initData: "auth_date=1&user=%7B%22id%22%3A1%7D&hash=x",
@@ -81,6 +82,28 @@ global.window = { Telegram: { WebApp: {
   BackButton: { show(){}, hide(){}, onClick(){} },
   HapticFeedback: { notificationOccurred(){} },
 } } };
+
+// Opt-in: the newer Telegram APIs (MainButton, theme events, swipes).
+global.__mbParams = {};
+global.__events = {};
+global.__swOff = 0;
+global.__swOn = 0;
+function withFullTelegram(w) {
+  w.colorScheme = "light";
+  w.isVersionAtLeast = () => true;
+  w.onEvent = (name, fn) => { global.__events[name] = fn; };
+  w.setHeaderColor = (c) => { global.__header = c; };
+  w.setBackgroundColor = (c) => { global.__background = c; };
+  w.disableVerticalSwipes = () => { global.__swOff++; };
+  w.enableVerticalSwipes = () => { global.__swOn++; };
+  w.MainButton = {
+    setParams(p) { global.__mbParams = Object.assign({}, global.__mbParams, p); },
+    onClick(fn) { global.__main = fn; },
+    showProgress() { global.__mbProgress = true; },
+    hideProgress() { global.__mbProgress = false; },
+  };
+}
+if (process.argv[3] === "mainbutton") { withFullTelegram(global.window.Telegram.WebApp); }
 global.Telegram = global.window.Telegram;
 const fetchCalls = [];
 global.fetch = (url, opts) => {
@@ -112,6 +135,7 @@ const SCENARIOS = {
               default_directory: "/home/aly/daemon-dir" },
   empty:    { directories: [], default_directory: "" },
   noparent: { directories: ["/home/aly/proj"], default_directory: "" },
+  mainbutton: { directories: ["/home/aly/proj"], default_directory: "/home/aly/proj" },
   chips:    { directories: ["/home/aly/proj", "/home/aly/daemon-dir", "/home/aly/other"],
               default_directory: "/home/aly/daemon-dir" },
 };
@@ -483,5 +507,30 @@ function driveChips() {
   }, 10);
 }
 
-const DRIVERS = { full: driveFull, empty: driveEmpty, noparent: driveNoParent, chips: driveChips };
+// ---- scenario: MainButton carries Start session (roadmap 8.44) ------
+function driveMainButton() {
+  api.openNewSession();
+  setTimeoutReal(() => {
+    const p = global.__mbParams;
+    if (p.text !== "Start session" || !p.is_visible) fail("MainButton: " + JSON.stringify(p));
+    if (p.is_active) fail("MainButton active with no name");
+    if (global.__swOff !== 1) fail("swipes not disabled on the form: " + global.__swOff);
+    byId["new-name"].value = "made";
+    fireInput(byId["new-name"]);
+    if (!global.__mbParams.is_active) fail("MainButton did not follow a valid form");
+    const before = fetchCalls.length;
+    global.__main();
+    setTimeoutReal(() => {
+      const posts = fetchCalls.slice(before).filter(f => f.method === "POST" && /\/api\/sessions$/.test(f.url));
+      if (posts.length !== 1) fail("MainButton sent " + posts.length + " creates");
+      if (global.__swOn !== 1) fail("swipes not re-enabled after leaving the form");
+      if (global.__mbParams.is_visible) fail("MainButton stayed up after leaving the form");
+      console.log("ok: MainButton Start session -> POST /api/sessions, swipes restored");
+      process.exit(0);
+    }, 30);
+  }, 10);
+}
+
+const DRIVERS = { full: driveFull, empty: driveEmpty, noparent: driveNoParent, chips: driveChips,
+                  mainbutton: driveMainButton };
 (DRIVERS[SCENARIO] || (() => fail("unknown scenario: " + SCENARIO)))();
