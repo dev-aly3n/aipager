@@ -25,6 +25,7 @@ the assertion is "tapping an option issues the right PUT", which is
 precisely what the operator reported as not working.
 """
 
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -1581,3 +1582,75 @@ def test_the_harness_detects_a_broken_telegram_layer(node_bin, tmp_path, old, ne
     else:
         proc = _drive_smoke(node_bin, tmp_path, broken, scenario)
     assert proc.returncode != 0, f"harness passed a broken Telegram layer: {old!r}"
+
+
+# ===== settings schema text shown plain (roadmap 8.44) =====================
+#
+# settings_schema() is shared with /settings in the chat: its titles lead
+# with an emoji and its labels and help carry em dashes. Every surface that
+# renders it (Settings tab, session settings, the new form) goes through
+# renderOptionGroup, which must show it plain.
+
+_PROBE_GROUP = {
+    "section": "probe", "field": "probe_field", "title": "🧪 Probe — group",
+    "options": [
+        {"value": "a", "label": "On — a probe label", "help": "help — text"},
+        {"value": "b", "label": "Off", "help": ""},
+    ],
+}
+
+
+@pytest.fixture
+def real_schema(tmp_path, monkeypatch):
+    """The real settings_schema() plus a probe group that always carries an
+    emoji title and em dashes, handed to the harness through the env."""
+    from aipager.bot.settings_menu import settings_schema
+
+    schema = settings_schema() + [_PROBE_GROUP]
+    path = tmp_path / "schema.json"
+    path.write_text(json.dumps(schema, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setenv("AIPAGER_TEST_SCHEMA", str(path))
+    return schema
+
+
+def test_settings_surfaces_show_schema_text_plain(node_bin, tmp_path, real_schema):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "schema_plain")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: schema text -> no em dash, bare titles, header shows the lead" in proc.stdout
+
+
+def test_the_new_form_shows_schema_text_plain(node_bin, tmp_path, real_schema):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_form(node_bin, tmp_path, INDEX_HTML, "schema.html", scenario="schema_plain")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: form schema text -> no em dash, bare titles, header shows the lead" \
+        in proc.stdout, proc.stdout
+
+
+_SCHEMA_PLAIN_MUTANTS = [
+    pytest.param("    title.textContent = groupTitle(opts.title);",
+                 "    title.textContent = opts.title;", id="title"),
+    pytest.param("      : (currentOpt ? labelLead(currentOpt.label) : \"-\");",
+                 "      : (currentOpt ? currentOpt.label : \"-\");", id="header-value"),
+    pytest.param("        main.textContent = plain(o.label);",
+                 "        main.textContent = o.label;", id="row-label"),
+    pytest.param("          help.textContent = plain(o.help);",
+                 "          help.textContent = o.help;", id="row-help"),
+]
+
+
+@pytest.mark.parametrize("old, new", _SCHEMA_PLAIN_MUTANTS)
+def test_the_harness_detects_schema_text_shown_raw(node_bin, tmp_path, real_schema, old, new):
+    """Guard the guard: drop any one normalisation and both the settings
+    scenario and the new-form scenario must fail."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    assert INDEX_HTML.count(old) == 1, f"mutation site not found once: {old!r}"
+    broken = INDEX_HTML.replace(old, new, 1)
+    proc = _drive_smoke(node_bin, tmp_path, broken, "schema_plain")
+    assert proc.returncode != 0, f"settings scenario passed with {old!r} broken"
+    proc = _drive_form(node_bin, tmp_path, broken, "broken-schema.html", scenario="schema_plain")
+    assert proc.returncode != 0, f"form scenario passed with {old!r} broken"

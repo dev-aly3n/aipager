@@ -137,7 +137,8 @@ const SCENARIOS = {
   noparent: { directories: ["/home/aly/proj"], default_directory: "" },
   mainbutton: { directories: ["/home/aly/proj"], default_directory: "/home/aly/proj" },
   chips:    { directories: ["/home/aly/proj", "/home/aly/daemon-dir", "/home/aly/other"],
-              default_directory: "/home/aly/daemon-dir" },
+              default_directory: "/home/aly/daemon-dir" },  // Schema from pytest (AIPAGER_TEST_SCHEMA): the real settings_schema().
+  schema_plain: { directories: ["/home/aly/proj"], default_directory: "/home/aly/proj" },
 };
 function fatal(msg) { console.error("FAIL: " + msg); process.exit(1); }
 
@@ -149,10 +150,13 @@ const SCHEMA = [
       { value: "medium", label: "Medium", help: "" },
     ] },
 ];
+const OPTION_SCHEMA = SCENARIO === "schema_plain"
+  ? JSON.parse(fs.readFileSync(process.env.AIPAGER_TEST_SCHEMA, "utf8"))
+  : SCHEMA;
 const FIXTURES = {
   "/api/session-options": Object.assign({
     models: [{ label: "Opus", hint: "Most capable" }, { label: "Opus 5.5", hint: "" }],
-    schema: SCHEMA,
+    schema: OPTION_SCHEMA,
     scope_defaults: { answer_length: "none" },
     can_create: true,
     can_use_auto: true,
@@ -192,6 +196,12 @@ const FIXTURES = {
     can_edit: true,
   },
 };
+if (SCENARIO === "schema_plain") {
+  // Each group's first option is the chat default, so every header has a value.
+  const d = {};
+  OPTION_SCHEMA.forEach(g => { d[g.field] = g.options[0].value; });
+  FIXTURES["/api/session-options"].scope_defaults = d;
+}
 
 // extract and run the page script
 let script = page.match(/<script>([\s\S]*?)<\/script>/g)
@@ -531,6 +541,34 @@ function driveMainButton() {
   }, 10);
 }
 
+// ---- scenario: the form's reply-style groups show schema text plain ---
+function driveSchemaPlain() {
+  const schema = OPTION_SCHEMA;
+  api.openNewSession();
+  setTimeoutReal(() => {
+    const host = byId["new-prefs"];
+    if (host.children.length !== schema.length)
+      fail("new-prefs rendered " + host.children.length + " groups");
+    for (let i = 0; i < schema.length; i++) {
+      const grp = byId["new-prefs"].children[i];
+      if (!grp.children[1]) grp.children[0].click();
+    }
+    if (byId["new-prefs"].children.some(g => !g.children[1])) fail("a group stayed shut");
+    const text = byId["new-prefs"].textContent;
+    if (text.indexOf("\u2014") !== -1) fail("the form shows an em dash: " + JSON.stringify(text));
+    byId["new-prefs"].children.forEach((g, i) => {
+      const title = g.children[0].children[0].textContent;
+      if (!/^[A-Za-z0-9]/.test(title)) fail("title keeps its emoji: " + JSON.stringify(title));
+      const lead = schema[i].options[0].label.split(" \u2014 ")[0];
+      const shown = g.children[0].children[1].textContent;
+      if (shown !== lead) fail("header shows " + JSON.stringify(shown) + ", want " +
+                               JSON.stringify(lead));
+    });
+    console.log("ok: form schema text -> no em dash, bare titles, header shows the lead");
+    process.exit(0);
+  }, 10);
+}
+
 const DRIVERS = { full: driveFull, empty: driveEmpty, noparent: driveNoParent, chips: driveChips,
-                  mainbutton: driveMainButton };
+                  mainbutton: driveMainButton, schema_plain: driveSchemaPlain };
 (DRIVERS[SCENARIO] || (() => fail("unknown scenario: " + SCENARIO)))();

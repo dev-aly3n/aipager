@@ -513,6 +513,24 @@ if (SCENARIO.indexOf("scope_save") === 0) {
   }
 }
 
+// ---- server schema text shown plain (roadmap 8.44) --------------------
+// The schema comes from pytest (AIPAGER_TEST_SCHEMA): the real
+// settings_schema() output, emoji titles and em-dash labels as /settings
+// shows them in the chat, plus a probe group that always carries both.
+if (SCENARIO === "schema_plain") {
+  const REAL = JSON.parse(fs.readFileSync(process.env.AIPAGER_TEST_SCHEMA, "utf8"));
+  const scopeVals = {}, sessVals = {};
+  REAL.forEach(g => {
+    const v = g.options[0].value;
+    scopeVals[g.field] = v;
+    sessVals[g.field] = { effective: v, scope_default: v, override_value: null,
+                          overridden: false };
+  });
+  FIXTURES["/api/preferences"] = { schema: REAL, values: scopeVals, can_edit: true };
+  FIXTURES["/api/sessions/dev/preferences"] = { schema: REAL, values: sessVals,
+                                                can_edit: true };
+}
+
 // ---- the lantern grid and Answer in chat (roadmap 8.44) ---------------
 function row(label, status, extra) {
   return Object.assign({
@@ -1610,8 +1628,48 @@ function driveScopeSave() {
   }, 10);
 }
 
+// ---- scenario: schema text is shown plain on both settings surfaces ---
+function openEveryGroup(hostId, n) {
+  const host = byId[hostId];
+  if (host.children.length !== n) fail(hostId + " rendered " + host.children.length + " groups");
+  for (let i = 0; i < n; i++) {
+    const grp = byId[hostId].children[i];
+    if (!grp.children[1]) grp.children[0].click();     // the header toggles
+  }
+  if (byId[hostId].children.some(g => !g.children[1])) fail(hostId + ": a group stayed shut");
+  return byId[hostId];
+}
+function checkSchemaPlain(where, host, schema) {
+  const text = host.textContent;
+  if (text.indexOf("\u2014") !== -1) fail(where + " shows an em dash: " + JSON.stringify(text));
+  host.children.forEach((g, i) => {
+    const title = g.children[0].children[0].textContent;
+    if (!/^[A-Za-z0-9]/.test(title)) fail(where + " title keeps its emoji: " + JSON.stringify(title));
+    const lead = schema[i].options[0].label.split(" \u2014 ")[0];
+    const shown = g.children[0].children[1].textContent;
+    if (shown !== lead) fail(where + " header shows " + JSON.stringify(shown) +
+                             ", want the label's lead " + JSON.stringify(lead));
+  });
+}
+function driveSchemaPlain() {
+  const schema = FIXTURES["/api/preferences"].schema;
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    checkSchemaPlain("Settings tab", openEveryGroup("settings-groups", schema.length), schema);
+    api.loadSessionSettings("dev");
+    setTimeoutReal(() => {
+      checkSchemaPlain("session settings",
+                       openEveryGroup("session-settings-groups", schema.length), schema);
+      console.log("ok: schema text -> no em dash, bare titles, header shows the lead");
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
 const DRIVERS = {
   scope_save: driveScopeSave,
+  schema_plain: driveSchemaPlain,
   scope_save_fails: driveScopeSave,
   updates_shutting_down: driveUpdatesShuttingDown,
   updates_poll_running: driveUpdatesPollRunning,

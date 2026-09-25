@@ -1972,6 +1972,18 @@ APP_JS = r"""
   // options - was what the operator meant by "make user lost in there".
   var openGroups = Object.create(null);
 
+  // Schema text is shared with /settings in the chat, where titles lead
+  // with an emoji and labels carry an em dash ("Off \u2014 busy card only").
+  // The page has its own line icons and shows a plain hyphen, so titles
+  // lose the leading emoji and the collapsed header shows only the lead
+  // of a label ("Off"); the row keeps the whole label.
+  function groupTitle(s) { return plain(s).replace(/^[^A-Za-z0-9]+\s+/, ""); }
+  function labelLead(s) {
+    var t = String(s === null || s === undefined ? "" : s);
+    var cut = t.indexOf(" \u2014 ");
+    return plain(cut > 0 ? t.slice(0, cut) : t);
+  }
+
   function renderOptionGroup(host, opts) {
     // opts: {key, title, options[], current, defaultValue, disabled, onPick,
     //        valueText, reveal}
@@ -2000,7 +2012,7 @@ APP_JS = r"""
 
     var title = document.createElement("span");
     title.className = "grp-title";
-    title.textContent = opts.title;
+    title.textContent = groupTitle(opts.title);
 
     var value = document.createElement("span");
     value.className = "grp-value";
@@ -2009,8 +2021,8 @@ APP_JS = r"""
       if (o.value === opts.current) { currentOpt = o; }
     });
     value.textContent = opts.valueText !== undefined
-      ? opts.valueText
-      : (currentOpt ? currentOpt.label : "-");
+      ? plain(opts.valueText)
+      : (currentOpt ? labelLead(currentOpt.label) : "-");
 
     var caret = document.createElement("span");
     caret.className = "grp-caret";      // the chevron is drawn in CSS
@@ -2040,7 +2052,7 @@ APP_JS = r"""
 
         var main = document.createElement("span");
         main.className = "choice-main";
-        main.textContent = o.label;
+        main.textContent = plain(o.label);
         row.appendChild(main);
 
         // The tag marks the SCOPE's value and never follows the
@@ -2054,7 +2066,7 @@ APP_JS = r"""
         if (o.help) {
           var help = document.createElement("span");
           help.className = "choice-help";
-          help.textContent = o.help;
+          help.textContent = plain(o.help);
           row.appendChild(help);
         }
         if (!opts.disabled) {
