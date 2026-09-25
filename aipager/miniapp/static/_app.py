@@ -62,6 +62,13 @@ APP_JS = r"""
     return String(s).replace(/ \u2014 /g, " - ").replace(/\u2014/g, "-");
   }
 
+  // One line icon from the page's inline sprite (see _shell.py). Page-owned
+  // names only; never server data.
+  function icon(name, cls) {
+    return '<svg class="ic' + (cls ? " " + cls : "") + '" aria-hidden="true">' +
+      '<use href="#i-' + name + '"></use></svg>';
+  }
+
   // ---- connectivity / staleness (spec: never a spinner-forever, never
   // a raw fetch error) --------------------------------------------------
 
@@ -260,20 +267,6 @@ APP_JS = r"""
     return card;
   }
 
-  function buildNewSessionCard() {
-    var card = document.createElement("div");
-    card.className = "card card-new";
-    var plus = document.createElement("div");
-    plus.className = "plus";
-    plus.textContent = "+";
-    var label = document.createElement("div");
-    label.textContent = "New session";
-    card.appendChild(plus);
-    card.appendChild(label);
-    card.addEventListener("click", openNewSession);
-    return card;
-  }
-
   var goneCollapsed = true;
   var lastGridData = null;   // so the gone-toggle can re-render without a fetch
 
@@ -313,11 +306,8 @@ APP_JS = r"""
       (s.status === "gone" ? gone : live).push(s);
     });
 
-    // The New-session cell is always the first grid cell and never
-    // scrolls out of first position.
     var el = document.getElementById("sessions");
     el.innerHTML = "";
-    el.appendChild(buildNewSessionCard());
     live.forEach(function (s) { el.appendChild(buildCard(s)); });
 
     document.getElementById("empty-state").hidden = sessions.length !== 0;
@@ -386,10 +376,14 @@ APP_JS = r"""
     // fields since stage 2; the old tab-strip page ignored them.
     var waitEl = document.getElementById("detail-waiting");
     if (data.status === "waiting") {
-      var what = data.waiting_summary
+      var isQuestion = data.waiting_kind === "question";
+      document.getElementById("detail-waiting-lamp").innerHTML =
+        icon(isQuestion ? "question" : "lock");
+      document.getElementById("detail-waiting-kind").textContent =
+        isQuestion ? "Claude is asking you" : "Claude needs your permission";
+      document.getElementById("detail-waiting-text").textContent = data.waiting_summary
         ? plain(data.waiting_summary)
-        : (data.waiting_kind === "question" ? "a question" : "a permission prompt");
-      waitEl.textContent = "Waiting on you: " + what;
+        : (isQuestion ? "A question is open in the chat." : "A permission prompt is open in the chat.");
       waitEl.hidden = false;
     } else {
       waitEl.hidden = true;
@@ -398,16 +392,7 @@ APP_JS = r"""
     // `facts` is built server-side (sessions.display_facts) and already
     // omits what would be noise - a finished session has no model, cost
     // or context to report, and "0% ctx · $0.00" reads like a fault.
-    var dl = document.getElementById("detail-facts");
-    dl.innerHTML = "";
-    (data.facts || []).forEach(function (fact) {
-      var dt = document.createElement("dt");
-      dt.textContent = fact.label;
-      var dd = document.createElement("dd");
-      dd.textContent = fact.value;
-      dl.appendChild(dt);
-      dl.appendChild(dd);
-    });
+    renderFacts(data.facts || []);
 
     var prev = document.getElementById("detail-preview");
     if (data.last_message) {
@@ -424,6 +409,29 @@ APP_JS = r"""
     renderModelControl(data);
     renderTimeline(data.timeline);
     updateSectionHeaders(data);
+  }
+
+  // Facts as a quiet two-column grid; the directory takes a whole row, and
+  // an odd one out is widened so no cell is left empty.
+  function renderFacts(facts) {
+    var dl = document.getElementById("detail-facts");
+    dl.innerHTML = "";
+    var narrow = facts.filter(function (f) { return f.label !== "Directory"; }).length;
+    var seen = 0;
+    facts.forEach(function (fact) {
+      var isDir = fact.label === "Directory";
+      if (!isDir) { seen += 1; }
+      var wide = isDir || (narrow % 2 === 1 && seen === narrow);
+      var cell = document.createElement("div");
+      cell.className = "fact" + (wide ? " fact-wide" : "") + (isDir ? " fact-mono" : "");
+      var dt = document.createElement("dt");
+      dt.textContent = fact.label;
+      var dd = document.createElement("dd");
+      dd.textContent = fact.value;
+      cell.appendChild(dt);
+      cell.appendChild(dd);
+      dl.appendChild(cell);
+    });
   }
 
   // ---- running-session model picker (roadmap 8.35) ---------------------
@@ -540,8 +548,7 @@ APP_JS = r"""
   function updateSectionHeaders(data) {
     var tl = document.getElementById("tab-timeline");
     var rows = (data && data.timeline) ? data.timeline.length : 0;
-    tl.textContent = (timelineOpen ? "▾ " : "▸ ") +
-      (rows ? "Timeline (" + rows + ")" : "Timeline (empty)");
+    setDisclosure(tl, rows ? "Timeline (" + rows + ")" : "Timeline (empty)", timelineOpen);
 
     var note = document.getElementById("timeline-note");
     if (note) {
@@ -554,19 +561,25 @@ APP_JS = r"""
     updateDiffHeader();
   }
 
+  // A disclosure row: its title plus a chevron that turns when open.
+  // Page-owned text only, so building it as markup is safe.
+  function setDisclosure(btn, title, open) {
+    var html = '<span class="dis-title">' + escapeHtml(title) + "</span>" +
+      icon("chevron", "chev" + (open ? " is-open" : ""));
+    if (btn.innerHTML !== html) { btn.innerHTML = html; }
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
   function updateDiffHeader() {
     var btn = document.getElementById("tab-diff");
-    var caret = diffOpen ? "▾ " : "▸ ";
-    if (!lastDiffData) {
-      btn.textContent = caret + "Changed files";
-      return;
+    var title = "Changed files";
+    if (lastDiffData && !lastDiffData.available) {
+      title = "Changed files (none)";
+    } else if (lastDiffData) {
+      var n = (lastDiffData.files || []).length;
+      title = n ? "Changed files (" + n + ")" : "Changed files (none)";
     }
-    if (!lastDiffData.available) {
-      btn.textContent = caret + "Changed files (none)";
-      return;
-    }
-    var n = (lastDiffData.files || []).length;
-    btn.textContent = caret + (n ? "Changed files (" + n + ")" : "Changed files (none)");
+    setDisclosure(btn, title, diffOpen);
   }
 
   // ---- per-session settings (design §4 default-vs-override mechanic) --
@@ -1029,8 +1042,17 @@ APP_JS = r"""
       item.className = "menu-item act-" + key +
         (CONFIRM_ACTIONS[key] ? " is-danger" : "");
       item.setAttribute("role", "menuitem");
-      item.textContent = key === "perms"
+      // An icon node plus a label node: textContent stays exactly the
+      // action name (the icon contributes no text).
+      var glyph = document.createElement("span");
+      glyph.className = "menu-icon";
+      glyph.innerHTML = icon(key);
+      var text = document.createElement("span");
+      text.className = "menu-label";
+      text.textContent = key === "perms"
         ? permsMenuLabel(data.skip_perms) : ACTION_TITLES[key];
+      item.appendChild(glyph);
+      item.appendChild(text);
       if (!spec.available) {
         item.disabled = true;
       } else {
@@ -1387,13 +1409,14 @@ APP_JS = r"""
     // and `active: <bool>` (drive the selected state from something other
     // than `current` - a row that performs an action rather than being a
     // value cannot use `current`, which has to keep holding the value).
+    var isOpen = !!openGroups[opts.key];
     var wrap = document.createElement("div");
-    wrap.className = "grp";
+    wrap.className = "grp" + (isOpen ? " is-open" : "");
 
     var head = document.createElement("button");
     head.type = "button";
     head.className = "grp-head";
-    var isOpen = !!openGroups[opts.key];
+    head.setAttribute("aria-expanded", isOpen ? "true" : "false");
 
     var title = document.createElement("span");
     title.className = "grp-title";
@@ -1410,8 +1433,8 @@ APP_JS = r"""
       : (currentOpt ? currentOpt.label : "-");
 
     var caret = document.createElement("span");
-    caret.className = "grp-caret";
-    caret.textContent = isOpen ? "▾" : "▸";
+    caret.className = "grp-caret";      // the chevron is drawn in CSS
+    caret.setAttribute("aria-hidden", "true");
 
     head.appendChild(title);
     head.appendChild(value);
@@ -2343,10 +2366,13 @@ APP_JS = r"""
   document.getElementById("new-create").addEventListener("click", submitNewSession);
   document.getElementById("new-advanced-toggle").addEventListener("click", function () {
     var adv = document.getElementById("new-advanced");
+    var btn = document.getElementById("new-advanced-toggle");
     adv.hidden = !adv.hidden;
-    document.getElementById("new-advanced-toggle").textContent =
-      (adv.hidden ? "▸ " : "▾ ") + "Advanced";
+    btn.setAttribute("aria-expanded", adv.hidden ? "false" : "true");
+    btn.classList.toggle("is-open", !adv.hidden);
   });
+  document.getElementById("new-session-btn").addEventListener("click", openNewSession);
+  document.getElementById("empty-new").addEventListener("click", openNewSession);
 
   // ---- top-level tabs -------------------------------------------------
 

@@ -676,28 +676,25 @@ def test_the_page_contains_no_stray_control_characters():
     )
 
 
-def test_the_action_menu_icons_are_real_code_points():
-    """The specific regression: each menu icon must be an actual glyph,
-    not the tail of a mangled escape."""
+def test_the_action_menu_icons_are_inline_svg_symbols():
+    """Replaces the emoji-code-point pin (roadmap 8.44): the emoji icon
+    language rendered differently per platform and is retired for inline
+    line icons. Every action the menu can show has a symbol in the page's
+    own sprite, and the menu builds its icon from the action key."""
     import re
 
     from aipager.miniapp.static import INDEX_HTML
 
-    found = dict(re.findall(
-        r"\.menu-item\.act-(\w+)::before \{ content: \"([^\"]*)\"; \}", INDEX_HTML,
-    ))
-    assert set(found) == {
-        "stop", "kill", "resume", "delete",
-        "clearqueue", "compact", "perms", "restart", "rename",
-    }, found
-    for action, glyph in found.items():
-        assert glyph, f"{action} has no icon"
-        assert not re.search(r"[0-9A-F]{3,}", glyph), (
-            f"{action}'s icon is hex text, not a character: {glyph!r}"
-        )
-        assert ord(glyph[0]) > 0x2000, (
-            f"{action}'s icon starts with U+{ord(glyph[0]):04X}, not a symbol"
-        )
+    order = re.search(r"var ACTION_ORDER = \[([^\]]*)\]", INDEX_HTML)
+    assert order, "ACTION_ORDER not found"
+    keys = re.findall(r'"(\w+)"', order.group(1))
+    assert len(keys) == 9, keys
+    symbols = set(re.findall(r'<symbol id="i-([\w-]+)"', INDEX_HTML))
+    missing = [k for k in keys if k not in symbols]
+    assert not missing, f"actions with no icon: {missing}"
+    assert "glyph.innerHTML = icon(key);" in INDEX_HTML
+    # And no emoji icon survives as a CSS `content:` glyph.
+    assert not re.search(r"\.menu-item\.act-\w+::before", INDEX_HTML)
 
 
 # ===== Mini App session MENU actions (perms/clearqueue/compact/restart/
