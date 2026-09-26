@@ -196,6 +196,24 @@ def test_local_path_origin_is_described(tmp_path):
     assert "/home/me" not in src.describe(show_paths=False)
 
 
+def test_a_local_folder_install_is_not_upgradable_from_here(tmp_path):
+    """8.46: `pipx upgrade` reinstalls from the folder, not PyPI, so /update
+    must not offer "update to the latest release" for it (live 2026-09-26:
+    the folder was gone and the upgrade failed)."""
+    src = _detect(_pipx_prefix(tmp_path),
+                  direct_url={"url": "file:///home/me/aipager", "dir_info": {}})
+    assert src.upgradable is False
+    assert src.reason == "it was installed from a local folder; update it from that folder"
+    assert "/home/me" not in src.reason       # shown in group chats too
+    assert src.kind == "pipx"                  # still described as pipx
+
+
+def test_an_index_install_stays_upgradable(tmp_path):
+    src = _detect(_pipx_prefix(tmp_path), direct_url=None)
+    assert src.origin == "index"
+    assert src.upgradable is True
+
+
 def test_vcs_origin(tmp_path):
     src = _detect(_uv_prefix(tmp_path),
                   direct_url={"url": "https://github.com/x/aipager",

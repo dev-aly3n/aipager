@@ -69,6 +69,8 @@ _REFUSAL_REASONS = {
     "unknown": "could not tell which installer owns this aipager",
 }
 
+_LOCAL_FOLDER_REASON = "it was installed from a local folder; update it from that folder"
+
 _UNSET = object()
 
 
@@ -96,7 +98,7 @@ class InstallSource:
             if show_paths:
                 base += f" ({self.prefix})"
             return base
-        if not self.upgradable:
+        if not self.upgradable and self.origin != "local":
             return {
                 "editable": "editable install",
                 "nix": "Nix install",
@@ -231,6 +233,16 @@ def _detect(prefix, executable, base_prefix, direct_url, uid, env) -> InstallSou
                     "writable by your user; aipager never touches another "
                     "user's install"),
         )
+    if origin == "local":
+        # Installed from a folder on disk (``pipx install /path/to/aipager``):
+        # the installer's own upgrade reinstalls from that folder, not from
+        # PyPI, so an update "to the latest release" could only reinstall
+        # the same code, or fail once the folder is gone (roadmap 8.46,
+        # seen live 2026-09-26). The folder's owner updates it there. No
+        # path in the reason: it is shown in group chats too.
+        return InstallSource(kind=kind, prefix=prefix, python=python,
+                             origin=origin, origin_detail=detail,
+                             upgradable=False, reason=_LOCAL_FOLDER_REASON)
     return InstallSource(kind=kind, prefix=prefix, python=python, origin=origin,
                          origin_detail=detail, upgradable=True, reason=None)
 

@@ -865,7 +865,7 @@ class UpdateManager:
             hint = install_source.reinstall_hint(source.kind)
             self._finish(job, "failed",
                          f"⏱ <b>aipager</b> upgrade timed out after "
-                         f"{self_update.UPGRADE_TIMEOUT_SECONDS}s and was stopped — "
+                         f"{self_update.UPGRADE_TIMEOUT_SECONDS}s and was stopped, "
                          f"nothing restarted, still running {_esc(running)}. The "
                          f"install on disk may be partial: reinstall with "
                          f"<code>{_esc(hint)}</code> before the next restart."
@@ -875,7 +875,7 @@ class UpdateManager:
             log.info("update.aipager.failed job=%s rc=%s", job.id, res.returncode)
             self._finish(job, "failed",
                          f"❌ <b>aipager</b> upgrade failed (exit "
-                         f"{res.returncode if res.returncode is not None else '?'}) — "
+                         f"{res.returncode if res.returncode is not None else '?'}), "
                          f"nothing restarted."
                          + _pre_tail(res.output_tail or res.error, job.chat_id))
             return False
@@ -895,7 +895,7 @@ class UpdateManager:
             log.info("update.aipager.smoke_failed job=%s error=%s", job.id, err)
             hint = install_source.reinstall_hint(source.kind)
             self._finish(job, "failed",
-                         f"❌ The new version failed to import — still running "
+                         f"❌ The new version failed to import, still running "
                          f"{_esc(running)}, nothing restarted. Reinstall with "
                          f"<code>{_esc(hint)}</code>"
                          + _pre_tail(err, job.chat_id))

@@ -242,11 +242,13 @@ def two_scope_bot(mk_bot, h):
 
 
 def test_group_outcome_omits_local_source_path(world, two_scope_bot, h, run_async):
+    """8.46: a local-folder install is refused before any installer runs; the
+    refusal a group sees still never names the folder."""
     world.origin = "local"
-    world.probe = (h.RUNNING, True, None)          # "already at A" + origin explanation
-    _, msg, _ = run_async(h.run_job(two_scope_bot, "aipager", chat_id=-100, user_id=555,
-                                    msg=h.status_message(-100)))
-    assert world.local_path not in h.all_text(two_scope_bot, msg)
+    with pytest.raises(AssertionError, match="not_upgradable"):
+        run_async(h.run_job(two_scope_bot, "aipager", chat_id=-100, user_id=555,
+                            msg=h.status_message(-100)))
+    assert world.local_path not in " ".join(map(str, world.calls))
 
 
 def test_admin_of_one_scope_is_refused_in_a_scope_where_not_admin(world, two_scope_bot, h, run_async):

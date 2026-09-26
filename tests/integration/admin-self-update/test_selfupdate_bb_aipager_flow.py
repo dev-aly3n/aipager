@@ -255,11 +255,14 @@ def test_unchanged_version_says_already_at(world, personal_bot, h, run_async):
     assert f"already at {h.RUNNING}" in h.all_text(personal_bot, msg)
 
 
-def test_unchanged_local_install_explains_the_source(world, personal_bot, h, run_async):
+def test_a_local_folder_install_is_never_upgraded_from_here(world, personal_bot, h, run_async):
+    """8.46 (operator 2026-09-26): was "unchanged local install explains the
+    source". `pipx upgrade` reinstalls a folder install from the folder, not
+    PyPI, so an update is refused before any installer runs."""
     world.origin = "local"
-    world.probe = (h.RUNNING, True, None)
-    _, msg, _ = _ap(personal_bot, h, run_async)
-    assert world.local_path in h.all_text(personal_bot, msg)
+    with pytest.raises(AssertionError, match="not_upgradable"):
+        _ap(personal_bot, h, run_async)
+    assert not any("upgrade" in " ".join(map(str, c)) for c in world.calls)
 
 
 def test_broken_new_version_says_failed_to_import(world, personal_bot, h, run_async):

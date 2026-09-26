@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **`/update` no longer offers to update an aipager installed from a local folder.** Such an install (`pipx install /path/to/aipager`) is upgraded from that folder, not from PyPI, so the update could only reinstall the same code, or fail once the folder was gone. The check now says "can't update from here: it was installed from a local folder; update it from that folder". Update failure messages also use plain punctuation now.
 - **No stack trace when two turns end back to back.** If a tool-less turn's card was being removed just as the next turn started, closing that card logged a `TypeError`. It is now treated as already gone.
 
 ## [0.7.19] - 2026-09-26
