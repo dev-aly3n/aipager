@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.19] - 2026-09-26
+
 ### Fixed
 - **An aipager update restarts when it says it will.** The restart after an update (and the voice extra's **Restart daemon now**) was a 5 s systemd timer that systemd was free to fire up to a minute late, and did (44 s). It now fires within a second of its delay.
 
