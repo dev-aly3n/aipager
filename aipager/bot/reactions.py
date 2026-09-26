@@ -175,11 +175,15 @@ def ledger_of(owner: Any) -> ReactionLedger:
     return ledger
 
 
-# How long a decided reaction waits before it is sent. An idle prompt
-# gets 👀 at hand-off and 👍 a moment later when Claude takes it; sent at
-# once, the user saw 👀 blink into 👍. Within the window only the latest
-# reaction for a message goes out (one call instead of two). 0 sends at
-# once (tests pin the lifecycle that way unless they test the window).
+# How long 👀 waits before it is sent. An idle prompt gets 👀 at hand-off
+# and 👍 a fraction of a second later when Claude takes it; sent at once,
+# the user saw 👀 blink into 👍 (2026-09-25). Only 👀 waits: every other
+# reaction goes out at once and cancels a 👀 still waiting, so an idle
+# prompt shows 👍 straight away (with its busy card) and a queued one
+# shows 👀 after the pause, then 👍 the moment Claude picks it up. An
+# earlier version delayed every reaction, which put 👍 a second behind
+# the busy card (2026-09-26). 0 sends 👀 at once (tests pin the lifecycle
+# that way unless they test the pause).
 REACTION_SETTLE_SECONDS = 1.0
 
 
@@ -196,26 +200,26 @@ async def _send(owner: Any, chat_id: Any, msg_id: int, emoji: str) -> None:
                   exc_info=True)
 
 
-async def _send_settled(owner: Any, ledger: "ReactionLedger", key: tuple,
-                        chat_id: Any, msg_id: int) -> None:
-    """Wait out the settle window, then send whatever the message's
-    reaction is by then (a later edge may have moved it on)."""
+async def _send_handed_off_later(owner: Any, ledger: "ReactionLedger",
+                                 key: tuple, chat_id: Any, msg_id: int) -> None:
+    """Wait out the pause, then send 👀 unless the message has moved on
+    (a later reaction was sent at once and cancelled this, or claimed a
+    higher state)."""
     try:
         await asyncio.sleep(REACTION_SETTLE_SECONDS)
     finally:
         if ledger.pending.get(key) is asyncio.current_task():
             ledger.pending.pop(key, None)
-    emoji = ledger.current(chat_id, msg_id)
-    if emoji:
+    if ledger.current(chat_id, msg_id) == HANDED_OFF:
         async with ledger.lock(chat_id, msg_id):
-            await _send(owner, chat_id, msg_id, emoji)
+            await _send(owner, chat_id, msg_id, HANDED_OFF)
 
 
 async def set_reaction(owner: Any, chat_id: Any, msg_id: int | None,
                        emoji: str) -> bool:
     """Set ``emoji`` on the user's message if it moves the lifecycle
-    forward. Returns whether it will be sent (after the settle window,
-    unless a later reaction for the same message replaces it first).
+    forward. Returns whether it will be sent (👀 after a short pause,
+    unless a later reaction replaces it first; anything else at once).
 
     ``owner`` is the ``TelegramBot`` (its ``_app.bot`` sends; the ledger
     lives on it). Never raises: a reaction is best-effort."""
@@ -230,21 +234,22 @@ async def set_reaction(owner: Any, chat_id: Any, msg_id: int | None,
                     "emoji", emoji)
         return False
     ledger = ledger_of(owner)
-    if REACTION_SETTLE_SECONDS <= 0:
-        async with ledger.lock(chat_id, msg_id):
-            if not ledger.claim(chat_id, msg_id, emoji):
-                return False
-            await _send(owner, chat_id, msg_id, emoji)
-            return True
-    if not ledger.claim(chat_id, msg_id, emoji):
-        return False
     key = _key(chat_id, msg_id)
-    if key not in ledger.pending:
-        # A reaction already waiting will send this newer one instead:
-        # it reads the ledger when its window ends.
-        ledger.pending[key] = asyncio.get_running_loop().create_task(
-            _send_settled(owner, ledger, key, chat_id, msg_id))
-    return True
+    if emoji == HANDED_OFF and REACTION_SETTLE_SECONDS > 0:
+        if not ledger.claim(chat_id, msg_id, emoji):
+            return False
+        if key not in ledger.pending:
+            ledger.pending[key] = asyncio.get_running_loop().create_task(
+                _send_handed_off_later(owner, ledger, key, chat_id, msg_id))
+        return True
+    async with ledger.lock(chat_id, msg_id):
+        if not ledger.claim(chat_id, msg_id, emoji):
+            return False
+        waiting = ledger.pending.pop(key, None)
+        if waiting is not None:
+            waiting.cancel()          # its 👀 is overtaken: never send it
+        await _send(owner, chat_id, msg_id, emoji)
+        return True
 
 
 def _msg_order(entry: dict) -> int:

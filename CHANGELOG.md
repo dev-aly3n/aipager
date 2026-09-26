@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **👍 no longer lags a second behind the busy card.** 0.7.18 delayed every reaction to stop 👀 blinking into 👍, which made 👍 arrive after the card. Now only 👀 waits: 👍 and every other reaction go out at once and cancel a 👀 still waiting, so a prompt to an idle session shows 👍 with its card and never flashes 👀.
+
 ## [0.7.20] - 2026-09-26
 
 ### Fixed
