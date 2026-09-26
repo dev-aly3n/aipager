@@ -467,6 +467,59 @@ def read_turn_blocks(
     return (items, offset + consumed_bytes)
 
 
+_QUEUE_OP_MARK = b'"queue-operation"'
+
+
+def read_queue_events(
+    transcript_path: str, offset: int,
+) -> tuple[list[tuple[str, str | None, str, object]], int]:
+    """Read the ``queue-operation`` lines appended after *offset*, in file
+    order, as ``(operation, reason, content, timestamp)`` — the same 4-tuple
+    :func:`read_turn_blocks` carries as a ``"queue"`` item's value.
+
+    The queue scan's own reader (roadmap 8.47): it keeps its own offset,
+    because :func:`read_turn_stream` — the prose fallback that runs while
+    the MessageDisplay hook is not yet known live — shares
+    ``stream_offset`` and DROPS queue lines, so an ``absorbed_mid_turn``
+    line it read past was lost for good. Lines without the marker are
+    skipped by a byte search before any JSON parse.
+
+    Same offset rules as :func:`read_turn_stream`: a trailing partial line
+    is not consumed, and any error returns ``([], offset)``.
+    """
+    if not transcript_path:
+        return ([], offset)
+    try:
+        with open(transcript_path, "rb") as fh:
+            fh.seek(offset)
+            raw = fh.read()
+    except (FileNotFoundError, PermissionError, OSError) as exc:
+        log.debug("read_queue_events: cannot open %s: %s", transcript_path, exc)
+        return ([], offset)
+    if not raw:
+        return ([], offset)
+    lines = raw.split(b"\n")[:-1]  # the last element is never a whole line
+    events: list[tuple[str, str | None, str, object]] = []
+    consumed_bytes = 0
+    for line_bytes in lines:
+        consumed_bytes += len(line_bytes) + 1
+        if _QUEUE_OP_MARK not in line_bytes:
+            continue
+        try:
+            entry = json.loads(line_bytes.decode("utf-8", errors="replace"))
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(entry, dict) or entry.get("type") != "queue-operation":
+            continue
+        content = entry.get("content", "")
+        events.append((
+            entry.get("operation", "") or "", entry.get("reason"),
+            content if isinstance(content, str) else "",
+            entry.get("timestamp"),
+        ))
+    return (events, offset + consumed_bytes)
+
+
 def read_turn_text(transcript_path: str, offset: int) -> tuple[str, int]:
     """Read assistant text blocks appended to *transcript_path* after *offset*.
 

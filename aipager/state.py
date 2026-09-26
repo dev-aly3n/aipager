@@ -627,6 +627,12 @@ class TrackedSession:
     # Drained (and reset to []) by whichever caller reads it next
     # tick/event/finish-sync. Never persisted.
     stream_consumed_notes: list[dict] = field(default_factory=list, repr=False)
+    # Roadmap 8.47: how far animation._scan_queue_operations has read the
+    # turn's pinned transcript for `queue-operation` lines. Its OWN offset,
+    # never `stream_offset`: the prose fallback shares that one and drops
+    # queue lines, which lost an `absorbed_mid_turn` line live. Seeded with
+    # `stream_offset` at turn start. Never persisted.
+    queue_scan_offset: int = 0
     # Messages Claude Code has QUEUED during a running turn whose fate is
     # not yet known ("anchor-on-transcript-consumption"): the hook's
     # pick-up fires at SUBMIT time for such a message, so it is recorded

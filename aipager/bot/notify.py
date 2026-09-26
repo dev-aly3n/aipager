@@ -617,10 +617,13 @@ class NotifyMixin:
         transcript scan reads its ``absorbed_mid_turn`` line. So first run
         that scan (an absorption since the last tick is applied — 👍 and,
         with ``reanchor``, the card follows it). Then trust the list only
-        when the scan is live (``_exact_anchors_available``) and no
-        background job is waiting: without the hook the scan never runs,
-        and in a job's waiting window the targets are kept on purpose
-        while Claude Code has already started the next prompt. An
+        when the MessageDisplay hook is known live
+        (``_exact_anchors_available``) and no background job is waiting.
+        The queue scan itself runs without the hook since roadmap 8.47;
+        the hook gate is kept deliberately as it was (a teardown that
+        guesses wrong sends an Escape), and in a job's waiting window the
+        targets are kept on purpose while Claude Code has already started
+        the next prompt. An
         untrusted target gets no 🤷 and no discard keystroke — an Escape
         into an empty Claude Code queue interrupts the running turn."""
         if not sess.queued_targets:

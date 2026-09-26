@@ -169,3 +169,48 @@ def test_existing_message_id_contract_unaffected_by_queue_support(tmp_path):
     assert transcript.read_turn_stream(path, 0) == (
         [("text", "first"), ("tool", "Bash"), ("tool", "Read")], off,
     )
+
+
+# ---- read_queue_events: the queue scan's own reader (roadmap 8.47) ----
+
+def test_read_queue_events_keeps_only_queue_lines_in_file_order(tmp_path):
+    path = _write_jsonl_bytes(tmp_path, [
+        _queue_op("enqueue", content="m2", ts="2026-09-26T20:56:06.890Z"),
+        _block_line("m1", {"type": "text", "text": "prose"}),
+        {"type": "user", "message": {"content": 'mentions "queue-operation"'}},
+        {"type": "attachment", "kind": "queue-operation", "operation": "enqueue"},
+        _queue_op("remove", "absorbed_mid_turn", "m2", "2026-09-26T20:57:05.812Z"),
+        {"type": "queue-operation", "operation": "dequeue",
+         "timestamp": "2026-09-26T20:57:10.480Z"},
+    ])
+    events, off = transcript.read_queue_events(path, 0)
+    assert events == [
+        ("enqueue", None, "m2", "2026-09-26T20:56:06.890Z"),
+        ("remove", "absorbed_mid_turn", "m2", "2026-09-26T20:57:05.812Z"),
+        ("dequeue", None, "", "2026-09-26T20:57:10.480Z"),
+    ]
+    assert off == len(open(path, "rb").read())
+
+
+def test_read_queue_events_leaves_a_partial_line_for_the_next_read(tmp_path):
+    p = tmp_path / "t.jsonl"
+    whole = json.dumps(_queue_op("enqueue", content="a")) + "\n"
+    rest = json.dumps(_queue_op("remove", "absorbed_mid_turn", "a"))
+    p.write_bytes((whole + rest[:20]).encode())
+    events, off = transcript.read_queue_events(str(p), 0)
+    assert [e[0] for e in events] == ["enqueue"] and off == len(whole.encode())
+    with open(p, "ab") as fh:
+        fh.write(rest[20:].encode() + b"\n")
+    events, off2 = transcript.read_queue_events(str(p), off)
+    assert events == [("remove", "absorbed_mid_turn", "a", 1234567890.0)]
+    assert off2 == p.stat().st_size
+
+
+def test_read_queue_events_tolerates_missing_files_and_odd_content(tmp_path):
+    assert transcript.read_queue_events("", 7) == ([], 7)
+    assert transcript.read_queue_events(str(tmp_path / "nope.jsonl"), 3) == ([], 3)
+    path = _write_jsonl_bytes(tmp_path, [
+        {"type": "queue-operation", "operation": "enqueue", "content": ["x"]},
+    ])
+    events, _ = transcript.read_queue_events(path, 0)
+    assert events == [("enqueue", None, "", None)]

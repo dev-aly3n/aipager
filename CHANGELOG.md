@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **👍 no longer lags a second behind the busy card.** 0.7.18 delayed every reaction to stop 👀 blinking into 👍, which made 👍 arrive after the card. Now only 👀 waits: 👍 and every other reaction go out at once and cancel a 👀 still waiting, so a prompt to an idle session shows 👍 with its card and never flashes 👀.
+- **No phantom "next turn" for a message Claude already answered.** A message sent while Claude was working, and folded into that same turn, could still get a second busy card once the turn ended, and later a bare "✅ Done" reply. This happened when Claude had not written any text since aipager last restarted. aipager now always sees Claude Code's record that it took a queued message, so the message turns 👍, the answer replies to it, and no extra turn is started.
 
 ## [0.7.20] - 2026-09-26
 

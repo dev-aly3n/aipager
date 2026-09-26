@@ -50,7 +50,7 @@ from aipager.bot.rich_message import (
     RichMessageGone,
 )
 from aipager import policy_snapshot
-from aipager.transcript import read_turn_blocks, read_turn_stream
+from aipager.transcript import read_queue_events, read_turn_blocks, read_turn_stream
 from aipager.state import Status, TrackedSession
 
 # Pure-function helpers and constants live in aipager.bot.transport
@@ -391,6 +391,67 @@ def _expire_tool_batch(sess: TrackedSession) -> None:
     sess.stream_batch_since = None
 
 
+def _scan_queue_operations(sess: TrackedSession) -> None:
+    """Read the turn's new ``queue-operation`` lines and act on them
+    (design.md "turn anchor follows consumption" R4; roadmap 8.47).
+
+    A message absorbed mid-turn, or delivered to a running background
+    agent, is the ONLY thing that moves the reply target here —
+    `enqueue`/`dequeue`/bare `remove` are ignored on purpose (R7: an
+    aipager-side discard is handled by the stop path; a `dequeue` — the
+    message popped as the NEXT turn — fires no hook at all, so the finish
+    path starts that turn itself from the still-queued target, R8, and the
+    line is confirmation only).
+
+    Runs from :func:`_sync_anchors_from_transcript` — every tick, the
+    first MessageDisplay chunk of each message, and the finish path —
+    whether or not the
+    MessageDisplay hook is known live, from its OWN offset
+    (``queue_scan_offset``). It used to ride the structure scan, which is
+    inert until the hook is known live, and shares ``stream_offset`` with
+    the prose fallback that drops queue lines: after a daemon restart, in a
+    turn with no preamble prose, an ``absorbed_mid_turn`` line was read past
+    and lost, and the finish path started a phantom next turn for the
+    absorbed message (seen live on Claude Code 2.1.283, 2026-09-26).
+    """
+    if not sess.stream_transcript_path:
+        return
+    events, sess.queue_scan_offset = read_queue_events(
+        sess.stream_transcript_path, sess.queue_scan_offset,
+    )
+    for operation, reason, content, _ts in events:
+        if operation == "remove" and reason in (
+            "absorbed_mid_turn", "delivered_to_agent",
+        ):
+            # A message queued while this turn ran was recorded as a
+            # queued target at its submit-time pick-up (the hook
+            # already deleted its note then); this line is the moment
+            # Claude actually consumed it
+            # ("anchor-on-transcript-consumption"). The on-disk note
+            # match stays as the fallback for a note no pick-up ever
+            # consumed.
+            target = _pop_queued_target(sess, content or "")
+            if target is not None:
+                sess.stream_consumed_notes.append(target)
+            else:
+                consumed = policy_snapshot.consume_notes_matching(
+                    sess.name, content or "",
+                )
+                if consumed:
+                    sess.stream_consumed_notes.extend(consumed)
+        elif operation == "popAll":
+            # Escape pulled Claude Code's queue back into the input
+            # box: this message is no longer queued, so it is not the
+            # next turn's prompt — drop the target, or the finish path
+            # starts a phantom turn for it. Its reaction stays 👀: the
+            # text can be edited and resubmitted from the terminal
+            # (measured: the one popAll on record was re-enqueued
+            # 4.5 s later), and no hook would then name it. A bare
+            # `remove` stays ignored: older Claude Code wrote it for
+            # an absorption too.
+            _pop_queued_target(sess, content or "")
+
+
 def _sync_anchors_from_transcript(sess: TrackedSession) -> bool:
     """Place hook-delivered sentences exactly, from the transcript's own
     message structure ("transcript-exact-sentence-anchors").
@@ -420,8 +481,11 @@ def _sync_anchors_from_transcript(sess: TrackedSession) -> bool:
     Returns True when an existing block moved (the card needs a redraw).
     Never reads text into the card: while the hook is live the transcript
     is read only for STRUCTURE. Inert when the hook is not live (the
-    fallback owns the cursor and offset then) or no transcript is pinned.
+    fallback owns the cursor and offset then) or no transcript is pinned —
+    except for the queue scan (:func:`_scan_queue_operations`), which runs
+    first, always, from its own offset.
     """
+    _scan_queue_operations(sess)
     if not _exact_anchors_available(sess):
         return False
     items, sess.stream_offset = read_turn_blocks(
@@ -434,50 +498,11 @@ def _sync_anchors_from_transcript(sess: TrackedSession) -> bool:
     pending: str | None = None
     for kind, value, mid in items:
         if kind == "queue":
-            # design.md "turn anchor follows consumption" R4: a message
-            # absorbed mid-turn, or delivered to a running background
-            # agent, is the ONLY thing that moves the reply target here —
-            # `enqueue`/`dequeue`/bare `remove` are ignored on purpose (R7:
-            # an aipager-side discard is handled by the stop path; a
-            # `dequeue` — the message popped as the NEXT turn —
-            # fires no hook at all, so the finish path starts that turn
-            # itself from the still-queued target, R8, and the line is
-            # confirmation only).
-            # Placed FIRST in the loop so a queue item never reaches
-            # `_find_tool_row` (which would otherwise stringify its
+            # Queue lines are handled by `_scan_queue_operations` from its
+            # own offset (roadmap 8.47). Skipped FIRST so a queue item never
+            # reaches `_find_tool_row` (which would otherwise stringify its
             # 4-tuple `value` into a bogus tool-name match) and never
             # disturbs `pending`/`cursor` state.
-            operation, reason, content, _ts = value
-            if operation == "remove" and reason in (
-                "absorbed_mid_turn", "delivered_to_agent",
-            ):
-                # A message queued while this turn ran was recorded as a
-                # queued target at its submit-time pick-up (the hook
-                # already deleted its note then); this line is the moment
-                # Claude actually consumed it
-                # ("anchor-on-transcript-consumption"). The on-disk note
-                # match stays as the fallback for a note no pick-up ever
-                # consumed.
-                target = _pop_queued_target(sess, content or "")
-                if target is not None:
-                    sess.stream_consumed_notes.append(target)
-                else:
-                    consumed = policy_snapshot.consume_notes_matching(
-                        sess.name, content or "",
-                    )
-                    if consumed:
-                        sess.stream_consumed_notes.extend(consumed)
-            elif operation == "popAll":
-                # Escape pulled Claude Code's queue back into the input
-                # box: this message is no longer queued, so it is not the
-                # next turn's prompt — drop the target, or the finish path
-                # starts a phantom turn for it. Its reaction stays 👀: the
-                # text can be edited and resubmitted from the terminal
-                # (measured: the one popAll on record was re-enqueued
-                # 4.5 s later), and no hook would then name it. A bare
-                # `remove` stays ignored: older Claude Code wrote it for
-                # an absorption too.
-                _pop_queued_target(sess, content or "")
             continue
         if kind == "text":
             pending = mid if mid and mid not in sess.stream_exact_anchor else None
@@ -2542,7 +2567,9 @@ class AnimationMixin:
             # prose is a real change, so it earns the fast cadence.
             if _read_stream_text(sess):
                 sess.stream_dirty = True
-        # Hook live instead: the transcript is read for STRUCTURE only —
+        # The queue scan (`_scan_queue_operations`, first thing in the
+        # call below) runs always, hook live or not (roadmap 8.47). With
+        # the hook live the transcript is also read for STRUCTURE only —
         # a round that flushed since the last tick places (or corrects)
         # the sentence it belongs to, exactly. Run this — and the
         # absorption-consumption check right after it — EVEN WHILE
@@ -3270,6 +3297,8 @@ class AnimationMixin:
                     sess.stream_offset = os.path.getsize(tp)
                 except OSError:
                     sess.stream_offset = 0
+            # The queue scan reads the same turn, from its own offset.
+            sess.queue_scan_offset = sess.stream_offset
             # A new turn starts clean: any earlier turn's deferred card is
             # void, whether or not this one defers its own.
             self._cancel_lazy_card(sess)

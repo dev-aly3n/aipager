@@ -434,3 +434,22 @@ def test_a_tick_corrects_an_anchor_and_marks_the_card_dirty(
     assert sess.stream_commentary == [(0, "Two checks.")]
     assert sess.stream_dirty is True
     bot._edit_busy_rich.assert_awaited()
+
+
+def test_a_queue_line_inside_a_round_does_not_break_its_anchor(tmp_path):
+    """Roadmap 8.47: queue lines are the queue scan's (own offset). The
+    structure scan skips them, so one flushed between a message's text line
+    and its tool_use line never cuts the sentence off its row."""
+    s = _sess(tmp_path)
+    s.tool_history = [("Bash: ls", False)]
+    with open(s.stream_transcript_path, "ab") as fh:
+        for line in (
+            {"type": "assistant", "message": {"id": "m1", "content": [
+                {"type": "text", "text": "Listing."}]}},
+            {"type": "queue-operation", "operation": "enqueue", "content": "x"},
+            {"type": "assistant", "message": {"id": "m1", "content": [
+                {"type": "tool_use", "id": "t1", "name": "Bash", "input": {}}]}},
+        ):
+            fh.write((json.dumps(line) + "\n").encode("utf-8"))
+    _sync_anchors_from_transcript(s)
+    assert s.stream_exact_anchor.get("m1") == 0
