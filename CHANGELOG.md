@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **No stack trace when two turns end back to back.** If a tool-less turn's card was being removed just as the next turn started, closing that card logged a `TypeError`. It is now treated as already gone.
+
 ## [0.7.19] - 2026-09-26
 
 ### Fixed

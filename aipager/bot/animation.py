@@ -1922,6 +1922,12 @@ class AnimationMixin:
             sess._stream_edit_lock = lock
 
         async with lock:
+            # Re-checked under the lock: while this edit waited, a racing
+            # finish may have taken the card away (8.32's tool-less path
+            # clears busy_msg_id and deletes the card; seen live 2026-09-26
+            # as a TypeError from int(None) on a superseded card's close).
+            if not sess.busy_msg_id or sess.busy_msg_id < 0:
+                return None
             # The tier unit every live counter renders in (8.30), set
             # BEFORE the build so the renderer itself stays pure.
             sess.card_elapsed_unit = (
