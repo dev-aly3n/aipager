@@ -35,6 +35,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import BadRequest
 
 from aipager import install_source, self_update
 from aipager.bot.flood import FloodMuted
@@ -47,6 +48,7 @@ from aipager.bot.transport import (
     calling_chat_id,
     edit_message,
     edit_text,
+    edit_text_at,
     reply_text,
     send_text,
 )
@@ -146,6 +148,10 @@ class _Job:
     # ``(from, to)`` once the new aipager is on disk and proven, so a
     # shutdown after that point still leaves the normal A→B marker.
     installed: tuple[str, str] | None = None
+    # The "installed, restarting when the current turn ends" section while
+    # the post-install gate holds the restart (dropped before any marker is
+    # written: the restart replaces it).
+    waiting_section: str | None = None
     event: asyncio.Event | None = None
     reporter: "_Reporter | None" = None
 
@@ -154,11 +160,15 @@ class _Job:
         return self.phase in TERMINAL_PHASES
 
     def snapshot(self) -> dict:
-        return {
+        snap = {
             "id": self.id, "kind": self.kind, "phase": self.phase,
             "blockers": list(self.blockers), "summary": self.summary,
             "started_at": self.started_at,
         }
+        if self.installed is not None:
+            # The Mini App's restart watch waits for exactly this version.
+            snap["installed"] = {"from": self.installed[0], "to": self.installed[1]}
+        return snap
 
     def wake(self) -> None:
         if self.event is not None:
@@ -452,6 +462,10 @@ class UpdateManager:
         # later job holds.
         self._lock_owner: int | None = None
         self._shutting_down = False
+        # Set by deliver_update_marker in the daemon an update restarted
+        # into: ``{"from", "to", "readopted", "missing"}``, shown by the
+        # Mini App's restart watch.
+        self.last_restart: dict | None = None
 
     # ---- read side -------------------------------------------------------
 
@@ -906,16 +920,17 @@ class UpdateManager:
             return False
 
         if not job.restart_now:
-            job.sections.append(f"✅ <b>aipager</b> {_esc(running)} → {_esc(new)} "
-                                "installed; restarting once no turn is running.")
+            job.waiting_section = (f"⏳ <b>aipager</b> {_esc(running)} → {_esc(new)} "
+                                   "installed, restarting when the current turn ends")
+            job.sections.append(job.waiting_section)
             if await self._wait_gate(job) == "cancel":
-                job.sections.pop()
+                self._drop_waiting_section(job)
                 self._finish(job, "cancelled",
                              f"✅ <b>aipager</b> {_esc(running)} → {_esc(new)} installed, "
                              "but the restart was cancelled. Restart it yourself: "
                              f"<code>{_esc(plan.manual_command)}</code>")
                 return False
-            job.sections.pop()
+            self._drop_waiting_section(job)
 
         plan = await asyncio.to_thread(self_update.restart_plan, registry)
         if self._shutting_down:
@@ -955,10 +970,18 @@ class UpdateManager:
                          f"yourself: <code>{_esc(plan.manual_command)}</code>")
             return False
         job.restart_unit = detail
+        # No countdown (roadmap 8.45): the new daemon edits this message
+        # into "✅ aipager updated A → B, N sessions re-adopted".
         self._finish(job, "restart_scheduled",
-                     f"✅ <b>aipager</b> {_esc(running)} → {_esc(new)} installed. "
-                     f"Restarting in {self_update.RESTART_DELAY_SECONDS} s…")
+                     f"⏳ <b>aipager</b> {_esc(running)} → {_esc(new)} installed, "
+                     "restarting…")
         return True
+
+    @staticmethod
+    def _drop_waiting_section(job: _Job) -> None:
+        if job.waiting_section is not None and job.waiting_section in job.sections:
+            job.sections.remove(job.waiting_section)
+        job.waiting_section = None
 
     async def _wait_gate(self, job: _Job) -> str:
         """``"open"``, ``"bypass"`` or ``"cancel"``."""
@@ -1035,7 +1058,25 @@ class UpdateManager:
                 if s.status.name != "GONE"
             ],
             "scheduled_at": time.time(),
+            "message": self._message_ref(job),
         }
+
+    @staticmethod
+    def _message_ref(job: _Job) -> dict | None:
+        """The job's status message, for the next daemon to edit into the
+        outcome (roadmap 8.45); ``None`` when there is none to edit (a
+        Mini App job whose first send never went out)."""
+        msg = job.reporter.message if job.reporter is not None else None
+        # None or MUTED (no message went out) has no int ids: None below.
+        chat_id = _message_chat_id(msg)
+        message_id = getattr(msg, "message_id", None)
+        if not all(isinstance(v, int) and not isinstance(v, bool)
+                   for v in (chat_id, message_id)):
+            return None
+        # Every caller drops the waiting section first: the restart (or
+        # the next start) replaces it.
+        return {"chat_id": chat_id, "message_id": message_id,
+                "prefix": "\n\n".join(job.sections)}
 
     def _installed_unprobed_at_shutdown(self, job: _Job, running: str) -> None:
         """The installer finished but the daemon is stopping before the
@@ -1058,6 +1099,7 @@ class UpdateManager:
         marker so the next start announces B."""
         log.info("update.restart.skipped job=%s reason=shutting-down from=%s to=%s",
                  job.id, running, new)
+        self._drop_waiting_section(job)
         try:
             self_update.write_marker(self._update_marker(job, running, new))
         except OSError:
@@ -1358,7 +1400,10 @@ async def handle_callback(bot: "TelegramBot", update, query, session_name: str,
 # ---------------------------------------------------------------------------
 
 async def deliver_update_marker(bot: "TelegramBot", registry) -> None:
-    """Post "aipager updated A → B, N sessions re-adopted" once. Never raises."""
+    """Announce "aipager updated A → B, N sessions re-adopted" once, by
+    editing the old daemon's "installed, restarting…" message when the
+    marker names it, else (or when that edit fails) by a new message.
+    Never raises."""
     from aipager.state import Status
 
     try:
@@ -1398,20 +1443,68 @@ async def deliver_update_marker(bot: "TelegramBot", registry) -> None:
                     back += 1
                 else:
                     missing.append(str(entry.get("label") or entry.get("name") or "?"))
-            text = f"✅ aipager updated {frm} → {to}, {back} sessions re-adopted"
+            text = (f"✅ aipager updated {frm} → {to}, {back} "
+                    f"session{'' if back == 1 else 's'} re-adopted")
             if missing:
                 text += "\n⚠️ Not back: " + ", ".join(missing)
+            mgr = getattr(bot, "updates", None)
+            if mgr is not None:
+                mgr.last_restart = {"from": frm, "to": to, "readopted": back,
+                                    "missing": missing}
         app = getattr(bot, "_app", None)
         if app is None:
             return
+        ref = _marker_message_ref(marker, chat_id)
+        if ref is not None:
+            # Edit the old daemon's "installed, restarting…" message into
+            # the outcome (roadmap 8.45). ESSENTIAL, like the send below.
+            message_id, prefix = ref
+            body = _esc_text(text)
+            if prefix:
+                body = f"{prefix}\n\n{body}"
+            try:
+                result = await edit_text_at(app.bot, text=body, chat_id=chat_id,
+                                            message_id=message_id, parse_mode="HTML")
+            except BadRequest as e:
+                if "not modified" in str(e).lower():
+                    log.info("update.marker.delivered chat=%s from=%s to=%s via=edit "
+                             "(unchanged)", chat_id, frm, to)
+                    return
+                # Deleted, or too old to edit: post it instead, as before.
+                log.info("update.marker.edit_failed chat=%s detail=%s", chat_id, e)
+            else:
+                if result is MUTED:
+                    log.info("update.marker.skipped_muted chat=%s", chat_id)
+                    return
+                # SKIPPED cannot happen for this ESSENTIAL (blocking) edit
+                # today; if it ever does, nothing went out, so send.
+                if result is not SKIPPED:
+                    log.info("update.marker.delivered chat=%s from=%s to=%s via=edit",
+                             chat_id, frm, to)
+                    return
         await _send_with_retry(app.bot, chat_id=chat_id, text=text)
-        log.info("update.marker.delivered chat=%s from=%s to=%s", chat_id, frm, to)
+        log.info("update.marker.delivered chat=%s from=%s to=%s via=send", chat_id, frm, to)
     except FloodMuted as e:
         log.info("update.marker.skipped_muted retry_after=%ss", e.retry_after)
     except asyncio.CancelledError:
         raise
     except Exception:
         log.warning("update marker delivery failed", exc_info=True)
+
+
+def _marker_message_ref(marker: dict, chat_id: int) -> tuple[int, str] | None:
+    """``(message_id, prefix_html)`` of the message the marker says to
+    edit, or ``None``. Only a message in the marker's own chat (the one
+    that asked for the update) is ever edited."""
+    ref = marker.get("message")
+    if not isinstance(ref, dict):
+        return None
+    message_id, ref_chat = ref.get("message_id"), ref.get("chat_id")
+    if not all(isinstance(v, int) and not isinstance(v, bool)
+               for v in (message_id, ref_chat)) or ref_chat != chat_id:
+        return None
+    prefix = ref.get("prefix")
+    return message_id, prefix if isinstance(prefix, str) else ""
 
 
 __all__ = [

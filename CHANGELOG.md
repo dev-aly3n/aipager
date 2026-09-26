@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **An aipager update restarts when it says it will.** The restart after an update (and the voice extra's **Restart daemon now**) was a 5 s systemd timer that systemd was free to fire up to a minute late, and did (44 s). It now fires within a second of its delay.
+
+### Changed
+- **One message for an aipager update, with no countdown.** The status message now reads `⏳ aipager 0.7.17 → 0.7.18 installed, restarting…` (or `…installed, restarting when the current turn ends` while a turn is still running), and after the restart the new daemon edits that same message into `✅ aipager updated 0.7.17 → 0.7.18, 2 sessions re-adopted` instead of posting a second one. If that message was deleted or can no longer be edited, the outcome is posted as a new message, as before. Updating only Claude Code is unchanged.
+- **The Mini App shows the restart instead of "reopen in a minute".** After an aipager update, **Settings → Updates** shows a turning lantern reading "Restarting aipager…", waits out the seconds the daemon is down, and ends on "Updated to 0.7.18, 2 sessions re-adopted." After about 2 minutes without an answer it says "Still restarting, reopen the app in a moment." With aipager's own tunnel (a new address on every restart), the open page cannot reach the new daemon, so it says "aipager restarted, reopen the app once the chat says it is updated" with a **Close the app** button. A page open for more than 5 minutes can no longer sign in, and says "Reopen the app to see the update's result."
+
 ## [0.7.18] - 2026-09-25
 
 ### Changed

@@ -165,7 +165,10 @@ def test_check_payload_has_documented_shape(team_server, run_async):
 
 def test_get_payload_is_the_job_only_and_looks_nothing_up(team_server, run_async, world):
     _, body = _call(team_server, run_async, "get", "/api/update", _hdr(ADMIN))
-    assert body == {"job": None}
+    # Roadmap 8.45 added the in-process restart-watch fields (was exactly
+    # {"job": None}); still nothing looked up.
+    assert body["job"] is None
+    assert set(body) == {"job", "version", "restarted", "url_changes_on_restart"}
     assert world.urls == [] and world.calls == []
 
 

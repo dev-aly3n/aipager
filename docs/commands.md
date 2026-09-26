@@ -383,7 +383,7 @@ success.
 `🔄 Restart daemon now`:
 
 - A daemon running as the systemd-user service schedules a detached
-  `systemctl --user restart aipager.service` 5 s later, in a transient
+  `systemctl --user restart aipager.service` 5 s later (a timer accurate to 1 s), in a transient
   unit outside the daemon's own cgroup, so it survives the daemon's
   exit. It refuses while the service unit would kill your sessions
   (`KillMode` other than `process`), and tells you to run
@@ -439,11 +439,9 @@ Updating aipager (**Update aipager**, or the second half of **Update both**, whi
    restart. Installer output is shown only in a private chat; a group
    gets "output in the daemon log".
 5. If a turn started during the upgrade, it waits again.
-6. It schedules a detached `systemctl --user restart aipager.service`
-   5 s later: `aipager A → B installed. Restarting in 5 s…`. The new
-   daemon then posts `✅ aipager updated A → B, N sessions re-adopted`
-   (and `⚠️ Not back: …` for any session that did not come back) to the
-   chat that asked.
+6. It schedules a detached `systemctl --user restart aipager.service` 5 s later (a timer accurate to 1 s), and the status message reads `⏳ aipager A → B installed, restarting…`. While step 5 waits, it reads `⏳ aipager A → B installed, restarting when the current turn ends`. After the restart, the new daemon edits that same message into `✅ aipager updated A → B, N sessions re-adopted` (and `⚠️ Not back: …` for any session that did not come back). If the message was deleted or can no longer be edited, it posts the outcome as a new message to the chat that asked.
+
+In the Mini App, **Settings → Updates** shows "Restarting aipager…" with a turning lantern until the new daemon answers, then "Updated to B" with the re-adopted count. It never shows a countdown. After about 2 minutes without an answer (never before the old daemon could have reported a restart that did not happen) it says "Still restarting, reopen the app in a moment." With aipager's managed tunnel, the app's address changes on every restart, so once the old daemon stops answering the open page says "aipager restarted, reopen the app once the chat says it is updated"; close it and open it again from the chat's menu button or `/app`. The app's sign-in lasts 5 minutes, so a page opened longer ago says "Reopen the app to see the update's result." instead.
 
 The daemon restarts itself only when it runs as the systemd-user
 service **and** that unit has `KillMode=process`. Otherwise aipager is
@@ -455,7 +453,7 @@ kill), the `launchctl kickstart` command on macOS, or "restart your
 Only one update runs at a time, across `/update`, the Mini App's
 **Settings → Updates** block (the same Check for updates button, the same one Update button, the same job) and
 `aipager update` on the command line. That includes the seconds between
-"Restarting in 5 s…" and the restart itself: `/update` answers that
+"installed, restarting…" and the restart itself: `/update` answers that
 aipager is about to restart, the Mini App offers no buttons, and the
 voice extra's **Restart daemon now** refuses while an update runs or
 waits to restart. If the daemon is still alive two minutes after

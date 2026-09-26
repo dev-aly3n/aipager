@@ -1260,6 +1260,11 @@ CSS = """
     white-space: pre-line;
     background: var(--fill);
   }
+  /* The restart after an update: a working lantern whose ring turns. */
+  .restart-row { display: flex; align-items: center; gap: var(--s3); }
+  .restart-text { min-width: 0; }
+  .lamp-spin { --pct: 28; }
+  .lamp-spin::before { animation: spin 1.1s linear infinite; }
   .updates-actions { display: flex; flex-wrap: wrap; gap: var(--s2); margin-top: var(--s3); }
   .updates-actions .primary { flex: 1 1 auto; }
   .updates-again {
@@ -1319,6 +1324,7 @@ CSS = """
   @keyframes beacon { from { opacity: 0.55; } to { opacity: 1; } }
   @keyframes swell { from { transform: scale(0.85); } to { transform: scale(1.15); } }
   @keyframes skel { to { transform: translateX(100%); } }
+  @keyframes spin { to { transform: rotate(1turn); } }
   @keyframes view-in { from { opacity: 0; transform: translateY(8px); } }
   @keyframes rise-in { from { opacity: 0; transform: translateY(6px) scale(0.98); } }
   @keyframes sheet-in { from { opacity: 0; transform: translateY(16px) scale(0.98); } }
@@ -1337,6 +1343,7 @@ CSS = """
     .beacon::before, .beacon-dot { animation: none; opacity: 1; }
     .bead-running { animation: none; transform: none; }
     .skel::after { animation: none; display: none; }
+    .lamp-spin::before { animation: none; }
     section:not([hidden]), .is-new, .menu, .modal, .overlay, .grp-body { animation: none; }
     #notice, .tile, .fab, .primary, .chip, .grp-caret::before, .chev { transition: none; }
     .tile:active, .primary:active, .fab:active, .pill:active, .chip:active,

@@ -397,8 +397,10 @@ def test_every_infinite_animation_stops_under_reduced_motion():
 
 
 def test_the_only_continuous_loops_are_state_signals():
+    # Roadmap 8.45 added "spin": the turning ring of the "Restarting
+    # aipager…" lantern, shown only while an update restart is awaited.
     names = set(re.findall(r"animation:\s*(\S+)[^;]*infinite", _CODE))
-    assert names <= {"breathe", "beacon", "swell", "skel"}, names
+    assert names <= {"breathe", "beacon", "swell", "skel", "spin"}, names
 
 
 def test_reduced_motion_keeps_the_beacon_and_halo_visible():
@@ -409,7 +411,7 @@ def test_reduced_motion_keeps_the_beacon_and_halo_visible():
 
 def test_loops_animate_only_opacity_and_transform():
     """Composited properties only: no layout and no animated shadow."""
-    for name in ("breathe", "beacon", "swell", "skel"):
+    for name in ("breathe", "beacon", "swell", "skel", "spin"):
         m = re.search(r"@keyframes " + name + r"\s*\{(.*?)\}\s*\}", _CODE, re.DOTALL)
         assert m, name
         props = set(re.findall(r"([a-z-]+):", m.group(1)))

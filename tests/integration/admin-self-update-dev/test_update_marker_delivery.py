@@ -42,7 +42,7 @@ def test_missing_sessions_are_named(env, run):
     env.add_session("claude-web", "web", Status.UNKNOWN)   # not re-adopted
     _marker(env)
     _deliver(env, run)
-    assert env.sent[0]["text"] == ("✅ aipager updated 0.7.13 → 0.7.14, 1 sessions "
+    assert env.sent[0]["text"] == ("✅ aipager updated 0.7.13 → 0.7.14, 1 session "
                                    "re-adopted\n⚠️ Not back: web")
 
 

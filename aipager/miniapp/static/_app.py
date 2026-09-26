@@ -2339,9 +2339,171 @@ APP_JS = r"""
     el.hidden = !text;
   }
 
+  // ---- the restart after an aipager update (roadmap 8.45) --------------
+  // No countdown: a loading state until the NEW daemon answers with the
+  // version the job installed. The old daemon goes away mid-watch, so a
+  // failed fetch or an error page (the tunnel's 502) means "not back yet".
+  // A managed quick tunnel gets a new hostname every run: once the old
+  // one is gone this page can never reach the new daemon, so it says so
+  // instead of spinning.
+  // About 2 minutes, but never before the old daemon's own watchdog (5 s
+  // delay + 120 s, update_flow.RESTART_WATCHDOG_SECONDS) can have said the
+  // restart did not happen, plus one full poll interval.
+  var RESTART_GIVE_UP_MS = 140000;
+  var RESTART_POLL_FIRST_MS = 1500;
+  var RESTART_POLL_MAX_MS = 8000;
+  // Polls, after the new version answered, to wait for its re-adopted count.
+  var RESTART_COUNT_POLLS = 3;
+  var restartWatch = null;
+
+  function beginRestartWatch(job, data) {
+    if (restartWatch && restartWatch.jobId === job.id) { return; }
+    stopRestartWatch();
+    var inst = job.installed || {};
+    restartWatch = {
+      jobId: job.id, to: String(inst.to || ""),
+      from: String(inst.from || (data && data.version) || ""),
+      urlChanges: !!(data && data.url_changes_on_restart),
+      startedAt: Date.now(), delay: RESTART_POLL_FIRST_MS, timer: null,
+      state: "restarting", version: "", restarted: null, countPolls: 0, downs: 0
+    };
+    scheduleRestartPoll(restartWatch);
+  }
+
+  function stopRestartWatch() {
+    if (restartWatch && restartWatch.timer) { clearTimeout(restartWatch.timer); }
+    restartWatch = null;
+  }
+
+  function scheduleRestartPoll(w) {
+    w.timer = setTimeout(function () { restartPoll(w); }, w.delay);
+    w.delay = Math.min(Math.round(w.delay * 1.5), RESTART_POLL_MAX_MS);
+  }
+
+  function endRestartWatch(w, state) {
+    w.state = state;
+    w.timer = null;
+    renderUpdates();
+  }
+
+  function restartPoll(w) {
+    if (restartWatch !== w) { return; }
+    w.timer = null;
+    fetch("/api/update", { method: "GET", cache: "no-store",
+                           headers: { "X-Telegram-Init-Data": initData } })
+      .then(function (res) {
+        if (res.status === 401 || res.status === 403) { return { kind: "refused" }; }
+        if (!res.ok) { return { kind: "down" }; }
+        return res.json().then(function (d) { return { kind: "up", data: d }; },
+                               function () { return { kind: "down" }; });
+      }, function () { return { kind: "down" }; })
+      .then(function (r) {
+        if (restartWatch !== w) { return; }
+        // A refused sign-in: the page's initData is too old (5 min).
+        if (r.kind === "refused") { endRestartWatch(w, "refused"); return; }
+        if (r.kind === "down") {
+          // Twice in a row, so one flaky fetch is not taken for the restart.
+          w.downs += 1;
+          if (w.urlChanges && w.downs >= 2) { endRestartWatch(w, "reopen"); return; }
+        } else {
+          w.downs = 0;
+          if (restartAnswered(w, r.data)) { return; }
+        }
+        if (Date.now() - w.startedAt >= RESTART_GIVE_UP_MS) {
+          endRestartWatch(w, w.state === "updated" ? "updated" : "slow");
+          return;
+        }
+        scheduleRestartPoll(w);
+      });
+  }
+
+  // True when the watch is over (or handed back to the job view).
+  function restartAnswered(w, d) {
+    var job = (d && d.job) || null;
+    if (job && job.id === w.jobId) {
+      if (job.phase === "restart_scheduled") { return false; }   // the old daemon, still up
+      // The old daemon gave up on the restart: show what the job says.
+      stopRestartWatch();
+      updatesData = { job: job };
+      renderUpdates();
+      return true;
+    }
+    // A daemon that does not know this job: the new one.
+    updatesData = { job: job };
+    w.version = String((d && d.version) || "");
+    var done = d && d.restarted;
+    if (done && (!w.to || done.to === w.to)) { w.restarted = done; }
+    var arrived = w.to ? w.version === w.to : (w.version !== "" && w.version !== w.from);
+    if (!arrived) { endRestartWatch(w, "other"); return true; }
+    if (w.restarted || w.countPolls >= RESTART_COUNT_POLLS) {
+      endRestartWatch(w, "updated");
+      return true;
+    }
+    // Back on the new version; its re-adopted count follows a moment later.
+    w.countPolls += 1;
+    if (w.state !== "updated") { w.state = "updated"; renderUpdates(); }
+    return false;
+  }
+
+  function restartText(w) {
+    if (w.state === "restarting") { return "Restarting aipager\u2026"; }
+    if (w.state === "updated") {
+      var text = "Updated to " + (w.version || w.to);
+      var done = w.restarted;
+      if (done && typeof done.readopted === "number") {
+        text += ", " + done.readopted + (done.readopted === 1 ? " session" : " sessions") +
+          " re-adopted";
+      }
+      text += ".";
+      if (done && done.missing && done.missing.length) {
+        text += "\nNot back: " + done.missing.join(", ");
+      }
+      return text;
+    }
+    if (w.state === "other") {
+      return "aipager restarted but is running " + (w.version || "an unknown version") +
+        (w.to ? ", not " + w.to : "") + ".";
+    }
+    if (w.state === "reopen") {
+      return "aipager restarted, reopen the app once the chat says it is updated. " +
+        "Close it, then open it again from the chat (the menu button or /app).";
+    }
+    if (w.state === "refused") { return "Reopen the app to see the update's result."; }
+    return "Still restarting, reopen the app in a moment.";
+  }
+
+  function renderRestartWatch(jobEl, actions) {
+    var w = restartWatch;
+    jobEl.hidden = false;
+    jobEl.innerHTML = "";
+    var row = make("div", "restart-row");
+    if (w.state === "restarting") {
+      row.appendChild(make("span", "lamp lamp-sm lamp-work lamp-spin"));
+    }
+    var text = make("span", "restart-text");
+    text.textContent = plain(restartText(w));
+    row.appendChild(text);
+    jobEl.appendChild(row);
+    var ended = w.state === "reopen" || w.state === "slow" || w.state === "refused";
+    if (ended && tg && typeof tg.close === "function") {
+      actions.appendChild(updateButton("Close the app", function () {
+        try { tg.close(); } catch (e) { /* stay open */ }
+      }, "updates-again"));
+    }
+    if (w.state !== "restarting") {
+      actions.appendChild(updateButton("Check for updates", function () {
+        stopRestartWatch();
+        checkUpdates();
+      }, "updates-again"));
+    }
+  }
+
   function renderUpdates() {
     var block = document.getElementById("updates-block");
-    if (!updatesData && !updatesChecking && !updatesCheck) { block.hidden = true; return; }
+    if (!updatesData && !updatesChecking && !updatesCheck && !restartWatch) {
+      block.hidden = true;
+      return;
+    }
     block.hidden = false;
     var job = (updatesData && updatesData.job) || null;
     var running = job && !UPDATE_TERMINAL[job.phase];
@@ -2354,12 +2516,12 @@ APP_JS = r"""
     setLine("updates-source", "");
     setLine("updates-restart", "");
     setLine("updates-summary", "");
+    if (job && job.phase === "restart_scheduled") { beginRestartWatch(job, updatesData); }
+    if (restartWatch) { renderRestartWatch(jobEl, actions); return; }
     if (job) {
       jobEl.hidden = false;
       var lines = [];
-      if (job.phase === "restart_scheduled") {
-        lines.push("Restarting. Reopen the app in a minute.");
-      } else if (job.phase === "waiting_for_idle") {
+      if (job.phase === "waiting_for_idle") {
         lines.push("Waiting for every session to go idle before the restart.");
       } else if (job.phase === "gate_timeout") {
         lines.push("Sessions are still busy. Wait more, restart now, or cancel?");
@@ -2374,8 +2536,6 @@ APP_JS = r"""
       jobEl.textContent = "";
     }
 
-    // A pending restart holds the update lock: offer nothing to start.
-    if (job && job.phase === "restart_scheduled") { return; }
     if (running) {
       var id = job.id;
       if (job.phase === "gate_timeout") {

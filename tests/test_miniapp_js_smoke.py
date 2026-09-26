@@ -1223,6 +1223,75 @@ def test_updates_offer_nothing_while_a_restart_is_pending(node_bin, tmp_path):
     assert "ok: pending restart -> no buttons, no poll" in proc.stdout
 
 
+def test_updates_restart_shows_loading_then_the_new_version(node_bin, tmp_path):
+    """Roadmap 8.45: after "installed, restarting…" the block shows a
+    spinner reading "Restarting aipager…" (never a countdown), rides out
+    the daemon being down (a failed fetch, the tunnel's 502 page) with a
+    growing poll interval, and ends on "Updated to 0.7.18" plus the
+    re-adopted count once the new daemon has it."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_restart_back")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: restarting -> down/502 tolerated -> Updated to 0.7.18 + count" in proc.stdout
+
+
+def test_updates_restart_gives_up_after_two_minutes(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_restart_give_up")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: never back -> gives up after ~2 min with reopen hint" in proc.stdout
+
+
+def test_updates_restart_on_a_quick_tunnel_says_reopen(node_bin, tmp_path):
+    """A managed quick tunnel gets a new hostname every run (seen live on
+    2026-09-25), so the old page can never reach the new daemon: once the
+    old one stops answering, say so instead of spinning."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_restart_tunnel")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: quick tunnel gone -> reopen the app, no spinning" in proc.stdout
+
+
+def test_updates_restart_back_on_the_old_version_says_so(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_restart_wrong_version")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: back on the old version -> says so, not Updated" in proc.stdout
+
+
+def test_updates_restart_refused_sign_in_says_reopen(node_bin, tmp_path):
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_restart_refused")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: 401 after restart -> reopen the app" in proc.stdout
+
+
+def test_updates_restart_waits_for_the_old_daemons_watchdog(node_bin, tmp_path):
+    """Review rev-iter1-001: a restart that never happens is reported by
+    the old daemon at 125 s; the page must not give up before that."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_restart_watchdog_late")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: watchdog at 125 s -> the job's own outcome, not Still restarting" \
+        in proc.stdout
+
+
+def test_updates_restart_that_never_happened_shows_the_job(node_bin, tmp_path):
+    """The old daemon's watchdog gives up on a restart that did not happen:
+    the watch hands back to the job's own outcome."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, "updates_restart_watchdog")
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert "ok: restart never happened -> the job's own outcome" in proc.stdout
+
+
 def test_updates_start_refused_while_shutting_down_says_so(node_bin, tmp_path):
     """Review rev-iter2-002: a start during a daemon shutdown is a 503
     ``shutting_down``, and the page tells the admin why."""

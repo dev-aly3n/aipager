@@ -748,7 +748,22 @@ class MiniAppServer:
         if not self.bot._is_update_admin(user_id, scope_chat_id):
             log.info("miniapp: update status rejected (403) — not an admin")
             return web.json_response({"error": "forbidden"}, status=403)
-        return web.json_response({"job": self.bot.updates.snapshot()})
+        from aipager import config, self_update
+        from aipager.miniapp.tunnel import get_managed_tunnel_url
+
+        manager = self.bot.updates
+        return web.json_response({
+            "job": manager.snapshot(),
+            # In-process, no lookup: the restart watch compares it with the
+            # version the job installed to know the new daemon answered.
+            "version": self_update.running_version(),
+            # Set in the daemon an update restarted into (8.45).
+            "restarted": manager.last_restart,
+            # A managed quick tunnel gets a new hostname every run, so a
+            # page open across the restart can never reach the new daemon.
+            "url_changes_on_restart": (not config.MINIAPP_PUBLIC_URL
+                                       and bool(get_managed_tunnel_url())),
+        })
 
     async def _handle_update_post(self, request):
         from aiohttp import web

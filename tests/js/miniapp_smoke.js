@@ -494,11 +494,30 @@ if (SCENARIO.indexOf("updates_") === 0) {
     phase: "starting", blockers: [], summary: "", started_at: 1 } };
   const JOB_PHASE = { updates_poll_running: "upgrading",
                       updates_no_poll_terminal: "done",
-                      updates_restart_pending: "restart_scheduled" }[SCENARIO];
+                      updates_restart_pending: "restart_scheduled",
+                      updates_restart_back: "restart_scheduled",
+                      updates_restart_give_up: "restart_scheduled",
+                      updates_restart_tunnel: "restart_scheduled",
+                      updates_restart_wrong_version: "restart_scheduled",
+                      updates_restart_watchdog: "restart_scheduled",
+                      updates_restart_refused: "restart_scheduled",
+                      updates_restart_watchdog_late: "restart_scheduled" }[SCENARIO];
   if (JOB_PHASE) {
     FIXTURES["/api/update"].job = { id: 7, kind: "aipager", phase: JOB_PHASE,
       blockers: [], summary: JOB_PHASE === "done" ? "aipager is already up to date" : "",
       started_at: 1 };
+  }
+  // Roadmap 8.45: the job says which version it installed, the old daemon
+  // says which it runs, and whether this page's URL survives the restart.
+  if (JOB_PHASE === "restart_scheduled") {
+    FIXTURES["/api/update"].job.installed = { from: "0.7.17", to: "0.7.18" };
+    FIXTURES["/api/update"].job.summary = "\u23f3 aipager 0.7.17 \u2192 0.7.18 installed, restarting\u2026";
+    FIXTURES["/api/update"].version = "0.7.17";
+    FIXTURES["/api/update"].restarted = null;
+    FIXTURES["/api/update"].url_changes_on_restart = SCENARIO === "updates_restart_tunnel";
+  }
+  if (SCENARIO === "updates_restart_tunnel") {
+    webApp.close = () => { global.__closed = true; };
   }
 }
 
@@ -1563,6 +1582,251 @@ function driveUpdatesRestartPending() {
   }, 10);
 }
 
+// ---- the restart after an aipager update (roadmap 8.45) ----------------
+// The page's timers are driven by hand here: every setTimeout the page
+// makes is queued, and `tick()` runs the oldest after moving the clock.
+// Each poll of /api/update answers from `replies` (in order); a reply is
+// "down" (fetch rejects), a status number (an error page, not JSON), or a
+// JSON body.
+function restartHarness(replies) {
+  const queue = [];
+  let now = 1000000;
+  Date.now = () => now;
+  global.setTimeout = (f, ms) => { timeoutCalls.push(ms); queue.push({ f, ms }); return queue.length; };
+  const baseFetch = global.fetch;
+  let polls = 0;
+  global.fetch = (url, opts) => {
+    // The first GET is loadUpdates' own (from FIXTURES); the rest are the watch's.
+    if (url === "/api/update" && fetchCalls.some(c => c.url === "/api/update")) {
+      fetchCalls.push({ url, method: "GET" });
+      polls += 1;
+      const r = typeof replies === "function" ? replies(now)
+        : (replies.length ? replies.shift() : "down");
+      if (r === "down") { return Promise.reject(new TypeError("Failed to fetch")); }
+      if (typeof r === "number") {
+        return Promise.resolve({ ok: false, status: r,
+          json: () => Promise.reject(new SyntaxError("Unexpected token <")) });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(r) });
+    }
+    return baseFetch(url, opts);
+  };
+  function jobText() { return byId["updates-job"].textContent; }
+  function spinning() {
+    for (const n of byId["updates-job"].walk()) {
+      if (n.className && n.className.indexOf("lamp-spin") !== -1) return true;
+    }
+    return false;
+  }
+  function tick(done) {
+    const t = queue.shift();
+    if (!t) { fail("no timer queued; job text: " + JSON.stringify(jobText())); }
+    now += t.ms;
+    t.f();
+    setTimeoutReal(done, 5);
+  }
+  return { queue, tick, jobText, spinning, polls: () => polls,
+           advance: (ms) => { now += ms; } };
+}
+
+function noCountdown(text) {
+  if (/\d+\s*s\b|in \d|seconds?/.test(text)) fail("a countdown is shown: " + JSON.stringify(text));
+}
+
+function driveUpdatesRestartBack() {
+  const NEW = { job: null, version: "0.7.18", restarted: null, url_changes_on_restart: false };
+  const DONE = { job: null, version: "0.7.18",
+                 restarted: { from: "0.7.17", to: "0.7.18", readopted: 2, missing: [] },
+                 url_changes_on_restart: false };
+  const OLD = JSON.parse(JSON.stringify(FIXTURES["/api/update"]));
+  const h = restartHarness([OLD, "down", 502, NEW, DONE]);
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    if (h.jobText() !== "Restarting aipager\u2026") fail("loading state: " + JSON.stringify(h.jobText()));
+    if (!h.spinning()) fail("no spinner in the loading state");
+    if (byId["updates-actions"].children.length) fail("buttons offered while restarting");
+    noCountdown(h.jobText());
+    h.tick(() => {                         // old daemon still up
+      if (h.jobText() !== "Restarting aipager\u2026") fail("old daemon answer: " + h.jobText());
+      h.tick(() => {                       // fetch error: the daemon is down
+        if (h.jobText() !== "Restarting aipager\u2026") fail("down: " + h.jobText());
+        h.tick(() => {                     // the tunnel's 502 page
+          if (h.jobText() !== "Restarting aipager\u2026") fail("502: " + h.jobText());
+          h.tick(() => {                   // the new daemon, count not yet known
+            if (h.jobText() !== "Updated to 0.7.18.") fail("new version: " + JSON.stringify(h.jobText()));
+            if (h.spinning()) fail("still spinning once updated");
+            h.tick(() => {                 // ...and its count
+              const text = h.jobText();
+              if (text !== "Updated to 0.7.18, 2 sessions re-adopted.")
+                fail("updated: " + JSON.stringify(text));
+              if (h.queue.length) fail("still polling once the count arrived");
+              const delays = timeoutCalls.slice(-5);
+              if (!(delays[1] > delays[0] && delays[2] > delays[1]))
+                fail("no backoff: " + JSON.stringify(delays));
+              const labels = byId["updates-actions"].children.map(c => c.textContent);
+              if (JSON.stringify(labels) !== JSON.stringify(["Check for updates"]))
+                fail("after the update: " + JSON.stringify(labels));
+              noCountdown(text);
+              console.log("ok: restarting -> down/502 tolerated -> Updated to 0.7.18 + count");
+              process.exit(0);
+            });
+          });
+        });
+      });
+    });
+  }, 10);
+}
+
+function driveUpdatesRestartGiveUp() {
+  const h = restartHarness([]);             // every poll: down
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    let rounds = 0;
+    const step = () => {
+      const text = h.jobText();
+      if (text === "Still restarting, reopen the app in a moment.") {
+        if (h.queue.length) fail("still polling after giving up");
+        const elapsed = timeoutCalls.reduce((a, b) => a + b, 0);
+        // About 2 minutes, but after the old daemon's 125 s watchdog.
+        if (elapsed < 130000 || elapsed > 160000) fail("gave up after " + elapsed + " ms");
+        if (h.spinning()) fail("still spinning after giving up");
+        const labels = byId["updates-actions"].children.map(c => c.textContent);
+        if (labels.indexOf("Check for updates") === -1)
+          fail("no way out after giving up: " + JSON.stringify(labels));
+        console.log("ok: never back -> gives up after ~2 min with reopen hint");
+        process.exit(0);
+      }
+      if (text !== "Restarting aipager\u2026") fail("while down: " + JSON.stringify(text));
+      if (++rounds > 60) fail("never gave up");
+      h.tick(step);
+    };
+    step();
+  }, 10);
+}
+
+function driveUpdatesRestartTunnel() {
+  const OLD = JSON.parse(JSON.stringify(FIXTURES["/api/update"]));
+  const h = restartHarness(["down", OLD, "down", "down"]);
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    if (h.jobText() !== "Restarting aipager\u2026") fail("loading state: " + h.jobText());
+    // One flaky fetch while the old daemon is still up is not the restart.
+    h.tick(() => h.tick(() => h.tick(() => {
+      if (h.jobText() !== "Restarting aipager\u2026")
+        fail("one failed fetch ended the watch: " + JSON.stringify(h.jobText()));
+    h.tick(() => {
+      const text = h.jobText();
+      if (text.indexOf("aipager restarted, reopen the app") !== 0)
+        fail("changed tunnel: " + JSON.stringify(text));
+      if (text.indexOf("/app") === -1) fail("no reopen hint: " + JSON.stringify(text));
+      if (text.indexOf("once the chat says it is updated") === -1)
+        fail("no when-to-reopen hint: " + JSON.stringify(text));
+      if (h.queue.length) fail("still polling a tunnel that is gone");
+      const close = byId["updates-actions"].children.find(c => c.textContent === "Close the app");
+      if (!close) fail("no Close the app button");
+      close.click();
+      if (!global.__closed) fail("Close the app did not close");
+      console.log("ok: quick tunnel gone -> reopen the app, no spinning");
+      process.exit(0);
+    });
+    })));
+  }, 10);
+}
+
+function driveUpdatesRestartWrongVersion() {
+  const h = restartHarness(["down", { job: null, version: "0.7.17", restarted: null,
+                                      url_changes_on_restart: false }]);
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    h.tick(() => h.tick(() => {
+      const text = h.jobText();
+      if (text !== "aipager restarted but is running 0.7.17, not 0.7.18.")
+        fail("wrong version back: " + JSON.stringify(text));
+      if (text.indexOf("Updated") !== -1) fail("claimed an update that did not land");
+      if (h.queue.length) fail("still polling");
+      console.log("ok: back on the old version -> says so, not Updated");
+      process.exit(0);
+    }));
+  }, 10);
+}
+
+function driveUpdatesRestartRefused() {
+  // The page's sign-in is no longer accepted (a 401 from the new daemon):
+  // polling on cannot help, reopening the app gives it a fresh one.
+  const h = restartHarness(["down", 401]);
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    h.tick(() => h.tick(() => {
+      const text = h.jobText();
+      // initData is only good for 5 min: a 401 says nothing about the restart.
+      if (text !== "Reopen the app to see the update's result.")
+        fail("401 during the watch: " + JSON.stringify(text));
+      if (h.queue.length) fail("still polling after a 401");
+      if (byId["updates-block"].hidden) fail("the block was hidden");
+      console.log("ok: 401 after restart -> reopen the app");
+      process.exit(0);
+    }));
+  }, 10);
+}
+
+// The restart never happened, and the old daemon's watchdog only says so
+// at 125 s (5 s delay + 120 s). The page must still be waiting then.
+function driveUpdatesRestartWatchdogLate() {
+  const old = FIXTURES["/api/update"];
+  const failed = JSON.parse(JSON.stringify(old));
+  failed.job.phase = "failed";
+  failed.job.summary = "\u26a0\ufe0f The scheduled restart did not happen";
+  let t0 = null;
+  // The old daemon's watchdog reports the failure at 125 s after
+  // scheduling; answering at 125 s into the watch is the later, harder case.
+  const h = restartHarness((now) =>
+    (now - t0 < 125000 ? JSON.parse(JSON.stringify(old)) : failed));
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    t0 = Date.now();
+    let rounds = 0;
+    const step = () => {
+      const text = h.jobText();
+      if (text.indexOf("The scheduled restart did not happen") !== -1) {
+        if (h.spinning()) fail("still spinning");
+        console.log("ok: watchdog at 125 s -> the job's own outcome, not Still restarting");
+        process.exit(0);
+      }
+      if (text !== "Restarting aipager\u2026")
+        fail("gave up before the watchdog: " + JSON.stringify(text));
+      if (++rounds > 60) fail("never handed back");
+      h.tick(step);
+    };
+    step();
+  }, 10);
+}
+
+function driveUpdatesRestartWatchdog() {
+  const failed = JSON.parse(JSON.stringify(FIXTURES["/api/update"]));
+  failed.job.phase = "failed";
+  failed.job.summary = "\u26a0\ufe0f The scheduled restart did not happen";
+  const h = restartHarness([failed]);
+  api.showView("settings");
+  api.loadSettings();
+  setTimeoutReal(() => {
+    h.tick(() => {
+      const text = h.jobText();
+      if (text.indexOf("The scheduled restart did not happen") === -1)
+        fail("the old daemon's give-up not shown: " + JSON.stringify(text));
+      if (h.spinning()) fail("still spinning");
+      if (h.queue.filter(t => t.ms !== 3000).length) fail("the restart watch kept polling");
+      console.log("ok: restart never happened -> the job's own outcome");
+      process.exit(0);
+    });
+  }, 10);
+}
+
 // ---- a start refused because the daemon is stopping (503) -------------
 function driveUpdatesShuttingDown() {
   api.loadSettings();
@@ -1688,6 +1952,13 @@ const DRIVERS = {
   updates_poll_running: driveUpdatesPollRunning,
   updates_no_poll_terminal: driveUpdatesNoPollTerminal,
   updates_restart_pending: driveUpdatesRestartPending,
+  updates_restart_back: driveUpdatesRestartBack,
+  updates_restart_give_up: driveUpdatesRestartGiveUp,
+  updates_restart_tunnel: driveUpdatesRestartTunnel,
+  updates_restart_wrong_version: driveUpdatesRestartWrongVersion,
+  updates_restart_watchdog: driveUpdatesRestartWatchdog,
+  updates_restart_refused: driveUpdatesRestartRefused,
+  updates_restart_watchdog_late: driveUpdatesRestartWatchdogLate,
   updates_hidden: driveUpdatesHidden,
   updates_render: driveUpdatesRender,
   updates_check_then_update: driveUpdatesCheckThenUpdate,

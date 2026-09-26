@@ -94,7 +94,9 @@ def test_watchdog_gives_up_stops_timer_releases_lock_clears_marker(env, run):
 
     async def scenario():
         await _scheduled(env)
-        unit = env.schedule_calls()[0][3].removeprefix("--unit=")
+        # Found by prefix: roadmap 8.45 put AccuracySec before --unit.
+        unit = next(a for a in env.schedule_calls()[0]
+                    if a.startswith("--unit=")).removeprefix("--unit=")
         await env.until(lambda: env.manager.snapshot()["phase"] == "failed")
         assert _lock_free() is True
         assert env.manager.busy is False

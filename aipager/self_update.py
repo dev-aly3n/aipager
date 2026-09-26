@@ -901,7 +901,10 @@ def schedule_restart(plan: RestartPlan) -> tuple[bool, str]:
         return False, "systemd-run or systemctl not found"
     unit = (f"aipager-update-restart-{int(time.time())}-{os.getpid()}-"
             f"{next(_UNIT_SEQ)}")
+    # AccuracySec: a transient timer defaults to 1min, so "--on-active=5s"
+    # may fire anywhere in the next minute (44 s late, live, roadmap 8.45).
     argv = [systemd_run, "--user", f"--on-active={RESTART_DELAY_SECONDS}s",
+            "--timer-property=AccuracySec=1s",
             f"--unit={unit}", "--collect", "--quiet",
             systemctl, "--user", "restart", UNIT_NAME]
     res = run_command(argv, timeout=SCHEDULE_TIMEOUT_SECONDS, env=_scrub_env())

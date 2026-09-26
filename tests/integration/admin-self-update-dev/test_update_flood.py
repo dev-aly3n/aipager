@@ -43,7 +43,8 @@ def test_heartbeat_edits_are_skippable_ornament(env, run, monkeypatch):
     beats = [e for e in env.edits if "still working" in e["text"]]
     assert beats and all(e.get("rate_limit_args") == ornament for e in beats)
     outcome = env.edits[-1]
-    assert "Restarting in 5 s" in outcome["text"]
+    # Roadmap 8.45: no countdown (was "Restarting in 5 s").
+    assert "installed, restarting…" in outcome["text"]
     assert "rate_limit_args" not in outcome   # ESSENTIAL: the default class
 
 

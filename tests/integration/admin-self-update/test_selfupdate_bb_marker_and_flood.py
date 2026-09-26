@@ -39,6 +39,9 @@ def _new_daemon(mk_bot, h, alive=("alpha", "beta"), gone=()):
     bot = mk_bot(reg)
     bot._app.bot.send_message = AsyncMock(
         side_effect=lambda *a, **kw: h.status_message(kw.get("chat_id", h.DM), 802))
+    # Roadmap 8.45: the new daemon edits the old one's status message.
+    bot._app.bot.edit_message_text = AsyncMock(
+        side_effect=lambda *a, **kw: h.status_message(kw.get("chat_id", h.DM), 700))
     return bot, reg
 
 
@@ -60,11 +63,13 @@ def test_new_daemon_posts_updated_a_to_b_with_count(restarted, mk_bot, h, run_as
 
 
 def test_marker_message_goes_to_requesting_chat(restarted, mk_bot, h, run_async):
+    """Roadmap 8.45: the outcome now EDITS the job's status message in the
+    requesting chat (was: a new send_message there, a second message)."""
     bot, reg = _new_daemon(mk_bot, h)
     run_async(update_flow.deliver_update_marker(bot, reg))
-    call = bot._app.bot.send_message.await_args
-    chat = call.kwargs.get("chat_id", call.args[0] if call.args else None)
-    assert chat == h.DM
+    call = bot._app.bot.edit_message_text.await_args
+    assert call.kwargs["chat_id"] == h.DM and call.kwargs["message_id"] == 700
+    bot._app.bot.send_message.assert_not_awaited()
 
 
 def test_marker_deleted_after_delivery(restarted, mk_bot, h, run_async):
@@ -77,7 +82,9 @@ def test_marker_delivered_only_once(restarted, mk_bot, h, run_async):
     bot, reg = _new_daemon(mk_bot, h)
     run_async(update_flow.deliver_update_marker(bot, reg))
     run_async(update_flow.deliver_update_marker(bot, reg))
-    assert bot._app.bot.send_message.await_count == 1
+    # Roadmap 8.45: delivered by one edit (was: one send_message).
+    assert bot._app.bot.edit_message_text.await_count == 1
+    assert bot._app.bot.send_message.await_count == 0
 
 
 def test_missing_session_is_reported_not_back(restarted, mk_bot, h, run_async):
@@ -90,7 +97,7 @@ def test_missing_session_is_reported_not_back(restarted, mk_bot, h, run_async):
 def test_missing_session_lowers_the_count(restarted, mk_bot, h, run_async):
     bot, reg = _new_daemon(mk_bot, h, alive=("alpha",), gone=("beta",))
     run_async(update_flow.deliver_update_marker(bot, reg))
-    assert "1 sessions re-adopted" in _sent(bot, h) or "1 session re-adopted" in _sent(bot, h)
+    assert "1 session re-adopted" in _sent(bot, h) or "1 session re-adopted" in _sent(bot, h)
 
 
 def test_unknown_status_session_is_not_counted_readopted(restarted, mk_bot, h, run_async):

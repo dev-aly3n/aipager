@@ -452,7 +452,10 @@ def test_page_load_makes_no_version_lookup(env, run):
         return r.status, await r.json()
     status, body = _call(env, run, fn)
     assert status == 200
-    assert body == {"job": None}
+    # Roadmap 8.45 added the in-process restart-watch fields (was exactly
+    # {"job": None}); still nothing looked up.
+    assert body["job"] is None
+    assert set(body) == {"job", "version", "restarted", "url_changes_on_restart"}
     assert env.fetches == [] and env.calls == []
 
 

@@ -37,6 +37,17 @@ def test_voice_restart_schedules_detached_restart(env, run):
     assert "Restarting in 5 s" in q.edit_message_text.await_args.args[0]
 
 
+def test_voice_restart_timer_fires_on_time(env, run):
+    """Roadmap 8.45: "Restarting in 5 s" is only true with AccuracySec=1s;
+    the default (1min) fired the update restart ~44 s late."""
+    q = _query(env)
+
+    async def scenario():
+        await env.bot._restart_daemon(q)
+    run(scenario)
+    assert "--timer-property=AccuracySec=1s" in env.schedule_calls()[0]
+
+
 def test_voice_restart_refuses_on_control_group_killmode(env, run):
     env.killmode = "control-group"
     env.add_session("claude-dev", "dev")

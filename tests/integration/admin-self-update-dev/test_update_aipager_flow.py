@@ -22,7 +22,8 @@ def test_happy_path_schedules_one_detached_restart(env, run):
     assert len(env.upgrade_calls()) == 1
     assert env.upgrade_calls()[0] == ["/abs/bin/pipx", "upgrade", "aipager"]
     assert len(env.schedule_calls()) == 1
-    assert "0.7.13 → 0.7.14 installed. Restarting in 5 s" in env.last_text()
+    # Roadmap 8.45: no countdown (was "installed. Restarting in 5 s").
+    assert "0.7.13 → 0.7.14 installed, restarting…" in env.last_text()
     marker = json.loads(self_update.UPDATE_MARKER_PATH.read_text())
     assert marker["from"] == "0.7.13" and marker["to"] == "0.7.14"
     assert marker["chat_id"] == env.chat_id
@@ -275,7 +276,8 @@ def test_both_runs_claude_first_then_aipager(env, run):
     assert claude_at < upgrade_at
     text = env.last_text()
     assert "Claude Code</b> 2.1.281 → 2.1.290" in text
-    assert "Restarting in 5 s" in text
+    # Roadmap 8.45: no countdown (was "Restarting in 5 s").
+    assert "installed, restarting…" in text
 
 
 def test_core_log_lines_carry_the_job_id(env, run, caplog):

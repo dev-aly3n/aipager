@@ -235,13 +235,32 @@ def test_schedule_restart_argv_is_detached_single_restart(monkeypatch):
     assert ok is True
     (argv, timeout, env), = seen
     assert argv[0] == "/usr/bin/systemd-run" and os.path.isabs(argv[0])
-    assert argv[1:3] == ["--user", "--on-active=5s"]
-    assert argv[3] == f"--unit={unit}" and unit.startswith("aipager-update-restart-")
-    assert argv[4:6] == ["--collect", "--quiet"]
-    assert argv[6:] == ["/usr/bin/systemctl", "--user", "restart", "aipager.service"]
+    assert argv[1:4] == ["--user", "--on-active=5s", "--timer-property=AccuracySec=1s"]
+    assert argv[4] == f"--unit={unit}" and unit.startswith("aipager-update-restart-")
+    assert argv[5:7] == ["--collect", "--quiet"]
+    assert argv[7:] == ["/usr/bin/systemctl", "--user", "restart", "aipager.service"]
     assert argv.count("restart") == 1 and "start" not in argv
     assert timeout == self_update.SCHEDULE_TIMEOUT_SECONDS
     assert "CLAUDE_TG_BOT_TOKEN" not in env
+
+
+def test_schedule_restart_timer_fires_within_a_second_of_its_delay(monkeypatch):
+    """Roadmap 8.45: a transient timer defaults to AccuracySec=1min, so an
+    ``--on-active=5s`` restart fired ~44 s late on the operator's box. The
+    timer must carry ``AccuracySec=1s`` (a systemd-run timer property),
+    and nothing may randomise it."""
+    monkeypatch.setattr(install_source, "resolve_tool", lambda n: f"/usr/bin/{n}")
+    seen: list = []
+    monkeypatch.setattr(self_update, "_run_command",
+                        lambda argv, **k: seen.append(list(argv))
+                        or CommandResult(0, "", False, None))
+    ok, _unit = schedule_restart(RestartPlan("systemd", True))
+    assert ok is True
+    (argv,) = seen
+    assert "--timer-property=AccuracySec=1s" in argv
+    # A timer property, before the command: after it, systemctl would get it.
+    assert argv.index("--timer-property=AccuracySec=1s") < argv.index("/usr/bin/systemctl")
+    assert not any("RandomizedDelaySec" in a for a in argv)
 
 
 def test_schedule_restart_reports_failure(monkeypatch):

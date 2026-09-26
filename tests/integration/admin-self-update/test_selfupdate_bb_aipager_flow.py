@@ -165,9 +165,12 @@ def test_marker_written_before_restart_is_scheduled(world, personal_bot, h, run_
 
 
 def test_happy_path_reports_a_to_b_restarting(world, personal_bot, h, run_async):
+    """Roadmap 8.45: "installed, restarting…" with no countdown (was:
+    "installed. Restarting in 5 s…", which the timer did not honour)."""
     _, msg, _ = _ap(personal_bot, h, run_async)
-    assert f"aipager {h.RUNNING} → {h.LATEST} installed. Restarting" in \
-        h.all_text(personal_bot, msg).replace("<b>", "").replace("</b>", "")
+    text = h.all_text(personal_bot, msg).replace("<b>", "").replace("</b>", "")
+    assert f"aipager {h.RUNNING} → {h.LATEST} installed, restarting…" in text
+    assert "Restarting in" not in text
 
 
 def test_lock_stays_held_once_restart_is_scheduled(world, personal_bot, h, run_async):
