@@ -559,6 +559,10 @@ def test_new_prompt_inside_a_job_carries_its_agents_and_keeps_the_record(
     (old,) = [c for c in r.chat.cards.values() if c["reply_to"] == 1]
     assert old["deleted"] is False and old["stop"] is False
     assert "launch it step 0" in old["text"]
+    # Settled while the agent still runs: said so, with no frozen counter
+    # (review rev-iter2-002).
+    assert "pipeline-runner (still running)" in old["text"]
+    assert "pipeline-runner ·" not in old["text"]
     assert r.chat.count("deleteMessage") == 0
     assert "a1" in sess.active_subagents
 
@@ -1010,7 +1014,7 @@ def _owned(r) -> bool:
         or sess.job_background_open())
 
 
-def test_stop_while_a_job_card_moves_leaves_no_orphan(replay, vloop,
+def test_stop_while_a_job_card_is_replaced_leaves_no_orphan(replay, vloop,
                                                       monkeypatch):
     """R2, the 09:25:51-09:25:56 shape: a prompt to an idle session with a
     job open; the turn's Stop lands while the card step is still busy with

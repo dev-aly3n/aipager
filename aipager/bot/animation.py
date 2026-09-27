@@ -688,8 +688,16 @@ def _build_sections(
                 # agent it represents is still active. Once settled it is
                 # pushed as "agent-settled" above (the `elif done:` branch),
                 # not merged into an ordinary run.
-                _push("agent-run",
-                      f"⏳ {_mono(_agent_live_row(info, _card_unit(sess, final)))}",
+                if final:
+                    # A card settled while its agent still runs (a newer
+                    # turn's card carries the agent on): a snapshot, so no
+                    # counter that would sit frozen under the settled
+                    # status (review rev-iter2-002).
+                    row = (f"{_SUBAGENT_MARK}{info.get('type') or 'agent'}"
+                           " (still running)")
+                else:
+                    row = _agent_live_row(info, _card_unit(sess, final))
+                _push("agent-run", f"⏳ {_mono(row)}",
                       list(info.get("tools", [])))
             else:
                 _push("run", f"⏳ {_mono(summary)}")
@@ -3387,7 +3395,7 @@ class AnimationMixin:
                         carried_agents = dict(sess.active_subagents)
                         log.info(
                             "[%s] new turn inside an open job (%d agents) "
-                            "— its agents move to the new card", sess.label,
+                            "- its agents move to the new card", sess.label,
                             len(carried_agents))
                     else:
                         log.warning(
