@@ -41,7 +41,9 @@ from aipager.bot import flood, flood_budget
 from aipager.bot.flood_budget import BudgetRateLimiter
 
 CHAT = 256113222
-NAME = "claude-aipager_boss"
+#: A name no live session on a developer's machine can carry, so nothing
+#: here can ever meet a real session's socket.
+NAME = "claude-sendnow_harness"
 PREFIX = "[via Telegram · @owner]\n"
 
 #: The REAL ``_post``, captured before conftest's autouse
@@ -356,7 +358,7 @@ class Replay:
         self.updates: asyncio.Queue = asyncio.Queue()
         self.tasks: list[asyncio.Task] = []
         self.sess = bot.registry.get_or_create(NAME)
-        self.sess.label = "aipager_boss"
+        self.sess.label = "sendnow_harness"
         self.sess.scope_chat_id = CHAT
         self.sess.scope_kind = "dm"
         self.sess.transcript_path = transcript
@@ -580,12 +582,15 @@ class PtyRecorder:
 
 
 @pytest.fixture
-def pty(monkeypatch, vloop):
+def pty(monkeypatch, vloop, tmp_path):
     """Record terminal writes instead of running ``dtach -p``, and stub the
-    session process calls /kill, /restart and startup make."""
+    session process calls /kill, /restart and startup make. Socket paths
+    point into this test's own directory, where no socket ever exists:
+    /restart's poll sees the session gone without reading /tmp."""
     from aipager.dtach import inject
 
     rec = PtyRecorder(vloop.time)
+    monkeypatch.setattr(inject, "SOCK_PREFIX", str(tmp_path / "claude-dtach-"))
 
     async def _run(args, stdin=b"", timeout=5):
         rec.writes.append((rec.clock(), bytes(stdin)))

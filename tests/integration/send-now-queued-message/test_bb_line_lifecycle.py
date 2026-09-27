@@ -14,7 +14,6 @@ the event; rows allow 10 s (virtual) for "line deleted".
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -418,7 +417,7 @@ def test_sc14_confirmed_kill_deletes_the_line(replay, vloop, pty):
     async def scenario():
         w = r.worker()
         line = await _lined(r)
-        await r.cmd("_handle_kill_cmd", "/kill aipager_boss")
+        await r.cmd("_handle_kill_cmd", "/kill sendnow_harness")
         await r.tap(9901, data=_confirm_data(r, "kill-confirm"))
         ok = await r.wait_deleted(line["id"], DELETE_WINDOW)
         w.cancel()
@@ -471,14 +470,8 @@ def test_sc16_session_end_clear_or_resume_keeps_the_line(
     assert _run(vloop, scenario()) is False
 
 
-def test_sc17_restart_deletes_the_line(replay, vloop, pty, monkeypatch):
+def test_sc17_restart_deletes_the_line(replay, vloop, pty):
     r = replay
-    # The socket poll: this host may run a real session of the same name,
-    # so its socket is answered as gone (filesystem boundary).
-    monkeypatch.setattr(
-        "aipager.bot.session_ops.Path",
-        MagicMock(return_value=MagicMock(
-            is_socket=MagicMock(return_value=False))))
 
     async def _restart_cmd(update, ctx):
         await session_parity.handle_restart_cmd(r.bot, update, ctx)
@@ -488,7 +481,7 @@ def test_sc17_restart_deletes_the_line(replay, vloop, pty, monkeypatch):
     async def scenario():
         w = r.worker()
         line = await _lined(r)
-        await r.cmd("_t_restart_cmd", "/restart aipager_boss")
+        await r.cmd("_t_restart_cmd", "/restart sendnow_harness")
         await r.tap(9902, data=_confirm_data(r, "restart-confirm"))
         ok = await r.wait_deleted(line["id"], DELETE_WINDOW)
         w.cancel()
