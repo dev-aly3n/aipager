@@ -127,6 +127,9 @@ def test_run_daemon_happy_path_personal_mode(monkeypatch):
     monkeypatch.setattr("aipager.config.CHAT_ID", "12345")
     monkeypatch.setattr("aipager.config.OBSERVER_BOTS", [])
     bot, hook, monitor, registry, _, _ = _patch_components(monkeypatch)
+    order: list[str] = []
+    registry.save.side_effect = lambda: order.append("save")
+    bot.stop.side_effect = lambda *a, **k: order.append("bot.stop")
 
     loop = asyncio.new_event_loop()
     loop.run_until_complete(daemon._run_daemon("bot_username"))
@@ -140,8 +143,10 @@ def test_run_daemon_happy_path_personal_mode(monkeypatch):
     monitor.stop.assert_called_once()
     hook.stop.assert_called_once()
     bot.stop.assert_awaited_once()
-    # State persisted
-    registry.save.assert_called_once()
+    # State persisted — and again once the bot has stopped, so a busy card
+    # whose send landed during the shutdown is on disk for the next
+    # daemon to close (roadmap 8.55).
+    assert order == ["save", "bot.stop", "save"]
 
 
 def test_run_daemon_wires_the_pinned_bar_to_the_monitor_tick(monkeypatch):
@@ -255,7 +260,7 @@ def test_run_daemon_never_refuses_to_launch_when_auth_is_absent(monkeypatch):
 
     bot.start.assert_awaited_once()
     monitor.start.assert_awaited_once()
-    registry.save.assert_called_once()
+    assert registry.save.call_count == 2
 
 
 def test_run_daemon_no_notice_task_when_provenance_is_none(monkeypatch):
@@ -417,7 +422,7 @@ def test_run_daemon_miniapp_port_in_use_does_not_crash_daemon(monkeypatch, caplo
     monitor.stop.assert_called_once()
     hook.stop.assert_called_once()
     bot.stop.assert_awaited_once()
-    registry.save.assert_called_once()
+    assert registry.save.call_count == 2
     assert any("Mini App" in r.getMessage() for r in caplog.records)
     # …and no launch button is published for a server that is not
     # listening. An empty URL clears whatever a previous run left, so a

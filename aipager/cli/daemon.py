@@ -485,6 +485,10 @@ async def _run_daemon(bot_username: str) -> None:
     if observers:
         await observers.stop()
     await bot.stop()
+    # Again, now that nothing sends any more: a busy card whose send was in
+    # flight at the first save landed since, and the next daemon can close
+    # it only if it is on disk (roadmap 8.55).
+    registry.save()
     log.info("Goodbye")
 
 

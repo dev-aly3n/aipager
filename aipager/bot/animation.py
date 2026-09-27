@@ -153,6 +153,16 @@ FIRST_TICK_DELAY = 1.5
 # (see CLAUDE.md). Same pattern as notify._finish_sleep.
 _lazy_card_sleep = asyncio.sleep
 
+# Card starts waiting on a previous turn's finish (roadmap 8.57), kept
+# referenced until done so the loop cannot collect them mid-wait.
+_GATED_CARDS: set = set()
+
+# The longest a NEWER turn's card waits for the previous turn's finish to
+# dispose of that turn's card and answer (roadmap 8.57). The finish is
+# normally done in well under this even behind a flood-delayed answer; the
+# bound only keeps a wedged finish from leaving a turn cardless.
+FINISH_GATE_TIMEOUT = 30.0
+
 # The sentinel `stream_last_rendered` carries while a chat is in minimal
 # mode (8.27 R3). It is deliberately NOT the rendered text: the text
 # contains the session label, so comparing against the text would re-send
@@ -2101,51 +2111,60 @@ class AnimationMixin:
         call always running strictly after ``_stop_animation``.
         """
         async with sess.animate_lock:
-            old_msg_id = sess.busy_msg_id
-            if not old_msg_id or old_msg_id <= 0:
-                # Nothing live (already gone, or a -1 claim from a
-                # concurrently-interrupted send) — the caller's own
-                # layout fallback (a standalone answer under the now-
-                # correct trigger_msg_id) covers this degraded case.
-                return
-            new_msg_id = await self.send_busy(
-                sess, reply_to=target_msg_id, disable_notification=True,
+            await self._reanchor_busy_card_locked(
+                sess, target_msg_id, final=final)
+
+    async def _reanchor_busy_card_locked(
+        self, sess: TrackedSession, target_msg_id: int, *, final: bool,
+    ) -> None:
+        """:meth:`_reanchor_busy_card`'s body, for a caller that already
+        holds ``sess.animate_lock`` (the turn-card step re-anchoring its
+        own turn's card, roadmap 8.57)."""
+        old_msg_id = sess.busy_msg_id
+        if not old_msg_id or old_msg_id <= 0:
+            # Nothing live (already gone, or a -1 claim from a
+            # concurrently-interrupted send) — the caller's own
+            # layout fallback (a standalone answer under the now-
+            # correct trigger_msg_id) covers this degraded case.
+            return
+        new_msg_id = await self.send_busy(
+            sess, reply_to=target_msg_id, disable_notification=True,
+        )
+        if not new_msg_id:
+            log.warning("[%s] re-anchor send failed — keeping the stale card",
+                        sess.label)
+            return
+        sess.busy_msg_id = new_msg_id  # mutates the SAME "busy" stack entry
+        self.registry.track_message(
+            new_msg_id, sess.name, resolve_chat_id_int(sess) or 0,
+        )
+        verb = FINAL_VERB if final else "Working"
+        waiting = (sess.status != Status.BUSY) if not final else False
+        # NOT through `_card_edit_due`, deliberately — an intended
+        # exemption from the turn-age cadence (8.30 Q3), like the
+        # resume, paused-line and final edits: it is user-driven (one
+        # per consumed mid-turn message) and fills in the card this
+        # re-anchor has just sent, which otherwise shows a bare frame
+        # until the next due tick — up to a minute in an old turn.
+        try:
+            if await self._edit_busy_rich(
+                sess, verb, final=final, waiting=waiting,
+            ) is None:
+                self._stop_animation(sess)
+        except Exception:
+            log.debug("[%s] re-anchor timeline render failed", sess.label,
+                      exc_info=True)
+        try:
+            await self._app.bot.delete_message(
+                chat_id=resolve_chat_id(sess), message_id=old_msg_id,
+                # ORNAMENT (8.26 R3): card housekeeping. Leaving a
+                # stale card behind is cosmetic; taking an answer's
+                # token to remove it is not.
+                rate_limit_args=_rl_args(priority=PRIORITY_ORNAMENT),
             )
-            if not new_msg_id:
-                log.warning("[%s] re-anchor send failed — keeping the stale card",
-                            sess.label)
-                return
-            sess.busy_msg_id = new_msg_id  # mutates the SAME "busy" stack entry
-            self.registry.track_message(
-                new_msg_id, sess.name, resolve_chat_id_int(sess) or 0,
-            )
-            verb = FINAL_VERB if final else "Working"
-            waiting = (sess.status != Status.BUSY) if not final else False
-            # NOT through `_card_edit_due`, deliberately — an intended
-            # exemption from the turn-age cadence (8.30 Q3), like the
-            # resume, paused-line and final edits: it is user-driven (one
-            # per consumed mid-turn message) and fills in the card this
-            # re-anchor has just sent, which otherwise shows a bare frame
-            # until the next due tick — up to a minute in an old turn.
-            try:
-                if await self._edit_busy_rich(
-                    sess, verb, final=final, waiting=waiting,
-                ) is None:
-                    self._stop_animation(sess)
-            except Exception:
-                log.debug("[%s] re-anchor timeline render failed", sess.label,
-                          exc_info=True)
-            try:
-                await self._app.bot.delete_message(
-                    chat_id=resolve_chat_id(sess), message_id=old_msg_id,
-                    # ORNAMENT (8.26 R3): card housekeeping. Leaving a
-                    # stale card behind is cosmetic; taking an answer's
-                    # token to remove it is not.
-                    rate_limit_args=_rl_args(priority=PRIORITY_ORNAMENT),
-                )
-            except Exception:
-                log.debug("[%s] re-anchor: old card delete failed (left behind)",
-                          sess.label, exc_info=True)
+        except Exception:
+            log.debug("[%s] re-anchor: old card delete failed (left behind)",
+                      sess.label, exc_info=True)
 
     @staticmethod
     def _card_elapsed_unit(sess: TrackedSession, now: float | None = None) -> str:
@@ -2903,6 +2922,69 @@ class AnimationMixin:
             log.info("[%s] superseded card %s: full-log attachment failed",
                      label, old_msg_id, exc_info=True)
 
+    async def _settle_orphan_card(self, sess: TrackedSession) -> None:
+        """Settle a busy card nothing owns any more (roadmap 8.55/8.57 R2):
+        its turn has ended and no path is left that would finish it, so it
+        would otherwise show "Thinking…" and a live Stop button for good —
+        a button whose tap now interrupts whatever turn runs next.
+
+        Dispatched by the session monitor once ``card_orphaned`` has held
+        for ``ORPHAN_CARD_GRACE_SECONDS``; re-checked here under the card
+        lock. The layout decides, as for any finish (R6): ``card`` renders
+        it final in place (no Stop button), ``replace`` and ``merged``
+        delete it — their finish already sent the answer on its own. A
+        refused call leaves the card for the next sweep; a gone message
+        simply ends it.
+        """
+        async with sess.animate_lock:
+            if not sess.card_orphaned(time.monotonic(), own_notify=1,
+                                      own_lock=True):
+                return
+            msg_id = sess.busy_msg_id
+            self._stop_animation(sess)
+            if sess.card_turn_seq is None and self._app:
+                # A card restored from disk (an adoption that no hook
+                # confirmed): this process has none of its turn's rows, so
+                # it gets the restart's own settled line, as at startup.
+                outcome = await self._recover_busy_message(
+                    self._app.bot, sess.name, sess, {sess.name})
+                self.registry.mark_dirty()
+                log.warning("[%s] restored busy card %s settled (%s) — no "
+                            "hook confirmed its turn after the restart",
+                            sess.label, msg_id, outcome)
+                return
+            layout = preferences.resolve_preferences(
+                sess.scope_chat_id, sess.preference_overrides(),
+            ).layout
+            settled = False
+            if layout == "card":
+                try:
+                    settled = await self._edit_busy_rich(
+                        sess, FINAL_VERB, final=True) is not False
+                except Exception:
+                    log.debug("[%s] orphaned card %s: final render failed",
+                              sess.label, msg_id, exc_info=True)
+            elif self._app:
+                try:
+                    await self._app.bot.delete_message(
+                        chat_id=resolve_chat_id(sess), message_id=msg_id,
+                        rate_limit_args=_rl_args(priority=PRIORITY_ORNAMENT),
+                    )
+                    settled = True
+                except Exception:
+                    log.debug("[%s] orphaned card %s: delete failed",
+                              sess.label, msg_id, exc_info=True)
+            if not settled:
+                log.info("[%s] orphaned busy card %s not settled yet — "
+                         "retried on a later sweep", sess.label, msg_id)
+                return
+            sess.busy_msg_id = None
+            sess.busy_card_trigger = None
+            self.registry.mark_dirty()
+            log.warning("[%s] orphaned busy card %s settled (%s) — its turn "
+                        "had ended and nothing else would have closed it",
+                        sess.label, msg_id, layout)
+
     def _cancel_lazy_card(self, sess: TrackedSession) -> None:
         """Forget a self-woken turn's deferred card (roadmap 8.32): clear
         the mark and cancel its timer — unless the caller IS that timer,
@@ -3088,10 +3170,44 @@ class AnimationMixin:
                 log.info("[%s] Busy message sent late (msg_id=%d, trigger=%s, "
                          "%s)", sess.label, msg_id, sess.trigger_msg_id, reason)
 
+    async def _wait_finish_gate(self, sess: TrackedSession,
+                                gate=None) -> None:
+        """Wait, at most ``FINISH_GATE_TIMEOUT``, for the finish path that
+        holds *gate* (``sess.finish_gate`` by default) to let newer turns'
+        cards — or a later turn's finish — through."""
+        if gate is None:
+            gate = sess.finish_gate
+        if not isinstance(gate, asyncio.Event) or gate.is_set():
+            return
+        try:
+            await asyncio.wait_for(gate.wait(), timeout=FINISH_GATE_TIMEOUT)
+        except asyncio.TimeoutError:
+            log.warning("[%s] a turn's finish did not release the card in "
+                        "%.0fs — going ahead anyway", sess.label,
+                        FINISH_GATE_TIMEOUT)
+
     async def _send_busy_and_animate(
         self, sess: TrackedSession, *, lazy: bool = False,
+        turn: int | None = None, _after_gate: bool = False,
     ) -> None:
-        """Send 'Working...' message and start spinner animation.
+        """Ensure THIS turn's busy card: the one step every turn start goes
+        through (roadmap 8.57, "one card per turn").
+
+        Every path that starts or joins a turn calls this — a Telegram
+        prompt, the terminal's UserPromptSubmit, the finish path's queued
+        pick-up (``_start_queued_turn``), a drained held message, a
+        self-woken turn (``lazy``), a retry — and it is idempotent per turn.
+        ``turn`` is the turn the request is for, ``sess.turn_seq`` when the
+        caller does not say, read BEFORE any await: a request that waited
+        (for the card lock, or for a previous turn's finish) while its turn
+        ended or was superseded sends nothing, and a second request for the
+        turn that already has a card re-uses it — re-anchored when the
+        reply target moved in between (the queued pick-up case), resumed
+        when its animation died. Only a request for a turn with no card of
+        its own sends one. Before 8.57 the decision was made from
+        "is an animation running" and a one-shot flag that every IDLE→BUSY
+        flip re-armed, so two requests for one turn, seconds apart behind a
+        flood-delayed send, both looked like a new turn and both sent.
 
         Serializes concurrent callers via ``sess.animate_lock`` so two
         coroutines (e.g. ``_handle_message`` and a ``UserPromptSubmit``
@@ -3108,8 +3224,36 @@ class AnimationMixin:
         whichever comes first; a turn that ends before either sends only
         its answer.
         """
+        if turn is None:
+            turn = sess.turn_seq
+        if (not _after_gate
+                and sess.finish_gate is not None
+                and sess.finishing_turn is not None
+                and sess.finishing_turn < turn
+                and sess.card_turn_seq != turn):
+            # A newer turn's card waits for the previous turn's finish to
+            # dispose of that turn's card, answer and reply target (roadmap
+            # 8.57). Racing it, this card was the one the finish settled,
+            # or the one it stopped animating, or its reply target was the
+            # one the finish cleared. Bounded: a wedged finish never keeps
+            # a turn cardless for longer than FINISH_GATE_TIMEOUT. The wait
+            # runs as its own task: callers include Telegram's update
+            # handlers, which PTB runs one at a time, so waiting here would
+            # hold every later update (a Stop tap, /stop) behind the finish.
+            gate = sess.finish_gate
+
+            async def _after_finish() -> None:
+                await self._wait_finish_gate(sess, gate)
+                await self._send_busy_and_animate(sess, lazy=lazy, turn=turn,
+                                                  _after_gate=True)
+
+            task = asyncio.create_task(_after_finish())
+            _GATED_CARDS.add(task)
+            task.add_done_callback(_GATED_CARDS.discard)
+            return
         if (not lazy and sess.lazy_card_at and sess.status is Status.BUSY
-                and not sess.job_reclaim_pending):
+                and not sess.job_reclaim_pending
+                and turn == sess.turn_seq):
             # A message sent into a self-woken turn that has not earned its
             # card yet (roadmap 8.32). Before 8.32 the live card made this
             # call a no-op; with no card on the stack it would fall into the
@@ -3128,7 +3272,8 @@ class AnimationMixin:
             await self._send_lazy_card(sess, reason="message mid-turn")
             return
         if (sess.busy_card_owed and sess.status is Status.BUSY
-                and not sess.job_reclaim_pending):
+                and not sess.job_reclaim_pending
+                and turn == sess.turn_seq):
             # The same turn, whose card the flood gate refused (roadmap
             # 8.17c) — typically the prompt's own UserPromptSubmit hook
             # arriving after the Telegram path already started the turn.
@@ -3142,11 +3287,67 @@ class AnimationMixin:
             await self._send_owed_card(sess, reason="turn start repeated")
             return
         async with sess.animate_lock:
+            if turn != sess.turn_seq:
+                # The turn this request was made for is over and another
+                # has begun: its own request owns that turn's card.
+                log.info("[%s] card request for turn %d dropped — turn %d "
+                         "is current", sess.label, turn, sess.turn_seq)
+                return
+            if sess.closed_turn_seq is not None and turn <= sess.closed_turn_seq:
+                # This turn's finish already disposed of its card and
+                # answer: a card now would outlive the turn (roadmap 8.57
+                # R2, the card sent after its turn ended).
+                log.info("[%s] card request for turn %d dropped — that "
+                         "turn has finished", sess.label, turn)
+                return
             # Stale-reset/bail decision, keyed on the stack's TOP KIND
             # (design.md Decision 8) rather than raw task liveness — this
             # is the actual fix for "one stuck compacting card suppresses
             # every later busy card on this session forever".
             top_kind = sess.stack_top_kind()
+            same_turn = sess.card_turn_seq == turn
+            # A new turn inside a background job whose agents are still
+            # running (roadmap 8.56): the job keeps its ONE card, moved
+            # down to this turn's message, with the agents' rows carried
+            # over — instead of the card being closed where it stands and
+            # a second one opened.
+            job_card: int | None = None
+            job_card_trigger: int | None = None
+            carried_agents: dict = {}
+            if same_turn and top_kind == "busy" and sess.busy_msg_id:
+                # This turn already has its card (roadmap 8.57 R1): never
+                # a second one. The reply target may have moved since it
+                # was sent (the finish path's queued pick-up names the
+                # prompt Claude really took) — then the card follows it.
+                if (sess.busy_msg_id > 0 and sess.trigger_msg_id is not None
+                        and sess.busy_card_trigger != sess.trigger_msg_id):
+                    await self._reanchor_busy_card_locked(
+                        sess, sess.trigger_msg_id, final=False)
+                elif (sess.busy_card_should_animate()
+                        and not sess.animation_running()):
+                    log.info("[%s] busy-card animation not running — "
+                             "resuming (turn start repeated)", sess.label)
+                    self._start_animation(sess)
+                return
+            if (same_turn and top_kind is None and not lazy
+                    and not sess.lazy_card_at and not sess.busy_card_owed):
+                # This turn's card was lost (a failed send, a deleted
+                # message): send it again WITHOUT the turn-start reset,
+                # which already ran — the rows, prose and clock recorded
+                # since belong on it. (A card deferred or owed is handled
+                # by its own path above.) Only while the turn runs: a card
+                # for a turn that has stopped would be an orphan.
+                if sess.status is not Status.BUSY:
+                    log.info("[%s] card request for turn %d dropped — the "
+                             "turn is not running", sess.label, turn)
+                    return
+                sess.busy_msg_id = -1
+                msg_id = await self._open_busy_card(sess)
+                if msg_id:
+                    log.info("[%s] Busy message sent again (msg_id=%d, "
+                             "trigger=%s, turn=%d)", sess.label, msg_id,
+                             sess.trigger_msg_id, turn)
+                return
             if top_kind == "busy":
                 if sess.job_reclaim_pending:
                     # A genuinely new prompt is starting while a PREVIOUS
@@ -3178,16 +3379,30 @@ class AnimationMixin:
                     # grace window) DID transition IDLE→BUSY, set the
                     # flag, and reclaims here.
                     sess.job_reclaim_pending = False
-                    log.warning(
-                        "[%s] new turn starting while a previous job is "
-                        "still open (%d agents, continuation=%s, grace=%s) "
-                        "— reclaiming the waiting card",
-                        sess.label, len(sess.active_subagents),
-                        sess.job_continuation_active,
-                        bool(sess.job_grace_until),
-                    )
-                    await self._close_superseded_card(sess)
-                    sess.busy_msg_id = None
+                    if sess.active_subagents and sess.busy_msg_id > 0:
+                        # Its agents are still running (roadmap 8.56): the
+                        # job's one card moves down to this new turn's
+                        # message below, agents' rows carried over, rather
+                        # than being settled where it stands under a
+                        # second card.
+                        job_card = sess.busy_msg_id
+                        job_card_trigger = sess.busy_card_trigger
+                        carried_agents = dict(sess.active_subagents)
+                        log.info(
+                            "[%s] new turn inside an open job (%d agents) "
+                            "— the job's card moves to it", sess.label,
+                            len(carried_agents))
+                    else:
+                        log.warning(
+                            "[%s] new turn starting while a previous job "
+                            "is still open (%d agents, continuation=%s, "
+                            "grace=%s) — reclaiming the waiting card",
+                            sess.label, len(sess.active_subagents),
+                            sess.job_continuation_active,
+                            bool(sess.job_grace_until),
+                        )
+                        await self._close_superseded_card(sess)
+                        sess.busy_msg_id = None
                 elif sess.animate_task and not sess.animate_task.done():
                     return  # already showing busy — original race guard, unchanged
                 else:
@@ -3196,6 +3411,13 @@ class AnimationMixin:
                     # ended abnormally — reset so we can send a fresh card.
                     log.debug("[%s] Clearing stale busy_msg_id=%s (animation dead)",
                               sess.label, sess.busy_msg_id)
+                    if (sess.card_turn_seq is not None
+                            and sess.card_turn_seq != turn):
+                        # A card this process sent for an EARLIER turn,
+                        # still showing Stop: settle it before it is
+                        # forgotten, or it stays live in the chat for good
+                        # (roadmap 8.57 R2).
+                        await self._close_superseded_card(sess)
                     sess.busy_msg_id = None
             elif top_kind == "compacting":
                 # A compacting card is reclaimed ONLY once its deadline has
@@ -3256,6 +3478,9 @@ class AnimationMixin:
             sess.job_continuation_active = False
             sess.job_grace_until = 0.0
             sess.job_reclaim_pending = False
+            # The card (or the deferral, or the debt) from here on is THIS
+            # turn's (roadmap 8.57); the previous job is settled.
+            sess.card_turn_seq = turn
             sess.last_card_truncated = False
             sess.busy_started_at = time.monotonic()
             # A new turn is a new card: tier 0, seconds, no frame stamped.
@@ -3302,6 +3527,24 @@ class AnimationMixin:
             # A new turn starts clean: any earlier turn's deferred card is
             # void, whether or not this one defers its own.
             self._cancel_lazy_card(sess)
+            if job_card is not None:
+                # Roadmap 8.56: the open job's card, moved to this turn. Its
+                # running agents stay on it — as rows, and as the job state
+                # that keeps this turn's own Stop an interim one — and the
+                # card is re-sent under this turn's message (the old one is
+                # deleted), exactly one re-anchor for this turn start.
+                sess.busy_msg_id = job_card
+                sess.busy_card_trigger = job_card_trigger
+                for agent_id, info in carried_agents.items():
+                    info["history_idx"] = sess.record_tool(
+                        f"\U0001f916 {info.get('type', 'agent')}", False)
+                    sess.active_subagents[agent_id] = info
+                if (sess.trigger_msg_id is not None
+                        and sess.busy_card_trigger != sess.trigger_msg_id):
+                    await self._reanchor_busy_card_locked(
+                        sess, sess.trigger_msg_id, final=False)
+                self._start_animation(sess)
+                return
             if lazy:
                 # Roadmap 8.32: the reset above is this turn's; the card
                 # waits until it is earned. The -1 claim is released so
@@ -3325,5 +3568,6 @@ class AnimationMixin:
                 return
             msg_id = await self._open_busy_card(sess)
             if msg_id:
-                log.info("[%s] Busy message sent (msg_id=%d, trigger=%s)",
-                         sess.label, msg_id, sess.trigger_msg_id)
+                log.info("[%s] Busy message sent (msg_id=%d, trigger=%s, "
+                         "turn=%d)", sess.label, msg_id, sess.trigger_msg_id,
+                         turn)

@@ -13,7 +13,9 @@ import asyncio
 import functools
 import html as html_mod
 import logging
+import os
 import re
+import time
 from typing import TYPE_CHECKING
 
 from telegram import (
@@ -48,6 +50,8 @@ from aipager.config import (
     TELEGRAM_PRIVATE_MAX_RATE,
 )
 from aipager.state import TrackedSession
+from aipager.bot.transport import resolve_chat_id
+from aipager.transcript import turn_appears_complete
 
 # Pure-function helpers and constants live in aipager.bot.transport
 # now. Re-export the names this module uses internally so the
@@ -76,6 +80,11 @@ from aipager.bot.transport import (  # noqa: F401
     _TRUNC_SUFFIX,
     _truncate_diff,
 )
+
+# How long a busy card restored mid-turn is kept waiting for that turn's
+# next hook before the orphan sweep settles it (roadmap 8.55). A long
+# tool call fires no hook until it ends, so this is generous.
+CARD_ADOPT_SECONDS = 180.0
 
 if TYPE_CHECKING:
     pass
@@ -455,7 +464,9 @@ class LifecycleMixin:
                 else f"🔴 <b>{label}</b> · Session ended")
         try:
             await bot.edit_message_text(
-                text, chat_id=CHAT_ID, message_id=orphaned_id,
+                # The session's own chat: a group-scoped session's card
+                # id means nothing in the owner's DM.
+                text, chat_id=resolve_chat_id(sess), message_id=orphaned_id,
                 parse_mode="HTML",
             )
         except BadRequest as e:
@@ -488,19 +499,64 @@ class LifecycleMixin:
             return f"error:{type(e).__name__}"
         return "edited"
 
+    async def _delete_pending_cards(self, bot, sess: TrackedSession) -> None:
+        """Delete the cards a previous run owed a delete and never sent it
+        for (roadmap 8.55: a restart killed the deferred delete). Best
+        effort, once: a card that cannot be deleted now is left as sent."""
+        pending = [m for m in sess.pending_card_deletes if m]
+        sess.pending_card_deletes = []
+        for msg_id in pending:
+            try:
+                await bot.delete_message(chat_id=resolve_chat_id(sess),
+                                         message_id=msg_id)
+                log.info("[%s] card %d a restart left behind deleted",
+                         sess.label, msg_id)
+            except Exception as e:  # noqa: BLE001 - best effort
+                log.info("[%s] card %d a restart left behind could not be "
+                         "deleted: %s", sess.label, msg_id, e)
+
+    @staticmethod
+    def _turn_still_running(sess: TrackedSession) -> bool:
+        """Whether *sess*'s transcript shows a turn still in progress (the
+        prompt without its answer yet, or a tool call in flight). Only a
+        transcript that clearly ends a turn says no — the same
+        conservative reading the idle recovery uses."""
+        tp = sess.transcript_path
+        try:
+            has_turn = bool(tp) and os.path.getsize(tp) > 0
+        except OSError:
+            has_turn = False
+        # Adopt only on evidence: a missing or empty transcript says
+        # nothing about a turn, and the card is closed instead.
+        return has_turn and not turn_appears_complete(tp)
+
     async def recover_sessions(self) -> None:
         """Clean up orphaned busy messages from a previous daemon lifecycle.
 
         For every session with a persisted ``busy_msg_id`` left over from
         the previous daemon run, try to edit the message to a terminal
         state ("Daemon restarted" if the dtach session is still alive,
-        "Session ended" otherwise). Returns a summary log line so the
-        outcome of each daemon startup is visible in `aipager logs`.
+        "Session ended" otherwise) — which also takes its Stop button
+        away. Returns a summary log line so the outcome of each daemon
+        startup is visible in `aipager logs`.
+
+        Roadmap 8.55: a live session whose transcript shows its turn still
+        running keeps its card instead — ADOPTED for
+        ``CARD_ADOPT_SECONDS``: the turn's next hook resumes its animation
+        (the ``tool_use`` path) and its Stop finishes it as usual; with no
+        hook by then, the session monitor's orphan sweep settles it. And a
+        card a previous run owed a delete (``pending_card_deletes``) is
+        deleted now.
         """
         if not self._app:
             return
         bot = self._app.bot
         live_names = set(await inject.list_sessions())
+
+        for sess in self.registry.all_sessions().values():
+            if sess.pending_card_deletes:
+                await self._delete_pending_cards(bot, sess)
+                self.registry.mark_dirty()
 
         targets = [(name, sess) for name, sess in self.registry.all_sessions().items()
                    if sess.busy_msg_id and sess.busy_msg_id > 0]
@@ -515,6 +571,13 @@ class LifecycleMixin:
                 # to edit (which would just generate more Forbidden noise).
                 sess.busy_msg_id = None
                 outcomes["skipped_blocked"] = outcomes.get("skipped_blocked", 0) + 1
+                continue
+            if name in live_names and self._turn_still_running(sess):
+                sess.card_adopt_until = time.monotonic() + CARD_ADOPT_SECONDS
+                log.info("[%s] busy card %d adopted — the turn looks still "
+                         "running; its next hook resumes it", sess.label,
+                         sess.busy_msg_id)
+                outcomes["adopted"] = outcomes.get("adopted", 0) + 1
                 continue
             outcome = await self._recover_busy_message(bot, name, sess, live_names)
             key = outcome.split(":", 1)[0]  # "error:foo" → "error"

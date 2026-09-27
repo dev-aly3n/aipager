@@ -720,6 +720,41 @@ class TrackedSession:
     # this, which is exactly the mid-continuation case that must be
     # swallowed). Transient, never persisted.
     job_reclaim_pending: bool = False
+    # One card per turn (roadmap 8.57). `turn_seq` counts genuine turn
+    # starts: bumped by ``SessionRegistry.transition()`` in exactly the
+    # branch that sets ``job_reclaim_pending``, so a permission answer, a
+    # background job's re-entry or a BUSY→BUSY no-op never counts. Every
+    # card request carries the turn it was made for, and the card records
+    # the turn it belongs to (`card_turn_seq`, ``None`` for a card whose
+    # turn is unknown: restored from disk, or hand-built). A request for a
+    # turn that is no longer current, or whose finish already ran
+    # (`closed_turn_seq`), sends nothing; a second request for the card's
+    # own turn re-uses it. `finish_gate` is set (an ``asyncio.Event``)
+    # while a finish path for turn `finishing_turn` is disposing of that
+    # turn's card and answer: a NEWER turn's card waits for it rather than
+    # racing it for the same card, reply target and stream state.
+    # All transient.
+    turn_seq: int = 0
+    card_turn_seq: int | None = None
+    closed_turn_seq: int | None = None
+    finishing_turn: int | None = None
+    finish_gate: asyncio.Event | None = None
+    # How many ``notify()`` calls are running for this session, and when
+    # the session monitor first saw its card orphaned (live, Stop button
+    # up, no turn or job running, nothing animating it, nothing in
+    # flight). The orphan sweep settles such a card after
+    # ORPHAN_CARD_GRACE_SECONDS (roadmap 8.55/8.57). Transient.
+    notify_in_flight: int = 0
+    orphan_card_seen_at: float = 0.0
+    # A card restored from disk whose turn looked still running at startup
+    # is ADOPTED until this monotonic deadline (roadmap 8.55): the first
+    # hook of that turn resumes its animation, and the orphan sweep leaves
+    # it alone until then. Transient.
+    card_adopt_until: float = 0.0
+    # Cards owed a delete that has not landed yet (a deferred tool-less
+    # delete, an orphan's). Persisted, so a restart that kills the delete
+    # still removes the card at the next startup (roadmap 8.55).
+    pending_card_deletes: list[int] = field(default_factory=list)
     # Roadmap 8.41 — live background agents, apart from `active_subagents`
     # on purpose: that table is per-TURN card bookkeeping (a new card
     # clears it, /stop clears it, and job_background_open() reads it), while
@@ -1281,6 +1316,47 @@ class TrackedSession:
             return False
         return self.status == Status.BUSY or self.job_background_open()
 
+    def close_turn(self, turn: int | None = None) -> None:
+        """Mark *turn* (the current one by default) and every earlier turn
+        finished for the card step (roadmap 8.57): no card is opened for
+        them from here on. Never moves backwards — a slow finish of an
+        older turn must not reopen a newer turn that has already ended."""
+        turn = self.turn_seq if turn is None else turn
+        if self.closed_turn_seq is None or turn > self.closed_turn_seq:
+            self.closed_turn_seq = turn
+
+    def card_orphaned(self, now: float, *, own_notify: int = 0,
+                      own_lock: bool = False) -> bool:
+        """True when this session shows a live busy card (Stop button up)
+        that nothing owns any more (roadmap 8.55/8.57): no turn is running
+        (not BUSY, not INTERACTIVE), no background job is open, nothing is
+        animating it or opening a card, no event for the session is being
+        handled, no finish is disposing of it, and it is not a restored
+        card still inside its adoption window. Such a card was sent for a
+        turn that has ended, and no path is left that would settle it.
+
+        Pure apart from reading the lock and task state; the session
+        monitor adds the grace period before acting on it. ``own_notify``
+        is the caller's own ``notify()`` call, when it is running inside
+        one, and ``own_lock`` says the caller holds ``animate_lock`` (the
+        settle re-checks from within its event, under the lock)."""
+        msg_id = self.busy_msg_id
+        if not msg_id or msg_id < 0:
+            return False
+        if self.stack_top_kind() != "busy":
+            return False
+        if self.status in (Status.BUSY, Status.INTERACTIVE):
+            return False
+        if self.job_background_open():
+            return False
+        if (self.notify_in_flight > own_notify
+                or self.finish_gate is not None):
+            return False
+        if (self.animate_lock.locked() and not own_lock) \
+                or self.animation_running():
+            return False
+        return now >= self.card_adopt_until
+
     def animation_running(self) -> bool:
         """True while an animate task exists and has not finished."""
         task = self.animate_task
@@ -1720,6 +1796,9 @@ class SessionRegistry:
                 sess.job_continuation_active = False
                 sess.job_grace_until = 0.0
                 sess.job_reclaim_pending = True
+                # A new turn (roadmap 8.57): card requests made for the
+                # previous one are stale from here on.
+                sess.turn_seq += 1
 
         old = sess.status
         sess.status = new_status
@@ -1939,6 +2018,8 @@ class SessionRegistry:
         # `persisted_digests()` (confirmed sends only) and read back
         # through `restore_delivered_digests`.
         "delivered_digests", "answer_delivered_wall",
+        # Roadmap 8.55: cards whose delete a restart may have cut off.
+        "pending_card_deletes",
         # NOT here, and not by oversight: `active_subagents` /
         # `finished_subagents` / `tool_history` are per-turn state, and the
         # subagent rows carry `started_at` / `last_seen` as
@@ -1990,6 +2071,8 @@ class SessionRegistry:
                     val = val if val and val > 0 else None
                 elif f == "delivered_digests":
                     val = sess.persisted_digests()
+                elif f == "pending_card_deletes":
+                    val = [m for m in val if type(m) is int and m > 0]
                 d[f] = val
             sessions[name] = d
 
@@ -2135,6 +2218,11 @@ class SessionRegistry:
             # Roadmap 8.39: an entry saved before this field existed has
             # neither key and restores to an empty ring / zero stamp.
             sess.restore_delivered_digests(sd.get("delivered_digests"))
+            # Roadmap 8.55: deletes a previous run owed and never landed.
+            raw_deletes = sd.get("pending_card_deletes") or []
+            if isinstance(raw_deletes, list):
+                sess.pending_card_deletes = [
+                    m for m in raw_deletes if type(m) is int and m > 0]
             try:
                 sess.answer_delivered_wall = float(
                     sd.get("answer_delivered_wall") or 0.0)

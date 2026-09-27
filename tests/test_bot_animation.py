@@ -408,7 +408,7 @@ def _reclaim_setup(mk_bot, *, commentary=None):
     """The exact state the reclaim branch sees, built through the REAL
     production path (review rev-iter2: an isolated-unit version bypassed
     transition() and hid a dead gate): a session parked on a live waiting
-    card (busy_msg_id=99, one background agent open, the old job's tool
+    card (busy_msg_id=99, the job's grace window open, the old job's tool
     rows and commentary still in memory, the animate task still alive),
     then a genuinely new prompt entering BUSY via registry.transition() —
     which sets job_reclaim_pending because the prior state was IDLE.
@@ -430,9 +430,11 @@ def _reclaim_setup(mk_bot, *, commentary=None):
     sess.stream_commentary = list(
         commentary if commentary is not None else [(2, _INTERIM)],
     )
-    sess.active_subagents["a1"] = {
-        "type": "Explore", "started_at": time.monotonic(),
-    }
+    # The job's agents have all stopped and its continuation grace window
+    # is open: the card is still the job's. (With an agent still RUNNING
+    # the new turn moves that card instead of settling it — roadmap 8.56,
+    # tests/integration/card-lifecycle.)
+    sess.job_grace_until = time.monotonic() + 60
     loop = asyncio.new_event_loop()
     async def _long(): await asyncio.sleep(100)
     original_task = loop.create_task(_long())

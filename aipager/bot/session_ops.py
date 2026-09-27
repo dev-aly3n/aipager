@@ -919,6 +919,7 @@ class SessionOpsMixin:
         # and is settled as "Stopped" below like any card.
         async with sess.animate_lock:
             self._cancel_lazy_card(sess)
+            sess.close_turn()  # no card for this turn from here (8.57)
         self._stop_animation(sess)
 
         # 3. Edit busy message to show "Stopped" (no keyboard)
@@ -1041,6 +1042,7 @@ class SessionOpsMixin:
         # same reasoning, and the same card lock, as `_stop_session_core`.
         async with sess.animate_lock:
             self._cancel_lazy_card(sess)
+            sess.close_turn()  # no card for this turn from here (8.57)
         self._stop_animation(sess)
         # 3. Replace the busy message with the block notice (or send fresh).
         notice = (f"🛑 <b>{html_mod.escape(sess.label)}</b> · Blocked by "
@@ -1102,6 +1104,7 @@ class SessionOpsMixin:
             # lands as the session's known card before the animation stops.
             async with sess.animate_lock:
                 self._cancel_lazy_card(sess)
+                sess.close_turn()  # no card for this turn from here (8.57)
             self._stop_animation(sess)
 
         # Recorded BEFORE the kill: killing the dtach host closes Claude

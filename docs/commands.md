@@ -251,6 +251,15 @@ attached below ↓` footer. Buttons:
 
 In the card layout ("Busy card + result") the finished card always stays above the answer, for every turn, as the record of how it was reached: its tool rows, agent rows and what Claude said between them, or just `✅ name · Done · Ns` for a turn that ran no tools. The answer arrives as its own (notifying) message. To have one message per turn instead, choose "Merged into busy message" (the answer goes into the card) or "Replace with result" (the card is removed and the answer stands alone).
 
+Each turn has exactly one busy card. A message you send while a turn
+runs never adds a second card for that turn, and a card whose turn has
+ended no longer keeps its Stop button: if nothing closed it (a lost
+Stop hook, a restart), aipager closes it after 30 seconds, as your
+layout says. After a daemon restart, a card whose turn is still running
+is kept and picks up again at that turn's next step (closed after 3
+minutes if nothing more is heard); any other card left from before the
+restart is closed ("Daemon restarted", Stop removed).
+
 A turn Claude starts **by itself** — a background agent reporting back
 with a `<task-notification>` when no job is open — gets its busy card
 only once it does something: at its first tool call, or after 15 s,
@@ -272,6 +281,14 @@ its `Bash ×N` tallies. When the agent finishes, its row settles to `✅
 play-by-play `.txt` attachment above gains an AGENTS section listing
 every agent that ran the turn, its elapsed time, tool count, and the
 tools it called.
+
+While background agents are still running after their turn ended, the
+card stays up as the job's status. When Claude takes a new message
+meanwhile (you sent it to the idle session, or it was queued and picked
+up), that one card moves down to the new message (it is re-sent there
+and the old one deleted), still showing the running agents. Tool calls
+made inside an agent never show as the parent turn's own rows, and never
+make aipager think a new turn started.
 
 Once a turn's timeline grows long, each older run of tool calls (three
 or more in a row, and not the run currently in progress) folds into its

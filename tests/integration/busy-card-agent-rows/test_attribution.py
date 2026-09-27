@@ -1,8 +1,10 @@
 """spec.md requirement 1 ("Attribution"): a tool event whose ``agent_id``
 matches a live ``active_subagents`` entry updates that agent's entry
 (activity/tool_count/last_tool_at) and does NOT append a row to the
-parent's ``tool_history``. A tool event with an unmatched/empty/missing
-``agent_id`` falls back to a parent row (never silently dropped).
+parent's ``tool_history``. A tool event with an empty/missing
+``agent_id`` is the parent's own and gets a parent row; one with an
+unmatched ``agent_id`` belongs to an agent this turn does not own and gets
+none (roadmap 8.58).
 
 Driven at the ``TelegramBot.notify`` event-level contract
 (entrypoints.md's "Direct, event-level" surface) and, for the
@@ -84,16 +86,20 @@ def test_matching_agent_id_records_last_tool_at(mk_sess, run_async, mk_bot):
 
 # ---- unmatched / empty / missing agent_id: never dropped -----------------
 
-def test_unknown_agent_id_falls_back_to_a_parent_row(mk_sess, run_async, mk_bot):
-    """The agent already stopped (or never existed) — no entry to
-    attribute to, so the tool event must still land somewhere."""
+def test_unknown_agent_id_never_becomes_a_parent_row(mk_sess, run_async, mk_bot):
+    """Roadmap 8.58 (reverses the old fallback): an agent_id this turn does
+    not own is a background agent a previous turn launched — detached by
+    the new turn's reset — and its tool calls are not this turn's work.
+    Live 2026-09-27: a background pipeline agent's "Write special-case edit
+    script" and "Apply special-case edits" sat on the parent's card as the
+    parent's own rows."""
     bot = mk_bot()
     sess = mk_sess()
     run_async(bot.notify(sess, "tool_use", {
         "tool_summary": "Bash: git status", "tool_name": "Bash",
         "tool_input_full": None, "agent_id": "agent-that-never-existed",
     }))
-    assert sess.tool_history == [("Bash: git status", False)]
+    assert sess.tool_history == []
 
 
 def test_empty_string_agent_id_falls_back_to_a_parent_row(mk_sess, run_async, mk_bot):
@@ -140,12 +146,11 @@ def test_missing_agent_id_key_entirely_falls_back_to_a_parent_row(
     assert sess.tool_history == [("Bash: whoami", False)]
 
 
-def test_unmatched_agent_id_tool_event_is_never_silently_dropped(
+def test_only_the_parents_own_tool_events_become_parent_rows(
     mk_sess, run_async, mk_bot,
 ):
-    """Regardless of which agent_id shape is unmatched, the event count
-    in tool_history must equal the number of tool_use events sent — none
-    vanish."""
+    """An empty agent_id is the parent's own call and always gets its row;
+    an unmatched one never does (roadmap 8.58)."""
     bot = mk_bot()
     sess = mk_sess()
     for i, aid in enumerate(["", "ghost-1", "ghost-2"]):
@@ -153,7 +158,7 @@ def test_unmatched_agent_id_tool_event_is_never_silently_dropped(
             "tool_summary": f"Bash: cmd{i}", "tool_name": "Bash",
             "tool_input_full": None, "agent_id": aid,
         }))
-    assert len(sess.tool_history) == 3
+    assert sess.tool_history == [("Bash: cmd0", False)]
 
 
 # ---- tool_done / tool_failed for an attributed tool: no parent mutation --

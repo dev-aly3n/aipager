@@ -137,6 +137,31 @@ MTIME_GRANULARITY_SLACK: float = 1.0
 # watchdog's own actions.
 CARD_STALE_SECONDS: float = 20.0
 
+# How long a busy card must stay orphaned — live, Stop button up, while no
+# turn or job is running and nothing is handling the session — before the
+# monitor settles it (roadmap 8.55/8.57). Longer than any finish path's
+# flood-delayed calls, so a card a finish is still closing is never
+# touched; short enough that a stray Stop button does not linger.
+ORPHAN_CARD_GRACE_SECONDS: float = 30.0
+
+
+def orphan_card_due(sess: TrackedSession, now: float) -> bool:
+    """Whether *sess*'s card has been orphaned (``card_orphaned``) for
+    ``ORPHAN_CARD_GRACE_SECONDS`` without a break. Keeps the first-seen
+    stamp on the session (``orphan_card_seen_at``): any tick that sees the
+    card owned again restarts the wait, and a due result restarts it too,
+    so a settle that was refused is retried one grace period later."""
+    if not sess.card_orphaned(now):
+        sess.orphan_card_seen_at = 0.0
+        return False
+    if not sess.orphan_card_seen_at:
+        sess.orphan_card_seen_at = now
+        return False
+    if now - sess.orphan_card_seen_at < ORPHAN_CARD_GRACE_SECONDS:
+        return False
+    sess.orphan_card_seen_at = now
+    return True
+
 
 def busy_card_watchdog_action(
     sess: TrackedSession, now: float, *, suppressed: bool = False,
@@ -722,6 +747,15 @@ class SessionMonitor:
                         "Failed to notify busy_card_watchdog for %s", name,
                         exc_info=True,
                     )
+
+            # Orphaned busy card (roadmap 8.55/8.57): a card whose turn
+            # has ended with nothing left to settle it.
+            if orphan_card_due(sess, now):
+                try:
+                    await self.notify_fn(sess, "orphan_card", {})
+                except Exception:
+                    log.warning("Failed to settle an orphaned card for %s",
+                                name, exc_info=True)
 
             # Held answers (8.29 R6): an answer a flood mute refused is
             # kept, and this is what delivers it. Driven from the tick

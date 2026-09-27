@@ -638,10 +638,10 @@ class HookReceiver:
                 # enforce.py, the sole source of truth for that decision)
                 # still governs, and flipping last_prompt_origin here would
                 # be the exact safety leak spec.md documents. The re-entry
-                # into BUSY is frequently a same-state no-op — the
-                # background agent's own PreToolUse (step 5/8 of the hiva
-                # sequence) already re-entered BUSY before this prompt
-                # arrives — so the notify fires unconditionally rather than
+                # into BUSY can be a same-state no-op (the parent's own
+                # tool call may have re-entered BUSY first; a background
+                # agent's own PreToolUse no longer does, roadmap 8.58), so
+                # the notify fires unconditionally rather than
                 # being gated on transition() reporting a real change; the
                 # card still needs to know a continuation happened even
                 # when status itself didn't move.
@@ -758,6 +758,43 @@ class HookReceiver:
             if tool_name:
                 summary = _summarize_tool(tool_name, tool_input)
                 sess = self.registry.get_or_create(session_name)
+                agent_id = msg.get("agent_id", "") or ""
+                if agent_id:
+                    # A tool call made INSIDE a subagent (roadmap 8.58): it
+                    # is never the parent's turn starting or resuming. A
+                    # background agent keeps working while Claude's own
+                    # loop sits idle, and entering BUSY for its tool call
+                    # made the next Telegram prompt — which Claude runs at
+                    # once, as a new turn — look "queued while busy": it
+                    # kept its 👀, got no card of its own, and every later
+                    # Stop then opened a card for it as a phantom next
+                    # turn (2026-09-27, 09:24-09:27). The parent's own
+                    # tool calls carry no agent_id and still enter BUSY
+                    # below. (The parent's statusline tokens ride its own
+                    # PreToolUse; an agent's are not the turn's.)
+                    if agent_id in sess.active_subagents:
+                        # A running agent of this turn's: its long tool
+                        # keeps the stale-busy warning quiet, as the
+                        # parent's own would.
+                        sess.pending_tool_started_at = time.monotonic()
+                    if sess.status == Status.INTERACTIVE:
+                        # Its tool running means the permission prompt
+                        # it waited on was answered (in the terminal):
+                        # the session is working again, as before 8.58.
+                        # Only IDLE -> BUSY is what an agent never causes.
+                        self.registry.transition(
+                            session_name, Status.BUSY,
+                            preserve_job_state=bool(sess.active_subagents),
+                        )
+                    await self.notify_fn(sess, "tool_use", {
+                        "tool_name": tool_name,
+                        "tool_summary": summary,
+                        "tool_input_full": (
+                            tool_input if tool_name in ("Write", "Edit")
+                            else None),
+                        "agent_id": agent_id,
+                    })
+                    return
                 # Mark tool-in-flight so session_monitor's stale-busy
                 # warning stands down for the duration — no hooks fire
                 # between PreToolUse and PostToolUse, so a long tool
@@ -824,7 +861,11 @@ class HookReceiver:
             if tool_name:
                 summary = _summarize_tool(tool_name, msg.get("tool_input", {}))
                 sess = self.registry.get_or_create(session_name)
-                sess.pending_tool_started_at = None
+                if (not msg.get("agent_id")
+                        or msg.get("agent_id") in sess.active_subagents):
+                    # A detached background agent's tool ending says
+                    # nothing about the parent's own tool in flight.
+                    sess.pending_tool_started_at = None
                 await self.notify_fn(sess, "tool_done", {
                     "tool_name": tool_name,
                     "tool_summary": summary,
@@ -836,7 +877,11 @@ class HookReceiver:
             if tool_name:
                 summary = _summarize_tool(tool_name, msg.get("tool_input", {}))
                 sess = self.registry.get_or_create(session_name)
-                sess.pending_tool_started_at = None
+                if (not msg.get("agent_id")
+                        or msg.get("agent_id") in sess.active_subagents):
+                    # A detached background agent's tool ending says
+                    # nothing about the parent's own tool in flight.
+                    sess.pending_tool_started_at = None
                 await self.notify_fn(sess, "tool_failed", {
                     "tool_name": tool_name,
                     "tool_summary": summary,

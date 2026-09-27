@@ -484,6 +484,11 @@ class NotifyMixin:
         bot = self._app.bot
         chat_id = resolve_chat_id(sess)
         label = sess.label
+        # Owed until it lands, and persisted: a restart that kills this
+        # task deletes the card at the next startup instead (roadmap 8.55).
+        if msg_id not in sess.pending_card_deletes:
+            sess.pending_card_deletes.append(msg_id)
+            self.registry.mark_dirty()
 
         async def _delete() -> None:
             try:
@@ -494,13 +499,17 @@ class NotifyMixin:
             except Exception:
                 log.debug("[%s] tool-less card delete failed (left behind)",
                           label, exc_info=True)
+            if msg_id in sess.pending_card_deletes:
+                sess.pending_card_deletes.remove(msg_id)
+                self.registry.mark_dirty()
 
         task = asyncio.create_task(_delete())
         _BACKGROUND_TASKS.add(task)
         task.add_done_callback(_BACKGROUND_TASKS.discard)
 
     async def _apply_consumption(
-        self, sess: TrackedSession, consumed: list[dict],
+        self, sess: TrackedSession, consumed: list[dict], *,
+        move_target: bool = True,
     ) -> None:
         """R2 (design.md "turn anchor follows consumption"): a message
         was actually consumed by Claude — picked up as the next turn, or
@@ -527,7 +536,9 @@ class NotifyMixin:
                                  resolve_chat_id(sess))
         last = consumed[-1]
         last_msg_id = last.get("msg_id")
-        if last_msg_id is not None:
+        # `move_target` is False only for a finish whose turn a newer one
+        # has already replaced: the target is that newer turn's by now.
+        if last_msg_id is not None and move_target:
             sess.trigger_msg_id = last_msg_id
             sess.last_prompt = last.get("raw_text", "") or ""
             sess.last_prompt_driver_user_id = note_driver_id(last)
@@ -587,13 +598,25 @@ class NotifyMixin:
         # Done, so no longer "queued": the notes expire (roadmap 8.37).
         mark_command_notes_ran(sess.name, ran)
 
-    async def _start_queued_turn(self, sess: TrackedSession) -> None:
-        """Start the turn for the oldest message Claude queued during the
-        turn that just ended and never absorbed: Claude Code pops its
-        queue the moment a run ends and fires NO hook for the prompt it
-        submits, so that turn would otherwise have no card, no reply
-        target and — its Stop landing inside the IDLE debounce — no
-        delivered answer ("anchor-on-transcript-consumption", R8).
+    def _take_next_prompt(
+        self, sess: TrackedSession,
+    ) -> tuple[dict, bool] | None:
+        """The oldest message Claude queued during the run that just ended
+        and never absorbed is running NOW: Claude Code pops its queue the
+        moment a run ends — an interim one inside a background job
+        included — and fires NO hook for the prompt it submits
+        ("anchor-on-transcript-consumption", R8).
+
+        Synchronous, and called the moment the Stop is handled (roadmap
+        8.57): the pop moves the reply target and enters BUSY right away,
+        so the popped turn's own hooks — its first PreToolUse, its Stop —
+        land on a session that already knows it is running, instead of
+        this happening seconds later behind a flood-delayed answer, when
+        that turn may already have ended (a BUSY that nothing would ever
+        end, and a card for a finished turn). Inside an open job
+        (roadmap 8.56) the entry preserves the job. Returns ``(target,
+        in_job)``, or ``None`` with nothing queued. The card and the 👍 go
+        out later, from :meth:`_open_popped_turn`.
 
         Accepted residual risk (review rev-iter1-005): if the operator
         clears Claude's queue from the terminal (Escape) in the fraction
@@ -601,18 +624,49 @@ class NotifyMixin:
         shows a turn that never runs. No hook can confirm the pop; the
         card sits until /stop, /kill or the stale-BUSY warning.
         """
+        if not sess.queued_targets:
+            return None
         nxt = sess.queued_targets.pop(0)
-        # Claude popped it as this turn's prompt: taken (R2).
-        await reactions.mark_all(self, [nxt], reactions.TAKEN,
-                                 resolve_chat_id(sess))
+        # "Inside the job" exactly when this Stop is an interim one: the
+        # continuation turn's own Stop closes the job (the finish below),
+        # so a message popped there starts a turn of its own.
+        in_job = (sess.job_background_open()
+                  and not (sess.job_continuation_active
+                           and not sess.active_subagents))
         sess.trigger_msg_id = nxt.get("msg_id")
         sess.last_prompt = nxt.get("raw_text") or ""
         sess.last_prompt_driver_user_id = nxt.get("driver_user_id")
         self.registry.mark_dirty()
-        self.registry.transition(sess.name, Status.BUSY)
-        await self._send_busy_and_animate(sess)
-        log.info("[%s] next turn started for queued message %s",
-                 sess.label, nxt.get("msg_id"))
+        self.registry.transition(sess.name, Status.BUSY,
+                                 preserve_job_state=in_job)
+        return nxt, in_job
+
+    async def _open_popped_turn(
+        self, sess: TrackedSession, nxt: dict, in_job: bool, turn: int,
+    ) -> None:
+        """The popped message's 👍 and card (see :meth:`_take_next_prompt`).
+
+        The card comes from the turn-card step for the popped turn: nothing
+        if that turn has already finished, the card it already has if
+        something else opened one (moved under this message, if it is not
+        there yet), a new one otherwise (roadmap 8.57). Inside an open job
+        the popped turn IS the job's turn, so that step finds the job's one
+        card and moves it down to this message — one re-anchor, never a
+        second card, no reset of the job's agent tracking (roadmap 8.56)."""
+        # Claude popped it as this turn's prompt: taken (R2).
+        await reactions.mark_all(self, [nxt], reactions.TAKEN,
+                                 resolve_chat_id(sess))
+        await self._send_busy_and_animate(sess, turn=turn)
+        log.info("[%s] %s for queued message %s (turn %d)", sess.label,
+                 "taken inside the open job" if in_job else "next turn started",
+                 nxt.get("msg_id"), turn)
+
+    async def _start_queued_turn(self, sess: TrackedSession) -> None:
+        """:meth:`_take_next_prompt` then :meth:`_open_popped_turn`, in one
+        step — for a caller that has nothing to deliver in between."""
+        taken = self._take_next_prompt(sess)
+        if taken is not None:
+            await self._open_popped_turn(sess, *taken, turn=sess.turn_seq)
 
     async def _settle_queued_targets(
         self, sess: TrackedSession, *, reanchor: bool = True,
@@ -629,9 +683,9 @@ class NotifyMixin:
         (``_exact_anchors_available``) and no background job is waiting.
         The queue scan itself runs without the hook since roadmap 8.47;
         the hook gate is kept deliberately as it was (a teardown that
-        guesses wrong sends an Escape), and in a job's waiting window the
-        targets are kept on purpose while Claude Code has already started
-        the next prompt. An
+        guesses wrong sends an Escape), and so is the job gate (an interim
+        Stop now takes the next target as it pops, roadmap 8.56, but a
+        teardown still does not guess while agents run). An
         untrusted target gets no 🤷 here. Whether a teardown types its
         queue wipe is decided by the transcript's evidence instead
         (``session_ops.held_by_claude``, roadmap 8.37)."""
@@ -867,6 +921,7 @@ class NotifyMixin:
 
     async def _deliver_job_interim(
         self, sess: TrackedSession, content: str, turn_end_wall: float,
+        *, reply_to=None,
     ) -> None:
         """Send a background job's interim answer NOW, as its own message
         (roadmap 8.42, operator decision 2026-09-24).
@@ -931,7 +986,10 @@ class NotifyMixin:
         plain_text = f"{lead_plain}\n\n{content}"
         is_rtl = detect_rtl(content)
         chat_id = resolve_chat_id_int(sess)
-        reply_to = sess.trigger_msg_id
+        # The interim turn's own message: the queued pick-up at this Stop
+        # has already moved `sess.trigger_msg_id` to the next one.
+        if reply_to is None:
+            reply_to = sess.trigger_msg_id
         landed = False
         msg_id = 0
         sent = None
@@ -1006,6 +1064,7 @@ class NotifyMixin:
 
     async def _handle_job_interim(
         self, sess: TrackedSession, context: dict, turn_end_wall: float,
+        *, gate=None, reply_to=None,
     ) -> None:
         """The ``idle_prompt`` path when ``sess.job_background_open()`` is
         True — an interim Stop/Notification/StopFailure while a background
@@ -1046,7 +1105,10 @@ class NotifyMixin:
                     sess, "Working", waiting=True,
                 ) is None:
                     self._stop_animation(sess)
-        await self._deliver_job_interim(sess, content, turn_end_wall)
+        await self._deliver_job_interim(sess, content, turn_end_wall,
+                                        reply_to=reply_to)
+        if gate is not None:
+            self._release_finish_gate(sess, gate)
         await self._drain_next_queued(sess)
 
     async def _drain_next_queued(self, sess: TrackedSession) -> None:
@@ -1102,8 +1164,31 @@ class NotifyMixin:
             # Popped and not sent: this held message is gone (R3).
             await self._mark_not_delivered(sess, [{"msg_id": queued_trigger}])
 
+    def _release_finish_gate(self, sess: TrackedSession, gate) -> None:
+        """Let newer turns' cards through (roadmap 8.57). Idempotent; only
+        the finish that owns the session's current gate clears it."""
+        gate.set()
+        if sess.finish_gate is gate:
+            sess.finish_gate = None
+            sess.finishing_turn = None
+
     async def notify(self, sess: TrackedSession, event: str, context: dict) -> None:
-        """Send appropriate Telegram notification for a state change."""
+        """Send appropriate Telegram notification for a state change.
+
+        Counts itself in ``sess.notify_in_flight`` while it runs: the
+        session monitor's orphan-card sweep never settles a card while
+        any event for its session is still being handled (roadmap 8.57).
+        """
+        sess.notify_in_flight += 1
+        try:
+            await self._notify_event(sess, event, context)
+        finally:
+            sess.notify_in_flight -= 1
+
+    async def _notify_event(
+        self, sess: TrackedSession, event: str, context: dict,
+    ) -> None:
+        """:meth:`notify`'s body."""
         if not self._app:
             return
 
@@ -1321,6 +1406,7 @@ class NotifyMixin:
             # grace window ("close the background-job endgame" requirement
             # 2's fallback) — close the job honestly: the interim answer
             # stands as the result.
+            sess.close_turn()  # no card for this turn from here (8.57)
             self._stop_animation(sess)
             elapsed_str = ""
             if sess.busy_started_at:
@@ -1372,6 +1458,7 @@ class NotifyMixin:
             # there is no answer to deliver. Deliberately does not drain
             # the pending queue (design.md Risks) — a message queued
             # during the wait drains on the next real idle-transition.
+            sess.close_turn()  # no card for this turn from here (8.57)
             self._stop_animation(sess)
             elapsed_str = ""
             if sess.busy_started_at:
@@ -1409,6 +1496,14 @@ class NotifyMixin:
             tool_name = context.get("tool_name", "")
             tool_input_full = context.get("tool_input_full")
             agent_id = context.get("agent_id", "")
+            if agent_id and agent_id not in sess.active_subagents:
+                # A tool call inside a subagent this turn does not own — a
+                # background agent a previous turn launched, whose row the
+                # new turn's reset dropped (roadmap 8.58). It is not this
+                # turn's work: no parent row, no card earned, no edit.
+                log.debug("[%s] tool call of detached agent %s — not on "
+                          "this turn's card", sess.label, agent_id)
+                return
             # Update tool history — mark previous as done, append new
             if tool_summary:
                 # A tool call made INSIDE a subagent (agent_id matches a
@@ -1516,6 +1611,7 @@ class NotifyMixin:
                 "[%s] prompt not taken by Claude Code: no hook within %.0fs "
                 "of the send (msg_id=%s)", label, grace, msg_id,
             )
+            sess.close_turn()  # no card for this turn from here (8.57)
             self._stop_animation(sess)
             warn_text = (
                 f"⚠️ <b>{html_mod.escape(label)}</b> · Not taken by Claude Code\n"
@@ -1579,6 +1675,12 @@ class NotifyMixin:
             # its turn the way the idle path does (review rev-iter1-002).
             # That send is a from-idle send and gets its own deadline.
             await self._drain_next_queued(sess)
+            return
+
+        if event == "orphan_card":
+            # The session monitor found a live card no turn owns any more
+            # (roadmap 8.55/8.57) — see TrackedSession.card_orphaned.
+            await self._settle_orphan_card(sess)
             return
 
         if event == "busy_card_watchdog":
@@ -1670,6 +1772,10 @@ class NotifyMixin:
             # ("agent activity rows on the busy card"). Skip the
             # parent-row search entirely so it can never mark an unrelated
             # in-flight row done via the "no exact match" fallback below.
+            if agent_id and agent_id not in sess.active_subagents:
+                # A detached background agent's tool (roadmap 8.58): not
+                # this turn's row, and nothing on this card changed.
+                return
             attributed = bool(agent_id and agent_id in sess.active_subagents)
             if tool_summary and not attributed:
                 for i, (s, done) in enumerate(sess.tool_history):
@@ -1963,6 +2069,7 @@ class NotifyMixin:
             # the card lock, and is then deleted below like any card.
             async with sess.animate_lock:
                 self._cancel_lazy_card(sess)
+                sess.close_turn()  # no card for this turn from here (8.57)
             # Claude Code's input queue dies with the process, restart
             # included (the relaunch starts empty): nothing still queued
             # there will be taken (R3). `/clear` and `/resume` also fire
@@ -2029,784 +2136,850 @@ class NotifyMixin:
             return
 
         if sess.status == Status.IDLE:
-            # The delivery stamp's moment (roadmap 8.39 R2), taken on
-            # arrival — before the awaited final card render, which the
-            # outbound gate can pace by seconds. A next turn's answer
-            # written during that render must not look older than it.
-            turn_end_wall = time.time()
-            # Every turn end, before the job-interim and API-error returns
-            # below: Claude Code has just run whatever it had queued.
-            await self._mark_ran_commands(sess)
-            if sess.job_continuation_active and not sess.active_subagents:
-                # The <task-notification> continuation turn's own Stop —
-                # the job's one true Finished ("close the background-job
-                # endgame" requirement 2). Clear the endgame state FIRST so
-                # the Finished path below runs exactly as a normal close.
-                sess.job_continuation_active = False
-                sess.job_grace_until = 0.0
-                sess.job_interim_seen = False
-            elif sess.job_background_open():
-                # A background agent this job launched is still running (or
-                # the continuation grace window is open) — this
-                # idle-transition is an INTERIM Stop, not the job's true
-                # end (design.md "model Claude Code background-agent jobs",
-                # requirement 1). Never falls through to the Finished-card
-                # disposal logic below: that logic's unconditional
-                # active_subagents.clear() (removed just below) was itself
-                # the bug this feature fixes — it erased the very state
-                # job_background_open() needs to keep working.
-                if sess.active_subagents:
-                    # A continuation turn that spawned NEW background
-                    # agents has ended — back to plain waiting; the next
-                    # continuation cycle re-arms via SubagentStop + grace.
-                    sess.job_continuation_active = False
-                await self._handle_job_interim(sess, context, turn_end_wall)
-                return
-            # The last round flushes right before Stop; no tick may have
-            # run in between. Place its sentence exactly before anything
-            # below snapshots or renders the timeline
-            # ("transcript-exact-sentence-anchors").
+            # The turn that ended, read before any await: a newer turn can
+            # begin while this finish is still out (a flood-delayed answer),
+            # and nothing below may take that turn's card, reply target or
+            # stream state for this one's (roadmap 8.57).
+            finishing_turn = sess.turn_seq
+            # This turn's reply target, read before any await (roadmap
+            # 8.57): the queued pick-up below, or a Telegram prompt that
+            # starts the NEXT turn while this finish is out, moves
+            # `sess.trigger_msg_id`; this turn's answer and card still
+            # belong under this turn's message.
+            finish_trigger = sess.trigger_msg_id
+            # A previous turn's finish may still be out (a flood-delayed
+            # answer) when this turn has already ended too. The two must
+            # not dispose of the same card: this one waits for that one
+            # below, after the synchronous captures here.
+            prev_gate = sess.finish_gate
+            gate = asyncio.Event()
+            sess.finish_gate = gate
+            sess.finishing_turn = finishing_turn
+            # An absorption flushed with the run's last round is first
+            # visible here; read it before deciding what is still queued.
             _sync_anchors_from_transcript(sess)
-            # R2 (design.md "turn anchor follows consumption", B6): the
-            # absorption line can be first visible only right here — no
-            # tick ran between it and Stop. Apply the consumption (move
-            # the target, react, track) BEFORE anything below snapshots
-            # or renders the timeline; the layout-aware re-anchor DECISION
-            # itself needs `layout`, resolved a few lines down, so it is
-            # not folded into `_consume_and_reanchor` here.
-            consumed = sess.stream_consumed_notes
+            # Those absorptions are THIS turn's, taken now: left staged, the
+            # old card's still-running animation would apply them to
+            # whatever turn is current by the time it ticks.
+            finish_consumed = sess.stream_consumed_notes
             sess.stream_consumed_notes = []
-            if consumed:
-                await self._apply_consumption(sess, consumed)
-            # Snapshot the play-by-play FIRST — before the done-marking
-            # below coerces every row to True (which would misreport
-            # failed rows as successes in the full-log attachment, review
-            # rev-iter1-003) and before the streaming reset wipes the
-            # commentary.
-            log_tools = list(sess.tool_history)
-            log_commentary = list(sess.stream_commentary)
-            # Snapshot every agent seen this turn — finished (already a
-            # {type, started_at, elapsed, tool_count, tools} snapshot) plus
-            # still-active (defensive: by the time a genuine Finished close
-            # runs, active_subagents should already be empty per
-            # job_background_open()'s own invariant, but this costs
-            # nothing and covers any edge path) — for build_full_log's
-            # AGENTS section ("agent activity rows on the busy card").
-            # Chronological (start order), matching the section's own
-            # "start order" contract.
-            log_agents = sorted(
-                list(sess.finished_subagents)
-                + [
-                    {
-                        "type": info.get("type", "agent"),
-                        "started_at": info.get("started_at", 0.0),
-                        "elapsed": (
-                            time.monotonic()
-                            - info.get("started_at", time.monotonic())
-                        ),
-                        "tool_count": info.get("tool_count", 0),
-                        "tools": list(info.get("tools", [])),
-                    }
-                    for info in sess.active_subagents.values()
-                ],
-                key=lambda a: a.get("started_at", 0.0),
-            )
-
-            # Mark all tools as done
-            sess.tool_history = [(s, True) for s, _ in sess.tool_history]
-            # A self-woken turn that ends before earning its deferred card
-            # never gets one: only the answer goes out, and with no card
-            # its first line carries the stats (roadmap 8.32). Under the
-            # card lock, and before the animation is stopped: a deferred
-            # card whose send is already in flight lands first and is then
-            # finished like any other card, instead of arriving after this
-            # path and being stranded mid-animation. The same wait covers a
-            # live re-anchor in flight (a tick's `_consume_and_reanchor`),
-            # which swaps `busy_msg_id` to its new card under this lock:
-            # everything below reads the card it leaves, never the old one
-            # it is replacing. Settling the old id instead would strand the
-            # live card on "Working" for good (tests: the in-flight re-anchor
-            # and in-flight send tests in test_quiet_toolless_turns.py).
-            async with sess.animate_lock:
-                self._cancel_lazy_card(sess)
-            # Stop animation and clean up busy message
-            self._stop_animation(sess)
-            sess.pending_permission = None  # clear stale inline permission if any
-            # `layout` resolves per-session first: this session's own override
-            # (if any) wins; otherwise falls back to the scope's stored
-            # /settings preference; an untouched scope falls back further to
-            # the KEEP_FINISHED_CARD seed (aipager.preferences is the sole
-            # owner of that resolution — resolve_preferences, not
-            # get_preferences, so a session override actually takes effect
-            # here rather than only in the prompt-injection path).
-            layout = preferences.resolve_preferences(
-                sess.scope_chat_id, sess.preference_overrides(),
-            ).layout
-            # R3/R5 (design.md "turn anchor follows consumption"): decide
-            # HERE, once layout is known, whether the about-to-be-
-            # finalised card needs to move. `card` re-anchors immediately
-            # (the finished render happens inside `_reanchor_busy_card`
-            # itself); `merged` only flags it — the old card is still
-            # needed for `_drop_answer_tail` below and the answer text
-            # isn't known yet, so the actual delete+resend happens once
-            # `_send_merged_final` is called, further down. `replace` is
-            # unchanged: the delete-then-answer-under-`trigger_msg_id`
-            # path already reads the now-correct target from insertion
-            # point 1 above.
-            #
-            # A real mismatch between `busy_card_trigger` and
-            # `trigger_msg_id` is the ONLY signal design.md defines for
-            # "consumption moved the target" (R3) — every production call
-            # site that establishes a live card now also records
-            # `busy_card_trigger` (`send_busy`, both `_reanchor_busy_card`
-            # sends, `_send_merged_final(send_as_new=True)`, the
-            # `compacting`/`compact_done` bypass sends, and the `load()`
-            # restart seed), so a bare `!= ` check — no `is not None`
-            # carve-out — cannot silently disable a genuine re-anchor
-            # after one of those paths runs (review rev-iter1-002: a
-            # `busy_card_trigger is not None` guard here used to survive
-            # exactly the compaction-bypass gap those sites had before
-            # this fix, degrading a real absorption to pre-feature
-            # behaviour with no signal it had happened). A hand-built
-            # `TrackedSession` that skips every production call site (as
-            # several pre-existing unit tests do) must seed
-            # `busy_card_trigger` itself, same as design.md's own contract
-            # already required.
-            reanchor_needed = bool(
-                sess.busy_msg_id and sess.busy_msg_id > 0
-                and sess.busy_card_trigger != sess.trigger_msg_id
-            )
-            # review rev-iter1-001: trim any trailing commentary that just
-            # duplicates the incoming answer BEFORE either final-render
-            # path below — the immediate `card`-layout re-anchor a few
-            # lines down renders the finished card RIGHT HERE via
-            # `_reanchor_busy_card`, and `card_already_final` then skips
-            # the second (correctly-ordered) render that used to catch
-            # this. Running the trim first means both the immediate
-            # re-anchor render and the ordinary in-place final render see
-            # the already-trimmed `stream_commentary`, so there is only
-            # ever one place this decision has to be made.
-            if sess.busy_msg_id and sess.busy_msg_id > 0 and layout in ("card", "merged"):
-                _drop_answer_tail(
-                    sess, context.get("raw_md") or context.get("summary") or "",
+            # An API error ends the run with nothing processed: the queue
+            # is left for the next finish, as before.
+            taken = (None if _detect_api_error(
+                context.get("raw_md") or context.get("summary") or "")
+                else self._take_next_prompt(sess))
+            popped_turn = sess.turn_seq
+            try:
+                if isinstance(prev_gate, asyncio.Event):
+                    await self._wait_finish_gate(sess, prev_gate)
+                # The delivery stamp's moment (roadmap 8.39 R2), taken on
+                # arrival — before the awaited final card render, which the
+                # outbound gate can pace by seconds. A next turn's answer
+                # written during that render must not look older than it.
+                turn_end_wall = time.time()
+                # Every turn end, before the job-interim and API-error returns
+                # below: Claude Code has just run whatever it had queued.
+                await self._mark_ran_commands(sess)
+                if sess.job_continuation_active and not sess.active_subagents:
+                    # The <task-notification> continuation turn's own Stop —
+                    # the job's one true Finished ("close the background-job
+                    # endgame" requirement 2). Clear the endgame state FIRST so
+                    # the Finished path below runs exactly as a normal close.
+                    sess.job_continuation_active = False
+                    sess.job_grace_until = 0.0
+                    sess.job_interim_seen = False
+                elif sess.job_background_open():
+                    # A background agent this job launched is still running (or
+                    # the continuation grace window is open) — this
+                    # idle-transition is an INTERIM Stop, not the job's true
+                    # end (design.md "model Claude Code background-agent jobs",
+                    # requirement 1). Never falls through to the Finished-card
+                    # disposal logic below: that logic's unconditional
+                    # active_subagents.clear() (removed just below) was itself
+                    # the bug this feature fixes — it erased the very state
+                    # job_background_open() needs to keep working.
+                    if sess.active_subagents:
+                        # A continuation turn that spawned NEW background
+                        # agents has ended — back to plain waiting; the next
+                        # continuation cycle re-arms via SubagentStop + grace.
+                        sess.job_continuation_active = False
+                    # An interim Stop leaves absorptions to the animator, which
+                    # moves the still-live card to them.
+                    sess.stream_consumed_notes = (
+                        finish_consumed + sess.stream_consumed_notes)
+                    await self._handle_job_interim(sess, context, turn_end_wall,
+                                                   gate=gate, reply_to=finish_trigger)
+                    return
+                # The last round flushes right before Stop; no tick may have
+                # run in between. Place its sentence exactly before anything
+                # below snapshots or renders the timeline
+                # ("transcript-exact-sentence-anchors").
+                _sync_anchors_from_transcript(sess)
+                # R2 (design.md "turn anchor follows consumption", B6): the
+                # absorption line can be first visible only right here — no
+                # tick ran between it and Stop. Apply the consumption (move
+                # the target, react, track) BEFORE anything below snapshots
+                # or renders the timeline; the layout-aware re-anchor DECISION
+                # itself needs `layout`, resolved a few lines down, so it is
+                # not folded into `_consume_and_reanchor` here.
+                consumed = finish_consumed + sess.stream_consumed_notes
+                sess.stream_consumed_notes = []
+                if consumed:
+                    # The target moves only while this is still the current turn;
+                    # either way this turn's answer follows its last consumed
+                    # message.
+                    await self._apply_consumption(
+                        sess, consumed, move_target=sess.turn_seq == finishing_turn)
+                    last_consumed = consumed[-1].get("msg_id")
+                    if last_consumed is not None:
+                        finish_trigger = last_consumed
+                # Snapshot the play-by-play FIRST — before the done-marking
+                # below coerces every row to True (which would misreport
+                # failed rows as successes in the full-log attachment, review
+                # rev-iter1-003) and before the streaming reset wipes the
+                # commentary.
+                log_tools = list(sess.tool_history)
+                log_commentary = list(sess.stream_commentary)
+                # Snapshot every agent seen this turn — finished (already a
+                # {type, started_at, elapsed, tool_count, tools} snapshot) plus
+                # still-active (defensive: by the time a genuine Finished close
+                # runs, active_subagents should already be empty per
+                # job_background_open()'s own invariant, but this costs
+                # nothing and covers any edge path) — for build_full_log's
+                # AGENTS section ("agent activity rows on the busy card").
+                # Chronological (start order), matching the section's own
+                # "start order" contract.
+                log_agents = sorted(
+                    list(sess.finished_subagents)
+                    + [
+                        {
+                            "type": info.get("type", "agent"),
+                            "started_at": info.get("started_at", 0.0),
+                            "elapsed": (
+                                time.monotonic()
+                                - info.get("started_at", time.monotonic())
+                            ),
+                            "tool_count": info.get("tool_count", 0),
+                            "tools": list(info.get("tools", [])),
+                        }
+                        for info in sess.active_subagents.values()
+                    ],
+                    key=lambda a: a.get("started_at", 0.0),
                 )
-            # ── the layout setting decides the card, always ─────────────────
-            # 8.32 R1 deleted a `card`-layout turn's card when it had no
-            # timeline (no tools), delivering the answer alone. That broke
-            # the operator's own setting: "Busy card + result" promises the
-            # card stays and the answer arrives as its own message, and
-            # tool turns kept theirs, so the chat looked random (operator,
-            # 2026-09-27: "it must respect the settings"). Every turn now
-            # follows the layout: `card` keeps the card, `replace` removes
-            # it, `merged` folds the answer in. The deletion hooks below
-            # stay wired for a future layout that wants them, and are
-            # inert while this stays 0.
-            toolless_card_msg_id = 0
-            card_already_final = False
-            merged_send_as_new = False
-            if reanchor_needed and layout == "card":
-                await self._reanchor_busy_card(sess, sess.trigger_msg_id, final=True)
-                card_already_final = True
-            elif reanchor_needed and layout == "merged":
-                merged_send_as_new = True
-            card_kept = False
-            # When the finished card went out, on the monotonic clock: the
-            # answer send below owes it FINISH_CARD_GRACE_SECONDS measured
-            # from that moment (roadmap 8.23) — the clock starts where
-            # this is STAMPED, a few lines down, not here. 0.0 means no
-            # finished card was rendered, and so nothing to wait for.
-            finish_card_at = 0.0
-            # True once the busy card has been successfully disposed of —
-            # either kept as the finished card (`card_kept`, below) or
-            # deleted outright (`replace`, and `merged`'s own delete-on-
-            # fallback a little further down). A kept card already says
-            # Done and the turn's stats, so the answer under it opens with
-            # the SHORT result line; with the card gone the answer's first
-            # line carries the stats instead — still ONE message, per the
-            # user's own framing of `replace`: "still we have only one
-            # message after user message but busy message gets removed".
-            if sess.busy_msg_id and sess.busy_msg_id > 0:
-                if layout in ("card", "merged"):
-                    # Leave the timeline in the chat: which tools ran, in what
-                    # order, and what Claude said between them is the record of
-                    # how this answer was reached. Rendered here — before the
-                    # streaming state is reset below and before the answer goes
-                    # out — so scrollback reads card, header, body.
-                    # (the trim already ran above, before any final render.)
-                    if layout == "card":
-                        if card_already_final:
-                            # _reanchor_busy_card already rendered the
-                            # exact same final content under the new
-                            # message a moment ago — a second POST here
-                            # would be redundant, harmless-but-wasteful.
-                            card_kept = True
-                        else:
-                            try:
-                                card_kept = await self._edit_busy_rich(
-                                    sess, FINAL_VERB, final=True,
-                                ) is True
-                            except Exception:
-                                log.debug("Final busy-card render failed", exc_info=True)
-                        if card_kept:
-                            # Stamped for BOTH branches above, and only
-                            # once the card is really out: the re-anchor
-                            # rendered it a few lines up, the edit right
-                            # here. A failed final render (`card_kept`
-                            # False) leaves this 0.0 — there is no
-                            # finished card for the answer to follow, so
-                            # the answer must not be held back for one.
-                            finish_card_at = time.monotonic()
-                        sess.busy_msg_id = None
-                    # "merged": busy_msg_id stays live on purpose — the one
-                    # combined edit (timeline + answer) happens below, once
-                    # the answer text is known, and clears it either way.
-                else:
-                    # "replace" — delete the busy card, then send the answer
-                    # as the turn's one message (its first line carries the
-                    # stats the card would have shown).
-                    try:
-                        await bot.delete_message(
-                            chat_id=resolve_chat_id(sess),
-                            message_id=sess.busy_msg_id,
-                        )
-                    except Exception:
-                        pass
-                    sess.busy_msg_id = None
 
-            summary = context.get("summary", "") or ""
-            raw_md = context.get("raw_md", "")
-            # Set only by session_monitor.py's idle-recovery fallback (a
-            # missed-Stop-hook guess, never a real Stop/Notification hook).
-            # When that guess turns up nothing new to say, the standalone
-            # "Finished" header below is suppressed entirely — see its use
-            # near `standalone_header`.
-            recovered = bool(context.get("recovered"))
-
-            # ── content-selection (design §1, named rule) ──────────────────
-            # raw_md takes precedence, then the producer's summary, then
-            # nothing. Deliberately NOT sess.summary: that is the PREVIOUS
-            # turn's answer, and a turn that produced no text of its own
-            # (it ended on tool calls, or was a background-job re-entry)
-            # used to fall through to it whenever the producer had not set
-            # `no_response` — the operator then read the last answer again
-            # as the reply to the new prompt, plausible enough to be
-            # believed and so worse than no body at all (three copies of
-            # one answer were seen live). An empty content sends no body;
-            # what goes out instead depends on whether a card exists — see
-            # the header placement below.
-            content = raw_md or summary
-
-            # Content-dedup covers the FINAL delivery too ("close the
-            # background-job endgame" requirement 3): a stray idle event
-            # re-running this path with content identical to the last
-            # delivered summary (interim or final) must not re-post it.
-            # The card disposal below still runs — the header/card is
-            # idempotent to finalize; only the body re-send is the spam.
-            # The single hash resets where a genuine new turn starts; the
-            # delivered-digest ring does not, so a body that already went
-            # out is never re-posted however the turns were counted — the
-            # transcript's newest text is an EARLIER turn's exactly when
-            # this one produced none, and that is the case a per-turn
-            # reset cannot see.
-            #
-            # Recorded PENDING (roadmap 8.39): refused in this process from
-            # here on, but written to the state file only once the send
-            # below is known to have landed — see `_answer_landed`.
-            _answer_digests: list[str] = []
-            _answer_landed = False
-            if content:
-                _digest = hashlib.md5(content.encode("utf-8")).hexdigest()
-                if (_digest == sess.last_idle_summary_hash
-                        or sess.was_delivered(_digest)):
-                    log.info(
-                        "[%s] final summary identical to a body already "
-                        "delivered this session — suppressing re-send",
-                        label,
-                    )
-                    content = ""
-                else:
-                    sess.last_idle_summary_hash = _digest
-                    sess.remember_delivered(_digest, pending=True)
-                    _answer_digests.append(_digest)
-
-            # Reset streaming state — the turn is over.
-            sess.stream_commentary = []
-            sess.stream_tool_cursor = 0
-            sess.stream_msg_id = ""
-            sess.stream_anchor_floor = 0
-            sess.stream_batch_since = None
-            sess.stream_block_index = {}
-            sess.stream_exact_anchor = {}
-            sess.stream_dirty = False
-            sess.stream_last_rendered = ""
-            sess.stream_offset = 0
-            sess.stream_transcript_path = ""
-
-            # ── API error detection → friendly message + retry button ──
-            error_source = raw_md or summary or ""
-            error_detection = _detect_api_error(error_source)
-            if error_detection:
-                if layout == "merged" and sess.busy_msg_id and sess.busy_msg_id > 0:
-                    # This branch returns before the merged-delivery attempt
-                    # below ever runs — clean up here so the busy card isn't
-                    # stranded showing "Working…" with a Stop button forever.
-                    try:
-                        await bot.delete_message(
-                            chat_id=resolve_chat_id(sess),
-                            message_id=sess.busy_msg_id,
-                        )
-                    except Exception:
-                        pass
-                    sess.busy_msg_id = None
-                friendly_error, _retry_after = error_detection
-                text = (f"⚠️ <b>{html_mod.escape(label)}</b> · {friendly_error}")
-                keyboard = (self._build_retry_keyboard(sess)
-                            if sess.last_prompt else None)
-                try:
-                    msg = await bot.send_message(
-                        resolve_chat_id(sess), text, parse_mode="HTML",
-                        reply_to_message_id=sess.trigger_msg_id,
-                        reply_markup=keyboard,
-                    )
-                    self.registry.track_message(msg.message_id, sess.name, resolve_chat_id_int(sess) or 0)
-                    await self._maybe_update_bot_name(sess.name)
-                except Exception:
-                    log.warning("Failed to send error notification", exc_info=True)
-                if self.observers:
-                    asyncio.create_task(self.observers.broadcast(text))
-                if toolless_card_msg_id:
-                    self._delete_card_later(sess, toolless_card_msg_id)
-                # Don't clear trigger_msg_id — retry needs it
-                # Don't flush pending queue — nothing was processed
-                return
-
-            # Compute elapsed time since BUSY started
-            elapsed_str = ""
-            elapsed_s = 0
-            if sess.busy_started_at:
-                elapsed_s = int(time.monotonic() - sess.busy_started_at)
-            elif sess.busy_started_wall:
-                # busy_started_at is stamped by the card sender; a turn
-                # that never got a card still has the transition's own
-                # stamp, so the header can report how long it ran.
-                elapsed_s = int(time.time() - sess.busy_started_wall)
-            if elapsed_s >= 60:
-                elapsed_str = f"{elapsed_s // 60}m {elapsed_s % 60}s"
-            elif elapsed_s > 0:
-                elapsed_str = f"{elapsed_s}s"
-            # Lines changed this turn
-            lines_str = ""
-            if sess.last_lines_added or sess.last_lines_removed:
-                lines_str = f"+{sess.last_lines_added} -{sess.last_lines_removed}"
-            # Build suffix: combine non-empty parts with comma
-            parts = [p for p in (elapsed_str, lines_str) if p]
-            suffix = f" ({', '.join(parts)})" if parts else ""
-            # The result line in its STATS form — a result that is the only
-            # message left for its turn says Finished and how long it took
-            # ("session-name-on-every-message"). HTML for the standalone
-            # header message, the rich-message dialect (bold = **) for a
-            # composed send, bare for the plain-text fallback.
-            header_text = (
-                f"{_RESULT_GLYPH} <b>{html_mod.escape(label)}</b> · Finished{suffix}"
-            )
-            header_md = f"{_result_line_md(label)} · Finished{suffix}"
-            header_plain = f"{_result_line_plain(label)} · Finished{suffix}"
-
-            # ── merged layout: one combined edit, timeline + answer ────────
-            # Attempted here — after the header text exists (used only by the
-            # observer broadcast below) but before the per-answer-alone
-            # overflow check, since merged has its own combined-text ceiling
-            # check inside _send_merged_final. Only attempted when the busy
-            # card is still live; if it isn't (e.g. it was already lost) there
-            # is nothing to merge into, so the turn falls through to the
-            # ordinary send below — the exact same path "replace" uses.
-            # Roadmap 8.41: agents this turn launched in the background are
-            # still running — the answer ends by saying so, in every layout.
-            agents = self._agents_snapshot(sess)
-            merged_delivered = False
-            if layout == "merged" and sess.busy_msg_id and sess.busy_msg_id > 0:
-                pre_merge_busy_msg_id = sess.busy_msg_id
-                # `_send_merged_final` EDITS the existing busy message in
-                # place rather than sending a new one, so on success no
-                # `registry.track_message` call happens here — reply
-                # routing for this message_id keeps working only because
-                # it was already registered when the busy message was
-                # first sent (see animation.py's `track_message` call
-                # right after `send_busy`) and that message_id is never
-                # reused for anything else. If a future refactor ever
-                # made the merged edit target a *different* message_id
-                # than the one tracked at send time, replies to it would
-                # silently stop resolving to this session.
+                # Mark all tools as done
+                sess.tool_history = [(s, True) for s, _ in sess.tool_history]
+                # A self-woken turn that ends before earning its deferred card
+                # never gets one: only the answer goes out, and with no card
+                # its first line carries the stats (roadmap 8.32). Under the
+                # card lock, and before the animation is stopped: a deferred
+                # card whose send is already in flight lands first and is then
+                # finished like any other card, instead of arriving after this
+                # path and being stranded mid-animation. The same wait covers a
+                # live re-anchor in flight (a tick's `_consume_and_reanchor`),
+                # which swaps `busy_msg_id` to its new card under this lock:
+                # everything below reads the card it leaves, never the old one
+                # it is replacing. Settling the old id instead would strand the
+                # live card on "Working" for good (tests: the in-flight re-anchor
+                # and in-flight send tests in test_quiet_toolless_turns.py).
+                async with sess.animate_lock:
+                    self._cancel_lazy_card(sess)
+                    # From here no card is opened for this turn (roadmap 8.57 R2):
+                    # a request for it that is still waiting on the lock finds it
+                    # finished and sends nothing.
+                    sess.close_turn(finishing_turn)
+                # Stop animation and clean up busy message
+                self._stop_animation(sess)
+                sess.pending_permission = None  # clear stale inline permission if any
+                # `layout` resolves per-session first: this session's own override
+                # (if any) wins; otherwise falls back to the scope's stored
+                # /settings preference; an untouched scope falls back further to
+                # the KEEP_FINISHED_CARD seed (aipager.preferences is the sole
+                # owner of that resolution — resolve_preferences, not
+                # get_preferences, so a session override actually takes effect
+                # here rather than only in the prompt-injection path).
+                layout = preferences.resolve_preferences(
+                    sess.scope_chat_id, sess.preference_overrides(),
+                ).layout
+                # R3/R5 (design.md "turn anchor follows consumption"): decide
+                # HERE, once layout is known, whether the about-to-be-
+                # finalised card needs to move. `card` re-anchors immediately
+                # (the finished render happens inside `_reanchor_busy_card`
+                # itself); `merged` only flags it — the old card is still
+                # needed for `_drop_answer_tail` below and the answer text
+                # isn't known yet, so the actual delete+resend happens once
+                # `_send_merged_final` is called, further down. `replace` is
+                # unchanged: the delete-then-answer-under-`trigger_msg_id`
+                # path already reads the now-correct target from insertion
+                # point 1 above.
                 #
-                # R5/B6 (design.md "turn anchor follows consumption"):
-                # `merged_send_as_new` (set once, layout-aware, right
-                # after `layout` was resolved above) means this card is
-                # anchored to a message this turn did NOT consume —
-                # Telegram cannot move an existing message's reply
-                # target, so the combined card+answer must be a fresh
-                # SEND under the new target instead of an edit in place.
-                if merged_send_as_new:
-                    merged_delivered = await self._send_merged_final(
-                        sess, content, send_as_new=True,
-                        reply_to=sess.trigger_msg_id, agents=agents,
+                # A real mismatch between `busy_card_trigger` and
+                # `trigger_msg_id` is the ONLY signal design.md defines for
+                # "consumption moved the target" (R3) — every production call
+                # site that establishes a live card now also records
+                # `busy_card_trigger` (`send_busy`, both `_reanchor_busy_card`
+                # sends, `_send_merged_final(send_as_new=True)`, the
+                # `compacting`/`compact_done` bypass sends, and the `load()`
+                # restart seed), so a bare `!= ` check — no `is not None`
+                # carve-out — cannot silently disable a genuine re-anchor
+                # after one of those paths runs (review rev-iter1-002: a
+                # `busy_card_trigger is not None` guard here used to survive
+                # exactly the compaction-bypass gap those sites had before
+                # this fix, degrading a real absorption to pre-feature
+                # behaviour with no signal it had happened). A hand-built
+                # `TrackedSession` that skips every production call site (as
+                # several pre-existing unit tests do) must seed
+                # `busy_card_trigger` itself, same as design.md's own contract
+                # already required.
+                reanchor_needed = bool(
+                    sess.busy_msg_id and sess.busy_msg_id > 0
+                    and sess.busy_card_trigger != finish_trigger
+                )
+                # review rev-iter1-001: trim any trailing commentary that just
+                # duplicates the incoming answer BEFORE either final-render
+                # path below — the immediate `card`-layout re-anchor a few
+                # lines down renders the finished card RIGHT HERE via
+                # `_reanchor_busy_card`, and `card_already_final` then skips
+                # the second (correctly-ordered) render that used to catch
+                # this. Running the trim first means both the immediate
+                # re-anchor render and the ordinary in-place final render see
+                # the already-trimmed `stream_commentary`, so there is only
+                # ever one place this decision has to be made.
+                if sess.busy_msg_id and sess.busy_msg_id > 0 and layout in ("card", "merged"):
+                    _drop_answer_tail(
+                        sess, context.get("raw_md") or context.get("summary") or "",
                     )
-                    if merged_delivered and pre_merge_busy_msg_id and pre_merge_busy_msg_id > 0:
+                # ── the layout setting decides the card, always ─────────────────
+                # 8.32 R1 deleted a `card`-layout turn's card when it had no
+                # timeline (no tools), delivering the answer alone. That broke
+                # the operator's own setting: "Busy card + result" promises the
+                # card stays and the answer arrives as its own message, and
+                # tool turns kept theirs, so the chat looked random (operator,
+                # 2026-09-27: "it must respect the settings"). Every turn now
+                # follows the layout: `card` keeps the card, `replace` removes
+                # it, `merged` folds the answer in. The deletion hooks below
+                # stay wired for a future layout that wants them, and are
+                # inert while this stays 0.
+                toolless_card_msg_id = 0
+                card_already_final = False
+                merged_send_as_new = False
+                if reanchor_needed and layout == "card":
+                    await self._reanchor_busy_card(sess, finish_trigger, final=True)
+                    card_already_final = True
+                elif reanchor_needed and layout == "merged":
+                    merged_send_as_new = True
+                card_kept = False
+                # When the finished card went out, on the monotonic clock: the
+                # answer send below owes it FINISH_CARD_GRACE_SECONDS measured
+                # from that moment (roadmap 8.23) — the clock starts where
+                # this is STAMPED, a few lines down, not here. 0.0 means no
+                # finished card was rendered, and so nothing to wait for.
+                finish_card_at = 0.0
+                # True once the busy card has been successfully disposed of —
+                # either kept as the finished card (`card_kept`, below) or
+                # deleted outright (`replace`, and `merged`'s own delete-on-
+                # fallback a little further down). A kept card already says
+                # Done and the turn's stats, so the answer under it opens with
+                # the SHORT result line; with the card gone the answer's first
+                # line carries the stats instead — still ONE message, per the
+                # user's own framing of `replace`: "still we have only one
+                # message after user message but busy message gets removed".
+                if sess.busy_msg_id and sess.busy_msg_id > 0:
+                    if layout in ("card", "merged"):
+                        # Leave the timeline in the chat: which tools ran, in what
+                        # order, and what Claude said between them is the record of
+                        # how this answer was reached. Rendered here — before the
+                        # streaming state is reset below and before the answer goes
+                        # out — so scrollback reads card, header, body.
+                        # (the trim already ran above, before any final render.)
+                        if layout == "card":
+                            if card_already_final:
+                                # _reanchor_busy_card already rendered the
+                                # exact same final content under the new
+                                # message a moment ago — a second POST here
+                                # would be redundant, harmless-but-wasteful.
+                                card_kept = True
+                            else:
+                                try:
+                                    card_kept = await self._edit_busy_rich(
+                                        sess, FINAL_VERB, final=True,
+                                    ) is True
+                                except Exception:
+                                    log.debug("Final busy-card render failed", exc_info=True)
+                            if card_kept:
+                                # Stamped for BOTH branches above, and only
+                                # once the card is really out: the re-anchor
+                                # rendered it a few lines up, the edit right
+                                # here. A failed final render (`card_kept`
+                                # False) leaves this 0.0 — there is no
+                                # finished card for the answer to follow, so
+                                # the answer must not be held back for one.
+                                finish_card_at = time.monotonic()
+                            sess.busy_msg_id = None
+                        # "merged": busy_msg_id stays live on purpose — the one
+                        # combined edit (timeline + answer) happens below, once
+                        # the answer text is known, and clears it either way.
+                    else:
+                        # "replace" — delete the busy card, then send the answer
+                        # as the turn's one message (its first line carries the
+                        # stats the card would have shown).
                         try:
                             await bot.delete_message(
                                 chat_id=resolve_chat_id(sess),
-                                message_id=pre_merge_busy_msg_id,
-                            )
-                        except Exception:
-                            log.debug("[%s] stale merged card delete failed",
-                                      sess.label, exc_info=True)
-                else:
-                    merged_delivered = await self._send_merged_final(
-                        sess, content, agents=agents)
-                if not merged_delivered:
-                    # Losing the timeline is acceptable; losing the answer is
-                    # never acceptable — fall back to the replace-style send
-                    # below by clearing the (now presumed-gone-or-stale) card.
-                    # Falling back to "replace" means behaving exactly like
-                    # it: one message opening with the stats result line,
-                    # once the card is gone.
-                    if sess.busy_msg_id and not MUTE.is_muted(resolve_chat_id(sess)):
-                        # Still live — _send_merged_final's own failure
-                        # wasn't a RichMessageGone, so the card needs an
-                        # explicit delete here (a send too: skipped while
-                        # the chat is flood-muted).
-                        try:
-                            await bot.delete_message(
-                                chat_id=resolve_chat_id(sess),
-                                message_id=pre_merge_busy_msg_id,
+                                message_id=sess.busy_msg_id,
                             )
                         except Exception:
                             pass
-                    # Else _send_merged_final already found the card gone
-                    # (RichMessageGone) and cleared busy_msg_id itself —
-                    # nothing left in the chat either way.
-                sess.busy_msg_id = None
+                        sess.busy_msg_id = None
 
-            # ── Overflow detection ─────────────────────────────────────────
-            # Skipped when the merged edit above already delivered the whole
-            # turn — its own combined-text ceiling check already covers this
-            # turn's answer.
-            send_file = False
-            body_content = content  # may be truncated below
-            # The first line the body carries when it goes out as ONE rich
-            # message: the short result line under a kept card (the card
-            # already says Done + stats), the stats form when no card
-            # remains (`replace`, `merged`'s fallback, a turn that never
-            # had a card). It counts against the byte ceiling, so the
-            # overflow check below leaves room for it.
-            lead_md = _result_line_md(label) if card_kept else header_md
-            lead_plain = _result_line_plain(label) if card_kept else header_plain
-            body_limit = _RICH_LIMIT - len(f"{lead_md}\n\n".encode("utf-8"))
-            if agents:
-                body_limit -= len(f"\n\n{agents['line']}".encode("utf-8"))
-            if not merged_delivered and content:
-                content_utf8 = content.encode("utf-8")
-                if len(content_utf8) > body_limit:
-                    # Truncate at the last markdown-safe boundary under the limit.
-                    bounds = _md_safe_boundaries(content)
-                    cut = 0
-                    for b in bounds:
-                        b_bytes = len(content[:b].encode("utf-8"))
-                        if b_bytes <= body_limit:
-                            cut = b
-                    if cut:
-                        body_content = content[:cut]
-                    else:
-                        # No safe boundary found — truncate at byte limit.
-                        body_content = content_utf8[:body_limit].decode("utf-8", errors="ignore")
-                    send_file = True
+                summary = context.get("summary", "") or ""
+                raw_md = context.get("raw_md", "")
+                # Set only by session_monitor.py's idle-recovery fallback (a
+                # missed-Stop-hook guess, never a real Stop/Notification hook).
+                # When that guess turns up nothing new to say, the standalone
+                # "Finished" header below is suppressed entirely — see its use
+                # near `standalone_header`.
+                recovered = bool(context.get("recovered"))
 
-            # ── Result-line placement: one message per turn, never a bare
-            # one, and every result opens with the session's name
-            # ("session-name-on-every-message") ──
-            # card kept + body        → ONE rich message — the SHORT result
-            #                           line (`💬 label`), blank line, body —
-            #                           threaded to the prompt. The card
-            #                           right above already reads
-            #                           ✅ label · Done · stats, so nothing
-            #                           of that is repeated.
-            # card kept + no body     → nothing. The card's ✅ status line IS
-            #                           the record; a bare "Finished" under it
-            #                           only ever repeated it.
-            # card deleted + body     → ONE rich message — the STATS result
-            #                           line (`💬 label · Finished (…)`),
-            #                           blank line, body (`replace`, and
-            #                           `merged` falling back to it): the
-            #                           card is gone, so this line carries
-            #                           the elapsed time.
-            # no card + body          → the same stats-line message. "No
-            #                           card" covers a turn that never had
-            #                           one and a final render that failed.
-            # no card / deleted card, → one header message carrying the
-            #   no body                 elapsed time: nothing else in the chat
-            #                           says the turn ended.
-            # Overflow keeps the standalone header regardless: the "attached
-            # below" note and the document's reply target both live on it,
-            # and the body then follows it bare.
-            #
-            # EXCEPT: a recovery-originated idle (session_monitor.py's
-            # missed-Stop-hook guess) with no body — content was empty, or
-            # its digest was already delivered — has nothing to report.
-            # `send_file` can't be true here (it requires non-empty
-            # `content`), so this only ever silences the "no card, no body"
-            # row above: no bare "Finished (46m 46s)" for a turn that, as
-            # far as the operator can tell, never actually ended.
-            standalone_header = (
-                not merged_delivered
-                and not (recovered and not body_content)
-                and (send_file or (not card_kept and not body_content))
-            )
-            msg_id = 0
-            if standalone_header and MUTE.is_muted(resolve_chat_id(sess)):
-                # R3: the header is a send too. The body below raises
-                # RichMessageFloodBanned before any HTTP and nothing
-                # falls back, so the whole turn costs zero attempts.
-                log.info("[%s] IDLE header skipped — chat flood-muted", label)
-            elif standalone_header:
-                if send_file:
-                    header_text += "\n\n📎 <i>Full response attached below ↓</i>"
-                log.debug("[%s] Sending IDLE notification (%d chars header)",
-                          label, len(header_text))
-                try:
-                    msg = await bot.send_message(
-                        resolve_chat_id(sess), header_text, parse_mode="HTML",
-                        reply_to_message_id=sess.trigger_msg_id,
-                    )
-                    msg_id = msg.message_id
-                except Exception:
-                    log.warning("[%s] Failed to send IDLE header", label, exc_info=True)
-                    # We still try to send the body below; msg_id stays 0 so
-                    # nothing downstream tracks or replies to a message that
-                    # was never sent.
+                # ── content-selection (design §1, named rule) ──────────────────
+                # raw_md takes precedence, then the producer's summary, then
+                # nothing. Deliberately NOT sess.summary: that is the PREVIOUS
+                # turn's answer, and a turn that produced no text of its own
+                # (it ended on tool calls, or was a background-job re-entry)
+                # used to fall through to it whenever the producer had not set
+                # `no_response` — the operator then read the last answer again
+                # as the reply to the new prompt, plausible enough to be
+                # believed and so worse than no body at all (three copies of
+                # one answer were seen live). An empty content sends no body;
+                # what goes out instead depends on whether a card exists — see
+                # the header placement below.
+                content = raw_md or summary
 
-            # ── Send the body via sendRichMessage ──────────────────────────
-            if not merged_delivered and body_content:
-                if standalone_header:
-                    # The header message above already opens the turn's
-                    # result with the session's name; the body follows it.
-                    rich_text = body_content
-                    plain_text = body_content
-                else:
-                    # One message — its FIRST line is the result line
-                    # ("session-name-on-every-message"), in whichever form
-                    # `lead_md` picked above.
-                    rich_text = f"{lead_md}\n\n{body_content}"
-                    plain_text = f"{lead_plain}\n\n{body_content}"
-                # Only the rich send carries the ⏳ line: it is the one whose
-                # exact text is kept to settle it. A held copy goes out late
-                # and a plain-text fallback is chunked — a line frozen into
-                # either could never be settled, so neither carries it.
-                held_rich = rich_text
-                if agents:
-                    rich_text = f"{rich_text}\n\n{agents['line']}"
-                is_rtl = detect_rtl(body_content)
-                log.info("[%s] sendRichMessage: %d chars, rtl=%s, overflow=%s, "
-                         "lead=%s",
-                         label, len(rich_text), is_rtl, send_file,
-                         "standalone" if standalone_header
-                         else ("short" if card_kept else "stats"))
-                # Without a standalone header the body IS the turn's message:
-                # it carries the reply link and becomes the tracked message.
-                body_is_the_message = not standalone_header
-                reply_to = sess.trigger_msg_id if body_is_the_message else None
-                chat_id = resolve_chat_id_int(sess)
-                # ── the finished card's head start (roadmap 8.23) ───────
-                # Wire order is already right; this makes it the VISIBLE
-                # order. Only the REMAINDER of the grace is slept — the
-                # answer-text building since the card edit counts toward
-                # it — and only in the `card` layout with a finished card
-                # really out, which is exactly what `finish_card_at`
-                # records (`merged` edits the card into the answer, so
-                # there is no ordering to fix; `replace` deleted it).
-                # This is the single grace site in the finish path: the
-                # plain-text fallbacks below follow a FAILED send, by
-                # which point the head start has long since elapsed.
+                # Content-dedup covers the FINAL delivery too ("close the
+                # background-job endgame" requirement 3): a stray idle event
+                # re-running this path with content identical to the last
+                # delivered summary (interim or final) must not re-post it.
+                # The card disposal below still runs — the header/card is
+                # idempotent to finalize; only the body re-send is the spam.
+                # The single hash resets where a genuine new turn starts; the
+                # delivered-digest ring does not, so a body that already went
+                # out is never re-posted however the turns were counted — the
+                # transcript's newest text is an EARLIER turn's exactly when
+                # this one produced none, and that is the case a per-turn
+                # reset cannot see.
                 #
-                # NOT "the card is always seen first", though — two sends
-                # can still precede it with a stamped card, and both are
-                # deliberate: the standalone overflow header just above
-                # (reachable with a kept card only when `send_file` is
-                # set, i.e. an answer over the byte ceiling going out as
-                # an attachment), and the API-error notice that returns
-                # early, upstream of here. Neither is the ANSWER — the
-                # message that actually competes with the card edit for
-                # the operator's eye — and the answer still follows the
-                # card by the grace in both cases, so the card is never
-                # the last thing to render. Covering those two wants its
-                # own decision, not a second grace site here: moving the
-                # wait above the header would also delay header-only
-                # turns and would have to learn about the flood mute,
-                # which skips that header entirely.
-                # A grace of 0 disables the wait through `owed` alone, so
-                # there is no separate (untestable) branch for it.
-                if finish_card_at:
-                    owed = FINISH_CARD_GRACE_SECONDS - (
-                        time.monotonic() - finish_card_at
-                    )
-                    if owed > 0:
-                        await _finish_sleep(owed)
-                try:
-                    if chat_id is None:
-                        # Unscoped session, no global CHAT_ID configured —
-                        # there's no numeric destination for the rich-message
-                        # API call. Go straight to the plain-text fallback
-                        # below (it still addresses the chat by whatever
-                        # resolve_chat_id(sess) returned) instead of letting
-                        # int(None-ish) raise and lose the answer outright.
-                        raise RichMessageFallbackRequired(
-                            "no numeric chat id resolved",
+                # Recorded PENDING (roadmap 8.39): refused in this process from
+                # here on, but written to the state file only once the send
+                # below is known to have landed — see `_answer_landed`.
+                _answer_digests: list[str] = []
+                _answer_landed = False
+                if content:
+                    _digest = hashlib.md5(content.encode("utf-8")).hexdigest()
+                    if (_digest == sess.last_idle_summary_hash
+                            or sess.was_delivered(_digest)):
+                        log.info(
+                            "[%s] final summary identical to a body already "
+                            "delivered this session — suppressing re-send",
+                            label,
                         )
-                    sent = await send_rich_message(
-                        chat_id,
-                        rich_text,
-                        is_rtl=is_rtl,
-                        reply_to_message_id=reply_to,
-                    )
-                    _answer_landed = True
-                    if body_is_the_message and isinstance(sent, dict):
-                        msg_id = sent.get("message_id") or 0
-                    if (agents and isinstance(sent, dict)
-                            and sent.get("message_id")):
-                        self._remember_agents_line(
-                            sess, chat_id, sent["message_id"], rich_text,
-                            agents, is_rtl)
-                except RichMessageBlocked:
-                    _log_blocked_once(Exception("sendRichMessage 403"))
-                except RichMessageFloodBanned:
-                    # HELD (8.29 R6). This is THE drop path the incident
-                    # log named five times on 2026-09-15: the answer lived
-                    # in a local of this method and went out of scope with
-                    # it, leaving one INFO line and nothing else.
-                    #
-                    # Still no plain-text fallback — that would be a fresh
-                    # violation extending the ban, and R2 is unchanged.
-                    # What changes is that "cannot send now" stops meaning
-                    # "cannot send": the text is kept and delivered once
-                    # the mute lifts, with an honest late marker.
-                    self._hold_answer(sess, held_rich, plain_text, reply_to,
-                                      digests=_answer_digests,
-                                      selected_wall=turn_end_wall)
-                except (RichMessageFallbackRequired, Exception):
-                    # Plain-text fallback — split into ≤4096-char chunks at
-                    # markdown-safe boundaries so the send cannot fail to parse.
-                    log.warning("[%s] sendRichMessage failed — falling back to plain text",
-                                label, exc_info=True)
-                    chunks = _plain_text_chunks(plain_text)
-                    for chunk in chunks:
+                        content = ""
+                    else:
+                        sess.last_idle_summary_hash = _digest
+                        sess.remember_delivered(_digest, pending=True)
+                        _answer_digests.append(_digest)
+
+                # Reset streaming state — the turn is over.
+                sess.stream_commentary = []
+                sess.stream_tool_cursor = 0
+                sess.stream_msg_id = ""
+                sess.stream_anchor_floor = 0
+                sess.stream_batch_since = None
+                sess.stream_block_index = {}
+                sess.stream_exact_anchor = {}
+                sess.stream_dirty = False
+                sess.stream_last_rendered = ""
+                sess.stream_offset = 0
+                sess.stream_transcript_path = ""
+
+                # ── API error detection → friendly message + retry button ──
+                error_source = raw_md or summary or ""
+                error_detection = _detect_api_error(error_source)
+                if error_detection:
+                    if layout == "merged" and sess.busy_msg_id and sess.busy_msg_id > 0:
+                        # This branch returns before the merged-delivery attempt
+                        # below ever runs — clean up here so the busy card isn't
+                        # stranded showing "Working…" with a Stop button forever.
                         try:
-                            fallback = await bot.send_message(
-                                resolve_chat_id(sess), chunk,
-                                # No parse_mode → Telegram cannot raise a parse
-                                # error; this is the "never lose a reply" safety net.
-                                reply_to_message_id=(
-                                    reply_to if not msg_id else None
-                                ),
+                            await bot.delete_message(
+                                chat_id=resolve_chat_id(sess),
+                                message_id=sess.busy_msg_id,
                             )
-                            _answer_landed = True
-                            # With no header, the first chunk that lands takes
-                            # over as the tracked message for this reply.
-                            if body_is_the_message and not msg_id:
-                                msg_id = fallback.message_id
                         except Exception:
-                            log.warning("[%s] plain-text fallback chunk send failed",
-                                        label, exc_info=True)
-
-            # Roadmap 8.39: only an answer that reached the chat is
-            # remembered ACROSS a restart. A held one (not persisted), a
-            # blocked or failed one, or one a shutdown cut off stays out of
-            # the state file, so the next daemon can still deliver it.
-            if _answer_digests and (_answer_landed or merged_delivered):
-                sess.confirm_delivered(_answer_digests, turn_end_wall)
-
-            # Inert while toolless_card_msg_id stays 0 (the layout decides
-            # the card, 2026-09-27); kept for a layout that wants it.
-            if toolless_card_msg_id:
-                self._delete_card_later(sess, toolless_card_msg_id)
-
-            sess.trigger_msg_id = None  # reply cycle complete
-            sess.busy_card_trigger = None
-            self.registry.mark_dirty()
-            if msg_id:
-                self.registry.track_message(msg_id, sess.name, resolve_chat_id_int(sess) or 0)
-            await self._maybe_update_bot_name(sess.name)
-
-            # ── Full-log .txt attachment ("layered-card-shedding") ────────
-            # Sent when the FINAL card render had to hide anything (the
-            # renderer reported it via sess.last_card_truncated) OR the
-            # answer body was truncated by the overflow logic above. One
-            # file per close, superseding the old answer-only
-            # response.txt: complete chronological play-by-play plus the
-            # full answer, so hidden history is always recoverable.
-            # For layout=card and layout=merged this flag comes from the
-            # FINAL render (stashed by _edit_busy_rich / _send_merged_final
-            # respectively). For layout=replace no final card is ever
-            # rendered — the busy card is deleted outright — so the flag
-            # reflects the last interim tick: a deliberate proxy (review
-            # rev-iter1-006), since replace leaves no finished card whose
-            # hidden rows an attachment would need to compensate for
-            # beyond what the interim state already showed.
-            attach_log = send_file or sess.last_card_truncated
-            file_content = (
-                build_full_log(label, log_tools, log_commentary, content,
-                                agents=log_agents)
-                if attach_log else ""
-            )
-            if attach_log and file_content:
-                content_bytes = file_content.encode("utf-8")
-                if len(content_bytes) > TELEGRAM_MAX_DOC_BYTES:
-                    mb = len(content_bytes) / (1024 * 1024)
-                    log.warning(
-                        "[%s] Response too large for Telegram (%.1f MB) — sent summary only",
-                        label, mb,
-                    )
-                    file_content = ""  # also skip the observer-broadcast path below
-                elif MUTE.is_muted(resolve_chat_id(sess)):
-                    # R3: a document is a send. Observers (own bots, own
-                    # budgets) still get theirs below.
-                    log.info("[%s] full-log attachment skipped — chat "
-                             "flood-muted", label)
-                else:
+                            pass
+                        sess.busy_msg_id = None
+                    friendly_error, _retry_after = error_detection
+                    text = (f"⚠️ <b>{html_mod.escape(label)}</b> · {friendly_error}")
+                    keyboard = (self._build_retry_keyboard(sess)
+                                if sess.last_prompt else None)
                     try:
-                        tmp = Path(tempfile.mktemp(suffix=".txt", prefix=f"{label}_"))
-                        tmp.write_text(file_content, encoding="utf-8")
-                        with open(tmp, "rb") as f:
-                            await bot.send_document(
-                                resolve_chat_id(sess), document=f,
-                                filename=f"{label}_full_log.txt",
-                                reply_to_message_id=msg_id or None,
-                            )
-                        tmp.unlink(missing_ok=True)
-                    except Forbidden as e:
-                        _log_blocked_once(e)
+                        msg = await bot.send_message(
+                            resolve_chat_id(sess), text, parse_mode="HTML",
+                            reply_to_message_id=finish_trigger,
+                            reply_markup=keyboard,
+                        )
+                        self.registry.track_message(msg.message_id, sess.name, resolve_chat_id_int(sess) or 0)
+                        await self._maybe_update_bot_name(sess.name)
                     except Exception:
-                        log.warning("Failed to send full response file", exc_info=True)
+                        log.warning("Failed to send error notification", exc_info=True)
+                    if self.observers:
+                        asyncio.create_task(self.observers.broadcast(text))
+                    if toolless_card_msg_id:
+                        self._delete_card_later(sess, toolless_card_msg_id)
+                    # Don't clear trigger_msg_id — retry needs it
+                    # Don't flush pending queue — nothing was processed
+                    return
 
-            # Broadcast to observer bots (header only — rich messages are not
-            # observable via the same channel; send the header as summary).
-            if self.observers:
-                obs_text = header_text
+                # Compute elapsed time since BUSY started
+                elapsed_str = ""
+                elapsed_s = 0
+                if sess.busy_started_at:
+                    elapsed_s = int(time.monotonic() - sess.busy_started_at)
+                elif sess.busy_started_wall:
+                    # busy_started_at is stamped by the card sender; a turn
+                    # that never got a card still has the transition's own
+                    # stamp, so the header can report how long it ran.
+                    elapsed_s = int(time.time() - sess.busy_started_wall)
+                if elapsed_s >= 60:
+                    elapsed_str = f"{elapsed_s // 60}m {elapsed_s % 60}s"
+                elif elapsed_s > 0:
+                    elapsed_str = f"{elapsed_s}s"
+                # Lines changed this turn
+                lines_str = ""
+                if sess.last_lines_added or sess.last_lines_removed:
+                    lines_str = f"+{sess.last_lines_added} -{sess.last_lines_removed}"
+                # Build suffix: combine non-empty parts with comma
+                parts = [p for p in (elapsed_str, lines_str) if p]
+                suffix = f" ({', '.join(parts)})" if parts else ""
+                # The result line in its STATS form — a result that is the only
+                # message left for its turn says Finished and how long it took
+                # ("session-name-on-every-message"). HTML for the standalone
+                # header message, the rich-message dialect (bold = **) for a
+                # composed send, bare for the plain-text fallback.
+                header_text = (
+                    f"{_RESULT_GLYPH} <b>{html_mod.escape(label)}</b> · Finished{suffix}"
+                )
+                header_md = f"{_result_line_md(label)} · Finished{suffix}"
+                header_plain = f"{_result_line_plain(label)} · Finished{suffix}"
+
+                # ── merged layout: one combined edit, timeline + answer ────────
+                # Attempted here — after the header text exists (used only by the
+                # observer broadcast below) but before the per-answer-alone
+                # overflow check, since merged has its own combined-text ceiling
+                # check inside _send_merged_final. Only attempted when the busy
+                # card is still live; if it isn't (e.g. it was already lost) there
+                # is nothing to merge into, so the turn falls through to the
+                # ordinary send below — the exact same path "replace" uses.
+                # Roadmap 8.41: agents this turn launched in the background are
+                # still running — the answer ends by saying so, in every layout.
+                agents = self._agents_snapshot(sess)
+                merged_delivered = False
+                if layout == "merged" and sess.busy_msg_id and sess.busy_msg_id > 0:
+                    pre_merge_busy_msg_id = sess.busy_msg_id
+                    # `_send_merged_final` EDITS the existing busy message in
+                    # place rather than sending a new one, so on success no
+                    # `registry.track_message` call happens here — reply
+                    # routing for this message_id keeps working only because
+                    # it was already registered when the busy message was
+                    # first sent (see animation.py's `track_message` call
+                    # right after `send_busy`) and that message_id is never
+                    # reused for anything else. If a future refactor ever
+                    # made the merged edit target a *different* message_id
+                    # than the one tracked at send time, replies to it would
+                    # silently stop resolving to this session.
+                    #
+                    # R5/B6 (design.md "turn anchor follows consumption"):
+                    # `merged_send_as_new` (set once, layout-aware, right
+                    # after `layout` was resolved above) means this card is
+                    # anchored to a message this turn did NOT consume —
+                    # Telegram cannot move an existing message's reply
+                    # target, so the combined card+answer must be a fresh
+                    # SEND under the new target instead of an edit in place.
+                    if merged_send_as_new:
+                        merged_delivered = await self._send_merged_final(
+                            sess, content, send_as_new=True,
+                            reply_to=finish_trigger, agents=agents,
+                        )
+                        if merged_delivered and pre_merge_busy_msg_id and pre_merge_busy_msg_id > 0:
+                            try:
+                                await bot.delete_message(
+                                    chat_id=resolve_chat_id(sess),
+                                    message_id=pre_merge_busy_msg_id,
+                                )
+                            except Exception:
+                                log.debug("[%s] stale merged card delete failed",
+                                          sess.label, exc_info=True)
+                    else:
+                        merged_delivered = await self._send_merged_final(
+                            sess, content, agents=agents)
+                    if not merged_delivered:
+                        # Losing the timeline is acceptable; losing the answer is
+                        # never acceptable — fall back to the replace-style send
+                        # below by clearing the (now presumed-gone-or-stale) card.
+                        # Falling back to "replace" means behaving exactly like
+                        # it: one message opening with the stats result line,
+                        # once the card is gone.
+                        if sess.busy_msg_id and not MUTE.is_muted(resolve_chat_id(sess)):
+                            # Still live — _send_merged_final's own failure
+                            # wasn't a RichMessageGone, so the card needs an
+                            # explicit delete here (a send too: skipped while
+                            # the chat is flood-muted).
+                            try:
+                                await bot.delete_message(
+                                    chat_id=resolve_chat_id(sess),
+                                    message_id=pre_merge_busy_msg_id,
+                                )
+                            except Exception:
+                                pass
+                        # Else _send_merged_final already found the card gone
+                        # (RichMessageGone) and cleared busy_msg_id itself —
+                        # nothing left in the chat either way.
+                    sess.busy_msg_id = None
+
+                # ── Overflow detection ─────────────────────────────────────────
+                # Skipped when the merged edit above already delivered the whole
+                # turn — its own combined-text ceiling check already covers this
+                # turn's answer.
+                send_file = False
+                body_content = content  # may be truncated below
+                # The first line the body carries when it goes out as ONE rich
+                # message: the short result line under a kept card (the card
+                # already says Done + stats), the stats form when no card
+                # remains (`replace`, `merged`'s fallback, a turn that never
+                # had a card). It counts against the byte ceiling, so the
+                # overflow check below leaves room for it.
+                lead_md = _result_line_md(label) if card_kept else header_md
+                lead_plain = _result_line_plain(label) if card_kept else header_plain
+                body_limit = _RICH_LIMIT - len(f"{lead_md}\n\n".encode("utf-8"))
+                if agents:
+                    body_limit -= len(f"\n\n{agents['line']}".encode("utf-8"))
+                if not merged_delivered and content:
+                    content_utf8 = content.encode("utf-8")
+                    if len(content_utf8) > body_limit:
+                        # Truncate at the last markdown-safe boundary under the limit.
+                        bounds = _md_safe_boundaries(content)
+                        cut = 0
+                        for b in bounds:
+                            b_bytes = len(content[:b].encode("utf-8"))
+                            if b_bytes <= body_limit:
+                                cut = b
+                        if cut:
+                            body_content = content[:cut]
+                        else:
+                            # No safe boundary found — truncate at byte limit.
+                            body_content = content_utf8[:body_limit].decode("utf-8", errors="ignore")
+                        send_file = True
+
+                # ── Result-line placement: one message per turn, never a bare
+                # one, and every result opens with the session's name
+                # ("session-name-on-every-message") ──
+                # card kept + body        → ONE rich message — the SHORT result
+                #                           line (`💬 label`), blank line, body —
+                #                           threaded to the prompt. The card
+                #                           right above already reads
+                #                           ✅ label · Done · stats, so nothing
+                #                           of that is repeated.
+                # card kept + no body     → nothing. The card's ✅ status line IS
+                #                           the record; a bare "Finished" under it
+                #                           only ever repeated it.
+                # card deleted + body     → ONE rich message — the STATS result
+                #                           line (`💬 label · Finished (…)`),
+                #                           blank line, body (`replace`, and
+                #                           `merged` falling back to it): the
+                #                           card is gone, so this line carries
+                #                           the elapsed time.
+                # no card + body          → the same stats-line message. "No
+                #                           card" covers a turn that never had
+                #                           one and a final render that failed.
+                # no card / deleted card, → one header message carrying the
+                #   no body                 elapsed time: nothing else in the chat
+                #                           says the turn ended.
+                # Overflow keeps the standalone header regardless: the "attached
+                # below" note and the document's reply target both live on it,
+                # and the body then follows it bare.
+                #
+                # EXCEPT: a recovery-originated idle (session_monitor.py's
+                # missed-Stop-hook guess) with no body — content was empty, or
+                # its digest was already delivered — has nothing to report.
+                # `send_file` can't be true here (it requires non-empty
+                # `content`), so this only ever silences the "no card, no body"
+                # row above: no bare "Finished (46m 46s)" for a turn that, as
+                # far as the operator can tell, never actually ended.
+                standalone_header = (
+                    not merged_delivered
+                    and not (recovered and not body_content)
+                    and (send_file or (not card_kept and not body_content))
+                )
+                msg_id = 0
+                if standalone_header and MUTE.is_muted(resolve_chat_id(sess)):
+                    # R3: the header is a send too. The body below raises
+                    # RichMessageFloodBanned before any HTTP and nothing
+                    # falls back, so the whole turn costs zero attempts.
+                    log.info("[%s] IDLE header skipped — chat flood-muted", label)
+                elif standalone_header:
+                    if send_file:
+                        header_text += "\n\n📎 <i>Full response attached below ↓</i>"
+                    log.debug("[%s] Sending IDLE notification (%d chars header)",
+                              label, len(header_text))
+                    try:
+                        msg = await bot.send_message(
+                            resolve_chat_id(sess), header_text, parse_mode="HTML",
+                            reply_to_message_id=finish_trigger,
+                        )
+                        msg_id = msg.message_id
+                    except Exception:
+                        log.warning("[%s] Failed to send IDLE header", label, exc_info=True)
+                        # We still try to send the body below; msg_id stays 0 so
+                        # nothing downstream tracks or replies to a message that
+                        # was never sent.
+
+                # ── Send the body via sendRichMessage ──────────────────────────
+                if not merged_delivered and body_content:
+                    if standalone_header:
+                        # The header message above already opens the turn's
+                        # result with the session's name; the body follows it.
+                        rich_text = body_content
+                        plain_text = body_content
+                    else:
+                        # One message — its FIRST line is the result line
+                        # ("session-name-on-every-message"), in whichever form
+                        # `lead_md` picked above.
+                        rich_text = f"{lead_md}\n\n{body_content}"
+                        plain_text = f"{lead_plain}\n\n{body_content}"
+                    # Only the rich send carries the ⏳ line: it is the one whose
+                    # exact text is kept to settle it. A held copy goes out late
+                    # and a plain-text fallback is chunked — a line frozen into
+                    # either could never be settled, so neither carries it.
+                    held_rich = rich_text
+                    if agents:
+                        rich_text = f"{rich_text}\n\n{agents['line']}"
+                    is_rtl = detect_rtl(body_content)
+                    log.info("[%s] sendRichMessage: %d chars, rtl=%s, overflow=%s, "
+                             "lead=%s",
+                             label, len(rich_text), is_rtl, send_file,
+                             "standalone" if standalone_header
+                             else ("short" if card_kept else "stats"))
+                    # Without a standalone header the body IS the turn's message:
+                    # it carries the reply link and becomes the tracked message.
+                    body_is_the_message = not standalone_header
+                    reply_to = finish_trigger if body_is_the_message else None
+                    chat_id = resolve_chat_id_int(sess)
+                    # ── the finished card's head start (roadmap 8.23) ───────
+                    # Wire order is already right; this makes it the VISIBLE
+                    # order. Only the REMAINDER of the grace is slept — the
+                    # answer-text building since the card edit counts toward
+                    # it — and only in the `card` layout with a finished card
+                    # really out, which is exactly what `finish_card_at`
+                    # records (`merged` edits the card into the answer, so
+                    # there is no ordering to fix; `replace` deleted it).
+                    # This is the single grace site in the finish path: the
+                    # plain-text fallbacks below follow a FAILED send, by
+                    # which point the head start has long since elapsed.
+                    #
+                    # NOT "the card is always seen first", though — two sends
+                    # can still precede it with a stamped card, and both are
+                    # deliberate: the standalone overflow header just above
+                    # (reachable with a kept card only when `send_file` is
+                    # set, i.e. an answer over the byte ceiling going out as
+                    # an attachment), and the API-error notice that returns
+                    # early, upstream of here. Neither is the ANSWER — the
+                    # message that actually competes with the card edit for
+                    # the operator's eye — and the answer still follows the
+                    # card by the grace in both cases, so the card is never
+                    # the last thing to render. Covering those two wants its
+                    # own decision, not a second grace site here: moving the
+                    # wait above the header would also delay header-only
+                    # turns and would have to learn about the flood mute,
+                    # which skips that header entirely.
+                    # A grace of 0 disables the wait through `owed` alone, so
+                    # there is no separate (untestable) branch for it.
+                    if finish_card_at:
+                        owed = FINISH_CARD_GRACE_SECONDS - (
+                            time.monotonic() - finish_card_at
+                        )
+                        if owed > 0:
+                            await _finish_sleep(owed)
+                    try:
+                        if chat_id is None:
+                            # Unscoped session, no global CHAT_ID configured —
+                            # there's no numeric destination for the rich-message
+                            # API call. Go straight to the plain-text fallback
+                            # below (it still addresses the chat by whatever
+                            # resolve_chat_id(sess) returned) instead of letting
+                            # int(None-ish) raise and lose the answer outright.
+                            raise RichMessageFallbackRequired(
+                                "no numeric chat id resolved",
+                            )
+                        sent = await send_rich_message(
+                            chat_id,
+                            rich_text,
+                            is_rtl=is_rtl,
+                            reply_to_message_id=reply_to,
+                        )
+                        _answer_landed = True
+                        if body_is_the_message and isinstance(sent, dict):
+                            msg_id = sent.get("message_id") or 0
+                        if (agents and isinstance(sent, dict)
+                                and sent.get("message_id")):
+                            self._remember_agents_line(
+                                sess, chat_id, sent["message_id"], rich_text,
+                                agents, is_rtl)
+                    except RichMessageBlocked:
+                        _log_blocked_once(Exception("sendRichMessage 403"))
+                    except RichMessageFloodBanned:
+                        # HELD (8.29 R6). This is THE drop path the incident
+                        # log named five times on 2026-09-15: the answer lived
+                        # in a local of this method and went out of scope with
+                        # it, leaving one INFO line and nothing else.
+                        #
+                        # Still no plain-text fallback — that would be a fresh
+                        # violation extending the ban, and R2 is unchanged.
+                        # What changes is that "cannot send now" stops meaning
+                        # "cannot send": the text is kept and delivered once
+                        # the mute lifts, with an honest late marker.
+                        self._hold_answer(sess, held_rich, plain_text, reply_to,
+                                          digests=_answer_digests,
+                                          selected_wall=turn_end_wall)
+                    except (RichMessageFallbackRequired, Exception):
+                        # Plain-text fallback — split into ≤4096-char chunks at
+                        # markdown-safe boundaries so the send cannot fail to parse.
+                        log.warning("[%s] sendRichMessage failed — falling back to plain text",
+                                    label, exc_info=True)
+                        chunks = _plain_text_chunks(plain_text)
+                        for chunk in chunks:
+                            try:
+                                fallback = await bot.send_message(
+                                    resolve_chat_id(sess), chunk,
+                                    # No parse_mode → Telegram cannot raise a parse
+                                    # error; this is the "never lose a reply" safety net.
+                                    reply_to_message_id=(
+                                        reply_to if not msg_id else None
+                                    ),
+                                )
+                                _answer_landed = True
+                                # With no header, the first chunk that lands takes
+                                # over as the tracked message for this reply.
+                                if body_is_the_message and not msg_id:
+                                    msg_id = fallback.message_id
+                            except Exception:
+                                log.warning("[%s] plain-text fallback chunk send failed",
+                                            label, exc_info=True)
+
+                # Roadmap 8.39: only an answer that reached the chat is
+                # remembered ACROSS a restart. A held one (not persisted), a
+                # blocked or failed one, or one a shutdown cut off stays out of
+                # the state file, so the next daemon can still deliver it.
+                if _answer_digests and (_answer_landed or merged_delivered):
+                    sess.confirm_delivered(_answer_digests, turn_end_wall)
+
+                # Inert while toolless_card_msg_id stays 0 (the layout decides
+                # the card, 2026-09-27); kept for a layout that wants it.
+                if toolless_card_msg_id:
+                    self._delete_card_later(sess, toolless_card_msg_id)
+
+                if (sess.turn_seq == finishing_turn
+                        and sess.trigger_msg_id == finish_trigger):
+                    # Reply cycle complete — unless a newer turn has begun, or a
+                    # popped message has taken the target (roadmap 8.57).
+                    sess.trigger_msg_id = None
+                    sess.busy_card_trigger = None
+                self.registry.mark_dirty()
+                if msg_id:
+                    self.registry.track_message(msg_id, sess.name, resolve_chat_id_int(sess) or 0)
+                await self._maybe_update_bot_name(sess.name)
+
+                # ── Full-log .txt attachment ("layered-card-shedding") ────────
+                # Sent when the FINAL card render had to hide anything (the
+                # renderer reported it via sess.last_card_truncated) OR the
+                # answer body was truncated by the overflow logic above. One
+                # file per close, superseding the old answer-only
+                # response.txt: complete chronological play-by-play plus the
+                # full answer, so hidden history is always recoverable.
+                # For layout=card and layout=merged this flag comes from the
+                # FINAL render (stashed by _edit_busy_rich / _send_merged_final
+                # respectively). For layout=replace no final card is ever
+                # rendered — the busy card is deleted outright — so the flag
+                # reflects the last interim tick: a deliberate proxy (review
+                # rev-iter1-006), since replace leaves no finished card whose
+                # hidden rows an attachment would need to compensate for
+                # beyond what the interim state already showed.
+                attach_log = send_file or sess.last_card_truncated
+                file_content = (
+                    build_full_log(label, log_tools, log_commentary, content,
+                                    agents=log_agents)
+                    if attach_log else ""
+                )
                 if attach_log and file_content:
-                    doc_bytes = file_content.encode("utf-8")
-                    asyncio.create_task(self.observers.broadcast_document(
-                        obs_text, doc_bytes, f"{label}_response.txt"))
-                else:
-                    asyncio.create_task(self.observers.broadcast(obs_text))
+                    content_bytes = file_content.encode("utf-8")
+                    if len(content_bytes) > TELEGRAM_MAX_DOC_BYTES:
+                        mb = len(content_bytes) / (1024 * 1024)
+                        log.warning(
+                            "[%s] Response too large for Telegram (%.1f MB) — sent summary only",
+                            label, mb,
+                        )
+                        file_content = ""  # also skip the observer-broadcast path below
+                    elif MUTE.is_muted(resolve_chat_id(sess)):
+                        # R3: a document is a send. Observers (own bots, own
+                        # budgets) still get theirs below.
+                        log.info("[%s] full-log attachment skipped — chat "
+                                 "flood-muted", label)
+                    else:
+                        try:
+                            tmp = Path(tempfile.mktemp(suffix=".txt", prefix=f"{label}_"))
+                            tmp.write_text(file_content, encoding="utf-8")
+                            with open(tmp, "rb") as f:
+                                await bot.send_document(
+                                    resolve_chat_id(sess), document=f,
+                                    filename=f"{label}_full_log.txt",
+                                    reply_to_message_id=msg_id or None,
+                                )
+                            tmp.unlink(missing_ok=True)
+                        except Forbidden as e:
+                            _log_blocked_once(e)
+                        except Exception:
+                            log.warning("Failed to send full response file", exc_info=True)
 
-            # A message Claude queued during this turn and did not absorb
-            # is the NEXT turn's prompt — Claude Code pops it as soon as
-            # the run ends, silently. Give that turn its card and target
-            # now (R8, "anchor-on-transcript-consumption"); a background
-            # job's waiting window keeps the queue for the job's close.
-            if sess.queued_targets and not sess.job_background_open():
-                await self._start_queued_turn(sess)
+                # Broadcast to observer bots (header only — rich messages are not
+                # observable via the same channel; send the header as summary).
+                if self.observers:
+                    obs_text = header_text
+                    if attach_log and file_content:
+                        doc_bytes = file_content.encode("utf-8")
+                        asyncio.create_task(self.observers.broadcast_document(
+                            obs_text, doc_bytes, f"{label}_response.txt"))
+                    else:
+                        asyncio.create_task(self.observers.broadcast(obs_text))
 
-            # Flush next queued message (one at a time, rest flush on next IDLE)
-            await self._drain_next_queued(sess)
+                # This turn's card and answer are settled: the next turn's
+                # card may go up now. (A message Claude had queued and did not
+                # absorb was taken as the next turn at this Stop's arrival,
+                # `_take_next_prompt` (R8, "anchor-on-transcript-consumption"),
+                # and its card follows once this returns.)
+                self._release_finish_gate(sess, gate)
 
+                # Flush next queued message (one at a time, rest flush on next IDLE)
+                await self._drain_next_queued(sess)
+            finally:
+                self._release_finish_gate(sess, gate)
+                if taken is not None:
+                    # The popped message's 👍 and card, now that this
+                    # turn's card and answer are settled (and whichever
+                    # way this finish ended).
+                    try:
+                        await self._open_popped_turn(sess, *taken,
+                                                     turn=popped_turn)
+                    except Exception:
+                        log.warning("[%s] the popped turn's card failed",
+                                    sess.label, exc_info=True)
         elif sess.status == Status.INTERACTIVE:
             self._stop_animation(sess)
             tool_info = context.get("tool_info")

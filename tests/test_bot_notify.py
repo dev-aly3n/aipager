@@ -140,17 +140,18 @@ def test_tool_use_attribution_increments_tool_count_activity_and_tools_list(
     assert info["tools"] == ["Bash: ls", "Read: /x"]
 
 
-def test_tool_use_with_unknown_agent_id_falls_back_to_parent_row(mk_bot, run_async):
+def test_tool_use_with_unknown_agent_id_adds_no_parent_row(mk_bot, run_async):
     bot = mk_bot()
     sess = _sess(busy_msg_id=None)
-    # agent-1 already stopped (or never started) — not in active_subagents
+    # agent-1 is not this turn's (a detached background agent, or one that
+    # already stopped): its tool call is not the parent's (roadmap 8.58).
     run_async(bot.notify(sess, "tool_use", {
         "tool_summary": "Bash: ls",
         "tool_name": "Bash",
         "tool_input_full": None,
         "agent_id": "agent-1",
     }))
-    assert sess.tool_history == [("Bash: ls", False)]
+    assert sess.tool_history == []
 
 
 def test_tool_use_with_empty_agent_id_falls_back_to_parent_row(mk_bot, run_async):
