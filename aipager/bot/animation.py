@@ -3249,11 +3249,22 @@ class AnimationMixin:
             # handlers, which PTB runs one at a time, so waiting here would
             # hold every later update (a Stop tap, /stop) behind the finish.
             gate = sess.finish_gate
+            if turn == sess.turn_seq:
+                # This turn's own hooks wait for its card state, which the
+                # reset below gives it only after that finish (roadmap
+                # 8.62); until then the state is still the older turn's.
+                sess.hold_turn_state(turn)
 
             async def _after_finish() -> None:
-                await self._wait_finish_gate(sess, gate)
-                await self._send_busy_and_animate(sess, lazy=lazy, turn=turn,
-                                                  _after_gate=True)
+                try:
+                    await self._wait_finish_gate(sess, gate)
+                    await self._send_busy_and_animate(
+                        sess, lazy=lazy, turn=turn, _after_gate=True)
+                finally:
+                    # Released at the reset when it ran; a request dropped
+                    # on the way (its turn finished or was replaced) must
+                    # not leave the hooks waiting.
+                    sess.release_turn_state(turn)
 
             task = asyncio.create_task(_after_finish())
             _GATED_CARDS.add(task)
@@ -3539,6 +3550,9 @@ class AnimationMixin:
                 info["history_idx"] = sess.record_tool(
                     f"\U0001f916 {info.get('type', 'agent')}", False)
                 sess.active_subagents[agent_id] = info
+            # This turn's card state exists now: its hooks held since it
+            # began (roadmap 8.62) are handled from here, in order, onto it.
+            sess.release_turn_state(turn)
             if lazy:
                 # Roadmap 8.32: the reset above is this turn's; the card
                 # waits until it is earned. The -1 claim is released so

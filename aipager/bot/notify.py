@@ -640,6 +640,12 @@ class NotifyMixin:
         self.registry.mark_dirty()
         self.registry.transition(sess.name, Status.BUSY,
                                  preserve_job_state=in_job)
+        if not in_job:
+            # A new turn whose card state (and card) waits for this finish:
+            # its own hooks are held until then (roadmap 8.62). Inside the
+            # job the turn goes on with the state it has; nothing to wait
+            # for.
+            sess.hold_turn_state(sess.turn_seq)
         return nxt, in_job
 
     async def _open_popped_turn(
@@ -654,10 +660,17 @@ class NotifyMixin:
         the popped turn IS the job's turn, so that step finds the job's one
         card and moves it down to this message — one re-anchor, never a
         second card, no reset of the job's agent tracking (roadmap 8.56)."""
-        # Claude popped it as this turn's prompt: taken (R2).
-        await reactions.mark_all(self, [nxt], reactions.TAKEN,
-                                 resolve_chat_id(sess))
-        await self._send_busy_and_animate(sess, turn=turn)
+        try:
+            # Claude popped it as this turn's prompt: taken (R2).
+            await reactions.mark_all(self, [nxt], reactions.TAKEN,
+                                     resolve_chat_id(sess))
+            await self._send_busy_and_animate(sess, turn=turn)
+        finally:
+            # The turn-card step released the popped turn's held hooks as
+            # soon as its card state existed. A request it dropped (the
+            # turn already finished or was replaced), or a failure, must
+            # not leave them waiting (roadmap 8.62).
+            sess.release_turn_state(turn)
         log.info("[%s] %s for queued message %s (turn %d)", sess.label,
                  "taken inside the open job" if in_job else "next turn started",
                  nxt.get("msg_id"), turn)
@@ -2233,13 +2246,25 @@ class NotifyMixin:
                         # (review rev-iter1-002).
                         await self._apply_consumption(
                             sess, finish_consumed, move_target=False)
+                        run_consumed = finish_consumed
                     else:
                         # An interim Stop leaves absorptions to the animator,
                         # which moves the still-live card to them.
                         sess.stream_consumed_notes = (
                             finish_consumed + sess.stream_consumed_notes)
+                        run_consumed = sess.stream_consumed_notes
+                    # This run's answer goes under the last message it took,
+                    # exactly as the final path's does (roadmap 8.63):
+                    # otherwise a message absorbed inside a job shows 👍 and
+                    # never gets an answer under it.
+                    interim_reply_to = finish_trigger
+                    if run_consumed:
+                        last_consumed = run_consumed[-1].get("msg_id")
+                        if last_consumed is not None:
+                            interim_reply_to = last_consumed
                     await self._handle_job_interim(sess, context, turn_end_wall,
-                                                   gate=gate, reply_to=finish_trigger)
+                                                   gate=gate,
+                                                   reply_to=interim_reply_to)
                     return
                 # The last round flushes right before Stop; no tick may have
                 # run in between. Place its sentence exactly before anything

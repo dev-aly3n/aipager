@@ -361,6 +361,24 @@ def _tool_detail(name: str, inp: dict) -> str:
 # "confirmed" by the previous turn's tail.
 _NOT_TURN_EVIDENCE = frozenset({"statusline", "SubagentStop"})
 
+# A turn's own activity: the events that write its card state (rows, prose,
+# agents, compaction, a permission prompt) or end it. While the running turn
+# waits for its card state behind an older turn's finish (roadmap 8.62,
+# `TrackedSession.turn_state_held`), these wait too, then run in arrival
+# order. Everything else (a new prompt, a queue pick-up, the status line,
+# session start/end, safety notices) is never held.
+_TURN_ACTIVITY_EVENTS = frozenset({
+    "PermissionRequest", "permission_prompt", "PreToolUse", "PostToolUse",
+    "PostToolUseFailure", "MessageDisplay", "SubagentStart", "SubagentStop",
+    "PreCompact", "PostCompact", "StopFailure",
+})
+_TURN_ENDING_EVENTS = ("idle_prompt", "idle", "stop", "notification")
+
+# The longest a held event waits: past it, it is handled anyway (as before
+# the hold existed). Above the finish gate's own bound (FINISH_GATE_TIMEOUT,
+# 30 s) plus the paced sends that follow it.
+TURN_STATE_HOLD_SECONDS: float = 60.0
+
 
 class HookReceiver:
     """Receives UDP datagrams from notify_hook.py and drives state transitions.
@@ -396,6 +414,24 @@ class HookReceiver:
         os.chmod(SOCKET_PATH, 0o666)
         self._transport = transport
         log.info("Hook receiver listening on %s", SOCKET_PATH)
+
+    async def _hold_for_turn_state(self, sess, event: str) -> None:
+        """Wait while the running turn's card state still belongs to an
+        older turn whose finish is out (roadmap 8.62): handled now, this
+        event would land on that turn's card and then be wiped by this
+        turn's reset. Bounded by ``TURN_STATE_HOLD_SECONDS``."""
+        hold = sess.turn_state_hold
+        if hold is None or not sess.turn_state_held():
+            return
+        try:
+            await asyncio.wait_for(hold.wait(), timeout=TURN_STATE_HOLD_SECONDS)
+        except asyncio.TimeoutError:
+            log.warning("[%s] turn %s still has no card state after %.0fs "
+                        "- handling its %s anyway", sess.label,
+                        sess.turn_state_hold_for, TURN_STATE_HOLD_SECONDS,
+                        event)
+            if sess.turn_state_hold is hold:
+                sess.release_turn_state()
 
     async def _on_datagram(self, data: bytes) -> None:
         try:
@@ -488,6 +524,10 @@ class HookReceiver:
             self.registry.mark_dirty()
 
         log.debug("Hook event: %s from %s", event, session_name)
+
+        if (event in _TURN_ACTIVITY_EVENTS
+                or event.lower() in _TURN_ENDING_EVENTS):
+            await self._hold_for_turn_state(sess_ref, event)
 
         if event == "PermissionRequest":
             # Primary path: structured tool data directly from hook payload

@@ -739,6 +739,15 @@ class TrackedSession:
     closed_turn_seq: int | None = None
     finishing_turn: int | None = None
     finish_gate: asyncio.Event | None = None
+    # A turn that has started while an older turn's finish still holds the
+    # shared card state (roadmap 8.62): a queued message popped at the
+    # Stop, or a prompt sent meanwhile. Its card, and the reset that gives
+    # it card state of its own, wait for that finish; until then the hook
+    # receiver holds this turn's own events on `turn_state_hold`, so they
+    # neither land on the older turn's card nor get wiped by the reset.
+    # Transient, never in _PERSIST_FIELDS: a restart has no finish out.
+    turn_state_hold_for: int | None = None
+    turn_state_hold: asyncio.Event | None = None
     # How many ``notify()`` calls are running for this session, and when
     # the session monitor first saw its card orphaned (live, Stop button
     # up, no turn or job running, nothing animating it, nothing in
@@ -1324,6 +1333,36 @@ class TrackedSession:
         turn = self.turn_seq if turn is None else turn
         if self.closed_turn_seq is None or turn > self.closed_turn_seq:
             self.closed_turn_seq = turn
+
+    def hold_turn_state(self, turn: int) -> None:
+        """Hold *turn*'s own hook events until its card state exists
+        (roadmap 8.62). An older turn's hold is released first: its turn is
+        over, and whatever it held may run now."""
+        if self.turn_state_hold_for == turn and self.turn_state_hold is not None:
+            return
+        self.release_turn_state()
+        self.turn_state_hold_for = turn
+        self.turn_state_hold = asyncio.Event()
+
+    def release_turn_state(self, turn: int | None = None) -> None:
+        """Let the held events through: *turn*'s card state exists now, or
+        its card request was dropped, or the hold gave up. ``None`` releases
+        any hold; a turn releases its own hold and any older one, never a
+        newer turn's. Idempotent."""
+        held_for = self.turn_state_hold_for
+        if held_for is None or (turn is not None and held_for > turn):
+            return
+        if self.turn_state_hold is not None:
+            self.turn_state_hold.set()
+        self.turn_state_hold_for = None
+        self.turn_state_hold = None
+
+    def turn_state_held(self) -> bool:
+        """True while the running turn's events must wait: it is the turn
+        being held, and the card state still belongs to an older turn."""
+        return (self.turn_state_hold is not None
+                and self.turn_state_hold_for == self.turn_seq
+                and self.card_turn_seq != self.turn_seq)
 
     def card_orphaned(self, now: float, *, own_notify: int = 0,
                       own_lock: bool = False) -> bool:

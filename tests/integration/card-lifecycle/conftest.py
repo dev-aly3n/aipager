@@ -107,8 +107,8 @@ class CardChat:
         self.next_id = 5000
         #: ``(endpoint, t)`` for every call that reached "Telegram".
         self.calls: list[tuple[str, float]] = []
-        #: card msg_id -> {"reply_to", "stop", "deleted", "text"} (``text``
-        #: once edited)
+        #: card msg_id -> {"reply_to", "stop", "deleted", "text", "texts"}
+        #: (``text`` the latest version, ``texts`` every version in order)
         self.cards: dict[int, dict] = {}
         #: answer msg_id -> reply_to
         self.answers: dict[int, object] = {}
@@ -157,15 +157,18 @@ class _PtbDouble:
         if name == "send_message":
             msg_id = chat.new_id()
             if kwargs.get("reply_markup") is not None:
+                text = kwargs.get("text") or (args[1] if len(args) > 1 else "")
                 chat.cards[msg_id] = {
                     "reply_to": kwargs.get("reply_to_message_id"),
-                    "stop": True, "deleted": False}
+                    "stop": True, "deleted": False, "text": text,
+                    "texts": [text]}
             return SimpleNamespace(message_id=msg_id)
         if name == "edit_message_text":
             card = chat.cards.get(kwargs.get("message_id"))
             if card is not None:
                 card["stop"] = kwargs.get("reply_markup") is not None
                 card["text"] = kwargs.get("text") or (args[0] if args else "")
+                card.setdefault("texts", []).append(card["text"])
             return True
         if name == "delete_message":
             card = chat.cards.get(kwargs.get("message_id"))
@@ -237,6 +240,7 @@ def rich_chat(monkeypatch, card_chat):
                 card["stop"] = "reply_markup" in payload
                 card["text"] = ((payload.get("rich_message") or {})
                                 .get("markdown") or payload.get("text") or "")
+                card.setdefault("texts", []).append(card["text"])
         elif endpoint == "sendRichMessage":
             msg_id = card_chat.new_id()
             card_chat.answers[msg_id] = payload.get("reply_to_message_id")

@@ -609,6 +609,8 @@ def test_absorbed_and_popped_inside_a_job_each_keep_their_own_message(
     live = r.chat.live_cards()
     assert len(live) == 1 and r.chat.cards[live[0]]["reply_to"] == 3
     assert 3 in r.chat.answers.values()
+    # The interim answer of the run that absorbed 2 goes under 2 (8.63).
+    assert 2 in r.chat.answers.values()
 
 
 def test_pop_inside_a_job_stays_the_jobs_turn_if_the_job_closes_meanwhile(
