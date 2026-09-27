@@ -31,6 +31,10 @@ DIALOG = "Answer the open question first"
 SENT_TOAST = "Sent to Claude now"
 NOW_SENT = "⚡ Sent to Claude now"
 FAILED = "Could not reach Claude, try again"
+SENDING = "Sending to Claude now"
+LINE_UNREACHED = ("⏳ Queued - could not reach Claude, tap Send now to "
+                  "try again")
+BUTTON = "⚡ Send now"
 
 #: The real typing path, captured at import, before the harness's
 #: ``daemon`` fixture replaces it with a mock: the prompt rows need its
@@ -38,10 +42,13 @@ FAILED = "Could not reach Claude, try again"
 _REAL_SEND_TEXT_AND_ENTER = inject.send_text_and_enter
 
 #: How long the slow Ctrl+X ``dtach -p`` takes (virtual seconds): past the
-#: other writers' wait for a chord in flight (so a foreign write can land in
-#: the gap), and short enough that the whole tap stays under a second.
-SLOW_CTRL_X = 0.7
-#: A Ctrl+X slow enough that the tap as a whole passes one second.
+#: other writers' 0.5 s wait for a chord in flight (so a foreign write can
+#: land in the gap), and short enough that the whole chord (plus its 0.1 s
+#: gap) ends before the tap's 0.8 s wait for it, so the tap toasts the
+#: chord's own outcome.
+SLOW_CTRL_X = 0.6
+#: A Ctrl+X slow enough that the chord as a whole passes the tap's 0.8 s
+#: wait, and the dispatcher's 1 s ack bound too.
 SLOWER_CTRL_X = 1.0
 
 
@@ -200,15 +207,19 @@ def test_held_turn_busy_text_has_no_em_dash():
 
 # ── (b) a foreign write inside the chord's gap ─────────────────────────────
 
-def _slow_ctrl_x(monkeypatch, seconds: float = SLOW_CTRL_X):
+def _slow_ctrl_x(monkeypatch, seconds: float = SLOW_CTRL_X, *,
+                 ctrl_s_fails: bool = False):
     """The Ctrl+X ``dtach -p`` takes *seconds* to return (a loaded box).
-    Every write is still recorded, when it starts, by the harness."""
+    Every write is still recorded, when it starts, by the harness. With
+    *ctrl_s_fails*, the Ctrl+S ``dtach -p`` exits with an error."""
     recorder = inject._run
 
     async def _run(args, stdin=b"", timeout=5):
         out = await recorder(args, stdin=stdin, timeout=timeout)
         if bytes(stdin) == CTRL_X:
             await asyncio.sleep(seconds)
+        if ctrl_s_fails and bytes(stdin) == CTRL_S:
+            return False, ""
         return out
 
     monkeypatch.setattr(inject, "_run", _run)
@@ -249,7 +260,8 @@ async def _prompt(r):
 
 
 def _gap_row(r, vloop, monkeypatch, foreign, *, via: str = "tap",
-             slow: bool = True, foreign_first: bool = False):
+             slow: bool = True, foreign_first: bool = False,
+             ctrl_x: float = SLOW_CTRL_X):
     """Line up message 2; with a slow Ctrl+X, start send-now (*via* a tap
     or ``/now``) and run *foreign* 0.05 s later (or, with
     *foreign_first*, before send-now). Returns ``(line_id, answer, writes
@@ -261,7 +273,7 @@ def _gap_row(r, vloop, monkeypatch, foreign, *, via: str = "tap",
         w = r.worker()
         line = await _lined(r)
         if slow:
-            _slow_ctrl_x(monkeypatch)
+            _slow_ctrl_x(monkeypatch, ctrl_x)
         start = len(r._pty.writes)
         if foreign is not None and foreign_first:
             await foreign(r)
@@ -366,22 +378,85 @@ def test_gap_prompt_before_the_chord_keeps_its_ctrl_s(rp, vloop, monkeypatch):
     assert writes[-2:] == CHORD
 
 
-def test_slow_chord_tap_still_toasts_its_outcome(rp, vloop, monkeypatch):
-    """Error guessing (a loaded box): a Ctrl+X ``dtach -p`` of 1 s. The
-    chord goes through, and the tap must still answer with its outcome
-    toast (entrypoints.md: exactly one ``query.answer(text)``)."""
-    r = rp
-
+def _slow_chord_tap(r, vloop, monkeypatch, *, ctrl_s_fails: bool = False):
+    """Error guessing (a loaded box): a Ctrl+X ``dtach -p`` of 1 s, so the
+    chord outlasts the dispatcher's 1 s ack bound. Returns ``(toast, the
+    virtual seconds from the tap to its first answer with text, the line
+    before the tap, the line KEEP_WINDOW s later, writes from the tap)``."""
     async def scenario():
         w = r.worker()
         line = await _lined(r)
-        _slow_ctrl_x(monkeypatch, SLOWER_CTRL_X)
-        toast = await r.tap(line["id"])
-        await asyncio.sleep(3.0)
+        before = dict(r.chat.lines[line["id"]])
+        _slow_ctrl_x(monkeypatch, SLOWER_CTRL_X, ctrl_s_fails=ctrl_s_fails)
+        start = len(r._pty.writes)
+        loop = asyncio.get_running_loop()
+        t0 = loop.time()
+        answered: list[float] = []
+        job = asyncio.ensure_future(r.tap(line["id"]))
+        while not job.done():
+            q = getattr(r, "last_query", None)
+            if not answered and q is not None and any(
+                    (c.args and c.args[0]) or c.kwargs.get("text")
+                    for c in q.answer.await_args_list):
+                answered.append(loop.time() - t0)
+            await asyncio.sleep(0.01)
+        toast = await job
+        await asyncio.sleep(KEEP_WINDOW)
+        after = dict(r.chat.lines[line["id"]])
         w.cancel()
-        return toast
+        return (toast, answered[0] if answered else None, before, after,
+                r._pty.data()[start:])
+    return _run(vloop, scenario())
 
-    assert _run(vloop, scenario()) == SENT_TOAST
+
+def test_slow_chord_tap_still_toasts_its_outcome(rp, vloop, monkeypatch):
+    """A chord slower than the ack bound: the tap still answers with a
+    toast, ``Sending to Claude now``, and within the bound (a toast after
+    it is dropped, and ``tap`` would return None)."""
+    toast, answered_at, _, _, _ = _slow_chord_tap(rp, vloop, monkeypatch)
+    assert toast == SENDING
+    assert answered_at is not None and answered_at < 1.0
+
+
+def test_slow_chord_that_goes_through_deletes_the_line(rp, vloop, monkeypatch):
+    _, _, _, after, writes = _slow_chord_tap(rp, vloop, monkeypatch)
+    assert writes == CHORD
+    assert after["deleted"] is True
+    assert after.get("edits", 0) == 0
+
+
+def test_slow_chord_that_fails_says_so_on_the_line(rp, vloop, monkeypatch):
+    """The Ctrl+S ``dtach -p`` fails after the ``Sending`` toast: the line
+    stays, its text says Claude was not reached, and its button is kept
+    (same button, same callback)."""
+    toast, _, before, after, writes = _slow_chord_tap(
+        rp, vloop, monkeypatch, ctrl_s_fails=True)
+    assert toast == SENDING
+    assert writes == CHORD
+    assert after["deleted"] is False
+    assert after["text"] == LINE_UNREACHED
+    assert after["button_text"] == BUTTON
+    assert after["buttons"] == 1
+    assert after["callback_data"] == before["callback_data"]
+
+
+def test_slow_chord_unreached_text_has_no_em_dash():
+    assert "\u2014" not in LINE_UNREACHED and "\u2014" not in SENDING
+
+
+def test_slow_chord_broken_by_a_prompt_says_so_on_the_line(
+        rp, vloop, monkeypatch):
+    """A Telegram prompt typed inside a 1 s chord: no Ctrl+S, the tap was
+    toasted ``Sending``, and the line then says Claude was not reached and
+    keeps its button."""
+    _, answer, writes, _ = _gap_row(rp, vloop, monkeypatch, _prompt,
+                                    ctrl_x=SLOWER_CTRL_X)
+    line = rp.chat.line_for(2)
+    assert answer == SENDING
+    assert _no_ctrl_s_after_foreign(writes)
+    assert line["deleted"] is False
+    assert line["text"] == LINE_UNREACHED
+    assert line["button_text"] == BUTTON
 
 
 def test_gap_prompt_before_the_chord_toasts_sent(rp, vloop, monkeypatch):

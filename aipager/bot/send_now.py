@@ -42,6 +42,7 @@ from aipager.bot.notify import _BACKGROUND_TASKS
 from aipager.bot.session_ops import held_by_claude
 from aipager.bot.transport import (
     calling_chat_id,
+    edit_text_at,
     reply_text,
     resolve_chat_id_int,
     send_text,
@@ -65,6 +66,9 @@ TOAST_INTERACTIVE = "Answer the open question first"
 TOAST_TYPING = "Busy typing a prompt, try again in a moment"
 TOAST_BUSY = "Busy, try again in a moment"
 TOAST_FAILED = "Could not reach Claude, try again"
+TOAST_SENDING = "Sending to Claude now"
+LINE_TEXT_UNREACHED = ("⏳ Queued - could not reach Claude, tap Send now to "
+                       "try again")
 TOAST_CANNOT_PROMPT = "You can't send to this session"
 TOAST_UNAVAILABLE = "That session is no longer available"
 REPLY_SENT = "⚡ Sent to Claude now"
@@ -77,6 +81,14 @@ REPLY_OTHER_CHAT = "No active session in this chat."
 # module path has hung this suite twice (see CLAUDE.md). Same pattern as
 # animation._lazy_card_sleep.
 _queued_line_sleep = asyncio.sleep
+
+# How long a tap waits for its chord before it toasts. The dispatcher sends
+# the blank ack that clears the tap's spinner after
+# ``callbacks.CALLBACK_ACK_BOUND`` (1 s), and a toast sent after it is
+# dropped, so the tap toasts below that bound: the outcome if the chord has
+# finished, else ``TOAST_SENDING``, and the chord's outcome then shows on
+# the line (deleted when sent, ``LINE_TEXT_UNREACHED`` when not).
+SEND_NOW_TOAST_WAIT: float = 0.8
 
 
 @dataclass
@@ -372,7 +384,24 @@ class SendNowMixin:
         if sess.scope_chat_id and chat_id is not None and sess.scope_chat_id != chat_id:
             await self._safe_answer(query, TOAST_UNAVAILABLE)
             return
-        outcome = await self._send_now_core(sess, msg_id)
+        # The core in its own task (its checks and the chord's start still
+        # run in one step, in that task): the toast cannot wait past the
+        # ack bound for a slow chord.
+        core = asyncio.create_task(self._send_now_core(sess, msg_id))
+        _BACKGROUND_TASKS.add(core)
+        core.add_done_callback(_BACKGROUND_TASKS.discard)
+        await asyncio.wait({core}, timeout=SEND_NOW_TOAST_WAIT)
+        if not core.done():
+            await self._safe_answer(query, TOAST_SENDING)
+            await asyncio.wait({core})
+            outcome = core.result()
+            if outcome.result in ("sent", "taken"):
+                self._drop_tapped_line(sess, msg_id, chat_id, tapped_id)
+            else:
+                await self._show_line_unreached(sess, msg_id, chat_id,
+                                                tapped_id)
+            return
+        outcome = core.result()
         toast = {
             "sent": TOAST_SENT,
             "taken": TOAST_TAKEN,
@@ -383,12 +412,42 @@ class SendNowMixin:
         await self._safe_answer(query, toast)
         if outcome.result not in ("sent", "taken"):
             return
-        # The tapped line goes at once (the operator's rule). Any other
-        # line waits for its own message to be taken (D2).
+        self._drop_tapped_line(sess, msg_id, chat_id, tapped_id)
+
+    def _drop_tapped_line(self, sess: TrackedSession, msg_id: int,
+                          chat_id: int | None, tapped_id: object) -> None:
+        """The tapped line goes at once (the operator's rule). Any other
+        line waits for its own message to be taken (D2)."""
         if msg_id in sess.queued_lines:
             self._drop_queued_line(sess, msg_id)
         elif chat_id and type(tapped_id) is int:
             self._delete_queued_line_later(chat_id, tapped_id)
+
+    async def _show_line_unreached(self, sess: TrackedSession, msg_id: int,
+                                   chat_id: int | None,
+                                   tapped_id: object) -> None:
+        """A slow chord failed after the tap was toasted ``TOAST_SENDING``:
+        say so on the line, keeping its button. Nothing to edit once the
+        line is gone (its message was taken meanwhile). Never raises."""
+        if not self._app:
+            return
+        rec = sess.queued_lines.get(msg_id)
+        if rec is None:
+            if (msg_id not in _target_ids(sess) or not chat_id
+                    or type(tapped_id) is not int):
+                return
+            rec = (chat_id, tapped_id)
+        line_chat, line_id = rec
+        try:
+            await edit_text_at(
+                self._app.bot, text=LINE_TEXT_UNREACHED, chat_id=line_chat,
+                message_id=line_id,
+                reply_markup=self._build_send_now_keyboard(sess, msg_id),
+                rate_limit_args=_rl_args(priority=PRIORITY_ORNAMENT),
+            )
+        except Exception:
+            log.debug("[%s] queued line %d not marked unreached", sess.label,
+                      line_id, exc_info=True)
 
     async def _handle_now_cmd(self, update: Update,
                               ctx: ContextTypes.DEFAULT_TYPE) -> None:

@@ -958,6 +958,139 @@ def test_a_tap_deletes_only_its_own_line(mk_bot, tmp_path, run_async, keys):
     assert sess.queued_lines == {3: (CHAT, 7002)}
 
 
+# ── a tap whose chord outlasts the ack bound ────────────────────────────
+
+def test_the_taps_wait_for_its_chord_is_below_the_ack_bound():
+    from aipager.bot.callbacks import CALLBACK_ACK_BOUND
+    assert 0 < sn.SEND_NOW_TOAST_WAIT < CALLBACK_ACK_BOUND
+
+
+def test_no_em_dash_in_the_slow_chord_texts():
+    assert "\u2014" not in sn.TOAST_SENDING + sn.LINE_TEXT_UNREACHED
+
+
+def _slow_chord(monkeypatch, *, ok=True, ctrl_x=1.0):
+    """A Ctrl+X ``dtach -p`` of *ctrl_x* seconds; the Ctrl+S returns *ok*."""
+    writes: list[bytes] = []
+
+    async def _run(args, stdin=b"", timeout=5):
+        writes.append(bytes(stdin))
+        if stdin == b"\x18":
+            await asyncio.sleep(ctrl_x)
+            return True, ""
+        return ok, ""
+
+    monkeypatch.setattr(inject, "_run", _run)
+    return writes
+
+
+def _slow_tap(bot, sess, run_async):
+    """Tap, and return ``(seconds to the first toast, toasts)``."""
+    update, q = _query(_cb(bot, sess))
+    stamps: list[float] = []
+
+    async def _answer(*args, **kwargs):
+        stamps.append(asyncio.get_running_loop().time())
+
+    q.answer = AsyncMock(side_effect=_answer)
+
+    async def scenario():
+        t0 = asyncio.get_running_loop().time()
+        await bot._handle_callback(update, MagicMock())
+        await _settle()
+        return stamps[0] - t0
+
+    first = run_async(scenario())
+    return first, _toasts(q)
+
+
+def test_a_slow_chord_tap_toasts_sending_before_the_ack_bound(
+        mk_bot, tmp_path, run_async, monkeypatch):
+    from aipager.bot.callbacks import CALLBACK_ACK_BOUND
+    bot, sess = _bot(mk_bot, tmp_path)
+    sess.queued_lines[2] = (CHAT, 7001)
+    writes = _slow_chord(monkeypatch)
+    first, toasts = _slow_tap(bot, sess, run_async)
+    assert toasts == [sn.TOAST_SENDING]
+    assert first < CALLBACK_ACK_BOUND
+    assert writes == [b"\x18", b"\x13"]
+
+
+def test_a_slow_chord_that_goes_through_deletes_the_line(
+        mk_bot, tmp_path, run_async, monkeypatch):
+    bot, sess = _bot(mk_bot, tmp_path)
+    sess.queued_lines[2] = (CHAT, 7001)
+    bot._app.bot.edit_message_text = AsyncMock()
+    _slow_chord(monkeypatch)
+    _slow_tap(bot, sess, run_async)
+    assert sess.queued_lines == {}
+    bot._app.bot.delete_message.assert_awaited_once()
+    bot._app.bot.edit_message_text.assert_not_awaited()
+
+
+def test_a_slow_chord_that_fails_says_so_on_the_line(mk_bot, tmp_path,
+                                                     run_async, monkeypatch):
+    bot, sess = _bot(mk_bot, tmp_path)
+    sess.queued_lines[2] = (CHAT, 7001)
+    bot._app.bot.edit_message_text = AsyncMock()
+    _slow_chord(monkeypatch, ok=False)
+    _, toasts = _slow_tap(bot, sess, run_async)
+    assert toasts == [sn.TOAST_SENDING]
+    assert sess.queued_lines == {2: (CHAT, 7001)}
+    bot._app.bot.delete_message.assert_not_awaited()
+    bot._app.bot.edit_message_text.assert_awaited_once()
+    kw = bot._app.bot.edit_message_text.await_args.kwargs
+    assert (kw.get("chat_id"), kw.get("message_id")) == (CHAT, 7001)
+    assert kw.get("text") == sn.LINE_TEXT_UNREACHED
+    markup = kw.get("reply_markup")
+    assert markup is not None, "the edit would remove the button"
+    button = markup.inline_keyboard[0][0]
+    assert button.text == sn.BUTTON_TEXT
+    assert button.callback_data == _cb(bot, sess)
+
+
+def test_a_slow_chord_that_fails_after_the_line_went_edits_nothing(
+        mk_bot, tmp_path, run_async, monkeypatch):
+    """The message was taken while the chord was out: its line is gone."""
+    bot, sess = _bot(mk_bot, tmp_path)
+    bot._app.bot.edit_message_text = AsyncMock()
+    _slow_chord(monkeypatch, ok=False)
+
+    async def _taken():
+        await asyncio.sleep(0.9)
+        sess.queued_targets.clear()
+
+    async def scenario():
+        update, _q = _query(_cb(bot, sess))
+        side = asyncio.ensure_future(_taken())
+        await bot._handle_callback(update, MagicMock())
+        await side
+
+    run_async(scenario())
+    bot._app.bot.edit_message_text.assert_not_awaited()
+
+
+def test_a_fast_chord_tap_still_toasts_its_outcome(mk_bot, tmp_path,
+                                                   run_async, monkeypatch):
+    """A chord inside the wait is toasted as before, never as Sending."""
+    bot, sess = _bot(mk_bot, tmp_path)
+    sess.queued_lines[2] = (CHAT, 7001)
+    _slow_chord(monkeypatch, ctrl_x=0.5)
+    _, toasts = _slow_tap(bot, sess, run_async)
+    assert toasts == [sn.TOAST_SENT]
+    assert sess.queued_lines == {}
+
+
+def test_now_waits_for_a_slow_chord(mk_bot, tmp_path, run_async, monkeypatch,
+                                    mk_update):
+    """/now is a message reply, not a callback: it waits for the outcome."""
+    bot, sess = _bot(mk_bot, tmp_path)
+    _slow_chord(monkeypatch, ok=False)
+    update = _cmd_update(mk_update)
+    run_async(bot._handle_now_cmd(update, MagicMock()))
+    assert _replies(update) == [sn.TOAST_FAILED]
+
+
 # ── /now ────────────────────────────────────────────────────────────────
 
 def test_now_sends_the_chord(mk_bot, tmp_path, run_async, keys, mk_update):

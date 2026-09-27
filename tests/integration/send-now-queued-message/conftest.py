@@ -125,7 +125,8 @@ class CardChat:
         #: msg_id -> [emoji, ...]
         self.reactions: dict[int, list[str]] = {}
         #: "⏳ Queued" line msg_id -> {"reply_to", "text", "button_text",
-        #: "callback_data", "deleted", "t"}: a sendMessage whose first
+        #: "callback_data", "deleted", "t"} (plus "edits", once edited: an
+        #: edit updates text and button): a sendMessage whose first
         #: button's callback_data carries ``:now:`` (never a card).
         self.lines: dict[int, dict] = {}
         #: every toast a tap answered with, in order (``None`` never listed)
@@ -232,6 +233,17 @@ class _PtbDouble:
                 card["stop"] = kwargs.get("reply_markup") is not None
                 card["text"] = kwargs.get("text") or (args[0] if args else "")
                 card.setdefault("texts", []).append(card["text"])
+            line = chat.lines.get(kwargs.get("message_id"))
+            if line is not None:
+                # An edit replaces the text and the keyboard: one sent
+                # without reply_markup removes the button.
+                markup = kwargs.get("reply_markup")
+                button = _first_button(markup)
+                line["text"] = kwargs.get("text") or (args[0] if args else "")
+                line["button_text"] = getattr(button, "text", None)
+                line["buttons"] = _button_count(markup)
+                line["callback_data"] = getattr(button, "callback_data", None) or ""
+                line["edits"] = line.get("edits", 0) + 1
             return True
         if name == "delete_message":
             chat.deletes.append((kwargs.get("chat_id"), kwargs.get("message_id")))
