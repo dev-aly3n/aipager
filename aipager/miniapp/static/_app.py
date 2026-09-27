@@ -1669,7 +1669,7 @@ APP_JS = r"""
   var RENAME_RESERVED = {
     "app": true, "clearqueue": true, "delete": true, "diff": true,
     "help": true, "kill": true, "list": true, "ls": true, "new": true,
-    "perms": true, "rename": true, "restart": true, "resume": true,
+    "now": true, "perms": true, "rename": true, "restart": true, "resume": true,
     "settings": true, "start": true, "status": true, "stop": true,
     "update": true, "whoami": true
   };

@@ -244,11 +244,65 @@ def _sock_path(session: str) -> str:
     return f"{SOCK_PREFIX}{name}.sock"
 
 
+# Claude Code's send-now chord (``chat:sendNow``, bound to ``ctrl+x
+# ctrl+s``): Ctrl+X then Ctrl+S, written as TWO separate ``dtach -p``
+# writes this many seconds apart. One chunk is read as text by Claude
+# Code's input (see send_text_and_enter), and a lone Ctrl+S is
+# ``chat:stash``, so the second byte is never written without the first.
+SEND_NOW_CHORD_GAP: float = 0.1
+_CTRL_X = b"\x18"
+_CTRL_S = b"\x13"
+# Sessions with a send-now chord being written right now. Every other
+# write waits for it (``_await_chord``): a byte landing between Ctrl+X and
+# Ctrl+S would break the chord, and the Ctrl+S would then stash the input.
+_CHORD_IN_FLIGHT: set[str] = set()
+# How long another write waits for a chord in flight, and how often it looks.
+_CHORD_WAIT_LIMIT: float = 0.5
+_CHORD_POLL: float = 0.02
+
+
+async def _await_chord(session: str) -> None:
+    """Wait (at most ``_CHORD_WAIT_LIMIT``) while a send-now chord is being
+    written to *session*, so no other write lands inside it."""
+    if session not in _CHORD_IN_FLIGHT:
+        return
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + _CHORD_WAIT_LIMIT
+    while session in _CHORD_IN_FLIGHT and loop.time() < deadline:
+        await asyncio.sleep(_CHORD_POLL)
+
+
+async def send_now(session: str) -> bool:
+    """Press Claude Code's send-now chord (Ctrl+X, then Ctrl+S) in
+    *session*: it sends every message Claude has queued at once. With
+    nothing queued Claude Code does nothing.
+
+    Two writes ``SEND_NOW_CHORD_GAP`` apart, never one chunk. If the Ctrl+X
+    write fails, Ctrl+S is not written: alone it would stash the input box.
+    Returns True when both writes succeeded."""
+    # Marked before the first await, so a write another path starts from
+    # here on waits for the chord instead of landing inside it.
+    _CHORD_IN_FLIGHT.add(session)
+    try:
+        sock = _sock_path(session)
+        ok, _ = await _run([_DTACH, "-p", sock], stdin=_CTRL_X)
+        if not ok:
+            return False
+        await asyncio.sleep(SEND_NOW_CHORD_GAP)
+        ok, _ = await _run([_DTACH, "-p", sock], stdin=_CTRL_S)
+        if ok:
+            log.info("Sent send-now chord → %s", session)
+        return ok
+    finally:
+        _CHORD_IN_FLIGHT.discard(session)
+
+
 async def send_keys(session: str, keys: str) -> bool:
     """Send a key sequence to the dtach session.
 
     `keys` can be a logical name ("Enter", "Down") or raw text.
     """
+    await _await_chord(session)
     seq = KEYS.get(keys, keys)
     sock = _sock_path(session)
     ok, _ = await _run([_DTACH, "-p", sock], stdin=seq.encode())
@@ -264,6 +318,7 @@ async def send_text_and_enter(session: str, text: str) -> bool:
     treats a single chunk (text + CR) as all-text input. A separate CR
     write is needed to trigger the submit keypress event.
     """
+    await _await_chord(session)
     sock = _sock_path(session)
     ok, _ = await _run([_DTACH, "-p", sock], stdin=text.encode())
     if not ok:
@@ -304,6 +359,7 @@ async def discard_queued_input(session: str) -> bool:
     which would risk interrupting the running turn it explicitly leaves
     alone).
     """
+    await _await_chord(session)
     await send_keys(session, "Escape")
     await asyncio.sleep(0.15)
     return await send_keys(session, "KillLine")
@@ -482,7 +538,7 @@ _RESERVED = {
     # Telegram bot commands (see bot/lifecycle.py::_command_list)
     "status", "stop", "kill", "new", "help", "start", "settings",
     "restart", "rename", "delete", "diff",
-    "app", "clearqueue", "perms", "resume", "whoami", "update",
+    "app", "clearqueue", "perms", "resume", "whoami", "update", "now",
     # `aipager session` subcommand verbs (see cli/session.py) — these are
     # matched before the name is treated as a session at all.
     "ls", "list",
