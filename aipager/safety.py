@@ -237,10 +237,35 @@ def _case_insensitive_fs() -> bool:
     return sys.platform == "darwin"
 
 
+def _expand_tool_home(path: str) -> str:
+    """Expand ``~`` exactly as Claude Code expands a tool's path, and no
+    further: only a bare ``~`` or a leading ``~/`` means the home folder.
+    Claude Code does NOT expand ``~name`` (another user's home); it reads
+    it as a relative name under the cwd. ``os.path.expanduser`` does
+    expand it, so ``~root/../../.config/aipager/config.yaml`` was checked
+    as ``/.config/aipager/config.yaml`` while Claude Code opened the one
+    under the operator's home: a restricted Read of the bot token (review
+    2026-09-27). The check must read a path the way the tool will."""
+    # No Unicode normalisation: Claude Code's expandPath returns the path
+    # through an identity wrapper, so the file it opens has the exact code
+    # points given. Normalising here (tried 2026-09-27) made the check read
+    # a different file than the tool opens (review 3).
+    if path == "~":
+        return os.path.expanduser("~")
+    if path.startswith("~/"):
+        # Node's path.join keeps the home folder even when the rest starts
+        # with "/"; Python's os.path.join would DROP it, turning
+        # "~//.config/aipager/x" into "/.config/aipager/x" (review
+        # 2026-09-27). Concatenate, then let abspath collapse the "//".
+        return os.path.expanduser("~").rstrip("/") + "/" + path[2:]
+    return path
+
+
 def _norm(path: str, base: str | None = None) -> str:
-    """Absolute, ~-expanded path for glob matching. A relative path is
+    """Absolute path for glob matching, ``~`` expanded the way Claude Code
+    expands a tool's path (:func:`_expand_tool_home`). A relative path is
     taken relative to ``base`` (the session's cwd) when given."""
-    p = os.path.expanduser(str(path))
+    p = _expand_tool_home(str(path))
     if base and not os.path.isabs(p):
         p = os.path.join(os.path.expanduser(base), p)
     return os.path.abspath(p)
@@ -355,7 +380,9 @@ def _search_violation(
     - every glob is plain and relative (:func:`_glob_problem`).
     """
     root = _js_trim(tool_input.get("path")) or cwd
-    if not isinstance(root, str) or not root:
+    if not isinstance(root, str) or not root or "\x00" in root:
+        # A NUL byte is never a real path; denied explicitly rather than by
+        # relying on something downstream raising on it.
         return f"{tool_name} with an unreadable search folder"
     spelled = _norm(root, cwd)
     real = _realpath(spelled)
@@ -434,7 +461,7 @@ def path_violation(
     raw = _js_trim(tool_input.get(key))
     if raw is None or raw == "":
         return None
-    if not isinstance(raw, str):
+    if not isinstance(raw, str) or "\x00" in raw:
         return f"{tool_name} with an unreadable path"  # fail closed
     spelled = _norm(raw, cwd)
     real = _realpath(spelled)

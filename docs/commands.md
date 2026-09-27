@@ -28,7 +28,7 @@ and on every session change.
 | `/diff [label]` | optional | Show the session's working-directory git diff. |
 | `/clearqueue` | — | Drop every not-yet-picked-up message for the active session — both messages aipager is holding and messages already queued inside Claude — without interrupting the running turn. Replies with the count cleared. |
 | `/perms [label]` | optional | Switch a session between Ask and Auto permission modes. On a busy session, offers `Stop task & switch` / `Not now`. |
-| `/settings` | — | Message layout, diff previews (off by default), long-turn card updates (on by default: a busy card refreshes every 10 s after 2 minutes of a turn, 30 s after 10, once a minute after an hour, counting in minutes then hours — switch off to keep the first-minutes pace for the whole turn; see [troubleshooting](troubleshooting.md#a-long-turns-card-refreshes-less-often)), formatting and language preferences. Whatever the layout, every busy card ends with its session's status line (`⏳`/`✅ name · …`) and every answer starts with its result line (`💬 name`, plus `· Finished (…)` when no finished card is left to show the stats); the merged layout stacks the two, each line in its own section. In the card layout the answer deliberately follows the finished card by a moment, so the card is seen to say Finished before the answer lands under it — tune or disable that head start with `FINISH_CARD_GRACE_SECONDS` (seconds, default 0.8; 0 sends both at once). A card-layout turn that ran no tools keeps no card: its card would only repeat `✅ name · Done · Ns`, so the answer arrives alone with the stats in its `💬` line (see [Idle responses](#idle-responses)). |
+| `/settings` | — | Message layout, diff previews (off by default), long-turn card updates (on by default: a busy card refreshes every 10 s after 2 minutes of a turn, 30 s after 10, once a minute after an hour, counting in minutes then hours — switch off to keep the first-minutes pace for the whole turn; see [troubleshooting](troubleshooting.md#a-long-turns-card-refreshes-less-often)), formatting and language preferences. Whatever the layout, every busy card ends with its session's status line (`⏳`/`✅ name · …`) and every answer starts with its result line (`💬 name`, plus `· Finished (…)` when no finished card is left to show the stats); the merged layout stacks the two, each line in its own section. In the card layout the answer deliberately follows the finished card by a moment, so the card is seen to say Finished before the answer lands under it — tune or disable that head start with `FINISH_CARD_GRACE_SECONDS` (seconds, default 0.8; 0 sends both at once). The message layout decides the card for every turn, whether or not tools ran (see [Idle responses](#idle-responses)). |
 | `/whoami` | — | Show your Telegram id and (in team mode) your role. |
 | `/update` | — | Admin only. Check aipager and Claude Code for newer versions, then update whatever has one with a single button. See [Update](#update). |
 
@@ -249,18 +249,7 @@ attached below ↓` footer. Buttons:
   a tap does nothing at all — the prompt is not re-sent and the button
   stays — so tap it again once the ban has lifted.
 
-In the card layout the finished card stays above the answer as the
-record of how it was reached — its tool rows, agent rows and what Claude
-said between them. A turn with none of those (no tool call, no agent,
-no commentary besides the answer itself) has nothing to record, and a
-card left behind would say only `✅ name · Done · Ns` right above an
-answer saying the same. Such a turn ends as **one** message instead: the
-answer, opening with `💬 name · Finished (Ns)`, sent as a normal
-(notifying) message threaded to the prompt that started the turn, if
-any; the busy card is deleted once the answer is out. A tool-less turn with no new answer text (none at all,
-or only text already delivered) keeps its card, as the one sign it
-ended. The merged and replace layouts are
-unchanged.
+In the card layout ("Busy card + result") the finished card always stays above the answer, for every turn, as the record of how it was reached: its tool rows, agent rows and what Claude said between them, or just `✅ name · Done · Ns` for a turn that ran no tools. The answer arrives as its own (notifying) message. To have one message per turn instead, choose "Merged into busy message" (the answer goes into the card) or "Replace with result" (the card is removed and the answer stands alone).
 
 A turn Claude starts **by itself** — a background agent reporting back
 with a `<task-notification>` when no job is open — gets its busy card
@@ -321,8 +310,7 @@ Labels are the agents' types, cut at 32 characters, three at most
 (`+N more` for the rest). An agent that stopped while background work of
 its own is still running counts as running, since it resumes later —
 aipager learns this from Claude's `<task-notification>` for it, when that
-notification starts a turn. The line is added in every layout, and on
-the one-message answer of a tool-less turn.
+notification starts a turn. The line is added in every layout.
 
 Once every agent a line named has finished, aipager edits that line
 once, silently, to `✅ pipeline-runner done (6m)` (or `✅ 2 agents done

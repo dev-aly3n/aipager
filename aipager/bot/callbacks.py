@@ -923,6 +923,12 @@ class CallbackDispatchMixin:
 
             prompt = (pending or {}).get("prompt", "")
             skip_perms = (pending or {}).get("skip_perms", False)
+            # The queued prompt is the text the /new AUTHOR typed, so it
+            # runs as the author, never as whoever tapped the button: a
+            # tapper's rights must not be lent to someone else's prompt
+            # (the same rule as Retry; review 2026-09-27). 0 means the
+            # author is unknown, which gets the floor at pick-up.
+            prompt_author = (pending or {}).get("user_id") or None
 
             if action == "new_resume":
                 # Live session → switch to it; GONE session → /resume flow.
@@ -934,7 +940,7 @@ class CallbackDispatchMixin:
                     )
                     if prompt and sess.queue_prompt(
                         prompt, pending.get("msg_id", 0), "",
-                        driver_id_from_update(update),
+                        prompt_author,
                     ):
                         self.registry.mark_dirty()
                     try:
@@ -962,7 +968,7 @@ class CallbackDispatchMixin:
                     resumed = self.registry.get(session_name)
                     if resumed and resumed.queue_prompt(
                         prompt, pending.get("msg_id", 0), "",
-                        driver_id_from_update(update),
+                        prompt_author,
                     ):
                         self.registry.mark_dirty()
                 return
@@ -1033,7 +1039,7 @@ class CallbackDispatchMixin:
                 asyncio.create_task(self._update_bot_commands())
                 if prompt and new_sess.queue_prompt(
                     prompt, pending.get("msg_id", 0), "",
-                    driver_id_from_update(update),
+                    prompt_author,
                 ):
                     self.registry.mark_dirty()
 

@@ -494,6 +494,24 @@ def test_new_resume_alive_session_switches(mk_bot, mk_query, run_async):
     assert any(t == "go" for t, *_ in sess.pending_queue)
 
 
+def test_new_resume_queues_the_prompt_as_its_author_not_the_tapper(
+        mk_bot, mk_query, run_async):
+    """review 2026-09-27: the queued prompt is the text the /new AUTHOR
+    typed, so it is credited to the author (user 111), never to whoever
+    tapped the button (user 222), or the tapper's rights would be lent to
+    someone else's prompt. An unknown author (0) is credited to nobody."""
+    for author, expected in ((111, 111), (0, None)):
+        bot = mk_bot()
+        sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+        bot.registry._sessions["claude-jim"] = sess
+        bot._new_conflict_pending["claude-jim"] = {
+            "prompt": "go", "skip_perms": False, "user_id": author, "msg_id": 5}
+        update, _query = mk_query("claude-jim:new_resume", user_id=222)
+        run_async(bot._handle_callback(update, MagicMock()))
+        (entry,) = [e for e in sess.pending_queue if e[0] == "go"]
+        assert entry[4] == expected
+
+
 def test_new_resume_gone_session_routes_to_do_resume(mk_bot, mk_query, run_async):
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
@@ -505,6 +523,42 @@ def test_new_resume_gone_session_routes_to_do_resume(mk_bot, mk_query, run_async
     update, query = mk_query("claude-jim:new_resume")
     run_async(bot._handle_callback(update, MagicMock()))
     bot._do_resume.assert_awaited_once()
+
+
+def test_new_resume_of_a_gone_session_queues_as_the_author(
+        mk_bot, mk_query, run_async):
+    """The GONE branch of Resume (review 2026-09-27): the prompt is the
+    /new author's (111), not the tapper's (222)."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
+    sess.claude_session_id = "UUID-1"
+    bot.registry._sessions["claude-jim"] = sess
+    bot._do_resume = AsyncMock()
+    bot._new_conflict_pending["claude-jim"] = {
+        "prompt": "go", "skip_perms": False, "user_id": 111, "msg_id": 5}
+    update, _query = mk_query("claude-jim:new_resume", user_id=222)
+    run_async(bot._handle_callback(update, MagicMock()))
+    (entry,) = [e for e in sess.pending_queue if e[0] == "go"]
+    assert entry[4] == 111
+
+
+def test_new_replace_queues_the_prompt_as_its_author(
+        mk_bot, mk_query, run_async, monkeypatch):
+    """Replace (review 2026-09-27): the relaunched session's queued prompt
+    is credited to the /new author (111), not the tapper (222). A GONE
+    session, so no kill and no socket wait is involved."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
+    bot.registry._sessions["claude-jim"] = sess
+    bot._new_conflict_pending["claude-jim"] = {
+        "prompt": "go", "skip_perms": False, "user_id": 111, "msg_id": 5}
+    monkeypatch.setattr("aipager.dtach.inject.launch_session",
+                        AsyncMock(return_value=(True, "")))
+    update, _query = mk_query("claude-jim:new_replace", user_id=222)
+    run_async(bot._handle_callback(update, MagicMock()))
+    new_sess = bot.registry.get("claude-jim")
+    (entry,) = [e for e in new_sess.pending_queue if e[0] == "go"]
+    assert entry[4] == 111
 
 
 def test_new_replace_kills_alive_then_launches(mk_bot, mk_query, run_async, monkeypatch):

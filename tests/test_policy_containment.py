@@ -738,11 +738,10 @@ def test_the_author_of_last_prompt_is_recorded_from_its_note():
         assert ps.note_driver_id(bad) is None
 
 
-def test_a_retry_never_lends_the_tappers_rights_on_the_second_tap(tmp_path, monkeypatch):
-    """rev-iter4-002: an owner taps Retry twice on a member's prompt. The
-    first retry's note has no explicit sender, so its author must stay
-    unknown, not become the owner, or the second retry would run the
-    member's text with the owner's bypass."""
+def test_write_note_records_no_author_when_none_is_given(tmp_path, monkeypatch):
+    """A note written with author_user_id=None has no author even though
+    sender_key carries a fallback id. (The real Retry path is covered by
+    test_retry_privilege_attribution.py::test_a_prompt_sent_with_no_sender_records_no_author.)"""
     monkeypatch.setattr(ps, "notes_dir", lambda name: tmp_path / "notes")
     # Retry sends with no explicit sender; sender_key carries the fallback.
     path = ps.write_note(SESSION, None, None, None, msg_id=1, chat_id=1,
@@ -880,3 +879,100 @@ def test_realpath_of_the_target_is_computed_once_per_call(monkeypatch):
     safety.path_violation("Read", {"file_path": target},
                           safety.DENY_PATHS_NO_ACCESS, ())
     assert calls.count(target) == 1
+
+
+# ===========================================================================
+# ~name is not a home folder to Claude Code (review 2026-09-27)
+# ===========================================================================
+# Claude Code expands only "~" and "~/" in a tool's path; "~root/…" is a
+# relative name under the cwd. Python's expanduser turned it into /root, so
+# from a project directly under $HOME, "~root/../../.config/aipager/…" was
+# checked as /.config/aipager/… while Claude Code read $HOME/.config/aipager/….
+
+TILDE_NAME_ESCAPES = [
+    "~root/../../.config/aipager/config.yaml",
+    "~root/../../.config/aipager/daemon.env",
+    "~root/../../.claude/.credentials.json",
+    "~nobody/../../.config/aipager/config.yaml",
+    " ~root/../../.config/aipager/config.yaml",
+]
+
+
+@pytest.mark.parametrize("path", TILDE_NAME_ESCAPES)
+@pytest.mark.parametrize("tool,key", [("Read", "file_path"), ("LSP", "filePath")])
+def test_tilde_name_cannot_escape_to_protected_files(tmp_path, tool, key, path):
+    _use_role(_builtin("user"))
+    tool_input = {key: path}
+    if tool == "LSP":
+        tool_input["operation"] = "documentSymbol"
+    assert _decide(tmp_path, tool, tool_input, cwd=os.path.join(HOME, "proj"))
+
+
+def test_tilde_name_is_read_the_way_claude_code_reads_it():
+    """Only a bare ~ and a leading ~/ expand; ~name stays literal, so it
+    resolves under the cwd like any relative name."""
+    cwd = os.path.join(HOME, "proj")
+    assert safety._norm("~root/x", cwd) == os.path.join(cwd, "~root", "x")
+    assert safety._norm("~", cwd) == HOME
+    assert safety._norm("~/.config", cwd) == os.path.join(HOME, ".config")
+    assert safety._norm("~/", cwd) == HOME
+
+
+def test_plain_home_spellings_are_still_protected(tmp_path):
+    _use_role(_builtin("user"))
+    for path in ("~/.config/aipager/config.yaml", "../.config/aipager/config.yaml"):
+        assert _decide(tmp_path, "Read", {"file_path": path},
+                       cwd=os.path.join(HOME, "proj"))
+
+
+# ~// keeps the home folder (Node's path.join), review 2026-09-27: a first
+# version of the ~name fix used os.path.join, which drops home when the
+# rest starts with "/", so "~//.config/aipager/x" was checked as
+# "/.config/aipager/x" and allowed.
+
+@pytest.mark.parametrize("path", [
+    "~//.config/aipager/config.yaml",
+    "~///.config/aipager/config.yaml",
+    "~//.claude/.credentials.json",
+])
+@pytest.mark.parametrize("tool,key", [("Read", "file_path"), ("LSP", "filePath")])
+def test_double_slash_after_tilde_keeps_home(tmp_path, tool, key, path):
+    _use_role(_builtin("user"))
+    tool_input = {key: path}
+    if tool == "LSP":
+        tool_input["operation"] = "documentSymbol"
+    assert _decide(tmp_path, tool, tool_input, cwd=os.path.join(HOME, "proj"))
+
+
+def test_double_slash_search_root_is_protected_for_an_admin(tmp_path):
+    _use_role(_builtin("admin"))
+    assert _decide(tmp_path, "Grep", {"path": "~//.config/aipager", "pattern": "TOKEN"},
+                   cwd=os.path.join(HOME, "proj"))
+
+
+def test_double_slash_write_lands_outside_the_project(tmp_path):
+    """Claude Code writes ~//<cwd>/x to <home>/<cwd>/x, which is outside
+    the project, so confinement must refuse it."""
+    _use_role(_builtin("user"))
+    cwd = os.path.join(HOME, "proj")
+    assert _decide(tmp_path, "Write", {"file_path": "~/" + cwd + "/x"}, cwd=cwd)
+
+
+def test_tool_paths_keep_their_exact_code_points_like_claude_code():
+    """Claude Code does not Unicode-normalise a tool's path (its expandPath
+    wrapper is the identity), so neither may the check: a normalised path
+    names a different file than the one the tool opens (review 3,
+    2026-09-27)."""
+    cwd = os.path.join(HOME, "proj")
+    assert safety._norm("~//.config", cwd) == os.path.join(HOME, ".config")
+    assert safety._norm("\u212a", cwd) == os.path.join(cwd, "\u212a")      # Kelvin sign kept
+    assert safety._norm("e\u0301", cwd) == os.path.join(cwd, "e\u0301")   # NFD kept
+
+
+def test_a_nfd_protected_folder_is_still_protected(tmp_path):
+    """review 3 P1: an operator rule naming an NFD folder must match the NFD
+    path the tool opens."""
+    base = tmp_path / "Re\u0301sume\u0301"
+    rule = str(base) + "/**"
+    assert safety.path_violation("Read", {"file_path": str(base / "salary.txt")},
+                                 (rule,), ())

@@ -104,8 +104,8 @@ log = logging.getLogger(__name__)
 # this suite twice (see CLAUDE.md). Same pattern as rich_message._sleep.
 _finish_sleep = asyncio.sleep
 
-# Strong references to fire-and-forget housekeeping tasks (the tool-less
-# card's delete, roadmap 8.32): the event loop only keeps weak ones, and a
+# Strong references to fire-and-forget housekeeping tasks (a card delete
+# scheduled by `_delete_card_later`): the event loop only keeps weak ones, and a
 # task collected mid-flight is a delete that silently never happened.
 _BACKGROUND_TASKS: set = set()
 
@@ -463,8 +463,9 @@ class NotifyMixin:
         return False
 
     def _delete_card_later(self, sess: TrackedSession, msg_id: int) -> None:
-        """Delete a finished turn's tool-less busy card once its answer is
-        out (roadmap 8.32 R1). Never raises, never waits.
+        """Delete a finished turn's busy card once its answer is out. Unused
+        since 2026-09-27 (the layout setting decides the card for every turn;
+        8.32 R1's tool-less delete was reverted). Never raises, never waits.
 
         Card housekeeping, so an ORNAMENT, like the re-anchor's own delete:
         leaving a stale card behind is cosmetic, taking an answer's token to
@@ -2118,9 +2119,9 @@ class NotifyMixin:
             # live re-anchor in flight (a tick's `_consume_and_reanchor`),
             # which swaps `busy_msg_id` to its new card under this lock:
             # everything below reads the card it leaves, never the old one
-            # it is deleting — for a tool-less card (8.32 R1) that is the
-            # difference between deleting the live card and stranding it on
-            # "Working" for good.
+            # it is replacing. Settling the old id instead would strand the
+            # live card on "Working" for good (tests: the in-flight re-anchor
+            # and in-flight send tests in test_quiet_toolless_turns.py).
             async with sess.animate_lock:
                 self._cancel_lazy_card(sess)
             # Stop animation and clean up busy message
@@ -2531,10 +2532,7 @@ class NotifyMixin:
             #                           blank line, body (`replace`, and
             #                           `merged` falling back to it): the
             #                           card is gone, so this line carries
-            #                           the elapsed time. A `card`-layout
-            #                           card with no timeline (roadmap 8.32)
-            #                           takes this row too: it is deleted
-            #                           once this message is out.
+            #                           the elapsed time.
             # no card + body          → the same stats-line message. "No
             #                           card" covers a turn that never had
             #                           one and a final render that failed.
@@ -2719,8 +2717,8 @@ class NotifyMixin:
             if _answer_digests and (_answer_landed or merged_delivered):
                 sess.confirm_delivered(_answer_digests, turn_end_wall)
 
-            # The tool-less card goes only now that the answer is out (or
-            # held) — roadmap 8.32 R1.
+            # Inert while toolless_card_msg_id stays 0 (the layout decides
+            # the card, 2026-09-27); kept for a layout that wants it.
             if toolless_card_msg_id:
                 self._delete_card_later(sess, toolless_card_msg_id)
 

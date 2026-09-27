@@ -1088,6 +1088,10 @@ def test_a_toolless_card_layout_turn_keeps_its_card(mk_bot, run_async, wire):
     (answer,) = wire.of("sendRichMessage")
     assert answer["reply_to_message_id"] == TRIGGER
     assert ANSWER in answer["rich_message"]["markdown"]
+    # The card carries the stats, so the answer opens with the short line,
+    # not "💬 name · Finished (Ns)" (which is only for a turn with no card).
+    first = answer["rich_message"]["markdown"].split("\n", 1)[0]
+    assert "Finished" not in first and first.startswith("💬")
 
 
 def test_card_layout_is_the_same_with_and_without_tools(mk_bot, run_async, wire):
@@ -1102,3 +1106,82 @@ def test_card_layout_is_the_same_with_and_without_tools(mk_bot, run_async, wire)
         shapes.append("delete_message" in wire.methods())
     assert shapes == [False, False]
 
+
+# ── the finish waits for an in-flight card change (animate_lock) ─────────
+# Rewritten for the kept card (review 2026-09-27): these were the only
+# tests of the finish path's ``async with sess.animate_lock``, and the race
+# they guard still exists when the card is kept rather than deleted.
+
+def _final_edits(wire, msg_id):
+    return [p for p in wire.of("editMessageText")
+            if p.get("message_id") == msg_id]
+
+
+def test_an_in_flight_re_anchor_is_waited_for_and_its_card_settled(
+    mk_bot, run_async, wire,
+):
+    """A live tick's re-anchor holds ``animate_lock`` and swaps the card to
+    a new message (77) as the turn finishes. The finish must settle the
+    card the re-anchor leaves behind, not the old id, or 77 stays on
+    "Working" for good."""
+    bot = _wire_bot(mk_bot, wire)
+    sess = _sess()
+
+    async def _scenario():
+        started = asyncio.Event()
+
+        async def _reanchor():
+            async with sess.animate_lock:
+                started.set()
+                await asyncio.sleep(0)
+                await asyncio.sleep(0)
+                sess.busy_msg_id = 77  # the re-anchored card
+
+        task = asyncio.create_task(_reanchor())
+        await started.wait()
+        await bot.notify(sess, "idle_prompt", {"summary": ANSWER})
+        await task
+        await _drain_background()
+
+    run_async(_bounded(_scenario()))
+    assert _final_edits(wire, 77), wire.calls
+    assert not _final_edits(wire, CARD)
+    assert "delete_message" not in wire.methods()
+
+
+def test_a_card_whose_send_is_in_flight_at_the_finish_is_settled(
+    mk_bot, run_async, wire, gate,
+):
+    """The late card's send (88) is still in flight as the turn ends: the
+    finish waits for it and then settles it like any kept card, instead of
+    the card landing afterwards and animating a turn that is over."""
+    bot = _wire_bot(mk_bot, wire)
+    sess = _busy_sess(bot)
+    release = {}
+
+    async def _slow_send_busy(s, **_kw):
+        release["event"] = asyncio.Event()
+        await release["event"].wait()
+        s.busy_card_trigger = s.trigger_msg_id
+        return 88
+
+    bot.send_busy = _slow_send_busy
+
+    async def _scenario():
+        await bot.notify(sess, "user_prompt_submit", {"self_woken": True})
+        await _yield()
+        gate.event.set()
+        await _yield()
+        assert "event" in release  # the late send is in flight
+        bot.registry.transition(sess.name, Status.IDLE)
+        finish = asyncio.create_task(
+            bot.notify(sess, "idle_prompt", {"summary": ANSWER}))
+        await _yield()
+        release["event"].set()
+        await finish
+        await _drain_background()
+        await _yield()
+
+    run_async(_bounded(_scenario()))
+    assert _final_edits(wire, 88), wire.calls
+    assert not sess.animation_running()
