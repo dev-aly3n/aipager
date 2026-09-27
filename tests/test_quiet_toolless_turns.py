@@ -33,7 +33,7 @@ import pytest
 from aipager import config
 from aipager import preferences as prefs
 from aipager.bot import notify as notify_mod
-from aipager.bot.animation import _RICH_LIMIT, final_card_has_timeline
+from aipager.bot.animation import final_card_has_timeline
 from aipager.state import Status, TrackedSession
 
 CHAT = 555
@@ -171,57 +171,6 @@ def test_hook_prose_with_no_row_after_it_is_the_answer_not_timeline():
 
 # ── R1 reproductions ─────────────────────────────────────────────────────────
 
-def test_a_toolless_card_turn_is_one_message_with_the_stats(
-    mk_bot, run_async, wire,
-):
-    """(a) The bigdog / catfish shape: a card-layout turn, zero tools.
-    Exactly one visible message remains — the answer, stats in its first
-    line, threaded to the prompt — and the card is deleted. Two calls,
-    never the three (send, final edit, answer) it cost before.
-
-    Guards: drop the R1 branch and a final editMessageText appears; the
-    answer then opens with the short line.
-    """
-    bot = _wire_bot(mk_bot, wire)
-    sess = _sess()
-    _finish(run_async, bot, sess, summary=ANSWER, raw_md=ANSWER)
-
-    assert wire.methods() == ["sendRichMessage", "delete_message"]
-    (answer,) = wire.of("sendRichMessage")
-    first, _, body = answer["rich_message"]["markdown"].partition("\n\n")
-    assert first.startswith("💬 **q** · Finished (")
-    assert "s)" in first  # the elapsed time rides in the 💬 line
-    assert body == ANSWER
-    assert answer["reply_to_message_id"] == TRIGGER
-    (delete,) = wire.of("delete_message")
-    assert delete["message_id"] == CARD
-    # Card housekeeping is an ORNAMENT: suspended in minimal mode, never
-    # taking an answer's token.
-    assert delete["rate_limit_args"] == {"class": "ornament"}
-    assert sess.busy_msg_id is None
-
-
-def test_the_answer_is_sent_before_the_card_is_deleted(mk_bot, run_async, wire):
-    """The answer never waits behind card housekeeping, and the chat is
-    never left with neither."""
-    bot = _wire_bot(mk_bot, wire)
-    _finish(run_async, bot, _sess(), summary=ANSWER)
-    assert wire.methods().index("sendRichMessage") < \
-        wire.methods().index("delete_message")
-
-
-def test_a_card_whose_only_prose_repeats_the_answer_goes_too(
-    mk_bot, run_async, wire,
-):
-    """Transcript fallback: the turn's one text block IS the answer, which
-    `_drop_answer_tail` trims — nothing is left for the card to keep."""
-    bot = _wire_bot(mk_bot, wire)
-    sess = _sess()
-    sess.stream_commentary = [(0, ANSWER)]
-    _finish(run_async, bot, sess, summary=ANSWER, raw_md=ANSWER)
-    assert wire.methods() == ["sendRichMessage", "delete_message"]
-
-
 def test_a_turn_with_tools_keeps_its_card_and_answer(mk_bot, run_async, wire):
     """(b) Unchanged: the finished card is edited in place and kept, the
     answer follows with the SHORT result line, nothing is deleted."""
@@ -244,64 +193,6 @@ def test_a_toolless_turn_with_no_answer_keeps_its_card(mk_bot, run_async, wire):
     bot = _wire_bot(mk_bot, wire)
     _finish(run_async, bot, _sess(), summary="", no_response=True)
     assert wire.methods() == ["editMessageText"]
-
-
-def test_a_toolless_card_is_not_re_anchored_the_answer_goes_to_the_target(
-    mk_bot, run_async, wire,
-):
-    """A card anchored to a message the turn did not consume is not re-sent
-    under the new target just to be deleted: the answer itself replies to
-    the target."""
-    bot = _wire_bot(mk_bot, wire)
-    sess = _sess()
-    sess.trigger_msg_id = 11  # consumption moved the target
-    _finish(run_async, bot, sess, summary=ANSWER)
-    assert wire.methods() == ["sendRichMessage", "delete_message"]
-    assert wire.of("sendRichMessage")[0]["reply_to_message_id"] == 11
-    assert wire.of("delete_message")[0]["message_id"] == CARD
-
-
-def test_a_long_answer_on_a_toolless_turn_still_arrives_whole(
-    mk_bot, run_async, wire,
-):
-    """(g) Over the rich ceiling: the stats header (with the attachment
-    note), the truncated body and the full log — and still no card."""
-    bot = _wire_bot(mk_bot, wire)
-    long = ("paragraph of answer text. " * 40 + "\n\n") * 60
-    assert len(long.encode()) > _RICH_LIMIT
-    _finish(run_async, bot, _sess(), summary=long, raw_md=long)
-
-    assert "editMessageText" not in wire.methods()
-    (header,) = wire.of("send_message")
-    assert header["_args"][1].startswith("💬 <b>q</b> · Finished (")
-    assert "attached below" in header["_args"][1]
-    assert len(wire.of("sendRichMessage")) == 1
-    assert len(wire.of("send_document")) == 1
-    assert [d["message_id"] for d in wire.of("delete_message")] == [CARD]
-
-
-def test_a_plain_text_fallback_on_a_toolless_turn_opens_with_the_stats(
-    mk_bot, run_async, wire, monkeypatch,
-):
-    """(g) Multi-part plain-text delivery (rich refused): the first chunk
-    carries the stats line, and the card still goes."""
-    bot = _wire_bot(mk_bot, wire)
-
-    async def _post(method, payload, **_kw):
-        wire.calls.append((method, payload))
-        if method == "sendRichMessage":
-            return {"ok": False, "error_code": 400, "description": "nope"}
-        return {"ok": True, "result": {"message_id": 5}}
-
-    monkeypatch.setattr("aipager.bot.rich_message._post", _post)
-    body = "\n\n".join(f"part {i} " + "x" * 1500 for i in range(6))
-    _finish(run_async, bot, _sess(), summary=body)
-
-    chunks = [c["_args"][1] for c in wire.of("send_message")]
-    assert len(chunks) > 1
-    assert chunks[0].startswith("💬 q · Finished (")
-    assert "editMessageText" not in wire.methods()
-    assert [d["message_id"] for d in wire.of("delete_message")] == [CARD]
 
 
 def test_a_muted_chat_holds_the_answer_and_delivers_it_once_with_no_card(
@@ -345,38 +236,6 @@ def test_other_layouts_are_unchanged_for_a_toolless_turn(
     else:
         assert wire.methods() == ["delete_message", "sendRichMessage"]
         assert "rate_limit_args" not in wire.of("delete_message")[0]
-
-
-def test_an_in_flight_re_anchor_is_waited_for_and_its_new_card_deleted(
-    mk_bot, run_async, wire,
-):
-    """Race: a live tick's re-anchor holds ``animate_lock`` and swaps the
-    card to a new message as the turn finishes. The finish path must take
-    the card the re-anchor leaves behind; reading the old id first deletes
-    a card the re-anchor deletes anyway and strands the new one on
-    "Working" for good."""
-    bot = _wire_bot(mk_bot, wire)
-    sess = _sess()
-
-    async def _scenario():
-        started = asyncio.Event()
-
-        async def _reanchor():
-            async with sess.animate_lock:
-                started.set()
-                await asyncio.sleep(0)
-                await asyncio.sleep(0)
-                sess.busy_msg_id = 77  # the re-anchored card
-
-        task = asyncio.create_task(_reanchor())
-        await started.wait()
-        await bot.notify(sess, "idle_prompt", {"summary": ANSWER})
-        await task
-        await _drain_background()
-
-    run_async(_bounded(_scenario()))
-    assert [d["message_id"] for d in wire.of("delete_message")] == [77]
-    assert sess.busy_msg_id is None
 
 
 # ── R2: self-woken turns get a lazy card ─────────────────────────────────────
@@ -572,46 +431,6 @@ def test_a_permission_wait_keeps_the_deferral_for_the_next_tool(
     bot._stop_animation(sess)
 
 
-def test_a_card_whose_send_is_in_flight_at_the_finish_is_not_stranded(
-    mk_bot, run_async, wire, gate,
-):
-    """The delay runs out as the turn ends: the finish waits for the
-    card's send, then settles it like any card (tool-less: deleted after
-    the answer), instead of the card landing afterwards, animating a turn
-    that is already over."""
-    bot = _wire_bot(mk_bot, wire)
-    sess = _busy_sess(bot)
-    release = {}
-
-    async def _slow_send_busy(s, **_kw):
-        release["event"] = asyncio.Event()
-        await release["event"].wait()
-        s.busy_card_trigger = s.trigger_msg_id
-        return 88
-
-    bot.send_busy = _slow_send_busy
-
-    async def _scenario():
-        await bot.notify(sess, "user_prompt_submit", {"self_woken": True})
-        await _yield()
-        gate.event.set()
-        await _yield()
-        assert "event" in release  # the late send is in flight
-        bot.registry.transition(sess.name, Status.IDLE)
-        finish = asyncio.create_task(
-            bot.notify(sess, "idle_prompt", {"summary": ANSWER}))
-        await _yield()
-        release["event"].set()
-        await finish
-        await _drain_background()
-        await _yield()
-
-    run_async(_bounded(_scenario()))
-    assert [d["message_id"] for d in wire.of("delete_message")] == [88]
-    assert sess.busy_msg_id is None
-    assert not sess.animation_running()
-
-
 def test_the_hook_receiver_marks_a_fresh_task_notification_turn_self_woken(
     mk_bot, run_async,
 ):
@@ -649,19 +468,6 @@ def test_the_hook_receiver_marks_a_fresh_task_notification_turn_self_woken(
 
 
 # ── the remaining guards, one test each ──────────────────────────────────────
-
-def test_an_api_error_on_a_toolless_turn_still_removes_the_card(
-    mk_bot, run_async, wire,
-):
-    """The API-error notice returns early, before the answer path; the
-    tool-less card it would otherwise strand on its last frame is deleted
-    there too."""
-    bot = _wire_bot(mk_bot, wire)
-    _finish(run_async, bot, _sess(),
-            summary="API Error: 500 internal server error")
-    assert [d["message_id"] for d in wire.of("delete_message")] == [CARD]
-    assert "editMessageText" not in wire.methods()
-
 
 def test_a_subagent_start_earns_the_deferred_card_too(
     mk_bot, run_async, wire, gate,
@@ -1263,3 +1069,36 @@ def test_the_pinned_bar_follows_a_turn_whose_card_was_never_sent(
     assert during == "⚙️ cat (working)"
     assert total > before
     assert after == "💤 cat (idle)"
+
+
+# ── layout decides (operator 2026-09-27, reversing 8.32 R1) ──────────────
+# "Busy card + result" promises the card stays; a tool-less turn deleting
+# it made the chat look random next to tool turns that kept theirs.
+
+def test_a_toolless_card_layout_turn_keeps_its_card(mk_bot, run_async, wire):
+    """`card` layout, zero tools: the card is finalised in place (no Stop
+    button) and the answer arrives as its own message, the same shape as
+    a turn that ran tools. Nothing is deleted."""
+    bot = _wire_bot(mk_bot, wire)
+    sess = _sess()
+    _finish(run_async, bot, sess, summary=ANSWER, raw_md=ANSWER)
+    methods = wire.methods()
+    assert "delete_message" not in methods
+    assert "sendRichMessage" in methods
+    (answer,) = wire.of("sendRichMessage")
+    assert answer["reply_to_message_id"] == TRIGGER
+    assert ANSWER in answer["rich_message"]["markdown"]
+
+
+def test_card_layout_is_the_same_with_and_without_tools(mk_bot, run_async, wire):
+    """Both turns end with a kept card and a separate answer: the shape
+    no longer depends on whether a tool ran."""
+    shapes = []
+    for tools in ((), (("Bash: ls", True),)):
+        wire.calls.clear()
+        bot = _wire_bot(mk_bot, wire)
+        sess = _sess(tools=tools)
+        _finish(run_async, bot, sess, summary=ANSWER, raw_md=ANSWER)
+        shapes.append("delete_message" in wire.methods())
+    assert shapes == [False, False]
+

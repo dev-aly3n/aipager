@@ -58,7 +58,7 @@ from aipager.bot.animation import (
     FINAL_VERB, _RICH_LIMIT, _exact_anchors_available, _expire_tool_batch,
     _md_escape, _read_stream_text, _sync_anchors_from_transcript,
     build_full_log,
-    build_stream_card_ex, final_card_has_timeline,
+    build_stream_card_ex,
 )
 
 # Pure-function helpers and constants live in aipager.bot.transport
@@ -2184,58 +2184,18 @@ class NotifyMixin:
                 _drop_answer_tail(
                     sess, context.get("raw_md") or context.get("summary") or "",
                 )
-            # ── a card with nothing on it (roadmap 8.32 R1) ────────────────
-            # In `card` layout the kept card is the turn's timeline record.
-            # A turn with NO timeline content — `final_card_has_timeline`
-            # names exactly what counts: tool rows, subagent rows, and prose
-            # the card would keep — would leave only "✅ label · Done · Ns"
-            # above an answer that is about to say the same. Such a turn is
-            # delivered as ONE message instead: the answer, opening with
-            # the STATS result line, the way `replace` delivers every turn.
-            #
-            # Not an edit of the card into the answer (what `merged` does):
-            # an edit is silent in Telegram, and a card-layout answer has
-            # always notified. The answer is a fresh send under the turn's
-            # target, and the card is deleted AFTER it (`_delete_card_later`)
-            # — two calls, where the kept card cost three, and the answer
-            # never waits behind card housekeeping.
-            #
-            # Only with something to deliver: a turn with no answer keeps
-            # its card as the one record that it ended, exactly as today.
-            # Checked after the `_drop_answer_tail` trim above, so a prose
-            # block that merely repeats the answer does not count as
-            # timeline. A re-anchor is moot for such a card — the answer
-            # replies to the turn's current target — so none is made.
-            # (With `busy_msg_id` cleared here, the `card` re-anchor just
-            # below finds no card and does nothing.)
-            #
-            # The id read here is the settled one: the `animate_lock` taken
-            # above waited out any re-anchor still in flight, and nothing
-            # between there and here yields.
-            #
-            # "Something to deliver" is judged the way the content
-            # selection below will judge it, read-only: an answer whose
-            # digest already went out is suppressed there (a turn with no
-            # text of its own reads an EARLIER turn's from the transcript),
-            # and such a turn has nothing to deliver — it keeps its card
-            # rather than trading it for a bare header, or, on the
-            # recovered path, for nothing at all.
+            # ── the layout setting decides the card, always ─────────────────
+            # 8.32 R1 deleted a `card`-layout turn's card when it had no
+            # timeline (no tools), delivering the answer alone. That broke
+            # the operator's own setting: "Busy card + result" promises the
+            # card stays and the answer arrives as its own message, and
+            # tool turns kept theirs, so the chat looked random (operator,
+            # 2026-09-27: "it must respect the settings"). Every turn now
+            # follows the layout: `card` keeps the card, `replace` removes
+            # it, `merged` folds the answer in. The deletion hooks below
+            # stay wired for a future layout that wants them, and are
+            # inert while this stays 0.
             toolless_card_msg_id = 0
-            _candidate = context.get("raw_md") or context.get("summary") or ""
-            _fresh_answer = False
-            if _candidate:
-                _cand_digest = hashlib.md5(_candidate.encode("utf-8")).hexdigest()
-                _fresh_answer = not (
-                    _cand_digest == sess.last_idle_summary_hash
-                    or sess.was_delivered(_cand_digest)
-                )
-            if (layout == "card" and sess.busy_msg_id and sess.busy_msg_id > 0
-                    and _fresh_answer
-                    and not final_card_has_timeline(sess)):
-                toolless_card_msg_id = sess.busy_msg_id
-                sess.busy_msg_id = None
-                log.info("[%s] finished card has no timeline — the answer "
-                         "goes out alone, with the stats", label)
             card_already_final = False
             merged_send_as_new = False
             if reanchor_needed and layout == "card":
