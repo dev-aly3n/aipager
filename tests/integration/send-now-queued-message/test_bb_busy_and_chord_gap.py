@@ -208,13 +208,17 @@ def test_held_turn_busy_text_has_no_em_dash():
 # ── (b) a foreign write inside the chord's gap ─────────────────────────────
 
 def _slow_ctrl_x(monkeypatch, seconds: float = SLOW_CTRL_X, *,
-                 ctrl_s_fails: bool = False):
+                 ctrl_s_fails: bool = False, raises: bytes | None = None):
     """The Ctrl+X ``dtach -p`` takes *seconds* to return (a loaded box).
     Every write is still recorded, when it starts, by the harness. With
-    *ctrl_s_fails*, the Ctrl+S ``dtach -p`` exits with an error."""
+    *ctrl_s_fails*, the Ctrl+S ``dtach -p`` exits with an error. With
+    *raises*, the ``dtach -p`` for that byte cannot even be started (a fork
+    failure: ``_run`` raises OSError instead of returning)."""
     recorder = inject._run
 
     async def _run(args, stdin=b"", timeout=5):
+        if raises is not None and bytes(stdin) == raises:
+            raise OSError("fork failed")
         out = await recorder(args, stdin=stdin, timeout=timeout)
         if bytes(stdin) == CTRL_X:
             await asyncio.sleep(seconds)
@@ -378,7 +382,9 @@ def test_gap_prompt_before_the_chord_keeps_its_ctrl_s(rp, vloop, monkeypatch):
     assert writes[-2:] == CHORD
 
 
-def _slow_chord_tap(r, vloop, monkeypatch, *, ctrl_s_fails: bool = False):
+def _slow_chord_tap(r, vloop, monkeypatch, *, ctrl_s_fails: bool = False,
+                    raises: bytes | None = None, seconds: float | None = None,
+                    outcome_only: bool = False):
     """Error guessing (a loaded box): a Ctrl+X ``dtach -p`` of 1 s, so the
     chord outlasts the dispatcher's 1 s ack bound. Returns ``(toast, the
     virtual seconds from the tap to its first answer with text, the line
@@ -387,7 +393,9 @@ def _slow_chord_tap(r, vloop, monkeypatch, *, ctrl_s_fails: bool = False):
         w = r.worker()
         line = await _lined(r)
         before = dict(r.chat.lines[line["id"]])
-        _slow_ctrl_x(monkeypatch, SLOWER_CTRL_X, ctrl_s_fails=ctrl_s_fails)
+        _slow_ctrl_x(monkeypatch,
+                     SLOWER_CTRL_X if seconds is None else seconds,
+                     ctrl_s_fails=ctrl_s_fails, raises=raises)
         start = len(r._pty.writes)
         loop = asyncio.get_running_loop()
         t0 = loop.time()
@@ -400,7 +408,14 @@ def _slow_chord_tap(r, vloop, monkeypatch, *, ctrl_s_fails: bool = False):
                     for c in q.answer.await_args_list):
                 answered.append(loop.time() - t0)
             await asyncio.sleep(0.01)
-        toast = await job
+        try:
+            toast = await job
+        except Exception:
+            if not outcome_only:
+                raise
+            # A tap whose handler raised showed the operator no outcome:
+            # asserted below as what they see, not as a crash.
+            toast = None
         await asyncio.sleep(KEEP_WINDOW)
         after = dict(r.chat.lines[line["id"]])
         w.cancel()
@@ -463,3 +478,50 @@ def test_gap_prompt_before_the_chord_toasts_sent(rp, vloop, monkeypatch):
     _, toast, _, _ = _gap_row(rp, vloop, monkeypatch, _prompt,
                               foreign_first=True)
     assert toast == SENT_TOAST
+
+
+# ── the chord's dtach -p cannot even be started (review rev-iter3-001) ──
+
+def test_slow_chord_whose_ctrl_s_cannot_start_says_so_on_the_line(
+        rp, vloop, monkeypatch):
+    """After the ``Sending`` toast, the Ctrl+S ``dtach -p`` fails to spawn:
+    the line says Claude was not reached and keeps its button."""
+    toast, _, before, after, writes = _slow_chord_tap(
+        rp, vloop, monkeypatch, raises=CTRL_S, outcome_only=True)
+    assert toast == SENDING
+    assert writes == [CTRL_X]
+    assert after["deleted"] is False
+    assert after["text"] == LINE_UNREACHED
+    assert after["callback_data"] == before["callback_data"]
+
+
+def test_fast_chord_whose_ctrl_x_cannot_start_toasts_the_failure(
+        rp, vloop, monkeypatch):
+    """The Ctrl+X ``dtach -p`` fails to spawn at once: the tap toasts the
+    failure, nothing reaches the terminal, and the line stays."""
+    toast, _, before, after, writes = _slow_chord_tap(
+        rp, vloop, monkeypatch, raises=CTRL_X, seconds=0.0, outcome_only=True)
+    assert toast == FAILED
+    assert writes == []
+    assert after["deleted"] is False
+    assert after["callback_data"] == before["callback_data"]
+
+
+def test_now_whose_chord_cannot_start_replies_the_failure(
+        rp, vloop, monkeypatch):
+    async def scenario():
+        w = rp.worker()
+        await _lined(rp)
+        _slow_ctrl_x(monkeypatch, 0.0, raises=CTRL_X)
+        start = len(rp._pty.writes)
+        try:
+            replies = await rp.cmd("_handle_now_cmd", "/now")
+        except Exception:
+            replies = None  # no reply reached the operator
+        w.cancel()
+        return replies, rp._pty.data()[start:]
+
+    replies, writes = _run(vloop, scenario())
+    assert replies == [FAILED]
+    assert writes == []
+

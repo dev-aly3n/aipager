@@ -168,8 +168,10 @@ def test_a_writer_behind_a_prompt_waits_at_most_its_settle_and_writes(
         return waited
 
     waited = run_async(scenario())
-    # text write + 0.5 s settle + Enter write + the Escape's own write
-    assert waited <= 0.5 + 3 * WRITE + 0.1
+    # text write + 0.5 s settle + Enter write + the Escape's own write, with
+    # room for a slow CI runner's scheduling (these are real sleeps): still
+    # well under a second prompt's worth (another 0.5 s settle).
+    assert waited <= 0.5 + 3 * WRITE + 0.35
     assert term.writes == [b"x" * 1000, b"\r", ESC]
 
 

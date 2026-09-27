@@ -354,6 +354,16 @@ class SendNowMixin:
         sess.send_now_inflight = True
         try:
             ok = await inject.send_now(sess.name)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            # `dtach -p` could not even be started (a fork failure on a
+            # loaded box): the keys did not arrive, which is a failure to
+            # report, never an exception that loses the tap's outcome
+            # (review rev-iter3-001).
+            log.warning("[%s] send now could not start its writes",
+                        sess.label, exc_info=True)
+            ok = False
         finally:
             sess.send_now_inflight = False
         log.info("[%s] send now %s", sess.label, "sent" if ok else "failed")
