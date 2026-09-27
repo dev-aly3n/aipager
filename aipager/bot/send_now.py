@@ -63,6 +63,7 @@ TOAST_SENT = "Sent to Claude now"
 TOAST_TAKEN = "Already taken"
 TOAST_INTERACTIVE = "Answer the open question first"
 TOAST_TYPING = "Busy typing a prompt, try again in a moment"
+TOAST_BUSY = "Busy, try again in a moment"
 TOAST_FAILED = "Could not reach Claude, try again"
 TOAST_CANNOT_PROMPT = "You can't send to this session"
 TOAST_UNAVAILABLE = "That session is no longer available"
@@ -85,8 +86,10 @@ class SendNowOutcome:
     ``result`` is one of ``"sent"`` (the chord was written, or one already
     was being written), ``"taken"`` (a tap's message is no longer held by
     Claude), ``"nothing"`` (``/now`` found nothing held), ``"interactive"``
-    (a dialog is open), ``"typing"`` (aipager is typing a prompt into the
-    session) or ``"failed"`` (the terminal write failed)."""
+    (a dialog is open), ``"held"`` (the newest turn's hook events are
+    still held, so whether a dialog is open is not known yet), ``"typing"``
+    (aipager is typing a prompt into the session) or ``"failed"`` (the
+    terminal write failed)."""
 
     result: str
     label: str
@@ -310,8 +313,9 @@ class SendNowMixin:
         """Press send-now in *sess* if Claude still holds the tapped message
         (*target_msg_id*), or, for ``/now`` (``None``), any queued message.
 
-        The checks, in order: evidence (D5), no dialog open (D3), aipager
-        not typing a prompt (D4), no chord already going out. There is NO
+        The checks, in order: evidence (D5), no dialog open (D3), no hook
+        events held for the newest turn (D3 again), aipager not typing a
+        prompt (D4), no chord already going out. There is NO
         await between the typing check and the chord's start, so a prompt
         injection cannot begin in between."""
         if target_msg_id is None:
@@ -325,6 +329,12 @@ class SendNowMixin:
             return SendNowOutcome(nothing, sess.label)
         if sess.status == Status.INTERACTIVE or sess.pending_permission:
             return SendNowOutcome("interactive", sess.label)
+        if sess.turn_state_held():
+            # The newest turn's own hook events wait for its card state
+            # (roadmap 8.62), a PermissionRequest or AskUserQuestion among
+            # them: a dialog may be open in Claude's terminal that the
+            # status above does not show yet, and the keys could reach it.
+            return SendNowOutcome("held", sess.label)
         if sess.prompt_injecting > 0:
             return SendNowOutcome("typing", sess.label)
         if sess.send_now_inflight:
@@ -367,6 +377,7 @@ class SendNowMixin:
             "sent": TOAST_SENT,
             "taken": TOAST_TAKEN,
             "interactive": TOAST_INTERACTIVE,
+            "held": TOAST_BUSY,
             "typing": TOAST_TYPING,
         }.get(outcome.result, TOAST_FAILED)
         await self._safe_answer(query, toast)
@@ -402,5 +413,6 @@ class SendNowMixin:
             "sent": REPLY_SENT,
             "nothing": REPLY_NOTHING,
             "interactive": TOAST_INTERACTIVE,
+            "held": TOAST_BUSY,
             "typing": TOAST_TYPING,
         }.get(outcome.result, TOAST_FAILED))

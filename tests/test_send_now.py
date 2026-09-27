@@ -672,6 +672,37 @@ def test_core_refuses_while_a_permission_prompt_is_pending(mk_bot, tmp_path,
     assert keys.writes == []
 
 
+def _hold_turn(sess):
+    """The session's newest turn has its hook events held (roadmap 8.62):
+    it waits for its card state behind an older turn's finish."""
+    sess.turn_seq = 2
+    sess.card_turn_seq = 1
+    sess.hold_turn_state(2)
+    assert sess.turn_state_held()
+
+
+def test_core_refuses_while_the_newest_turns_hooks_are_held(
+        mk_bot, tmp_path, run_async, keys):
+    """A PermissionRequest or AskUserQuestion may be among the held events:
+    a dialog can be open in Claude's terminal while the status still reads
+    BUSY (review rev-iter1-001)."""
+    bot, sess = _bot(mk_bot, tmp_path)
+    _hold_turn(sess)
+    assert sess.status == Status.BUSY and not sess.pending_permission
+    assert run_async(bot._send_now_core(sess, 2)).result == "held"
+    assert run_async(bot._send_now_core(sess, None)).result == "held"
+    assert keys.writes == []
+
+
+def test_core_sends_once_the_hold_is_released(mk_bot, tmp_path, run_async,
+                                              keys):
+    bot, sess = _bot(mk_bot, tmp_path)
+    _hold_turn(sess)
+    sess.release_turn_state(2)
+    assert run_async(bot._send_now_core(sess, 2)).result == "sent"
+    assert keys.writes == [b"\x18", b"\x13"]
+
+
 def test_core_refuses_while_a_prompt_is_being_typed(mk_bot, tmp_path,
                                                     run_async, keys):
     bot, sess = _bot(mk_bot, tmp_path)
@@ -777,6 +808,7 @@ def test_tap_on_a_line_whose_record_is_gone_deletes_the_tapped_message(
 
 @pytest.mark.parametrize("setup,toast", [
     (lambda s: setattr(s, "status", Status.INTERACTIVE), sn.TOAST_INTERACTIVE),
+    (_hold_turn, sn.TOAST_BUSY),
     (lambda s: setattr(s, "prompt_injecting", 1), sn.TOAST_TYPING),
 ])
 def test_tap_refusals_keep_the_line(mk_bot, tmp_path, run_async, keys, setup,
@@ -894,6 +926,7 @@ def test_now_sends_the_chord(mk_bot, tmp_path, run_async, keys, mk_update):
 @pytest.mark.parametrize("setup,reply", [
     (lambda s: s.queued_targets.clear(), sn.REPLY_NOTHING),
     (lambda s: setattr(s, "status", Status.INTERACTIVE), sn.TOAST_INTERACTIVE),
+    (_hold_turn, sn.TOAST_BUSY),
     (lambda s: setattr(s, "prompt_injecting", 2), sn.TOAST_TYPING),
 ])
 def test_now_refusals(mk_bot, tmp_path, run_async, keys, mk_update, setup,
