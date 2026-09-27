@@ -253,18 +253,49 @@ SEND_NOW_CHORD_GAP: float = 0.1
 _CTRL_X = b"\x18"
 _CTRL_S = b"\x13"
 # Sessions with a send-now chord being written right now. Every other
-# write waits for it (``_await_chord``): a byte landing between Ctrl+X and
-# Ctrl+S would break the chord, and the Ctrl+S would then stash the input.
+# write first waits for it (``_await_chord``), so in normal timing nothing
+# lands in the chord's gap and the chord goes through: a byte there would
+# break it, and the chord would then be dropped (see send_now).
 _CHORD_IN_FLIGHT: set[str] = set()
 # How long another write waits for a chord in flight, and how often it looks.
 _CHORD_WAIT_LIMIT: float = 0.5
 _CHORD_POLL: float = 0.02
-# Every write to a session's terminal, counted as it starts
-# (``_note_write``). The wait above is bounded, and a slow ``dtach -p``
-# can outlast it, so the chord does not trust timing: it writes Ctrl+S
-# only when this count shows nothing else was written to the session since
-# its Ctrl+X.
+# Every write to a session's terminal, counted as its lock is taken
+# (``_note_write``): once per lock hold, which is what the chord compares.
 _WRITES: dict[str, int] = {}
+# The per-session terminal write lock. Every ``dtach -p`` write holds its
+# session's lock until the write has returned (``dtach -p`` exits only
+# after writing), so writes are delivered one at a time and in order, not
+# merely started in order:
+# - ``send_keys``: one hold per key write (``discard_queued_input`` and
+#   every other key path go through it);
+# - ``send_text_and_enter``: ONE hold across the text, its settle delay and
+#   the Enter, so nothing can land between them;
+# - ``send_now``: one hold for the Ctrl+X; released for the gap; one hold
+#   from its "was anything written since my Ctrl+X?" check through the
+#   Ctrl+S write, so a foreign write falls before the check (and the
+#   Ctrl+S is skipped) or after the Ctrl+S, never between them.
+# Waiting is FIFO. The bound on any writer's wait (Stop's Escape
+# included): at most ``_CHORD_WAIT_LIMIT`` (0.5 s) for a chord in flight,
+# then the lock hold in progress: one ``dtach -p`` write, or a prompt's
+# text + its settle delay (at most 0.5 s) + Enter. So one writer ahead
+# costs at most ~0.5 s plus the write in flight. (A chord never starts
+# while a prompt is typed: bot/send_now.py refuses then. Several writers
+# queued at once on one session would add up, but Telegram updates are
+# handled one at a time.) Each ``dtach -p`` is capped by ``_run``'s
+# timeout, so no hold is unbounded.
+_WRITE_LOCKS: dict[str, tuple[asyncio.AbstractEventLoop, asyncio.Lock]] = {}
+
+
+def _write_lock(session: str) -> asyncio.Lock:
+    """*session*'s terminal write lock, for the running event loop (a lock
+    is bound to the loop it first waited in; tests run many loops)."""
+    loop = asyncio.get_running_loop()
+    entry = _WRITE_LOCKS.get(session)
+    if entry is None or entry[0] is not loop:
+        entry = (loop, asyncio.Lock())
+        _WRITE_LOCKS[session] = entry
+    return entry[1]
 
 
 def _note_write(session: str) -> int:
@@ -305,17 +336,23 @@ async def send_now(session: str) -> bool:
     _CHORD_IN_FLIGHT.add(session)
     try:
         sock = _sock_path(session)
-        mark = _note_write(session)
-        ok, _ = await _run([_DTACH, "-p", sock], stdin=_CTRL_X)
+        lock = _write_lock(session)
+        async with lock:
+            mark = _note_write(session)
+            ok, _ = await _run([_DTACH, "-p", sock], stdin=_CTRL_X)
         if not ok:
             return False
         await asyncio.sleep(SEND_NOW_CHORD_GAP)
-        if _WRITES.get(session) != mark:
-            log.warning("Send-now chord → %s broken by another write; "
-                        "Ctrl+S not written", session)
-            return False
-        _note_write(session)
-        ok, _ = await _run([_DTACH, "-p", sock], stdin=_CTRL_S)
+        # The check and the Ctrl+S under ONE hold: a write that got the
+        # lock during the gap has counted itself by now, and no write can
+        # start between this check and the Ctrl+S.
+        async with lock:
+            if _WRITES.get(session) != mark:
+                log.warning("Send-now chord → %s broken by another write; "
+                            "Ctrl+S not written", session)
+                return False
+            _note_write(session)
+            ok, _ = await _run([_DTACH, "-p", sock], stdin=_CTRL_S)
         if ok:
             log.info("Sent send-now chord → %s", session)
         return ok
@@ -331,8 +368,9 @@ async def send_keys(session: str, keys: str) -> bool:
     await _await_chord(session)
     seq = KEYS.get(keys, keys)
     sock = _sock_path(session)
-    _note_write(session)
-    ok, _ = await _run([_DTACH, "-p", sock], stdin=seq.encode())
+    async with _write_lock(session):
+        _note_write(session)
+        ok, _ = await _run([_DTACH, "-p", sock], stdin=seq.encode())
     if ok:
         log.info("Sent keys %r → %s", keys, session)
     return ok
@@ -343,21 +381,24 @@ async def send_text_and_enter(session: str, text: str) -> bool:
 
     Text and Enter must be separate dtach -p calls — Claude Code's TUI
     treats a single chunk (text + CR) as all-text input. A separate CR
-    write is needed to trigger the submit keypress event.
+    write is needed to trigger the submit keypress event. Both are written
+    under one hold of the session's write lock, so no other write (a Stop's
+    Escape, a send-now chord's check and Ctrl+S) can land between them; it
+    is counted once, for the pair.
     """
     await _await_chord(session)
     sock = _sock_path(session)
-    _note_write(session)
-    ok, _ = await _run([_DTACH, "-p", sock], stdin=text.encode())
-    if not ok:
-        return False
-    # Claude Code's Ink TUI needs time to process text input before
-    # Enter is recognized as "submit". Too short → \r is swallowed.
-    # Scale with text length: longer text = more rendering time needed.
-    delay = max(0.15, min(0.5, len(text) * 0.003))
-    await asyncio.sleep(delay)
-    _note_write(session)
-    ok, _ = await _run([_DTACH, "-p", sock], stdin=b"\r")
+    async with _write_lock(session):
+        _note_write(session)
+        ok, _ = await _run([_DTACH, "-p", sock], stdin=text.encode())
+        if not ok:
+            return False
+        # Claude Code's Ink TUI needs time to process text input before
+        # Enter is recognized as "submit". Too short → \r is swallowed.
+        # Scale with text length: longer text = more rendering time needed.
+        delay = max(0.15, min(0.5, len(text) * 0.003))
+        await asyncio.sleep(delay)
+        ok, _ = await _run([_DTACH, "-p", sock], stdin=b"\r")
     if ok:
         log.info("Sent text %r + Enter → %s", text[:50], session)
     return ok
