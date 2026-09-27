@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from aipager import safety
 from aipager.policy import (
     PolicyError,
     load_policy,
@@ -32,7 +33,14 @@ def test_defaults_when_no_files(tmp_path: Path):
     assert sorted(p.roles) == ["admin", "owner", "read_only", "user"]
     assert p.roles["owner"].bypass_safety is True
     assert p.roles["user"].bypass_safety is False
-    assert p.roles["user"].deny_tools == ()
+    # Operator decision 2026-09-26, "No Bash for restricted": the built-in
+    # user role denies every code-running tool, plus SendMessage and the
+    # worktree tools (was: no denies at all).
+    assert p.roles["user"].deny_tools == safety.RESTRICTED_DENY_TOOLS
+    assert "Bash" in p.roles["user"].deny_tools
+    assert p.roles["read_only"].deny_tools == safety.RESTRICTED_DENY_TOOLS
+    assert p.roles["owner"].deny_tools == ()
+    assert p.roles["admin"].deny_tools == ()
     # built-in safety floor present
     assert "~/.claude/**" in p.safety_deny_paths_no_access
     assert r"\bclaude\b" in p.safety_deny_bash_patterns

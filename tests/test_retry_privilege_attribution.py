@@ -25,9 +25,11 @@ Sequence reproduced below, matching review-1.md exactly:
    mixed-sender hold passes trivially.
 5. Old code: the retried note — carrying the member's prompt text — is
    written with the owner's resolved role, ``bypass_safety=True``.
-   Fixed code: Retry passes no explicit ``driver_user_id``, so
-   permission resolution fails closed instead of reading
-   ``sess.last_driver_user_id``.
+   Fixed code: Retry passes the tapper as ``driver_user_id`` only when
+   the tapper sent ``sess.last_prompt`` (``last_prompt_driver_user_id``,
+   roadmap 8.50, 2026-09-27 — so an owner's own Retry keeps its rights);
+   here the author is the member, so no sender is passed and permission
+   resolution fails closed to the floor.
 """
 
 from __future__ import annotations
@@ -171,3 +173,39 @@ def test_retry_does_not_leak_a_later_senders_bypass_safety(
         "the retried note carries the owner's bypass_safety even though "
         "the content is the member's prompt, not the owner's — rev-iter1-001"
     )
+
+
+def test_a_prompt_sent_with_no_sender_records_no_author(mk_bot, run_async, monkeypatch):
+    """review rev-iter4-002: a Retry (or /compact) sends with no explicit
+    sender while the owner is the session's last driver. Its note must not
+    name the owner as the prompt's author, or the owner's next Retry of it
+    would count as "the tapper's own prompt" and run with owner rights."""
+    from aipager.policy_snapshot import note_driver_id
+    bot = _bot(mk_bot)
+    sess = _sess()
+    bot.registry._sessions[sess.name] = sess
+    monkeypatch.setattr(inject, "is_alive", AsyncMock(return_value=True))
+    monkeypatch.setattr(inject, "send_text_and_enter", AsyncMock(return_value=True))
+    bot._send_busy_and_animate = AsyncMock()
+
+    bot._mark_driver(sess, _update_for(2))          # the owner drove last
+    assert run_async(bot._inject_prompt(sess, "member's prompt", msg_id=601,
+                                        chat_id=CHAT_ID, driver_user_id=None))
+    notes = [n for n in list_outstanding_notes(sess.name) if n.get("msg_id") == 601]
+    assert notes and all(note_driver_id(n) is None for n in notes)
+
+    # ...while an explicit sender is still recorded as the author.
+    assert run_async(bot._inject_prompt(sess, "owner's own", msg_id=602,
+                                        chat_id=CHAT_ID, driver_user_id=2))
+    own = [n for n in list_outstanding_notes(sess.name) if n.get("msg_id") == 602]
+    assert own and note_driver_id(own[0]) == 2
+
+
+def test_the_pickup_datagram_carries_the_real_author():
+    """The daemon records the prompt's author from the queue_pickup wire
+    note; without author_user_id there it would always be unknown."""
+    from aipager.dtach.notify_hook import _note_wire
+    wire = _note_wire({"msg_id": 1, "chat_id": CHAT_ID, "raw_text": "t",
+                       "sender_key": [CHAT_ID, 2], "author_user_id": 2})
+    assert wire["author_user_id"] == 2
+    assert "bypass_safety" not in wire          # identity only, no permissions

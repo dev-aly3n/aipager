@@ -258,6 +258,27 @@ def test_handle_message_reply_to_guessed_from_text(mk_bot, mk_update, run_async,
     assert sess.status == Status.BUSY
 
 
+def test_handle_message_records_who_sent_the_prompt(mk_bot, mk_update, run_async,
+                                                    monkeypatch):
+    """Retry runs as the tapper only if they sent it (roadmap 8.50)."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr("aipager.dtach.inject.is_alive",
+                        AsyncMock(return_value=True))
+    monkeypatch.setattr("aipager.dtach.inject.send_text_and_enter",
+                        AsyncMock(return_value=True))
+    bot._send_busy_and_animate = AsyncMock()
+    bot._react = AsyncMock()
+    update = mk_update("text", user_id=4242)
+    update.message.reply_to_message = MagicMock(
+        message_id=999999, text="⚙️ jim · Working", caption=None,
+    )
+    run_async(bot._handle_message(update, MagicMock()))
+    assert sess.last_prompt == "text"
+    assert sess.last_prompt_driver_user_id == 4242
+
+
 # ===== _send_template / _send_command corners ==========================
 
 def test_send_template_no_active_warns(mk_bot, mk_update, run_async):

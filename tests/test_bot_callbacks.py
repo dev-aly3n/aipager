@@ -230,6 +230,34 @@ def test_retry_happy_path(mk_bot, mk_query, run_async, monkeypatch):
     bot._send_busy_and_animate.assert_awaited_once()
 
 
+@pytest.mark.parametrize("author,tapper,expected", [
+    (777, 777, 777),     # your own prompt: runs as you (an owner keeps Bash)
+    (555, 777, None),    # someone else's text: no borrowed rights -> floor
+    (None, 777, None),   # author unknown: floor
+])
+def test_retry_runs_as_the_tapper_only_for_their_own_prompt(
+        mk_bot, mk_query, run_async, monkeypatch, author, tapper, expected):
+    """Roadmap 8.50, 2026-09-27: a Retry wrote its policy note with no
+    sender, so the turn ran on the floor — which now denies Bash, so an
+    owner's own Retry would lose it. It runs as the tapper when the
+    tapper sent the prompt; never lends the tapper's rights to someone
+    else's text (test_retry_privilege_attribution.py)."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    sess.last_prompt = "the prompt"
+    sess.last_prompt_driver_user_id = author
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr("aipager.dtach.inject.is_alive",
+                        AsyncMock(return_value=True))
+    bot._inject_prompt = AsyncMock(return_value=True)
+    bot._send_busy_and_animate = AsyncMock()
+    bot._app.bot.delete_message = AsyncMock()
+    update, query = mk_query("claude-jim:retry", user_id=tapper)
+    run_async(bot._handle_callback(update, MagicMock()))
+    bot._inject_prompt.assert_awaited_once()
+    assert bot._inject_prompt.await_args.kwargs["driver_user_id"] == expected
+
+
 def test_retry_send_text_fails_toasts(mk_bot, mk_query, run_async, monkeypatch):
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)

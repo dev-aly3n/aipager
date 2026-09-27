@@ -248,6 +248,22 @@ def test_queue_pickup_sets_trigger_and_last_prompt_from_the_last_consumed(
     assert sess.last_prompt == "second"
 
 
+def test_queue_pickup_records_who_sent_the_prompt(receiver, run_async):
+    """Retry runs as the tapper only if they sent it (roadmap 8.50). The
+    author comes from ``author_user_id`` only: ``sender_key`` may hold the
+    last driver as a fallback (review rev-iter4-002)."""
+    registry, recv, notify_fn = receiver
+    _send(recv, run_async, hook_event_name="queue_pickup", session="claude-jim",
+          consumed=[{"msg_id": 11, "chat_id": -100, "raw_text": "second",
+                     "sender_key": [-100, 42], "author_user_id": 42}],
+          expired=[])
+    assert registry.get("claude-jim").last_prompt_driver_user_id == 42
+    _send(recv, run_async, hook_event_name="queue_pickup", session="claude-jim",
+          consumed=[{"msg_id": 12, "chat_id": -100, "raw_text": "third",
+                     "sender_key": [-100, 42]}], expired=[])
+    assert registry.get("claude-jim").last_prompt_driver_user_id is None
+
+
 def test_queue_pickup_forwards_consumed_and_expired_to_notify(receiver, run_async):
     registry, recv, notify_fn = receiver
     _send(recv, run_async,

@@ -160,6 +160,15 @@ def _apply_layer(
     for name, spec in roles_raw.items():
         overrides = _coerce_role_overrides(str(name), spec, source)
         base = roles.get(name) or Role(name=str(name))
+        # Naming a tool in allow_tools is an explicit grant: it lifts that
+        # tool from the deny_tools the role inherited (the built-in user
+        # role denies Bash — safety.CODE_EXECUTION_TOOLS). Only when this
+        # layer leaves deny_tools alone; a deny_tools set in the same
+        # layer is taken as written, and deny wins over allow there.
+        if "allow_tools" in overrides and "deny_tools" not in overrides:
+            granted = set(overrides["allow_tools"])
+            overrides["deny_tools"] = tuple(
+                t for t in base.deny_tools if t not in granted)
         roles[name] = replace(base, **overrides)
 
     safety_raw = raw.get("safety") or {}

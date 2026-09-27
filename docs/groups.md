@@ -81,24 +81,59 @@ its messages — not every chat in the group.
 
 Four built-in roles (see `aipager/safety.py`):
 
-| Role | Send prompts | Approve | Bypass deny rules | Bypass the safety floor |
-|---|---|---|---|---|
-| `owner` | ✅ | ✅ | ✅ | ✅ |
-| `admin` | ✅ | ✅ | ✅ | ❌ |
-| `user` | ✅ | ✅ | ❌ | ❌ |
-| `read_only` | ❌ | ❌ | ❌ | ❌ |
+| Role | Send prompts | Approve | Bypass deny rules | Bypass the safety floor | Bash | Writes |
+|---|---|---|---|---|---|---|
+| `owner` | ✅ | ✅ | ✅ | ✅ | ✅ | anywhere |
+| `admin` | ✅ | ✅ | ✅ | ❌ | ✅ (best-effort rules) | anywhere the floor allows |
+| `user` | ✅ | ✅ | ❌ | ❌ | ❌ | the session's folder + scratchpad |
+| `read_only` | ❌ | ❌ | ❌ | ❌ | ❌ | the session's folder + scratchpad |
 
 - **owner** — full control, including the built-in safety floor.
   There should be exactly one: the person who runs the machine.
 - **admin** — bypasses role deny rules (their Allow tap works on a
-  restricted tool), but the safety floor still applies.
+  restricted tool), but the safety floor still applies. An admin keeps
+  Bash, and with a shell the floor's command patterns are best-effort,
+  not a boundary: only make someone an admin if you would give them a
+  shell on the machine.
 - **user** — deny rules apply; an Allow tap on a rule-denied tool is
-  auto-rejected.
+  auto-rejected. No Bash, and no other tool that runs code (PowerShell,
+  Monitor, scheduled prompts, workflows — `safety.CODE_EXECUTION_TOOLS`),
+  no `SendMessage` to other sessions, no switching worktrees.
+  File writes land only inside the session's folder and its Claude Code
+  scratchpad, and never in the folder's `.claude/`, `.git/` or
+  `.mcp.json` (each of those runs commands). `Grep`/`Glob` search only
+  inside those folders, with plain relative globs. Reads follow the
+  protected-path rules.
 - **read_only** — observers. They see every message and can call
-  `/status`, but their text / voice / file messages are ignored.
+  `/status`, but their text / voice / file messages are ignored. Same
+  tool and write limits as `user`, in case one of their messages ever
+  reaches a session.
 
 Custom roles can be defined in `policy.yaml`; the four above are the
-defaults it layers on top of.
+defaults it layers on top of. A role field you set replaces the
+built-in value. To give `user` back Bash (only for people you would
+give a shell), name it in `allow_tools` (which then also becomes that
+role's allow-list) or replace its `deny_tools`:
+
+```yaml
+roles:
+  user:
+    # the built-in list minus Bash
+    deny_tools: [PowerShell, Monitor, REPL, Workflow, CronCreate,
+                 RemoteTrigger, AppifactRepl, self_hosted_runner_spawn_local,
+                 self_hosted_runner_requeue_session, SendMessage,
+                 EnterWorktree, ExitWorktree]
+```
+
+`aipager doctor` then warns: `role user has Bash: its safety rules are
+best-effort, not a boundary`. If your `policy.yaml` already set
+`deny_tools` for `user` before this default existed, your list still
+replaces it, so that role has Bash until you add it back; the doctor
+warning tells you. A folder confined to the session only means
+something if the session was started in a project folder: a session
+started in your home folder can write anywhere in it. See
+[security → team-mode enforcement](security.md#team-mode-enforcement)
+for what these limits do not cover.
 
 ## `aipager.yaml` schema (team parts)
 
@@ -134,10 +169,24 @@ with `aipager policy validate`. Supported fields per role:
 - `allow_tools` — if non-empty, an allow-list: everything else is
   denied for that role.
 - `deny_bash_patterns` — patterns matched against `Bash` inputs.
-- `deny_paths_no_access` / `deny_paths_no_write` — path rules.
+- `deny_paths_no_access` / `deny_paths_no_write` — path rules. A
+  rule with no leading `/` or `~` (`**/.env`) matches anywhere, so
+  while one is in place every `Grep`/`Glob` of a restricted role is
+  denied (any search could read such a file), which halts that turn.
 
 Underneath all roles sits a built-in **safety floor** (protected
-paths and command patterns) that only `owner` bypasses.
+paths and command patterns) that only `owner` bypasses. The protected
+paths hold for Claude Code's file tools (`Read`, `Write`, `Edit`,
+`MultiEdit`, `NotebookEdit`, `LSP`, `Grep`, `Glob`); a restricted
+role's `Grep`/`Glob` must also stay inside the session's folder (a
+search of `~/.config` for `aipager/**` is denied). Tools such as
+`WebFetch` or `SendFile` are not path-checked. A Telegram turn aipager
+cannot attribute to a sender gets the floor, which is at least as
+strict as `user`. Retry runs as whoever tapped it if they sent the
+prompt being retried, and on the floor otherwise.
+The command patterns only matter for a role that has Bash, and there
+they are a filter, not a wall — see
+[security → team-mode enforcement](security.md#team-mode-enforcement).
 
 When claude asks for permission to use a rule-denied tool and the
 driver's role does not bypass rules:

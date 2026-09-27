@@ -57,6 +57,36 @@ def test_apply_consumption_moves_trigger_to_the_last_consumed(mk_bot, run_async)
     assert sess.last_prompt == "part two"
 
 
+def test_apply_consumption_records_who_sent_the_prompt(mk_bot, run_async):
+    """Retry runs as the tapper only if they sent it (roadmap 8.50)."""
+    bot = mk_bot()
+    bot._app.bot = AsyncMock()
+    sess = _sess()
+    sess.last_prompt_driver_user_id = 99
+    bot.registry.track_message = MagicMock()
+    run_async(bot._apply_consumption(sess, [
+        {"msg_id": 3, "chat_id": 555, "raw_text": "b", "sender_key": [555, 42],
+         "author_user_id": 42},
+    ]))
+    assert sess.last_prompt_driver_user_id == 42
+    run_async(bot._apply_consumption(sess, [
+        {"msg_id": 4, "chat_id": 555, "raw_text": "c"},
+    ]))
+    assert sess.last_prompt_driver_user_id is None  # unknown, not the old one
+
+
+def test_start_queued_turn_records_who_sent_the_prompt(mk_bot, run_async):
+    bot = mk_bot()
+    bot._app.bot = AsyncMock()
+    bot._send_busy_and_animate = AsyncMock()
+    sess = bot.registry.get_or_create("claude-jim")
+    sess.queued_targets = [{"msg_id": 5, "chat_id": 555, "raw_text": "q",
+                            "driver_user_id": 42}]
+    run_async(bot._start_queued_turn(sess))
+    assert sess.last_prompt == "q"
+    assert sess.last_prompt_driver_user_id == 42
+
+
 def test_apply_consumption_reacts_thumbsup_on_every_consumed_message(mk_bot, run_async):
     bot = mk_bot()
     bot._app.bot = AsyncMock()

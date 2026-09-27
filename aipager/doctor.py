@@ -594,6 +594,54 @@ def check_team() -> CheckResult:
     )
 
 
+def _code_tools_of(role) -> list[str]:
+    """The code-running tools (``safety.CODE_EXECUTION_TOOLS``) ``role``
+    may use: all of them when it bypasses role denies."""
+    from aipager.safety import CODE_EXECUTION_TOOLS, tool_violation
+
+    return [t for t in CODE_EXECUTION_TOOLS
+            if role.bypass_role_denies
+            or tool_violation(t, role.deny_tools, role.allow_tools) is None]
+
+
+def check_role_shell_access() -> CheckResult:
+    """Warn, once per role in use, when a role without the owner's bypass
+    can run Bash (roadmap 8.50). aipager's safety rules for such a turn
+    are regex patterns and path globs: the Claude session runs as the
+    same OS user that owns aipager's files, so a shell can reach them
+    through spellings no pattern anticipates. The built-in ``user`` and
+    ``read_only`` roles have no Bash; ``admin`` bypasses role denies and
+    keeps it; ``policy.yaml`` can give it back to any role.
+
+    Only roles a scope member actually holds are checked — in personal
+    mode there are no restricted senders to warn about."""
+    from aipager.config import POLICY, SCOPES
+
+    if not SCOPES:
+        return CheckResult(OK, "role shell access",
+                           detail=["personal mode (no scopes)"])
+    used = sorted({m.role for s in SCOPES for m in s.members})
+    warned = []
+    for name in used:
+        role = POLICY.get_role(name)
+        if role is None or role.bypass_safety:
+            continue
+        tools = _code_tools_of(role)
+        if tools:
+            what = "Bash" if "Bash" in tools else ", ".join(tools)
+            warned.append(
+                f"role {name} has {what}: its safety rules are best-effort, "
+                "not a boundary")
+    if warned:
+        return CheckResult(
+            WARN, "role shell access", detail=warned,
+            fix="give only people you would hand a shell to a role with "
+                "Bash (docs/security.md)",
+        )
+    return CheckResult(OK, "role shell access",
+                       detail=["no restricted role has Bash"])
+
+
 def check_miniapp() -> CheckResult:
     """Can the Mini App actually start, if it is switched on?
 
@@ -631,6 +679,7 @@ CHECKS: list[Callable[[], CheckResult]] = [
     check_token_valid,
     check_chat_reachable,
     check_team,
+    check_role_shell_access,
     check_claude,
     check_claude_auth,
     check_dtach,
@@ -775,13 +824,23 @@ def _print_safety_policy() -> None:
             flags.append("bypass_role_denies")
         if not role.can_prompt:
             flags.append("read-only")
+        if not role.bypass_safety:
+            tools = _code_tools_of(role)
+            if tools:
+                flags.append(f"runs code ({', '.join(tools)}): "
+                             "best-effort rules")
+            else:
+                flags.append("no code tools")
+            if not role.bypass_role_denies:
+                flags.append("writes confined to the session folder")
         extra = f" ({', '.join(flags)})" if flags else ""
         console.print(f"    • {name}{extra}")
     console.print()
     console.print(
-        "  Note: enforcement is pattern-based; all scopes share one "
-        "filesystem.\n  For hard isolation between untrusted users, run "
-        "separate daemons\n  per OS account. See the multi-scope docs."
+        "  Note: the bash patterns are a filter, not a boundary — a role\n"
+        "  with Bash can get around them. All scopes share one filesystem\n"
+        "  and OS user; for hard isolation between untrusted users, run\n"
+        "  separate daemons per OS account. See docs/security.md."
     )
 
 
@@ -923,7 +982,7 @@ __all__ = [
     "OK", "WARN", "FAIL", "CheckResult", "run_all", "cmd_doctor",
     "cmd_doctor_fix",
     "check_config", "check_token_valid", "check_chat_reachable",
-    "check_team",
+    "check_team", "check_role_shell_access",
     "check_dtach", "check_claude", "check_claude_auth",
     "check_settings_json",
     "check_hook_scripts", "check_daemon", "check_service_installed",

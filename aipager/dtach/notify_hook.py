@@ -137,6 +137,13 @@ def _note_wire(note: dict) -> dict:
         "msg_id": note.get("msg_id"),
         "chat_id": note.get("chat_id"),
         "raw_text": note.get("raw_text", ""),
+        # Who sent it — so the daemon can record the author of the turn's
+        # prompt, which decides whether a Retry may run as the tapper
+        # (roadmap 8.50). Identity only; no permission field travels.
+        "sender_key": note.get("sender_key"),
+        # The prompt's real author, never the sender_key fallback (review
+        # rev-iter4-002); what note_driver_id reads on the daemon side.
+        "author_user_id": note.get("author_user_id"),
     }
 
 
@@ -162,13 +169,19 @@ def _match_and_promote(session: str, prompt_text: str) -> tuple[list[dict], list
     - Matched (``consumed`` non-empty): merge from ONLY the consumed
       notes — this turn is attributable, so only its actual contributors
       restrict it — and delete them (confirmed picked up).
-    - Unmatched but notes exist (the "all-outstanding fallback"): merge
+    - Unmatched, and the prompt carries no Telegram text the current
+      snapshot was not already built from (a message typed in the
+      terminal and queued behind the turn, another local session's
+      message, a redelivery): the running turn keeps its snapshot,
+      narrowed by any outstanding note — never widened
+      (``policy_snapshot.snapshot_for_unattributed_prompt``, roadmap 8.49).
+    - Otherwise, unmatched but notes exist (the "all-outstanding fallback"): merge
       from EVERY outstanding note. This turn's origin can't be
       attributed to any subset, so the safe answer is "as restrictive as
       the most restrictive thing still waiting" — nothing is deleted, so
       an unmatched note keeps feeding future merges too, never widening
       anything (design.md "Why the fallback is safe").
-    - No notes outstanding at all: merges to :data:`FLOOR_SNAPSHOT`
+    - Otherwise, no notes outstanding at all: merges to :data:`FLOOR_SNAPSHOT`
       exactly (the "empty floor" path) — never assumed unrestricted,
       and never labelled terminal origin (that would be
       ``enforce.decide()`` returning ``None``, which this never does).
@@ -181,7 +194,7 @@ def _match_and_promote(session: str, prompt_text: str) -> tuple[list[dict], list
         delete_notes,
         list_outstanding_notes,
         match_notes_prefix_run,
-        merge_snapshots,
+        snapshot_for_prompt,
         write_merged_snapshot,
     )
 
@@ -201,9 +214,10 @@ def _match_and_promote(session: str, prompt_text: str) -> tuple[list[dict], list
 
     if consumed:
         delete_notes(session, consumed)
-        merged = merge_snapshots(consumed)
-    else:
-        merged = merge_snapshots(outstanding)  # all-outstanding fallback, or floor
+    # Matched → the consumed notes' merge; unmatched → keep the running
+    # turn's snapshot unless the prompt carries unattributed Telegram text
+    # (roadmap 8.49); else the all-outstanding fallback, or the floor.
+    merged = snapshot_for_prompt(session, prompt_text, outstanding, consumed)
     write_merged_snapshot(session, merged)
     return consumed, expired
 
@@ -277,28 +291,33 @@ def main():
     # tagged with the current tool_name) once it knows more. The except
     # handler below reads ``cap_slot[0]`` without allocating, so it
     # picks up whatever the most recent successful swap left behind.
-    cap_slot = [cap_payload]
+    # Slot 1 flips to True once ``_run`` knows this is a PreToolUse
+    # event: a cap hit while deciding one must deny the tool, not let it
+    # through unchecked.
+    cap_slot = [cap_payload, False]
 
     try:
         _run(session, cap_slot)
     except MemoryError:
         # Cap tripped mid-work. Fire the pre-baked datagram (best-effort,
-        # never raises), then exit non-zero so Claude sees the failure.
+        # never raises), then exit non-zero so Claude sees the failure —
+        # 2 for a PreToolUse event, which Claude Code reads as "deny".
         if cap_sock is not None:
             try:
                 cap_sock.sendto(cap_slot[0], SOCKET_PATH)
             except OSError:
                 pass
-        sys.exit(1)
+        sys.exit(2 if cap_slot[1] else 1)
 
 
-def _run(session: str, cap_slot: list[bytes]) -> None:
+def _run(session: str, cap_slot: list) -> None:
     """Main hook body — separated so ``main()`` can wrap it in a single
     ``try/except MemoryError``. Any allocation inside here that pushes
     the process past the cap will trip that handler.
 
-    ``cap_slot`` is a one-element list holding the pre-serialized
-    cap-hit payload; we mutate ``cap_slot[0]`` in place to enrich it
+    ``cap_slot`` holds the pre-serialized cap-hit payload at index 0
+    and, when ``main()`` passes it, a PreToolUse flag at index 1 (set
+    below, read by main's MemoryError handler); we mutate ``cap_slot[0]`` in place to enrich it
     (e.g. with the current tool name) as we learn more. Best-effort:
     any failure to serialize the richer payload silently keeps the
     fallback bytes, so the notification path never crashes the hook.
@@ -479,21 +498,46 @@ def _run(session: str, cap_slot: list[bytes]) -> None:
     # a Claude Code deny decision on stdout. Best-effort — any error falls
     # through to "allow" so the hook never wedges a session.
     if hook_event_name == "PreToolUse":
+        # A MemoryError from here on exits 2, which Claude Code treats as
+        # a deny for PreToolUse (main()); the slot write allocates nothing.
+        if len(cap_slot) > 1:
+            cap_slot[1] = True
         try:
-            from aipager.dtach.enforce import decide, deny_decision_json
-            block = decide(data)
+            from aipager.dtach import enforce
+            try:
+                block = enforce.decide(data)
+            except MemoryError:
+                raise
+            except Exception as e:
+                # decide() already fails closed; this covers a bug around
+                # it. Deny unless the snapshot grants the owner's bypass.
+                _debug(f"enforcement error (denying unless owner): {e}")
+                block = enforce.fail_closed(data)
             if block:
-                _udp({
-                    "hook_event_name": "safety_blocked",
-                    "session": data.get("session", ""),
-                    "tool": block["tool"],
-                    "reason": block["reason"],
-                })
-                print(deny_decision_json(block["reason"]))
+                # Deny first: a failure reporting it must not undo it.
+                print(enforce.deny_decision_json(block["reason"]))
+                sys.stdout.flush()
+                try:
+                    _udp({
+                        "hook_event_name": "safety_blocked",
+                        "session": data.get("session", ""),
+                        "tool": block["tool"],
+                        "reason": block["reason"],
+                    })
+                except Exception as e:
+                    _debug(f"safety_blocked notify failed: {e}")
         except MemoryError:
             raise  # let main() handle it uniformly
-        except Exception as e:  # never wedge claude on enforcement bugs
-            _debug(f"enforcement error (allowing): {e}")
+        except Exception as e:
+            # The enforcer could not even be imported. Nothing can read
+            # the snapshot either, so deny.
+            _debug(f"enforcement unavailable (denying): {e}")
+            print(json.dumps({"hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny",
+                "permissionDecisionReason":
+                    "aipager safety policy: the safety check could not run",
+            }}))
 
     # /settings reply-style injection (item 6.2). The daemon precomputes
     # `style_text` on the session's policy snapshot at prompt-injection

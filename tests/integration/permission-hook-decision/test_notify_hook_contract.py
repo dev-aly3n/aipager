@@ -301,8 +301,11 @@ def test_pre_tool_use_event_never_enriches_or_waits(monkeypatch, short_dir, caps
     srv = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
     srv.bind(sock_path)
     srv.settimeout(5.0)
-    _set_stdin(monkeypatch, {"hook_event_name": "PreToolUse", "tool_name": "Bash",
-                            "tool_input": {"command": "ls"}})
+    # A Read, not a Bash `ls`: this payload has no transcript, so it is
+    # judged as a Telegram turn with no snapshot — the floor, which since
+    # 2026-09-27 (operator decision) denies Bash and would print a deny.
+    _set_stdin(monkeypatch, {"hook_event_name": "PreToolUse", "tool_name": "Read",
+                            "tool_input": {"file_path": "/etc/hostname"}})
     monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-t10")
 
     start = time.monotonic()

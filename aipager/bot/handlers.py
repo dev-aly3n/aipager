@@ -1517,7 +1517,8 @@ class CommandHandlersMixin:
         # target itself moves only when this message starts a turn from
         # IDLE — `_adopt_trigger` no-ops the target (but always sets
         # `last_prompt` when not-BUSY) while BUSY.
-        self._adopt_trigger(sess, update.message.message_id, text)
+        self._adopt_trigger(sess, update.message.message_id, text,
+            driver_user_id=driver_id_from_update(update))
         self._mark_driver(sess, update)
         self.registry.track_message(update.message.message_id, sess.name, chat_id or 0)
         self.registry.mark_dirty()
@@ -1683,7 +1684,8 @@ class CommandHandlersMixin:
         # Injects immediately regardless of Status.BUSY — see the same
         # comment in _handle_message (design.md "queue handoff"). R1:
         # the reply target itself only moves via _adopt_trigger.
-        self._adopt_trigger(sess, update.message.message_id, transcript)
+        self._adopt_trigger(sess, update.message.message_id, transcript,
+            driver_user_id=driver_id_from_update(update))
         self._mark_driver(sess, update)
         self.registry.track_message(update.message.message_id, sess.name, chat_id or 0)
         self.registry.mark_dirty()
@@ -1837,7 +1839,8 @@ class CommandHandlersMixin:
         # Injects immediately regardless of Status.BUSY — see the same
         # comment in _handle_message (design.md "queue handoff"). R1:
         # the reply target itself only moves via _adopt_trigger.
-        self._adopt_trigger(sess, msg.message_id, prompt)
+        self._adopt_trigger(sess, msg.message_id, prompt,
+            driver_user_id=driver_id_from_update(update))
         self._mark_driver(sess, update)
         self.registry.track_message(msg.message_id, sess.name, chat_id or 0)
         self.registry.mark_dirty()
@@ -1955,7 +1958,8 @@ class CommandHandlersMixin:
         # comment in _handle_message (design.md "queue handoff"). R1:
         # the reply target itself only moves via _adopt_trigger.
         template_chat_id = calling_chat_id(update)
-        self._adopt_trigger(sess, update.message.message_id, prompt_text)
+        self._adopt_trigger(sess, update.message.message_id, prompt_text,
+            driver_user_id=driver_id_from_update(update))
         self.registry.track_message(update.message.message_id, sess.name,
                                     template_chat_id or 0)
         self.registry.mark_dirty()
@@ -2130,7 +2134,8 @@ class CommandHandlersMixin:
                 return
             # R1 (design.md "turn anchor follows consumption"): the
             # reply target itself only moves via _adopt_trigger.
-            self._adopt_trigger(sess, update.message.message_id, prompt_text)
+            self._adopt_trigger(sess, update.message.message_id, prompt_text,
+                driver_user_id=driver_id_from_update(update))
             self.registry.track_message(update.message.message_id, name,
                                         calling_chat_id(update) or 0)
             self.registry.mark_dirty()
@@ -2159,7 +2164,8 @@ class CommandHandlersMixin:
                 return
             # R1 (design.md "turn anchor follows consumption"): the
             # reply target itself only moves via _adopt_trigger.
-            self._adopt_trigger(new_sess, update.message.message_id, prompt_text)
+            self._adopt_trigger(new_sess, update.message.message_id, prompt_text,
+                driver_user_id=driver_id_from_update(update))
             self.registry.track_message(update.message.message_id, session_name,
                                         calling_chat_id(update) or 0)
             self.registry.mark_dirty()

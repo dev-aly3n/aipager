@@ -433,6 +433,7 @@ class SessionOpsMixin:
 
     def _adopt_trigger(
         self, sess: TrackedSession, msg_id: int | None, text: str | None = None,
+        *, driver_user_id: int | None = None,
     ) -> None:
         """R1 (design.md "turn anchor follows consumption"): move the
         reply target only for a message that STARTS a turn.
@@ -451,6 +452,7 @@ class SessionOpsMixin:
         sess.trigger_msg_id = msg_id
         if text is not None:
             sess.last_prompt = text
+            sess.last_prompt_driver_user_id = driver_user_id
 
     def _adopt_by_typed_name(self, session_name: str,
                              target_label: str) -> TrackedSession:
@@ -618,6 +620,9 @@ class SessionOpsMixin:
             write_note(
                 sess.name, role, scope, member,
                 msg_id=msg_id, chat_id=chat_id, sender_key=sender_key,
+                # Only the explicitly passed sender is the author: the
+                # sender_key fallback must never be recorded as one.
+                author_user_id=explicit_driver_user_id,
                 body=body, raw_text=text,
                 style_text=style, reply_context=reply_context,
             )

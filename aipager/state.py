@@ -305,6 +305,11 @@ class TrackedSession:
     pre_compact_pct: int = 0
     # Last injected prompt text — enables retry on API errors
     last_prompt: str = ""
+    # Who sent ``last_prompt`` (Telegram user id), when aipager knows.
+    # Retry runs as the tapper only when the tapper IS this person —
+    # otherwise the prompt is someone else's text and Retry must not lend
+    # it the tapper's rights; it then runs on the floor. None = unknown.
+    last_prompt_driver_user_id: int | None = None
     # Inline permission context (tool_info, question, etc.) — set when permission
     # is displayed inside the busy message instead of as a separate message
     pending_permission: dict | None = None
@@ -1913,6 +1918,7 @@ class SessionRegistry:
     _PERSIST_FIELDS = (
         "name", "label", "last_msg_id", "transcript_path",
         "trigger_msg_id", "pending_queue", "last_prompt",
+        "last_prompt_driver_user_id",
         "model_name", "busy_msg_id",
         # Team-mode attribution — preserved across restarts so the
         # pinned dashboard remembers who's driving each session.
@@ -2073,6 +2079,7 @@ class SessionRegistry:
                 transcript_path=sd.get("transcript_path", ""),
                 trigger_msg_id=sd.get("trigger_msg_id"),
                 last_prompt=sd.get("last_prompt", ""),
+                last_prompt_driver_user_id=sd.get("last_prompt_driver_user_id"),
                 last_idle_at=0.0,
                 created_by_user_id=sd.get("created_by_user_id"),
                 last_driver_user_id=sd.get("last_driver_user_id"),

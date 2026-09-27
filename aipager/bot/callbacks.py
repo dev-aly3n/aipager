@@ -634,8 +634,17 @@ class CallbackDispatchMixin:
                 return
             # Re-inject the last prompt (last_prompt stays set for retry-of-retry)
             prompt = sess.last_prompt
+            # Runs as whoever tapped Retry when that person also sent the
+            # prompt, so an owner's own Retry keeps its rights (a note
+            # with no sender falls to the floor, which has no Bash).
+            # Someone else's text never borrows the tapper's rights
+            # (rev-iter1-001 of the queue-handoff review): with a
+            # different or unknown author, no sender — the floor.
+            tapper = driver_id_from_update(update)
+            author = sess.last_prompt_driver_user_id
             ok = await self._inject_prompt(
-                sess, prompt, msg_id=sess.trigger_msg_id, chat_id=CHAT_ID)
+                sess, prompt, msg_id=sess.trigger_msg_id, chat_id=CHAT_ID,
+                driver_user_id=tapper if tapper == author else None)
             if ok:
                 await self._safe_answer(query, f"Retrying [{sess.label}]")
                 # Delete the error message — busy animation replaces it

@@ -83,7 +83,10 @@ def test_bash_nested_claude_blocked(tmp_path, monkeypatch):
 def test_normal_edit_allowed(tmp_path, monkeypatch):
     _patch_snap(tmp_path, monkeypatch)
     _snap(tmp_path, "claude-x__g100")
-    d = _data(tmp_path, tool_name="Edit",
+    # The payload's cwd (Claude Code always sends one) is the folder a
+    # restricted turn may write in — roadmap 8.50, 2026-09-26: writes are
+    # confined to it, so an edit with no cwd to vouch for it is denied.
+    d = _data(tmp_path, tool_name="Edit", cwd="/home/u/proj",
               tool_input={"file_path": "/home/u/proj/app.js"})
     assert decide(d) is None
 

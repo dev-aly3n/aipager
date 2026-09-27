@@ -89,7 +89,8 @@ def test_inject_writes_policy_snapshot(mk_bot, run_async, monkeypatch):
 
     def _fake_write_note(name, role, scope, member, *, msg_id=None,
                          chat_id=None, sender_key=None, body="",
-                         raw_text="", style_text="", reply_context=""):
+                         raw_text="", style_text="", reply_context="",
+                         author_user_id=None):
         captured.update(name=name, role=role, member=member,
                         style_text=style_text)
         return None
@@ -118,7 +119,8 @@ def test_inject_prompt_role_resolution_requires_an_explicit_driver_user_id(
 
     def _fake_write_note(name, role, scope, member, *, msg_id=None,
                          chat_id=None, sender_key=None, body="",
-                         raw_text="", style_text="", reply_context=""):
+                         raw_text="", style_text="", reply_context="",
+                         author_user_id=None):
         captured.update(role=role, member=member)
         return None
     monkeypatch.setattr(policy_snapshot, "write_note", _fake_write_note)
@@ -147,7 +149,8 @@ def test_inject_prompt_style_text_reflects_session_override(mk_bot, run_async, m
 
     def _fake_write_note(name, role, scope, member, *, msg_id=None,
                          chat_id=None, sender_key=None, body="",
-                         raw_text="", style_text="", reply_context=""):
+                         raw_text="", style_text="", reply_context="",
+                         author_user_id=None):
         captured.update(style_text=style_text)
         return None
     monkeypatch.setattr(policy_snapshot, "write_note", _fake_write_note)

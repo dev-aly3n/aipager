@@ -53,6 +53,7 @@ from aipager.config import (
     STREAM_EDIT_INTERVAL,
 )
 from aipager.state import BG_AGENTS_RETRY_SECONDS, Status, TrackedSession
+from aipager.policy_snapshot import note_driver_id
 from aipager.bot.animation import (
     FINAL_VERB, _RICH_LIMIT, _exact_anchors_available, _expire_tool_batch,
     _md_escape, _read_stream_text, _sync_anchors_from_transcript,
@@ -528,6 +529,7 @@ class NotifyMixin:
         if last_msg_id is not None:
             sess.trigger_msg_id = last_msg_id
             sess.last_prompt = last.get("raw_text", "") or ""
+            sess.last_prompt_driver_user_id = note_driver_id(last)
             self.registry.mark_dirty()
 
     def _track_consumed(
@@ -600,6 +602,7 @@ class NotifyMixin:
                                  resolve_chat_id(sess))
         sess.trigger_msg_id = nxt.get("msg_id")
         sess.last_prompt = nxt.get("raw_text") or ""
+        sess.last_prompt_driver_user_id = nxt.get("driver_user_id")
         self.registry.mark_dirty()
         self.registry.transition(sess.name, Status.BUSY)
         await self._send_busy_and_animate(sess)
@@ -1067,6 +1070,7 @@ class NotifyMixin:
         if starts_turn:
             sess.trigger_msg_id = queued_trigger
             sess.last_prompt = queued_text
+            sess.last_prompt_driver_user_id = queued_driver_user_id
         if queued_trigger is not None:
             # Queued messages are never tracked at queue time
             # (Part 1 only covers the immediate-inject branches)
@@ -1203,6 +1207,7 @@ class NotifyMixin:
                     "msg_id": n.get("msg_id"),
                     "chat_id": n.get("chat_id"),
                     "raw_text": n.get("raw_text", "") or "",
+                    "driver_user_id": note_driver_id(n),
                 } for n in queued)
                 log.info("[%s] queued while busy: %s", label,
                          [n.get("msg_id") for n in queued])

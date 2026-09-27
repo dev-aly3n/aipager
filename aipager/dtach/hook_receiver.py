@@ -25,7 +25,11 @@ from aipager.config import (
     SOCKET_PATH,
 )
 from aipager.md_to_tg import markdown_to_telegram_html
-from aipager.policy_snapshot import expire_notes_after_turn_end, list_outstanding_notes
+from aipager.policy_snapshot import (
+    expire_notes_after_turn_end,
+    list_outstanding_notes,
+    note_driver_id,
+)
 from aipager.state import (
     ACTIVE_SUBAGENTS_CAP,
     JOB_CONTINUATION_GRACE_SECONDS,
@@ -727,6 +731,7 @@ class HookReceiver:
                 last_text = last.get("raw_text")
                 if last_text:
                     sess.last_prompt = last_text
+                    sess.last_prompt_driver_user_id = note_driver_id(last)
                 self.registry.mark_dirty()
             await self.notify_fn(sess, "queue_pickup", {
                 "consumed": consumed, "expired": expired,

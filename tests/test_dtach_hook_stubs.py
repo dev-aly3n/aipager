@@ -502,7 +502,9 @@ def test_notify_hook_enforce_memory_error_reraises_to_main(monkeypatch, tmp_path
 
         with pytest.raises(SystemExit) as exc:
             notify_hook.main()
-        assert exc.value.code == 1
+        # 2026-09-27: a cap hit while deciding a PreToolUse must deny the
+        # tool (exit 2), not let it through unchecked (was: exit 1).
+        assert exc.value.code == 2
         # Skip past any other in-flight datagrams (the pre-enforce _udp
         # fires an ordinary datagram first).
         while True:
@@ -594,7 +596,9 @@ def test_notify_hook_cap_hit_includes_tool_when_stdin_parsed(monkeypatch, tmp_pa
 
         with pytest.raises(SystemExit) as exc:
             notify_hook.main()
-        assert exc.value.code == 1
+        # 2026-09-27: a cap hit while deciding a PreToolUse must deny the
+        # tool (exit 2), not let it through unchecked (was: exit 1).
+        assert exc.value.code == 2
 
         # Skip past the initial (pre-enforce) UDP datagram
         while True:
@@ -675,7 +679,9 @@ def test_notify_hook_cap_hit_survives_payload_swap_failure(monkeypatch, tmp_path
 
         with pytest.raises(SystemExit) as exc:
             notify_hook.main()
-        assert exc.value.code == 1
+        # 2026-09-27: a cap hit while deciding a PreToolUse must deny the
+        # tool (exit 2), not let it through unchecked (was: exit 1).
+        assert exc.value.code == 2
 
         # The received cap-hit datagram must be the BASE payload (no tool),
         # not the enriched one (which failed to serialize).

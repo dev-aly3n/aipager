@@ -14,11 +14,16 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Iterator
 
 from aipager import safety
-from aipager.policy_snapshot import FLOOR_SNAPSHOT, read_snapshot
+from aipager.policy_snapshot import (
+    FLOOR_SNAPSHOT,
+    read_snapshot,
+    reply_context_path,
+)
 
 # Marker our deny reasons carry (see deny_decision_json). Once it appears
 # in a tool_result this turn, every later tool call is sticky-blocked.
@@ -117,6 +122,17 @@ def _tool_result_text(entry: dict) -> str:
     return " ".join(out)
 
 
+def _is_injected(entry: dict) -> bool:
+    """True for a ``type:"user"`` entry Claude Code wrote itself rather
+    than a prompt someone sent: the compact summary ("This session is
+    being continued…", ``isCompactSummary``) and meta entries
+    (``isMeta``). Neither governs a turn's origin nor ends it (roadmap
+    8.51): read as a prompt, a compact summary carries no Telegram marker
+    and made an auto-compacted restricted turn run as "terminal", i.e.
+    unrestricted, and it cleared the turn's sticky block."""
+    return bool(entry.get("isCompactSummary") or entry.get("isMeta"))
+
+
 def _is_tool_result(entry: dict) -> bool:
     """True if a transcript entry is a tool-result carrier.
 
@@ -165,6 +181,8 @@ def _origin_from_transcript(path: str | None) -> str:
                 continue
             if _is_tool_result(entry):
                 continue  # tool-results are type:"user" but aren't prompts
+            if _is_injected(entry):
+                continue  # written by Claude Code, not a governing prompt
             text = _user_text(entry)
             if text.lstrip().startswith(_TASK_NOTIFICATION_PREFIX):
                 # A self-triggered continuation, not a governing prompt —
@@ -213,6 +231,8 @@ def _turn_already_blocked(path: str | None) -> bool:
             if _BLOCK_MARKER in _tool_result_text(entry):
                 return True
             if entry.get("type") == "user" and not _is_tool_result(entry):
+                if _is_injected(entry):
+                    continue  # not a turn boundary (8.51)
                 if _user_text(entry).lstrip().startswith(
                     _TASK_NOTIFICATION_PREFIX,
                 ):
@@ -256,11 +276,77 @@ def _user_text(entry: dict) -> str:
     return ""
 
 
+# Claude Code's per-uid temp root, where every session gets
+# ``<root>/<encoded project dir>/<session id>/scratchpad``.
+_ENCODED_DIR_MAX = 200  # Claude Code hashes longer names; not derivable
+
+
+def _claude_temp_root() -> str:
+    """``<temp dir>/claude-<uid>`` as Claude Code 2.1.283 builds it: the
+    temp dir is ``$CLAUDE_CODE_TMPDIR``, else Node's ``os.tmpdir()``
+    (``$TMPDIR``, else ``/tmp`` — on macOS ``$TMPDIR`` is under
+    ``/var/folders``). The hook inherits Claude Code's environment."""
+    base = (os.environ.get("CLAUDE_CODE_TMPDIR")
+            or os.environ.get("TMPDIR") or "/tmp").rstrip("/") or "/"
+    return os.path.join(base, f"claude-{os.getuid()}")
+
+
+def _scratch_root(cwd: str | None, session_id) -> str:
+    """The session's own Claude Code temp directory when it can be
+    derived from the payload (project dir encoded as Claude Code does:
+    every non-alphanumeric character becomes ``-``), else the per-uid
+    root that holds it."""
+    root = _claude_temp_root()
+    if cwd and isinstance(session_id, str) and re.fullmatch(
+        r"[A-Za-z0-9-]+", session_id,
+    ):
+        enc = re.sub(r"[^A-Za-z0-9]", "-", cwd)
+        if len(enc) <= _ENCODED_DIR_MAX:
+            return f"{root}/{enc}/{session_id}"
+    return root
+
+
+def _write_roots(cwd: str | None, session_id) -> tuple[str, ...]:
+    """Where a confined turn may write: the session's cwd (when the
+    payload carries one — none means scratchpad only, fail closed) and
+    its scratchpad."""
+    roots = [cwd] if cwd and os.path.isabs(cwd) else []
+    roots.append(_scratch_root(cwd, session_id))
+    return tuple(roots)
+
+
+_FAIL_CLOSED_REASON = "this tool call could not be checked, so it was denied"
+
+
+def fail_closed(data: dict) -> dict | None:
+    """The answer when the decision itself failed (an exception — e.g. a
+    NUL byte in a path makes ``expanduser`` raise). Deny, unless the
+    session's snapshot can be read and grants the owner's bypass: an
+    owner's turn keeps working, anyone else's is refused rather than
+    let through unchecked (it used to be allowed)."""
+    try:
+        snap = read_snapshot(str(data.get("session") or ""))
+    except Exception:
+        snap = None
+    if isinstance(snap, dict) and snap.get("bypass_safety") is True:
+        return None
+    return {"tool": str(data.get("tool_name") or ""),
+            "reason": _FAIL_CLOSED_REASON}
+
+
 def decide(data: dict) -> dict | None:
     """Return a block descriptor `{tool, reason}` if the PreToolUse call
-    must be denied, else None (allow). Pure aside from file reads."""
+    must be denied, else None (allow). Pure aside from file reads. Any
+    exception while deciding is a deny (:func:`fail_closed`)."""
     if data.get("hook_event_name") != "PreToolUse":
         return None
+    try:
+        return _decide(data)
+    except Exception:
+        return fail_closed(data)
+
+
+def _decide(data: dict) -> dict | None:
     tool_name = data.get("tool_name", "")
     tool_input = data.get("tool_input", {}) or {}
 
@@ -294,8 +380,23 @@ def decide(data: dict) -> dict | None:
     deny_tools = tuple(snap.get("deny_tools", ()))
     allow_tools = tuple(snap.get("allow_tools", ()))
 
+    cwd = data.get("cwd") if isinstance(data.get("cwd"), str) else None
+    # Roles without the owner's bypass or an admin's role-deny bypass
+    # write only inside the session's folder and scratchpad (roadmap
+    # 8.50). The folder is the hook payload's cwd — Claude Code's, never
+    # the tool input's. A snapshot that predates the field is confined.
+    write_roots = (
+        _write_roots(cwd, data.get("session_id"))
+        if snap.get("confine_writes") is not False else None
+    )
+    # The one control file a turn may read: its own session's reply
+    # context, which the prompt tells Claude to Read (session_ops).
+    readable = (str(reply_context_path(session)),) if session else ()
+
     reason = (
-        safety.path_violation(tool_name, tool_input, no_access, no_write)
+        safety.path_violation(tool_name, tool_input, no_access, no_write,
+                              cwd=cwd, write_roots=write_roots,
+                              readable=readable)
         or (safety.bash_violation(tool_input.get("command", ""), bash_pats)
             if tool_name == "Bash" else None)
         or safety.tool_violation(tool_name, deny_tools, allow_tools)

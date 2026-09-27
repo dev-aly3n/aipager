@@ -64,3 +64,22 @@ def test_adopt_trigger_gone_status_also_adopts(mk_bot):
     bot._adopt_trigger(sess, 5, "hello")
 
     assert sess.trigger_msg_id == 5
+
+
+def test_adopt_trigger_records_who_sent_the_prompt(mk_bot):
+    """Retry runs as the tapper only if they sent it (roadmap 8.50)."""
+    bot = mk_bot()
+    sess = _sess(Status.IDLE)
+    sess.last_prompt_driver_user_id = 99
+    bot._adopt_trigger(sess, 5, "hello", driver_user_id=42)
+    assert sess.last_prompt_driver_user_id == 42
+    bot._adopt_trigger(sess, 6, "again")
+    assert sess.last_prompt_driver_user_id is None
+
+
+def test_adopt_trigger_keeps_the_author_when_busy(mk_bot):
+    bot = mk_bot()
+    sess = _sess(Status.BUSY)
+    sess.last_prompt_driver_user_id = 99
+    bot._adopt_trigger(sess, 5, "hello", driver_user_id=42)
+    assert sess.last_prompt_driver_user_id == 99

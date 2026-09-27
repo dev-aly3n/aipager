@@ -152,6 +152,153 @@ reads them. Two properties are load-bearing:
   never as an unrestricted terminal prompt. Prompts you type directly
   into the terminal remain unrestricted; anything carrying the
   Telegram marker on any line is enforced.
+- **A prompt with no new sender keeps the turn's rules.** Claude Code
+  also reports prompts that no Telegram message accounts for while a
+  Telegram turn is running: a message typed in the terminal and queued
+  behind the turn (reported the moment it is queued), a message from
+  another local Claude session, or the same Telegram message delivered
+  again after a compact. Such a prompt adds no Telegram sender, so the
+  turn keeps the rules it was running under, made stricter by any
+  message still waiting to be picked up and never looser. A prompt that
+  carries Telegram text aipager cannot attribute still falls to the
+  built-in floor, and a message from a less-privileged sender still
+  lowers the turn to that sender's rules.
+
+**What actually contains a restricted user.** The Claude session runs
+as the same OS user that owns aipager's config (including the bot token
+in `~/.config/aipager/daemon.env`) and its per-turn policy file
+(`/tmp/claude-policy-<session>.json`). A shell running as that user can
+reach both through spellings no pattern anticipates
+(`sed -i … /tmp/*-policy-*.json`, a `for` loop over a glob, a Python
+one-liner) and rewrite its own rules to the owner's. Command patterns
+are therefore a filter, not a boundary. For a turn run under the
+built-in restricted roles (`user`, `read_only`), and for a turn aipager
+cannot attribute, aipager enforces these rules, none of which depend on
+command patterns (see the known limits below for what they do not
+cover):
+
+- **No shell.** They cannot use `Bash`, or any other tool Claude Code
+  runs code with (`PowerShell`, `Monitor`, `REPL`, `Workflow`, the
+  prompt schedulers `CronCreate` and `RemoteTrigger`, …; the list is
+  `safety.CODE_EXECUTION_TOOLS`). A scheduled prompt would arrive
+  without the Telegram marker, i.e. unrestricted, so those count too.
+  For the same reason they cannot use `SendMessage` (it can hand a
+  prompt to another local Claude session, which would run it as a
+  terminal prompt), nor `EnterWorktree`/`ExitWorktree` (they move the
+  session's working directory, which the next rule relies on).
+- **Writes stay in the project.** `Write`, `Edit`, `MultiEdit` and
+  `NotebookEdit` land only inside the session's folder (the working
+  directory Claude Code reports in the hook payload, never a path from
+  the tool call) and the session's Claude Code scratchpad
+  (`/tmp/claude-<uid>/<project>/<session id>/`, or `/tmp/claude-<uid>/`
+  when that cannot be worked out). Everything else is denied: your
+  shell startup files, `~/.ssh`, other projects, aipager's `/tmp`
+  files. Inside the folder, `.claude/`, `.git/` and `.mcp.json` are
+  denied too, because each of them makes Claude Code or git run a
+  command. Symlinks are followed before deciding.
+- **Searches stay in the project.** A `Grep` or `Glob` is allowed
+  only when all of this holds: the folder it searches (its `path`, or
+  the session's folder when it has none, symlinks followed) is inside
+  the session's folder or scratchpad; that folder is not a protected
+  path and holds none (a session started in your home folder holds
+  `~/.config/aipager`, so it cannot search from its top); every glob is
+  a plain relative pattern — no leading `/`, `~`, `$` or drive letter,
+  no `..`, no `#` (a comment to ripgrep) or `!` (a negation), no `\`
+  escape; and you have no protected-path rule without a leading `/` or
+  `~` (`**/.env` can sit anywhere in the project, so with one in place
+  every restricted search is denied). Anything else is denied. This is
+  an allow-list on purpose: three review rounds each found a new glob
+  spelling that led ripgrep out of the folder a model of its parsing
+  expected, and one of them read the bot token.
+- **The file tools honour the protected paths.** `Read`, `LSP` and
+  the write tools check where a path really leads, symlinks included.
+  The one control file a turn may read is its own session's
+  `/tmp/claude-reply-<session>.txt`, which aipager names in the prompt
+  when you reply to an older message; other sessions' reply files, and
+  any write to it, stay denied. On macOS, `/tmp` is `/private/tmp` and
+  the disk ignores case, so both spellings, and any capitalisation, are
+  matched.
+- **A check that fails denies.** If deciding on a tool call raises an
+  error (a NUL byte in a path, a bug), or the hook runs out of memory
+  while deciding, the call is denied — unless the session's rules could
+  be read and grant the owner's bypass. It used to be let through.
+
+**Turns aipager cannot attribute.** A Telegram turn with no sender to
+hold it to runs under the built-in floor, which matches the built-in
+`user` role (not any extra restrictions you add to `user` in
+`policy.yaml`): no code-running tools, writes and searches confined, the
+protected paths. That happens for a message whose permission note
+expired (after 24 hours) or could not be written, and for a prompt
+carrying Telegram text that no note matches. The Retry button runs as
+whoever tapped it when they also sent the prompt being retried, so an
+owner's Retry of their own message keeps Bash; a Retry of someone
+else's message, or of one whose sender aipager does not know, runs on
+the floor, so nobody's text borrows the tapper's rights.
+
+Reads outside the protected paths are allowed: a restricted user can
+read other projects of the OS user. Owners are not held to any of this.
+Admins' writes are not confined, and their `Grep`/`Glob` are checked on
+the folder they start in only — they have Bash, so their rules are
+best-effort anyway (below).
+
+**Known limits.** These are not covered:
+
+- If the hook itself fails before it starts deciding (for example it
+  cannot read its own status file, or runs out of memory while
+  starting), Claude Code treats that as "allow". A restricted user
+  cannot cause this; any error while deciding denies.
+- Tools that are not file tools but can read a file or send data out
+  are not path-checked: `SendFile`, `WebFetch` (anything the turn can
+  read it can send to a URL), and Claude Code's other file-delivery
+  tools. Deny them for a role in `policy.yaml` if that matters to you.
+- A background agent a restricted turn started keeps running after the
+  turn ends, and its later tool calls are judged by whichever prompt
+  is newest in the session: a later owner or terminal prompt lifts its
+  restrictions.
+- A session started in your home folder confines writes to your home
+  folder: a restricted user there can write your shell startup files.
+  Start restricted users' sessions in a project folder.
+- Inside the project a restricted user can change what you later run
+  or read yourself (source, `Makefile`, `package.json` scripts,
+  `conftest.py`, a `CLAUDE.md` your own turns load).
+
+**A role that has Bash** — `admin`, which bypasses role deny rules, or
+any role `policy.yaml` gives it back to (`allow_tools` naming `Bash`,
+or a replaced `deny_tools`) — **is held to best-effort rules only**:
+the command patterns below, which a determined user can get around.
+`aipager doctor` warns once for every such role a member holds. Only
+give Bash to someone you would give a shell on the machine.
+
+**The built-in command rules.** Among the `Bash` patterns every
+non-owner Telegram turn with Bash is held to, one blocks the word `claude`: it
+stops a nested `claude` (with any path, wrapper or flag) and any
+`~/.claude` access in one rule, and it also catches the plain names of
+aipager's own `/tmp/claude-*` control files, whose names share the
+prefix (a pattern is not a real protection for those files: a glob
+spelling avoids it). The one exception is the scratchpad folder Claude
+Code creates, `/tmp/claude-<uid>/…`: that exact directory, as a whole
+path component, is exempt, so commands run from a session's scratchpad
+are not halted. It belongs to the OS user, not to one session, so a
+turn with Bash can read other sessions' scratchpads and task output
+there, as the `Read` tool can. A glob or look-alike
+of it (`/tmp/claude-1*`, `claude-1000x`), another temp directory, and
+anything reached from it (`…/../../home/you/.claude`) are still
+blocked. Other mentions of the word (`git log --grep=claude`, a file
+named `claude-notes.md`, `pip show claude-agent-sdk`) are also still
+blocked, deliberately: the same word names the binary, its SDKs and
+aipager's control files, and a pattern cannot tell them apart. Rules
+you add in `policy.yaml` see the command exactly as typed, scratchpad
+included.
+
+**Why one block halts the whole turn.** After a tool call is blocked,
+every later call in the same turn is denied too, until the next
+prompt. Without this, the agent simply retries the same action
+reworded (a glob, a different command, an encoded path) until one
+spelling slips past the patterns. Halting the turn makes a first
+attempt costly; it does not make a pattern a boundary, since the
+first spelling tried may be the one that slips through. The cost of a
+false positive is one stopped turn, which is why the rules above are
+kept narrow.
 
 See [groups → how rules work](groups.md#how-rules-work) for the
 user-facing rules these notes carry.
@@ -320,6 +467,7 @@ per-project `~/.claude/settings.json` overrides or a container
 | Stranger sends bot a command | Chat ID filter rejects |
 | Stolen bot token | Use `/revoke` in @BotFather, re-config |
 | Compromised claude tool call | Claude's `settings.json` is the gate; aipager respects it |
+| Restricted Telegram user escalates to the owner | No shell, writes and searches confined to the project, protected paths for the file tools, failed checks deny ([team-mode enforcement](#team-mode-enforcement)); best-effort only for a role given Bash, and not covered for the cases under "Known limits" |
 | Audit log tampering | Append-only; out of scope to prevent without a separate signing daemon |
 | Network attacker | No inbound port, not directly reachable |
 | Local privilege escalation | No sudo / setuid; daemon stays in user space |

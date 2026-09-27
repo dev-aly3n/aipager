@@ -41,6 +41,25 @@ def snapshot_path(session_name: str) -> Path:
 # ---------------------------------------------------------------------------
 
 
+def note_driver_id(note: dict) -> int | None:
+    """The Telegram user id that actually wrote a note's prompt, or
+    ``None`` when unknown.
+
+    Read ONLY from ``author_user_id`` (review rev-iter4-002, 2026-09-27):
+    ``sender_key`` falls back to whoever last drove the session when a
+    prompt is sent with no explicit sender (a Retry of someone else's
+    prompt, ``/compact``). Recorded as the prompt's author, that fallback
+    made an owner's SECOND Retry of a member's prompt run it with the
+    owner's rights. A note without the field (written before this fix)
+    has no known author, which sends a Retry of it to the floor."""
+    if not isinstance(note, dict) or "author_user_id" not in note:
+        return None
+    uid = note.get("author_user_id")
+    if isinstance(uid, int) and not isinstance(uid, bool) and uid:
+        return uid
+    return None
+
+
 def notes_dir(session_name: str) -> Path:
     """Directory holding a session's not-yet-confirmed-picked-up notes.
 
@@ -69,9 +88,13 @@ _ALLOW_TOOLS_SENTINEL: tuple[str, ...] = ("\x00none",)
 # same object rather than two hand-maintained copies that could drift.
 # Callers must treat this as read-only; a caller that wants a mutable copy
 # should ``dict(FLOOR_SNAPSHOT)`` rather than mutate it in place.
+# It is the answer for a turn nobody can be held to, so it is at least as
+# strict as the built-in ``user`` role: no code-running tools, writes
+# confined (2026-09-27 — it used to leave Bash on).
 FLOOR_SNAPSHOT: dict = {
     "bypass_safety": False,
-    "deny_tools": [],
+    "confine_writes": True,
+    "deny_tools": list(safety.RESTRICTED_DENY_TOOLS),
     "allow_tools": [],
     "deny_paths_no_access": list(safety.DENY_PATHS_NO_ACCESS),
     "deny_paths_no_write": list(safety.DENY_PATHS_NO_WRITE),
@@ -111,6 +134,10 @@ def resolve_snapshot(role, scope, member, style_text: str = "",
     no_write: set[str] = set(safety.DENY_PATHS_NO_WRITE)
     bash: set[str] = set(safety.DENY_BASH_PATTERNS)
 
+    if role is None:
+        # No role: a sender aipager cannot attribute. Held to the floor's
+        # tools, like a turn with no note at all (2026-09-27).
+        deny_tools |= set(FLOOR_SNAPSHOT["deny_tools"])
     if not bypass_role_denies:
         if scope:
             deny_tools |= set(scope.deny_tools)
@@ -127,6 +154,10 @@ def resolve_snapshot(role, scope, member, style_text: str = "",
     return {
         "origin": "telegram",
         "bypass_safety": bypass_safety,
+        # Writes confined to the session's folder + scratchpad (roadmap
+        # 8.50) for every sender without the owner's bypass or an
+        # admin's role-deny bypass — an unknown sender (no role) too.
+        "confine_writes": not (bypass_safety or bypass_role_denies),
         "deny_tools": sorted(deny_tools),
         "allow_tools": sorted(allow_tools),
         "deny_paths_no_access": sorted(no_access),
@@ -195,12 +226,17 @@ def write_merged_snapshot(session_name: str, snap: dict) -> None:
 
 # ---- Per-message notes -----------------------------------------------------
 
+# Default for write_note's author_user_id: derive it from sender_key.
+_FROM_SENDER_KEY = object()
+
+
 def write_note(
     session_name: str, role, scope, member, *,
     msg_id: int | None, chat_id: int | None,
     sender_key: tuple[int, int] | None,
     body: str, raw_text: str,
     style_text: str = "", reply_context: str = "",
+    author_user_id=_FROM_SENDER_KEY,
 ) -> Path | None:
     """Write one per-message policy note (design.md "queue handoff").
 
@@ -222,6 +258,11 @@ def write_note(
     note["msg_id"] = msg_id
     note["chat_id"] = chat_id
     note["sender_key"] = list(sender_key) if sender_key is not None else None
+    # The prompt's real author (see note_driver_id). Callers that know
+    # the sender was only a fallback pass author_user_id=None explicitly.
+    if author_user_id is _FROM_SENDER_KEY:
+        author_user_id = sender_key[1] if sender_key else None
+    note["author_user_id"] = author_user_id if author_user_id else None
     note["body"] = body
     note["raw_text"] = raw_text
     note["queued_at"] = time.time()
@@ -607,6 +648,12 @@ def merge_snapshots(notes: list[dict]) -> dict:
     ordered = sorted(notes, key=lambda n: n.get("queued_at") or 0)
 
     bypass_safety = all(bool(n.get("bypass_safety")) for n in ordered)
+    # ORed: confined if any contributor is. A note without the field
+    # (written before it existed) counts as confined unless it bypasses.
+    confine_writes = any(
+        n.get("confine_writes") is not False and not n.get("bypass_safety")
+        for n in ordered
+    )
 
     deny_tools: set[str] = set()
     deny_paths_no_access: set[str] = set()
@@ -634,6 +681,7 @@ def merge_snapshots(notes: list[dict]) -> dict:
     return {
         "origin": "telegram",
         "bypass_safety": bypass_safety,
+        "confine_writes": confine_writes,
         "deny_tools": sorted(deny_tools),
         "allow_tools": allow_tools,
         "deny_paths_no_access": sorted(deny_paths_no_access),
@@ -642,6 +690,115 @@ def merge_snapshots(notes: list[dict]) -> dict:
         "style_text": last.get("style_text") or "",
         "reply_context": last.get("reply_context") or "",
     }
+
+
+# The line ``session_ops._inject_prompt`` prepends to every Telegram
+# message in team/scope mode — the same test ``enforce._origin_from_transcript``
+# uses to call a prompt Telegram-originated.
+_TELEGRAM_MARKER = "[via Telegram"
+
+# The safety fields a snapshot carries (everything ``merge_snapshots``
+# reasons about). ``note_bodies`` is provenance, not a rule.
+_LIST_FIELDS = ("deny_tools", "allow_tools", "deny_paths_no_access",
+                "deny_paths_no_write", "deny_bash_patterns")
+
+
+def _has_telegram_marker(text: str) -> bool:
+    return any(line.lstrip().startswith(_TELEGRAM_MARKER)
+               for line in text.split("\n"))
+
+
+def snapshot_for_unattributed_prompt(
+    current: dict | None, outstanding: list[dict], prompt_text: str,
+) -> dict | None:
+    """The snapshot a ``UserPromptSubmit`` with NO matching note should
+    leave behind, or ``None`` to fall back to the old answer
+    (``merge_snapshots(outstanding)``, i.e. the floor when nothing waits).
+
+    Roadmap 8.49. Claude Code fires ``UserPromptSubmit`` for prompts no
+    Telegram note accounts for while a Telegram turn is still running:
+    a message typed in the terminal and queued behind the turn (the hook
+    fires at ENQUEUE — measured 2026-09-26, and on record since 2.1.259),
+    a message from another local Claude session, the same Telegram
+    message delivered a second time after a compact. Rebuilding the
+    snapshot from "no notes" wrote the floor, demoting an owner's running
+    turn mid-flight. Such a prompt adds no Telegram sender to the turn, so
+    the turn keeps the snapshot it is running under — the last one written
+    for this session — narrowed by every note still waiting
+    (most-restrictive-wins, never wider than ``current`` on any axis).
+
+    Kept only when the prompt carries no UNATTRIBUTED Telegram text: after
+    removing every message body already merged into ``current``
+    (``note_bodies``), no line may start with the Telegram marker. Anything
+    else — a marked prompt no note matches and ``current`` was not built
+    from — still cannot be attributed and falls back, fail closed.
+
+    Returns ``None`` (fall back) as well when ``current`` is missing or not
+    a well-formed snapshot. ``style_text``/``reply_context`` come from the
+    newest outstanding note, else are blank — the kept snapshot must not
+    re-inject the previous message's reply pointer into this prompt.
+    """
+    if not isinstance(current, dict):
+        return None
+    bodies = current.get("note_bodies") or []
+    if not isinstance(bodies, list):
+        return None
+    for f in _LIST_FIELDS:
+        v = current.get(f)
+        if v is not None and not (
+            isinstance(v, list) and all(isinstance(x, str) for x in v)
+        ):
+            return None
+    bodies = [b for b in bodies if isinstance(b, str) and b]
+    rest = prompt_text or ""
+    for body in bodies:
+        rest = rest.replace(body, "")
+    if _has_telegram_marker(rest):
+        return None
+    carried = {f: list(current.get(f) or []) for f in _LIST_FIELDS}
+    # The built-in floor always applies on top: a hand-edited snapshot
+    # missing its deny lists must not be carried forward without them.
+    for f in ("deny_paths_no_access", "deny_paths_no_write",
+              "deny_bash_patterns"):
+        carried[f] = sorted(set(carried[f]) | set(FLOOR_SNAPSHOT[f]))
+    carried["bypass_safety"] = current.get("bypass_safety") is True
+    carried["confine_writes"] = current.get("confine_writes") is not False
+    carried["queued_at"] = float("-inf")  # oldest: never supplies style/reply
+    carried["style_text"] = ""
+    carried["reply_context"] = ""
+    merged = merge_snapshots([carried, *outstanding])
+    merged["note_bodies"] = bodies
+    return merged
+
+
+def snapshot_for_prompt(
+    session_name: str, prompt_text: str,
+    outstanding: list[dict], consumed: list[dict],
+) -> dict:
+    """The canonical snapshot a ``UserPromptSubmit`` writes
+    (``notify_hook._match_and_promote``).
+
+    - Notes matched (``consumed``): their merge, exactly as before — this
+      is how a different, less-privileged sender's message lowers the turn.
+      The merged bodies are recorded as ``note_bodies``.
+    - No note matched: :func:`snapshot_for_unattributed_prompt` keeps the
+      current snapshot when the prompt adds no unattributed Telegram text.
+    - Otherwise: the old answer — every outstanding note's merge, or
+      :data:`FLOOR_SNAPSHOT` when none is waiting.
+    """
+    if consumed:
+        merged = merge_snapshots(consumed)
+        merged["note_bodies"] = [
+            n["body"] for n in consumed
+            if isinstance(n.get("body"), str) and n["body"]
+        ]
+        return merged
+    kept = snapshot_for_unattributed_prompt(
+        read_snapshot(session_name), outstanding, prompt_text,
+    )
+    if kept is not None:
+        return kept
+    return merge_snapshots(outstanding)  # all-outstanding fallback, or floor
 
 
 def clear_snapshot(session_name: str) -> None:

@@ -58,8 +58,20 @@ def test_persistence_round_trip(tmp_state_file):
     assert s2.last_msg_id == 99
     assert s2.transcript_path == "/some/path.jsonl"
     assert s2.last_prompt == "do the thing"
+    assert s2.last_prompt_driver_user_id is None
     assert r2.last_active_session == "claude-bar"
     assert r2.get_session_by_msg(99, 4242) is not None
+
+
+def test_the_last_prompts_author_survives_a_restart(tmp_state_file):
+    """Retry runs as the tapper only if they sent the prompt (8.50)."""
+    r1 = SessionRegistry()
+    r1.transition("claude-bar", Status.IDLE)
+    r1.get("claude-bar").last_prompt_driver_user_id = 42
+    r1.save()
+    r2 = SessionRegistry()
+    r2.load()
+    assert r2.get("claude-bar").last_prompt_driver_user_id == 42
 
 
 def test_track_message_maps_to_session(tmp_state_file):

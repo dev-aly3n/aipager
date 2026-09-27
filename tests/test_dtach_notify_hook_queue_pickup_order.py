@@ -139,10 +139,13 @@ def test_other_events_unaffected_by_the_reordering(monkeypatch, tmp_path):
     monkeypatch.setattr(notify_hook, "SOCKET_PATH", str(tmp_path / "nope.sock"))
     sent = _record_udp_sends(monkeypatch)
 
+    # A Read, not a Bash `ls`: with no transcript and no snapshot this is
+    # judged on the floor, which since 2026-09-27 (operator decision)
+    # denies Bash and would add a safety_blocked datagram.
     _set_stdin(monkeypatch, json.dumps({
         "hook_event_name": "PreToolUse",
-        "tool_name": "Bash",
-        "tool_input": {"command": "ls"},
+        "tool_name": "Read",
+        "tool_input": {"file_path": "/etc/hostname"},
     }))
     monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-hiva")
     notify_hook.main()

@@ -6,6 +6,7 @@ import json
 
 from aipager import session_store as ss
 from aipager.policy import load_policy
+from aipager.safety import RESTRICTED_DENY_TOOLS
 from aipager.scope import Member, Scope
 
 
@@ -30,7 +31,11 @@ def test_build_session_md_roster():
     md = ss.build_session_md(_scope(), load_policy(), "jim")
     assert "# Session: jim" in md
     assert "**aly** (owner — can call any tool)" in md
-    assert "**bob** (user — denied: Bash)" in md
+    # Operator decision 2026-09-26: the built-in user role denies every
+    # code-running tool (and SendMessage, the worktree tools), so bob's
+    # line lists them all (was: just Bash).
+    assert ("**bob** (user — denied: "
+            + ", ".join(sorted(RESTRICTED_DENY_TOOLS)) + ")") in md
     assert "**ro** (read_only — observer; cannot drive prompts)" in md
     # routing-hint + blocked-paths notes present
     assert "[via Telegram · @X · role:Y]" in md

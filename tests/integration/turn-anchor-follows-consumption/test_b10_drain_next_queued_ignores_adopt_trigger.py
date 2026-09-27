@@ -35,6 +35,7 @@ def test_b10_drain_at_an_idle_moment_starts_the_turn(mk_bot, run_async):
 
     assert sess.trigger_msg_id == 2
     assert sess.last_prompt == "no it was a test"
+    assert sess.last_prompt_driver_user_id is None  # queued with no sender
     assert sess.pending_queue == []
     assert sess.status == Status.BUSY
     bot._send_busy_and_animate.assert_awaited_once()
@@ -56,3 +57,13 @@ def test_b10_drain_while_a_turn_runs_is_a_mid_turn_send(mk_bot, run_async):
     assert sess.last_prompt == "first"
     assert sess.pending_queue == []
     bot._send_busy_and_animate.assert_not_awaited()
+
+
+def test_b10_drain_records_who_sent_the_prompt(mk_bot, run_async):
+    """Retry runs as the tapper only if they sent it (roadmap 8.50)."""
+    bot, sess = _wire(mk_bot)
+    sess.status = Status.IDLE
+    sess.last_prompt_driver_user_id = 99
+    sess.queue_prompt("queued", 2, driver_user_id=42)
+    run_async(bot._drain_next_queued(sess))
+    assert sess.last_prompt_driver_user_id == 42
