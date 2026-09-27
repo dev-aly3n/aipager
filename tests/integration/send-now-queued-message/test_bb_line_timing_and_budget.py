@@ -8,17 +8,18 @@ its ban ceiling with a busy card animating.
   ``QUEUED_LINE_DELAY`` (10 s) after the pick-up. A message queued behind
   a step already that old gets its line at once; one queued earlier gets
   it when the step reaches that age.
-- The line is a BLOCKING ornament: it waits for its token instead of being
-  refused whenever the card has left the chat below the skip reserve. In
-  the live test the second queued message never got a line.
+- The line is BLOCKING: it waits for its token instead of being refused
+  whenever the card has left the chat below the skip reserve (in the live
+  test the second queued message never got a line). A session's first
+  live line goes at answer priority; further lines while one shows are
+  ornaments, so a burst of queued messages never delays an answer.
 - A due line that is not sent says why at INFO.
 
 Same harness as the other rows (conftest.py): the virtual loop, the real
 limiter with the operator's ban history (0.5/s), the public surface only.
-At that ceiling a blocking ornament needs the chat's whole burst (its token
-plus the reserve), so a due line can land up to a few seconds after it is
-due while the card is animating: rows allow ``BUDGET_SLACK`` for that, and
-every early row is still well clear of the 10 s fallback.
+At that ceiling a due line still waits for the chat's next token (about
+2 s), so rows allow ``BUDGET_SLACK`` for that, and every early row is still
+well clear of the 10 s fallback.
 """
 
 from __future__ import annotations
@@ -373,8 +374,9 @@ def test_d_cleared_while_its_line_waits_for_a_token_is_dropped_at_once(
             if _line_t(r, 2) is not None and not seen:
                 seen.append(dict(r.sess.queued_lines))
         # The line's delete is owed from the instant it lands; it goes out
-        # behind /clearqueue's own reply and reactions at this ceiling.
-        await _until(vloop, t0 + 60.0)
+        # behind /clearqueue's own reply and reactions at this ceiling
+        # (measured: lands at +11.5 s, deleted at +25.5 s).
+        await _until(vloop, t0 + 35.0)
         w.cancel()
         return waiting, seen
 
@@ -572,7 +574,7 @@ def test_e_a_line_due_while_the_chat_is_short_lands_within_seconds(
     assert t - t0 <= 10.0 + 4.0, (t0, t)
 
 
-def test_a_safety_blocked_step_is_not_a_step_claude_is_in(replay, vloop, pty):
+def test_a_message_after_a_safety_halt_gets_no_early_line(replay, vloop, pty):
     """A PreToolUse the safety policy denied never runs and gets no
     PostToolUse: a message sent after it is not treated as queued behind a
     step. (The first block of a turn halts the session back to idle, so
@@ -643,3 +645,31 @@ def test_a_turn_or_session_end_clears_the_step(replay, vloop, pty, ending):
     before, after = _run(vloop, scenario())
     assert before is not None, "precondition: the step was open"
     assert after is None
+
+
+def test_a_burst_of_queued_messages_does_not_hold_back_an_answer(
+        replay, vloop, pty):
+    """Six messages queued at once behind an old step: only the first line
+    goes at answer priority (one tap sends everything), so an answer sent
+    right after is not held behind six lines (measured before: +10 s)."""
+    r = replay
+
+    async def scenario():
+        w = r.worker()
+        await r.turn(1, "first")
+        await asyncio.sleep(SETTLE)
+        await r.tool_start("long step")
+        await asyncio.sleep(5.0)
+        for i in range(6):
+            await r.queue(10 + i, f"burst {i}")
+        await asyncio.sleep(0.5)
+        t_ans = vloop.time()
+        await r.bot._app.bot.send_message(chat_id=CHAT, text="an answer")
+        waited = vloop.time() - t_ans
+        await asyncio.sleep(30.0)
+        w.cancel()
+        return waited
+
+    waited = _run(vloop, scenario())
+    assert waited <= 4.0, waited
+    assert r.chat.line_for(10) is not None  # the first line still went out

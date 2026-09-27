@@ -624,11 +624,12 @@ queue back into the input box, or it is dropped by `/stop`,
 `/clearqueue`, `/kill`, `/restart`, a safety halt or the session
 ending. A daemon restart removes any line still showing.
 
-The line is a courtesy, so it is not sent while the chat is flood-muted,
-in minimal mode or short of its hourly budget; `/now` does the same job
-then. When the chat is only busy (a busy card updating on a slow chat),
-the line waits its turn instead, behind answers, so it can arrive
-several seconds late. Each waiting message costs at most two chat calls (the
+The line is not sent while the chat is flood-muted or in minimal mode;
+`/now` does the same job then. When the chat is only busy (a busy card
+updating on a slow chat), the first line goes out like an answer, so it
+arrives within a couple of seconds; if you queue several messages, the
+lines after the first one wait behind answers, since one tap already
+sends everything. Each waiting message costs at most two chat calls (the
 line and its removal).
 
 ### Files

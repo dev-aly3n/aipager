@@ -62,8 +62,8 @@ def _sc1(r, vloop):
         t0 = await _queued(r)
         await _until(vloop, t0 + 9.0)
         at_9 = [dict(ln) for ln in r.chat.lines.values()]
-        # The line is due at 10 s and, a blocking ornament at this
-        # chat's 0.5/s, waits for its token and the reserve: allow 2.5 s.
+        # The line is due at 10 s and, blocking at this chat's 0.5/s,
+        # may wait for its token: allow 2.5 s.
         await _until(vloop, t0 + 12.5)
         at_11 = [dict(ln) for ln in r.chat.lines.values()]
         w.cancel()

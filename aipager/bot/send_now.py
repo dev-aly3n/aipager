@@ -19,12 +19,14 @@ it. Nothing guesses a message's fate. Every line sent is owed a delete on
 the registry (``SessionRegistry.queued_line_deletes``) until the delete
 lands, and startup deletes what a restart left behind.
 
-The line and its delete are ORNAMENTS: never sent while the chat is muted
-or in minimal mode or past its hour's ornament share (``/now`` is the
-fallback then), and a refused delete stays owed. The line is the
-operator's only affordance, so it WAITS for its token like the delete
-does, rather than being skipped whenever a busy card leaves the chat
-short.
+The line is never sent while the chat is muted or in minimal mode
+(``/now`` is the fallback then). It WAITS for its token rather than being
+skipped whenever a busy card leaves the chat short: a session's first live
+line goes at answer priority, as the operator's only way to send the
+message now, and any further line while one is showing goes as an
+ornament (one tap sends everything queued, so those are extras that must
+not delay answers). The delete is an ornament, and a refused delete stays
+owed.
 """
 
 from __future__ import annotations
@@ -222,25 +224,30 @@ class SendNowMixin:
             log.info("[%s] queued line for %s not sent: not the session's "
                      "chat", sess.label, msg_id)
             return
-        # 5. An ornament: not while the chat is muted or in minimal mode.
+        # 5. Not while the chat is muted or in minimal mode.
         if session_monitor.cards_suppressed(chat_id):
             log.info("[%s] queued line for %s not sent: chat suppressed "
                      "(muted or minimal mode)", sess.label, msg_id)
             return
-        # BLOCKING at answer priority, not a skip-kind ornament: the line is
-        # the operator's only way to send the message now, not a card
-        # refresh. A skip-kind send was refused whenever a busy card had
-        # left the chat below the reserve (live test 2026-09-27: a second
-        # queued message never got its line), and a blocking ORNAMENT still
-        # lost every token to the card's own edits at a low ceiling, landing
-        # many seconds late. It goes out like an answer instead; the mute
-        # and minimal mode are refused above (cards_suppressed), and a
-        # message taken while it waited is dropped by the re-check below.
+        # BLOCKING, never a skip-kind ornament: a skip-kind send was refused
+        # whenever a busy card had left the chat below the reserve (live
+        # test 2026-09-27: a second queued message never got its line). The
+        # session's first live line goes at answer priority: it is the
+        # operator's only way to send the message now, and as a blocking
+        # ORNAMENT it lost every token to the card's own edits at a low
+        # ceiling, landing many seconds late. A further line while one is
+        # already showing is an extra (one tap sends everything queued), so
+        # it goes as an ornament and never delays an answer behind a burst
+        # of queued messages (review rev-iter2-001). The mute and minimal
+        # mode are refused above (cards_suppressed), and a message taken
+        # while it waited is dropped by the re-check below.
+        priority = (PRIORITY_ORNAMENT if sess.queued_lines
+                    else PRIORITY_ESSENTIAL)
         sent = await send_text(
             self._app.bot, chat_id, LINE_TEXT,
             reply_to_message_id=msg_id,
             reply_markup=self._build_send_now_keyboard(sess, msg_id),
-            rate_limit_args=_rl_args(priority=PRIORITY_ESSENTIAL),
+            rate_limit_args=_rl_args(priority=priority),
         )
         line_id = getattr(sent, "message_id", None) if sent else None
         if type(line_id) is not int or line_id <= 0:
