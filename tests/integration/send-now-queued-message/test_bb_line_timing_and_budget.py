@@ -311,9 +311,18 @@ def test_d_taken_before_10s_with_no_step_never_gets_a_line(
     assert r.chat.lines == {}
 
 
+def _drain_before_due(r, t0):
+    """Two answers queued at the chat's gate just before the line is due
+    (like the live test's other traffic): even at answer priority the line
+    then waits for its token."""
+    return [asyncio.ensure_future(
+        r.bot._app.bot.send_message(chat_id=CHAT, text=f"answer {n}"))
+        for n in range(2)]
+
+
 def test_d_taken_while_its_line_waits_for_a_token_is_dropped_at_once(
         replay, vloop, pty):
-    """Due at 10 s, the line waits for its token (about 1.5 s here); the
+    """Due at 10 s, the line waits for its token behind two answers; the
     message is taken in that wait. The line that then lands is dropped the moment it does (the
     send's own re-check), not at some later tick: it is never recorded as
     this message's line, and its delete is owed from that instant."""
@@ -323,6 +332,8 @@ def test_d_taken_while_its_line_waits_for_a_token_is_dropped_at_once(
         w = r.worker()
         await r.turn(1, "first")
         t0 = await r.queue(2, "queued two")
+        await _until(vloop, t0 + 9.8)
+        _drain_before_due(r, t0)
         await _until(vloop, t0 + 10.3)
         waiting = (_line_t(r, 2) is None and 2 in r.sess.queued_line_timers)
         r.absorb("queued two")
@@ -351,6 +362,8 @@ def test_d_cleared_while_its_line_waits_for_a_token_is_dropped_at_once(
         w = r.worker()
         await r.turn(1, "first")
         t0 = await r.queue(2, "queued two")
+        await _until(vloop, t0 + 9.8)
+        _drain_before_due(r, t0)
         await _until(vloop, t0 + 10.3)
         waiting = (_line_t(r, 2) is None and 2 in r.sess.queued_line_timers)
         await r.cmd("_handle_clearqueue_cmd", "/clearqueue")
@@ -359,6 +372,9 @@ def test_d_cleared_while_its_line_waits_for_a_token_is_dropped_at_once(
             await asyncio.sleep(0.01)
             if _line_t(r, 2) is not None and not seen:
                 seen.append(dict(r.sess.queued_lines))
+        # The line's delete is owed from the instant it lands; it goes out
+        # behind /clearqueue's own reply and reactions at this ceiling.
+        await _until(vloop, t0 + 60.0)
         w.cancel()
         return waiting, seen
 
@@ -519,22 +535,111 @@ def test_g_suppressed_is_logged_at_info(replay, vloop, pty, caplog):
     assert any("suppressed" in m for m in _reasons(caplog))
 
 
-def test_g_refused_send_is_logged_at_info(replay, vloop, vlimiter, pty,
-                                          caplog, monkeypatch):
-    """The gate refuses the send itself."""
+def test_g_muted_during_the_lines_wait_is_logged_at_info(
+        replay, vloop, pty, caplog):
+    """The chat is muted while the line waits for its token behind two
+    answers: no line, and the reason is logged at INFO."""
     r = replay
     caplog.set_level(logging.INFO, logger="aipager.bot.send_now")
-    # The hour's ornament share found spent at the instant of taking (the
-    # one refusal a blocking ornament meets past the pre-check).
-    monkeypatch.setattr(vlimiter, "_ornament_share_spent", lambda _b: True)
 
     async def scenario():
         w = r.worker()
         await r.turn(1, "first")
         t0 = await r.queue(2, "queued two")
+        await _until(vloop, t0 + 9.8)
+        _drain_before_due(r, t0)
+        await _until(vloop, t0 + 10.3)
+        waiting = (_line_t(r, 2) is None and 2 in r.sess.queued_line_timers)
+        MUTE.mute(CHAT, 600)
         await _until(vloop, t0 + 25.0)
         w.cancel()
+        return waiting
 
-    _run(vloop, scenario())
+    assert _run(vloop, scenario()) is True, "precondition: the line waited"
     assert r.chat.lines == {}
-    assert any("refused by the flood gate" in m for m in _reasons(caplog))
+    assert any("chat muted" in m for m in _reasons(caplog))
+
+
+# ── follow-ups: answer priority, and a step that can no longer be running ──
+
+def test_e_a_line_due_while_the_chat_is_short_lands_within_seconds(
+        replay, vloop, pty):
+    """At answer priority the line only waits for the chat's next token
+    (about 2 s at this chat's 0.5/s), instead of losing every token to the
+    busy card's own edits and landing many seconds after it was due."""
+    t0, t = _short_at_due(replay, vloop)
+    assert t is not None
+    assert t - t0 <= 10.0 + 4.0, (t0, t)
+
+
+def test_a_safety_blocked_step_is_not_a_step_claude_is_in(replay, vloop, pty):
+    """A PreToolUse the safety policy denied never runs and gets no
+    PostToolUse: a message sent after it is not treated as queued behind a
+    step. (The first block of a turn halts the session back to idle, so
+    the next message starts a turn of its own and its prompt clears the
+    step; this row pins that end result.)"""
+    r = replay
+
+    async def scenario():
+        w = r.worker()
+        await r.turn(1, "first")
+        await asyncio.sleep(SETTLE)
+        await r.tool_start("blocked step")
+        await asyncio.sleep(0.5)
+        await r.hook(type="safety_blocked", tool="Bash", reason="denied")
+        await asyncio.sleep(4.0)
+        t0 = await r.queue(3, "queued three")
+        await _until(vloop, t0 + 9.5)
+        at_9 = _line_t(r, 3)
+        w.cancel()
+        return at_9
+
+    assert _run(vloop, scenario()) is None
+
+
+def test_a_turn_end_clears_the_step_before_a_popped_turn(replay, vloop, pty):
+    """Turn 1 ends (Stop) with its step never closed and pops message 3 as
+    turn 2, which fires no prompt hook. A message queued in turn 2 with no
+    step running is not behind turn 1's old step: no early line."""
+    r = replay
+
+    async def scenario():
+        w = r.worker()
+        await r.turn(1, "first")
+        await asyncio.sleep(SETTLE)
+        await r.tool_start("step with no end")
+        await r.queue(3, "queued three")
+        await r.stop("answer one")
+        await asyncio.sleep(3.0)
+        t0 = await r.queue(5, "queued five")
+        await _until(vloop, t0 + 9.5)
+        at_9 = _line_t(r, 5)
+        w.cancel()
+        return at_9
+
+    assert _run(vloop, scenario()) is None
+
+
+@pytest.mark.parametrize("ending", [
+    {"hook_event_name": "StopFailure", "error": "api_error"},
+    {"hook_event_name": "SessionEnd", "reason": "other"},
+])
+def test_a_turn_or_session_end_clears_the_step(replay, vloop, pty, ending):
+    """A failed turn end or the session ending: whatever step was open is
+    over, so nothing later reads it as a step Claude is still in."""
+    r = replay
+
+    async def scenario():
+        w = r.worker()
+        await r.turn(1, "first")
+        await r.tool_start("step with no end")
+        await asyncio.sleep(0.5)
+        before = r.sess.parent_tool_started_at
+        await r.hook(**ending)
+        await asyncio.sleep(0.5)
+        w.cancel()
+        return before, r.sess.parent_tool_started_at
+
+    before, after = _run(vloop, scenario())
+    assert before is not None, "precondition: the step was open"
+    assert after is None

@@ -1086,6 +1086,7 @@ class HookReceiver:
 
         elif event == "SessionEnd":
             sess = self.registry.get_or_create(session_name)
+            sess.parent_tool_started_at = None
             # Claude Code's SessionEnd carries `reason` (clear, resume,
             # logout, prompt_input_exit, other — its hook schema in
             # 2.1.272 and 2.1.281); `source` is SessionStart's field and is
@@ -1261,6 +1262,8 @@ class HookReceiver:
             return  # no further notification — animation reads cached values
 
         elif event == "StopFailure":
+            # The turn is over, whatever step it was in (see the Stop branch).
+            sess_ref.parent_tool_started_at = None
             # A turn ended in failure — no Stop is emitted, so we must
             # finalize here or the session strands in BUSY. Unlike the
             # Stop handler, StopFailure never carries last_assistant_message,
@@ -1320,6 +1323,13 @@ class HookReceiver:
             await expire_notes_after_turn_end(session_name, pre_notes)
 
         elif event.lower() in ("idle_prompt", "idle", "stop", "notification"):
+            if event.lower() == "stop":
+                # The turn is over, whatever step it was in. A queued
+                # message Claude now takes as the next turn fires no
+                # prompt hook to clear this, so without it the next turn
+                # would look like it sits behind an old step and flash an
+                # early Send now line.
+                sess_ref.parent_tool_started_at = None
             # A Notification-class idle event (Claude Code's "waiting for
             # your input" nudge, `notification_type` set) for a session
             # that is INTERACTIVE is not a turn end: the session is blocked

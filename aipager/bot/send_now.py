@@ -39,6 +39,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from aipager import config, session_monitor
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot.flood_budget import (
+    PRIORITY_ESSENTIAL,
     PRIORITY_ORNAMENT,
     FloodSkipped,
     rate_limit_args as _rl_args,
@@ -49,7 +50,6 @@ from aipager.bot.transport import (
     calling_chat_id,
     edit_text_at,
     MUTED,
-    SKIPPED,
     reply_text,
     resolve_chat_id_int,
     send_text,
@@ -227,23 +227,24 @@ class SendNowMixin:
             log.info("[%s] queued line for %s not sent: chat suppressed "
                      "(muted or minimal mode)", sess.label, msg_id)
             return
-        # BLOCKING, not skip: a skip-kind send is refused whenever a busy
-        # card has left the chat below the reserve, which at a low ceiling
-        # is most of the time (live test 2026-09-27: a second queued
-        # message never got its line). It waits for its token instead,
-        # behind every answer; the hour's ornament share and minimal mode
-        # still refuse it, and a message taken while it waited is dropped
-        # by the re-check below the moment it lands.
+        # BLOCKING at answer priority, not a skip-kind ornament: the line is
+        # the operator's only way to send the message now, not a card
+        # refresh. A skip-kind send was refused whenever a busy card had
+        # left the chat below the reserve (live test 2026-09-27: a second
+        # queued message never got its line), and a blocking ORNAMENT still
+        # lost every token to the card's own edits at a low ceiling, landing
+        # many seconds late. It goes out like an answer instead; the mute
+        # and minimal mode are refused above (cards_suppressed), and a
+        # message taken while it waited is dropped by the re-check below.
         sent = await send_text(
             self._app.bot, chat_id, LINE_TEXT,
             reply_to_message_id=msg_id,
             reply_markup=self._build_send_now_keyboard(sess, msg_id),
-            rate_limit_args=_rl_args(priority=PRIORITY_ORNAMENT),
+            rate_limit_args=_rl_args(priority=PRIORITY_ESSENTIAL),
         )
         line_id = getattr(sent, "message_id", None) if sent else None
         if type(line_id) is not int or line_id <= 0:
             why = ("chat muted" if sent is MUTED
-                   else "refused by the flood gate" if sent is SKIPPED
                    else f"send failed ({sent!r})")
             log.info("[%s] queued line for %s not sent: %s", sess.label,
                      msg_id, why)

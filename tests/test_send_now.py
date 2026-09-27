@@ -17,6 +17,7 @@ import pytest
 from aipager.bot import send_now as sn
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot.flood_budget import (
+    PRIORITY_ESSENTIAL,
     PRIORITY_ORNAMENT,
     FloodSkipped,
     rate_limit_args,
@@ -412,10 +413,10 @@ def test_a_held_message_gets_the_line_and_owes_its_delete(
     assert button.callback_data.startswith("_:sx:")
     assert button.callback_data.endswith(":now:2")
     assert len(button.callback_data.encode()) <= 64
-    # A BLOCKING ornament: it waits for its token, never skipped for a
-    # short chat (live test 2026-09-27).
+    # BLOCKING at answer priority: never skipped for a short chat, and not
+    # starved by the busy card's own edits (live test 2026-09-27).
     assert call.kwargs["rate_limit_args"] == rate_limit_args(
-        priority=PRIORITY_ORNAMENT) == {"class": PRIORITY_ORNAMENT}
+        priority=PRIORITY_ESSENTIAL) is None
     assert sess.queued_lines == {2: (CHAT, 7001)}
     assert bot.registry.queued_line_deletes == [[CHAT, 7001]]
     assert sess.queued_line_timers == {}
