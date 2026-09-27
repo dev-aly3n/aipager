@@ -253,7 +253,7 @@ class KeyboardMixin:
             desc = opt.get("description", "")
             text += f"\n  {i+1}. {html_mod.escape(opt_label)}"
             if desc:
-                text += f" — {html_mod.escape(desc[:60])}"
+                text += f" - {html_mod.escape(desc[:60])}"
 
         # Local import, not top-level — avoids an import cycle with
         # session_parity (which itself imports from this package).

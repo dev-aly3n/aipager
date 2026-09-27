@@ -587,7 +587,7 @@ def test_reclaim_truncated_card_attaches_full_log_under_old_card(
     assert doc_kw["filename"] == "jim_full_log.txt"
     assert doc_kw["reply_to_message_id"] == 99
     body = doc_kw["document"].decode("utf-8")
-    assert "jim — complete play-by-play" in body
+    assert "jim - complete play-by-play" in body
     assert "[v] Read: /a" in body
     assert _INTERIM_HUGE.strip() in body  # the full prose, unclipped
     assert "FINAL ANSWER" not in body  # no composed answer exists
@@ -1137,10 +1137,10 @@ def test_build_full_log_agents_section_lists_type_elapsed_count_and_tools():
         "jim", [("Bash: parent", True)], [], "the answer", agents=agents,
     )
     assert "AGENTS" in log
-    assert "\U0001f916 explore — 7s — 2 tool calls" in log
+    assert "\U0001f916 explore (7s, 2 tool calls)" in log
     assert "  - Bash: ls" in log
     assert "  - Read: /x" in log
-    assert "\U0001f916 review — 1m 5s — 1 tool call" in log
+    assert "\U0001f916 review (1m 5s, 1 tool call)" in log
     assert "1 tool calls" not in log  # singular, not plural
     assert log.index("AGENTS") < log.index("FINAL ANSWER")
 

@@ -246,7 +246,7 @@ def test_format_provenance_two_installs_one_also_found_line():
     lines = claude_resolve.format_provenance(resolved, auth)
     assert lines == [
         "claude: /x/claude (2.1.235) · auth: none (not logged in)",
-        "also found: /y/claude (2.1.143) — set claude_path to override",
+        "also found: /y/claude (2.1.143) - set claude_path to override",
     ]
 
 

@@ -1309,7 +1309,7 @@ class MiniAppServer:
         if not outcome.ok:
             return web.json_response({
                 "error": "not_busy",
-                "detail": "This session isn't busy right now — nothing to stop.",
+                "detail": "This session isn't busy right now - nothing to stop.",
             }, status=409)
 
         await self._mirror_session_stopped(
@@ -1417,7 +1417,7 @@ class MiniAppServer:
         if outcome.result == "still_running":
             return web.json_response({
                 "error": "still_running",
-                "detail": "Could not kill — the process is still running. Try again.",
+                "detail": "Could not kill - the process is still running. Try again.",
             }, status=409)
         if outcome.result == "resuming":
             # NOT the 404 fallthrough below: the session very much exists,
@@ -1558,7 +1558,7 @@ class MiniAppServer:
         if outcome.reason == "already_restarting":
             return web.json_response({
                 "error": "already_restarting",
-                "detail": "This session is already restarting — wait a moment.",
+                "detail": "This session is already restarting - wait a moment.",
             }, status=409)
         if outcome.reason == "still_stopping":
             return web.json_response({
@@ -1608,7 +1608,7 @@ class MiniAppServer:
         resp = self._restart_outcome_response(
             outcome,
             still_stopping_detail=(
-                f"{outcome.label} is still stopping — mode not changed. "
+                f"{outcome.label} is still stopping - mode not changed. "
                 f"Try again in a moment."
             ),
         )

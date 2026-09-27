@@ -8,7 +8,7 @@ design.md success criteria 1-2:
 entrypoints.md: success body is
   {"status": "stopped", "label": string, "dropped": integer}
 refusal is 409 {"error": "not_busy",
-  "detail": "This session isn't busy right now — nothing to stop."}
+  "detail": "This session isn't busy right now - nothing to stop."}
 """
 
 from __future__ import annotations
@@ -140,7 +140,7 @@ def test_stop_idle_session_returns_409_not_busy(server, run_async, monkeypatch):
             body = await resp.json()
             assert body["error"] == "not_busy"
             assert body["detail"] == (
-                "This session isn't busy right now — nothing to stop."
+                "This session isn't busy right now - nothing to stop."
             )
         finally:
             await client.close()

@@ -5,8 +5,9 @@ strings (schema labels and hints, choices, reasons, details, model hints,
 waiting summaries) are displayed with " — " replaced by " - ". The payloads
 fed to the page here are the REAL bodies of the public GET routes (built by
 the daemon's own route handlers with the shipped settings schema and model
-catalog, which carry em dashes today), with extra em dashes placed in the
-fields the page renders. The harness then walks every displayed text node
+catalog), with em dashes put back into the fields the page renders. The
+server text has none of its own since roadmap 8.54; these stand in for the
+pass-through text that can still carry one. The harness then walks every displayed text node
 and the aria-label/title/placeholder attributes of the Settings tab, the
 session page (with its action menu and session settings) and the new
 session form.
@@ -105,13 +106,33 @@ def _real_payloads(server, run_async, user_id):
     return run_async(_run())
 
 
+def _dashed(text):
+    """The pre-8.54 wording: an em dash where the server now has " - "."""
+    assert " - " in text, text
+    return text.replace(" - ", f" {EM} ")
+
+
 def _with_more_dashes(fix):
-    """Put an em dash into every schema title too (labels and hints already
-    carry them in the shipped schema)."""
+    """Put an em dash into every schema title, back into the schema labels
+    and help and the model hints, and into the model reason. The shipped
+    server text no longer carries any (roadmap 8.54), so these stand in for
+    pass-through text and keep every *_shown_plain check below failing
+    when the page drops plain()."""
     for key in ("GET /api/preferences", "GET /api/sessions/alpha/preferences",
                 "GET /api/sessions/bravo/preferences", "GET /api/session-options"):
         for group in fix[key]["schema"]:
             group["title"] = f"{group['title']} {EM} tuned"
+            for opt in group["options"]:
+                if " - " in opt["label"]:
+                    opt["label"] = _dashed(opt["label"])
+                if " - " in (opt.get("help") or ""):
+                    opt["help"] = _dashed(opt["help"])
+    for model in fix["GET /api/session-options"]["models"]:
+        if " - " in (model.get("hint") or ""):
+            model["hint"] = _dashed(model["hint"])
+    switch = fix["GET /api/sessions/alpha"].get("model_switch") or {}
+    if " - " in (switch.get("reason") or ""):   # an admin's view: waiting
+        switch["reason"] = _dashed(switch["reason"])
     return fix
 
 
@@ -130,11 +151,12 @@ def _fixture_for(scenario, server, run_async):
     return fix
 
 
-def test_real_payloads_carry_em_dashes(server, run_async):
-    """Premise check: the shipped server text does contain em dashes, so
-    the page-side replacement is what keeps them off the screen."""
+def test_real_payloads_carry_no_em_dashes(server, run_async):
+    """Premise check (roadmap 8.54): the shipped server text carries no em
+    dash of its own, so every one the scenarios below strip is one this
+    file injected, standing in for pass-through text."""
     fix = _real_payloads(server, run_async, ADMIN_ID)
-    assert EM in json.dumps(fix["GET /api/session-options"], ensure_ascii=False)
+    assert EM not in json.dumps(fix["GET /api/session-options"], ensure_ascii=False)
 
 
 _CACHE: dict = {}

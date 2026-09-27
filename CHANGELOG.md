@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Commands run from a session's scratchpad are no longer halted by the safety policy.** Claude Code gives every session a scratchpad under `/tmp/claude-<uid>/`, and the rule that stops a Telegram turn from launching `claude` or reading `~/.claude` matched the `claude` in that path, so an ordinary `cat`, `curl` or `ssh` run from there stopped the turn. That folder, `/tmp/claude-<uid>/` itself (it holds the scratchpads of every session of that OS user), is now exempt; the `claude` binary, `~/.claude` (including `…/../../home/you/.claude`), aipager's own `/tmp/claude-*` files and any glob or look-alike of the scratchpad path are still blocked. The `--resume` flag rule also no longer matches longer flags such as `--resume-from`. Rules you add in `policy.yaml` still see the command exactly as typed.
 - **An owner's turn no longer loses its safety bypass halfway through.** A message typed in the terminal while a Telegram turn runs (Claude Code reports it as a new prompt the moment it is queued), a message from another local Claude session, or a Telegram message delivered a second time after a compact reset the turn to the strictest built-in rules, so the owner's next command could be halted. Such a prompt now keeps the rules the turn is running under. It can only make them stricter, never looser: a message from a less-privileged Telegram sender still lowers the turn to that sender's rules, and a Telegram message aipager cannot attribute still gets the strictest rules.
 
+### Changed
+- **No more long dashes in what aipager shows you.** Chat messages, toasts, buttons, `/settings`, the Mini App, and `aipager` command output use a plain "-" or parentheses instead of an em dash: `Busy - try again in a moment`, `bigdog (5m ago)` in the resume picker, `still working (quiet for 10 min)`.
+
 ## [0.7.20] - 2026-09-26
 
 ### Fixed

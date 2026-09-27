@@ -1244,7 +1244,7 @@ def build_full_log(
         slot = min(max(anchor, 0), len(tool_history))
         by_anchor.setdefault(slot, []).append(text)
     lines: list[str] = [
-        f"{label} — complete play-by-play",
+        f"{label} - complete play-by-play",
         f"(memory holds the most recent {len(tool_history)} tool rows; "
         "older rows of very long turns may already be gone)",
         "",
@@ -1269,8 +1269,8 @@ def build_full_log(
             plural = "" if tool_count == 1 else "s"
             lines.append("")
             lines.append(
-                f"\U0001f916 {agent_type} — {elapsed_str} — "
-                f"{tool_count} tool call{plural}"
+                f"\U0001f916 {agent_type} ({elapsed_str}, "
+                f"{tool_count} tool call{plural})"
             )
             for tool_summary in agent.get("tools", []):
                 lines.append(f"  - {tool_summary}")
@@ -1816,7 +1816,7 @@ class AnimationMixin:
                     desc = opt.get("description", "")
                     text += f"\n  {i+1}. {html_mod.escape(opt_label)}"
                     if desc:
-                        text += f" — {html_mod.escape(desc[:60])}"
+                        text += f" - {html_mod.escape(desc[:60])}"
             else:
                 tool_summary = perm.get("tool_summary", "Permission needed")
                 text += f"\n\n🔐 <code>{html_mod.escape(tool_summary)}</code>"
@@ -2504,8 +2504,8 @@ class AnimationMixin:
         try:
             sent = await self._edit_busy_raw(
                 sess.busy_msg_id,
-                f"⏳ <b>{html_mod.escape(sess.label)}</b> · working — "
-                "updates paused",
+                f"⏳ <b>{html_mod.escape(sess.label)}</b> · working "
+                "(updates paused)",
                 chat_id=resolve_chat_id(sess),
                 priority=PRIORITY_ESSENTIAL,
             )

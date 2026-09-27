@@ -30,7 +30,7 @@ _ROLE_MAP = {
 }
 
 _POLICY_SEED = """\
-# aipager — policy (the "what"). USER-OWNED: `aipager config` never
+# aipager - policy (the "what"). USER-OWNED: `aipager config` never
 # writes this file, so anything you put here survives wizard re-runs.
 #
 # Built-in roles (owner / admin / user / read_only) and the safety

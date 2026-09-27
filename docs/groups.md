@@ -216,7 +216,7 @@ happens to interrupt:
   contributors — privileges never widen.
 - Buttons that act on a running turn (Stop, Kill, Restart, Replace,
   perms-switch) refuse when tapped from a card belonging to an
-  earlier task — `That task already finished — …` — so a stale tap in a
+  earlier task — `That task already finished - …` — so a stale tap in a
   busy group can't destroy someone else's current work.
 
 ## What everyone sees

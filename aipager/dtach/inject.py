@@ -560,12 +560,12 @@ def _conversation_exists(session_id: str) -> bool:
 # ends with the latter.
 _DTACH_FAILURE_PHRASES: tuple[tuple[str, str], ...] = (
     ("address already in use",
-     "a session socket with this name already exists — kill it or pick another name"),
+     "a session socket with this name already exists - kill it or pick another name"),
     ("could not execute",
      "dtach could not start the shell (bash missing or not executable?)"),
     ("could not find a pty", "no pseudo-terminal available on this machine"),
     ("file name too long",
-     "the session name makes the socket path too long — pick a shorter name"),
+     "the session name makes the socket path too long - pick a shorter name"),
     ("permission denied", "no permission to create the session socket"),
     ("no such file or directory", "the socket directory does not exist"),
 )

@@ -93,7 +93,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 MODEL_SWITCH_OTHER_SENDER_REASON = (
-    "another member's message is still waiting to be picked up — "
+    "another member's message is still waiting to be picked up - "
     "switch the model after it."
 )
 
@@ -358,7 +358,7 @@ class CommandHandlersMixin:
                 if time.monotonic() - last_edit_at >= 5.0:
                     await self._safe_edit_callback(
                         query,
-                        f"📦 Installing voice extra — still working… ({elapsed}s)",
+                        f"📦 Installing voice extra - still working… ({elapsed}s)",
                     )
                     last_edit_at = time.monotonic()
 
@@ -471,7 +471,7 @@ class CommandHandlersMixin:
                     return
                 await self._safe_edit_callback(
                     query,
-                    f"🔄 Restarting in {self_update.RESTART_DELAY_SECONDS} s — "
+                    f"🔄 Restarting in {self_update.RESTART_DELAY_SECONDS} s - "
                     "send your voice message again in a few seconds.",
                 )
                 return
@@ -537,7 +537,7 @@ class CommandHandlersMixin:
         # flush before SIGTERM tears the event loop down.
         await self._safe_edit_callback(
             query,
-            "🔄 Restarting — send your voice message again in a few seconds.",
+            "🔄 Restarting - send your voice message again in a few seconds.",
         )
         await asyncio.sleep(0.5)
         os.kill(os.getpid(), signal.SIGTERM)
@@ -558,29 +558,29 @@ class CommandHandlersMixin:
             session_block = "  <i>(no sessions yet)</i>"
 
         text = (
-            "\U0001f44b <b>aipager</b> — Telegram remote for Claude Code\n\n"
+            "\U0001f44b <b>aipager</b> - Telegram remote for Claude Code\n\n"
             "Talk to your local Claude sessions from this chat. The daemon "
             "is running and mirroring sessions to you live.\n\n"
             "<b>Tracked sessions</b>\n"
             f"{session_block}\n\n"
             "<b>How to use</b>\n"
             "  • Tap a session name on the keyboard below to switch to it.\n"
-            "  • Send a plain message — it goes to the active session.\n"
+            "  • Send a plain message - it goes to the active session.\n"
             "  • Reply to a session's message to pin your prompt to that session.\n\n"
             "<b>Open a new session</b>\n"
-            "  /new — pick a name, mode, model and folder here\n"
-            "  <code>aipager session &lt;name&gt;</code> — or from your computer\n\n"
+            "  /new - pick a name, mode, model and folder here\n"
+            "  <code>aipager session &lt;name&gt;</code> - or from your computer\n\n"
             "<b>Commands</b>\n"
-            "  /status — per-session dashboard\n"
-            "  /stop — interrupt the active session\n"
-            "  /restart — restart a session with its history\n"
-            "  /rename — give a session a new name\n"
-            "  /diff — show a session's working-directory diff\n"
-            "  /kill — terminate a session\n"
-            "  /delete — drop a finished session from the list\n"
-            "  /settings — message layout, formatting and language\n"
-            "  /perms — switch a session between Ask and Auto\n"
-            "  /update — update aipager and Claude Code (admin)\n"
+            "  /status - per-session dashboard\n"
+            "  /stop - interrupt the active session\n"
+            "  /restart - restart a session with its history\n"
+            "  /rename - give a session a new name\n"
+            "  /diff - show a session's working-directory diff\n"
+            "  /kill - terminate a session\n"
+            "  /delete - drop a finished session from the list\n"
+            "  /settings - message layout, formatting and language\n"
+            "  /perms - switch a session between Ask and Auto\n"
+            "  /update - update aipager and Claude Code (admin)\n"
         )
         try:
             await send_text(self._app.bot,
@@ -646,7 +646,7 @@ class CommandHandlersMixin:
         chat = update.effective_chat
         if chat is None or chat.id <= 0:
             await reply_text(update.message,
-                "📱 The Mini App only works in a private chat — DM the bot "
+                "📱 The Mini App only works in a private chat - DM the bot "
                 "and send /app there."
             )
             return
@@ -678,14 +678,14 @@ class CommandHandlersMixin:
             from aipager.miniapp.server import miniapp_extra_available
             if not miniapp_extra_available():
                 await reply_text(update.message,
-                    "📱 The Mini App can't start on this machine — its "
+                    "📱 The Mini App can't start on this machine - its "
                     "install looks incomplete.\n\n"
                     "Everything else keeps working; ask whoever set this "
                     "up to reinstall aipager.",
                 )
             else:
                 await reply_text(update.message,
-                    "📱 The Mini App link is still being set up — "
+                    "📱 The Mini App link is still being set up - "
                     "try /app again in a few seconds.",
                 )
             return
@@ -782,9 +782,9 @@ class CommandHandlersMixin:
             sl = self._read_status_file(name)
             # Build table rows
             rows = []
-            model = (sl.get("model") if sl else None) or sess.model_name or "—"
+            model = (sl.get("model") if sl else None) or sess.model_name or "-"
             ctx_pct = sl["ctx_pct"] if sl else (sess.last_token_pct or 0)
-            cost = f"${sl['cost']:.2f}" if sl and sl["cost"] >= 0.01 else "—"
+            cost = f"${sl['cost']:.2f}" if sl and sl["cost"] >= 0.01 else "-"
             rows.append(f"  Model  {html_mod.escape(model)}")
             rows.append(f"  Ctx    {ctx_pct}%")
             rows.append(f"  Cost   {cost}")
@@ -898,7 +898,7 @@ class CommandHandlersMixin:
         name = self.registry.last_active_session
         if not name:
             await reply_text(update.message,
-                "No active session — switch to one with /<label> first.",
+                "No active session - switch to one with /<label> first.",
             )
             return
         sess = self.registry.get(name)
@@ -1020,7 +1020,7 @@ class CommandHandlersMixin:
         # exists to remove.
         if name.lower() in inject._RESERVED:
             await reply_text(update.message,
-                f"⚠️ <code>{html_mod.escape(name)}</code> is a command name — "
+                f"⚠️ <code>{html_mod.escape(name)}</code> is a command name - "
                 "pick something else, or it would shadow /"
                 f"{html_mod.escape(name.lower())}.",
                 parse_mode="HTML",
@@ -1358,7 +1358,7 @@ class CommandHandlersMixin:
             return
 
         await reply_text(update.message,
-            "🪪 Personal mode — full control of this machine from this DM.")
+            "🪪 Personal mode - full control of this machine from this DM.")
 
     async def _handle_message(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle text messages — replies to notifications or /<label> commands."""

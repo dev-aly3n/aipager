@@ -387,7 +387,7 @@ def _search_violation(
     spelled = _norm(root, cwd)
     real = _realpath(spelled)
     if not any(_under(real, _realpath(_norm(r))) for r in roots):
-        return (f"{tool_name} outside the session's folder — a restricted "
+        return (f"{tool_name} outside the session's folder - a restricted "
                 "turn searches only its project and scratchpad")
     for glob in no_access:
         if _matches_targets({spelled, real}, glob):
@@ -426,7 +426,7 @@ def _confinement_violation(tool_name: str, real: str,
             return (f"{tool_name} to a file that runs commands "
                     "(.claude/, .git/, .mcp.json)")
         return None
-    return (f"{tool_name} outside the session's folder — a restricted turn "
+    return (f"{tool_name} outside the session's folder - a restricted turn "
             "writes only in its project and scratchpad")
 
 

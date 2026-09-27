@@ -345,7 +345,7 @@ def detect_auth(
     if _semver_tuple(version) < _AUTH_MIN_VERSION:
         return AuthStatus(
             logged_in=False, auth_method="unknown", source="version-gated",
-            error="binary predates 2.1.41 — upgrade to check",
+            error="binary predates 2.1.41 - upgrade to check",
         )
     try:
         r = subprocess.run(
@@ -399,7 +399,7 @@ def format_provenance(resolved: ResolvedClaude, auth: AuthStatus) -> list[str]:
     for other in resolved.others:
         lines.append(
             f"also found: {other.path} ({other.version}) "
-            "— set claude_path to override"
+            "- set claude_path to override"
         )
     return lines
 
@@ -616,7 +616,7 @@ def format_auth_notice(found_kinds: list[str], *, rejected: bool = False) -> str
         # sitting right where it should be.
         what = _with_article(found_kinds[0]) if found_kinds else "a credential"
         return (
-            f"\u26a0\ufe0f Claude rejected {what} — it has probably expired "
+            f"\u26a0\ufe0f Claude rejected {what} - it has probably expired "
             "or been revoked.\n\n" + fix
         )
     if not found_kinds:
@@ -631,7 +631,7 @@ def format_auth_notice(found_kinds: list[str], *, rejected: bool = False) -> str
         what = ", ".join(phrases[:-1]) + f" and {phrases[-1]}"
     return (
         f"\u26a0\ufe0f Claude isn't logged in, though I did find {what} on "
-        "this machine — Claude isn't picking it up.\n\n" + fix
+        "this machine - Claude isn't picking it up.\n\n" + fix
     )
 
 

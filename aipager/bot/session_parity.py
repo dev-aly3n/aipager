@@ -84,13 +84,13 @@ _DIFF_REASON_TEXT = {
     "git_not_installed": "git isn't available on this machine.",
     "not_a_git_repo": "[{label}]'s directory isn't a git repo.",
     "no_commits_yet": "[{label}]'s repo has no commits yet.",
-    "git_error": "Couldn't read the diff right now — try again.",
+    "git_error": "Couldn't read the diff right now - try again.",
 }
 
 _RESTART_REASON_TEXT = {
     "not_live": "[{label}] isn't running.",
     "already_restarting": "[{label}] is already restarting.",
-    "still_stopping": "[{label}] didn't stop in time — try again shortly.",
+    "still_stopping": "[{label}] didn't stop in time - try again shortly.",
     "launch_failed": "Restart failed for [{label}]: {err}",
 }
 
@@ -263,7 +263,7 @@ def _render_session_menu(
             "🗑️ Delete", callback_data=session_cb(bot, chat_id, sess, "delete"))])
     rows.append([InlineKeyboardButton(
         "✖️ Close", callback_data=session_cb(bot, chat_id, sess, "menu-close"))])
-    text = f"⋮ <b>{html_mod.escape(sess.label)}</b> — choose an action:"
+    text = f"⋮ <b>{html_mod.escape(sess.label)}</b> - choose an action:"
     if gone and not sess.claude_session_id:
         # Say why, rather than quietly showing a shorter menu — "where did
         # Resume go" is a worse question than a one-line answer.
@@ -665,7 +665,7 @@ def render_session_preferences_root(
         )])
     rows.append([InlineKeyboardButton("« Back", callback_data="_:spref")])
     text = (
-        f"👤 <b>Per-session preferences — [{html_mod.escape(sess.label)}]</b>\n\n"
+        f"👤 <b>Per-session preferences - [{html_mod.escape(sess.label)}]</b>\n\n"
         "Overrides this session's reply style. Unset fields fall back to "
         "this chat's /settings. ⭐ marks a field this session has overridden."
     )
@@ -704,7 +704,7 @@ def render_session_preferences_field(
     rows.append([InlineKeyboardButton("« Back", callback_data=cb_prefix)])
 
     text = (
-        f"{entry['title']} — for [<b>{html_mod.escape(sess.label)}</b>]\n\n"
+        f"{entry['title']} - for [<b>{html_mod.escape(sess.label)}</b>]\n\n"
         f"{entry['title']} this session uses, overriding this chat's own "
         "/settings just for it."
     )
@@ -732,7 +732,7 @@ async def _handle_spref_callback(
         sess = _resolve_pref_index(bot, chat_id, parts[0])
         if sess is None:
             await bot._safe_answer(
-                query, "This session is no longer available — reopen /settings.",
+                query, "This session is no longer available - reopen /settings.",
             )
             return True
         text, kb = render_session_preferences_root(
@@ -746,7 +746,7 @@ async def _handle_spref_callback(
         sess = _resolve_pref_index(bot, chat_id, idx_token)
         if sess is None:
             await bot._safe_answer(
-                query, "This session is no longer available — reopen /settings.",
+                query, "This session is no longer available - reopen /settings.",
             )
             return True
         rendered = render_session_preferences_field(
@@ -764,7 +764,7 @@ async def _handle_spref_callback(
         sess = _resolve_pref_index(bot, chat_id, idx_token)
         if sess is None:
             await bot._safe_answer(
-                query, "This session is no longer available — reopen /settings.",
+                query, "This session is no longer available - reopen /settings.",
             )
             return True
         user_id = query.from_user.id if getattr(query, "from_user", None) else None
@@ -819,7 +819,7 @@ async def maybe_handle_text(
     sess = bot.registry.get(pending["session_name"])
     if sess is None:
         await reply_text(update.message,
-            "⚠️ That session is no longer available — run /rename again.",
+            "⚠️ That session is no longer available - run /rename again.",
         )
         return True
 
@@ -1032,7 +1032,7 @@ async def handle_callback(
             # whether the task being destroyed is the one the operator was
             # looking at.
             await bot._safe_answer(
-                query, "That task already finished — reopen the menu")
+                query, "That task already finished - reopen the menu")
             return True
         await bot._safe_answer(query, f"Restarting {sess.label}...")
         outcome = await bot._restart_session_core(sess)

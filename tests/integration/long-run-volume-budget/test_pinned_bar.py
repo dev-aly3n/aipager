@@ -1363,7 +1363,7 @@ def test_answer_toast_when_the_resend_is_skipped(mk_bot, pbot, vloop, legacy):
     _wait(_session(bot, "s0"))
     pbot.skip["sendMessage"] = 1
     toasts = _answer_tap(bot, pbot, vloop)
-    assert "Busy — try again in a moment" in toasts
+    assert "Busy - try again in a moment" in toasts
     assert pbot.of("sendMessage") == []
 
 
@@ -1388,7 +1388,7 @@ def test_answer_toast_when_there_is_nothing_to_resend(
     s0.pending_prompt_msg = None
     update, toasts = _tap(pbot, button.callback_data)
     vloop.run_until_complete(bot._handle_callback(update, MagicMock()))
-    assert ("The prompt can't be re-sent — answer it in the terminal"
+    assert ("The prompt can't be re-sent - answer it in the terminal"
             in toasts), toasts
     assert pbot.calls == []
 

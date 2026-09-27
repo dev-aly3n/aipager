@@ -464,7 +464,7 @@ def test_the_switch_is_unconfirmed_when_the_model_never_changes(
             assert body["status"] == "unconfirmed"
             assert body["model"] == "Sonnet 5"
             assert body["requested"] == "claude-opus-5-5"
-            assert body["detail"].startswith("not confirmed — check the session")
+            assert body["detail"].startswith("not confirmed - check the session")
         finally:
             await client.close()
     run_async(_run())

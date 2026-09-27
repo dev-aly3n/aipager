@@ -317,7 +317,7 @@ class AuthMixin:
                         await reply_text(msg,
                             "🚫 You're not on this bot's allow-list. "
                             "Ask an admin to add your Telegram user ID "
-                            f"({tg_user.id}) to ~/.config/aipager/team.yaml — "
+                            f"({tg_user.id}) to ~/.config/aipager/team.yaml, "
                             "or `aipager config` → Review pending users.",
                         )
                     except Exception:
@@ -329,7 +329,7 @@ class AuthMixin:
             if msg is not None:
                 try:
                     await reply_text(msg,
-                        f"👀 {attribution_label(member)} — your role is "
+                        f"👀 {attribution_label(member)} - your role is "
                         "<i>read_only</i>; you can use <code>/status</code> "
                         "but can't drive sessions.",
                         parse_mode="HTML",
@@ -401,7 +401,7 @@ class AuthMixin:
             if msg is not None:
                 try:
                     await reply_text(msg,
-                        f"👀 {attribution_label(member)} — your role is "
+                        f"👀 {attribution_label(member)} - your role is "
                         f"<i>{html_mod.escape(member.role)}</i>; you can use "
                         "<code>/status</code> but can't drive sessions.",
                         parse_mode="HTML",

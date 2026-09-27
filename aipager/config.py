@@ -867,9 +867,9 @@ MODELS_BUTTON = "Model \u203a"
 # Claude Code's own model table (`claude --help` and its binary); `[1m]`
 # is its 1M-context suffix ("append [1m] to the model name").
 MODEL_CATALOG: tuple[tuple[str, str, str], ...] = (
-    ("Sonnet", "sonnet", "Balanced — the everyday default"),
-    ("Opus", "opus", "Most capable — deep reasoning, hardest problems"),
-    ("Haiku", "haiku", "Fastest and cheapest — quick edits and lookups"),
+    ("Sonnet", "sonnet", "Balanced - the everyday default"),
+    ("Opus", "opus", "Most capable - deep reasoning, hardest problems"),
+    ("Haiku", "haiku", "Fastest and cheapest - quick edits and lookups"),
     ("Fable", "fable", "Newest family alias"),
     ("OpusPlan", "opusplan", "Opus for planning, Sonnet to execute"),
     ("Opus 5.5", "claude-opus-5-5", ""),

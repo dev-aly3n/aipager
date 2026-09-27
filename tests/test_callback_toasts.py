@@ -152,7 +152,7 @@ def test_pin_answer_nothing_to_resend_is_shown(mk_bot):
     _session(bot, status=Status.INTERACTIVE)
     answers = _tap(bot, "claude-jim:pin_answer")
     assert answers.shown == [
-        "The prompt can't be re-sent — answer it in the terminal"], answers.calls
+        "The prompt can't be re-sent - answer it in the terminal"], answers.calls
 
 
 def test_pin_answer_skipped_resend_is_shown(mk_bot):
@@ -164,7 +164,7 @@ def test_pin_answer_skipped_resend_is_shown(mk_bot):
     bot._app.bot.send_message = AsyncMock(
         side_effect=FloodSkipped(CHAT, "sendMessage"))
     answers = _tap(bot, "claude-jim:pin_answer")
-    assert answers.shown == ["Busy — try again in a moment"], answers.calls
+    assert answers.shown == ["Busy - try again in a moment"], answers.calls
 
 
 def test_a_stale_prompt_surface_says_already_answered(mk_bot, monkeypatch):

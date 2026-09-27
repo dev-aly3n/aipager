@@ -44,16 +44,16 @@ def _http_json(url: str) -> tuple[dict | None, int | None, str]:
 
 def _explain_http_error(code: int | None, err: str) -> str:
     if code == 401:
-        return ("HTTP 401 — Telegram rejected the token. Generate a fresh one "
+        return ("HTTP 401 - Telegram rejected the token. Generate a fresh one "
                 "from @BotFather.")
     if code == 404:
-        return ("HTTP 404 — the bot token URL is malformed. Double-check the "
+        return ("HTTP 404 - the bot token URL is malformed. Double-check the "
                 "token you pasted.")
     if code == 429:
-        return ("HTTP 429 — Telegram is rate-limiting us. Wait a minute "
+        return ("HTTP 429 - Telegram is rate-limiting us. Wait a minute "
                 "and retry.")
     if code and code >= 500:
-        return f"HTTP {code} — Telegram API error. Probably transient; retry."
+        return f"HTTP {code} - Telegram API error. Probably transient; retry."
     if err.startswith("network:"):
         return f"can't reach api.telegram.org ({err[len('network:'):].strip()})"
     return err or "unknown error"

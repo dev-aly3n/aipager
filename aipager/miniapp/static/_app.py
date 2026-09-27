@@ -75,8 +75,9 @@ APP_JS = r"""
 
   function statusClass(s) { return "status status-" + s; }
 
-  // Server strings (reasons, details, hints, summaries) are shared with
-  // the chat and may carry an em dash; the page shows a plain hyphen.
+  // Server strings (reasons, details, hints, summaries) can still carry
+  // an em dash from text aipager passes through (Claude's summaries, tool
+  // text, error details); the page shows a plain hyphen.
   function plain(s) {
     if (s === null || s === undefined) { return ""; }
     return String(s).replace(/ \u2014 /g, " - ").replace(/\u2014/g, "-");
@@ -1872,14 +1873,15 @@ APP_JS = r"""
   var openGroups = Object.create(null);
 
   // Schema text is shared with /settings in the chat, where titles lead
-  // with an emoji and labels carry an em dash ("Off \u2014 busy card only").
-  // The page has its own line icons and shows a plain hyphen, so titles
-  // lose the leading emoji and the collapsed header shows only the lead
-  // of a label ("Off"); the row keeps the whole label.
+  // with an emoji and labels carry a separator ("Off - busy card only").
+  // The page has its own line icons, so titles lose the leading emoji and
+  // the collapsed header shows only the lead of a label ("Off"); the row
+  // keeps the whole label.
   function groupTitle(s) { return plain(s).replace(/^[^A-Za-z0-9]+\s+/, ""); }
   function labelLead(s) {
     var t = String(s === null || s === undefined ? "" : s);
-    var cut = t.indexOf(" \u2014 ");
+    var cut = t.indexOf(" - ");
+    if (cut < 0) { cut = t.indexOf(" \u2014 "); }
     return plain(cut > 0 ? t.slice(0, cut) : t);
   }
 

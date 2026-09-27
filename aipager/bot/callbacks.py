@@ -227,13 +227,13 @@ class CallbackDispatchMixin:
             # running — and this path kills and relaunches it.
             # `tapped_msg_id=None` (the /perms command path) fails
             # open, as does an idle session with no busy card.
-            await edit_fn("⚠️ That task already finished — run /perms again")
+            await edit_fn("⚠️ That task already finished - run /perms again")
             return
         outcome = await self._perms_switch_core(sess, target_skip_perms)
 
         if outcome.reason == "still_stopping":
             await edit_fn(
-                f"⚠️ <b>{html_mod.escape(label)}</b> is still stopping — "
+                f"⚠️ <b>{html_mod.escape(label)}</b> is still stopping - "
                 f"mode not changed. Try /perms again in a moment.",
                 parse_mode="HTML",
             )
@@ -515,7 +515,7 @@ class CallbackDispatchMixin:
                 # ever strips its keyboard, unlike the busy card. So an old
                 # one destroys whatever is running when it is finally tapped.
                 await self._safe_answer(
-                    query, "That task already finished — run /kill again")
+                    query, "That task already finished - run /kill again")
                 return
             await self._safe_answer(query, f"Killing {sess.label}...")
             await self._kill_session_by_label(query, sess.label)
@@ -532,7 +532,7 @@ class CallbackDispatchMixin:
                 # ever strips its keyboard, unlike the busy card. So an old
                 # one destroys whatever is running when it is finally tapped.
                 await self._safe_answer(
-                    query, "That task already finished — run /kill again")
+                    query, "That task already finished - run /kill again")
                 return
             await self._safe_answer(query, f"Killing {sess.label}...")
             await self._kill_session_by_label(query, sess.label)
@@ -599,7 +599,7 @@ class CallbackDispatchMixin:
                 log.info("[%s] Retry refused — chat %s is flood-muted until %s",
                          sess.label, chat_muted, until)
                 await self._safe_answer(
-                    query, "Telegram is rate-limiting this chat — try again "
+                    query, "Telegram is rate-limiting this chat - try again "
                     f"after {until}")
                 return
             if not await inject.is_alive(session_name):
@@ -624,7 +624,7 @@ class CallbackDispatchMixin:
                 # answered. `last_prompt` is untouched, so nothing is lost.
                 try:
                     await edit_message(query.message,
-                        f"{original_text}\n\n⏸ Not retried — a prompt is "
+                        f"{original_text}\n\n⏸ Not retried - a prompt is "
                         "open. Answer it, then tap Retry again.",
                         reply_markup=query.message.reply_markup,
                     )
@@ -739,7 +739,7 @@ class CallbackDispatchMixin:
             if action == "perms_wait":
                 try:
                     await edit_text(query,
-                        f"⏳ Cancelled — try /perms again when "
+                        f"⏳ Cancelled - try /perms again when "
                         f"<b>{html_mod.escape(label)}</b> is idle.",
                         parse_mode="HTML",
                     )
@@ -780,7 +780,7 @@ class CallbackDispatchMixin:
                     # `pending` is None.
                     await self._safe_answer(
                         query,
-                        "That task already finished — run /perms again")
+                        "That task already finished - run /perms again")
                     return
                 # BUSY: send Ctrl-C, then poll for socket disappearance.
                 # Same deliberate outage as the IDLE path — the session is
@@ -793,7 +793,7 @@ class CallbackDispatchMixin:
                 if outcome.reason == "still_stopping":
                     try:
                         await edit_text(query,
-                            f"⚠️ <b>{html_mod.escape(label)}</b> is still stopping — "
+                            f"⚠️ <b>{html_mod.escape(label)}</b> is still stopping - "
                             f"mode not changed. Try /perms again in a moment.",
                             parse_mode="HTML",
                         )
@@ -901,7 +901,7 @@ class CallbackDispatchMixin:
             if action == "new_cancel":
                 try:
                     await edit_text(query,
-                        "↩️ Cancelled — no session changed.",
+                        "↩️ Cancelled - no session changed.",
                     )
                 except Exception:
                     pass
@@ -981,7 +981,7 @@ class CallbackDispatchMixin:
                     # dropped, so a stale tap destroys a live session with
                     # no path back to it.
                     await self._safe_answer(
-                        query, "That task already finished — run /new again")
+                        query, "That task already finished - run /new again")
                     return
                 # Kill alive socket first, then launch fresh (no resume_id).
                 if sess and sess.status != Status.GONE:
@@ -1355,7 +1355,7 @@ class CallbackDispatchMixin:
                 else:
                     verb = ACTION_VERBS["allow"]
                     answer_text = (
-                        f"No always-rule for this command — allowed once [{sess.label}]"
+                        f"No always-rule for this command - allowed once [{sess.label}]"
                     )
                     log.info("[%s] allow_always degraded to a single allow "
                              "(always_available=%r)", sess.label,
@@ -1381,7 +1381,7 @@ class CallbackDispatchMixin:
                 via = "keystroke_fallback"
                 verb = ACTION_VERBS["allow"]
                 answer_text = (
-                    f"No always-rule for this command — allowed once [{sess.label}]"
+                    f"No always-rule for this command - allowed once [{sess.label}]"
                 )
                 log.info("[%s] allow_always degraded to a single allow "
                          "(always_available=%r)", sess.label,

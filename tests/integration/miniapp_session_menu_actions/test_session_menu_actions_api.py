@@ -48,7 +48,7 @@ READONLY_ID = 888       # neither bypass_safety NOR can_prompt
 OUTSIDER_ID = 999        # member of no scope at all
 FOREIGN_MEMBER_ID = 321  # a real member, but of the OTHER scope
 
-QUEUE_FULL_DETAIL = "Queue is full (50 pending) — clear it or wait for it to drain."
+QUEUE_FULL_DETAIL = "Queue is full (50 pending) - clear it or wait for it to drain."
 # The POST route's 403 `detail` and the GET actions dict's `reason` for
 # the SAME refusal are two distinct strings per entrypoints.md — the
 # route table says "Auto mode requires admin." while the actions-object

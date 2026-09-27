@@ -39,7 +39,7 @@ def _step_token(step_label: str = "[1/5]") -> tuple[str, str]:
         ))
         token = _normalize_token(raw)
         if not token:
-            err_console.print("  [err]empty — try again[/err]")
+            err_console.print("  [err]empty - try again[/err]")
             continue
         with _spin("Verifying with Telegram…"):
             info = _verify_token(token)
@@ -47,7 +47,7 @@ def _step_token(step_label: str = "[1/5]") -> tuple[str, str]:
             err_console.print("  [hint]Try again or Ctrl-C to exit.[/hint]")
             continue
         username = info.get("username") or "your_bot"
-        ok(f"Verified — @{username}")
+        ok(f"Verified - @{username}")
         return token, username
 
 
@@ -110,7 +110,7 @@ def _step_chat_id(
         else:
             hint(detect_hint)
             _ask(questionary.confirm(
-                "Sent — continue?",
+                "Sent - continue?",
                 default=True, qmark="?", style=_PROMPT_STYLE,
             ))
             with _spin(spinner_msg):
@@ -123,7 +123,7 @@ def _step_chat_id(
                 else:
                     target = "group /start" if mode == "team" else "DM"
                     err_console.print(
-                        f"  [err]No {target} detected — try again.[/err]"
+                        f"  [err]No {target} detected - try again.[/err]"
                     )
                 continue
             cid = found_id
@@ -134,28 +134,28 @@ def _step_chat_id(
             sent, err = _test_send(token, cid)
 
         if sent:
-            ok(f"chat_id={cid} — test message delivered.")
+            ok(f"chat_id={cid} - test message delivered.")
             confirmed = _ask(questionary.confirm(
                 "Did the test message arrive in your Telegram?",
                 default=True, qmark="?", style=_PROMPT_STYLE,
             ))
             if confirmed:
                 return cid
-            hint("Let's try again — the message went somewhere unexpected.")
+            hint("Let's try again - the message went somewhere unexpected.")
             continue
 
         if _CHAT_NOT_FOUND_RE.search(err):
             err_console.print(f"  [err]Telegram says: {err}[/err]")
-            hint(f"You haven't started @{bot_username} yet — open it:")
+            hint(f"You haven't started @{bot_username} yet - open it:")
             hint(f"  https://t.me/{bot_username}")
             _ask(questionary.confirm(
-                "I've tapped Start in Telegram — retry?",
+                "I've tapped Start in Telegram - retry?",
                 default=True, qmark="?", style=_PROMPT_STYLE,
             ))
             with _spin("Retrying test send…"):
                 sent2, err2 = _test_send(token, cid)
             if sent2:
-                ok(f"chat_id={cid} — test message delivered.")
+                ok(f"chat_id={cid} - test message delivered.")
                 return cid
             err_console.print(f"  [err]Still failing: {err2}[/err]")
             continue
@@ -173,7 +173,7 @@ def _completion_screen() -> None:
         "  Start the daemon:    [path]aipager start[/path]",
         "  Launch a session:    [path]aipager session dev[/path]",
         "  Health check:        [path]aipager doctor[/path]",
-        "  Mini App:             on — opens a public tunnel "
+        "  Mini App:             on - opens a public tunnel "
         "([path]aipager miniapp disable[/path] to turn off)",
     ]
     body = "\n".join(lines)
@@ -188,7 +188,7 @@ def _completion_screen() -> None:
         console.print("  Start the daemon:    aipager start")
         console.print("  Launch a session:    aipager session dev")
         console.print("  Health check:        aipager doctor")
-        console.print("  Mini App:             on — opens a public tunnel "
+        console.print("  Mini App:             on - opens a public tunnel "
                       "(aipager miniapp disable to turn off)")
 
 
@@ -208,7 +208,7 @@ def _grant_owner_step(chat_id: int, step_label: str = "[3/4]") -> str:
     )
     console.print(
         "[muted]   daemon manipulation · reading every file · nested "
-        "claude · config edits — the safety boundary does not apply.[/muted]"
+        "claude · config edits - the safety boundary does not apply.[/muted]"
     )
     console.print(
         "[muted]   Grant only to yourself or someone you'd hand an SSH "
@@ -233,7 +233,7 @@ def _commit_owner_dm(token: str, chat_id: int, role: str) -> None:
         members=(Member(id=chat_id, label="owner", role=role),),
     )
     commit_scope(scope, token)
-    ok(f"Wrote aipager.yaml — your DM, role {role}.")
+    ok(f"Wrote aipager.yaml - your DM, role {role}.")
     if role == "owner":
         try:
             from aipager import audit
@@ -252,21 +252,21 @@ def _step_default_mode(step_label: str = "[5/5]") -> str:
     step(f"{step_label}  Default session mode")
     console.print()
     console.print(
-        "[muted]  💬 Ask  — Claude prompts before each tool call (recommended).[/muted]"
+        "[muted]  💬 Ask  - Claude prompts before each tool call (recommended).[/muted]"
     )
     console.print(
-        "[muted]  🤖 Auto — Claude runs tools without prompting "
+        "[muted]  🤖 Auto - Claude runs tools without prompting "
         "(<code>--dangerously-skip-permissions</code>).[/muted]"
     )
     console.print()
     ask_choice = questionary.Choice(
-        "💬 Ask — Claude prompts for each tool call", value="ask")
+        "💬 Ask - Claude prompts for each tool call", value="ask")
     mode = _ask(questionary.select(
         "Default mode for new sessions:",
         choices=[
             ask_choice,
             questionary.Choice(
-                "🤖 Auto — Claude runs tools without prompting", value="auto"),
+                "🤖 Auto - Claude runs tools without prompting", value="auto"),
         ],
         default=ask_choice,
         qmark="?",
@@ -327,7 +327,7 @@ def _first_run_flow() -> int:
             ))
             if not cont:
                 friendly_warn(
-                    "Setup aborted — install the missing dependencies and "
+                    "Setup aborted - install the missing dependencies and "
                     "re-run `aipager config`.",
                 )
                 return 2

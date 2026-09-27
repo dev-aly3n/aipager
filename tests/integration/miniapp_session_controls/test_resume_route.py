@@ -26,7 +26,7 @@ from .conftest import (
     _mk_session,
 )
 
-NO_TRANSCRIPT_REASON = "No resumable transcript — start a fresh session instead."
+NO_TRANSCRIPT_REASON = "No resumable transcript - start a fresh session instead."
 
 
 def _mock_launch(monkeypatch, *, ok, err=""):

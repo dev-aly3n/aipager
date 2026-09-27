@@ -160,7 +160,7 @@ def test_kill_still_alive_returns_409(server, run_async, monkeypatch):
             body = await resp.json()
             assert body["error"] == "still_running"
             assert body["detail"] == (
-                "Could not kill — the process is still running. Try again."
+                "Could not kill - the process is still running. Try again."
             )
         finally:
             await client.close()

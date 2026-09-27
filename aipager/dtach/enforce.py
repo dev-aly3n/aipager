@@ -370,7 +370,7 @@ def _decide(data: dict) -> dict | None:
     if _turn_already_blocked(data.get("transcript_path")):
         return {
             "tool": tool_name,
-            "reason": ("session halted — a prior tool call this turn was "
+            "reason": ("session halted - a prior tool call this turn was "
                        "blocked by safety policy; start a new request"),
         }
 

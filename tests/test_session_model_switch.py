@@ -187,7 +187,7 @@ def test_telegram_feedback_says_unconfirmed_on_timeout(run_async, mk_bot):
     msg.edit_text = AsyncMock()
     run_async(bot._confirm_model_feedback(msg, sess, "Sonnet 5", "HEAD", timeout=0.1))
     text = msg.edit_text.await_args.args[0]
-    assert "not confirmed — check the session" in text
+    assert "not confirmed - check the session" in text
 
 
 def _stub_pty(monkeypatch):

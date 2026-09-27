@@ -159,7 +159,7 @@ What you see:
   climb past 0.5 calls/s (`FLOOD_WARNED_CEILING`), and it climbs back
   slowly. `aipager status` shows it:
   `Telegram chat 123: rate 0.25/s (ceiling 0.50/s), 212/1200 calls in the
-  last hour (as of 18s ago), 7/30 in the last minute — warning regime,
+  last hour (as of 18s ago), 7/30 in the last minute - warning regime,
   5h 52m left`.
 
 Nothing to do. It clears itself. The backoff line disappears once the
@@ -204,7 +204,7 @@ one that has not, and it earns its speed back over the following hours.
 
 If a chat's rate falls below 0.2 calls/s — or its hourly budget's share
 for cards and bubbles is spent — it enters **minimal mode**: busy cards
-stop animating and show one static `⏳ working — updates paused` line,
+stop animating and show one static `⏳ working (updates paused)` line,
 the typing bubble stops, and the pinned status bar shows
 `⏸ card updates paused (hourly limit)` (or `(rate limit)` when the rate
 is what put the chat there) and otherwise stops changing until it lifts.
@@ -230,8 +230,8 @@ What you see:
   `flood mute on chat … lifted` line.
 - `aipager status` also shows the chat's state in full:
   `Telegram chat 123: rate 0.05/s (ceiling 0.50/s), 431/600 calls in the
-  last hour (as of 12s ago) — MINIMAL MODE, card updates paused —
-  flood-muted until 09:41 — warning regime, 5h 59m left (1 ban(s) in the
+  last hour (as of 12s ago) - MINIMAL MODE, card updates paused -
+  flood-muted until 09:41 - warning regime, 5h 59m left (1 ban(s) in the
   last 7 days)`.
 
 The daemon mutes the chat for exactly the time Telegram asked and makes
@@ -555,7 +555,7 @@ refuse, and name the reason, for:
 
 A pipx install made from a local path (`pipx install /path/to/aipager`)
 upgrades from that same path, not from PyPI. `/update` says
-`already at A — this pipx install upgrades from the local path …`. Pull
+`already at A - this pipx install upgrades from the local path …`. Pull
 or check out the new version there first, or switch to PyPI with
 `pipx install --force aipager`. (The voice extra's install button uses
 `pipx install --force aipager[voice]`, which also switches a local-path

@@ -48,7 +48,7 @@ _WAITING_STATUS = "waiting"
 # server.py's Resume 409 body (design.md file-by-file plan), so the
 # pre-check reason and the enforced refusal always read identically —
 # one string, not two that could drift apart.
-NO_TRANSCRIPT_REASON = "No resumable transcript — start a fresh session instead."
+NO_TRANSCRIPT_REASON = "No resumable transcript - start a fresh session instead."
 NO_PERMISSION_REASON = "You don't have permission to control this session."
 # Shared verbatim between session_actions()'s client-facing reason and the
 # corresponding write route's refusal body (entrypoints.md), same rationale
@@ -66,19 +66,19 @@ QUEUE_EMPTY_REASON = "Nothing queued to clear."
 # that turn and can raise Claude Code's "Switch model?" confirmation on
 # top of it, where the daemon cannot see it.
 MODEL_SWITCH_BUSY_REASON = (
-    "Claude is working — switch the model when this turn ends."
+    "Claude is working - switch the model when this turn ends."
 )
 MODEL_SWITCH_PROMPT_OPEN_REASON = (
-    "A prompt is open in the terminal — answer it before switching the model."
+    "A prompt is open in the terminal - answer it before switching the model."
 )
 MODEL_SWITCH_NOT_LIVE_REASON = "Session isn't running."
 # UNKNOWN is the state right after a daemon restart, before the monitor
 # has looked: aipager does not yet know whether a turn is running.
 MODEL_SWITCH_UNKNOWN_REASON = (
-    "aipager hasn't seen this session's state yet — try again in a moment."
+    "aipager hasn't seen this session's state yet - try again in a moment."
 )
 MODEL_SWITCH_PENDING_REASON = (
-    "The last model switch isn't confirmed yet — check the terminal for "
+    "The last model switch isn't confirmed yet - check the terminal for "
     "Claude Code's \"Switch model?\" question before switching again."
 )
 # What the page and the chat say when the statusline never reported a new
@@ -88,11 +88,11 @@ MODEL_SWITCH_PENDING_REASON = (
 # a Claude Code older than 2.1.251, or an `opusplan` switch that asks the
 # hook twice, still shows it — and keystrokes are never guessed at it.
 MODEL_SWITCH_UNCONFIRMED = (
-    "not confirmed — check the session. Claude Code may be asking "
+    "not confirmed - check the session. Claude Code may be asking "
     "\"Switch model?\" in the terminal, or it was already on that model."
 )
 QUEUE_FULL_REASON = (
-    f"Queue is full ({QUEUE_CAP} pending) — clear it or wait for it to drain."
+    f"Queue is full ({QUEUE_CAP} pending) - clear it or wait for it to drain."
 )
 # design.md Decision 6 — the Mini App's own unavailable-with-reason
 # mechanism, reused verbatim rather than adding new client code. Greys
@@ -101,7 +101,7 @@ QUEUE_FULL_REASON = (
 # (a human tapping a button whose tap does nothing). A UI affordance
 # only — the server-side POST route is unaffected (session_ops.py's
 # `_compact_session_core` still accepts it regardless of context_pct).
-NO_CONTEXT_REASON = "Nothing to compact — context is already empty."
+NO_CONTEXT_REASON = "Nothing to compact - context is already empty."
 
 
 def _derive_status(sess: "TrackedSession") -> tuple[str, str | None, str | None]:

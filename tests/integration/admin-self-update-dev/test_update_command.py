@@ -278,7 +278,7 @@ def test_update_is_registered_and_in_help(mk_bot):
     assert "update" in names
     import inspect
     from aipager.bot import handlers
-    assert "/update — update aipager and Claude Code (admin)" in inspect.getsource(
+    assert "/update - update aipager and Claude Code (admin)" in inspect.getsource(
         handlers.CommandHandlersMixin._handle_start_cmd)
 
 

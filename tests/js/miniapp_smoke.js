@@ -214,10 +214,12 @@ global.Telegram = undefined;
 // controls").
 const SCENARIO = SCENARIO_ARG;
 
-// Mirrors aipager.miniapp.sessions.NO_TRANSCRIPT_REASON verbatim — this
+// Mirrors aipager.miniapp.sessions.NO_TRANSCRIPT_REASON — this
 // harness has no Python import, so the string is duplicated here on
 // purpose; a mismatch would only ever show up as a failing assertion
-// below, never silently.
+// below, never silently. It (and the other mirrored reasons below) keeps
+// the em dash the server dropped in roadmap 8.54, standing in for
+// pass-through text, so the page's plain() stays exercised.
 const NO_TRANSCRIPT_REASON =
   "No resumable transcript — start a fresh session instead.";
 // The page shows server strings with " - " in place of an em dash
@@ -369,7 +371,8 @@ Object.assign(SESSION_DETAIL_FIXTURES, {
 });
 
 // ---- running-session model picker (roadmap 8.35) ---------------------
-// Mirrors aipager.miniapp.sessions.MODEL_SWITCH_BUSY_REASON verbatim.
+// Mirrors aipager.miniapp.sessions.MODEL_SWITCH_BUSY_REASON (em dash kept,
+// see NO_TRANSCRIPT_REASON).
 const MODEL_SWITCH_BUSY_REASON =
   "Claude is working — switch the model when this turn ends.";
 function modelDetailFor(status, modelSwitch) {
@@ -540,8 +543,9 @@ if (SCENARIO.indexOf("scope_save") === 0) {
 
 // ---- server schema text shown plain (roadmap 8.44) --------------------
 // The schema comes from pytest (AIPAGER_TEST_SCHEMA): the real
-// settings_schema() output, emoji titles and em-dash labels as /settings
-// shows them in the chat, plus a probe group that always carries both.
+// settings_schema() output, emoji titles and " - " labels as /settings
+// shows them in the chat, plus a probe group that carries an emoji title
+// and em dashes.
 if (SCENARIO === "schema_plain") {
   const REAL = JSON.parse(fs.readFileSync(process.env.AIPAGER_TEST_SCHEMA, "utf8"));
   const scopeVals = {}, sessVals = {};
@@ -1922,7 +1926,7 @@ function checkSchemaPlain(where, host, schema) {
   host.children.forEach((g, i) => {
     const title = g.children[0].children[0].textContent;
     if (!/^[A-Za-z0-9]/.test(title)) fail(where + " title keeps its emoji: " + JSON.stringify(title));
-    const lead = schema[i].options[0].label.split(" \u2014 ")[0];
+    const lead = schema[i].options[0].label.split(/ - | \u2014 /)[0];
     const shown = g.children[0].children[1].textContent;
     if (shown !== lead) fail(where + " header shows " + JSON.stringify(shown) +
                              ", want the label's lead " + JSON.stringify(lead));

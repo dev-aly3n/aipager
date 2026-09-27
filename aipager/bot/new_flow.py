@@ -463,7 +463,7 @@ async def start_wizard(
         try:
             await edit_text_at(bot._app.bot,
                 chat_id=chat_id, message_id=old["msg_id"],
-                text="↩️ Cancelled — started over.", reply_markup=None,
+                text="↩️ Cancelled - started over.", reply_markup=None,
             )
         except Exception:
             log.debug("new_flow: failed to strip old wizard message", exc_info=True)
@@ -732,7 +732,7 @@ async def _handle_path_token(
         if not parent:
             await bot._safe_answer(
                 query,
-                "No directory available yet — start a session from a "
+                "No directory available yet - start a session from a "
                 "real project directory first.",
                 show_alert=True,
             )
@@ -811,7 +811,7 @@ async def _confirm(
         # rather than silently downgrading to Ask.
         await _goto_mode(
             bot, chat_id, pending,
-            note="Your permissions changed — pick a mode again.",
+            note="Your permissions changed - pick a mode again.",
         )
         return
 

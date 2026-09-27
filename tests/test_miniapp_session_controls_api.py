@@ -194,7 +194,7 @@ def test_stop_idle_session_returns_409_not_busy_and_sends_no_mirror(
             body = await resp.json()
             assert body == {
                 "error": "not_busy",
-                "detail": "This session isn't busy right now — nothing to stop.",
+                "detail": "This session isn't busy right now - nothing to stop.",
             }
             assert send.await_count == 0
         finally:
@@ -308,7 +308,7 @@ def test_kill_still_running_returns_409_and_session_survives(
             assert resp.status == 409
             assert await resp.json() == {
                 "error": "still_running",
-                "detail": "Could not kill — the process is still running. Try again.",
+                "detail": "Could not kill - the process is still running. Try again.",
             }
             assert server.registry.get("claude-dev") is not None
             assert send.await_count == 0

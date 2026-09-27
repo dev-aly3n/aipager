@@ -38,15 +38,15 @@ _LAYOUT_LABELS = {
 }
 _LAYOUT_ORDER = ("card", "merged", "replace")
 
-_FORMATTING_LABELS = {False: "Off — default formatting", True: "On — plain prose only"}
+_FORMATTING_LABELS = {False: "Off - default formatting", True: "On - plain prose only"}
 _FORMATTING_ORDER = (False, True)
 
-_DIFFS_LABELS = {False: "Off — busy card only", True: "On — a diff message per edit"}
+_DIFFS_LABELS = {False: "Off - busy card only", True: "On - a diff message per edit"}
 _DIFFS_ORDER = (False, True)
 
 # On first: it is the default, and the one that keeps a long turn cheap.
-_CADENCE_LABELS = {True: "On — slow down as a turn gets long",
-                   False: "Off — same pace for the whole turn"}
+_CADENCE_LABELS = {True: "On - slow down as a turn gets long",
+                   False: "Off - same pace for the whole turn"}
 _CADENCE_ORDER = (True, False)
 
 _LENGTH_LABELS = {
@@ -84,13 +84,13 @@ _OPTION_HELP = {
     ("layout", "replace"): "The busy card is replaced by the answer alone.",
     ("diffs", False): "File edits show only as rows on the busy card.",
     ("diffs", True): "Each Write/Edit is also posted as its own diff message under the busy card.",
-    ("cadence", True): ("The card refreshes less often as a turn runs on — every 10 s "
-                        "after 2 min, 30 s after 10 min, a minute after an hour — and "
+    ("cadence", True): ("The card refreshes less often as a turn runs on (every 10 s "
+                        "after 2 min, 30 s after 10 min, a minute after an hour) and "
                         "counts in minutes, so it never looks frozen. A state change "
                         "still shows at once."),
     ("cadence", False): "The card refreshes at the same pace for the whole turn, however long.",
     ("formatting", False): "Claude formats replies however it likes.",
-    ("formatting", True): "Plain prose and dashed lists only — no tables or code blocks.",
+    ("formatting", True): "Plain prose and dashed lists only - no tables or code blocks.",
     ("length", "none"): "No length guidance at all.",
     ("length", "xshort"): "One or two sentences. No preamble, no summary.",
     ("length", "short"): "A few sentences.",
@@ -208,7 +208,7 @@ _SECTION_INTRO = {
     "layout": "How a finished turn appears in the chat.",
     "diffs": (
         "Whether each file edit is posted as a separate diff message under "
-        "the busy card. Off keeps one busy card and one answer — the card "
+        "the busy card. Off keeps one busy card and one answer - the card "
         "still lists every edit, and the Mini App has a diff viewer."
     ),
     "cadence": (
@@ -218,7 +218,7 @@ _SECTION_INTRO = {
         "Off keeps the first-minutes pace for the whole turn."
     ),
     "formatting": (
-        "When ON, replies use plain prose and simple dashed lists only — "
+        "When ON, replies use plain prose and simple dashed lists only - "
         "no tables, code blocks, headings, or bold/italics."
     ),
     "length": "How long Claude's replies should be.",

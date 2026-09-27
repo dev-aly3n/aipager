@@ -196,7 +196,7 @@ def _resume_picker_loop() -> int:
         start = page * page_size
         chunk = gone[start:start + page_size]
         print()
-        print(f"Previous sessions — page {page + 1}/{total_pages} "
+        print(f"Previous sessions - page {page + 1}/{total_pages} "
               f"({len(gone)} total)")
         print()
         for i, sd in enumerate(chunk, start=1):
@@ -207,7 +207,7 @@ def _resume_picker_loop() -> int:
             row = f"  {i:>2}. {label:<20} {ago}"
             if preview:
                 snippet = preview[:60] + ("…" if len(preview) > 60 else "")
-                row += f"  — {snippet}"
+                row += f"  - {snippet}"
             print(row)
         print()
         prompt = "Pick a number"

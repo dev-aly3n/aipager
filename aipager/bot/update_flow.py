@@ -742,7 +742,7 @@ class UpdateManager:
                 {fut}, timeout=max(0.01, float(self_update.PROGRESS_EDIT_MIN_SECONDS)))
             if done:
                 return fut.result()
-            job.live = f"⏳ {label} — still working{_elapsed_label(time.monotonic() - started)}"
+            job.live = f"⏳ {label} - still working{_elapsed_label(time.monotonic() - started)}"
             await self._report(job, ornament=True)
 
     # ---- Claude Code -------------------------------------------------------
@@ -757,7 +757,7 @@ class UpdateManager:
                 if s.status != Status.GONE}
         others = len(set(everyone) - set(mine))
         lines = ["Running sessions keep the old version until they are "
-                 "restarted — none was restarted."]
+                 "restarted - none was restarted."]
         if mine:
             lines.append("Still on the old version: " + ", ".join(
                 _esc(s.label or s.name) for _, s in sorted(mine.items())))
@@ -845,7 +845,7 @@ class UpdateManager:
         if plan.automatic:
             if await self._wait_gate(job) == "cancel":
                 self._finish(job, "cancelled",
-                             "↩️ <b>aipager</b> update cancelled — nothing was installed.")
+                             "↩️ <b>aipager</b> update cancelled - nothing was installed.")
                 return False
 
         job.phase = "upgrading"
@@ -1088,7 +1088,7 @@ class UpdateManager:
                      job.id, new)
             self._finish(job, "done",
                          "✅ <b>aipager</b> upgrade finished; the daemon is shutting "
-                         "down, so nothing was restarted — the next start runs what "
+                         "down, so nothing was restarted - the next start runs what "
                          "is installed.")
             return
         self._installed_at_shutdown(job, running, new)
@@ -1106,7 +1106,7 @@ class UpdateManager:
             log.warning("update.shutdown.marker_failed job=%s", job.id, exc_info=True)
         self._finish(job, "done",
                      f"✅ <b>aipager</b> {_esc(running)} → {_esc(new)} installed; the "
-                     f"daemon is shutting down, so nothing was restarted — the next "
+                     f"daemon is shutting down, so nothing was restarted - the next "
                      f"start runs {_esc(new)}.")
 
     def _shutdown_section(self, job: _Job) -> str:
@@ -1230,7 +1230,7 @@ class UpdateManager:
             log.warning("update.restart.timer_stop_failed job=%s", job.id, exc_info=True)
         self_update.clear_marker()
         self._release_lock(job)
-        job.sections.append("⚠️ The scheduled restart did not happen — the new version "
+        job.sections.append("⚠️ The scheduled restart did not happen - the new version "
                             "is installed but the old one is still running. Restart it "
                             f"yourself: <code>systemctl --user restart "
                             f"{self_update.UNIT_NAME}</code>")
@@ -1243,12 +1243,12 @@ def _origin_explanation(source: install_source.InstallSource, chat_id) -> str:
     show = isinstance(chat_id, int) and chat_id > 0
     if source.origin == "local":
         where = f" {source.origin_detail}" if show and source.origin_detail else ""
-        return (f" — this {source.kind} install upgrades from the local path{_esc(where)}, "
+        return (f" - this {source.kind} install upgrades from the local path{_esc(where)}, "
                 "which still has the same version. Update that checkout first.")
     if source.origin == "vcs":
-        return f" — this {source.kind} install upgrades from its git source, which has nothing newer."
+        return f" - this {source.kind} install upgrades from its git source, which has nothing newer."
     if source.origin == "index":
-        return " — the package index has nothing newer."
+        return " - the package index has nothing newer."
     return "."
 
 
@@ -1330,7 +1330,7 @@ async def handle_callback(bot: "TelegramBot", update, query, session_name: str,
     mgr = bot.updates
     if verb == "x" and len(parts) == 1:
         try:
-            await edit_text(query, "↩️ Update cancelled — nothing changed.")
+            await edit_text(query, "↩️ Update cancelled - nothing changed.")
         except Exception:
             log.debug("update cancel edit failed", exc_info=True)
         return True

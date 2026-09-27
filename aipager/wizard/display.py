@@ -98,7 +98,7 @@ def _show_current_config() -> None:
                 f"{n} member{'s' if n != 1 else ''}{deny_txt}"
             )
             for m in s.members:
-                lines.append(f"   • [path]{m.label}[/path] — {m.role}")
+                lines.append(f"   • [path]{m.label}[/path] ({m.role})")
 
     if token:
         lines.append(f"[title]Token:[/title]  {mask_token(token)}")

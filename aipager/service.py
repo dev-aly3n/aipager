@@ -141,7 +141,7 @@ def _resolve_aipager_bin() -> str:
         if _is_exe(cand):
             return str(cand)
     raise FileNotFoundError(
-        "aipager not on PATH — install via pipx/brew/pip before running "
+        "aipager not on PATH - install via pipx/brew/pip before running "
         "`aipager service install`"
     )
 
@@ -318,7 +318,7 @@ def ensure_daemon_env() -> Path:
 
     _write_daemon_env("")
     friendly_warn(
-        "No Claude credential found — wrote an empty daemon.env.",
+        "No Claude credential found - wrote an empty daemon.env.",
         "  If sessions can't authenticate once the service starts, add a",
         "  CLAUDE_CODE_OAUTH_TOKEN=... or ANTHROPIC_API_KEY=... line to",
         f"  {DAEMON_ENV_PATH}, or run `aipager doctor --fix`.",
@@ -491,7 +491,7 @@ def _post_install_probe() -> None:
 def _install_macos(*, yes: bool = False) -> int:
     if shutil.which("launchctl") is None:
         friendly_error(
-            "launchctl not on PATH — this doesn't look like macOS.",
+            "launchctl not on PATH - this doesn't look like macOS.",
             "  Run `aipager start` under tmux/screen instead.",
         )
         return 2

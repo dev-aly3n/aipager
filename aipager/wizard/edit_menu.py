@@ -115,7 +115,7 @@ def _edit_scope(scope, token: str) -> bool:
         return False
     if not remove_scope(scope.chat_id):
         friendly_warn(
-            "Can't remove the only scope — at least one must remain. "
+            "Can't remove the only scope - at least one must remain. "
             "Add another scope first, or re-run setup.",
         )
         return False
@@ -126,7 +126,7 @@ def _edit_scope(scope, token: str) -> bool:
 def _edit_member(scope, token: str) -> bool:
     """Set role / edit per-user deny_tools / remove a member."""
     choices = [
-        questionary.Choice(f"{m.label} — {m.role}", value=m.id)
+        questionary.Choice(f"{m.label} ({m.role})", value=m.id)
         for m in scope.members
     ]
     choices.append(questionary.Choice("Cancel", value=None))
@@ -174,13 +174,13 @@ def _edit_member(scope, token: str) -> bool:
     # remove
     if scope.kind == "dm":
         friendly_warn(
-            "A DM scope is one person — remove the whole scope instead "
+            "A DM scope is one person - remove the whole scope instead "
             "(Edit a scope → Remove this scope).",
         )
         return False
     if len(scope.members) == 1:
         friendly_warn(
-            "That's the last member — remove the whole scope instead.",
+            "That's the last member - remove the whole scope instead.",
         )
         return False
     confirm = _ask(questionary.confirm(
@@ -210,10 +210,10 @@ def _view_policy() -> None:
 
     console.print()
     console.print(
-        "[title]Policy (user-owned — this wizard never writes it):[/title]"
+        "[title]Policy (user-owned, this wizard never writes it):[/title]"
     )
     state = "exists" if POLICY_PATH.exists() else \
-        "absent — built-in defaults in effect"
+        "absent - built-in defaults in effect"
     console.print(f"  [path]{POLICY_PATH}[/path]  [muted]({state})[/muted]")
     console.print(f"  [path]{POLICY_D_DIR}/[/path]")
     try:
@@ -226,7 +226,7 @@ def _view_policy() -> None:
     console.print(f"[title]Roles:[/title] {', '.join(sorted(pol.roles))}")
     console.print(
         "[muted]  Edit the file directly to add custom roles / tune "
-        "safety — nothing here overwrites it.[/muted]"
+        "safety - nothing here overwrites it.[/muted]"
     )
     console.print("[muted]  Lint:   aipager policy validate[/muted]")
     console.print("[muted]  Render: aipager doctor --safety-check[/muted]")
@@ -244,7 +244,7 @@ def _refresh_token(scopes) -> str | None:
         ))
         token = _normalize_token(raw)
         if not token:
-            friendly_warn("Empty — try again or Ctrl-C to cancel.")
+            friendly_warn("Empty - try again or Ctrl-C to cancel.")
             continue
         info = _verify_token(token)
         if info is None:

@@ -95,7 +95,7 @@ together, so that line says what most needs you:
 
 Below it, only while it applies, a flood line — `🐢 slow mode after a
 Telegram warning` (the six hours after a 429) or `⏸ card updates paused
-— hourly limit` / `— rate limit` (minimal mode, see
+(hourly limit)` / `(rate limit)` (minimal mode, see
 [troubleshooting](troubleshooting.md#the-hourly-budget)) — and then,
 when the chat has more than one live session, one line per session with
 its state: `working`, `needs you`, `idle` or `starting`. The bar names
@@ -234,7 +234,7 @@ option (and checkbox-style multi-select where the question allows it).
 Buttons that act on a running turn — Stop, Kill, Restart, `/new`'s
 Replace, `/perms`' Stop-and-switch — are tied to the task they were
 shown for. Tapping one left over from an earlier task answers
-`That task already finished — …` (with a hint to re-run the command)
+`That task already finished - …` (with a hint to re-run the command)
 and changes nothing, instead of acting on whatever is running now.
 
 ### Idle responses

@@ -245,7 +245,7 @@ class TeamConfigError(Exception):
 # Canonical header for team.yaml — explains the file at a glance and
 # tells the user how to apply changes. Re-emitted on every write.
 _TEAM_YAML_HEADER = """\
-# aipager team mode — managed by `aipager config`.
+# aipager team mode (managed by `aipager config`).
 # Edit by hand to add / remove users. Restart the daemon after
 # changes (`aipager service restart`, or kill the foreground daemon
 # and re-run `aipager start`).

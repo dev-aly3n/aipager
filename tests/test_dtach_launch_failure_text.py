@@ -28,13 +28,13 @@ NAME = "secretproj"
 
 SAMPLES = [
     (f"{DTACH}: {SOCK}: Address already in use",
-     "a session socket with this name already exists — kill it or pick another name"),
+     "a session socket with this name already exists - kill it or pick another name"),
     (f"{DTACH}: could not execute {CMD}: No such file or directory",
      "dtach could not start the shell (bash missing or not executable?)"),
     (f"{DTACH}: Could not find a pty.",
      "no pseudo-terminal available on this machine"),
     (f"{DTACH}: {SOCK}: File name too long",
-     "the session name makes the socket path too long — pick a shorter name"),
+     "the session name makes the socket path too long - pick a shorter name"),
     (f"{DTACH}: {SOCK}: Permission denied",
      "no permission to create the session socket"),
     (f"{DTACH}: {SOCK}: No such file or directory",
@@ -110,7 +110,7 @@ def test_helper_order_shell_failure_wins_over_missing_file():
 
 def test_helper_is_case_insensitive():
     assert dtach_inject._describe_dtach_failure(1, "X: ADDRESS ALREADY IN USE") == (
-        "a session socket with this name already exists — kill it or pick another name")
+        "a session socket with this name already exists - kill it or pick another name")
 
 
 def test_helper_generic_includes_the_status():

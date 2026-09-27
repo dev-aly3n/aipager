@@ -735,7 +735,7 @@ def test_retry_during_a_mute_offers_the_clear_time_toast(
     run_async(bot._handle_callback(update, MagicMock()))
     texts = [t for t in offered if t]
     assert len(texts) == 1
-    assert texts[0].startswith("Telegram is rate-limiting this chat — try again after ")
+    assert texts[0].startswith("Telegram is rate-limiting this chat - try again after ")
     from aipager.bot.flood import clear_time
     assert texts[0].endswith(clear_time(flood_clock.wall + BAN))
 

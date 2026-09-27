@@ -86,7 +86,7 @@ def require_claude() -> str:
             "",
             *(f"  {line}" for line in str(e).splitlines()),
             "",
-            "  aipager wraps the `claude` command — install it from:",
+            "  aipager wraps the `claude` command - install it from:",
             "      https://docs.anthropic.com/claude/docs/claude-code",
             "",
             "  After install, verify with: `claude --version`",

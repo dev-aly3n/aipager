@@ -173,7 +173,7 @@ def _cmd_miniapp_enable(args: argparse.Namespace) -> int:
     if not miniapp_extra_available():
         friendly_warn(
             "Mini App settings saved, but this install is missing the "
-            "Mini App server's own dependency — it cannot start.",
+            "Mini App server's own dependency - it cannot start.",
             "  aiohttp ships with aipager, so this usually means an "
             "interrupted or partial install.",
             f"  Repair it with:  {reinstall_with_miniapp_hint()}",
@@ -181,12 +181,12 @@ def _cmd_miniapp_enable(args: argparse.Namespace) -> int:
         )
         return 0
 
-    console.print(f"[ok]✓[/ok]  Mini App enabled — port {port}")
+    console.print(f"[ok]✓[/ok]  Mini App enabled - port {port}")
     if settings["public_url"]:
         console.print(f"    public URL override: {settings['public_url']}")
     else:
         console.print(
-            "    public URL: managed automatically — aipager starts a "
+            "    public URL: managed automatically - aipager starts a "
             "Cloudflare quick tunnel alongside the daemon and publishes "
             "whatever public https://*.trycloudflare.com address it is "
             "assigned"
@@ -195,7 +195,7 @@ def _cmd_miniapp_enable(args: argparse.Namespace) -> int:
             "[muted]    That address is not secret and is not meant to "
             "be: every request is verified against Telegram's initData "
             "signature, not by the URL being hard to guess. The hostname "
-            "changes on every restart and is never written to config — "
+            "changes on every restart and is never written to config - "
             "if Tailscale is set up, it is used as the fallback while "
             "the tunnel comes up.[/muted]"
         )
@@ -238,14 +238,14 @@ def _cmd_miniapp_status(args: argparse.Namespace) -> int:
     # Tailscale is not something the user is expected to go fix.
     console.print(f"fallback url:   {detected or '(none)'}")
     console.print(
-        f"mini app deps:  {'installed' if miniapp_extra_available() else 'MISSING — server cannot start'}"
+        f"mini app deps:  {'installed' if miniapp_extra_available() else 'MISSING (server cannot start)'}"
     )
     if cfg["public_url"]:
-        managed_note = "disabled — a manual url override is set"
+        managed_note = "disabled (a manual url override is set)"
     else:
         managed_note = (
             "starts with the daemon (this command runs cold and cannot "
-            "show a live URL — check the Telegram button or `aipager "
+            "show a live URL - check the Telegram button or `aipager "
             "logs`/journalctl once the daemon is running)"
         )
     console.print(f"managed tunnel: {managed_note}")

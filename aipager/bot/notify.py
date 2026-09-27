@@ -1154,12 +1154,12 @@ class NotifyMixin:
                 f"{tool_suffix}\n"
                 "\n"
                 f"<code>{html_mod.escape(hook_name)}</code> exceeded its "
-                "1 GB limit — one event was dropped. The session is still "
+                "1 GB limit - one event was dropped. The session is still "
                 "running; the tool call that triggered this proceeded "
                 "normally.\n"
                 "\n"
                 "<i>If this repeats, aipager is compensating for a runaway "
-                "allocation somewhere in the hook path — please report.</i>"
+                "allocation somewhere in the hook path - please report.</i>"
             )
             try:
                 await bot.send_message(
@@ -1226,7 +1226,7 @@ class NotifyMixin:
                         default_chat_id,
                         f"⏳ <b>{html_mod.escape(label)}</b> · a queued "
                         f"message wasn't confirmed picked up in time"
-                        f"{suffix} — Claude may still process it.",
+                        f"{suffix} - Claude may still process it.",
                         parse_mode="HTML",
                     )
                 except Exception:
@@ -1521,7 +1521,7 @@ class NotifyMixin:
                 f"⚠️ <b>{html_mod.escape(label)}</b> · Not taken by Claude Code\n"
                 "\n"
                 f"No hook arrived within {grace:.0f} s of the send. A message "
-                "that starts with \"/\" is read as a slash command — check "
+                "that starts with \"/\" is read as a slash command - check "
                 "the terminal."
             )
             if sess.busy_msg_id and sess.busy_msg_id > 0:
@@ -1809,7 +1809,7 @@ class NotifyMixin:
         if event == "context_warning":
             ctx_pct = context.get("context_pct", 0)
             warn_text = (f"⚠️ <b>{html_mod.escape(label)}</b> · Context at "
-                         f"{ctx_pct}% — auto-compact soon")
+                         f"{ctx_pct}% - auto-compact soon")
             try:
                 keyboard = self._build_compact_keyboard(sess)
                 await bot.send_message(resolve_chat_id(sess), warn_text, parse_mode="HTML",
@@ -1836,8 +1836,8 @@ class NotifyMixin:
             # testing) never renders "quiet for 0 min".
             minutes = context.get("minutes", max(1, int(STALE_BUSY_TIMEOUT / 60)))
             stale_text = (
-                f"⏳ <b>{html_mod.escape(label)}</b> · still working — "
-                f"quiet for {minutes} min\n"
+                f"⏳ <b>{html_mod.escape(label)}</b> · still working "
+                f"(quiet for {minutes} min)\n"
                 "\n"
                 "No status updates yet. This is usually normal.\n"
                 "\n"

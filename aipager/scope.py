@@ -124,8 +124,8 @@ class Scope:
 
 # Canonical header — re-emitted on every write. Mirrors team.py's pattern.
 _AIPAGER_YAML_HEADER = """\
-# aipager — multi-scope config (the "who"). Managed by `aipager config`.
-# For custom roles + safety rules, edit policy.yaml — that file is
+# aipager - multi-scope config (the "who"). Managed by `aipager config`.
+# For custom roles + safety rules, edit policy.yaml; that file is
 # never overwritten. Restart the daemon after changes.
 """
 
@@ -326,7 +326,7 @@ def dump_miniapp(settings: dict, path: Path = CONFIG_PATH) -> None:
     raw = _raw_yaml(path)
     if not raw:
         raise ScopeConfigError(
-            "aipager.yaml is missing or unreadable — run `aipager config` first"
+            "aipager.yaml is missing or unreadable - run `aipager config` first"
         )
     raw[_MINIAPP_KEY] = {
         "enabled": settings.get("enabled", False) is True,
@@ -356,7 +356,7 @@ def dump_claude_path(value: str, path: Path = CONFIG_PATH) -> None:
     raw = _raw_yaml(path)
     if not raw:
         raise ScopeConfigError(
-            "aipager.yaml is missing or unreadable — run `aipager config` first"
+            "aipager.yaml is missing or unreadable - run `aipager config` first"
         )
     value = value.strip()
     if value:

@@ -723,9 +723,9 @@ class DashboardMixin:
             await self._safe_answer(query, "already answered")
         elif outcome == RESEND_NOT_RESENDABLE:
             await self._safe_answer(
-                query, "The prompt can't be re-sent — answer it in the terminal")
+                query, "The prompt can't be re-sent - answer it in the terminal")
         elif outcome == RESEND_BUSY:
-            await self._safe_answer(query, "Busy — try again in a moment")
+            await self._safe_answer(query, "Busy - try again in a moment")
 
     async def _resend_pending_prompt(self, chat: int,
                                      sess: TrackedSession) -> str:
@@ -969,7 +969,7 @@ class DashboardMixin:
 
         rows: list[list[InlineKeyboardButton]] = []
         for s in chunk:
-            label = f"{s.label} — {self._fmt_gone_ago(s.gone_at)}"
+            label = f"{s.label} ({self._fmt_gone_ago(s.gone_at)})"
             rows.append([InlineKeyboardButton(
                 label, callback_data=session_parity.session_cb(
                     self, scope_chat_id or 0, s, "resume"),
@@ -1006,14 +1006,14 @@ class DashboardMixin:
             )).strip()
             if snippet:
                 lines.append(
-                    f"🔘 <b>{html_mod.escape(s.label)}</b> — "
-                    f"<i>{html_mod.escape(when)}</i>\n"
+                    f"🔘 <b>{html_mod.escape(s.label)}</b> ("
+                    f"<i>{html_mod.escape(when)}</i>)\n"
                     f"<blockquote>{html_mod.escape(snippet)}</blockquote>"
                 )
             else:
                 lines.append(
-                    f"🔘 <b>{html_mod.escape(s.label)}</b> — "
-                    f"<i>{html_mod.escape(when)}</i>\n"
+                    f"🔘 <b>{html_mod.escape(s.label)}</b> ("
+                    f"<i>{html_mod.escape(when)}</i>)\n"
                     f"<i>(no preview)</i>"
                 )
         lines.append("Tap a button below to resume.")

@@ -67,7 +67,7 @@ def _check_existing_daemon() -> None:
     except OSError as e:
         friendly_warn(
             f"Could not probe existing socket at {SOCKET_PATH}: {e}",
-            "  Continuing — if the daemon fails to bind, kill the stale process.",
+            "  Continuing - if the daemon fails to bind, kill the stale process.",
         )
         return
     finally:
@@ -177,7 +177,7 @@ def _telegram_preflight() -> str:
     if code and code >= 500:
         friendly_error(
             f"Telegram API error (HTTP {code}).",
-            "  Probably transient — wait a moment and retry `aipager start`.",
+            "  Probably transient - wait a moment and retry `aipager start`.",
         )
         sys.exit(1)
     if not body or not body.get("ok"):

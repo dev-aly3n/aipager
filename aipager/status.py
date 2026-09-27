@@ -277,15 +277,15 @@ def flood_chat_lines(chats: list[dict]) -> list[str]:
                 f", {chat['sustained_used']}/{chat['sustained_limit']} "
                 "in the last minute")
         if chat.get("minimal"):
-            parts.append(" — MINIMAL MODE, card updates paused")
+            parts.append(" - MINIMAL MODE, card updates paused")
         if chat.get("muted_until"):
             parts.append(
-                " — flood-muted until "
+                " - flood-muted until "
                 f"{_dt.datetime.fromtimestamp(chat['muted_until']).strftime('%H:%M')}")
         remaining = chat.get("warning_remaining") or 0.0
         if remaining > 0.0:
             minutes = int(remaining // 60)
-            parts.append(f" — warning regime, {minutes // 60}h {minutes % 60}m left")
+            parts.append(f" - warning regime, {minutes // 60}h {minutes % 60}m left")
         if chat.get("bans_7d"):
             parts.append(f" ({chat['bans_7d']} ban(s) in the last 7 days)")
         lines.append("".join(parts))

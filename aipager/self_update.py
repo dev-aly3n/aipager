@@ -946,7 +946,7 @@ def cli_restart_instruction() -> list[str]:
         lines = []
         show = _systemctl_show("KillMode")
         if show is None or not _killmode_is_safe(show.get("KillMode")):
-            lines.append("run `aipager service install` first — it sets "
+            lines.append("run `aipager service install` first - it sets "
                          "KillMode=process so the restart keeps your sessions")
         lines.append(f"then restart the daemon: systemctl --user restart {UNIT_NAME}"
                      if lines else

@@ -167,7 +167,7 @@ def _capture_user_identity(
     """
     if token:
         method = _ask(questionary.select(
-            f"User #{idx} — how should we capture their identity?",
+            f"User #{idx} - how should we capture their identity?",
             choices=[
                 questionary.Choice(
                     "Auto-detect (I'll watch for them to mention the bot)",
@@ -187,19 +187,19 @@ def _capture_user_identity(
     if method == "auto":
         hint(
             "Ask the new user to either DM the bot (tap /start) or "
-            "mention the bot in the group — any message the bot can see "
+            "mention the bot in the group - any message the bot can see "
             "will reveal their numeric id."
         )
         while True:
             _ask(questionary.confirm(
-                "They've sent something — continue?",
+                "They've sent something - continue?",
                 default=True, qmark="?", style=_PROMPT_STYLE,
             ))
             with _spin("Watching for a new user…"):
                 uid, who, _adv = _fetch_id_from_updates(token, want="user")
             if uid is None:
                 err_console.print(
-                    "  [err]No recent message detected — try again or "
+                    "  [err]No recent message detected - try again or "
                     "switch to manual.[/err]"
                 )
                 retry = _ask(questionary.select(
@@ -237,7 +237,7 @@ def _capture_user_identity(
             qmark="?", style=_PROMPT_STYLE,
         )).strip()
         if not raw:
-            friendly_warn("Empty — paste an id or @handle.")
+            friendly_warn("Empty - paste an id or @handle.")
             continue
 
         uid: int | None = None
@@ -263,7 +263,7 @@ def _capture_user_identity(
                     "Ask the user to do ONE of these, then retry:",
                     "  • DM the bot directly (open it and tap /start), OR",
                     "  • Send any message in the group (a mention of",
-                    "    the bot works best — privacy-on bots only see",
+                    "    the bot works best - privacy-on bots only see",
                     "    those).",
                 )
                 next_step = _ask(questionary.select(
@@ -358,7 +358,7 @@ def _finalize_user(
             continue
         if label in existing_labels:
             friendly_warn(
-                f"Label {label!r} is already in use — try a different one.",
+                f"Label {label!r} is already in use - try a different one.",
             )
             continue
         return {"id": uid, "label": label}

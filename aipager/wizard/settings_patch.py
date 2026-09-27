@@ -294,7 +294,7 @@ def _step_settings(step_label: str = "[4/5]") -> None:
             extra = ""
             if re.search(r"^\s*//|/\*", existing_text):
                 extra = ("\n     Looks like the file has // or /* */ comments. "
-                         "Claude Code uses strict JSON — strip them.")
+                         "Claude Code uses strict JSON - strip them.")
             raise ValueError(
                 f"{CLAUDE_SETTINGS} is not valid JSON ({e}).{extra}"
             ) from e

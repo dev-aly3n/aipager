@@ -559,7 +559,7 @@ function driveSchemaPlain() {
     byId["new-prefs"].children.forEach((g, i) => {
       const title = g.children[0].children[0].textContent;
       if (!/^[A-Za-z0-9]/.test(title)) fail("title keeps its emoji: " + JSON.stringify(title));
-      const lead = schema[i].options[0].label.split(" \u2014 ")[0];
+      const lead = schema[i].options[0].label.split(/ - | \u2014 /)[0];
       const shown = g.children[0].children[1].textContent;
       if (shown !== lead) fail("header shows " + JSON.stringify(shown) + ", want " +
                                JSON.stringify(lead));

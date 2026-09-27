@@ -27,7 +27,7 @@ from aipager.state import Status
 
 from .conftest import ADMIN_ID, READONLY_ID, _client_for, _hdr, _mk_session
 
-NO_TRANSCRIPT_REASON = "No resumable transcript — start a fresh session instead."
+NO_TRANSCRIPT_REASON = "No resumable transcript - start a fresh session instead."
 NO_PERMISSION_REASON = "You don't have permission to control this session."
 QUEUE_EMPTY_REASON = "Nothing queued to clear."
 

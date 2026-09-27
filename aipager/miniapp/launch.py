@@ -171,7 +171,7 @@ def validate_cwd(candidate: object, roots: list[str]) -> tuple[str, str]:
         return "", "Working directory contains an invalid character."
     if not roots:
         return "", (
-            "No directory is available yet — start a session from chat first, "
+            "No directory is available yet - start a session from chat first, "
             "then this picker will offer its project."
         )
 

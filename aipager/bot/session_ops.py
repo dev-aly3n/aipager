@@ -975,7 +975,7 @@ class SessionOpsMixin:
             # future caller cannot forget. `update`-driven callers (the /stop
             # command, `/<label> stop`) pass no query and are always current.
             await self._safe_answer(
-                query, "That task already finished — use the current card")
+                query, "That task already finished - use the current card")
             return StopOutcome(ok=False, label=sess.label, reason="stale")
         outcome = await self._stop_session_core(sess)
         if not outcome.ok:
@@ -1044,7 +1044,7 @@ class SessionOpsMixin:
         self._stop_animation(sess)
         # 3. Replace the busy message with the block notice (or send fresh).
         notice = (f"🛑 <b>{html_mod.escape(sess.label)}</b> · Blocked by "
-                  f"safety policy: {html_mod.escape(reason)} — stopped")
+                  f"safety policy: {html_mod.escape(reason)} (stopped)")
         try:
             if sess.busy_msg_id and sess.busy_msg_id > 0:
                 await self._edit_busy_raw(
@@ -1182,11 +1182,11 @@ class SessionOpsMixin:
             await _reply(f"💀 Killed [{target_label}]")
         elif outcome.result == "resuming":
             await _reply(
-                f"⏳ [{target_label}] is being resumed right now — "
+                f"⏳ [{target_label}] is being resumed right now - "
                 f"try the kill again in a moment",
             )
         elif outcome.result == "still_running":
-            await _reply(f"⚠️ Could not kill [{target_label}] — still running")
+            await _reply(f"⚠️ Could not kill [{target_label}] (still running)")
         else:
             await _reply(f"⚠️ Session [{target_label}] not found")
 

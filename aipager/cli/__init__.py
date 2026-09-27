@@ -184,7 +184,7 @@ def main() -> None:
     session_p.add_argument(
         "name",
         help="session label, OR one of: `ls` / `list` (list sessions), "
-             "`kill` (terminate a session — supply name after)",
+             "`kill` (terminate a session - supply name after)",
     )
     session_p.add_argument(
         "claude_args", nargs=argparse.REMAINDER,

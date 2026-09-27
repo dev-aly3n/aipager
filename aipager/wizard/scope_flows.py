@@ -49,7 +49,7 @@ def _role_choices(*, include_owner: bool = True) -> list[questionary.Choice]:
         if n == "owner" and not include_owner:
             continue
         gloss = _ROLE_GLOSS.get(n, "custom role")
-        choices.append(questionary.Choice(f"{n} — {gloss}", value=n))
+        choices.append(questionary.Choice(f"{n} - {gloss}", value=n))
     return choices
 
 
@@ -73,7 +73,7 @@ def add_dm_scope(token: str, bot_username: str) -> bool:
         1, existing_ids=set(), existing_labels=set(), token=token,
     )
     if captured is None:
-        friendly_warn("Cancelled — no DM scope added.")
+        friendly_warn("Cancelled - no DM scope added.")
         return False
     # A DM scope has exactly one member. Single-tenant deployments (one
     # friend per aipager container, they own everything) legitimately
@@ -144,7 +144,7 @@ def add_group_scope(token: str, bot_username: str,
                           default="user", include_owner=False)
         members.append({**captured, "role": role})
         _persist()
-        ok(f"Added @{captured['label']} ({role}) — "
+        ok(f"Added @{captured['label']} ({role}) - "
            f"{len(members)} member(s) drafted.")
         more = _ask(questionary.confirm(
             "Add another member?", default=False,
@@ -154,7 +154,7 @@ def add_group_scope(token: str, bot_username: str,
             break
 
     if not members:
-        friendly_warn("No members added — group scope discarded.")
+        friendly_warn("No members added - group scope discarded.")
         clear_draft()
         return False
 
@@ -217,4 +217,4 @@ def resume_or_discard_draft(token: str, bot_username: str) -> None:
     try:
         add_group_scope(token, bot_username, resume=draft)
     except KeyboardInterrupt:
-        friendly_warn("Paused again — draft kept.")
+        friendly_warn("Paused again - draft kept.")

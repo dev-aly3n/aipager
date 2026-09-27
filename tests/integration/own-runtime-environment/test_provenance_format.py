@@ -74,7 +74,7 @@ def test_two_installs_exactly_one_also_found_line_version_descending(
     also_found = [line for line in lines if line.startswith("also found:")]
     assert len(also_found) == 1, f"expected exactly one 'also found' line: {lines!r}"
     assert also_found[0] == (
-        f"also found: {low} (2.1.100) — set claude_path to override"
+        f"also found: {low} (2.1.100) - set claude_path to override"
     )
 
 

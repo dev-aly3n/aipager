@@ -150,7 +150,7 @@ def check_chat_reachable() -> CheckResult:
             # prints checks in order, so reference the bot generically.
             return CheckResult(
                 FAIL, "Telegram chat",
-                detail=[f"chat {CHAT_ID} not reachable — bot may need /start"],
+                detail=[f"chat {CHAT_ID} not reachable - bot may need /start"],
                 fix="open your bot in Telegram, tap Start, then retry",
             )
         return CheckResult(WARN, "Telegram chat", detail=[err])
@@ -221,7 +221,7 @@ def check_claude() -> CheckResult:
         )
     detail = [f"{resolved.chosen.path} ({resolved.chosen.version})"]
     for other in resolved.others:
-        detail.append(f"also: {other.path} ({other.version}) — set claude_path to override")
+        detail.append(f"also: {other.path} ({other.version}) - set claude_path to override")
     return CheckResult(OK, "claude CLI", detail=detail)
 
 
@@ -241,7 +241,7 @@ def check_claude_auth() -> CheckResult:
     try:
         resolved = claude_resolve.resolve_claude_binary(force=True)
     except claude_resolve.ClaudeNotFoundError as e:
-        return CheckResult(WARN, "claude auth", detail=[f"can't probe — {e}"])
+        return CheckResult(WARN, "claude auth", detail=[f"can't probe - {e}"])
 
     env = daemon_secrets.build_session_env()
     auth = claude_resolve.detect_auth(
@@ -269,14 +269,14 @@ def check_claude_auth() -> CheckResult:
     if check.state == "rejected":
         return CheckResult(
             WARN, "claude auth",
-            detail=[f"{detail_line} — but the API rejected it "
+            detail=[f"{detail_line} - but the API rejected it "
                     "(expired or revoked)"],
             fix="claude auth login  # the stored credential is no longer valid",
         )
     if check.state == "absent":
         return CheckResult(
             WARN, "claude auth",
-            detail=[f"{detail_line} — but claude reports no usable credential"],
+            detail=[f"{detail_line} - but claude reports no usable credential"],
             fix="claude auth login",
         )
     if check.state == "unknown":
@@ -286,7 +286,7 @@ def check_claude_auth() -> CheckResult:
             OK, "claude auth",
             detail=[f"{detail_line} (not re-verified: {check.detail})"],
         )
-    return CheckResult(OK, "claude auth", detail=[f"{detail_line} — verified"])
+    return CheckResult(OK, "claude auth", detail=[f"{detail_line} (verified)"])
 
 
 def check_service_unit_path() -> CheckResult:
@@ -326,7 +326,7 @@ def check_service_unit_path() -> CheckResult:
         resolved = claude_resolve.resolve_claude_binary(force=True)
     except claude_resolve.ClaudeNotFoundError:
         return CheckResult(WARN, "service unit PATH",
-                           detail=["can't verify — no claude binary resolves"])
+                           detail=["can't verify - no claude binary resolves"])
     claude_dir = str(Path(resolved.chosen.path).parent)
     if claude_dir in unit_path_dirs:
         return CheckResult(OK, "service unit PATH", detail=[claude_dir])
@@ -451,14 +451,14 @@ def check_daemon() -> CheckResult:
         return CheckResult(
             WARN, "aipager daemon",
             detail=[SOCKET_PATH, *flood_mute_lines(mutes),
-                    "self-clears when the ban lapses — do not restart into it",
+                    "self-clears when the ban lapses - do not restart into it",
                     *backoff, *chat_lines],
         )
     if minimal:
         return CheckResult(
             WARN, "aipager daemon",
             detail=[SOCKET_PATH,
-                    "a chat is in minimal mode — busy-card updates are "
+                    "a chat is in minimal mode - busy-card updates are "
                     "paused so answers keep flowing; it lifts as the "
                     "chat's earned rate recovers",
                     *backoff, *chat_lines],
@@ -547,7 +547,7 @@ def check_team() -> CheckResult:
 
     # 2) At least one admin.
     if not any(u.role == Role.ADMIN for u in team.users.values()):
-        issues.append("no admin user — no one can bypass rules.deny_tools")
+        issues.append("no admin user - no one can bypass rules.deny_tools")
         fixes.append(
             "promote a user to admin via `aipager config` → "
             "Change a user's role"
@@ -557,7 +557,7 @@ def check_team() -> CheckResult:
     suggestions: list[str] = []
     if not team.rules.deny_tools:
         suggestions.append(
-            "rules.deny_tools is empty — consider enabling at least "
+            "rules.deny_tools is empty - consider enabling at least "
             "[Write, Edit] to block accidental file changes"
         )
 
@@ -666,7 +666,7 @@ def check_miniapp() -> CheckResult:
     if not miniapp_extra_available():
         return CheckResult(
             WARN, "Mini App",
-            detail=["enabled in config, but aiohttp is missing — the "
+            detail=["enabled in config, but aiohttp is missing - the "
                     "server cannot start (incomplete install)"],
             fix=reinstall_with_miniapp_hint(),
         )
@@ -837,7 +837,7 @@ def _print_safety_policy() -> None:
         console.print(f"    • {name}{extra}")
     console.print()
     console.print(
-        "  Note: the bash patterns are a filter, not a boundary — a role\n"
+        "  Note: the bash patterns are a filter, not a boundary - a role\n"
         "  with Bash can get around them. All scopes share one filesystem\n"
         "  and OS user; for hard isolation between untrusted users, run\n"
         "  separate daemons per OS account. See docs/security.md."
@@ -855,7 +855,7 @@ def _fix_daemon_credential() -> None:
 
     has_content = DAEMON_ENV_PATH.exists() and DAEMON_ENV_PATH.stat().st_size > 0
     if has_content:
-        console.print(f"  [ok]✓[/ok]  {DAEMON_ENV_PATH} already has content — leaving it alone")
+        console.print(f"  [ok]✓[/ok]  {DAEMON_ENV_PATH} already has content - leaving it alone")
         return
     console.print(f"  No credential found at {DAEMON_ENV_PATH}.")
     from aipager.errors import require_interactive
@@ -879,15 +879,15 @@ def _fix_claude_path() -> None:
     try:
         resolved = claude_resolve.resolve_claude_binary(force=True)
     except claude_resolve.ClaudeNotFoundError as e:
-        console.print(f"  [warn]⚠[/warn]  no claude binary resolves — {e}")
+        console.print(f"  [warn]⚠[/warn]  no claude binary resolves - {e}")
         return
     if not resolved.others:
-        console.print("  [ok]✓[/ok]  one claude install found — nothing to disambiguate")
+        console.print("  [ok]✓[/ok]  one claude install found - nothing to disambiguate")
         return
 
     installs = [resolved.chosen, *resolved.others]
     console.print("  Multiple claude installs found:")
-    console.print(f"    0) {installs[0].path} ({installs[0].version}) — current pick")
+    console.print(f"    0) {installs[0].path} ({installs[0].version}, current pick)")
     for i, install in enumerate(installs[1:], start=1):
         console.print(f"    {i}) {install.path} ({install.version})")
     from aipager.errors import require_interactive
@@ -902,10 +902,10 @@ def _fix_claude_path() -> None:
     try:
         idx = int(answer)
     except ValueError:
-        console.print("  [warn]⚠[/warn]  not a number — skipped")
+        console.print("  [warn]⚠[/warn]  not a number - skipped")
         return
     if not (0 <= idx < len(installs)):
-        console.print("  [warn]⚠[/warn]  out of range — skipped")
+        console.print("  [warn]⚠[/warn]  out of range - skipped")
         return
     try:
         # `path=` passed explicitly and read from the module at call
@@ -968,7 +968,7 @@ def cmd_doctor(args: argparse.Namespace | None = None) -> int:
         console.print(
             "ℹ️  Multiple scopes share one filesystem. Telegram-driven "
             "sessions can't read each other's aipager data, but this is "
-            "not a hard multi-tenant sandbox — for mutually untrusted "
+            "not a hard multi-tenant sandbox - for mutually untrusted "
             "users, run separate per-OS-user daemons. "
             "(`aipager doctor --safety-check` shows the policy.)"
         )

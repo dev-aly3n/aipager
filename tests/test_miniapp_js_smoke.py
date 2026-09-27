@@ -1676,7 +1676,8 @@ def test_the_harness_detects_a_broken_telegram_layer(node_bin, tmp_path, old, ne
 # ===== settings schema text shown plain (roadmap 8.44) =====================
 #
 # settings_schema() is shared with /settings in the chat: its titles lead
-# with an emoji and its labels and help carry em dashes. Every surface that
+# with an emoji and its labels carry a " - " separator; the probe group
+# below carries em dashes, as pass-through text can. Every surface that
 # renders it (Settings tab, session settings, the new form) goes through
 # renderOptionGroup, which must show it plain.
 

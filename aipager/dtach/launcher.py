@@ -118,7 +118,7 @@ def _validate_name(name: str) -> str | None:
         if name in _SUBCOMMAND_VERBS:
             return (f"{name!r} is reserved as an `aipager session` subcommand "
                     "(ls / list / kill); pick a different name")
-        return (f"{name!r} is reserved as an aipager command name — a session "
+        return (f"{name!r} is reserved as an aipager command name - a session "
                 f"called that would shadow /{name} in Telegram")
     return None
 
@@ -146,7 +146,7 @@ def _resolve_launch_name(name: str) -> str:
         if canonical != raw:
             console.print(
                 f"  [muted](session {raw!r} is no longer running; "
-                f"starting {canonical!r} — its stale socket remains at "
+                f"starting {canonical!r} - its stale socket remains at "
                 f"{sock})[/muted]")
         return canonical
     return normalize_session_name(raw)
