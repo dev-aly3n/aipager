@@ -1316,6 +1316,9 @@ class NotifyMixin:
                 } for n in queued)
                 log.info("[%s] queued while busy: %s", label,
                          [n.get("msg_id") for n in queued])
+                # Still waiting QUEUED_LINE_DELAY from now: the "⏳ Queued"
+                # line and its "⚡ Send now" button (bot/send_now.py).
+                self._arm_queued_lines(sess, queued)
             await self._apply_consumption(sess, own)
             if expired:
                 try:
@@ -2090,7 +2093,7 @@ class NotifyMixin:
             # SessionEnd, but the process lives on — leave its queue alone.
             if context.get("source") not in ("clear", "resume"):
                 lost = await self._settle_queued_targets(sess, reanchor=False)
-                sess.queued_targets.clear()
+                self._discard_queued_targets(sess)
                 # `notes`: what was still outstanding just before the GONE
                 # transition deleted the notes dir (captured by the caller)
                 # — a command or message Claude never got to run.
@@ -2193,6 +2196,11 @@ class NotifyMixin:
                     context.get("raw_md") or context.get("summary") or "")
                     else self._take_next_prompt(sess))
                 popped_turn = sess.turn_seq
+                # What the sync above absorbed (or popAll dropped) and what
+                # the pop just took have left Claude's queue: their "⏳
+                # Queued" lines go now, before any wait below, so before the
+                # popped turn's card and its 👍.
+                self._sync_queued_lines(sess)
                 if isinstance(prev_gate, asyncio.Event):
                     await self._wait_finish_gate(sess, prev_gate)
                 # The delivery stamp's moment (roadmap 8.39 R2), taken on
@@ -2280,6 +2288,9 @@ class NotifyMixin:
                 # or renders the timeline; the layout-aware re-anchor DECISION
                 # itself needs `layout`, resolved a few lines down, so it is
                 # not folded into `_consume_and_reanchor` here.
+                # An absorption first visible here (flushed while this finish
+                # waited) takes its "⏳ Queued" line with it.
+                self._sync_queued_lines(sess)
                 consumed = finish_consumed + sess.stream_consumed_notes
                 sess.stream_consumed_notes = []
                 if consumed:

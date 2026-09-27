@@ -153,6 +153,10 @@ ALLOWED_JOINEDSTR_SIGNATURES = frozenset({
 ALLOWED_VERB_JOINEDSTR_SIGNATURES = frozenset({
     "opt{i}",
     "opt{num - 1}",
+    # bot/send_now.py's "⚡ Send now" button: the queued Telegram message's
+    # id, an int (at most 10 digits), never a session name:
+    # "_:sx:<idx>:now:" + 10 digits stays under 30 bytes.
+    "now:{msg_id}",
 })
 
 

@@ -27,6 +27,7 @@ from aipager.bot.handlers import CommandHandlersMixin
 from aipager.bot.keyboards import KeyboardMixin
 from aipager.bot.lifecycle import LifecycleMixin
 from aipager.bot.notify import NotifyMixin
+from aipager.bot.send_now import SendNowMixin
 from aipager.bot.session_ops import SessionOpsMixin
 from aipager.config import MODEL_CHOICES, QUICK_COMMANDS, QUICK_TEMPLATES
 from aipager.state import SessionRegistry
@@ -40,6 +41,7 @@ class TelegramBot(
     LifecycleMixin,
     AuthMixin,
     SessionOpsMixin,
+    SendNowMixin,
     CommandHandlersMixin,
     CallbackDispatchMixin,
     AnimationMixin,

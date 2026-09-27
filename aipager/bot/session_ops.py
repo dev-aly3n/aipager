@@ -678,7 +678,15 @@ class SessionOpsMixin:
         # (review rev-iter1-001). A failed send stamps nothing either:
         # there is no turn to watch for.
         was_idle = sess.status != Status.BUSY
-        ok = await inject.send_text_and_enter(sess.name, body)
+        # Typed but not yet submitted, the text would be submitted by a
+        # send-now chord: /now and the "⚡ Send now" button refuse while
+        # this is above zero (bot/send_now.py). Raised with no await
+        # before the injection starts.
+        sess.prompt_injecting += 1
+        try:
+            ok = await inject.send_text_and_enter(sess.name, body)
+        finally:
+            sess.prompt_injecting -= 1
         if ok and was_idle:
             sess.prompt_sent_at = time.monotonic()
             sess.prompt_sent_msg = (
@@ -823,7 +831,7 @@ class SessionOpsMixin:
         sess = self.registry.get_or_create(session_name)
         # /new reusing a finished session's name reuses its entry: drop any
         # queued target the old process left behind (review rev-iter2-001).
-        sess.queued_targets.clear()
+        self._discard_queued_targets(sess)
         sess.label = label
         sess.skip_perms = skip_perms
         if cwd:
@@ -953,7 +961,7 @@ class SessionOpsMixin:
         sess.busy_card_trigger = None
         # Claude's own queue was discarded above — nothing left in it can
         # become the next turn ("anchor-on-transcript-consumption").
-        sess.queued_targets.clear()
+        self._discard_queued_targets(sess)
         sess.user_stopped_at = time.monotonic()
         sess.last_idle_at = time.monotonic()  # prevent debounce of next real IDLE
         self.registry.mark_dirty()
@@ -1068,7 +1076,7 @@ class SessionOpsMixin:
         sess.status = Status.IDLE
         sess.trigger_msg_id = None
         sess.busy_card_trigger = None
-        sess.queued_targets.clear()
+        self._discard_queued_targets(sess)
         sess.user_stopped_at = time.monotonic()
         sess.last_idle_at = time.monotonic()
         self.registry.mark_dirty()
@@ -1144,7 +1152,7 @@ class SessionOpsMixin:
             await self._mark_not_delivered(
                 sess, reactions.held_entries(sess.pending_queue)
                 + list_outstanding_notes(session_name) + queued_targets)
-            sess.queued_targets.clear()
+            self._discard_queued_targets(sess)
         if killed:
             # remember_label: the entry is about to be re-created by the
             # monitor's next scan (the socket outlives SIGTERM briefly), and
@@ -1262,7 +1270,7 @@ class SessionOpsMixin:
             # A resumed claude starts with an empty input queue: a target the
             # old process had queued but never absorbed must not start a
             # phantom turn later (review rev-iter2-001).
-            sess.queued_targets.clear()
+            self._discard_queued_targets(sess)
             sess.skip_perms = effective_skip_perms
             self.registry.transition(session_name, Status.IDLE)
             if driver_user_id is not None:
@@ -1577,7 +1585,7 @@ class SessionOpsMixin:
         # message the old process had queued but never absorbed must not
         # start a phantom turn later ("anchor-on-transcript-consumption",
         # review rev-iter1-002).
-        sess.queued_targets.clear()
+        self._discard_queued_targets(sess)
         self.registry.transition(session_name, Status.IDLE)
         self.registry.mark_dirty()
 
@@ -1675,7 +1683,7 @@ class SessionOpsMixin:
         clear_notes_dir(sess.name)
         if held:
             await inject.discard_queued_input(sess.name)
-        sess.queued_targets.clear()
+        self._discard_queued_targets(sess)
         self.registry.mark_dirty()
         log.info("[%s] queue cleared (dropped %d)", sess.label, dropped)
         return ClearQueueOutcome(ok=True, label=sess.label, dropped=dropped)

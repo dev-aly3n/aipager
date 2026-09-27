@@ -2608,6 +2608,11 @@ class AnimationMixin:
         # returns early on an empty read).
         if _sync_anchors_from_transcript(sess):
             sess.stream_dirty = True
+        # A message absorbed, delivered to an agent or pulled back by
+        # popAll has just left Claude's queue (the scan above): its "⏳
+        # Queued" line goes now, not after the re-anchor below, whose
+        # sends the outbound gate can pace by seconds.
+        self._sync_queued_lines(sess)
         await self._consume_and_reanchor(sess)
         # Choose the required minimum gap: the chat's own interval, which
         # scales with how many BUSY sessions share it and with any 429

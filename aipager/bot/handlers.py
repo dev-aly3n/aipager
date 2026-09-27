@@ -573,6 +573,7 @@ class CommandHandlersMixin:
             "<b>Commands</b>\n"
             "  /status - per-session dashboard\n"
             "  /stop - interrupt the active session\n"
+            "  /now - send your queued message to Claude now\n"
             "  /restart - restart a session with its history\n"
             "  /rename - give a session a new name\n"
             "  /diff - show a session's working-directory diff\n"

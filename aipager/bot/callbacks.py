@@ -497,6 +497,14 @@ class CallbackDispatchMixin:
                 await self._safe_answer(query, f"[{sess.label}] is not busy.")
             return
 
+        if action.startswith("now:"):
+            # The "⚡ Send now" button under a queued message
+            # (bot/send_now.py). The message's id travels in the data: a tap
+            # acts only while Claude still holds THAT message.
+            await self._handle_send_now_tap(
+                update, query, session_name, action.split(":", 1)[1])
+            return
+
         if action == "kill":
             sess = self.registry.get(session_name)
             if sess is None:

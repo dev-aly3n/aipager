@@ -348,6 +348,7 @@ class LifecycleMixin:
         self._app.add_handler(CommandHandler("help", self._handle_start_cmd))
         self._app.add_handler(CommandHandler("status", self._handle_status))
         self._app.add_handler(CommandHandler("stop", self._handle_stop_cmd))
+        self._app.add_handler(CommandHandler("now", self._handle_now_cmd))
         self._app.add_handler(CommandHandler("kill", self._handle_kill_cmd))
         self._app.add_handler(CommandHandler("new", self._handle_new_cmd))
         self._app.add_handler(CommandHandler("resume", self._handle_resume_cmd))
@@ -553,6 +554,12 @@ class LifecycleMixin:
         bot = self._app.bot
         live_names = set(await inject.list_sessions())
 
+        # "⏳ Queued" lines the previous run sent and never deleted: their
+        # messages' fate is unknown now, so no line may outlive a restart.
+        if self.registry.queued_line_deletes:
+            await self._delete_owed_queued_lines(bot)
+            self.registry.mark_dirty()
+
         for sess in self.registry.all_sessions().values():
             if sess.pending_card_deletes:
                 await self._delete_pending_cards(bot, sess)
@@ -627,6 +634,7 @@ class LifecycleMixin:
         commands = [
             BotCommand("status", "Show all sessions"),
             BotCommand("stop", "Stop active session"),
+            BotCommand("now", "Send queued messages to Claude now"),
             BotCommand("kill", "Kill a session (destroy)"),
             BotCommand("new", "Launch new session"),
             BotCommand("resume", "Resume a past session"),
