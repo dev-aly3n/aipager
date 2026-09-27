@@ -589,13 +589,20 @@ everything it has queued at once, not only the message you tapped.
 What happens to the work in progress is Claude Code's choice: a running
 command or agent keeps going in the background; if Claude is in the
 middle of writing a reply, that reply is cut short and restarted with
-your message.
+your message. Any other kind of step (another tool, for example) may be
+interrupted too, after a short grace period. If Claude Code's
+background tasks are turned off, send-now falls back to a plain
+interrupt of the running step. This is all Claude Code's own send-now
+behaviour, not something aipager decides.
 
 The tap answers `Sent to Claude now` and the line disappears. The keys
 are only pressed when Claude's transcript shows it still holding the
 message; otherwise the tap answers `Already taken` and removes the
 line. It is refused, with nothing pressed, while a permission or
-question prompt is open (`Answer the open question first`) and while
+question prompt is open (`Answer the open question first`), while
+Claude may have just opened one that aipager has not shown yet (its
+events for a new turn are held while the previous turn's answer is
+still being delivered: `Busy, try again in a moment`), and while
 aipager is in the middle of typing another message into the session
 (`Busy typing a prompt, try again in a moment`). Anyone who may send
 messages to the session can use the button and `/now`; a `read_only`
