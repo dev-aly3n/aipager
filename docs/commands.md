@@ -284,9 +284,12 @@ tools it called.
 
 While background agents are still running after their turn ended, the
 card stays up as the job's status. When Claude takes a new message
-meanwhile (you sent it to the idle session, or it was queued and picked
-up), that one card moves down to the new message (it is re-sent there
-and the old one deleted), still showing the running agents. Tool calls
+meanwhile, the live card is the one under that message, still showing
+the running agents. A message you send to the idle session starts a new
+turn: the earlier turn's card is settled where it stands, its steps
+kept, and the new turn gets its own card. A message that was queued and
+is picked up continues the job's turn: its card is re-sent under that
+message and the old copy deleted. Tool calls
 made inside an agent never show as the parent turn's own rows, and never
 make aipager think a new turn started.
 

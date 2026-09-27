@@ -20,6 +20,7 @@ from aipager.session_monitor import ORPHAN_CARD_GRACE_SECONDS, orphan_card_due
 from aipager.state import SessionRegistry, Status
 
 CHAT = 256113222
+PREFIX = "[via Telegram · @owner]\n"
 
 
 def _layout(layout: str = "card") -> None:
@@ -494,10 +495,10 @@ def test_deferred_delete_is_owed_until_it_lands(replay, vloop):
 
 # ── R4: the job's card follows the newest message ──────────────────────────
 
-async def _job_open(r):
+async def _job_open(r, tools: int = 0):
     """A turn that launched a background agent, ended: the job's card is up,
     waiting."""
-    await _turn(r, 1, "launch it", tools=0)
+    await _turn(r, 1, "launch it", tools=tools)
     r.hook(hook_event_name="SubagentStart", agent_id="a1",
            agent_type="pipeline-runner")
     await asyncio.sleep(2)
@@ -533,14 +534,20 @@ def test_message_popped_inside_a_job_moves_the_job_card(replay, vloop):
     assert 1 in r.chat.answers.values()  # the interim answer, under ITS prompt
 
 
-def test_new_prompt_inside_a_job_moves_the_job_card(replay, vloop):
+def test_new_prompt_inside_a_job_carries_its_agents_and_keeps_the_record(
+        replay, vloop):
+    """A new prompt while the job's agent still runs: the one live card is
+    the new turn's, under its message, showing the running agent; the card
+    of the turn that launched it is settled where it stands with its rows,
+    never deleted - "Busy card + result" keeps every turn's card (review
+    rev-iter1-005)."""
     _layout()
     r = replay
     sess = r.sess
 
     async def scenario():
         w = _worker(r)
-        await _job_open(r)
+        await _job_open(r, tools=1)
         await _turn(r, 5, "and now this", tools=0)
         await asyncio.sleep(10)
         w.cancel()
@@ -548,9 +555,157 @@ def test_new_prompt_inside_a_job_moves_the_job_card(replay, vloop):
     _run(vloop, scenario())
     live = r.chat.live_cards()
     assert len(live) == 1 and r.chat.cards[live[0]]["reply_to"] == 5
-    assert all(c["deleted"] for c in r.chat.cards.values()
-               if c["reply_to"] == 1)
+    assert "pipeline-runner" in r.chat.cards[live[0]].get("text", "")
+    (old,) = [c for c in r.chat.cards.values() if c["reply_to"] == 1]
+    assert old["deleted"] is False and old["stop"] is False
+    assert "launch it step 0" in old["text"]
+    assert r.chat.count("deleteMessage") == 0
     assert "a1" in sess.active_subagents
+
+
+def test_absorbed_and_popped_inside_a_job_each_keep_their_own_message(
+        replay, vloop):
+    """Inside an open job, message 2 is absorbed by the running turn and
+    message 3 is queued, then popped at the interim Stop. 2 is taken (👍)
+    but the popped turn's target, card and answer stay under 3 (review
+    rev-iter1-002)."""
+    _layout()
+    r = replay
+    sess = r.sess
+
+    async def scenario():
+        w = _worker(r)
+        await _turn(r, 1, "launch it", tools=0)
+        r.hook(hook_event_name="SubagentStart", agent_id="a1",
+               agent_type="pipeline-runner")
+        await asyncio.sleep(1)
+        r.say(2, "fold this in")
+        await r.updates.join()
+        r.prompt_hooks(2, "fold this in")
+        await asyncio.sleep(1)
+        r.say(3, "queued in the job")
+        await r.updates.join()
+        r.prompt_hooks(3, "queued in the job")
+        await asyncio.sleep(1)
+        r.append({"type": "queue-operation", "operation": "remove",
+                  "reason": "absorbed_mid_turn",
+                  "content": PREFIX + "fold this in"})
+        r.stop("launched")
+        await asyncio.sleep(15)
+        target_after_pop = sess.trigger_msg_id
+        r.stop("answer three")
+        await asyncio.sleep(15)
+        w.cancel()
+        return target_after_pop
+
+    target_after_pop = _run(vloop, scenario())
+    assert target_after_pop == 3
+    assert r.chat.reactions[2][-1] == "👍"
+    assert r.chat.reactions[3][-1] == "👍"
+    live = r.chat.live_cards()
+    assert len(live) == 1 and r.chat.cards[live[0]]["reply_to"] == 3
+    assert 3 in r.chat.answers.values()
+
+
+def test_pop_inside_a_job_stays_the_jobs_turn_if_the_job_closes_meanwhile(
+        replay, vloop, monkeypatch):
+    """A message popped inside the job continues the job's turn. If the job
+    closes while this finish still waits (a flood-delayed call), the finish
+    must not take the final path, whose close would end the popped turn too
+    and leave it running with no card (review rev-iter1-003)."""
+    _layout()
+    r = replay
+    sess = r.sess
+    slow = r.bot._mark_ran_commands
+
+    async def _slow_mark(s):
+        await asyncio.sleep(6)
+        # The job closes during the wait: its agent is gone and no grace
+        # or continuation is left.
+        s.active_subagents.clear()
+        s.job_grace_until = 0.0
+        s.job_continuation_active = False
+        await slow(s)
+
+    async def scenario():
+        w = _worker(r)
+        await _turn(r, 1, "launch it", tools=0)
+        r.hook(hook_event_name="SubagentStart", agent_id="a1",
+               agent_type="pipeline-runner")
+        await asyncio.sleep(1)
+        r.say(3, "queued in the job")
+        await r.updates.join()
+        r.prompt_hooks(3, "queued in the job")
+        await asyncio.sleep(1)
+        monkeypatch.setattr(r.bot, "_mark_ran_commands", _slow_mark)
+        r.stop("launched")
+        await asyncio.sleep(20)
+        monkeypatch.setattr(r.bot, "_mark_ran_commands", slow)
+        w.cancel()
+
+    _run(vloop, scenario())
+    assert sess.status == Status.BUSY
+    live = r.chat.live_cards()
+    assert len(live) == 1 and r.chat.cards[live[0]]["reply_to"] == 3
+    assert 1 in r.chat.answers.values()  # the interim answer went out
+
+
+def test_a_finish_that_raises_early_still_releases_its_gate(
+        replay, vloop, monkeypatch):
+    """The finish gate is released even when the finish fails before its
+    first await (review rev-iter1-004): left set, it would hold every later
+    card for FINISH_GATE_TIMEOUT and keep the orphan sweep off the
+    session."""
+    _layout()
+    r = replay
+    sess = r.sess
+
+    def _boom(s):
+        raise OSError("transcript unreadable")
+
+    async def scenario():
+        w = _worker(r)
+        await _turn(r, 1, "work", tools=1)
+        monkeypatch.setattr("aipager.bot.notify._sync_anchors_from_transcript",
+                            _boom)
+        await _drain(r, 0)
+        r.stop("done")
+        await _drain(r, 5)
+        w.cancel()
+
+    _run(vloop, scenario())
+    assert sess.finish_gate is None
+    assert sess.finishing_turn is None
+
+
+def test_the_monitor_tick_settles_an_orphaned_card(replay, vloop,
+                                                   monkeypatch):
+    """The session monitor's own tick is what settles a frozen card at
+    runtime (review rev-iter1-001), not only the helpers the other orphan
+    rows call directly."""
+    from aipager.session_monitor import SessionMonitor
+
+    r = replay
+    sess = _orphan(r, vloop, "card")
+    monkeypatch.setattr("aipager.dtach.inject.list_sessions",
+                        AsyncMock(return_value=[sess.name]))
+    mon = SessionMonitor(r.bot.registry, r.bot.notify)
+
+    async def scenario():
+        await mon._scan()
+        await asyncio.sleep(ORPHAN_CARD_GRACE_SECONDS - 1)
+        await mon._scan()
+        still_live = list(r.chat.live_cards())
+        await asyncio.sleep(2)
+        await mon._scan()
+        return still_live
+
+    still_live = _run(vloop, scenario())
+    assert len(still_live) == 1  # not before the grace period
+    assert r.chat.live_cards() == []
+    (card,) = r.chat.cards.values()
+    assert card["deleted"] is False  # "card" layout keeps it, settled
+    assert sess.busy_msg_id is None
 
 
 # ── 8.58: a detached background agent is not the parent's turn ────────────
@@ -1218,3 +1373,35 @@ def test_closed_turn_never_moves_backwards():
     sess.turn_seq = 7
     sess.close_turn()
     assert sess.closed_turn_seq == 7
+
+
+@pytest.mark.parametrize("in_job", [False, True])
+def test_the_gate_is_open_before_the_next_queued_message_drains(
+        replay, vloop, monkeypatch, in_job):
+    """A finish lets newer cards through BEFORE it drains aipager's own
+    queue, on the final path and the job's interim one alike: the drained
+    message's card must not wait on the finish that started it."""
+    _layout()
+    r = replay
+    seen = []
+    real_drain = r.bot._drain_next_queued
+
+    async def _drain_spy(s):
+        seen.append(s.finish_gate)
+        await real_drain(s)
+
+    monkeypatch.setattr(r.bot, "_drain_next_queued", _drain_spy)
+
+    async def scenario():
+        w = _worker(r)
+        await _turn(r, 1, "work", tools=1)
+        if in_job:
+            r.hook(hook_event_name="SubagentStart", agent_id="a1",
+                   agent_type="pipeline-runner")
+            await asyncio.sleep(1)
+        r.stop("done")
+        await asyncio.sleep(10)
+        w.cancel()
+
+    _run(vloop, scenario())
+    assert seen and all(g is None for g in seen)

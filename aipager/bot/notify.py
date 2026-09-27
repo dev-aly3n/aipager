@@ -537,7 +537,8 @@ class NotifyMixin:
         last = consumed[-1]
         last_msg_id = last.get("msg_id")
         # `move_target` is False only for a finish whose turn a newer one
-        # has already replaced: the target is that newer turn's by now.
+        # has already replaced, or whose Stop popped the next message: the
+        # target is that newer turn's (or that message's) by now.
         if last_msg_id is not None and move_target:
             sess.trigger_msg_id = last_msg_id
             sess.last_prompt = last.get("raw_text", "") or ""
@@ -2155,21 +2156,28 @@ class NotifyMixin:
             gate = asyncio.Event()
             sess.finish_gate = gate
             sess.finishing_turn = finishing_turn
-            # An absorption flushed with the run's last round is first
-            # visible here; read it before deciding what is still queued.
-            _sync_anchors_from_transcript(sess)
-            # Those absorptions are THIS turn's, taken now: left staged, the
-            # old card's still-running animation would apply them to
-            # whatever turn is current by the time it ticks.
-            finish_consumed = sess.stream_consumed_notes
-            sess.stream_consumed_notes = []
-            # An API error ends the run with nothing processed: the queue
-            # is left for the next finish, as before.
-            taken = (None if _detect_api_error(
-                context.get("raw_md") or context.get("summary") or "")
-                else self._take_next_prompt(sess))
-            popped_turn = sess.turn_seq
+            taken = None
+            popped_turn = finishing_turn
+            # Everything from here on is inside the `try`, so its `finally`
+            # releases the gate even when a transcript read below raises
+            # (review rev-iter1-004): a gate left set would hold every later
+            # card for FINISH_GATE_TIMEOUT and keep the orphan sweep off
+            # this session.
             try:
+                # An absorption flushed with the run's last round is first
+                # visible here; read it before deciding what is still queued.
+                _sync_anchors_from_transcript(sess)
+                # Those absorptions are THIS turn's, taken now: left staged,
+                # the old card's still-running animation would apply them to
+                # whatever turn is current by the time it ticks.
+                finish_consumed = sess.stream_consumed_notes
+                sess.stream_consumed_notes = []
+                # An API error ends the run with nothing processed: the queue
+                # is left for the next finish, as before.
+                taken = (None if _detect_api_error(
+                    context.get("raw_md") or context.get("summary") or "")
+                    else self._take_next_prompt(sess))
+                popped_turn = sess.turn_seq
                 if isinstance(prev_gate, asyncio.Event):
                     await self._wait_finish_gate(sess, prev_gate)
                 # The delivery stamp's moment (roadmap 8.39 R2), taken on
@@ -2180,7 +2188,16 @@ class NotifyMixin:
                 # Every turn end, before the job-interim and API-error returns
                 # below: Claude Code has just run whatever it had queued.
                 await self._mark_ran_commands(sess)
-                if sess.job_continuation_active and not sess.active_subagents:
+                if taken is not None:
+                    # A message popped at this Stop's arrival settled then
+                    # whether this Stop is the job's interim one (review
+                    # rev-iter1-003): taken inside the open job, the popped
+                    # turn IS the job's turn, which this finish must not
+                    # close; taken outside it, the popped turn is a new one
+                    # and this finish is the old turn's plain close. What
+                    # the job does during the waits above changes neither.
+                    job_interim = taken[1]
+                elif sess.job_continuation_active and not sess.active_subagents:
                     # The <task-notification> continuation turn's own Stop —
                     # the job's one true Finished ("close the background-job
                     # endgame" requirement 2). Clear the endgame state FIRST so
@@ -2188,7 +2205,10 @@ class NotifyMixin:
                     sess.job_continuation_active = False
                     sess.job_grace_until = 0.0
                     sess.job_interim_seen = False
-                elif sess.job_background_open():
+                    job_interim = False
+                else:
+                    job_interim = sess.job_background_open()
+                if job_interim:
                     # A background agent this job launched is still running (or
                     # the continuation grace window is open) — this
                     # idle-transition is an INTERIM Stop, not the job's true
@@ -2203,10 +2223,21 @@ class NotifyMixin:
                         # agents has ended — back to plain waiting; the next
                         # continuation cycle re-arms via SubagentStop + grace.
                         sess.job_continuation_active = False
-                    # An interim Stop leaves absorptions to the animator, which
-                    # moves the still-live card to them.
-                    sess.stream_consumed_notes = (
-                        finish_consumed + sess.stream_consumed_notes)
+                    if taken is not None:
+                        # The message popped at this Stop now owns the reply
+                        # target and the job's card (roadmap 8.56). What this
+                        # run absorbed is taken (👍, tracked) but must not
+                        # pull the target back to itself: staged for the
+                        # animator, it would, and the popped turn's card and
+                        # answer would land under the absorbed message
+                        # (review rev-iter1-002).
+                        await self._apply_consumption(
+                            sess, finish_consumed, move_target=False)
+                    else:
+                        # An interim Stop leaves absorptions to the animator,
+                        # which moves the still-live card to them.
+                        sess.stream_consumed_notes = (
+                            finish_consumed + sess.stream_consumed_notes)
                     await self._handle_job_interim(sess, context, turn_end_wall,
                                                    gate=gate, reply_to=finish_trigger)
                     return

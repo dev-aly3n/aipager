@@ -3307,12 +3307,9 @@ class AnimationMixin:
             top_kind = sess.stack_top_kind()
             same_turn = sess.card_turn_seq == turn
             # A new turn inside a background job whose agents are still
-            # running (roadmap 8.56): the job keeps its ONE card, moved
-            # down to this turn's message, with the agents' rows carried
-            # over — instead of the card being closed where it stands and
-            # a second one opened.
-            job_card: int | None = None
-            job_card_trigger: int | None = None
+            # running (roadmap 8.56): the agents' rows and job state are
+            # carried over to this turn's card, so the one live card, under
+            # the newest message, is the one that shows them.
             carried_agents: dict = {}
             if same_turn and top_kind == "busy" and sess.busy_msg_id:
                 # This turn already has its card (roadmap 8.57 R1): never
@@ -3380,17 +3377,17 @@ class AnimationMixin:
                     # flag, and reclaims here.
                     sess.job_reclaim_pending = False
                     if sess.active_subagents and sess.busy_msg_id > 0:
-                        # Its agents are still running (roadmap 8.56): the
-                        # job's one card moves down to this new turn's
-                        # message below, agents' rows carried over, rather
-                        # than being settled where it stands under a
-                        # second card.
-                        job_card = sess.busy_msg_id
-                        job_card_trigger = sess.busy_card_trigger
+                        # Its agents are still running (roadmap 8.56): they
+                        # move to this new turn's card below, rows and job
+                        # state carried over. The old card is still settled
+                        # where it stands, rows and prose kept: it is the
+                        # record of the turn that launched them, and the
+                        # layout setting keeps every turn's card (review
+                        # rev-iter1-005).
                         carried_agents = dict(sess.active_subagents)
                         log.info(
                             "[%s] new turn inside an open job (%d agents) "
-                            "— the job's card moves to it", sess.label,
+                            "— its agents move to the new card", sess.label,
                             len(carried_agents))
                     else:
                         log.warning(
@@ -3401,8 +3398,8 @@ class AnimationMixin:
                             sess.job_continuation_active,
                             bool(sess.job_grace_until),
                         )
-                        await self._close_superseded_card(sess)
-                        sess.busy_msg_id = None
+                    await self._close_superseded_card(sess)
+                    sess.busy_msg_id = None
                 elif sess.animate_task and not sess.animate_task.done():
                     return  # already showing busy — original race guard, unchanged
                 else:
@@ -3527,24 +3524,13 @@ class AnimationMixin:
             # A new turn starts clean: any earlier turn's deferred card is
             # void, whether or not this one defers its own.
             self._cancel_lazy_card(sess)
-            if job_card is not None:
-                # Roadmap 8.56: the open job's card, moved to this turn. Its
-                # running agents stay on it — as rows, and as the job state
-                # that keeps this turn's own Stop an interim one — and the
-                # card is re-sent under this turn's message (the old one is
-                # deleted), exactly one re-anchor for this turn start.
-                sess.busy_msg_id = job_card
-                sess.busy_card_trigger = job_card_trigger
-                for agent_id, info in carried_agents.items():
-                    info["history_idx"] = sess.record_tool(
-                        f"\U0001f916 {info.get('type', 'agent')}", False)
-                    sess.active_subagents[agent_id] = info
-                if (sess.trigger_msg_id is not None
-                        and sess.busy_card_trigger != sess.trigger_msg_id):
-                    await self._reanchor_busy_card_locked(
-                        sess, sess.trigger_msg_id, final=False)
-                self._start_animation(sess)
-                return
+            # Roadmap 8.56: the open job's running agents, carried to this
+            # turn — as rows on its card, and as the job state that keeps
+            # this turn's own Stop an interim one.
+            for agent_id, info in carried_agents.items():
+                info["history_idx"] = sess.record_tool(
+                    f"\U0001f916 {info.get('type', 'agent')}", False)
+                sess.active_subagents[agent_id] = info
             if lazy:
                 # Roadmap 8.32: the reset above is this turn's; the card
                 # waits until it is earned. The -1 claim is released so
