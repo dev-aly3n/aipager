@@ -131,6 +131,8 @@ class CardChat:
         #: ``(chat_id, message_id)`` of every deleteMessage that reached
         #: "Telegram", in order
         self.deletes: list[tuple[object, object]] = []
+        #: ``(text, kwargs)`` of every sendMessage that reached "Telegram"
+        self.sent: list[tuple[str, dict]] = []
 
     def new_id(self) -> int:
         self.next_id += 1
@@ -199,6 +201,8 @@ class _PtbDouble:
         chat = self._chat
         if name == "send_message":
             msg_id = chat.new_id()
+            chat.sent.append((kwargs.get("text")
+                              or (args[1] if len(args) > 1 else ""), kwargs))
             button = _first_button(kwargs.get("reply_markup"))
             data = getattr(button, "callback_data", None) or ""
             if ":now:" in data:
@@ -218,7 +222,7 @@ class _PtbDouble:
                 chat.cards[msg_id] = {
                     "reply_to": kwargs.get("reply_to_message_id"),
                     "stop": True, "deleted": False, "text": text,
-                    "texts": [text]}
+                    "texts": [text], "t": chat.clock()}
             return SimpleNamespace(message_id=msg_id)
         if name == "edit_message_text":
             card = chat.cards.get(kwargs.get("message_id"))
@@ -235,6 +239,7 @@ class _PtbDouble:
             line = chat.lines.get(kwargs.get("message_id"))
             if line is not None:
                 line["deleted"] = True
+                line.setdefault("deleted_t", chat.clock())
             return True
         if name == "set_message_reaction":
             chat.reactions.setdefault(args[1], []).append(args[2])
@@ -430,6 +435,7 @@ class Replay:
         query.message.chat_id = chat_id
         line = self.chat.lines.get(line_id)
         query.message.text = line["text"] if line else ""
+        query.message.reply_text = AsyncMock()
         query.answer = answer
         query.edit_message_text = AsyncMock()
         update = MagicMock()
@@ -438,6 +444,8 @@ class Replay:
         update.effective_user.id = user_id
         update.effective_chat = MagicMock()
         update.effective_chat.id = chat_id
+        #: the last tap's query (its ``edit_message_text`` mock is readable)
+        self.last_query = query
         await self.bot._handle_callback(update, MagicMock())
         toast = None
         for call in answer.await_args_list:
@@ -459,6 +467,9 @@ class Replay:
         update.message.chat_id = chat_id
         update.effective_message = update.message
         await getattr(self.bot, handler_name)(update, MagicMock())
+        #: every ``reply_text`` call's kwargs, e.g. a confirm keyboard
+        self.last_reply_kwargs = [
+            call.kwargs for call in update.message.reply_text.await_args_list]
         out = []
         for call in update.message.reply_text.await_args_list:
             reply = call.args[0] if call.args else call.kwargs.get("text")
@@ -467,6 +478,83 @@ class Replay:
 
     async def settle(self, seconds: float) -> None:
         await asyncio.sleep(seconds)
+
+    # ── scenario plumbing for the send-now rows ──────────────────────────
+    def worker(self) -> asyncio.Task:
+        return asyncio.ensure_future(self._updates())
+
+    async def turn(self, mid: int, text: str, *, tools: int = 1) -> None:
+        """A Telegram prompt reaching an idle Claude, taken as a new turn."""
+        self.say(mid, text)
+        await self.updates.join()
+        self.prompt_hooks(mid, text)
+        await asyncio.sleep(1)
+        for i in range(tools):
+            self.tool(f"{text} step {i}")
+            await asyncio.sleep(1)
+
+    async def queue(self, mid: int, text: str, *, evidence: bool = True,
+                    pickups: int = 1) -> float:
+        """*text* sent while a turn runs: typed into Claude's queue, its
+        transcript ``enqueue`` line (unless *evidence* is False) and its
+        ``queue_pickup``. Returns the virtual time of the pick-up."""
+        self.say(mid, text)
+        await self.updates.join()
+        if evidence:
+            self.enqueue(text)
+        policy_snapshot.consume_notes_matching(NAME, PREFIX + text)
+        t0 = self.loop.time()
+        for _ in range(pickups):
+            await self.hook(type="queue_pickup", consumed=[
+                {"msg_id": mid, "chat_id": CHAT, "raw_text": text}],
+                expired=[])
+        return t0
+
+    def fate(self, operation: str, text: str | None = None, *,
+             reason: str | None = None) -> None:
+        """A queue-operation line: ``remove`` (with *reason*), ``dequeue``
+        or ``popAll``."""
+        entry = {"type": "queue-operation", "operation": operation}
+        if reason is not None:
+            entry["reason"] = reason
+        if text is not None:
+            entry["content"] = PREFIX + text
+        self.append(entry)
+
+    def absorb(self, text: str) -> None:
+        self.fate("remove", text, reason="absorbed_mid_turn")
+
+    async def wait_line(self, reply_to, timeout: float = 15.0) -> dict | None:
+        """Poll (0.1 s virtual) until a line replying to *reply_to* exists."""
+        end = self.loop.time() + timeout
+        while self.loop.time() < end:
+            line = self.chat.line_for(reply_to)
+            if line is not None:
+                return line
+            await asyncio.sleep(0.1)
+        return self.chat.line_for(reply_to)
+
+    async def wait_deleted(self, line_id: int, timeout: float = 10.0) -> bool:
+        end = self.loop.time() + timeout
+        while self.loop.time() < end:
+            if self.chat.lines[line_id]["deleted"]:
+                return True
+            await asyncio.sleep(0.1)
+        return self.chat.lines[line_id]["deleted"]
+
+    def restarted_bot(self, mk_bot):
+        """Save the registry, load it into a fresh registry and bot (the
+        daemon after a restart), talking to the same fake chat through the
+        same limiter."""
+        from aipager.state import SessionRegistry
+
+        self.bot.registry.save()
+        registry = SessionRegistry()
+        registry.load()
+        bot = mk_bot(registry)
+        bot._app.bot = _PtbDouble(self.bot._app.bot._limiter, self.chat)
+        bot._maybe_update_bot_name = AsyncMock()
+        return bot
 
 
 
