@@ -655,6 +655,27 @@ class TrackedSession:
     # Spans turns by design; cleared by /stop, /clearqueue, kill and
     # restart. Never persisted.
     queued_targets: list[dict] = field(default_factory=list, repr=False)
+    # "Send now" (bot/send_now.py): the "⏳ Queued" reply line under each
+    # queued target that is still waiting after QUEUED_LINE_DELAY, keyed by
+    # the target's msg_id -> (chat_id, line message id). A line exists only
+    # for a msg_id still in `queued_targets`. Transient, never in
+    # _PERSIST_FIELDS: a restart has no queued targets, and the line ids a
+    # restart would orphan are owed on the REGISTRY
+    # (`SessionRegistry.queued_line_deletes`), which outlives a /kill.
+    queued_lines: dict[int, tuple[int, int]] = field(
+        default_factory=dict, repr=False)
+    # The pending 10 s timer per queued msg_id (the dict is its strong
+    # reference). Transient: a task cannot be persisted, and a restart has
+    # nothing queued to time.
+    queued_line_timers: dict[int, asyncio.Task] = field(
+        default_factory=dict, repr=False)
+    # > 0 while aipager is typing a prompt into this session (text written,
+    # Enter not yet): send-now then would submit the half-typed text, so a
+    # tap or /now is refused. Transient: no injection survives a restart.
+    prompt_injecting: int = 0
+    # True while a send-now chord is being written, so a second tap does not
+    # write it twice. Transient, for the same reason.
+    send_now_inflight: bool = False
     # monotonic stamp of the last explicit /stop (or safety halt). A Stop
     # hook that lands on an already-IDLE session shortly after it is
     # Claude finalising the INTERRUPTED turn, not an unanswered one — the
@@ -1648,6 +1669,22 @@ def _load_pinned_msg_ids(data: dict) -> dict[int, int]:
     return out
 
 
+def _clean_line_deletes(raw: object) -> list[list[int]]:
+    """The owed "send now" line deletes, as ``[chat_id, message_id]``
+    pairs of non-zero ints with a positive message id. Anything else (a
+    missing key, a wrong type, a malformed pair) is dropped: an entry that
+    cannot name a message cannot be deleted."""
+    out: list[list[int]] = []
+    if not isinstance(raw, list):
+        return out
+    for pair in raw:
+        if (isinstance(pair, (list, tuple)) and len(pair) == 2
+                and all(type(v) is int for v in pair)
+                and pair[0] != 0 and pair[1] > 0):
+            out.append([pair[0], pair[1]])
+    return out
+
+
 class SessionRegistry:
     """Single source of truth for all tracked Claude sessions."""
 
@@ -1672,6 +1709,12 @@ class SessionRegistry:
         # and the hook receiver (SessionStart of a resumed id) touch it.
         # Transient: never persisted.
         self.killed_sessions: dict[str, float] = {}
+        # "Send now" reply lines owed a delete, as [chat_id, message_id]:
+        # every line sent and not yet deleted (bot/send_now.py). Persisted,
+        # and on the registry rather than a session, so a restart, or a
+        # /kill that removes the session entry, never leaves a live button
+        # behind: startup deletes whatever is still here.
+        self.queued_line_deletes: list[list[int]] = []
 
     def get(self, name: str) -> TrackedSession | None:
         return self._sessions.get(name)
@@ -2153,6 +2196,7 @@ class SessionRegistry:
             "pinned_msg_ids": {str(c): m for c, m in self.pinned_msg_ids.items()},
             "msg_map": {f"{cid}:{mid}": v for (cid, mid), v in msg_map.items()},
             "sessions": sessions,
+            "queued_line_deletes": _clean_line_deletes(self.queued_line_deletes),
         }
 
         state_file = Path(SESSION_STATE_FILE)
@@ -2185,6 +2229,8 @@ class SessionRegistry:
 
         self.last_active_session = data.get("last_active_session", "")
         self.pinned_msg_ids = _load_pinned_msg_ids(data)
+        self.queued_line_deletes = _clean_line_deletes(
+            data.get("queued_line_deletes"))
 
         # Resolve the default scope once (for backfilling legacy sessions).
         _default = _default_scope()

@@ -377,6 +377,12 @@ FINISH_CARD_GRACE_SECONDS: float = float(
 # always gets its card at once; this delay applies to self-woken turns only.
 SELF_WOKEN_CARD_DELAY: float = 15.0
 
+# Seconds a Telegram message must still be waiting in Claude Code's own
+# queue before aipager replies under it with the "⏳ Queued" line and its
+# "⚡ Send now" button. A message Claude takes sooner shows only 👀 -> 👍,
+# with no line flashing up and away. A constant, not a setting.
+QUEUED_LINE_DELAY: float = 10.0
+
 # Seconds a session can stay BUSY with no hook activity before the bot
 # posts an informational "still working" note in chat. Nothing is wrong
 # when this fires — a session running a long tool call, generating
