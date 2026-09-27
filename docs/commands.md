@@ -19,6 +19,7 @@ and on every session change.
 | `/app` | — | Open the Mini App dashboard (sessions, diff viewer, settings). |
 | `/status` | — | One-message snapshot of every live session: model, context %, cost, queue depth. |
 | `/stop` | — | Interrupt the active session's current turn. Also discards queued messages and replies with how many were discarded. |
+| `/now` | - | Send the messages Claude is holding in the active session's queue right now, instead of after the current step (Claude Code's own send-now keys, Ctrl+X Ctrl+S). Works any time, including while the chat is muted or in minimal mode; replies `Nothing is waiting in the queue` when Claude holds nothing. See [Send a queued message now](#send-a-queued-message-now). |
 | `/new [label] [prompt]` | all optional | Create a session. With no args, an interactive wizard walks name → mode → model → folder. With a label (and optional first prompt), creates `claude-<label>` directly. |
 | `/resume [label]` | optional | Resume a previously-gone session by name, or open a picker. A session that ended stays listed for `GONE_SESSION_MAX_AGE_DAYS` (default 14) and then leaves the registry; its Claude transcript is untouched. |
 | `/kill [label]` | optional | Destroy a session. With no arg, opens a picker. Always two-tap: shows `[💀 Kill] [Cancel]`. |
@@ -236,6 +237,10 @@ Replace, `/perms`' Stop-and-switch — are tied to the task they were
 shown for. Tapping one left over from an earlier task answers
 `That task already finished - …` (with a hint to re-run the command)
 and changes nothing, instead of acting on whatever is running now.
+
+A `⚡ Send now` button acts only on the message it sits under: if
+Claude has already taken that message, the tap answers `Already taken`,
+sends nothing and removes the line.
 
 ### Idle responses
 
@@ -564,6 +569,49 @@ once resolved:
 
 Held messages are capped at 50 per session and expire after 24 h;
 `/clearqueue` drops them along with anything Claude is holding.
+
+#### Send a queued message now
+
+A message you send while Claude is working waits in Claude's queue
+until the current step ends. If it is still waiting 10 seconds after
+Claude queued it (`QUEUED_LINE_DELAY`), aipager replies under it:
+
+```
+⏳ Queued - Claude will read it after the current step
+[⚡ Send now]
+```
+
+A message Claude takes sooner gets no line, only 👀 then 👍.
+
+Tapping `⚡ Send now` (or sending `/now`) presses Claude Code's own
+send-now keys (Ctrl+X, then Ctrl+S) in that session. Claude then reads
+everything it has queued at once, not only the message you tapped.
+What happens to the work in progress is Claude Code's choice: a running
+command or agent keeps going in the background; if Claude is in the
+middle of writing a reply, that reply is cut short and restarted with
+your message.
+
+The tap answers `Sent to Claude now` and the line disappears. The keys
+are only pressed when Claude's transcript shows it still holding the
+message; otherwise the tap answers `Already taken` and removes the
+line. It is refused, with nothing pressed, while a permission or
+question prompt is open (`Answer the open question first`) and while
+aipager is in the middle of typing another message into the session
+(`Busy typing a prompt, try again in a moment`). Anyone who may send
+messages to the session can use the button and `/now`; a `read_only`
+member cannot.
+
+The line disappears on its own when its message leaves Claude's queue:
+Claude takes it (folded into the running turn, handed to a background
+agent, or started as the next turn), Escape in the terminal pulls the
+queue back into the input box, or it is dropped by `/stop`,
+`/clearqueue`, `/kill`, `/restart`, a safety halt or the session
+ending. A daemon restart removes any line still showing.
+
+The line is a courtesy, so it is not sent while the chat is flood-muted,
+in minimal mode or short of its hourly budget; `/now` does the same job
+then. Each waiting message costs at most two chat calls (the line and
+its removal).
 
 ### Files
 
