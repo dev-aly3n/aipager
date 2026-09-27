@@ -572,3 +572,78 @@ def test_a_held_turn_start_counts_as_work_in_flight(vloop):
     reason = sess.work_in_flight_reason(now + 10)
     assert reason is not None and reason[0] == "turn start"
     assert sess.work_in_flight_reason(now + TURN_STATE_HOLD_SECONDS) is None
+
+
+def test_late_answer_prose_after_the_gate_is_still_the_old_turns(
+        replay, vloop, monkeypatch):
+    """The hold outlasts the finish's gate (the popped message's 👍 and the
+    card lock come after it): the finishing turn's answer, arriving late in
+    that window, is still that turn's."""
+    _layout()
+    r = replay
+    sess = r.sess
+    from aipager.bot import reactions as reactions_mod
+    real_mark = reactions_mod.mark_all
+
+    async def _slow_taken(bot, notes, emoji, chat_id):
+        if emoji == reactions_mod.TAKEN and any(
+                n.get("msg_id") == 3 for n in notes):
+            await asyncio.sleep(5)
+        return await real_mark(bot, notes, emoji, chat_id)
+
+    async def scenario():
+        w = _worker(r)
+        await _queue_after_first(r)
+        monkeypatch.setattr(reactions_mod, "mark_all", _slow_taken)
+        r.stop("answer first")
+        await asyncio.sleep(0.2)
+        r.tool("popped step")
+        for _ in range(100):
+            await asyncio.sleep(0.2)
+            if sess.finish_gate is None:
+                break
+        gate_open_while_held = (sess.finish_gate is None
+                                and sess.turn_state_held())
+        r.hook(hook_event_name="MessageDisplay", delta="answer first",
+               message_id="m-first", index=0)
+        await asyncio.sleep(20)
+        r.stop("answer queued")
+        await _drain(r)
+        w.cancel()
+        return gate_open_while_held
+
+    assert _run(vloop, scenario()) is True
+    (new,) = _cards_for(r, 3)
+    assert not _ever_showed(new, "answer first")
+    assert "popped step" in new["text"]
+
+
+def test_a_held_reply_timeout_follows_its_permission_prompt(replay, vloop):
+    """Held in order, the hook's reply-window timeout runs after the prompt
+    it belongs to and closes that prompt's reply channel, so a late tap
+    answers by keystrokes instead of writing to a socket nobody reads."""
+    r = replay
+    sess = r.sess
+
+    async def scenario():
+        r.bot.registry.transition(sess.name, Status.BUSY)
+        sess.trigger_msg_id = 1
+        await r.bot._send_busy_and_animate(sess)
+        r.bot._stop_animation(sess)
+        sess.card_turn_seq = sess.turn_seq - 1
+        sess.hold_turn_state(sess.turn_seq)
+        reply = {"aipager_reply_addr": "unused-reply-addr",
+                 "aipager_request_id": "req-1"}
+        r.hook(hook_event_name="PermissionRequest", tool_name="Bash",
+               tool_input={"command": "rm -rf build"}, **reply)
+        await asyncio.sleep(0.1)
+        r.hook(hook_event_name="permission_reply_timeout",
+               aipager_request_id="req-1")
+        await asyncio.sleep(0.5)
+        sess.release_turn_state()
+        await asyncio.sleep(1)
+
+    _run(vloop, scenario())
+    assert sess.status == Status.INTERACTIVE
+    assert sess.pending_permission is not None
+    assert sess.pending_permission.get("hook_reply") is None
