@@ -259,6 +259,19 @@ _CHORD_IN_FLIGHT: set[str] = set()
 # How long another write waits for a chord in flight, and how often it looks.
 _CHORD_WAIT_LIMIT: float = 0.5
 _CHORD_POLL: float = 0.02
+# Every write to a session's terminal, counted as it starts
+# (``_note_write``). The wait above is bounded, and a slow ``dtach -p``
+# can outlast it, so the chord does not trust timing: it writes Ctrl+S
+# only when this count shows nothing else was written to the session since
+# its Ctrl+X.
+_WRITES: dict[str, int] = {}
+
+
+def _note_write(session: str) -> int:
+    """Count one write to *session*'s terminal; return the new count."""
+    count = _WRITES.get(session, 0) + 1
+    _WRITES[session] = count
+    return count
 
 
 async def _await_chord(session: str) -> None:
@@ -279,16 +292,29 @@ async def send_now(session: str) -> bool:
 
     Two writes ``SEND_NOW_CHORD_GAP`` apart, never one chunk. If the Ctrl+X
     write fails, Ctrl+S is not written: alone it would stash the input box.
-    Returns True when both writes succeeded."""
+    Nor is it written when any other write reached the session after the
+    Ctrl+X (a writer that gave up waiting for this chord): the chord is
+    broken then, and a Ctrl+S after it would stash the input, while a lone
+    Ctrl+X is harmless. Returns True when both writes succeeded.
+
+    Cancelled during the gap (daemon shutdown), or with a Ctrl+X write that
+    timed out after its byte was delivered, a lone Ctrl+X may be left
+    pending in Claude Code's input; the next key then ends that chord."""
     # Marked before the first await, so a write another path starts from
     # here on waits for the chord instead of landing inside it.
     _CHORD_IN_FLIGHT.add(session)
     try:
         sock = _sock_path(session)
+        mark = _note_write(session)
         ok, _ = await _run([_DTACH, "-p", sock], stdin=_CTRL_X)
         if not ok:
             return False
         await asyncio.sleep(SEND_NOW_CHORD_GAP)
+        if _WRITES.get(session) != mark:
+            log.warning("Send-now chord → %s broken by another write; "
+                        "Ctrl+S not written", session)
+            return False
+        _note_write(session)
         ok, _ = await _run([_DTACH, "-p", sock], stdin=_CTRL_S)
         if ok:
             log.info("Sent send-now chord → %s", session)
@@ -305,6 +331,7 @@ async def send_keys(session: str, keys: str) -> bool:
     await _await_chord(session)
     seq = KEYS.get(keys, keys)
     sock = _sock_path(session)
+    _note_write(session)
     ok, _ = await _run([_DTACH, "-p", sock], stdin=seq.encode())
     if ok:
         log.info("Sent keys %r → %s", keys, session)
@@ -320,6 +347,7 @@ async def send_text_and_enter(session: str, text: str) -> bool:
     """
     await _await_chord(session)
     sock = _sock_path(session)
+    _note_write(session)
     ok, _ = await _run([_DTACH, "-p", sock], stdin=text.encode())
     if not ok:
         return False
@@ -328,6 +356,7 @@ async def send_text_and_enter(session: str, text: str) -> bool:
     # Scale with text length: longer text = more rendering time needed.
     delay = max(0.15, min(0.5, len(text) * 0.003))
     await asyncio.sleep(delay)
+    _note_write(session)
     ok, _ = await _run([_DTACH, "-p", sock], stdin=b"\r")
     if ok:
         log.info("Sent text %r + Enter → %s", text[:50], session)

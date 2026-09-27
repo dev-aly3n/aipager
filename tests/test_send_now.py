@@ -194,6 +194,51 @@ def test_the_chord_wait_is_bounded(keys, run_async):
     assert keys.writes == [b"\x1b"]
 
 
+@pytest.mark.parametrize("other,its_writes", [
+    (lambda: inject.send_keys(NAME, "Escape"), [b"\x1b"]),
+    (lambda: inject.send_text_and_enter(NAME, "hi"), [b"hi", b"\r"]),
+    (lambda: inject.discard_queued_input(NAME), [b"\x1b", b"\x15"]),
+], ids=["send_keys", "send_text_and_enter", "discard_queued_input"])
+def test_a_write_inside_a_slow_chord_means_no_ctrl_s(monkeypatch, run_async,
+                                                     other, its_writes):
+    """A Ctrl+X write that outlasts the other writer's bounded wait: that
+    writer goes ahead, so the chord is broken, and its Ctrl+S (which would
+    stash the input box) is never written."""
+    monkeypatch.setattr(inject, "_CHORD_WAIT_LIMIT", 0.05)
+    writes: list[bytes] = []
+
+    async def _run(args, stdin=b"", timeout=5):
+        writes.append(bytes(stdin))
+        if stdin == b"\x18":
+            await asyncio.sleep(0.2)  # a slow dtach -p, past the wait limit
+        return True, ""
+
+    monkeypatch.setattr(inject, "_run", _run)
+
+    async def scenario():
+        chord = asyncio.ensure_future(inject.send_now(NAME))
+        await asyncio.sleep(0)  # the chord's Ctrl+X write has started
+        other_ok = await other()
+        return await chord, other_ok
+
+    chord_ok, other_ok = run_async(scenario())
+    assert chord_ok is False
+    assert other_ok is True
+    assert b"\x13" not in writes, writes
+    assert writes == [b"\x18", *its_writes]
+
+
+def test_a_write_before_the_chord_does_not_block_its_ctrl_s(keys, run_async):
+    """Only a write AFTER the Ctrl+X breaks the chord: earlier ones never
+    stop the Ctrl+S."""
+    async def scenario():
+        await inject.send_keys(NAME, "Escape")
+        return await inject.send_now(NAME)
+
+    assert run_async(scenario()) is True
+    assert keys.writes == [b"\x1b", b"\x18", b"\x13"]
+
+
 def test_now_is_a_reserved_session_name(run_async):
     assert "now" in inject._RESERVED
     ok, err = run_async(inject.launch_session("now"))
