@@ -64,7 +64,7 @@ def test_clearqueue_singular_message(mk_bot, mk_update, run_async):
 
 
 def test_clearqueue_also_clears_outstanding_notes_combined_count(
-    mk_bot, mk_update, run_async, monkeypatch,
+    mk_bot, mk_update, run_async, monkeypatch, tmp_path,
 ):
     """design.md "queue handoff": /clearqueue's count includes what
     Claude itself is holding, not just aipager's own pending_queue —
@@ -78,6 +78,11 @@ def test_clearqueue_also_clears_outstanding_notes_combined_count(
     registry.last_active_session = "claude-jim"
     ps.write_note("claude-jim", None, None, None, msg_id=9, chat_id=1,
                   sender_key=(1, 1), body="note text", raw_text="note text")
+    # Claude Code's own record that it holds the note's message (8.37).
+    transcript = tmp_path / "t.jsonl"
+    transcript.write_text('{"type":"queue-operation","operation":"enqueue",'
+                          '"content":"note text"}\n', encoding="utf-8")
+    sess.transcript_path = str(transcript)
     bot = mk_bot(registry)
     keys = []
     async def _send_keys(name, k):

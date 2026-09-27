@@ -577,11 +577,15 @@ class NotifyMixin:
         nothing else would ever move it off 👀. A prompt-type command
         queued the same way was named by its pick-up and is a queued
         target instead. (A teardown before the turn ends drops it: 🤷.)"""
-        from aipager.policy_snapshot import list_outstanding_notes
+        from aipager.policy_snapshot import (
+            list_outstanding_notes, mark_command_notes_ran,
+        )
         ran = [n for n in list_outstanding_notes(sess.name)
                if reactions.is_slash_command(n.get("raw_text"))]
         await reactions.mark_all(self, ran, reactions.ACK,
                                  resolve_chat_id(sess))
+        # Done, so no longer "queued": the notes expire (roadmap 8.37).
+        mark_command_notes_ran(sess.name, ran)
 
     async def _start_queued_turn(self, sess: TrackedSession) -> None:
         """Start the turn for the oldest message Claude queued during the
@@ -628,8 +632,9 @@ class NotifyMixin:
         guesses wrong sends an Escape), and in a job's waiting window the
         targets are kept on purpose while Claude Code has already started
         the next prompt. An
-        untrusted target gets no 🤷 and no discard keystroke — an Escape
-        into an empty Claude Code queue interrupts the running turn."""
+        untrusted target gets no 🤷 here. Whether a teardown types its
+        queue wipe is decided by the transcript's evidence instead
+        (``session_ops.held_by_claude``, roadmap 8.37)."""
         if not sess.queued_targets:
             return []
         if not _exact_anchors_available(sess) or sess.job_background_open():

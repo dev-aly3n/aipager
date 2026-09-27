@@ -326,6 +326,13 @@ def list_outstanding_notes(
 
     out: list[dict] = []
     for p in entries:
+        if p.suffix == _RAN_SUFFIX and not p.with_suffix(".json").exists():
+            # Its note is gone (consumed, swept): the mark means nothing.
+            try:
+                p.unlink(missing_ok=True)
+            except OSError:
+                pass
+            continue
         if p.suffix != ".json":
             continue
         try:
@@ -339,11 +346,13 @@ def list_outstanding_notes(
         except (TypeError, ValueError):
             queued_at_f = now
         note["_path"] = p
+        if _ran_long_enough(p, now):
+            # A command that already ran (roadmap 8.37): not a message
+            # anyone is waiting on, so not reported as expired either.
+            _unlink_note(p)
+            continue
         if queued_at_f < cutoff:
-            try:
-                p.unlink(missing_ok=True)
-            except OSError:
-                pass
+            _unlink_note(p)
             if expired_out is not None:
                 expired_out.append(note)
             continue
@@ -352,6 +361,83 @@ def list_outstanding_notes(
     out.sort(key=lambda n: (n.get("queued_at") if isinstance(
         n.get("queued_at"), (int, float)) else now, str(n.get("_path"))))
     return out
+
+
+#: How long a slash command's note outlives the moment it ran (roadmap
+#: 8.37). A local command (``/model``) fires no prompt hook, so nothing
+#: would ever consume its note; a prompt-type one fires UserPromptSubmit
+#: within a fraction of a second of the Enter and needs its note there to
+#: be matched.
+RAN_COMMAND_NOTE_GRACE_SECONDS: float = 10.0
+
+
+#: The mark :func:`mark_command_notes_ran` leaves beside a note. A file of
+#: its own, never a rewrite of the note: the pick-up hook may be deleting
+#: that note at the same moment, and a rewrite could bring it back.
+_RAN_SUFFIX = ".ran"
+
+
+def _is_command_note(note: dict) -> bool:
+    return str(note.get("raw_text") or "").lstrip().startswith("/")
+
+
+def _unlink_note(path: Path) -> None:
+    """Remove a note file and its ran mark (best-effort)."""
+    for p in (path, path.with_suffix(_RAN_SUFFIX)):
+        try:
+            p.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def _ran_long_enough(path: Path, now: float) -> bool:
+    try:
+        ran_at = float(path.with_suffix(_RAN_SUFFIX).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return now - ran_at >= RAN_COMMAND_NOTE_GRACE_SECONDS
+
+
+def mark_command_notes_ran(
+    session_name: str, notes: list[dict] | None = None, *,
+    msg_id: int | None = None, chat_id: int | None = None,
+    now: float | None = None,
+) -> int:
+    """Record that slash commands have run, so their notes expire
+    :data:`RAN_COMMAND_NOTE_GRACE_SECONDS` later instead of lingering as
+    "outstanding" for a day (roadmap 8.37). A lingering one read as a
+    queued message to ``/clearqueue`` and, at the head of the queue,
+    stopped every later pick-up from matching.
+
+    Marks *notes* (from :func:`list_outstanding_notes`), or, when that is
+    ``None``, the outstanding notes of message *msg_id* in chat *chat_id*.
+    Only a command's note (its ``raw_text`` starts with ``/``) is ever
+    marked, and a mark already made is kept. The note itself is never
+    rewritten. Best-effort; returns how many notes were marked.
+    """
+    if notes is None:
+        if msg_id is None:
+            return 0
+        notes = [n for n in list_outstanding_notes(session_name)
+                 if n.get("msg_id") == msg_id and n.get("chat_id") == chat_id]
+    stamp = time.time() if now is None else now
+    marked = 0
+    for note in notes:
+        path = note.get("_path")
+        if path is None or not _is_command_note(note):
+            continue
+        mark = Path(path).with_suffix(_RAN_SUFFIX)
+        if mark.exists():
+            continue
+        tmp = mark.with_name(mark.name + ".tmp")
+        try:
+            tmp.write_text(repr(stamp), encoding="utf-8")
+            os.replace(tmp, mark)
+        except OSError:
+            log.debug("could not mark note %s ran", path, exc_info=True)
+            continue
+        marked += 1
+    return marked
 
 
 def delete_notes(session_name: str, notes: list[dict]) -> None:
@@ -366,10 +452,7 @@ def delete_notes(session_name: str, notes: list[dict]) -> None:
         path = note.get("_path")
         if path is None:
             continue
-        try:
-            Path(path).unlink(missing_ok=True)
-        except OSError:
-            pass
+        _unlink_note(Path(path))
 
 
 def match_notes_prefix_run(outstanding: list[dict], content: str) -> list[dict]:

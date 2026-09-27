@@ -38,6 +38,7 @@ from aipager.bot.callbacks import (
 )
 from aipager.state import Status, TrackedSession
 from aipager.transcript import last_assistant_preview as _read_preview
+from aipager.transcript import read_still_queued
 
 # Pure-function helpers and constants live in aipager.bot.transport
 # now. Re-export the names this module uses internally so the
@@ -426,6 +427,46 @@ def _external_quote_context(fragment: str) -> str:
         f"\"{fragment}\". They are pointing at that specific passage — "
         "it is not itself a new instruction."
     )
+
+
+def held_by_claude(sess: TrackedSession, candidates: list[dict]) -> list[dict]:
+    """The *candidates* (outstanding notes, queued targets) that Claude
+    Code's transcript shows it still holding in its queue: each needs an
+    ``enqueue`` line carrying its text with no fate written after it
+    (:func:`aipager.transcript.read_still_queued`, roadmap 8.37).
+
+    This is what a teardown's queue wipe (Escape, then KillLine) is gated
+    on. Anything else aipager remembers - a note nothing consumed, a
+    target the scan never settled - is not evidence: an Escape into
+    Claude Code's empty queue interrupts the running turn.
+
+    A note is matched by its ``body`` (the exact text typed, marker
+    included), a target by its ``raw_text``. Longest text first, and
+    each queued line backs one candidate only, so a short message ("ok")
+    cannot borrow a longer one's line.
+    """
+    if not candidates:
+        return []
+    queued = read_still_queued(
+        sess.stream_transcript_path or sess.transcript_path or "")
+    if not queued:
+        return []
+
+    def _text(c: dict) -> str:
+        return str(c.get("body") or c.get("raw_text") or "")
+
+    held: set[int] = set()
+    for i in sorted(range(len(candidates)),
+                    key=lambda k: -len(_text(candidates[k]))):
+        text = _text(candidates[i])
+        if not text:
+            continue
+        for j, content in enumerate(queued):
+            if text in content:
+                held.add(i)
+                del queued[j]
+                break
+    return [c for i, c in enumerate(candidates) if i in held]
 
 
 class SessionOpsMixin:
@@ -847,8 +888,13 @@ class SessionOpsMixin:
         # makes Claude Code pull it into the input box and write
         # `popAll`, and a later read would see that line, forget the
         # message and skip wiping the input box (see 1b).
-        queued_targets = await self._settle_queued_targets(
-            sess, reanchor=False)
+        await self._settle_queued_targets(sess, reanchor=False)
+        from aipager.policy_snapshot import clear_notes_dir, list_outstanding_notes
+        # Only what the transcript shows Claude holding counts (roadmap
+        # 8.37): a note left by a command that already ran is not queued,
+        # and the queue wipe below must not be typed for it.
+        held = held_by_claude(
+            sess, list_outstanding_notes(sess.name) + self._queued_candidates(sess))
 
         # 1. Send Escape twice to Claude Code — proven interrupt
         # behaviour this change does not touch.
@@ -862,14 +908,8 @@ class SessionOpsMixin:
         # without cancelling the running task, and left alone it would
         # concatenate onto the next prompt. Read once, up front, so the
         # "was anything actually outstanding" check and the combined
-        # drop count below agree on the same snapshot.
-        from aipager.policy_snapshot import clear_notes_dir, list_outstanding_notes
-        outstanding_notes = list_outstanding_notes(sess.name)
-        # A message Claude queued mid-turn has no note any more (the
-        # submit-time pick-up consumed it) but is still in Claude's queue:
-        # it counts as outstanding exactly like a note — when that is
-        # known (`queued_targets`, read in step 0).
-        if outstanding_notes or queued_targets:
+        # drop count below agree on the same snapshot (`held`, step 0).
+        if held:
             await inject.discard_queued_input(sess.name)
 
         # 2. Cancel animation — and a self-woken turn's deferred card
@@ -890,12 +930,10 @@ class SessionOpsMixin:
         sess.busy_msg_id = None
 
         # 4. Transition to IDLE directly (skip notify — we handle UI here)
-        dropped = (len(sess.pending_queue) + len(outstanding_notes)
-                   + len(queued_targets))
+        dropped = len(sess.pending_queue) + len(held)
         # Every one of them is now never going to be taken (R3).
         await self._mark_not_delivered(
-            sess, reactions.held_entries(sess.pending_queue)
-            + outstanding_notes + queued_targets)
+            sess, reactions.held_entries(sess.pending_queue) + held)
         sess.pending_queue.clear()
         clear_notes_dir(sess.name)
         sess.pending_permission = None
@@ -1581,6 +1619,17 @@ class SessionOpsMixin:
             sess, target_skip_perms=sess.skip_perms, interrupt_first=False,
         )
 
+    @staticmethod
+    def _queued_candidates(sess: TrackedSession) -> list[dict]:
+        """The queued targets a teardown may wipe from Claude's queue,
+        before the transcript's evidence (:func:`held_by_claude`) is
+        asked. None in a background job's waiting window: the targets are
+        kept there on purpose while Claude Code may already have started
+        the next prompt (see ``_settle_queued_targets``)."""
+        if sess.job_background_open():
+            return []
+        return list(sess.queued_targets)
+
     async def _clear_queue_core(self, sess: TrackedSession) -> ClearQueueOutcome:
         """Discard every prompt queued behind the session's in-progress
         turn AND everything Claude itself is holding but hasn't
@@ -1595,29 +1644,33 @@ class SessionOpsMixin:
         (design.md "Stop and /clearqueue on the same primitive") — ONE
         call to :func:`inject.discard_queued_input`, never preceded by
         the interrupt pair :meth:`_stop_session_core` sends, so this can
-        never cancel the running turn. Sends no keys at all when only
-        ``pending_queue`` (never-injected, aipager-side-only holds) is
-        being cleared — there is nothing in the pty's input box to wipe
-        unless a note had actually reached it.
+        never cancel the running turn. Sends no keys at all unless the
+        transcript shows Claude holding a queued message
+        (:func:`held_by_claude`, roadmap 8.37): clearing only
+        ``pending_queue`` (never-injected, aipager-side-only holds)
+        touches nothing in the pty, and neither does a note left behind
+        by a command that already ran.
         """
         from aipager.policy_snapshot import clear_notes_dir, list_outstanding_notes
 
-        outstanding_notes = list_outstanding_notes(sess.name)
-        # Messages Claude queued mid-turn: their notes went at the
-        # submit-time pick-up, but they are still in Claude's queue — when
-        # that is known (see _settle_queued_targets; an Escape into an
-        # empty Claude Code queue would interrupt the turn).
-        queued_targets = await self._settle_queued_targets(sess)
-        dropped = (len(sess.pending_queue) + len(outstanding_notes)
-                   + len(queued_targets))
+        # Settle first: an absorption no tick has read yet is 👍, not 🤷.
+        await self._settle_queued_targets(sess)
+        notes = list_outstanding_notes(sess.name)
+        # What Claude itself still holds - a message queued mid-turn (its
+        # note went at the submit-time pick-up; it is a queued target) or
+        # a command queued behind the turn (still a note) - counts only
+        # with the transcript's evidence (roadmap 8.37): the wipe below
+        # types Escape, and an Escape into Claude Code's empty queue
+        # interrupts the running turn.
+        held = held_by_claude(sess, notes + self._queued_candidates(sess))
+        dropped = len(sess.pending_queue) + len(held)
         if not dropped:
             return ClearQueueOutcome(ok=False, label=sess.label, dropped=0)
         await self._mark_not_delivered(
-            sess, reactions.held_entries(sess.pending_queue)
-            + outstanding_notes + queued_targets)
+            sess, reactions.held_entries(sess.pending_queue) + held)
         sess.pending_queue.clear()
         clear_notes_dir(sess.name)
-        if outstanding_notes or queued_targets:
+        if held:
             await inject.discard_queued_input(sess.name)
         sess.queued_targets.clear()
         self.registry.mark_dirty()

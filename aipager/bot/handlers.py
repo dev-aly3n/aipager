@@ -2050,6 +2050,15 @@ class CommandHandlersMixin:
             # reaction — it silently failed, 8.33.)
             await self._react(update, reactions.HANDED_OFF if was_busy
                               else reactions.ACK)
+            if not was_busy:
+                # Ran, so its note is no queued message: let it expire
+                # (roadmap 8.37 - a lingering one made /clearqueue type
+                # Escape into a later turn). Queued, it waits for 👌.
+                from aipager.policy_snapshot import mark_command_notes_ran
+                mark_command_notes_ran(
+                    sess.name, msg_id=update.message.message_id,
+                    chat_id=calling_chat_id(update),
+                )
             # Explicit feedback for model changes
             if is_model_switch:
                 model_arg = command_text.split(" ", 1)[1]

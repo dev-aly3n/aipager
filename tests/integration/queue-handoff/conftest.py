@@ -19,13 +19,14 @@ convention already used by ``tests/test_hold_prompt_during_open_dialog.py``.
 
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock
 
 import pytest
 
 
 @pytest.fixture
-def wired(mk_bot, monkeypatch):
+def wired(mk_bot, monkeypatch, tmp_path):
     """A bot with a live-looking session named ``claude-x``; pty writes
     captured, not performed; reactions/messages captured via a blanket
     AsyncMock Telegram client. ``_react`` is stubbed out — tests that
@@ -43,6 +44,7 @@ def wired(mk_bot, monkeypatch):
 
     async def _send_text_and_enter(name, body):
         injected.append(body)
+        _claude_writes_queue_lines(sess, body)
         return True
 
     async def _send_keys(name, key):
@@ -61,8 +63,27 @@ def wired(mk_bot, monkeypatch):
     sess = bot.registry.get_or_create("claude-x")
     sess.label = "x"
     bot.registry.last_active_session = "claude-x"
+    transcript = tmp_path / "transcript.jsonl"
+    transcript.write_bytes(b"")
+    sess.transcript_path = str(transcript)
 
     return bot, sess, injected, keys
+
+
+def _claude_writes_queue_lines(sess, body):
+    """What Claude Code writes for text typed into it: an ``enqueue``
+    line, and straight away a ``dequeue`` when no turn is running (it
+    becomes the prompt). While a turn runs the message stays queued -
+    the evidence /clearqueue and /stop wipe Claude's queue on (roadmap
+    8.37)."""
+    from aipager.state import Status
+    lines = [{"type": "queue-operation", "operation": "enqueue",
+              "content": body}]
+    if sess.status != Status.BUSY:
+        lines.append({"type": "queue-operation", "operation": "dequeue"})
+    with open(sess.transcript_path, "a", encoding="utf-8") as fh:
+        for line in lines:
+            fh.write(json.dumps(line) + "\n")
 
 
 @pytest.fixture

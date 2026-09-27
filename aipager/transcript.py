@@ -520,6 +520,77 @@ def read_queue_events(
     return (events, offset + consumed_bytes)
 
 
+#: How far back :func:`read_still_queued` looks. Claude Code runs its whole
+#: queue when a turn ends, so anything still queued was enqueued during the
+#: running turn; a message older than this window is simply not evidence.
+QUEUE_EVIDENCE_WINDOW_BYTES = 8 * 1024 * 1024
+
+
+def read_still_queued(
+    transcript_path: str, *, window: int = QUEUE_EVIDENCE_WINDOW_BYTES,
+) -> list[str]:
+    """The ``content`` of every ``enqueue`` line Claude Code has written no
+    fate for yet: the exact evidence that it holds a message in its queue
+    right now (roadmap 8.37).
+
+    Only positive evidence counts, because a teardown acts on this by
+    typing Escape, and an Escape into an empty queue interrupts the running
+    turn. So every line that might have taken a message out of the queue
+    is read as having taken it:
+
+    - ``remove`` naming a content (``absorbed_mid_turn``,
+      ``delivered_to_agent``) takes that one message;
+    - ``dequeue`` and a bare ``remove`` carry no content, and ``popAll``
+      empties the queue into the input box: each ends the evidence for
+      every message enqueued before it. A ``dequeue`` names no message,
+      and Claude Code usually writes one per queued message in the same
+      instant, but not always (a task notification can stay queued behind
+      a single one). Which message it took cannot be known, and the
+      oldest-first guess goes wrong once a queue line is missing, so no
+      message keeps its evidence past one: a message still queued behind
+      it is missed (no keys), never an empty queue reported as full;
+    - an operation this reader does not know does the same.
+
+    Reads at most the last *window* bytes; a missing or unreadable file is
+    no evidence (``[]``).
+    """
+    if not transcript_path:
+        return []
+    try:
+        with open(transcript_path, "rb") as fh:
+            size = fh.seek(0, os.SEEK_END)
+            start = max(0, size - window)
+            fh.seek(start)
+            raw = fh.read()
+    except (OSError, ValueError) as exc:
+        log.debug("read_still_queued: cannot read %s: %s", transcript_path, exc)
+        return []
+    lines = raw.split(b"\n")[:-1]   # the last element is never a whole line
+    if start and lines:
+        lines = lines[1:]           # the window began mid-line
+    queued: list[str] = []
+    for line_bytes in lines:
+        if _QUEUE_OP_MARK not in line_bytes:
+            continue
+        try:
+            entry = json.loads(line_bytes.decode("utf-8", errors="replace"))
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(entry, dict) or entry.get("type") != "queue-operation":
+            continue
+        operation = entry.get("operation")
+        content = entry.get("content")
+        if operation == "enqueue":
+            queued.append(content if isinstance(content, str) else "")
+        elif (operation == "remove" and isinstance(content, str)
+              and content):
+            if content in queued:
+                queued.remove(content)
+        else:
+            queued.clear()
+    return queued
+
+
 def read_turn_text(transcript_path: str, offset: int) -> tuple[str, int]:
     """Read assistant text blocks appended to *transcript_path* after *offset*.
 

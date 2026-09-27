@@ -17,6 +17,20 @@ from aipager.state import Status, TrackedSession
 
 # ---- _stop_session -------------------------------------------------------
 
+
+def _claude_holds(sess, tmp_path, *contents):
+    """Claude Code's transcript ``enqueue`` line for each of *contents*,
+    with no fate after it: the only evidence /stop and /clearqueue type
+    their queue wipe on (roadmap 8.37)."""
+    import json
+    t = tmp_path / "transcript.jsonl"
+    with open(t, "a", encoding="utf-8") as fh:
+        for content in contents:
+            fh.write(json.dumps({"type": "queue-operation",
+                                 "operation": "enqueue",
+                                 "content": content}) + "\n")
+    sess.transcript_path = str(t)
+
 def test_stop_session_sends_two_escapes(mk_bot, run_async, monkeypatch):
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
@@ -379,7 +393,7 @@ def test_stop_session_core_ok_true_with_dropped_count(mk_bot, run_async, monkeyp
 
 
 def test_stop_session_core_discards_input_and_counts_notes_when_outstanding(
-    mk_bot, run_async, monkeypatch,
+    mk_bot, run_async, monkeypatch, tmp_path,
 ):
     """design.md "Stop and /clearqueue on the same primitive": with an
     outstanding note, Stop's dropped count includes it AND
@@ -393,6 +407,7 @@ def test_stop_session_core_discards_input_and_counts_notes_when_outstanding(
     bot.registry._sessions["claude-jim"] = sess
     ps.write_note("claude-jim", None, None, None, msg_id=9, chat_id=1,
                   sender_key=(1, 1), body="note text", raw_text="note text")
+    _claude_holds(sess, tmp_path, "note text")
 
     keys = []
     async def _send_keys(name, k):
@@ -963,7 +978,8 @@ def test_clear_queue_core_sends_no_keys_when_only_pending_queue(mk_bot, run_asyn
     assert outcome.dropped == 1
 
 
-def test_clear_queue_core_discards_notes_and_counts_them_combined(mk_bot, run_async, monkeypatch):
+def test_clear_queue_core_discards_notes_and_counts_them_combined(mk_bot, run_async, monkeypatch,
+                                                                tmp_path):
     """design.md "Stop and /clearqueue on the same primitive": ONE call
     to discard_queued_input, never preceded by an interrupt Escape — and
     the combined count includes outstanding notes even with an empty
@@ -974,6 +990,7 @@ def test_clear_queue_core_discards_notes_and_counts_them_combined(mk_bot, run_as
     bot.registry._sessions["claude-jim"] = sess
     ps.write_note("claude-jim", None, None, None, msg_id=9, chat_id=1,
                   sender_key=(1, 1), body="note text", raw_text="note text")
+    _claude_holds(sess, tmp_path, "note text")
 
     keys = []
     async def _send_keys(name, k):
@@ -989,7 +1006,8 @@ def test_clear_queue_core_discards_notes_and_counts_them_combined(mk_bot, run_as
     assert ps.list_outstanding_notes("claude-jim") == []
 
 
-def test_clear_queue_core_combined_count_with_both_queue_and_notes(mk_bot, run_async, monkeypatch):
+def test_clear_queue_core_combined_count_with_both_queue_and_notes(mk_bot, run_async, monkeypatch,
+                                                                   tmp_path):
     from aipager import policy_snapshot as ps
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
@@ -998,6 +1016,7 @@ def test_clear_queue_core_combined_count_with_both_queue_and_notes(mk_bot, run_a
     bot.registry._sessions["claude-jim"] = sess
     ps.write_note("claude-jim", None, None, None, msg_id=9, chat_id=1,
                   sender_key=(1, 1), body="note text", raw_text="note text")
+    _claude_holds(sess, tmp_path, "note text")
     monkeypatch.setattr("aipager.dtach.inject.send_keys",
                         AsyncMock(return_value=True))
 
@@ -1183,11 +1202,12 @@ def test_create_session_reusing_a_finished_name_drops_queued_targets(
     assert sess.queued_targets == []
 
 
-def test_clear_queue_core_drops_queued_targets(mk_bot, run_async):
+def test_clear_queue_core_drops_queued_targets(mk_bot, run_async, tmp_path):
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
     sess.queue_prompt("a", 1)
     sess.queued_targets = [{"msg_id": 7, "chat_id": -1, "raw_text": "later"}]
+    _claude_holds(sess, tmp_path, "later")
     bot.registry._sessions["claude-jim"] = sess
     outcome = run_async(bot._clear_queue_core(sess))
     assert outcome.ok is True

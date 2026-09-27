@@ -28,10 +28,33 @@ def _busy_with_m1(bot, sess, run_async, send_text, pickup):
     sess.stream_hook_live = True
 
 
+def _enqueue(sess, msg_id):
+    """Claude Code's ``enqueue`` line for *msg_id*: the text aipager typed
+    (its note's ``body``). /clearqueue and /stop wipe Claude's queue only
+    on this evidence (roadmap 8.37)."""
+    import json
+
+    from aipager.policy_snapshot import list_outstanding_notes
+    body = next(n["body"] for n in list_outstanding_notes(sess.name)
+                if n.get("msg_id") == msg_id)
+    with open(sess.stream_transcript_path, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"type": "queue-operation",
+                             "operation": "enqueue", "content": body}) + "\n")
+
+
+def _last_enqueued(sess):
+    """The ``content`` of the transcript's last ``enqueue`` line."""
+    import json
+    with open(sess.stream_transcript_path, encoding="utf-8") as fh:
+        return [json.loads(raw)["content"] for raw in fh
+                if '"enqueue"' in raw][-1]
+
+
 def _queue_m2(bot, sess, run_async, send_text, pickup):
-    """M2 is sent while the turn runs; Claude Code queues it and fires
-    the submit-time pick-up for it."""
+    """M2 is sent while the turn runs; Claude Code queues it (its
+    ``enqueue`` line) and fires the submit-time pick-up for it."""
     run_async(send_text(bot, "second", 2))
+    _enqueue(sess, 2)
     run_async(pickup(bot, sess, 2))
 
 
@@ -408,15 +431,18 @@ def test_no_reaction_reaches_a_muted_chat_and_none_is_replayed(
 
 # ── rev-iter1-001: an untrusted queue is left alone ─────────────────────────
 
-def test_clearqueue_without_the_live_scan_sends_no_keys_and_no_shrug(
-        wired, run_async, send_text, pickup, reactions):
+def test_clearqueue_without_the_live_scan_trusts_the_transcripts_absorption(
+        wired, run_async, send_text, pickup, reactions, append_queue_op):
     """Without the MessageDisplay hook the transcript scan never runs, so a
     queued target may have been absorbed long ago. An Escape into Claude
-    Code's then-empty queue would interrupt the running turn."""
+    Code's then-empty queue would interrupt the running turn: the
+    transcript's own absorption line says it is gone (roadmap 8.37)."""
     bot, sess, _inj, keys = wired
     _busy_with_m1(bot, sess, run_async, send_text, pickup)
     _queue_m2(bot, sess, run_async, send_text, pickup)
     sess.stream_hook_live = False
+    append_queue_op(sess, "remove", "absorbed_mid_turn",
+                    _last_enqueued(sess))
     outcome = run_async(bot._clear_queue_core(sess))
     assert not outcome.ok and outcome.dropped == 0
     assert keys == []
@@ -480,6 +506,7 @@ def _busy_command(bot, sess, run_async, mk_update, send_text, pickup,
     _busy_with_m1(bot, sess, run_async, send_text, pickup)
     update = mk_update("Cmd", message_id=msg_id, chat_id=CHAT_ID)
     run_async(bot._send_command(update, command))
+    _enqueue(sess, msg_id)
     assert ledger_of(bot).current(CHAT_ID, msg_id) == EYES
 
 
@@ -699,6 +726,7 @@ def test_a_dropped_queued_command_is_marked_not_delivered(
     _busy_with_m1(bot, sess, run_async, send_text, pickup)
     update = mk_update("Init", message_id=8, chat_id=CHAT_ID)
     run_async(bot._send_command(update, "/init"))
+    _enqueue(sess, 8)
     run_async(pickup(bot, sess, 8))
     run_async(bot._clear_queue_core(sess))
     assert reactions(bot).get(8)[-1] == SHRUG
