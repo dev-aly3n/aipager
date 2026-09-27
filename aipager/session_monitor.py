@@ -24,7 +24,12 @@ from aipager.config import (
     STATUSLINE_ALIVE_SECONDS,
     TOOL_INFLIGHT_MAX_SECONDS,
 )
-from aipager.state import SessionRegistry, Status, TrackedSession
+from aipager.state import (
+    TURN_STATE_HOLD_SECONDS,
+    SessionRegistry,
+    Status,
+    TrackedSession,
+)
 from aipager.transcript import (
     extract_last_response,
     last_assistant_preview,
@@ -939,8 +944,9 @@ class SessionMonitor:
                     if in_flight is not None:
                         kind, elapsed = in_flight
                         if not sess.recovery_stand_down_logged:
-                            cap = (TOOL_INFLIGHT_MAX_SECONDS if kind == "tool"
-                                   else COMPACT_INFLIGHT_MAX_SECONDS)
+                            cap = {"tool": TOOL_INFLIGHT_MAX_SECONDS,
+                                   "compact": COMPACT_INFLIGHT_MAX_SECONDS,
+                                   }.get(kind, TURN_STATE_HOLD_SECONDS)
                             log.info(
                                 "[%s] idle-recovery stood down — %s still in "
                                 "flight (%.0fs, cap %.0fs); the transcript "

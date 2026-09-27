@@ -3249,11 +3249,11 @@ class AnimationMixin:
             # handlers, which PTB runs one at a time, so waiting here would
             # hold every later update (a Stop tap, /stop) behind the finish.
             gate = sess.finish_gate
-            if turn == sess.turn_seq:
-                # This turn's own hooks wait for its card state, which the
-                # reset below gives it only after that finish (roadmap
-                # 8.62); until then the state is still the older turn's.
-                sess.hold_turn_state(turn)
+            # This turn's own hooks wait for its card state, which the reset
+            # below gives it only after that finish (roadmap 8.62); until
+            # then the state is still the older turn's. (A late request for
+            # a turn that is over holds nothing.)
+            sess.hold_turn_state(turn)
 
             async def _after_finish() -> None:
                 try:

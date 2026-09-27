@@ -33,6 +33,7 @@ from aipager.policy_snapshot import (
 from aipager.state import (
     ACTIVE_SUBAGENTS_CAP,
     JOB_CONTINUATION_GRACE_SECONDS,
+    TURN_STATE_HOLD_SECONDS,
     SessionRegistry,
     Status,
 )
@@ -362,22 +363,28 @@ def _tool_detail(name: str, inp: dict) -> str:
 _NOT_TURN_EVIDENCE = frozenset({"statusline", "SubagentStop"})
 
 # A turn's own activity: the events that write its card state (rows, prose,
-# agents, compaction, a permission prompt) or end it. While the running turn
-# waits for its card state behind an older turn's finish (roadmap 8.62,
-# `TrackedSession.turn_state_held`), these wait too, then run in arrival
-# order. Everything else (a new prompt, a queue pick-up, the status line,
-# session start/end, safety notices) is never held.
+# agents, compaction and the SessionStart that ends it, a permission prompt)
+# or end the turn. While the running turn waits for its card state behind an
+# older turn's finish (roadmap 8.62, `TrackedSession.turn_state_held`), these
+# wait too, then run in arrival order. Everything else (a new prompt, a queue
+# pick-up, the status line, session end, safety notices) is never held.
 _TURN_ACTIVITY_EVENTS = frozenset({
     "PermissionRequest", "permission_prompt", "PreToolUse", "PostToolUse",
     "PostToolUseFailure", "MessageDisplay", "SubagentStart", "SubagentStop",
-    "PreCompact", "PostCompact", "StopFailure",
+    "PreCompact", "PostCompact", "SessionStart", "StopFailure",
 })
 _TURN_ENDING_EVENTS = ("idle_prompt", "idle", "stop", "notification")
 
-# The longest a held event waits: past it, it is handled anyway (as before
-# the hold existed). Above the finish gate's own bound (FINISH_GATE_TIMEOUT,
-# 30 s) plus the paced sends that follow it.
-TURN_STATE_HOLD_SECONDS: float = 60.0
+# A permission request's hook waits PERMISSION_REPLY_DEADLINE (20 s) for the
+# Telegram answer before Claude Code's own dialog takes over. Held, it waits
+# at most this long, so most of that window is left for the operator.
+PERMISSION_HOLD_SECONDS: float = 5.0
+
+
+def _is_turn_activity(event: str) -> bool:
+    """Whether *event* is held while the running turn waits for its card
+    state (roadmap 8.62)."""
+    return event in _TURN_ACTIVITY_EVENTS or event.lower() in _TURN_ENDING_EVENTS
 
 
 class HookReceiver:
@@ -415,23 +422,33 @@ class HookReceiver:
         self._transport = transport
         log.info("Hook receiver listening on %s", SOCKET_PATH)
 
-    async def _hold_for_turn_state(self, sess, event: str) -> None:
+    async def _hold_for_turn_state(self, sess, event: str, msg: dict) -> None:
         """Wait while the running turn's card state still belongs to an
         older turn whose finish is out (roadmap 8.62): handled now, this
         event would land on that turn's card and then be wiped by this
-        turn's reset. Bounded by ``TURN_STATE_HOLD_SECONDS``."""
+        turn's reset. Bounded by ``TURN_STATE_HOLD_SECONDS`` (a permission
+        request by ``PERMISSION_HOLD_SECONDS``)."""
         hold = sess.turn_state_hold
         if hold is None or not sess.turn_state_held():
             return
+        if event == "MessageDisplay":
+            # The finishing turn's own answer, reaching the daemon after its
+            # Stop: that turn's, handled now as it always was.
+            delta = str(msg.get("delta") or "").strip()
+            if delta and delta in sess.finishing_answer:
+                return
+        held_turn = sess.turn_state_hold_for
+        bound = (PERMISSION_HOLD_SECONDS if event == "PermissionRequest"
+                 else TURN_STATE_HOLD_SECONDS)
         try:
-            await asyncio.wait_for(hold.wait(), timeout=TURN_STATE_HOLD_SECONDS)
+            await asyncio.wait_for(hold.wait(), timeout=bound)
         except asyncio.TimeoutError:
             log.warning("[%s] turn %s still has no card state after %.0fs "
-                        "- handling its %s anyway", sess.label,
-                        sess.turn_state_hold_for, TURN_STATE_HOLD_SECONDS,
-                        event)
-            if sess.turn_state_hold is hold:
-                sess.release_turn_state()
+                        "- handling its %s anyway", sess.label, held_turn,
+                        bound, event)
+            if event != "PermissionRequest":
+                # Only this turn's hold (never a newer one's) is given up.
+                sess.release_turn_state(held_turn)
 
     async def _on_datagram(self, data: bytes) -> None:
         try:
@@ -525,9 +542,8 @@ class HookReceiver:
 
         log.debug("Hook event: %s from %s", event, session_name)
 
-        if (event in _TURN_ACTIVITY_EVENTS
-                or event.lower() in _TURN_ENDING_EVENTS):
-            await self._hold_for_turn_state(sess_ref, event)
+        if _is_turn_activity(event):
+            await self._hold_for_turn_state(sess_ref, event, msg)
 
         if event == "PermissionRequest":
             # Primary path: structured tool data directly from hook payload

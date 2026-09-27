@@ -69,6 +69,12 @@ QUEUE_MAX_AGE_SECONDS: float = 86400.0  # 24h
 MIXED_SENDER_HOLD_WINDOW_SECONDS: float = 1800.0  # 30 min
 # `tool_history` is trimmed to the most recent N entries on each append.
 TOOL_HISTORY_CAP: int = 200
+
+# The longest a new turn's own hook events wait for its card state while an
+# older turn's finish is out (roadmap 8.62): past it, they are handled anyway
+# (as before the hold existed). Above the finish gate's own bound (30 s) plus
+# the paced sends that follow it.
+TURN_STATE_HOLD_SECONDS: float = 60.0
 # `active_subagents` is held to this many entries at insertion; the oldest
 # (by `started_at`, the same age the TTL sweep uses) is evicted when a new
 # start would exceed it. The TTL sweep and SubagentStop pops are TIME and
@@ -748,6 +754,11 @@ class TrackedSession:
     # Transient, never in _PERSIST_FIELDS: a restart has no finish out.
     turn_state_hold_for: int | None = None
     turn_state_hold: asyncio.Event | None = None
+    turn_state_hold_since: float = 0.0
+    # The answer of the turn whose finish is out (its Stop's text), while
+    # it is out: a late MessageDisplay carrying it is that turn's, never
+    # the held newer turn's (roadmap 8.62). Transient.
+    finishing_answer: str = ""
     # How many ``notify()`` calls are running for this session, and when
     # the session monitor first saw its card orphaned (live, Stop button
     # up, no turn or job running, nothing animating it, nothing in
@@ -1271,7 +1282,8 @@ class TrackedSession:
         ``"compact"`` — while a PreToolUse/PostToolUse pair or a
         PreCompact/post-compact-SessionStart pair is still open AND
         younger than its own cap (``TOOL_INFLIGHT_MAX_SECONDS`` /
-        ``COMPACT_INFLIGHT_MAX_SECONDS``). No hooks fire mid-tool-call or
+        ``COMPACT_INFLIGHT_MAX_SECONDS``), or ``"turn start"`` while the
+        running turn's own hooks are held (roadmap 8.62). No hooks fire mid-tool-call or
         mid-compaction, so the transcript and every hook-driven timestamp
         look quiet even though the session is genuinely working.
 
@@ -1296,6 +1308,13 @@ class TrackedSession:
             elapsed = now - compact_start
             if elapsed < COMPACT_INFLIGHT_MAX_SECONDS:
                 return "compact", elapsed
+        if self.turn_state_held():
+            # A turn waiting for its card state (roadmap 8.62): its own
+            # hooks, a tool call's PreToolUse included, are held, so the
+            # tool it is running is not recorded yet.
+            elapsed = now - self.turn_state_hold_since
+            if elapsed < TURN_STATE_HOLD_SECONDS:
+                return "turn start", elapsed
         return None
 
     def work_in_flight(self, now: float) -> bool:
@@ -1336,13 +1355,18 @@ class TrackedSession:
 
     def hold_turn_state(self, turn: int) -> None:
         """Hold *turn*'s own hook events until its card state exists
-        (roadmap 8.62). An older turn's hold is released first: its turn is
+        (roadmap 8.62). Only the running turn is held: a late request for
+        a turn that is over holds nothing (and so never frees the running
+        turn's hold). An older turn's hold is released first: its turn is
         over, and whatever it held may run now."""
+        if turn != self.turn_seq:
+            return
         if self.turn_state_hold_for == turn and self.turn_state_hold is not None:
             return
         self.release_turn_state()
         self.turn_state_hold_for = turn
         self.turn_state_hold = asyncio.Event()
+        self.turn_state_hold_since = time.monotonic()
 
     def release_turn_state(self, turn: int | None = None) -> None:
         """Let the held events through: *turn*'s card state exists now, or

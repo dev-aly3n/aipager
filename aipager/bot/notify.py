@@ -1185,6 +1185,7 @@ class NotifyMixin:
         if sess.finish_gate is gate:
             sess.finish_gate = None
             sess.finishing_turn = None
+            sess.finishing_answer = ""
 
     async def notify(self, sess: TrackedSession, event: str, context: dict) -> None:
         """Send appropriate Telegram notification for a state change.
@@ -2169,6 +2170,8 @@ class NotifyMixin:
             gate = asyncio.Event()
             sess.finish_gate = gate
             sess.finishing_turn = finishing_turn
+            sess.finishing_answer = str(
+                context.get("raw_md") or context.get("summary") or "")
             taken = None
             popped_turn = finishing_turn
             # Everything from here on is inside the `try`, so its `finally`

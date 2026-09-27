@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from aipager import preferences as prefs
 from aipager.dtach import hook_receiver as hook_receiver_mod
 from aipager.state import Status
@@ -100,12 +102,17 @@ def test_popped_turns_first_steps_land_on_its_own_card(replay, vloop,
                delta="Working on the queued one now.", message_id="m-pop",
                index=0)
         await asyncio.sleep(20)
+        (live,) = _cards_for(r, 3)
+        live_text = live["text"]
         monkeypatch.setattr(r.bot, "_mark_ran_commands", real)
         r.stop("answer queued")
         await _drain(r)
         w.cancel()
+        return live_text
 
-    _run(vloop, scenario())
+    live_text = _run(vloop, scenario())
+    # Its PostToolUse was held too, and settled the row on the new card.
+    assert "✅ `Bash: popped step`" in live_text
     (old,) = _cards_for(r, 1)
     (new,) = _cards_for(r, 3)
     assert not _ever_showed(old, "popped step")
@@ -448,6 +455,10 @@ def test_hold_contract(vloop):
     # An older turn's release never frees a newer turn's hold.
     sess.release_turn_state(4)
     assert sess.turn_state_held() and not first.is_set()
+    # A late hold request for a turn that is over holds nothing, and never
+    # frees the running turn's hold.
+    sess.hold_turn_state(4)
+    assert sess.turn_state_hold is first and not first.is_set()
     # A newer turn's hold releases the older one first.
     sess.turn_seq = 6
     sess.hold_turn_state(6)
@@ -472,3 +483,93 @@ def test_a_stale_or_satisfied_hold_holds_nothing(vloop):
     sess.turn_seq = 5
     sess.card_turn_seq = 5  # the held turn already has its card state
     assert not sess.turn_state_held()
+
+
+@pytest.mark.parametrize("event,held", [
+    ("PermissionRequest", True), ("permission_prompt", True),
+    ("PreToolUse", True), ("PostToolUse", True), ("PostToolUseFailure", True),
+    ("MessageDisplay", True), ("SubagentStart", True), ("SubagentStop", True),
+    ("PreCompact", True), ("PostCompact", True), ("SessionStart", True),
+    ("StopFailure", True), ("Stop", True), ("idle_prompt", True),
+    ("Notification", True),
+    ("UserPromptSubmit", False), ("queue_pickup", False),
+    ("statusline", False), ("SessionEnd", False), ("safety_blocked", False),
+    ("hook_memory_cap_hit", False), ("permission_reply_timeout", False),
+])
+def test_which_events_wait_for_the_turn_state(event, held):
+    assert hook_receiver_mod._is_turn_activity(event) is held
+
+
+def test_a_held_permission_request_waits_only_briefly(replay, vloop):
+    """The permission hook waits 20 s for Telegram's answer: held, the
+    request waits at most PERMISSION_HOLD_SECONDS, and the turn's other
+    events stay held."""
+    r = replay
+    sess = r.sess
+
+    async def scenario():
+        r.bot.registry.transition(sess.name, Status.BUSY)
+        sess.card_turn_seq = sess.turn_seq - 1
+        sess.hold_turn_state(sess.turn_seq)
+        r.hook(hook_event_name="PermissionRequest", tool_name="Bash",
+               tool_input={"command": "rm -rf build"})
+        r.hook(hook_event_name="PreToolUse", tool_name="Bash",
+               tool_input={"command": "held step"})
+        await asyncio.sleep(
+            hook_receiver_mod.PERMISSION_HOLD_SECONDS + 1)
+        return (sess.status, sess.turn_state_held(),
+                [s for s, _ in sess.tool_history])
+
+    status, still_held, rows = _run(vloop, scenario())
+    assert status == Status.INTERACTIVE
+    assert still_held
+    assert "Bash: held step" not in rows
+
+
+def test_the_finishing_turns_late_answer_prose_is_not_held(replay, vloop,
+                                                          monkeypatch):
+    """The finishing turn's own answer, if its MessageDisplay reaches the
+    daemon after its Stop, is that turn's: never the popped turn's first
+    sentence."""
+    _layout()
+    r = replay
+    sess = r.sess
+
+    async def scenario():
+        w = _worker(r)
+        await _queue_after_first(r)
+        real = _slow_finish(r, monkeypatch)
+        r.stop("answer first")
+        await asyncio.sleep(0.3)
+        r.hook(hook_event_name="MessageDisplay", delta="answer first",
+               message_id="m-first", index=0)
+        await asyncio.sleep(0.3)
+        r.tool("popped step")
+        await asyncio.sleep(20)
+        monkeypatch.setattr(r.bot, "_mark_ran_commands", real)
+        r.stop("answer queued")
+        await _drain(r)
+        w.cancel()
+
+    _run(vloop, scenario())
+    (new,) = _cards_for(r, 3)
+    assert not _ever_showed(new, "answer first")
+    assert "popped step" in new["text"]
+    assert sess.finishing_answer == ""  # cleared with the finish's gate
+
+
+def test_a_held_turn_start_counts_as_work_in_flight(vloop):
+    """The held turn's PreToolUse is not recorded yet, so the idle-recovery
+    and stale-busy checks must not read the quiet transcript as a turn that
+    ended."""
+    from aipager.state import TURN_STATE_HOLD_SECONDS, TrackedSession
+
+    sess = TrackedSession(name="claude-x", label="x")
+    sess.turn_seq = 5
+    sess.card_turn_seq = 4
+    now = vloop.time()
+    assert sess.work_in_flight_reason(now) is None
+    sess.hold_turn_state(5)
+    reason = sess.work_in_flight_reason(now + 10)
+    assert reason is not None and reason[0] == "turn start"
+    assert sess.work_in_flight_reason(now + TURN_STATE_HOLD_SECONDS) is None
