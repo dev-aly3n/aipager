@@ -530,6 +530,11 @@ class Replay:
         await self.updates.join()
         if evidence:
             self.enqueue(text)
+        # Claude Code fires UserPromptSubmit the moment a message is queued
+        # behind a running turn (not when it is later taken), just before
+        # the pick-up of the note the injection left.
+        await self.hook(hook_event_name="UserPromptSubmit",
+                        prompt=PREFIX + text)
         policy_snapshot.consume_notes_matching(NAME, PREFIX + text)
         t0 = self.loop.time()
         for _ in range(pickups):

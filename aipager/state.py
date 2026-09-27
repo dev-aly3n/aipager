@@ -1919,6 +1919,11 @@ class SessionRegistry:
                 # A new turn (roadmap 8.57): card requests made for the
                 # previous one are stale from here on.
                 sess.turn_seq += 1
+                # No step of the parent's is running at a new turn's start
+                # (the Send now line's "behind a long step" clock). A
+                # message queued mid-turn is a BUSY->BUSY no-op and never
+                # reaches here, so it cannot erase the running step.
+                sess.parent_tool_started_at = None
 
         old = sess.status
         sess.status = new_status

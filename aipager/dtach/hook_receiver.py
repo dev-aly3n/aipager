@@ -679,12 +679,13 @@ class HookReceiver:
 
         elif event == "UserPromptSubmit":
             prompt = msg.get("prompt", "")
-            # A prompt starts a new turn: no step of the parent's is
-            # running yet (an interrupted tool may never have sent its
-            # PostToolUse).
-            _ups = self.registry.get(session_name)
-            if _ups is not None:
-                _ups.parent_tool_started_at = None
+            # NOT a place to clear the parent's step: Claude Code fires this
+            # the moment a message is QUEUED behind a running step, and
+            # clearing there erased the very step the Send now line reads
+            # (live test 2026-09-27 23:56: the line came at 10 s instead of
+            # at once). A genuinely new turn clears it in transition(), an
+            # interrupted step through PostToolUseFailure (is_interrupt),
+            # a finished turn at Stop.
             if prompt.startswith(_TASK_NOTIFICATION_PREFIX):
                 # Roadmap 8.41: an agent that stopped with background work
                 # of its own still running resumes later — its SubagentStop

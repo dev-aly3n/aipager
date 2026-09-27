@@ -32,6 +32,7 @@ import pytest
 from aipager import config
 from aipager import preferences as prefs
 from aipager.bot.flood import MUTE
+from aipager.state import Status
 
 CHAT = 256113222
 #: How late a due line may land because it waits for its token.
@@ -253,20 +254,21 @@ def test_a_an_agents_tool_ending_does_not_end_claudes_step(
     assert t is not None and t - t0 <= BUDGET_SLACK, (t0, t)
 
 
-def test_c_a_new_prompt_clears_a_step_that_never_ended(replay, vloop, pty):
-    """A step whose PostToolUse never came (an interrupt) must not make the
-    next turn's queued message look queued behind a long step."""
+def test_c_an_interrupted_step_does_not_linger(replay, vloop, pty):
+    """A step interrupted in the terminal ends with PostToolUseFailure
+    (is_interrupt), not PostToolUse: a message queued after it, with no
+    new step running, is not queued behind a step."""
     r = replay
 
     async def scenario():
         w = r.worker()
         await r.turn(1, "first")
+        await asyncio.sleep(SETTLE)
         await r.tool_start("interrupted step")
         await asyncio.sleep(3.0)
-        # No PostToolUse and no Stop: a terminal prompt starts the next
-        # turn with the old step never closed.
-        await r.hook(hook_event_name="UserPromptSubmit",
-                     prompt="terminal prompt")
+        await r.hook(hook_event_name="PostToolUseFailure", tool_name="Bash",
+                     tool_input={"command": "interrupted step"},
+                     error="interrupted", is_interrupt=True)
         await asyncio.sleep(1.0)
         t0 = await r.queue(3, "queued three")
         await _until(vloop, t0 + 9.5)
@@ -276,6 +278,39 @@ def test_c_a_new_prompt_clears_a_step_that_never_ended(replay, vloop, pty):
 
     assert _run(vloop, scenario()) is None
 
+
+def test_c_a_new_turn_starts_with_no_step(replay, vloop, pty):
+    """A turn that ended with its Stop lost (the monitor recovered it to
+    idle) left its step open: the next turn starts with no step, so a
+    message queued in it gets no early line."""
+    r = replay
+
+    async def scenario():
+        w = r.worker()
+        await r.turn(1, "first")
+        await asyncio.sleep(SETTLE)
+        await r.tool_start("step whose turn lost its stop")
+        await asyncio.sleep(1.0)
+        r.bot.registry.transition(r.sess.name, Status.IDLE)
+        await asyncio.sleep(1.0)
+        await r.turn(5, "next turn", tools=0)
+        await asyncio.sleep(1.0)
+        t0 = await r.queue(7, "queued seven")
+        await _until(vloop, t0 + 9.5)
+        at_9 = _line_t(r, 7)
+        w.cancel()
+        return at_9
+
+    assert _run(vloop, scenario()) is None
+
+
+def test_a_the_queued_messages_own_prompt_event_keeps_the_step(
+        replay, vloop, pty):
+    """Claude Code fires UserPromptSubmit when a message is QUEUED: that
+    must not erase the step it is queued behind (live test 2026-09-27
+    23:56, where the line then came at 10 s instead of at once)."""
+    t0, t = _behind_old_step(replay, vloop)
+    assert t is not None and t - t0 <= BUDGET_SLACK, (t0, t)
 
 # ── (d) taken before its line: never a line, by either deadline ──────────
 
