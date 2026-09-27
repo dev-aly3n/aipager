@@ -573,8 +573,12 @@ Held messages are capped at 50 per session and expire after 24 h;
 #### Send a queued message now
 
 A message you send while Claude is working waits in Claude's queue
-until the current step ends. If it is still waiting 10 seconds after
-Claude queued it (`QUEUED_LINE_DELAY`), aipager replies under it:
+until the current step ends. If Claude is in the middle of a longer step
+(one that has already run 3 seconds, `QUEUED_LINE_TOOL_AGE`), that wait
+is usually long, so aipager replies under the message at once, or as
+soon as the step reaches 3 seconds. Otherwise it replies if the message
+is still waiting 10 seconds after Claude queued it
+(`QUEUED_LINE_DELAY`):
 
 ```
 ⏳ Queued - Claude will read it after the current step
@@ -622,8 +626,10 @@ ending. A daemon restart removes any line still showing.
 
 The line is a courtesy, so it is not sent while the chat is flood-muted,
 in minimal mode or short of its hourly budget; `/now` does the same job
-then. Each waiting message costs at most two chat calls (the line and
-its removal).
+then. When the chat is only busy (a busy card updating on a slow chat),
+the line waits its turn instead, behind answers, so it can arrive
+several seconds late. Each waiting message costs at most two chat calls (the
+line and its removal).
 
 ### Files
 

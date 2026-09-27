@@ -62,7 +62,9 @@ def _sc1(r, vloop):
         t0 = await _queued(r)
         await _until(vloop, t0 + 9.0)
         at_9 = [dict(ln) for ln in r.chat.lines.values()]
-        await _until(vloop, t0 + 11.0)
+        # The line is due at 10 s and, a blocking ornament at this
+        # chat's 0.5/s, waits for its token and the reserve: allow 2.5 s.
+        await _until(vloop, t0 + 12.5)
         at_11 = [dict(ln) for ln in r.chat.lines.values()]
         w.cancel()
         return at_9, at_11
@@ -74,7 +76,7 @@ def test_sc1_no_line_at_9_seconds(replay, vloop, pty):
     assert at_9 == []
 
 
-def test_sc1_exactly_one_line_by_11_seconds(replay, vloop, pty):
+def test_sc1_exactly_one_line_by_12_5_seconds(replay, vloop, pty):
     _, at_11 = _sc1(replay, vloop)
     assert len(at_11) == 1
 

@@ -383,6 +383,15 @@ SELF_WOKEN_CARD_DELAY: float = 15.0
 # with no line flashing up and away. A constant, not a setting.
 QUEUED_LINE_DELAY: float = 10.0
 
+# Seconds Claude's own current step (the parent's tool call) must have
+# been running for the "⏳ Queued" line to go up at once instead of after
+# QUEUED_LINE_DELAY. A message queued behind a step already this old waits
+# long (measured over 181 queued messages: median 36 s, only 15% taken
+# within 10 s), while one queued with no step running is usually taken in
+# about 1.5 s. A message queued earlier gets its line the moment the step
+# reaches this age. A constant, not a setting.
+QUEUED_LINE_TOOL_AGE: float = 3.0
+
 # Seconds a session can stay BUSY with no hook activity before the bot
 # posts an informational "still working" note in chat. Nothing is wrong
 # when this fires — a session running a long tool call, generating

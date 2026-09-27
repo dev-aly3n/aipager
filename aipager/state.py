@@ -360,6 +360,17 @@ class TrackedSession:
     # meaningless across daemon restarts, and a fresh daemon should
     # start with in-flight state clear.
     pending_tool_started_at: float | None = None
+    # Monotonic timestamp of the PARENT's own PreToolUse (no agent_id)
+    # whose PostToolUse has not fired yet: the step Claude itself is in.
+    # Unlike pending_tool_started_at, a subagent's tool calls never touch
+    # it, so a foreground agent's inner tools do not restart its age and a
+    # detached background agent's tools never count as the parent's step.
+    # Read by the "⏳ Queued" line (bot/send_now.py, QUEUED_LINE_TOOL_AGE):
+    # a message queued behind a step this old waits long. Cleared by the
+    # parent's PostToolUse / PostToolUseFailure and at each prompt
+    # submission (an interrupted step never sends its PostToolUse). Never
+    # persisted (monotonic).
+    parent_tool_started_at: float | None = None
     # Monotonic timestamp of the most recent PreCompact hook when the
     # matching post-compact SessionStart hasn't fired yet — compaction
     # can take minutes on a large transcript with no hooks in between,
@@ -656,7 +667,8 @@ class TrackedSession:
     # restart. Never persisted.
     queued_targets: list[dict] = field(default_factory=list, repr=False)
     # "Send now" (bot/send_now.py): the "⏳ Queued" reply line under each
-    # queued target that is still waiting after QUEUED_LINE_DELAY, keyed by
+    # queued target still waiting when its line is due (QUEUED_LINE_DELAY,
+    # or sooner behind a long step: QUEUED_LINE_TOOL_AGE), keyed by
     # the target's msg_id -> (chat_id, line message id). A line exists only
     # for a msg_id still in `queued_targets`. Transient, never in
     # _PERSIST_FIELDS: a restart has no queued targets, and the line ids a
@@ -664,7 +676,7 @@ class TrackedSession:
     # (`SessionRegistry.queued_line_deletes`), which outlives a /kill.
     queued_lines: dict[int, tuple[int, int]] = field(
         default_factory=dict, repr=False)
-    # The pending 10 s timer per queued msg_id (the dict is its strong
+    # The pending line timer per queued msg_id (the dict is its strong
     # reference). Transient: a task cannot be persisted, and a restart has
     # nothing queued to time.
     queued_line_timers: dict[int, asyncio.Task] = field(

@@ -2,8 +2,10 @@
 
 A message sent while a turn runs is queued by Claude Code (a *queued
 target*, ``TrackedSession.queued_targets``) until the running step ends.
-If Claude's transcript still shows it held ``QUEUED_LINE_DELAY`` seconds
-after its pick-up, aipager replies under it with one line and one button.
+If Claude's transcript still shows it held once Claude's current step has
+run ``QUEUED_LINE_TOOL_AGE`` seconds, or ``QUEUED_LINE_DELAY`` seconds after
+its pick-up, whichever comes first, aipager replies under it with one line
+and one button.
 The button, or ``/now``, presses Claude Code's own send-now keys
 (``inject.send_now``: Ctrl+X, Ctrl+S), which sends every queued message at
 once: a running command or agent moves to the background, a reply being
@@ -18,8 +20,11 @@ the registry (``SessionRegistry.queued_line_deletes``) until the delete
 lands, and startup deletes what a restart left behind.
 
 The line and its delete are ORNAMENTS: never sent while the chat is muted
-or in minimal mode or short of budget (``/now`` is the fallback then), and
-a refused delete stays owed.
+or in minimal mode or past its hour's ornament share (``/now`` is the
+fallback then), and a refused delete stays owed. The line is the
+operator's only affordance, so it WAITS for its token like the delete
+does, rather than being skipped whenever a busy card leaves the chat
+short.
 """
 
 from __future__ import annotations
@@ -43,6 +48,8 @@ from aipager.bot.session_ops import held_by_claude
 from aipager.bot.transport import (
     calling_chat_id,
     edit_text_at,
+    MUTED,
+    SKIPPED,
     reply_text,
     resolve_chat_id_int,
     send_text,
@@ -81,6 +88,31 @@ REPLY_OTHER_CHAT = "No active session in this chat."
 # module path has hung this suite twice (see CLAUDE.md). Same pattern as
 # animation._lazy_card_sleep.
 _queued_line_sleep = asyncio.sleep
+
+# The shortest re-check the line timer makes, so a step whose age sits a
+# hair under QUEUED_LINE_TOOL_AGE cannot make it spin.
+_QUEUED_LINE_MIN_WAIT: float = 0.05
+
+
+def _queued_line_wait(sess: TrackedSession, waited: float) -> float:
+    """Seconds the line timer should still sleep, ``<= 0`` once the line
+    is due: ``QUEUED_LINE_DELAY`` after the pick-up (*waited* so far), or as
+    soon as the parent's current step (``parent_tool_started_at``, never a
+    subagent's) has run ``QUEUED_LINE_TOOL_AGE``. With no step running it
+    sleeps at most ``QUEUED_LINE_TOOL_AGE``, so a step that starts later is
+    seen before it is that old: at most four wake-ups in all.
+
+    The step's start is stamped with ``time.monotonic()``; the running
+    loop's ``time()`` is that same clock (and the virtual one in tests)."""
+    left = config.QUEUED_LINE_DELAY - waited
+    start = sess.parent_tool_started_at
+    if start is None:
+        return min(left, config.QUEUED_LINE_TOOL_AGE)
+    age = asyncio.get_running_loop().time() - start
+    if age >= config.QUEUED_LINE_TOOL_AGE:
+        return 0.0
+    return min(left, max(config.QUEUED_LINE_TOOL_AGE - age,
+                         _QUEUED_LINE_MIN_WAIT))
 
 # How long a tap waits for its chord before it toasts. The dispatcher sends
 # the blank ack that clears the tap's spinner after
@@ -131,12 +163,15 @@ class SendNowMixin:
                 self._queued_line_timer(sess, msg_id))
 
     async def _queued_line_timer(self, sess: TrackedSession, msg_id: int) -> None:
-        """Wait ``QUEUED_LINE_DELAY``, then send the line if the message is
-        still held. Never retries: a missed line is cosmetic, and ``/now``
-        is always there."""
+        """Wait until the line is due (:func:`_queued_line_wait`), then send
+        it if the message is still held. Never retries: a missed line is
+        cosmetic, and ``/now`` is always there."""
         me = asyncio.current_task()
         try:
-            await _queued_line_sleep(config.QUEUED_LINE_DELAY)
+            waited = 0.0
+            while (wait := _queued_line_wait(sess, waited)) > 0:
+                await _queued_line_sleep(wait)
+                waited += wait
             # Past the wait, the send runs shielded: cancelled half-way it
             # could land with nobody recording its id, and that line would
             # never be deleted. It re-checks membership itself once sent.
@@ -153,49 +188,65 @@ class SendNowMixin:
         try:
             await self._send_queued_line_checked(sess, msg_id)
         except Exception:
-            log.debug("[%s] queued line for %s not sent", sess.label, msg_id,
-                      exc_info=True)
+            log.info("[%s] queued line for %s not sent: error", sess.label,
+                     msg_id, exc_info=True)
 
     async def _send_queued_line_checked(self, sess: TrackedSession,
                                         msg_id: int) -> None:
         if not self._app:
             return
+        # Every due line not sent is logged at INFO with its reason, so a
+        # live test is diagnosable from the journal.
         # 1. Still this registry's live session.
         if self.registry.get(sess.name) is not sess or sess.status == Status.GONE:
+            log.info("[%s] queued line for %s not sent: session gone",
+                     sess.label, msg_id)
             return
         # 2. Still queued, and no line yet.
         target = next((t for t in sess.queued_targets
                        if t.get("msg_id") == msg_id), None)
         if target is None or msg_id in sess.queued_lines:
+            log.info("[%s] queued line for %s not sent: %s", sess.label,
+                     msg_id, "taken" if target is None else "already up")
             return
         # 3. Claude's transcript still shows it held. Without that evidence
         # no line: a button over an empty queue invites a pointless tap.
         if not held_by_claude(sess, [target]):
-            log.debug("[%s] queued line for %s: no queue evidence",
-                      sess.label, msg_id)
+            log.info("[%s] queued line for %s not sent: no queue evidence",
+                     sess.label, msg_id)
             return
         # 4. Sent to the session's own chat, where its button resolves.
         chat_id = resolve_chat_id_int(sess)
-        if not chat_id:
-            return
         target_chat = target.get("chat_id")
-        if target_chat is not None and target_chat != chat_id:
+        if not chat_id or (target_chat is not None and target_chat != chat_id):
+            log.info("[%s] queued line for %s not sent: not the session's "
+                     "chat", sess.label, msg_id)
             return
         # 5. An ornament: not while the chat is muted or in minimal mode.
         if session_monitor.cards_suppressed(chat_id):
-            log.debug("[%s] queued line for %s skipped: chat suppressed",
-                      sess.label, msg_id)
+            log.info("[%s] queued line for %s not sent: chat suppressed "
+                     "(muted or minimal mode)", sess.label, msg_id)
             return
+        # BLOCKING, not skip: a skip-kind send is refused whenever a busy
+        # card has left the chat below the reserve, which at a low ceiling
+        # is most of the time (live test 2026-09-27: a second queued
+        # message never got its line). It waits for its token instead,
+        # behind every answer; the hour's ornament share and minimal mode
+        # still refuse it, and a message taken while it waited is dropped
+        # by the re-check below the moment it lands.
         sent = await send_text(
             self._app.bot, chat_id, LINE_TEXT,
             reply_to_message_id=msg_id,
             reply_markup=self._build_send_now_keyboard(sess, msg_id),
-            rate_limit_args=_rl_args(kind="skip", priority=PRIORITY_ORNAMENT),
+            rate_limit_args=_rl_args(priority=PRIORITY_ORNAMENT),
         )
         line_id = getattr(sent, "message_id", None) if sent else None
         if type(line_id) is not int or line_id <= 0:
-            log.debug("[%s] queued line for %s not sent: %r", sess.label,
-                      msg_id, sent)
+            why = ("chat muted" if sent is MUTED
+                   else "refused by the flood gate" if sent is SKIPPED
+                   else f"send failed ({sent!r})")
+            log.info("[%s] queued line for %s not sent: %s", sess.label,
+                     msg_id, why)
             return
         sess.queued_lines[msg_id] = (chat_id, line_id)
         # Owed a delete from now on, persisted: a restart deletes it (D8).
@@ -203,8 +254,14 @@ class SendNowMixin:
         log.info("[%s] queued line %d sent for message %d", sess.label,
                  line_id, msg_id)
         # Taken (or the session gone) while the send was out: drop it now.
+        # The send can wait seconds for its token, so the transcript is
+        # asked again too: a message Claude took in that wait is no longer
+        # held, though no tick may have removed its target yet.
         if (self.registry.get(sess.name) is not sess
-                or msg_id not in _target_ids(sess)):
+                or msg_id not in _target_ids(sess)
+                or not held_by_claude(sess, [target])):
+            log.info("[%s] queued line %d dropped: message %d taken while "
+                     "it was sent", sess.label, line_id, msg_id)
             self._drop_queued_line(sess, msg_id)
 
     def _build_send_now_keyboard(self, sess: TrackedSession,

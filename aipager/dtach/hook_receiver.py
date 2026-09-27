@@ -679,6 +679,12 @@ class HookReceiver:
 
         elif event == "UserPromptSubmit":
             prompt = msg.get("prompt", "")
+            # A prompt starts a new turn: no step of the parent's is
+            # running yet (an interrupted tool may never have sent its
+            # PostToolUse).
+            _ups = self.registry.get(session_name)
+            if _ups is not None:
+                _ups.parent_tool_started_at = None
             if prompt.startswith(_TASK_NOTIFICATION_PREFIX):
                 # Roadmap 8.41: an agent that stopped with background work
                 # of its own still running resumes later — its SubagentStop
@@ -855,6 +861,8 @@ class HookReceiver:
                 # between PreToolUse and PostToolUse, so a long tool
                 # otherwise looks like a wedged session.
                 sess.pending_tool_started_at = time.monotonic()
+                # The parent's own step (the "⏳ Queued" line's clock).
+                sess.parent_tool_started_at = sess.pending_tool_started_at
                 # Ensure we're in BUSY state. A PreToolUse arriving while
                 # NOT already BUSY is background activity ONLY when there
                 # is actual evidence of an open background job —
@@ -921,6 +929,8 @@ class HookReceiver:
                     # A detached background agent's tool ending says
                     # nothing about the parent's own tool in flight.
                     sess.pending_tool_started_at = None
+                if not msg.get("agent_id"):
+                    sess.parent_tool_started_at = None
                 await self.notify_fn(sess, "tool_done", {
                     "tool_name": tool_name,
                     "tool_summary": summary,
@@ -937,6 +947,8 @@ class HookReceiver:
                     # A detached background agent's tool ending says
                     # nothing about the parent's own tool in flight.
                     sess.pending_tool_started_at = None
+                if not msg.get("agent_id"):
+                    sess.parent_tool_started_at = None
                 await self.notify_fn(sess, "tool_failed", {
                     "tool_name": tool_name,
                     "tool_summary": summary,

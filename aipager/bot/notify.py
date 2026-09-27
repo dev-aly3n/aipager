@@ -1316,8 +1316,8 @@ class NotifyMixin:
                 } for n in queued)
                 log.info("[%s] queued while busy: %s", label,
                          [n.get("msg_id") for n in queued])
-                # Still waiting QUEUED_LINE_DELAY from now: the "⏳ Queued"
-                # line and its "⚡ Send now" button (bot/send_now.py).
+                # Still waiting when its line is due: the "⏳ Queued" line
+                # and its "⚡ Send now" button (bot/send_now.py).
                 self._arm_queued_lines(sess, queued)
             await self._apply_consumption(sess, own)
             if expired:

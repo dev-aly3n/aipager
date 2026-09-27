@@ -416,6 +416,20 @@ class Replay:
         self.hook(hook_event_name="PostToolUse", tool_name="Bash",
                   tool_input={"command": summary}, **extra)
 
+    def tool_start(self, summary: str, agent_id: str = "") -> asyncio.Task:
+        """A tool call's PreToolUse alone: the step is still running."""
+        extra = {"agent_id": agent_id} if agent_id else {}
+        return self.hook(hook_event_name="PreToolUse", tool_name="Bash",
+                         tool_input={"command": summary}, **extra)
+
+    def tool_end(self, summary: str, agent_id: str = "", *,
+                 event: str = "PostToolUse") -> asyncio.Task:
+        """The PostToolUse (or *event*, e.g. PostToolUseFailure) that ends
+        a :meth:`tool_start` step."""
+        extra = {"agent_id": agent_id} if agent_id else {}
+        return self.hook(hook_event_name=event, tool_name="Bash",
+                         tool_input={"command": summary}, **extra)
+
     def stop(self, answer: str) -> asyncio.Task:
         return self.hook(hook_event_name="Stop",
                          last_assistant_message=answer)

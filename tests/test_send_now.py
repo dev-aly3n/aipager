@@ -336,6 +336,8 @@ def test_no_timer_for_a_message_that_already_has_a_line(mk_bot, tmp_path,
 
 def test_the_timer_waits_the_configured_delay(mk_bot, tmp_path, run_async,
                                               monkeypatch):
+    """No step running: the full QUEUED_LINE_DELAY, looked at again every
+    QUEUED_LINE_TOOL_AGE so a step that starts later is seen in time."""
     bot, sess = _bot(mk_bot, tmp_path)
     waited = []
 
@@ -345,7 +347,52 @@ def test_the_timer_waits_the_configured_delay(mk_bot, tmp_path, run_async,
     monkeypatch.setattr(sn, "_queued_line_sleep", _wait)
     run_async(bot._queued_line_timer(sess, 2))
     from aipager import config
-    assert waited == [config.QUEUED_LINE_DELAY] == [10.0]
+    assert sum(waited) == config.QUEUED_LINE_DELAY == 10.0
+    assert waited == [3.0, 3.0, 3.0, 1.0]
+
+
+def test_the_timer_sends_at_once_behind_an_old_step(mk_bot, tmp_path,
+                                                    run_async, monkeypatch):
+    bot, sess = _bot(mk_bot, tmp_path)
+    waited = []
+
+    async def _wait(seconds):
+        waited.append(seconds)
+
+    monkeypatch.setattr(sn, "_queued_line_sleep", _wait)
+
+    async def scenario():
+        sess.parent_tool_started_at = asyncio.get_running_loop().time() - 7
+        await bot._queued_line_timer(sess, 2)
+
+    run_async(scenario())
+    assert waited == []
+    bot._app.bot.send_message.assert_awaited_once()
+
+
+def _wait_at(sess, *, age, waited=0.0):
+    async def scenario():
+        now = asyncio.get_running_loop().time()
+        sess.parent_tool_started_at = None if age is None else now - age
+        return sn._queued_line_wait(sess, waited)
+    return asyncio.run(scenario())
+
+
+def test_queued_line_wait(mk_bot, tmp_path):
+    _bot_, sess = _bot(mk_bot, tmp_path)
+    # Due at once: a step at or past 3 s, or the 10 s spent.
+    assert _wait_at(sess, age=3.0) == 0.0
+    assert _wait_at(sess, age=40.0) == 0.0
+    assert _wait_at(sess, age=None, waited=10.0) == 0.0
+    assert _wait_at(sess, age=1.0, waited=10.0) == 0.0
+    # A young step: until it is 3 s old, never past the 10 s.
+    assert _wait_at(sess, age=1.0) == pytest.approx(2.0, abs=0.01)
+    assert _wait_at(sess, age=1.0, waited=9.0) == pytest.approx(1.0)
+    # No step: look again after 3 s, never past the 10 s.
+    assert _wait_at(sess, age=None) == 3.0
+    assert _wait_at(sess, age=None, waited=8.5) == 1.5
+    # A step a hair under 3 s cannot make the timer spin.
+    assert _wait_at(sess, age=2.98) == sn._QUEUED_LINE_MIN_WAIT
 
 
 def test_a_held_message_gets_the_line_and_owes_its_delete(
@@ -365,8 +412,10 @@ def test_a_held_message_gets_the_line_and_owes_its_delete(
     assert button.callback_data.startswith("_:sx:")
     assert button.callback_data.endswith(":now:2")
     assert len(button.callback_data.encode()) <= 64
+    # A BLOCKING ornament: it waits for its token, never skipped for a
+    # short chat (live test 2026-09-27).
     assert call.kwargs["rate_limit_args"] == rate_limit_args(
-        kind="skip", priority=PRIORITY_ORNAMENT)
+        priority=PRIORITY_ORNAMENT) == {"class": PRIORITY_ORNAMENT}
     assert sess.queued_lines == {2: (CHAT, 7001)}
     assert bot.registry.queued_line_deletes == [[CHAT, 7001]]
     assert sess.queued_line_timers == {}
