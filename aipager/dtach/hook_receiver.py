@@ -363,22 +363,22 @@ def _tool_detail(name: str, inp: dict) -> str:
 _NOT_TURN_EVIDENCE = frozenset({"statusline", "SubagentStop"})
 
 # A turn's own activity: the events that write its card state (rows, prose,
-# agents, compaction and the SessionStart that ends it, a permission prompt)
-# or end the turn. While the running turn waits for its card state behind an
-# older turn's finish (roadmap 8.62, `TrackedSession.turn_state_held`), these
-# wait too, then run in arrival order. Everything else (a new prompt, a queue
+# agents, compaction and the SessionStart that ends it, a permission prompt
+# and its reply-window timeout) or end the turn. While the running turn waits
+# for its card state behind an older turn's finish (roadmap 8.62,
+# `TrackedSession.turn_state_held`), these wait too, then run in arrival
+# order: none may overtake another (a permission prompt handled before the
+# PreToolUse that preceded it would be flipped back to BUSY by it, and a
+# reply-window timeout handled before its prompt would leave that prompt's
+# closed reply channel in place). Everything else (a new prompt, a queue
 # pick-up, the status line, session end, safety notices) is never held.
 _TURN_ACTIVITY_EVENTS = frozenset({
-    "PermissionRequest", "permission_prompt", "PreToolUse", "PostToolUse",
-    "PostToolUseFailure", "MessageDisplay", "SubagentStart", "SubagentStop",
-    "PreCompact", "PostCompact", "SessionStart", "StopFailure",
+    "PermissionRequest", "permission_prompt", "permission_reply_timeout",
+    "PreToolUse", "PostToolUse", "PostToolUseFailure", "MessageDisplay",
+    "SubagentStart", "SubagentStop", "PreCompact", "PostCompact",
+    "SessionStart", "StopFailure",
 })
 _TURN_ENDING_EVENTS = ("idle_prompt", "idle", "stop", "notification")
-
-# A permission request's hook waits PERMISSION_REPLY_DEADLINE (20 s) for the
-# Telegram answer before Claude Code's own dialog takes over. Held, it waits
-# at most this long, so most of that window is left for the operator.
-PERMISSION_HOLD_SECONDS: float = 5.0
 
 
 def _is_turn_activity(event: str) -> bool:
@@ -426,29 +426,28 @@ class HookReceiver:
         """Wait while the running turn's card state still belongs to an
         older turn whose finish is out (roadmap 8.62): handled now, this
         event would land on that turn's card and then be wiped by this
-        turn's reset. Bounded by ``TURN_STATE_HOLD_SECONDS`` (a permission
-        request by ``PERMISSION_HOLD_SECONDS``)."""
+        turn's reset. Bounded by ``TURN_STATE_HOLD_SECONDS``. A permission
+        request waits like the rest: its hook's reply window may close
+        meanwhile, and then the prompt is answered by keystrokes, as it is
+        for any answer that comes after the window."""
         hold = sess.turn_state_hold
         if hold is None or not sess.turn_state_held():
             return
         if event == "MessageDisplay":
-            # The finishing turn's own answer, reaching the daemon after its
-            # Stop: that turn's, handled now as it always was.
+            # The latest finished turn's own answer, reaching the daemon
+            # after its Stop: that turn's, handled now as it always was.
             delta = str(msg.get("delta") or "").strip()
             if delta and delta in sess.finishing_answer:
                 return
         held_turn = sess.turn_state_hold_for
-        bound = (PERMISSION_HOLD_SECONDS if event == "PermissionRequest"
-                 else TURN_STATE_HOLD_SECONDS)
         try:
-            await asyncio.wait_for(hold.wait(), timeout=bound)
+            await asyncio.wait_for(hold.wait(), timeout=TURN_STATE_HOLD_SECONDS)
         except asyncio.TimeoutError:
             log.warning("[%s] turn %s still has no card state after %.0fs "
                         "- handling its %s anyway", sess.label, held_turn,
-                        bound, event)
-            if event != "PermissionRequest":
-                # Only this turn's hold (never a newer one's) is given up.
-                sess.release_turn_state(held_turn)
+                        TURN_STATE_HOLD_SECONDS, event)
+            # Only this turn's hold (never a newer one's) is given up.
+            sess.release_turn_state(held_turn)
 
     async def _on_datagram(self, data: bytes) -> None:
         try:

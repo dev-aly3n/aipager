@@ -755,9 +755,11 @@ class TrackedSession:
     turn_state_hold_for: int | None = None
     turn_state_hold: asyncio.Event | None = None
     turn_state_hold_since: float = 0.0
-    # The answer of the turn whose finish is out (its Stop's text), while
-    # it is out: a late MessageDisplay carrying it is that turn's, never
-    # the held newer turn's (roadmap 8.62). Transient.
+    # The answer (its Stop's text) of the latest turn whose finish started:
+    # a late MessageDisplay carrying it is that turn's, never a held newer
+    # turn's (roadmap 8.62). Kept after the finish, since the hold it serves
+    # can outlast the finish's gate; every finish overwrites it before it
+    # can pop or hold anything. Transient.
     finishing_answer: str = ""
     # How many ``notify()`` calls are running for this session, and when
     # the session monitor first saw its card orphaned (live, Stop button

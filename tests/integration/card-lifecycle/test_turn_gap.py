@@ -494,16 +494,16 @@ def test_a_stale_or_satisfied_hold_holds_nothing(vloop):
     ("Notification", True),
     ("UserPromptSubmit", False), ("queue_pickup", False),
     ("statusline", False), ("SessionEnd", False), ("safety_blocked", False),
-    ("hook_memory_cap_hit", False), ("permission_reply_timeout", False),
+    ("hook_memory_cap_hit", False), ("permission_reply_timeout", True),
 ])
 def test_which_events_wait_for_the_turn_state(event, held):
     assert hook_receiver_mod._is_turn_activity(event) is held
 
 
-def test_a_held_permission_request_waits_only_briefly(replay, vloop):
-    """The permission hook waits 20 s for Telegram's answer: held, the
-    request waits at most PERMISSION_HOLD_SECONDS, and the turn's other
-    events stay held."""
+def test_a_held_permission_request_keeps_its_place_in_line(replay, vloop):
+    """A permission request is held like the rest, and never overtakes the
+    PreToolUse before it: handled first, it would be flipped back to BUSY by
+    that PreToolUse, and the operator would never see the prompt."""
     r = replay
     sess = r.sess
 
@@ -511,19 +511,20 @@ def test_a_held_permission_request_waits_only_briefly(replay, vloop):
         r.bot.registry.transition(sess.name, Status.BUSY)
         sess.card_turn_seq = sess.turn_seq - 1
         sess.hold_turn_state(sess.turn_seq)
+        r.hook(hook_event_name="PreToolUse", tool_name="Bash",
+               tool_input={"command": "rm -rf build"})
         r.hook(hook_event_name="PermissionRequest", tool_name="Bash",
                tool_input={"command": "rm -rf build"})
-        r.hook(hook_event_name="PreToolUse", tool_name="Bash",
-               tool_input={"command": "held step"})
-        await asyncio.sleep(
-            hook_receiver_mod.PERMISSION_HOLD_SECONDS + 1)
-        return (sess.status, sess.turn_state_held(),
-                [s for s, _ in sess.tool_history])
+        await asyncio.sleep(25)  # past the hook's own 20 s reply window
+        during = (sess.status, [s for s, _ in sess.tool_history])
+        sess.release_turn_state()
+        await asyncio.sleep(1)
+        return during
 
-    status, still_held, rows = _run(vloop, scenario())
-    assert status == Status.INTERACTIVE
-    assert still_held
-    assert "Bash: held step" not in rows
+    during = _run(vloop, scenario())
+    assert during == (Status.BUSY, [])
+    assert sess.status == Status.INTERACTIVE
+    assert "Bash: rm -rf build" in [s for s, _ in sess.tool_history]
 
 
 def test_the_finishing_turns_late_answer_prose_is_not_held(replay, vloop,
@@ -533,7 +534,6 @@ def test_the_finishing_turns_late_answer_prose_is_not_held(replay, vloop,
     sentence."""
     _layout()
     r = replay
-    sess = r.sess
 
     async def scenario():
         w = _worker(r)
@@ -541,7 +541,7 @@ def test_the_finishing_turns_late_answer_prose_is_not_held(replay, vloop,
         real = _slow_finish(r, monkeypatch)
         r.stop("answer first")
         await asyncio.sleep(0.3)
-        r.hook(hook_event_name="MessageDisplay", delta="answer first",
+        r.hook(hook_event_name="MessageDisplay", delta="answer first\n",
                message_id="m-first", index=0)
         await asyncio.sleep(0.3)
         r.tool("popped step")
@@ -555,7 +555,6 @@ def test_the_finishing_turns_late_answer_prose_is_not_held(replay, vloop,
     (new,) = _cards_for(r, 3)
     assert not _ever_showed(new, "answer first")
     assert "popped step" in new["text"]
-    assert sess.finishing_answer == ""  # cleared with the finish's gate
 
 
 def test_a_held_turn_start_counts_as_work_in_flight(vloop):

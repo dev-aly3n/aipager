@@ -1185,7 +1185,6 @@ class NotifyMixin:
         if sess.finish_gate is gate:
             sess.finish_gate = None
             sess.finishing_turn = None
-            sess.finishing_answer = ""
 
     async def notify(self, sess: TrackedSession, event: str, context: dict) -> None:
         """Send appropriate Telegram notification for a state change.
