@@ -120,9 +120,10 @@ def test_waiting_card_names_agents_and_shells(replay, vloop):
 
 
 def test_wakeup_continues_the_same_job_and_card(replay, vloop):
-    """G16: the shell's wake-up is the job's continuation: the same card
-    comes back to life and its Stop closes the job as Finished there.
-    The daemon must decide "continue" before taking the shell off."""
+    """G17 end to end: the shell's wake-up is the job's continuation. The
+    same card comes back to life and its Stop closes the job as Finished
+    there. Ending the shell arms the grace window after the interim, so
+    the wake-up continues whichever order the receiver applies the end."""
     _layout()
     r = replay
 
@@ -144,6 +145,49 @@ def test_wakeup_continues_the_same_job_and_card(replay, vloop):
     assert f"✅ `shell: {DESC} - done (" in card["text"]
     assert "✅ `Bash: read the output`" in card["text"]
     assert r.bot._render_pinned(CHAT)[0].endswith("(idle)")
+
+
+def test_wakeup_before_the_interim_is_decided_starts_its_own_card(
+        replay, vloop):
+    """G16: the wake-up can arrive after the Stop made the session IDLE but
+    before the finish path decided the Stop is the job's interim (it waits
+    for a previous finish still out). The shell's end is applied first, as
+    an agent's SubagentStop would be: nothing is left to continue, so card
+    1 settles Done and the wake-up gets its own card under message 1.
+    Deciding first would continue a job whose finish then closes it,
+    leaving the wake-up with no card and its answer under nothing."""
+    _layout()
+    r = replay
+
+    async def scenario():
+        w = _worker(r)
+        await _turn(r, 1, "launch it")
+        r.bg_bash(DESC, "bshell01")
+        await asyncio.sleep(2)
+        held = asyncio.Event()
+        r.sess.finish_gate = held
+        r.stop("started the tests")
+        await asyncio.sleep(1)
+        interim_undecided = not r.sess.job_interim_seen
+        r.wake(r.notification("bshell01", "completed", DONE))
+        await asyncio.sleep(1)
+        held.set()
+        await asyncio.sleep(2)
+        r.tool("read the output")
+        await asyncio.sleep(2)
+        r.stop("the tests pass")
+        await asyncio.sleep(10)
+        w.cancel()
+        return interim_undecided
+
+    assert _run(vloop, scenario()) is True
+    assert len(r.chat.cards) == 2, list(r.chat.cards.values())
+    first, second = r.chat.cards.values()
+    assert first["reply_to"] == 1 and second["reply_to"] == 1
+    assert "Done" in first["text"] and first["stop"] is False
+    assert "✅ `Bash: read the output`" in second["text"]
+    assert "Bash: read the output" not in first["text"]
+    assert list(r.chat.answers.values()) == [1, 1]
 
 
 def test_end_read_on_the_waiting_card_before_the_wakeup_still_continues(

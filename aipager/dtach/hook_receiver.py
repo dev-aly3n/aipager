@@ -722,17 +722,25 @@ class HookReceiver:
                 # card still needs to know a continuation happened even
                 # when status itself didn't move.
                 cont_sess = self.registry.get_or_create(session_name)
-                # Decided BEFORE the background shells this notification
-                # reports as ended are taken off: ending the job's last
-                # shell first would close the very job this wake-up
-                # continues, and send it down the "no open job" path.
-                continuing = (
-                    cont_sess.status in (Status.BUSY, Status.INTERACTIVE)
-                    or cont_sess.job_background_open())
+                # The background shells this notification reports as ended
+                # are taken off BEFORE deciding whether it continues a job,
+                # the order an agent's end has (its SubagentStop lands
+                # before its wake-up). Once the job's Stop was taken as an
+                # interim, the end arms the grace window (end_bg_shell), so
+                # the job stays open for this wake-up either way. Before
+                # that decision (the Stop's finish still waits on an
+                # earlier one) no grace is armed: the job closes here, the
+                # pending finish settles the card as Done, and this wake-up
+                # starts its own card below. Deciding first would continue
+                # a job that pending finish then closes, leaving this turn
+                # with no card at all.
                 for task_id, status, exit_code in \
                         bg_shells.parse_shell_ends(prompt):
                     cont_sess.end_bg_shell(task_id, status, now_mono,
                                            exit_code)
+                continuing = (
+                    cont_sess.status in (Status.BUSY, Status.INTERACTIVE)
+                    or cont_sess.job_background_open())
                 if continuing:
                     # The continuation turn takes over from the grace
                     # window: from here the job closes only at THIS turn's
