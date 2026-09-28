@@ -25,6 +25,7 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Any
 
+from aipager import bg_shells as _bg_shells
 from aipager.scope import strip_scope_suffix
 from aipager.config import (
     GONE_SESSION_MAX_AGE_DAYS,
@@ -124,6 +125,13 @@ BG_AGENTS_RECENT_CAP: int = 20
 # job's agent reports back more than once or the operator asks something
 # while agents run; five is well above that, and bounds a runaway.
 AGENTS_LINES_CAP: int = 5
+# Background shells a session has running (`TrackedSession.bg_shells`) are
+# held to this many at insertion; the oldest (by launch) is evicted when a
+# new launch would exceed it. Shells send no hooks while they run, so
+# nothing else bounds the table between an end that was never seen and the
+# max-age sweep (session_monitor.BG_SHELL_MAX_TRACK_SECONDS). A busy
+# session runs a handful at once; 50 only ever engages on a runaway loop.
+BG_SHELLS_CAP: int = 50
 # Max GONE entries retained for `/resume` history. When a new session is
 # created and the GONE count exceeds this, the oldest-by-`gone_at` entry
 # is evicted. Lives on disk in aipager-sessions.json — kept here so
@@ -793,6 +801,19 @@ class TrackedSession:
     bg_agents: dict = field(default_factory=dict)
     bg_agents_recent: dict = field(default_factory=dict)
     agents_lines: list = field(default_factory=list)
+    # Background shells the main loop started (a `Bash` PostToolUse whose
+    # `tool_response` carries a `backgroundTaskId`), from launch until
+    # their end is seen: a `<task-notification>` with a `<status>`, a
+    # TaskStop/KillShell, the max age, or the session going GONE. task id
+    # -> {"label", "summary" (the launch's `Bash: ...` card summary),
+    # "started" (monotonic), "in_job" (bool), "history_idx" (int | None)}.
+    # ONE table in both roles agents split across two: as a whole it is
+    # the running set (like `bg_agents`: the pin, the answer line), and
+    # filtered to `in_job` it is the job's table (like `active_subagents`:
+    # job_background_open(), the waiting phrase, the card rows). /stop only
+    # takes shells out of the job: Escape does not end them. Capped at
+    # BG_SHELLS_CAP. Transient, never in _PERSIST_FIELDS (monotonic stamps).
+    bg_shells: dict = field(default_factory=dict)
     # Whether the most recent card render had to hide anything (collapsed
     # runs, folded sections, or byte truncation) — stashed by
     # _edit_busy_rich from build_stream_card_ex's report and read by the
@@ -1164,6 +1185,7 @@ class TrackedSession:
             return False
         return bool(
             self.active_subagents
+            or self.job_shell_ids()
             or self.job_continuation_active
             or (self.job_grace_until
                 and time.monotonic() < self.job_grace_until)
@@ -1242,10 +1264,11 @@ class TrackedSession:
         return silent
 
     def clear_bg_agents(self) -> None:
-        """The session is gone: no agent of it is running, and no line of
-        it is owed an edit."""
+        """The session is gone: no agent or shell of it is running, and no
+        line of it is owed an edit."""
         self.bg_agents.clear()
         self.bg_agents_recent.clear()
+        self.bg_shells.clear()
         self.agents_lines = []
 
     def add_agents_line(self, rec: dict) -> None:
@@ -1258,6 +1281,90 @@ class TrackedSession:
     def bg_agent_labels(self) -> list[str]:
         return [info["label"] for info in self.bg_agents.values()]
 
+    # ── background shells ─────────────────────────────────────────────────
+    #
+    # Pure bookkeeping, like the agents' set above: hook_receiver and the
+    # card's queue scan call these, and nothing here sends or reads a file.
+
+    def bg_shell_started(self, task_id: str, label: str, summary: str,
+                         now: float) -> bool:
+        """A background shell launched by the main loop is running. An
+        empty id adds nothing. It belongs to the running job until it
+        ends, /stop takes it out, or a new turn does not carry it."""
+        if not task_id:
+            return False
+        self.bg_shells[task_id] = {
+            "label": label, "summary": summary, "started": now,
+            "in_job": True, "history_idx": None,
+        }
+        while len(self.bg_shells) > BG_SHELLS_CAP:
+            oldest = min(self.bg_shells,
+                         key=lambda t: self.bg_shells[t]["started"])
+            self.bg_shells.pop(oldest)
+        return True
+
+    def job_shell_ids(self) -> list[str]:
+        """The running shells the open job waits on."""
+        return [task_id for task_id, info in self.bg_shells.items()
+                if info.get("in_job")]
+
+    def job_work_running(self) -> bool:
+        """Background work of the job's own still runs: an agent or a
+        shell."""
+        return bool(self.active_subagents or self.job_shell_ids())
+
+    def bg_shell_labels(self) -> list[str]:
+        return [info["label"] for info in self.bg_shells.values()]
+
+    def bg_shells_leave_job(self) -> None:
+        """/stop: the job is over, but Escape does not end a background
+        shell, so each stays counted as running (pin, answer line) without
+        holding a job open or a row on a card."""
+        for info in self.bg_shells.values():
+            info["in_job"] = False
+            info["history_idx"] = None
+
+    def end_bg_shell(self, task_id: str, outcome: str, now: float,
+                     exit_code: int | None = None) -> dict | None:
+        """The ONE place a shell's end is applied. *outcome* is a
+        notification status (completed, failed, killed), ``stopped``
+        (TaskStop/KillShell) or ``lost`` (the max age). An id that is not
+        a running shell of this session (an agent's, a subagent's shell's,
+        a Monitor's, one already ended) changes nothing and returns
+        ``None``; otherwise the popped entry.
+
+        Its card row settles to the outcome. A real end of the job's last
+        background work after an interim Stop keeps the job open for the
+        wake-up Claude sends next, exactly as SubagentStop does. A lost
+        shell is not known to have ended: an answer whose line named it is
+        left as sent, never settled to done on no evidence."""
+        info = self.bg_shells.pop(task_id, None)
+        if info is None:
+            return None
+        text, mark = _bg_shells.settled_row(
+            info["label"], outcome, now - info["started"], exit_code)
+        idx = info.get("history_idx")
+        if idx is not None and 0 <= idx < len(self.tool_history):
+            self.tool_history[idx] = (text, mark)
+            self.stream_dirty = True
+        if outcome == "lost":
+            self.agents_lines = [rec for rec in self.agents_lines
+                                 if task_id not in rec["ids"]]
+        elif (info.get("in_job") and self.job_interim_seen
+              and not self.job_work_running()):
+            self.job_grace_until = now + JOB_CONTINUATION_GRACE_SECONDS
+        return info
+
+    def sweep_bg_shells(self, now: float, max_age: float) -> list[str]:
+        """Drop the shells running longer than *max_age* seconds (an end
+        that was never seen: a lost TaskStop datagram, a daemon restart
+        between launch and end) and return their ids."""
+        old = [task_id for task_id, info in self.bg_shells.items()
+               if now - info["started"] > max_age]
+        for task_id in old:
+            self.end_bg_shell(task_id, "lost", now)
+        return old
+
     def agents_lines_due(self, now: float) -> list[dict]:
         """The answers whose ⏳ line is owed its ✅ edit at *now*: every
         agent the line named has been gone for BG_AGENTS_SETTLE_SECONDS,
@@ -1266,7 +1373,8 @@ class TrackedSession:
         if one comes back."""
         due = []
         for rec in self.agents_lines:
-            if any(agent_id in self.bg_agents for agent_id in rec["ids"]):
+            if any(task_id in self.bg_agents or task_id in self.bg_shells
+                   for task_id in rec["ids"]):
                 rec["gone_at"] = 0.0
                 continue
             if not rec["gone_at"]:
@@ -1592,6 +1700,11 @@ class TrackedSession:
             for info in self.active_subagents.values():
                 if "history_idx" in info and info["history_idx"] is not None:
                     info["history_idx"] -= drop
+            for info in self.bg_shells.values():
+                if info.get("history_idx") is not None:
+                    info["history_idx"] -= drop
+                    if info["history_idx"] < 0:
+                        info["history_idx"] = None
             # The card's anchors index into the same list, so they shift with
             # it. Left unshifted they would drift toward the top of the
             # timeline on a turn long enough to trim, quietly putting prose
@@ -2094,7 +2207,9 @@ class SessionRegistry:
         # silent (drop it, and publish the false "Finished" card) or as
         # stamped in the future (never sweep it at all). If they are ever
         # persisted, `load()`'s `normalize_subagent_liveness(..., reset=True)`
-        # is what keeps that honest.
+        # is what keeps that honest. The same goes for `bg_agents` and
+        # `bg_shells` (monotonic stamps): after a restart a shell's wake-up
+        # takes the "no open job" fresh-turn path.
     )
     _MAX_MSG_MAP = 2000  # cap _msg_map entries to avoid unbounded growth (doubled — Part 1 roughly doubles density by also tracking user prompts)
 

@@ -112,6 +112,39 @@ SUBAGENT_SILENCE_SECONDS, _SILENCE_DEPRECATED_ENV = _resolve_silence_window()
 # startup and not once per SessionMonitor ever constructed.
 _silence_deprecation_logged: bool = False
 
+# How long a background shell counts as running with no end seen. Shells
+# send no hooks while they run, so there is no silence to judge by, and a
+# legitimate test run or build can take an hour: past this age the shell
+# stops holding its job open and stops counting in the pin, and its card
+# row reads "no end seen". Overridable with AIPAGER_BG_SHELL_MAX_TRACK
+# (seconds); read at every scan, so a test can patch the global.
+_BG_SHELL_MAX_TRACK_ENV = "AIPAGER_BG_SHELL_MAX_TRACK"
+BG_SHELL_MAX_TRACK_DEFAULT: float = 7200.0
+
+
+def resolve_bg_shell_max_track(env: dict | None = None) -> float:
+    """The background-shell max age from *env* (default ``os.environ``).
+    Blank or unset gives the default; an unparsable or non-positive value
+    logs a warning and gives the default. Never raises: this runs at
+    import, and a bad value must not take the daemon down."""
+    src = os.environ if env is None else env
+    raw = (src.get(_BG_SHELL_MAX_TRACK_ENV) or "").strip()
+    if not raw:
+        return BG_SHELL_MAX_TRACK_DEFAULT
+    try:
+        value = float(raw)
+    except ValueError:
+        value = 0.0
+    if not value > 0 or value == float("inf"):
+        log.warning("%s=%r is not a positive number of seconds; using %d",
+                    _BG_SHELL_MAX_TRACK_ENV, raw,
+                    int(BG_SHELL_MAX_TRACK_DEFAULT))
+        return BG_SHELL_MAX_TRACK_DEFAULT
+    return value
+
+
+BG_SHELL_MAX_TRACK_SECONDS: float = resolve_bg_shell_max_track()
+
 # Idle-recovery fallback. The normal BUSY→IDLE transition comes from
 # Claude's Stop hook (hook_receiver). If that hook is ever missed — e.g.
 # the user interrupts a pending permission then immediately sends a new
@@ -785,6 +818,27 @@ class SessionMonitor:
                 log.info("[%s] background agent %s silent for %d min — no "
                          "longer counted as running", sess.label, aid,
                          int(SUBAGENT_SILENCE_SECONDS / 60))
+            # Background shells get an age bound instead (they send no
+            # hooks to be silent by). A job waiting only on the shell that
+            # aged out closes, with its own notice.
+            was_job_open = sess.job_background_open()
+            aged = sess.sweep_bg_shells(now, BG_SHELL_MAX_TRACK_SECONDS)
+            for sid in aged:
+                log.info("[%s] background shell %s running past %d min "
+                         "with no end seen - no longer counted as running",
+                         sess.label, sid,
+                         int(BG_SHELL_MAX_TRACK_SECONDS / 60))
+            if (aged and was_job_open and sess.status == Status.IDLE
+                    and not sess.job_background_open()):
+                sess.job_interim_seen = False
+                sess.job_continuation_active = False
+                sess.job_grace_until = 0.0
+                try:
+                    await self.notify_fn(sess, "job_agents_lost",
+                                         {"what": "shell"})
+                except Exception:
+                    log.warning("Failed to notify job_agents_lost for %s",
+                                name)
             if sess.agents_lines_due(now):
                 try:
                     await self.notify_fn(sess, "agents_line_done",

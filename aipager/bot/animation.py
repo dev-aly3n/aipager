@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 
 from telegram.error import RetryAfter
 
-from aipager import flood_policy, preferences
+from aipager import bg_shells, flood_policy, preferences
 from aipager.config import (
     BUSY_EDIT_INTERVAL, CARD_CADENCE_FLOOR_GROUP, CARD_CADENCE_FLOOR_PRIVATE,
     CARD_RETRY_WAKE, CARD_STATE_BYPASS_MIN_GAP,
@@ -430,6 +430,17 @@ def _scan_queue_operations(sess: TrackedSession) -> None:
         sess.stream_transcript_path, sess.queue_scan_offset,
     )
     for operation, reason, content, _ts in events:
+        if content and "<task-notification>" in content:
+            # A background shell that ended while this turn ran: Claude
+            # Code queues its notification (`enqueue`, then an
+            # `absorbed_mid_turn` remove) and fires no hook for it, so
+            # this line is the only prompt sign of the end. Read from
+            # every operation; an id already ended is gone, so a repeat
+            # changes nothing.
+            now = time.monotonic()
+            for task_id, status, exit_code in \
+                    bg_shells.parse_shell_ends(content):
+                sess.end_bg_shell(task_id, status, now, exit_code)
         if operation == "remove" and reason in (
             "absorbed_mid_turn", "delivered_to_agent",
         ):
@@ -649,6 +660,15 @@ def _build_sections(
         if idx is not None:
             finished_by_idx[idx] = entry
 
+    # idx -> the job's running background shell whose launch row lives
+    # there: drawn as a live shell row instead of the launch's summary.
+    shell_live: dict[int, dict] = {}
+    for task_id in sess.job_shell_ids():
+        entry = sess.bg_shells[task_id]
+        idx = entry.get("history_idx")
+        if idx is not None:
+            shell_live[idx] = entry
+
     sections: list[tuple[str, list[str], list[str] | None]] = []
 
     def _push(kind: str, row: str, agent_tools: list[str] | None = None) -> None:
@@ -666,6 +686,8 @@ def _build_sections(
             _push("prose", _quote(text))
         if done == "failed":
             _push("run", f"❌ {_mono(summary)}")
+        elif done == bg_shells.STOPPED:
+            _push("run", f"⏹ {_mono(summary)}")
         elif done:
             settled = finished_by_idx.get(i)
             if summary.startswith(_SUBAGENT_MARK) and settled is not None:
@@ -699,6 +721,16 @@ def _build_sections(
                     row = _agent_live_row(info, _card_unit(sess, final))
                 _push("agent-run", f"⏳ {_mono(row)}",
                       list(info.get("tools", [])))
+            elif i in shell_live:
+                shell = shell_live[i]
+                if final:
+                    # Settled while the shell still runs: no frozen counter.
+                    row = bg_shells.final_live_row(shell["label"])
+                else:
+                    row = bg_shells.live_row(
+                        shell["label"],
+                        _elapsed_str(shell["started"], _card_unit(sess, final)))
+                _push("run", f"⏳ {_mono(row)}")
             else:
                 _push("run", f"⏳ {_mono(summary)}")
     for slot in sorted(by_anchor):
@@ -1041,21 +1073,29 @@ def _agent_live_row(info: dict, unit: str = "s") -> str:
 
 
 def _agent_phrase(sess: TrackedSession) -> str:
-    """Shared "N agent(s) (types)" fragment of the waiting status line. During the continuation-grace
+    """Shared "N agent(s) (types), M shell(s)" fragment of the waiting
+    status line. During the continuation-grace
     window the table is legitimately EMPTY (the agent finished, the
     wake-up hasn't arrived) — "0 agents still working" would read as
     broken (review rev-iter1-004), so that state says "finishing up"
     instead."""
     n = len(sess.active_subagents)
-    if n == 0:
+    shells = len(sess.job_shell_ids())
+    if n == 0 and shells == 0:
         return "finishing up"
-    plural = "" if n == 1 else "s"
-    phrase = f"{n} agent{plural}"
-    types = sorted({info.get("type", "") for info in sess.active_subagents.values()
-                    if info.get("type")})
-    if 1 <= len(types) <= 3:
-        phrase += f" ({', '.join(_md_escape(t) for t in types)})"
-    return phrase
+    parts = []
+    if n:
+        plural = "" if n == 1 else "s"
+        phrase = f"{n} agent{plural}"
+        types = sorted({info.get("type", "")
+                        for info in sess.active_subagents.values()
+                        if info.get("type")})
+        if 1 <= len(types) <= 3:
+            phrase += f" ({', '.join(_md_escape(t) for t in types)})"
+        parts.append(phrase)
+    if shells:
+        parts.append(f"{shells} shell{'' if shells == 1 else 's'}")
+    return ", ".join(parts)
 
 
 def _card_unit(sess: TrackedSession, final: bool) -> str:
@@ -3330,6 +3370,7 @@ class AnimationMixin:
             # carried over to this turn's card, so the one live card, under
             # the newest message, is the one that shows them.
             carried_agents: dict = {}
+            carried_shells: list[str] = []
             if same_turn and top_kind == "busy" and sess.busy_msg_id:
                 # This turn already has its card (roadmap 8.57 R1): never
                 # a second one. The reply target may have moved since it
@@ -3395,7 +3436,8 @@ class AnimationMixin:
                     # grace window) DID transition IDLE→BUSY, set the
                     # flag, and reclaims here.
                     sess.job_reclaim_pending = False
-                    if sess.active_subagents and sess.busy_msg_id > 0:
+                    if ((sess.active_subagents or sess.job_shell_ids())
+                            and sess.busy_msg_id > 0):
                         # Its agents are still running (roadmap 8.56): they
                         # move to this new turn's card below, rows and job
                         # state carried over. The old card is still settled
@@ -3404,10 +3446,12 @@ class AnimationMixin:
                         # layout setting keeps every turn's card (review
                         # rev-iter1-005).
                         carried_agents = dict(sess.active_subagents)
+                        carried_shells = sess.job_shell_ids()
                         log.info(
-                            "[%s] new turn inside an open job (%d agents) "
-                            "- its agents move to the new card", sess.label,
-                            len(carried_agents))
+                            "[%s] new turn inside an open job (%d agents, "
+                            "%d shells) - they move to the new card",
+                            sess.label, len(carried_agents),
+                            len(carried_shells))
                     else:
                         log.warning(
                             "[%s] new turn starting while a previous job "
@@ -3473,6 +3517,12 @@ class AnimationMixin:
             sess.tool_history.clear()
             sess.active_subagents.clear()
             sess.finished_subagents.clear()
+            # Background shells outlive turns (the pin, the answer line),
+            # but only the ones carried stay in the job and get a row on
+            # this card, like the agents; the rest leave the job.
+            for task_id, shell in sess.bg_shells.items():
+                shell["history_idx"] = None
+                shell["in_job"] = task_id in carried_shells
             sess.pending_permission = None
             sess.last_token_pct = 0
             sess.last_output_tokens = 0
@@ -3550,6 +3600,11 @@ class AnimationMixin:
                 info["history_idx"] = sess.record_tool(
                     f"\U0001f916 {info.get('type', 'agent')}", False)
                 sess.active_subagents[agent_id] = info
+            for task_id in carried_shells:
+                shell = sess.bg_shells.get(task_id)
+                if shell is not None:
+                    shell["history_idx"] = sess.record_tool(
+                        shell["summary"], False)
             # This turn's card state exists now: its hooks held since it
             # began (roadmap 8.62) are handled from here, in order, onto it.
             sess.release_turn_state(turn)

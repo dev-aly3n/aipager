@@ -946,6 +946,9 @@ class SessionOpsMixin:
         # Nothing of the job is owed here: its interim answers went out
         # as they were written (roadmap 8.42).
         sess.active_subagents.clear()
+        # Escape does not end a background shell: it stays counted as
+        # running (pin, answer line), but no longer holds the job open.
+        sess.bg_shells_leave_job()
         sess.job_interim_seen = False
         sess.job_continuation_active = False
         sess.job_grace_until = 0.0

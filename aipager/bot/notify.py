@@ -44,6 +44,7 @@ from aipager.bot.rich_message import (
 )
 
 
+from aipager import bg_shells as _bg_shells
 from aipager import preferences
 from aipager.config import (
     COMPACT_CARD_TIMEOUT_SECONDS,
@@ -386,11 +387,16 @@ class NotifyMixin:
         """The agents running as an answer goes out — ONE snapshot, taken
         once, so the line shown, the ids it waits for and the labels the ✅
         repeats all describe the same agents — or ``None`` with none."""
-        labels = sess.bg_agent_labels()
+        agents = sess.bg_agent_labels()
+        shells = sess.bg_shell_labels()
+        labels = agents + shells
         if not labels:
             return None
-        return {"line": _agents_line.running_line(labels, markdown=True),
-                "ids": list(sess.bg_agents), "labels": labels}
+        kinds = ["agent"] * len(agents) + ["shell"] * len(shells)
+        return {"line": _agents_line.running_line(labels, kinds=kinds,
+                                                  markdown=True),
+                "ids": list(sess.bg_agents) + list(sess.bg_shells),
+                "labels": labels, "kinds": kinds}
 
     def _remember_agents_line(
         self, sess: TrackedSession, chat_id: int, msg_id: int, text: str,
@@ -401,7 +407,9 @@ class NotifyMixin:
         sess.add_agents_line({
             "chat_id": chat_id, "msg_id": msg_id, "text": text,
             "line": agents["line"], "ids": list(agents["ids"]),
-            "labels": list(agents["labels"]), "is_rtl": is_rtl,
+            "labels": list(agents["labels"]),
+            "kinds": list(agents.get("kinds") or []) or None,
+            "is_rtl": is_rtl,
             "sent_wall": time.time(), "attempts": 0, "next_try": 0.0,
             "gone_at": 0.0,
         })
@@ -429,7 +437,8 @@ class NotifyMixin:
         """One attempt at one answer's ✅ edit. True when that answer is
         finished with (settled, gone, or given up)."""
         done = _agents_line.done_line(
-            rec["labels"], time.time() - rec["sent_wall"], markdown=True)
+            rec["labels"], time.time() - rec["sent_wall"],
+            kinds=rec.get("kinds"), markdown=True)
         text = rec["text"][: -len(rec["line"])] + done
         rec["attempts"] += 1
         chat_id = rec["chat_id"]
@@ -633,7 +642,7 @@ class NotifyMixin:
         # so a message popped there starts a turn of its own.
         in_job = (sess.job_background_open()
                   and not (sess.job_continuation_active
-                           and not sess.active_subagents))
+                           and not sess.job_work_running()))
         sess.trigger_msg_id = nxt.get("msg_id")
         sess.last_prompt = nxt.get("raw_text") or ""
         sess.last_prompt_driver_user_id = nxt.get("driver_user_id")
@@ -1482,8 +1491,12 @@ class NotifyMixin:
                 elif elapsed_s > 0:
                     elapsed_str = f"{elapsed_s}s"
             suffix = f" after {elapsed_str}" if elapsed_str else ""
-            text = (f"⚠️ <b>{html_mod.escape(label)}</b> · Finished "
-                    f"(background agent lost{suffix})")
+            if context.get("what", "agent") == "shell":
+                text = (f"⚠️ <b>{html_mod.escape(label)}</b> · Finished "
+                        f"(no end seen for a background shell{suffix})")
+            else:
+                text = (f"⚠️ <b>{html_mod.escape(label)}</b> · Finished "
+                        f"(background agent lost{suffix})")
             target_msg_id = sess.busy_msg_id
             if target_msg_id and target_msg_id > 0:
                 await self._edit_busy_raw(
@@ -1791,7 +1804,20 @@ class NotifyMixin:
                 # this turn's row, and nothing on this card changed.
                 return
             attributed = bool(agent_id and agent_id in sess.active_subagents)
-            if tool_summary and not attributed:
+            shell = sess.bg_shells.get(context.get("bg_shell_id") or "")
+            if shell is not None:
+                # A background shell's launch: the call returned, the shell
+                # runs on. Its row stays live until the shell's end is
+                # seen. Only its own row: never the "last undone" fallback
+                # below, which would take another tool's pending row.
+                for i, (s, done) in enumerate(sess.tool_history):
+                    if s == tool_summary and not done:
+                        shell["history_idx"] = i
+                        break
+                else:
+                    shell["history_idx"] = sess.record_tool(tool_summary,
+                                                            False)
+            elif tool_summary and not attributed:
                 for i, (s, done) in enumerate(sess.tool_history):
                     if s == tool_summary and not done:
                         sess.tool_history[i] = (s, mark)
@@ -2212,7 +2238,8 @@ class NotifyMixin:
                     # and this finish is the old turn's plain close. What
                     # the job does during the waits above changes neither.
                     job_interim = taken[1]
-                elif sess.job_continuation_active and not sess.active_subagents:
+                elif (sess.job_continuation_active
+                      and not sess.job_work_running()):
                     # The <task-notification> continuation turn's own Stop —
                     # the job's one true Finished ("close the background-job
                     # endgame" requirement 2). Clear the endgame state FIRST so
@@ -2233,10 +2260,11 @@ class NotifyMixin:
                     # active_subagents.clear() (removed just below) was itself
                     # the bug this feature fixes — it erased the very state
                     # job_background_open() needs to keep working.
-                    if sess.active_subagents:
+                    if sess.job_work_running():
                         # A continuation turn that spawned NEW background
-                        # agents has ended — back to plain waiting; the next
-                        # continuation cycle re-arms via SubagentStop + grace.
+                        # agents or shells has ended — back to plain
+                        # waiting; the next continuation cycle re-arms via
+                        # their end + grace.
                         sess.job_continuation_active = False
                     if taken is not None:
                         # The message popped at this Stop now owns the reply
@@ -2325,8 +2353,13 @@ class NotifyMixin:
                     key=lambda a: a.get("started_at", 0.0),
                 )
 
-                # Mark all tools as done
-                sess.tool_history = [(s, True) for s, _ in sess.tool_history]
+                # Mark all tools as done — except a background shell's
+                # settled failed/stopped row, which keeps its own outcome.
+                sess.tool_history = [
+                    (s, d if (d in ("failed", _bg_shells.STOPPED)
+                              and s.startswith(_bg_shells.SHELL_ROW_PREFIX))
+                     else True)
+                    for s, d in sess.tool_history]
                 # A self-woken turn that ends before earning its deferred card
                 # never gets one: only the answer goes out, and with no card
                 # its first line carries the stats (roadmap 8.32). Under the

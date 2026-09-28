@@ -19,6 +19,7 @@ import socket
 import time
 from pathlib import Path
 
+from aipager import bg_shells
 from aipager.config import (
     HOOK_DEDUP_WINDOW_SECONDS,
     RICH_SUMMARIES,
@@ -106,6 +107,26 @@ def _still_running_task_ids(prompt: str) -> list[str]:
         if match:
             ids.append(match.group(1))
     return ids
+
+
+# The tools Claude stops a background task with. TaskStop takes `task_id`
+# (and a `shell_id` alias); KillShell is its older name.
+_SHELL_STOP_TOOLS = ("TaskStop", "KillShell")
+
+
+def _background_shell_id(tool_name: str, msg: dict) -> str:
+    """The task id of the background shell this PostToolUse launched, or
+    ``""``. Keyed on ``tool_response.backgroundTaskId`` of a ``Bash`` call,
+    never on ``run_in_background``: Ctrl+B and a timeout move a shell to the
+    background with that flag false, and a Monitor's launch reports
+    ``taskId`` instead."""
+    if tool_name != "Bash":
+        return ""
+    response = msg.get("tool_response")
+    if not isinstance(response, dict):
+        return ""
+    task_id = response.get("backgroundTaskId")
+    return task_id if isinstance(task_id, str) else ""
 
 
 def _read_statusline(session_name: str) -> dict | None:
@@ -701,8 +722,18 @@ class HookReceiver:
                 # card still needs to know a continuation happened even
                 # when status itself didn't move.
                 cont_sess = self.registry.get_or_create(session_name)
-                if (cont_sess.status in (Status.BUSY, Status.INTERACTIVE)
-                        or cont_sess.job_background_open()):
+                # Decided BEFORE the background shells this notification
+                # reports as ended are taken off: ending the job's last
+                # shell first would close the very job this wake-up
+                # continues, and send it down the "no open job" path.
+                continuing = (
+                    cont_sess.status in (Status.BUSY, Status.INTERACTIVE)
+                    or cont_sess.job_background_open())
+                for task_id, status, exit_code in \
+                        bg_shells.parse_shell_ends(prompt):
+                    cont_sess.end_bg_shell(task_id, status, now_mono,
+                                           exit_code)
+                if continuing:
                     # The continuation turn takes over from the grace
                     # window: from here the job closes only at THIS turn's
                     # own Stop (notify.py's idle branch, "close the
@@ -879,7 +910,7 @@ class HookReceiver:
                 if sess.status != Status.BUSY:
                     self.registry.transition(
                         session_name, Status.BUSY,
-                        preserve_job_state=bool(sess.active_subagents),
+                        preserve_job_state=sess.job_work_running(),
                     )
                 # Item 4.4: forward the raw tool_input for Write/Edit so
                 # the bot can render a diff. We don't forward EVERY
@@ -914,18 +945,36 @@ class HookReceiver:
         elif event == "PostToolUse":
             tool_name = msg.get("tool_name", "")
             if tool_name:
-                summary = _summarize_tool(tool_name, msg.get("tool_input", {}))
+                tool_input = msg.get("tool_input", {})
+                summary = _summarize_tool(tool_name, tool_input)
                 sess = self.registry.get_or_create(session_name)
                 if (not msg.get("agent_id")
                         or msg.get("agent_id") in sess.active_subagents):
                     # A detached background agent's tool ending says
                     # nothing about the parent's own tool in flight.
                     sess.pending_tool_started_at = None
-                await self.notify_fn(sess, "tool_done", {
+                done_ctx = {
                     "tool_name": tool_name,
                     "tool_summary": summary,
                     "agent_id": msg.get("agent_id", ""),
-                })
+                }
+                if not msg.get("agent_id"):
+                    # Background shells of the main loop only: a
+                    # subagent's shells notify that agent, not the parent.
+                    shell_id = _background_shell_id(tool_name, msg)
+                    if shell_id and sess.bg_shell_started(
+                            shell_id, bg_shells.shell_label(tool_input),
+                            summary, now_mono):
+                        done_ctx["bg_shell_id"] = shell_id
+                    elif (tool_name in _SHELL_STOP_TOOLS
+                          and isinstance(tool_input, dict)):
+                        # Claude stopped a task; for a shell this is its
+                        # only end signal (no notification follows).
+                        stopped = (tool_input.get("task_id")
+                                   or tool_input.get("shell_id") or "")
+                        if isinstance(stopped, str):
+                            sess.end_bg_shell(stopped, "stopped", now_mono)
+                await self.notify_fn(sess, "tool_done", done_ctx)
 
         elif event == "PostToolUseFailure":
             tool_name = msg.get("tool_name", "")
@@ -1018,7 +1067,7 @@ class HookReceiver:
                 if info:
                     elapsed = time.monotonic() - info["started_at"]
                     sess.archive_finished_subagent(agent_type, info, elapsed)
-                    if not sess.active_subagents and sess.job_interim_seen:
+                    if not sess.job_work_running() and sess.job_interim_seen:
                         # The last real background agent just stopped after
                         # an interim idle — Claude will enqueue the
                         # <task-notification> continuation next (observed

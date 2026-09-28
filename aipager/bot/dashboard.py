@@ -139,13 +139,21 @@ def _pinned_word(sess: TrackedSession) -> str:
 
 def _pinned_agents(sess: TrackedSession) -> str:
     """``, N agent(s) running`` while *sess* has background agents
-    running (roadmap 8.41), else ``""``: the tail of the parenthesised
-    state, as in ``catfish (working, 3 agents running)``. A count, never
-    their names: the bar then moves only when the count does."""
+    running (roadmap 8.41), ``, M shell(s) running`` for background shells,
+    ``, N agents, M shells running`` for both, else ``""``: the tail of the
+    parenthesised state, as in ``catfish (working, 3 agents running)``. A
+    count, never their names: the bar then moves only when the count
+    does."""
     n = len(sess.bg_agents)
-    if not n:
+    m = len(sess.bg_shells)
+    parts = []
+    if n:
+        parts.append(f"{n} agent{'' if n == 1 else 's'}")
+    if m:
+        parts.append(f"{m} shell{'' if m == 1 else 's'}")
+    if not parts:
         return ""
-    return f", {n} agent{'' if n == 1 else 's'} running"
+    return f", {', '.join(parts)} running"
 
 
 def _pinned_state(sess: TrackedSession) -> str:
