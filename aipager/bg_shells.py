@@ -79,6 +79,10 @@ def parse_shell_ends(text: str) -> list[tuple[str, str, int | None]]:
     ends: list[tuple[str, str, int | None]] = []
     if not text or _NOTIFICATION not in text:
         return ends
+    # Non-greedy: a span ends at the first literal "</result>", so a result
+    # that quotes "</result>" itself and then a whole notification leaves
+    # that quote's tail in the text. Rare enough to accept: the quoted id
+    # would also have to be a running shell of this session.
     text = _RESULT_SPAN_RE.sub("", text)
     for block in text.split(_NOTIFICATION)[1:]:
         cut = block.find(_RESULT)

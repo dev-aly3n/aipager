@@ -311,6 +311,26 @@ def test_max_track_env_override(caplog):
     assert len(caplog.records) == 3
 
 
+@pytest.mark.parametrize("value", ["nan", "NaN"])
+def test_max_track_nan_falls_back(value, caplog):
+    """NaN is not a number of seconds (no age ever compares past it): the
+    default, with a warning."""
+    caplog.set_level(logging.WARNING, logger="aipager.session_monitor")
+    assert resolve_bg_shell_max_track(
+        {"AIPAGER_BG_SHELL_MAX_TRACK": value}) == 7200.0
+    assert len(caplog.records) == 1
+
+
+@pytest.mark.parametrize("value", ["inf", "Infinity"])
+def test_max_track_infinity_falls_back(value, caplog):
+    """An infinite max age would never sweep: the default, with a
+    warning."""
+    caplog.set_level(logging.WARNING, logger="aipager.session_monitor")
+    assert resolve_bg_shell_max_track(
+        {"AIPAGER_BG_SHELL_MAX_TRACK": value}) == 7200.0
+    assert len(caplog.records) == 1
+
+
 # ── /stop, /kill, a session's end, /clear ───────────────────────────────────
 
 def test_stop_closes_the_job_but_keeps_the_shell_counted(replay, vloop,
