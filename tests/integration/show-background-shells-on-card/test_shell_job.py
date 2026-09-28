@@ -10,6 +10,9 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock
 
+import httpx
+
+import aipager.bot.rich_message as rm
 from aipager import preferences as prefs
 from aipager import session_monitor
 from aipager.session_monitor import SessionMonitor
@@ -499,3 +502,60 @@ def test_new_turn_without_a_live_card_drops_shells_from_the_job(replay,
     assert "Done" in new["text"]
     assert "`shell:" not in new["text"]
     assert pin.endswith("(idle, 1 shell running)")
+
+
+def test_wakeup_waits_behind_the_turns_held_hooks(replay, vloop,
+                                                  monkeypatch):
+    """Turn 2's hooks are held behind turn 1's flood-held answer (roadmap
+    8.62). The shell's wake-up arrives meanwhile and waits too, so it is
+    handled after turn 2's launch and interim Stop: it continues turn 2's
+    job on turn 2's card, and its answer is no card-less Finished one."""
+    _layout()
+    r = replay
+    inner = rm._client._transport.handler
+    held = {"done": False}
+
+    async def slow_first_answer(request: httpx.Request) -> httpx.Response:
+        if (request.url.path.endswith("sendRichMessage")
+                and not held["done"]):
+            held["done"] = True
+            await asyncio.sleep(30)
+        return inner(request)
+
+    monkeypatch.setattr(rm, "_client", httpx.AsyncClient(
+        transport=httpx.MockTransport(slow_first_answer)))
+
+    async def scenario():
+        w = _worker(r)
+        await _turn(r, 1, "please run it", tools=0)
+        r.tool("look around")
+        await asyncio.sleep(3)
+        r.stop("answer one")
+        await asyncio.sleep(2)
+        await _turn(r, 2, "now run the tests", tools=0)
+        r.bg_bash(DESC, "bshell01")
+        await asyncio.sleep(3)
+        r.stop("started it")
+        await asyncio.sleep(1)
+        r.wake(r.notification("bshell01", "completed", DONE))
+        await asyncio.sleep(2)
+        r.tool("read the output")
+        await asyncio.sleep(2)
+        r.stop("the tests passed")
+        await asyncio.sleep(60)
+        w.cancel()
+
+    _run(vloop, scenario())
+    turn2 = [c for c in r.chat.cards.values() if c["reply_to"] == 2]
+    assert len(turn2) == 1, turn2
+    assert f"✅ `shell: {DESC} - done (" in turn2[0]["text"]
+    assert "✅ `Bash: read the output`" in turn2[0]["text"]
+    assert turn2[0]["stop"] is False
+    interim = [m for m, texts in r.chat.answer_texts.items()
+               if "started it" in texts[0]]
+    assert interim and any("1 shell still running" in t
+                           for t in r.chat.answer_texts[interim[0]])
+    last = r.chat.answer_texts[max(r.chat.answer_texts)][-1]
+    assert "the tests passed" in last
+    assert "· Finished (" not in last
+    assert r.sess.bg_shells == {}

@@ -391,8 +391,12 @@ _NOT_TURN_EVIDENCE = frozenset({"statusline", "SubagentStop"})
 # order: none may overtake another (a permission prompt handled before the
 # PreToolUse that preceded it would be flipped back to BUSY by it, and a
 # reply-window timeout handled before its prompt would leave that prompt's
-# closed reply channel in place). Everything else (a new prompt, a queue
-# pick-up, the status line, session end, safety notices) is never held.
+# closed reply channel in place). A `<task-notification>` wake-up waits as
+# well: Claude sends it only after the turn's own Stop, and handled first it
+# would decide whether the job continues before that Stop (and the
+# background launch before it) were seen. Everything else (a new prompt, a
+# queue pick-up, the status line, session end, safety notices) is never
+# held.
 _TURN_ACTIVITY_EVENTS = frozenset({
     "PermissionRequest", "permission_prompt", "permission_reply_timeout",
     "PreToolUse", "PostToolUse", "PostToolUseFailure", "MessageDisplay",
@@ -402,9 +406,13 @@ _TURN_ACTIVITY_EVENTS = frozenset({
 _TURN_ENDING_EVENTS = ("idle_prompt", "idle", "stop", "notification")
 
 
-def _is_turn_activity(event: str) -> bool:
+def _is_turn_activity(event: str, msg: dict | None = None) -> bool:
     """Whether *event* is held while the running turn waits for its card
     state (roadmap 8.62)."""
+    if event == "UserPromptSubmit":
+        prompt = (msg or {}).get("prompt")
+        return isinstance(prompt, str) and prompt.startswith(
+            _TASK_NOTIFICATION_PREFIX)
     return event in _TURN_ACTIVITY_EVENTS or event.lower() in _TURN_ENDING_EVENTS
 
 
@@ -562,7 +570,7 @@ class HookReceiver:
 
         log.debug("Hook event: %s from %s", event, session_name)
 
-        if _is_turn_activity(event):
+        if _is_turn_activity(event, msg):
             await self._hold_for_turn_state(sess_ref, event, msg)
 
         if event == "PermissionRequest":
