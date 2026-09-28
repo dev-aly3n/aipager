@@ -104,8 +104,10 @@ line of its own, and the first line never lists names the lines below
 repeat.
 A session with agents still running in the background says how many on
 its own line (or on the one line, with a single session):
-`💤 jim (idle, 1 agent running)`. It is a count, never their names,
-so the bar moves only when the count does.
+`💤 jim (idle, 1 agent running)`. Commands Claude runs in the background
+are counted the same way: `(idle, 1 shell running)`, or
+`(idle, 2 agents, 1 shell running)` with both. It is a count, never
+their names, so the bar moves only when the count does.
 Tap the bar to jump to the message.
 
 Buttons on the pinned message:
@@ -293,6 +295,24 @@ message and the old copy deleted. Tool calls
 made inside an agent never show as the parent turn's own rows, and never
 make aipager think a new turn started.
 
+A command Claude runs in the background (`run_in_background`, Ctrl+B,
+or one Claude Code moves there when it times out) gets a row of its own
+while it runs: `⏳ shell: <description> (3m)`, named by the call's
+description or else the first line of the command. When it ends the row
+settles to `✅ shell: <description> - done (6m)`, `❌ ... - failed (exit
+1)`, or `⏹ ... - stopped (6m)` (Claude stopped it with TaskStop, or
+Claude Code stopped it under memory pressure); failed and stopped rows
+keep that mark on the finished card. A turn that ends while such a
+command still runs is not finished: the card waits as the job's status
+(`🔄 name · 1 shell still working · 4m`, or `1 agent (ship-reviewer), 1
+shell still working` with an agent too), and when the command ends
+Claude's follow-up continues on that same card. Commands started inside
+an agent are that agent's and are not shown. A command whose end
+aipager never sees (a restart, a lost event) stops counting after two
+hours (`AIPAGER_BG_SHELL_MAX_TRACK`, in seconds): its row reads `⏹ ...
+- no end seen`, and a job that was waiting only on it closes with
+`⚠️ name · Finished (no end seen for a background shell after 120m 4s)`.
+
 Once a turn's timeline grows long, each older run of tool calls (three
 or more in a row, and not the run currently in progress) folds into its
 own `▸ N tool calls` tap right where it happened, instead of piling up
@@ -315,7 +335,14 @@ so:
 ```
 ⏳ 1 agent still running (pipeline-runner) - results will follow here
 ⏳ 2 agents still running (pipeline-runner, ship-reviewer) - results will follow here
+⏳ 1 shell still running (run the tests) - results will follow here
+⏳ 1 agent, 1 shell still running (ship-reviewer, run the tests) - results will follow here
 ```
+
+Background commands (shells) count in this line the same way agents do.
+`/stop` ends the job, but Escape does not end a background command, so
+one that is still running stays counted here and in the pinned bar
+until it ends; its later follow-up then starts a turn of its own.
 
 That answer goes out the moment the turn ends, as a normal (notifying)
 message threaded to your prompt — the same text the terminal shows. The
@@ -334,7 +361,9 @@ notification starts a turn. The line is added in every layout.
 
 Once every agent a line named has finished, aipager edits that line
 once, silently, to `✅ pipeline-runner done (6m)` (or `✅ 2 agents done
-(6m)`, with the time since the answer went out); the results themselves
+(6m)`, `✅ shell: run the tests - done (6m)`, `✅ 1 agent, 1 shell done
+(6m)`, with the time since the answer went out; a failed command is
+also "done" here, its card row says how it ended); the results themselves
 arrive as their own message. Each answer that carried the line is edited
 this way (up to five pending per session). The edit is a low-priority
 one: it is never made while the chat is flood-muted, is tried once more
@@ -348,6 +377,8 @@ the agents finished:
 - an agent aipager hears nothing from for 30 minutes
   (`AIPAGER_SUBAGENT_SILENCE`) is no longer counted as running, but
   silence is not completion;
+- a background command running longer than two hours
+  (`AIPAGER_BG_SHELL_MAX_TRACK`) with no end seen is no longer counted;
 - a daemon restart forgets which answers are pending.
 
 An answer held back by a flood mute, or delivered as plain text after

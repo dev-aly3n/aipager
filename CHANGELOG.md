@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Background shells show up like background agents.** When Claude runs a command in the background (for example a long test run it started with `run_in_background`, or one you moved there with Ctrl+B), the busy card shows it as a running row (`⏳ shell: run the tests (3m)`) that turns into `✅ done`, `❌ failed (exit 1)` or `⏹ stopped` when it ends. A turn that ends while such a command still runs no longer reads as finished: the card waits with `1 shell still working` and its Stop button, the answer ends with `⏳ 1 shell still running (...) - results will follow here` (edited to done once it ends), the pinned bar says `(idle, 1 shell running)`, and when the command finishes Claude's follow-up continues on the same card. `/stop` closes the job but keeps a still-running command counted, since Escape does not end it. A command whose end is never seen stops counting after 2 hours (set `AIPAGER_BG_SHELL_MAX_TRACK` in seconds to change it).
+
 ### Security
 - **A restricted user could read the bot token through a `~name` path.** Claude Code expands only `~` and `~/` in a tool's path and reads `~root/…` as a folder name under the current folder; aipager expanded it to that user's home, so `~root/../../.config/aipager/config.yaml` from a project under your home passed the check while Claude Code read your real config. Tool paths are now read exactly the way Claude Code reads them (only `~` and `~/` expand, and `~//` keeps your home folder), and a file path or search folder containing a NUL byte is refused.
 - **A `/new` prompt could borrow the tapper's rights.** When `/new` hit an existing session name and someone else tapped Resume or Replace, the queued prompt was credited to the tapper. It is now credited to the person who typed it.
