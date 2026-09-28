@@ -11,6 +11,7 @@ import asyncio
 from unittest.mock import AsyncMock
 
 from aipager import preferences as prefs
+from aipager import session_monitor
 from aipager.session_monitor import SessionMonitor
 from aipager.state import JOB_CONTINUATION_GRACE_SECONDS
 
@@ -377,6 +378,52 @@ def test_agent_stop_while_shell_runs_keeps_waiting_past_grace(
     card = _only_card(r)
     assert card["stop"] is True
     assert "1 shell still working" in card["text"]
+
+
+def test_silent_agent_dropped_while_shell_runs_keeps_the_job_waiting(
+        replay, vloop, monkeypatch):
+    """The agent silence sweep closes a job only when none of its work is
+    left: an agent dropped as silent while the job's shell still runs
+    leaves the card waiting on the shell, and the shell's wake-up then
+    continues the same card to its Finished."""
+    monkeypatch.setattr(session_monitor, "SUBAGENT_SILENCE_SECONDS", 60.0)
+    _layout()
+    r = replay
+    mon = _monitor(r, monkeypatch)
+
+    async def scenario():
+        w = _worker(r)
+        await _turn(r, 1, "launch it")
+        r.hook(hook_event_name="SubagentStart", agent_id="a1",
+               agent_type="ship-reviewer")
+        r.bg_bash(DESC, "bshell01")
+        await asyncio.sleep(2)
+        r.stop("launched both")
+        await asyncio.sleep(8)
+        await asyncio.sleep(70)
+        await mon._scan()
+        await asyncio.sleep(5)
+        agent_dropped = not r.sess.active_subagents
+        waiting = dict(_only_card(r))
+        r.wake(r.notification("bshell01", "completed", DONE))
+        await asyncio.sleep(2)
+        r.tool("read the output")
+        await asyncio.sleep(2)
+        r.stop("the tests pass")
+        await asyncio.sleep(10)
+        w.cancel()
+        return agent_dropped, waiting
+
+    agent_dropped, waiting = _run(vloop, scenario())
+    assert agent_dropped is True
+    assert waiting["stop"] is True
+    assert "1 shell still working" in waiting["text"]
+    assert "lost" not in waiting["text"]
+    card = _only_card(r)
+    assert card["stop"] is False
+    assert "Done" in card["text"]
+    assert "✅ `Bash: read the output`" in card["text"]
+    assert list(r.chat.answers.values()) == [1, 1]
 
 
 def test_new_prompt_while_waiting_carries_the_shell_row(replay, vloop):

@@ -883,9 +883,11 @@ class SessionMonitor:
                 # here would be unreachable by construction — and therefore
                 # unkillable by any test, which this project treats as worse
                 # than absent (CLAUDE.md: every guard gets a test that fails
-                # when the guard is removed).
+                # when the guard is removed). A background shell of the
+                # job's own still running keeps it open: the shell ends
+                # it, or its max age does.
                 if (was_job_open and sess.status == Status.IDLE
-                        and not sess.active_subagents):
+                        and not sess.job_work_running()):
                     sess.job_interim_seen = False
                     sess.job_continuation_active = False
                     sess.job_grace_until = 0.0
@@ -904,7 +906,7 @@ class SessionMonitor:
             # IDLE: a BUSY session is genuinely working (the continuation
             # itself, or a new real turn), not orphaned.
             if (sess.status == Status.IDLE and sess.job_interim_seen
-                    and not sess.active_subagents
+                    and not sess.job_work_running()
                     and not sess.job_continuation_active
                     and sess.job_grace_until
                     and now >= sess.job_grace_until):
