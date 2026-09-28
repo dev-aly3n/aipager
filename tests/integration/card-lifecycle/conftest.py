@@ -33,7 +33,9 @@ from aipager.bot import flood, flood_budget
 from aipager.bot.flood_budget import BudgetRateLimiter
 
 CHAT = 256113222
-NAME = "claude-aipager_boss"
+# A name no live session can have: a harness named like the operator's own
+# session deleted that session's real policy snapshot (2026-09-28).
+NAME = "claude-cardlife_harness"
 PREFIX = "[via Telegram · @owner]\n"
 
 #: The REAL ``_post``, captured before conftest's autouse

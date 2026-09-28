@@ -668,6 +668,67 @@ def tmp_state_file(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_session_tmp_files(tmp_path, monkeypatch):
+    """Redirect every per-session file the daemon keeps under ``/tmp`` to
+    ``tmp_path`` for every test: the policy snapshot
+    (``/tmp/claude-policy-<session>.json``), the reply-context file
+    (``/tmp/claude-reply-<session>.txt``) and the upload folder
+    (``/tmp/aipager-files``).
+
+    A live session's snapshot is what its safety hook reads. A test that
+    ran the ``/kill`` path for a session named like a live one deleted
+    that session's real snapshot (incident 2026-09-28: the card-lifecycle
+    harness used ``claude-aipager_boss``), and the next turn the session
+    woke itself for was then held to the restrictive floor: the owner's
+    Bash blocked and the session halted. Patched on the module AND on every
+    module that bound the name at import time (``enforce`` imports
+    ``reply_context_path``, ``handlers`` imports ``FILE_DOWNLOAD_DIR``);
+    ``session_ops`` imports inside its functions and so reads the patched
+    module attribute. ``notes_dir`` is redirected by
+    :func:`_isolate_notes_dir` below. Tests that patch one of these
+    themselves still win: their ``monkeypatch.setattr`` runs after this.
+    """
+    base = tmp_path / "session-tmp"
+    snap = lambda name: base / f"claude-policy-{name}.json"  # noqa: E731
+    reply = lambda name: base / f"claude-reply-{name}.txt"  # noqa: E731
+    monkeypatch.setattr("aipager.policy_snapshot.snapshot_path", snap)
+    monkeypatch.setattr("aipager.policy_snapshot.reply_context_path", reply)
+    monkeypatch.setattr("aipager.dtach.enforce.reply_context_path", reply)
+    downloads = base / "aipager-files"
+    monkeypatch.setattr("aipager.config.FILE_DOWNLOAD_DIR", downloads)
+    monkeypatch.setattr("aipager.bot.handlers.FILE_DOWNLOAD_DIR", downloads)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _guard_live_session_files():
+    """Fail the run if the suite removed a live session's policy snapshot
+    or reply-context file from ``/tmp`` (the per-test redirect above
+    prevents it; this catches a module that binds a new path at import
+    time and slips past it). Existence only, like
+    :func:`_guard_live_sockets`: a live session rewrites its snapshot on
+    every prompt, so a content check would false-positive, but nothing
+    the suite does may remove one. An overwrite or a planted file is NOT
+    detected here: the per-test redirect and ``tests/test_tmp_isolation.py``
+    are the defence against those."""
+    import glob
+
+    def _live() -> set[str]:
+        return (set(glob.glob("/tmp/claude-policy-*.json"))
+                | set(glob.glob("/tmp/claude-reply-*.txt")))
+
+    before = _live()
+    yield
+    gone = sorted(before - _live())
+    if gone:
+        pytest.fail(
+            "tests removed live session files:\n  " + "\n  ".join(gone)
+            + "\n\nRedirect the responsible path in "
+              "_isolate_session_tmp_files. (If a session ended while the "
+              "suite ran, this is a false positive.)"
+        )
+
+
+@pytest.fixture(autouse=True)
 def _isolate_notes_dir(tmp_path, monkeypatch):
     """Redirect ``policy_snapshot.notes_dir`` to ``tmp_path`` for every test.
 

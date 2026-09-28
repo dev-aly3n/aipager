@@ -66,6 +66,23 @@ def _builtin(name):
     return pol.get_role(name)
 
 
+# Captured at import, before any fixture redirects it.
+_REAL_REPLY_PATH = ps.reply_context_path
+
+
+@pytest.fixture(autouse=True)
+def _real_reply_path(monkeypatch):
+    """These rows ask the policy about the REAL reply-file path, which the
+    protected-path list names (``/tmp/claude-reply-*``): a pure decision,
+    and no row may read, write or clear through it (``claude-proj`` is a
+    valid session name). The root conftest redirects the
+    function for every test (``_isolate_session_tmp_files``); this module
+    puts the real one back for its decisions only. Its snapshot writes
+    stay redirected."""
+    monkeypatch.setattr(ps, "reply_context_path", _REAL_REPLY_PATH)
+    monkeypatch.setattr(enforce, "reply_context_path", _REAL_REPLY_PATH)
+
+
 def _use_role(role):
     ps.write_merged_snapshot(SESSION, ps.resolve_snapshot(role, None, None))
 

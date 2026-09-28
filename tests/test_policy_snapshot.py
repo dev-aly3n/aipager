@@ -10,11 +10,12 @@ from aipager.policy import load_policy
 from aipager.scope import Member, Scope
 
 # Captured at import time, before the suite-wide autouse
-# `_isolate_notes_dir` fixture (tests/conftest.py) can monkeypatch it —
-# the one test in this file that checks the REAL production path needs
-# the genuine function, not the tmp_path-redirected one every other
-# test in the suite relies on.
+# `_isolate_notes_dir` / `_isolate_session_tmp_files` fixtures
+# (tests/conftest.py) can monkeypatch them — the tests in this file that
+# check the REAL production paths need the genuine functions, not the
+# tmp_path-redirected ones every other test in the suite relies on.
 _REAL_NOTES_DIR = ps.notes_dir
+_REAL_REPLY_CONTEXT_PATH = ps.reply_context_path
 
 
 def _policy():
@@ -144,7 +145,7 @@ def test_write_snapshot_reply_context_defaults_empty_and_clears_a_prior_value(
 # ---- reply-context /tmp file (design.md Part 2/5) --------------------------
 
 def test_reply_context_path_uses_the_documented_filename():
-    assert ps.reply_context_path("claude-jim") == (
+    assert _REAL_REPLY_CONTEXT_PATH("claude-jim") == (
         __import__("pathlib").Path("/tmp/claude-reply-claude-jim.txt")
     )
 

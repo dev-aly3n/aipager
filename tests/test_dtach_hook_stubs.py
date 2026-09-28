@@ -305,7 +305,14 @@ def test_statusline_swallows_unreachable_daemon(monkeypatch, tmp_path, capsys):
     assert "[zz]" in out
 
 
-def test_statusline_malformed_json_emits_empty(monkeypatch, capsys):
+def test_statusline_malformed_json_emits_empty(monkeypatch, tmp_path, capsys):
+    # The raw stdin is written before it is parsed: keep that write off
+    # the real /tmp, as the neighbouring tests do.
+    _real_write = statusline_notify.Path.write_text
+    monkeypatch.setattr(
+        statusline_notify.Path, "write_text",
+        lambda self, c: _real_write(tmp_path / self.name, c),
+    )
     _set_stdin(monkeypatch, "not json")
     monkeypatch.setenv("CLAUDE_DTACH_SESSION", "claude-x")
     statusline_notify.main()
