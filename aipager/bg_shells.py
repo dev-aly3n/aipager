@@ -27,6 +27,7 @@ STOPPED = "stopped"
 
 _NOTIFICATION = "<task-notification>"
 _RESULT = "<result>"
+_RESULT_SPAN_RE = re.compile(r"<result>.*?</result>", re.DOTALL)
 _TASK_ID_RE = re.compile(r"<task-id>\s*([A-Za-z0-9_-]+)\s*</task-id>")
 _STATUS_RE = re.compile(r"<status>\s*([A-Za-z_]+)\s*</status>")
 _SUMMARY_RE = re.compile(r"<summary>(.*?)</summary>", re.DOTALL)
@@ -71,12 +72,14 @@ def parse_shell_ends(text: str) -> list[tuple[str, str, int | None]]:
 
     One prompt can carry several notifications, so each is read on its
     own, and only its tags BEFORE any ``<result>``: an agent's result is
-    free text and may quote another notification. A block with no status
-    (a Monitor event) ends nothing. Whether the id is one of this
-    session's shells is the caller's question."""
+    free text and may quote anything, a whole notification included, so
+    every ``<result>...</result>`` span is dropped before the split. A
+    block with no status (a Monitor event) ends nothing. Whether the id is
+    one of this session's shells is the caller's question."""
     ends: list[tuple[str, str, int | None]] = []
     if not text or _NOTIFICATION not in text:
         return ends
+    text = _RESULT_SPAN_RE.sub("", text)
     for block in text.split(_NOTIFICATION)[1:]:
         cut = block.find(_RESULT)
         if cut >= 0:

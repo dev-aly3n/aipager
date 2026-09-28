@@ -1169,6 +1169,10 @@ def _status_line(
             head = summary.split(":", 1)[0] if ":" in summary else summary
             words = head.split()
             name = words[0][:20] if words else ""
+            if summary.startswith(bg_shells.SHELL_ROW_PREFIX):
+                # A background shell's settled row is still the Bash call
+                # that launched it, as its live row was.
+                name = "Bash"
             if not name:
                 continue
             tally[name] = tally.get(name, 0) + 1

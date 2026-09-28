@@ -962,7 +962,7 @@ class HookReceiver:
                     # Background shells of the main loop only: a
                     # subagent's shells notify that agent, not the parent.
                     shell_id = _background_shell_id(tool_name, msg)
-                    if shell_id and sess.bg_shell_started(
+                    if sess.bg_shell_started(
                             shell_id, bg_shells.shell_label(tool_input),
                             summary, now_mono):
                         done_ctx["bg_shell_id"] = shell_id
