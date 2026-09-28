@@ -970,9 +970,15 @@ class HookReceiver:
                     # Background shells of the main loop only: a
                     # subagent's shells notify that agent, not the parent.
                     shell_id = _background_shell_id(tool_name, msg)
-                    if sess.bg_shell_started(
-                            shell_id, bg_shells.shell_label(tool_input),
-                            summary, now_mono):
+                    shell = sess.bg_shell_started(
+                        shell_id, bg_shells.shell_label(tool_input),
+                        summary, now_mono)
+                    if shell is not None and "row" in shell:
+                        # Its end was handled first (this launch was held
+                        # behind an earlier turn's finish, the wake-up was
+                        # not): the launch row goes up already settled.
+                        done_ctx["bg_shell_row"] = shell["row"]
+                    elif shell is not None:
                         done_ctx["bg_shell_id"] = shell_id
                     elif (tool_name in _SHELL_STOP_TOOLS
                           and isinstance(tool_input, dict)):

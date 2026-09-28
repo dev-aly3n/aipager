@@ -567,3 +567,103 @@ def test_one_card_edit_path_no_new_message_per_shell(replay, vloop):
     assert r.chat.count("sendMessage") == 1  # the card
     assert r.chat.count("sendRichMessage") == 1  # the answer
     assert r.chat.plain == []
+
+
+# ── an end seen before its launch ───────────────────────────────────────────
+
+def test_end_read_before_its_launch_settles_the_launch(replay, vloop):
+    """The queue scan read the shell's end before its launch's PostToolUse
+    was handled: the launch goes up settled to that outcome and never
+    counts as running (no pin count, no Stop button, no answer line)."""
+    _layout()
+    r = replay
+
+    async def scenario():
+        w = _worker(r)
+        await _turn(r, 1, "launch it")
+        r.enqueue(r.notification(
+            "bshell01", "failed",
+            f'Background command "{DESC}" failed with exit code 3'))
+        await asyncio.sleep(5)
+        r.bg_bash(DESC, "bshell01")
+        await asyncio.sleep(2)
+        mid = _pin(r)
+        r.stop("it failed")
+        await asyncio.sleep(10)
+        w.cancel()
+        return mid
+
+    mid = _run(vloop, scenario())
+    assert r.sess.bg_shells == {}
+    assert "shell" not in mid
+    card = _only_card(r)
+    assert f"❌ `shell: {DESC} - failed (exit 3)`" in card["text"]
+    assert card["stop"] is False
+    assert "Done" in card["text"]
+    assert "still running" not in _answer(r)[-1]
+    assert r.sess.bg_shell_early_ends == {}
+
+
+def test_wakeup_before_its_launch_settles_the_launch(replay, vloop):
+    """The same through the hook path: a wake-up handled before the
+    launch it reports on (no hold in play here, so the order is forced)."""
+    _layout()
+    r = replay
+
+    async def scenario():
+        w = _worker(r)
+        await _turn(r, 1, "launch it")
+        r.wake(r.notification("bshell01", "completed", DONE))
+        await asyncio.sleep(1)
+        r.bg_bash(DESC, "bshell01")
+        await asyncio.sleep(2)
+        r.stop("the tests passed")
+        await asyncio.sleep(10)
+        w.cancel()
+
+    _run(vloop, scenario())
+    assert r.sess.bg_shells == {}
+    assert "shell" not in _pin(r)
+    card = _only_card(r)
+    assert f"✅ `shell: {DESC} - done (" in card["text"]
+    assert card["stop"] is False
+    assert "still running" not in _answer(r)[-1]
+
+
+def _bare_session() -> state_mod.TrackedSession:
+    return state_mod.TrackedSession(name="claude-x", label="x")
+
+
+def test_early_end_is_short_lived_bounded_and_never_for_lost():
+    sess = _bare_session()
+    # A lost shell is not known to have ended: nothing to remember.
+    sess.end_bg_shell("blost", "lost", 100.0)
+    assert sess.bg_shell_early_ends == {}
+    # Expired: the launch counts as running as always.
+    sess.end_bg_shell("bold", "completed", 100.0)
+    late = 100.0 + state_mod.BG_SHELL_EARLY_END_SECONDS + 1
+    shell = sess.bg_shell_started("bold", DESC, "Bash: x", late)
+    assert "row" not in shell
+    assert "bold" in sess.bg_shells
+    # Capped: the oldest goes first.
+    for i in range(state_mod.BG_SHELL_EARLY_ENDS_CAP + 3):
+        sess.end_bg_shell(f"b{i:03d}", "completed", 200.0 + i)
+    assert len(sess.bg_shell_early_ends) == state_mod.BG_SHELL_EARLY_ENDS_CAP
+    assert "b000" not in sess.bg_shell_early_ends
+    # Taken once: a second launch with the same id is tracked.
+    last = f"b{state_mod.BG_SHELL_EARLY_ENDS_CAP + 2:03d}"
+    assert "row" in sess.bg_shell_started(last, DESC, "Bash: x", 300.0)
+    assert last not in sess.bg_shells
+    assert last not in sess.bg_shell_early_ends
+    # Gone with the session's other shell state.
+    sess.clear_bg_agents()
+    assert sess.bg_shell_early_ends == {}
+
+
+def test_early_end_is_never_persisted(replay, vloop):
+    r = replay
+    r.sess.end_bg_shell("bearly01", "completed", 1.0)
+    r.bot.registry.save()
+    saved = state_mod.SESSION_STATE_FILE.read_text()
+    assert "bearly01" not in saved
+    assert "bg_shell_early_ends" not in saved

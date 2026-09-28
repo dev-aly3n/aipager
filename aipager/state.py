@@ -132,6 +132,15 @@ AGENTS_LINES_CAP: int = 5
 # max-age sweep (session_monitor.BG_SHELL_MAX_TRACK_SECONDS). A busy
 # session runs a handful at once; 50 only ever engages on a runaway loop.
 BG_SHELLS_CAP: int = 50
+# Ends seen for a task id no running shell has (`TrackedSession.
+# bg_shell_early_ends`): kept this long, at most this many per session, so
+# a launch handled after its own end (its PostToolUse held behind an
+# earlier turn's finish, roadmap 8.62, while the wake-up is not) settles
+# at once. The hold gives up after TURN_STATE_HOLD_SECONDS; this outlives
+# it with room. Most entries are agents' and Monitors' ids that no launch
+# ever claims, and simply expire.
+BG_SHELL_EARLY_END_SECONDS: float = 300.0
+BG_SHELL_EARLY_ENDS_CAP: int = 50
 # Max GONE entries retained for `/resume` history. When a new session is
 # created and the GONE count exceeds this, the oldest-by-`gone_at` entry
 # is evicted. Lives on disk in aipager-sessions.json — kept here so
@@ -814,6 +823,12 @@ class TrackedSession:
     # takes shells out of the job: Escape does not end them. Capped at
     # BG_SHELLS_CAP. Transient, never in _PERSIST_FIELDS (monotonic stamps).
     bg_shells: dict = field(default_factory=dict)
+    # Ends seen before their launch: task id -> {"outcome", "exit_code",
+    # "at" (monotonic)}, recorded by end_bg_shell for an id no running
+    # shell has, read by bg_shell_started. Short-lived
+    # (BG_SHELL_EARLY_END_SECONDS), capped (BG_SHELL_EARLY_ENDS_CAP),
+    # transient like `bg_shells`.
+    bg_shell_early_ends: dict = field(default_factory=dict)
     # Whether the most recent card render had to hide anything (collapsed
     # runs, folded sections, or byte truncation) — stashed by
     # _edit_busy_rich from build_stream_card_ex's report and read by the
@@ -1269,6 +1284,7 @@ class TrackedSession:
         self.bg_agents.clear()
         self.bg_agents_recent.clear()
         self.bg_shells.clear()
+        self.bg_shell_early_ends.clear()
         self.agents_lines = []
 
     def add_agents_line(self, rec: dict) -> None:
@@ -1287,21 +1303,56 @@ class TrackedSession:
     # card's queue scan call these, and nothing here sends or reads a file.
 
     def bg_shell_started(self, task_id: str, label: str, summary: str,
-                         now: float) -> bool:
+                         now: float) -> dict | None:
         """A background shell launched by the main loop is running. An
-        empty id adds nothing. It belongs to the running job until it
-        ends, /stop takes it out, or a new turn does not carry it."""
+        empty id adds nothing (``None``). It belongs to the running job
+        until it ends, /stop takes it out, or a new turn does not carry it.
+        Returns its entry.
+
+        A launch whose end was already seen (bg_shell_early_ends: the
+        launch's PostToolUse was held while the wake-up was not) is ended
+        at once with that outcome, exactly as end_bg_shell does for the
+        job state at this moment, and never counts as running. Its entry
+        is returned popped, with the settled ``row`` (text, mark) for the
+        launch's card row."""
         if not task_id:
-            return False
+            return None
         self.bg_shells[task_id] = {
             "label": label, "summary": summary, "started": now,
             "in_job": True, "history_idx": None,
         }
+        early = self._pop_early_end(task_id, now)
+        if early is not None:
+            return self.end_bg_shell(task_id, early["outcome"],
+                                     max(now, early["at"]),
+                                     early["exit_code"])
         while len(self.bg_shells) > BG_SHELLS_CAP:
             oldest = min(self.bg_shells,
                          key=lambda t: self.bg_shells[t]["started"])
             self.bg_shells.pop(oldest)
-        return True
+        return self.bg_shells.get(task_id)
+
+    def _pop_early_end(self, task_id: str, now: float) -> dict | None:
+        """The unexpired end recorded for *task_id* before its launch, if
+        any; expired entries are dropped on the way."""
+        for old in [t for t, e in self.bg_shell_early_ends.items()
+                    if now - e["at"] > BG_SHELL_EARLY_END_SECONDS]:
+            self.bg_shell_early_ends.pop(old)
+        return self.bg_shell_early_ends.pop(task_id, None)
+
+    def _record_early_end(self, task_id: str, outcome: str, now: float,
+                          exit_code: int | None) -> None:
+        """Remember an end seen for an id no running shell has, in case
+        its launch is handled after it. Capped: the oldest goes first."""
+        if not task_id:
+            return
+        self.bg_shell_early_ends[task_id] = {
+            "outcome": outcome, "exit_code": exit_code, "at": now,
+        }
+        while len(self.bg_shell_early_ends) > BG_SHELL_EARLY_ENDS_CAP:
+            oldest = min(self.bg_shell_early_ends,
+                         key=lambda t: self.bg_shell_early_ends[t]["at"])
+            self.bg_shell_early_ends.pop(oldest)
 
     def job_shell_ids(self) -> list[str]:
         """The running shells the open job waits on."""
@@ -1330,8 +1381,10 @@ class TrackedSession:
         notification status (completed, failed, killed), ``stopped``
         (TaskStop/KillShell) or ``lost`` (the max age). An id that is not
         a running shell of this session (an agent's, a subagent's shell's,
-        a Monitor's, one already ended) changes nothing and returns
-        ``None``; otherwise the popped entry.
+        a Monitor's, one already ended, or one whose launch is not handled
+        yet) changes nothing and returns ``None``; its end is remembered a
+        short while for a launch handled after it (bg_shell_started).
+        Otherwise the popped entry, with its settled ``row`` (text, mark).
 
         Its card row settles to the outcome. A real end of the job's last
         background work after an interim Stop keeps the job open for the
@@ -1340,9 +1393,12 @@ class TrackedSession:
         left as sent, never settled to done on no evidence."""
         info = self.bg_shells.pop(task_id, None)
         if info is None:
+            if outcome != "lost":
+                self._record_early_end(task_id, outcome, now, exit_code)
             return None
         text, mark = _bg_shells.settled_row(
             info["label"], outcome, now - info["started"], exit_code)
+        info["row"] = (text, mark)
         idx = info.get("history_idx")
         if idx is not None and 0 <= idx < len(self.tool_history):
             self.tool_history[idx] = (text, mark)
