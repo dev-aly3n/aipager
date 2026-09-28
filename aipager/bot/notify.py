@@ -1805,13 +1805,19 @@ class NotifyMixin:
                 return
             attributed = bool(agent_id and agent_id in sess.active_subagents)
             shell = sess.bg_shells.get(context.get("bg_shell_id") or "")
+            # A live shell's row stays pending until the shell ends, so a
+            # later call with the same summary (a second shell, or a plain
+            # Bash) would find it first: rows a running shell holds are
+            # never another call's to take.
+            claimed = {info["history_idx"] for info in sess.bg_shells.values()
+                       if info.get("history_idx") is not None}
             if shell is not None:
                 # A background shell's launch: the call returned, the shell
                 # runs on. Its row stays live until the shell's end is
                 # seen. Only its own row: never the "last undone" fallback
                 # below, which would take another tool's pending row.
                 for i, (s, done) in enumerate(sess.tool_history):
-                    if s == tool_summary and not done:
+                    if s == tool_summary and not done and i not in claimed:
                         shell["history_idx"] = i
                         break
                 else:
@@ -1819,13 +1825,13 @@ class NotifyMixin:
                                                             False)
             elif tool_summary and not attributed:
                 for i, (s, done) in enumerate(sess.tool_history):
-                    if s == tool_summary and not done:
+                    if s == tool_summary and not done and i not in claimed:
                         sess.tool_history[i] = (s, mark)
                         break
                 else:
                     # No exact match — mark the last undone tool
                     for i in range(len(sess.tool_history) - 1, -1, -1):
-                        if not sess.tool_history[i][1]:
+                        if not sess.tool_history[i][1] and i not in claimed:
                             sess.tool_history[i] = (sess.tool_history[i][0], mark)
                             break
             # Update display (debounced — animation picks up state if skipped)

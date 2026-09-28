@@ -459,3 +459,94 @@ def test_failed_shell_row_stays_failed_on_the_finished_card(replay, vloop):
     assert "Done" in text
     assert f"❌ `shell: {DESC} - failed (exit 1)`" in text
     assert "⏹ `shell: second - stopped (" in text
+
+
+# ── rows a running shell holds ──────────────────────────────────────────────
+
+def test_two_shells_with_the_same_description_get_a_row_each(replay, vloop):
+    """Two background launches with one description: each binds its own
+    row, never the first shell's still-pending one, and each settles on
+    its own end."""
+    _layout()
+    r = replay
+
+    async def scenario():
+        w = _worker(r)
+        await _turn(r, 1, "go")
+        r.bg_bash(DESC, "bshell01")
+        await asyncio.sleep(1)
+        r.bg_bash(DESC, "bshell02")
+        await asyncio.sleep(10)
+        both = _card_text(r)
+        r.enqueue(r.notification("bshell01", "completed", DONE))
+        await asyncio.sleep(10)
+        one_ended = _card_text(r)
+        r.enqueue(r.notification(
+            "bshell02", "failed",
+            f'Background command "{DESC}" failed with exit code 3'))
+        await asyncio.sleep(10)
+        w.cancel()
+        return both, one_ended
+
+    both, one_ended = _run(vloop, scenario())
+    assert both.count(f"⏳ `shell: {DESC} (") == 2
+    assert f"`Bash: {DESC}`" not in both
+    assert one_ended.count(f"✅ `shell: {DESC} - done (") == 1
+    assert one_ended.count(f"⏳ `shell: {DESC} (") == 1
+    text = _card_text(r)
+    assert text.count(f"✅ `shell: {DESC} - done (") == 1
+    assert text.count(f"❌ `shell: {DESC} - failed (exit 3)`") == 1
+
+
+def test_foreground_bash_with_a_live_shells_summary_settles_its_own_row(
+        replay, vloop):
+    """A plain Bash call whose summary equals a running shell's settles
+    its own row: the shell's row stays live."""
+    _layout()
+    r = replay
+
+    async def scenario():
+        w = _worker(r)
+        await _turn(r, 1, "go")
+        r.bg_bash(DESC, "bshell01")
+        await asyncio.sleep(1)
+        fg = {"command": "x", "description": DESC}
+        r.hook(hook_event_name="PreToolUse", tool_name="Bash",
+               tool_input=fg)
+        await asyncio.sleep(1)
+        r.hook(hook_event_name="PostToolUse", tool_name="Bash",
+               tool_input=fg, tool_response={"stdout": "ok"})
+        await asyncio.sleep(10)
+        w.cancel()
+
+    _run(vloop, scenario())
+    text = _card_text(r)
+    assert f"⏳ `shell: {DESC} (" in text
+    assert f"✅ `Bash: {DESC}`" in text
+    assert f"⏳ `Bash: {DESC}`" not in text
+
+
+def test_unmatched_tool_end_never_takes_a_live_shells_row(replay, vloop):
+    """A tool end with no row of its own (a lost PreToolUse) settles the
+    last pending row that is not a running shell's."""
+    _layout()
+    r = replay
+
+    async def scenario():
+        w = _worker(r)
+        await _turn(r, 1, "go", tools=0)
+        r.hook(hook_event_name="PreToolUse", tool_name="Bash",
+               tool_input={"command": "slow thing"})
+        await asyncio.sleep(1)
+        r.bg_bash(DESC, "bshell01")
+        await asyncio.sleep(1)
+        r.hook(hook_event_name="PostToolUse", tool_name="Bash",
+               tool_input={"command": "lost pre"},
+               tool_response={"stdout": "ok"})
+        await asyncio.sleep(10)
+        w.cancel()
+
+    _run(vloop, scenario())
+    text = _card_text(r)
+    assert f"⏳ `shell: {DESC} (" in text
+    assert "✅ `Bash: slow thing`" in text
