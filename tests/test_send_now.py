@@ -18,7 +18,6 @@ from aipager.bot import send_now as sn
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot.flood_budget import (
     PRIORITY_ESSENTIAL,
-    PRIORITY_ORNAMENT,
     FloodSkipped,
     rate_limit_args,
 )
@@ -614,8 +613,8 @@ def test_no_bare_queued_targets_clear_left_in_bot_code():
     assert offenders == []
 
 
-def test_a_delete_is_an_ornament_and_settles_the_debt(mk_bot, tmp_path,
-                                                      run_async):
+def test_a_delete_is_essential_and_settles_the_debt(mk_bot, tmp_path,
+                                                     run_async):
     bot, _sess = _bot(mk_bot, tmp_path)
 
     async def scenario():
@@ -626,7 +625,7 @@ def test_a_delete_is_an_ornament_and_settles_the_debt(mk_bot, tmp_path,
     run_async(scenario())
     kwargs = bot._app.bot.delete_message.await_args.kwargs
     assert kwargs["rate_limit_args"] == rate_limit_args(
-        priority=PRIORITY_ORNAMENT)
+        priority=PRIORITY_ESSENTIAL)
     assert bot.registry.queued_line_deletes == []
 
 
@@ -993,7 +992,7 @@ def test_a_tap_for_a_missing_session_deletes_the_tapped_line(
     assert bot._app.bot.delete_message.await_args.kwargs["message_id"] == 6600
 
 
-def test_a_tap_deletes_only_its_own_line(mk_bot, tmp_path, run_async, keys):
+def test_a_tap_deletes_every_line(mk_bot, tmp_path, run_async, keys):
     bot, sess = _bot(mk_bot, tmp_path)
     sess.queued_targets.append({"msg_id": 3, "chat_id": CHAT,
                                 "raw_text": "three"})
@@ -1005,7 +1004,9 @@ def test_a_tap_deletes_only_its_own_line(mk_bot, tmp_path, run_async, keys):
         await _settle()
 
     run_async(scenario())
-    assert sess.queued_lines == {3: (CHAT, 7002)}
+    assert sess.queued_lines == {}
+    # Message 3's target stays: it still routes the answer and reactions.
+    assert [t["msg_id"] for t in sess.queued_targets] == [2, 3]
 
 
 # ── a tap whose chord outlasts the ack bound ────────────────────────────
@@ -1210,8 +1211,8 @@ def test_now_from_a_read_only_member_is_refused(mk_bot, tmp_path, run_async,
     assert len(_replies(update)) == 1 and "read_only" in _replies(update)[0]
 
 
-def test_now_deletes_no_line_itself(mk_bot, tmp_path, run_async, keys,
-                                    mk_update):
+def test_now_deletes_every_line(mk_bot, tmp_path, run_async, keys,
+                                mk_update):
     bot, sess = _bot(mk_bot, tmp_path)
     sess.queued_lines[2] = (CHAT, 7001)
     update = _cmd_update(mk_update)
@@ -1221,8 +1222,8 @@ def test_now_deletes_no_line_itself(mk_bot, tmp_path, run_async, keys,
         await _settle()
 
     run_async(scenario())
-    assert sess.queued_lines == {2: (CHAT, 7001)}
-    bot._app.bot.delete_message.assert_not_awaited()
+    assert sess.queued_lines == {}
+    bot._app.bot.delete_message.assert_awaited()
 
 
 # ── the queue_pickup hook arms the timer ─────────────────────────────────

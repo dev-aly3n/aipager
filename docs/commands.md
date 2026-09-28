@@ -240,7 +240,7 @@ and changes nothing, instead of acting on whatever is running now.
 
 A `⚡ Send now` button acts only on the message it sits under: if
 Claude has already taken that message, the tap answers `Already taken`,
-sends nothing and removes the line.
+sends nothing and removes the queued lines.
 
 ### Idle responses
 
@@ -599,15 +599,21 @@ example with Claude Code's background tasks turned off) send-now falls
 back to a plain interrupt of the running step. This is all Claude
 Code's own send-now behaviour, not something aipager decides.
 
-The tap answers `Sent to Claude now` and the line disappears. If the
+The tap answers `Sent to Claude now` and every queued line of that
+session disappears at once, since send-now hands Claude everything it
+holds; `/now` removes them the same way. If Claude cancels the running
+step instead of moving it to the background, it takes only the oldest
+queued message straight away and reads the rest at its next step; the
+answer goes under the message it took, and that message is not run a
+second time. If the
 keys take longer than a moment to reach Claude (a busy machine), the
-tap answers `Sending to Claude now` instead; the line then disappears
+tap answers `Sending to Claude now` instead; the lines then disappear
 once they are in, or, if they could not be delivered, stays and reads
 `⏳ Queued - could not reach Claude, tap Send now to try again`, with
 its button, so you can tap again. The keys
 are only pressed when Claude's transcript shows it still holding the
 message; otherwise the tap answers `Already taken` and removes the
-line. It is refused, with nothing pressed, while a permission or
+lines. It is refused, with nothing pressed, while a permission or
 question prompt is open (`Answer the open question first`), while
 Claude may have just opened one that aipager has not shown yet (its
 events for a new turn are held while the previous turn's answer is

@@ -25,8 +25,10 @@ skipped whenever a busy card leaves the chat short: a session's first live
 line goes at answer priority, as the operator's only way to send the
 message now, and any further line while one is showing goes as an
 ornament (one tap sends everything queued, so those are extras that must
-not delay answers). The delete is an ornament, and a refused delete stays
-owed.
+not delay answers). The delete goes at answer priority, since a button
+still showing once its message has gone would be wrong, and a refused
+delete stays owed. A Send now (tap or ``/now``) drops every line of the
+session: it hands Claude everything it holds.
 """
 
 from __future__ import annotations
@@ -330,12 +332,16 @@ class SendNowMixin:
             self.registry.mark_dirty()
 
     def _delete_queued_line_later(self, chat_id: int, line_id: int) -> None:
-        """Delete a line in the background, at ORNAMENT priority. Never
-        raises, never waits.
+        """Delete a line in the background, at answer (ESSENTIAL) priority:
+        its message has left Claude's queue or was just sent, so a button
+        still showing would be wrong, and ORNAMENT pacing behind card edits
+        kept one up for up to 23 s in a live test. Never raises, never
+        waits.
 
         Owed until it lands. Skipped outright while the chat is muted, and
-        a delete the gate refuses (minimal mode, budget) stays owed: the
-        next startup deletes it (``_delete_owed_queued_lines``). Any other
+        a delete the gate refuses (a flood mute that starts while it waits)
+        stays owed: the next startup deletes it
+        (``_delete_owed_queued_lines``). Any other
         failure means the message is gone already, and it is no longer
         owed."""
         if not self._app:
@@ -349,7 +355,7 @@ class SendNowMixin:
             try:
                 await bot.delete_message(
                     chat_id=chat_id, message_id=line_id,
-                    rate_limit_args=_rl_args(priority=PRIORITY_ORNAMENT),
+                    rate_limit_args=_rl_args(priority=PRIORITY_ESSENTIAL),
                 )
             except (FloodSkipped, FloodMuted):
                 log.info("queued line %d delete refused by the flood gate; "
@@ -417,6 +423,13 @@ class SendNowMixin:
         if sess.send_now_inflight:
             return SendNowOutcome("sent", sess.label)
         sess.send_now_inflight = True
+        # Stamped BEFORE the keys go out: Claude writes its take's
+        # `dequeue` within a fraction of a second of the Ctrl+S, which can be
+        # before `inject.send_now` returns (it waits for `dtach -p` to exit),
+        # and a tick that read the dequeue with no stamp would pass it for
+        # good (roadmap 8.64). A chord that then fails stamps harmlessly: a
+        # mid-turn dequeue has no other source, and IDLE clears the stamp.
+        sess.mark_send_now_pressed()
         try:
             ok = await inject.send_now(sess.name)
         except asyncio.CancelledError:
@@ -491,12 +504,20 @@ class SendNowMixin:
 
     def _drop_tapped_line(self, sess: TrackedSession, msg_id: int,
                           chat_id: int | None, tapped_id: object) -> None:
-        """The tapped line goes at once (the operator's rule). Any other
-        line waits for its own message to be taken (D2)."""
-        if msg_id in sess.queued_lines:
-            self._drop_queued_line(sess, msg_id)
-        elif chat_id and type(tapped_id) is int:
+        """The tapped line goes at once, and so does every other line of
+        the session (the operator's rule, live test 2026-09-28: Send now
+        sends everything Claude holds, so no button may stay). A tapped
+        line aipager no longer tracks is deleted by its own id."""
+        tracked = msg_id in sess.queued_lines
+        self._drop_all_queued_lines(sess)
+        if not tracked and chat_id and type(tapped_id) is int:
             self._delete_queued_line_later(chat_id, tapped_id)
+
+    def _drop_all_queued_lines(self, sess: TrackedSession) -> None:
+        """Drop every line and pending line timer of *sess*. Its queued
+        targets stay: they still route the answers and reactions."""
+        for msg_id in list(set(sess.queued_lines) | set(sess.queued_line_timers)):
+            self._drop_queued_line(sess, msg_id)
 
     async def _show_line_unreached(self, sess: TrackedSession, msg_id: int,
                                    chat_id: int | None,
@@ -529,8 +550,8 @@ class SendNowMixin:
         """``/now``: send whatever Claude is holding in the active session's
         queue, at any time (before the line appears, or while the chat is
         muted or in minimal mode and no line is sent). The session is
-        resolved exactly like ``/stop``'s. Deletes no line itself: each
-        goes when its own message is taken."""
+        resolved exactly like ``/stop``'s. Once the keys are sent, every
+        line of the session goes, as after a tap."""
         if not await self._authorize(update):
             return
         name = self.registry.last_active_session
@@ -543,6 +564,8 @@ class SendNowMixin:
             await reply_text(update.message, REPLY_OTHER_CHAT)
             return
         outcome = await self._send_now_core(sess, None)
+        if outcome.result == "sent":
+            self._drop_all_queued_lines(sess)
         await reply_text(update.message, {
             "sent": REPLY_SENT,
             "nothing": REPLY_NOTHING,

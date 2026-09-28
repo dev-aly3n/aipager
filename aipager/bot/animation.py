@@ -406,12 +406,14 @@ def _scan_queue_operations(sess: TrackedSession) -> None:
     (design.md "turn anchor follows consumption" R4; roadmap 8.47).
 
     A message absorbed mid-turn, or delivered to a running background
-    agent, is the ONLY thing that moves the reply target here —
+    agent, is what moves the reply target here —
     `enqueue`/`dequeue`/bare `remove` are ignored on purpose (R7: an
     aipager-side discard is handled by the stop path; a `dequeue` — the
     message popped as the NEXT turn — fires no hook at all, so the finish
     path starts that turn itself from the still-queued target, R8, and the
-    line is confirmation only).
+    line is confirmation only). The one exception is a `dequeue` right after
+    a Send now press, before any Stop: Claude cancelled the step and took
+    the oldest queued message there and then (roadmap 8.64).
 
     Runs from :func:`_sync_anchors_from_transcript` — every tick, the
     first MessageDisplay chunk of each message, and the finish path —
@@ -449,6 +451,20 @@ def _scan_queue_operations(sess: TrackedSession) -> None:
                 )
                 if consumed:
                     sess.stream_consumed_notes.extend(consumed)
+        elif operation == "dequeue" and sess.send_now_take_open():
+            # Roadmap 8.64: a Send now that Claude Code answered by
+            # cancelling the running step, not backgrounding it. It then
+            # takes its OLDEST queued message as a new prompt at once, with
+            # no hook: this nameless dequeue is the only trace. Consumed
+            # like an absorption (reply target, 👍, its line), or the
+            # finish path would start it again as the next turn. Outside a
+            # fresh press a dequeue stays the ordinary next-turn pop (R8).
+            # Like R8's own pop at the Stop, this assumes the head of
+            # Claude's queue is the oldest Telegram target; a terminal-typed
+            # message or a task notification queued ahead of it would be
+            # misread (accepted, as for R8).
+            if sess.queued_targets:
+                sess.stream_consumed_notes.append(sess.queued_targets.pop(0))
         elif operation == "popAll":
             # Escape pulled Claude Code's queue back into the input
             # box: this message is no longer queued, so it is not the

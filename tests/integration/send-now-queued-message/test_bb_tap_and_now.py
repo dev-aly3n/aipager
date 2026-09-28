@@ -331,13 +331,12 @@ def test_sc27_tap_deletes_the_tapped_line(rp, vloop):
     assert two_gone is True
 
 
-def test_sc27_tap_keeps_the_other_line(rp, vloop):
+def test_sc27_tap_also_deletes_the_other_line(rp, vloop):
+    """A Send now hands Claude everything it holds, so every line of the
+    session goes at the tap (operator's rule, live test 2026-09-28). That
+    an absorption alone removes only its own line is
+    test_live_fixes_0928::test_control_absorbing_one_message_keeps_the_other_lines."""
     (_, three_gone), _ = _sc27(rp, vloop)
-    assert three_gone is False
-
-
-def test_sc27_other_line_goes_on_its_own_absorption(rp, vloop):
-    _, three_gone = _sc27(rp, vloop)
     assert three_gone is True
 
 

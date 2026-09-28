@@ -75,6 +75,12 @@ TOOL_HISTORY_CAP: int = 200
 # (as before the hold existed). Above the finish gate's own bound (30 s) plus
 # the paced sends that follow it.
 TURN_STATE_HOLD_SECONDS: float = 60.0
+
+# How long after a Send now press a `dequeue` queue-operation still counts as
+# Claude having cancelled the running step and taken its oldest queued
+# message as a new prompt (roadmap 8.64). That take is written within a
+# second of the chord; a dequeue later than this is some other pop.
+SEND_NOW_DEQUEUE_WINDOW: float = 15.0
 # `active_subagents` is held to this many entries at insertion; the oldest
 # (by `started_at`, the same age the TTL sweep uses) is evicted when a new
 # start would exceed it. The TTL sweep and SubagentStop pops are TIME and
@@ -688,6 +694,14 @@ class TrackedSession:
     # True while a send-now chord is being written, so a second tap does not
     # write it twice. Transient, for the same reason.
     send_now_inflight: bool = False
+    # monotonic stamp of the last send-now chord that reached the terminal,
+    # 0.0 when none is pending. When Claude Code cancels the running step
+    # instead of backgrounding it, it takes the oldest queued message as a
+    # new prompt with no hook at all, only a `dequeue` queue-operation; a
+    # dequeue read while this is fresh is that take (roadmap 8.64, see
+    # send_now_take_open). Cleared when the session goes IDLE: a dequeue
+    # after a Stop is the ordinary next-turn pop. Transient.
+    send_now_pressed_at: float = 0.0
     # monotonic stamp of the last explicit /stop (or safety halt). A Stop
     # hook that lands on an already-IDLE session shortly after it is
     # Claude finalising the INTERRUPTED turn, not an unanswered one — the
@@ -1423,6 +1437,18 @@ class TrackedSession:
                 and self.turn_state_hold_for == self.turn_seq
                 and self.card_turn_seq != self.turn_seq)
 
+    def mark_send_now_pressed(self) -> None:
+        """A send-now chord reached this session's terminal."""
+        self.send_now_pressed_at = time.monotonic()
+
+    def send_now_take_open(self) -> bool:
+        """Whether a `dequeue` read now is Claude taking its oldest queued
+        message after cancelling the running step for a Send now: a press
+        is pending (no IDLE since) and within SEND_NOW_DEQUEUE_WINDOW."""
+        return (self.send_now_pressed_at > 0.0
+                and time.monotonic() - self.send_now_pressed_at
+                <= SEND_NOW_DEQUEUE_WINDOW)
+
     def card_orphaned(self, now: float, *, own_notify: int = 0,
                       own_lock: bool = False) -> bool:
         """True when this session shows a live busy card (Stop button up)
@@ -1857,6 +1883,9 @@ class SessionRegistry:
         # Debounce: suppress rapid re-IDLE (e.g. user sends quick command,
         # Claude responds in <1s, triggers another idle notification)
         if new_status == Status.IDLE:
+            # A dequeue from here on is the next turn's pop, not a Send now
+            # take (roadmap 8.64).
+            sess.send_now_pressed_at = 0.0
             now = time.monotonic()
             if sess.last_idle_at and (now - sess.last_idle_at) < IDLE_DEBOUNCE:
                 log.debug("[%s] IDLE debounced (%.1fs since last)", sess.label,
