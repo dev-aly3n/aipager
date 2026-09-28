@@ -62,6 +62,12 @@ def _monitor(r, monkeypatch) -> SessionMonitor:
     return SessionMonitor(r.bot.registry, r.bot.notify)
 
 
+def _only_card(r) -> dict:
+    assert len(r.chat.cards) == 1, list(r.chat.cards.values())
+    (card,) = r.chat.cards.values()
+    return card
+
+
 def _pin(r) -> str:
     return r.bot._render_pinned(CHAT)[0]
 
@@ -226,7 +232,7 @@ def test_shell_past_max_age_closes_the_job_with_a_notice(replay, vloop,
     early = _run(vloop, scenario())
     assert early == "💤 aipager_boss (idle, 1 shell running)"
     assert _pin(r) == "💤 aipager_boss (idle)"
-    (card,) = r.chat.cards.values()
+    card = _only_card(r)
     assert card["stop"] is False
     assert card["text"].startswith(
         "⚠️ <b>aipager_boss</b> · Finished (no end seen for a background "
@@ -253,7 +259,7 @@ def test_shell_past_max_age_mid_turn_reads_no_end_seen(replay, vloop,
         w.cancel()
 
     _run(vloop, scenario())
-    (card,) = r.chat.cards.values()
+    card = _only_card(r)
     assert card["stop"] is True
     assert f"⏹ `shell: {DESC} - no end seen (" in card["text"]
 
@@ -459,7 +465,7 @@ def test_end_for_an_unknown_id_changes_nothing(replay, vloop):
         w.cancel()
 
     _run(vloop, scenario())
-    (card,) = r.chat.cards.values()
+    card = _only_card(r)
     assert "✅ `TaskStop`" in card["text"]
     assert f"⏳ `shell: {DESC} (" in card["text"]
     assert "1 shell running" in _pin(r)

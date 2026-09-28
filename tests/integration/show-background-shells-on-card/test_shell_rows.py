@@ -44,6 +44,7 @@ async def _turn(r, mid: int, text: str, *, tools: int = 1) -> None:
 
 def _card_text(r) -> str:
     """The latest version of the one card of the scenario."""
+    assert len(r.chat.cards) == 1, list(r.chat.cards.values())
     (card,) = r.chat.cards.values()
     return card["text"]
 

@@ -57,6 +57,7 @@ def _monitor(r, monkeypatch) -> SessionMonitor:
 
 
 def _only_card(r) -> dict:
+    assert len(r.chat.cards) == 1, list(r.chat.cards.values())
     (card,) = r.chat.cards.values()
     return card
 
@@ -275,7 +276,9 @@ def test_message_popped_while_continuation_shell_runs_stays_in_the_job(
 def test_first_tool_of_a_lost_wakeup_keeps_the_job_card(replay, vloop):
     """G22: the wake-up's UserPromptSubmit datagram is lost and the
     turn's first PreToolUse arrives while the session looks idle. Waiting
-    on a shell is background work: it resumes the job, not a new turn."""
+    on a shell is background work: that tool resumes the job, not a new
+    turn, so a message sent meanwhile finds the job's card running (a new
+    turn would settle it as Done and open another)."""
     _layout()
     r = replay
 
@@ -283,14 +286,21 @@ def test_first_tool_of_a_lost_wakeup_keeps_the_job_card(replay, vloop):
         w = _worker(r)
         await _shell_job(r)
         r.tool("read the output")
+        await asyncio.sleep(3)
+        r.say(3, "while it runs")
+        await r.updates.join()
+        r.prompt_hooks(3, "while it runs")
         await asyncio.sleep(10)
         w.cancel()
 
     _run(vloop, scenario())
+    assert len(r.chat.cards) == 1
     card = _only_card(r)
     assert card["stop"] is True
     assert card["reply_to"] == 1
+    assert "Done" not in card["text"]
     assert f"⏳ `shell: {DESC} (" in card["text"]
+    assert "✅ `Bash: read the output`" in card["text"]
 
 
 def test_agent_stop_while_shell_runs_keeps_waiting_past_grace(
