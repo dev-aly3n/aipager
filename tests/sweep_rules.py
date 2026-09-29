@@ -50,7 +50,7 @@ GATED_FAMILIES: set[str] = {
     "edit_message_text", "edit_message_reply_markup", "edit_message_caption",
     "edit_text",
     "send_message", "send_document", "send_photo",
-    "delete_message", "send_chat_action",
+    "delete_message", "delete_messages", "send_chat_action",
 }
 
 #: Methods that are deliberately NOT in :data:`GATED_FAMILIES`, with the

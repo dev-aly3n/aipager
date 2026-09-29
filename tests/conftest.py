@@ -49,6 +49,23 @@ def _reactions_send_at_once(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _forget_tasks_a_test_left_running():
+    """Drop the background tasks a test left pending when its event loop
+    stopped. ``notify._BACKGROUND_TASKS`` and ``animation._CARD_TASKS`` are
+    module-level sets (strong refs for fire-and-forget tasks); a test that
+    returns while a message is still queued leaves its Send now watcher or
+    line send there, bound to a loop that will never run again, and a later
+    test that drains those sets with ``asyncio.gather`` fails with "The
+    future belongs to a different loop". The daemon runs one loop, so this
+    is a test-only concern."""
+    yield
+    from aipager.bot import animation, notify
+    for tasks in (notify._BACKGROUND_TASKS, animation._CARD_TASKS):
+        for task in [t for t in tasks if not t.done()]:
+            tasks.discard(task)
+
+
+@pytest.fixture(autouse=True)
 def _isolate_audit_log(tmp_path, monkeypatch):
     """Redirect the audit log to tmp for every test, so exercising the
     bot's audit path never appends to the operator's real

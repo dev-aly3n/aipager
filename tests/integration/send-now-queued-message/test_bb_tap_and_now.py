@@ -305,37 +305,45 @@ def test_sc26_tap_while_typing_keeps_the_line(rp, vloop, monkeypatch):
 # ── SC27-SC28: several lines, repeated taps ───────────────────────────────
 
 def _sc27(r, vloop):
-    """Two messages queued, the session's one line under 2, tapped. The
-    tap answered for the whole queue: no line comes for 3 afterwards, even
-    once 2 is taken."""
+    """Two messages queued, each with its own line; 2's line tapped. The tap
+    answered for the whole queue: both lines go at once, and 3 never gets
+    a line again, even once 2 is taken."""
     async def scenario():
         w = r.worker()
         await r.turn(1, "first")
         await r.queue(2, "queued two")
         await asyncio.sleep(6)
         await r.queue(3, "queued three")
-        l2 = await r.wait_line(2, timeout=15)
-        assert l2 is not None, "precondition: the session's line, under 2"
+        l2 = await r.wait_line(2, timeout=2)
+        l3 = await r.wait_line(3, timeout=2)
+        assert l2 is not None and l3 is not None, "precondition: two lines"
         await r.tap(l2["id"])
-        await asyncio.sleep(15)
-        two_gone = r.chat.lines[l2["id"]]["deleted"]
+        await asyncio.sleep(1)
+        gone = (r.chat.lines[l2["id"]]["deleted"],
+                r.chat.lines[l3["id"]]["deleted"])
         r.absorb("queued two")
         await asyncio.sleep(15)
         w.cancel()
-        return two_gone, r.chat.line_for(3)
+        return gone, sum(1 for ln in r.chat.lines.values()
+                         if ln["reply_to"] == 3)
     return _run(vloop, scenario())
 
 
 def test_sc27_tap_deletes_the_tapped_line(rp, vloop):
-    two_gone, _ = _sc27(rp, vloop)
+    (two_gone, _), _ = _sc27(rp, vloop)
     assert two_gone is True
 
 
-def test_sc27_no_line_comes_for_the_rest_of_the_tapped_queue(rp, vloop):
+def test_sc27_tap_also_deletes_the_other_line(rp, vloop):
     """A Send now hands Claude everything it holds (operator's rule, live
-    tests 2026-09-28/29): the line does not move on to 3."""
-    _, three_line = _sc27(rp, vloop)
-    assert three_line is None
+    tests 2026-09-28/29): every line of the session goes at the tap."""
+    (_, three_gone), _ = _sc27(rp, vloop)
+    assert three_gone is True
+
+
+def test_sc27_no_new_line_comes_for_the_tapped_queue(rp, vloop):
+    _, lines_for_three = _sc27(rp, vloop)
+    assert lines_for_three == 1
 
 
 def _double_tap(r, vloop, gap: float):
@@ -391,9 +399,10 @@ def test_sc29_now_before_the_line_replies_sent(rp, vloop):
     assert replies == [NOW_SENT]
 
 
-def test_sc29_now_is_sent_before_any_line_exists(rp, vloop):
+def test_sc29_now_removes_the_line_already_up(rp, vloop):
+    """The line is up the moment the message is queued; /now removes it."""
     _now_row(rp, vloop)
-    assert rp.chat.lines == {}
+    assert rp.chat.live_lines() == []
 
 
 def test_sc30_now_with_nothing_queued_writes_nothing(rp, vloop):

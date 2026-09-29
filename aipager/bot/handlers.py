@@ -1523,6 +1523,7 @@ class CommandHandlersMixin:
         self._mark_driver(sess, update)
         self.registry.track_message(update.message.message_id, sess.name, chat_id or 0)
         self.registry.mark_dirty()
+        was_busy = sess.status is Status.BUSY
         ok = await self._inject_prompt(
             sess, text, reply_context,
             msg_id=update.message.message_id, chat_id=chat_id,
@@ -1531,7 +1532,7 @@ class CommandHandlersMixin:
         if ok:
             await self._react(update, reactions.HANDED_OFF)
             self.registry.transition(sess.name, Status.BUSY)
-            await self._send_busy_and_animate(sess)
+            await self._card_for_injected(sess, was_busy=was_busy)
             log.info("[%s] Sent text: %s", sess.label, text[:80])
         else:
             await reply_text(update.message, f"❌ Failed to send to [{sess.label}]")
@@ -1690,6 +1691,7 @@ class CommandHandlersMixin:
         self._mark_driver(sess, update)
         self.registry.track_message(update.message.message_id, sess.name, chat_id or 0)
         self.registry.mark_dirty()
+        was_busy = sess.status is Status.BUSY
         ok = await self._inject_prompt(
             sess, transcript, reply_context,
             msg_id=update.message.message_id, chat_id=chat_id,
@@ -1701,7 +1703,7 @@ class CommandHandlersMixin:
             # before this; a reaction for it would cost a fourth call.
             await self._react(update, reactions.HANDED_OFF)
             self.registry.transition(sess.name, Status.BUSY)
-            await self._send_busy_and_animate(sess)
+            await self._card_for_injected(sess, was_busy=was_busy)
             log.info("[%s] Voice injected: %r", sess.label, transcript[:80])
         else:
             await reply_text(update.message,
@@ -1845,6 +1847,7 @@ class CommandHandlersMixin:
         self._mark_driver(sess, update)
         self.registry.track_message(msg.message_id, sess.name, chat_id or 0)
         self.registry.mark_dirty()
+        was_busy = sess.status is Status.BUSY
         ok = await self._inject_prompt(
             sess, prompt, reply_context,
             msg_id=msg.message_id, chat_id=chat_id,
@@ -1853,7 +1856,7 @@ class CommandHandlersMixin:
         if ok:
             await self._react(update, reactions.HANDED_OFF)
             self.registry.transition(sess.name, Status.BUSY)
-            await self._send_busy_and_animate(sess)
+            await self._card_for_injected(sess, was_busy=was_busy)
             log.info("[%s] File sent: %s", sess.label, log_name)
         else:
             await reply_text(msg, f"❌ Failed to send to [{sess.label}]")
@@ -1964,6 +1967,7 @@ class CommandHandlersMixin:
         self.registry.track_message(update.message.message_id, sess.name,
                                     template_chat_id or 0)
         self.registry.mark_dirty()
+        was_busy = sess.status is Status.BUSY
         ok = await self._inject_prompt(
             sess, prompt_text,
             msg_id=update.message.message_id, chat_id=template_chat_id,
@@ -1972,7 +1976,7 @@ class CommandHandlersMixin:
         if ok:
             await self._react(update, reactions.HANDED_OFF)
             self.registry.transition(sess.name, Status.BUSY)
-            await self._send_busy_and_animate(sess)
+            await self._card_for_injected(sess, was_busy=was_busy)
             log.info("[%s] Template sent: %s", sess.label, prompt_text[:80])
         else:
             await reply_text(update.message, f"❌ Failed to send to [{sess.label}]")
@@ -2151,6 +2155,7 @@ class CommandHandlersMixin:
             self.registry.mark_dirty()
             self.registry.last_active_session = name  # user explicitly targeted this session
             asyncio.create_task(self._maybe_update_bot_name(name))
+            was_busy = sess.status is Status.BUSY
             ok = await self._inject_prompt(
                 sess, prompt_text,
                 msg_id=update.message.message_id, chat_id=calling_chat_id(update),
@@ -2159,7 +2164,7 @@ class CommandHandlersMixin:
             if ok:
                 await self._react(update, reactions.HANDED_OFF)
                 self.registry.transition(name, Status.BUSY)
-                await self._send_busy_and_animate(sess)
+                await self._card_for_injected(sess, was_busy=was_busy)
                 log.info("[%s] Direct send: %s", target_label, prompt_text[:80])
             else:
                 await reply_text(update.message, f"❌ Failed to send to [{target_label}]")

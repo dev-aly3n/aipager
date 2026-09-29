@@ -86,9 +86,8 @@ def _muted_row(r, vloop):
     async def scenario():
         w = r.worker()
         await r.turn(1, "first")
-        t0 = await r.queue(2, "queued two")
-        await _until(vloop, t0 + 5.0)
         MUTE.mute(CHAT, 600)
+        t0 = await r.queue(2, "queued two")
         await _until(vloop, t0 + 20.0)
         sent_to_2 = _replies_to_2(r)
         start = len(pty_of(r).writes)
@@ -126,10 +125,9 @@ def _budget_row(r, vloop, vlimiter, used: int, *, recover_at=None,
     async def scenario():
         w = r.worker()
         await r.turn(1, "first")
-        t0 = await r.queue(2, "queued two")
-        await _until(vloop, t0 + 5.0)
         _stand_at(vlimiter, vloop, used, **latches)
         minimal_at_5 = vlimiter.minimal_mode(CHAT)
+        t0 = await r.queue(2, "queued two")
         if recover_at is not None:
             await _until(vloop, t0 + recover_at)
             _stand_at(vlimiter, vloop, 0)
@@ -146,9 +144,11 @@ def test_sc36_minimal_mode_precondition(replay, vloop, vlimiter, pty):
     assert minimal is True
 
 
-def test_sc36_minimal_mode_gets_no_line(replay, vloop, vlimiter, pty):
+def test_sc36_minimal_mode_still_gets_the_line(replay, vloop, vlimiter, pty):
+    """The line is INSTANT: minimal mode suspends the card's decoration,
+    not this line (operator, 2026-09-29)."""
     _, lines = _budget_row(replay, vloop, vlimiter, 540, hourly_minimal=True)
-    assert lines == []
+    assert len(lines) == 1
 
 
 def test_sc36_control_below_minimal_still_gets_a_line(
@@ -158,18 +158,11 @@ def test_sc36_control_below_minimal_still_gets_a_line(
     assert len(lines) == 1
 
 
-def test_sc37_budget_short_at_10s_gets_no_line(replay, vloop, vlimiter, pty):
-    """The hour stands exactly at the ornament share (540), no latch."""
+def test_sc37_budget_short_still_gets_the_line(replay, vloop, vlimiter, pty):
+    """The hour stands exactly at the ornament share (540), no latch: the
+    INSTANT line still goes."""
     _, lines = _budget_row(replay, vloop, vlimiter, 540)
-    assert lines == []
-
-
-def test_sc37_budget_recovered_later_is_never_retried(
-        replay, vloop, vlimiter, pty):
-    """Short at 10 s, the budget back at 12 s: still no line by 60 s."""
-    _, lines = _budget_row(replay, vloop, vlimiter, 540, recover_at=12.0,
-                           until=60.0)
-    assert lines == []
+    assert len(lines) == 1
 
 
 # ── SC38-SC39: a restart never leaves an orphan line ──────────────────────

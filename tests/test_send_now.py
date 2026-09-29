@@ -17,7 +17,7 @@ import pytest
 from aipager.bot import send_now as sn
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot.flood_budget import (
-    PRIORITY_ESSENTIAL,
+    PRIORITY_INSTANT,
     FloodSkipped,
     rate_limit_args,
 )
@@ -334,10 +334,10 @@ def test_no_timer_for_a_message_that_already_has_a_line(mk_bot, tmp_path,
     assert sess.queued_line_timers == {}
 
 
-def test_the_timer_waits_the_configured_delay(mk_bot, tmp_path, run_async,
-                                              monkeypatch):
-    """No step running: the full QUEUED_LINE_DELAY, looked at again every
-    QUEUED_LINE_TOOL_AGE so a step that starts later is seen in time."""
+def test_the_timer_sends_at_once_with_no_step_running(mk_bot, tmp_path,
+                                                     run_async, monkeypatch):
+    """No due delay any more (operator, 2026-09-29): with the queue record
+    there the line goes at once, whatever Claude's step is doing."""
     bot, sess = _bot(mk_bot, tmp_path)
     waited = []
 
@@ -345,10 +345,10 @@ def test_the_timer_waits_the_configured_delay(mk_bot, tmp_path, run_async,
         waited.append(seconds)
 
     monkeypatch.setattr(sn, "_queued_line_sleep", _wait)
+    sess.parent_tool_started_at = None
     run_async(bot._queued_line_timer(sess, 2))
-    from aipager import config
-    assert sum(waited) == config.QUEUED_LINE_DELAY == 10.0
-    assert waited == [3.0, 3.0, 3.0, 1.0]
+    assert waited == []
+    bot._app.bot.send_message.assert_awaited_once()
 
 
 def test_the_timer_sends_at_once_behind_an_old_step(mk_bot, tmp_path,
@@ -370,29 +370,13 @@ def test_the_timer_sends_at_once_behind_an_old_step(mk_bot, tmp_path,
     bot._app.bot.send_message.assert_awaited_once()
 
 
-def _wait_at(sess, *, age, waited=0.0):
-    async def scenario():
-        now = asyncio.get_running_loop().time()
-        sess.parent_tool_started_at = None if age is None else now - age
-        return sn._queued_line_wait(sess, waited)
-    return asyncio.run(scenario())
-
-
-def test_queued_line_wait(mk_bot, tmp_path):
-    _bot_, sess = _bot(mk_bot, tmp_path)
-    # Due at once: a step at or past 3 s, or the 10 s spent.
-    assert _wait_at(sess, age=3.0) == 0.0
-    assert _wait_at(sess, age=40.0) == 0.0
-    assert _wait_at(sess, age=None, waited=10.0) == 0.0
-    assert _wait_at(sess, age=1.0, waited=10.0) == 0.0
-    # A young step: until it is 3 s old, never past the 10 s.
-    assert _wait_at(sess, age=1.0) == pytest.approx(2.0, abs=0.01)
-    assert _wait_at(sess, age=1.0, waited=9.0) == pytest.approx(1.0)
-    # No step: look again after 3 s, never past the 10 s.
-    assert _wait_at(sess, age=None) == 3.0
-    assert _wait_at(sess, age=None, waited=8.5) == 1.5
-    # A step a hair under 3 s cannot make the timer spin.
-    assert _wait_at(sess, age=2.98) == sn._QUEUED_LINE_MIN_WAIT
+def test_the_due_rule_is_gone():
+    """The 10 s / 3 s due rule was removed (2026-09-29): nothing may bring
+    it back quietly."""
+    from aipager import config
+    assert not hasattr(sn, "_queued_line_wait")
+    assert not hasattr(config, "QUEUED_LINE_DELAY")
+    assert not hasattr(config, "QUEUED_LINE_TOOL_AGE")
 
 
 def test_a_held_message_gets_the_line_and_owes_its_delete(
@@ -412,10 +396,9 @@ def test_a_held_message_gets_the_line_and_owes_its_delete(
     assert button.callback_data.startswith("_:sx:")
     assert button.callback_data.endswith(":now:2")
     assert len(button.callback_data.encode()) <= 64
-    # BLOCKING at answer priority: never skipped for a short chat, and not
-    # starved by the busy card's own edits (live test 2026-09-27).
+    # INSTANT: never waits for a chat token (operator, 2026-09-29).
     assert call.kwargs["rate_limit_args"] == rate_limit_args(
-        priority=PRIORITY_ESSENTIAL) is None
+        priority=PRIORITY_INSTANT)
     assert sess.queued_lines == {2: (CHAT, 7001)}
     assert bot.registry.queued_line_deletes == [[CHAT, 7001]]
     assert sess.queued_line_timers == {}
@@ -474,14 +457,16 @@ def test_no_line_while_the_chat_is_muted(mk_bot, tmp_path, run_async, instant):
     bot._app.bot.send_message.assert_not_awaited()
 
 
-def test_no_line_in_minimal_mode(mk_bot, tmp_path, run_async, instant,
-                                 monkeypatch):
+def test_the_line_is_sent_in_minimal_mode(mk_bot, tmp_path, run_async,
+                                          instant, monkeypatch):
+    """Minimal mode suspends the card's decoration, not this line
+    (operator, 2026-09-29: the flood manager must not block it)."""
     from aipager import session_monitor
     bot, sess = _bot(mk_bot, tmp_path)
     monkeypatch.setattr(session_monitor, "cards_suppressed",
                         lambda chat_id: chat_id == CHAT)
     run_async(bot._queued_line_timer(sess, 2))
-    bot._app.bot.send_message.assert_not_awaited()
+    bot._app.bot.send_message.assert_awaited_once()
 
 
 @pytest.mark.parametrize("result", [MUTED, SKIPPED, None,
@@ -613,8 +598,8 @@ def test_no_bare_queued_targets_clear_left_in_bot_code():
     assert offenders == []
 
 
-def test_a_delete_is_essential_and_settles_the_debt(mk_bot, tmp_path,
-                                                     run_async):
+def test_a_delete_is_instant_and_settles_the_debt(mk_bot, tmp_path,
+                                                   run_async):
     bot, _sess = _bot(mk_bot, tmp_path)
 
     async def scenario():
@@ -625,7 +610,7 @@ def test_a_delete_is_essential_and_settles_the_debt(mk_bot, tmp_path,
     run_async(scenario())
     kwargs = bot._app.bot.delete_message.await_args.kwargs
     assert kwargs["rate_limit_args"] == rate_limit_args(
-        priority=PRIORITY_ESSENTIAL)
+        priority=PRIORITY_INSTANT)
     assert bot.registry.queued_line_deletes == []
 
 
@@ -1262,7 +1247,7 @@ def test_the_turns_own_message_arms_nothing(mk_bot, tmp_path, run_async):
     assert run_async(scenario()) == {}
 
 
-# ── one line per session (live test 2026-09-29) ─────────────────────────
+# ── one line per queued message (live tests 2026-09-29) ─────────────────
 
 def _two_held(mk_bot, tmp_path, *, two_held=True):
     """Messages 2 and 3 queued; 3 is always in Claude's queue, 2 only when
@@ -1281,8 +1266,10 @@ def _two_held(mk_bot, tmp_path, *, two_held=True):
     return bot, sess
 
 
-def test_a_second_queued_message_gets_no_line_of_its_own(
+def test_each_queued_message_gets_its_own_line_at_once(
         mk_bot, tmp_path, run_async, instant):
+    """One line per queued message (operator, 2026-09-29), not one per
+    session."""
     bot, sess = _two_held(mk_bot, tmp_path)
 
     async def scenario():
@@ -1294,18 +1281,18 @@ def test_a_second_queued_message_gets_no_line_of_its_own(
     run_async(scenario())
     replies = [c.kwargs["reply_to_message_id"]
                for c in bot._app.bot.send_message.await_args_list]
-    assert replies == [2]
-    assert list(sess.queued_lines) == [2]
+    assert replies == [2, 3]
+    assert sorted(sess.queued_lines) == [2, 3]
 
 
-def test_a_line_that_cannot_be_sent_hands_on_to_the_next_message(
+def test_a_message_without_a_queue_record_gets_no_line_the_other_does(
         mk_bot, tmp_path, run_async, instant):
-    """2 is not in Claude's queue (no evidence): its timer gives up, and
-    the line goes to 3 instead; 2 is not tried again."""
+    """2 is not in Claude's queue (no evidence): no line for it; 3 still
+    gets its own."""
     bot, sess = _two_held(mk_bot, tmp_path, two_held=False)
 
     async def scenario():
-        bot._arm_queued_lines(sess, [{"msg_id": 2}])
+        bot._arm_queued_lines(sess, [{"msg_id": 2}, {"msg_id": 3}])
         for _ in range(5):
             await _settle()
 
@@ -1365,11 +1352,10 @@ def test_a_message_queued_after_a_press_still_gets_its_line(
     assert list(sess.queued_lines) == [2]
 
 
-def test_a_line_dropped_as_it_lands_moves_on_to_the_next_message(
+def test_a_line_dropped_as_it_lands_leaves_the_others(
         mk_bot, tmp_path, run_async, instant):
-    """Review rev-iter1-001: line 2's send waited for its token while
-    Claude took 2 and message 3 was queued. Line 2 lands, is dropped (2 is
-    no longer held), and the line moves on to 3."""
+    """Line 2's send was out while Claude took 2: line 2 is dropped as it
+    lands, line 3 (its own message still queued) stays."""
     bot, sess = _two_held(mk_bot, tmp_path)
     ids = iter([7001, 7002])
 
@@ -1385,7 +1371,7 @@ def test_a_line_dropped_as_it_lands_moves_on_to_the_next_message(
     bot._app.bot.send_message = AsyncMock(side_effect=_send)
 
     async def scenario():
-        bot._arm_queued_lines(sess, [{"msg_id": 2}])
+        bot._arm_queued_lines(sess, [{"msg_id": 2}, {"msg_id": 3}])
         for _ in range(5):
             await _settle()
 
@@ -1396,13 +1382,14 @@ def test_a_line_dropped_as_it_lands_moves_on_to_the_next_message(
     assert list(sess.queued_lines) == [3]
 
 
-def test_a_second_line_landing_beside_another_is_dropped(
+def test_a_line_landing_beside_another_stays(
         mk_bot, tmp_path, run_async, instant):
-    """Review rev-iter1-003: one line per session by construction."""
+    """Lines are per message: another message's line being up is no reason
+    to drop this one."""
     bot, sess = _bot(mk_bot, tmp_path)
 
     async def _send(*_a, **_kw):
-        sess.queued_lines[3] = (CHAT, 6000)  # another line went up meanwhile
+        sess.queued_lines[3] = (CHAT, 6000)  # another message's line
         return SimpleNamespace(message_id=7001)
 
     bot._app.bot.send_message = AsyncMock(side_effect=_send)
@@ -1412,15 +1399,16 @@ def test_a_second_line_landing_beside_another_is_dropped(
         await _settle()
 
     run_async(scenario())
-    assert list(sess.queued_lines) == [3]
-    bot._app.bot.delete_message.assert_awaited()
+    assert sorted(sess.queued_lines) == [2, 3]
+    bot._app.bot.delete_message.assert_not_awaited()
 
 
-def test_no_line_is_sent_while_another_is_up(mk_bot, tmp_path, run_async):
+def test_a_line_is_sent_while_another_is_up(mk_bot, tmp_path, run_async):
+    """Per message: message 3's line does not stop message 2's."""
     bot, sess = _bot(mk_bot, tmp_path)
     sess.queued_lines[3] = (CHAT, 6000)
     run_async(bot._send_queued_line_checked(sess, 2))
-    bot._app.bot.send_message.assert_not_awaited()
+    bot._app.bot.send_message.assert_awaited_once()
 
 
 def test_a_message_queued_while_the_chord_is_out_still_gets_its_line(
@@ -1460,3 +1448,148 @@ def test_a_message_queued_while_the_chord_is_out_still_gets_its_line(
                for c in bot._app.bot.send_message.await_args_list]
     assert replies == [3]
     assert list(sess.queued_lines) == [3]
+
+
+# ── Telegram asking to slow down (review rev-iter1-003/008) ─────────────
+
+@pytest.fixture
+def instant_retry(monkeypatch):
+    """The 429 retry's wait, made instant (never asyncio.sleep itself)."""
+    waits: list[float] = []
+
+    async def _now(seconds):
+        waits.append(seconds)
+    monkeypatch.setattr(sn, "_line_retry_sleep", _now)
+    return waits
+
+
+def test_a_small_429_on_the_line_is_waited_out_and_sent_again(
+        mk_bot, tmp_path, run_async, instant, instant_retry):
+    from telegram.error import RetryAfter
+    bot, sess = _bot(mk_bot, tmp_path)
+    bot._app.bot.send_message = AsyncMock(
+        side_effect=[RetryAfter(3), SimpleNamespace(message_id=7001)])
+
+    async def scenario():
+        bot._arm_queued_lines(sess, [{"msg_id": 2}])
+        for _ in range(3):
+            await _settle()
+
+    run_async(scenario())
+    assert instant_retry == [3.0]
+    assert sess.queued_lines == {2: (CHAT, 7001)}
+
+
+def test_a_small_429_on_a_delete_is_waited_out_and_deleted_again(
+        mk_bot, tmp_path, run_async, instant_retry):
+    from telegram.error import RetryAfter
+    bot, _sess = _bot(mk_bot, tmp_path)
+    bot._app.bot.delete_messages = AsyncMock(side_effect=[RetryAfter(2), True])
+
+    async def scenario():
+        bot._delete_queued_lines_later(CHAT, [7001, 7002])
+        for _ in range(3):
+            await _settle()
+
+    run_async(scenario())
+    assert bot._app.bot.delete_messages.await_count == 2
+    assert instant_retry == [2.0]
+    assert bot.registry.queued_line_deletes == []
+
+
+def test_a_delete_refused_twice_stays_owed(mk_bot, tmp_path, run_async,
+                                           instant_retry):
+    from telegram.error import RetryAfter
+    bot, _sess = _bot(mk_bot, tmp_path)
+    bot._app.bot.delete_messages = AsyncMock(
+        side_effect=[RetryAfter(2), RetryAfter(2)])
+
+    async def scenario():
+        bot._delete_queued_lines_later(CHAT, [7001, 7002])
+        for _ in range(3):
+            await _settle()
+
+    run_async(scenario())
+    assert sorted(bot.registry.queued_line_deletes) == [[CHAT, 7001],
+                                                        [CHAT, 7002]]
+
+
+# A ban-sized 429, or a small one while the chat is muted, is not slept out
+# and retried: the retry would fire at the ban's end (review rev-iter2-002).
+
+BAN = 19289   # the 2026-09-11 incident's retry_after, over the 90 s ceiling
+
+
+def _muting_429(seconds: int):
+    """A call the gate answers the way it does a ban: mute armed, 429
+    re-raised."""
+    from telegram.error import RetryAfter
+
+    async def _call(*_a, **_k):
+        MUTE.mute(CHAT, 600)
+        raise RetryAfter(seconds)
+    return AsyncMock(side_effect=_call)
+
+
+def test_a_ban_sized_429_on_the_line_gives_up_at_once(
+        mk_bot, tmp_path, run_async, instant, instant_retry):
+    from telegram.error import RetryAfter
+    bot, sess = _bot(mk_bot, tmp_path)
+    bot._app.bot.send_message = AsyncMock(side_effect=[RetryAfter(BAN)])
+
+    async def scenario():
+        bot._arm_queued_lines(sess, [{"msg_id": 2}])
+        for _ in range(3):
+            await _settle()
+
+    run_async(scenario())
+    assert (instant_retry, bot._app.bot.send_message.await_count,
+            sess.queued_lines) == ([], 1, {})
+
+
+def test_a_small_429_on_the_line_while_muted_gives_up_at_once(
+        mk_bot, tmp_path, run_async, instant, instant_retry):
+    bot, sess = _bot(mk_bot, tmp_path)
+    bot._app.bot.send_message = _muting_429(3)
+
+    async def scenario():
+        bot._arm_queued_lines(sess, [{"msg_id": 2}])
+        for _ in range(3):
+            await _settle()
+
+    run_async(scenario())
+    assert (instant_retry, bot._app.bot.send_message.await_count,
+            sess.queued_lines) == ([], 1, {})
+
+
+def test_a_ban_sized_429_on_a_delete_gives_up_at_once_and_stays_owed(
+        mk_bot, tmp_path, run_async, instant_retry):
+    from telegram.error import RetryAfter
+    bot, _sess = _bot(mk_bot, tmp_path)
+    bot._app.bot.delete_messages = AsyncMock(side_effect=[RetryAfter(BAN)])
+
+    async def scenario():
+        bot._delete_queued_lines_later(CHAT, [7001, 7002])
+        for _ in range(3):
+            await _settle()
+
+    run_async(scenario())
+    assert (instant_retry, bot._app.bot.delete_messages.await_count) == ([], 1)
+    assert sorted(bot.registry.queued_line_deletes) == [[CHAT, 7001],
+                                                        [CHAT, 7002]]
+
+
+def test_a_small_429_on_a_delete_while_muted_gives_up_at_once(
+        mk_bot, tmp_path, run_async, instant_retry):
+    bot, _sess = _bot(mk_bot, tmp_path)
+    bot._app.bot.delete_messages = _muting_429(2)
+
+    async def scenario():
+        bot._delete_queued_lines_later(CHAT, [7001, 7002])
+        for _ in range(3):
+            await _settle()
+
+    run_async(scenario())
+    assert (instant_retry, bot._app.bot.delete_messages.await_count) == ([], 1)
+    assert sorted(bot.registry.queued_line_deletes) == [[CHAT, 7001],
+                                                        [CHAT, 7002]]

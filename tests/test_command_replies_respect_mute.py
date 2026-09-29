@@ -731,6 +731,7 @@ def test_the_exempt_set_is_exactly_the_seam_the_gate_and_the_observer():
     """
     assert EXEMPT_FILES == {"transport.py", "flood_budget.py", "observer.py"}
     assert "delete_message" in GATED_FAMILIES
+    assert "delete_messages" in GATED_FAMILIES   # the batched line delete
     assert "send_chat_action" in GATED_FAMILIES
 
 

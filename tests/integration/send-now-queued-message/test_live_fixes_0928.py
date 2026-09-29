@@ -44,18 +44,16 @@ def _run(vloop, coro):
 
 
 async def _three_lined(r) -> dict[int, dict]:
-    """Messages 2, 3 and 4 queued behind turn 1, the session's one line up
-    under 2 (the oldest): ``{2: line}``."""
+    """Messages 2, 3 and 4 queued behind turn 1, each with its own line
+    (sent at once, 2026-09-29)."""
     await r.turn(1, "first")
-    await r.queue(2, "hello?")
-    line = await r.wait_line(2, timeout=60)
-    assert line is not None, "precondition: no line under 2"
-    for mid, text in ((3, "hi"), (4, "hmmm")):
+    lines = {}
+    for mid, text in ((2, "hello?"), (3, "hi"), (4, "hmmm")):
         await r.queue(mid, text)
-        await asyncio.sleep(2)
-    assert r.chat.line_for(3) is None and r.chat.line_for(4) is None, (
-        "precondition: one line per session")
-    return {2: line}
+        line = await r.wait_line(mid, timeout=2)
+        assert line is not None, f"precondition: no line for {mid}"
+        lines[mid] = line
+    return lines
 
 
 def _live_ids(r) -> set[int]:
@@ -110,10 +108,11 @@ def _live_replay(r, vloop, *, tap: bool = True, dequeues: int = 1,
     return _run(vloop, scenario())
 
 
-def test_live_tap_removes_the_line_at_once_and_no_other_comes(rp, vloop):
+def test_live_tap_removes_every_line_at_once_in_one_call(rp, vloop):
     lines, live_after_tap = _live_replay(rp, vloop)
-    assert not live_after_tap & {ln["id"] for ln in lines.values()}
-    assert rp.chat.line_for(3) is None and rp.chat.line_for(4) is None
+    ids = {ln["id"] for ln in lines.values()}
+    assert not live_after_tap & ids
+    assert sorted(ids) in [sorted(c) for c in rp.chat.delete_calls]
 
 
 def test_live_dequeued_message_is_not_run_again_as_a_new_turn(rp, vloop):
@@ -243,7 +242,8 @@ def test_now_command_removes_every_line(rp, vloop):
 
 def test_already_taken_tap_ends_the_lines_for_that_queue(rp, vloop):
     """Message 2 was absorbed; its stored button is tapped while 3 and 4
-    are still queued: nothing is pressed, and no line comes for them."""
+    are still queued: nothing is pressed, their lines go, and no new line
+    comes for them."""
     async def scenario():
         w = rp.worker()
         lines = await _three_lined(rp)
@@ -256,23 +256,22 @@ def test_already_taken_tap_ends_the_lines_for_that_queue(rp, vloop):
     toast = _run(vloop, scenario())
     assert toast == "Already taken"
     assert _live_ids(rp) == set()
-    assert rp.chat.line_for(3) is None and rp.chat.line_for(4) is None
+    assert sum(1 for ln in rp.chat.lines.values()
+               if ln["reply_to"] in (3, 4)) == 2
 
 
-def test_absorbing_the_lines_message_moves_the_line_to_the_next(rp, vloop):
-    """Without a Send now, the line follows the queue: 2 absorbed while 3
-    and 4 wait, the line goes and comes back under 3 (the oldest)."""
+def test_absorbing_one_message_removes_only_its_line(rp, vloop):
+    """Without a Send now, only the taken message's line goes."""
     async def scenario():
         w = rp.worker()
         lines = await _three_lined(rp)
         rp.absorb("hello?")
-        l3 = await rp.wait_line(3, timeout=15)
+        await asyncio.sleep(1.0)
         w.cancel()
-        return lines, l3
-    lines, l3 = _run(vloop, scenario())
+        return lines
+    lines = _run(vloop, scenario())
     assert lines[2]["id"] not in _live_ids(rp)
-    assert l3 is not None and l3["id"] in _live_ids(rp)
-    assert rp.chat.line_for(4) is None
+    assert {lines[3]["id"], lines[4]["id"]} <= _live_ids(rp)
 
 
 # ── R2: a line's delete goes at answer priority ────────────────────────────

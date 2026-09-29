@@ -650,6 +650,7 @@ class CallbackDispatchMixin:
             # different or unknown author, no sender — the floor.
             tapper = driver_id_from_update(update)
             author = sess.last_prompt_driver_user_id
+            was_busy = sess.status is Status.BUSY
             ok = await self._inject_prompt(
                 sess, prompt, msg_id=sess.trigger_msg_id, chat_id=CHAT_ID,
                 driver_user_id=tapper if tapper == author else None)
@@ -664,7 +665,7 @@ class CallbackDispatchMixin:
                 except Exception:
                     pass
                 self.registry.transition(session_name, Status.BUSY)
-                await self._send_busy_and_animate(sess)
+                await self._card_for_injected(sess, was_busy=was_busy)
                 log.info("[%s] Retry: %s", sess.label, prompt[:80])
             else:
                 await self._safe_answer(query, "Failed to retry")

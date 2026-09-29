@@ -25,7 +25,7 @@ dependencies = [
     # optional in practice: without it every send hits Telegram unthrottled
     # and a flood-control penalty surfaces as an unhandled RetryAfter at each
     # of ~64 call sites. See bot/lifecycle.py's rate_limiter() call.
-    "python-telegram-bot[rate-limiter]>=20",
+    "python-telegram-bot[rate-limiter]>=20.8",
     "httpx>=0.24",
     "dtach-bin>=0.9.1",
     "rich>=14.0,<16",

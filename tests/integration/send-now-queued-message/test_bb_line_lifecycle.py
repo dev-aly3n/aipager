@@ -60,10 +60,9 @@ def _sc1(r, vloop):
     async def scenario():
         w = r.worker()
         t0 = await _queued(r)
-        await _until(vloop, t0 + 9.0)
+        # INSTANT: up the moment Claude's queue shows the message.
+        await _until(vloop, t0 + 0.5)
         at_9 = [dict(ln) for ln in r.chat.lines.values()]
-        # The line is due at 10 s and, blocking at this chat's 0.5/s,
-        # may wait for its token: allow 2.5 s.
         await _until(vloop, t0 + 12.5)
         at_11 = [dict(ln) for ln in r.chat.lines.values()]
         w.cancel()
@@ -71,9 +70,9 @@ def _sc1(r, vloop):
     return _run(vloop, scenario())
 
 
-def test_sc1_no_line_at_9_seconds(replay, vloop, pty):
-    at_9, _ = _sc1(replay, vloop)
-    assert at_9 == []
+def test_sc1_the_line_is_up_within_half_a_second(replay, vloop, pty):
+    at_half, _ = _sc1(replay, vloop)
+    assert len(at_half) == 1 and at_half[0]["reply_to"] == 2
 
 
 def test_sc1_exactly_one_line_by_12_5_seconds(replay, vloop, pty):
@@ -114,7 +113,7 @@ def test_sc1_callback_data_names_the_session_and_target(replay, vloop, pty):
 
 # ── SC2-SC5: taken or not held before the delay -> never a line ────────────
 
-def test_sc2_absorbed_at_5s_never_gets_a_line(replay, vloop, pty):
+def test_sc2_absorbed_at_5s_deletes_its_line_at_once(replay, vloop, pty):
     r = replay
 
     async def scenario():
@@ -122,11 +121,11 @@ def test_sc2_absorbed_at_5s_never_gets_a_line(replay, vloop, pty):
         t0 = await _queued(r)
         await _until(vloop, t0 + 5.0)
         r.absorb("queued two")
-        await _until(vloop, t0 + 25.0)
+        await _until(vloop, t0 + 5.5)
         w.cancel()
 
     _run(vloop, scenario())
-    assert r.chat.lines == {}
+    assert len(r.chat.lines) == 1 and r.chat.live_lines() == []
 
 
 def test_sc2_absorbed_at_5s_shows_thumbs_up(replay, vloop, pty):
@@ -144,7 +143,7 @@ def test_sc2_absorbed_at_5s_shows_thumbs_up(replay, vloop, pty):
     assert r.chat.reactions.get(2, [])[-1:] == ["👍"]
 
 
-def test_sc3_popped_by_a_stop_at_5s_never_gets_a_line(replay, vloop, pty):
+def test_sc3_popped_by_a_stop_at_5s_deletes_its_line(replay, vloop, pty):
     r = replay
 
     async def scenario():
@@ -159,7 +158,7 @@ def test_sc3_popped_by_a_stop_at_5s_never_gets_a_line(replay, vloop, pty):
         w.cancel()
 
     _run(vloop, scenario())
-    assert r.chat.lines == {}
+    assert r.chat.live_lines() == []
 
 
 def test_sc4_no_enqueue_evidence_never_gets_a_line(replay, vloop, pty):
@@ -185,24 +184,6 @@ def test_sc5_the_turns_own_trigger_never_gets_a_line(replay, vloop, pty):
         r.enqueue("first")
         await r.turn(1, "first")
         await asyncio.sleep(25)
-        w.cancel()
-
-    _run(vloop, scenario())
-    assert r.chat.lines == {}
-
-
-def test_boundary_evidence_ended_by_dequeue_before_10s_gets_no_line(
-        replay, vloop, pty):
-    """Held at pick-up, evidence ended at 5 s (a ``dequeue`` line) but no
-    Stop yet: the 10 s check finds nothing held."""
-    r = replay
-
-    async def scenario():
-        w = r.worker()
-        t0 = await _queued(r)
-        await _until(vloop, t0 + 5.0)
-        r.fate("dequeue")
-        await _until(vloop, t0 + 25.0)
         w.cancel()
 
     _run(vloop, scenario())
@@ -526,40 +507,33 @@ def test_sc18_pickup_repeated_later_still_one_line(replay, vloop, pty):
 
 
 def _sc19(r, vloop):
-    """Two messages queued: the session's one line goes under 2 (live test
-    2026-09-29: a line per message came 12-39 s late at the chat's
-    ceiling). When 2 is absorbed and 3 still waits, the line moves to 3."""
+    """Two messages queued: each gets its own line (operator, 2026-09-29).
+    When 2 is absorbed, only 2's line goes; 3's stays."""
     async def scenario():
         w = r.worker()
         await r.turn(1, "first")
         await r.queue(2, "queued two")
         await asyncio.sleep(6)
         await r.queue(3, "queued three")
-        l2 = await r.wait_line(2, timeout=15)
-        assert l2 is not None, "precondition: the session's line, under 2"
-        three_before = r.chat.line_for(3)
+        l2 = await r.wait_line(2, timeout=2)
+        l3 = await r.wait_line(3, timeout=2)
+        assert l2 is not None and l3 is not None, "precondition: two lines"
         r.absorb("queued two")
-        l3 = await r.wait_line(3, timeout=15)
+        await asyncio.sleep(1.0)
         w.cancel()
-        return r.chat.lines[l2["id"]]["deleted"], three_before, l3
+        return (r.chat.lines[l2["id"]]["deleted"],
+                r.chat.lines[l3["id"]]["deleted"])
     return _run(vloop, scenario())
 
 
 def test_sc19_absorbing_two_deletes_twos_line(replay, vloop, pty):
-    two_gone, _, _ = _sc19(replay, vloop)
+    two_gone, _ = _sc19(replay, vloop)
     assert two_gone is True
 
 
-def test_sc19_three_has_no_line_of_its_own_while_twos_is_up(
-        replay, vloop, pty):
-    _, three_before, _ = _sc19(replay, vloop)
-    assert three_before is None
-
-
-def test_sc19_the_line_moves_to_three_when_two_is_absorbed(
-        replay, vloop, pty):
-    _, _, l3 = _sc19(replay, vloop)
-    assert l3 is not None and l3["deleted"] is False
+def test_sc19_absorbing_two_keeps_threes_line(replay, vloop, pty):
+    _, three_gone = _sc19(replay, vloop)
+    assert three_gone is False
 
 
 def test_ui_text_has_no_em_dash(replay, vloop, pty):

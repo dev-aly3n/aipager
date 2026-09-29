@@ -603,26 +603,19 @@ Held messages are capped at 50 per session and expire after 24 h;
 
 #### Send a queued message now
 
-A message you send while Claude is working waits in Claude's queue
-until the current step ends. If Claude is in the middle of a longer step
-(one that has already run 3 seconds, `QUEUED_LINE_TOOL_AGE`), that wait
-is usually long, so aipager replies under the message at once, or as
-soon as the step reaches 3 seconds. Otherwise it replies if the message
-is still waiting 10 seconds after Claude queued it
-(`QUEUED_LINE_DELAY`):
+A message you send while Claude is working goes to Claude at once
+(aipager never holds it back) and waits in Claude's queue until the
+current step ends. As soon as Claude's queue shows it, aipager replies
+under it:
 
 ```
 ⏳ Queued - Claude will read it after the current step
 [⚡ Send now]
 ```
 
-A message Claude takes sooner gets no line, only 👀 then 👍.
-
-There is one such line per session, under the first message still
-waiting: one tap sends everything Claude holds, so a message you add
-while the line is up gets no line of its own. If Claude takes the
-message the line sits under while others still wait, the line moves on
-to the next of them.
+Every queued message gets its own line, and each line disappears, with
+its 👍, the moment Claude takes that message. A message Claude takes
+before its queue record is seen gets no line, only 👀 then 👍.
 
 Tapping `⚡ Send now` (or sending `/now`) presses Claude Code's own
 send-now keys (Ctrl+X, then Ctrl+S) in that session. Claude then reads
@@ -636,8 +629,8 @@ example with Claude Code's background tasks turned off) send-now falls
 back to a plain interrupt of the running step. This is all Claude
 Code's own send-now behaviour, not something aipager decides.
 
-The tap answers `Sent to Claude now` and the line disappears at once,
-since send-now hands Claude everything it holds; `/now` removes it the
+The tap answers `Sent to Claude now` and every line disappears at once,
+since send-now hands Claude everything it holds; `/now` removes them the
 same way, and no line comes for the messages that Send now sent (a
 message you send after it gets its own). If Claude cancels the running
 step instead of moving it to the background, it takes only the oldest
@@ -666,13 +659,12 @@ queue back into the input box, or it is dropped by `/stop`,
 `/clearqueue`, `/kill`, `/restart`, a safety halt or the session
 ending. A daemon restart removes any line still showing.
 
-The line is not sent while the chat is flood-muted or in minimal mode;
-`/now` does the same job then. When the chat is only busy (a busy card
-updating on a slow chat), the first line goes out like an answer, so it
-arrives within a couple of seconds; if you queue several messages, the
-lines after the first one wait behind answers, since one tap already
-sends everything. Each waiting message costs at most two chat calls (the
-line and its removal).
+The lines never wait for the flood manager: they go out and are removed
+straight away even on a busy or slow chat, and in minimal mode. Only
+while Telegram itself has the chat muted is no line sent (`/now` still
+works then), and if Telegram has just asked aipager to slow down, a line
+waits the few seconds it asked for. Each waiting message costs one chat
+call for its line; lines that go together are removed in one call.
 
 ### Files
 

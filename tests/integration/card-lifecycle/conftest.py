@@ -137,6 +137,16 @@ class CardChat:
                    if endpoint is None or e == endpoint)
 
 
+def _is_now_line(markup) -> bool:
+    """The "⏳ Queued / ⚡ Send now" line (bot/send_now.py): a reply with a
+    button, but not a card. Its button's callback carries ``now:``."""
+    for row in getattr(markup, "inline_keyboard", None) or ():
+        for button in row:
+            if ":now:" in (getattr(button, "callback_data", None) or ""):
+                return True
+    return False
+
+
 class _PtbDouble:
     """``bot._app.bot``: each call gated by the real limiter, answered by
     :class:`CardChat`."""
@@ -148,6 +158,7 @@ class _PtbDouble:
         "send_chat_action": ("sendChatAction", 0),
         "set_message_reaction": ("setMessageReaction", 0),
         "send_document": ("sendDocument", 0),
+        "delete_messages": ("deleteMessages", 0),
     }
 
     def __init__(self, limiter, chat: CardChat) -> None:
@@ -158,7 +169,8 @@ class _PtbDouble:
         chat = self._chat
         if name == "send_message":
             msg_id = chat.new_id()
-            if kwargs.get("reply_markup") is not None:
+            if kwargs.get("reply_markup") is not None and not _is_now_line(
+                    kwargs.get("reply_markup")):
                 text = kwargs.get("text") or (args[1] if len(args) > 1 else "")
                 chat.cards[msg_id] = {
                     "reply_to": kwargs.get("reply_to_message_id"),
@@ -176,6 +188,12 @@ class _PtbDouble:
             card = chat.cards.get(kwargs.get("message_id"))
             if card is not None:
                 card["deleted"] = True
+            return True
+        if name == "delete_messages":
+            for mid in kwargs.get("message_ids") or []:
+                card = chat.cards.get(mid)
+                if card is not None:
+                    card["deleted"] = True
             return True
         if name == "set_message_reaction":
             chat.reactions.setdefault(args[1], []).append(args[2])

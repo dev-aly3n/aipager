@@ -92,6 +92,20 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+# Strong references to the card steps a queued message's handler starts in
+# the background (`_card_for_injected`), so none is collected mid-flight.
+_CARD_TASKS: set = set()
+
+
+def _card_task_done(task: "asyncio.Task") -> None:
+    _CARD_TASKS.discard(task)
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        log.warning("busy card step for a queued message failed",
+                    exc_info=exc)
+
 _RICH_LIMIT = 32_768  # UTF-8 byte ceiling for rich messages
 # Whole-card CHARACTER ceiling — not bytes, a distinct unit from
 # _RICH_LIMIT above, and specifically Python's own len() (code points),
@@ -3258,6 +3272,27 @@ class AnimationMixin:
             log.warning("[%s] a turn's finish did not release the card in "
                         "%.0fs — going ahead anyway", sess.label,
                         FINISH_GATE_TIMEOUT)
+
+    async def _card_for_injected(self, sess: TrackedSession, *,
+                                 was_busy: bool) -> None:
+        """The busy card for a message just injected. A message that starts
+        a turn (*was_busy* False) waits for its card, as before. One queued
+        behind a running turn does NOT: the card step waits for the card's
+        lock, which a tick holds while its edit waits for a flood token, and
+        PTB handles updates one at a time, so waiting here held every later
+        message back from Claude (live test 2026-09-29: 18 s). For that
+        message the step runs in the background; there is usually nothing
+        for it to do."""
+        if not was_busy:
+            await self._send_busy_and_animate(sess)
+            return
+        # The turn is read NOW, as the awaited call did, so a step that only
+        # runs after a later event cannot act for a turn it was not asked
+        # about.
+        task = asyncio.create_task(
+            self._send_busy_and_animate(sess, turn=sess.turn_seq))
+        _CARD_TASKS.add(task)
+        task.add_done_callback(_card_task_done)
 
     async def _send_busy_and_animate(
         self, sess: TrackedSession, *, lazy: bool = False,

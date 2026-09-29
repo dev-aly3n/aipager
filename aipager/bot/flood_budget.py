@@ -265,6 +265,19 @@ _TOKEN_EPS: float = 1e-6
 PRIORITY_ESSENTIAL: str = "essential"
 PRIORITY_ORNAMENT: str = "ornament"
 PRIORITY_SIGNAL: str = "signal"
+# INSTANT — the "⏳ Queued / ⚡ Send now" line under a message Claude still
+#   holds, and its delete (bot/send_now.py). The operator's rule (live test
+#   2026-09-29): it goes out the moment the message is queued and goes the
+#   moment Claude takes it, never paced behind card edits. So it never
+#   waits for a chat token and is never refused by minimal mode or the
+#   skip reserve: it takes a token when one is free (card edits yield to
+#   it), is stamped into the rolling window even when that is full, counts
+#   in the chat's hour like an answer, meets the 30/s overall bucket, and
+#   is refused only by the MUTE (a send into an active ban fails and
+#   extends it). Its one wait is a deferral Telegram itself set with a
+#   429. A 429 on it is not retried here (the caller decides): noted like
+#   any other, and a ban-sized one arms the mute.
+PRIORITY_INSTANT: str = "instant"
 
 
 
@@ -394,6 +407,14 @@ class SlidingWindow:
         for _ in range(count):
             self._stamps.append(now)
         return True
+
+    def stamp(self, n: float = 1.0) -> None:
+        """Record *n* calls whether or not the window has room: a call that
+        went out anyway (an INSTANT one) still counts, so the paced traffic
+        behind it yields."""
+        now = self._clock()
+        for _ in range(max(int(n), 1)):
+            self._stamps.append(now)
 
     def time_until(self, n: float = 1.0) -> float:
         """Seconds until *n* more calls fit; ``0.0`` when they already do.
@@ -627,6 +648,8 @@ class ChatBudget:
         self.calls: int = 0
         self.skipped: int = 0
         self.reactions: int = 0
+        # INSTANT calls (the Send now line and its deletes), never paced.
+        self.instant: int = 0
         self.chat_actions: int = 0
         self.muted_refusals: int = 0
         self.ornaments_suspended: int = 0
@@ -877,7 +900,8 @@ def _class_of(rate_limit_args) -> str:
     """
     if isinstance(rate_limit_args, dict):
         declared = rate_limit_args.get("class")
-        if declared in (PRIORITY_ORNAMENT, PRIORITY_SIGNAL):
+        if declared in (PRIORITY_ORNAMENT, PRIORITY_SIGNAL,
+                        PRIORITY_INSTANT):
             return declared
     return PRIORITY_ESSENTIAL
 
@@ -1976,6 +2000,34 @@ class BudgetRateLimiter(BaseRateLimiter):
             budget.ornaments_suspended += 1
             raise FloodSkipped(chat_id, endpoint)
 
+        # ── INSTANT (the Send now line) ──────────────────────────────────
+        # Never waits for the chat: a token is taken only when one is free,
+        # the call is counted, and it goes after the overall bucket alone.
+        # Below the mute check on purpose; above minimal mode's effect and
+        # every chat-token wait on purpose.
+        if cls == PRIORITY_INSTANT and budget is not None:
+            # The one wait: a deferral Telegram itself set with a 429's
+            # retry_after. A call inside it is a certain 429 and a fresh
+            # violation, so it cannot land sooner by going now (review
+            # rev-iter1-004). Asked again after each wait: another 429
+            # during it moves the deferral on (review rev-iter2), and a
+            # ban armed during it must refuse the call, since `_run` does
+            # not check the mute.
+            while (wait := budget.retry_until - self._clock()) > 0:
+                await self._sleep(wait)
+                if MUTE.is_muted(chat_id):
+                    budget.muted_refusals += 1
+                    raise FloodMuted(MUTE.remaining(chat_id), chat_id)
+            budget.chat.take(1.0)
+            budget.window.stamp(1.0)
+            self._record(budget, cls)
+            budget.instant += 1
+            await self._wait_for_overall()
+            return await self._run(
+                budget, callback, args, kwargs, endpoint, chat_id,
+                kind="blocking", allow_retry=False, cls=cls,
+            )
+
         # ── THE TYPING BUBBLE (8.30 R1/R2) ───────────────────────────────
         # The lowest ornament, whatever class its caller declared: skip,
         # never a wait; refused while the hour has shed it or a 429 on it
@@ -2528,6 +2580,7 @@ __all__ = [
     "PRIORITY_ESSENTIAL",
     "PRIORITY_ORNAMENT",
     "PRIORITY_SIGNAL",
+    "PRIORITY_INSTANT",
     "REACTION_ENDPOINT",
     "SlidingWindow",
     "TokenBucket",

@@ -134,6 +134,9 @@ class CardChat:
         #: ``(chat_id, message_id)`` of every deleteMessage that reached
         #: "Telegram", in order
         self.deletes: list[tuple[object, object]] = []
+        #: the message ids of each delete CALL (deleteMessage or the batch
+        #: deleteMessages), in order
+        self.delete_calls: list[list] = []
         #: ``(text, kwargs)`` of every sendMessage that reached "Telegram"
         self.sent: list[tuple[str, dict]] = []
 
@@ -191,6 +194,7 @@ class _PtbDouble:
         "send_message": ("sendMessage", 0),
         "edit_message_text": ("editMessageText", 1),
         "delete_message": ("deleteMessage", 0),
+        "delete_messages": ("deleteMessages", 0),
         "send_chat_action": ("sendChatAction", 0),
         "set_message_reaction": ("setMessageReaction", 0),
         "send_document": ("sendDocument", 0),
@@ -246,6 +250,7 @@ class _PtbDouble:
                 line["edits"] = line.get("edits", 0) + 1
             return True
         if name == "delete_message":
+            chat.delete_calls.append([kwargs.get("message_id")])
             chat.deletes.append((kwargs.get("chat_id"), kwargs.get("message_id")))
             card = chat.cards.get(kwargs.get("message_id"))
             if card is not None:
@@ -254,6 +259,19 @@ class _PtbDouble:
             if line is not None:
                 line["deleted"] = True
                 line.setdefault("deleted_t", chat.clock())
+            return True
+        if name == "delete_messages":
+            ids = list(kwargs.get("message_ids") or [])
+            chat.delete_calls.append(ids)
+            for mid in ids:
+                chat.deletes.append((kwargs.get("chat_id"), mid))
+                card = chat.cards.get(mid)
+                if card is not None:
+                    card["deleted"] = True
+                line = chat.lines.get(mid)
+                if line is not None:
+                    line["deleted"] = True
+                    line.setdefault("deleted_t", chat.clock())
             return True
         if name == "set_message_reaction":
             chat.reactions.setdefault(args[1], []).append(args[2])

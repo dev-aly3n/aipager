@@ -388,11 +388,10 @@ class TrackedSession:
     # Unlike pending_tool_started_at, a subagent's tool calls never touch
     # it, so a foreground agent's inner tools do not restart its age and a
     # detached background agent's tools never count as the parent's step.
-    # Read by the "⏳ Queued" line (bot/send_now.py, QUEUED_LINE_TOOL_AGE):
-    # a message queued behind a step this old waits long. Cleared by the
-    # parent's PostToolUse / PostToolUseFailure and at each prompt
-    # submission (an interrupted step never sends its PostToolUse). Never
-    # persisted (monotonic).
+    # No longer read since the "⏳ Queued" line goes up at once (2026-09-29);
+    # kept, with its bookkeeping, until that dead state is removed on its
+    # own. Cleared by the parent's PostToolUse / PostToolUseFailure and at
+    # each new turn. Never persisted (monotonic).
     parent_tool_started_at: float | None = None
     # Monotonic timestamp of the most recent PreCompact hook when the
     # matching post-compact SessionStart hasn't fired yet — compaction
@@ -690,12 +689,11 @@ class TrackedSession:
     # restart. Never persisted.
     queued_targets: list[dict] = field(default_factory=list, repr=False)
     # "Send now" (bot/send_now.py): the "⏳ Queued" reply line under each
-    # queued target still waiting when its line is due (QUEUED_LINE_DELAY,
-    # or sooner behind a long step: QUEUED_LINE_TOOL_AGE), keyed by
-    # the target's msg_id -> (chat_id, line message id). A line exists only
-    # for a msg_id still in `queued_targets`. Transient, never in
-    # _PERSIST_FIELDS: a restart has no queued targets, and the line ids a
-    # restart would orphan are owed on the REGISTRY
+    # queued target Claude still holds, sent as soon as its queue record is
+    # seen, keyed by the target's msg_id -> (chat_id, line message id). A
+    # line exists only for a msg_id still in `queued_targets`. Transient,
+    # never in _PERSIST_FIELDS: a restart has no queued targets, and the
+    # line ids a restart would orphan are owed on the REGISTRY
     # (`SessionRegistry.queued_line_deletes`), which outlives a /kill.
     queued_lines: dict[int, tuple[int, int]] = field(
         default_factory=dict, repr=False)
