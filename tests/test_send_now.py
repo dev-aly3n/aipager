@@ -1260,3 +1260,203 @@ def test_the_turns_own_message_arms_nothing(mk_bot, tmp_path, run_async):
         return dict(sess.queued_line_timers)
 
     assert run_async(scenario()) == {}
+
+
+# ── one line per session (live test 2026-09-29) ─────────────────────────
+
+def _two_held(mk_bot, tmp_path, *, two_held=True):
+    """Messages 2 and 3 queued; 3 is always in Claude's queue, 2 only when
+    *two_held*."""
+    bot, sess = _bot(mk_bot, tmp_path, text="the second one")
+    sess.queued_targets.append({"msg_id": 3, "chat_id": CHAT,
+                                "raw_text": "the third one",
+                                "driver_user_id": 12345})
+    lines = [{"type": "queue-operation", "operation": "enqueue",
+              "content": PREFIX + "the third one"}]
+    if two_held:
+        lines.insert(0, {"type": "queue-operation", "operation": "enqueue",
+                         "content": PREFIX + "the second one"})
+    with open(sess.transcript_path, "w") as fh:
+        fh.write("".join(json.dumps(e) + "\n" for e in lines))
+    return bot, sess
+
+
+def test_a_second_queued_message_gets_no_line_of_its_own(
+        mk_bot, tmp_path, run_async, instant):
+    bot, sess = _two_held(mk_bot, tmp_path)
+
+    async def scenario():
+        bot._arm_queued_lines(sess, [{"msg_id": 2}])
+        await _settle()
+        bot._arm_queued_lines(sess, [{"msg_id": 3}])
+        await _settle()
+
+    run_async(scenario())
+    replies = [c.kwargs["reply_to_message_id"]
+               for c in bot._app.bot.send_message.await_args_list]
+    assert replies == [2]
+    assert list(sess.queued_lines) == [2]
+
+
+def test_a_line_that_cannot_be_sent_hands_on_to_the_next_message(
+        mk_bot, tmp_path, run_async, instant):
+    """2 is not in Claude's queue (no evidence): its timer gives up, and
+    the line goes to 3 instead; 2 is not tried again."""
+    bot, sess = _two_held(mk_bot, tmp_path, two_held=False)
+
+    async def scenario():
+        bot._arm_queued_lines(sess, [{"msg_id": 2}])
+        for _ in range(5):
+            await _settle()
+
+    run_async(scenario())
+    replies = [c.kwargs["reply_to_message_id"]
+               for c in bot._app.bot.send_message.await_args_list]
+    assert replies == [3]
+
+
+def test_a_press_after_the_line_was_armed_stops_its_send(
+        mk_bot, tmp_path, run_async, instant):
+    bot, sess = _bot(mk_bot, tmp_path)
+
+    async def scenario():
+        bot._arm_queued_lines(sess, [{"msg_id": 2}])
+        sess.mark_send_now_pressed()
+        await _settle()
+
+    run_async(scenario())
+    bot._app.bot.send_message.assert_not_awaited()
+
+
+def test_a_line_landing_after_a_press_is_dropped_at_once(
+        mk_bot, tmp_path, run_async, instant):
+    """The send waited for its token and Send now was pressed meanwhile:
+    the line that lands is deleted, never left up."""
+    bot, sess = _bot(mk_bot, tmp_path)
+
+    async def _send(*_a, **_kw):
+        sess.mark_send_now_pressed()
+        return SimpleNamespace(message_id=7001)
+
+    bot._app.bot.send_message = AsyncMock(side_effect=_send)
+
+    async def scenario():
+        bot._arm_queued_lines(sess, [{"msg_id": 2}])
+        await _settle()
+
+    run_async(scenario())
+    bot._app.bot.send_message.assert_awaited_once()
+    assert sess.queued_lines == {}
+    bot._app.bot.delete_message.assert_awaited()
+
+
+def test_a_message_queued_after_a_press_still_gets_its_line(
+        mk_bot, tmp_path, run_async, instant):
+    bot, sess = _bot(mk_bot, tmp_path)
+    sess.mark_send_now_pressed()
+
+    async def scenario():
+        await asyncio.sleep(0.01)
+        bot._arm_queued_lines(sess, [{"msg_id": 2}])
+        await _settle()
+
+    run_async(scenario())
+    bot._app.bot.send_message.assert_awaited_once()
+    assert list(sess.queued_lines) == [2]
+
+
+def test_a_line_dropped_as_it_lands_moves_on_to_the_next_message(
+        mk_bot, tmp_path, run_async, instant):
+    """Review rev-iter1-001: line 2's send waited for its token while
+    Claude took 2 and message 3 was queued. Line 2 lands, is dropped (2 is
+    no longer held), and the line moves on to 3."""
+    bot, sess = _two_held(mk_bot, tmp_path)
+    ids = iter([7001, 7002])
+
+    async def _send(*_a, **kw):
+        if kw.get("reply_to_message_id") == 2:
+            with open(sess.transcript_path, "a") as fh:
+                fh.write(json.dumps({
+                    "type": "queue-operation", "operation": "remove",
+                    "reason": "absorbed_mid_turn",
+                    "content": PREFIX + "the second one"}) + "\n")
+        return SimpleNamespace(message_id=next(ids))
+
+    bot._app.bot.send_message = AsyncMock(side_effect=_send)
+
+    async def scenario():
+        bot._arm_queued_lines(sess, [{"msg_id": 2}])
+        for _ in range(5):
+            await _settle()
+
+    run_async(scenario())
+    replies = [c.kwargs["reply_to_message_id"]
+               for c in bot._app.bot.send_message.await_args_list]
+    assert replies == [2, 3]
+    assert list(sess.queued_lines) == [3]
+
+
+def test_a_second_line_landing_beside_another_is_dropped(
+        mk_bot, tmp_path, run_async, instant):
+    """Review rev-iter1-003: one line per session by construction."""
+    bot, sess = _bot(mk_bot, tmp_path)
+
+    async def _send(*_a, **_kw):
+        sess.queued_lines[3] = (CHAT, 6000)  # another line went up meanwhile
+        return SimpleNamespace(message_id=7001)
+
+    bot._app.bot.send_message = AsyncMock(side_effect=_send)
+
+    async def scenario():
+        bot._arm_queued_lines(sess, [{"msg_id": 2}])
+        await _settle()
+
+    run_async(scenario())
+    assert list(sess.queued_lines) == [3]
+    bot._app.bot.delete_message.assert_awaited()
+
+
+def test_no_line_is_sent_while_another_is_up(mk_bot, tmp_path, run_async):
+    bot, sess = _bot(mk_bot, tmp_path)
+    sess.queued_lines[3] = (CHAT, 6000)
+    run_async(bot._send_queued_line_checked(sess, 2))
+    bot._app.bot.send_message.assert_not_awaited()
+
+
+def test_a_message_queued_while_the_chord_is_out_still_gets_its_line(
+        mk_bot, tmp_path, run_async, instant, monkeypatch, mk_update):
+    """Review rev-iter2-001: the chord takes the queue as it stood (2); a
+    message queued while the keys were going out (3) is still in Claude's
+    queue afterwards and gets the line."""
+    bot, sess = _bot(mk_bot, tmp_path)
+    sess.queued_lines[2] = (CHAT, 7001)
+    sess.queued_targets[0]["line_armed"] = True
+
+    async def _run(args, stdin=b"", timeout=5):
+        if stdin == b"\x13":
+            with open(sess.transcript_path, "a") as fh:
+                fh.write(json.dumps({"type": "queue-operation",
+                                     "operation": "dequeue"}) + "\n")
+                fh.write(json.dumps({"type": "queue-operation",
+                                     "operation": "enqueue",
+                                     "content": PREFIX + "sent meanwhile"})
+                         + "\n")
+            sess.queued_targets.append({"msg_id": 3, "chat_id": CHAT,
+                                        "raw_text": "sent meanwhile",
+                                        "driver_user_id": 12345})
+            bot._arm_queued_lines(sess, [{"msg_id": 3}])
+        return True, ""
+
+    monkeypatch.setattr(inject, "_run", _run)
+    update = _cmd_update(mk_update)
+
+    async def scenario():
+        await bot._handle_now_cmd(update, MagicMock())
+        for _ in range(5):
+            await _settle()
+
+    run_async(scenario())
+    replies = [c.kwargs["reply_to_message_id"]
+               for c in bot._app.bot.send_message.await_args_list]
+    assert replies == [3]
+    assert list(sess.queued_lines) == [3]

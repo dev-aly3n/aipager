@@ -10,9 +10,9 @@ its ban ceiling with a busy card animating.
   it when the step reaches that age.
 - The line is BLOCKING: it waits for its token instead of being refused
   whenever the card has left the chat below the skip reserve (in the live
-  test the second queued message never got a line). A session's first
-  live line goes at answer priority; further lines while one shows are
-  ornaments, so a burst of queued messages never delays an answer.
+  test the second queued message never got a line). A session has one
+  line at a time (live test 2026-09-29: a line per message came 12-39 s
+  late at the chat's ceiling), at answer priority.
 - A due line that is not sent says why at INFO.
 
 Same harness as the other rows (conftest.py): the virtual loop, the real
@@ -451,12 +451,13 @@ def test_e_the_first_of_two_queued_messages_gets_a_line(replay, vloop, pty):
     assert l2 is not None and l2 - t2 <= 5.0, (t2, l2)
 
 
-def test_e_the_second_of_two_queued_messages_gets_a_line(replay, vloop, pty):
-    """The live test's shape (step 7 s old, a second message 9 s later).
-    The harness chat has room here, so this row pins the timing; the
-    refusal itself is pinned by ``test_e_a_chat_short_of_the_reserve...``."""
-    _t2, t3, _l2, l3, _live = _two_queued(replay, vloop)
-    assert l3 is not None and l3 - t3 <= 5.0, (t3, l3)
+def test_e_the_second_of_two_queued_messages_shares_the_first_line(
+        replay, vloop, pty):
+    """One line per session (live test 2026-09-29: a line per message
+    came 12-39 s late at the chat's ceiling): its button sends everything
+    queued, so the second message gets no line of its own."""
+    _t2, _t3, l2, l3, _live = _two_queued(replay, vloop)
+    assert l2 is not None and l3 is None, (l2, l3)
 
 
 def _short_at_due(r, vloop):

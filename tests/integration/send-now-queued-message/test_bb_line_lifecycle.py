@@ -525,39 +525,41 @@ def test_sc18_pickup_repeated_later_still_one_line(replay, vloop, pty):
     assert sum(1 for ln in r.chat.lines.values() if ln["reply_to"] == 2) == 1
 
 
-def _two_lines(r):
-    async def _go():
+def _sc19(r, vloop):
+    """Two messages queued: the session's one line goes under 2 (live test
+    2026-09-29: a line per message came 12-39 s late at the chat's
+    ceiling). When 2 is absorbed and 3 still waits, the line moves to 3."""
+    async def scenario():
+        w = r.worker()
         await r.turn(1, "first")
         await r.queue(2, "queued two")
         await asyncio.sleep(6)
         await r.queue(3, "queued three")
         l2 = await r.wait_line(2, timeout=15)
-        l3 = await r.wait_line(3, timeout=15)
-        assert l2 is not None and l3 is not None, "precondition: two lines"
-        return l2, l3
-    return _go()
-
-
-def _sc19(r, vloop):
-    async def scenario():
-        w = r.worker()
-        l2, l3 = await _two_lines(r)
+        assert l2 is not None, "precondition: the session's line, under 2"
+        three_before = r.chat.line_for(3)
         r.absorb("queued two")
-        await asyncio.sleep(15)
+        l3 = await r.wait_line(3, timeout=15)
         w.cancel()
-        return (r.chat.lines[l2["id"]]["deleted"],
-                r.chat.lines[l3["id"]]["deleted"])
+        return r.chat.lines[l2["id"]]["deleted"], three_before, l3
     return _run(vloop, scenario())
 
 
 def test_sc19_absorbing_two_deletes_twos_line(replay, vloop, pty):
-    two_gone, _ = _sc19(replay, vloop)
+    two_gone, _, _ = _sc19(replay, vloop)
     assert two_gone is True
 
 
-def test_sc19_absorbing_two_keeps_threes_line(replay, vloop, pty):
-    _, three_gone = _sc19(replay, vloop)
-    assert three_gone is False
+def test_sc19_three_has_no_line_of_its_own_while_twos_is_up(
+        replay, vloop, pty):
+    _, three_before, _ = _sc19(replay, vloop)
+    assert three_before is None
+
+
+def test_sc19_the_line_moves_to_three_when_two_is_absorbed(
+        replay, vloop, pty):
+    _, _, l3 = _sc19(replay, vloop)
+    assert l3 is not None and l3["deleted"] is False
 
 
 def test_ui_text_has_no_em_dash(replay, vloop, pty):

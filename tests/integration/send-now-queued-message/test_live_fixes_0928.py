@@ -44,17 +44,18 @@ def _run(vloop, coro):
 
 
 async def _three_lined(r) -> dict[int, dict]:
-    """Messages 2, 3 and 4 queued behind turn 1, each with its line up."""
+    """Messages 2, 3 and 4 queued behind turn 1, the session's one line up
+    under 2 (the oldest): ``{2: line}``."""
     await r.turn(1, "first")
-    lines = {}
-    # One at a time, as live: a further line waits for its budget token
-    # behind the first, so each is awaited before the next message.
-    for mid, text in ((2, "hello?"), (3, "hi"), (4, "hmmm")):
+    await r.queue(2, "hello?")
+    line = await r.wait_line(2, timeout=60)
+    assert line is not None, "precondition: no line under 2"
+    for mid, text in ((3, "hi"), (4, "hmmm")):
         await r.queue(mid, text)
-        line = await r.wait_line(mid, timeout=60)
-        assert line is not None, f"precondition: no line for {mid}"
-        lines[mid] = line
-    return lines
+        await asyncio.sleep(2)
+    assert r.chat.line_for(3) is None and r.chat.line_for(4) is None, (
+        "precondition: one line per session")
+    return {2: line}
 
 
 def _live_ids(r) -> set[int]:
@@ -88,7 +89,7 @@ def _live_replay(r, vloop, *, tap: bool = True, dequeues: int = 1,
         w = r.worker()
         lines = await _three_lined(r)
         if tap:
-            await r.tap(lines[4]["id"])
+            await r.tap(lines[2]["id"])
         # "At once": within the settle, while the step still runs (the
         # deletes are background tasks, each through the outbound gate).
         await asyncio.sleep(TAP_SETTLE)
@@ -109,9 +110,10 @@ def _live_replay(r, vloop, *, tap: bool = True, dequeues: int = 1,
     return _run(vloop, scenario())
 
 
-def test_live_tap_on_the_last_line_removes_every_line_at_once(rp, vloop):
+def test_live_tap_removes_the_line_at_once_and_no_other_comes(rp, vloop):
     lines, live_after_tap = _live_replay(rp, vloop)
     assert not live_after_tap & {ln["id"] for ln in lines.values()}
+    assert rp.chat.line_for(3) is None and rp.chat.line_for(4) is None
 
 
 def test_live_dequeued_message_is_not_run_again_as_a_new_turn(rp, vloop):
@@ -147,7 +149,7 @@ def test_dequeue_read_after_the_stop_is_the_ordinary_pop(rp, vloop):
     async def scenario():
         w = rp.worker()
         lines = await _three_lined(rp)
-        await rp.tap(lines[4]["id"])
+        await rp.tap(lines[2]["id"])
         await asyncio.sleep(TAP_SETTLE)
         rp.fate("dequeue")           # no await before the Stop is handled
         await rp.stop("answer one")
@@ -176,7 +178,7 @@ def test_dequeue_during_a_slow_ctrl_s_is_still_a_take(rp, vloop, monkeypatch):
         w = rp.worker()
         lines = await _three_lined(rp)
         monkeypatch.setattr(inject, "_run", _slow_ctrl_s)
-        await rp.tap(lines[4]["id"])
+        await rp.tap(lines[2]["id"])
         await asyncio.sleep(5)
         rp.absorb("hi")
         rp.absorb("hmmm")
@@ -199,7 +201,7 @@ def test_two_dequeues_take_the_two_oldest(rp, vloop):
     async def scenario():
         w = rp.worker()
         lines = await _three_lined(rp)
-        await rp.tap(lines[4]["id"])
+        await rp.tap(lines[2]["id"])
         await asyncio.sleep(0.2)
         rp.fate("dequeue")
         rp.fate("dequeue")
@@ -216,7 +218,7 @@ def test_press_stamp_clears_when_the_session_goes_idle(rp, vloop):
     async def scenario():
         w = rp.worker()
         lines = await _three_lined(rp)
-        await rp.tap(lines[4]["id"])
+        await rp.tap(lines[2]["id"])
         pressed = rp.sess.send_now_take_open()
         await rp.stop("answer")
         await asyncio.sleep(1)
@@ -239,35 +241,38 @@ def test_now_command_removes_every_line(rp, vloop):
     assert not _live_ids(rp) & {ln["id"] for ln in lines.values()}
 
 
-def test_already_taken_tap_removes_every_line(rp, vloop):
+def test_already_taken_tap_ends_the_lines_for_that_queue(rp, vloop):
     """Message 2 was absorbed; its stored button is tapped while 3 and 4
-    are still queued: nothing is pressed, and every line goes."""
+    are still queued: nothing is pressed, and no line comes for them."""
     async def scenario():
         w = rp.worker()
         lines = await _three_lined(rp)
         rp.absorb("hello?")
         await asyncio.sleep(0.05)
         toast = await rp.tap(lines[2]["id"])
-        await asyncio.sleep(TAP_SETTLE)
+        await asyncio.sleep(15)
         w.cancel()
-        return lines, toast
-    lines, toast = _run(vloop, scenario())
+        return toast
+    toast = _run(vloop, scenario())
     assert toast == "Already taken"
-    assert not _live_ids(rp) & {lines[3]["id"], lines[4]["id"]}
+    assert _live_ids(rp) == set()
+    assert rp.chat.line_for(3) is None and rp.chat.line_for(4) is None
 
 
-def test_control_absorbing_one_message_keeps_the_other_lines(rp, vloop):
-    """Without a Send now, only the taken message's line goes."""
+def test_absorbing_the_lines_message_moves_the_line_to_the_next(rp, vloop):
+    """Without a Send now, the line follows the queue: 2 absorbed while 3
+    and 4 wait, the line goes and comes back under 3 (the oldest)."""
     async def scenario():
         w = rp.worker()
         lines = await _three_lined(rp)
         rp.absorb("hello?")
-        await asyncio.sleep(TAP_SETTLE + 2)
+        l3 = await rp.wait_line(3, timeout=15)
         w.cancel()
-        return lines
-    lines = _run(vloop, scenario())
+        return lines, l3
+    lines, l3 = _run(vloop, scenario())
     assert lines[2]["id"] not in _live_ids(rp)
-    assert {lines[3]["id"], lines[4]["id"]} <= _live_ids(rp)
+    assert l3 is not None and l3["id"] in _live_ids(rp)
+    assert rp.chat.line_for(4) is None
 
 
 # ── R2: a line's delete goes at answer priority ────────────────────────────
@@ -280,7 +285,7 @@ def test_line_deletes_go_through_in_minimal_mode(rp, vloop, vlimiter):
         lines = await _three_lined(rp)
         _stand_minimal(vlimiter, vloop)
         assert vlimiter.minimal_mode(CHAT) is True
-        await rp.tap(lines[4]["id"])
+        await rp.tap(lines[2]["id"])
         await asyncio.sleep(TAP_SETTLE)
         w.cancel()
         return lines

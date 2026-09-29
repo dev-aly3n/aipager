@@ -60,8 +60,8 @@ def _scenario(r):
         await asyncio.sleep(7)
         await r.queue(2, "hello?")
         await r.queue(3, "hi?")
-        line = await r.wait_line(3, timeout=30)
-        assert line is not None, "precondition: no line under message 3"
+        line = await r.wait_line(2, timeout=30)
+        assert line is not None, "precondition: the session's line, under 2"
         await r.tap(line["id"])
         # Claude moves the ping to the background to deliver the messages.
         await r.hook(hook_event_name="PostToolUse", tool_name="Bash",

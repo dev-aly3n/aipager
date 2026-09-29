@@ -305,6 +305,9 @@ def test_sc26_tap_while_typing_keeps_the_line(rp, vloop, monkeypatch):
 # ── SC27-SC28: several lines, repeated taps ───────────────────────────────
 
 def _sc27(r, vloop):
+    """Two messages queued, the session's one line under 2, tapped. The
+    tap answered for the whole queue: no line comes for 3 afterwards, even
+    once 2 is taken."""
     async def scenario():
         w = r.worker()
         await r.turn(1, "first")
@@ -312,32 +315,27 @@ def _sc27(r, vloop):
         await asyncio.sleep(6)
         await r.queue(3, "queued three")
         l2 = await r.wait_line(2, timeout=15)
-        l3 = await r.wait_line(3, timeout=15)
-        assert l2 is not None and l3 is not None, "precondition: two lines"
+        assert l2 is not None, "precondition: the session's line, under 2"
         await r.tap(l2["id"])
         await asyncio.sleep(15)
-        after_tap = (r.chat.lines[l2["id"]]["deleted"],
-                     r.chat.lines[l3["id"]]["deleted"])
-        r.absorb("queued three")
-        await r.wait_deleted(l3["id"], DELETE_WINDOW)
-        after_absorb = r.chat.lines[l3["id"]]["deleted"]
+        two_gone = r.chat.lines[l2["id"]]["deleted"]
+        r.absorb("queued two")
+        await asyncio.sleep(15)
         w.cancel()
-        return after_tap, after_absorb
+        return two_gone, r.chat.line_for(3)
     return _run(vloop, scenario())
 
 
 def test_sc27_tap_deletes_the_tapped_line(rp, vloop):
-    (two_gone, _), _ = _sc27(rp, vloop)
+    two_gone, _ = _sc27(rp, vloop)
     assert two_gone is True
 
 
-def test_sc27_tap_also_deletes_the_other_line(rp, vloop):
-    """A Send now hands Claude everything it holds, so every line of the
-    session goes at the tap (operator's rule, live test 2026-09-28). That
-    an absorption alone removes only its own line is
-    test_live_fixes_0928::test_control_absorbing_one_message_keeps_the_other_lines."""
-    (_, three_gone), _ = _sc27(rp, vloop)
-    assert three_gone is True
+def test_sc27_no_line_comes_for_the_rest_of_the_tapped_queue(rp, vloop):
+    """A Send now hands Claude everything it holds (operator's rule, live
+    tests 2026-09-28/29): the line does not move on to 3."""
+    _, three_line = _sc27(rp, vloop)
+    assert three_line is None
 
 
 def _double_tap(r, vloop, gap: float):

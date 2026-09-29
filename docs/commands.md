@@ -618,6 +618,12 @@ is still waiting 10 seconds after Claude queued it
 
 A message Claude takes sooner gets no line, only 👀 then 👍.
 
+There is one such line per session, under the first message still
+waiting: one tap sends everything Claude holds, so a message you add
+while the line is up gets no line of its own. If Claude takes the
+message the line sits under while others still wait, the line moves on
+to the next of them.
+
 Tapping `⚡ Send now` (or sending `/now`) presses Claude Code's own
 send-now keys (Ctrl+X, then Ctrl+S) in that session. Claude then reads
 everything it has queued at once, not only the message you tapped.
@@ -630,29 +636,28 @@ example with Claude Code's background tasks turned off) send-now falls
 back to a plain interrupt of the running step. This is all Claude
 Code's own send-now behaviour, not something aipager decides.
 
-The tap answers `Sent to Claude now` and every queued line of that
-session disappears at once, since send-now hands Claude everything it
-holds; `/now` removes them the same way. If Claude cancels the running
+The tap answers `Sent to Claude now` and the line disappears at once,
+since send-now hands Claude everything it holds; `/now` removes it the
+same way, and no line comes for the messages that Send now sent (a
+message you send after it gets its own). If Claude cancels the running
 step instead of moving it to the background, it takes only the oldest
 queued message straight away and reads the rest at its next step; the
 answer goes under the message it took, and that message is not run a
-second time. If the
-keys take longer than a moment to reach Claude (a busy machine), the
-tap answers `Sending to Claude now` instead; the lines then disappear
-once they are in, or, if they could not be delivered, stays and reads
-`⏳ Queued - could not reach Claude, tap Send now to try again`, with
-its button, so you can tap again. The keys
-are only pressed when Claude's transcript shows it still holding the
-message; otherwise the tap answers `Already taken` and removes the
-lines. It is refused, with nothing pressed, while a permission or
-question prompt is open (`Answer the open question first`), while
-Claude may have just opened one that aipager has not shown yet (its
-events for a new turn are held while the previous turn's answer is
-still being delivered: `Busy, try again in a moment`), and while
-aipager is in the middle of typing another message into the session
-(`Busy typing a prompt, try again in a moment`). Anyone who may send
-messages to the session can use the button and `/now`; a `read_only`
-member cannot.
+second time. If the keys take longer than a moment to reach Claude (a
+busy machine), the tap answers `Sending to Claude now` instead; the line
+then disappears once they are in, or, if they could not be delivered,
+stays and reads `⏳ Queued - could not reach Claude, tap Send now to try
+again`, with its button, so you can tap again. The keys are only pressed
+when Claude's transcript shows it still holding the message; otherwise
+the tap answers `Already taken` and removes the line. It is refused,
+with nothing pressed, while a permission or question prompt is open
+(`Answer the open question first`), while Claude may have just opened
+one that aipager has not shown yet (its events for a new turn are held
+while the previous turn's answer is still being delivered: `Busy, try
+again in a moment`), and while aipager is in the middle of typing
+another message into the session (`Busy typing a prompt, try again in a
+moment`). Anyone who may send messages to the session can use the button
+and `/now`; a `read_only` member cannot.
 
 The line disappears on its own when its message leaves Claude's queue:
 Claude takes it (folded into the running turn, handed to a background
