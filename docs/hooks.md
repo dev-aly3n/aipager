@@ -76,6 +76,16 @@ Tool finished. aipager appends a one-line summary to the session's
 `tool_history` (capped at 200 entries). On failure, the busy message
 header changes to "⚠️ Tool failed" until the next event.
 
+A `Bash` call Claude Code moved to the background reports a
+`backgroundTaskId` in its `tool_response`. aipager then tracks it as a
+running background shell (main loop only: a call carrying `agent_id` is
+a subagent's) until its end is seen: a `<task-notification>` with a
+`<status>` (in the wake-up prompt, or in the transcript's
+`queue-operation` line when it arrives mid-turn), a `TaskStop` /
+`KillShell` of its id, the session ending, or the max age
+(`AIPAGER_BG_SHELL_MAX_TRACK`, seconds, default 7200). See
+[commands](commands.md) for what the card and the pinned bar show.
+
 ### `PermissionRequest` (and the legacy `permission_prompt`)
 
 The primary, first-arriving signal for an ordinary interactive

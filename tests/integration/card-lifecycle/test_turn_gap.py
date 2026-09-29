@@ -647,3 +647,17 @@ def test_a_held_reply_timeout_follows_its_permission_prompt(replay, vloop):
     assert sess.status == Status.INTERACTIVE
     assert sess.pending_permission is not None
     assert sess.pending_permission.get("hook_reply") is None
+
+
+@pytest.mark.parametrize("prompt,held", [
+    ("<task-notification><task-id>b1</task-id>"
+     "<status>completed</status></task-notification>", True),
+    ("please run it", False),
+    ("", False),
+])
+def test_a_wakeup_waits_for_the_turn_state(prompt, held):
+    """Claude sends a <task-notification> wake-up only after the turn's
+    own Stop, so it waits behind that turn's held hooks; a human prompt
+    never waits."""
+    assert hook_receiver_mod._is_turn_activity(
+        "UserPromptSubmit", {"prompt": prompt}) is held
