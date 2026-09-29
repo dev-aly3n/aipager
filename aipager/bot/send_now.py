@@ -97,6 +97,14 @@ _queued_line_sleep = asyncio.sleep
 # hair under QUEUED_LINE_TOOL_AGE cannot make it spin.
 _QUEUED_LINE_MIN_WAIT: float = 0.05
 
+# A line due at once (behind a long step) is due within a millisecond of
+# the pick-up, which can be before Claude has written the message's
+# `enqueue` queue record: the evidence check then finds nothing (live test
+# 2026-09-29: the first and last of four queued messages got no line). The
+# timer re-checks after each of these pauses (about 2 s in all) before it
+# gives up; each re-check reads the transcript once.
+_QUEUED_LINE_EVIDENCE_PAUSES: tuple[float, ...] = (0.2, 0.3, 0.5, 1.0)
+
 
 def _queued_line_wait(sess: TrackedSession, waited: float) -> float:
     """Seconds the line timer should still sleep, ``<= 0`` once the line
@@ -167,8 +175,10 @@ class SendNowMixin:
                 self._queued_line_timer(sess, msg_id))
 
     async def _queued_line_timer(self, sess: TrackedSession, msg_id: int) -> None:
-        """Wait until the line is due (:func:`_queued_line_wait`), then send
-        it if the message is still held. Never retries: a missed line is
+        """Wait until the line is due (:func:`_queued_line_wait`), give
+        Claude a moment to write the message's queue record if it has not
+        yet (:meth:`_await_queue_evidence`), then send the line if the
+        message is still held. Nothing more after that: a missed line is
         cosmetic, and ``/now`` is always there."""
         me = asyncio.current_task()
         try:
@@ -176,6 +186,7 @@ class SendNowMixin:
             while (wait := _queued_line_wait(sess, waited)) > 0:
                 await _queued_line_sleep(wait)
                 waited += wait
+            await self._await_queue_evidence(sess, msg_id)
             # Past the wait, the send runs shielded: cancelled half-way it
             # could land with nobody recording its id, and that line would
             # never be deleted. It re-checks membership itself once sent.
@@ -186,6 +197,22 @@ class SendNowMixin:
         finally:
             if sess.queued_line_timers.get(msg_id) is me:
                 del sess.queued_line_timers[msg_id]
+
+    async def _await_queue_evidence(self, sess: TrackedSession,
+                                    msg_id: int) -> None:
+        """Return once Claude's transcript shows *msg_id* queued, or it no
+        longer needs a line (taken, or one is up), or the re-checks
+        (``_QUEUED_LINE_EVIDENCE_PAUSES``) run out. The send that follows
+        makes the final check and logs the reason if there is still no
+        evidence."""
+        for pause in _QUEUED_LINE_EVIDENCE_PAUSES:
+            target = next((t for t in sess.queued_targets
+                           if t.get("msg_id") == msg_id), None)
+            if target is None or msg_id in sess.queued_lines:
+                return
+            if held_by_claude(sess, [target]):
+                return
+            await _queued_line_sleep(pause)
 
     async def _send_queued_line(self, sess: TrackedSession, msg_id: int) -> None:
         """Send the line under *msg_id* if every check passes. Never raises."""

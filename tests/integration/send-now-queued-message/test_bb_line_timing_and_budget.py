@@ -30,6 +30,7 @@ import logging
 import pytest
 
 from aipager import config
+from aipager.bot import send_now
 from aipager import preferences as prefs
 from aipager.bot.flood import MUTE
 from aipager.state import Status
@@ -549,7 +550,9 @@ def test_g_no_evidence_is_logged_at_info(replay, vloop, pty, caplog):
         w = r.worker()
         await r.turn(1, "first")
         t0 = await r.queue(2, "queued two", evidence=False)
-        await _until(vloop, t0 + 12.0)
+        # Due at 10 s; it gives up only after the evidence re-checks.
+        await _until(vloop, t0 + 12.0
+                     + sum(send_now._QUEUED_LINE_EVIDENCE_PAUSES))
         w.cancel()
 
     _run(vloop, scenario())
