@@ -15,6 +15,11 @@ how many prompts sit behind a session's turn. No registry, subprocess or
 network access is added; the file-shaping contract above still holds for
 everything else in this module.
 
+A third exception: a live session's context %, cost and model come from
+its status-line file (``statusline_file.latest_stats``, one small read per
+row), because the daemon's in-memory copy is empty after a restart and
+zeroed at a turn's start.
+
 A second exception: ``last_message`` stats a live session's transcript
 and tail-reads it when it changed (roadmap 8.34), cached by (size, mtime)
 in ``transcript.cached_last_assistant_preview``.
@@ -34,6 +39,7 @@ from typing import TYPE_CHECKING, Any
 
 from aipager.policy_snapshot import combined_queue_depth
 from aipager.state import QUEUE_CAP, Status
+from aipager.statusline_file import latest_stats
 from aipager.transcript import cached_last_assistant_preview
 
 if TYPE_CHECKING:
@@ -201,6 +207,7 @@ def session_summary(sess: "TrackedSession", now: float) -> dict[str, Any]:
     """
     status, waiting_kind, summary = _derive_status(sess)
     last_active = round(now - sess.last_hook_at) if sess.last_hook_at else None
+    stats = latest_stats(sess)
     return {
         "label": sess.label,
         "status": status,
@@ -208,9 +215,9 @@ def session_summary(sess: "TrackedSession", now: float) -> dict[str, Any]:
         "waiting_summary": (
             grid_waiting_summary(summary) if status == _WAITING_STATUS else None
         ),
-        "model": sess.model_name or "",
-        "context_pct": sess.last_token_pct or 0,
-        "cost_usd": round(sess.last_cost_usd or 0.0, 4),
+        "model": stats["model"],
+        "context_pct": stats["context_pct"],
+        "cost_usd": stats["cost_usd"],
         "last_active_seconds_ago": last_active,
         "project": os.path.basename(sess.cwd) if sess.cwd else "",
     }
@@ -370,14 +377,15 @@ def session_detail(
     if sess.busy_started_at and sess.status in (Status.BUSY, Status.INTERACTIVE):
         busy_elapsed = round(now - sess.busy_started_at)
     queue_depth = combined_queue_depth(sess)
+    stats = latest_stats(sess)
     detail = {
         "label": sess.label,
         "status": status,
         "waiting_kind": waiting_kind,
         "waiting_summary": waiting_summary,
-        "model": sess.model_name or "",
-        "context_pct": sess.last_token_pct or 0,
-        "cost_usd": round(sess.last_cost_usd or 0.0, 4),
+        "model": stats["model"],
+        "context_pct": stats["context_pct"],
+        "cost_usd": stats["cost_usd"],
         "cwd": sess.cwd or "",
         "last_active_seconds_ago": last_active,
         "busy_elapsed_seconds": busy_elapsed,

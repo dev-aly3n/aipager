@@ -66,6 +66,17 @@ def _forget_tasks_a_test_left_running():
 
 
 @pytest.fixture(autouse=True)
+def _isolate_status_line_files(tmp_path, monkeypatch):
+    """Point every status-line file read (``aipager.statusline_file``) at
+    this test's tmp dir, so no test reads a live session's
+    ``/tmp/claude-status-<session>.json``. A test that wants a file writes
+    it under ``statusline_file.STATUS_DIR``."""
+    d = tmp_path / "status-line"
+    d.mkdir()
+    monkeypatch.setattr("aipager.statusline_file.STATUS_DIR", str(d))
+
+
+@pytest.fixture(autouse=True)
 def _isolate_audit_log(tmp_path, monkeypatch):
     """Redirect the audit log to tmp for every test, so exercising the
     bot's audit path never appends to the operator's real

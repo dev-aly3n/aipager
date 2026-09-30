@@ -19,7 +19,7 @@ import socket
 import time
 from pathlib import Path
 
-from aipager import bg_shells
+from aipager import bg_shells, statusline_file
 from aipager.config import (
     HOOK_DEDUP_WINDOW_SECONDS,
     RICH_SUMMARIES,
@@ -136,31 +136,14 @@ def _read_statusline(session_name: str) -> dict | None:
     We modified the command to also write this JSON to a per-session file.
     This gives us accurate cumulative token counts — same source the terminal uses.
     """
-    status_file = Path(f"/tmp/claude-status-{session_name}.json")
-    try:
-        data = json.loads(status_file.read_text())
-    except (FileNotFoundError, PermissionError, json.JSONDecodeError):
+    sl = statusline_file.read_status_line(session_name)
+    if sl is None:
         return None
-
-    ctx = data.get("context_window", {})
-    total_in = ctx.get("total_input_tokens", 0)
-    total_out = ctx.get("total_output_tokens", 0)
-    pct = ctx.get("used_percentage")
-    remaining = ctx.get("remaining_percentage")
-
-    # Compute context_pct from whatever's available
-    if pct is not None:
-        context_pct = round(pct)
-    elif remaining is not None:
-        context_pct = round(100 - remaining)
-    else:
-        context_pct = 0
-
     return {
-        "context_pct": context_pct,
-        "total_input": total_in,
-        "total_output": total_out,
-        "total_tokens": total_in + total_out,
+        "context_pct": sl.context_pct,
+        "total_input": sl.total_input,
+        "total_output": sl.total_output,
+        "total_tokens": sl.total_input + sl.total_output,
     }
 
 
@@ -1307,6 +1290,8 @@ class HookReceiver:
             ctx_pct = int(round(msg.get("context_pct") or 0))
             total_out = msg.get("total_output") or 0
             sess.last_token_pct = ctx_pct
+            sess.statusline_ctx_pct = ctx_pct
+            sess.statusline_at = time.time()
             model = msg.get("model_name", "")
             if model and model != sess.model_name:
                 sess.model_name = model

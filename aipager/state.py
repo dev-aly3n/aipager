@@ -309,6 +309,14 @@ class TrackedSession:
     # "$ this turn" instead of lifetime cost.
     last_cost_usd: float = 0.0
     cost_baseline: float | None = None
+    # When the daemon last applied a statusLine update (wall clock) and the
+    # context % it carried. Kept apart from `last_token_pct`, which a new
+    # turn zeroes for the busy card, so displays can tell the in-memory
+    # numbers from the status-line file's and take the newer
+    # (statusline_file.latest_stats). Not persisted: after a restart the
+    # file is the only source.
+    statusline_at: float = 0.0
+    statusline_ctx_pct: int = 0
     # Subagent count THIS TURN (item 4.5) — increment per subagent_start,
     # reset on BUSY transition.
     subagent_count_this_turn: int = 0

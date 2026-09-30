@@ -224,11 +224,8 @@ def test_status_multiscope_empty_scope_skips_discovery(
 
 def test_read_status_file_missing_returns_none(mk_bot, tmp_path, monkeypatch):
     bot = mk_bot()
-    # Path lookup uses /tmp; redirect via monkeypatch
-    _real_path = bot.__class__.__module__  # noqa
-    from aipager.bot import handlers
-    monkeypatch.setattr(handlers, "Path",
-                        lambda p: tmp_path / p.split("/")[-1])
+    from aipager import statusline_file
+    monkeypatch.setattr(statusline_file, "STATUS_DIR", str(tmp_path))
     assert bot._read_status_file("missing") is None
 
 
@@ -239,10 +236,8 @@ def test_read_status_file_parses_used_percentage(mk_bot, tmp_path, monkeypatch):
         "cost": {"total_cost_usd": 0.42},
         "model": {"display_name": "Sonnet"},
     }))
-    from aipager.bot import handlers
-    _real = handlers.Path
-    monkeypatch.setattr(handlers, "Path",
-                        lambda p: _real(tmp_path / p.split("/")[-1]))
+    from aipager import statusline_file
+    monkeypatch.setattr(statusline_file, "STATUS_DIR", str(tmp_path))
     bot = mk_bot()
     out = bot._read_status_file("jim")
     assert out["ctx_pct"] == 50
@@ -257,10 +252,8 @@ def test_read_status_file_uses_remaining_when_no_used(mk_bot, tmp_path, monkeypa
         "cost": {},
         "model": {},
     }))
-    from aipager.bot import handlers
-    _real = handlers.Path
-    monkeypatch.setattr(handlers, "Path",
-                        lambda p: _real(tmp_path / p.split("/")[-1]))
+    from aipager import statusline_file
+    monkeypatch.setattr(statusline_file, "STATUS_DIR", str(tmp_path))
     bot = mk_bot()
     out = bot._read_status_file("jim")
     assert out["ctx_pct"] == 25  # 100 - 75

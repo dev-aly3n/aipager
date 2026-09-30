@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from aipager import statusline_file
 from aipager.dtach import hook_receiver as hr
 from aipager.state import SessionRegistry, Status
 
@@ -78,14 +79,7 @@ def test_summarize_tool_ask_user_question_no_questions():
 
 
 def test_read_statusline_missing_file_returns_none(tmp_path, monkeypatch):
-    # Redirect the /tmp status-file lookup into tmp_path via a Path
-    # *factory* (matching the sibling tests). NB: do not subclass
-    # pathlib.Path here — subclassing is unsupported on Python 3.10/3.11
-    # (`AttributeError: ... has no attribute '_flavour'`); a factory that
-    # returns a real Path works on every version.
-    _real = hr.Path
-    monkeypatch.setattr(hr, "Path",
-                        lambda p: _real(tmp_path / p.split("/")[-1]))
+    monkeypatch.setattr(statusline_file, "STATUS_DIR", str(tmp_path))
     assert hr._read_statusline("missing") is None
 
 
@@ -98,9 +92,7 @@ def test_read_statusline_parses_used_percentage(tmp_path, monkeypatch):
             "total_output_tokens": 200,
         },
     }))
-    _real = hr.Path
-    monkeypatch.setattr(hr, "Path",
-                        lambda p: _real(tmp_path / p.split("/")[-1]))
+    monkeypatch.setattr(statusline_file, "STATUS_DIR", str(tmp_path))
     out = hr._read_statusline("jim")
     assert out is not None
     assert out["context_pct"] == 33
@@ -113,9 +105,7 @@ def test_read_statusline_falls_back_to_remaining(tmp_path, monkeypatch):
     f.write_text(json.dumps({
         "context_window": {"remaining_percentage": 75},
     }))
-    _real = hr.Path
-    monkeypatch.setattr(hr, "Path",
-                        lambda p: _real(tmp_path / p.split("/")[-1]))
+    monkeypatch.setattr(statusline_file, "STATUS_DIR", str(tmp_path))
     assert hr._read_statusline("jim")["context_pct"] == 25
 
 

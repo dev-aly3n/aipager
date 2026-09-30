@@ -2042,6 +2042,7 @@ class MiniAppServer:
 
     def _build_status_payload(self, scope_chat_id: int) -> dict:
         from aipager import __version__
+        from aipager.statusline_file import latest_stats
 
         now = time.monotonic()
         sessions = []
@@ -2049,12 +2050,13 @@ class MiniAppServer:
             last_active = (
                 round(now - sess.last_hook_at) if sess.last_hook_at else None
             )
+            stats = latest_stats(sess)
             sessions.append({
                 "label": sess.label,
                 "status": sess.status.name.lower(),
-                "model": sess.model_name or "",
-                "context_pct": sess.last_token_pct or 0,
-                "cost_usd": round(sess.last_cost_usd or 0.0, 4),
+                "model": stats["model"],
+                "context_pct": stats["context_pct"],
+                "cost_usd": stats["cost_usd"],
                 "last_active_seconds_ago": last_active,
             })
 

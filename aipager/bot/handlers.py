@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import asyncio
 import html as html_mod
-import json
 import logging
 import os
 import shlex
@@ -36,6 +35,7 @@ from telegram.ext import (
 
 from aipager.dtach import inject
 
+from aipager import statusline_file
 from aipager.bot import new_flow, reactions, session_parity
 from aipager.bot.session_ops import (
     await_model_change,
@@ -767,24 +767,14 @@ class CommandHandlersMixin:
     @staticmethod
     def _read_status_file(session_name: str) -> dict | None:
         """Read cost and context from the statusLine JSON file."""
-        try:
-            data = json.loads(Path(f"/tmp/claude-status-{session_name}.json").read_text())
-        except (FileNotFoundError, PermissionError, json.JSONDecodeError):
+        sl = statusline_file.read_status_line(session_name)
+        if sl is None:
             return None
-        ctx = data.get("context_window", {})
-        pct = ctx.get("used_percentage")
-        remaining = ctx.get("remaining_percentage")
-        if pct is not None:
-            ctx_pct = round(pct)
-        elif remaining is not None:
-            ctx_pct = round(100 - remaining)
-        else:
-            ctx_pct = 0
         return {
-            "ctx_pct": ctx_pct,
-            "cost": data.get("cost", {}).get("total_cost_usd", 0),
-            "model": data.get("model", {}).get("display_name", ""),
-            "total_output": ctx.get("total_output_tokens", 0),
+            "ctx_pct": sl.context_pct,
+            "cost": sl.cost_usd,
+            "model": sl.model,
+            "total_output": sl.total_output,
         }
 
     async def _handle_stop_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:

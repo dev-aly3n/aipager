@@ -6,7 +6,7 @@ import argparse
 import json
 import socket
 
-from aipager import status
+from aipager import status, statusline_file
 
 
 def _ns(**kw):
@@ -339,9 +339,7 @@ def test_render_plain_with_total_cost(capsys):
 def test_read_statusline_used_percentage_in_data(tmp_path, monkeypatch):
     f = tmp_path / "claude-status-jim.json"
     f.write_text(json.dumps({"context_window": {"used_percentage": 33.4}}))
-    _real = status.Path
-    monkeypatch.setattr(status, "Path",
-                        lambda p: _real(tmp_path / p.split("/")[-1]))
+    monkeypatch.setattr(statusline_file, "STATUS_DIR", str(tmp_path))
     out = status._read_statusline("jim")
     # status._read_statusline returns raw dict; assertions depend on impl
     assert "context_window" in out
@@ -350,8 +348,6 @@ def test_read_statusline_used_percentage_in_data(tmp_path, monkeypatch):
 def test_read_statusline_with_remaining_pct(tmp_path, monkeypatch):
     f = tmp_path / "claude-status-jim.json"
     f.write_text(json.dumps({"context_window": {"remaining_percentage": 60}}))
-    _real = status.Path
-    monkeypatch.setattr(status, "Path",
-                        lambda p: _real(tmp_path / p.split("/")[-1]))
+    monkeypatch.setattr(statusline_file, "STATUS_DIR", str(tmp_path))
     out = status._read_statusline("jim")
     assert "context_window" in out

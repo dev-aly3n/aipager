@@ -26,6 +26,7 @@ import socket
 import time
 from pathlib import Path
 
+from aipager import statusline_file
 from aipager.config import BOT_TOKEN, CHAT_ID, SESSION_STATE_FILE, SOCKET_PATH
 from aipager.flood_policy import (
     bans_within,
@@ -48,11 +49,7 @@ def _read_state() -> dict:
 
 def _read_statusline(session_name: str) -> dict:
     """Return parsed `/tmp/claude-status-{session}.json` or {}."""
-    path = Path(f"/tmp/claude-status-{session_name}.json")
-    try:
-        return json.loads(path.read_text())
-    except (FileNotFoundError, PermissionError, json.JSONDecodeError, OSError):
-        return {}
+    return statusline_file.read_raw(session_name) or {}
 
 
 def _live_sessions() -> set[str]:
