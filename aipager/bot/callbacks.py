@@ -497,12 +497,51 @@ class CallbackDispatchMixin:
                 await self._safe_answer(query, f"[{sess.label}] is not busy.")
             return
 
+        if action.startswith("ststop") and action[6:].isdigit():
+            # /status's ⏹ Stop (4.2): stop the turn the list showed, then
+            # redraw the list in place (never overwrite it with one line).
+            sess = self.registry.get(session_name)
+            if not sess:
+                await self._safe_answer(query, "Session not found")
+                return
+            chat = calling_chat_id(update)
+            if not self._can_prompt_user(
+                    getattr(getattr(query, "from_user", None), "id", None), chat):
+                await self._safe_answer(query, "You can't stop this session.")
+                return
+            if sess.scope_chat_id and chat is not None and sess.scope_chat_id != chat:
+                await self._safe_answer(query, "That session isn't running here.")
+                return
+            if not sess.tap_is_for_this_turn(None, turn=int(action[6:])):
+                await self._safe_answer(
+                    query, f"{sess.label} moved on to new work - see /status again")
+            else:
+                outcome = await self._stop_session_core(sess)
+                ack = f"⏹ Stopped {sess.label}" if outcome.ok else f"{sess.label} is not working"
+                if outcome.ok and outcome.dropped:
+                    # The count stays visible (tester-iter1-001 of /stop).
+                    ack += (f" ({outcome.dropped} queued message"
+                            f"{'s' if outcome.dropped > 1 else ''} discarded)")
+                await self._safe_answer(query, ack)
+            text, kb = self._render_status_list(calling_chat_id(update), update)
+            try:
+                await edit_text(query, text, parse_mode="HTML", reply_markup=kb)
+            except Exception:
+                pass
+            return
+
         if action.startswith("now:"):
             # The "⚡ Send now" button under a queued message
             # (bot/send_now.py). The message's id travels in the data: a tap
             # acts only while Claude still holds THAT message.
             await self._handle_send_now_tap(
                 update, query, session_name, action.split(":", 1)[1])
+            return
+
+        if action in ("kill", "kill-confirm") and not self._can_prompt_user(
+                getattr(getattr(query, "from_user", None), "id", None),
+                calling_chat_id(update)):
+            await self._safe_answer(query, "You can't end sessions here.")
             return
 
         if action == "kill":
@@ -705,29 +744,40 @@ class CallbackDispatchMixin:
             await self._dispatch_settings_action(update, query, action)
             return
 
+        if session_name == "_" and action in ("st:list", "st:ended"):
+            # /status's own navigation (4.2): back to the list, or the
+            # Ended view. Re-rendered from state on every tap.
+            chat = calling_chat_id(update)
+            text, kb = (self._render_status_list(chat, update)
+                        if action == "st:list" else self._render_ended_view(chat))
+            try:
+                await edit_text(query, text, parse_mode="HTML", reply_markup=kb)
+            except Exception:
+                pass
+            return
+
         if action == "clear_gone":
-            # Hide GONE sessions from /status. Preserves resume
-            # metadata (claude_session_id, cwd) so /resume keeps
-            # working — see TrackedSession.hidden_from_status.
+            # Hide THIS chat's GONE sessions from /status (never another
+            # chat's). Preserves resume metadata (claude_session_id, cwd)
+            # so /resume keeps working — see TrackedSession.hidden_from_status.
+            chat = calling_chat_id(update)
             hidden = []
-            for name, sess in list(self.registry.all_sessions().items()):
+            for name, sess in list(self.registry.all_sessions(chat).items()):
                 if sess.status == Status.GONE and not sess.hidden_from_status:
                     sess.hidden_from_status = True
                     hidden.append(sess.label)
             if hidden:
                 self.registry.mark_dirty()
-                await self._safe_answer(query, f"Hidden {len(hidden)} session(s)")
-                try:
-                    await edit_text(query,
-                        f"Hidden from /status: {', '.join(hidden)}\n"
-                        f"<i>Still available in /resume.</i>",
-                        parse_mode="HTML",
-                    )
-                except Exception:
-                    pass
+                await self._safe_answer(
+                    query, f"Cleared {len(hidden)} from /status (still in /resume)")
                 log.info("Hid gone sessions from /status: %s", hidden)
             else:
-                await self._safe_answer(query, "No gone sessions to hide")
+                await self._safe_answer(query, "Nothing to clear")
+            text, kb = self._render_status_list(chat, update)
+            try:
+                await edit_text(query, text, parse_mode="HTML", reply_markup=kb)
+            except Exception:
+                pass
             return
 
         # ---- /perms callbacks -----------------------------------------

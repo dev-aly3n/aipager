@@ -145,9 +145,12 @@ class KeyboardMixin:
             rows = []
             if labels:
                 rows = self._build_button_rows(labels)
-            rows.append([KeyboardButton("status"), KeyboardButton("stop"), KeyboardButton("kill")])
+            # `new` where `kill` was (4.7, 2026-09-30): the common action
+            # up front, not a destructive one beside Stop. Ending a session
+            # is in /status → ⋮, and `kill` still works when typed.
+            rows.append([KeyboardButton("status"), KeyboardButton("stop"), KeyboardButton("new")])
             # Rides along on the existing nav row rather than claiming one
-            # of its own: three across matches the status/stop/kill row
+            # of its own: three across matches the status/stop/new row
             # above it, and the keyboard is already the busiest surface in
             # the chat.
             nav = [KeyboardButton(TEMPLATES_BUTTON), KeyboardButton(COMMANDS_BUTTON)]

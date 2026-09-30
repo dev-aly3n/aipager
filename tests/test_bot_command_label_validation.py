@@ -24,8 +24,8 @@ TELEGRAM_COMMAND = re.compile(r"^[a-z0-9_]{1,32}$")
 
 # Every static command the menu must keep offering no matter how broken
 # the session labels are.
-STATIC = {"status", "stop", "kill", "new", "resume", "perms", "settings",
-          "clearqueue", "whoami", "restart", "rename", "delete", "diff"}
+# The menu's fixed part since the 2026-09-30 redesign (4.6).
+STATIC = {"new", "status", "stop", "now", "resume", "perms", "settings", "help"}
 
 
 def _commands(labels):

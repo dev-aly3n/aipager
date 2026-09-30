@@ -63,7 +63,10 @@ def _two_session_bot(mk_bot, helpers):
 def _status_menu_cb_for(helpers, bot, chat_id, cbs, sess_name):
     """The raw ``:menu``-suffixed callback_data whose destination is
     ``sess_name``, as actually rendered by ``/status``."""
-    menu_cbs = [c for c in cbs if helpers.destinations(bot, chat_id, [c])[0][1] == "menu"]
+    # Session buttons only: /status also carries New and Ended (2026-09-30).
+    session_cbs = [c for c in cbs if c.startswith("_:sx:")]
+    menu_cbs = [c for c in session_cbs
+                if helpers.destinations(bot, chat_id, [c])[0][1] == "menu"]
     for c in menu_cbs:
         dest, verb = helpers.destinations(bot, chat_id, [c])[0]
         if dest == sess_name:

@@ -75,6 +75,7 @@ from aipager.bot.transport import (
     edit_message,
     edit_text_at,
     reply_text,
+    send_text,
 )
 from aipager.config import (
     APP_BUTTON,
@@ -168,7 +169,8 @@ _LOOKING_COMMANDS = frozenset({"new", "status", "start", "help", "whoami",
 #: Buttons that only look: the card's own, /settings (its New sessions
 #: page is this card's own defaults; per-session preferences), and paging
 #: through the resume list.
-_LOOKING_BUTTONS = ("_:nw:", "_:set:", "_:spref", "_:resume_page:", "_:resume_noop")
+_LOOKING_BUTTONS = ("_:nw:", "_:set:", "_:spref", "_:resume_page:", "_:resume_noop",
+                    "_:st:")
 
 
 def _bot_username(bot: TelegramBot) -> str:
@@ -466,6 +468,35 @@ async def start_wizard(
     tg_user = update.effective_user
     user_id = tg_user.id if tg_user is not None else None
 
+    async def _reply(text, kb):
+        return await reply_text(update.message, text, parse_mode="HTML", reply_markup=kb)
+    await _open_card(bot, chat_id, user_id, _reply, error=error)
+
+
+async def open_card_from_tap(bot: TelegramBot, update: Update, query: CallbackQuery) -> None:
+    """``🆕 New`` on /status or /start (``_:nw:open``): the same Name card
+    as a bare ``/new``, sent as a new message and owned by the person who
+    tapped, who must be allowed to prompt here."""
+    chat_id = calling_chat_id(update)
+    actor = _actor_id(update, query)
+    if chat_id is None:
+        await bot._safe_answer(query, "Invalid callback")
+        return
+    if not bot._can_prompt_user(actor, chat_id):
+        await bot._safe_answer(query, "You can't start sessions here.", show_alert=True)
+        return
+    await bot._safe_answer(query)
+
+    async def _send(text, kb):
+        return await send_text(bot._app.bot, chat_id, text, parse_mode="HTML",
+                               reply_markup=kb)
+    await _open_card(bot, chat_id, actor, _send)
+
+
+async def _open_card(bot: TelegramBot, chat_id: int, user_id: int | None, send,
+                     *, error: str = "") -> None:
+    """Send the Name card with *send* and make it the chat's open card,
+    owned by *user_id* (a second one replaces the first)."""
     store = _pending_store(bot)
     # The same person's rename left waiting for its new name would take
     # the message after this card's name: their newest question wins.
@@ -491,8 +522,8 @@ async def start_wizard(
         **resolve_new_session_settings(bot, chat_id, user_id),
     }
     text, kb = _render_name_card(pending, error=error)
-    sent = await reply_text(update.message, text, parse_mode="HTML", reply_markup=kb)
-    if sent is MUTED:
+    sent = await send(text, kb)
+    if sent is MUTED or getattr(sent, "message_id", None) is None:
         # The chat is flood-muted: the card never went out, so nothing may
         # swallow the next message as its name.
         return
@@ -988,6 +1019,9 @@ async def handle_callback(
         return True
     if session_name != "_" or not action.startswith("nw:"):
         return False
+    if action == "nw:open":
+        await open_card_from_tap(bot, update, query)
+        return True
 
     chat_id = calling_chat_id(update)
     if chat_id is None:

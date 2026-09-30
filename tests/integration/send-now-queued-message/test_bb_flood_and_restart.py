@@ -313,7 +313,7 @@ def test_sc40_now_is_in_help(replay, vloop, pty):
     r = replay
 
     async def scenario():
-        replies = await r.cmd("_handle_start_cmd", "/help")
+        replies = await r.cmd("_handle_help_cmd", "/help")
         await asyncio.sleep(1)
         return replies + [t for t, _kw in r.chat.sent]
 

@@ -132,6 +132,13 @@ _TRANSIENT_RETRY = 60.0
 
 _prompt_tokens = itertools.count(1)
 
+#: /status (4.2): a session's state glyph (the pinned bar's words), the
+#: current step cut to this, and how many ended sessions its Ended view
+#: lists (the rest are in /resume).
+_STATUS_GLYPHS = {"working": "⚙️", "needs you": "⏳", "idle": "💤"}
+_STATUS_STEP_MAX = 40
+_ENDED_SHOWN_MAX = 10
+
 
 def _pinned_word(sess: TrackedSession) -> str:
     return _PINNED_WORDS.get(sess.status, "starting")
@@ -791,6 +798,144 @@ class DashboardMixin:
         guard off a message that still has live-looking buttons."""
         self._resent_prompts[(chat or 0, msg_id)] = (sess.name, token)
 
+    def _status_block(self, sess: TrackedSession, target) -> str:
+        """One session in /status (4.2): its state in words, the step it is
+        on or what it asks, and one line of details."""
+        esc = html_mod.escape
+        word = _pinned_word(sess)
+        glyph = _STATUS_GLYPHS.get(word, "🔄")
+        head = (f"{'✍️ ' if sess is target else ''}<b>{esc(sess.label)}</b>"
+                f" · {glyph} {word}")
+        if sess.status == Status.BUSY:
+            if sess.busy_started_at:
+                secs = int(time.monotonic() - sess.busy_started_at)
+                head += f" {secs // 60}m" if secs >= 60 else f" {secs}s"
+            if sess.tool_history:
+                step = " ".join(str(sess.tool_history[-1][0]).split())
+                if len(step) > _STATUS_STEP_MAX:
+                    step = step[:_STATUS_STEP_MAX - 1].rstrip() + "…"
+                if step:
+                    head += f" · {esc(step)}"
+        elif sess.status == Status.INTERACTIVE:
+            summary = self._pinned_summary(sess)
+            if summary:
+                head += f" · {esc(summary)}"
+        sl = self._read_status_file(sess.name)
+        details = []
+        model = (sl.get("model") if sl else None) or sess.model_name
+        if model:
+            details.append(esc(model))
+        ctx_pct = sl["ctx_pct"] if sl else (sess.last_token_pct or 0)
+        if ctx_pct:
+            details.append(f"ctx {ctx_pct}%")
+        cost = sl["cost"] if sl else 0
+        if cost and cost >= 0.01:
+            details.append(f"${cost:,.2f}")
+        queued, notes = queue_depth_parts(sess)
+        if queued + notes:
+            # Split, so a pile of stale notes never reads as real messages
+            # waiting (the incident the old Queue row's breakdown fixed).
+            details.append(f"queue {queued + notes} ({queued} queued, {notes} notes)")
+        # Every subagent running now (as the old Agents row counted), and
+        # the shells Claude runs in the background.
+        for count, noun in ((len(sess.active_subagents), "agent"),
+                            (len(sess.bg_shells), "shell")):
+            if count:
+                details.append(f"{count} {noun}{'' if count == 1 else 's'}")
+        return head + (f"\n   {' · '.join(details)}" if details else "")
+
+    def _status_sessions(self, chat_id) -> tuple[list[TrackedSession], list[TrackedSession]]:
+        """(live, ended) sessions of *chat_id*: live by label, ended (GONE,
+        not cleared from /status) newest first."""
+        live, ended = [], []
+        for sess in self.registry.all_sessions(chat_id).values():
+            if not sess.label:
+                continue
+            if sess.status != Status.GONE:
+                live.append(sess)
+            elif not sess.hidden_from_status:
+                ended.append(sess)
+        live.sort(key=lambda s: (s.label.lower(), s.name))
+        ended.sort(key=lambda s: -(s.gone_at or 0.0))
+        return live, ended
+
+    def _render_status_list(
+        self, chat_id, update=None, *, with_buttons: bool = True,
+    ) -> tuple[str, InlineKeyboardMarkup | None]:
+        """/status (4.2): a list you can act on. Each live session's
+        state in words, ✍️ on the one a plain message here goes to, and a
+        row of buttons: talk to it, Stop while it works, Answer while it
+        waits, ⋮ for the rest. Ended sessions wait behind one button.
+        ``with_buttons=False``: the list alone (/start's home screen)."""
+        live, ended = self._status_sessions(chat_id)
+        target = self.registry.target_for(chat_id)
+        cb_chat = chat_id or 0
+        if live:
+            text = f"📊 <b>Sessions ({len(live)})</b>\n\n" + "\n\n".join(
+                self._status_block(s, target) for s in live)
+        elif ended:
+            text = "No live sessions."
+        else:
+            text = "No sessions yet."
+        if not with_buttons:
+            return text, None
+        rows: list[list[InlineKeyboardButton]] = []
+        for sess in live:
+            row = [InlineKeyboardButton(
+                f"✍️ {sess.label}",
+                callback_data=session_parity.session_cb(self, cb_chat, sess, "talk"))]
+            if sess.status == Status.BUSY:
+                # Carries the turn it was shown for: the list is edited in
+                # place, so its message id says nothing about that.
+                row.append(InlineKeyboardButton(
+                    "⏹ Stop", callback_data=session_parity.session_cb(
+                        self, cb_chat, sess, f"ststop{sess.turn_key}")))
+            elif sess.status == Status.INTERACTIVE:
+                row.append(InlineKeyboardButton(
+                    "Answer", callback_data=session_parity.session_cb(
+                        self, cb_chat, sess, "pin_answer")))
+            row.append(InlineKeyboardButton(
+                "⋮", callback_data=session_parity.session_cb(self, cb_chat, sess, "menu")))
+            rows.append(row)
+        footer = [InlineKeyboardButton(
+            "🆕 New" if live else "🆕 New session", callback_data="_:nw:open")]
+        if ended:
+            footer.append(InlineKeyboardButton(
+                f"⚫ Ended ({len(ended)})", callback_data="_:st:ended"))
+        rows.append(footer)
+        if update is not None:
+            rows += self._app_button_row(update)
+        return text, InlineKeyboardMarkup(rows)
+
+    def _render_ended_view(self, chat_id) -> tuple[str, InlineKeyboardMarkup]:
+        """/status → ⚫ Ended: resume one, delete one, or clear them all
+        from /status (they stay in /resume)."""
+        _live, ended = self._status_sessions(chat_id)
+        cb_chat = chat_id or 0
+        rows: list[list[InlineKeyboardButton]] = []
+        for sess in ended[:_ENDED_SHOWN_MAX]:
+            if sess.claude_session_id:
+                rows.append([
+                    InlineKeyboardButton(f"▶️ {sess.label}", callback_data=session_parity.session_cb(
+                        self, cb_chat, sess, "resume")),
+                    InlineKeyboardButton("🗑", callback_data=session_parity.session_cb(
+                        self, cb_chat, sess, "delete"))])
+            else:
+                rows.append([InlineKeyboardButton(
+                    f"🗑 {sess.label}", callback_data=session_parity.session_cb(
+                        self, cb_chat, sess, "delete"))])
+        rows.append([InlineKeyboardButton("🧹 Clear all", callback_data="_:clear_gone"),
+                     InlineKeyboardButton("« Back", callback_data="_:st:list")])
+        if ended:
+            text = (f"⚫ <b>Ended sessions ({len(ended)})</b>\n\n"
+                    "Resume one, delete one, or clear them all from /status "
+                    "(they stay in /resume).")
+            if len(ended) > _ENDED_SHOWN_MAX:
+                text += f"\n\nThe {_ENDED_SHOWN_MAX} newest are here; /resume lists all."
+        else:
+            text = "No ended sessions."
+        return text, InlineKeyboardMarkup(rows)
+
     def _render_switch_reply(
         self, chat_id: int, sess: TrackedSession, update=None,
     ) -> tuple[str, InlineKeyboardMarkup]:
@@ -801,7 +946,7 @@ class DashboardMixin:
         pinned bar's Answer; ⋮ is the session's own menu."""
         esc = html_mod.escape
         word = _pinned_word(sess)
-        glyph = {"working": "⚙️", "needs you": "⏳", "idle": "💤"}.get(word, "🔄")
+        glyph = _STATUS_GLYPHS.get(word, "🔄")
         label = esc(sess.label)
         lines = [f"✍️ Now talking to <b>{label}</b> · {glyph} {word} · "
                  f"{'🤖 Auto' if sess.skip_perms else '💬 Ask'}"]

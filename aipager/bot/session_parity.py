@@ -68,6 +68,9 @@ _SCHEMA = {entry["section"]: entry for entry in settings_menu.settings_schema()}
 
 _SESSION_ACTIONS = frozenset({
     "menu", "menu-close",
+    # /status's "✍️ label" (make it this chat's target) and the ⋮ menu's
+    # "⏹ End session" (a confirm on the existing kill-confirm/-cancel).
+    "talk", "end",
     "restart", "restart-confirm", "restart-cancel",
     "rename", "rename-cancel",
     "delete", "delete-confirm", "delete-cancel",
@@ -253,6 +256,9 @@ def _render_session_menu(
     if not gone:
         rows.append([InlineKeyboardButton(
             "🔄 Restart", callback_data=session_cb(bot, chat_id, sess, "restart"))])
+        # Off the main keyboard since 2026-09-30 (it sat beside Stop).
+        rows.append([InlineKeyboardButton(
+            "⏹ End session", callback_data=session_cb(bot, chat_id, sess, "end"))])
     elif sess.claude_session_id:
         rows.append([InlineKeyboardButton(
             "▶️ Resume", callback_data=session_cb(bot, chat_id, sess, "resume"))])
@@ -950,7 +956,8 @@ async def handle_callback(
     if session_name.startswith("__") and session_name.endswith("__"):
         return False
 
-    if action not in _SESSION_ACTIONS:
+    if action not in _SESSION_ACTIONS and not (
+            action.startswith("endok") and action[5:].isdigit()):
         return False
 
     sess = bot.registry.get(session_name)
@@ -962,6 +969,72 @@ async def handle_callback(
 
     if action == "menu":
         text, kb = _render_session_menu(bot, chat_id, sess)
+        await _edit(query, text, kb)
+        return True
+
+    if action == "talk":
+        if not bot._can_prompt_user(user_id, chat_id):
+            await bot._safe_answer(query, "You can't send to this session.")
+            return True
+        if sess.status == Status.GONE or (
+                sess.scope_chat_id and chat_id is not None and sess.scope_chat_id != chat_id):
+            await bot._safe_answer(query, "That session isn't running here.")
+            return True
+        bot.registry.last_active_session = sess.name
+        bot.registry.mark_dirty()
+        # The pinned bar's target line (it returns at once: its own task).
+        await bot._maybe_update_bot_name(sess.name)
+        await bot._safe_answer(query, f"✍️ Messages go to {sess.label}")
+        text, kb = bot._render_status_list(chat_id, update)
+        await _edit(query, text, kb)
+        return True
+
+    if action == "end":
+        if not bot._can_prompt_user(user_id, chat_id):
+            await bot._safe_answer(query, "You can't end this session.")
+            return True
+        if sess.status == Status.GONE:
+            text, kb = _render_session_menu(bot, chat_id, sess)
+            await _edit(query, text, kb)
+            await bot._safe_answer(query, "That session has already ended.")
+            return True
+        # The confirm carries the turn End was tapped in: this message is
+        # edited in place (from /status or ⋮), so its id says nothing.
+        kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton("⏹ End", callback_data=session_cb(
+                bot, chat_id, sess, f"endok{sess.turn_key}")),
+            InlineKeyboardButton("Cancel", callback_data=session_cb(
+                bot, chat_id, sess, "kill-cancel")),
+        ]])
+        await _edit(query, f"⏹ End <b>{html_mod.escape(sess.label)}</b>? "
+                           "Claude stops and the session closes.", kb)
+        return True
+
+    if action.startswith("endok") and action[5:].isdigit():
+        if not bot._can_prompt_user(user_id, chat_id):
+            await bot._safe_answer(query, "You can't end this session.")
+            return True
+        if sess.scope_chat_id and chat_id is not None and sess.scope_chat_id != chat_id:
+            await bot._safe_answer(query, "That session isn't running here.")
+            return True
+        if sess.status == Status.GONE:
+            await bot._safe_answer(query, "That session has already ended.")
+        elif not sess.tap_is_for_this_turn(None, turn=int(action[5:])):
+            # A new turn started since End was tapped: the confirm is for
+            # work the person never saw.
+            await bot._safe_answer(
+                query, f"{sess.label} moved on to new work - open ⋮ again to end it.")
+            text, kb = _render_session_menu(bot, chat_id, sess)
+            await _edit(query, text, kb)
+            return True
+        else:
+            outcome = await bot._kill_session_core(sess.name, sess.label)
+            await bot._safe_answer(query, {
+                "killed": f"⏹ Ended {sess.label}",
+                "resuming": f"{sess.label} is being resumed - try again in a moment",
+                "still_running": f"{sess.label} did not stop - try again",
+            }.get(outcome.result, f"{sess.label} was not found"))
+        text, kb = bot._render_status_list(chat_id, update)
         await _edit(query, text, kb)
         return True
 

@@ -207,7 +207,9 @@ def test_the_predicate_is_pure_and_ordering_based(mk_bot):
 # seam that performs the check itself, so its callers do not repeat it — and
 # the guard still verifies the check dominates the primitive INSIDE it.
 _DESTRUCTIVE = ("_stop_session_core", "_perms_switch_core",
-                "_kill_and_relaunch_core", "_restart_session_core")
+                "_kill_and_relaunch_core", "_restart_session_core",
+                # The ⋮ End confirm calls it directly (2026-09-30).
+                "_kill_session_core")
 _CHECK = "tap_is_for_this_turn"
 
 
@@ -458,6 +460,26 @@ def _closure(graph, start, seen=None):
     return seen
 
 
+def _verb_of(test):
+    """The verb an `if` tests `action` against: `action == "x"`, or
+    `action.startswith("x")` for the verbs that carry a value (/status's
+    Stop and the ⋮ End confirm carry the turn they were shown for), as
+    `"x*"`."""
+    if (isinstance(test, ast.Compare) and isinstance(test.left, ast.Name)
+            and test.left.id == "action" and test.comparators
+            and isinstance(test.comparators[0], ast.Constant)
+            and isinstance(test.comparators[0].value, str)):
+        return test.comparators[0].value
+    for n in ast.walk(test):
+        if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                and n.func.attr == "startswith"
+                and isinstance(n.func.value, ast.Name) and n.func.value.id == "action"
+                and n.args and isinstance(n.args[0], ast.Constant)
+                and isinstance(n.args[0].value, str)):
+            return n.args[0].value + "*"
+    return None
+
+
 def _destructive_button_verbs():
     """`(verb, primitive, protected, site)` for every callback verb whose
     call graph reaches something that destroys a live session."""
@@ -469,15 +491,10 @@ def _destructive_button_verbs():
     for path in sorted((root / "bot").glob("*.py")):
         tree = ast.parse(path.read_text(), str(path))
         for node in ast.walk(tree):
-            if not (isinstance(node, ast.If)
-                    and isinstance(node.test, ast.Compare)
-                    and isinstance(node.test.left, ast.Name)
-                    and node.test.left.id == "action"
-                    and node.test.comparators
-                    and isinstance(node.test.comparators[0], ast.Constant)):
+            if not isinstance(node, ast.If):
                 continue
-            verb = node.test.comparators[0].value
-            if not isinstance(verb, str):
+            verb = _verb_of(node.test)
+            if verb is None:
                 continue
             reached: set[str] = set()
             for inner in ast.walk(node):
@@ -516,3 +533,13 @@ def test_no_button_can_destroy_a_session_without_checking_the_turn():
         "nothing on the way there checks the tap belongs to the running "
         "turn — so a button from an earlier turn would act on current "
         "work:\n  " + "\n  ".join(unprotected))
+
+
+def test_the_detectors_see_the_verbs_that_carry_a_turn():
+    """Review-2 (P3): /status's Stop (`ststop<turn>`) and the ⋮ End confirm
+    (`endok<turn>`) are prefix verbs; a detector blind to them passes
+    vacuously for exactly the two newest destructive buttons."""
+    verbs = {r[0] for r in _destructive_button_verbs()}
+    assert {"ststop*", "endok*"} <= verbs, sorted(verbs)
+    sites = {loc.split(" ")[1] for loc, _ok in _destructive_button_paths()}
+    assert "_kill_session_core()" in sites

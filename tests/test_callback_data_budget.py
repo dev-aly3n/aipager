@@ -161,6 +161,11 @@ ALLOWED_VERB_JOINEDSTR_SIGNATURES = frozenset({
     # new_flow.py's Ready card model list: an index into MODEL_CHOICES
     # (a short, fixed list): "_:sx:<idx>:rdy_m" + 2 digits stays tiny.
     "rdy_m{idx}",
+    # dashboard.py's /status ⏹ Stop and session_parity.py's ⋮ End confirm
+    # (2026-09-30): the session's turn key, a clock-seeded int (16 digits),
+    # never a session name: "_:sx:<idx>:ststop" + 16 digits is ~31 bytes.
+    "ststop{sess.turn_key}",
+    "endok{sess.turn_key}",
 })
 
 

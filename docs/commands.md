@@ -15,14 +15,15 @@ and on every session change.
 
 | Command | Args | What it does |
 |---|---|---|
-| `/start`, `/help` | — | Print the welcome panel and persistent keyboard. |
+| `/start` | - | The home screen: this chat's sessions, where a plain message goes (`✍️ Messages go to x1.`), and `🆕 New session`, `↩️ Resume` and `⚙️ Settings`. Also shows the persistent keyboard. |
+| `/help` | - | A short guide by task (start, talk, control, manage, settings), with the tip that tapping a command sends it at once: long-press it (phone) or press Tab (desktop) to add text first. |
 | `/app` | — | Open the Mini App dashboard (sessions, diff viewer, settings). |
-| `/status` | — | One-message snapshot of every live session: model, context %, cost, queue depth. |
+| `/status` | - | This chat's sessions as a list you can act on. Each says its state in words (`⚙️ working 3m · Bash: run tests`, `⏳ needs you · Bash: make deploy`, `💤 idle`), with `✍️` on the one a plain message goes to, and a second line with the model, context, cost, what is queued (`queue 3 (1 queued, 2 notes)`), and running agents and shells. Each has a row of buttons: `✍️ x1` sends your next messages there, `⏹ Stop` while it works, `Answer` while it waits for you, and `⋮` for the rest. Below: `🆕 New`, and `⚫ Ended (n)` for the sessions that ended (resume, delete, or clear them all from the list; they stay in `/resume`). |
 | `/stop` | — | Interrupt the active session's current turn. Also discards queued messages and replies with how many were discarded. |
 | `/now` | - | Send the messages Claude is holding in the active session's queue right now, instead of after the current step (Claude Code's own send-now keys, Ctrl+X Ctrl+S). Works any time, including while the chat is muted or in minimal mode; replies `Nothing is waiting in the queue` when Claude holds nothing. See [Send a queued message now](#send-a-queued-message-now). |
 | `/new [name] [first message]` | all optional | Start a session. `/new x1` starts it at once, and `/new x1 fix the tests` also sends "fix the tests" as its first message. Sent bare (for example tapped from the menu), `/new` asks for the name, and the next message you send is used exactly like the argument, so `/new` then `x1 fix the tests` gives the same result. Only that next message: if you do anything else first (a photo, another command, a reply to another message, a keyboard template, another button), it is handled as usual and the card closes; `/status`, `/settings` and the keyboard's menus leave it open. The card that asks also shows the mode, model and folder the session will get, with buttons to change them first. Every way ends in the same Ready card: what the session got, that your next message goes to it, and one-tap buttons to switch to the other mode or change the model. New sessions start in Auto for an admin (Ask for everyone else); change what /new uses in `/settings` → New sessions. A `!` before the name still means Auto. A name that is in use offers Resume, Replace or Cancel, for the person who sent `/new` only. |
 | `/resume [label]` | optional | Resume a previously-gone session by name, or open a picker. A session that ended stays listed for `GONE_SESSION_MAX_AGE_DAYS` (default 14) and then leaves the registry; its Claude transcript is untouched. |
-| `/kill [label]` | optional | Destroy a session. With no arg, opens a picker. Always two-tap: shows `[💀 Kill] [Cancel]`. |
+| `/kill [label]` | optional | Destroy a session. With no arg, opens a picker. Always two-tap: shows `[💀 Kill] [Cancel]`. Also in `/status` → `⋮` → `⏹ End session`. |
 | `/restart [label]` | optional | Kill and relaunch a session, keeping its conversation. |
 | `/rename [label]` | optional | Give a session a new name. |
 | `/delete [label]` | optional | Drop a finished (GONE) session from the list. |
@@ -32,6 +33,13 @@ and on every session change.
 | `/settings` | — | Message layout, diff previews (off by default), long-turn card updates (on by default: a busy card refreshes every 10 s after 2 minutes of a turn, 30 s after 10, once a minute after an hour, counting in minutes then hours; switch off to keep the first-minutes pace for the whole turn; see [troubleshooting](troubleshooting.md#a-long-turns-card-refreshes-less-often)), formatting and language preferences, and New sessions: the mode (Auto or Ask), model and folder `/new` starts a session with. Whatever the layout, every busy card ends with its session's status line (`⏳`/`✅ name · …`) and every answer starts with its result line (`💬 name`, plus `· Finished (…)` when no finished card is left to show the stats); the merged layout stacks the two, each line in its own section. In the card layout the answer deliberately follows the finished card by a moment, so the card is seen to say Finished before the answer lands under it; tune or disable that head start with `FINISH_CARD_GRACE_SECONDS` (seconds, default 0.8; 0 sends both at once). The message layout decides the card for every turn, whether or not tools ran (see [Idle responses](#idle-responses)). |
 | `/whoami` | — | Show your Telegram id and (in team mode) your role. |
 | `/update` | — | Admin only. Check aipager and Claude Code for newer versions, then update whatever has one with a single button. See [Update](#update). |
+
+The `/` menu shows your sessions first (`/x1 · Talk to x1`), then the
+frequent commands: `new`, `status`, `stop`, `now`, `resume`, `perms`,
+`settings`, `help` (and `app` with the Mini App on). `kill`, `restart`,
+`rename`, `delete`, `diff`, `clearqueue`, `whoami` and `update` are not in
+the menu but work when typed; the session actions are also in
+`/status` → `⋮`.
 
 ### Per-session dynamic commands
 
@@ -154,7 +162,7 @@ A persistent keyboard sits below the chat input. Rows, top to bottom:
 | Row | Buttons | Notes |
 |---|---|---|
 | Sessions | one button per live session label | auto-built from the registry |
-| Actions | `status`, `stop`, `kill` | plain-text shortcuts |
+| Actions | `status`, `stop`, `new` | plain-text shortcuts (`kill` still works typed; ending a session is in `/status` → `⋮`) |
 | Nav | `Templates`, `Commands`, `📱 App` | App appears in private chats while the Mini App is up, and opens it directly |
 
 `Model ›` lives inside the Commands submenu. Tapping a submenu

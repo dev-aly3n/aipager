@@ -201,14 +201,16 @@ def test_status_check_runs_no_installer_and_no_restart(world, personal_bot, mk_u
         and not world.claude_update_calls()
 
 
-def test_update_is_in_the_bot_command_menu():
+def test_update_is_typed_only_not_in_the_menu():
+    """The / menu holds the frequent commands since 2026-09-30 (4.6);
+    /update is admin-only and stays typed, named in /help."""
     from aipager.bot.lifecycle import LifecycleMixin
-    assert "update" in {c.command for c in LifecycleMixin._command_list(set())}
+    assert "update" not in {c.command for c in LifecycleMixin._command_list(set())}
 
 
 def test_update_is_in_help_text(world, personal_bot, mk_update, h, run_async):
     upd = mk_update("/help", user_id=h.OPERATOR, chat_id=h.DM)
     upd.effective_message = upd.message
     upd.effective_chat.type = "private"
-    run_async(personal_bot._handle_start_cmd(upd, MagicMock()))
+    run_async(personal_bot._handle_help_cmd(upd, MagicMock()))
     assert "/update" in "\n".join(h.texts_of(upd.message, personal_bot._app.bot))

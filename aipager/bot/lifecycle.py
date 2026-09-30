@@ -353,7 +353,7 @@ class LifecycleMixin:
             group=-1)
         self._app.add_handler(CallbackQueryHandler(self._handle_callback))
         self._app.add_handler(CommandHandler("start", self._handle_start_cmd))
-        self._app.add_handler(CommandHandler("help", self._handle_start_cmd))
+        self._app.add_handler(CommandHandler("help", self._handle_help_cmd))
         self._app.add_handler(CommandHandler("status", self._handle_status))
         self._app.add_handler(CommandHandler("stop", self._handle_stop_cmd))
         self._app.add_handler(CommandHandler("now", self._handle_now_cmd))
@@ -638,29 +638,11 @@ class LifecycleMixin:
 
     @staticmethod
     def _command_list(labels: set[str]) -> list[BotCommand]:
-        """Static commands + one `/label` per live session label."""
-        commands = [
-            BotCommand("status", "Show all sessions"),
-            BotCommand("stop", "Stop active session"),
-            BotCommand("now", "Send queued messages to Claude now"),
-            BotCommand("kill", "Kill a session (destroy)"),
-            BotCommand("new", "Launch new session"),
-            BotCommand("resume", "Resume a past session"),
-            BotCommand("perms", "Switch permission mode for active session"),
-            BotCommand("settings", "Configure message layout, formatting, and language"),
-            BotCommand("clearqueue", "Drop pending queued prompts"),
-            BotCommand("whoami", "Show your role + permissions"),
-            BotCommand("restart", "Restart a session"),
-            BotCommand("rename", "Rename a session"),
-            BotCommand("delete", "Remove a finished session from the list"),
-            BotCommand("diff", "Show a session's working-directory diff"),
-            BotCommand("update", "Update aipager and Claude Code (admin)"),
-        ]
-        # Read late (not module-level) so a live `aipager miniapp enable`
-        # + restart is reflected without re-importing this module.
-        from aipager.config import MINIAPP_ENABLED
-        if MINIAPP_ENABLED:
-            commands.append(BotCommand("app", "Open the Mini App dashboard"))
+        """The / menu (4.6): one `/label` per live session first (what is
+        tapped most), then the frequent commands. The rare ones (kill,
+        restart, rename, delete, diff, clearqueue, whoami, update) still
+        work when typed, and live in /status → ⋮ or /help."""
+        commands = []
         for label in sorted(labels):
             command = _label_command(label)
             if command is None:
@@ -671,7 +653,22 @@ class LifecycleMixin:
                           "command; the session is still reachable by "
                           "keyboard button and by typing it in full", label)
                 continue
-            commands.append(BotCommand(command, f"Send to [{label}]"))
+            commands.append(BotCommand(command, f"Talk to {label}"))
+        commands += [
+            BotCommand("new", "Start a session"),
+            BotCommand("status", "Your sessions"),
+            BotCommand("stop", "Stop what Claude is doing"),
+            BotCommand("now", "Send queued messages to Claude now"),
+            BotCommand("resume", "Resume an ended session"),
+            BotCommand("perms", "Switch between Auto and Ask"),
+            BotCommand("settings", "Message layout, formatting, new sessions"),
+            BotCommand("help", "What you can do"),
+        ]
+        # Read late (not module-level) so a live `aipager miniapp enable`
+        # + restart is reflected without re-importing this module.
+        from aipager.config import MINIAPP_ENABLED
+        if MINIAPP_ENABLED:
+            commands.append(BotCommand("app", "Open the Mini App dashboard"))
         return commands
 
     async def _update_bot_commands_global(self) -> None:

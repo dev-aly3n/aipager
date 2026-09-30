@@ -279,7 +279,8 @@ def test_a_button_that_acts_on_a_session_closes_the_card(chat, data):
 
 @pytest.mark.parametrize("data", ["_:nw:mode:ask", "_:nw:opt:model", "_:set:ns",
                                   "_:set:layout", "_:spref", "_:spref:0",
-                                  "_:resume_page:1", "_:resume_noop"])
+                                  "_:resume_page:1", "_:resume_noop",
+                                  "_:st:ended", "_:st:list"])
 def test_the_cards_own_buttons_and_settings_keep_it(chat, data):
     chat.send("/new")
     chat.tap(data)

@@ -336,7 +336,7 @@ def test_clear_gone_with_no_gone_sessions(mk_bot, mk_query, run_async, monkeypat
     update, query = mk_query("anything:clear_gone")
     run_async(bot._handle_callback(update, MagicMock()))
     answers = [c.args[0] for c in query.answer.await_args_list if c.args]
-    assert any("No gone sessions" in (a or "") for a in answers)
+    assert any("Nothing to clear" in (a or "") for a in answers)
     # Session still present
     assert bot.registry.get("claude-jim") is not None
 
@@ -356,11 +356,11 @@ def test_clear_gone_hides_session_preserves_resume_id(mk_bot, mk_query, run_asyn
     # Resume metadata preserved
     assert s.claude_session_id == "abc-uuid"
     assert s.cwd == "/home/u/proj"
-    # Message edited with the new "Still available in /resume" copy
+    # Since 2026-09-30 it says so in a toast and goes back to the list.
+    answers = [c.args[0] for c in query.answer.await_args_list if c.args]
+    assert any("still in /resume" in (a or "") for a in answers), answers
     query.edit_message_text.assert_awaited_once()
-    body = query.edit_message_text.await_args.args[0]
-    assert "Hidden from /status" in body
-    assert "Still available in /resume" in body
+    assert "No sessions yet." in query.edit_message_text.await_args.args[0]
 
 
 def test_clear_gone_skips_already_hidden(mk_bot, mk_query, run_async):
@@ -374,9 +374,9 @@ def test_clear_gone_skips_already_hidden(mk_bot, mk_query, run_async):
     run_async(bot._handle_callback(update, MagicMock()))
     assert s1.hidden_from_status is True
     assert s2.hidden_from_status is True
-    # Toast says "Hidden 1 session(s)" — only the newly flipped one
+    # The toast counts only the newly flipped one
     answers = [c.args[0] for c in query.answer.await_args_list if c.args]
-    assert any("Hidden 1 session" in (a or "") for a in answers)
+    assert any("Cleared 1 from /status" in (a or "") for a in answers)
 
 
 def test_clear_gone_only_targets_gone_sessions(mk_bot, mk_query, run_async):

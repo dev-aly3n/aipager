@@ -14,6 +14,7 @@ all duplicate notification bugs from the old system.
 from __future__ import annotations
 
 import asyncio
+import itertools
 import json
 import logging
 import os
@@ -35,6 +36,11 @@ from aipager.config import (
 )
 
 log = logging.getLogger(__name__)
+
+#: `TrackedSession.turn_key`s: seeded from the clock (microseconds) when the
+#: daemon starts, so no key handed out after a restart, or to a re-created
+#: session, can equal one an old button still carries.
+_TURN_KEYS = itertools.count(time.time_ns() // 1000)
 
 # --- Bounded-growth constants (item 2.3, 2.4 of group B hardening) -----
 #
@@ -808,6 +814,13 @@ class TrackedSession:
     # racing it for the same card, reply target and stream state.
     # All transient.
     turn_seq: int = 0
+    # What a button on a message edited in place (/status's Stop, the ⋮
+    # End confirm) carries to say which turn it was shown for. New on
+    # every turn AND for every new session, unique across restarts (see
+    # `_TURN_KEYS`): `turn_seq` starts at 0 for each new entry, so a kill
+    # then `/new` of the same name, or a restart, would hand an old button
+    # the number of the new session's first turn. Transient.
+    turn_key: int = field(default_factory=lambda: next(_TURN_KEYS))
     card_turn_seq: int | None = None
     closed_turn_seq: int | None = None
     finishing_turn: int | None = None
@@ -1728,8 +1741,17 @@ class TrackedSession:
         """
         return self.status is Status.INTERACTIVE
 
-    def tap_is_for_this_turn(self, tapped_msg_id: int | None) -> bool:
+    def tap_is_for_this_turn(self, tapped_msg_id: int | None, *,
+                             turn: int | None = None) -> bool:
         """True if a button tap belongs to the turn currently running.
+
+        ``turn``: the `turn_key` a button was shown for, carried in its
+        own callback data. For buttons on a message that is edited in
+        place (/status, the ⋮ menu's End confirm), whose id says nothing
+        about when they were shown, and which a mid-turn card move would
+        make look stale: the tap is for this turn iff no new turn started
+        since (a self-woken continuation of the same job is the same
+        turn). Without it, the message-id ordering below applies.
 
         Ordering, not identity. Telegram message ids increase within a
         chat, and every card that can carry a destructive button for the
@@ -1743,6 +1765,8 @@ class TrackedSession:
         action the operator asked for, and silence is what the project's
         long-form-button contract forbids outright.
         """
+        if turn is not None:
+            return turn == self.turn_key
         current = self.busy_msg_id
         if not current or current < 0 or not tapped_msg_id:
             return True
@@ -2191,6 +2215,7 @@ class SessionRegistry:
                 # A new turn (roadmap 8.57): card requests made for the
                 # previous one are stale from here on.
                 sess.turn_seq += 1
+                sess.turn_key = next(_TURN_KEYS)
                 # No step of the parent's is running at a new turn's start
                 # (the Send now line's "behind a long step" clock). A
                 # message queued mid-turn is a BUSY->BUSY no-op and never

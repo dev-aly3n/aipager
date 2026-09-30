@@ -80,8 +80,9 @@ def test_status_shows_agents_and_the_combined_queue(mk_bot, run_async):
     run_async(bot._handle_status(update, MagicMock()))
 
     text = "\n".join(replies)
-    assert "Agents 2" in text
-    assert "Queue  3" in text, f"expected combined 2 notes + 1 held; got:\n{text}"
+    # One details line per session since 2026-09-30 (4.2).
+    assert "2 agents" in text
+    assert "queue 3 (" in text, f"expected combined 2 notes + 1 held; got:\n{text}"
     assert "1 queued" in text and "2 notes" in text, (
         "intent.md requirement 4: the combined total must be broken "
         f"down into queued vs. outstanding notes so a pile of stale "
@@ -197,5 +198,5 @@ def test_status_keeps_a_bare_agent_count_by_design(mk_bot, run_async):
     run_async(bot._handle_status(update, MagicMock()))
 
     text = "\n".join(replies)
-    assert "Agents 3" in text
+    assert "3 agents" in text
     assert "explore" not in text and "plan" not in text

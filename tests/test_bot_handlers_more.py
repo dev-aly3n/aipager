@@ -24,7 +24,7 @@ def test_start_with_no_sessions_shows_friendly_text(mk_bot, mk_update, run_async
     run_async(bot._handle_start_cmd(update, MagicMock()))
     text = bot._app.bot.send_message.await_args.args[1]
     assert "aipager" in text
-    assert "no sessions yet" in text
+    assert "No sessions yet." in text and "Start one with /new." in text
     bot._send_keyboard.assert_awaited_once()
 
 
@@ -105,7 +105,8 @@ def test_status_offers_clear_button_when_gone_sessions(mk_bot, mk_update, run_as
     kb = update.message.reply_text.await_args.kwargs["reply_markup"]
     assert kb is not None
     cb = [b.callback_data for row in kb.inline_keyboard for b in row]
-    assert "_:clear_gone" in cb
+    # Behind "⚫ Ended (1)" since 2026-09-30; Clear all is in that view.
+    assert "_:st:ended" in cb
 
 
 def test_status_recovers_gone_session_when_socket_alive(mk_bot, mk_update, run_async, monkeypatch):
@@ -134,13 +135,14 @@ def test_status_filters_hidden_gone_sessions(mk_bot, mk_update, run_async, monke
     bot._read_status_file = MagicMock(return_value=None)
     update = mk_update("/status")
     run_async(bot._handle_status(update, MagicMock()))
-    body = update.message.reply_text.await_args.args[0]
-    assert "show" in body
-    assert "hide" not in body
-    # Button still appears because there's a visible-GONE session
+    # Ended sessions are behind "⚫ Ended (n)" since 2026-09-30: the count
+    # leaves out the hidden one, and so does the Ended view.
     kb = update.message.reply_text.await_args.kwargs["reply_markup"]
-    cb = [b.callback_data for row in kb.inline_keyboard for b in row]
-    assert "_:clear_gone" in cb
+    labels = [b.text for row in kb.inline_keyboard for b in row]
+    assert "⚫ Ended (1)" in labels
+    ended_text, ended_kb = bot._render_ended_view(update.effective_chat.id)
+    ended_labels = " ".join(b.text for row in ended_kb.inline_keyboard for b in row)
+    assert "show" in ended_labels and "hide" not in ended_labels
 
 
 def test_status_button_absent_when_only_hidden_gone(mk_bot, mk_update, run_async, monkeypatch):
@@ -155,7 +157,8 @@ def test_status_button_absent_when_only_hidden_gone(mk_bot, mk_update, run_async
     update = mk_update("/status")
     run_async(bot._handle_status(update, MagicMock()))
     kb = update.message.reply_text.await_args.kwargs["reply_markup"]
-    assert kb is None
+    labels = [b.text for row in kb.inline_keyboard for b in row]
+    assert not any(t.startswith("⚫ Ended") for t in labels)
 
 
 def test_status_unhides_on_revival(mk_bot, mk_update, run_async, monkeypatch):
@@ -213,7 +216,7 @@ def test_status_multiscope_empty_scope_skips_discovery(
     update = mk_update("/status", chat_id=100)  # scope 100 has nothing
     run_async(bot._handle_status(update, MagicMock()))
     body = update.message.reply_text.await_args.args[0]
-    assert "No sessions in this chat" in body
+    assert "No sessions yet." in body and "bob" not in body
     discovery.assert_not_called()  # must not adopt other scopes' sockets
 
 

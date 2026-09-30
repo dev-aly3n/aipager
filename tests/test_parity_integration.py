@@ -56,16 +56,19 @@ def test_status_offers_a_menu_row_per_session_in_render_order(
         resolved.append(sess.name)
     assert resolved == ["claude-alpha", "claude-beta"], (
         f"menu rows must follow the status block order, got {resolved}")
-    assert all(t.startswith("⋮ ") for t in _texts(kb) if "⋮" in t)
+    # Each row starts "✍️ label" (2026-09-30), so ⋮ needs no label of its own.
+    assert [t for t in _texts(kb) if "⋮" in t] == ["⋮", "⋮"]
 
 
 async def _true():
     return True
 
 
-def test_clear_gone_stays_last_when_present(
+def test_ended_sessions_wait_behind_one_button(
         mk_bot, mk_update, run_async, monkeypatch):
-    """Anyone used to where that button sits must still find it there."""
+    """Since 2026-09-30 (4.2) ended sessions are behind "⚫ Ended (n)",
+    the last button of /status (no App row in a group); Clear all is in
+    that view."""
     bot = mk_bot()
     s = bot.registry.get_or_create("claude-dead")
     s.label = "dead"
@@ -76,7 +79,9 @@ def test_clear_gone_stays_last_when_present(
     run_async(bot._handle_status(update, MagicMock()))
 
     kb = update.message.reply_text.await_args.kwargs["reply_markup"]
-    assert _cb(kb)[-1] == "_:clear_gone"
+    assert _cb(kb)[-1] == "_:st:ended"
+    _text, ended = bot._render_ended_view(update.effective_chat.id)
+    assert "_:clear_gone" in _cb(ended)
 
 
 async def _false():
@@ -244,23 +249,21 @@ def _welcome_text(bot):
 
 # ---- /start's help text and the registered command menu must agree ------
 
-def test_start_help_mentions_the_session_management_commands(
+def test_help_names_the_session_management_actions(
         mk_bot, mk_update, run_async):
-    """`/start` is the first thing a new user sees, and its command list
-    was written before `/restart`, `/rename`, `/delete` and `/diff`
-    existed. A command reachable only from the Mini App (or only from
-    Telegram's `/` menu, which is a separate surface) is exactly the
-    parity gap this feature exists to close.
-    """
+    """/start is a home screen since 2026-09-30 (4.3) and points to /help,
+    which names what can be done with a session."""
     bot = mk_bot()
-    update = mk_update("/start", chat_id=555)
+    update = mk_update("/help", chat_id=555)
 
-    run_async(bot._handle_start_cmd(update, MagicMock()))
+    run_async(bot._handle_help_cmd(update, MagicMock()))
 
-    text = _welcome_text(bot)
-    for cmd in ("/status", "/stop", "/restart", "/rename", "/diff",
-                "/kill", "/delete", "/settings", "/perms", "/new"):
-        assert cmd in text, f"{cmd} is missing from the /start help"
+    text = update.message.reply_text.await_args.args[0]
+    for word in ("/status", "/stop", "/settings", "/perms", "/new",
+                 "restart", "rename", "diff", "end", "delete"):
+        assert word in text, f"{word} is missing from /help"
+    run_async(bot._handle_start_cmd(mk_update("/start", chat_id=555), MagicMock()))
+    assert "/help" in _welcome_text(bot)
 
 
 def test_start_help_never_advertises_an_unregistered_command(mk_bot, mk_update,

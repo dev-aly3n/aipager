@@ -251,11 +251,9 @@ def test_now_is_registered_in_the_command_list_and_help(mk_bot, mk_update,
     names = [c.command for c in LifecycleMixin._command_list(set())]
     assert "now" in names
     bot = mk_bot()
-    bot._app.bot.send_message = AsyncMock()
-    run_async(bot._handle_start_cmd(mk_update("/help"), MagicMock()))
-    texts = [str(c.args[1]) for c in bot._app.bot.send_message.await_args_list
-             if len(c.args) > 1]
-    assert any("/now - " in t for t in texts)
+    update = mk_update("/help")
+    run_async(bot._handle_help_cmd(update, MagicMock()))
+    assert "/now" in update.message.reply_text.await_args.args[0]
 
 
 # ── the registry's owed deletes ──────────────────────────────────────────

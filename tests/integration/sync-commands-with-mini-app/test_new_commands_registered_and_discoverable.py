@@ -24,40 +24,24 @@ def _run(coro):
 NEW_COMMANDS = ("restart", "rename", "delete", "diff")
 
 
-def test_new_commands_are_in_the_telegram_slash_command_menu():
-    """``_command_list`` is what ``lifecycle.py`` feeds to
-    ``set_my_commands`` — Telegram's own "/" autocomplete menu."""
+def test_new_commands_leave_the_menu_but_keep_working():
+    """Since 2026-09-30 (4.6) the / menu holds the frequent commands only.
+    /restart /rename /delete /diff still work when typed (every dispatched
+    command is pinned by test_reserved_name_reconciliation) and are one tap
+    away in /status → ⋮."""
     from aipager.bot.lifecycle import LifecycleMixin
-    cmds = LifecycleMixin._command_list(set())
-    cmd_names = {c.command for c in cmds}
-    missing = [c for c in NEW_COMMANDS if c not in cmd_names]
-    assert not missing, (
-        f"design.md: /restart /rename /delete /diff must be registered "
-        f"bot commands; missing from _command_list: {missing}"
-    )
+    cmd_names = {c.command for c in LifecycleMixin._command_list(set())}
+    assert not [c for c in NEW_COMMANDS if c in cmd_names]
 
 
 def test_new_commands_are_mentioned_in_help_text(mk_bot, helpers):
-    """``/help`` == ``_handle_start_cmd`` (a literal alias registered in
-    lifecycle.py) — this is what a user actually sees when they run
-    ``/help``."""
+    """``/help`` is its own short guide since 2026-09-30: it names the
+    actions under Manage (/status, then ⋮)."""
     bot = helpers.make_personal_bot(mk_bot)
     upd = helpers.make_message_update("/help", chat_id=555, chat_type="private")
-    _run(bot._handle_start_cmd(upd, MagicMock()))
+    _run(bot._handle_help_cmd(upd, MagicMock()))
 
-    texts = []
-    if upd.message.reply_text.await_args_list:
-        texts.extend(c.args[0] for c in upd.message.reply_text.await_args_list if c.args)
-    for c in bot._app.bot.send_message.await_args_list:
-        t = c.kwargs.get("text") or (c.args[1] if len(c.args) > 1 else (c.args[0] if c.args else ""))
-        texts.append(t or "")
-    assert texts, "expected /help to send at least one message"
-    # The welcome text is whichever call is longest — the OTHER calls
-    # in this turn are the short "keyboard active" confirmation
-    # (`_send_keyboard`), not the welcome itself.
-    text = max(texts, key=len)
-    missing = [c for c in NEW_COMMANDS if f"/{c}" not in text]
-    assert not missing, (
-        f"design.md: /restart /rename /delete /diff must appear in "
-        f"/help's command list; missing from the welcome text: {missing}"
-    )
+    text = upd.message.reply_text.await_args.args[0]
+    missing = [c for c in NEW_COMMANDS if c not in text]
+    assert not missing, f"/help does not name: {missing}"
+    assert "/status" in text and "⋮" in text

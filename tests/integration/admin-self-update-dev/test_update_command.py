@@ -274,12 +274,11 @@ def test_busy_update_says_already_running(env, run):
 def test_update_is_registered_and_in_help(mk_bot):
     from aipager.bot.lifecycle import LifecycleMixin
 
+    # Typed-only since the 2026-09-30 menu (4.6); /help names it.
     names = [c.command for c in LifecycleMixin._command_list(set())]
-    assert "update" in names
-    import inspect
+    assert "update" not in names
     from aipager.bot import handlers
-    assert "/update - update aipager and Claude Code (admin)" in inspect.getsource(
-        handlers.CommandHandlersMixin._handle_start_cmd)
+    assert "/update" in handlers.HELP_TEXT
 
 
 def test_status_is_cached_between_mini_app_polls(env, run):

@@ -49,7 +49,6 @@ from aipager.config import (
     FILE_DOWNLOAD_DIR, KEYBOARD_PARENTS, MODELS_BUTTON,
     TEMPLATES_BUTTON,
 )
-from aipager.policy_snapshot import queue_depth_parts
 from aipager.state import QUEUE_CAP, Status, TrackedSession
 
 # Pure-function helpers and constants live in aipager.bot.transport
@@ -92,6 +91,20 @@ if TYPE_CHECKING:
     pass
 
 log = logging.getLogger(__name__)
+
+#: /help (4.3): what you can do, grouped by task, in one screen.
+HELP_TEXT = (
+    "<b>How to use aipager</b>\n\n"
+    "<b>Start:</b> /new name · /resume\n"
+    "<b>Talk:</b> just type (it goes to the ✍️ session) · reply to a message"
+    " · /&lt;label&gt; message\n"
+    "<b>Control:</b> /stop · /now (send queued) · /clearqueue\n"
+    "<b>Manage:</b> /status, then ⋮ (restart, rename, diff, end, delete)\n"
+    "<b>Settings:</b> /settings · /perms (Auto or Ask)\n"
+    "<b>Admin:</b> /update (aipager and Claude Code)\n\n"
+    "<i>Tip: tapping a command sends it at once. Long-press it (phone) or "
+    "press Tab (desktop) to add text first.</i>"
+)
 
 MODEL_SWITCH_OTHER_SENDER_REASON = (
     "another member's message is still waiting to be picked up - "
@@ -544,54 +557,49 @@ class CommandHandlersMixin:
         os.kill(os.getpid(), signal.SIGTERM)
 
     async def _handle_start_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle /start and /help — friendly welcome with current state."""
+        """/start: the home screen (4.3). This chat's sessions (never another
+        chat's), where a plain message goes, and the three things to do
+        next. It used to be a 25-line manual listing every chat's
+        sessions; the manual is /help now."""
         if not await self._authorize(update, allow_read_only=True):
             return
-        sessions = sorted(
-            (sess.label, sess.status.name.lower())
-            for sess in self.registry.all_sessions().values()
-            if sess.status != Status.GONE and sess.label
-        )
-        if sessions:
-            session_block = "\n".join(f"  • <b>{lbl}</b> · {status}"
-                                     for lbl, status in sessions)
+        chat_id = calling_chat_id(update)
+        listing, _kb = self._render_status_list(chat_id, update, with_buttons=False)
+        target = self.registry.target_for(chat_id)
+        if target is not None and target.status != Status.GONE:
+            next_line = f"✍️ Messages go to <b>{html_mod.escape(target.label)}</b>."
+        elif listing.startswith("📊"):
+            next_line = "Tap a session on the keyboard to talk to it."
         else:
-            session_block = "  <i>(no sessions yet)</i>"
-
+            next_line = "Start one with /new."
         text = (
-            "\U0001f44b <b>aipager</b> - Telegram remote for Claude Code\n\n"
-            "Talk to your local Claude sessions from this chat. The daemon "
-            "is running and mirroring sessions to you live.\n\n"
-            "<b>Tracked sessions</b>\n"
-            f"{session_block}\n\n"
-            "<b>How to use</b>\n"
-            "  • Tap a session name on the keyboard below to switch to it.\n"
-            "  • Send a plain message - it goes to the active session.\n"
-            "  • Reply to a session's message to pin your prompt to that session.\n\n"
-            "<b>Open a new session</b>\n"
-            "  /new - pick a name, mode, model and folder here\n"
-            "  <code>aipager session &lt;name&gt;</code> - or from your computer\n\n"
-            "<b>Commands</b>\n"
-            "  /status - per-session dashboard\n"
-            "  /stop - interrupt the active session\n"
-            "  /now - send your queued message to Claude now\n"
-            "  /restart - restart a session with its history\n"
-            "  /rename - give a session a new name\n"
-            "  /diff - show a session's working-directory diff\n"
-            "  /kill - terminate a session\n"
-            "  /delete - drop a finished session from the list\n"
-            "  /settings - message layout, formatting and language\n"
-            "  /perms - switch a session between Ask and Auto\n"
-            "  /update - update aipager and Claude Code (admin)\n"
+            "👋 <b>aipager</b> - Claude Code from Telegram\n\n"
+            f"{listing}\n\n{next_line}\n\n"
+            "<i>/help shows everything you can do.</i>"
         )
+        # No inline App row: the keyboard sent right after carries 📱 App
+        # (see _app_button_row). Resume only with something to resume, or
+        # the tap would swap this screen for one line and no buttons.
+        row = [InlineKeyboardButton("🆕 New session", callback_data="_:nw:open")]
+        if any(s.claude_session_id for s in self._gone_sessions_sorted(chat_id)):
+            row.append(InlineKeyboardButton("↩️ Resume", callback_data="_:resume_page:0"))
+        row.append(InlineKeyboardButton("⚙️ Settings", callback_data="_:set:back"))
+        keyboard = InlineKeyboardMarkup([row])
         try:
             await send_text(self._app.bot,
                 update.effective_chat.id, text, parse_mode="HTML",
+                reply_markup=keyboard,
             )
         except Exception:
             log.warning("Failed to send /start welcome", exc_info=True)
         # Make sure the persistent keyboard is showing.
-        await self._send_keyboard(level="main", chat_id=calling_chat_id(update))
+        await self._send_keyboard(level="main", chat_id=chat_id)
+
+    async def _handle_help_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """/help: a short guide grouped by task (4.3)."""
+        if not await self._authorize(update, allow_read_only=True):
+            return
+        await reply_text(update.message, HELP_TEXT, parse_mode="HTML")
 
     def _app_button_row(self, update: Update) -> list:
         """One inline row linking to the Mini App, or [] when it doesn't belong.
@@ -719,125 +727,42 @@ class CommandHandlersMixin:
         )
 
     async def _handle_status(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle /status command — rich per-session dashboard."""
+        """Handle /status: this chat's sessions as a list you can act on."""
         if not await self._authorize(update, allow_read_only=True):
             return
         chat_id = calling_chat_id(update)
         sessions = self.registry.all_sessions(chat_id)
-        if not sessions:
+        if not sessions and self.scopes is None:
             # Discovery (adopt raw dtach sockets) is a single-scope
             # recovery aid only. In multi-scope it would create
             # unstamped (scope_chat_id=0) sessions that leak into every
-            # scope, so an empty scope just says so.
-            if self.scopes is not None:
-                # Empty state is exactly when someone wants the
-                # richer view — offer it here too, not only when
-                # there are sessions to list.
-                _app = self._app_button_row(update)
-                await reply_text(update.message,
-                    "No sessions in this chat.",
-                    reply_markup=InlineKeyboardMarkup(_app) if _app else None,
-                )
-                return
-            discovered = await inject.list_sessions()
-            if not discovered:
-                # Empty state is exactly when someone wants the
-                # richer view — offer it here too, not only when
-                # there are sessions to list.
-                _app = self._app_button_row(update)
-                await reply_text(update.message,
-                    "No sessions found.",
-                    reply_markup=InlineKeyboardMarkup(_app) if _app else None,
-                )
-                return
-            for name in discovered:
+            # scope, so an empty scope just says so (below).
+            for name in await inject.list_sessions():
                 self.registry.get_or_create(name)
             sessions = self.registry.all_sessions(chat_id)
 
-        blocks = []
-        shown: list[tuple[str, str]] = []
-        has_gone = False
         for name, sess in sessions.items():
             alive = await inject.is_alive(name)
             # Reconcile: socket alive but status GONE → recover to IDLE
             if alive and sess.status == Status.GONE:
                 self.registry.transition(name, Status.IDLE)
-            # Hidden flag is set by "Clear gone sessions". If a hidden
-            # session comes back alive (e.g. via /resume), unhide so it
-            # reappears in /status. /resume always shows it regardless.
+            # Hidden flag is set by "Clear all" in the Ended view. If a
+            # hidden session comes back alive (e.g. via /resume), unhide so
+            # it reappears in /status. /resume always shows it regardless.
             if alive and sess.hidden_from_status:
                 sess.hidden_from_status = False
                 self.registry.mark_dirty()
-            if sess.status == Status.GONE and sess.hidden_from_status:
-                continue
-            icon = "🟢" if alive else "🔴"
-            if not alive and not sess.hidden_from_status:
-                has_gone = True
-            status_str = sess.status.name.lower()
-            if sess.status == Status.BUSY and sess.busy_started_at:
-                elapsed_s = int(time.monotonic() - sess.busy_started_at)
-                if elapsed_s >= 60:
-                    status_str += f" {elapsed_s // 60}m{elapsed_s % 60}s"
-                else:
-                    status_str += f" {elapsed_s}s"
-            # Read live data from statusLine file
-            sl = self._read_status_file(name)
-            # Build table rows
-            rows = []
-            model = (sl.get("model") if sl else None) or sess.model_name or "-"
-            ctx_pct = sl["ctx_pct"] if sl else (sess.last_token_pct or 0)
-            cost = f"${sl['cost']:.2f}" if sl and sl["cost"] >= 0.01 else "-"
-            rows.append(f"  Model  {html_mod.escape(model)}")
-            rows.append(f"  Ctx    {ctx_pct}%")
-            rows.append(f"  Cost   {cost}")
-            if sess.active_subagents:
-                rows.append(f"  Agents {len(sess.active_subagents)}")
-            # Combined depth (held + inside Claude) — the same seam the
-            # Mini App and /clearqueue read, so no surface disagrees.
-            # This does a small synchronous directory listing per session
-            # (the notes dir); accepted knowingly, as the Mini App already
-            # did for its single-session view — /status multiplies it by
-            # session count, which at this project's scale is microseconds.
-            queued, notes = queue_depth_parts(sess)
-            depth = queued + notes
-            if depth:
-                # Split so "16 pending" can never mean 15 ghost notes and
-                # one real message — the exact confusion that hid the
-                # live incident this breakdown fixes (intent.md).
-                rows.append(f"  Queue  {depth} ({queued} queued, {notes} notes)")
-            # Last tool for BUSY sessions
-            if sess.status == Status.BUSY and sess.tool_history:
-                last_summary, last_done = sess.tool_history[-1]
-                t_icon = "✅" if last_done and last_done != "failed" else ("❌" if last_done == "failed" else "⏳")
-                rows.append(f"  Tool   {t_icon} {html_mod.escape(last_summary[:50])}")
-            header = f"{icon} <b>{html_mod.escape(sess.label)}</b> · {status_str}"
-            table = "\n".join(rows)
-            blocks.append(f"{header}\n<code>{table}</code>")
-            shown.append((name, sess.label))
 
-        # One ⋮ row per session actually rendered, in the same order as
-        # the blocks above — this is what makes restart/rename/delete/
-        # diff/preferences reachable without memorising four command
-        # names. "Clear gone sessions" stays last so its position is
-        # unchanged for anyone used to it.
-        rows_kb = [
-            [InlineKeyboardButton(
-                f"⋮ {label}",
-                callback_data=session_parity.session_cb(
-                    self, chat_id or 0, self.registry.get(name), "menu"))]
-            for name, label in shown
-            if self.registry.get(name) is not None
-        ]
-        if has_gone:
-            rows_kb.append([
-                InlineKeyboardButton("Clear gone sessions", callback_data="_:clear_gone"),
-            ])
-        rows_kb += self._app_button_row(update)
-        keyboard = InlineKeyboardMarkup(rows_kb) if rows_kb else None
-        await reply_text(update.message,
-            "\n\n".join(blocks), parse_mode="HTML", reply_markup=keyboard,
-        )
-        asyncio.create_task(self._update_bot_commands())
+        # 4.2 (2026-09-30): a list you can act on, instead of one stats
+        # table per session. The stats that matter are on each session's
+        # second line.
+        text, keyboard = self._render_status_list(chat_id, update)
+        await reply_text(update.message, text, parse_mode="HTML", reply_markup=keyboard)
+        if sessions:
+            # Only with sessions to list, as before: an empty /status must
+            # not broadcast a keyboard (it would go out even while this
+            # chat is muted).
+            asyncio.create_task(self._update_bot_commands())
 
     @staticmethod
     def _read_status_file(session_name: str) -> dict | None:

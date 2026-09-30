@@ -127,7 +127,9 @@ def test_menu_renders_rows_in_order_for_live_session(mk_bot, run_async, mk_query
     assert handled is True
     labels = [btn.text for row in query.edit_message_text.await_args.kwargs["reply_markup"]
               .inline_keyboard for btn in row]
-    assert labels[:4] == ["🔄 Restart", "✏️ Rename", "👤 Preferences", "📝 Diff"]
+    # "⏹ End session" joined after Restart on 2026-09-30 (off the keyboard).
+    assert labels[:5] == ["🔄 Restart", "⏹ End session", "✏️ Rename", "👤 Preferences",
+                          "📝 Diff"]
     assert "🗑️ Delete" not in labels
     assert bot._session_pref_index[0] == [sess.name]
 
