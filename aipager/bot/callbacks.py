@@ -96,6 +96,16 @@ log = logging.getLogger(__name__)
 CALLBACK_ACK_BOUND = 1.0
 
 
+def _switch_refused(outcome) -> str:
+    """Why a mode switch did not happen, for the reasons left after
+    still_stopping and launch_failed, which say their own."""
+    label = html_mod.escape(outcome.label)
+    if outcome.reason == "already_restarting":
+        return (f"⚠️ <b>{label}</b> is restarting right now - mode not changed. "
+                "Send /mode again in a moment.")
+    return f"⚠️ <b>{label}</b> is not running - mode not changed."
+
+
 def _stopped_line(outcome, *, html: bool = True) -> str:
     """`⏹ Stopped x1`, with the queued messages it dropped: what every
     Stop says (a toast is plain text, a message HTML)."""
@@ -245,7 +255,7 @@ class CallbackDispatchMixin:
         if outcome.reason == "still_stopping":
             await edit_fn(
                 f"⚠️ <b>{html_mod.escape(label)}</b> is still stopping - "
-                f"mode not changed. Try /perms again in a moment.",
+                f"mode not changed. Try /mode again in a moment.",
                 parse_mode="HTML",
             )
             return
@@ -258,10 +268,9 @@ class CallbackDispatchMixin:
             return
 
         if not outcome.ok:
-            # not_live / already_restarting: chat's own callers already
-            # filter to a live, not-already-restarting session before
-            # reaching here, so this never trips in practice — a silent
-            # no-op is still safer than crashing on an unhandled branch.
+            # not_live / already_restarting: never silence (a refused
+            # switch used to leave its card and buttons as they were).
+            await edit_fn(_switch_refused(outcome), parse_mode="HTML")
             return
 
         mode_icon = "🤖" if target_skip_perms else "💬"
@@ -791,12 +800,26 @@ class CallbackDispatchMixin:
         # ---- /perms callbacks -----------------------------------------
         if action in ("perms_confirm", "perms_cancel",
                       "perms_stop_switch", "perms_wait"):
-            pending = self._perms_pending.pop(session_name, None)
-            target_skip_perms = (pending or {}).get("target_skip_perms", False)
+            # The card's own record says which mode it switches to. A tap
+            # on another card for the session (an older one) must neither
+            # use nor clear the newer card's record.
+            tapped = getattr(query.message, "message_id", None)
+            pending = self._perms_pending.get(session_name)
+            if pending is not None and pending.get("msg_id") not in (None, tapped):
+                # (A tap that carries no message id cannot show it is this
+                # card's, so it is not.)
+                pending = None
             label = (pending or {}).get("label", session_name.removeprefix("claude-"))
             sess = self.registry.get(session_name)
 
+            def _consume() -> None:
+                # Only this card's record, and only if it is still the one
+                # stored: a newer card's must survive a tap on this one.
+                if pending is not None and self._perms_pending.get(session_name) is pending:
+                    del self._perms_pending[session_name]
+
             if action == "perms_cancel":
+                _consume()
                 try:
                     await edit_text(query, "↩️ Cancelled.")
                 except Exception:
@@ -804,9 +827,10 @@ class CallbackDispatchMixin:
                 return
 
             if action == "perms_wait":
+                _consume()
                 try:
                     await edit_text(query,
-                        f"⏳ Cancelled - try /perms again when "
+                        f"⏳ Cancelled - try /mode again when "
                         f"<b>{html_mod.escape(label)}</b> is idle.",
                         parse_mode="HTML",
                     )
@@ -814,11 +838,32 @@ class CallbackDispatchMixin:
                     pass
                 return
 
+            if pending is None:
+                # Which mode this card was for is not known any more (it
+                # was used, a newer card replaced it, or the daemon
+                # restarted). Never guess: it used to default to Ask, so a
+                # "Switch to Auto?" card relaunched the session in Ask.
+                await self._safe_answer(query, "This card is out of date - send /mode again")
+                try:
+                    await edit_text(query, "⚠️ This card is out of date - send /mode again.")
+                except Exception:
+                    pass
+                return
+            target_skip_perms = pending["target_skip_perms"]
+
             if sess is None:
+                _consume()
                 try:
                     await edit_text(query, "⚠️ Session not found.")
                 except Exception:
                     pass
+                return
+
+            if sess.relaunch_in_flight:
+                # A switch or restart is running right now. Say so, and keep
+                # the card and its record: the same button works in a moment.
+                await self._safe_answer(
+                    query, f"{sess.label} is restarting right now - tap again in a moment")
                 return
 
             async def _edit(text, **kw):
@@ -830,10 +875,11 @@ class CallbackDispatchMixin:
                     )
 
             if action == "perms_confirm":
-                # IDLE Ask→Auto confirmed.
+                # IDLE Ask→Auto confirmed. Whatever happens next edits this
+                # card (its buttons go with it), so its record is spent.
+                _consume()
                 await self._do_perms_switch_via_fn(
-                    sess, target_skip_perms, _edit,
-                    tapped_msg_id=getattr(query.message, "message_id", None))
+                    sess, target_skip_perms, _edit, tapped_msg_id=tapped)
                 return
 
             if action == "perms_stop_switch":
@@ -849,6 +895,7 @@ class CallbackDispatchMixin:
                         query,
                         "That task already finished - send /mode again")
                     return
+                _consume()
                 # BUSY: send Ctrl-C, then poll for socket disappearance.
                 # Same deliberate outage as the IDLE path — the session is
                 # meant to exit here, so its exit is not news. Thin
@@ -861,7 +908,7 @@ class CallbackDispatchMixin:
                     try:
                         await edit_text(query,
                             f"⚠️ <b>{html_mod.escape(label)}</b> is still stopping - "
-                            f"mode not changed. Try /perms again in a moment.",
+                            f"mode not changed. Try /mode again in a moment.",
                             parse_mode="HTML",
                         )
                     except Exception:
@@ -879,6 +926,10 @@ class CallbackDispatchMixin:
                     return
 
                 if not outcome.ok:
+                    try:
+                        await edit_text(query, _switch_refused(outcome), parse_mode="HTML")
+                    except Exception:
+                        pass
                     return
 
                 mode_icon = "🤖" if target_skip_perms else "💬"

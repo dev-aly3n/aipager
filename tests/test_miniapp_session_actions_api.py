@@ -290,7 +290,7 @@ def test_perms_not_live_returns_409(server, run_async):
 def test_perms_already_restarting_returns_409(server, run_async):
     async def _run():
         sess = _mk_session(server, "dev", status=Status.IDLE)
-        sess.restarting_until = time.monotonic() + 10.0
+        sess.relaunch_in_flight = True
         client = await _client_for(server)
         try:
             resp = await client.post(
@@ -680,7 +680,7 @@ def test_restart_not_live_returns_409(server, run_async):
 def test_restart_already_restarting_returns_409(server, run_async):
     async def _run():
         sess = _mk_session(server, "dev", status=Status.IDLE)
-        sess.restarting_until = time.monotonic() + 10.0
+        sess.relaunch_in_flight = True
         client = await _client_for(server)
         try:
             resp = await client.post(

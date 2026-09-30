@@ -498,7 +498,7 @@ def test_perms_busy_session_success_mirrors_and_leaves_status_non_gone(
 def test_perms_already_restarting_returns_409(server, run_async):
     async def _run():
         sess = _mk_session(server, "dev", status=Status.IDLE)
-        sess.restarting_until = time.monotonic() + 100.0
+        sess.relaunch_in_flight = True
         client = await _client_for(server)
         try:
             resp = await client.post(
@@ -948,7 +948,7 @@ def test_restart_preserves_pending_queue_not_dropped(server, run_async, monkeypa
 def test_restart_already_restarting_returns_409(server, run_async):
     async def _run():
         sess = _mk_session(server, "dev", status=Status.BUSY)
-        sess.restarting_until = time.monotonic() + 100.0
+        sess.relaunch_in_flight = True
         client = await _client_for(server)
         send = server.bot._app.bot.send_message
         try:
@@ -1012,40 +1012,64 @@ def test_restart_not_live_gone_session_returns_409(server, run_async):
 
 def test_two_overlapping_restarts_only_one_succeeds(server, run_async, monkeypatch):
     """design.md Risks: "two overlapping restart requests (double-tap,
-    two tabs) — mitigated by the is_restarting() guard; the second
-    409s instead of racing." Fired truly concurrently via
-    asyncio.gather over real loopback sockets, not sequentially."""
+    two tabs) — mitigated by the in-flight guard; the second 409s instead
+    of racing." The second request arrives while the first is provably
+    still relaunching (its launch waits on an event), not merely soon
+    after: since 2026-09-30 a restart that has FINISHED no longer refuses
+    the next one for 10 s (that window silently refused /mode switches)."""
     _mock_inject_happy(monkeypatch)
-    # Give the kill step one real await so the two requests can
-    # actually interleave instead of one completing before the other
-    # is even scheduled.
+    in_launch = asyncio.Event()
     release = asyncio.Event()
 
-    async def _slow_kill(*a, **k):
-        await asyncio.sleep(0)
-        await asyncio.sleep(0)
-        return True
+    async def _held_launch(*a, **k):
+        # Only the first launch is held: a second one getting through
+        # returns at once, so a missing guard fails the assertion below
+        # instead of waiting on this event forever.
+        if not in_launch.is_set():
+            in_launch.set()
+            await release.wait()
+        return True, ""
 
     monkeypatch.setattr(
-        "aipager.dtach.inject.kill_session", AsyncMock(side_effect=_slow_kill),
+        "aipager.dtach.inject.launch_session", AsyncMock(side_effect=_held_launch),
     )
 
     async def _run():
         _mk_session(server, "dev", status=Status.BUSY, claude_session_id="uuid-1")
         client = await _client_for(server)
         try:
-            r1, r2 = await asyncio.gather(
-                client.post("/api/sessions/dev/restart", headers=_hdr(ADMIN_ID)),
-                client.post("/api/sessions/dev/restart", headers=_hdr(DEVELOPER_ID)),
+            first = asyncio.ensure_future(
+                client.post("/api/sessions/dev/restart", headers=_hdr(ADMIN_ID)))
+            await asyncio.wait_for(in_launch.wait(), timeout=5)
+            r2 = await client.post("/api/sessions/dev/restart", headers=_hdr(DEVELOPER_ID))
+            release.set()
+            r1 = await asyncio.wait_for(first, timeout=5)
+            assert (r1.status, r2.status) == (200, 409), (
+                f"expected the first to succeed and the overlapping one to 409, "
+                f"got {(r1.status, r2.status)}"
             )
-            statuses = sorted([r1.status, r2.status])
-            assert statuses == [200, 409], (
-                f"expected exactly one 200 and one 409, got {statuses}"
-            )
+            assert (await r2.json())["error"] == "already_restarting"
         finally:
             await client.close()
     run_async(_run())
-    del release
+
+
+def test_a_restart_right_after_a_finished_one_goes_ahead(server, run_async, monkeypatch):
+    """The 10 s after a relaunch only hush the old process's late
+    SessionEnd; a new request in them is not refused (2026-09-30)."""
+    _mock_inject_happy(monkeypatch)
+
+    async def _run():
+        sess = _mk_session(server, "dev", status=Status.IDLE, claude_session_id="uuid-1")
+        client = await _client_for(server)
+        try:
+            r1 = await client.post("/api/sessions/dev/restart", headers=_hdr(ADMIN_ID))
+            assert sess.is_restarting(), "the quiet window should still be open"
+            r2 = await client.post("/api/sessions/dev/restart", headers=_hdr(ADMIN_ID))
+            assert (r1.status, r2.status) == (200, 200)
+        finally:
+            await client.close()
+    run_async(_run())
 
 
 # ===== rename ================================================================

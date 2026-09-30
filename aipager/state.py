@@ -467,6 +467,13 @@ class TrackedSession:
     # expires on its own. Not persisted — a restart never spans a daemon
     # restart.
     restarting_until: float = 0.0
+    # True from a kill-and-relaunch's kill to its relaunch (or failure):
+    # what refuses a second switch or restart while one runs. Not the
+    # window above, which outlives a SUCCESSFUL relaunch by design (the
+    # late SessionEnd) and used to refuse, in silence, a switch sent in
+    # the seconds after one (2026-09-30). Cleared in a `finally`, so it
+    # cannot stick; not persisted.
+    relaunch_in_flight: bool = False
     # Monotonic deadline while a resume's launch is in flight — read by
     # `is_resuming()`, which the ageing sweep honours. Transient: a
     # daemon restart means no resume is in flight any more.

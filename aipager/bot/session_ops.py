@@ -1494,22 +1494,33 @@ class SessionOpsMixin:
         ORCHESTRATOR OVERRIDE for why it now exists in exactly one
         place rather than being duplicated a third time.
 
-        Re-validates liveness and the ``is_restarting()`` guard itself
+        Re-validates liveness and the ``relaunch_in_flight`` guard itself
         rather than trusting the caller, the same belt-and-braces
-        pattern every other core in this module already uses. Chat's
-        own callers never trip either guard (they already filter to a
-        live, not-already-restarting session before calling in), so
-        this changes nothing about chat's observable behaviour — it
-        only matters for the Mini App, where a stale menu, a direct API
-        probe, or a race with the session monitor must never be able to
-        kick off a second kill/relaunch while one is already in flight.
+        pattern every other core in this module already uses: a stale
+        menu, a direct API probe, a second tap or a race with the session
+        monitor must never be able to kick off a second kill/relaunch
+        while one is already in flight. Every caller says so in words.
         """
         label = sess.label
         if sess.status not in (Status.BUSY, Status.INTERACTIVE, Status.IDLE):
             return RestartOutcome(ok=False, reason="not_live", label=label)
-        if sess.is_restarting():
+        if sess.relaunch_in_flight:
             return RestartOutcome(ok=False, reason="already_restarting", label=label)
+        sess.relaunch_in_flight = True
+        try:
+            return await self._kill_and_relaunch_in_flight(
+                sess, target_skip_perms=target_skip_perms,
+                interrupt_first=interrupt_first)
+        finally:
+            sess.relaunch_in_flight = False
 
+    async def _kill_and_relaunch_in_flight(
+        self, sess: TrackedSession, *, target_skip_perms: bool,
+        interrupt_first: bool,
+    ) -> RestartOutcome:
+        """The body of :meth:`_kill_and_relaunch_core`, run while its
+        ``relaunch_in_flight`` is held."""
+        label = sess.label
         session_name = sess.name
         resume_id = sess.claude_session_id
         cwd = sess.cwd or None
@@ -1518,7 +1529,10 @@ class SessionOpsMixin:
         # Everything from here to a confirmed relaunch is an expected
         # outage. Opened before the kill so the dying session's own
         # SessionEnd hook — which can arrive before kill_session/send_keys
-        # returns — is covered too.
+        # returns — is covered too. A failure below gives back what was
+        # there before, not zero: an earlier relaunch's window may still
+        # be hushing its own old process's late SessionEnd.
+        earlier_window = sess.restarting_until
         sess.restarting_until = time.monotonic() + _PERMS_RESTART_QUIET
 
         # The turn being killed will never earn a card (roadmap 8.32):
@@ -1546,7 +1560,7 @@ class SessionOpsMixin:
             # Socket still present after 3 s — give up. Reopen the
             # alarm: no relaunch is coming, so whatever state the
             # session is in now is news the caller needs.
-            sess.restarting_until = 0.0
+            sess.restarting_until = earlier_window
             return RestartOutcome(ok=False, reason="still_stopping", label=label)
 
         short_name = session_name.removeprefix("claude-")
@@ -1559,7 +1573,7 @@ class SessionOpsMixin:
         if not ok:
             # The relaunch failed, so the session really is gone — stop
             # suppressing, or the caller is left believing it survived.
-            sess.restarting_until = 0.0
+            sess.restarting_until = earlier_window
             return RestartOutcome(
                 ok=False, reason="launch_failed", label=label, err=err,
             )

@@ -694,7 +694,7 @@ def test_kill_and_relaunch_core_refuses_when_already_restarting(
     flight - the guard a stale Mini App menu or a double-tap needs."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
-    sess.restarting_until = time.monotonic() + 10.0
+    sess.relaunch_in_flight = True
 
     async def _boom(*a, **k):
         raise AssertionError("dtach must not be touched while already restarting")
