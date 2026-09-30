@@ -580,7 +580,7 @@ async def _run_diff(bot: "TelegramBot", sess: TrackedSession, *, target_message)
 async def handle_diff_cmd(
     bot: "TelegramBot", update: Update, ctx: ContextTypes.DEFAULT_TYPE,
 ) -> None:
-    """``/diff [label]``. No label → ``registry.last_active_session``.
+    """``/diff [label]``. No label → this chat's target session.
     With a label → resolves via ``find_by_label``. Read-only, no
     confirm — gated with ``allow_read_only=True``."""
     if not await bot._authorize(update, allow_read_only=True):
@@ -590,8 +590,7 @@ async def handle_diff_cmd(
     chat_id = calling_chat_id(update)
 
     if len(parts) < 2:
-        name = bot.registry.last_active_session
-        sess = bot.registry.get(name) if name else None
+        sess = bot.registry.target_for(chat_id)
         if sess is None:
             await reply_text(update.message, "No active session to diff.")
             return

@@ -33,9 +33,13 @@ from unittest.mock import MagicMock
 from aipager import policy_snapshot as ps
 from aipager.state import MIXED_SENDER_HOLD_WINDOW_SECONDS, Status
 
-CHAT_ID = -1001
 NAME = "claude-x"
-SCOPE_CHAT = 256113222  # a stamped scope id, distinct from CHAT_ID
+SCOPE_CHAT = 256113222  # the stamped scope id
+# The messages come from the chat the session is stamped into: the target
+# is per chat since 2026-09-30 (F11), so a message from any OTHER chat is
+# (rightly) never routed to it. The stamping still changes the sender
+# key's scope component from 0 to this id, which is what these tests pin.
+CHAT_ID = SCOPE_CHAT
 
 USER_A = 12345
 USER_B = 999999

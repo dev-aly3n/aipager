@@ -866,13 +866,10 @@ class CommandHandlersMixin:
         """Handle /stop command — stop the last active session."""
         if not await self._authorize(update):
             return
-        name = self.registry.last_active_session
-        if not name:
-            await reply_text(update.message, "No active session to stop.")
-            return
-        sess = self.registry.get(name)
+        # This chat's own target (F11): never another chat's session.
+        sess = self.registry.target_for(calling_chat_id(update))
         if not sess:
-            await reply_text(update.message, "[?] is not busy.")
+            await reply_text(update.message, "No active session to stop.")
             return
         outcome = await self._stop_session(sess, update=update)
         if not outcome.ok:
@@ -897,15 +894,11 @@ class CommandHandlersMixin:
         """
         if not await self._authorize(update):
             return
-        name = self.registry.last_active_session
-        if not name:
+        sess = self.registry.target_for(calling_chat_id(update))
+        if not sess:
             await reply_text(update.message,
                 "No active session - switch to one with /<label> first.",
             )
-            return
-        sess = self.registry.get(name)
-        if not sess:
-            await reply_text(update.message, f"Session '{name}' not found.")
             return
         outcome = await self._clear_queue_core(sess)
         if not outcome.ok:
@@ -1149,14 +1142,7 @@ class CommandHandlersMixin:
         if not await self._authorize(update):
             return
 
-        name = self.registry.last_active_session
-        if not name:
-            await reply_text(update.message,
-                "No active session. Use /new to start one.",
-            )
-            return
-
-        sess = self.registry.get(name)
+        sess = self.registry.target_for(calling_chat_id(update))
         if not sess or sess.status == Status.GONE:
             await reply_text(update.message,
                 "No active session. Use /new to start one.",
@@ -1403,8 +1389,8 @@ class CommandHandlersMixin:
                 "routed by last_active fallback"
             )
         if not sess:
-            name = self.registry.last_active_session
-            sess = self.registry.get(name) if name else None
+            # This chat's own target: never another chat's session (F11).
+            sess = self.registry.target_for(chat_id)
 
         if not sess:
             log.warning("Dropped text %r — no session to route to", text[:80])
@@ -1582,8 +1568,7 @@ class CommandHandlersMixin:
         chat_id = calling_chat_id(update)
         sess = self._resolve_reply_target(reply_to, chat_id)
         if not sess:
-            name = self.registry.last_active_session
-            sess = self.registry.get(name) if name else None
+            sess = self.registry.target_for(chat_id)
         if not sess:
             await reply_text(update.message,
                 "⚠️ Voice transcribed but no active session to send it to. "
@@ -1736,8 +1721,7 @@ class CommandHandlersMixin:
             # pointer, then the last active session.
             sess = self._resolve_reply_target(msg.reply_to_message, chat_id)
             if not sess:
-                name = self.registry.last_active_session
-                sess = self.registry.get(name) if name else None
+                sess = self.registry.target_for(chat_id)
         prompt = _file_prompt(caption, paths, all_photos=all_photos)
 
         if not sess:
@@ -1872,9 +1856,8 @@ class CommandHandlersMixin:
                 )
 
     async def _send_template(self, update: Update, prompt_text: str) -> None:
-        """Inject a quick-template prompt into the last active session."""
-        name = self.registry.last_active_session
-        sess = self.registry.get(name) if name else None
+        """Inject a quick-template prompt into this chat's target session."""
+        sess = self.registry.target_for(calling_chat_id(update))
 
         if not sess or sess.status == Status.GONE:
             await reply_text(update.message, "⚠️ No active session")
@@ -1917,8 +1900,7 @@ class CommandHandlersMixin:
         animation. Slash commands like /model, /cost, /context complete
         instantly and produce no Claude response.
         """
-        name = self.registry.last_active_session
-        sess = self.registry.get(name) if name else None
+        sess = self.registry.target_for(calling_chat_id(update))
 
         if not sess or sess.status == Status.GONE:
             await reply_text(update.message, "⚠️ No active session")

@@ -1484,8 +1484,9 @@ class SessionOpsMixin:
             self.registry.last_active_session = name
             self.registry.mark_dirty()
             asyncio.create_task(self._maybe_update_bot_name(name))
-            dashboard = self._build_session_dashboard(sess)
-            await reply_text(update.message, dashboard, parse_mode="HTML")
+            text, kb = self._render_switch_reply(
+                calling_chat_id(update) or 0, sess, update)
+            await reply_text(update.message, text, parse_mode="HTML", reply_markup=kb)
             return
 
         # Try auto-discover
@@ -1496,8 +1497,9 @@ class SessionOpsMixin:
             self.registry.mark_dirty()
             asyncio.create_task(self._maybe_update_bot_name(session_name))
             asyncio.create_task(self._update_bot_commands())
-            dashboard = self._build_session_dashboard(sess)
-            await reply_text(update.message, dashboard, parse_mode="HTML")
+            text, kb = self._render_switch_reply(
+                calling_chat_id(update) or 0, sess, update)
+            await reply_text(update.message, text, parse_mode="HTML", reply_markup=kb)
             return
 
         await reply_text(update.message, f"⚠️ Unknown session: {target_label}")

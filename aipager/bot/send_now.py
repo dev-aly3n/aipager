@@ -89,7 +89,6 @@ TOAST_UNAVAILABLE = "That session is no longer available"
 REPLY_SENT = "⚡ Sent to Claude now"
 REPLY_NOTHING = "Nothing is waiting in the queue"
 REPLY_NO_SESSION = "No active session."
-REPLY_OTHER_CHAT = "No active session in this chat."
 
 # The line timer's and the queue watcher's waits. Module attributes so tests
 # replace THESE and never patch asyncio.sleep, which is the global module:
@@ -768,14 +767,12 @@ class SendNowMixin:
         line of the session goes, as after a tap."""
         if not await self._authorize(update):
             return
-        name = self.registry.last_active_session
-        sess = self.registry.get(name) if name else None
-        if sess is None:
-            await reply_text(update.message, REPLY_NO_SESSION)
-            return
         chat_id = calling_chat_id(update)
-        if sess.scope_chat_id and chat_id is not None and sess.scope_chat_id != chat_id:
-            await reply_text(update.message, REPLY_OTHER_CHAT)
+        sess = self.registry.target_for(chat_id)
+        if sess is None:
+            # Including a chat whose last target is another chat's
+            # session: `target_for` never returns one (F11).
+            await reply_text(update.message, REPLY_NO_SESSION)
             return
         outcome = await self._send_now_core(sess, None)
         if outcome.result == "sent":

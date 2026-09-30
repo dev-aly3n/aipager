@@ -192,7 +192,9 @@ def test_handle_clearqueue_unknown_session(mk_bot, mk_update, run_async):
     update = mk_update("/clearqueue")
     run_async(bot._handle_clearqueue_cmd(update, MagicMock()))
     text = update.message.reply_text.await_args.args[0]
-    assert "not found" in text
+    # A target that vanished is no target (2026-09-30), and the reply no
+    # longer shows the internal session name.
+    assert "No active session" in text and "claude-vanished" not in text
 
 
 def test_handle_clearqueue_empty(mk_bot, mk_update, run_async):

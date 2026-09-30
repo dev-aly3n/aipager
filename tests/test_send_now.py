@@ -1181,7 +1181,9 @@ def test_now_for_a_session_of_another_chat(mk_bot, tmp_path, run_async, keys,
     bot, _sess = _bot(mk_bot, tmp_path)
     update = _cmd_update(mk_update, chat_id=-100999)
     run_async(bot._handle_now_cmd(update, MagicMock()))
-    assert _replies(update) == [sn.REPLY_OTHER_CHAT]
+    # The target is per chat (2026-09-30): this chat has none, and the
+    # other chat's session is never typed into.
+    assert _replies(update) == [sn.REPLY_NO_SESSION]
     assert keys.writes == []
 
 

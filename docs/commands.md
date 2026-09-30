@@ -39,7 +39,7 @@ One command per live session, registered from its label:
 
 | Form | What it does |
 |---|---|
-| `/<label>` | Switch the active session to `<label>` and show its dashboard. |
+| `/<label>` | Make `<label>` the session your messages go to. The reply says so with its state and mode (`✍️ Now talking to x1 · 💤 idle · 🤖 Auto`, then "Send a message and it goes to x1."), offers **Answer** when it is waiting for you, and **⋮ More** for its menu. The full stats are in `/status`. |
 | `/<label> <prompt>` | Send `<prompt>` straight to that session without switching. |
 | `/<label> stop` | Interrupt that session's current turn. |
 
@@ -98,8 +98,9 @@ Below it, only while it applies, a flood line — `🐢 slow mode after a
 Telegram warning` (the six hours after a 429) or `⏸ card updates paused
 (hourly limit)` / `(rate limit)` (minimal mode, see
 [troubleshooting](troubleshooting.md#the-hourly-budget)) — and then,
-when the chat has more than one live session, one line per session with
-its state: `working`, `needs you`, `idle` or `starting`. The bar names
+when the chat has more than one live session, `✍️ Messages go to jim`
+(the session a plain message in this chat goes to, see below) and one line
+per session with its state: `working`, `needs you`, `idle` or `starting`. The bar names
 each session once: the waiting session the first line names gets no
 line of its own, and the first line never lists names the lines below
 repeat.
@@ -110,6 +111,13 @@ are counted the same way: `(idle, 1 shell running)`, or
 `(idle, 2 agents, 1 shell running)` with both. It is a count, never
 their names, so the bar moves only when the count does.
 Tap the bar to jump to the message.
+
+**Where a plain message goes.** A message that is not a reply goes to the
+session this chat last talked with: the one you last switched to with
+`/<label>`, sent a message to, started, or that last answered you here.
+A bare `/stop`, `/perms`, `/clearqueue`, `/diff` or `/now` acts on the same
+session. Each chat has its own: a message in one chat never goes to a
+session that belongs to another chat.
 
 Buttons on the pinned message:
 
@@ -525,8 +533,10 @@ takes at most 8 s in total.
 
 ### Text
 
-Treated as the next prompt for the **active session** (the one whose
-slash command you last sent). Messages reach Claude **immediately**,
+Treated as the next prompt for the **active session**: this chat's
+target, the session you last switched to, sent a message to, started, or
+that last answered you here (see
+[the pinned status bar](#the-pinned-status-bar)). Messages reach Claude **immediately**,
 even while a turn is running — exactly like typing into the terminal.
 Send several and they queue inside Claude itself, which picks each up
 at a natural boundary:

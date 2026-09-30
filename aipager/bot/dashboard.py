@@ -362,8 +362,9 @@ class DashboardMixin:
         self, chat: int, sessions: list[TrackedSession] | None = None,
     ) -> tuple[str, InlineKeyboardMarkup | None]:
         """The bar for *chat*: ``(html text, keyboard or None)``. Pure: a
-        function of session state, the chat's flood regime and the Mini App
-        URL, and nothing that moves by itself."""
+        function of session state, the chat's message target, the chat's
+        flood regime and the Mini App URL, and nothing that moves by
+        itself."""
         if sessions is None:
             sessions = self._pinned_sessions(chat)
         esc = html_mod.escape
@@ -403,6 +404,12 @@ class DashboardMixin:
         else:
             first = "💤 all idle"
         lines = [first] + self._pinned_flood_lines(chat)
+        # Where a plain message goes (4.9, 2026-09-30), once there is a
+        # choice: with one session it can only go there. The target moves
+        # with the conversation, so the bar says which one it is now.
+        target = self.registry.target_for(chat) if len(sessions) > 1 else None
+        if target is not None and any(target is s for s in sessions):
+            lines.append(f"✍️ Messages go to <b>{esc(target.label)}</b>")
         for s in sessions:
             if s is not named:
                 lines.append(f"• <b>{esc(s.label)}</b> {_pinned_state(s)}")
@@ -784,8 +791,36 @@ class DashboardMixin:
         guard off a message that still has live-looking buttons."""
         self._resent_prompts[(chat or 0, msg_id)] = (sess.name, token)
 
+    def _render_switch_reply(
+        self, chat_id: int, sess: TrackedSession, update=None,
+    ) -> tuple[str, InlineKeyboardMarkup]:
+        """The reply to a bare ``/<label>`` (4.5, 2026-09-30): the switch
+        confirmed, the session's state and mode in words, and what happens
+        next. It replaced a stats table with no call to action; the full
+        stats are in /status. A session waiting on its person offers the
+        pinned bar's Answer; ⋮ is the session's own menu."""
+        esc = html_mod.escape
+        word = _pinned_word(sess)
+        glyph = {"working": "⚙️", "needs you": "⏳", "idle": "💤"}.get(word, "🔄")
+        label = esc(sess.label)
+        lines = [f"✍️ Now talking to <b>{label}</b> · {glyph} {word} · "
+                 f"{'🤖 Auto' if sess.skip_perms else '💬 Ask'}"]
+        rows: list[list[InlineKeyboardButton]] = []
+        if sess.status == Status.INTERACTIVE:
+            lines.append(f"{label} is waiting for your answer.")
+            rows.append([InlineKeyboardButton(
+                f"Answer {sess.label}",
+                callback_data=session_parity.session_cb(self, chat_id, sess, "pin_answer"))])
+        else:
+            lines.append(f"Send a message and it goes to {label}.")
+        rows.append([InlineKeyboardButton(
+            "⋮ More", callback_data=session_parity.session_cb(self, chat_id, sess, "menu"))])
+        if update is not None:
+            rows += self._app_button_row(update)
+        return "\n".join(lines), InlineKeyboardMarkup(rows)
+
     def _build_session_dashboard(self, sess: TrackedSession) -> str:
-        """Build a rich HTML dashboard for a session (used on switch)."""
+        """Build a rich HTML dashboard for a session (shown on resume)."""
         # Status icon
         status_icons = {
             Status.IDLE: "\U0001f7e2",       # green circle

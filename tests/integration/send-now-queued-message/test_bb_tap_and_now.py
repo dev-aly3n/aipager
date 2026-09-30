@@ -466,7 +466,9 @@ def test_sc34_now_from_another_chat_writes_nothing(rp, vloop):
 
 def test_sc34_now_from_another_chat_replies_no_session_here(rp, vloop):
     replies, _ = _now_row(rp, vloop, chat_id=OTHER_CHAT)
-    assert replies == ["No active session in this chat."]
+    # The target is per chat (2026-09-30): this chat has none, which /now
+    # says the same way as anywhere else.
+    assert replies == ["No active session."]
 
 
 def test_now_with_no_active_session_replies_so(rp, vloop):

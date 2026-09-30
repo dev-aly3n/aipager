@@ -1904,7 +1904,19 @@ class SessionRegistry:
         # name → the label it carried when a /kill removed it. See
         # `remove(remember_label=True)`.
         self._remembered_labels: dict[str, str] = {}
-        self.last_active_session: str = ""  # last session that sent a notification
+        # The message target, PER CHAT (F11, 2026-09-30): where a plain
+        # message, voice note or file that is not a reply goes, and what a
+        # bare /stop, /perms, /diff or /now acts on. chat_id → (session
+        # name, order), keyed by the session's OWN chat (`scope_chat_id`,
+        # 0 for a session not stamped with one): a session belongs to one
+        # chat, so "x1 became active" means "x1 is now the target in x1's
+        # chat", and every setter of `last_active_session` records it with
+        # no chat of its own to pass. Read with `target_for(chat_id)`.
+        # It used to be one value for the whole install, so a message in
+        # one chat could be typed into another chat's session.
+        self._targets: dict[int, tuple[str, int]] = {}
+        self._target_seq: int = 0
+        self._last_active_session: str = ""
         # The pinned "needs you" bar's message in each chat that has one
         # (8.31): chat_id → message_id. Persisted, so a restart edits the
         # same message instead of pinning a new one. Replaces the single
@@ -1985,10 +1997,69 @@ class SessionRegistry:
                 self.remove(name)
                 dropped.append(name)
         if dropped:
-            if self.last_active_session in dropped:
-                self.last_active_session = ""  # the field's unset value, never None
+            # (`remove` forgets a dropped session as a target, too.)
             self._dirty = True
         return dropped
+
+    @property
+    def last_active_session(self) -> str:
+        """The session made a target most recently, in ANY chat. Kept for
+        callers with no chat (a legacy unscoped update) and saved state;
+        routing reads :meth:`target_for`."""
+        return self._last_active_session
+
+    @last_active_session.setter
+    def last_active_session(self, name: str) -> None:
+        self._last_active_session = name or ""
+        if not name:
+            # "No target" is what the one install-wide value meant: none
+            # in any chat.
+            self._targets.clear()
+            return
+        self._target_seq += 1
+        # A session is the target of one chat: drop it from any other
+        # (it was stamped into a chat since, say).
+        for chat, (target, _order) in list(self._targets.items()):
+            if target == name:
+                del self._targets[chat]
+        self._targets[self._target_chat(self._sessions.get(name))] = (
+            name, self._target_seq)
+
+    @staticmethod
+    def _target_chat(sess: TrackedSession | None) -> int:
+        """The chat *sess* is the target of: its own; 0 for a session with
+        no chat stamped, which matches any chat (the rule `all_sessions`
+        and `find_by_label` apply to it too, so the target never disagrees
+        with the label lookups)."""
+        return sess.scope_chat_id if sess is not None and sess.scope_chat_id else 0
+
+    def target_for(self, chat_id: int | None) -> TrackedSession | None:
+        """Where an unaddressed message in *chat_id* goes: the newest
+        target made in that chat, or by a session with no chat stamped,
+        that is still one of the chat's sessions (a newer one since
+        stamped into another chat is skipped, not a dead end). Never a
+        session that belongs to another chat. ``None`` chat (a legacy
+        unscoped update) falls back to the install-wide latest."""
+        if chat_id is None:
+            name = self._last_active_session
+            return self._sessions.get(name) if name else None
+        entries = sorted(
+            (e for e in (self._targets.get(chat_id), self._targets.get(0)) if e),
+            key=lambda e: e[1], reverse=True)
+        for name, _order in entries:
+            sess = self._sessions.get(name)
+            if sess is not None and self._target_chat(sess) in (0, chat_id):
+                return sess
+        return None
+
+    def _forget_target(self, name: str) -> None:
+        for chat, (target, _order) in list(self._targets.items()):
+            if target == name:
+                del self._targets[chat]
+        if self._last_active_session == name:
+            # The newest target left, for an update with no chat.
+            self._last_active_session = max(
+                self._targets.values(), key=lambda e: e[1], default=("", 0))[0]
 
     def _evict_gone_overflow(self) -> None:
         """Keep at most ``MAX_GONE_HISTORY`` GONE entries in the registry.
@@ -2283,6 +2354,7 @@ class SessionRegistry:
         internal name.
         """
         sess = self._sessions.pop(name, None)
+        self._forget_target(name)
         if sess and remember_label and sess.label:
             # Only worth remembering a label derivation would NOT reproduce:
             # for an unrenamed session the two are identical, so storing it
@@ -2413,6 +2485,7 @@ class SessionRegistry:
         data = {
             "version": 1,
             "last_active_session": self.last_active_session,
+            "targets": {str(c): [n, o] for c, (n, o) in self._targets.items()},
             "pinned_msg_ids": {str(c): m for c, m in self.pinned_msg_ids.items()},
             "msg_map": {f"{cid}:{mid}": v for (cid, mid), v in msg_map.items()},
             "sessions": sessions,
@@ -2447,7 +2520,9 @@ class SessionRegistry:
             log.warning("Corrupt session state JSON — starting fresh")
             return
 
-        self.last_active_session = data.get("last_active_session", "")
+        # Set once the sessions are loaded (below): the per-chat targets
+        # key on each session's own chat.
+        saved_last_active = data.get("last_active_session", "") or ""
         self.pinned_msg_ids = _load_pinned_msg_ids(data)
         self.queued_line_deletes = _clean_line_deletes(
             data.get("queued_line_deletes"))
@@ -2683,10 +2758,39 @@ class SessionRegistry:
         # the next save_if_dirty cycle persists the derived gone_at.
         # Otherwise it stays False (load alone doesn't dirty the state).
 
+        self._load_targets(data.get("targets"), saved_last_active)
+
         # Age out sessions that ended more than GONE_SESSION_MAX_AGE_DAYS
         # ago (roadmap 8.12) — after msg_map and last_active_session are
         # restored, so their references go with the entries.
         self.expire_gone()
+
+    def _load_targets(self, raw, saved_last_active: str) -> None:
+        """Restore the per-chat targets. State saved before they existed
+        has only the install-wide one: it becomes its own chat's target,
+        which is exactly where a single-chat install sent everything."""
+        self._targets = {}
+        if isinstance(raw, dict):
+            for key, value in raw.items():
+                try:
+                    chat = int(key)
+                    name, order = value
+                    order = int(order)
+                except (TypeError, ValueError):
+                    continue
+                if not (isinstance(name, str) and name in self._sessions):
+                    continue
+                # Keyed by the session's chat NOW: the load's backfill may
+                # just have stamped a session that had none.
+                chat = self._target_chat(self._sessions[name])
+                if chat not in self._targets or self._targets[chat][1] < order:
+                    self._targets[chat] = (name, order)
+        self._target_seq = max((o for _n, o in self._targets.values()), default=0)
+        if saved_last_active in self._sessions:
+            if not self._targets:
+                self.last_active_session = saved_last_active
+            else:
+                self._last_active_session = saved_last_active
 
     def save_if_dirty(self) -> None:
         """Save state if it has been modified since last save."""
