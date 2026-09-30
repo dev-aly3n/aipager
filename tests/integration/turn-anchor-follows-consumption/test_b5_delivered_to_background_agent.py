@@ -72,16 +72,16 @@ def test_b5_waiting_card_reanchors_to_message_delivered_to_agent(
 
     bot._app.bot.delete_message.assert_any_await(
         chat_id=CHAT_ID, message_id=c1,
-        # 8.26 R3: the re-anchor's delete of the OLD card is an
-        # ORNAMENT — card housekeeping. Leaving a stale card behind
-        # is cosmetic; taking an answer's token to remove it is not.
-        rate_limit_args={"class": "ornament"},
+        # The move's delete of the OLD card is INSTANT (operator,
+        # 2026-09-29): two cards on screen for seconds is not cosmetic.
+        rate_limit_args={"class": "instant"},
     )
+    # The move is one silent sendRichMessage carrying the whole card.
     reanchor_send = next(
-        c for c in bot._app.bot.send_message.await_args_list
-        if c.kwargs.get("reply_to_message_id") == 2
+        p for m, p in rich_calls
+        if m == "sendRichMessage" and p.get("reply_to_message_id") == 2
     )
-    assert reanchor_send.kwargs.get("disable_notification") is True
+    assert reanchor_send.get("disable_notification") is True
 
     # The job actually finishes now — its single final answer follows M2.
     sess.active_subagents = {}
@@ -90,5 +90,6 @@ def test_b5_waiting_card_reanchors_to_message_delivered_to_agent(
     run_async(bot.notify(sess, "idle_prompt", {
         "summary": "job done", "raw_md": "job done",
     }))
-    answer_payload = next(p for m, p in rich_calls if m == "sendRichMessage")
+    answer_payload = next(p for m, p in rich_calls
+                          if m == "sendRichMessage" and not p.get("disable_notification"))
     assert answer_payload["reply_to_message_id"] == 2

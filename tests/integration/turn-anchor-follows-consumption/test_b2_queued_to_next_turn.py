@@ -49,7 +49,8 @@ def test_b2_turn1_answers_m1_turn2_card_sent_once_under_m2(
         "summary": "turn one's answer", "raw_md": "turn one's answer",
     }))
 
-    turn1_answer = next(p for m, p in rich_calls if m == "sendRichMessage")
+    turn1_answer = next(p for m, p in rich_calls
+                          if m == "sendRichMessage" and not p.get("disable_notification"))
     assert turn1_answer["reply_to_message_id"] == 1, (
         "turn 1's answer must reply to M1 — the message that started "
         f"IT, not whatever was sent afterward. rich_calls={rich_calls}"
@@ -91,5 +92,6 @@ def test_b2_turn1_answers_m1_turn2_card_sent_once_under_m2(
     run_async(bot.notify(sess, "idle_prompt", {
         "summary": "turn two's answer", "raw_md": "turn two's answer",
     }))
-    turn2_answer = next(p for m, p in rich_calls if m == "sendRichMessage")
+    turn2_answer = next(p for m, p in rich_calls
+                          if m == "sendRichMessage" and not p.get("disable_notification"))
     assert turn2_answer["reply_to_message_id"] == 2

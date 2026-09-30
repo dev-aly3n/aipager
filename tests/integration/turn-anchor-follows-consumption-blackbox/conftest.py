@@ -60,9 +60,20 @@ def rich_calls(monkeypatch):
     """
     calls = []
 
+    ids = {"n": 20_000}
+
     async def _fake_post(method, payload, **_kw):
         calls.append((method, payload))
-        return {"ok": True, "result": {"message_id": 999}}
+        if method != "sendRichMessage":
+            return {"ok": True, "result": {"message_id": 999}}
+        # A fresh id per sent message, and the keyboard it carried, as
+        # Telegram answers: the card's move is one sendRichMessage too
+        # (animation._send_card_copy).
+        ids["n"] += 1
+        result = {"message_id": ids["n"]}
+        if "reply_markup" in payload:
+            result["reply_markup"] = payload["reply_markup"]
+        return {"ok": True, "result": result}
 
     monkeypatch.setattr("aipager.bot.rich_message._post", _fake_post)
     return calls

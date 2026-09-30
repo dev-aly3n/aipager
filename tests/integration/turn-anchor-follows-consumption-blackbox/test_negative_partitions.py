@@ -17,6 +17,14 @@ M1 = 901
 M2 = 902
 
 
+
+def _moves(rich_calls):
+    """The card's moves: the whole card in one silent sendRichMessage
+    (animation._send_card_copy)."""
+    return [p for m, p in rich_calls
+            if m == "sendRichMessage" and p.get("disable_notification")]
+
+
 def _unchanged(bot, sess, c1):
     bot._app.bot.delete_message.assert_not_awaited()
     bot._app.bot.send_message.assert_not_awaited()
@@ -87,6 +95,8 @@ def test_absorption_of_an_already_swept_note_is_ignored(
 
     bot._app.bot.delete_message.assert_not_awaited()
     bot._app.bot.send_message.assert_not_awaited()
+    assert not [p for m, p in rich_calls if m == "sendRichMessage"
+                and p.get("disable_notification")], "the card did not move"
     assert sess.busy_msg_id == c1
     assert sess.trigger_msg_id == M1
 
@@ -126,7 +136,7 @@ def test_completing_the_partial_line_then_consumes_it(
     tick(bot, run_async, sess)
 
     bot._app.bot.delete_message.assert_awaited_once()
-    bot._app.bot.send_message.assert_awaited_once()
+    assert len(_moves(rich_calls)) == 1   # the card's one-call move
     assert sess.trigger_msg_id == M2
 
 
@@ -148,7 +158,7 @@ def test_a_quiescent_transcript_produces_no_extra_effects_on_a_second_tick(
     tick(bot, run_async, sess)
 
     bot._app.bot.delete_message.assert_awaited_once()
-    bot._app.bot.send_message.assert_awaited_once()
+    assert len(_moves(rich_calls)) == 1   # the card's one-call move
     busy_msg_id_after_first_tick = sess.busy_msg_id
     trigger_after_first_tick = sess.trigger_msg_id
     busy_card_trigger_after_first_tick = sess.busy_card_trigger
@@ -160,6 +170,7 @@ def test_a_quiescent_transcript_produces_no_extra_effects_on_a_second_tick(
 
     bot._app.bot.delete_message.assert_not_awaited()
     bot._app.bot.send_message.assert_not_awaited()
+    assert len(_moves(rich_calls)) == 1, "a quiescent re-scan moves nothing"
     assert sess.busy_msg_id == busy_msg_id_after_first_tick
     assert sess.trigger_msg_id == trigger_after_first_tick
     assert sess.busy_card_trigger == busy_card_trigger_after_first_tick

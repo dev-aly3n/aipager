@@ -43,14 +43,16 @@ def test_card_layout_resends_finished_card_under_m2_not_edits_in_place(
 
     run_async(bot.notify(sess, "idle_prompt", {"summary": "it was a test"}))
 
-    # "Re-sent" means a brand-new send_message under the new target (the
-    # plain busy-card transport send_busy always uses) — never an
-    # in-place edit of the STALE card (C1). The freshly-sent card is
-    # then itself rendered via a rich edit (an editMessageText on the
-    # NEW message id) — that part is the SAME two-step every ordinary
-    # busy-card render already uses, not a re-anchor-specific quirk.
-    bot._app.bot.send_message.assert_awaited_once()
-    send_kwargs = bot._app.bot.send_message.await_args.kwargs
+    # "Re-sent" means a brand-new message under the new target — never
+    # an in-place edit of the STALE card (C1). The move is ONE silent
+    # sendRichMessage carrying the whole finished card (operator,
+    # 2026-09-29: no bare frame, no second call to fill it in).
+    # The move is ONE silent sendRichMessage carrying the whole card.
+    moves = [p for m, p in rich_calls
+             if m == "sendRichMessage" and p.get("disable_notification")]
+    assert len(moves) == 1, f"expected exactly one move: {rich_calls}"
+    bot._app.bot.send_message.assert_not_awaited()
+    send_kwargs = moves[0]
     assert send_kwargs.get("reply_to_message_id") == M2
     assert send_kwargs.get("disable_notification") is True
 
@@ -61,7 +63,8 @@ def test_card_layout_resends_finished_card_under_m2_not_edits_in_place(
     bot._app.bot.delete_message.assert_awaited_once()
     assert bot._app.bot.delete_message.await_args.kwargs.get("message_id") == c1
 
-    send_rich_payloads = [p for m, p in rich_calls if m == "sendRichMessage"]
+    send_rich_payloads = [p for m, p in rich_calls if m == "sendRichMessage"
+                          and not p.get("disable_notification")]
     assert send_rich_payloads, f"no answer sent: {rich_calls}"
     assert send_rich_payloads[-1].get("reply_to_message_id") == M2
 

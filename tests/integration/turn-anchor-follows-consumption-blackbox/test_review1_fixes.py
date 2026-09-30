@@ -63,9 +63,12 @@ def test_b6_card_reanchor_does_not_duplicate_the_answer_in_its_own_timeline(
 
     run_async(bot.notify(sess, "idle_prompt", {"summary": answer, "raw_md": answer}))
 
-    edit_payloads = [p for m, p in rich_calls if m == "editMessageText"]
-    assert edit_payloads, f"the re-sent card was never rendered: {rich_calls}"
-    final_markdown = edit_payloads[-1]["rich_message"]["markdown"]
+    # The moved finished card is rendered in its own one-call send.
+    renders = [p for m, p in rich_calls
+               if m == "editMessageText"
+               or (m == "sendRichMessage" and p.get("disable_notification"))]
+    assert renders, f"the re-sent card was never rendered: {rich_calls}"
+    final_markdown = renders[-1]["rich_message"]["markdown"]
     assert answer not in final_markdown, (
         "the re-anchored FINAL card must not carry the answer's own text "
         f"in its own timeline (rev-iter1-001); markdown={final_markdown!r}")
@@ -86,8 +89,8 @@ def test_b6_card_reanchor_does_not_duplicate_the_answer_in_its_own_timeline(
 # ===== (b) rev-iter1-002: compaction bypass sites seed busy_card_trigger ===
 
 def test_absorption_after_compaction_bypass_still_reanchors_the_live_card(
-    wire_transport, install_session, append_queue_op, tick, send_update,
-    send_text, run_async, monkeypatch,
+    wire_transport, rich_calls, install_session, append_queue_op, tick,
+    send_update, send_text, run_async, monkeypatch,
 ):
     """No card is live; ``compacting`` sends a fresh one (a bypass site,
     never ``send_busy``); ``compact_done`` resolves it in place; only
@@ -135,9 +138,12 @@ def test_absorption_after_compaction_bypass_still_reanchors_the_live_card(
     assert bot._app.bot.delete_message.await_args.kwargs.get("message_id") == c1, (
         "the OLD (post-compaction) card was not the one deleted")
 
-    bot._app.bot.send_message.assert_awaited_once()
-    send_kwargs = bot._app.bot.send_message.await_args.kwargs
-    assert send_kwargs.get("reply_to_message_id") == M2
+    # The move is ONE silent sendRichMessage carrying the whole card (a
+    # send_message here would be M2's Send now line, not the card).
+    moves = [p for m, p in rich_calls
+             if m == "sendRichMessage" and p.get("disable_notification")]
+    assert len(moves) == 1, f"expected exactly one move: {rich_calls}"
+    assert moves[0].get("reply_to_message_id") == M2
     assert sess.busy_card_trigger == M2
     assert sess.trigger_msg_id == M2
 

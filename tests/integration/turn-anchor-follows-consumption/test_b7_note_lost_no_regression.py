@@ -55,5 +55,6 @@ def test_b7_note_lost_before_absorption_degrades_to_m1_like_today(
     run_async(bot.notify(sess, "idle_prompt", {
         "summary": "degraded answer", "raw_md": "degraded answer",
     }))
-    answer_payload = next(p for m, p in rich_calls if m == "sendRichMessage")
+    answer_payload = next(p for m, p in rich_calls
+                          if m == "sendRichMessage" and not p.get("disable_notification"))
     assert answer_payload["reply_to_message_id"] == 1

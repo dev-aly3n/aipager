@@ -11,7 +11,6 @@ call.
 from __future__ import annotations
 
 import asyncio
-from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from aipager.state import Status, TrackedSession
@@ -27,7 +26,7 @@ def _sess(busy_msg_id):
 
 
 def test_b9_final_reanchor_wins_after_live_one_is_cancelled_mid_send(
-    mk_bot, run_async, rich_calls,
+    mk_bot, run_async, monkeypatch,
 ):
     bot = mk_bot()
     bot._app.bot = AsyncMock()
@@ -35,16 +34,22 @@ def test_b9_final_reanchor_wins_after_live_one_is_cancelled_mid_send(
 
     entered_send = asyncio.Event()
     gate = asyncio.Event()  # never set — the live call blocks here until cancelled
-    calls = {"n": 0}
+    sends = []
 
-    async def _send_message(*_a, **_kw):
-        calls["n"] += 1
-        if calls["n"] == 1:
+    async def _post(method, payload, **_kw):
+        # The move is one sendRichMessage carrying the whole card.
+        if method != "sendRichMessage":
+            return {"ok": True, "result": {"message_id": 999}}
+        sends.append(payload)
+        if len(sends) == 1:
             entered_send.set()
             await gate.wait()
-        return SimpleNamespace(message_id=9000 + calls["n"])
+        result = {"message_id": 9000 + len(sends)}
+        if "reply_markup" in payload:
+            result["reply_markup"] = payload["reply_markup"]
+        return {"ok": True, "result": result}
 
-    bot._app.bot.send_message = AsyncMock(side_effect=_send_message)
+    monkeypatch.setattr("aipager.bot.rich_message._post", _post)
     bot._app.bot.delete_message = AsyncMock()
 
     async def scenario():
@@ -79,19 +84,15 @@ def test_b9_final_reanchor_wins_after_live_one_is_cancelled_mid_send(
 
     run_async(scenario())
 
-    assert calls["n"] == 2, "exactly one cancelled attempt, one that completed"
+    assert len(sends) == 2, "exactly one cancelled attempt, one that completed"
     assert sess.busy_msg_id == 9002, "the FINAL card is the one left live"
     bot._app.bot.delete_message.assert_awaited_once_with(
         chat_id=-2002, message_id=555,
-        # 8.26 R3: the re-anchor's delete of the OLD card is an
-        # ORNAMENT — card housekeeping. Leaving a stale card behind
-        # is cosmetic; taking an answer's token to remove it is not.
-        rate_limit_args={"class": "ornament"},
+        # The move's delete of the OLD card is INSTANT (operator,
+        # 2026-09-29): two cards on screen for seconds is not cosmetic.
+        rate_limit_args={"class": "instant"},
     )
-
-    final_edits = [p for m, p in rich_calls if m == "editMessageText"]
-    assert final_edits, "the final render must have gone out"
-    assert final_edits[-1].get("reply_markup") is None, (
+    assert "reply_markup" not in sends[-1], (
         "the settled card must carry no Stop button — never left "
-        f"showing 'Working': {final_edits[-1]}"
+        f"showing 'Working': {sends[-1]}"
     )

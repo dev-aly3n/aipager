@@ -48,8 +48,9 @@ def test_b8_old_card_delete_raises_new_card_still_sent(
         "the new card must still exist even though the old one's delete raised"
     )
     bot._app.bot.delete_message.assert_awaited()  # the delete WAS attempted
+    # The move is one silent sendRichMessage carrying the whole card.
     reanchor_send = next(
-        c for c in bot._app.bot.send_message.await_args_list
-        if c.kwargs.get("reply_to_message_id") == 2
+        p for m, p in rich_calls
+        if m == "sendRichMessage" and p.get("reply_to_message_id") == 2
     )
-    assert reanchor_send.kwargs.get("disable_notification") is True
+    assert reanchor_send.get("disable_notification") is True

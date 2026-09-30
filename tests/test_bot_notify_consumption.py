@@ -418,9 +418,13 @@ def test_finish_path_trims_answer_tail_before_the_immediate_card_reanchor(
         "summary": answer, "raw_md": answer,
     }))
 
-    edits = [p for m, p in rich_calls if m == "editMessageText"]
-    assert len(edits) == 1, f"expected exactly one final render; got {rich_calls}"
-    markdown = edits[0]["rich_message"]["markdown"]
+    # The moved finished card is rendered once, in its own one-call send
+    # (a silent sendRichMessage; the answer is the other, notifying one).
+    renders = [p for m, p in rich_calls
+               if m == "editMessageText"
+               or (m == "sendRichMessage" and p.get("disable_notification"))]
+    assert len(renders) == 1, f"expected exactly one final render; got {rich_calls}"
+    markdown = renders[0]["rich_message"]["markdown"]
     assert answer not in markdown, (
         "the re-anchored FINAL card must not carry the answer's own "
         f"text in its own timeline (rev-iter1-001); markdown={markdown!r}"

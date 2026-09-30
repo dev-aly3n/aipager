@@ -36,5 +36,6 @@ def test_a_message_from_idle_anchors_card_and_answer_to_itself(
     run_async(bot.notify(sess, "idle_prompt", {
         "summary": "hi there", "raw_md": "hi there",
     }))
-    answer_payload = next(p for m, p in rich_calls if m == "sendRichMessage")
+    answer_payload = next(p for m, p in rich_calls
+                          if m == "sendRichMessage" and not p.get("disable_notification"))
     assert answer_payload["reply_to_message_id"] == 1

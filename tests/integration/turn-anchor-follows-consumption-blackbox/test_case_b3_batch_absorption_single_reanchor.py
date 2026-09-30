@@ -27,7 +27,11 @@ def test_two_absorptions_in_one_batch_reanchor_exactly_once(
     tick(bot, run_async, sess)
 
     bot._app.bot.delete_message.assert_awaited_once()
-    bot._app.bot.send_message.assert_awaited_once()
+    # The move is ONE silent sendRichMessage carrying the whole card.
+    moves = [p for m, p in rich_calls
+             if m == "sendRichMessage" and p.get("disable_notification")]
+    assert len(moves) == 1, f"expected exactly one move: {rich_calls}"
+    bot._app.bot.send_message.assert_not_awaited()
 
 
 def test_batch_absorption_ends_anchored_under_the_last_message(
@@ -44,8 +48,9 @@ def test_batch_absorption_ends_anchored_under_the_last_message(
     assert sess.trigger_msg_id == M3, "must anchor to the LAST consumed message"
     assert sess.busy_card_trigger == M3
 
-    send_kwargs = bot._app.bot.send_message.await_args.kwargs
-    assert send_kwargs.get("reply_to_message_id") == M3
+    moves = [p for m, p in rich_calls
+             if m == "sendRichMessage" and p.get("disable_notification")]
+    assert moves[-1].get("reply_to_message_id") == M3
 
 
 def test_batch_absorption_reacts_thumbs_up_on_both_messages(

@@ -182,7 +182,9 @@ def _cards(bot):
 
 
 def _answers(rich_calls):
-    return [p["reply_to_message_id"] for m, p in rich_calls if m == "sendRichMessage"]
+    """Answers only: a moved card is a silent sendRichMessage too."""
+    return [p["reply_to_message_id"] for m, p in rich_calls
+            if m == "sendRichMessage" and not p.get("disable_notification")]
 
 
 # ── the live regression ─────────────────────────────────────────────────

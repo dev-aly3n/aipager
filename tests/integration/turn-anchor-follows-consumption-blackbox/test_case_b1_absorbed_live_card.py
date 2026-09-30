@@ -48,8 +48,12 @@ def test_absorption_deletes_the_old_card_and_sends_a_new_one_under_m2(
     assert delete_kwargs.get("message_id") == c1, (
         f"the OLD card was not the one deleted: {delete_kwargs}")
 
-    bot._app.bot.send_message.assert_awaited_once()
-    send_kwargs = bot._app.bot.send_message.await_args.kwargs
+    # The move is ONE silent sendRichMessage carrying the whole card.
+    moves = [p for m, p in rich_calls
+             if m == "sendRichMessage" and p.get("disable_notification")]
+    assert len(moves) == 1, f"expected exactly one move: {rich_calls}"
+    bot._app.bot.send_message.assert_not_awaited()
+    send_kwargs = moves[0]
     assert send_kwargs.get("reply_to_message_id") == M2
     assert send_kwargs.get("disable_notification") is True
 

@@ -18,6 +18,7 @@ import re
 import time
 from typing import TYPE_CHECKING
 
+import httpx
 from telegram.error import RetryAfter
 
 from aipager import bg_shells, flood_policy, preferences
@@ -33,12 +34,14 @@ from aipager.config import (
 from aipager.bot.flood import MUTE, FloodMuted, _key as _chat_key
 from aipager.bot.flood_budget import (
     PRIORITY_ESSENTIAL,
+    PRIORITY_INSTANT,
     PRIORITY_ORNAMENT,
     FloodSkipped,
     rate_limit_args as _rl_args,
     _retry_after_seconds as _retry_after_secs,
     card_interval,
     is_group_chat,
+    small_429_wait,
 )
 from aipager.bot.rich_message import (
     detect_rtl,
@@ -48,6 +51,7 @@ from aipager.bot.rich_message import (
     RichMessageFallbackRequired,
     RichMessageFloodBanned,
     RichMessageGone,
+    send_rich_message,
 )
 from aipager import policy_snapshot
 from aipager.transcript import read_queue_events, read_turn_blocks, read_turn_stream
@@ -91,6 +95,14 @@ if TYPE_CHECKING:
     pass
 
 log = logging.getLogger(__name__)
+
+# The wait before the one retry of a moved card's old-card delete after a
+# small 429 (a seam: tests replace this attribute, never asyncio itself).
+_card_retry_sleep = asyncio.sleep
+
+# `_send_card_copy`'s "refused": the chat is muted or the bot is blocked, so
+# the card does not move at all (None means "try the two-step copy").
+_COPY_REFUSED = object()
 
 # Strong references to the card steps a queued message's handler starts in
 # the background (`_card_for_injected`), so none is collected mid-flight.
@@ -1751,6 +1763,7 @@ class AnimationMixin:
     async def send_busy(
         self, sess: TrackedSession, *,
         reply_to: int | None = None, disable_notification: bool = False,
+        priority: str = PRIORITY_ORNAMENT,
     ) -> int | None:
         """Send initial 'Working...' message and start animation. Returns message_id.
 
@@ -1759,14 +1772,15 @@ class AnimationMixin:
         :meth:`_start_animation` right after this returns, because this
         function is also a CARD path (see the note at the end of the body).
 
-        ``reply_to``/``disable_notification`` (design.md "turn anchor
-        follows consumption") let :meth:`_reanchor_busy_card` reuse this
-        same send for a re-anchor: ``reply_to`` defaults to
-        ``sess.trigger_msg_id`` (today's behaviour, unchanged for every
-        existing call site), and a successful send records
-        ``sess.busy_card_trigger`` — which message THIS card currently
-        replies to — so a later mismatch against ``trigger_msg_id`` (R3)
-        can be detected.
+        ``reply_to``/``disable_notification``/``priority`` (design.md
+        "turn anchor follows consumption") let the card's move reuse this
+        send for its two-step FALLBACK only (the move itself is one
+        complete ``sendRichMessage``, :meth:`_send_card_copy`):
+        ``reply_to`` defaults to ``sess.trigger_msg_id`` (today's
+        behaviour, unchanged for every existing call site), and a
+        successful send records ``sess.busy_card_trigger`` — which
+        message THIS card currently replies to — so a later mismatch
+        against ``trigger_msg_id`` (R3) can be detected.
         """
         if not self._app:
             return None
@@ -1781,17 +1795,21 @@ class AnimationMixin:
                 # ORNAMENT (8.26 R3): the card's creation. It is the
                 # single largest consumer of a chat's budget (~95 % of
                 # outbound volume against the answer's ~5 %), so it is
-                # the first thing pressure sheds — and `_reanchor_busy_card`
-                # inherits the class through this call.
-                rate_limit_args=_rl_args(priority=PRIORITY_ORNAMENT),
+                # the first thing pressure sheds. The card's move passes
+                # INSTANT for its two-step fallback
+                # (`_reanchor_busy_card_locked`).
+                rate_limit_args=_rl_args(priority=priority),
             )
-            sess.busy_card_trigger = target
             # Read INSIDE the try, as this always has been: a send that
             # answers something without a `message_id` (a stub, a mocked
             # transport, a future API change) is a FAILED send, and the
             # ``except`` below is what turns it into ``None`` for the
             # caller rather than an AttributeError out of the card path.
             msg_id = msg.message_id
+            # Only once the card really exists: a failed send recording
+            # its target would make the card look moved when it was not,
+            # and it would never be moved again.
+            sess.busy_card_trigger = target
         except FloodMuted:
             # The gate refused it (8.26 R1, row A): the chat is banned and
             # this card is an ornament. No card, no crash, no traceback —
@@ -1821,9 +1839,9 @@ class AnimationMixin:
         # is sent by `_animate_typing`, whose task `_start_animation`
         # begins the moment this function returns — see `_start_typing`.
         # Sending it from here would put a Telegram round trip on a CARD
-        # path: this function is also `_reanchor_busy_card`'s send, which
+        # path: this function is also the card move's fallback send, which
         # runs inside `_animate_tick` and holds `sess.animate_lock`, so an
-        # awaited action here delays the re-anchor's own edit, the old
+        # awaited action here delays the move's fill-in edit, the old
         # card's delete and `track_message` behind it — exactly what R2
         # and R3 forbid. (The ordering that mattered is preserved for
         # free: the task's first refresh happens after this send, and
@@ -2068,10 +2086,11 @@ class AnimationMixin:
             reply_markup = (
                 None if final else self._build_stop_keyboard(sess).to_dict()
             )
+            edited_id = int(sess.busy_msg_id)
             try:
                 result = await edit_message_text_rich(
                     int(resolve_chat_id(sess)),
-                    int(sess.busy_msg_id),
+                    edited_id,
                     markdown,
                     is_rtl=is_rtl,
                     reply_markup=reply_markup,
@@ -2101,6 +2120,14 @@ class AnimationMixin:
                 log.warning("[%s] editMessageText blocked — stopping animation", sess.label)
                 return None
             except RichMessageGone:
+                if sess.busy_msg_id != edited_id:
+                    # The card moved while this edit was out
+                    # (`_reanchor_busy_card_locked` deletes the old copy):
+                    # the live card is the new one. Transient: the next
+                    # tick edits it.
+                    log.debug("[%s] editMessageText: old card %s gone after "
+                              "a move", sess.label, edited_id)
+                    return False
                 log.debug("[%s] editMessageText: message gone — clearing busy_msg_id",
                           sess.label)
                 sess.busy_msg_id = 0
@@ -2201,7 +2228,17 @@ class AnimationMixin:
     ) -> None:
         """:meth:`_reanchor_busy_card`'s body, for a caller that already
         holds ``sess.animate_lock`` (the turn-card step re-anchoring its
-        own turn's card, roadmap 8.57)."""
+        own turn's card, roadmap 8.57).
+
+        The move looks instant (operator, 2026-09-29: "when the copy went
+        below, the old bussy card was still there for few second"): the
+        copy goes out COMPLETE in one call (:meth:`_send_card_copy`), and
+        the old card is deleted right after it lands
+        (:meth:`_delete_moved_card`). Both are INSTANT: they never wait
+        for a chat token and minimal mode does not stop them; a mute
+        does. Only if the one-call copy is impossible (the rich API
+        refused it) does the old two-step copy run: a bare frame, then the
+        fill-in edit, both INSTANT too."""
         old_msg_id = sess.busy_msg_id
         if not old_msg_id or old_msg_id <= 0:
             # Nothing live (already gone, or a -1 claim from a
@@ -2209,44 +2246,183 @@ class AnimationMixin:
             # layout fallback (a standalone answer under the now-
             # correct trigger_msg_id) covers this degraded case.
             return
-        new_msg_id = await self.send_busy(
-            sess, reply_to=target_msg_id, disable_notification=True,
-        )
-        if not new_msg_id:
-            log.warning("[%s] re-anchor send failed — keeping the stale card",
-                        sess.label)
+        verb = FINAL_VERB if final else "Working"
+        waiting = (sess.status != Status.BUSY) if not final else False
+        new_msg_id = await self._send_card_copy(
+            sess, target_msg_id, verb=verb, final=final, waiting=waiting)
+        if new_msg_id is _COPY_REFUSED:
             return
-        sess.busy_msg_id = new_msg_id  # mutates the SAME "busy" stack entry
+        if new_msg_id is None:
+            log.info("[%s] card move: the one-call copy was refused, "
+                     "sending it in two steps", sess.label)
+            new_msg_id = await self._send_bare_card_copy(sess, target_msg_id)
+            if not new_msg_id:
+                log.warning("[%s] re-anchor send failed — keeping the stale "
+                            "card", sess.label)
+                return
+            # NOT through `_card_edit_due`, deliberately — an intended
+            # exemption from the turn-age cadence (8.30 Q3), like the
+            # resume, paused-line and final edits: it is user-driven (one
+            # per consumed mid-turn message) and fills in the card just
+            # sent, which otherwise shows a bare frame until the next due
+            # tick — up to a minute in an old turn.
+            try:
+                if await self._edit_busy_rich(
+                    sess, verb, final=final, waiting=waiting,
+                    priority=PRIORITY_INSTANT,
+                ) is None:
+                    self._stop_animation(sess)
+            except Exception:
+                log.debug("[%s] re-anchor timeline render failed", sess.label,
+                          exc_info=True)
         self.registry.track_message(
             new_msg_id, sess.name, resolve_chat_id_int(sess) or 0,
         )
-        verb = FINAL_VERB if final else "Working"
-        waiting = (sess.status != Status.BUSY) if not final else False
-        # NOT through `_card_edit_due`, deliberately — an intended
-        # exemption from the turn-age cadence (8.30 Q3), like the
-        # resume, paused-line and final edits: it is user-driven (one
-        # per consumed mid-turn message) and fills in the card this
-        # re-anchor has just sent, which otherwise shows a bare frame
-        # until the next due tick — up to a minute in an old turn.
-        try:
-            if await self._edit_busy_rich(
+        deleted = await self._delete_moved_card(sess, old_msg_id)
+        log.info("[%s] card moved under %s (%s -> %s)%s", sess.label,
+                 target_msg_id, old_msg_id, new_msg_id,
+                 "" if deleted else "; the old card was left behind")
+
+    async def _send_card_copy(
+        self, sess: TrackedSession, target_msg_id: int, *, verb: str,
+        final: bool, waiting: bool,
+    ) -> object:
+        """Send the card's complete copy under *target_msg_id* in ONE
+        call: what the old card shows (the render :meth:`_edit_busy_rich`
+        would put on it, or the minimal-mode paused line), with its Stop
+        button (none when *final*). Returns the new message id with
+        ``busy_msg_id`` switched to it; ``_COPY_REFUSED`` when the card
+        must not move (the chat is muted, the bot is blocked, or the copy
+        may already be on screen though Telegram did not say so: a second
+        copy would be the very duplicate card this avoids); None when the
+        rich API refused it outright (the caller sends the two-step copy).
+
+        No card-edit lock: an edit of the old card still in flight when it
+        is deleted is answered "message gone", and :meth:`_edit_busy_rich`
+        clears ``busy_msg_id`` only if it is still the card it edited."""
+        chat_id = resolve_chat_id_int(sess)
+        if chat_id is None:
+            return None
+        paused = not final and sess.stream_last_rendered == _PAUSED_CARD_TEXT
+        sess.card_elapsed_unit = "s" if final else self._card_elapsed_unit(sess)
+        if paused:
+            markdown, hid = (f"⏳ **{_md_escape(sess.label)}** · working "
+                             "(updates paused)"), False
+        else:
+            markdown, hid = build_stream_card_ex(
                 sess, verb, final=final, waiting=waiting,
-            ) is None:
-                self._stop_animation(sess)
-        except Exception:
-            log.debug("[%s] re-anchor timeline render failed", sess.label,
-                      exc_info=True)
-        try:
-            await self._app.bot.delete_message(
-                chat_id=resolve_chat_id(sess), message_id=old_msg_id,
-                # ORNAMENT (8.26 R3): card housekeeping. Leaving a
-                # stale card behind is cosmetic; taking an answer's
-                # token to remove it is not.
-                rate_limit_args=_rl_args(priority=PRIORITY_ORNAMENT),
             )
+        markup = None if final else self._build_stop_keyboard(sess).to_dict()
+        try:
+            sent = await send_rich_message(
+                chat_id, markdown,
+                is_rtl=detect_rtl(
+                    " ".join(t for _a, t in sess.stream_commentary)),
+                reply_to_message_id=target_msg_id,
+                reply_markup=markup,
+                disable_notification=True,
+                priority=PRIORITY_INSTANT,
+            )
+        except (RichMessageFloodBanned, FloodMuted):
+            log.info("[%s] card not moved under %s: the chat is muted",
+                     sess.label, target_msg_id)
+            return _COPY_REFUSED
+        except RichMessageBlocked:
+            log.info("[%s] card not moved under %s: the bot is blocked",
+                     sess.label, target_msg_id)
+            return _COPY_REFUSED
+        except RichMessageFallbackRequired as exc:
+            cause = exc.__cause__
+            if isinstance(cause, httpx.TransportError) and not isinstance(
+                    cause, (httpx.ConnectError, httpx.ConnectTimeout)):
+                # The request may have reached Telegram: the copy could be
+                # on screen already.
+                log.info("[%s] card not moved under %s: the copy's send "
+                         "has an unknown outcome (%s)", sess.label,
+                         target_msg_id, type(cause).__name__)
+                return _COPY_REFUSED
+            log.debug("[%s] one-call card copy refused", sess.label,
+                      exc_info=True)
+            return None
         except Exception:
-            log.debug("[%s] re-anchor: old card delete failed (left behind)",
-                      sess.label, exc_info=True)
+            log.debug("[%s] one-call card copy failed", sess.label,
+                      exc_info=True)
+            return None
+        new_msg_id = sent.get("message_id") if isinstance(sent, dict) else None
+        if not new_msg_id:
+            # Telegram said ok but named no message: it may be on screen.
+            log.info("[%s] card not moved under %s: the copy was accepted "
+                     "without a message id", sess.label, target_msg_id)
+            return _COPY_REFUSED
+        sess.busy_msg_id = new_msg_id  # the SAME "busy" stack entry
+        sess.busy_card_trigger = target_msg_id
+        # What a landed edit records (`_edit_busy_rich`); the paused
+        # marker stays, so the tick does not re-send the paused line.
+        sess.last_card_truncated = hid
+        sess.last_tool_edit_at = time.monotonic()
+        sess.stream_last_rendered = _PAUSED_CARD_TEXT if paused else markdown
+        sess.stream_dirty = False
+        sess.card_skipped_since = 0.0
+        sess.card_frame_state = self._card_frame_state(sess)
+        if markup is not None and not sent.get("reply_markup"):
+            # Telegram took the card but not its button: the next tick's
+            # edit (which always carries it) must not be skipped as
+            # "nothing changed".
+            sess.stream_last_rendered = ""
+            log.info("[%s] moved card came back without its Stop "
+                     "button; the next edit adds it", sess.label)
+        return new_msg_id
+
+    async def _send_bare_card_copy(self, sess: TrackedSession,
+                                   target_msg_id: int) -> int | None:
+        """The two-step copy's first step: a bare frame under the target,
+        INSTANT, with ``busy_msg_id`` switched to it. Nothing has been
+        rendered on it, so ``stream_last_rendered`` is cleared: if the
+        fill-in edit fails, the next tick re-renders it instead of
+        skipping it as "nothing changed"."""
+        new_msg_id = await self.send_busy(
+            sess, reply_to=target_msg_id, disable_notification=True,
+            priority=PRIORITY_INSTANT,
+        )
+        if not new_msg_id:
+            return None
+        sess.busy_msg_id = new_msg_id  # the SAME "busy" stack entry
+        sess.stream_last_rendered = ""
+        return new_msg_id
+
+    async def _delete_moved_card(self, sess: TrackedSession,
+                                 old_msg_id: int) -> bool:
+        """Delete the card a move left behind, at once (INSTANT). A small
+        429 is waited out once and the delete tried again; a mute or a
+        ban-sized 429 gives up at once (B8: the old card stays). Never
+        raises."""
+        for attempt in (1, 2):
+            try:
+                await self._app.bot.delete_message(
+                    chat_id=resolve_chat_id(sess), message_id=old_msg_id,
+                    rate_limit_args=_rl_args(priority=PRIORITY_INSTANT),
+                )
+                return True
+            except RetryAfter as exc:
+                wait = small_429_wait(exc, resolve_chat_id_int(sess))
+                if attempt == 2 or wait is None:
+                    log.info("[%s] old card %s not deleted: Telegram %s",
+                             sess.label, old_msg_id,
+                             "asked to slow down twice" if wait is not None
+                             else "muted the chat")
+                    return False
+                await _card_retry_sleep(wait)
+            except (FloodMuted, FloodSkipped):
+                log.info("[%s] old card %s not deleted: the chat is muted",
+                         sess.label, old_msg_id)
+                return False
+            except Exception:
+                log.info("[%s] old card %s not deleted (already gone?)",
+                         sess.label, old_msg_id)
+                log.debug("[%s] old card delete failed", sess.label,
+                          exc_info=True)
+                return False
+        return False
 
     @staticmethod
     def _card_elapsed_unit(sess: TrackedSession, now: float | None = None) -> str:
@@ -2651,6 +2827,14 @@ class AnimationMixin:
             # under `FLOOD_MINIMAL_MODE_RATE_FLOOR`, so it can no longer
             # afford an animation — but it can still afford the ANSWER,
             # which is the whole point of shedding pixels first.
+            #
+            # The card's MOVE is not animation: it follows a message
+            # Claude took, and the operator must see it at once (2026-09-
+            # 29). The queue is read and the card moved (INSTANT; the copy
+            # carries the paused line) even here; no timeline is rendered.
+            _sync_anchors_from_transcript(sess)
+            self._sync_queued_lines(sess)
+            await self._consume_and_reanchor(sess)
             #
             # FALSE, NEVER NONE. `None` ends `_animate_busy`'s loop and
             # kills the task; the watchdog then restarts it every 20 s for

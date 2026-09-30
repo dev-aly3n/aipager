@@ -70,6 +70,8 @@ def test_message_while_busy_before_a_background_job_starts_holds_the_target(
 
     assert sess.trigger_msg_id == M1
     bot._app.bot.send_message.assert_not_awaited()
+    assert not [p for m, p in rich_calls if m == "sendRichMessage"
+                and p.get("disable_notification")], "the card did not move"
 
 
 def test_interim_stop_opens_the_job_while_the_notes_race_is_still_live(
@@ -221,8 +223,12 @@ def test_b5_waiting_card_reanchors_under_delivered_to_agent_and_job_answer_follo
         assert bot._app.bot.delete_message.await_args.kwargs.get("message_id") == c0, (
             "the OLD waiting card was not the one deleted")
 
-        bot._app.bot.send_message.assert_awaited_once()
-        send_kwargs = bot._app.bot.send_message.await_args.kwargs
+        # The move is ONE silent sendRichMessage carrying the whole card.
+        moves = [p for m, p in rich_calls
+                 if m == "sendRichMessage" and p.get("disable_notification")]
+        assert len(moves) == 1, f"expected exactly one move: {rich_calls}"
+        bot._app.bot.send_message.assert_not_awaited()
+        send_kwargs = moves[0]
         assert send_kwargs.get("reply_to_message_id") == M2
         assert send_kwargs.get("disable_notification") is True
 

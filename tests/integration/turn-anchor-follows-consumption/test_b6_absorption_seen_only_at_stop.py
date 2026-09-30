@@ -62,18 +62,19 @@ def test_b6_card_layout_resends_finished_card_and_answer_under_m2(
     assert sess.trigger_msg_id is None  # reply cycle complete, reset at the end
     bot._app.bot.delete_message.assert_any_await(
         chat_id=CHAT_ID, message_id=c1,
-        # 8.26 R3: the re-anchor's delete of the OLD card is an
-        # ORNAMENT — card housekeeping. Leaving a stale card behind
-        # is cosmetic; taking an answer's token to remove it is not.
-        rate_limit_args={"class": "ornament"},
+        # The move's delete of the OLD card is INSTANT (operator,
+        # 2026-09-29): two cards on screen for seconds is not cosmetic.
+        rate_limit_args={"class": "instant"},
     )
+    # The move is one silent sendRichMessage carrying the whole card.
     finished_card_send = next(
-        c for c in bot._app.bot.send_message.await_args_list
-        if c.kwargs.get("reply_to_message_id") == 2
+        p for m, p in rich_calls
+        if m == "sendRichMessage" and p.get("reply_to_message_id") == 2
     )
-    assert finished_card_send.kwargs.get("disable_notification") is True
+    assert finished_card_send.get("disable_notification") is True
 
-    answer_payload = next(p for m, p in rich_calls if m == "sendRichMessage")
+    answer_payload = next(p for m, p in rich_calls
+                          if m == "sendRichMessage" and not p.get("disable_notification"))
     assert answer_payload["reply_to_message_id"] == 2
 
 
@@ -105,9 +106,13 @@ def test_b6_card_layout_does_not_duplicate_a_trailing_answer_in_the_resent_card(
         "summary": answer, "raw_md": answer,
     }))
 
-    edits = [p for m, p in rich_calls if m == "editMessageText"]
-    assert len(edits) == 1, f"expected exactly one final render; got {rich_calls}"
-    markdown = edits[0]["rich_message"]["markdown"]
+    # The moved finished card is rendered once, in its own send (the move
+    # is one silent sendRichMessage carrying the whole card).
+    renders = [p for m, p in rich_calls
+               if m == "editMessageText"
+               or (m == "sendRichMessage" and p.get("disable_notification"))]
+    assert len(renders) == 1, f"expected exactly one final render; got {rich_calls}"
+    markdown = renders[0]["rich_message"]["markdown"]
     assert answer not in markdown, (
         "the re-anchored FINAL card must not carry the answer's own "
         f"text in its own timeline (rev-iter1-001); markdown={markdown!r}"
@@ -140,7 +145,8 @@ def test_b6_merged_layout_sends_fresh_combined_message_under_m2(
         "the stale card must be SENT fresh, never edited in place — "
         f"rich_calls={rich_calls}"
     )
-    merged_send = next(p for m, p in rich_calls if m == "sendRichMessage")
+    merged_send = next(p for m, p in rich_calls
+                          if m == "sendRichMessage" and not p.get("disable_notification"))
     assert merged_send["reply_to_message_id"] == 2
     # The reply cycle is complete by the time notify() returns — both
     # trigger_msg_id and busy_card_trigger reset together at the finish

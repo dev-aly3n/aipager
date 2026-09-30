@@ -310,7 +310,10 @@ def test_message_popped_while_continuation_shell_runs_stays_in_the_job(
         return live
 
     live = _run(vloop, scenario())
-    assert live == [min(r.chat.cards)]  # the job's own card, still up
+    # The job's one card, still up, moved under the popped message (the
+    # move happens at once since 2026-09-29; it used to be paced).
+    assert len(live) == 1
+    assert r.chat.cards[live[0]]["reply_to"] == 3, r.chat.cards
     # No card was ever settled as a Finished one (the job card may move
     # under the newest answer, which deletes the old copy).
     assert not [c for c in r.chat.cards.values()

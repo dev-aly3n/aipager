@@ -277,12 +277,20 @@ async def send_rich_message(
     reply_to_message_id: int | None = None,
     kind: str = "blocking",
     priority: str = PRIORITY_ESSENTIAL,
+    reply_markup: dict | None = None,
+    disable_notification: bool = False,
 ) -> dict | None:
     """POST sendRichMessage and return the result dict, or None on ok-but-empty.
 
     ``priority`` declares the call's class to the limiter (8.26 R3).
     Defaults to ESSENTIAL — an answer is never dropped — so no existing
-    caller changes. Only the busy card passes ``PRIORITY_ORNAMENT``.
+    caller changes. The busy card's own sends pass ``PRIORITY_ORNAMENT``;
+    its move (below) passes ``PRIORITY_INSTANT``.
+
+    ``reply_markup`` (an inline keyboard as a dict) and
+    ``disable_notification`` go into the payload only when given: the
+    busy card's move sends the whole card, Stop button included, in this
+    one call (``animation._reanchor_busy_card_locked``).
 
     Raises
     ------
@@ -307,6 +315,10 @@ async def send_rich_message(
     }
     if reply_to_message_id is not None:
         payload["reply_to_message_id"] = reply_to_message_id
+    if reply_markup is not None:
+        payload["reply_markup"] = reply_markup
+    if disable_notification:
+        payload["disable_notification"] = True
 
     return await _send_rich_message_once(payload, allow_retry=True, kind=kind,
                                         priority=priority)

@@ -45,13 +45,16 @@ def _start_turn(bot, mk_update, run_async, sess):
     return sess.busy_msg_id
 
 
-def _reanchor_sends(bot):
-    return [c for c in bot._app.bot.send_message.await_args_list
-            if c.kwargs.get("disable_notification") is True]
+def _reanchor_sends(rich_calls):
+    """The card's moves: the whole card in one silent sendRichMessage
+    (animation._send_card_copy)."""
+    return [p for m, p in rich_calls
+            if m == "sendRichMessage" and p.get("disable_notification")]
 
 
 def _answers(rich_calls):
-    return [p["reply_to_message_id"] for m, p in rich_calls if m == "sendRichMessage"]
+    return [p["reply_to_message_id"] for m, p in rich_calls
+            if m == "sendRichMessage" and not p.get("disable_notification")]
 
 
 # ── (b) absorbed: the pick-up at submit moves nothing; the transcript does ─
@@ -66,7 +69,7 @@ def test_pickup_while_busy_moves_nothing_and_absorption_reanchors(
     _pickup(bot, run_async, sess, 2, "second")
 
     assert sess.trigger_msg_id == 1, "a pick-up at submit time is not consumption"
-    assert sess.busy_msg_id == c1 and not _reanchor_sends(bot)
+    assert sess.busy_msg_id == c1 and not _reanchor_sends(rich_calls)
     assert [t["msg_id"] for t in sess.queued_targets] == [2]
     # Claude only QUEUED it: it keeps its 👀 until the absorption.
     assert not any(c.args[1] == 2 and c.args[2] == "👍"
@@ -80,14 +83,13 @@ def test_pickup_while_busy_moves_nothing_and_absorption_reanchors(
     assert sess.trigger_msg_id == 2
     assert sess.busy_card_trigger == 2 and sess.busy_msg_id != c1
     assert sess.queued_targets == []
-    (re_send,) = _reanchor_sends(bot)
-    assert re_send.kwargs["reply_to_message_id"] == 2
+    (re_send,) = _reanchor_sends(rich_calls)
+    assert re_send["reply_to_message_id"] == 2
     bot._app.bot.delete_message.assert_any_await(
         chat_id=CHAT_ID, message_id=c1,
-        # 8.26 R3: the re-anchor's delete of the OLD card is an
-        # ORNAMENT — card housekeeping. Leaving a stale card behind
-        # is cosmetic; taking an answer's token to remove it is not.
-        rate_limit_args={"class": "ornament"},
+        # The move's delete of the OLD card is INSTANT (operator,
+        # 2026-09-29): two cards on screen for seconds is not cosmetic.
+        rate_limit_args={"class": "instant"},
     )
 
     sess.status = Status.IDLE

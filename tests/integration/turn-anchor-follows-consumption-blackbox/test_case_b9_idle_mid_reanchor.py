@@ -48,7 +48,9 @@ def test_absorption_immediately_followed_by_finish_settles_on_one_final_answer(
 
     run_async(_scenario())
 
-    send_rich_payloads = [p for m, p in rich_calls if m == "sendRichMessage"]
+    # Answers only: the card's move is a silent sendRichMessage too.
+    send_rich_payloads = [p for m, p in rich_calls if m == "sendRichMessage"
+                          and not p.get("disable_notification")]
     assert len(send_rich_payloads) == 1, (
         f"exactly one answer must be sent, never a duplicate: {rich_calls}")
     assert send_rich_payloads[-1].get("reply_to_message_id") == M2

@@ -122,10 +122,24 @@ def test_hiva_sequence_replayed_end_to_end(mk_bot, run_async, tmp_path, monkeypa
 
     edit_calls: list[dict] = []
     real_edit_busy_rich = bot._edit_busy_rich
-    async def _spy_edit_busy_rich(sess_, verb, *, final=False, waiting=False):
+    async def _spy_edit_busy_rich(sess_, verb, *, final=False, waiting=False,
+                                  **kw):
         edit_calls.append({"verb": verb, "final": final, "waiting": waiting})
-        return await real_edit_busy_rich(sess_, verb, final=final, waiting=waiting)
+        return await real_edit_busy_rich(sess_, verb, final=final,
+                                         waiting=waiting, **kw)
     bot._edit_busy_rich = _spy_edit_busy_rich
+
+    # The card's move sends the whole card in one call: a render too,
+    # the finished one when it carries no Stop button.
+    async def _send_card_copy(chat_id, markdown, **kwargs):
+        next_id[0] += 1
+        edit_calls.append({"verb": "moved",
+                           "final": kwargs.get("reply_markup") is None,
+                           "waiting": False})
+        return {"message_id": next_id[0],
+                "reply_markup": kwargs.get("reply_markup")}
+    monkeypatch.setattr("aipager.bot.animation.send_rich_message",
+                        _send_card_copy)
 
     async def _edit_rich_transport(chat_id, msg_id, markdown, **kwargs):
         return {}
@@ -353,10 +367,24 @@ def test_ishaq_endgame_job_stays_open_through_continuation(
 
     edit_calls: list[dict] = []
     real_edit_busy_rich = bot._edit_busy_rich
-    async def _spy_edit_busy_rich(sess_, verb, *, final=False, waiting=False):
+    async def _spy_edit_busy_rich(sess_, verb, *, final=False, waiting=False,
+                                  **kw):
         edit_calls.append({"verb": verb, "final": final, "waiting": waiting})
-        return await real_edit_busy_rich(sess_, verb, final=final, waiting=waiting)
+        return await real_edit_busy_rich(sess_, verb, final=final,
+                                         waiting=waiting, **kw)
     bot._edit_busy_rich = _spy_edit_busy_rich
+
+    # The card's move sends the whole card in one call: a render too,
+    # the finished one when it carries no Stop button.
+    async def _send_card_copy(chat_id, markdown, **kwargs):
+        next_id[0] += 1
+        edit_calls.append({"verb": "moved",
+                           "final": kwargs.get("reply_markup") is None,
+                           "waiting": False})
+        return {"message_id": next_id[0],
+                "reply_markup": kwargs.get("reply_markup")}
+    monkeypatch.setattr("aipager.bot.animation.send_rich_message",
+                        _send_card_copy)
 
     async def _edit_rich_transport(chat_id, msg_id, markdown, **kwargs):
         return {}
@@ -656,10 +684,22 @@ def test_double_hop_continuation_spawning_new_agents(
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
     edit_calls: list[dict] = []
     real_edit = bot._edit_busy_rich
-    async def _spy(sess_, verb, *, final=False, waiting=False):
+    async def _spy(sess_, verb, *, final=False, waiting=False, **kw):
         edit_calls.append({"final": final, "waiting": waiting})
-        return await real_edit(sess_, verb, final=final, waiting=waiting)
+        return await real_edit(sess_, verb, final=final, waiting=waiting,
+                               **kw)
     bot._edit_busy_rich = _spy
+
+    # The card's move sends the whole card in one call: a render too,
+    # the finished one when it carries no Stop button.
+    async def _send_card_copy(chat_id, markdown, **kwargs):
+        next_id[0] += 1
+        edit_calls.append({"final": kwargs.get("reply_markup") is None,
+                           "waiting": False})
+        return {"message_id": next_id[0],
+                "reply_markup": kwargs.get("reply_markup")}
+    monkeypatch.setattr("aipager.bot.animation.send_rich_message",
+                        _send_card_copy)
     async def _edit_rich_transport(chat_id, msg_id, markdown, **kwargs):
         return {}
     monkeypatch.setattr("aipager.bot.animation.edit_message_text_rich",
@@ -740,10 +780,22 @@ def test_real_prompt_during_grace_supersedes_and_late_continuation_closes(
     monkeypatch.setattr("aipager.bot.notify.send_rich_message", _send_rich)
     edit_calls: list[dict] = []
     real_edit = bot._edit_busy_rich
-    async def _spy(sess_, verb, *, final=False, waiting=False):
+    async def _spy(sess_, verb, *, final=False, waiting=False, **kw):
         edit_calls.append({"final": final, "waiting": waiting})
-        return await real_edit(sess_, verb, final=final, waiting=waiting)
+        return await real_edit(sess_, verb, final=final, waiting=waiting,
+                               **kw)
     bot._edit_busy_rich = _spy
+
+    # The card's move sends the whole card in one call: a render too,
+    # the finished one when it carries no Stop button.
+    async def _send_card_copy(chat_id, markdown, **kwargs):
+        next_id[0] += 1
+        edit_calls.append({"final": kwargs.get("reply_markup") is None,
+                           "waiting": False})
+        return {"message_id": next_id[0],
+                "reply_markup": kwargs.get("reply_markup")}
+    monkeypatch.setattr("aipager.bot.animation.send_rich_message",
+                        _send_card_copy)
     async def _edit_rich_transport(chat_id, msg_id, markdown, **kwargs):
         return {}
     monkeypatch.setattr("aipager.bot.animation.edit_message_text_rich",

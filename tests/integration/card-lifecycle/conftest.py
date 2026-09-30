@@ -9,7 +9,8 @@ LOOP is virtual, and each module's OWN ``time`` reference is rebound — and
 every call goes through the real ``BudgetRateLimiter`` before it counts.
 
 What this directory adds is a Telegram that remembers every busy CARD: a
-``sendMessage`` with a Stop keyboard opens one, an ``editMessageText``
+``sendMessage`` with a Stop keyboard opens one (as does a silent
+``sendRichMessage``, a moved card), an ``editMessageText``
 without ``reply_markup`` settles it (Telegram drops the keyboard), and a
 ``deleteMessage`` removes it. A card still carrying its Stop button when a
 row ends, with no turn running, is exactly the operator's stuck card.
@@ -175,7 +176,7 @@ class _PtbDouble:
                 chat.cards[msg_id] = {
                     "reply_to": kwargs.get("reply_to_message_id"),
                     "stop": True, "deleted": False, "text": text,
-                    "texts": [text]}
+                    "texts": [text], "t": chat.clock()}
             return SimpleNamespace(message_id=msg_id)
         if name == "edit_message_text":
             card = chat.cards.get(kwargs.get("message_id"))
@@ -188,6 +189,7 @@ class _PtbDouble:
             card = chat.cards.get(kwargs.get("message_id"))
             if card is not None:
                 card["deleted"] = True
+                card["deleted_at"] = chat.clock()
             return True
         if name == "delete_messages":
             for mid in kwargs.get("message_ids") or []:
@@ -263,9 +265,20 @@ def rich_chat(monkeypatch, card_chat):
                 card.setdefault("texts", []).append(card["text"])
         elif endpoint == "sendRichMessage":
             msg_id = card_chat.new_id()
-            card_chat.answers[msg_id] = payload.get("reply_to_message_id")
-        return httpx.Response(200, json={
-            "ok": True, "result": {"message_id": msg_id or 4242}})
+            if payload.get("disable_notification"):
+                # A moved card (animation._send_card_copy): the whole
+                # card in one silent send, its Stop button unless final.
+                text = (payload.get("rich_message") or {}).get("markdown") or ""
+                card_chat.cards[msg_id] = {
+                    "reply_to": payload.get("reply_to_message_id"),
+                    "stop": "reply_markup" in payload, "deleted": False,
+                    "text": text, "texts": [text], "t": card_chat.clock()}
+            else:
+                card_chat.answers[msg_id] = payload.get("reply_to_message_id")
+        result = {"message_id": msg_id or 4242}
+        if "reply_markup" in payload:
+            result["reply_markup"] = payload["reply_markup"]
+        return httpx.Response(200, json={"ok": True, "result": result})
 
     monkeypatch.setattr(rm, "_post", _REAL_POST)
     monkeypatch.setattr(

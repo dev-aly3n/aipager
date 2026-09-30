@@ -27,8 +27,12 @@ def test_delete_failure_does_not_block_the_new_card_send(
     append_queue_op(sess, "remove", "absorbed_mid_turn", "second")
     tick(bot, run_async, sess)  # must not raise
 
-    bot._app.bot.send_message.assert_awaited_once()
-    send_kwargs = bot._app.bot.send_message.await_args.kwargs
+    # The move is ONE silent sendRichMessage carrying the whole card.
+    moves = [p for m, p in rich_calls
+             if m == "sendRichMessage" and p.get("disable_notification")]
+    assert len(moves) == 1, f"expected exactly one move: {rich_calls}"
+    bot._app.bot.send_message.assert_not_awaited()
+    send_kwargs = moves[0]
     assert send_kwargs.get("reply_to_message_id") == M2
     assert send_kwargs.get("disable_notification") is True
 

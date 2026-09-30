@@ -58,12 +58,11 @@ def test_b3_two_absorptions_in_one_batch_reanchor_once_to_the_last(
     assert delete_calls[0].kwargs["message_id"] == c1
 
     reanchor_sends = [
-        c for c in bot._app.bot.send_message.await_args_list
-        if c.kwargs.get("reply_to_message_id") == 3
+        p for m, p in rich_calls
+        if m == "sendRichMessage" and p.get("reply_to_message_id") == 3
     ]
     assert len(reanchor_sends) == 1, (
-        f"expected exactly one re-anchor send, got "
-        f"{bot._app.bot.send_message.await_args_list}"
+        f"expected exactly one re-anchor send, got {rich_calls}"
     )
 
     reaction_targets = [
@@ -78,5 +77,6 @@ def test_b3_two_absorptions_in_one_batch_reanchor_once_to_the_last(
     run_async(bot.notify(sess, "idle_prompt", {
         "summary": "final", "raw_md": "final",
     }))
-    answer_payload = next(p for m, p in rich_calls if m == "sendRichMessage")
+    answer_payload = next(p for m, p in rich_calls
+                          if m == "sendRichMessage" and not p.get("disable_notification"))
     assert answer_payload["reply_to_message_id"] == 3

@@ -341,9 +341,20 @@ def rich_chat(monkeypatch, card_chat):
                 card.setdefault("texts", []).append(card["text"])
         elif endpoint == "sendRichMessage":
             msg_id = card_chat.new_id()
-            card_chat.answers[msg_id] = payload.get("reply_to_message_id")
-        return httpx.Response(200, json={
-            "ok": True, "result": {"message_id": msg_id or 4242}})
+            if payload.get("disable_notification"):
+                # A moved card (animation._send_card_copy): the whole
+                # card in one silent send, its Stop button unless final.
+                text = (payload.get("rich_message") or {}).get("markdown") or ""
+                card_chat.cards[msg_id] = {
+                    "reply_to": payload.get("reply_to_message_id"),
+                    "stop": "reply_markup" in payload, "deleted": False,
+                    "text": text, "texts": [text], "t": card_chat.clock()}
+            else:
+                card_chat.answers[msg_id] = payload.get("reply_to_message_id")
+        result = {"message_id": msg_id or 4242}
+        if "reply_markup" in payload:
+            result["reply_markup"] = payload["reply_markup"]
+        return httpx.Response(200, json={"ok": True, "result": result})
 
     monkeypatch.setattr(rm, "_post", _REAL_POST)
     monkeypatch.setattr(

@@ -35,6 +35,8 @@ def test_bare_remove_triggers_no_reanchor(
 
     bot._app.bot.delete_message.assert_not_awaited()
     bot._app.bot.send_message.assert_not_awaited()
+    assert not [p for m, p in rich_calls if m == "sendRichMessage"
+                and p.get("disable_notification")], "the card did not move"
     assert sess.trigger_msg_id == M1
     assert sess.busy_msg_id == c1
 

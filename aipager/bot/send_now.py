@@ -41,15 +41,14 @@ from typing import TYPE_CHECKING
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import RetryAfter
 
-from aipager import config
 from aipager.bot import reactions
 from aipager.bot.animation import _scan_queue_operations
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot.flood_budget import (
     PRIORITY_INSTANT,
     FloodSkipped,
-    _retry_after_seconds,
     rate_limit_args as _rl_args,
+    small_429_wait as _small_429_wait,
 )
 from aipager.bot.notify import _BACKGROUND_TASKS
 from aipager.bot.session_ops import held_by_claude
@@ -71,18 +70,6 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-
-def _small_429_wait(exc: RetryAfter, chat_id: int | None) -> float | None:
-    """Seconds to wait before the one retry a line send or delete gets
-    after a 429, or None to give up at once. A ban-sized 429 (over
-    ``TELEGRAM_MAX_RETRY_AFTER``) has armed the chat's mute, and sleeping
-    it out would park the task for hours and fire the retry right at the
-    ban's end (review rev-iter2-002)."""
-    wait = _retry_after_seconds(exc)
-    if wait > config.TELEGRAM_MAX_RETRY_AFTER or (
-            chat_id is not None and MUTE.is_muted(chat_id)):
-        return None
-    return wait
 
 # The line, its button, and what a tap or /now answers (no em dashes: see
 # tests/test_no_em_dash_in_ui_text.py).

@@ -265,10 +265,14 @@ _TOKEN_EPS: float = 1e-6
 PRIORITY_ESSENTIAL: str = "essential"
 PRIORITY_ORNAMENT: str = "ornament"
 PRIORITY_SIGNAL: str = "signal"
-# INSTANT — the "⏳ Queued / ⚡ Send now" line under a message Claude still
-#   holds, and its delete (bot/send_now.py). The operator's rule (live test
-#   2026-09-29): it goes out the moment the message is queued and goes the
-#   moment Claude takes it, never paced behind card edits. So it never
+# INSTANT — what the operator must see the moment it happens (2026-09-29:
+#   "user need to see them instantly"): the "⏳ Queued / ⚡ Send now" line
+#   under a message Claude still holds, and its delete (bot/send_now.py),
+#   and the busy card's MOVE under a message Claude took (its one-call
+#   copy and the old card's delete, animation._reanchor_busy_card_locked;
+#   once per absorption batch). The line goes out the moment the message
+#   is queued and goes the moment Claude takes it, never paced behind card
+#   edits; the move never leaves two cards on screen. So it never
 #   waits for a chat token and is never refused by minimal mode or the
 #   skip reserve: it takes a token when one is free (card edits yield to
 #   it), is stamped into the rolling window even when that is full, counts
@@ -947,6 +951,20 @@ def _retry_after_seconds(exc: RetryAfter) -> float:
         with contextlib.suppress(TypeError, ValueError):
             return float(raw)
     return 1.0
+
+
+def small_429_wait(exc: RetryAfter, chat_id: int | None) -> float | None:
+    """Seconds to wait before the ONE retry an instant call (a Send now
+    line, its delete, the busy card's move) gets after a 429, or None to
+    give up at once. A ban-sized 429 (over ``TELEGRAM_MAX_RETRY_AFTER``)
+    has armed the chat's mute, and sleeping it out would park the task for
+    hours and fire the retry right at the ban's end (review rev-iter2-002
+    of send-now-instant-lines)."""
+    wait = _retry_after_seconds(exc)
+    if wait > TELEGRAM_MAX_RETRY_AFTER or (
+            chat_id is not None and MUTE.is_muted(chat_id)):
+        return None
+    return wait
 
 
 class BudgetRateLimiter(BaseRateLimiter):
@@ -2588,4 +2606,5 @@ __all__ = [
     "clear_backoff_signal",
     "is_group_chat",
     "rate_limit_args",
+    "small_429_wait",
 ]

@@ -83,14 +83,15 @@ def test_b1_absorbed_mid_turn_reanchors_live_card_and_answer(
 
     bot._app.bot.delete_message.assert_any_await(
         chat_id=CHAT_ID, message_id=c1,
-        # 8.26 R3: the re-anchor's delete of the OLD card is an
-        # ORNAMENT — card housekeeping. Leaving a stale card behind
-        # is cosmetic; taking an answer's token to remove it is not.
-        rate_limit_args={"class": "ornament"},
+        # The move's delete of the OLD card is INSTANT (operator,
+        # 2026-09-29): two cards on screen for seconds is not cosmetic.
+        rate_limit_args={"class": "instant"},
     )
-    reanchor_send = bot._app.bot.send_message.await_args_list[-1]
-    assert reanchor_send.kwargs["reply_to_message_id"] == 2
-    assert reanchor_send.kwargs.get("disable_notification") is True
+    # The move is one silent sendRichMessage carrying the whole card.
+    reanchor_send = [p for m, p in rich_calls if m == "sendRichMessage"][-1]
+    assert reanchor_send["reply_to_message_id"] == 2
+    assert reanchor_send.get("disable_notification") is True
+    assert "Stop" in str(reanchor_send.get("reply_markup"))
 
     reaction_targets = [
         call.args[1] for call in bot._app.bot.set_message_reaction.await_args_list
@@ -106,7 +107,8 @@ def test_b1_absorbed_mid_turn_reanchors_live_card_and_answer(
 
     methods = [m for m, _p in rich_calls]
     assert "sendRichMessage" in methods
-    answer_payload = next(p for m, p in rich_calls if m == "sendRichMessage")
+    answer_payload = next(p for m, p in rich_calls
+                          if m == "sendRichMessage" and not p.get("disable_notification"))
     assert answer_payload["reply_to_message_id"] == 2, (
         "the answer must reply to M2, the message Claude actually "
         f"consumed for this turn — rich_calls={rich_calls}"

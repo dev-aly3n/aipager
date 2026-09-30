@@ -18,7 +18,7 @@ def _update(mk_update, text, message_id, user_id=12345):
 
 
 def test_b4_stop_drops_the_note_without_reanchoring(
-    wired, mk_update, run_async,
+    wired, mk_update, run_async, rich_calls,
 ):
     bot, sess, injected = wired
 
@@ -37,12 +37,11 @@ def test_b4_stop_drops_the_note_without_reanchoring(
 
     # The note is gone — dropped, not consumed.
     assert list_outstanding_notes(sess.name) == []
-    # No re-anchor: delete_message was never called with a NEW card
-    # id — only the stop path's own edit (_edit_busy_raw) touched the
-    # ORIGINAL card, never a send_message re-anchor.
+    # No re-anchor: the stop path's own edit (_edit_busy_raw) touched the
+    # ORIGINAL card, and no move (one silent sendRichMessage) was sent.
     reanchor_sends = [
-        c for c in bot._app.bot.send_message.await_args_list
-        if c.kwargs.get("disable_notification") is True
+        p for m, p in rich_calls
+        if m == "sendRichMessage" and p.get("disable_notification")
     ]
     assert reanchor_sends == []
     bot._app.bot.delete_message.assert_not_awaited()

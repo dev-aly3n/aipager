@@ -38,6 +38,8 @@ def test_note_lost_produces_no_detection_and_no_reanchor(
 
     bot._app.bot.delete_message.assert_not_awaited()
     bot._app.bot.send_message.assert_not_awaited()
+    assert not [p for m, p in rich_calls if m == "sendRichMessage"
+                and p.get("disable_notification")], "the card did not move"
     assert sess.busy_msg_id == c1
     assert sess.trigger_msg_id == M1
 
