@@ -540,9 +540,19 @@ class NotifyMixin:
         """
         if not consumed:
             return
-        self._track_consumed(sess, consumed)
+        # The target first, with no wait in between: a Stop landing during
+        # the 👍 round trips must find the target already moved (review
+        # rev-iter1-001 of instant-card-move-and-helper-questions).
+        self._take_consumed(sess, consumed, move_target=move_target)
         await reactions.mark_all(self, consumed, reactions.TAKEN,
                                  resolve_chat_id(sess))
+
+    def _take_consumed(self, sess: TrackedSession, consumed: list[dict], *,
+                       move_target: bool = True) -> None:
+        """:meth:`_apply_consumption` without the 👍: track the consumed
+        messages and move the reply target to the last one. Synchronous,
+        so it cannot interleave with a Stop."""
+        self._track_consumed(sess, consumed)
         last = consumed[-1]
         last_msg_id = last.get("msg_id")
         # `move_target` is False only for a finish whose turn a newer one

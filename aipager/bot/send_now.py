@@ -481,8 +481,9 @@ class SendNowMixin:
         is handled once), its line is deleted, and it gets its 👍 at once.
         The card tick is paced by the chat's flood budget; this is not
         (live test 2026-09-29: lines and 👍 lagged the queue by seconds).
-        Moving the reply target and the card stays with the tick and the
-        finish path, which drain the same staged notes. Ends when nothing
+        While a turn runs it also moves the reply target and the card at
+        once (:meth:`_move_card_now`); after a Stop that stays with the
+        finish path. The tick drains the same staged notes too. Ends when nothing
         is queued or the session is gone; the next armed line restarts it.
         Never raises."""
         try:
@@ -511,11 +512,54 @@ class SendNowMixin:
                         self, taken, reactions.TAKEN, resolve_chat_id(sess)))
                     _BACKGROUND_TASKS.add(task)
                     task.add_done_callback(_BACKGROUND_TASKS.discard)
+                    if sess.status is Status.BUSY:
+                        # The card follows the message Claude took at
+                        # once, not at the card's next paced tick (live
+                        # 2026-09-30: 2.75 s late); with no live card only
+                        # the reply target moves. Only while a turn runs:
+                        # after a Stop the finish path owns the reply
+                        # target (a popped turn keeps its own).
+                        move = asyncio.create_task(self._move_card_now(sess))
+                        _BACKGROUND_TASKS.add(move)
+                        move.add_done_callback(_BACKGROUND_TASKS.discard)
         except asyncio.CancelledError:
             raise
         except Exception:
             log.warning("[%s] queue watcher stopped", sess.label,
                         exc_info=True)
+
+    async def _move_card_now(self, sess: TrackedSession) -> None:
+        """The queue watcher's move: take the notes it just staged (reply
+        target first, synchronously) and move the card under the last
+        message taken (INSTANT one-call copy). The 👍 goes in the
+        background: waiting for its round trips would delay the card by
+        one per message (review rev-iter1-002), and a Stop landing in that
+        wait would meet a half-taken note (rev-iter1-001).
+
+        Only while a turn runs, checked before anything is taken: after a
+        Stop the finish path owns the notes and the target. A tick or hook
+        that drained them first leaves nothing to do; a mover that finds
+        the card already there, or the target moved on (a popped turn),
+        sends nothing (``_reanchor_busy_card``). Never raises."""
+        try:
+            if sess.status is not Status.BUSY:
+                return
+            consumed = sess.stream_consumed_notes
+            if not consumed:
+                return
+            sess.stream_consumed_notes = []
+            self._take_consumed(sess, consumed)
+            thumbs = asyncio.create_task(reactions.mark_all(
+                self, consumed, reactions.TAKEN, resolve_chat_id(sess)))
+            _BACKGROUND_TASKS.add(thumbs)
+            thumbs.add_done_callback(_BACKGROUND_TASKS.discard)
+            if (sess.busy_msg_id and sess.busy_msg_id > 0
+                    and sess.busy_card_trigger != sess.trigger_msg_id):
+                await self._reanchor_busy_card(sess, sess.trigger_msg_id,
+                                               final=False)
+        except Exception:
+            log.warning("[%s] moving the card from the queue watcher failed",
+                        sess.label, exc_info=True)
 
     async def _delete_owed_queued_lines(self, bot) -> None:
         """At startup: delete every line a previous run left owed (D8).

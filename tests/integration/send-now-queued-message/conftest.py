@@ -255,6 +255,7 @@ class _PtbDouble:
             card = chat.cards.get(kwargs.get("message_id"))
             if card is not None:
                 card["deleted"] = True
+                card.setdefault("deleted_t", chat.clock())
             line = chat.lines.get(kwargs.get("message_id"))
             if line is not None:
                 line["deleted"] = True
@@ -268,6 +269,7 @@ class _PtbDouble:
                 card = chat.cards.get(mid)
                 if card is not None:
                     card["deleted"] = True
+                    card.setdefault("deleted_t", chat.clock())
                 line = chat.lines.get(mid)
                 if line is not None:
                     line["deleted"] = True

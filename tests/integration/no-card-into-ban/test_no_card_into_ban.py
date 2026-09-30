@@ -597,9 +597,9 @@ def test_anchor_the_late_card_replies_to_the_trigger_as_it_is_at_the_lift(
 
     async def scenario():
         await _prompt(bot, sess)
-        await bot._reanchor_busy_card(sess, 15, final=False)
-        assert gated_bot.calls == []
         sess.trigger_msg_id = 15                 # the anchor moved
+        await bot._reanchor_busy_card(sess, 15, final=False)
+        assert gated_bot.calls == []             # nothing to move: owed
         _lift(flood_clock)
         _affordable(limiter, flood_clock)
         await _tick(bot, monkeypatch)

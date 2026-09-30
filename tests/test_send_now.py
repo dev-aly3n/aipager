@@ -1593,3 +1593,108 @@ def test_a_small_429_on_a_delete_while_muted_gives_up_at_once(
     assert (instant_retry, bot._app.bot.delete_messages.await_count) == ([], 1)
     assert sorted(bot.registry.queued_line_deletes) == [[CHAT, 7001],
                                                         [CHAT, 7002]]
+
+
+# The queue watcher moves the card the moment Claude takes a message, but
+# only while a turn runs: after a Stop the finish path owns the reply
+# target (a popped turn keeps its own), live 2026-09-30.
+
+def _watch_one_absorption(mk_bot, tmp_path, run_async, monkeypatch, status):
+    bot, sess = _bot(mk_bot, tmp_path)
+    sess.status = status
+    sess.stream_transcript_path = sess.transcript_path
+    sess.queued_lines[2] = (CHAT, 7001)
+    sess.busy_msg_id = 500
+    bot._app.bot.set_message_reaction = AsyncMock()
+    with open(sess.transcript_path, "a") as fh:
+        fh.write(json.dumps({"type": "queue-operation", "operation": "remove",
+                             "reason": "absorbed_mid_turn",
+                             "content": PREFIX + "and this too"}) + "\n")
+    moves = []
+
+    async def _spy(s):
+        moves.append(s.name)
+    monkeypatch.setattr(bot, "_move_card_now", _spy)
+
+    async def _fast(_seconds):
+        await asyncio.sleep(0)
+    monkeypatch.setattr(sn, "_queue_watch_sleep", _fast)
+
+    async def scenario():
+        await asyncio.wait_for(bot._queue_watch(sess), timeout=5)
+        await _settle()
+    run_async(scenario())
+    return bot, sess, moves
+
+
+def test_the_watcher_moves_the_card_while_the_turn_runs(
+        mk_bot, tmp_path, run_async, monkeypatch):
+    bot, _sess, moves = _watch_one_absorption(
+        mk_bot, tmp_path, run_async, monkeypatch, Status.BUSY)
+    assert moves == [NAME]
+    bot._app.bot.delete_message.assert_awaited()     # its line went too
+
+
+def test_the_watcher_leaves_the_card_to_the_finish_after_a_stop(
+        mk_bot, tmp_path, run_async, monkeypatch):
+    bot, _sess, moves = _watch_one_absorption(
+        mk_bot, tmp_path, run_async, monkeypatch, Status.IDLE)
+    assert moves == []
+    bot._app.bot.delete_message.assert_awaited()     # the line still goes
+
+
+def _staged(sess, *mids):
+    sess.stream_consumed_notes = [
+        {"msg_id": m, "chat_id": CHAT, "raw_text": f"m{m}"} for m in mids]
+
+
+def test_the_watchers_move_takes_nothing_once_the_turn_ended(
+        mk_bot, tmp_path, run_async):
+    """The move task was started while the turn ran but runs after the
+    Stop: the finish path owns the staged notes and the target now."""
+    bot, sess = _bot(mk_bot, tmp_path)
+    sess.status = Status.IDLE
+    sess.trigger_msg_id = 1
+    sess.busy_msg_id, sess.busy_card_trigger = 500, 1
+    _staged(sess, 2)
+    bot._reanchor_busy_card = AsyncMock()
+
+    run_async(bot._move_card_now(sess))
+
+    assert [n["msg_id"] for n in sess.stream_consumed_notes] == [2]
+    assert sess.trigger_msg_id == 1
+    bot._reanchor_busy_card.assert_not_awaited()
+
+
+def test_the_watchers_move_does_not_wait_for_the_thumbs_up(
+        mk_bot, tmp_path, run_async):
+    """The 👍 round trips go in the background: the card moves first
+    (review rev-iter1-002), and the target is set before anything waits."""
+    bot, sess = _bot(mk_bot, tmp_path)
+    sess.trigger_msg_id = 1
+    sess.busy_msg_id, sess.busy_card_trigger = 500, 1
+    _staged(sess, 2, 3)
+    order = []
+    gate = asyncio.Event()
+
+    async def _slow_reaction(*_a, **_k):
+        order.append("reaction")
+        await gate.wait()
+    bot._app.bot.set_message_reaction = AsyncMock(side_effect=_slow_reaction)
+
+    async def _move(s, target, *, final):
+        order.append(("move", target, s.trigger_msg_id))
+    bot._reanchor_busy_card = _move
+
+    async def scenario():
+        task = asyncio.create_task(bot._move_card_now(sess))
+        await _settle()
+        moved_while_the_thumbs_up_was_out = list(order)
+        gate.set()
+        await task
+        await _settle()
+        return moved_while_the_thumbs_up_was_out
+
+    early = run_async(scenario())
+    assert ("move", 3, 3) in early, early
+    assert sess.stream_consumed_notes == []

@@ -2220,6 +2220,15 @@ class AnimationMixin:
         call always running strictly after ``_stop_animation``.
         """
         async with sess.animate_lock:
+            if not final and (sess.busy_card_trigger == target_msg_id
+                              or sess.trigger_msg_id != target_msg_id):
+                # Another mover (the queue watcher, the tick or a hook)
+                # got the lock first and moved it there, or the target
+                # moved on while this one waited (a Stop popped the next
+                # message as a new turn): a copy now would flash two cards
+                # or drag the new turn's card back. A final move always
+                # renders.
+                return
             await self._reanchor_busy_card_locked(
                 sess, target_msg_id, final=final)
 

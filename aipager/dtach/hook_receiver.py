@@ -854,6 +854,32 @@ class HookReceiver:
             # (detected here because PreToolUse provides full tool_input
             #  with questions/options, unlike the Notification hook)
             if tool_name == "AskUserQuestion":
+                ask_agent = msg.get("agent_id", "") or ""
+                asker = self.registry.get(session_name)
+                questions = (tool_input.get("questions")
+                             if isinstance(tool_input, dict) else None) or []
+                first_q = str(questions[0].get("question", "")
+                              if questions and isinstance(questions[0], dict)
+                              else "")
+                label = asker.label if asker else session_name
+                if (ask_agent
+                        and (asker is None
+                             or (asker.status is not Status.BUSY
+                                 and ask_agent not in asker.bg_agents
+                                 and ask_agent not in asker.bg_agents_recent))):
+                    # Not Claude asking the user: a Claude Code helper
+                    # (a forked run after the turn, e.g. prompt
+                    # suggestions) while no turn runs. Live 2026-09-30:
+                    # its "What would you like to do next?" became buttons
+                    # that answered nothing and typed Enter into an idle
+                    # prompt.
+                    log.info("[%s] AskUserQuestion from helper agent %s "
+                             "while %s, not shown: %s", label, ask_agent,
+                             asker.status.name if asker else "untracked",
+                             first_q[:80])
+                    return
+                log.info("[%s] AskUserQuestion (agent %s): %s", label,
+                         ask_agent or "-", first_q[:80])
                 tool_info = {"name": "AskUserQuestion", "input": tool_input,
                              "summary": _summarize_tool("AskUserQuestion", tool_input)}
                 sess_aq = self.registry.transition(session_name, Status.INTERACTIVE)

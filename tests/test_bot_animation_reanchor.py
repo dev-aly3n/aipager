@@ -129,7 +129,9 @@ def _wire_move_bot(mk_bot, rich_post):
 def _moving_sess():
     """A live card with a timeline worth copying: tool rows, prose, a
     background shell's row and an agent's row."""
-    s = _sess(busy_msg_id=100, trigger_msg_id=1)
+    # The real precondition of a move: the reply target has moved on to
+    # the message Claude took (2), the card is still under the old one (1).
+    s = _sess(busy_msg_id=100, trigger_msg_id=2)
     s.busy_card_trigger = 1
     s.busy_started_at = __import__("time").monotonic() - 30
     from aipager import bg_shells
@@ -249,7 +251,7 @@ def test_the_move_is_logged_at_info(mk_bot, run_async, rich_post, caplog):
 
 def test_nothing_moves_when_nothing_is_live(mk_bot, run_async, rich_post):
     bot = _wire_move_bot(mk_bot, rich_post)
-    sess = _sess(busy_msg_id=0, trigger_msg_id=1)
+    sess = _sess(busy_msg_id=0, trigger_msg_id=2)
 
     run_async(bot._reanchor_busy_card(sess, 2, final=False))
 
@@ -446,9 +448,11 @@ def test_reanchor_busy_card_serializes_via_animate_lock(mk_bot, run_async,
     rich_post["send"] = _send
 
     async def scenario():
+        sess.trigger_msg_id = 2
         first = asyncio.create_task(bot._reanchor_busy_card(sess, 2, final=False))
         await entered.wait()
         assert sess.animate_lock.locked()
+        sess.trigger_msg_id = 3      # another message taken meanwhile
         second = asyncio.create_task(bot._reanchor_busy_card(sess, 3, final=False))
         await asyncio.sleep(0)  # let `second` start and block on the lock
         assert not second.done()
@@ -664,3 +668,67 @@ def test_the_two_step_fallback_is_logged_at_info(mk_bot, run_async,
 
     assert any("sending it in two steps" in r.getMessage()
                for r in caplog.records)
+
+
+def test_two_movers_to_the_same_message_send_one_copy(mk_bot, run_async,
+                                                      rich_post):
+    """The queue watcher, the tick and a hook can all see the same taken
+    message: the first to get the lock moves the card, the others find it
+    already there (a second copy would flash two cards)."""
+    bot = _wire_move_bot(mk_bot, rich_post)
+    sess = _moving_sess()
+
+    async def scenario():
+        await asyncio.gather(
+            bot._reanchor_busy_card(sess, 2, final=False),
+            bot._reanchor_busy_card(sess, 2, final=False),
+            bot._reanchor_busy_card(sess, 2, final=False))
+
+    run_async(scenario())
+    assert len(_sends(rich_post)) == 1
+    assert (sess.busy_msg_id, sess.busy_card_trigger) == (200, 2)
+
+
+def test_a_final_move_is_never_skipped_as_already_there(mk_bot, run_async,
+                                                        rich_post):
+    """The finish renders the finished card even when a live move just put
+    the card under the same message: skipping it would leave "Working"
+    and a Stop button on a finished turn."""
+    bot = _wire_move_bot(mk_bot, rich_post)
+    sess = _moving_sess()
+    sess.busy_card_trigger = 2     # a live move already put it there
+    sess.status = Status.IDLE
+
+    run_async(bot._reanchor_busy_card(sess, 2, final=True))
+
+    sends = _sends(rich_post)
+    assert len(sends) == 1, "the final move was skipped"
+    assert "reply_markup" not in sends[0]
+
+
+def test_a_move_whose_target_moved_on_while_it_waited_sends_nothing(
+        mk_bot, run_async, rich_post):
+    """A live move waits for the card's lock; meanwhile a Stop popped the
+    next message as a new turn, whose card is under that message. The
+    waiting move must not drag the new turn's card back under the old
+    target (review rev-iter1-001)."""
+    bot = _wire_move_bot(mk_bot, rich_post)
+    sess = _moving_sess()
+    sess.trigger_msg_id = 2        # the move is for 2 ...
+
+    async def scenario():
+        await sess.animate_lock.acquire()          # the finish holds it
+        move = asyncio.create_task(bot._reanchor_busy_card(sess, 2,
+                                                           final=False))
+        for _ in range(5):
+            await asyncio.sleep(0)
+        # ... the finish popped 3 as a new turn, with its own card.
+        sess.trigger_msg_id = 3
+        sess.busy_card_trigger = 3
+        sess.busy_msg_id = 300
+        sess.animate_lock.release()
+        await move
+
+    run_async(scenario())
+    assert _sends(rich_post) == []
+    assert (sess.busy_msg_id, sess.trigger_msg_id) == (300, 3)

@@ -10,6 +10,8 @@ own narrower unit tests against the three new/changed pieces directly.
 
 from __future__ import annotations
 
+import asyncio
+
 import time
 from unittest.mock import AsyncMock, MagicMock
 
@@ -55,6 +57,36 @@ def test_apply_consumption_moves_trigger_to_the_last_consumed(mk_bot, run_async)
 
     assert sess.trigger_msg_id == 3
     assert sess.last_prompt == "part two"
+
+
+def test_apply_consumption_moves_the_target_before_waiting_for_the_thumbs_up(
+        mk_bot, run_async):
+    """The reply target moves before the 👍 round trips: a Stop landing
+    while a 👍 is out must find the target already on the message Claude
+    took (review rev-iter2-001 of instant-card-move-and-helper-questions)."""
+    bot = mk_bot()
+    bot._app.bot = AsyncMock()
+    sess = _sess()
+    bot.registry.track_message = MagicMock()
+    gate = asyncio.Event()
+
+    async def _held_reaction(*_a, **_k):
+        await gate.wait()
+    bot._app.bot.set_message_reaction = AsyncMock(side_effect=_held_reaction)
+
+    async def scenario():
+        task = asyncio.create_task(bot._apply_consumption(sess, [
+            {"msg_id": 2, "chat_id": 555, "raw_text": "part one"},
+            {"msg_id": 3, "chat_id": 555, "raw_text": "part two"},
+        ]))
+        for _ in range(10):
+            await asyncio.sleep(0)
+        while_the_thumbs_up_is_out = sess.trigger_msg_id
+        gate.set()
+        await task
+        return while_the_thumbs_up_is_out
+
+    assert run_async(scenario()) == 3
 
 
 def test_apply_consumption_records_who_sent_the_prompt(mk_bot, run_async):
