@@ -73,7 +73,7 @@ def test_settings_group_chat_never_shows_app_button(mk_bot, helpers):
     assert not _has_web_app_button(kb)
 
 
-def test_oneshot_new_success_reply_private_chat_shows_app_button(mk_bot, helpers):
+def test_new_ready_card_private_chat_shows_app_button(mk_bot, helpers):
     from unittest.mock import MagicMock
 
     bot = helpers.make_personal_bot(mk_bot, miniapp_url="https://example.com/app")
@@ -86,12 +86,12 @@ def test_oneshot_new_success_reply_private_chat_shows_app_button(mk_bot, helpers
     with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
         _run(bot._handle_new_cmd(upd, MagicMock()))
 
-    status_msg = upd.message.reply_text.return_value
-    kb = status_msg.edit_text.await_args.kwargs.get("reply_markup")
+    # The "Starting" message is edited into the Ready card by id.
+    kb = bot._app.bot.edit_message_text.await_args.kwargs.get("reply_markup")
     assert _has_web_app_button(kb)
 
 
-def test_oneshot_new_success_reply_group_chat_never_shows_app_button(mk_bot, helpers):
+def test_new_ready_card_group_chat_never_shows_app_button(mk_bot, helpers):
     from unittest.mock import MagicMock
 
     bot = helpers.make_personal_bot(mk_bot, miniapp_url="https://example.com/app")
@@ -104,6 +104,6 @@ def test_oneshot_new_success_reply_group_chat_never_shows_app_button(mk_bot, hel
     with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
         _run(bot._handle_new_cmd(upd, MagicMock()))
 
-    status_msg = upd.message.reply_text.return_value
-    kb = status_msg.edit_text.await_args.kwargs.get("reply_markup")
+    kb = bot._app.bot.edit_message_text.await_args.kwargs.get("reply_markup")
+    assert kb is not None, "the Ready card lost its buttons"
     assert not _has_web_app_button(kb)

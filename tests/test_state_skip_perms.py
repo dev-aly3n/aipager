@@ -141,3 +141,16 @@ def test_load_json_with_skip_perms_true(tmp_state_file):
     sess = r.get("claude-dev")
     assert sess is not None
     assert sess.skip_perms is True
+
+
+# ---- launch_model (2026-09-30) ----------------------------------------------
+
+def test_launch_model_round_trips(tmp_state_file):
+    r1 = SessionRegistry()
+    r1.transition("claude-dev", Status.IDLE)
+    r1.get("claude-dev").launch_model = "haiku"
+    r1.save()
+
+    r2 = SessionRegistry()
+    r2.load()
+    assert r2.get("claude-dev").launch_model == "haiku"

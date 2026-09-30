@@ -852,6 +852,69 @@ def test_kill_and_relaunch_core_success_restores_state_and_transitions_idle(
     assert launch.await_args.kwargs["cwd"] == "/home/user/project"
 
 
+def test_kill_and_relaunch_core_keeps_the_launch_model(mk_bot, run_async, monkeypatch):
+    """A mode switch or restart starts the session with the model it was
+    started with (or last switched to), not Claude Code's default."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    sess.launch_model = "haiku"
+    bot.registry._sessions["claude-jim"] = sess
+    # The poll interval, not the global asyncio.sleep (CLAUDE.md).
+    monkeypatch.setattr("aipager.bot.session_ops._PERMS_POLL_INTERVAL", 0)
+    monkeypatch.setattr("aipager.bot.session_ops.Path", _fake_path_cls(False))
+    monkeypatch.setattr("aipager.dtach.inject.kill_session",
+                        AsyncMock(return_value=True))
+    launch = AsyncMock(return_value=(True, ""))
+    monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
+
+    run_async(bot._kill_and_relaunch_core(
+        sess, target_skip_perms=False, interrupt_first=False))
+
+    assert launch.await_args.kwargs.get("model") == "haiku"
+
+
+def test_create_session_records_the_launch_model(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    monkeypatch.setattr("aipager.dtach.inject.launch_session",
+                        AsyncMock(return_value=(True, "")))
+    bot._maybe_update_bot_name = AsyncMock()
+    bot._update_bot_commands = AsyncMock()
+
+    name, _err = run_async(bot.create_session("jim", scope_chat_id=0, model="opus"))
+
+    assert bot.registry.get(name).launch_model == "opus"
+
+
+def test_a_sent_model_switch_becomes_the_launch_model(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    sess.launch_model = "opus"
+    bot.registry._sessions["claude-jim"] = sess
+    monkeypatch.setattr("aipager.dtach.inject.is_alive", AsyncMock(return_value=True))
+    bot._inject_prompt = AsyncMock(return_value=True)
+
+    outcome = run_async(bot._switch_model_core(sess, "sonnet"))
+
+    assert outcome.ok is True
+    assert sess.launch_model == "sonnet"
+
+
+def test_resume_keeps_the_launch_model(mk_bot, run_async, monkeypatch):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
+    sess.claude_session_id = "uuid-1"
+    sess.launch_model = "haiku"
+    bot.registry._sessions["claude-jim"] = sess
+    launch = AsyncMock(return_value=(True, ""))
+    monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
+    bot._maybe_update_bot_name = AsyncMock()
+    bot._update_bot_commands = AsyncMock()
+
+    run_async(bot._do_resume_core(sess, driver_user_id=None))
+
+    assert launch.await_args.kwargs.get("model") == "haiku"
+
+
 def test_perms_switch_core_busy_interrupts_first(mk_bot, run_async, monkeypatch):
     """The perms wrapper's interrupt_first=True derivation for BUSY."""
     bot = mk_bot()

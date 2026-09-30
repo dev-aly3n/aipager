@@ -20,7 +20,7 @@ and on every session change.
 | `/status` | — | One-message snapshot of every live session: model, context %, cost, queue depth. |
 | `/stop` | — | Interrupt the active session's current turn. Also discards queued messages and replies with how many were discarded. |
 | `/now` | - | Send the messages Claude is holding in the active session's queue right now, instead of after the current step (Claude Code's own send-now keys, Ctrl+X Ctrl+S). Works any time, including while the chat is muted or in minimal mode; replies `Nothing is waiting in the queue` when Claude holds nothing. See [Send a queued message now](#send-a-queued-message-now). |
-| `/new [label] [prompt]` | all optional | Create a session. With no args, an interactive wizard walks name → mode → model → folder. With a label (and optional first prompt), creates `claude-<label>` directly. |
+| `/new [name] [first message]` | all optional | Start a session. `/new x1` starts it at once, and `/new x1 fix the tests` also sends "fix the tests" as its first message. Sent bare (for example tapped from the menu), `/new` asks for the name, and the next message you send is used exactly like the argument, so `/new` then `x1 fix the tests` gives the same result. Only that next message: if you do anything else first (a photo, another command, a reply to another message, a keyboard template, another button), it is handled as usual and the card closes; `/status`, `/settings` and the keyboard's menus leave it open. The card that asks also shows the mode, model and folder the session will get, with buttons to change them first. Every way ends in the same Ready card: what the session got, that your next message goes to it, and one-tap buttons to switch to the other mode or change the model. New sessions start in Auto for an admin (Ask for everyone else); change what /new uses in `/settings` → New sessions. A `!` before the name still means Auto. A name that is in use offers Resume, Replace or Cancel, for the person who sent `/new` only. |
 | `/resume [label]` | optional | Resume a previously-gone session by name, or open a picker. A session that ended stays listed for `GONE_SESSION_MAX_AGE_DAYS` (default 14) and then leaves the registry; its Claude transcript is untouched. |
 | `/kill [label]` | optional | Destroy a session. With no arg, opens a picker. Always two-tap: shows `[💀 Kill] [Cancel]`. |
 | `/restart [label]` | optional | Kill and relaunch a session, keeping its conversation. |
@@ -29,7 +29,7 @@ and on every session change.
 | `/diff [label]` | optional | Show the session's working-directory git diff. |
 | `/clearqueue` | — | Drop every not-yet-picked-up message for the active session — both messages aipager is holding and messages already queued inside Claude — without interrupting the running turn. Replies with the count cleared. |
 | `/perms [label]` | optional | Switch a session between Ask and Auto permission modes. On a busy session, offers `Stop task & switch` / `Not now`. |
-| `/settings` | — | Message layout, diff previews (off by default), long-turn card updates (on by default: a busy card refreshes every 10 s after 2 minutes of a turn, 30 s after 10, once a minute after an hour, counting in minutes then hours — switch off to keep the first-minutes pace for the whole turn; see [troubleshooting](troubleshooting.md#a-long-turns-card-refreshes-less-often)), formatting and language preferences. Whatever the layout, every busy card ends with its session's status line (`⏳`/`✅ name · …`) and every answer starts with its result line (`💬 name`, plus `· Finished (…)` when no finished card is left to show the stats); the merged layout stacks the two, each line in its own section. In the card layout the answer deliberately follows the finished card by a moment, so the card is seen to say Finished before the answer lands under it — tune or disable that head start with `FINISH_CARD_GRACE_SECONDS` (seconds, default 0.8; 0 sends both at once). The message layout decides the card for every turn, whether or not tools ran (see [Idle responses](#idle-responses)). |
+| `/settings` | — | Message layout, diff previews (off by default), long-turn card updates (on by default: a busy card refreshes every 10 s after 2 minutes of a turn, 30 s after 10, once a minute after an hour, counting in minutes then hours; switch off to keep the first-minutes pace for the whole turn; see [troubleshooting](troubleshooting.md#a-long-turns-card-refreshes-less-often)), formatting and language preferences, and New sessions: the mode (Auto or Ask), model and folder `/new` starts a session with. Whatever the layout, every busy card ends with its session's status line (`⏳`/`✅ name · …`) and every answer starts with its result line (`💬 name`, plus `· Finished (…)` when no finished card is left to show the stats); the merged layout stacks the two, each line in its own section. In the card layout the answer deliberately follows the finished card by a moment, so the card is seen to say Finished before the answer lands under it; tune or disable that head start with `FINISH_CARD_GRACE_SECONDS` (seconds, default 0.8; 0 sends both at once). The message layout decides the card for every turn, whether or not tools ran (see [Idle responses](#idle-responses)). |
 | `/whoami` | — | Show your Telegram id and (in team mode) your role. |
 | `/update` | — | Admin only. Check aipager and Claude Code for newer versions, then update whatever has one with a single button. See [Update](#update). |
 
@@ -239,6 +239,8 @@ Replace, `/perms`' Stop-and-switch — are tied to the task they were
 shown for. Tapping one left over from an earlier task answers
 `That task already finished - …` (with a hint to re-run the command)
 and changes nothing, instead of acting on whatever is running now.
+`/new`'s Replace says `x1 started working since. Send /new again to
+replace it.` when the session started a turn after its card was shown.
 
 A `⚡ Send now` button acts only on the message it sits under: if
 Claude has already taken that message, the tap answers `Already taken`,
@@ -695,8 +697,8 @@ the missing one.
 
 Voice messages route through `faster-whisper` (the `aipager[voice]`
 extra). The audio is transcribed locally and the transcript is
-injected as if you had typed it — including as an answer to the
-`/new` wizard or a pending rename. See
+injected as if you had typed it, including as the name for `/new`
+or a pending rename. See
 [hooks → UserPromptSubmit](hooks.md#userpromptsubmit) for what
 happens next.
 

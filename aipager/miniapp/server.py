@@ -19,6 +19,7 @@ An operator-provided URL is still honoured as an override.
 
 from __future__ import annotations
 
+import functools
 import logging
 import os
 import time
@@ -150,6 +151,16 @@ _ANSWER_CHAT_BUSY_BODY = {
 }
 
 
+
+@functools.cache
+def _close_card_key():
+    """The request key a session action sets, so the close runs only after
+    it succeeded (see `_build_app`'s middleware). A typed `RequestKey`
+    where aiohttp has one (3.10+; a plain str key warns there)."""
+    from aiohttp import web
+    make = getattr(web, "RequestKey", None)
+    return make("aipager_close_card", tuple) if make else "aipager_close_card"
+
 class MiniAppServer:
     """``GET /`` (static shell) + read-only authenticated JSON routes.
 
@@ -191,7 +202,19 @@ class MiniAppServer:
         real TCP bind."""
         from aiohttp import web
 
-        app = web.Application()
+        @web.middleware
+        async def _close_card_after_action(request, handler):
+            # A session action (or create) that went through closes the
+            # caller's open /new Name card in chat: a refused one (403,
+            # 429, a bad body) changes nothing.
+            resp = await handler(request)
+            target = request.get(_close_card_key())
+            if target is not None and getattr(resp, "status", 500) < 400:
+                from aipager.bot import new_flow
+                new_flow.close_open_card(self.bot, *target)
+            return resp
+
+        app = web.Application(middlewares=[_close_card_after_action])
         app.router.add_get("/", self._handle_index)
         # The one asset the page loads besides itself. Unauthenticated by
         # necessity, like GET / — the page loads it BEFORE it has any
@@ -487,6 +510,9 @@ class MiniAppServer:
         if not self.bot._can_prompt_user(user_id, scope_chat_id):
             log.info("miniapp: session create rejected (403) — caller cannot prompt")
             return web.json_response({"error": "forbidden"}, status=403)
+        # Starting one from the app: once it succeeds, their open /new
+        # Name card in chat must not take their next message as a name.
+        request[_close_card_key()] = (scope_chat_id, user_id)
         if not self._allow_write(user_id):
             log.info("miniapp: session create rejected (429) — rate limited")
             return web.json_response({"error": "too_many_requests"}, status=429)
@@ -1032,6 +1058,13 @@ class MiniAppServer:
         if sess is None:
             log.info("miniapp: %s rejected (404) — not found in scope", route_name)
             return web.json_response({"error": "not_found"}, status=404)
+
+        if request.method != "GET" and "preferences" not in route_name:
+            # Acting on a session from the app: once it succeeds, the
+            # person's open /new Name card in chat must not take their
+            # next message as a name (new_flow.close_if_moved_on is the
+            # chat side of this).
+            request[_close_card_key()] = (scope_chat_id, user_id)
 
         return sess, scope_chat_id, user_id
 

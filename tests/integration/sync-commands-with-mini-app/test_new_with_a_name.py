@@ -1,14 +1,7 @@
-"""Priority 1 (task brief): `/new !name` must be byte-for-byte unchanged.
-
-spec.md's own live-verified example: ``/new !henlo`` -> "✅ henlo created ·
-🤖 Auto mode". design.md's shared-file integration plan says the ONLY
-change to ``_handle_new_cmd`` is the no-args branch now delegating to
-``new_flow.start_wizard`` — every argument form (``/new name``,
-``/new !name``, ``/new name prompt``) falls through unchanged below that
-branch. These tests prove the wizard was spliced in without perturbing
-that fall-through path: same reply shape, same single edit, and —
-mechanically, not just by inspection — the wizard's own entry point is
-never invoked for an args-bearing ``/new``.
+"""`/new <name>` (with a name) starts the session at once, without the Name
+card, and ends in the Ready card (2026-09-30 redesign: one flow for every
+spelling, Auto by default for an admin). Reserved words are refused on the
+bare label, before any launch, in every chat mode.
 """
 
 from __future__ import annotations
@@ -53,6 +46,7 @@ def _make_bot():
     bot._app = MagicMock()
     bot._app.bot = MagicMock()
     bot._app.bot.send_message = AsyncMock()
+    bot._app.bot.edit_message_text = AsyncMock()
     bot.team = None
     bot.scopes = None
     return bot
@@ -102,50 +96,37 @@ def test_new_no_args_does_invoke_wizard_start():
 
 
 # --------------------------------------------------------------------------- #
-# Exact reply shape — matches spec.md's live-verified example verbatim      #
+# The reply: one "Starting" message, edited once into the Ready card          #
 # --------------------------------------------------------------------------- #
 
-def test_new_bang_name_reply_has_success_checkmark_and_label():
+def _ready_text(bot):
+    return bot._app.bot.edit_message_text.await_args.kwargs["text"]
+
+
+def test_new_bang_name_ends_in_the_ready_card():
     bot = _make_bot()
     bot._is_admin = MagicMock(return_value=True)
     update = _make_update("/new !henlo")
     with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
         _run(bot._handle_new_cmd(update, MagicMock()))
-    status_msg = update.message.reply_text.return_value
-    text = status_msg.edit_text.await_args[0][0]
-    assert "✅ <b>henlo</b> created" in text, text
-
-
-def test_new_bang_name_reply_says_auto_mode():
-    bot = _make_bot()
-    bot._is_admin = MagicMock(return_value=True)
-    update = _make_update("/new !henlo")
-    with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
-        _run(bot._handle_new_cmd(update, MagicMock()))
-    status_msg = update.message.reply_text.return_value
-    text = status_msg.edit_text.await_args[0][0]
-    assert "🤖 Auto mode" in text, text
+    text = _ready_text(bot)
+    assert "✅ <b>henlo</b> is ready" in text, text
+    assert "🤖 Auto" in text, text
 
 
 def test_new_bang_name_only_edits_the_launch_message_once():
-    """No extra step: the success path is exactly one `reply_text`
-    (the "🚀 Launching…" message) followed by exactly one `edit_text`
-    on it — never a second outbound message (e.g. a confirm prompt)."""
+    """No extra step: exactly one `reply_text` (the "🚀 Starting…"
+    message) and exactly one edit of it, into the Ready card."""
     bot = _make_bot()
     bot._is_admin = MagicMock(return_value=True)
     update = _make_update("/new !henlo")
     with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
         _run(bot._handle_new_cmd(update, MagicMock()))
     update.message.reply_text.assert_awaited_once()
-    status_msg = update.message.reply_text.return_value
-    status_msg.edit_text.assert_awaited_once()
+    bot._app.bot.edit_message_text.assert_awaited_once()
 
 
 def test_new_bang_name_registers_session_with_skip_perms_true():
-    """Session shape: Auto mode via `!` prefix must map to
-    `skip_perms=True` on the created TrackedSession — the same object
-    the Mini App's create route and the wizard's Confirm both produce
-    through `create_session()`."""
     bot = _make_bot()
     bot._is_admin = MagicMock(return_value=True)
     update = _make_update("/new !henlo")
@@ -155,23 +136,16 @@ def test_new_bang_name_registers_session_with_skip_perms_true():
     assert sess is not None and sess.skip_perms is True
 
 
-def test_new_named_no_bang_reply_says_ask_mode():
+def test_new_named_no_bang_is_auto_for_an_admin():
+    """Auto is the default now (operator, 2026-09-30); the `!` is only
+    the legacy spelling of it."""
     bot = _make_bot()
     update = _make_update("/new henlo")
     with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
         _run(bot._handle_new_cmd(update, MagicMock()))
-    status_msg = update.message.reply_text.return_value
-    text = status_msg.edit_text.await_args[0][0]
-    assert "💬 Ask mode" in text, text
-
-
-def test_new_named_no_bang_registers_session_with_skip_perms_false():
-    bot = _make_bot()
-    update = _make_update("/new henlo")
-    with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
-        _run(bot._handle_new_cmd(update, MagicMock()))
+    assert "🤖 Auto" in _ready_text(bot)
     sess = bot.registry.find_by_label("henlo", 0)
-    assert sess is not None and sess.skip_perms is False
+    assert sess is not None and sess.skip_perms is True
 
 
 # --------------------------------------------------------------------------- #

@@ -1020,6 +1020,12 @@ def mk_update():
         # _build_reply_context's `quote.text[:1000]` in every test that
         # doesn't care about highlighting.
         update.message.quote = None
+        # Telegram's "absent" for the kinds of message the /new Name card
+        # tells apart (new_flow): not a quote from another chat, not
+        # forwarded, not posted through a bot.
+        update.message.external_reply = None
+        update.message.forward_origin = None
+        update.message.via_bot = None
         # Default to "not part of an album". A bare MagicMock here is
         # truthy, which would route every upload test through the
         # media-group coalescer instead of the immediate single-file path.

@@ -182,9 +182,12 @@ def _rename_pending_map(bot: "TelegramBot") -> dict[int, dict]:
 
 def _start_rename_capture(
     bot: "TelegramBot", chat_id: int, sess: TrackedSession,
+    user_id: int | None = None,
 ) -> None:
+    # Who asked: a /new from someone else must not cancel it
+    # (new_flow.start_wizard).
     _rename_pending_map(bot)[chat_id] = {
-        "session_name": sess.name, "label": sess.label,
+        "session_name": sess.name, "label": sess.label, "user_id": user_id,
     }
 
 
@@ -1049,7 +1052,7 @@ async def handle_callback(
         if not bot._can_prompt_user(user_id, chat_id):
             await bot._safe_answer(query, "You can't rename this session.")
             return True
-        _start_rename_capture(bot, chat_id, sess)
+        _start_rename_capture(bot, chat_id, sess, user_id)
         text = f"✏️ New name for [<b>{html_mod.escape(sess.label)}</b>]? Send it as a message."
         kb = InlineKeyboardMarkup([[InlineKeyboardButton(
             "Cancel", callback_data=session_cb(bot, chat_id, sess, "rename-cancel"))]])

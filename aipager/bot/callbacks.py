@@ -903,11 +903,35 @@ class CallbackDispatchMixin:
 
         # ---- /new name-conflict callbacks -----------------------------
         if action in ("new_resume", "new_replace", "new_cancel"):
-            pending = self._new_conflict_pending.pop(session_name, None)
+            # Looked at, not taken: a refused Replace leaves the card (and
+            # its first message) to its author. Each action that goes
+            # ahead takes it.
+            pending = self._new_conflict_pending.get(session_name)
             sess = self.registry.get(session_name)
             label = sess.label if sess else session_name.removeprefix("claude-")
+            # The card belongs to the person who sent /new, like the Name
+            # card: nobody else cancels it, resumes with their first
+            # message, or replaces the session. Resume and Replace also
+            # need the right to prompt here.
+            # A card whose author is unknown (0) has nobody to check
+            # against: anyone who may prompt uses it, and Auto is then
+            # refused below (no author is an admin).
+            tapper = getattr(getattr(query, "from_user", None), "id", None)
+            author = (pending or {}).get("user_id")
+            if author and tapper != author:
+                await self._safe_answer(
+                    query, "Only the person who sent /new can use this card.",
+                    show_alert=True)
+                return
+            if action != "new_cancel" and not self._can_prompt_user(
+                    tapper, calling_chat_id(update)):
+                await self._safe_answer(
+                    query, "You can't start or resume sessions here.",
+                    show_alert=True)
+                return
 
             if action == "new_cancel":
+                self._new_conflict_pending.pop(session_name, None)
                 try:
                     await edit_text(query,
                         "↩️ Cancelled - no session changed.",
@@ -927,11 +951,17 @@ class CallbackDispatchMixin:
                 # calling inject.launch_session for an arbitrary tapped
                 # name (the severe case design.md's success criteria and
                 # the "Old buttons" section both promise against).
+                self._new_conflict_pending.pop(session_name, None)
                 await self._safe_answer(query, "Session not found")
                 return
 
             prompt = (pending or {}).get("prompt", "")
             skip_perms = (pending or {}).get("skip_perms", False)
+            if skip_perms and not self._is_admin_user(
+                    (pending or {}).get("user_id"), calling_chat_id(update)):
+                # Auto is re-checked at creation, like every other start:
+                # the card may be old, and its author since demoted.
+                skip_perms = False
             # The queued prompt is the text the /new AUTHOR typed, so it
             # runs as the author, never as whoever tapped the button: a
             # tapper's rights must not be lent to someone else's prompt
@@ -940,6 +970,7 @@ class CallbackDispatchMixin:
             prompt_author = (pending or {}).get("user_id") or None
 
             if action == "new_resume":
+                self._new_conflict_pending.pop(session_name, None)
                 # Live session → switch to it; GONE session → /resume flow.
                 if sess and sess.status != Status.GONE:
                     self.registry.last_active_session = session_name
@@ -971,27 +1002,43 @@ class CallbackDispatchMixin:
                             chat_id=CHAT_ID, text=text, **kw,
                         )
 
-                await self._do_resume(label=label, reply_fn=_reply)
-                # Queue the prompt into the freshly-resumed session.
-                if prompt:
-                    resumed = self.registry.get(session_name)
-                    if resumed and resumed.queue_prompt(
-                        prompt, pending.get("msg_id", 0), "",
-                        prompt_author,
-                    ):
-                        self.registry.mark_dirty()
+                # Exactly the session this card is about: a label lookup
+                # could find another chat's session of the same name.
+                await self._do_resume(label=label, reply_fn=_reply,
+                                      update=update, query=query, sess=sess)
+                # Queue the prompt only into a session that came back.
+                if prompt and sess.status != Status.GONE and sess.queue_prompt(
+                    prompt, pending.get("msg_id", 0), "", prompt_author,
+                ):
+                    self.registry.mark_dirty()
                 return
 
             if action == "new_replace":
-                if sess and not sess.tap_is_for_this_turn(
-                        getattr(query.message, "message_id", None)):
-                    # The most severe of the seven: this kills the socket
-                    # directly and relaunches with resume_id deliberately
-                    # dropped, so a stale tap destroys a live session with
-                    # no path back to it.
+                # Replace kills a session and starts a fresh one: only on a
+                # card whose state is known (author and choices), and only
+                # on the work the card showed.
+                if pending is None:
                     await self._safe_answer(
-                        query, "That task already finished - run /new again")
+                        query, "This card has expired. Send /new again.",
+                        show_alert=True)
                     return
+                working = sess.status in (Status.BUSY, Status.INTERACTIVE)
+                if (not sess.tap_is_for_this_turn(pending.get("msg_id"))
+                        or (working and not pending.get("was_working"))):
+                    # The card appeared right after the message that named
+                    # the session (it may be the older Name card, edited),
+                    # so a turn whose card came later is work it never
+                    # showed; and so is one that started while the session
+                    # was idle on the card, card or not yet (a self-woken
+                    # turn holds its card back for seconds). This kills the
+                    # socket and drops resume_id: a stale tap would destroy
+                    # a live session for good.
+                    await self._safe_answer(
+                        query, f"{sess.label} started working since. "
+                               "Send /new again to replace it.",
+                        show_alert=True)
+                    return
+                self._new_conflict_pending.pop(session_name, None)
                 # Kill alive socket first, then launch fresh (no resume_id).
                 if sess and sess.status != Status.GONE:
                     # The replaced session's turn will never earn a card
@@ -1002,8 +1049,11 @@ class CallbackDispatchMixin:
                     self._cancel_lazy_card(sess)
                     await inject.kill_session(session_name)
                     # Wait briefly for socket to disappear so the next
-                    # launch_session's "already exists" check passes.
-                    sock = f"{inject.SOCK_PREFIX}{label}.sock"
+                    # launch's "already exists" check passes. The socket
+                    # is named after the INTERNAL name (chat-suffixed in a
+                    # scoped chat), never the bare label.
+                    sock = (f"{inject.SOCK_PREFIX}"
+                            f"{session_name.removeprefix('claude-')}.sock")
                     from pathlib import Path as _Path
                     for _ in range(10):
                         await asyncio.sleep(0.2)
@@ -1019,48 +1069,50 @@ class CallbackDispatchMixin:
 
                 try:
                     await edit_text(query,
-                        f"🚀 Launching <b>{html_mod.escape(label)}</b> "
+                        f"🚀 Starting <b>{html_mod.escape(label)}</b> "
                         f"(fresh)…",
                         parse_mode="HTML",
                     )
                 except Exception:
                     pass
 
-                ok, err = await inject.launch_session(
-                    label, skip_perms=skip_perms, is_relaunch=True)
-                if not ok:
+                # The shared seam, like every other start: the session's
+                # system prompt, and the mode, model and folder /new chose
+                # (Name card or the chat's defaults). It used to relaunch
+                # the bare label, which in a scoped chat is a different
+                # session. The fresh process keeps the replaced one's exact
+                # internal name (a renamed session's label no longer gives
+                # it) and its own scope, never the tapping chat's.
+                scope = sess.scope_chat_id or None
+                new_name, err = await self.create_session(
+                    label, scope_chat_id=scope, reuse_name=session_name,
+                    skip_perms=skip_perms,
+                    cwd=(pending or {}).get("cwd") or None,
+                    driver_user_id=prompt_author,
+                    model=(pending or {}).get("model") or None,
+                )
+                if not new_name:
                     try:
-                        await send_text(self._app.bot,
-                            chat_id=CHAT_ID,
-                            text=f"❌ {html_mod.escape(err)}",
-                            parse_mode="HTML",
-                        )
+                        await edit_text(query, f"❌ {html_mod.escape(err)}",
+                                        parse_mode="HTML")
                     except Exception:
                         pass
                     return
 
-                new_sess = self.registry.get_or_create(session_name)
-                if new_sess.status in (Status.GONE, Status.UNKNOWN):
-                    self.registry.transition(session_name, Status.IDLE)
-                self.registry.last_active_session = session_name
-                self.registry.mark_dirty()
-                asyncio.create_task(self._maybe_update_bot_name(session_name))
-                asyncio.create_task(self._update_bot_commands())
+                new_sess = self.registry.get_or_create(new_name)
                 if prompt and new_sess.queue_prompt(
                     prompt, pending.get("msg_id", 0), "",
                     prompt_author,
                 ):
                     self.registry.mark_dirty()
 
+                # The model line comes from the session's launch model,
+                # by its label ("opus" shows as "Opus").
+                ready_text, ready_kb = new_flow.render_ready(
+                    self, update, new_sess, first_message=bool(prompt))
                 try:
-                    await send_text(self._app.bot,
-                        chat_id=CHAT_ID,
-                        text=(
-                            f"✅ <b>{html_mod.escape(label)}</b> launched"
-                            + ("\n📝 Prompt queued" if prompt else "")
-                        ),
-                        parse_mode="HTML",
-                    )
+                    await edit_text(query, ready_text, parse_mode="HTML",
+                                    reply_markup=ready_kb)
                 except Exception:
                     pass
                 log.info("[%s] /new conflict resolved via Replace (prompt=%s)",

@@ -7,7 +7,7 @@ SC15: Non-admin /new !ben → "requires admin role", no session launched.
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 
 from aipager.state import SessionRegistry, Status, TrackedSession
@@ -42,8 +42,11 @@ def _make_bot_non_admin(*, registry=None):
     bot._app.bot.send_message = AsyncMock()
     bot.team = None
     bot.scopes = None
-    # Patch admin check to return False
+    # Patch the admin rule to return False: `_is_admin(update)` delegates
+    # to `_is_admin_user(user_id, chat_id)`, which surfaces without an
+    # Update (the /new Name card and Ready card) call directly.
     bot._is_admin = MagicMock(return_value=False)
+    bot._is_admin_user = MagicMock(return_value=False)
     return bot
 
 
@@ -137,35 +140,38 @@ def test_sc14_admin_perms_to_auto_not_denied():
 # SC15 — Non-admin /new !ben: denied, no session launched                     #
 # --------------------------------------------------------------------------- #
 
-def test_sc15_non_admin_new_auto_denied():
-    """SC15: Non-admin /new !ben must receive 'requires admin role' reply."""
+def test_sc15_non_admin_new_auto_gets_ask_and_says_why():
+    """SC15 (2026-09-30 redesign): a non-admin's /new !ben never gets
+    Auto. The session starts in Ask and the Ready card says why, instead
+    of refusing someone who may create Ask sessions."""
     bot = _make_bot_non_admin()
+    bot._app.bot.edit_message_text = AsyncMock()
     update = _make_update("/new !ben")
 
-    _run(bot._handle_new_cmd(update, MagicMock()))
+    async def _launch_ok(*a, **kw):
+        return True, ""
 
-    update.message.reply_text.assert_awaited_once()
-    msg = update.message.reply_text.await_args[0][0]
-    assert "requires admin role" in msg, (
-        f"Non-admin /new !ben must get 'requires admin role'; got: {msg}"
-    )
+    with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
+        _run(bot._handle_new_cmd(update, MagicMock()))
+
+    text = bot._app.bot.edit_message_text.await_args.kwargs["text"]
+    assert "Auto mode needs an admin" in text, text
+    assert "💬 Ask" in text, text
 
 
-def test_sc15_non_admin_new_auto_no_session_created():
-    """SC15: After non-admin /new !ben denial, no session must be created
-    in the registry."""
+def test_sc15_non_admin_new_auto_creates_no_auto_session():
+    """SC15: whatever a non-admin types, no session with skip_perms=True."""
     bot = _make_bot_non_admin()
+    bot._app.bot.edit_message_text = AsyncMock()
     update = _make_update("/new !ben")
-    initial_count = len(bot.registry.all_sessions())
 
-    _run(bot._handle_new_cmd(update, MagicMock()))
+    async def _launch_ok(*a, **kw):
+        return True, ""
 
-    final_count = len(bot.registry.all_sessions())
-    assert final_count == initial_count, (
-        f"No session must be created on denial; had {initial_count}, now {final_count}"
-    )
+    with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
+        _run(bot._handle_new_cmd(update, MagicMock()))
 
-
+    assert not [s for s in bot.registry.all_sessions().values() if s.skip_perms]
 def test_sc15_admin_new_auto_not_denied():
     """SC15 negative: Admin /new !ben must not get the denial message."""
     from aipager.bot import TelegramBot

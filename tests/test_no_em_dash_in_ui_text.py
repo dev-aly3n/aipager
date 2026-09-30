@@ -39,9 +39,7 @@ _LOG_NAMES = {"log", "logger", "_log", "_logger", "LOG", "logging"}
 # path (relative to the package) -> fragments of literals that may keep an
 # em dash. Nothing here reaches a user as aipager's own wording.
 ALLOWED: dict[str, tuple[str, ...]] = {
-    # Sent to Claude, not shown: newline flattening of a /new prompt.
     "bot/handlers.py": (
-        'prompt = prompt.replace("\\n", " — ")',
         # Built into a variable, then only ever logged.
         "routed by last_active fallback",
     ),

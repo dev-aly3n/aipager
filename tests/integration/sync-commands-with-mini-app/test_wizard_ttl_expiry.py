@@ -125,16 +125,13 @@ def test_text_sent_to_an_expired_wizards_name_step_shows_the_expiry_message(
 
 
 def test_wizard_survives_expiry_and_a_new_new_starts_clean(mk_bot, helpers):
-    """Expiry must be a soft reset, not a wedge: after an expired wizard
-    is discovered, `/new` must still work normally."""
+    """Expiry must be a soft reset, not a wedge: after an expired card is
+    discovered, `/new` still works normally and its name starts a session."""
     bot = helpers.make_personal_bot(mk_bot)
 
     start = helpers.make_message_update("/new", chat_id=CHAT, chat_type="private")
     start.message.reply_text.return_value.message_id = 9201
     _run(bot._handle_new_cmd(start, MagicMock()))
-    name_upd = helpers.make_message_update(
-        "ttlsurvivewiz", chat_id=CHAT, chat_type="private")
-    _run(bot._handle_message(name_upd, MagicMock()))
 
     baseline = new_flow._now()
     with patch("aipager.bot.new_flow._now", lambda: baseline + TTL_SECONDS + 1):
@@ -142,9 +139,8 @@ def test_wizard_survives_expiry_and_a_new_new_starts_clean(mk_bot, helpers):
             "_:nw:mode:ask", chat_id=CHAT, chat_type="private", message_id=9201)
         _run(bot._handle_callback(upd, MagicMock()))
 
-    # Confirm this run actually went through the expiry path (otherwise
-    # "a new /new starts clean" below would hold trivially regardless of
-    # whether the TTL guard did anything at all).
+    # This run really went through the expiry path (otherwise "a new /new
+    # starts clean" below would hold trivially).
     expired_text, *_ = helpers.latest_edit(bot)
     assert "expired" in (expired_text or "").lower(), expired_text
 
@@ -153,8 +149,12 @@ def test_wizard_survives_expiry_and_a_new_new_starts_clean(mk_bot, helpers):
     _run(bot._handle_new_cmd(second, MagicMock()))
     second.message.reply_text.assert_awaited_once()
 
+    async def _launch_ok(*a, **kw):
+        return True, ""
+
     fresh_name = helpers.make_message_update(
         "freshafterexpiry", chat_id=CHAT, chat_type="private")
-    _run(bot._handle_message(fresh_name, MagicMock()))
+    with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
+        _run(bot._handle_message(fresh_name, MagicMock()))
     text, markup, *_ = helpers.latest_edit(bot)
-    assert "freshafterexpiry" in text
+    assert "freshafterexpiry</b> is ready" in text

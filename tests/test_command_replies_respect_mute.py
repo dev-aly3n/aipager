@@ -375,8 +375,11 @@ def test_new_wizard_name_step_makes_no_edit_while_muted_and_another_chat_still_d
     bot._app.bot.edit_message_text.assert_not_awaited()
 
     assert run_async(new_flow.maybe_handle_text(bot, other, MagicMock(), "beta")) is True
-    bot._app.bot.edit_message_text.assert_awaited_once()
-    assert bot._app.bot.edit_message_text.await_args.kwargs["chat_id"] == OTHER_CHAT
+    # The name starts the session: "Starting", then the Ready card (or the
+    # card back with the reason). All of it in the other chat, none of it
+    # into the ban.
+    chats = {c.kwargs["chat_id"] for c in bot._app.bot.edit_message_text.await_args_list}
+    assert chats == {OTHER_CHAT}, chats
 
 
 def test_diff_document_makes_no_send_while_muted_and_another_chat_still_gets_it(

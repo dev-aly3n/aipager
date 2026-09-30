@@ -1,11 +1,13 @@
-"""Tests for the interactive `/new` wizard (aipager/bot/new_flow.py).
+"""Tests for `/new` (aipager/bot/new_flow.py): one parser for every
+spelling, the Name card, the Ready card, and the chat's new-session
+defaults (operator, 2026-09-30: "/new x1 or /new and then x1 ... I want
+same experience for both"; "default ... must be automode").
 
-Exercises the three exported entry points directly — `start_wizard`,
-`maybe_handle_text`, `handle_callback` — exactly as a black-box Tester
-would per entrypoints.md, since the shared-file integration lines that
-would make `/new` (no args) reachable through `_handle_callback`/
-`_handle_message` are applied by the integrator in a different worktree,
-not here.
+Drives the module's own entry points (`start_wizard`, `maybe_handle_text`,
+`create_from_text`, `handle_callback`); `create_session` is faked so no
+process is launched. The spellings through the real `_handle_new_cmd` /
+`_handle_message` are compared end to end in
+tests/integration/new-session-flow/.
 """
 
 from __future__ import annotations
@@ -14,44 +16,59 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from aipager import preferences
 from aipager.bot import new_flow
-from aipager.dtach import inject
+from aipager.bot.session_ops import ModelSwitchOutcome, RestartOutcome
+from aipager.config import MODEL_CHOICES
 from aipager.miniapp import launch
 from aipager.state import SessionRegistry, Status, TrackedSession
 
-# ---- local fixtures (file-scoped, per project convention — see
-# test_bot_callbacks_settings.py's own local `mk_query`) -----------------
+CHAT = 555
+OWNER = 111
+
+
+# ---- fixtures ------------------------------------------------------------
 
 @pytest.fixture
 def wbot(mk_bot):
-    """A `mk_bot()` bot pre-wired with the extra AsyncMocks new_flow.py
-    needs (`bot._app.bot.edit_message_text` / `.edit_message_reply_markup`)
-    — `mk_bot()` itself only wires `send_message`."""
-    def _mk(registry=None, **kw):
-        bot = mk_bot(registry, **kw)
+    """A bot whose message edits are recorded and whose `create_session`
+    registers a session without launching anything."""
+    def _mk(registry=None, *, admin=True, launch_error=""):
+        bot = mk_bot(registry)
         bot._app.bot.edit_message_text = AsyncMock()
         bot._app.bot.edit_message_reply_markup = AsyncMock()
+        bot._is_admin_user = MagicMock(return_value=admin)
+        bot.created = []
+
+        async def _create(label, *, scope_chat_id, skip_perms=False, cwd=None,
+                          driver_user_id=None, model=None, keep_card=False):
+            bot.created.append({"label": label, "scope": scope_chat_id,
+                                "skip_perms": skip_perms, "cwd": cwd,
+                                "model": model, "driver": driver_user_id})
+            if launch_error:
+                return "", launch_error
+            name = f"claude-{label}"
+            sess = bot.registry.get_or_create(name)
+            sess.label = label
+            sess.skip_perms = skip_perms
+            sess.scope_chat_id = scope_chat_id
+            if cwd:
+                sess.cwd = cwd
+            bot.registry.transition(name, Status.IDLE)
+            return name, ""
+
+        bot.create_session = _create
         return bot
     return _mk
 
 
 @pytest.fixture
 def mk_cb():
-    """Build a (update, query) pair for a callback-query test, mirroring
-    test_bot_callbacks_settings.py's local `mk_query` fixture but callable
-    with new_flow.handle_callback directly (no `_authorize_callback` gate
-    to satisfy — that check happens in `_handle_callback`, above this
-    module's own seam)."""
-    def _mk(*, user_id=111, chat_id=555, message_id=42, chat_type="private"):
+    def _mk(*, user_id=OWNER, chat_id=CHAT, message_id=900, chat_type="private"):
         query = MagicMock()
         query.answer = AsyncMock()
         query.message = MagicMock()
         query.message.message_id = message_id
-        # Real callback queries always carry `from_user`, and it is the
-        # authoritative "who tapped this" — `update.effective_user` is
-        # derived from it. Leaving it an auto-MagicMock made the tapping
-        # user unidentifiable, which is precisely what the wizard now has
-        # to check.
         query.from_user = MagicMock()
         query.from_user.id = user_id
         update = MagicMock()
@@ -66,886 +83,877 @@ def mk_cb():
     return _mk
 
 
-def _reply_text_returning(message_id: int) -> AsyncMock:
-    return AsyncMock(return_value=MagicMock(message_id=message_id))
+def _msg(mk_update, text, *, user_id=OWNER, message_id=77):
+    update = mk_update(text, message_id=message_id, chat_id=CHAT, user_id=user_id)
+    update.effective_chat.type = "private"
+    update.message.reply_text = AsyncMock(return_value=MagicMock(message_id=900))
+    return update
 
 
-async def _create_ok(*a, **kw):
-    return True, ""
+def _open_card(bot, mk_update, run_async, **kw):
+    update = _msg(mk_update, "/new", **kw)
+    run_async(new_flow.start_wizard(bot, update, MagicMock()))
+    return update
 
 
-def _extract_texts(kb) -> list[str]:
+def _last_edit(bot) -> dict:
+    return bot._app.bot.edit_message_text.await_args.kwargs
+
+
+def _buttons(kb) -> list[str]:
     return [b.text for row in kb.inline_keyboard for b in row]
 
 
-def _extract_cbs(kb) -> list[str]:
+def _cbs(kb) -> list[str]:
     return [b.callback_data for row in kb.inline_keyboard for b in row
             if b.callback_data is not None]
 
 
-# ---- start_wizard ------------------------------------------------------
+# ---- the Name card ----------------------------------------------------------
 
-def test_start_wizard_sends_name_prompt_and_seeds_pending(wbot, mk_update, run_async):
+def test_bare_new_sends_the_name_card_with_auto_by_default(wbot, mk_update, run_async):
     bot = wbot()
-    update = mk_update("/new", message_id=1, chat_id=555, user_id=111)
-    update.message.reply_text = _reply_text_returning(900)
-
-    run_async(new_flow.start_wizard(bot, update, MagicMock()))
+    update = _open_card(bot, mk_update, run_async)
 
     update.message.reply_text.assert_awaited_once()
     text = update.message.reply_text.await_args.args[0]
-    assert "called" in text.lower()
     kb = update.message.reply_text.await_args.kwargs["reply_markup"]
-    assert "_:nw:cancel" in _extract_cbs(kb)
+    assert "Send a name" in text and "x1 fix the failing tests" in text
+    assert "🤖 Auto" in text
+    assert _buttons(kb) == ["💬 Ask instead", "🧠 Model", "📁 Folder", "✖️ Cancel"]
+    pending = bot._new_wizard_pending[CHAT]
+    assert (pending["step"], pending["msg_id"], pending["user_id"],
+            pending["skip_perms"]) == ("name", 900, OWNER, True)
 
-    pending = bot._new_wizard_pending[555]
-    assert pending["step"] == "name"
-    assert pending["msg_id"] == 900
-    assert pending["user_id"] == 111
+
+def test_a_non_admin_gets_ask_and_no_mode_toggle(wbot, mk_update, run_async):
+    bot = wbot(admin=False)
+    update = _open_card(bot, mk_update, run_async)
+
+    text = update.message.reply_text.await_args.args[0]
+    kb = update.message.reply_text.await_args.kwargs["reply_markup"]
+    assert "💬 Ask" in text and "🤖 Auto" not in text
+    assert _buttons(kb) == ["🧠 Model", "📁 Folder", "✖️ Cancel"]
+
+
+def test_the_chats_default_ask_is_honoured(wbot, mk_update, run_async):
+    preferences.set_new_session_default(CHAT, "mode", "ask")
+    bot = wbot()
+    update = _open_card(bot, mk_update, run_async)
+
+    assert bot._new_wizard_pending[CHAT]["skip_perms"] is False
+    kb = update.message.reply_text.await_args.kwargs["reply_markup"]
+    assert "🤖 Auto instead" in _buttons(kb)
 
 
 def test_second_new_replaces_first_cleanly(wbot, mk_update, run_async):
     bot = wbot()
-    update1 = mk_update("/new", chat_id=555, user_id=111)
-    update1.message.reply_text = _reply_text_returning(900)
-    run_async(new_flow.start_wizard(bot, update1, MagicMock()))
-
-    update2 = mk_update("/new", chat_id=555, user_id=111)
-    update2.message.reply_text = _reply_text_returning(901)
+    _open_card(bot, mk_update, run_async)
+    update2 = _msg(mk_update, "/new")
+    update2.message.reply_text = AsyncMock(return_value=MagicMock(message_id=901))
     run_async(new_flow.start_wizard(bot, update2, MagicMock()))
 
-    # The FIRST wizard message was stripped in place.
-    bot._app.bot.edit_message_text.assert_awaited_once()
-    kwargs = bot._app.bot.edit_message_text.await_args.kwargs
+    kwargs = _last_edit(bot)
     assert kwargs["message_id"] == 900
     assert "started over" in kwargs["text"].lower()
     assert kwargs["reply_markup"] is None
-
-    # Pending now points at the SECOND message, not the first.
-    pending = bot._new_wizard_pending[555]
-    assert pending["msg_id"] == 901
+    assert bot._new_wizard_pending[CHAT]["msg_id"] == 901
 
 
 def test_start_wizard_unauthorized_sends_nothing(wbot, mk_update, run_async):
     from aipager.team import Team
     bot = wbot()
-    bot.team = Team(group_id=555, users={})
-    update = mk_update("/new", chat_id=555, user_id=999)
-    update.message.reply_text = AsyncMock()
+    bot.team = Team(group_id=CHAT, users={})
+    update = _msg(mk_update, "/new", user_id=999)
 
     run_async(new_flow.start_wizard(bot, update, MagicMock()))
 
-    assert 555 not in getattr(bot, "_new_wizard_pending", {})
+    assert CHAT not in getattr(bot, "_new_wizard_pending", {})
 
 
-# ---- maybe_handle_text: name step --------------------------------------
-
-def test_name_step_valid_name_advances_to_mode(wbot, mk_update, run_async):
+def test_a_muted_chat_seeds_no_card(wbot, mk_update, run_async):
+    from aipager.bot.transport import MUTED
     bot = wbot()
-    update = mk_update("dev", chat_id=555, user_id=111)
-    update.message.reply_text = _reply_text_returning(900)
+    update = _msg(mk_update, "/new")
+    update.message.reply_text = AsyncMock(return_value=MUTED)
+
     run_async(new_flow.start_wizard(bot, update, MagicMock()))
+
+    assert CHAT not in getattr(bot, "_new_wizard_pending", {})
+
+
+# ---- the name, answered ------------------------------------------------
+
+def test_a_valid_name_creates_the_session_at_once(wbot, mk_update, run_async):
+    bot = wbot()
+    _open_card(bot, mk_update, run_async)
+    update = _msg(mk_update, "dev")
 
     handled = run_async(new_flow.maybe_handle_text(bot, update, MagicMock(), "dev"))
 
     assert handled is True
-    pending = bot._new_wizard_pending[555]
-    assert pending["step"] == "mode"
-    assert pending["name"] == "dev"
-    bot._app.bot.edit_message_text.assert_awaited_once()
-    text = bot._app.bot.edit_message_text.await_args.kwargs["text"]
-    assert "dev" in text
-    assert "mode" in text.lower()
+    assert bot.created == [{"label": "dev", "scope": CHAT, "skip_perms": True,
+                            "cwd": None, "model": None, "driver": OWNER}]
+    assert CHAT not in bot._new_wizard_pending
+    ready = _last_edit(bot)
+    assert ready["message_id"] == 900           # the Name card became it
+    assert "✅ <b>dev</b> is ready" in ready["text"]
+    assert "✍️ Just send a message, it goes to dev." in ready["text"]
 
 
-def test_name_step_rejects_invalid_characters_and_reprompts_in_place(
-    wbot, mk_update, run_async,
-):
+def test_a_name_with_a_first_message_queues_it(wbot, mk_update, run_async):
     bot = wbot()
-    update = mk_update("!!!bad", chat_id=555, user_id=111)
-    update.message.reply_text = _reply_text_returning(900)
-    run_async(new_flow.start_wizard(bot, update, MagicMock()))
+    _open_card(bot, mk_update, run_async)
+    update = _msg(mk_update, "dev fix the tests\nplease")
 
-    handled = run_async(new_flow.maybe_handle_text(bot, update, MagicMock(), "!!!bad"))
+    run_async(new_flow.maybe_handle_text(bot, update, MagicMock(),
+                                         "dev fix the tests\nplease"))
 
-    assert handled is True
-    pending = bot._new_wizard_pending[555]
-    assert pending["step"] == "name"          # unchanged — still waiting
-    assert pending["name"] is None
-    kwargs = bot._app.bot.edit_message_text.await_args.kwargs
-    assert "letters" in kwargs["text"].lower() or "invalid" in kwargs["text"].lower()
-    assert kwargs["message_id"] == 900
+    sess = bot.registry.get("claude-dev")
+    assert [q[0] for q in sess.pending_queue] == ["fix the tests - please"]
+    assert "▶️ Working on your first message." in _last_edit(bot)["text"]
 
 
-def test_name_step_rejects_reserved_command_name(wbot, mk_update, run_async):
+def test_an_invalid_name_re_renders_the_card_with_the_reason(wbot, mk_update, run_async):
     bot = wbot()
-    update = mk_update("status", chat_id=555, user_id=111)
-    update.message.reply_text = _reply_text_returning(900)
-    run_async(new_flow.start_wizard(bot, update, MagicMock()))
+    _open_card(bot, mk_update, run_async)
+    update = _msg(mk_update, "b@d")
 
-    run_async(new_flow.maybe_handle_text(bot, update, MagicMock(), "status"))
+    run_async(new_flow.maybe_handle_text(bot, update, MagicMock(), "b@d"))
 
-    pending = bot._new_wizard_pending[555]
+    assert bot.created == []
+    pending = bot._new_wizard_pending[CHAT]
     assert pending["step"] == "name"
-    assert "reserved" in bot._app.bot.edit_message_text.await_args.kwargs["text"].lower()
+    kwargs = _last_edit(bot)
+    assert kwargs["message_id"] == 900
+    assert "letters" in kwargs["text"].lower()
 
 
-def test_name_step_rejects_live_session_collision(wbot, mk_update, run_async):
+def test_a_reserved_name_is_refused(wbot, mk_update, run_async):
+    bot = wbot()
+    _open_card(bot, mk_update, run_async)
+    run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "resume"),
+                                         MagicMock(), "resume"))
+
+    assert bot.created == []
+    assert "reserved" in _last_edit(bot)["text"].lower()
+
+
+def test_a_live_name_gets_the_conflict_card(wbot, mk_update, run_async):
     registry = SessionRegistry()
     registry._sessions["claude-jim"] = TrackedSession(
-        name="claude-jim", label="jim", status=Status.IDLE)
+        name="claude-jim", label="jim", status=Status.IDLE, scope_chat_id=CHAT)
     bot = wbot(registry)
-    update = mk_update("jim", chat_id=555, user_id=111)
-    update.message.reply_text = _reply_text_returning(900)
-    run_async(new_flow.start_wizard(bot, update, MagicMock()))
+    bot._send_new_conflict_prompt = AsyncMock()
+    _open_card(bot, mk_update, run_async)
 
-    run_async(new_flow.maybe_handle_text(bot, update, MagicMock(), "jim"))
+    run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "jim do it"),
+                                         MagicMock(), "jim do it"))
 
-    pending = bot._new_wizard_pending[555]
-    assert pending["step"] == "name"
-    assert "already in use" in bot._app.bot.edit_message_text.await_args.kwargs["text"]
+    assert bot.created == []
+    kw = bot._send_new_conflict_prompt.await_args.kwargs
+    assert (kw["existing"].name, kw["prompt"], kw["skip_perms"]) == (
+        "claude-jim", "do it", True)
+    assert CHAT not in bot._new_wizard_pending
+    # The Name card itself becomes the conflict card: one message.
+    assert kw["edit_msg_id"] == 900
 
 
-def test_name_step_allows_gone_session_with_no_resume_info(wbot, mk_update, run_async):
-    """A GONE session with no claude_session_id is genuinely reusable —
-    same rule `_handle_new_cmd` applies for its own conflict prompt."""
+def test_a_gone_name_with_no_transcript_is_reused(wbot, mk_update, run_async):
     registry = SessionRegistry()
-    registry._sessions["claude-old"] = TrackedSession(
-        name="claude-old", label="old", status=Status.GONE)
+    registry._sessions["claude-jim"] = TrackedSession(
+        name="claude-jim", label="jim", status=Status.GONE, scope_chat_id=CHAT)
     bot = wbot(registry)
-    update = mk_update("old", chat_id=555, user_id=111)
-    update.message.reply_text = _reply_text_returning(900)
-    run_async(new_flow.start_wizard(bot, update, MagicMock()))
+    bot._send_new_conflict_prompt = AsyncMock()
+    _open_card(bot, mk_update, run_async)
 
-    run_async(new_flow.maybe_handle_text(bot, update, MagicMock(), "old"))
+    run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "jim"), MagicMock(), "jim"))
 
-    assert bot._new_wizard_pending[555]["step"] == "mode"
+    bot._send_new_conflict_prompt.assert_not_awaited()
+    assert [c["label"] for c in bot.created] == ["jim"]
 
 
-def test_name_step_rejects_gone_but_resumable_collision(wbot, mk_update, run_async):
+def test_a_gone_resumable_name_gets_the_conflict_card(wbot, mk_update, run_async):
     registry = SessionRegistry()
-    registry._sessions["claude-old"] = TrackedSession(
-        name="claude-old", label="old", status=Status.GONE,
-        claude_session_id="abc-123",
-    )
+    registry._sessions["claude-jim"] = TrackedSession(
+        name="claude-jim", label="jim", status=Status.GONE,
+        claude_session_id="abc", scope_chat_id=CHAT)
     bot = wbot(registry)
-    update = mk_update("old", chat_id=555, user_id=111)
-    update.message.reply_text = _reply_text_returning(900)
-    run_async(new_flow.start_wizard(bot, update, MagicMock()))
+    bot._send_new_conflict_prompt = AsyncMock()
+    _open_card(bot, mk_update, run_async)
 
-    run_async(new_flow.maybe_handle_text(bot, update, MagicMock(), "old"))
+    run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "jim"), MagicMock(), "jim"))
 
-    assert bot._new_wizard_pending[555]["step"] == "name"
+    bot._send_new_conflict_prompt.assert_awaited_once()
+    assert bot.created == []
 
 
-# ---- maybe_handle_text: only intercepts the two/three text-capture steps
-
-def test_maybe_handle_text_ignored_with_no_pending_wizard(wbot, mk_update, run_async):
+def test_a_strangers_text_is_not_taken_as_the_name(wbot, mk_update, run_async):
     bot = wbot()
-    update = mk_update("hello", chat_id=555, user_id=111)
-    handled = run_async(new_flow.maybe_handle_text(bot, update, MagicMock(), "hello"))
-    assert handled is False
+    _open_card(bot, mk_update, run_async)
 
-
-def test_maybe_handle_text_ignored_at_callback_only_step(wbot, mk_update, run_async):
-    """While sitting at `mode` (callback-only), free text must NOT be
-    swallowed — normal session routing has to keep working (design.md
-    Risks)."""
-    bot = wbot()
-    update = mk_update("dev", chat_id=555, user_id=111)
-    update.message.reply_text = _reply_text_returning(900)
-    run_async(new_flow.start_wizard(bot, update, MagicMock()))
-    run_async(new_flow.maybe_handle_text(bot, update, MagicMock(), "dev"))
-    assert bot._new_wizard_pending[555]["step"] == "mode"
-
-    handled = run_async(
-        new_flow.maybe_handle_text(bot, update, MagicMock(), "unrelated text"))
+    handled = run_async(new_flow.maybe_handle_text(
+        bot, _msg(mk_update, "hello", user_id=222), MagicMock(), "hello"))
 
     assert handled is False
-    assert bot._new_wizard_pending[555]["step"] == "mode"  # untouched
+    assert bot.created == []
+    assert CHAT in bot._new_wizard_pending
 
 
-# ---- mode step -----------------------------------------------------------
-
-def _to_mode(bot, mk_update, run_async, *, chat_id=555, user_id=111, name="dev"):
-    update = mk_update(name, chat_id=chat_id, user_id=user_id)
-    update.message.reply_text = _reply_text_returning(900)
-    run_async(new_flow.start_wizard(bot, update, MagicMock()))
-    run_async(new_flow.maybe_handle_text(bot, update, MagicMock(), name))
-    return update
-
-
-def test_mode_ask_advances_to_summary(wbot, mk_update, run_async, mk_cb):
+def test_text_with_no_open_card_is_not_taken(wbot, mk_update, run_async):
     bot = wbot()
-    _to_mode(bot, mk_update, run_async)
-    update, query = mk_cb(chat_id=555, user_id=111)
-
-    handled = run_async(new_flow.handle_callback(bot, update, query, "_", "nw:mode:ask"))
-
-    assert handled is True
-    pending = bot._new_wizard_pending[555]
-    assert pending["step"] == "summary"
-    assert pending["skip_perms"] is False
-    text = bot._app.bot.edit_message_text.await_args.kwargs["text"]
-    assert "Ask mode" in text
-    assert "Confirm" in bot._app.bot.edit_message_text.await_args.kwargs["text"]
+    assert run_async(new_flow.maybe_handle_text(
+        bot, _msg(mk_update, "dev"), MagicMock(), "dev")) is False
 
 
-def test_mode_auto_blocked_for_non_admin(wbot, mk_update, run_async, mk_cb):
+def test_a_name_typed_while_a_picker_is_open_still_creates(wbot, mk_update, run_async, mk_cb):
     bot = wbot()
-    bot._is_admin_user = lambda uid, cid: False
-    _to_mode(bot, mk_update, run_async)
-    edit_calls_before = bot._app.bot.edit_message_text.await_count
-    update, query = mk_cb(chat_id=555, user_id=111)
+    _open_card(bot, mk_update, run_async)
+    update, query = mk_cb()
+    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:model"))
 
-    handled = run_async(new_flow.handle_callback(bot, update, query, "_", "nw:mode:auto"))
+    run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "dev"), MagicMock(), "dev"))
 
-    assert handled is True
-    query.answer.assert_awaited()
-    toast = query.answer.await_args
-    assert "admin" in toast.args[0].lower()
-    pending = bot._new_wizard_pending[555]
-    assert pending["step"] == "mode"
-    assert pending["skip_perms"] is None
-    # No message edit — state didn't move.
-    assert bot._app.bot.edit_message_text.await_count == edit_calls_before
+    assert [c["label"] for c in bot.created] == ["dev"]
 
 
-def test_mode_auto_allowed_for_admin(wbot, mk_update, run_async, mk_cb):
+def test_a_failed_launch_brings_the_card_back_with_its_choices(wbot, mk_update, run_async):
+    bot = wbot(launch_error="dtach unavailable")
+    _open_card(bot, mk_update, run_async)
+    bot._new_wizard_pending[CHAT]["skip_perms"] = False
+
+    run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "dev"), MagicMock(), "dev"))
+
+    pending = bot._new_wizard_pending.get(CHAT)
+    assert pending is not None, "the Name card must come back"
+    assert (pending["step"], pending["skip_perms"], pending["msg_id"]) == (
+        "name", False, 900)
+    assert "dtach unavailable" in _last_edit(bot)["text"]
+
+
+def test_a_failed_launch_leaves_a_newer_card_alone(wbot, mk_update, run_async):
+    """A second /new opened while the first card's session was launching:
+    the failure must not put the old card back over the new one."""
     bot = wbot()
-    bot._is_admin_user = lambda uid, cid: True
-    _to_mode(bot, mk_update, run_async)
-    update, query = mk_cb(chat_id=555, user_id=111)
+    _open_card(bot, mk_update, run_async)
+    newer = {"step": "name", "user_id": OWNER, "msg_id": 901,
+             "last_active": new_flow._now()}
+
+    async def _fail(label, **kw):
+        bot._new_wizard_pending[CHAT] = newer
+        return "", "dtach unavailable"
+    bot.create_session = _fail
+
+    run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "dev"), MagicMock(), "dev"))
+
+    assert bot._new_wizard_pending[CHAT] is newer
+
+
+def test_auto_is_refused_at_creation_for_a_non_admin(wbot, mk_update, run_async):
+    """The card's state says Auto (a stale card, a demotion): creation
+    re-checks the person creating and gives Ask, saying why."""
+    bot = wbot(admin=False)
+    _open_card(bot, mk_update, run_async)
+    bot._new_wizard_pending[CHAT]["skip_perms"] = True
+
+    run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "dev"), MagicMock(), "dev"))
+
+    assert bot.created[0]["skip_perms"] is False
+    assert "Auto mode needs an admin" in _last_edit(bot)["text"]
+
+
+# ---- the Name card's buttons --------------------------------------------
+
+def test_the_mode_toggle_switches_to_ask_and_back(wbot, mk_update, run_async, mk_cb):
+    bot = wbot()
+    _open_card(bot, mk_update, run_async)
+    update, query = mk_cb()
+
+    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:mode:ask"))
+    assert bot._new_wizard_pending[CHAT]["skip_perms"] is False
+    assert "💬 Ask" in _last_edit(bot)["text"]
+
+    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:mode:auto"))
+    assert bot._new_wizard_pending[CHAT]["skip_perms"] is True
+
+
+def test_the_mode_toggle_refuses_auto_for_a_non_admin(wbot, mk_update, run_async, mk_cb):
+    bot = wbot(admin=False)
+    _open_card(bot, mk_update, run_async)
+    update, query = mk_cb()
 
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:mode:auto"))
 
-    pending = bot._new_wizard_pending[555]
-    assert pending["step"] == "summary"
-    assert pending["skip_perms"] is True
+    assert bot._new_wizard_pending[CHAT]["skip_perms"] is False
+    assert query.answer.await_args.kwargs.get("show_alert") is True
 
 
-# ---- summary / optional menu navigation ----------------------------------
-
-def _to_summary(bot, mk_update, run_async, mk_cb, **kw):
-    update = _to_mode(bot, mk_update, run_async, **kw)
-    cb_update, query = mk_cb(chat_id=kw.get("chat_id", 555), user_id=kw.get("user_id", 111))
-    run_async(new_flow.handle_callback(bot, cb_update, query, "_", "nw:mode:ask"))
-    return update
-
-
-def test_opt_menu_lists_model_path_and_pref_sections(wbot, mk_update, run_async, mk_cb):
+def test_picking_a_model_returns_to_the_name_card(wbot, mk_update, run_async, mk_cb):
     bot = wbot()
-    _to_summary(bot, mk_update, run_async, mk_cb)
-    update, query = mk_cb()
-
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt"))
-
-    pending = bot._new_wizard_pending[555]
-    assert pending["step"] == "opt_menu"
-    kb = bot._app.bot.edit_message_text.await_args.kwargs["reply_markup"]
-    cbs = _extract_cbs(kb)
-    assert "_:nw:opt:model" in cbs
-    assert "_:nw:opt:path" in cbs
-    assert "_:nw:opt:pref:layout" in cbs
-    assert "_:nw:opt:pref:formatting" in cbs
-    assert "_:nw:opt:pref:length" in cbs
-    assert "_:nw:opt:pref:level" in cbs
-    assert "_:nw:summary" in cbs
-    assert "_:nw:cancel" in cbs
-
-
-def test_back_from_opt_menu_returns_to_summary(wbot, mk_update, run_async, mk_cb):
-    bot = wbot()
-    _to_summary(bot, mk_update, run_async, mk_cb)
-    update, query = mk_cb()
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt"))
-    assert bot._new_wizard_pending[555]["step"] == "opt_menu"
-
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:summary"))
-
-    assert bot._new_wizard_pending[555]["step"] == "summary"
-
-
-# ---- model submenu --------------------------------------------------------
-
-@pytest.fixture
-def two_models(monkeypatch):
-    choices = [("Sonnet", "/model sonnet"), ("Opus", "/model opus")]
-    monkeypatch.setattr(new_flow, "MODEL_CHOICES", choices)
-    return choices
-
-
-def test_model_submenu_lists_choices_from_model_choices(
-    wbot, mk_update, run_async, mk_cb, two_models,
-):
-    bot = wbot()
-    _to_summary(bot, mk_update, run_async, mk_cb)
+    _open_card(bot, mk_update, run_async)
     update, query = mk_cb()
 
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:model"))
+    kb = _last_edit(bot)["reply_markup"]
+    assert _buttons(kb)[:len(MODEL_CHOICES)] == [lbl for lbl, _ in MODEL_CHOICES]
 
-    assert bot._new_wizard_pending[555]["step"] == "opt_model"
-    kb = bot._app.bot.edit_message_text.await_args.kwargs["reply_markup"]
-    texts = _extract_texts(kb)
-    assert any("Sonnet" in t for t in texts)
-    assert any("Opus" in t for t in texts)
-    cbs = _extract_cbs(kb)
-    assert "_:nw:model:0" in cbs
-    assert "_:nw:model:1" in cbs
-    assert "_:nw:model:default" in cbs
-    assert "_:nw:model:custom" in cbs
-
-
-def test_pick_model_by_index_sets_model_and_returns_to_summary(
-    wbot, mk_update, run_async, mk_cb, two_models,
-):
-    bot = wbot()
-    _to_summary(bot, mk_update, run_async, mk_cb)
-    update, query = mk_cb()
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:model"))
-
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:model:1"))
-
-    pending = bot._new_wizard_pending[555]
-    assert pending["step"] == "summary"
-    assert pending["model"] == "opus"
-    assert pending["model_label"] == "Opus"
-    assert "Opus" in bot._app.bot.edit_message_text.await_args.kwargs["text"]
-
-
-def test_model_default_clears_choice(wbot, mk_update, run_async, mk_cb, two_models):
-    bot = wbot()
-    _to_summary(bot, mk_update, run_async, mk_cb)
-    update, query = mk_cb()
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:model"))
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:model:0"))
-    assert bot._new_wizard_pending[555]["model"] == "sonnet"
+    pending = bot._new_wizard_pending[CHAT]
+    assert pending["step"] == "name"
+    assert pending["model_label"] == MODEL_CHOICES[0][0]
+    assert MODEL_CHOICES[0][0] in _last_edit(bot)["text"]
 
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:model"))
+
+def test_default_model_clears_the_choice(wbot, mk_update, run_async, mk_cb):
+    bot = wbot()
+    _open_card(bot, mk_update, run_async)
+    update, query = mk_cb()
+    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:model:0"))
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:model:default"))
 
-    pending = bot._new_wizard_pending[555]
-    assert pending["model"] is None
-    assert pending["model_label"] is None
+    assert bot._new_wizard_pending[CHAT]["model"] is None
 
 
-def test_model_index_out_of_range_toasts_and_reopens_model_list(
-    wbot, mk_update, run_async, mk_cb, two_models,
-):
+def test_an_out_of_range_model_reopens_the_list(wbot, mk_update, run_async, mk_cb):
     bot = wbot()
-    _to_summary(bot, mk_update, run_async, mk_cb)
+    _open_card(bot, mk_update, run_async)
     update, query = mk_cb()
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:model"))
 
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:model:99"))
 
-    assert "no longer available" in query.answer.await_args.args[0].lower()
-    assert bot._new_wizard_pending[555]["step"] == "opt_model"
-    assert bot._new_wizard_pending[555]["model"] is None
+    assert bot._new_wizard_pending[CHAT]["step"] == "opt_model"
+    assert "no longer offered" in query.answer.await_args.args[0]
 
 
-def test_model_custom_text_capture_valid(wbot, mk_update, run_async, mk_cb, two_models):
+def test_a_custom_model_is_typed_then_used(wbot, mk_update, run_async, mk_cb):
     bot = wbot()
-    update = _to_summary(bot, mk_update, run_async, mk_cb)
-    cb_update, query = mk_cb()
-    run_async(new_flow.handle_callback(bot, cb_update, query, "_", "nw:opt:model"))
-    run_async(new_flow.handle_callback(bot, cb_update, query, "_", "nw:model:custom"))
-    assert bot._new_wizard_pending[555]["step"] == "opt_model_custom"
-
-    handled = run_async(
-        new_flow.maybe_handle_text(bot, update, MagicMock(), "claude-opus-5"))
-
-    assert handled is True
-    pending = bot._new_wizard_pending[555]
-    assert pending["step"] == "summary"
-    assert pending["model"] == "claude-opus-5"
-
-
-def test_model_custom_text_capture_invalid_reprompts(
-    wbot, mk_update, run_async, mk_cb, two_models,
-):
-    bot = wbot()
-    update = _to_summary(bot, mk_update, run_async, mk_cb)
-    cb_update, query = mk_cb()
-    run_async(new_flow.handle_callback(bot, cb_update, query, "_", "nw:opt:model"))
-    run_async(new_flow.handle_callback(bot, cb_update, query, "_", "nw:model:custom"))
-
-    handled = run_async(
-        new_flow.maybe_handle_text(bot, update, MagicMock(), "-not-valid"))
-
-    assert handled is True
-    pending = bot._new_wizard_pending[555]
-    assert pending["step"] == "opt_model_custom"
-    assert pending["model"] is None
-
-
-# ---- path submenu ----------------------------------------------------------
-
-def test_path_submenu_lists_allowed_roots_freshly(
-    wbot, mk_update, run_async, mk_cb, monkeypatch,
-):
-    bot = wbot()
-    _to_summary(bot, mk_update, run_async, mk_cb)
+    _open_card(bot, mk_update, run_async)
     update, query = mk_cb()
-    calls = []
+    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:model:custom"))
+    assert bot._new_wizard_pending[CHAT]["step"] == "opt_model_custom"
 
-    def fake_roots(registry, chat_id):
-        calls.append(chat_id)
-        return ["/home/aly/proj-a", "/home/aly/proj-b"]
+    run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "claude-opus-5"),
+                                         MagicMock(), "claude-opus-5"))
 
-    monkeypatch.setattr(launch, "allowed_roots", fake_roots)
-
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:path"))
-
-    assert calls == [555]
-    pending = bot._new_wizard_pending[555]
-    assert pending["step"] == "opt_path"
-    assert pending["path_options"] == ["/home/aly/proj-a", "/home/aly/proj-b"]
-    kb = bot._app.bot.edit_message_text.await_args.kwargs["reply_markup"]
-    cbs = _extract_cbs(kb)
-    assert "_:nw:path:0" in cbs
-    assert "_:nw:path:1" in cbs
-    assert "_:nw:path:default" in cbs
-    assert "_:nw:path:new" in cbs
-
-    # A SECOND open re-snapshots — never reuses a stale list.
-    def fake_roots_2(registry, chat_id):
-        return ["/only/one"]
-    monkeypatch.setattr(launch, "allowed_roots", fake_roots_2)
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:path"))
-    assert bot._new_wizard_pending[555]["path_options"] == ["/only/one"]
+    pending = bot._new_wizard_pending[CHAT]
+    assert (pending["step"], pending["model"]) == ("name", "claude-opus-5")
+    assert bot.created == []                   # a model, not a name
 
 
-def test_pick_path_by_index_sets_cwd(wbot, mk_update, run_async, mk_cb, monkeypatch):
+def test_an_invalid_custom_model_asks_again(wbot, mk_update, run_async, mk_cb):
     bot = wbot()
-    _to_summary(bot, mk_update, run_async, mk_cb)
+    _open_card(bot, mk_update, run_async)
     update, query = mk_cb()
-    monkeypatch.setattr(
-        launch, "allowed_roots", lambda registry, chat_id: ["/a", "/b"])
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:path"))
+    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:model:custom"))
 
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:path:1"))
+    run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "bad model!"),
+                                         MagicMock(), "bad model!"))
 
-    pending = bot._new_wizard_pending[555]
-    assert pending["step"] == "summary"
-    assert pending["cwd"] == "/b"
+    assert bot._new_wizard_pending[CHAT]["step"] == "opt_model_custom"
 
 
-def test_path_default_clears_cwd(wbot, mk_update, run_async, mk_cb, monkeypatch):
+def test_picking_a_folder_sets_it(wbot, mk_update, run_async, mk_cb, tmp_path, monkeypatch):
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat: [str(tmp_path)])
     bot = wbot()
-    _to_summary(bot, mk_update, run_async, mk_cb)
+    _open_card(bot, mk_update, run_async)
     update, query = mk_cb()
-    monkeypatch.setattr(launch, "allowed_roots", lambda registry, chat_id: ["/a"])
+
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:path"))
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:path:0"))
-    assert bot._new_wizard_pending[555]["cwd"] == "/a"
 
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:path"))
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:path:default"))
-
-    assert bot._new_wizard_pending[555]["cwd"] is None
+    assert bot._new_wizard_pending[CHAT]["cwd"] == str(tmp_path)
+    run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "dev"), MagicMock(), "dev"))
+    assert bot.created[0]["cwd"] == str(tmp_path)
 
 
-def test_path_index_out_of_range_toasts_and_reopens(
-    wbot, mk_update, run_async, mk_cb, monkeypatch,
-):
+def test_a_new_folder_is_created_and_used(wbot, mk_update, run_async, mk_cb, tmp_path, monkeypatch):
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat: [str(tmp_path)])
     bot = wbot()
-    _to_summary(bot, mk_update, run_async, mk_cb)
+    _open_card(bot, mk_update, run_async)
     update, query = mk_cb()
-    monkeypatch.setattr(launch, "allowed_roots", lambda registry, chat_id: ["/a"])
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:path"))
+    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:path:new"))
 
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:path:5"))
+    run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "proj"), MagicMock(), "proj"))
 
-    assert "no longer available" in query.answer.await_args.args[0].lower()
-    assert bot._new_wizard_pending[555]["step"] == "opt_path"
+    assert (tmp_path / "proj").is_dir()
+    assert bot._new_wizard_pending[CHAT]["cwd"] == str(tmp_path / "proj")
 
 
-def test_new_folder_with_no_roots_toasts_and_does_not_advance(
-    wbot, mk_update, run_async, mk_cb, monkeypatch,
-):
+def test_new_folder_with_no_roots_toasts(wbot, mk_update, run_async, mk_cb, monkeypatch):
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat: [])
     bot = wbot()
-    _to_summary(bot, mk_update, run_async, mk_cb)
+    _open_card(bot, mk_update, run_async)
     update, query = mk_cb()
-    monkeypatch.setattr(launch, "allowed_roots", lambda registry, chat_id: [])
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:path"))
 
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:path:new"))
 
+    assert bot._new_wizard_pending[CHAT]["step"] == "name"
     assert query.answer.await_args.kwargs.get("show_alert") is True
-    assert bot._new_wizard_pending[555]["step"] == "opt_path"
 
 
-def test_new_folder_happy_path_creates_real_dir_under_tmp_root(
-    wbot, mk_update, run_async, mk_cb, tmp_path, monkeypatch,
-):
-    project_dir = tmp_path / "project"
-    project_dir.mkdir()
-    monkeypatch.setattr(inject, "_PROJECT_DIR", str(project_dir))
-
+def test_an_invalid_new_folder_name_asks_again_and_creates_nothing(
+        wbot, mk_update, run_async, mk_cb, tmp_path, monkeypatch):
+    """A bad folder name re-asks in place: nothing is created, and the text
+    is never taken as a session name."""
+    root = tmp_path / "root"
+    root.mkdir()
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat: [str(root)])
     bot = wbot()
-    update = _to_summary(bot, mk_update, run_async, mk_cb)
-    cb_update, query = mk_cb()
-    run_async(new_flow.handle_callback(bot, cb_update, query, "_", "nw:opt:path"))
-    run_async(new_flow.handle_callback(bot, cb_update, query, "_", "nw:path:new"))
-    assert bot._new_wizard_pending[555]["step"] == "opt_path_newfolder"
+    _open_card(bot, mk_update, run_async)
+    update, query = mk_cb()
+    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:path:new"))
 
-    handled = run_async(new_flow.maybe_handle_text(bot, update, MagicMock(), "sub1"))
+    run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "../x"), MagicMock(), "../x"))
 
-    assert handled is True
-    pending = bot._new_wizard_pending[555]
-    assert pending["step"] == "summary"
-    assert pending["cwd"] == str(project_dir / "sub1")
-    assert (project_dir / "sub1").is_dir()
+    assert bot._new_wizard_pending[CHAT]["step"] == "opt_path_newfolder"
+    assert bot.created == []
+    assert list(root.iterdir()) == [] and not (tmp_path / "x").exists()
+    assert "📁" in _last_edit(bot)["text"]
 
 
-def test_new_folder_invalid_name_reprompts_in_place(
-    wbot, mk_update, run_async, mk_cb, tmp_path, monkeypatch,
-):
-    project_dir = tmp_path / "project"
-    project_dir.mkdir()
-    monkeypatch.setattr(inject, "_PROJECT_DIR", str(project_dir))
-
+def test_an_out_of_range_folder_reopens_a_fresh_list(
+        wbot, mk_update, run_async, mk_cb, tmp_path, monkeypatch):
+    roots = [str(tmp_path / "a")]
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat: list(roots))
     bot = wbot()
-    update = _to_summary(bot, mk_update, run_async, mk_cb)
-    cb_update, query = mk_cb()
-    run_async(new_flow.handle_callback(bot, cb_update, query, "_", "nw:opt:path"))
-    run_async(new_flow.handle_callback(bot, cb_update, query, "_", "nw:path:new"))
+    _open_card(bot, mk_update, run_async)
+    update, query = mk_cb()
+    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:path"))
 
-    handled = run_async(
-        new_flow.maybe_handle_text(bot, update, MagicMock(), "../escape"))
+    roots.append(str(tmp_path / "b"))
+    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:path:5"))
 
-    assert handled is True
-    pending = bot._new_wizard_pending[555]
-    assert pending["step"] == "opt_path_newfolder"
+    pending = bot._new_wizard_pending[CHAT]
     assert pending["cwd"] is None
-    assert not (project_dir / "escape").exists()
+    assert pending["step"] == "opt_path"
+    assert "no longer available" in query.answer.await_args.args[0]
+    assert pending["path_options"] == roots      # read again, not reused
 
 
-# ---- preference fields ------------------------------------------------
-
-def test_pref_field_submenu_lists_options_with_markers(wbot, mk_update, run_async, mk_cb):
+def test_a_folder_index_resolves_against_the_list_that_was_shown(
+        wbot, mk_update, run_async, mk_cb, tmp_path, monkeypatch):
+    """Roots change between two openings of the picker: the tap resolves
+    against the latest list shown, not the first."""
+    roots = [str(tmp_path / "old")]
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat: list(roots))
     bot = wbot()
-    _to_summary(bot, mk_update, run_async, mk_cb)
+    _open_card(bot, mk_update, run_async)
+    update, query = mk_cb()
+    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:path"))
+    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:back"))
+
+    roots[:] = [str(tmp_path / "new")]
+    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:path"))
+    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:path:0"))
+
+    assert bot._new_wizard_pending[CHAT]["cwd"] == str(tmp_path / "new")
+
+
+def test_short_path_keeps_the_end_of_a_long_path():
+    assert new_flow._short_path("/srv/a") == "/srv/a"
+    long = "/home/someone/" + "x" * 60 + "/project"
+    short = new_flow._short_path(long)
+    assert len(short) == 40 and short.startswith("…") and short.endswith("/project")
+
+
+def test_cancel_clears_the_card(wbot, mk_update, run_async, mk_cb):
+    bot = wbot()
+    _open_card(bot, mk_update, run_async)
     update, query = mk_cb()
 
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:pref:layout"))
+    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:cancel"))
 
-    pending = bot._new_wizard_pending[555]
-    assert pending["step"] == "opt_pref_field"
-    assert pending["pref_section"] == "layout"
-    kb = bot._app.bot.edit_message_text.await_args.kwargs["reply_markup"]
-    cbs = _extract_cbs(kb)
-    assert "_:nw:pref:layout:card" in cbs
-    assert "_:nw:pref:layout:merged" in cbs
-    assert "_:nw:pref:layout:replace" in cbs
-    assert "_:nw:pref:layout:default" in cbs
-    texts = _extract_texts(kb)
-    assert any("✅" in t and "chat default" in t.lower() for t in texts)  # nothing set yet
+    assert CHAT not in bot._new_wizard_pending
+    assert "Cancelled" in _last_edit(bot)["text"]
 
 
-def test_pref_field_unknown_section_toasts_invalid(wbot, mk_update, run_async, mk_cb):
+def test_a_strangers_tap_is_refused(wbot, mk_update, run_async, mk_cb):
     bot = wbot()
-    _to_summary(bot, mk_update, run_async, mk_cb)
-    update, query = mk_cb()
+    _open_card(bot, mk_update, run_async)
+    update, query = mk_cb(user_id=222)
 
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:pref:bogus"))
+    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:mode:ask"))
 
-    assert query.answer.await_args.args[0] == "Invalid callback"
-    assert bot._new_wizard_pending[555]["step"] == "summary"  # unchanged
-
-
-def test_pref_field_set_value_records_override(wbot, mk_update, run_async, mk_cb):
-    bot = wbot()
-    _to_summary(bot, mk_update, run_async, mk_cb)
-    update, query = mk_cb()
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:pref:formatting"))
-
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:pref:formatting:on"))
-
-    pending = bot._new_wizard_pending[555]
-    assert pending["step"] == "summary"
-    assert pending["prefs"]["simple_formatting"] is True
-    text = bot._app.bot.edit_message_text.await_args.kwargs["text"]
-    assert "Simple formatting" in text or "formatting" in text.lower()
+    assert bot._new_wizard_pending[CHAT]["skip_perms"] is True
+    assert query.answer.await_args.kwargs.get("show_alert") is True
 
 
-def test_pref_field_use_chat_default_clears_override(wbot, mk_update, run_async, mk_cb):
-    bot = wbot()
-    _to_summary(bot, mk_update, run_async, mk_cb)
-    update, query = mk_cb()
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:pref:length"))
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:pref:length:short"))
-    assert bot._new_wizard_pending[555]["prefs"]["answer_length"] == "short"
-
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:pref:length"))
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:pref:length:default"))
-
-    assert "answer_length" not in bot._new_wizard_pending[555]["prefs"]
-
-
-def test_pref_field_invalid_value_toasts_and_does_not_mutate(wbot, mk_update, run_async, mk_cb):
-    bot = wbot()
-    _to_summary(bot, mk_update, run_async, mk_cb)
-    update, query = mk_cb()
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:pref:level"))
-
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:pref:level:sideways"))
-
-    assert query.answer.await_args.args[0] == "Invalid value"
-    assert "language_level" not in bot._new_wizard_pending[555]["prefs"]
-
-
-# ---- cancel --------------------------------------------------------------
-
-def test_cancel_from_summary_clears_pending_and_edits_message(
-    wbot, mk_update, run_async, mk_cb,
-):
-    bot = wbot()
-    _to_summary(bot, mk_update, run_async, mk_cb)
-    update, query = mk_cb()
-
-    handled = run_async(new_flow.handle_callback(bot, update, query, "_", "nw:cancel"))
-
-    assert handled is True
-    assert 555 not in bot._new_wizard_pending
-    kwargs = bot._app.bot.edit_message_text.await_args.kwargs
-    assert "Cancelled" in kwargs["text"]
-    assert kwargs["reply_markup"] is None
-
-
-# ---- callback routing: only claims its own namespace ---------------------
-
-def test_handle_callback_ignores_non_wizard_callbacks(wbot, mk_update, run_async, mk_cb):
+def test_a_tap_with_no_open_card_says_expired(wbot, mk_cb, run_async):
     bot = wbot()
     update, query = mk_cb()
-    handled = run_async(
-        new_flow.handle_callback(bot, update, query, "claude-dev", "kill"))
-    assert handled is False
-    handled2 = run_async(
-        new_flow.handle_callback(bot, update, query, "_", "set:layout"))
-    assert handled2 is False
 
-
-# ---- stale taps: no pending state (daemon restart) / expired -----------
-
-def test_callback_with_no_pending_state_shows_expired(wbot, mk_update, run_async, mk_cb):
-    bot = wbot()
-    update, query = mk_cb(chat_id=555, message_id=123)
-
-    handled = run_async(new_flow.handle_callback(bot, update, query, "_", "nw:confirm"))
-
-    assert handled is True
+    assert run_async(new_flow.handle_callback(bot, update, query, "_", "nw:cancel")) is True
     assert "expired" in query.answer.await_args.args[0].lower()
-    kwargs = bot._app.bot.edit_message_text.await_args.kwargs
-    assert kwargs["message_id"] == 123
-    assert "expired" in kwargs["text"].lower()
-    assert kwargs["reply_markup"] is None
 
 
-def test_wizard_expires_after_ttl_on_text(wbot, mk_update, run_async):
+def test_the_card_expires_after_its_ttl(wbot, mk_update, run_async, monkeypatch):
     bot = wbot()
-    update = mk_update("dev", chat_id=555, user_id=111)
-    update.message.reply_text = _reply_text_returning(900)
-    run_async(new_flow.start_wizard(bot, update, MagicMock()))
+    _open_card(bot, mk_update, run_async)
+    bot._new_wizard_pending[CHAT]["last_active"] -= new_flow._WIZARD_TTL_SECONDS + 1
 
-    bot._new_wizard_pending[555]["last_active"] -= (new_flow._WIZARD_TTL_SECONDS + 1)
-
-    handled = run_async(new_flow.maybe_handle_text(bot, update, MagicMock(), "dev"))
+    handled = run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "dev"),
+                                                   MagicMock(), "dev"))
 
     assert handled is True
-    assert 555 not in bot._new_wizard_pending
-    text = bot._app.bot.edit_message_text.await_args.kwargs["text"]
-    assert "expired" in text.lower()
+    assert bot.created == []
+    assert CHAT not in bot._new_wizard_pending
+    assert "expired" in _last_edit(bot)["text"]
 
 
-def test_wizard_expires_after_ttl_on_callback(wbot, mk_update, run_async, mk_cb):
+def test_foreign_callbacks_are_not_this_modules(wbot, mk_cb, run_async):
     bot = wbot()
-    _to_summary(bot, mk_update, run_async, mk_cb)
-    bot._new_wizard_pending[555]["last_active"] -= (new_flow._WIZARD_TTL_SECONDS + 1)
+    update, query = mk_cb()
+    assert run_async(new_flow.handle_callback(bot, update, query, "_", "set:layout")) is False
+    assert run_async(new_flow.handle_callback(bot, update, query, "claude-x", "stop")) is False
+
+
+# ---- the one parser -------------------------------------------------------
+
+@pytest.mark.parametrize("text, expected", [
+    ("x1", ("x1", "", False, "")),
+    ("X1 fix it", ("x1", "fix it", False, "")),
+    ("!x1", ("x1", "", True, "")),
+    ("x1   two\nlines", ("x1", "two - lines", False, "")),
+])
+def test_parse_request(text, expected):
+    assert new_flow.parse_request(text) == expected
+
+
+def test_parse_request_rejects_an_empty_name():
+    assert new_flow.parse_request("!")[3]
+
+
+def test_direct_argument_with_a_bad_name_opens_the_card_with_the_reason(
+        wbot, mk_update, run_async):
+    bot = wbot()
+    update = _msg(mk_update, "/new b@d")
+
+    run_async(new_flow.create_from_text(bot, update, "b@d"))
+
+    assert bot.created == []
+    text = update.message.reply_text.await_args.args[0]
+    assert "letters" in text.lower() and "Send a name" in text
+    assert bot._new_wizard_pending[CHAT]["step"] == "name"
+
+
+# ---- the Ready card and its buttons ----------------------------------------
+
+def _ready_session(bot, *, skip_perms=True, status=Status.IDLE):
+    sess = bot.registry.get_or_create("claude-dev")
+    sess.label = "dev"
+    sess.skip_perms = skip_perms
+    sess.scope_chat_id = CHAT
+    bot.registry.transition("claude-dev", status)
+    return sess
+
+
+def test_the_ready_card_says_where_messages_go(wbot, mk_update):
+    bot = wbot()
+    sess = _ready_session(bot)
+    text, kb = new_flow.render_ready(bot, _msg(mk_update, "x"), sess)
+
+    assert text.startswith("✅ <b>dev</b> is ready\n🤖 Auto · 🧠 Default model · 📁 ")
+    assert "✍️ Just send a message, it goes to dev." in text
+    assert "Later: tap dev on the keyboard, or reply to any dev message." in text
+    assert _buttons(kb) == ["💬 Switch to Ask", "🧠 Model"]
+    assert "—" not in text
+
+
+def test_the_ready_card_offers_auto_when_asking(wbot, mk_update):
+    bot = wbot()
+    sess = _ready_session(bot, skip_perms=False)
+    _text, kb = new_flow.render_ready(bot, _msg(mk_update, "x"), sess)
+    assert _buttons(kb)[0] == "🤖 Switch to Auto"
+
+
+def _switch_core(bot):
+    async def _core(sess, target):
+        sess.skip_perms = target
+        return RestartOutcome(ok=True, reason="done", label=sess.label,
+                              skip_perms=target)
+    bot._perms_switch_core = AsyncMock(side_effect=_core)
+
+
+def test_switch_to_ask_relaunches_and_re_renders(wbot, mk_cb, run_async):
+    bot = wbot()
+    sess = _ready_session(bot)
+    _switch_core(bot)
     update, query = mk_cb()
 
-    handled = run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt"))
+    assert run_async(new_flow.handle_callback(bot, update, query, sess.name, "rdy_ask"))
 
-    assert handled is True
-    assert 555 not in bot._new_wizard_pending
-    assert "expired" in query.answer.await_args.args[0].lower()
-    kwargs = bot._app.bot.edit_message_text.await_args.kwargs
-    assert "expired" in kwargs["text"].lower()
-    assert kwargs["reply_markup"] is None
+    bot._perms_switch_core.assert_awaited_once_with(sess, False)
+    assert "💬 Ask" in _last_edit(bot)["text"]
+    assert _buttons(_last_edit(bot)["reply_markup"])[0] == "🤖 Switch to Auto"
 
 
-# ---- confirm: happy path -------------------------------------------------
-
-def test_confirm_creates_session_ask_mode(wbot, mk_update, run_async, mk_cb, monkeypatch):
-    monkeypatch.setattr(inject, "launch_session", _create_ok)
-    registry = SessionRegistry()
-    bot = wbot(registry)
-    _to_summary(bot, mk_update, run_async, mk_cb, chat_id=555, user_id=111)
-    update, query = mk_cb(chat_id=555, user_id=111, chat_type="private")
-
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:confirm"))
-
-    assert 555 not in bot._new_wizard_pending
-    kwargs = bot._app.bot.edit_message_text.await_args.kwargs
-    assert "created" in kwargs["text"]
-    assert "Ask mode" in kwargs["text"]
-    sess = registry.find_by_label("dev", 555)
-    assert sess is not None
-    assert sess.skip_perms is False
-
-
-def test_confirm_applies_preference_overrides(wbot, mk_update, run_async, mk_cb, monkeypatch):
-    monkeypatch.setattr(inject, "launch_session", _create_ok)
-    registry = SessionRegistry()
-    bot = wbot(registry)
-    _to_summary(bot, mk_update, run_async, mk_cb)
-    update, query = mk_cb()
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:pref:layout"))
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:pref:layout:merged"))
-
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:confirm"))
-
-    sess = registry.find_by_label("dev", 555)
-    assert sess.override_layout == "merged"
-
-
-def test_confirm_adds_miniapp_button_only_in_private_chat_with_url(
-    wbot, mk_update, run_async, mk_cb, monkeypatch,
-):
-    monkeypatch.setattr(inject, "launch_session", _create_ok)
-    registry = SessionRegistry()
-    bot = wbot(registry)
-    bot._miniapp_url = "https://example.aipager.run/app"
-    _to_summary(bot, mk_update, run_async, mk_cb)
-    update, query = mk_cb(chat_type="private")
-
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:confirm"))
-
-    kb = bot._app.bot.edit_message_text.await_args.kwargs["reply_markup"]
-    assert kb is not None
-    # Asserted against the shared constant, not a literal: the wizard's
-    # success reply builds this row with the same `_app_button_row`
-    # helper every other surface uses, so the label is whatever chat
-    # calls the Mini App everywhere else.
-    from aipager.config import APP_BUTTON
-    assert any(APP_BUTTON == b.text for row in kb.inline_keyboard for b in row)
-
-
-def test_confirm_no_miniapp_button_in_group_chat(
-    wbot, mk_update, run_async, mk_cb, monkeypatch,
-):
-    monkeypatch.setattr(inject, "launch_session", _create_ok)
-    registry = SessionRegistry()
-    bot = wbot(registry)
-    bot._miniapp_url = "https://example.aipager.run/app"
-    _to_summary(bot, mk_update, run_async, mk_cb, chat_id=-1001)
-    update, query = mk_cb(chat_id=-1001, chat_type="group")
-
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:confirm"))
-
-    kb = bot._app.bot.edit_message_text.await_args.kwargs["reply_markup"]
-    assert kb is None
-
-
-def test_confirm_failure_returns_to_summary_and_keeps_pending(
-    wbot, mk_update, run_async, mk_cb, monkeypatch,
-):
-    async def _fail_launch(*a, **kw):
-        return False, "dtach socket busy"
-    monkeypatch.setattr(inject, "launch_session", _fail_launch)
-    bot = wbot()
-    _to_summary(bot, mk_update, run_async, mk_cb)
+def test_switch_to_auto_needs_an_admin(wbot, mk_cb, run_async):
+    bot = wbot(admin=False)
+    sess = _ready_session(bot, skip_perms=False)
+    _switch_core(bot)
     update, query = mk_cb()
 
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:confirm"))
+    run_async(new_flow.handle_callback(bot, update, query, sess.name, "rdy_auto"))
 
-    pending = bot._new_wizard_pending.get(555)
-    assert pending is not None                 # retry-able — not cleared
-    assert pending["step"] == "summary"
-    kwargs = bot._app.bot.edit_message_text.await_args.kwargs
-    assert "dtach socket busy" in kwargs["text"]
-    assert kwargs["reply_markup"] is not None   # Confirm/Optional still there
+    bot._perms_switch_core.assert_not_awaited()
+    assert query.answer.await_args.kwargs.get("show_alert") is True
 
 
-# ---- confirm: re-authorization ------------------------------------------
-
-def test_confirm_denied_when_caller_can_no_longer_prompt(
-    wbot, mk_update, run_async, mk_cb,
-):
+def test_switching_mode_is_refused_while_the_session_works(wbot, mk_cb, run_async):
     bot = wbot()
-    _to_summary(bot, mk_update, run_async, mk_cb)
-    bot._can_prompt_user = lambda uid, cid: False
+    sess = _ready_session(bot, status=Status.BUSY)
+    _switch_core(bot)
     update, query = mk_cb()
 
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:confirm"))
+    run_async(new_flow.handle_callback(bot, update, query, sess.name, "rdy_ask"))
 
-    assert 555 not in bot._new_wizard_pending
-    text = bot._app.bot.edit_message_text.await_args.kwargs["text"]
-    assert "not" in text.lower() or "authorized" in text.lower()
+    bot._perms_switch_core.assert_not_awaited()
+    assert "working" in query.answer.await_args.args[0]
 
 
-def test_confirm_reopens_mode_step_when_auto_demoted(
-    wbot, mk_update, run_async, mk_cb,
-):
-    """Auto was chosen while admin; by Confirm time the caller has been
-    demoted — must re-open `mode`, never silently create in Ask mode."""
+def test_a_tap_from_before_the_running_turn_is_refused(wbot, mk_cb, run_async):
+    """The card is older than the running turn's busy card (the status has
+    not caught up yet): the switch would kill that turn, so it refuses."""
     bot = wbot()
-    bot._is_admin_user = lambda uid, cid: True
-    _to_mode(bot, mk_update, run_async)
-    cb_update, query = mk_cb()
-    run_async(new_flow.handle_callback(bot, cb_update, query, "_", "nw:mode:auto"))
-    assert bot._new_wizard_pending[555]["skip_perms"] is True
+    sess = _ready_session(bot)
+    sess.busy_msg_id = 1000
+    _switch_core(bot)
+    update, query = mk_cb(message_id=900)
 
-    bot._is_admin_user = lambda uid, cid: False  # demoted between steps
-    run_async(new_flow.handle_callback(bot, cb_update, query, "_", "nw:confirm"))
+    run_async(new_flow.handle_callback(bot, update, query, sess.name, "rdy_ask"))
 
-    pending = bot._new_wizard_pending.get(555)
-    assert pending is not None                  # still resumable
-    assert pending["step"] == "mode"
-    text = bot._app.bot.edit_message_text.await_args.kwargs["text"]
-    assert "permission" in text.lower()
+    bot._perms_switch_core.assert_not_awaited()
+    assert "working" in query.answer.await_args.args[0]
 
 
-def test_confirm_with_no_name_set_is_invalid_callback(wbot, mk_update, run_async, mk_cb):
-    """Defensive: a stray Confirm tap that somehow arrives before a name
-    was ever recorded must not attempt to create a session."""
+def test_a_turn_that_starts_during_the_toast_is_left_alone(wbot, mk_cb, run_async):
+    """Idle when tapped, working by the time the toast went out: the
+    switch is dropped and the card says why."""
     bot = wbot()
-    store = new_flow._pending_store(bot)
-    store[555] = {
-        "step": "name", "user_id": 111, "msg_id": 900, "name": None,
-        "skip_perms": None, "model": None, "model_label": None, "cwd": None,
-        "prefs": {}, "path_options": [], "pref_section": None,
-        "new_folder_parent": None, "last_active": new_flow._now(),
-    }
+    sess = _ready_session(bot)
+    _switch_core(bot)
     update, query = mk_cb()
 
-    run_async(new_flow.handle_callback(bot, update, query, "_", "nw:confirm"))
+    async def _turn_starts(*_a, **_k):
+        sess.status = Status.BUSY
+    query.answer = AsyncMock(side_effect=_turn_starts)
 
-    assert query.answer.await_args.args[0] == "Invalid callback"
-    assert 555 in bot._new_wizard_pending  # untouched, not popped
+    run_async(new_flow.handle_callback(bot, update, query, sess.name, "rdy_ask"))
 
-
-# ---- pure helper functions ------------------------------------------------
-
-def test_is_expired_true_past_ttl_false_within():
-    fresh = {"last_active": new_flow._now()}
-    assert new_flow._is_expired(fresh) is False
-    stale = {"last_active": new_flow._now() - new_flow._WIZARD_TTL_SECONDS - 1}
-    assert new_flow._is_expired(stale) is True
+    bot._perms_switch_core.assert_not_awaited()
+    assert "started working" in _last_edit(bot)["text"]
 
 
-def test_short_path_truncates_long_paths_and_keeps_short_ones():
-    short = "/home/aly/proj"
-    assert new_flow._short_path(short) == short
-    long_path = "/" + ("x" * 80)
-    out = new_flow._short_path(long_path, limit=20)
-    assert len(out) == 20
-    assert out.startswith("…")
-    assert out.endswith(long_path[-19:])
+def test_the_model_button_lists_models_and_switches(wbot, mk_cb, run_async):
+    bot = wbot()
+    sess = _ready_session(bot)
+    bot._switch_model_core = AsyncMock(return_value=ModelSwitchOutcome(
+        ok=True, reason="sent", label="dev"))
+    update, query = mk_cb()
+
+    run_async(new_flow.handle_callback(bot, update, query, sess.name, "rdy_model"))
+    listed = _buttons(_last_edit(bot)["reply_markup"])
+    assert listed[:len(MODEL_CHOICES)] == [lbl for lbl, _ in MODEL_CHOICES]
+
+    run_async(new_flow.handle_callback(bot, update, query, sess.name, "rdy_m0"))
+    resolved, _err = launch.validate_model(MODEL_CHOICES[0][0], MODEL_CHOICES)
+    assert bot._switch_model_core.await_args.args == (sess, resolved)
+    assert "is ready" in _last_edit(bot)["text"]
 
 
-def test_mode_icon_label():
-    assert new_flow._mode_icon_label({"skip_perms": True}) == ("🤖", "Auto")
-    assert new_flow._mode_icon_label({"skip_perms": False}) == ("💬", "Ask")
-    assert new_flow._mode_icon_label({"skip_perms": None}) == ("💬", "Ask")
+def test_the_ready_card_shows_the_model_just_picked(wbot, mk_cb, run_async):
+    """The statusline still reports the old model: the card shows the
+    one just switched to, not the stale one."""
+    bot = wbot()
+    sess = _ready_session(bot)
+    sess.model_name = "Old Model 1"
+    bot._switch_model_core = AsyncMock(return_value=ModelSwitchOutcome(
+        ok=True, reason="sent", label="dev"))
+    update, query = mk_cb()
+
+    run_async(new_flow.handle_callback(bot, update, query, sess.name, "rdy_m1"))
+
+    text = _last_edit(bot)["text"]
+    assert f"🧠 {MODEL_CHOICES[1][0]}" in text and "Old Model 1" not in text, text
+
+
+def test_the_ready_card_falls_back_to_the_launch_model(wbot, mk_update):
+    """Before the first statusline (a mode switch right after /new), the
+    card shows the model the session was started with."""
+    bot = wbot()
+    sess = _ready_session(bot)
+    sess.launch_model, _err = launch.validate_model(MODEL_CHOICES[2][0], MODEL_CHOICES)
+
+    text, _kb = new_flow.render_ready(bot, _msg(mk_update, "x"), sess)
+
+    assert f"🧠 {MODEL_CHOICES[2][0]} ·" in text, text
+
+
+def test_a_pending_model_switch_beats_the_stale_statusline(wbot, mk_update, monkeypatch):
+    bot = wbot()
+    sess = _ready_session(bot)
+    sess.model_name = "Old Model 1"
+    sess.launch_model, _err = launch.validate_model(MODEL_CHOICES[1][0], MODEL_CHOICES)
+    monkeypatch.setattr(type(sess), "model_switch_pending", lambda self: True)
+
+    text, _kb = new_flow.render_ready(bot, _msg(mk_update, "x"), sess)
+
+    assert f"🧠 {MODEL_CHOICES[1][0]} ·" in text, text
+
+
+def test_a_refused_model_switch_says_why(wbot, mk_cb, run_async):
+    bot = wbot()
+    sess = _ready_session(bot)
+    bot._switch_model_core = AsyncMock(return_value=ModelSwitchOutcome(
+        ok=False, reason="busy", label="dev", detail="dev is working"))
+    update, query = mk_cb()
+
+    run_async(new_flow.handle_callback(bot, update, query, sess.name, "rdy_m0"))
+
+    assert query.answer.await_args.args[0] == "dev is working"
+
+
+def test_the_ready_card_refuses_an_ended_session(wbot, mk_cb, run_async):
+    bot = wbot()
+    sess = _ready_session(bot, status=Status.GONE)
+    _switch_core(bot)
+    update, query = mk_cb()
+
+    run_async(new_flow.handle_callback(bot, update, query, sess.name, "rdy_ask"))
+
+    bot._perms_switch_core.assert_not_awaited()
+    assert "ended" in query.answer.await_args.args[0]
+
+
+# ---- the chat's defaults ------------------------------------------------------
+
+def test_defaults_are_auto_for_an_admin_and_ask_otherwise(wbot):
+    assert new_flow.resolve_new_session_settings(wbot(), CHAT, OWNER)["skip_perms"] is True
+    assert new_flow.resolve_new_session_settings(
+        wbot(admin=False), CHAT, OWNER)["skip_perms"] is False
+
+
+def test_a_stored_model_is_used_and_a_withdrawn_one_ignored(wbot):
+    label = MODEL_CHOICES[0][0]
+    preferences.set_new_session_default(CHAT, "model", label)
+    assert new_flow.resolve_new_session_settings(wbot(), CHAT, OWNER)["model_label"] == label
+
+    preferences.set_new_session_default(CHAT, "model", "not-a-model-we-offer")
+    assert new_flow.resolve_new_session_settings(wbot(), CHAT, OWNER)["model"] is None
+
+
+def test_a_stored_folder_that_is_no_longer_allowed_falls_back(wbot, tmp_path, monkeypatch):
+    preferences.set_new_session_default(CHAT, "cwd", str(tmp_path))
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat: [str(tmp_path)])
+    assert new_flow.resolve_new_session_settings(wbot(), CHAT, OWNER)["cwd"] == str(tmp_path)
+
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat: ["/elsewhere"])
+    assert new_flow.resolve_new_session_settings(wbot(), CHAT, OWNER)["cwd"] is None
+
+
+def test_new_session_defaults_validate_and_clear():
+    with pytest.raises(ValueError):
+        preferences.set_new_session_default(CHAT, "mode", "sometimes")
+    with pytest.raises(ValueError):
+        preferences.set_new_session_default(CHAT, "cwd", "relative/path")
+    with pytest.raises(ValueError):
+        preferences.set_new_session_default(CHAT, "colour", "blue")
+    preferences.set_new_session_default(CHAT, "mode", "ask")
+    assert preferences.get_new_session_defaults(CHAT).mode == "ask"
+    preferences.set_new_session_default(CHAT, "mode", "")
+    assert preferences.get_new_session_defaults(CHAT).mode == ""
+
+
+def test_settings_new_sessions_screen_sets_each_default(wbot, mk_cb, run_async, tmp_path, monkeypatch):
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat: [str(tmp_path)])
+    bot = wbot()
+    update, query = mk_cb()
+
+    run_async(new_flow.handle_callback(bot, update, query, "_", "set:ns"))
+    assert "New sessions" in _last_edit(bot)["text"]
+
+    run_async(new_flow.handle_callback(bot, update, query, "_", "set:ns:mode:ask"))
+    run_async(new_flow.handle_callback(bot, update, query, "_", "set:ns:model:0"))
+    run_async(new_flow.handle_callback(bot, update, query, "_", "set:ns:cwd"))
+    run_async(new_flow.handle_callback(bot, update, query, "_", "set:ns:cwd:0"))
+
+    stored = preferences.get_new_session_defaults(CHAT)
+    assert (stored.mode, stored.model, stored.cwd) == (
+        "ask", MODEL_CHOICES[0][0], str(tmp_path))
+    run_async(new_flow.handle_callback(bot, update, query, "_", "set:ns:mode:auto"))
+    assert preferences.get_new_session_defaults(CHAT).mode == ""
+
+
+def test_a_default_folder_tap_saves_the_folder_that_was_shown(
+        wbot, mk_cb, run_async, tmp_path, monkeypatch):
+    """The allowed folders move (a session starts somewhere new): a tap
+    resolves against the list it was shown, not a fresh one."""
+    a, b, c = (str(tmp_path / x) for x in "abc")
+    roots = [a, b]
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat: list(roots))
+    bot = wbot()
+    update, query = mk_cb()
+    run_async(new_flow.handle_callback(bot, update, query, "_", "set:ns:cwd"))
+
+    roots[:] = [c, a, b]
+    run_async(new_flow.handle_callback(bot, update, query, "_", "set:ns:cwd:0"))
+
+    assert preferences.get_new_session_defaults(CHAT).cwd == a
+
+
+def test_a_default_folder_that_is_no_longer_allowed_is_refused(
+        wbot, mk_cb, run_async, tmp_path, monkeypatch):
+    roots = [str(tmp_path / "a")]
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat: list(roots))
+    bot = wbot()
+    update, query = mk_cb()
+    run_async(new_flow.handle_callback(bot, update, query, "_", "set:ns:cwd"))
+
+    roots[:] = []
+    run_async(new_flow.handle_callback(bot, update, query, "_", "set:ns:cwd:0"))
+
+    assert preferences.get_new_session_defaults(CHAT).cwd == ""
+    assert "no longer available" in query.answer.await_args.args[0]
+
+
+def test_the_defaults_screen_tells_a_non_admin_they_get_ask(wbot, mk_cb, run_async):
+    bot = wbot(admin=False)
+    update, query = mk_cb()
+
+    run_async(new_flow.handle_callback(bot, update, query, "_", "set:ns"))
+
+    assert "Mode: 💬 Ask for you" in _last_edit(bot)["text"]
+
+
+def test_a_group_member_who_is_not_admin_cannot_change_defaults(wbot, mk_cb, run_async):
+    bot = wbot()
+    bot._is_admin = MagicMock(return_value=False)
+    update, query = mk_cb(chat_id=-100)
+
+    run_async(new_flow.handle_callback(bot, update, query, "_", "set:ns:mode:ask"))
+
+    assert preferences.get_new_session_defaults(-100).mode == ""
+    assert query.answer.await_args.kwargs.get("show_alert") is True
+
+
+def test_a_stale_default_choice_is_refused(wbot, mk_cb, run_async):
+    bot = wbot()
+    update, query = mk_cb()
+
+    run_async(new_flow.handle_callback(bot, update, query, "_", "set:ns:model:99"))
+
+    assert preferences.get_new_session_defaults(CHAT).model == ""
+    assert "no longer available" in query.answer.await_args.args[0]
+
+
+def test_the_ready_card_refuses_someone_who_may_not_prompt(wbot, mk_cb, run_async):
+    bot = wbot()
+    sess = _ready_session(bot)
+    _switch_core(bot)
+    bot._can_prompt_user = MagicMock(return_value=False)
+    update, query = mk_cb(user_id=222)
+
+    run_async(new_flow.handle_callback(bot, update, query, sess.name, "rdy_ask"))
+
+    bot._perms_switch_core.assert_not_awaited()
+    assert query.answer.await_args.kwargs.get("show_alert") is True

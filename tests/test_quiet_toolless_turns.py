@@ -853,11 +853,15 @@ async def _teardown(bot, sess, how):
 
         bot._new_conflict_pending[sess.name] = {
             "prompt": "", "skip_perms": False, "user_id": 1, "msg_id": 5,
+            # The card showed it running, so Replace may stop that turn
+            # (2026-09-30: otherwise a turn begun after it is refused).
+            "was_working": True,
         }
         query = MagicMock()
         query.data = f"{sess.name}:new_replace"
         query.message = MagicMock(message_id=None, text="")
-        query.from_user = MagicMock(id=12345)
+        # Only the /new author may Replace (2026-09-30).
+        query.from_user = MagicMock(id=1)
 
         async def _answer(*_a, **_kw):
             return None

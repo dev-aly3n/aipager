@@ -118,16 +118,17 @@ def test_handle_new_empty_after_bang_warns(mk_bot, mk_update, run_async):
 
 def test_handle_new_launch_failure(mk_bot, mk_update, run_async, monkeypatch):
     bot = mk_bot()
-    status_msg = MagicMock()
-    status_msg.edit_text = AsyncMock()
+    bot._app.bot.edit_message_text = AsyncMock()
+    status_msg = MagicMock(message_id=321)
     update = mk_update("/new newsess")
     update.message.reply_text = AsyncMock(return_value=status_msg)
     monkeypatch.setattr("aipager.dtach.inject.launch_session",
                         AsyncMock(return_value=(False, "dtach unavailable")))
     run_async(bot._handle_new_cmd(update, MagicMock()))
-    # Status message edited with the error
-    text = status_msg.edit_text.await_args.args[0]
-    assert "dtach unavailable" in text
+    # The "Starting" message is edited with the error
+    kw = bot._app.bot.edit_message_text.await_args.kwargs
+    assert kw["message_id"] == 321
+    assert "dtach unavailable" in kw["text"]
 
 
 # ===== _send_new_conflict_prompt =======================================
@@ -347,6 +348,27 @@ def test_send_command_model_change_acks(mk_bot, mk_update, run_async, monkeypatc
     run_async(bot._send_command(update, "/model opus"))
     text = update.message.reply_text.await_args.args[0]
     assert "opus" in text
+
+
+def test_a_keyboard_model_switch_becomes_the_launch_model(
+        mk_bot, mk_update, run_async, monkeypatch):
+    """The keyboard's Model buttons: a later relaunch (/perms, restart,
+    resume) keeps this model instead of putting back an older one."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    sess.launch_model = "opus"
+    bot.registry._sessions["claude-jim"] = sess
+    bot.registry.last_active_session = "claude-jim"
+    monkeypatch.setattr("aipager.dtach.inject.is_alive",
+                        AsyncMock(return_value=True))
+    monkeypatch.setattr("aipager.dtach.inject.send_text_and_enter",
+                        AsyncMock(return_value=True))
+    bot._react = AsyncMock()
+    bot._confirm_model_feedback = AsyncMock()
+
+    run_async(bot._send_command(mk_update("Sonnet"), "/model sonnet"))
+
+    assert sess.launch_model == "sonnet"
 
 
 def test_send_command_send_failure(mk_bot, mk_update, run_async, monkeypatch):

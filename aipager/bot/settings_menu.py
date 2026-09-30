@@ -191,6 +191,10 @@ def render_settings_root(chat_id: int) -> tuple[str, InlineKeyboardMarkup]:
                               callback_data=f"_:set:{section}")]
         for section in SECTIONS
     ]
+    # What /new starts a session with (mode, model, folder): the chat's
+    # own defaults, kept out of SECTIONS on purpose (new_flow.py).
+    rows.append([InlineKeyboardButton(
+        "🆕 New sessions", callback_data="_:set:ns")])
     # Per-session overrides live behind their own picker — the Mini App
     # can set these per session and chat could not reach them at all.
     rows.append([InlineKeyboardButton(

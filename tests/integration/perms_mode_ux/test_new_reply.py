@@ -1,7 +1,13 @@
-"""Integration tests: SC10, SC11 — enriched /new reply text.
+"""Integration tests: SC10, SC11 - the /new reply (the Ready card).
 
-SC10: /new ben → contains 💬, "Ask", actual cwd, "/perms" nudge; model omitted when unknown.
-SC11: /new !ben → contains 🤖, "Auto", no "/perms" nudge.
+Since the 2026-09-30 redesign every /new ends in the Ready card: the mode,
+model and folder the session got, where the next message goes, and a
+one-tap switch to the other mode (it replaced the "/perms" nudge).
+
+SC10: an Ask session (the chat's default set to Ask) shows 💬 Ask, the real
+      folder, "Default model" when none was chosen, and a Switch to Auto
+      button.
+SC11: /new !ben shows 🤖 Auto and a Switch to Ask button.
 """
 
 from __future__ import annotations
@@ -9,7 +15,9 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 
+from aipager import preferences
 from aipager.state import SessionRegistry
 
 
@@ -39,6 +47,7 @@ def _make_bot(*, registry=None):
     bot._app = MagicMock()
     bot._app.bot = MagicMock()
     bot._app.bot.send_message = AsyncMock()
+    bot._app.bot.edit_message_text = AsyncMock()
     bot.team = None
     bot.scopes = None
     return bot
@@ -48,144 +57,57 @@ async def _launch_ok(*a, **kw):
     return True, ""
 
 
+def _ready(text_cmd, *, ask_default=False):
+    if ask_default:
+        preferences.set_new_session_default(0, "mode", "ask")
+    bot = _make_bot()
+    update = _make_update(text_cmd)
+    with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
+        _run(bot._handle_new_cmd(update, MagicMock()))
+    bot._app.bot.edit_message_text.assert_awaited_once()
+    kw = bot._app.bot.edit_message_text.await_args.kwargs
+    buttons = [b.text for row in kw["reply_markup"].inline_keyboard for b in row]
+    return kw["text"], buttons
+
+
 # --------------------------------------------------------------------------- #
-# SC10 — /new ben reply contains Ask mode indicators and /perms nudge         #
+# SC10 - an Ask session                                                       #
 # --------------------------------------------------------------------------- #
 
-def test_sc10_new_ask_reply_contains_ask_icon():
-    """SC10: /new ben reply must contain 💬 icon for Ask mode."""
-    bot = _make_bot()
-    update = _make_update("/new ben")
-
-    with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
-        _run(bot._handle_new_cmd(update, MagicMock()))
-
-    status_msg = update.message.reply_text.return_value
-    status_msg.edit_text.assert_awaited_once()
-    text = status_msg.edit_text.await_args[0][0]
-    assert "💬" in text, f"Ask mode reply must contain 💬; got: {text}"
+def test_sc10_new_ask_reply_says_ask():
+    text, _ = _ready("/new ben", ask_default=True)
+    assert "💬 Ask" in text, text
 
 
-def test_sc10_new_ask_reply_contains_ask_label():
-    """SC10: /new ben reply must contain the word 'Ask'."""
-    bot = _make_bot()
-    update = _make_update("/new ben")
-
-    with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
-        _run(bot._handle_new_cmd(update, MagicMock()))
-
-    status_msg = update.message.reply_text.return_value
-    text = status_msg.edit_text.await_args[0][0]
-    assert "Ask" in text, f"Ask mode reply must contain 'Ask'; got: {text}"
-
-
-def test_sc10_new_ask_reply_contains_perms_nudge():
-    """SC10: /new ben reply must contain '/perms' as a discoverability nudge."""
-    bot = _make_bot()
-    update = _make_update("/new ben")
-
-    with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
-        _run(bot._handle_new_cmd(update, MagicMock()))
-
-    status_msg = update.message.reply_text.return_value
-    text = status_msg.edit_text.await_args[0][0]
-    assert "/perms" in text, f"Ask mode reply must contain /perms nudge; got: {text}"
+def test_sc10_new_ask_reply_offers_auto_instead_of_a_perms_nudge():
+    text, buttons = _ready("/new ben", ask_default=True)
+    assert "🤖 Switch to Auto" in buttons, buttons
+    assert "/perms" not in text
 
 
 def test_sc10_new_ask_reply_contains_cwd():
-    """SC10: /new ben reply must contain the actual launch cwd (inject._PROJECT_DIR)."""
-    from aipager.dtach import inject as _inject
-
-    bot = _make_bot()
-    update = _make_update("/new ben")
-
-    with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
-        _run(bot._handle_new_cmd(update, MagicMock()))
-
-    status_msg = update.message.reply_text.return_value
-    text = status_msg.edit_text.await_args[0][0]
-    # For a fresh session sess.cwd is empty; the handler falls back to
-    # inject._PROJECT_DIR which equals os.getcwd() by default.
-    expected_cwd = _inject._PROJECT_DIR
-    assert expected_cwd in text, (
-        f"Reply must contain launch cwd {expected_cwd!r}; got: {text}"
-    )
+    from aipager.dtach import inject
+    text, _ = _ready("/new ben", ask_default=True)
+    assert inject._PROJECT_DIR[-20:] in text, text
 
 
-def test_sc10_new_ask_model_omitted_when_unknown():
-    """SC10: When model_name is empty, the model clause is omitted.
-    The reply must not contain 'None' or an empty placeholder."""
-    bot = _make_bot()
-    update = _make_update("/new ben")
+def test_sc10_new_ask_model_reads_default_when_unknown():
+    text, _ = _ready("/new ben", ask_default=True)
+    assert "🧠 Default model" in text, text
 
-    with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
-        _run(bot._handle_new_cmd(update, MagicMock()))
 
-    status_msg = update.message.reply_text.return_value
-    text = status_msg.edit_text.await_args[0][0]
-    assert "None" not in text, f"Reply must not contain 'None'; got: {text}"
+def test_sc10_the_reply_says_where_the_next_message_goes():
+    text, _ = _ready("/new ben", ask_default=True)
+    assert "✍️ Just send a message, it goes to ben." in text, text
 
 
 # --------------------------------------------------------------------------- #
-# SC11 — /new !ben reply contains Auto mode, no /perms nudge                  #
+# SC11 - an Auto session                                                      #
 # --------------------------------------------------------------------------- #
 
-def test_sc11_new_auto_reply_contains_auto_icon():
-    """SC11: /new !ben reply must contain 🤖 icon for Auto mode."""
-    bot = _make_bot()
-    bot._is_admin = MagicMock(return_value=True)
-    update = _make_update("/new !ben")
-
-    with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
-        _run(bot._handle_new_cmd(update, MagicMock()))
-
-    status_msg = update.message.reply_text.return_value
-    status_msg.edit_text.assert_awaited_once()
-    text = status_msg.edit_text.await_args[0][0]
-    assert "🤖" in text, f"Auto mode reply must contain 🤖; got: {text}"
-
-
-def test_sc11_new_auto_reply_contains_auto_label():
-    """SC11: /new !ben reply must contain the word 'Auto'."""
-    bot = _make_bot()
-    bot._is_admin = MagicMock(return_value=True)
-    update = _make_update("/new !ben")
-
-    with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
-        _run(bot._handle_new_cmd(update, MagicMock()))
-
-    status_msg = update.message.reply_text.return_value
-    text = status_msg.edit_text.await_args[0][0]
-    assert "Auto" in text, f"Auto mode reply must contain 'Auto'; got: {text}"
-
-
-def test_sc11_new_auto_reply_no_perms_nudge():
-    """SC11: /new !ben reply must NOT contain '/perms' nudge."""
-    bot = _make_bot()
-    bot._is_admin = MagicMock(return_value=True)
-    update = _make_update("/new !ben")
-
-    with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
-        _run(bot._handle_new_cmd(update, MagicMock()))
-
-    status_msg = update.message.reply_text.return_value
-    text = status_msg.edit_text.await_args[0][0]
-    assert "/perms" not in text, (
-        f"Auto mode reply must NOT contain /perms nudge; got: {text}"
-    )
-
-
-def test_sc11_new_auto_reply_no_ask_icon():
-    """SC11: /new !ben reply must NOT contain 💬 (Ask icon)."""
-    bot = _make_bot()
-    bot._is_admin = MagicMock(return_value=True)
-    update = _make_update("/new !ben")
-
-    with patch("aipager.dtach.inject.launch_session", side_effect=_launch_ok):
-        _run(bot._handle_new_cmd(update, MagicMock()))
-
-    status_msg = update.message.reply_text.return_value
-    text = status_msg.edit_text.await_args[0][0]
-    assert "💬" not in text, (
-        f"Auto mode reply must NOT contain 💬; got: {text}"
-    )
+@pytest.mark.parametrize("cmd", ["/new !ben", "/new ben"])
+def test_sc11_new_auto_reply_says_auto(cmd):
+    text, buttons = _ready(cmd)
+    assert "🤖 Auto" in text, text
+    assert "💬" not in text, text
+    assert "💬 Switch to Ask" in buttons, buttons

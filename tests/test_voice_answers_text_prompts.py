@@ -47,11 +47,13 @@ def test_a_voice_message_answers_the_new_wizard(mk_bot, mk_update, run_async):
 
     upd = _voice_update(mk_update)
     bot._app.bot.edit_message_text = AsyncMock()
+    bot.create_session = AsyncMock(return_value=("", "not launched in tests"))
 
     run_async(bot._dispatch_voice_transcript(upd, "voicenamed"))
 
-    assert new_flow._pending_store(bot)[555].get("name") == "voicenamed", (
-        "the wizard never saw the transcript")
+    bot.create_session.assert_awaited_once()
+    assert bot.create_session.await_args.args[0] == "voicenamed", (
+        "the Name card never saw the transcript")
 
 
 def test_a_consumed_transcript_is_not_also_sent_to_a_session(

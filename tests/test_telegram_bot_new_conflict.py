@@ -62,9 +62,10 @@ def test_new_alive_collision_prompts_buttons(mk_bot, mk_update, run_async):
     assert (sess.name, "new_replace") in dests
     assert (sess.name, "new_cancel") in dests
 
-    # Prompt + skip_perms stashed for the callback to consume
+    # Prompt + skip_perms stashed for the callback to consume (Auto: the
+    # default for an admin since 2026-09-30)
     assert bot._new_conflict_pending["claude-jim"]["prompt"] == "do something"
-    assert bot._new_conflict_pending["claude-jim"]["skip_perms"] is False
+    assert bot._new_conflict_pending["claude-jim"]["skip_perms"] is True
 
 
 def test_new_gone_with_resumable_id_prompts_buttons(mk_bot, mk_update, run_async):

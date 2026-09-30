@@ -60,6 +60,7 @@ from aipager.bot.transport import (  # noqa: F401
     MUTED,
     reply_text,
     edit_message,
+    edit_text_at,
     send_text,
     ACTION_VERBS,
     TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES,
@@ -980,151 +981,35 @@ class CommandHandlersMixin:
         )
 
     async def _handle_new_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle /new <name> [prompt] — launch a new Claude Code session.
+        """Handle /new [name [first message...]]: start a Claude Code session.
 
-        Prefix the name with ``!`` to launch with
-        ``--dangerously-skip-permissions`` (e.g. ``/new !dev fix the bug``).
-        Without the prefix, claude runs with its default safety checks.
-        """
+        One flow for every spelling (``new_flow``): with an argument the
+        session starts at once with the chat's defaults (Auto for an
+        admin unless the chat's default says Ask); bare, the Name card
+        asks for the name and the next message is that same argument.
+        Both end in the same Ready card. A leading ``!`` on the name is
+        the legacy Auto shorthand."""
         if not await self._authorize(update):
             return
-        text = update.message.text.strip()
-        parts = text.split(maxsplit=2)  # /new <name> [prompt...]
+        parts = update.message.text.strip().split(maxsplit=1)  # /new <rest>
         if len(parts) < 2:
-            # No arguments: hand over to the interactive wizard rather
-            # than printing usage text. `/new !name` and `/new name`
-            # fall through below, byte-for-byte unchanged.
             await new_flow.start_wizard(self, update, ctx)
             return
-
-        raw_name = parts[1].strip()
-        skip_perms = raw_name.startswith("!")
-        # `!` selects Auto mode and is stripped BEFORE normalising, so it
-        # never becomes part of the name.
-        name = inject.normalize_session_name(raw_name.lstrip("!"))
-        prompt = parts[2].strip() if len(parts) > 2 else ""
-
-        if not name:
-            await reply_text(update.message,
-                "⚠️ Session name is empty after stripping <code>!</code>.",
-                parse_mode="HTML",
-            )
-            return
-
-        # Reserved-word protection has to happen HERE, on the label, not
-        # in launch_session — by the time the name reaches dtach it has
-        # been scope-suffixed (`restart` -> `restart__g100`) and no longer
-        # matches `_RESERVED` at all, so the check there silently passed
-        # for every scoped chat. The Mini App's own launch layer
-        # (miniapp/launch.py) has always validated the bare label; chat
-        # did not, which is exactly the sort of divergence this ship
-        # exists to remove.
-        if name.lower() in inject._RESERVED:
-            await reply_text(update.message,
-                f"⚠️ <code>{html_mod.escape(name)}</code> is a command name - "
-                "pick something else, or it would shadow /"
-                f"{html_mod.escape(name.lower())}.",
-                parse_mode="HTML",
-            )
-            return
-
-        # Admin gate: Auto mode (--dangerously-skip-permissions) requires admin.
-        if skip_perms and not self._is_admin(update):
-            await reply_text(update.message,
-                "Switching to Auto mode requires admin role.",
-            )
-            return
-
-        # Name-conflict check — both alive sessions and entries in the
-        # GONE history get the same Resume / Replace / Cancel prompt so
-        # the user doesn't accidentally throw away a conversation by
-        # typing /new with a familiar name. The button callbacks land
-        # in _handle_callback under the new_resume / new_replace /
-        # new_cancel actions defined below.
-        # Resolve the calling scope from the message's chat. New sessions
-        # get a disambiguated internal name (claude-<label>__<suffix>) so
-        # two scopes can reuse the same label; the user only sees <label>.
-        chat_id = calling_chat_id(update)
-        existing = self.registry.find_by_label(name, chat_id, include_gone=True)
-        if existing is not None and (
-            existing.status != Status.GONE
-            or existing.claude_session_id
-        ):
-            await self._send_new_conflict_prompt(
-                update=update,
-                existing=existing,
-                prompt=prompt,
-                skip_perms=skip_perms,
-            )
-            return
-
-        mode_icon = "🤖" if skip_perms else "💬"
-        mode_label = "Auto" if skip_perms else "Ask"
-        status_msg = await reply_text(update.message,
-            f"🚀 Launching <b>{html_mod.escape(name)}</b> "
-            f"{mode_icon} {mode_label}…",
-            parse_mode="HTML",
-        )
-
-        # The shared seam — the Mini App's create route calls the same
-        # method, so both surfaces register a session identically.
-        session_name, err = await self.create_session(
-            name, scope_chat_id=chat_id, skip_perms=skip_perms,
-        )
-        if not session_name:
-            await edit_message(status_msg, f"❌ {html_mod.escape(err)}")
-            return
-
-        sess = self.registry.get_or_create(session_name)
-        # Team-mode attribution: record the creator (and current driver).
-        self._mark_driver(sess, update)
-
-        # Queue the initial prompt if given — it'll drain on first IDLE
-        if prompt:
-            # Flatten newlines (lesson: newlines cause premature Enter)
-            prompt = prompt.replace("\n", " — ")
-            if sess.queue_prompt(prompt, update.message.message_id, "",
-                                 driver_id_from_update(update)):
-                self.registry.mark_dirty()
-
-        # Enriched reply: icon + mode + cwd + optional model + /perms nudge.
-        mode_icon2 = "🤖" if skip_perms else "💬"
-        mode_label2 = "Auto" if skip_perms else "Ask"
-        # Use the actual cwd when it has been populated asynchronously; fall
-        # back to inject._PROJECT_DIR for fresh sessions where the hook
-        # receiver has not yet delivered the first statusLine event.
-        from aipager.dtach import inject as _inject  # local import to avoid cycles
-        effective_cwd = sess.cwd or _inject._PROJECT_DIR
-        cwd_line = f"\n📁 <code>{html_mod.escape(effective_cwd)}</code>"
-        model_line = (f"\n🧠 {html_mod.escape(sess.model_name)}"
-                      if sess.model_name else "")
-        perms_nudge = (
-            "\n\n💡 Use /perms to switch between Ask and Auto mode."
-            if not skip_perms else ""
-        )
-        # design.md's Shared-file integration lists the App button here —
-        # a just-created session is the moment someone is most likely to
-        # want the richer view. Empty in groups and when no Mini App URL
-        # is known, so this degrades to exactly the old reply.
-        app_row = self._app_button_row(update)
-        await edit_message(status_msg,
-            f"✅ <b>{html_mod.escape(name)}</b> created\n"
-            f"{mode_icon2} {mode_label2} mode"
-            f"{model_line}{cwd_line}"
-            + ("\n📝 Prompt queued" if prompt else "")
-            + perms_nudge,
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup(app_row) if app_row else None,
-        )
-        log.info("Launched session %s (prompt=%s)", name, bool(prompt))
+        await new_flow.create_from_text(self, update, parts[1])
 
     # ---- /new name-conflict prompt --------------------------------------
 
     async def _send_new_conflict_prompt(self, *, update: Update,
                                           existing: TrackedSession,
                                           prompt: str,
-                                          skip_perms: bool) -> None:
+                                          skip_perms: bool,
+                                          model: str | None = None,
+                                          cwd: str | None = None,
+                                          edit_msg_id: int | None = None) -> None:
         """Render the Resume / Replace / Cancel buttons when /new hits a known name.
+
+        ``edit_msg_id``: the Name card the name answered, which becomes
+        this card (one message per flow); else it is a reply.
 
         ``existing.status`` tells us whether the conflict is with a live
         session (`!= GONE`) or a history entry (`GONE` with a stashed
@@ -1134,9 +1019,20 @@ class CommandHandlersMixin:
         label = existing.label
         alive = existing.status != Status.GONE
 
-        self._new_conflict_pending[existing.name] = {
+        # One card per name: a newer /new for it (anyone's) replaces the
+        # older card, which says so instead of keeping live buttons its
+        # author can no longer use.
+        older = self._new_conflict_pending.get(existing.name)
+        entry = self._new_conflict_pending[existing.name] = {
             "prompt": prompt,
             "skip_perms": skip_perms,
+            # What a Replace starts the fresh session with: the same
+            # choices the Name card or the chat's defaults gave /new.
+            "model": model,
+            "cwd": cwd,
+            # Replace refuses to kill work the card never showed: a turn
+            # that starts after it, on a session idle when it was shown.
+            "was_working": existing.status in (Status.BUSY, Status.INTERACTIVE),
             "user_id": (update.effective_user.id
                         if update.effective_user else 0),
             "msg_id": update.message.message_id,
@@ -1180,9 +1076,42 @@ class CommandHandlersMixin:
                         self, conflict_chat_id, existing, "new_cancel")),
             ],
         ])
-        await reply_text(update.message,
-            header, parse_mode="HTML", reply_markup=keyboard,
-        )
+        card_id = None
+        if edit_msg_id is not None:
+            try:
+                await edit_text_at(self._app.bot,
+                    chat_id=conflict_chat_id, message_id=edit_msg_id,
+                    text=header, parse_mode="HTML", reply_markup=keyboard,
+                )
+                card_id = edit_msg_id
+            except Exception:
+                log.debug("conflict card: editing the Name card failed, replying",
+                          exc_info=True)
+        if card_id is None:
+            sent = await reply_text(update.message,
+                header, parse_mode="HTML", reply_markup=keyboard,
+            )
+            card_id = getattr(sent, "message_id", None)
+        # Into THIS card's own entry: another /new for the name may have
+        # replaced it while the card went out.
+        entry["card"] = (conflict_chat_id, card_id)
+        if self._new_conflict_pending.get(existing.name) is not entry:
+            stale = entry["card"]     # it did: this card is the older one now
+        else:
+            stale = (older or {}).get("card")
+            if stale == entry["card"]:
+                stale = None          # the same message, edited again
+        if stale and stale[1]:
+            try:
+                await edit_text_at(self._app.bot,
+                    chat_id=stale[0], message_id=stale[1],
+                    text=(f"↩️ A newer /new for <b>{html_mod.escape(label)}</b> "
+                          "replaced this card."),
+                    parse_mode="HTML",
+                )
+            except Exception:
+                log.debug("conflict card: retiring the older card failed",
+                          exc_info=True)
 
     async def _handle_resume_cmd(self, update: Update,
                                   ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -2055,6 +1984,10 @@ class CommandHandlersMixin:
             # reaction — it silently failed, 8.33.)
             await self._react(update, reactions.HANDED_OFF if was_busy
                               else reactions.ACK)
+            if is_model_switch:
+                # A later relaunch (/perms, restart, resume) keeps it.
+                sess.launch_model = command_text.split(" ", 1)[1].strip()
+                self.registry.mark_dirty()
             if not was_busy:
                 # Ran, so its note is no queued message: let it expire
                 # (roadmap 8.37 - a lingering one made /clearqueue type

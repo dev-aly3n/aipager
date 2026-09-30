@@ -290,6 +290,11 @@ class TrackedSession:
     # Tool history for busy message — list of (summary, done_bool)
     tool_history: list = field(default_factory=list)
     model_name: str = ""              # e.g. "Opus 4.6" from statusLine
+    # The model id aipager started this session with (`--model`), or last
+    # switched it to from Telegram; "" = Claude Code's own default. A
+    # kill-and-relaunch (/perms, restart) starts it with the same one, so
+    # a mode switch never silently drops the model /new picked.
+    launch_model: str = ""
     last_token_pct: int = 0          # cached context % for display
     last_output_tokens: int = 0      # output tokens THIS TURN (delta from baseline)
     output_baseline: int | None = None  # total_output_tokens at first statusLine read this cycle
@@ -2319,7 +2324,7 @@ class SessionRegistry:
         "name", "label", "last_msg_id", "transcript_path",
         "trigger_msg_id", "pending_queue", "last_prompt",
         "last_prompt_driver_user_id",
-        "model_name", "busy_msg_id",
+        "model_name", "launch_model", "busy_msg_id",
         # Team-mode attribution — preserved across restarts so the
         # pinned dashboard remembers who's driving each session.
         "created_by_user_id", "last_driver_user_id",
@@ -2506,6 +2511,7 @@ class SessionRegistry:
                 ),
                 hidden_from_status=sd.get("hidden_from_status", False),
                 skip_perms=sd.get("skip_perms", False),
+                launch_model=str(sd.get("launch_model") or ""),
                 scope_chat_id=int(sd.get("scope_chat_id", 0) or 0),
                 scope_kind=sd.get("scope_kind", ""),
                 # Raw passthrough, exactly like every other field above —

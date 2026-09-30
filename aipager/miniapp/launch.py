@@ -83,7 +83,8 @@ def validate_session_name(name: object) -> tuple[str, str]:
     if not _VALID_NAME.match(clean):
         return "", "Use letters, numbers, hyphens and underscores; start with a letter or number."
     if clean.lower() in _RESERVED:
-        return "", f"'{clean}' is a reserved command name."
+        return "", (f"'{clean}' is a reserved command name (/{clean.lower()}). "
+                    "Pick another name.")
     return clean, ""
 
 

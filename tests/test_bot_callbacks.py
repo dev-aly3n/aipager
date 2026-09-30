@@ -471,7 +471,7 @@ def test_new_cancel_edits_message(mk_bot, mk_query, run_async):
     bot = mk_bot()
     bot._new_conflict_pending["claude-jim"] = {"prompt": "", "skip_perms": False,
                                                   "user_id": 1, "msg_id": 5}
-    update, query = mk_query("claude-jim:new_cancel")
+    update, query = mk_query("claude-jim:new_cancel", user_id=1)
     run_async(bot._handle_callback(update, MagicMock()))
     query.edit_message_text.assert_awaited_once()
     text = query.edit_message_text.await_args.args[0]
@@ -486,7 +486,7 @@ def test_new_resume_alive_session_switches(mk_bot, mk_query, run_async):
     bot.registry._sessions["claude-jim"] = sess
     bot._new_conflict_pending["claude-jim"] = {"prompt": "go", "skip_perms": False,
                                                   "user_id": 1, "msg_id": 5}
-    update, query = mk_query("claude-jim:new_resume")
+    update, query = mk_query("claude-jim:new_resume", user_id=1)
     run_async(bot._handle_callback(update, MagicMock()))
     # Switched: last_active_session updated
     assert bot.registry.last_active_session == "claude-jim"
@@ -498,15 +498,17 @@ def test_new_resume_queues_the_prompt_as_its_author_not_the_tapper(
         mk_bot, mk_query, run_async):
     """review 2026-09-27: the queued prompt is the text the /new AUTHOR
     typed, so it is credited to the author (user 111), never to whoever
-    tapped the button (user 222), or the tapper's rights would be lent to
-    someone else's prompt. An unknown author (0) is credited to nobody."""
-    for author, expected in ((111, 111), (0, None)):
+    tapped the button, or the tapper's rights would be lent to someone
+    else's prompt. Since 2026-09-30 only the author may tap a card with a
+    known author; a card whose author is unknown (0) can be tapped by
+    anyone who may prompt (222 here), and credits the prompt to nobody."""
+    for author, tapper, expected in ((111, 111, 111), (0, 222, None)):
         bot = mk_bot()
         sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
         bot.registry._sessions["claude-jim"] = sess
         bot._new_conflict_pending["claude-jim"] = {
             "prompt": "go", "skip_perms": False, "user_id": author, "msg_id": 5}
-        update, _query = mk_query("claude-jim:new_resume", user_id=222)
+        update, _query = mk_query("claude-jim:new_resume", user_id=tapper)
         run_async(bot._handle_callback(update, MagicMock()))
         (entry,) = [e for e in sess.pending_queue if e[0] == "go"]
         assert entry[4] == expected
@@ -520,7 +522,7 @@ def test_new_resume_gone_session_routes_to_do_resume(mk_bot, mk_query, run_async
     bot._do_resume = AsyncMock()
     bot._new_conflict_pending["claude-jim"] = {"prompt": "", "skip_perms": False,
                                                   "user_id": 1, "msg_id": 5}
-    update, query = mk_query("claude-jim:new_resume")
+    update, query = mk_query("claude-jim:new_resume", user_id=1)
     run_async(bot._handle_callback(update, MagicMock()))
     bot._do_resume.assert_awaited_once()
 
@@ -528,15 +530,18 @@ def test_new_resume_gone_session_routes_to_do_resume(mk_bot, mk_query, run_async
 def test_new_resume_of_a_gone_session_queues_as_the_author(
         mk_bot, mk_query, run_async):
     """The GONE branch of Resume (review 2026-09-27): the prompt is the
-    /new author's (111), not the tapper's (222)."""
+    /new author's (111), queued once the session came back."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
     sess.claude_session_id = "UUID-1"
     bot.registry._sessions["claude-jim"] = sess
-    bot._do_resume = AsyncMock()
+
+    async def _resumed(**kw):
+        sess.status = Status.IDLE
+    bot._do_resume = AsyncMock(side_effect=_resumed)
     bot._new_conflict_pending["claude-jim"] = {
         "prompt": "go", "skip_perms": False, "user_id": 111, "msg_id": 5}
-    update, _query = mk_query("claude-jim:new_resume", user_id=222)
+    update, _query = mk_query("claude-jim:new_resume", user_id=111)
     run_async(bot._handle_callback(update, MagicMock()))
     (entry,) = [e for e in sess.pending_queue if e[0] == "go"]
     assert entry[4] == 111
@@ -545,8 +550,9 @@ def test_new_resume_of_a_gone_session_queues_as_the_author(
 def test_new_replace_queues_the_prompt_as_its_author(
         mk_bot, mk_query, run_async, monkeypatch):
     """Replace (review 2026-09-27): the relaunched session's queued prompt
-    is credited to the /new author (111), not the tapper (222). A GONE
-    session, so no kill and no socket wait is involved."""
+    is credited to the /new author (111). Only the author may tap Replace
+    since 2026-09-30 (see the refusal rows below). A GONE session, so no
+    kill and no socket wait is involved."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
     bot.registry._sessions["claude-jim"] = sess
@@ -554,11 +560,464 @@ def test_new_replace_queues_the_prompt_as_its_author(
         "prompt": "go", "skip_perms": False, "user_id": 111, "msg_id": 5}
     monkeypatch.setattr("aipager.dtach.inject.launch_session",
                         AsyncMock(return_value=(True, "")))
-    update, _query = mk_query("claude-jim:new_replace", user_id=222)
+    update, _query = mk_query("claude-jim:new_replace", user_id=111)
     run_async(bot._handle_callback(update, MagicMock()))
     new_sess = bot.registry.get("claude-jim")
     (entry,) = [e for e in new_sess.pending_queue if e[0] == "go"]
     assert entry[4] == 111
+
+
+def test_new_replace_starts_fresh_with_the_chosen_folder_and_model_and_ends_ready(
+        mk_bot, mk_query, run_async, monkeypatch):
+    """Replace starts the fresh session through create_session with the
+    mode, folder and model /new chose, in the replaced session's own
+    scope, and the conflict card becomes the Ready card (2026-09-30)."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
+    bot.registry._sessions["claude-jim"] = sess
+    bot._new_conflict_pending["claude-jim"] = {
+        "prompt": "", "skip_perms": True, "user_id": 111, "msg_id": 5,
+        "cwd": "/srv/proj", "model": "opus"}
+    launch = AsyncMock(return_value=(True, ""))
+    monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
+
+    update, query = mk_query("claude-jim:new_replace", user_id=111)
+    update.effective_chat.id = 4242   # tapped in a real DM
+    run_async(bot._handle_callback(update, MagicMock()))
+
+    kw = launch.await_args.kwargs
+    # An unscoped legacy session stays unscoped: the same name, never
+    # the tapping chat's suffix or scope.
+    assert launch.await_args.args[0] == "jim"
+    assert bot.registry.get("claude-jim").scope_chat_id == 0
+    assert (kw["skip_perms"], kw["cwd"], kw["model"]) == (True, "/srv/proj", "opus")
+    texts = [str(c.args[0]) if c.args else str(c.kwargs.get("text"))
+             for c in query.edit_message_text.await_args_list]
+    assert any("jim</b> is ready" in t for t in texts), texts
+
+
+def test_new_replace_keeps_a_scoped_sessions_own_name(
+        mk_bot, mk_query, run_async, monkeypatch):
+    """A session scoped to a group is replaced under the same internal
+    name, so the fresh one is the same session to that group."""
+    from aipager.scope import disambiguated_name
+
+    bot = mk_bot()
+    name = disambiguated_name("jim", -100, "group")
+    sess = TrackedSession(name=name, label="jim", status=Status.GONE)
+    sess.scope_chat_id = -100
+    bot.registry._sessions[name] = sess
+    bot._new_conflict_pending[name] = {
+        "prompt": "", "skip_perms": False, "user_id": 111, "msg_id": 5}
+    launch = AsyncMock(return_value=(True, ""))
+    monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
+
+    update, _query = mk_query(f"{name}:new_replace", user_id=111)
+    update.effective_chat.id = -100
+    run_async(bot._handle_callback(update, MagicMock()))
+
+    assert launch.await_args.args[0] == name.removeprefix("claude-")
+    assert bot.registry.get(name).scope_chat_id == -100
+
+
+def test_new_replace_keeps_a_renamed_sessions_internal_name(
+        mk_bot, mk_query, run_async, monkeypatch):
+    """/rename changes the label, never the internal name: Replace must
+    restart THAT session, not start a second one under a name derived
+    from the new label."""
+    from aipager.scope import disambiguated_name
+
+    bot = mk_bot()
+    name = disambiguated_name("old", -100, "group")
+    sess = TrackedSession(name=name, label="jim", status=Status.GONE)
+    sess.scope_chat_id = -100
+    bot.registry._sessions[name] = sess
+    bot._new_conflict_pending[name] = {
+        "prompt": "", "skip_perms": False, "user_id": 111, "msg_id": 5}
+    launch = AsyncMock(return_value=(True, ""))
+    monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
+
+    update, _query = mk_query(f"{name}:new_replace", user_id=111)
+    update.effective_chat.id = -100
+    run_async(bot._handle_callback(update, MagicMock()))
+
+    assert launch.await_args.args[0] == name.removeprefix("claude-")
+    assert [s.name for s in bot.registry.all_sessions().values()
+            if s.label == "jim"] == [name]
+
+
+def _replace_refusal_setup(mk_bot, monkeypatch, pending):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    bot.registry._sessions["claude-jim"] = sess
+    if pending is not None:
+        bot._new_conflict_pending["claude-jim"] = pending
+    kill = AsyncMock()
+    launch = AsyncMock(return_value=(True, ""))
+    monkeypatch.setattr("aipager.dtach.inject.kill_session", kill)
+    monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
+    return bot, kill, launch
+
+
+def test_new_replace_by_someone_else_is_refused_and_kills_nothing(
+        mk_bot, mk_query, run_async, monkeypatch):
+    """Replace kills a session: only the person who sent /new may tap
+    it, and a refused tap leaves the card for its author."""
+    pending = {"prompt": "", "skip_perms": False, "user_id": 111, "msg_id": 5}
+    bot, kill, launch = _replace_refusal_setup(mk_bot, monkeypatch, pending)
+
+    update, query = mk_query("claude-jim:new_replace", user_id=222)
+    run_async(bot._handle_callback(update, MagicMock()))
+
+    kill.assert_not_awaited()
+    launch.assert_not_awaited()
+    assert "claude-jim" in bot._new_conflict_pending
+    answers = [c.args[0] for c in query.answer.await_args_list if c.args]
+    assert any("Only the person who sent /new" in a for a in answers), answers
+
+
+def test_new_replace_by_an_author_who_may_no_longer_prompt_is_refused(
+        mk_bot, mk_query, run_async, monkeypatch):
+    pending = {"prompt": "", "skip_perms": False, "user_id": 111, "msg_id": 5}
+    bot, kill, launch = _replace_refusal_setup(mk_bot, monkeypatch, pending)
+    bot._can_prompt_user = MagicMock(return_value=False)
+
+    update, _query = mk_query("claude-jim:new_replace", user_id=111)
+    run_async(bot._handle_callback(update, MagicMock()))
+
+    kill.assert_not_awaited()
+    launch.assert_not_awaited()
+    assert "claude-jim" in bot._new_conflict_pending
+
+
+def test_new_replace_with_no_card_state_is_refused(
+        mk_bot, mk_query, run_async, monkeypatch):
+    """The card outlived its state (a daemon restart): nobody's choices
+    or rights are known, so it kills nothing."""
+    bot, kill, launch = _replace_refusal_setup(mk_bot, monkeypatch, None)
+
+    update, query = mk_query("claude-jim:new_replace", user_id=111)
+    run_async(bot._handle_callback(update, MagicMock()))
+
+    kill.assert_not_awaited()
+    launch.assert_not_awaited()
+    answers = [c.args[0] for c in query.answer.await_args_list if c.args]
+    assert any("expired" in a for a in answers), answers
+
+
+def test_new_replace_after_a_turn_started_since_the_card_is_refused_and_kept(
+        mk_bot, mk_query, run_async, monkeypatch):
+    """jim started a turn (busy card 50) after the name was sent (40):
+    the card never showed that work, so Replace refuses, and the card's
+    first message is kept for a retry."""
+    pending = {"prompt": "do it", "skip_perms": False, "user_id": 111, "msg_id": 40}
+    bot, kill, launch = _replace_refusal_setup(mk_bot, monkeypatch, pending)
+    bot.registry.get("claude-jim").busy_msg_id = 50
+
+    update, query = mk_query("claude-jim:new_replace", user_id=111, message_id=60)
+    run_async(bot._handle_callback(update, MagicMock()))
+
+    kill.assert_not_awaited()
+    launch.assert_not_awaited()
+    assert bot._new_conflict_pending["claude-jim"]["prompt"] == "do it"
+
+
+def test_new_replace_from_an_edited_name_card_is_not_mistaken_for_stale(
+        mk_bot, mk_query, run_async, monkeypatch):
+    """The conflict card is the older Name card (message 10), edited: a
+    turn that started before the name was sent (busy card 30, name 40)
+    is the one the card showed, so the tap goes through."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.GONE)
+    sess.busy_msg_id = 30
+    bot.registry._sessions["claude-jim"] = sess
+    bot._new_conflict_pending["claude-jim"] = {
+        "prompt": "", "skip_perms": False, "user_id": 111, "msg_id": 40}
+    launch = AsyncMock(return_value=(True, ""))
+    monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
+
+    update, _query = mk_query("claude-jim:new_replace", user_id=111, message_id=10)
+    run_async(bot._handle_callback(update, MagicMock()))
+
+    launch.assert_awaited_once()
+
+
+@pytest.mark.parametrize("verb", ["new_cancel", "new_resume"])
+def test_cancel_and_resume_take_the_cards_state(
+        mk_bot, mk_query, run_async, monkeypatch, verb):
+    """Only a refused Replace leaves the card's state behind; every action
+    that goes ahead takes it, so nothing is left to act on twice."""
+    bot = mk_bot()
+    bot.registry._sessions["claude-jim"] = TrackedSession(
+        name="claude-jim", label="jim", status=Status.IDLE)
+    bot._new_conflict_pending["claude-jim"] = {
+        "prompt": "", "skip_perms": False, "user_id": 111, "msg_id": 5}
+
+    update, _query = mk_query(f"claude-jim:{verb}", user_id=111)
+    run_async(bot._handle_callback(update, MagicMock()))
+
+    assert "claude-jim" not in bot._new_conflict_pending
+
+
+def test_a_tap_for_a_session_no_longer_tracked_takes_the_cards_state(
+        mk_bot, mk_query, run_async):
+    bot = mk_bot()
+    bot._new_conflict_pending["claude-jim"] = {
+        "prompt": "", "skip_perms": False, "user_id": 111, "msg_id": 5}
+
+    update, query = mk_query("claude-jim:new_replace", user_id=111)
+    run_async(bot._handle_callback(update, MagicMock()))
+
+    assert "claude-jim" not in bot._new_conflict_pending
+    answers = [c.args[0] for c in query.answer.await_args_list if c.args]
+    assert "Session not found" in answers
+
+
+@pytest.mark.parametrize("verb", ["new_cancel", "new_resume"])
+def test_cancel_and_resume_by_someone_else_are_refused_and_keep_the_card(
+        mk_bot, mk_query, run_async, verb):
+    """The conflict card is its author's, like the Name card: nobody else
+    cancels it (losing the author's first message) or resumes with it."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    bot.registry._sessions["claude-jim"] = sess
+    bot._new_conflict_pending["claude-jim"] = {
+        "prompt": "go", "skip_perms": False, "user_id": 111, "msg_id": 5}
+
+    update, query = mk_query(f"claude-jim:{verb}", user_id=222)
+    run_async(bot._handle_callback(update, MagicMock()))
+
+    assert bot._new_conflict_pending["claude-jim"]["prompt"] == "go"
+    assert sess.pending_queue == []
+    answers = [c.args[0] for c in query.answer.await_args_list if c.args]
+    assert any("Only the person who sent /new" in a for a in answers), answers
+
+
+def test_resume_by_an_author_who_may_no_longer_prompt_is_refused(
+        mk_bot, mk_query, run_async):
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    bot.registry._sessions["claude-jim"] = sess
+    bot._new_conflict_pending["claude-jim"] = {
+        "prompt": "go", "skip_perms": False, "user_id": 111, "msg_id": 5}
+    bot._can_prompt_user = MagicMock(return_value=False)
+
+    update, _query = mk_query("claude-jim:new_resume", user_id=111)
+    run_async(bot._handle_callback(update, MagicMock()))
+
+    assert sess.pending_queue == []
+    assert "claude-jim" in bot._new_conflict_pending
+
+
+def test_resume_brings_back_exactly_the_cards_session(
+        mk_bot, mk_query, run_async, monkeypatch):
+    """Review-3's probe: a GONE `jim` in two groups. Resume on group B's
+    card resumes B's jim (not A's, found by label anywhere), and the
+    first message is queued there."""
+    from aipager.scope import disambiguated_name
+
+    bot = mk_bot()
+    names = {}
+    for chat in (-100, -200):
+        name = disambiguated_name("jim", chat, "group")
+        gone = TrackedSession(name=name, label="jim", status=Status.GONE,
+                              claude_session_id=f"id{chat}")
+        gone.scope_chat_id = chat
+        bot.registry._sessions[name] = gone
+        names[chat] = name
+    b = names[-200]
+    bot._new_conflict_pending[b] = {
+        "prompt": "go", "skip_perms": False, "user_id": 111, "msg_id": 5}
+    launch = AsyncMock(return_value=(True, ""))
+    monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
+    monkeypatch.setattr("aipager.bot.session_ops._read_preview", lambda *a, **k: "",
+                        raising=False)
+    bot._maybe_update_bot_name = AsyncMock()
+    bot._update_bot_commands = AsyncMock()
+    bot._read_status_file = MagicMock(return_value=None)
+
+    update, _query = mk_query(f"{b}:new_resume", user_id=111)
+    update.effective_chat.id = -200
+    run_async(bot._handle_callback(update, MagicMock()))
+
+    assert launch.await_args.args[0] == b.removeprefix("claude-")
+    assert launch.await_args.kwargs["resume_id"] == "id-200"
+    assert [q[0] for q in bot.registry.get(b).pending_queue] == ["go"]
+    assert bot.registry.get(names[-100]).status == Status.GONE
+
+
+def test_resume_given_the_session_never_looks_one_up_by_label(
+        mk_bot, run_async, monkeypatch):
+    """The conflict card hands `_do_resume` its exact session: a label
+    lookup (which another chat's or a newer same-named session could
+    answer) is never consulted."""
+    bot = mk_bot()
+    gone = TrackedSession(name="claude-jim", label="jim", status=Status.GONE,
+                          claude_session_id="abc")
+    bot.registry._sessions["claude-jim"] = gone
+    decoy = TrackedSession(name="claude-jim__g999", label="jim",
+                           status=Status.GONE, claude_session_id="zzz")
+    monkeypatch.setattr(bot.registry, "find_by_label", lambda *a, **k: decoy)
+    core = AsyncMock(return_value=MagicMock(ok=False, reason="launch_failed", err="x"))
+    bot._do_resume_core = core
+
+    run_async(bot._do_resume(label="jim", reply_fn=AsyncMock(), sess=gone))
+
+    assert core.await_args.args[0] is gone
+
+
+def test_resume_on_the_card_resumes_the_cards_own_session(
+        mk_bot, mk_query, run_async, monkeypatch):
+    """The card knows its session: Resume never re-finds it by label (a
+    newer or another chat's `jim` could answer that)."""
+    bot = mk_bot()
+    gone = TrackedSession(name="claude-jim", label="jim", status=Status.GONE,
+                          claude_session_id="abc")
+    bot.registry._sessions["claude-jim"] = gone
+    bot._new_conflict_pending["claude-jim"] = {
+        "prompt": "", "skip_perms": False, "user_id": 111, "msg_id": 5}
+    decoy = TrackedSession(name="claude-jim__g999", label="jim",
+                           status=Status.GONE, claude_session_id="zzz")
+    monkeypatch.setattr(bot.registry, "find_by_label", lambda *a, **k: decoy)
+    core = AsyncMock(return_value=MagicMock(ok=False, reason="launch_failed", err="x"))
+    bot._do_resume_core = core
+
+    update, _query = mk_query("claude-jim:new_resume", user_id=111)
+    run_async(bot._handle_callback(update, MagicMock()))
+
+    assert core.await_args.args[0] is gone
+
+
+def test_a_failed_resume_queues_nothing(mk_bot, mk_query, run_async, monkeypatch):
+    bot = mk_bot()
+    gone = TrackedSession(name="claude-jim", label="jim", status=Status.GONE,
+                          claude_session_id="abc")
+    bot.registry._sessions["claude-jim"] = gone
+    bot._new_conflict_pending["claude-jim"] = {
+        "prompt": "go", "skip_perms": False, "user_id": 111, "msg_id": 5}
+    monkeypatch.setattr("aipager.dtach.inject.launch_session",
+                        AsyncMock(return_value=(False, "dtach broken")))
+
+    update, _query = mk_query("claude-jim:new_resume", user_id=111)
+    run_async(bot._handle_callback(update, MagicMock()))
+
+    assert gone.status == Status.GONE
+    assert gone.pending_queue == []
+
+
+def test_new_replace_refuses_a_turn_that_started_after_an_idle_card(
+        mk_bot, mk_query, run_async, monkeypatch):
+    """Review-3: a self-woken turn holds its card back for seconds, so the
+    busy card cannot tell. The card was shown on an idle session and the
+    session now works: that is work the card never showed."""
+    pending = {"prompt": "", "skip_perms": False, "user_id": 111, "msg_id": 40,
+               "was_working": False}
+    bot, kill, launch = _replace_refusal_setup(mk_bot, monkeypatch, pending)
+    bot.registry.get("claude-jim").status = Status.BUSY      # no busy card yet
+
+    update, _query = mk_query("claude-jim:new_replace", user_id=111)
+    run_async(bot._handle_callback(update, MagicMock()))
+
+    kill.assert_not_awaited()
+    launch.assert_not_awaited()
+    assert "claude-jim" in bot._new_conflict_pending
+
+
+def test_new_replace_of_a_session_shown_working_goes_ahead(
+        mk_bot, mk_query, run_async, monkeypatch):
+    """The card said it was already running: replacing it is what the
+    author chose."""
+    pending = {"prompt": "", "skip_perms": False, "user_id": 111, "msg_id": 40,
+               "was_working": True}
+    bot, kill, launch = _replace_refusal_setup(mk_bot, monkeypatch, pending)
+    bot.registry.get("claude-jim").status = Status.BUSY
+    monkeypatch.setattr("pathlib.Path.is_socket", lambda self: False)
+
+    update, _query = mk_query("claude-jim:new_replace", user_id=111)
+    run_async(bot._handle_callback(update, MagicMock()))
+
+    kill.assert_awaited_once()
+    launch.assert_awaited_once()
+
+
+def test_the_conflict_card_records_whether_the_session_was_working(
+        mk_bot, mk_update, run_async):
+    bot = mk_bot()
+    for status, expected in ((Status.BUSY, True), (Status.IDLE, False)):
+        sess = TrackedSession(name="claude-jim", label="jim", status=status)
+        update = mk_update("/new jim", user_id=111)
+        run_async(bot._send_new_conflict_prompt(
+            update=update, existing=sess, prompt="", skip_perms=False))
+        assert bot._new_conflict_pending["claude-jim"]["was_working"] is expected
+
+
+def test_a_newer_conflict_card_for_the_same_name_retires_the_older_one(
+        mk_bot, mk_update, run_async):
+    """Review-4: two people send /new jim. The state is per name, so the
+    first card's buttons would refuse its own author; it says it was
+    replaced instead of keeping live buttons."""
+    bot = mk_bot()
+    bot._app.bot.edit_message_text = AsyncMock()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    first = mk_update("/new jim", user_id=111, message_id=10)
+    first.message.reply_text = AsyncMock(return_value=MagicMock(message_id=11))
+    run_async(bot._send_new_conflict_prompt(
+        update=first, existing=sess, prompt="", skip_perms=False))
+    second = mk_update("/new jim", user_id=222, message_id=12)
+    second.message.reply_text = AsyncMock(return_value=MagicMock(message_id=13))
+    run_async(bot._send_new_conflict_prompt(
+        update=second, existing=sess, prompt="", skip_perms=False))
+
+    assert bot._new_conflict_pending["claude-jim"]["user_id"] == 222
+    assert bot._app.bot.edit_message_text.await_count == 1, "older card not retired"
+    kw = bot._app.bot.edit_message_text.await_args.kwargs
+    assert kw["message_id"] == 11 and "replaced this card" in kw["text"]
+    assert kw.get("reply_markup") is None
+
+
+def test_two_conflict_cards_racing_retire_the_older_one(mk_bot, mk_update, run_async):
+    """Review-5: a second /new jim lands while the first card is still
+    going out. The first card's id belongs to the first entry, which is
+    no longer current, so that card retires itself; the new card stays."""
+    bot = mk_bot()
+    bot._app.bot.edit_message_text = AsyncMock()
+    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
+    second = mk_update("/new jim", user_id=222, message_id=12)
+    second.message.reply_text = AsyncMock(return_value=MagicMock(message_id=13))
+
+    async def _first_goes_out(*a, **k):
+        await bot._send_new_conflict_prompt(
+            update=second, existing=sess, prompt="", skip_perms=False)
+        return MagicMock(message_id=11)
+    first = mk_update("/new jim", user_id=111, message_id=10)
+    first.message.reply_text = AsyncMock(side_effect=_first_goes_out)
+
+    run_async(bot._send_new_conflict_prompt(
+        update=first, existing=sess, prompt="", skip_perms=False))
+
+    current = bot._new_conflict_pending["claude-jim"]
+    assert (current["user_id"], current.get("card", (None, None))[1]) == (222, 13)
+    edited = [c.kwargs["message_id"] for c in bot._app.bot.edit_message_text.await_args_list]
+    assert edited == [11]
+
+
+def test_new_replace_re_checks_auto_at_creation(
+        mk_bot, mk_query, run_async, monkeypatch):
+    """The card stored Auto, but its author is no longer an admin: the
+    fresh session asks."""
+    bot = mk_bot()
+    bot.registry._sessions["claude-jim"] = TrackedSession(
+        name="claude-jim", label="jim", status=Status.GONE)
+    bot._new_conflict_pending["claude-jim"] = {
+        "prompt": "", "skip_perms": True, "user_id": 111, "msg_id": 5}
+    bot._is_admin_user = MagicMock(return_value=False)
+    launch = AsyncMock(return_value=(True, ""))
+    monkeypatch.setattr("aipager.dtach.inject.launch_session", launch)
+
+    update, _query = mk_query("claude-jim:new_replace", user_id=111)
+    run_async(bot._handle_callback(update, MagicMock()))
+
+    assert launch.await_args.kwargs["skip_perms"] is False
 
 
 def test_new_replace_kills_alive_then_launches(mk_bot, mk_query, run_async, monkeypatch):
@@ -573,13 +1032,12 @@ def test_new_replace_kills_alive_then_launches(mk_bot, mk_query, run_async, monk
     launch_called = AsyncMock(return_value=(True, ""))
     monkeypatch.setattr("aipager.dtach.inject.kill_session", kill_called)
     monkeypatch.setattr("aipager.dtach.inject.launch_session", launch_called)
-    # Pretend the socket disappears immediately
+    # Pretend the socket disappears immediately (one real 0.2 s poll: the
+    # global asyncio.sleep is never patched, CLAUDE.md).
     from pathlib import Path
     monkeypatch.setattr(Path, "is_socket", lambda self: False)
-    async def _no_sleep(_): pass
-    monkeypatch.setattr("aipager.bot.callbacks.asyncio.sleep", _no_sleep)
 
-    update, query = mk_query("claude-jim:new_replace")
+    update, query = mk_query("claude-jim:new_replace", user_id=1)
     run_async(bot._handle_callback(update, MagicMock()))
     kill_called.assert_awaited_once()
     launch_called.assert_awaited_once()
@@ -595,22 +1053,12 @@ def test_new_replace_launch_failure_messages_error(mk_bot, mk_query, run_async, 
                                                   "user_id": 1, "msg_id": 5}
     monkeypatch.setattr("aipager.dtach.inject.launch_session",
                         AsyncMock(return_value=(False, "dtach broken")))
-    update, query = mk_query("claude-jim:new_replace")
+    update, query = mk_query("claude-jim:new_replace", user_id=1)
     run_async(bot._handle_callback(update, MagicMock()))
-    # Should have called send_message with the failure text via _app.bot.
-    # Args can be positional or kwargs depending on PTB version.
-    found = False
-    for c in bot._app.bot.send_message.await_args_list:
-        joined = " ".join(str(a) for a in c.args) + " " + " ".join(
-            str(v) for v in c.kwargs.values()
-        )
-        if "dtach broken" in joined:
-            found = True
-            break
-    assert found, (
-        "Expected 'dtach broken' in some send_message call; got "
-        f"{[(c.args, c.kwargs) for c in bot._app.bot.send_message.await_args_list]}"
-    )
+    # The conflict card itself says why (it was the "Starting" message).
+    texts = [str(c.args[0]) if c.args else str(c.kwargs.get("text"))
+             for c in query.edit_message_text.await_args_list]
+    assert any("dtach broken" in t for t in texts), texts
 
 
 # ---- unknown action toast ----------------------------------------------

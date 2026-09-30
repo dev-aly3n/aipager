@@ -788,10 +788,14 @@ class SessionOpsMixin:
     async def create_session(
         self, label: str, *, scope_chat_id, skip_perms: bool = False,
         cwd: str | None = None, driver_user_id: int | None = None,
-        model: str | None = None,
+        model: str | None = None, reuse_name: str | None = None,
     ) -> tuple[str, str]:
         """Launch a session and register it. Returns ``(session_name, "")``
         or ``("", error)``.
+
+        ``reuse_name``: start the process under this exact internal name
+        (Replace). A renamed session, or one named before chats had their
+        own names, has a name its label and chat no longer produce.
 
         The single seam both entry points go through: chat's ``/new`` and
         the Mini App's create route. Everything that makes a launched
@@ -812,7 +816,11 @@ class SessionOpsMixin:
         from aipager.scope import disambiguated_name
         from aipager.state import Status
 
-        if scope_chat_id is not None:
+        if reuse_name:
+            scope_kind = ("group" if scope_chat_id is not None and scope_chat_id < 0
+                          else "dm")
+            session_name = reuse_name
+        elif scope_chat_id is not None:
             scope_kind = "group" if scope_chat_id < 0 else "dm"
             session_name = disambiguated_name(label, scope_chat_id, scope_kind)
         else:
@@ -834,6 +842,7 @@ class SessionOpsMixin:
         self._discard_queued_targets(sess)
         sess.label = label
         sess.skip_perms = skip_perms
+        sess.launch_model = model or ""
         if cwd:
             # The hook receiver stamps cwd on the first statusLine event,
             # but the operator picked this one explicitly — record it now
@@ -1259,7 +1268,7 @@ class SessionOpsMixin:
             ok, err = await inject.launch_session(
                 short_name, resume_id=resume_id, cwd=cwd,
                 skip_perms=effective_skip_perms, is_relaunch=True,
-                system_prompt_extra=sys_extra,
+                system_prompt_extra=sys_extra, model=sess.launch_model or None,
             )
             if not ok:
                 # Restore the id so the user can try again after fixing
@@ -1295,7 +1304,8 @@ class SessionOpsMixin:
     async def _do_resume(self, *, label: str, reply_fn,
                           update: Update | None = None,
                           query=None,
-                          skip_perms_override: bool | None = None) -> None:
+                          skip_perms_override: bool | None = None,
+                          sess: TrackedSession | None = None) -> None:
         """Shared resume logic for /resume <name> and picker callbacks.
 
         ``reply_fn`` is the async-callable used to send the result back
@@ -1307,8 +1317,12 @@ class SessionOpsMixin:
         place that resolves the label to a session and handles "no such
         session" — the core is never called with ``sess is None``.
         """
-        sess = self.registry.find_by_label(
-            label, calling_chat_id(update or query), include_gone=True)
+        if sess is None:
+            # ``sess``: a caller that already holds the exact session (the
+            # /new conflict card) passes it; a label can name another
+            # chat's session.
+            sess = self.registry.find_by_label(
+                label, calling_chat_id(update or query), include_gone=True)
 
         if sess is None:
             await reply_fn(
@@ -1569,7 +1583,7 @@ class SessionOpsMixin:
         ok, err = await inject.launch_session(
             short_name, skip_perms=target_skip_perms,
             resume_id=resume_id or None, cwd=cwd, is_relaunch=True,
-            system_prompt_extra=sys_extra,
+            system_prompt_extra=sys_extra, model=sess.launch_model or None,
         )
         if not ok:
             # The relaunch failed, so the session really is gone — stop
@@ -1755,6 +1769,9 @@ class SessionOpsMixin:
         if not ok:
             clear_model_switch_pending(sess)
             return ModelSwitchOutcome(ok=False, reason="send_failed", label=label)
+        # A later relaunch (/perms, restart) keeps this model.
+        sess.launch_model = model
+        self.registry.mark_dirty()
         log.info("[%s] model switch sent: /model %s", label, model)
         return ModelSwitchOutcome(
             ok=True, reason="sent", label=label, previous_model=previous,

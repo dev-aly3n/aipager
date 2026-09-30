@@ -1,11 +1,15 @@
-"""Tests for /new enriched reply — mode icon, mode label, cwd, model, /perms nudge."""
+"""The /new reply is the Ready card: mode, model, folder, where the next
+message goes, and a one-tap switch to the other mode (it replaced the
+"/perms" nudge in the 2026-09-30 redesign). Auto is the default for an
+admin; a non-admin gets Ask."""
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from aipager import preferences
 from aipager.state import Status, TrackedSession
 
 
@@ -17,103 +21,69 @@ def mk_launch_ok():
     return _launch
 
 
-def test_new_ask_mode_reply_contains_ask_and_perms_nudge(
-        mk_bot, mk_update, run_async, mk_launch_ok):
-    """Reply for /new dev (Ask mode) must contain 💬, 'Ask', and /perms."""
-    bot = mk_bot()
+def _ready(bot, update, launch):
+    bot._app.bot.edit_message_text = AsyncMock()
+    with patch("aipager.dtach.inject.launch_session", side_effect=launch):
+        import asyncio
+        asyncio.new_event_loop().run_until_complete(
+            bot._handle_new_cmd(update, MagicMock()))
+    bot._app.bot.edit_message_text.assert_awaited_once()
+    kw = bot._app.bot.edit_message_text.await_args.kwargs
+    buttons = [b.text for row in kw["reply_markup"].inline_keyboard for b in row]
+    return kw["text"], buttons
+
+
+def test_new_ask_mode_reply_offers_auto(mk_bot, mk_update, mk_launch_ok):
+    """An Ask session (the chat's default set to Ask): 💬 Ask on the card,
+    and a Switch to Auto button instead of a /perms nudge."""
     update = mk_update("/new dev")
+    preferences.set_new_session_default(update.effective_chat.id, "mode", "ask")
+    text, buttons = _ready(mk_bot(), update, mk_launch_ok)
 
-    with patch("aipager.dtach.inject.launch_session", side_effect=mk_launch_ok):
-        run_async(bot._handle_new_cmd(update, MagicMock()))
-
-    # status_msg.edit_text was called
-    status_msg = update.message.reply_text.return_value
-    status_msg.edit_text.assert_awaited_once()
-    text = status_msg.edit_text.await_args[0][0]
-
-    assert "💬" in text or "Ask" in text, f"Expected Ask mode text, got: {text}"
-    assert "/perms" in text, f"Expected /perms nudge, got: {text}"
-    # Must NOT contain "Auto" as the mode (it's Ask mode)
-    assert "🤖" not in text, f"Should not have Auto icon in Ask mode: {text}"
+    assert "💬 Ask" in text, text
+    assert "🤖" not in text, text
+    assert "/perms" not in text, text
+    assert "🤖 Switch to Auto" in buttons, buttons
 
 
-def test_new_auto_mode_reply_contains_auto_no_perms_nudge(
-        mk_bot, mk_update, run_async, mk_launch_ok):
-    """Reply for /new !dev (Auto mode) must contain 🤖, 'Auto', no /perms nudge."""
-    bot = mk_bot()
-    bot._is_admin = MagicMock(return_value=True)
-    update = mk_update("/new !dev")
+def test_new_auto_mode_reply_offers_ask(mk_bot, mk_update, mk_launch_ok):
+    text, buttons = _ready(mk_bot(), mk_update("/new !dev"), mk_launch_ok)
 
-    with patch("aipager.dtach.inject.launch_session", side_effect=mk_launch_ok):
-        run_async(bot._handle_new_cmd(update, MagicMock()))
-
-    status_msg = update.message.reply_text.return_value
-    status_msg.edit_text.assert_awaited_once()
-    text = status_msg.edit_text.await_args[0][0]
-
-    assert "🤖" in text or "Auto" in text, f"Expected Auto mode text, got: {text}"
-    # Auto mode should NOT have the /perms nudge
-    assert "/perms" not in text, f"Should not have /perms nudge in Auto mode: {text}"
+    assert "🤖 Auto" in text, text
+    assert "/perms" not in text, text
+    assert "💬 Switch to Ask" in buttons, buttons
 
 
-def test_new_reply_omits_model_when_unknown(mk_bot, mk_update, run_async, mk_launch_ok):
-    """When model_name is empty, the model clause should be omitted (no 'None')."""
-    bot = mk_bot()
-    update = mk_update("/new dev")
+def test_new_reply_reads_default_model_when_unknown(mk_bot, mk_update, mk_launch_ok):
+    text, _ = _ready(mk_bot(), mk_update("/new dev"), mk_launch_ok)
 
-    with patch("aipager.dtach.inject.launch_session", side_effect=mk_launch_ok):
-        run_async(bot._handle_new_cmd(update, MagicMock()))
-
-    status_msg = update.message.reply_text.return_value
-    text = status_msg.edit_text.await_args[0][0]
-
-    # model_name is "" by default — should NOT appear as "None" or empty placeholder
-    assert "None" not in text, f"'None' should not appear in reply: {text}"
-    # No model icon if unknown
-    assert "🧠" not in text or text.count("🧠") == 0, (
-        f"Model icon should not appear when unknown: {text}"
-    )
+    assert "None" not in text, text
+    assert "🧠 Default model" in text, text
 
 
-def test_new_reply_includes_model_when_known(mk_bot, mk_update, run_async, mk_launch_ok):
-    """When model_name is pre-populated on the session, it appears in the reply.
-
-    model_name is normally populated by the first statusLine event (async,
-    after launch).  Here we pre-seed the registry with the session so that
-    get_or_create returns the existing entry, which already has model_name set.
-    """
+def test_new_reply_includes_model_when_known(mk_bot, mk_update, mk_launch_ok):
+    """A known model (normally from the first statusLine event) shows."""
     from aipager.scope import disambiguated_name
 
     bot = mk_bot()
-    # With chat_id=0 and scope_kind="dm", the session name is "claude-dev__d0".
-    # Pre-seed as GONE with no claude_session_id so the conflict check is skipped,
-    # but model_name is preserved for the enriched reply check.
     session_name = disambiguated_name("dev", 0, "dm")
     pre = TrackedSession(name=session_name, label="dev", status=Status.GONE)
     pre.model_name = "Sonnet 4.5"
     bot.registry._sessions[session_name] = pre
 
-    update = mk_update("/new dev", chat_id=0)
-
-    with patch("aipager.dtach.inject.launch_session", side_effect=mk_launch_ok):
-        run_async(bot._handle_new_cmd(update, MagicMock()))
-
-    status_msg = update.message.reply_text.return_value
-    text = status_msg.edit_text.await_args[0][0]
-    assert "Sonnet 4.5" in text, f"Expected model name in reply: {text}"
+    text, _ = _ready(bot, mk_update("/new dev", chat_id=0), mk_launch_ok)
+    assert "Sonnet 4.5" in text, text
 
 
-def test_new_auto_requires_admin(mk_bot, mk_update, run_async):
-    """Non-admin user sending /new !dev gets an error."""
+def test_new_auto_needs_an_admin(mk_bot, mk_update, mk_launch_ok):
+    """A non-admin's /new !dev gets Ask, and the card says why."""
     bot = mk_bot()
     bot._is_admin = MagicMock(return_value=False)
-    update = mk_update("/new !dev")
+    bot._is_admin_user = MagicMock(return_value=False)
+    text, _ = _ready(bot, mk_update("/new !dev"), mk_launch_ok)
 
-    run_async(bot._handle_new_cmd(update, MagicMock()))
-
-    update.message.reply_text.assert_awaited_once()
-    msg = update.message.reply_text.await_args[0][0]
-    assert "requires admin role" in msg
+    assert "Auto mode needs an admin" in text, text
+    assert "💬 Ask" in text, text
 
 
 def _find_dev_session(bot):
@@ -124,28 +94,27 @@ def _find_dev_session(bot):
     return None
 
 
-def test_new_sets_skip_perms_on_session(mk_bot, mk_update, run_async, mk_launch_ok):
-    """After /new dev, the session's skip_perms should be False (Ask mode)."""
+def test_new_is_auto_by_default_for_an_admin(mk_bot, mk_update, mk_launch_ok):
+    bot = mk_bot()
+    _ready(bot, mk_update("/new dev"), mk_launch_ok)
+
+    sess = _find_dev_session(bot)
+    assert sess is not None and sess.skip_perms is True
+
+
+def test_new_honours_the_chats_ask_default(mk_bot, mk_update, mk_launch_ok):
     bot = mk_bot()
     update = mk_update("/new dev")
-
-    with patch("aipager.dtach.inject.launch_session", side_effect=mk_launch_ok):
-        run_async(bot._handle_new_cmd(update, MagicMock()))
+    preferences.set_new_session_default(update.effective_chat.id, "mode", "ask")
+    _ready(bot, update, mk_launch_ok)
 
     sess = _find_dev_session(bot)
-    assert sess is not None
-    assert sess.skip_perms is False
+    assert sess is not None and sess.skip_perms is False
 
 
-def test_new_auto_sets_skip_perms_true(mk_bot, mk_update, run_async, mk_launch_ok):
-    """After /new !dev, the session's skip_perms should be True (Auto mode)."""
+def test_new_auto_sets_skip_perms_true(mk_bot, mk_update, mk_launch_ok):
     bot = mk_bot()
-    bot._is_admin = MagicMock(return_value=True)
-    update = mk_update("/new !dev")
-
-    with patch("aipager.dtach.inject.launch_session", side_effect=mk_launch_ok):
-        run_async(bot._handle_new_cmd(update, MagicMock()))
+    _ready(bot, mk_update("/new !dev"), mk_launch_ok)
 
     sess = _find_dev_session(bot)
-    assert sess is not None
-    assert sess.skip_perms is True
+    assert sess is not None and sess.skip_perms is True

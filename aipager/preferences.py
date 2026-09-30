@@ -286,6 +286,72 @@ def set_preference(chat_id: int, field: str, value: object) -> Preferences:
     return get_preferences(chat_id)
 
 
+# ---- new-session defaults (/settings → 🆕 New sessions, and /new) -------
+#
+# What a session started from chat gets when the person starting it does
+# not choose: mode, model and folder. Stored in the same per-chat entry as
+# the reply style, under their own keys, and deliberately NOT part of
+# :class:`Preferences` or ``settings_schema`` (the reply style, shared with
+# the Mini App and with per-session overrides). Validated here for shape;
+# the model and folder are re-checked by their caller at use time against
+# the lists that are true then (MODEL_CHOICES, ``launch.allowed_roots``).
+
+_NEW_SESSION_KEYS = {
+    "mode": "new_session_mode",
+    "model": "new_session_model",
+    "cwd": "new_session_cwd",
+}
+
+_NEW_SESSION_VALIDATORS = {
+    "mode": lambda v: v in ("auto", "ask"),
+    "model": lambda v: isinstance(v, str) and 0 < len(v) <= 100,
+    "cwd": lambda v: isinstance(v, str) and v.startswith("/") and len(v) <= 4096,
+}
+
+
+@dataclass(frozen=True)
+class NewSessionDefaults:
+    """A chat's stored defaults for new sessions. Empty means "not chosen":
+    ``mode`` then falls to Auto for a caller who may use it, ``model`` to
+    Claude Code's own default, ``cwd`` to the project directory."""
+    mode: str = ""
+    model: str = ""
+    cwd: str = ""
+
+
+def get_new_session_defaults(chat_id: int) -> NewSessionDefaults:
+    """Never raises. A stored value of the wrong shape reads as unset."""
+    store = _ensure_loaded()
+    raw = store.get(str(chat_id))
+    scope_raw = raw if isinstance(raw, dict) else {}
+    values = {}
+    for field, key in _NEW_SESSION_KEYS.items():
+        value = scope_raw.get(key, "")
+        values[field] = value if _NEW_SESSION_VALIDATORS[field](value) else ""
+    return NewSessionDefaults(**values)
+
+
+def set_new_session_default(chat_id: int, field: str, value: str) -> NewSessionDefaults:
+    """Store one default for ``chat_id``; an empty ``value`` clears it
+    (back to the built-in default). Raises ``ValueError`` for an unknown
+    field or a value of the wrong shape, before anything is written."""
+    if field not in _NEW_SESSION_KEYS:
+        raise ValueError(f"unknown new-session default: {field!r}")
+    if value != "" and not _NEW_SESSION_VALIDATORS[field](value):
+        raise ValueError(f"invalid value for {field!r}: {value!r}")
+    store = _ensure_loaded()
+    key = str(chat_id)
+    existing = store.get(key)
+    scope_raw = dict(existing) if isinstance(existing, dict) else {}
+    if value == "":
+        scope_raw.pop(_NEW_SESSION_KEYS[field], None)
+    else:
+        scope_raw[_NEW_SESSION_KEYS[field]] = value
+    store[key] = scope_raw
+    _save_raw(store)
+    return get_new_session_defaults(chat_id)
+
+
 _STYLE_LEAD_IN = (
     "Apply this reply guidance to your next answer; "
     "do not mention or quote it:"

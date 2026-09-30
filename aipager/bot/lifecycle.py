@@ -21,19 +21,21 @@ from typing import TYPE_CHECKING
 from telegram import (
     BotCommand,
     BotCommandScopeChat,
+    Update,
 )
 from telegram.ext import (
     ApplicationBuilder,
     CallbackQueryHandler,
     CommandHandler,
     MessageHandler,
+    TypeHandler,
     filters,
 )
 from telegram.error import BadRequest, Forbidden, RetryAfter
 
 from aipager.dtach import inject
 
-from aipager.bot import session_parity, update_flow
+from aipager.bot import new_flow, session_parity, update_flow
 from aipager.bot.flood import MUTE, FloodMuted, _key as _chat_key
 from aipager.bot import flood_state
 from aipager.bot.flood_budget import BudgetRateLimiter, clear_backoff_signal
@@ -343,6 +345,12 @@ class LifecycleMixin:
         flood_state.load()
 
         # Register handlers
+        # First, for every update (group -1 runs before the rest and never
+        # stops them): an open /new Name card closes the moment its person
+        # does anything but answer it or look around.
+        self._app.add_handler(
+            TypeHandler(Update, functools.partial(new_flow.close_if_moved_on, self)),
+            group=-1)
         self._app.add_handler(CallbackQueryHandler(self._handle_callback))
         self._app.add_handler(CommandHandler("start", self._handle_start_cmd))
         self._app.add_handler(CommandHandler("help", self._handle_start_cmd))

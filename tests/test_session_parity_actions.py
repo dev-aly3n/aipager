@@ -465,7 +465,9 @@ def test_rename_callback_starts_capture(mk_bot, run_async, mk_query):
     handled = run_async(session_parity.handle_callback(bot, update, query, sess.name, "rename"))
 
     assert handled is True
-    assert bot._rename_pending[555] == {"session_name": sess.name, "label": "dev"}
+    # user_id: who tapped (2026-09-30), so another person's /new leaves it.
+    assert bot._rename_pending[555] == {"session_name": sess.name, "label": "dev",
+                                        "user_id": query.from_user.id}
     query.edit_message_text.assert_awaited_once()
 
 

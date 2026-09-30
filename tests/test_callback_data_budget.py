@@ -94,8 +94,8 @@ _WORST_CASE_INDEX = "9" * 19
 # review; each is also out of scope for this ship — already short-form
 # before it started, per entrypoints.md / design.md's "Out of scope").
 ALLOWED_NAME_SIGNATURES = frozenset({
-    # new_flow.py's _back_cancel_kb(back_action) — every call site
-    # passes a literal "_:nw:..." constant (grep `_back_cancel_kb\(`),
+    # new_flow.py's _back_cancel_row(back_action) — every call site
+    # passes a literal "_:nw:..." constant (grep `_back_cancel_row\(`),
     # never a session-derived string.
     "back_action",
     # session_parity.py's per-session-preferences `cb_prefix` param —
@@ -115,11 +115,12 @@ ALLOWED_JOINEDSTR_SIGNATURES = frozenset({
     # (design.md: "never embed a session"). `entry['section']` / `idx`
     # / `section` / `token` all come from a fixed schema or a small
     # enumerated choice list, never a session name.
-    "_:nw:opt:pref:{entry['section']}",
     "_:nw:model:{idx}",
     "_:nw:path:{idx}",
-    "_:nw:pref:{section}:{token}",
-    "_:nw:pref:{section}:default",
+    # /settings → 🆕 New sessions (new_flow.render_new_session_defaults):
+    # an index into MODEL_CHOICES / launch.allowed_roots, never a name.
+    "_:set:ns:model:{idx}",
+    "_:set:ns:cwd:{idx}",
     # settings_menu.py — chat-level /settings, never session-scoped.
     "_:set:{section}",
     "_:set:{section}:{token}",
@@ -157,6 +158,9 @@ ALLOWED_VERB_JOINEDSTR_SIGNATURES = frozenset({
     # id, an int (at most 10 digits), never a session name:
     # "_:sx:<idx>:now:" + 10 digits stays under 30 bytes.
     "now:{msg_id}",
+    # new_flow.py's Ready card model list: an index into MODEL_CHOICES
+    # (a short, fixed list): "_:sx:<idx>:rdy_m" + 2 digits stays tiny.
+    "rdy_m{idx}",
 })
 
 
