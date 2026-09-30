@@ -24,7 +24,7 @@ import pytest
 from aipager.dtach import inject
 from aipager.state import Status, TrackedSession
 
-from _verbs import NOT_FOUND_MESSAGE
+from _verbs import NOT_FOUND_MESSAGE, OUT_OF_DATE_KILL_MESSAGE
 
 CHAT_ID = -100
 
@@ -104,19 +104,13 @@ def test_old_longform_missing_session_answers_not_found(scb_bot, helpers, verb):
 
 # ---- the deviations this suite's exploration actually found --------------
 
-def test_old_longform_kill_on_missing_session_should_answer_not_found(
+def test_old_longform_kill_on_missing_session_is_out_of_date(
         scb_bot, helpers, monkeypatch):
-    """FAILS on this ship's current behaviour: an old `<name>:kill`
-    button for a session that no longer exists does not answer
-    'Session not found' -- it proceeds to call ``inject.kill_session``
-    with the tapped name and answers "Killing <name>...". That is
-    exactly the "worst outcome" spec.md itself calls out (an old button
-    doing something other than fail closed), for a verb design.md's own
-    success criteria promises is covered:
-    "A long-form tap for a missing session answers 'Session not found'
-    -- not silence, not a crash." No crash occurs here, but the promise
-    is still broken: the action fires against a name that was never a
-    real, tracked session.
+    """An old `<name>:kill` button for a session that no longer exists
+    must fail closed: never call ``inject.kill_session`` with the tapped
+    name. It first answered "Killing <name>..." and killed; then "Session
+    not found"; since P4 retired the verb, every old kill button answers
+    that it is out of date and does nothing.
     """
     killed = AsyncMock()
     monkeypatch.setattr(inject, "kill_session", killed)
@@ -125,16 +119,18 @@ def test_old_longform_kill_on_missing_session_should_answer_not_found(
         "claude-ghost__d999999999:kill", chat_id=CHAT_ID)
     _run(bot._handle_callback(cb_upd, MagicMock()))
     assert q.answer.await_args is not None
-    assert q.answer.await_args.args[0] == NOT_FOUND_MESSAGE, (
-        f"expected {NOT_FOUND_MESSAGE!r} for a missing session, got "
+    # Since P4 the old kill buttons answer "out of date" and do nothing.
+    assert killed.await_args_list == []
+    assert q.answer.await_args.args[0] == OUT_OF_DATE_KILL_MESSAGE, (
+        f"expected {OUT_OF_DATE_KILL_MESSAGE!r} for an old kill button, got "
         f"{q.answer.await_args!r}; kill_session called with "
         f"{killed.await_args_list!r}"
     )
 
 
-def test_old_longform_kill_confirm_on_missing_session_should_answer_not_found(
+def test_old_longform_kill_confirm_on_missing_session_is_out_of_date(
         scb_bot, helpers, monkeypatch):
-    """Same class of deviation as kill, for kill-confirm."""
+    """Same for kill-confirm."""
     killed = AsyncMock()
     monkeypatch.setattr(inject, "kill_session", killed)
     bot = scb_bot()
@@ -142,8 +138,10 @@ def test_old_longform_kill_confirm_on_missing_session_should_answer_not_found(
         "claude-ghost__d999999999:kill-confirm", chat_id=CHAT_ID)
     _run(bot._handle_callback(cb_upd, MagicMock()))
     assert q.answer.await_args is not None
-    assert q.answer.await_args.args[0] == NOT_FOUND_MESSAGE, (
-        f"expected {NOT_FOUND_MESSAGE!r} for a missing session, got "
+    # Since P4 the old kill buttons answer "out of date" and do nothing.
+    assert killed.await_args_list == []
+    assert q.answer.await_args.args[0] == OUT_OF_DATE_KILL_MESSAGE, (
+        f"expected {OUT_OF_DATE_KILL_MESSAGE!r} for an old kill button, got "
         f"{q.answer.await_args!r}; kill_session called with "
         f"{killed.await_args_list!r}"
     )

@@ -445,12 +445,12 @@ def test_perms_prompt_muted_leaves_nothing_pending_and_does_not_raise(
     bot._is_admin = MagicMock(return_value=True)
     MUTE.mute(MUTED_CHAT, BAN)
 
-    update = _command(mk_update, "/perms", MUTED_CHAT)
+    update = _command(mk_update, "/perms auto", MUTED_CHAT)
     run_async(bot._handle_perms_cmd(update, MagicMock()))
     update.message.reply_text.assert_not_awaited()
     assert "claude-dev" not in bot._perms_pending
 
-    update = _command(mk_update, "/perms", OTHER_CHAT)
+    update = _command(mk_update, "/perms auto", OTHER_CHAT)
     run_async(bot._handle_perms_cmd(update, MagicMock()))
     update.message.reply_text.assert_awaited_once()
     assert bot._perms_pending["claude-dev"]["msg_id"] == 900

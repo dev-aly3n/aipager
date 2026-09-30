@@ -233,6 +233,28 @@ def _destinations(bot, chat_id, cbs):
 # ---- /restart ----------------------------------------------------------
 
 def test_restart_cmd_no_label_shows_picker_of_live_sessions(mk_bot, mk_update, run_async):
+    """Two live sessions: a picker of the live ones only, the chat's
+    target first, then a Cancel."""
+    bot = mk_bot()
+    live = _session(name="claude-live", label="live", status=Status.IDLE)
+    aaa = _session(name="claude-aaa", label="aaa", status=Status.IDLE)
+    gone = _session(name="claude-gone", label="gone", status=Status.GONE)
+    for sess in (live, aaa, gone):
+        bot.registry._sessions[sess.name] = sess
+    bot.registry.last_active_session = live.name
+
+    update = mk_update("/restart")
+    run_async(session_parity.handle_restart_cmd(bot, update, MagicMock()))
+
+    kwargs = update.message.reply_text.await_args.kwargs
+    cbs = [b.callback_data for row in kwargs["reply_markup"].inline_keyboard for b in row]
+    assert cbs[-1] == "_:pick:cancel"
+    dests = _destinations(bot, update.effective_chat.id, cbs[:-1])
+    assert dests == [("claude-live", "restart"), ("claude-aaa", "restart")]
+
+
+def test_restart_cmd_no_label_one_live_session_shows_its_confirm(
+        mk_bot, mk_update, run_async):
     bot = mk_bot()
     live = _session(name="claude-live", label="live", status=Status.IDLE)
     gone = _session(name="claude-gone", label="gone", status=Status.GONE)
@@ -245,7 +267,8 @@ def test_restart_cmd_no_label_shows_picker_of_live_sessions(mk_bot, mk_update, r
     kwargs = update.message.reply_text.await_args.kwargs
     cbs = [b.callback_data for row in kwargs["reply_markup"].inline_keyboard for b in row]
     dests = _destinations(bot, update.effective_chat.id, cbs)
-    assert dests == [("claude-live", "restart")]
+    assert dests == [("claude-live", f"restartok{live.turn_key}"),
+                     ("claude-live", "restart-cancel")]
 
 
 def test_restart_cmd_with_label_shows_confirm_directly(mk_bot, mk_update, run_async):
@@ -259,7 +282,7 @@ def test_restart_cmd_with_label_shows_confirm_directly(mk_bot, mk_update, run_as
     kwargs = update.message.reply_text.await_args.kwargs
     cbs = [b.callback_data for row in kwargs["reply_markup"].inline_keyboard for b in row]
     dests = _destinations(bot, update.effective_chat.id, cbs)
-    assert (sess.name, "restart-confirm") in dests
+    assert (sess.name, f"restartok{sess.turn_key}") in dests
     assert (sess.name, "restart-cancel") in dests
 
 
@@ -268,7 +291,7 @@ def test_restart_cmd_unknown_label(mk_bot, mk_update, run_async):
     update = mk_update("/restart nope")
     run_async(session_parity.handle_restart_cmd(bot, update, MagicMock()))
     text = update.message.reply_text.await_args.args[0]
-    assert "Unknown" in text
+    assert text == "⚠️ No live session named <b>nope</b> here."
 
 
 def test_restart_cmd_refuses_read_only_member(mk_bot, mk_update, run_async):
@@ -302,10 +325,10 @@ def test_restart_confirm_executes_and_reports_success(mk_bot, run_async, mk_quer
     outcome = RestartOutcome(ok=True, reason="done", label=sess.label)
     bot._restart_session_core = AsyncMock(return_value=outcome)
 
-    query = mk_query(f"{sess.name}:restart-confirm")
+    query = mk_query(f"{sess.name}:restartok{sess.turn_key}")
     update = _mk_cb_update(0, 1)
     handled = run_async(
-        session_parity.handle_callback(bot, update, query, sess.name, "restart-confirm"),
+        session_parity.handle_callback(bot, update, query, sess.name, f"restartok{sess.turn_key}"),
     )
 
     assert handled is True
@@ -321,9 +344,9 @@ def test_restart_confirm_reports_failure_reason(mk_bot, run_async, mk_query):
     outcome = RestartOutcome(ok=False, reason="still_stopping", label=sess.label)
     bot._restart_session_core = AsyncMock(return_value=outcome)
 
-    query = mk_query(f"{sess.name}:restart-confirm")
+    query = mk_query(f"{sess.name}:restartok{sess.turn_key}")
     update = _mk_cb_update(0, 1)
-    run_async(session_parity.handle_callback(bot, update, query, sess.name, "restart-confirm"))
+    run_async(session_parity.handle_callback(bot, update, query, sess.name, f"restartok{sess.turn_key}"))
 
     text = query.edit_message_text.await_args.args[0]
     assert "didn't stop in time" in text
@@ -339,15 +362,34 @@ def test_restart_confirm_denied_for_non_prompt_capable_member(mk_bot, run_async,
     bot.registry._sessions[sess.name] = sess
     bot._restart_session_core = AsyncMock()
 
-    query = mk_query(f"{sess.name}:restart-confirm", user_id=999)
+    query = mk_query(f"{sess.name}:restartok{sess.turn_key}", user_id=999)
     update = _mk_cb_update(0, 999)
+    handled = run_async(
+        session_parity.handle_callback(bot, update, query, sess.name, f"restartok{sess.turn_key}"),
+    )
+
+    assert handled is True
+    bot._restart_session_core.assert_not_awaited()
+    query.answer.assert_awaited_once_with("You can't restart this session.")
+
+
+def test_an_old_restart_confirm_is_out_of_date(mk_bot, run_async, mk_query):
+    """The confirm before restartok<turn_key> (P4) restarts nothing: which
+    turn it was shown for cannot be known."""
+    bot = mk_bot()
+    sess = _session(status=Status.IDLE)
+    bot.registry._sessions[sess.name] = sess
+    bot._restart_session_core = AsyncMock()
+    query = mk_query(f"{sess.name}:restart-confirm")
+    update = _mk_cb_update(0, 1)
+
     handled = run_async(
         session_parity.handle_callback(bot, update, query, sess.name, "restart-confirm"),
     )
 
     assert handled is True
     bot._restart_session_core.assert_not_awaited()
-    query.answer.assert_awaited_once_with("You can't restart this session.")
+    query.answer.assert_awaited_once_with("This button is out of date - send /restart again")
 
 
 def test_restart_show_confirm_denied_for_non_prompt_capable_member(mk_bot, run_async, mk_query):
@@ -401,7 +443,7 @@ def test_rename_cmd_unknown_old_label(mk_bot, mk_update, run_async):
     update = mk_update("/rename nope newname")
     run_async(session_parity.handle_rename_cmd(bot, update, MagicMock()))
     text = update.message.reply_text.await_args.args[0]
-    assert "Unknown" in text
+    assert text == "⚠️ No session named <b>nope</b> here."
 
 
 def test_rename_cmd_collision_refused(mk_bot, mk_update, run_async):
@@ -422,15 +464,34 @@ def test_rename_cmd_collision_refused(mk_bot, mk_update, run_async):
 def test_rename_cmd_no_args_shows_picker(mk_bot, mk_update, run_async):
     bot = mk_bot()
     sess = _session(label="dev")
+    other = _session(name="claude-abc", label="abc")
     bot.registry._sessions[sess.name] = sess
+    bot.registry._sessions[other.name] = other
 
     update = mk_update("/rename")
     run_async(session_parity.handle_rename_cmd(bot, update, MagicMock()))
 
     kwargs = update.message.reply_text.await_args.kwargs
     cbs = [b.callback_data for row in kwargs["reply_markup"].inline_keyboard for b in row]
-    dests = _destinations(bot, update.effective_chat.id, cbs)
-    assert dests == [(sess.name, "rename")]
+    assert cbs[-1] == "_:pick:cancel"
+    dests = _destinations(bot, update.effective_chat.id, cbs[:-1])
+    assert dests == [(other.name, "rename"), (sess.name, "rename")]
+
+
+def test_rename_cmd_no_args_one_session_asks_for_the_name(mk_bot, mk_update, run_async):
+    bot = mk_bot()
+    sess = _session(label="dev")
+    bot.registry._sessions[sess.name] = sess
+
+    update = mk_update("/rename")
+    run_async(session_parity.handle_rename_cmd(bot, update, MagicMock()))
+
+    args = update.message.reply_text.await_args
+    assert args.args[0] == "✏️ New name for [<b>dev</b>]? Send it as a message."
+    cbs = [b.callback_data for row in args.kwargs["reply_markup"].inline_keyboard for b in row]
+    assert _destinations(bot, update.effective_chat.id, cbs) == [(sess.name, "rename-cancel")]
+    pending = session_parity._rename_pending_map(bot)[update.effective_chat.id]
+    assert pending["session_name"] == sess.name
 
 
 def test_rename_cmd_one_arg_also_shows_picker(mk_bot, mk_update, run_async):
@@ -565,6 +626,26 @@ def test_maybe_handle_text_denied_for_read_only_member(mk_bot, mk_update, run_as
 def test_delete_cmd_no_label_shows_picker_of_gone_sessions(mk_bot, mk_update, run_async):
     bot = mk_bot()
     gone = _session(name="claude-gone", label="gone", status=Status.GONE)
+    ended = _session(name="claude-ended", label="ended", status=Status.GONE)
+    live = _session(name="claude-live", label="live", status=Status.IDLE)
+    for sess in (gone, ended, live):
+        bot.registry._sessions[sess.name] = sess
+
+    update = mk_update("/delete")
+    run_async(session_parity.handle_delete_cmd(bot, update, MagicMock()))
+
+    args = update.message.reply_text.await_args
+    assert args.args[0] == "Which ended session to remove?"
+    cbs = [b.callback_data for row in args.kwargs["reply_markup"].inline_keyboard for b in row]
+    assert cbs[-1] == "_:pick:cancel"
+    dests = _destinations(bot, update.effective_chat.id, cbs[:-1])
+    assert dests == [("claude-ended", "delete"), ("claude-gone", "delete")]
+
+
+def test_delete_cmd_no_label_one_gone_session_shows_its_confirm(
+        mk_bot, mk_update, run_async):
+    bot = mk_bot()
+    gone = _session(name="claude-gone", label="gone", status=Status.GONE)
     live = _session(name="claude-live", label="live", status=Status.IDLE)
     bot.registry._sessions[gone.name] = gone
     bot.registry._sessions[live.name] = live
@@ -575,7 +656,7 @@ def test_delete_cmd_no_label_shows_picker_of_gone_sessions(mk_bot, mk_update, ru
     kwargs = update.message.reply_text.await_args.kwargs
     cbs = [b.callback_data for row in kwargs["reply_markup"].inline_keyboard for b in row]
     dests = _destinations(bot, update.effective_chat.id, cbs)
-    assert dests == [("claude-gone", "delete")]
+    assert dests == [("claude-gone", "delete-confirm"), ("claude-gone", "delete-cancel")]
 
 
 def test_delete_cmd_label_not_gone_refused(mk_bot, mk_update, run_async):
@@ -595,7 +676,7 @@ def test_delete_cmd_unknown_label(mk_bot, mk_update, run_async):
     update = mk_update("/delete nope")
     run_async(session_parity.handle_delete_cmd(bot, update, MagicMock()))
     text = update.message.reply_text.await_args.args[0]
-    assert "Unknown" in text
+    assert text == "⚠️ No session named <b>nope</b> here."
 
 
 def test_delete_cmd_refuses_read_only_member(mk_bot, mk_update, run_async):
@@ -811,7 +892,7 @@ def test_diff_cmd_no_active_session(mk_bot, mk_update, run_async):
     update = mk_update("/diff")
     run_async(session_parity.handle_diff_cmd(bot, update, MagicMock()))
     text = update.message.reply_text.await_args.args[0]
-    assert "No active session" in text
+    assert text == "No live sessions to diff."
 
 
 def test_diff_cmd_unknown_label(mk_bot, mk_update, run_async):
@@ -819,7 +900,7 @@ def test_diff_cmd_unknown_label(mk_bot, mk_update, run_async):
     update = mk_update("/diff nope")
     run_async(session_parity.handle_diff_cmd(bot, update, MagicMock()))
     text = update.message.reply_text.await_args.args[0]
-    assert "Unknown" in text
+    assert text == "⚠️ No session named <b>nope</b> here."
 
 
 def test_diff_cmd_allows_read_only_member(mk_bot, mk_update, run_async, monkeypatch):

@@ -25,9 +25,15 @@ import pytest
 from aipager.dtach import inject
 from aipager.state import Status, TrackedSession
 
-from _verbs import NOT_FOUND_MESSAGE
+from _verbs import NO_LONGER_RENDERED_VERBS, NOT_FOUND_MESSAGE, OUT_OF_DATE_KILL_MESSAGE
 
 CHAT_ID = -100
+
+
+def _expected_answer(verb):
+    # The retired /kill buttons answer "out of date" before looking at
+    # the session at all.
+    return OUT_OF_DATE_KILL_MESSAGE if verb in NO_LONGER_RENDERED_VERBS else NOT_FOUND_MESSAGE
 
 
 def _run(coro):
@@ -75,8 +81,8 @@ def test_never_existed_name_fails_closed_with_no_side_effect(scb_bot, helpers, m
         f"never existed: {bot._app.bot.send_message.await_args_list!r}"
     )
     assert q.answer.await_args is not None, f"verb={verb!r}: silence"
-    assert q.answer.await_args.args[0] == NOT_FOUND_MESSAGE, (
-        f"verb={verb!r}: expected {NOT_FOUND_MESSAGE!r}, got {q.answer.await_args!r}"
+    assert q.answer.await_args.args[0] == _expected_answer(verb), (
+        f"verb={verb!r}: expected {_expected_answer(verb)!r}, got {q.answer.await_args!r}"
     )
 
 
@@ -108,6 +114,6 @@ def test_name_removed_between_render_and_tap_fails_closed(scb_bot, helpers, monk
         f"verb={verb!r}: send_keys fired for a session removed before the tap"
     )
     assert q.answer.await_args is not None, f"verb={verb!r}: silence"
-    assert q.answer.await_args.args[0] == NOT_FOUND_MESSAGE, (
-        f"verb={verb!r}: expected {NOT_FOUND_MESSAGE!r}, got {q.answer.await_args!r}"
+    assert q.answer.await_args.args[0] == _expected_answer(verb), (
+        f"verb={verb!r}: expected {_expected_answer(verb)!r}, got {q.answer.await_args!r}"
     )

@@ -884,9 +884,11 @@ class DashboardMixin:
             row = [InlineKeyboardButton(
                 f"✍️ {sess.label}",
                 callback_data=session_parity.session_cb(self, cb_chat, sess, "talk"))]
-            if sess.status == Status.BUSY:
-                # Carries the turn it was shown for: the list is edited in
-                # place, so its message id says nothing about that.
+            if sess.status != Status.INTERACTIVE and sess.can_be_stopped():
+                # Working, or idle with its job's background agent or shell
+                # still going. Carries the turn it was shown for: the list
+                # is edited in place, so its message id says nothing about
+                # that.
                 row.append(InlineKeyboardButton(
                     "⏹ Stop", callback_data=session_parity.session_cb(
                         self, cb_chat, sess, f"ststop{sess.turn_key}")))

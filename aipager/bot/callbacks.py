@@ -96,6 +96,17 @@ log = logging.getLogger(__name__)
 CALLBACK_ACK_BOUND = 1.0
 
 
+def _stopped_line(outcome, *, html: bool = True) -> str:
+    """`⏹ Stopped x1`, with the queued messages it dropped: what every
+    Stop says (a toast is plain text, a message HTML)."""
+    label = html_mod.escape(outcome.label) if html else outcome.label
+    line = f"⏹ Stopped <b>{label}</b>" if html else f"⏹ Stopped {label}"
+    if outcome.dropped:
+        line += (f" ({outcome.dropped} queued message"
+                 f"{'s' if outcome.dropped > 1 else ''} discarded)")
+    return line
+
+
 class _QueryAck:
     """Whether a callback query has had its one answer yet."""
 
@@ -227,7 +238,7 @@ class CallbackDispatchMixin:
             # running — and this path kills and relaunches it.
             # `tapped_msg_id=None` (the /perms command path) fails
             # open, as does an idle session with no busy card.
-            await edit_fn("⚠️ That task already finished - run /perms again")
+            await edit_fn("⚠️ That task already finished - send /mode again")
             return
         outcome = await self._perms_switch_core(sess, target_skip_perms)
 
@@ -371,6 +382,39 @@ class CallbackDispatchMixin:
 
         await self._safe_answer(query, "Invalid callback")
 
+    async def _stop_the_turn_shown(self, update: Update, query, session_name: str,
+                                   turn: int, *, again: str):
+        """Stop *session_name* from a button carrying the turn it was shown
+        for (/status's Stop, the /stop picker), answering the tap.
+
+        Returns ``(looked, outcome)``: ``looked`` is False when the tap is
+        refused outright (no such session, no right to prompt, another
+        chat's session); ``outcome`` is None when a new turn started since,
+        which is not stopped: the button was for the work it listed."""
+        sess = self.registry.get(session_name)
+        if not sess:
+            await self._safe_answer(query, "Session not found")
+            return False, None
+        chat = calling_chat_id(update)
+        if not self._can_prompt_user(
+                getattr(getattr(query, "from_user", None), "id", None), chat):
+            await self._safe_answer(query, "You can't stop this session.")
+            return False, None
+        if sess.scope_chat_id and chat is not None and sess.scope_chat_id != chat:
+            await self._safe_answer(query, "That session isn't running here.")
+            return False, None
+        if sess.status == Status.GONE:
+            await self._safe_answer(query, "That session has ended.")
+            return True, None
+        if not sess.tap_is_for_this_turn(None, turn=turn):
+            await self._safe_answer(query, f"{sess.label} moved on to new work - {again}")
+            return True, None
+        outcome = await self._stop_session_core(sess)
+        # The count stays visible (tester-iter1-001 of /stop).
+        await self._safe_answer(query, _stopped_line(outcome, html=False) if outcome.ok
+                                else f"{sess.label} is not working")
+        return True, outcome
+
     async def _handle_callback(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle inline keyboard button tap.
 
@@ -494,40 +538,34 @@ class CallbackDispatchMixin:
             if not outcome.ok and outcome.reason != "stale":
                 # A stale tap already explained itself at the seam; adding
                 # "is not busy" on top would be both wrong and louder.
-                await self._safe_answer(query, f"[{sess.label}] is not busy.")
+                await self._safe_answer(query, f"{sess.label} is not working")
             return
 
         if action.startswith("ststop") and action[6:].isdigit():
             # /status's ⏹ Stop (4.2): stop the turn the list showed, then
             # redraw the list in place (never overwrite it with one line).
-            sess = self.registry.get(session_name)
-            if not sess:
-                await self._safe_answer(query, "Session not found")
+            looked, _outcome = await self._stop_the_turn_shown(
+                update, query, session_name, int(action[6:]),
+                again="tap ⏹ Stop again to stop it")
+            if not looked:
                 return
-            chat = calling_chat_id(update)
-            if not self._can_prompt_user(
-                    getattr(getattr(query, "from_user", None), "id", None), chat):
-                await self._safe_answer(query, "You can't stop this session.")
-                return
-            if sess.scope_chat_id and chat is not None and sess.scope_chat_id != chat:
-                await self._safe_answer(query, "That session isn't running here.")
-                return
-            if not sess.tap_is_for_this_turn(None, turn=int(action[6:])):
-                await self._safe_answer(
-                    query, f"{sess.label} moved on to new work - see /status again")
-            else:
-                outcome = await self._stop_session_core(sess)
-                ack = f"⏹ Stopped {sess.label}" if outcome.ok else f"{sess.label} is not working"
-                if outcome.ok and outcome.dropped:
-                    # The count stays visible (tester-iter1-001 of /stop).
-                    ack += (f" ({outcome.dropped} queued message"
-                            f"{'s' if outcome.dropped > 1 else ''} discarded)")
-                await self._safe_answer(query, ack)
             text, kb = self._render_status_list(calling_chat_id(update), update)
             try:
                 await edit_text(query, text, parse_mode="HTML", reply_markup=kb)
             except Exception:
                 pass
+            return
+
+        if action.startswith("pstop") and action[5:].isdigit():
+            # The /stop picker's ⏹ (4.4): stop the turn it listed; the
+            # picker becomes the result. A refused tap leaves the picker.
+            _looked, outcome = await self._stop_the_turn_shown(
+                update, query, session_name, int(action[5:]), again="send /stop again")
+            if outcome is not None and outcome.ok:
+                try:
+                    await edit_text(query, _stopped_line(outcome), parse_mode="HTML")
+                except Exception:
+                    pass
             return
 
         if action.startswith("now:"):
@@ -538,57 +576,19 @@ class CallbackDispatchMixin:
                 update, query, session_name, action.split(":", 1)[1])
             return
 
-        if action in ("kill", "kill-confirm") and not self._can_prompt_user(
-                getattr(getattr(query, "from_user", None), "id", None),
-                calling_chat_id(update)):
-            await self._safe_answer(query, "You can't end sessions here.")
-            return
-
-        if action == "kill":
-            sess = self.registry.get(session_name)
-            if sess is None:
-                # Stale long-form tap (or a resolved index whose session
-                # vanished between render and tap) — fail closed rather
-                # than falling through to _kill_session_by_label, which
-                # would otherwise synthesize a `claude-<label>` name and
-                # call inject.kill_session against a name that was never
-                # actually tracked. design.md: "A long-form tap for a
-                # missing session answers 'Session not found'."
-                await self._safe_answer(query, "Session not found")
-                return
-            if not sess.tap_is_for_this_turn(
-                    getattr(query.message, "message_id", None)):
-                # /kill's confirm card has no expiry logic anywhere — nothing
-                # ever strips its keyboard, unlike the busy card. So an old
-                # one destroys whatever is running when it is finally tapped.
-                await self._safe_answer(
-                    query, "That task already finished - run /kill again")
-                return
-            await self._safe_answer(query, f"Killing {sess.label}...")
-            await self._kill_session_by_label(query, sess.label)
-            return
-
-        if action == "kill-confirm":
-            sess = self.registry.get(session_name)
-            if sess is None:
-                await self._safe_answer(query, "Session not found")
-                return
-            if not sess.tap_is_for_this_turn(
-                    getattr(query.message, "message_id", None)):
-                # /kill's confirm card has no expiry logic anywhere — nothing
-                # ever strips its keyboard, unlike the busy card. So an old
-                # one destroys whatever is running when it is finally tapped.
-                await self._safe_answer(
-                    query, "That task already finished - run /kill again")
-                return
-            await self._safe_answer(query, f"Killing {sess.label}...")
-            await self._kill_session_by_label(query, sess.label)
+        if action in ("kill", "kill-confirm"):
+            # The old /kill picker (one tap, and it listed every chat's
+            # sessions) and its confirm. No longer rendered: /kill opens the
+            # End confirm (session_parity "end" / "endok<turn_key>"). One
+            # still sitting in a chat does nothing; it was shown for a
+            # session and a turn nothing can check any more.
+            await self._safe_answer(query, "This button is out of date - send /kill again")
             return
 
         if action == "kill-cancel":
             try:
                 await edit_text(query,
-                    "↩️ Cancelled (no session killed).",
+                    "↩️ Cancelled. Nothing was ended.",
                 )
             except Exception:
                 pass
@@ -744,6 +744,14 @@ class CallbackDispatchMixin:
             await self._dispatch_settings_action(update, query, action)
             return
 
+        if session_name == "_" and action == "pick:cancel":
+            # Any session command's picker (4.4).
+            try:
+                await edit_text(query, "Cancelled.")
+            except Exception:
+                pass
+            return
+
         if session_name == "_" and action in ("st:list", "st:ended"):
             # /status's own navigation (4.2): back to the list, or the
             # Ended view. Re-rendered from state on every tap.
@@ -839,7 +847,7 @@ class CallbackDispatchMixin:
                     # `pending` is None.
                     await self._safe_answer(
                         query,
-                        "That task already finished - run /perms again")
+                        "That task already finished - send /mode again")
                     return
                 # BUSY: send Ctrl-C, then poll for socket disappearance.
                 # Same deliberate outage as the IDLE path — the session is

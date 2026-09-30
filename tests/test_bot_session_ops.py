@@ -1,6 +1,6 @@
 """Tests for aipager.bot.session_ops.SessionOpsMixin.
 
-The session-operation methods (_stop_session, _kill_session_by_label,
+The session-operation methods (_stop_session, _kill_session_core,
 _stop_by_label, _switch_session, _guess_session_from_text) handle the
 "do something with session X" flows. Each is exercised here so any
 silent break in the registry / dtach plumbing surfaces in CI.
@@ -114,52 +114,28 @@ def test_stop_session_swallows_query_edit_failure(mk_bot, run_async, monkeypatch
     run_async(bot._stop_session(sess, query=query))
 
 
-# ---- _kill_session_by_label ---------------------------------------------
+# ---- _kill_session_core (/kill's End, ⋮ End, the Mini App) ---------------
 
-def test_kill_session_finds_in_registry(mk_bot, mk_update, run_async, monkeypatch):
+def test_kill_session_core_ends_it_and_drops_it_from_the_registry(
+        mk_bot, run_async, monkeypatch):
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
     bot.registry._sessions["claude-jim"] = sess
     monkeypatch.setattr("aipager.dtach.inject.kill_session",
                         AsyncMock(return_value=True))
     bot._update_bot_commands = AsyncMock()
-    update = mk_update("/kill jim")
-    run_async(bot._kill_session_by_label(update, "jim"))
-    update.message.reply_text.assert_awaited_once()
-    assert "Killed" in update.message.reply_text.await_args.args[0]
+    outcome = run_async(bot._kill_session_core("claude-jim", "jim"))
+    assert outcome.result == "killed"
     assert bot.registry.get("claude-jim") is None
 
 
-def test_kill_session_via_query_uses_edit(mk_bot, run_async, monkeypatch):
-    bot = mk_bot()
-    monkeypatch.setattr("aipager.dtach.inject.kill_session",
-                        AsyncMock(return_value=True))
-    bot._update_bot_commands = AsyncMock()
-    query = MagicMock()
-    query.message = None
-    query.edit_message_text = AsyncMock()
-    run_async(bot._kill_session_by_label(query, "jim"))
-    query.edit_message_text.assert_awaited_once()
-
-
-def test_kill_session_kill_returns_false_warns(mk_bot, mk_update, run_async, monkeypatch):
+def test_kill_session_core_says_not_found_when_nothing_was_killed(
+        mk_bot, run_async, monkeypatch):
     bot = mk_bot()
     monkeypatch.setattr("aipager.dtach.inject.kill_session",
                         AsyncMock(return_value=False))
-    update = mk_update("/kill jim")
-    run_async(bot._kill_session_by_label(update, "jim"))
-    text = update.message.reply_text.await_args.args[0]
-    assert "not found" in text
-
-
-def test_kill_session_label_not_in_registry_falls_back_to_claude_prefix(mk_bot, mk_update, run_async, monkeypatch):
-    bot = mk_bot()
-    monkeypatch.setattr("aipager.dtach.inject.kill_session",
-                        AsyncMock(return_value=False))
-    update = mk_update("/kill nonexistent")
-    run_async(bot._kill_session_by_label(update, "nonexistent"))
-    text = update.message.reply_text.await_args.args[0]
-    assert "not found" in text
+    outcome = run_async(bot._kill_session_core("claude-nonexistent", "nonexistent"))
+    assert outcome.result == "not_found"
 
 
 # ---- _stop_by_label -----------------------------------------------------
@@ -181,7 +157,7 @@ def test_stop_by_label_idle_session_replies_not_busy(mk_bot, mk_update, run_asyn
     update = mk_update("/jim stop")
     run_async(bot._stop_by_label(update, "jim"))
     text = update.message.reply_text.await_args.args[0]
-    assert "not busy" in text
+    assert text == "<b>jim</b> is not working."
 
 
 def test_stop_by_label_unknown_label_replies_unknown(mk_bot, mk_update, run_async):
@@ -189,7 +165,7 @@ def test_stop_by_label_unknown_label_replies_unknown(mk_bot, mk_update, run_asyn
     update = mk_update("/nope stop")
     run_async(bot._stop_by_label(update, "nope"))
     text = update.message.reply_text.await_args.args[0]
-    assert "Unknown" in text
+    assert text == "⚠️ No session named <b>nope</b> here."
 
 
 # ---- _guess_session_from_text -------------------------------------------

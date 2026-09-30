@@ -103,7 +103,7 @@ def test_clearqueue_also_clears_outstanding_notes_combined_count(
 # ----- /kill confirmation flow -----
 
 def test_kill_with_label_shows_confirmation(monkeypatch, mk_bot, mk_update, run_async):
-    """The Kill/Cancel buttons carry the short indexed form, not
+    """The End/Cancel buttons carry the short indexed form, not
     `{name}:<verb>` — no `{name}:<verb>` form can fit Telegram's 64-byte
     callback_data cap (design.md), so what must hold is the DESTINATION
     (which session a button reaches), not the literal encoded string."""
@@ -119,7 +119,7 @@ def test_kill_with_label_shows_confirmation(monkeypatch, mk_bot, mk_update, run_
     call = update.message.reply_text.await_args
     text = call.args[0] if call.args else call.kwargs.get("text", "")
     # Should ask for confirmation, not kill immediately
-    assert "Kill session" in text
+    assert text == "⏹ End <b>jim</b>? Claude stops and the session closes."
     keyboard = call.kwargs.get("reply_markup")
     assert keyboard is not None
     # Inspect the inline keyboard buttons
@@ -130,8 +130,7 @@ def test_kill_with_label_shows_confirmation(monkeypatch, mk_bot, mk_update, run_
         assert (_sentinel, kind) == ("_", "sx"), f"unexpected callback form: {b.callback_data!r}"
         resolved = session_parity._resolve_pref_index(bot, -1001, idx)
         dests.append((resolved.name if resolved is not None else None, verb))
-    assert (sess.name, "kill-confirm") in dests
-    assert (sess.name, "kill-cancel") in dests
+    assert dests == [(sess.name, f"endok{sess.turn_key}"), (sess.name, "kill-cancel")]
 
 
 def test_kill_unknown_session_friendly_error(monkeypatch, mk_bot, mk_update, run_async):
@@ -141,7 +140,7 @@ def test_kill_unknown_session_friendly_error(monkeypatch, mk_bot, mk_update, run
     update = mk_update("/kill ghost")
     run_async(bot._handle_kill_cmd(update, MagicMock()))
     msg = update.message.reply_text.await_args.args[0]
-    assert "Unknown" in msg or "gone" in msg
+    assert msg == "⚠️ No live session named <b>ghost</b> here."
 
 
 def test_kill_already_gone_session_friendly_error(mk_bot, mk_update, run_async):
@@ -152,4 +151,4 @@ def test_kill_already_gone_session_friendly_error(mk_bot, mk_update, run_async):
     update = mk_update("/kill jim")
     run_async(bot._handle_kill_cmd(update, MagicMock()))
     msg = update.message.reply_text.await_args.args[0]
-    assert "Unknown" in msg or "gone" in msg
+    assert msg == "⚠️ No live session named <b>jim</b> here."

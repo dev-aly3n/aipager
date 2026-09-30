@@ -170,8 +170,8 @@ def test_restart_confirm_via_a_stale_index_after_removal_never_restarts_anything
     kb = upd.message.reply_text.await_args.kwargs.get("reply_markup")
     cbs = helpers.callback_data_in(kb)
     dests = helpers.destinations(bot, CHAT, cbs)
-    assert (sess.name, "restart-confirm") in dests
-    confirm_cb = cbs[[v for _, v in dests].index("restart-confirm")]
+    assert (sess.name, f"restartok{sess.turn_key}") in dests
+    confirm_cb = cbs[[v for _, v in dests].index(f"restartok{sess.turn_key}")]
 
     del bot.registry._sessions[sess.name]  # dies before the confirm tap
 

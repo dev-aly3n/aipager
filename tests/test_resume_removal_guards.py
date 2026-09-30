@@ -182,22 +182,26 @@ def test_kill_still_works_on_an_ordinary_gone_session(mk_bot, run_async, monkeyp
     assert NAME not in registry.all_sessions()
 
 
-def test_kill_by_label_tells_the_operator_to_retry(mk_bot, run_async, monkeypatch):
+def test_end_tells_the_operator_to_retry_while_a_resume_is_in_flight(
+    mk_bot, run_async, mk_query, monkeypatch,
+):
+    """/kill's (and ⋮'s) End confirm: a session being resumed is GONE until
+    its launch lands, and ending it then is refused in words that say so."""
     registry = SessionRegistry()
-    _resuming(_gone_session(registry))
+    sess = _resuming(_gone_session(registry))
     bot = _bot(mk_bot, registry)
-    monkeypatch.setattr(inject, "kill_session", AsyncMock(return_value=True))
-    source = MagicMock()
-    source.effective_chat = MagicMock()
-    source.effective_chat.id = CHAT   # else find_by_label scopes to a mock
-    source.message = MagicMock()
-    source.message.reply_text = AsyncMock()
+    kill = AsyncMock(return_value=True)
+    monkeypatch.setattr(inject, "kill_session", kill)
+    query = mk_query(f"{NAME}:endok{sess.turn_key}")
 
-    run_async(bot._kill_session_by_label(source, "proj"))
+    handled = run_async(session_parity.handle_callback(
+        bot, _cb_update(), query, NAME, f"endok{sess.turn_key}"))
 
-    text = source.message.reply_text.await_args.args[0]
-    assert "proj" in text
-    assert "resum" in text.lower(), text
+    assert handled is True
+    kill.assert_not_awaited()
+    assert registry.get(NAME) is sess
+    assert query.answer.await_args.args[0] == (
+        "proj is being resumed - send /kill again in a moment")
 
 
 # ===== 8.16 — the chat delete button ====================================

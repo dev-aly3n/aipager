@@ -83,7 +83,7 @@ def test_sc6_perms_idle_ask_to_auto_sends_confirm_keyboard():
     bot.registry.last_active_session = "claude-ben"
     bot._is_admin = MagicMock(return_value=True)
 
-    update = _make_update("/perms")
+    update = _make_update("/perms auto")
     _run(bot._handle_perms_cmd(update, MagicMock()))
 
     update.message.reply_text.assert_awaited_once()
@@ -183,7 +183,7 @@ def test_sc7_perms_idle_auto_to_ask_no_confirm_keyboard():
     bot._is_admin = MagicMock(return_value=True)
     bot._do_perms_switch_via_fn = AsyncMock()
 
-    update = _make_update("/perms")
+    update = _make_update("/perms ask")
     _run(bot._handle_perms_cmd(update, MagicMock()))
 
     # Confirm keyboard must NOT have been sent
@@ -210,7 +210,7 @@ def test_sc7_perms_idle_auto_to_ask_switch_sets_false():
     bot._is_admin = MagicMock(return_value=True)
     bot._do_perms_switch_via_fn = AsyncMock()
 
-    update = _make_update("/perms")
+    update = _make_update("/perms ask")
     _run(bot._handle_perms_cmd(update, MagicMock()))
 
     call_args = bot._do_perms_switch_via_fn.await_args
@@ -267,7 +267,7 @@ def test_sc8_perms_busy_sends_busy_keyboard():
     bot.registry.last_active_session = "claude-ben"
     bot._is_admin = MagicMock(return_value=True)
 
-    update = _make_update("/perms")
+    update = _make_update("/perms auto")
     _run(bot._handle_perms_cmd(update, MagicMock()))
 
     update.message.reply_text.assert_awaited_once()
@@ -535,7 +535,7 @@ def test_perms_no_active_session_sends_helpful_error():
 
     update.message.reply_text.assert_awaited_once()
     msg = update.message.reply_text.await_args[0][0]
-    assert "No active session" in msg or "no session" in msg.lower(), (
+    assert msg == "No live sessions here. Start one with /new.", (
         f"Must send helpful error when no active session; got: {msg}"
     )
 
@@ -575,7 +575,7 @@ def test_perms_unknown_status_sends_initializing_message():
     bot.registry.last_active_session = "claude-ben"
     bot._is_admin = MagicMock(return_value=True)
 
-    update = _make_update("/perms")
+    update = _make_update("/perms auto")
     _run(bot._handle_perms_cmd(update, MagicMock()))
 
     update.message.reply_text.assert_awaited_once()

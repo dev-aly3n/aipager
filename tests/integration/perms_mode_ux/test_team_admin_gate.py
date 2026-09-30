@@ -63,13 +63,13 @@ def test_sc14_non_admin_perms_to_auto_denied():
     bot.registry._sessions["claude-ben"] = sess
     bot.registry.last_active_session = "claude-ben"
 
-    update = _make_update("/perms")
+    update = _make_update("/perms auto")
     _run(bot._handle_perms_cmd(update, MagicMock()))
 
     update.message.reply_text.assert_awaited_once()
     msg = update.message.reply_text.await_args[0][0]
-    assert "requires admin role" in msg, (
-        f"Non-admin must get 'requires admin role'; got: {msg}"
+    assert "Auto mode needs an admin" in msg, (
+        f"Non-admin must get 'Auto mode needs an admin'; got: {msg}"
     )
 
 

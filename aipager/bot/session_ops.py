@@ -35,6 +35,7 @@ from aipager.bot.callbacks import (
     _PERMS_POLL_COUNT,
     _PERMS_POLL_INTERVAL,
     _PERMS_RESTART_QUIET,
+    _stopped_line,
 )
 from aipager.state import Status, TrackedSession
 from aipager.transcript import last_assistant_preview as _read_preview
@@ -889,8 +890,7 @@ class SessionOpsMixin:
         no side effects, when the session is not actually busy — this
         makes the refusal pytest-testable with zero dtach mocking.
         """
-        if (sess.status not in (Status.BUSY, Status.INTERACTIVE)
-                and not sess.job_background_open()):
+        if not sess.can_be_stopped():
             # A session waiting on background work (design.md "model
             # Claude Code background-agent jobs") reads as IDLE, not BUSY
             # — the shared gate above widens to still recognise it as
@@ -1002,14 +1002,9 @@ class SessionOpsMixin:
         if not outcome.ok:
             return outcome
 
-        # Acknowledge
-        ack = f"Stopped [{sess.label}]"
-        if outcome.dropped:
-            ack += (f" ({outcome.dropped} queued message"
-                    f"{'s' if outcome.dropped > 1 else ''} discarded)")
-
+        # Acknowledge, in the words every Stop uses.
         if query:
-            await self._safe_answer(query, ack)
+            await self._safe_answer(query, _stopped_line(outcome, html=False))
             # Also edit the callback query's message if it's the busy message
             try:
                 await edit_text(query,
@@ -1032,7 +1027,8 @@ class SessionOpsMixin:
             await self._react(update, reactions.ACK)
             if getattr(update, "message", None) is not None:
                 try:
-                    await reply_text(update.message, ack)
+                    await reply_text(update.message, _stopped_line(outcome),
+                                     parse_mode="HTML")
                 except Exception:
                     log.debug("[%s] stop acknowledgement reply failed",
                               sess.label, exc_info=True)
@@ -1181,37 +1177,6 @@ class SessionOpsMixin:
                 result="still_running", label=label, session_name=session_name,
             )
         return KillOutcome(result="not_found", label=label, session_name=session_name)
-
-    async def _kill_session_by_label(self, source, target_label: str) -> None:
-        """Kill a session by label. source is Update or CallbackQuery.
-
-        Thin wrapper around :meth:`_kill_session_core` — the chat-only
-        label→name resolution (with its ``claude-<label>`` fallback,
-        unreachable from the Mini App) and reply phrasing live here.
-        """
-        async def _reply(text: str) -> None:
-            if hasattr(source, 'message') and source.message:
-                await reply_text(source.message, text)
-            else:
-                await edit_text(source, text)
-
-        # Find session within the calling scope (label may repeat across scopes)
-        found = self.registry.find_by_label(
-            target_label, calling_chat_id(source), include_gone=True)
-        session_name = found.name if found else f"claude-{target_label}"
-
-        outcome = await self._kill_session_core(session_name, target_label)
-        if outcome.result == "killed":
-            await _reply(f"💀 Killed [{target_label}]")
-        elif outcome.result == "resuming":
-            await _reply(
-                f"⏳ [{target_label}] is being resumed right now - "
-                f"try the kill again in a moment",
-            )
-        elif outcome.result == "still_running":
-            await _reply(f"⚠️ Could not kill [{target_label}] (still running)")
-        else:
-            await _reply(f"⚠️ Session [{target_label}] not found")
 
     async def _do_resume_core(
         self, sess: TrackedSession, *,
@@ -1401,9 +1366,13 @@ class SessionOpsMixin:
         if sess is not None:
             outcome = await self._stop_session(sess, update=update)
             if not outcome.ok:
-                await reply_text(update.message, f"[{target_label}] is not busy.")
+                await reply_text(update.message,
+                    f"<b>{html_mod.escape(sess.label)}</b> is not working.",
+                    parse_mode="HTML")
             return
-        await reply_text(update.message, f"⚠️ Unknown session: {target_label}")
+        await reply_text(update.message,
+            f"⚠️ No session named <b>{html_mod.escape(target_label)}</b> here.",
+            parse_mode="HTML")
 
     def _guess_session_from_text(
         self, text: str, scope_chat_id: int | None = None,
@@ -1619,15 +1588,15 @@ class SessionOpsMixin:
     ) -> RestartOutcome:
         """Toggle permission mode on an already-resolved, live session.
 
-        ``interrupt_first`` mirrors chat's own ``/perms`` branching
-        exactly (``handlers._handle_perms_cmd`` /
+        ``interrupt_first`` mirrors chat's own ``/mode`` branching
+        exactly (``handlers._perms_flow`` /
         ``callbacks._handle_callback``'s ``perms_stop_switch``): BUSY
         gets a courtesy Ctrl-C first — one more chance to finish
         cleanly before the hard kill; anything else — including
         INTERACTIVE, which chat's own command folds into the same IDLE
         flow — goes straight to :meth:`_kill_and_relaunch_core`'s hard
         kill. So the outcome for a given starting status is identical
-        to what ``/perms`` would already produce for it.
+        to what ``/mode`` would already produce for it.
         """
         interrupt_first = sess.status == Status.BUSY
         return await self._kill_and_relaunch_core(

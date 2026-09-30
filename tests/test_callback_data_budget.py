@@ -64,6 +64,7 @@ on its own.
 from __future__ import annotations
 
 import ast
+import pathlib
 from pathlib import Path
 
 AIPAGER_ROOT = Path(__file__).resolve().parents[1] / "aipager"
@@ -166,6 +167,11 @@ ALLOWED_VERB_JOINEDSTR_SIGNATURES = frozenset({
     # never a session name: "_:sx:<idx>:ststop" + 16 digits is ~31 bytes.
     "ststop{sess.turn_key}",
     "endok{sess.turn_key}",
+    # handlers.py's /mode card switch and session_parity.py's Restart
+    # confirm (P4): the same turn key.
+    "restartok{sess.turn_key}",
+    "modeask{sess.turn_key}",
+    "modeauto{sess.turn_key}",
 })
 
 
@@ -181,6 +187,12 @@ ALLOWED_VERB_JOINEDSTR_SIGNATURES = frozenset({
 # violation, not a pass.
 
 CANONICAL_MODULE = "aipager.bot.session_parity"
+
+# session_picker's own verb argument, exactly as written there.
+_PICKER_VERB_FORMS = frozenset({
+    "verb",
+    "f'{verb}{s.turn_key}' if keyed else verb",
+})
 CANONICAL_TARGET = f"{CANONICAL_MODULE}.{SESSION_CB_ATTR}"
 
 
@@ -336,6 +348,13 @@ def _verb_violation(call: ast.Call, filename: str, lineno: int) -> str | None:
             f"on the reviewed allow-list (ALLOWED_VERB_JOINEDSTR_SIGNATURES) — "
             f"add it there with a justification, or make it a literal verb"
         )
+
+    if (filename.endswith("session_parity.py")
+            and ast.unparse(verb) in _PICKER_VERB_FORMS):
+        # session_parity.session_picker(..., verb, keyed=...): every call
+        # site passes a short literal verb, and keyed adds the turn key;
+        # both pinned by test_every_session_picker_verb_is_a_short_literal.
+        return None
 
     return (
         f"{filename}:{lineno}: session_cb(...) verb argument is "
@@ -711,3 +730,30 @@ def test_guard_still_rejects_an_impostor_even_inside_a_file_named_like_session_p
         'InlineKeyboardButton("x", callback_data=session_cb(bot, chat_id, sess, "kill"))\n'
     )
     assert _violations_in_source(src, dotted="aipager.bot.not_session_parity")
+
+
+def test_every_session_picker_verb_is_a_short_literal():
+    """`session_picker` (P4, 2026-09-30) hands its `verb` parameter to
+    `session_cb`; that is only provably bounded if every caller passes a
+    short literal."""
+    import aipager
+
+    root = pathlib.Path(aipager.__file__).parent
+    calls = 0
+    for path in sorted((root / "bot").glob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(), str(path))):
+            if not (isinstance(node, ast.Call) and (
+                    (isinstance(node.func, ast.Attribute) and node.func.attr == "session_picker")
+                    or (isinstance(node.func, ast.Name) and node.func.id == "session_picker"))):
+                continue
+            calls += 1
+            verb = node.args[3] if len(node.args) >= 4 else None
+            assert isinstance(verb, ast.Constant) and isinstance(verb.value, str), (
+                f"{path.name}:{node.lineno}: session_picker verb must be a literal")
+            # keyed=True appends the turn key: at most 20 digits (a 64-bit int).
+            keyed = any(k.arg == "keyed" and not (
+                isinstance(k.value, ast.Constant) and k.value.value is False)
+                for k in node.keywords)
+            suffix = "9" * 20 if keyed else ""
+            assert len(f"_:sx:{_WORST_CASE_INDEX}:{verb.value}{suffix}".encode()) <= 64
+    assert calls >= 5, "the scan no longer finds the pickers"

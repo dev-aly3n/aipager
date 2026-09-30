@@ -103,30 +103,24 @@ def test_stop_callback_toasts_when_not_busy(mk_bot, mk_query, run_async, monkeyp
     run_async(bot._handle_callback(update, MagicMock()))
 
     answers = [c.args[0] for c in query.answer.await_args_list if c.args]
-    assert any("not busy" in (a or "").lower() for a in answers)
+    assert any("not working" in (a or "").lower() for a in answers)
     assert sess.status == Status.IDLE
 
 
 # ---- action: kill / kill-confirm / kill-cancel -------------------------
 
-def test_kill_calls_kill_by_label(mk_bot, mk_query, run_async):
+@pytest.mark.parametrize("verb", ["kill", "kill-confirm"])
+def test_the_old_kill_buttons_are_out_of_date(mk_bot, mk_query, run_async, verb):
+    """No longer rendered since P4 (/kill opens the End confirm): one still
+    in a chat ends nothing, even for a live session it names."""
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
     bot.registry._sessions["claude-jim"] = sess
-    bot._kill_session_by_label = AsyncMock()
-    update, query = mk_query("claude-jim:kill")
+    bot._kill_session_core = AsyncMock()
+    update, query = mk_query(f"claude-jim:{verb}")
     run_async(bot._handle_callback(update, MagicMock()))
-    bot._kill_session_by_label.assert_awaited_once()
-
-
-def test_kill_confirm_calls_kill_by_label(mk_bot, mk_query, run_async):
-    bot = mk_bot()
-    sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
-    bot.registry._sessions["claude-jim"] = sess
-    bot._kill_session_by_label = AsyncMock()
-    update, query = mk_query("claude-jim:kill-confirm")
-    run_async(bot._handle_callback(update, MagicMock()))
-    bot._kill_session_by_label.assert_awaited_once()
+    bot._kill_session_core.assert_not_awaited()
+    assert query.answer.await_args.args[0] == "This button is out of date - send /kill again"
 
 
 def test_kill_cancel_edits_message(mk_bot, mk_query, run_async):

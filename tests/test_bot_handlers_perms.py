@@ -38,7 +38,7 @@ def test_perms_no_active_session_replies_error(mk_bot, mk_update, run_async):
     run_async(bot._handle_perms_cmd(update, MagicMock()))
     update.message.reply_text.assert_awaited_once()
     msg = update.message.reply_text.await_args[0][0]
-    assert "No active session" in msg
+    assert msg == "No live sessions here. Start one with /new."
 
 
 def test_perms_gone_session_replies_error(mk_bot, mk_update, run_async):
@@ -50,7 +50,7 @@ def test_perms_gone_session_replies_error(mk_bot, mk_update, run_async):
     run_async(bot._handle_perms_cmd(update, MagicMock()))
     update.message.reply_text.assert_awaited_once()
     msg = update.message.reply_text.await_args[0][0]
-    assert "No active session" in msg
+    assert msg == "No live sessions here. Start one with /new."
 
 
 # ---- IDLE Ask→Auto: requires admin + shows confirm keyboard ----------------
@@ -64,11 +64,11 @@ def test_perms_idle_ask_to_auto_non_admin_denied(mk_bot, mk_update, run_async):
     bot.registry.last_active_session = "claude-dev"
     # Make _is_admin return False
     bot._is_admin = MagicMock(return_value=False)
-    update = mk_update("/perms")
+    update = mk_update("/perms auto")
     run_async(bot._handle_perms_cmd(update, MagicMock()))
     update.message.reply_text.assert_awaited_once()
     msg = update.message.reply_text.await_args[0][0]
-    assert "requires admin role" in msg
+    assert "Auto mode needs an admin" in msg
 
 
 def test_perms_idle_ask_to_auto_admin_shows_confirm_keyboard(mk_bot, mk_update, run_async):
@@ -79,7 +79,7 @@ def test_perms_idle_ask_to_auto_admin_shows_confirm_keyboard(mk_bot, mk_update, 
     bot.registry._sessions["claude-dev"] = sess
     bot.registry.last_active_session = "claude-dev"
     bot._is_admin = MagicMock(return_value=True)
-    update = mk_update("/perms")
+    update = mk_update("/perms auto")
     run_async(bot._handle_perms_cmd(update, MagicMock()))
     update.message.reply_text.assert_awaited_once()
     # Keyboard must be present
@@ -101,7 +101,7 @@ def test_perms_idle_auto_to_ask_executes_directly(mk_bot, mk_update, run_async):
     bot.registry.last_active_session = "claude-dev"
     bot._is_admin = MagicMock(return_value=True)
     bot._do_perms_switch_via_fn = AsyncMock()
-    update = mk_update("/perms")
+    update = mk_update("/perms ask")
     run_async(bot._handle_perms_cmd(update, MagicMock()))
     # Should call _do_perms_switch_via_fn with target_skip_perms=False
     bot._do_perms_switch_via_fn.assert_awaited_once()
@@ -119,7 +119,7 @@ def test_perms_busy_shows_busy_keyboard(mk_bot, mk_update, run_async):
     bot.registry._sessions["claude-dev"] = sess
     bot.registry.last_active_session = "claude-dev"
     bot._is_admin = MagicMock(return_value=True)
-    update = mk_update("/perms")
+    update = mk_update("/perms auto")
     run_async(bot._handle_perms_cmd(update, MagicMock()))
     update.message.reply_text.assert_awaited_once()
     call_kwargs = update.message.reply_text.await_args[1]
@@ -136,8 +136,30 @@ def test_perms_busy_to_ask_non_admin_ok(mk_bot, mk_update, run_async):
     bot.registry._sessions["claude-dev"] = sess
     bot.registry.last_active_session = "claude-dev"
     bot._is_admin = MagicMock(return_value=False)
-    update = mk_update("/perms")
+    update = mk_update("/perms ask")
     run_async(bot._handle_perms_cmd(update, MagicMock()))
     # Should NOT be denied (target is Ask, not Auto)
     call_text = update.message.reply_text.await_args[0][0]
-    assert "requires admin" not in call_text
+    assert "needs an admin" not in call_text
+
+
+# ---- bare /perms (= /mode, 2026-09-30): the mode and one switch -------------
+
+def test_bare_perms_shows_the_mode_and_switches_nothing(mk_bot, mk_update, run_async):
+    """It used to flip the mode blind; now it says what the mode is and
+    offers the other one."""
+    bot = mk_bot()
+    sess = TrackedSession(name="claude-dev", label="dev", status=Status.IDLE)
+    sess.skip_perms = True
+    bot.registry._sessions["claude-dev"] = sess
+    bot.registry.last_active_session = "claude-dev"
+    bot._do_perms_switch_via_fn = AsyncMock()
+    update = mk_update("/perms")
+
+    run_async(bot._handle_perms_cmd(update, MagicMock()))
+
+    bot._do_perms_switch_via_fn.assert_not_awaited()
+    text = update.message.reply_text.await_args[0][0]
+    kb = update.message.reply_text.await_args[1]["reply_markup"]
+    assert text == "✍️ <b>dev</b> is 🤖 Auto."
+    assert [b.text for row in kb.inline_keyboard for b in row] == ["💬 Switch to Ask"]

@@ -100,7 +100,7 @@ HELP_TEXT = (
     " · /&lt;label&gt; message\n"
     "<b>Control:</b> /stop · /now (send queued) · /clearqueue\n"
     "<b>Manage:</b> /status, then ⋮ (restart, rename, diff, end, delete)\n"
-    "<b>Settings:</b> /settings · /perms (Auto or Ask)\n"
+    "<b>Settings:</b> /settings · /mode (Auto or Ask)\n"
     "<b>Admin:</b> /update (aipager and Claude Code)\n\n"
     "<i>Tip: tapping a command sends it at once. Long-press it (phone) or "
     "press Tab (desktop) to add text first.</i>"
@@ -788,17 +788,46 @@ class CommandHandlersMixin:
         }
 
     async def _handle_stop_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle /stop command — stop the last active session."""
+        """/stop [name] (4.4): stop what a session of this chat is doing.
+        Bare: the one working session (even when it is not the target), a
+        picker when several are, and "Nothing is running." when none is."""
         if not await self._authorize(update):
             return
-        # This chat's own target (F11): never another chat's session.
-        sess = self.registry.target_for(calling_chat_id(update))
-        if not sess:
-            await reply_text(update.message, "No active session to stop.")
+        chat_id = calling_chat_id(update)
+        parts = update.message.text.strip().split(maxsplit=1)
+        if len(parts) > 1:
+            label = parts[1].strip().lstrip("/")
+            sess = self.registry.find_by_label(label, chat_id)
+            if sess is None:
+                await reply_text(update.message,
+                    f"⚠️ No session named <b>{html_mod.escape(label)}</b> here.",
+                    parse_mode="HTML")
+                return
+            if not sess.can_be_stopped():
+                await reply_text(update.message,
+                    f"<b>{html_mod.escape(sess.label)}</b> is not working.",
+                    parse_mode="HTML")
+                return
+            working = [sess]
+        else:
+            # Working includes an idle session whose job still runs a
+            # background agent or shell: its card still says working.
+            working = [s for s in self.registry.all_sessions(chat_id).values()
+                       if s.label and s.can_be_stopped()]
+        if not working:
+            await reply_text(update.message, "Nothing is running.")
             return
+        if len(working) > 1:
+            await reply_text(update.message, "Which one to stop?",
+                             reply_markup=session_parity.session_picker(
+                                 self, chat_id, working, "pstop", glyph="⏹ ",
+                                 keyed=True))
+            return
+        sess = working[0]
         outcome = await self._stop_session(sess, update=update)
         if not outcome.ok:
-            await reply_text(update.message, f"[{sess.label}] is not busy.")
+            await reply_text(update.message,
+                f"<b>{html_mod.escape(sess.label)}</b> is not working.", parse_mode="HTML")
 
     async def _handle_clearqueue_cmd(
         self, update: Update, ctx: ContextTypes.DEFAULT_TYPE
@@ -841,62 +870,35 @@ class CommandHandlersMixin:
         log.info("[%s] /clearqueue cleared %d entries", sess.label, outcome.dropped)
 
     async def _handle_kill_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle /kill <label> — destroy a session entirely."""
+        """/kill [name] (4.4): end a session of this chat, always through
+        a confirm. Bare: the one live session's confirm, or a picker of
+        this chat's live sessions (it used to list every chat's)."""
         if not await self._authorize(update):
             return
-        text = update.message.text.strip()
-        parts = text.split(maxsplit=1)
+        chat_id = calling_chat_id(update)
+        parts = update.message.text.strip().split(maxsplit=1)
         if len(parts) < 2:
-            # No label given — show inline keyboard with session choices
-            sessions = self.registry.all_sessions()
-            alive = [
-                sess for sess in sessions.values()
-                if sess.status != Status.GONE and sess.label
-            ]
+            alive = [s for s in self.registry.all_sessions(chat_id).values()
+                     if s.status != Status.GONE and s.label]
             if not alive:
-                await reply_text(update.message, "No sessions to kill.")
+                await reply_text(update.message, "No sessions to end.")
                 return
-            kill_chat_id = calling_chat_id(update) or 0
-            buttons = [
-                [InlineKeyboardButton(
-                    f"💀 {sess.label}",
-                    callback_data=session_parity.session_cb(
-                        self, kill_chat_id, sess, "kill"))]
-                for sess in alive
-            ]
-            await reply_text(update.message,
-                "Which session to kill?",
-                reply_markup=InlineKeyboardMarkup(buttons),
-            )
-            return
-
-        target_label = parts[1].strip()
-        # Two-tap confirmation: show inline [💀 Kill] [Cancel] instead of
-        # destroying immediately. One mistype on a phone shouldn't wipe a
-        # session; the user explicitly confirms here.
-        sess = self.registry.find_by_label(target_label, calling_chat_id(update))
-        if sess is None:
-            await reply_text(update.message,
-                f"⚠️ Unknown or already-gone session: {target_label}",
-            )
-            return
-        confirm_chat_id = calling_chat_id(update) or 0
-        keyboard = InlineKeyboardMarkup([[
-            InlineKeyboardButton(
-                "💀 Kill",
-                callback_data=session_parity.session_cb(
-                    self, confirm_chat_id, sess, "kill-confirm")),
-            InlineKeyboardButton(
-                "Cancel",
-                callback_data=session_parity.session_cb(
-                    self, confirm_chat_id, sess, "kill-cancel")),
-        ]])
-        await reply_text(update.message,
-            f"⚠️ Kill session [<b>{html_mod.escape(target_label)}</b>]? "
-            "This will terminate the running claude process.",
-            reply_markup=keyboard,
-            parse_mode="HTML",
-        )
+            if len(alive) > 1:
+                await reply_text(update.message, "Which session to end?",
+                                 reply_markup=session_parity.session_picker(
+                                     self, chat_id, alive, "end", glyph="⏹ "))
+                return
+            sess = alive[0]
+        else:
+            label = parts[1].strip().lstrip("/")
+            sess = self.registry.find_by_label(label, chat_id)
+            if sess is None:
+                await reply_text(update.message,
+                    f"⚠️ No live session named <b>{html_mod.escape(label)}</b> here.",
+                    parse_mode="HTML")
+                return
+        text, kb = session_parity.render_end_confirm(self, chat_id, sess)
+        await reply_text(update.message, text, reply_markup=kb, parse_mode="HTML")
 
     async def _handle_new_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /new [name [first message...]]: start a Claude Code session.
@@ -1055,38 +1057,107 @@ class CommandHandlersMixin:
             update=update,
         )
 
-    async def _handle_perms_cmd(self, update: Update,
-                                ctx: ContextTypes.DEFAULT_TYPE) -> None:
-        """Handle /perms — toggle permission mode on the active session.
+    async def _handle_mode_cmd(self, update: Update,
+                               ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        """/mode [name] [ask|auto] (4.4); /perms is the same command.
 
-        IDLE Ask→Auto: sends a confirmation keyboard (requires admin).
-        IDLE Auto→Ask: executes the switch directly (no confirmation needed).
-        BUSY: sends a [Stop task & switch] / [Not now] keyboard.
-        No active session: replies with an error.
-        """
+        Shows the session's mode with a one-tap switch to the other one
+        (it used to flip it blind), or switches straight to the mode named:
+        `/mode ask`, `/mode x1 auto`. Only going to Auto needs an admin."""
         if not await self._authorize(update):
             return
-
-        sess = self.registry.target_for(calling_chat_id(update))
-        if not sess or sess.status == Status.GONE:
-            await reply_text(update.message,
-                "No active session. Use /new to start one.",
-            )
+        chat_id = calling_chat_id(update)
+        want = label = None
+        for word in update.message.text.split()[1:]:
+            if want is None and word.lower() in ("ask", "auto"):
+                want = word.lower()
+            elif label is None:
+                label = word.lstrip("/")
+            else:
+                # A word it would otherwise drop: say what it takes rather
+                # than act on half of what was typed.
+                await reply_text(update.message,
+                    "⚠️ /mode takes a session name and ask or auto, for example "
+                    "/mode x1 or /mode x1 ask.")
+                return
+        if label is not None:
+            sess = self.registry.find_by_label(label, chat_id)
+            if sess is None:
+                await reply_text(update.message,
+                    f"⚠️ No live session named <b>{html_mod.escape(label)}</b> here.",
+                    parse_mode="HTML")
+                return
+        else:
+            sess = self.registry.target_for(chat_id)
+            if sess is None or sess.status == Status.GONE:
+                live = [s for s in self.registry.all_sessions(chat_id).values()
+                        if s.label and s.status != Status.GONE]
+                if len(live) > 1:
+                    # A mode named still switches in one tap: the picker's
+                    # buttons are then the card's own switch (turn-keyed).
+                    if want is None:
+                        question = "Which session?"
+                        kb = session_parity.session_picker(self, chat_id, live, "mode_show")
+                    elif want == "ask":
+                        question = "Which session to switch to 💬 Ask?"
+                        kb = session_parity.session_picker(
+                            self, chat_id, live, "modeask", keyed=True)
+                    else:
+                        question = "Which session to switch to 🤖 Auto?"
+                        kb = session_parity.session_picker(
+                            self, chat_id, live, "modeauto", keyed=True)
+                    await reply_text(update.message, question, reply_markup=kb)
+                    return
+                sess = live[0] if live else None
+        if sess is None or sess.status == Status.GONE:
+            await reply_text(update.message, "No live sessions here. Start one with /new.")
             return
-
-        target_skip_perms = not sess.skip_perms
-
-        # Admin gate: switching TO Auto mode requires admin.
-        if target_skip_perms and not self._is_admin(update):
+        if want is None:
+            text, kb = self._render_mode_card(chat_id, sess)
+            await reply_text(update.message, text, parse_mode="HTML", reply_markup=kb)
+            return
+        target = want == "auto"
+        if sess.skip_perms == target:
             await reply_text(update.message,
-                "Switching to Auto mode requires admin role.",
-            )
+                f"<b>{html_mod.escape(sess.label)}</b> is already in "
+                f"{'🤖 Auto' if target else '💬 Ask'}.", parse_mode="HTML")
+            return
+        await self._perms_flow(sess, target, update.message,
+                               may_auto=self._is_admin(update))
+
+    # The old name: the same command since 2026-09-30.
+    _handle_perms_cmd = _handle_mode_cmd
+
+    def _render_mode_card(self, chat_id, sess: TrackedSession):
+        """`x1 is 🤖 Auto.` and the one switch that makes sense."""
+        target = self.registry.target_for(chat_id)
+        auto = sess.skip_perms
+        text = (f"{'✍️ ' if sess is target else ''}<b>{html_mod.escape(sess.label)}</b> "
+                f"is {'🤖 Auto' if auto else '💬 Ask'}.")
+        # The switch relaunches the session, so the button carries the turn
+        # it was shown for (a new turn since refuses it, as Stop and End do).
+        if auto:
+            button = InlineKeyboardButton("💬 Switch to Ask", callback_data=session_parity.session_cb(
+                self, chat_id or 0, sess, f"modeask{sess.turn_key}"))
+        else:
+            button = InlineKeyboardButton("🤖 Switch to Auto", callback_data=session_parity.session_cb(
+                self, chat_id or 0, sess, f"modeauto{sess.turn_key}"))
+        return text, InlineKeyboardMarkup([[button]])
+
+    async def _perms_flow(self, sess: TrackedSession, target_skip_perms: bool,
+                          message, *, may_auto: bool) -> None:
+        """Switch *sess* to Auto (``target_skip_perms``) or Ask, replying to
+        *message*: Ask→Auto asks to confirm; Auto→Ask switches at once; a
+        working session offers Stop & switch."""
+        # Admin gate: only switching TO Auto needs one.
+        if target_skip_perms and not may_auto:
+            await reply_text(message, "Auto mode needs an admin.")
             return
 
         if sess.status == Status.UNKNOWN:
-            await reply_text(update.message,
+            await reply_text(message,
                 f"⚠️ <b>{html_mod.escape(sess.label)}</b>'s status is still initializing."
-                f" Try /perms again in a moment.",
+                f" Try /mode again in a moment.",
                 parse_mode="HTML",
             )
             return
@@ -1095,7 +1166,7 @@ class CommandHandlersMixin:
             # BUSY flow: show Stop & switch / Not now keyboard.
             kb = self._build_perms_busy_keyboard(sess)
             mode_label = "Auto" if target_skip_perms else "Ask"
-            sent = await reply_text(update.message,
+            sent = await reply_text(message,
                 f"⚙️ <b>{html_mod.escape(sess.label)}</b> is busy.\n"
                 f"Switch to {mode_label} mode?",
                 parse_mode="HTML",
@@ -1116,7 +1187,7 @@ class CommandHandlersMixin:
         if target_skip_perms:
             # Ask→Auto: require confirmation.
             kb = self._build_perms_confirm_keyboard(sess)
-            sent = await reply_text(update.message,
+            sent = await reply_text(message,
                 f"⚙️ Switch <b>{html_mod.escape(sess.label)}</b> to "
                 f"🤖 Auto mode?\n"
                 f"<i>Claude will run tools without prompting "
@@ -1133,7 +1204,7 @@ class CommandHandlersMixin:
             }
         else:
             # Auto→Ask: execute immediately, no confirmation needed.
-            status_msg = await reply_text(update.message,
+            status_msg = await reply_text(message,
                 f"⚙️ Switching <b>{html_mod.escape(sess.label)}</b> "
                 f"to 💬 Ask mode…",
                 parse_mode="HTML",
@@ -1143,7 +1214,7 @@ class CommandHandlersMixin:
                 try:
                     await edit_message(status_msg, text, **kw)
                 except Exception:
-                    await reply_text(update.message, text, **kw)
+                    await reply_text(message, text, **kw)
 
             await self._do_perms_switch_via_fn(sess, False, _edit)
 

@@ -389,9 +389,12 @@ def test_sc13_clearqueue_deletes_the_line(replay, vloop, pty):
 
 
 def _confirm_data(r, verb: str) -> str:
+    """The confirm button whose verb starts with *verb*: since P4 the
+    End and Restart confirms carry the turn they were shown for
+    (`endok<key>`, `restartok<key>`)."""
     markup = r.last_reply_kwargs[0]["reply_markup"]
     return next(b.callback_data for row in markup.inline_keyboard
-                for b in row if b.callback_data.endswith(verb))
+                for b in row if b.callback_data.rsplit(":", 1)[-1].startswith(verb))
 
 
 def test_sc14_confirmed_kill_deletes_the_line(replay, vloop, pty):
@@ -401,7 +404,7 @@ def test_sc14_confirmed_kill_deletes_the_line(replay, vloop, pty):
         w = r.worker()
         line = await _lined(r)
         await r.cmd("_handle_kill_cmd", "/kill sendnow_harness")
-        await r.tap(9901, data=_confirm_data(r, "kill-confirm"))
+        await r.tap(9901, data=_confirm_data(r, "endok"))
         ok = await r.wait_deleted(line["id"], DELETE_WINDOW)
         w.cancel()
         return ok
@@ -465,7 +468,7 @@ def test_sc17_restart_deletes_the_line(replay, vloop, pty):
         w = r.worker()
         line = await _lined(r)
         await r.cmd("_t_restart_cmd", "/restart sendnow_harness")
-        await r.tap(9902, data=_confirm_data(r, "restart-confirm"))
+        await r.tap(9902, data=_confirm_data(r, "restartok"))
         ok = await r.wait_deleted(line["id"], DELETE_WINDOW)
         w.cancel()
         return ok

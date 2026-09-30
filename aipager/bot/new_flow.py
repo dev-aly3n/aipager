@@ -760,7 +760,7 @@ async def _handle_ready_callback(
             # A mode switch relaunches the session: never under a running
             # turn from a card that may be minutes old.
             await bot._safe_answer(
-                query, f"{sess.label} is working. Switch after it finishes, or use /perms.",
+                query, f"{sess.label} is working. Switch after it finishes, or use /mode.",
                 show_alert=True)
             return
         await bot._safe_answer(query, "Switching...")

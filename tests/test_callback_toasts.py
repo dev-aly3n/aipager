@@ -114,7 +114,7 @@ def _tap(bot, data, **kw):
     ("nocolon", "Invalid callback"),
     ("claude-jim:bogus_verb", "Unknown: bogus_verb"),
     ("claude-nobody:stop", "Session not found"),
-    ("claude-nobody:kill", "Session not found"),
+    ("claude-nobody:kill", "This button is out of date - send /kill again"),
     ("claude-nobody:retry", "Session not found"),
     ("claude-nobody:pin_answer", "Session not found"),
     ("_:sx:99:allow", "That session is no longer available"),

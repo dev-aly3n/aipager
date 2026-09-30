@@ -401,14 +401,16 @@ def test_the_menu_puts_sessions_then_the_frequent_commands_first(mk_bot, monkeyp
     assert [(c.command, c.description) for c in commands[:2]] == [
         ("dev", "Talk to dev"), ("x1", "Talk to x1")]
     assert [c.command for c in commands[2:]] == [
-        "new", "status", "stop", "now", "resume", "perms", "settings", "help"]
+        "new", "status", "stop", "now", "resume", "mode", "settings", "help"]
 
 
 def test_the_rare_commands_leave_the_menu_but_still_answer(mk_bot, run_async):
     from aipager.bot.lifecycle import LifecycleMixin
 
     menu = {c.command for c in LifecycleMixin._command_list(set())}
-    rare = {"kill", "restart", "rename", "delete", "diff", "clearqueue", "whoami", "update"}
+    # /perms is /mode's old name since P4 (typed only).
+    rare = {"kill", "restart", "rename", "delete", "diff", "clearqueue", "whoami", "update",
+            "perms"}
     assert not (menu & rare)
     assert rare <= _dispatched_commands(mk_bot, run_async)
 
@@ -473,7 +475,7 @@ def test_stop_from_status_stops_and_redraws_the_list(bot, tap):
     """Review-1 (001): it used to overwrite the whole list with one line."""
     busy = _sess(bot, "b1", Status.BUSY)
     _sess(bot, "a1")
-    bot._stop_session_core = AsyncMock(return_value=MagicMock(ok=True, dropped=0))
+    bot._stop_session_core = AsyncMock(return_value=MagicMock(ok=True, dropped=0, label="b1"))
 
     query = tap(_stop_cb(bot, busy))
 
@@ -487,7 +489,7 @@ def test_stop_from_status_refuses_a_turn_that_moved_on(bot, tap):
     cb = _stop_cb(bot, busy)
     bot.registry.transition(busy.name, Status.IDLE)
     bot.registry.transition(busy.name, Status.BUSY)   # a new turn since the list was drawn
-    bot._stop_session_core = AsyncMock(return_value=MagicMock(ok=True, dropped=0))
+    bot._stop_session_core = AsyncMock(return_value=MagicMock(ok=True, dropped=0, label="b1"))
 
     query = tap(cb)
 
@@ -500,7 +502,7 @@ def test_stop_from_status_survives_a_card_move_in_the_same_turn(bot, tap):
     """Review-1 (002): the busy card moving mid-turn made a message-id check
     call the tap stale; the turn is what counts."""
     busy = _sess(bot, "b1", Status.BUSY, busy_msg_id=99999)
-    bot._stop_session_core = AsyncMock(return_value=MagicMock(ok=True, dropped=0))
+    bot._stop_session_core = AsyncMock(return_value=MagicMock(ok=True, dropped=0, label="b1"))
 
     tap(_stop_cb(bot, busy))
 
@@ -509,7 +511,7 @@ def test_stop_from_status_survives_a_card_move_in_the_same_turn(bot, tap):
 
 def test_stop_from_status_needs_the_right_to_prompt(bot, tap):
     busy = _sess(bot, "b1", Status.BUSY)
-    bot._stop_session_core = AsyncMock(return_value=MagicMock(ok=True, dropped=0))
+    bot._stop_session_core = AsyncMock(return_value=MagicMock(ok=True, dropped=0, label="b1"))
     bot._can_prompt_user = MagicMock(return_value=False)
 
     tap(_stop_cb(bot, busy))
@@ -530,7 +532,8 @@ def test_end_ends_the_session_and_redraws_the_list(bot, tap):
 
     bot._kill_session_core.assert_awaited_once_with(sess.name, "x1")
     assert "⏹ Ended x1" in query.answer.await_args.args[0]
-    assert _edited(query)[0].startswith("📊")
+    # P4: what happened stays above what remains.
+    assert _edited(query)[0].startswith("⏹ Ended <b>x1</b>\n\n📊")
 
 
 def test_end_refuses_work_that_started_after_it_was_tapped(bot, tap):
@@ -558,16 +561,19 @@ def test_end_needs_the_right_to_prompt(bot, tap):
 
 
 @pytest.mark.parametrize("verb", ["kill", "kill-confirm"])
-def test_the_kill_buttons_need_the_right_to_prompt(bot, tap, verb):
-    """Review-1 (003): a read_only member could tap someone else's kill."""
+@pytest.mark.parametrize("may_prompt", [True, False])
+def test_the_old_kill_buttons_end_nothing(bot, tap, verb, may_prompt):
+    """Review-1 (003) gated these on the right to prompt; P4 retired them
+    (review-1 of P4, 003): nothing renders them any more, and nothing can
+    check which chat or turn one still in a chat was shown for."""
     sess = _sess(bot, "x1")
-    bot._kill_session_by_label = AsyncMock()
-    bot._can_prompt_user = MagicMock(return_value=False)
+    bot._kill_session_core = AsyncMock(return_value=MagicMock(result="killed"))
+    bot._can_prompt_user = MagicMock(return_value=may_prompt)
 
     query = tap(session_parity.session_cb(bot, CHAT, sess, verb))
 
-    bot._kill_session_by_label.assert_not_awaited()
-    assert "can't end" in query.answer.await_args.args[0]
+    bot._kill_session_core.assert_not_awaited()
+    assert query.answer.await_args.args[0] == "This button is out of date - send /kill again"
 
 
 def test_talk_refuses_another_chats_session(bot, tap):
@@ -605,7 +611,7 @@ def test_an_old_stop_never_stops_a_recreated_session_of_the_same_name(bot, tap):
     cb = _stop_cb(bot, old)
     del bot.registry._sessions[old.name]            # ended, then /new x1
     new = _sess(bot, "x1", Status.BUSY)
-    bot._stop_session_core = AsyncMock(return_value=MagicMock(ok=True, dropped=0))
+    bot._stop_session_core = AsyncMock(return_value=MagicMock(ok=True, dropped=0, label="b1"))
 
     query = tap(cb)
 
@@ -644,7 +650,7 @@ def test_turn_keys_do_not_repeat_across_a_restart(tmp_state_file):
 def test_stop_from_status_says_how_many_queued_messages_went(bot, tap):
     """Review-2 (003): the count the /stop wrapper reports stays visible."""
     busy = _sess(bot, "b1", Status.BUSY)
-    bot._stop_session_core = AsyncMock(return_value=MagicMock(ok=True, dropped=2))
+    bot._stop_session_core = AsyncMock(return_value=MagicMock(ok=True, dropped=2, label="b1"))
 
     query = tap(_stop_cb(bot, busy))
 
@@ -668,7 +674,7 @@ def test_a_failed_end_says_why_in_words(bot, tap, result, toast):
 @pytest.mark.parametrize("verb", ["ststop", "endok"])
 def test_stop_and_end_refuse_another_chats_session(bot, tap, verb):
     theirs = _sess(bot, "b1", Status.BUSY, chat=OTHER_CHAT)
-    bot._stop_session_core = AsyncMock(return_value=MagicMock(ok=True, dropped=0))
+    bot._stop_session_core = AsyncMock(return_value=MagicMock(ok=True, dropped=0, label="b1"))
     bot._kill_session_core = AsyncMock(return_value=MagicMock(result="killed"))
 
     query = tap(f"{theirs.name}:{verb}{theirs.turn_key}")

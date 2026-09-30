@@ -259,7 +259,7 @@ def test_help_names_the_session_management_actions(
     run_async(bot._handle_help_cmd(update, MagicMock()))
 
     text = update.message.reply_text.await_args.args[0]
-    for word in ("/status", "/stop", "/settings", "/perms", "/new",
+    for word in ("/status", "/stop", "/settings", "/mode", "/new",
                  "restart", "rename", "diff", "end", "delete"):
         assert word in text, f"{word} is missing from /help"
     run_async(bot._handle_start_cmd(mk_update("/start", chat_id=555), MagicMock()))

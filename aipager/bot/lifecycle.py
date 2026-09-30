@@ -362,7 +362,9 @@ class LifecycleMixin:
         self._app.add_handler(CommandHandler("resume", self._handle_resume_cmd))
         self._app.add_handler(CommandHandler("clearqueue", self._handle_clearqueue_cmd))
         self._app.add_handler(CommandHandler("whoami", self._handle_whoami))
-        self._app.add_handler(CommandHandler("perms", self._handle_perms_cmd))
+        # /mode (4.4) and its old name /perms: the same command.
+        self._app.add_handler(CommandHandler("mode", self._handle_mode_cmd))
+        self._app.add_handler(CommandHandler("perms", self._handle_mode_cmd))
         self._app.add_handler(CommandHandler("settings", self._handle_settings_cmd))
         self._app.add_handler(CommandHandler("app", self._handle_app_cmd))
         # Admin-only self-update (roadmap 8.36); the handler gates itself.
@@ -660,7 +662,7 @@ class LifecycleMixin:
             BotCommand("stop", "Stop what Claude is doing"),
             BotCommand("now", "Send queued messages to Claude now"),
             BotCommand("resume", "Resume an ended session"),
-            BotCommand("perms", "Switch between Auto and Ask"),
+            BotCommand("mode", "Auto or Ask"),
             BotCommand("settings", "Message layout, formatting, new sessions"),
             BotCommand("help", "What you can do"),
         ]

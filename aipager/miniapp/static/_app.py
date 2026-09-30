@@ -1668,7 +1668,7 @@ APP_JS = r"""
   // added after it was written.
   var RENAME_RESERVED = {
     "app": true, "clearqueue": true, "delete": true, "diff": true,
-    "help": true, "kill": true, "list": true, "ls": true, "new": true,
+    "help": true, "kill": true, "list": true, "ls": true, "mode": true, "new": true,
     "now": true, "perms": true, "rename": true, "restart": true, "resume": true,
     "settings": true, "start": true, "status": true, "stop": true,
     "update": true, "whoami": true

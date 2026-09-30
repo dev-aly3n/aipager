@@ -1246,6 +1246,15 @@ class TrackedSession:
             drop = len(self.finished_subagents) - FINISHED_SUBAGENTS_CAP
             del self.finished_subagents[:drop]
 
+    def can_be_stopped(self) -> bool:
+        """True while Stop has something to interrupt: a turn running or
+        waiting on its person, or an idle session whose job still has a
+        background agent or shell going (its card still shows it working,
+        CLAUDE.md "Background agents end the turn"). The one definition
+        the stop core, /stop and /status's Stop share."""
+        return (self.status in (Status.BUSY, Status.INTERACTIVE)
+                or self.job_background_open())
+
     def job_background_open(self) -> bool:
         """True while a background agent launched by this job is still
         running (design.md "model Claude Code background-agent jobs").
@@ -1930,7 +1939,7 @@ class SessionRegistry:
         self._remembered_labels: dict[str, str] = {}
         # The message target, PER CHAT (F11, 2026-09-30): where a plain
         # message, voice note or file that is not a reply goes, and what a
-        # bare /stop, /perms, /diff or /now acts on. chat_id → (session
+        # bare /mode, /diff, /clearqueue or /now acts on. chat_id → (session
         # name, order), keyed by the session's OWN chat (`scope_chat_id`,
         # 0 for a session not stamped with one): a session belongs to one
         # chat, so "x1 became active" means "x1 is now the target in x1's
@@ -2146,6 +2155,11 @@ class SessionRegistry:
         # below can return early.
         if sess.status == Status.GONE:
             sess.last_assistant_preview = ""
+        # Ending, or coming back (a resume, a relaunch), is a new turn for
+        # every button that carries one (End, Restart, the mode switch,
+        # Stop): one shown before must not act on the session after.
+        if Status.GONE in (sess.status, new_status):
+            sess.turn_key = next(_TURN_KEYS)
 
         # Debounce: suppress rapid re-IDLE (e.g. user sends quick command,
         # Claude responds in <1s, triggers another idle notification)

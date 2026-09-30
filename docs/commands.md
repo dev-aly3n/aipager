@@ -19,27 +19,42 @@ and on every session change.
 | `/help` | - | A short guide by task (start, talk, control, manage, settings), with the tip that tapping a command sends it at once: long-press it (phone) or press Tab (desktop) to add text first. |
 | `/app` | — | Open the Mini App dashboard (sessions, diff viewer, settings). |
 | `/status` | - | This chat's sessions as a list you can act on. Each says its state in words (`⚙️ working 3m · Bash: run tests`, `⏳ needs you · Bash: make deploy`, `💤 idle`), with `✍️` on the one a plain message goes to, and a second line with the model, context, cost, what is queued (`queue 3 (1 queued, 2 notes)`), and running agents and shells. Each has a row of buttons: `✍️ x1` sends your next messages there, `⏹ Stop` while it works, `Answer` while it waits for you, and `⋮` for the rest. Below: `🆕 New`, and `⚫ Ended (n)` for the sessions that ended (resume, delete, or clear them all from the list; they stay in `/resume`). |
-| `/stop` | — | Interrupt the active session's current turn. Also discards queued messages and replies with how many were discarded. |
+| `/stop [label]` | optional | Interrupt a session's current turn. Bare, it stops the one session of this chat that is working (even if your messages go to another one; a session whose background agent or shell is still running counts as working), asks which with a picker when several are, and says `Nothing is running.` when none is. `/stop x1` (or `/x1 stop`) stops x1 (or replies `x1 is not working.` when it is not). Also discards queued messages and replies with how many were discarded. |
 | `/now` | - | Send the messages Claude is holding in the active session's queue right now, instead of after the current step (Claude Code's own send-now keys, Ctrl+X Ctrl+S). Works any time, including while the chat is muted or in minimal mode; replies `Nothing is waiting in the queue` when Claude holds nothing. See [Send a queued message now](#send-a-queued-message-now). |
 | `/new [name] [first message]` | all optional | Start a session. `/new x1` starts it at once, and `/new x1 fix the tests` also sends "fix the tests" as its first message. Sent bare (for example tapped from the menu), `/new` asks for the name, and the next message you send is used exactly like the argument, so `/new` then `x1 fix the tests` gives the same result. Only that next message: if you do anything else first (a photo, another command, a reply to another message, a keyboard template, another button), it is handled as usual and the card closes; `/status`, `/settings` and the keyboard's menus leave it open. The card that asks also shows the mode, model and folder the session will get, with buttons to change them first. Every way ends in the same Ready card: what the session got, that your next message goes to it, and one-tap buttons to switch to the other mode or change the model. New sessions start in Auto for an admin (Ask for everyone else); change what /new uses in `/settings` → New sessions. A `!` before the name still means Auto. A name that is in use offers Resume, Replace or Cancel, for the person who sent `/new` only. |
 | `/resume [label]` | optional | Resume a previously-gone session by name, or open a picker. A session that ended stays listed for `GONE_SESSION_MAX_AGE_DAYS` (default 14) and then leaves the registry; its Claude transcript is untouched. |
-| `/kill [label]` | optional | Destroy a session. With no arg, opens a picker. Always two-tap: shows `[💀 Kill] [Cancel]`. Also in `/status` → `⋮` → `⏹ End session`. |
-| `/restart [label]` | optional | Kill and relaunch a session, keeping its conversation. |
-| `/rename [label]` | optional | Give a session a new name. |
-| `/delete [label]` | optional | Drop a finished (GONE) session from the list. |
-| `/diff [label]` | optional | Show the session's working-directory git diff. |
+| `/kill [label]` | optional | End a session, always after a confirm: `⏹ End x1? Claude stops and the session closes.` with `[⏹ End] [Cancel]`. Bare, it goes to the confirm when this chat has one live session, else a picker of this chat's live sessions. Also in `/status` → `⋮` → `⏹ End session`. |
+| `/restart [label]` | optional | Restart a session after a confirm: Claude stops and starts again, keeping its conversation. |
+| `/rename [label] [new]` | optional | Give a session a new name (ended sessions too). Without the new name it asks for it. |
+| `/delete [label]` | optional | Drop an ended session from the list, after a confirm. |
+| `/diff [label]` | optional | Show the session's working-directory git diff. Bare, it shows the session your messages go to. |
 | `/clearqueue` | — | Drop every not-yet-picked-up message for the active session — both messages aipager is holding and messages already queued inside Claude — without interrupting the running turn. Replies with the count cleared. |
-| `/perms [label]` | optional | Switch a session between Ask and Auto permission modes. On a busy session, offers `Stop task & switch` / `Not now`. |
+| `/mode [label] [ask\|auto]` | optional | Show a session's permission mode with a button to switch to the other one: `✍️ x1 is 🤖 Auto.` `[💬 Switch to Ask]`. `/mode ask`, `/mode auto` or `/mode x1 ask` switch straight away. Going to Auto needs an admin and a confirm; going to Ask happens at once. On a busy session, offers `Stop task & switch` / `Not now`. `/perms` is the old name and still works the same. |
 | `/settings` | — | Message layout, diff previews (off by default), long-turn card updates (on by default: a busy card refreshes every 10 s after 2 minutes of a turn, 30 s after 10, once a minute after an hour, counting in minutes then hours; switch off to keep the first-minutes pace for the whole turn; see [troubleshooting](troubleshooting.md#a-long-turns-card-refreshes-less-often)), formatting and language preferences, and New sessions: the mode (Auto or Ask), model and folder `/new` starts a session with. Whatever the layout, every busy card ends with its session's status line (`⏳`/`✅ name · …`) and every answer starts with its result line (`💬 name`, plus `· Finished (…)` when no finished card is left to show the stats); the merged layout stacks the two, each line in its own section. In the card layout the answer deliberately follows the finished card by a moment, so the card is seen to say Finished before the answer lands under it; tune or disable that head start with `FINISH_CARD_GRACE_SECONDS` (seconds, default 0.8; 0 sends both at once). The message layout decides the card for every turn, whether or not tools ran (see [Idle responses](#idle-responses)). |
 | `/whoami` | — | Show your Telegram id and (in team mode) your role. |
 | `/update` | — | Admin only. Check aipager and Claude Code for newer versions, then update whatever has one with a single button. See [Update](#update). |
 
 The `/` menu shows your sessions first (`/x1 · Talk to x1`), then the
-frequent commands: `new`, `status`, `stop`, `now`, `resume`, `perms`,
+frequent commands: `new`, `status`, `stop`, `now`, `resume`, `mode`,
 `settings`, `help` (and `app` with the Mini App on). `kill`, `restart`,
-`rename`, `delete`, `diff`, `clearqueue`, `whoami` and `update` are not in
-the menu but work when typed; the session actions are also in
+`rename`, `delete`, `diff`, `clearqueue`, `perms`, `whoami` and `update`
+are not in the menu but work when typed; the session actions are also in
 `/status` → `⋮`.
+
+**Commands that act on a session** (`/stop`, `/mode`, `/kill`, `/restart`,
+`/rename`, `/delete`, `/diff`) follow one rule:
+
+- With a name (`/restart x1`) they act on that session of this chat.
+- Bare, they act on the one session the command can mean (the only one
+  working for `/stop`, the only live one for `/kill` and `/restart`, the
+  only ended one for `/delete`), going through the usual confirm where
+  there is one.
+- Otherwise they show a picker of only this chat's sessions the command
+  makes sense for: the one your messages go to first, marked `✍️`, then
+  the rest by name, and `✖️ Cancel`. Picking one leads to the same card as
+  typing its name.
+
+`/mode` and `/diff` first look at the session your messages go to.
 
 ### Per-session dynamic commands
 
@@ -123,8 +138,8 @@ Tap the bar to jump to the message.
 **Where a plain message goes.** A message that is not a reply goes to the
 session this chat last talked with: the one you last switched to with
 `/<label>`, sent a message to, started, or that last answered you here.
-A bare `/stop`, `/perms`, `/clearqueue`, `/diff` or `/now` acts on the same
-session. Each chat has its own: a message in one chat never goes to a
+A bare `/mode`, `/clearqueue`, `/diff` or `/now` acts on the same session
+(`/stop` stops whichever session is working). Each chat has its own: a message in one chat never goes to a
 session that belongs to another chat.
 
 Buttons on the pinned message:
@@ -233,7 +248,7 @@ run, under its own description of it — approve what you can read.
   from now on" row in the outside-read one, and — for a Write/Edit it
   can't derive a per-file rule for — a permission-mode switch such as
   auto-accepting all file edits (`acceptEdits`); aipager never selects
-  any of these; change modes deliberately with `/perms`.
+  any of these; change modes deliberately with `/mode`.
 - **Stop** — interrupt the turn instead of answering.
 
 Every tap is recorded in `~/.claude/aipager-audit.jsonl` and mirrored
@@ -250,11 +265,15 @@ option (and checkbox-style multi-select where the question allows it).
 
 ### Stale buttons
 
-Buttons that act on a running turn — Stop, Kill, Restart, `/new`'s
-Replace, `/perms`' Stop-and-switch — are tied to the task they were
-shown for. Tapping one left over from an earlier task answers
-`That task already finished - …` (with a hint to re-run the command)
-and changes nothing, instead of acting on whatever is running now.
+Buttons that act on a running turn (Stop, End, Restart, the `/mode`
+switch and its Stop-and-switch, `/new`'s Replace) are tied to the task
+they were shown for. One left over from an earlier task changes nothing,
+instead of acting on whatever is running now, and so does one shown
+before the session ended and was resumed or restarted. End, Restart, the
+`/mode` switch, and the Stop in `/status` or the `/stop` picker answer
+`x1 moved on to new work - …` with what to tap or send again (or `That
+session has ended.`); the busy card's Stop and `/mode`'s Stop-and-switch
+answer `That task already finished - …`.
 `/new`'s Replace says `x1 started working since. Send /new again to
 replace it.` when the session started a turn after its card was shown.
 
@@ -412,16 +431,20 @@ not see it; an agent that stopped with work still running can then be
 marked done too early, and the pinned bar shows it running again when it
 resumes.
 
-### Kill confirmation
+### End confirmation
 
-`/kill <label>` and the `💀 Kill` button always confirm:
+`/kill`, its picker and `⋮` → `⏹ End session` always confirm:
 
 ```
-⚠️ Kill session [jim]?
-This will terminate the running claude process.
+⏹ End jim? Claude stops and the session closes.
 
-  [💀 Kill]  [Cancel]
+  [⏹ End]  [Cancel]
 ```
+
+After `⏹ End` the message says `⏹ Ended jim` above this chat's remaining
+sessions. A confirm tapped after the session started new work is refused
+(`jim moved on to new work - …`), and so is one for a session of the same
+name started since.
 
 ### Voice install (when extra isn't installed)
 

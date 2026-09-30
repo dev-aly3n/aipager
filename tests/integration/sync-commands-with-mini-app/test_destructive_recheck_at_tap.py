@@ -60,7 +60,7 @@ def test_restart_command_draws_a_confirm_with_confirm_and_cancel(mk_bot, helpers
     kb = upd.message.reply_text.await_args.kwargs.get("reply_markup")
     cbs = helpers.callback_data_in(kb)
     dests = helpers.destinations(bot, CHAT, cbs)
-    assert (sess.name, "restart-confirm") in dests
+    assert (sess.name, f"restartok{sess.turn_key}") in dests
     assert (sess.name, "restart-cancel") in dests
 
 
@@ -78,7 +78,7 @@ def test_restart_confirm_tap_demoted_between_command_and_tap_is_refused(mk_bot, 
     bot._restart_session_core = AsyncMock()
 
     cb_upd, q = helpers.make_callback_update(
-        f"{sess.name}:restart-confirm", chat_id=CHAT, chat_type="group",
+        f"{sess.name}:restartok{sess.turn_key}", chat_id=CHAT, chat_type="group",
         user_id=USER, message_id=42,
     )
     _run(bot._handle_callback(cb_upd, MagicMock()))
@@ -102,7 +102,7 @@ def test_restart_confirm_tap_not_demoted_actually_restarts(mk_bot, helpers):
     bot._restart_session_core = AsyncMock(
         return_value=RestartOutcome(ok=True, reason="done", label="foo"))
     cb_upd, q = helpers.make_callback_update(
-        f"{sess.name}:restart-confirm", chat_id=CHAT, chat_type="group",
+        f"{sess.name}:restartok{sess.turn_key}", chat_id=CHAT, chat_type="group",
         user_id=USER, message_id=42,
     )
     _run(bot._handle_callback(cb_upd, MagicMock()))
@@ -138,7 +138,7 @@ def test_restart_confirm_tap_by_outsider_is_refused(mk_bot, helpers):
 
     OUTSIDER = 99999
     cb_upd, q = helpers.make_callback_update(
-        f"{sess.name}:restart-confirm", chat_id=CHAT, chat_type="group",
+        f"{sess.name}:restartok{sess.turn_key}", chat_id=CHAT, chat_type="group",
         user_id=OUTSIDER, message_id=42,
     )
     _run(bot._handle_callback(cb_upd, MagicMock()))

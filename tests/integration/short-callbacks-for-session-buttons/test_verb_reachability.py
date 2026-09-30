@@ -27,7 +27,7 @@ import pytest
 
 from aipager.state import Status, TrackedSession
 
-from _verbs import SESSION_SCOPED_VERBS, OPT_VERBS
+from _verbs import NO_LONGER_RENDERED_VERBS, OPT_VERBS, SESSION_SCOPED_VERBS
 
 CHAT_ID = -100
 
@@ -130,20 +130,24 @@ def test_ask_keyboard_single_select_reaches_opts(sess):
 # ---- pre-existing (out-of-scope-for-conversion, but part of the -----------
 # ---- documented grammar) command handlers ---------------------------------
 
-def test_kill_picker_reaches_kill(scb_bot, helpers):
+def test_kill_picker_reaches_end(scb_bot, helpers):
+    """With two live sessions a bare /kill is a picker whose buttons
+    open the End confirm (verb "end"); its Cancel is not session-scoped."""
     bot = scb_bot()
-    s = TrackedSession(name="claude-jim__d123456789012", label="jim",
-                        status=Status.IDLE, scope_chat_id=CHAT_ID)
-    bot.registry._sessions[s.name] = s
+    for label in ("jim", "joe"):
+        s = TrackedSession(name=f"claude-{label}__d123456789012", label=label,
+                            status=Status.IDLE, scope_chat_id=CHAT_ID)
+        bot.registry._sessions[s.name] = s
     upd = helpers.make_message_update("/kill", chat_id=CHAT_ID)
     import asyncio
     asyncio.new_event_loop().run_until_complete(bot._handle_kill_cmd(upd, MagicMock()))
     kb = upd.message.reply_text.await_args.kwargs.get("reply_markup")
-    verbs = _short_form_verbs(helpers.callback_data_in(kb))
-    assert "kill" in verbs
+    verbs = _short_form_verbs([cb for cb in helpers.callback_data_in(kb)
+                               if cb.startswith("_:sx:")])
+    assert verbs == ["end", "end"]
 
 
-def test_kill_with_label_reaches_kill_confirm_and_cancel(scb_bot, helpers):
+def test_kill_with_label_reaches_end_confirm_and_cancel(scb_bot, helpers):
     bot = scb_bot()
     s = TrackedSession(name="claude-jim__d123456789012", label="jim",
                         status=Status.IDLE, scope_chat_id=CHAT_ID)
@@ -153,7 +157,7 @@ def test_kill_with_label_reaches_kill_confirm_and_cancel(scb_bot, helpers):
     asyncio.new_event_loop().run_until_complete(bot._handle_kill_cmd(upd, MagicMock()))
     kb = upd.message.reply_text.await_args.kwargs.get("reply_markup")
     verbs = _short_form_verbs(helpers.callback_data_in(kb))
-    assert set(verbs) == {"kill-confirm", "kill-cancel"}
+    assert set(verbs) == {f"endok{s.turn_key}", "kill-cancel"}
 
 
 def test_new_command_conflict_reaches_new_resume_replace_cancel(scb_bot, helpers):
@@ -192,8 +196,9 @@ def test_every_documented_session_scoped_verb_was_observed_reachable():
     observed = {
         "allow", "deny", "allow_always", "stop", "retry", "compact",
         "perms_confirm", "perms_cancel", "perms_stop_switch", "perms_wait",
-        "submit", *OPT_VERBS, "kill", "kill-confirm", "kill-cancel",
+        "submit", *OPT_VERBS, "kill-cancel",
         "new_resume", "new_replace", "new_cancel", "resume",
     }
-    missing = set(SESSION_SCOPED_VERBS + OPT_VERBS) - observed
+    missing = (set(SESSION_SCOPED_VERBS + OPT_VERBS)
+               - set(NO_LONGER_RENDERED_VERBS) - observed)
     assert not missing, f"verbs with no reachability test in this file: {missing}"

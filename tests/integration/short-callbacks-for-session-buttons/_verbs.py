@@ -36,6 +36,14 @@ ALL_SESSION_SCOPED_VERBS = SESSION_SCOPED_VERBS + OPT_VERBS
 MENU_FAMILY_SAMPLE_VERBS = ["menu", "menu-close", "diff",
                              "resume-ask", "resume-auto", "resume-cancel"]
 
+# No longer rendered: since the session-command rule the /kill picker's
+# verb is "end" and its confirm "endok<turn key>" (the same as ⋮ End).
+# "kill" and "kill-confirm" still sitting in chats answer "out of date"
+# and do nothing.
+NO_LONGER_RENDERED_VERBS = ["kill", "kill-confirm"]
+# ...and what one of them answers, whatever it names: it does nothing.
+OUT_OF_DATE_KILL_MESSAGE = "This button is out of date - send /kill again"
+
 # Legacy, long-form-only verbs (entrypoints.md: "accepted for older
 # buttons, never emitted now").
 LEGACY_LONGFORM_ONLY_VERBS = [

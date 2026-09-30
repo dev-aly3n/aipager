@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
+from aipager.bot.session_parity import resolve_short_cb
 from aipager.dtach import inject
 from aipager.state import Status, TrackedSession
 
@@ -33,19 +34,32 @@ def _verb_cb(cbs, verb):
 # ---- /kill: picker's immediate-kill button on a LIVE session -------------
 
 def test_kill_picker_button_still_kills_a_live_session(scb_bot, helpers, monkeypatch):
+    """The picker's button opens the End confirm in place; its End kills."""
     kill_session = AsyncMock()
     monkeypatch.setattr(inject, "kill_session", kill_session)
     bot = scb_bot()
     s = TrackedSession(name="claude-liveone__d123456789012", label="liveone",
                         status=Status.IDLE, scope_chat_id=CHAT_ID)
+    other = TrackedSession(name="claude-livetwo__d123456789012", label="livetwo",
+                            status=Status.IDLE, scope_chat_id=CHAT_ID)
     bot.registry._sessions[s.name] = s
+    bot.registry._sessions[other.name] = other
 
     upd = helpers.make_message_update("/kill", chat_id=CHAT_ID)
     _run(bot._handle_kill_cmd(upd, MagicMock()))
     kb = upd.message.reply_text.await_args.kwargs.get("reply_markup")
-    cb = _verb_cb(helpers.callback_data_in(kb), "kill")
+    picker = [cb for cb in helpers.callback_data_in(kb) if cb.startswith("_:sx:")]
+    cb = next(cb for cb in picker
+              if resolve_short_cb(bot, CHAT_ID, "_", cb.split(":", 1)[1])[0] == s.name)
 
     cb_upd, q = helpers.make_callback_update(cb, chat_id=CHAT_ID)
+    _run(bot._handle_callback(cb_upd, MagicMock()))
+    edited = q.edit_message_text.await_args
+    assert edited is not None, "the picker's End button must open the confirm"
+    confirm = _verb_cb(helpers.callback_data_in(edited.kwargs.get("reply_markup")),
+                       f"endok{s.turn_key}")
+
+    cb_upd, q = helpers.make_callback_update(confirm, chat_id=CHAT_ID)
     _run(bot._handle_callback(cb_upd, MagicMock()))
 
     assert kill_session.await_args_list != [], (
@@ -68,7 +82,7 @@ def test_kill_confirm_button_still_kills_a_live_session(scb_bot, helpers, monkey
     upd = helpers.make_message_update("/kill liveone", chat_id=CHAT_ID)
     _run(bot._handle_kill_cmd(upd, MagicMock()))
     kb = upd.message.reply_text.await_args.kwargs.get("reply_markup")
-    cb = _verb_cb(helpers.callback_data_in(kb), "kill-confirm")
+    cb = _verb_cb(helpers.callback_data_in(kb), f"endok{s.turn_key}")
 
     cb_upd, q = helpers.make_callback_update(cb, chat_id=CHAT_ID)
     _run(bot._handle_callback(cb_upd, MagicMock()))

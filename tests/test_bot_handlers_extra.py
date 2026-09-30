@@ -16,7 +16,7 @@ def test_handle_stop_no_active_session(mk_bot, mk_update, run_async):
     update = mk_update("/stop")
     run_async(bot._handle_stop_cmd(update, MagicMock()))
     text = update.message.reply_text.await_args.args[0]
-    assert "No active session" in text
+    assert text == "Nothing is running."
 
 
 def test_handle_stop_session_not_busy(mk_bot, mk_update, run_async):
@@ -27,7 +27,8 @@ def test_handle_stop_session_not_busy(mk_bot, mk_update, run_async):
     update = mk_update("/stop")
     run_async(bot._handle_stop_cmd(update, MagicMock()))
     text = update.message.reply_text.await_args.args[0]
-    assert "not busy" in text
+    # A bare /stop looks for working sessions, not at the target.
+    assert text == "Nothing is running."
 
 
 def test_handle_stop_busy_invokes_stop(mk_bot, mk_update, run_async):
@@ -48,31 +49,36 @@ def test_handle_kill_no_arg_no_sessions(mk_bot, mk_update, run_async):
     update = mk_update("/kill")
     run_async(bot._handle_kill_cmd(update, MagicMock()))
     text = update.message.reply_text.await_args.args[0]
-    assert "No sessions to kill" in text
+    assert text == "No sessions to end."
 
 
 def test_handle_kill_no_arg_lists_sessions(mk_bot, mk_update, run_async):
-    """The picker's buttons carry the short indexed form, not
-    `{name}:kill` — no `{name}:<verb>` form can fit Telegram's 64-byte
-    callback_data cap (design.md), so what must hold is the DESTINATION
-    (which session a button reaches), not the literal encoded string."""
+    """With two live sessions a bare /kill is a picker. Its buttons carry
+    the short indexed form, not `{name}:end` — no `{name}:<verb>` form can
+    fit Telegram's 64-byte callback_data cap (design.md), so what must
+    hold is the DESTINATION (which session a button reaches), not the
+    literal encoded string. The picker's Cancel is `_:pick:cancel`."""
     from aipager.bot import session_parity
 
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
     bot.registry._sessions["claude-jim"] = sess
+    other = TrackedSession(name="claude-joe", label="joe", status=Status.IDLE)
+    bot.registry._sessions["claude-joe"] = other
     update = mk_update("/kill")  # default chat_id=-1001
     run_async(bot._handle_kill_cmd(update, MagicMock()))
     kb = update.message.reply_text.await_args.kwargs.get("reply_markup")
     assert kb is not None
     cbs = [b.callback_data for row in kb.inline_keyboard for b in row]
+    assert cbs[-1] == "_:pick:cancel"
     dests = []
-    for cb in cbs:
+    for cb in cbs[:-1]:
         _sentinel, kind, idx, verb = cb.split(":", 3)
         assert (_sentinel, kind) == ("_", "sx"), f"unexpected callback form: {cb!r}"
         resolved = session_parity._resolve_pref_index(bot, -1001, idx)
         dests.append((resolved.name if resolved is not None else None, verb))
-    assert (sess.name, "kill") in dests
+    assert (sess.name, "end") in dests
+    assert (other.name, "end") in dests
 
 
 def test_handle_kill_unknown_label(mk_bot, mk_update, run_async):
@@ -80,7 +86,7 @@ def test_handle_kill_unknown_label(mk_bot, mk_update, run_async):
     update = mk_update("/kill nonexistent")
     run_async(bot._handle_kill_cmd(update, MagicMock()))
     text = update.message.reply_text.await_args.args[0]
-    assert "Unknown" in text
+    assert "No live session named <b>nonexistent</b> here." in text
 
 
 # ===== /new error paths =================================================

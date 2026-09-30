@@ -368,12 +368,16 @@ def test_a_file_goes_only_to_its_own_chats_target(two_chats, ana_target, mk_upda
     assert _typed_into(two_chats) == ana_target
 
 
-def test_bare_stop_stops_only_its_own_chats_target(two_chats, ana_target, mk_update,
-                                                   run_async):
+def test_bare_stop_stops_only_its_own_chats_session(two_chats, ana_target, mk_update,
+                                                    run_async):
+    """Since P4 (4.4) a bare /stop stops this chat's one working session,
+    target or not; never another chat's."""
+    for name in (ANA, BOB):
+        two_chats.registry.get(name).status = Status.BUSY
     two_chats._stop_session = AsyncMock(return_value=MagicMock(ok=True))
     run_async(two_chats._handle_stop_cmd(_from_ana(mk_update, "/stop"), MagicMock()))
 
-    assert [c.args[0].name for c in two_chats._stop_session.await_args_list] == ana_target
+    assert [c.args[0].name for c in two_chats._stop_session.await_args_list] == [ANA]
 
 
 def test_bare_clearqueue_clears_only_its_own_chats_target(two_chats, ana_target, mk_update,
@@ -391,11 +395,13 @@ def test_bare_perms_switches_only_its_own_chats_target(two_chats, ana_target, mk
     update = _from_ana(mk_update, "/perms")
     run_async(two_chats._handle_perms_cmd(update, MagicMock()))
 
+    # Since P4 a bare /perms (= /mode) shows the mode of this chat's target,
+    # or of its one live session: ana's either way, never bob's.
     acted = [c.args[0].name for c in two_chats._kill_and_relaunch_core.await_args_list]
     replies = " ".join(str(c.args[0]) for c in update.message.reply_text.await_args_list
                        if c.args)
-    assert BOB not in acted
-    assert ("No active session" in replies) is (not ana_target)
+    assert acted == []
+    assert "<b>ana</b>" in replies and "bob" not in replies
 
 
 def test_bare_diff_shows_only_its_own_chats_target(two_chats, ana_target, mk_update,
@@ -410,7 +416,9 @@ def test_bare_diff_shows_only_its_own_chats_target(two_chats, ana_target, mk_upd
     update = _from_ana(mk_update, "/diff")
     run_async(session_parity.handle_diff_cmd(two_chats, update, MagicMock()))
 
-    assert shown == ana_target
+    # Since P4 a bare /diff with no target shows this chat's one live
+    # session: ana's either way, never bob's.
+    assert shown == [ANA]
 
 
 def test_now_sends_only_its_own_chats_queue(two_chats, ana_target, mk_update, run_async):

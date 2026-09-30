@@ -540,6 +540,8 @@ def test_the_detectors_see_the_verbs_that_carry_a_turn():
     (`endok<turn>`) are prefix verbs; a detector blind to them passes
     vacuously for exactly the two newest destructive buttons."""
     verbs = {r[0] for r in _destructive_button_verbs()}
-    assert {"ststop*", "endok*"} <= verbs, sorted(verbs)
+    # P4 added the /stop picker's, the /mode card's and the Restart
+    # confirm's.
+    assert {"ststop*", "endok*", "pstop*", "modeask*", "restartok*"} <= verbs, sorted(verbs)
     sites = {loc.split(" ")[1] for loc, _ok in _destructive_button_paths()}
     assert "_kill_session_core()" in sites
