@@ -164,10 +164,12 @@ _ASCII_ESCAPE = re.compile(rb"\\u00[2-7][0-9a-fA-F]")
 # A key ``type`` with value ``user``. Text inside a JSON string has its
 # quotes escaped (``\"``), so user-controlled text cannot form this run.
 _USER_TYPE = re.compile(rb'"type"\s*:\s*"user"')
-# A tool-result carrier, matched at the line's FIRST ``"message"``: a user
-# message whose content's first block is a tool_result (Claude Code may
-# write ``tool_use_id`` before ``type``). A genuine prompt (string
-# content, text or image blocks) never matches.
+# A tool-result carrier, matched (anchored, ``.match``) at the line's
+# FIRST ``"message"``: a user message whose content's first block is a
+# tool_result (Claude Code may write ``tool_use_id`` before ``type``). A
+# genuine prompt (string content, text or image blocks) never matches.
+# Anchored, because a prompt's own ``"message"`` comes first and a nested
+# tool-result-shaped one later in the line must not hide it.
 _TOOL_RESULT_LAYOUT = re.compile(
     rb'"message"\s*:\s*\{\s*"role"\s*:\s*"user"\s*,\s*"content"\s*:\s*\[\s*\{\s*'
     rb'(?:"tool_use_id"\s*:\s*"[^"\\]*"\s*,\s*)?"type"\s*:\s*"tool_result"'
@@ -211,6 +213,15 @@ def _needs_parse(raw: bytes, sticky: bool) -> bool:
       line is a user entry, so the origin scan ignores it and the sticky
       scan ignores it unless it holds the marker. With the layout, the
       entry is a tool result: never a prompt nor a turn boundary.
+    - The first ``"message"`` byte run is trusted as the entry's own
+      key only when the byte before it is not a backslash. A quote
+      inside a JSON string is always written ``\\"`` (or as ``\\u0022``,
+      which the escape rule catches), so ``"x\\"message":{...}`` puts
+      that run inside a key or string, not at a key. A real closing
+      quote after an escaped backslash (``\\\\"``) cannot be followed
+      directly by ``message"`` in valid JSON, so with no backslash in
+      front, a layout match is a real key named ``message``. With one,
+      the line is parsed (invalid JSON is then skipped as before).
     - Sticky scan only: all three marker words present. Without one of
       them ``_BLOCK_MARKER in _tool_result_text(entry)`` is False: every
       letter of that text comes verbatim from the line, except a hex
@@ -230,7 +241,8 @@ def _needs_parse(raw: bytes, sticky: bool) -> bool:
         return True
     if b'"user"' in raw and _USER_TYPE.search(raw):
         at = raw.find(b'"message"')
-        if at == -1 or not _TOOL_RESULT_LAYOUT.match(raw, at):
+        if (at == -1 or raw[at - 1:at] == b"\\"
+                or not _TOOL_RESULT_LAYOUT.match(raw, at)):
             return True
     return False
 
