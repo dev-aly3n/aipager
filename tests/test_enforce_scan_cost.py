@@ -608,6 +608,10 @@ HAND_CASES = {
     "big_int_user_prompt": (
         '{"type":"user","message":{"content":"x"},"n":' + "7" * 5000 + "}\n",
         ("RAISE:ValueError", "RAISE:ValueError")),
+    # A user line with no "message" key is read as its own message.
+    "user_line_without_a_message_key": (
+        TERM_LINE + '\n{"type":"user","content":"[via Telegram · @o]\\nhi"}\n',
+        ("telegram", False)),
     "user_message_is_a_string": (
         TG_LINE + '\n{"type":"user","message":"x"}\n',
         ("RAISE:AttributeError", "RAISE:AttributeError")),
@@ -866,6 +870,17 @@ def test_unreadable_snapshots_are_anchored(tmp_path, monkeypatch, variant,
     old, new = _decide_both(monkeypatch, data)
     assert new == expected
     assert old == expected
+
+
+@pytest.mark.parametrize("bypass,expected_allowed", [
+    (True, True), (1, False), ("yes", False), (False, False), (None, False)])
+def test_fail_closed_allows_only_a_real_true_bypass(monkeypatch, bypass,
+                                                   expected_allowed):
+    # The one accepted short-circuit divergence (design 4.1) is a truthy
+    # but not True bypass; fail_closed itself must keep requiring True.
+    monkeypatch.setattr(enforce, "read_snapshot", lambda s: {"bypass_safety": bypass})
+    result = enforce.fail_closed({"session": SESSION, "tool_name": "Bash"})
+    assert (result is None) is expected_allowed
 
 
 def _note(role, **over):
