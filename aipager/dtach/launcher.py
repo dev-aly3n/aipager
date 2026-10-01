@@ -11,6 +11,7 @@ hook scripts can identify which session sent which event.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import socket as _socket
@@ -102,6 +103,167 @@ def _force_redraw(name: str) -> None:
     """Bounce PTY size 0.8s after attach to force Ink to redraw."""
     time.sleep(0.8)
     _dtach_redraw.redraw(name)
+
+
+# Following a relaunch. Telegram's /mode, /restart and Restart kill the
+# dtach master and start a new one on the SAME socket about a second later
+# (`session_ops._kill_and_relaunch_core`). The attach client ends with the
+# old master (`inject.kill_session` SIGTERMs it alongside the master, and it
+# exits on the master's EOF otherwise), so without this the terminal fell
+# back to a shell while the session ran on unseen. How long to wait for the
+# socket to come back: the relaunch waits for the old process to exit,
+# polls up to 3 s for its socket to go, then spawns, so a few seconds is
+# normal and 15 s is generous. (Wall time can run longer if the probes'
+# connects stall, at worst 60 polls x (0.25 s + 0.5 s connect timeout), about
+# 45 s, but the poll count keeps it bounded.)
+_FOLLOW_WAIT_S = 15.0
+_FOLLOW_POLL_S = 0.25
+# `kill_session` signals the attach client and the master in the same loop,
+# so the client can be gone while the master is still dying and its socket
+# still answers. Probe this many more times (x _FOLLOW_POLL_S) before
+# deciding the master survived the attach. An alive probe alone cannot tell
+# the old master from the relaunched one (the dead gap between them is only
+# about 0.2-0.3 s, easily stepped over), so every probe also checks that the
+# socket file is the very one the attach began on (`_sock_identity`).
+_DETACH_GRACE_PROBES = 4
+# A session that keeps coming back and dying (a crash loop under some
+# supervisor) must not keep the terminal reattaching forever.
+_FOLLOW_MAX_REATTACHES = 5
+_FOLLOW_WINDOW_S = 60.0
+
+
+def _sleep(seconds: float) -> None:
+    time.sleep(seconds)
+
+
+def _clock() -> float:
+    return time.monotonic()
+
+
+def _stat(path: str) -> os.stat_result:
+    return os.stat(path)
+
+
+def _sock_identity(sock: str) -> tuple[int, int, int] | None:
+    """Which socket FILE is at *sock*: a relaunch unlinks the old one and
+    the new master binds a new one. None if nothing is there.
+
+    Device, inode and MODIFICATION time. The inode alone is not enough:
+    ext4 hands a just-freed inode number straight back to the next bind.
+    The change time is wrong: the dtach master chmods its socket (u+x
+    while a client is attached, u-x when none is), so ctime moves on every
+    attach and detach of the same master. mtime is set when the socket is
+    bound and left alone by chmod, connects and `dtach -p` pushes.
+    """
+    try:
+        st = _stat(sock)
+    except OSError:
+        return None
+    return (st.st_dev, st.st_ino, st.st_mtime_ns)
+
+
+def _master_survived(sock: str, ident: tuple[int, int, int] | None) -> bool:
+    """True if the master the attach began on is still running.
+
+    *ident* is the socket's identity taken just before the attach. Each
+    probe needs the socket alive AND still that same file: a dead socket
+    or a different file means the session ended or was relaunched. The
+    grace exists because during a hard-kill relaunch the client is
+    SIGTERMed next to the master and can exit first, while the old socket
+    still answers. Ctrl-C during the grace means "back to the shell".
+    """
+    def same_master() -> bool:
+        # No identity to compare (the stat failed): alive has to do.
+        return _socket_alive(sock) and (
+            ident is None or _sock_identity(sock) == ident)
+
+    if not same_master():
+        return False
+    try:
+        for _ in range(_DETACH_GRACE_PROBES):
+            _sleep(_FOLLOW_POLL_S)
+            if not same_master():
+                return False
+    except KeyboardInterrupt:
+        return True
+    return True
+
+
+def _wait_for_return(sock: str, name: str) -> bool:
+    """Wait, bounded, for *sock* to be alive again after its master died.
+
+    True as soon as something listens on it again; False once the bound
+    runs out or the user presses Ctrl-C. The bound is a poll COUNT, not a
+    clock deadline, so it stays bounded even when sleep is a no-op.
+    """
+    label = (f"[muted]{name} ended; waiting for it to come back "
+             f"(Ctrl-C to stop)[/muted]")
+    status = console.status(label, spinner="dots") if console.is_terminal else None
+    if status:
+        status.__enter__()
+    else:
+        console.print(f"  {label}")
+    try:
+        for _ in range(int(_FOLLOW_WAIT_S / _FOLLOW_POLL_S)):
+            _sleep(_FOLLOW_POLL_S)
+            if _socket_alive(sock):
+                return True
+        return False
+    except KeyboardInterrupt:
+        return False
+    finally:
+        if status:
+            status.__exit__(None, None, None)
+
+
+def _attach_following(dtach: str, sock: str, name: str,
+                      *, redraw: bool) -> float:
+    """Attach to *sock* and stay attached across relaunches.
+
+    Returns how long the LAST attach lasted, for the caller's
+    "exited immediately" check. The one attach loop both branches of
+    :func:`launch` use.
+
+    After ``dtach -a`` returns, the socket tells the two endings apart: if
+    only the attach ended (the client was signalled) the master is still
+    running and this returns within a second; a dead master means the
+    session ended or is being relaunched, so wait a bounded time for it
+    to come back and reattach.
+    """
+    stop = threading.Event()
+    _set_title(name)
+    threading.Thread(target=_keep_title, args=(name, stop), daemon=True).start()
+    reattached_at: list[float] = []
+    try:
+        while True:
+            if redraw:
+                threading.Thread(target=_force_redraw, args=(name,),
+                                 daemon=True).start()
+            ident = _sock_identity(sock)
+            started = _clock()
+            subprocess.run([dtach, "-a", sock, "-r", "winch", "-E"], check=False)
+            elapsed = _clock() - started
+            if _master_survived(sock, ident):
+                return elapsed
+            now = _clock()
+            reattached_at = [t for t in reattached_at
+                             if now - t < _FOLLOW_WINDOW_S]
+            if len(reattached_at) >= _FOLLOW_MAX_REATTACHES:
+                console.print(
+                    f"  [muted]({name} restarted {len(reattached_at)} times "
+                    f"in {_FOLLOW_WINDOW_S:.0f}s; no longer following it)"
+                    "[/muted]")
+                return elapsed
+            if not _wait_for_return(sock, name):
+                return elapsed
+            reattached_at.append(_clock())
+            console.print(f"[step]→[/step] [muted]{name} restarted, "
+                          "reattaching[/muted]")
+            _set_title(name)
+            # A relaunched claude has drawn its screen with nobody attached.
+            redraw = True
+    finally:
+        stop.set()
 
 
 def _validate_name(name: str) -> str | None:
@@ -221,21 +383,12 @@ def launch(name: str, claude_args: list[str] | None = None,
         f'-- it is your name in this session.'
     )
 
-    stop = threading.Event()
     sock_path = Path(sock)
 
     # Reattach branch — only if the socket is *alive*.
     if sock_path.exists() and _socket_alive(sock):
         console.print(f"[step]→[/step] reattaching to [path]{session}[/path]")
-        _set_title(name)
-        threading.Thread(target=_keep_title, args=(name, stop), daemon=True).start()
-        threading.Thread(target=_force_redraw, args=(name,), daemon=True).start()
-        attach_started = time.monotonic()
-        try:
-            subprocess.run([dtach, "-a", sock, "-r", "winch", "-E"], check=False)
-        finally:
-            stop.set()
-        elapsed = time.monotonic() - attach_started
+        elapsed = _attach_following(dtach, sock, name, redraw=True)
         if elapsed < 1.0 and not sock_path.exists():
             friendly_warn(
                 f"session '{session}' exited immediately ({elapsed:.1f}s).",
@@ -312,14 +465,7 @@ def launch(name: str, claude_args: list[str] | None = None,
         return 1
 
     ok(f"session [path]{session}[/path] ready")
-    _set_title(name)
-    threading.Thread(target=_keep_title, args=(name, stop), daemon=True).start()
-    attach_started = time.monotonic()
-    try:
-        subprocess.run([dtach, "-a", sock, "-r", "winch", "-E"], check=False)
-    finally:
-        stop.set()
-    elapsed = time.monotonic() - attach_started
+    elapsed = _attach_following(dtach, sock, name, redraw=False)
     if elapsed < 1.0 and not sock_path.exists():
         friendly_warn(
             f"session '{session}' exited immediately ({elapsed:.1f}s).",

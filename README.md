@@ -193,7 +193,8 @@ aipager session dev
 This creates (or reattaches to) a dtach session named `claude-dev`
 running Claude Code. The aipager daemon discovers it within seconds
 and Telegram starts mirroring it. Re-run the same command to reattach
-later; detach with `Ctrl-\`.
+later; to leave without stopping Claude, close the terminal or tmux
+pane (the session keeps running).
 
 If the dtach session was killed (machine reboot, etc.) but you want
 to pick up the Claude conversation from disk, add `--resume`:

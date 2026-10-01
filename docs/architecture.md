@@ -147,7 +147,14 @@ dtach gives each Claude Code session a real PTY without binding it
 to a terminal that has to stay open. The aipager daemon attaches
 non-interactively via `dtach -a -E` to read the output stream and
 inject keystrokes; the user can also attach interactively from any
-shell via `aipager session <name>` for direct access.
+shell via `aipager session <name>` for direct access. That attach
+follows the session through a restart from Telegram (`/mode`,
+`/restart`, Restart): when the session's socket goes away it waits up
+to 15 s for the same socket to come back and reattaches on its own.
+A session that really ended returns to the shell after the wait
+(Ctrl-C ends it sooner). The attach runs with dtach's detach key
+turned off, so `Ctrl-\` goes to Claude; to leave, close the terminal
+or tmux pane and the session keeps running.
 
 The result: Claude Code runs as if you typed in a terminal, but
 that terminal can come and go without disturbing the running session.
