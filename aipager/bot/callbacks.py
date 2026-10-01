@@ -57,6 +57,7 @@ from aipager.bot.transport import (  # noqa: F401
     _message_chat_id,
     resolve_chat_id,
     edit_message,
+    MUTED,
     edit_markup,
     edit_text,
     send_text,
@@ -102,7 +103,7 @@ def _switch_refused(outcome) -> str:
     label = html_mod.escape(outcome.label)
     if outcome.reason == "already_restarting":
         return (f"⚠️ <b>{label}</b> is restarting right now - mode not changed. "
-                "Send /mode again in a moment.")
+                "Try again in a moment.")
     return f"⚠️ <b>{label}</b> is not running - mode not changed."
 
 
@@ -230,57 +231,57 @@ class CallbackDispatchMixin:
 
     async def _do_perms_switch_via_fn(self, sess, target_skip_perms: bool,
                                       edit_fn, *,
-                                      tapped_msg_id: int | None = None) -> None:
-        """Kill + poll + relaunch with toggled skip_perms.
+                                      tapped_msg_id: int | None = None,
+                                      turn: int | None = None,
+                                      chat_id=None, announce: bool = True):
+        """Kill + poll + relaunch with toggled skip_perms, showing each step
+        through ``edit_fn`` (an async ``(text, **kw)``: the card being
+        edited in place) and ending in the /mode card: the new mode and the
+        opposite switch, or what went wrong above the current one.
 
         Thin wrapper around :meth:`SessionOpsMixin._perms_switch_core` —
         the single kill/poll/relaunch seam chat and the Mini App now
-        both go through (design.md ORCHESTRATOR OVERRIDE). ``edit_fn``
-        is an async callable ``(text, **kw)`` used to update the
-        in-progress message (either via query.edit_message_text or via
-        status_msg.edit_text / update.message.reply_text, depending on
-        the call site).
+        both go through (design.md ORCHESTRATOR OVERRIDE).
+
+        ``turn``: the turn the card was shown for (its pending record's);
+        it decides whether the tap is current. Without one, the tapped
+        message id is compared with the busy card's, which an older card
+        edited in place would fail. ``announce``: show "Switching…" first
+        (the caller may have already). Returns the outcome, or None when
+        the tap was refused as stale.
         """
-        label = sess.label
-        if not sess.tap_is_for_this_turn(tapped_msg_id):
-            # A /perms card offered while the session was idle can be
-            # tapped much later, by which time a different turn is
-            # running — and this path kills and relaunches it.
-            # `tapped_msg_id=None` (the /perms command path) fails
-            # open, as does an idle session with no busy card.
-            await edit_fn("⚠️ That task already finished - send /mode again")
-            return
+        label = html_mod.escape(sess.label)
+        if not (sess.tap_is_for_this_turn(None, turn=turn) if turn is not None
+                else sess.tap_is_for_this_turn(tapped_msg_id)):
+            # A card offered while the session was idle can be tapped much
+            # later, by which time a different turn is running — and this
+            # path kills and relaunches it.
+            text, kb = self._mode_card(chat_id, sess, (
+                f"⚠️ <b>{label}</b> moved on to new work, so nothing changed."))
+            await edit_fn(text, parse_mode="HTML", reply_markup=kb)
+            return None
+        if announce:
+            # The buttons go at once: a second tap during the relaunch has
+            # nothing left to press.
+            await edit_fn(f"⚙️ Switching <b>{label}</b> to "
+                          f"{'🤖 Auto' if target_skip_perms else '💬 Ask'} mode…",
+                          parse_mode="HTML")
         outcome = await self._perms_switch_core(sess, target_skip_perms)
 
-        if outcome.reason == "still_stopping":
-            await edit_fn(
-                f"⚠️ <b>{html_mod.escape(label)}</b> is still stopping - "
-                f"mode not changed. Try /mode again in a moment.",
-                parse_mode="HTML",
-            )
-            return
-
-        if outcome.reason == "launch_failed":
-            await edit_fn(
-                f"❌ Couldn't switch mode: {html_mod.escape(outcome.err)}",
-                parse_mode="HTML",
-            )
-            return
-
-        if not outcome.ok:
+        if outcome.ok:
+            note = ""
+            log.info("[%s] perms switched to skip_perms=%s", sess.label, target_skip_perms)
+        elif outcome.reason == "still_stopping":
+            note = f"⚠️ <b>{label}</b> is still stopping - mode not changed."
+        elif outcome.reason == "launch_failed":
+            note = f"❌ Couldn't switch mode: {html_mod.escape(outcome.err)}"
+        else:
             # not_live / already_restarting: never silence (a refused
             # switch used to leave its card and buttons as they were).
-            await edit_fn(_switch_refused(outcome), parse_mode="HTML")
-            return
-
-        mode_icon = "🤖" if target_skip_perms else "💬"
-        mode_label = "Auto" if target_skip_perms else "Ask"
-        await edit_fn(
-            f"{mode_icon} <b>{html_mod.escape(label)}</b> is now in "
-            f"{mode_label} mode.",
-            parse_mode="HTML",
-        )
-        log.info("[%s] perms switched to skip_perms=%s", label, target_skip_perms)
+            note = _switch_refused(outcome)
+        text, kb = self._mode_card(chat_id, sess, note)
+        await edit_fn(text, parse_mode="HTML", reply_markup=kb)
+        return outcome
 
     # Callback-data value tokens → the field value `preferences.set_preference`
     # expects. Only the boolean sections need translation (bool ↔ on/off);
@@ -818,36 +819,41 @@ class CallbackDispatchMixin:
                 if pending is not None and self._perms_pending.get(session_name) is pending:
                     del self._perms_pending[session_name]
 
-            if action == "perms_cancel":
-                _consume()
+            chat = calling_chat_id(update)
+
+            async def _show_card(note: str = "") -> None:
+                """Back to the /mode card (the current mode, a fresh switch)."""
+                if sess is None:
+                    text, kb = (note or "↩️ Cancelled."), None
+                else:
+                    text, kb = self._mode_card(chat, sess, note)
                 try:
-                    await edit_text(query, "↩️ Cancelled.")
+                    await edit_text(query, text, parse_mode="HTML", reply_markup=kb)
                 except Exception:
                     pass
+
+            if action in ("perms_cancel", "perms_wait"):
+                # Cancel / Not now: the card again, for the mode it is in.
+                _consume()
+                await _show_card()
                 return
 
-            if action == "perms_wait":
-                _consume()
-                try:
-                    await edit_text(query,
-                        f"⏳ Cancelled - try /mode again when "
-                        f"<b>{html_mod.escape(label)}</b> is idle.",
-                        parse_mode="HTML",
-                    )
-                except Exception:
-                    pass
+            if sess is not None and sess.relaunch_in_flight:
+                # A switch or restart is running right now (perhaps this
+                # card's own, tapped twice). Say so, and keep the card and
+                # any record: the same button works in a moment.
+                await self._safe_answer(
+                    query, f"{sess.label} is restarting right now - tap again in a moment")
                 return
 
             if pending is None:
                 # Which mode this card was for is not known any more (it
                 # was used, a newer card replaced it, or the daemon
                 # restarted). Never guess: it used to default to Ask, so a
-                # "Switch to Auto?" card relaunched the session in Ask.
-                await self._safe_answer(query, "This card is out of date - send /mode again")
-                try:
-                    await edit_text(query, "⚠️ This card is out of date - send /mode again.")
-                except Exception:
-                    pass
+                # "Switch to Auto?" card relaunched the session in Ask. It
+                # becomes the current card, so a tap on it is a fresh one.
+                await self._safe_answer(query, "This card is out of date - nothing changed")
+                await _show_card("⚠️ That card was out of date, so nothing changed.")
                 return
             target_skip_perms = pending["target_skip_perms"]
 
@@ -859,92 +865,39 @@ class CallbackDispatchMixin:
                     pass
                 return
 
-            if sess.relaunch_in_flight:
-                # A switch or restart is running right now. Say so, and keep
-                # the card and its record: the same button works in a moment.
-                await self._safe_answer(
-                    query, f"{sess.label} is restarting right now - tap again in a moment")
-                return
+            fallback: list = []
 
             async def _edit(text, **kw):
-                try:
-                    await edit_text(query, text, **kw)
-                except Exception:
-                    await send_text(self._app.bot,
-                        chat_id=CHAT_ID, text=text, **kw,
-                    )
-
-            if action == "perms_confirm":
-                # IDLE Ask→Auto confirmed. Whatever happens next edits this
-                # card (its buttons go with it), so its record is spent.
-                _consume()
-                await self._do_perms_switch_via_fn(
-                    sess, target_skip_perms, _edit, tapped_msg_id=tapped)
-                return
-
-            if action == "perms_stop_switch":
-                if not sess.tap_is_for_this_turn(
-                        getattr(query.message, "message_id", None)):
-                    # Same defect as a stale Stop, with a worse payload:
-                    # this Ctrl-Cs AND hard-kills+relaunches the session.
-                    # `_perms_pending` is never cleared when a turn ends, so
-                    # an ignored /perms card keeps a live-looking button
-                    # indefinitely, and the branch above proceeds even when
-                    # `pending` is None.
-                    await self._safe_answer(
-                        query,
-                        "That task already finished - send /mode again")
-                    return
-                _consume()
-                # BUSY: send Ctrl-C, then poll for socket disappearance.
-                # Same deliberate outage as the IDLE path — the session is
-                # meant to exit here, so its exit is not news. Thin
-                # wrapper around the same shared core the IDLE path
-                # (_do_perms_switch_via_fn) and the Mini App both go
-                # through now (design.md ORCHESTRATOR OVERRIDE).
-                outcome = await self._perms_switch_core(sess, target_skip_perms)
-
-                if outcome.reason == "still_stopping":
+                """The card, edited; if that fails once, one message in the
+                tapped chat carries every later step (never the card again)."""
+                if not fallback:
                     try:
-                        await edit_text(query,
-                            f"⚠️ <b>{html_mod.escape(label)}</b> is still stopping - "
-                            f"mode not changed. Try /mode again in a moment.",
-                            parse_mode="HTML",
-                        )
-                    except Exception:
-                        pass
-                    return
-
-                if outcome.reason == "launch_failed":
+                        await edit_text(query, text, **kw)
+                        return
+                    except Exception as exc:
+                        if "not modified" in str(exc).lower():
+                            return        # it already shows this
+                        log.debug("[%s] mode card edit failed, sending", label,
+                                  exc_info=True)
+                elif fallback[0] is not MUTED:
                     try:
-                        await edit_text(query,
-                            f"❌ Couldn't switch mode: {html_mod.escape(outcome.err)}",
-                            parse_mode="HTML",
-                        )
+                        await edit_message(fallback[0], text, **kw)
+                        return
                     except Exception:
-                        pass
-                    return
+                        log.debug("[%s] mode message edit failed", label, exc_info=True)
+                fallback[:] = [await send_text(self._app.bot,
+                    chat_id=chat or CHAT_ID, text=text, **kw,
+                )]
 
-                if not outcome.ok:
-                    try:
-                        await edit_text(query, _switch_refused(outcome), parse_mode="HTML")
-                    except Exception:
-                        pass
-                    return
-
-                mode_icon = "🤖" if target_skip_perms else "💬"
-                mode_label = "Auto" if target_skip_perms else "Ask"
-                try:
-                    await edit_text(query,
-                        f"{mode_icon} <b>{html_mod.escape(label)}</b> is now in "
-                        f"{mode_label} mode.",
-                        parse_mode="HTML",
-                    )
-                except Exception:
-                    pass
-                log.info("[%s] perms switched (stop_switch) to skip_perms=%s",
-                         label, target_skip_perms)
-                return
+            # Confirmed (Ask→Auto on an idle session) or Stop & switch (a
+            # busy one; the core interrupts first). Whatever happens next
+            # edits this card, its buttons going first, so its record is
+            # spent. The record's turn decides whether the tap is current.
+            _consume()
+            await self._do_perms_switch_via_fn(
+                sess, target_skip_perms, _edit, tapped_msg_id=tapped,
+                turn=pending.get("turn"), chat_id=chat)
+            return
 
         # ---- /resume mode-picker callbacks ----------------------------
         if action in ("resume_mode_ask", "resume_mode_auto", "resume_mode_cancel"):

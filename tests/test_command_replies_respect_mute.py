@@ -467,7 +467,8 @@ def test_perms_busy_prompt_muted_leaves_nothing_pending_and_does_not_raise(
     bot._is_admin = MagicMock(return_value=True)
     MUTE.mute(MUTED_CHAT, BAN)
 
-    update = _command(mk_update, "/perms", MUTED_CHAT)
+    # Named, so it reaches the busy prompt (a bare /perms shows the card).
+    update = _command(mk_update, "/perms auto", MUTED_CHAT)
     run_async(bot._handle_perms_cmd(update, MagicMock()))
     update.message.reply_text.assert_not_awaited()
     assert "claude-dev" not in bot._perms_pending

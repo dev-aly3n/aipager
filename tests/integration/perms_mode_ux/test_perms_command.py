@@ -131,11 +131,13 @@ def test_sc6_perms_idle_ask_to_auto_confirm_updates_registry():
         "Registry skip_perms must be True after perms_confirm"
     )
     # Message must be edited
-    query.edit_message_text.assert_awaited_once()
-    edited_text = query.edit_message_text.await_args[0][0]
-    assert "🤖" in edited_text or "Auto" in edited_text, (
-        f"Edited message must mention Auto mode; got: {edited_text}"
-    )
+    # The card changes in place: "Switching…" (buttons gone), then the
+    # /mode card for the new mode with the opposite switch (2026-10-01).
+    edits = query.edit_message_text.await_args_list
+    assert [c.args[0] for c in edits] == [
+        "⚙️ Switching <b>ben</b> to 🤖 Auto mode…", "<b>ben</b> is 🤖 Auto."]
+    kb = edits[-1].kwargs["reply_markup"]
+    assert [b.text for row in kb.inline_keyboard for b in row] == ["💬 Switch to Ask"]
 
 
 def test_sc6_perms_confirm_clears_pending():
@@ -245,7 +247,6 @@ def test_sc7_perms_confirm_result_shows_ask_mode():
         mock_path_cls.return_value.is_socket.return_value = False
         _run(bot._handle_callback(update, MagicMock()))
 
-    query.edit_message_text.assert_awaited_once()
     text = query.edit_message_text.await_args[0][0]
     assert "💬" in text or "Ask" in text, (
         f"Message must mention Ask mode after Auto→Ask switch; got: {text}"
@@ -300,11 +301,10 @@ def test_sc8_perms_not_now_edits_to_cancellation():
     update, query = _make_query("claude-ben:perms_wait")
     _run(bot._handle_callback(update, MagicMock()))
 
+    # Not now: back to the /mode card for the mode it is in (2026-10-01).
     query.edit_message_text.assert_awaited_once()
     msg = query.edit_message_text.await_args[0][0]
-    assert "Cancelled" in msg or "cancel" in msg.lower(), (
-        f"Not now must edit to cancellation; got: {msg}"
-    )
+    assert msg == "<b>ben</b> is 💬 Ask.", msg
     # skip_perms must be unchanged
     assert sess.skip_perms is False, (
         "Not now must not change skip_perms"
@@ -329,10 +329,9 @@ def test_sc8_perms_not_now_message_contains_retry_hint():
     update, query = _make_query("claude-ben:perms_wait")
     _run(bot._handle_callback(update, MagicMock()))
 
-    msg = query.edit_message_text.await_args[0][0]
-    assert "perms" in msg.lower() or "idle" in msg.lower() or "Cancelled" in msg, (
-        f"Not now message must hint about retrying; got: {msg}"
-    )
+    # The way to retry is the card's own switch.
+    kb = query.edit_message_text.await_args.kwargs["reply_markup"]
+    assert [b.text for row in kb.inline_keyboard for b in row] == ["🤖 Switch to Auto"]
 
 
 # --------------------------------------------------------------------------- #
@@ -439,7 +438,6 @@ def test_sc9_stop_switch_edits_message_to_new_mode():
         mock_path_cls.return_value.is_socket.return_value = False
         _run(bot._handle_callback(update, MagicMock()))
 
-    query.edit_message_text.assert_awaited_once()
     text = query.edit_message_text.await_args[0][0]
     assert "🤖" in text or "Auto" in text, (
         f"After switch to Auto, message must say so; got: {text}"

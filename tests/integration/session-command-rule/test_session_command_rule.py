@@ -528,7 +528,10 @@ def test_a_non_admin_tapping_switch_to_auto_is_refused_in_words(bot, cmd, tap):
 
     query = tap(_cb(bot, kb, "🤖 Switch to Auto"))
 
-    assert query.message.reply_text.await_args.args[0] == "Auto mode needs an admin."
+    # A toast; the card stays as it is, and nothing new is sent.
+    assert _toast(query) == "Auto mode needs an admin."
+    query.edit_message_text.assert_not_awaited()
+    query.message.reply_text.assert_not_awaited()
     assert x1.skip_perms is False
 
 
@@ -926,8 +929,9 @@ def test_an_admin_switching_to_auto_by_button_gets_the_confirm(bot, cmd, tap):
 
     query = tap(_cb(bot, kb, "🤖 Switch to Auto"))
 
-    assert query.message.reply_text.await_args.args[0].startswith(
-        "⚙️ Switch <b>x1</b> to 🤖 Auto mode?")
+    # The card itself becomes the confirm (2026-10-01).
+    assert _edited(query)[0].startswith("⚙️ Switch <b>x1</b> to 🤖 Auto mode?")
+    query.message.reply_text.assert_not_awaited()
 
 
 @pytest.mark.parametrize("text", ["/mode x1 x2", "/mode x1 ask more", "/mode ask auto x1"])

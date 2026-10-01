@@ -1155,9 +1155,11 @@ async def handle_callback(
             text, kb = bot._render_mode_card(chat_id, sess)
             await _edit(query, text, kb)
             return True
-        await bot._safe_answer(query)
+        # The card itself becomes the confirm, the switch and the result
+        # (operator, 2026-10-01): no second message to leave it stale.
         await bot._perms_flow(sess, target, query.message,
-                              may_auto=bot._is_admin_user(user_id, chat_id))
+                              may_auto=bot._is_admin_user(user_id, chat_id),
+                              chat_id=chat_id, query=query)
         return True
 
     if action == "menu-close":

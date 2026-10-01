@@ -59,6 +59,7 @@ from aipager.bot.transport import (  # noqa: F401
     MUTED,
     reply_text,
     edit_message,
+    edit_text,
     edit_text_at,
     send_text,
     ACTION_VERBS,
@@ -1113,7 +1114,7 @@ class CommandHandlersMixin:
                 f"{'🤖 Auto' if target else '💬 Ask'}.", parse_mode="HTML")
             return
         await self._perms_flow(sess, target, update.message,
-                               may_auto=self._is_admin(update))
+                               may_auto=self._is_admin(update), chat_id=chat_id)
 
     # The old name: the same command since 2026-09-30.
     _handle_perms_cmd = _handle_mode_cmd
@@ -1134,79 +1135,128 @@ class CommandHandlersMixin:
                 self, chat_id or 0, sess, f"modeauto{sess.turn_key}"))
         return text, InlineKeyboardMarkup([[button]])
 
+    def _mode_card(self, chat_id, sess: TrackedSession, note: str = ""):
+        """The /mode card, under *note* (HTML) when there is one: where every
+        switch ends, whether it happened, failed or was refused."""
+        text, kb = self._render_mode_card(chat_id, sess)
+        return (f"{note}\n\n{text}" if note else text), kb
+
     async def _perms_flow(self, sess: TrackedSession, target_skip_perms: bool,
-                          message, *, may_auto: bool) -> None:
-        """Switch *sess* to Auto (``target_skip_perms``) or Ask, replying to
-        *message*: Ask→Auto asks to confirm; Auto→Ask switches at once; a
-        working session offers Stop & switch."""
+                          message, *, may_auto: bool, chat_id=None,
+                          query=None) -> None:
+        """Switch *sess* to Auto (``target_skip_perms``) or Ask: Ask→Auto
+        asks to confirm; Auto→Ask switches at once; a working session
+        offers Stop & switch. Every way ends in the /mode card.
+
+        ``query``: the tap on a /mode card or picker. That message is edited
+        through every step, one message that changes in place (operator,
+        2026-10-01: a second message left the card behind with a button
+        pointing the wrong way); a refusal is a toast and the card stays.
+        Without it (the typed command) the flow replies once to *message*
+        and edits that reply. ``chat_id``: the chat the card is in, for its
+        buttons."""
+        label = html_mod.escape(sess.label)
+        shown: list = []        # the typed path's one reply, once sent
+
+        async def show(text, kb=None):
+            """Put a step on screen; the id of the message it is on, or None
+            when nothing showed (the chat is muted)."""
+            if query is not None and not shown:
+                try:
+                    if await edit_text(query, text, parse_mode="HTML",
+                                       reply_markup=kb) is MUTED:
+                        return None
+                    return getattr(query.message, "message_id", None)
+                except Exception as exc:
+                    if "not modified" in str(exc).lower():
+                        # The card already shows this step (a second tap on
+                        # the same button): it is on screen, not a failure.
+                        return getattr(query.message, "message_id", None)
+                    log.debug("[%s] mode card edit failed, replying", sess.label,
+                              exc_info=True)
+                    target = query.message
+            else:
+                # The typed command, or a card whose edit failed once: every
+                # later step goes to the one reply, never back to the card.
+                target = query.message if query is not None else message
+            if shown and shown[0] is not MUTED:
+                try:
+                    await edit_message(shown[0], text, parse_mode="HTML", reply_markup=kb)
+                    return shown[0].message_id
+                except Exception:
+                    log.debug("[%s] mode reply edit failed, replying", sess.label,
+                              exc_info=True)
+            sent = await reply_text(target, text, parse_mode="HTML", reply_markup=kb)
+            shown[:] = [sent]
+            return None if sent is MUTED else getattr(sent, "message_id", None)
+
+        async def refuse(toast: str, reply: str) -> None:
+            if query is not None:
+                await self._safe_answer(query, toast)       # the card stays
+            else:
+                await reply_text(message, reply, parse_mode="HTML")
+
         # Admin gate: only switching TO Auto needs one.
         if target_skip_perms and not may_auto:
-            await reply_text(message, "Auto mode needs an admin.")
+            await refuse("Auto mode needs an admin.", "Auto mode needs an admin.")
             return
 
         if sess.status == Status.UNKNOWN:
-            await reply_text(message,
-                f"⚠️ <b>{html_mod.escape(sess.label)}</b>'s status is still initializing."
-                f" Try /mode again in a moment.",
-                parse_mode="HTML",
-            )
+            await refuse(
+                f"{sess.label} is still starting - try again in a moment",
+                f"⚠️ <b>{label}</b>'s status is still initializing."
+                f" Try /mode again in a moment.")
             return
+
+        if query is not None:
+            await self._safe_answer(query)
+        mode = "🤖 Auto" if target_skip_perms else "💬 Ask"
 
         if sess.status == Status.BUSY:
             # BUSY flow: show Stop & switch / Not now keyboard.
-            kb = self._build_perms_busy_keyboard(sess)
-            mode_label = "Auto" if target_skip_perms else "Ask"
-            sent = await reply_text(message,
-                f"⚙️ <b>{html_mod.escape(sess.label)}</b> is busy.\n"
-                f"Switch to {mode_label} mode?",
-                parse_mode="HTML",
-                reply_markup=kb,
-            )
-            if sent is MUTED:
-                # Flood-muted: no keyboard reached the user, so there is
-                # nothing pending for a tap to confirm.
+            card_id = await show(
+                f"⚙️ <b>{label}</b> is busy.\nSwitch to {mode[2:]} mode?",
+                self._build_perms_busy_keyboard(sess))
+            if card_id is None:
+                # Muted: no keyboard reached the user, so there is nothing
+                # pending for a tap to confirm.
                 return
             self._perms_pending[sess.name] = {
                 "target_skip_perms": target_skip_perms,
-                "msg_id": sent.message_id,
+                "msg_id": card_id,
                 "label": sess.label,
+                # The card may be an older message edited in place, so its
+                # id says nothing about the turn: the turn it was shown for
+                # decides (callbacks perms_stop_switch).
+                "turn": sess.turn_key,
             }
             return
 
         # IDLE flow.
         if target_skip_perms:
             # Ask→Auto: require confirmation.
-            kb = self._build_perms_confirm_keyboard(sess)
-            sent = await reply_text(message,
-                f"⚙️ Switch <b>{html_mod.escape(sess.label)}</b> to "
-                f"🤖 Auto mode?\n"
+            card_id = await show(
+                f"⚙️ Switch <b>{label}</b> to 🤖 Auto mode?\n"
                 f"<i>Claude will run tools without prompting "
                 f"(<code>--dangerously-skip-permissions</code>).</i>",
-                parse_mode="HTML",
-                reply_markup=kb,
-            )
-            if sent is MUTED:
+                self._build_perms_confirm_keyboard(sess))
+            if card_id is None:
                 return  # as above: no prompt went out, nothing to confirm
             self._perms_pending[sess.name] = {
                 "target_skip_perms": True,
-                "msg_id": sent.message_id,
+                "msg_id": card_id,
                 "label": sess.label,
+                "turn": sess.turn_key,
             }
         else:
             # Auto→Ask: execute immediately, no confirmation needed.
-            status_msg = await reply_text(message,
-                f"⚙️ Switching <b>{html_mod.escape(sess.label)}</b> "
-                f"to 💬 Ask mode…",
-                parse_mode="HTML",
-            )
+            await show(f"⚙️ Switching <b>{label}</b> to 💬 Ask mode…")
 
             async def _edit(text, **kw):
-                try:
-                    await edit_message(status_msg, text, **kw)
-                except Exception:
-                    await reply_text(message, text, **kw)
+                await show(text, kw.get("reply_markup"))
 
-            await self._do_perms_switch_via_fn(sess, False, _edit)
+            await self._do_perms_switch_via_fn(sess, False, _edit, chat_id=chat_id,
+                                               announce=False)
 
     async def _handle_whoami(self, update: Update,
                              ctx: ContextTypes.DEFAULT_TYPE) -> None:
