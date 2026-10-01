@@ -68,6 +68,10 @@ def test_launch_reattach_when_socket_alive(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(launcher, "_dtach_works",
                         lambda p: (True, ""))
     monkeypatch.setattr(launcher, "_socket_alive", lambda s: True)
+    # The attach's master-survived check: same socket file (one master's
+    # identity is stable across an attach), no real waits.
+    monkeypatch.setattr(launcher, "_sock_identity", lambda s: (1, 2, 3))
+    monkeypatch.setattr(launcher, "_sleep", lambda s: None)
     # Patch Path() -> point to our tmp socket
     real_path = launcher.Path
     def _fake_path(p):
