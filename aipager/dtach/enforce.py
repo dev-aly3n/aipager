@@ -145,8 +145,11 @@ def _iter_lines_reversed(
 # writes are skipped where the old code parsed them:
 #   1. a user line whose FIRST ``"message"`` key is a nested object laid
 #      out like a tool result while the entry itself is a prompt;
-#   2. duplicate keys (the first ``"message"`` a tool result, the last,
-#      which ``json.loads`` keeps, a prompt);
+#   2. duplicate keys where the layout check looks: a second
+#      ``"message"``, a second ``"content"`` in the message, or a second
+#      ``"type"`` in its first block. The check reads the first,
+#      ``json.loads`` keeps the last, so a tool result there can hide a
+#      prompt;
 #   3. a line that is no prompt candidate but made the old parse raise
 #      something other than JSONDecodeError (nesting ~10,000 deep, an
 #      integer over 4,300 digits, a truthy non-dict ``"message"`` in the

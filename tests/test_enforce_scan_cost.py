@@ -731,6 +731,17 @@ DOCUMENTED = {
         TERM_LINE + '\n{"type":"user","message":' + json.dumps(_NESTED_TR)
         + ',"message":' + json.dumps({"role": "user", "content": TG}) + "}",
         ("terminal", False), ("telegram", False)),
+    # 2 (review-2): a duplicate "content" in the message, or a duplicate
+    # "type" in its first block; the layout check reads the first, json
+    # keeps the last.
+    "duplicate_content_keys": (
+        TERM_LINE + '\n{"type":"user","message":{"role":"user","content":'
+        '[{"type":"tool_result","content":"ok"}],"content":' + json.dumps(TG) + "}}",
+        ("terminal", False), ("telegram", False)),
+    "duplicate_block_type_keys": (
+        TERM_LINE + '\n{"type":"user","message":{"role":"user","content":'
+        '[{"type":"tool_result","type":"text","text":' + json.dumps(TG) + "}]}}",
+        ("terminal", False), ("telegram", False)),
     # 3: non-candidate lines the old parse raised on.
     "deep_assistant_line": (
         TG_LINE + "\n" + _deep('{"type":"assistant","message":{"content":') + "}",
