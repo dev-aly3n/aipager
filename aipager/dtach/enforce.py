@@ -60,46 +60,169 @@ _BLOCK_MARKER = "aipager safety policy"
 _TASK_NOTIFICATION_PREFIX = "<task-notification>"
 
 
+def _iter_raw_lines_reversed(
+    path: str | Path, chunk_bytes: int = 65536,
+) -> Iterator[bytes]:
+    """Yield the raw lines of ``path`` last first, as bytes.
+
+    Yields exactly ``data.split(b"\\n")`` reversed: the empty piece after
+    a final newline is yielded, ``\\r`` is kept, and a file with no
+    trailing newline still yields its final line. An empty file yields
+    nothing (not ``[b""]``), as the scans have always expected.
+
+    Linear in the bytes read. The file is read from EOF backwards in
+    ``chunk_bytes`` chunks through the builtin ``open`` (so a caller that
+    stops early reads only the tail), and newlines are found with
+    ``rfind`` inside each chunk. A line longer than a chunk is kept as a
+    list of pieces and joined once, when its start is found; the old
+    reader re-copied and re-split a growing fragment on every chunk,
+    which was quadratic in the line's length and took seconds on one
+    40 MB line. Peak memory is about twice the longest line plus a chunk.
+    """
+    with open(path, "rb") as f:
+        f.seek(0, os.SEEK_END)
+        pos = f.tell()
+        pending: list[bytes] = []  # pieces of the open line, newest first
+        while pos > 0:
+            read_size = min(chunk_bytes, pos)
+            pos -= read_size
+            f.seek(pos)
+            buf = f.read(read_size)
+            end = len(buf)
+            nl = buf.rfind(b"\n", 0, end)
+            while nl != -1:
+                if pending:
+                    pending.append(buf[nl + 1:end])
+                    line = b"".join(reversed(pending))
+                    pending = []  # drop the pieces before the consumer runs
+                    yield line
+                    del line
+                else:
+                    yield buf[nl + 1:end]
+                end = nl
+                nl = buf.rfind(b"\n", 0, end)
+            pending.append(buf[:end])
+        if pending:
+            line = b"".join(reversed(pending))
+            pending = []
+            yield line
+
+
 def _iter_lines_reversed(
     path: str | Path, chunk_bytes: int = 65536,
 ) -> Iterator[str]:
     """Yield lines from ``path`` in reverse (last line first).
 
-    Streams the file in ``chunk_bytes`` chunks from EOF backwards; only
-    the tail actually consulted lands in memory. Partial bytes at a
-    chunk boundary are buffered until the previous chunk is read, so
-    multi-byte UTF-8 characters never get split mid-sequence. Files
-    with no trailing newline still yield their final line. Blank lines
-    are yielded as empty strings — callers filter as needed.
+    The same lines as :func:`_iter_raw_lines_reversed`, decoded. Streams
+    the file in ``chunk_bytes`` chunks from EOF backwards; only the tail
+    actually consulted lands in memory. A line is decoded only once it is
+    complete, so multi-byte UTF-8 characters never get split
+    mid-sequence. Files with no trailing newline still yield their final
+    line. Blank lines are yielded as empty strings — callers filter as
+    needed.
 
     Malformed UTF-8 falls back to ``errors="replace"`` per line rather
     than raising, matching the caller's existing
     "skip lines we can't parse" semantics.
     """
-    with open(path, "rb") as f:
-        f.seek(0, os.SEEK_END)
-        pos = f.tell()
-        if pos == 0:
-            return
-        fragment = b""
-        while pos > 0:
-            read_size = min(chunk_bytes, pos)
-            pos -= read_size
-            f.seek(pos)
-            buf = f.read(read_size) + fragment
-            parts = buf.split(b"\n")
-            if pos > 0:
-                # Leading part may continue into the preceding chunk.
-                fragment = parts[0]
-                complete = parts[1:]
-            else:
-                fragment = b""
-                complete = parts
-            for line in reversed(complete):
-                try:
-                    yield line.decode("utf-8")
-                except UnicodeDecodeError:
-                    yield line.decode("utf-8", errors="replace")
+    for raw in _iter_raw_lines_reversed(path, chunk_bytes=chunk_bytes):
+        try:
+            yield raw.decode("utf-8")
+        except UnicodeDecodeError:
+            yield raw.decode("utf-8", errors="replace")
+
+
+# ---- which lines the scans parse ----------------------------------------
+#
+# Both scans walk the transcript back to the governing prompt and used to
+# ``json.loads`` every line on the way, seconds of CPU per tool call on a
+# long turn. ``_needs_parse`` decides from the raw bytes whether a line
+# can change a scan's answer; only those lines go through the old
+# per-line logic, unchanged. Every skip below is safe for anything Claude
+# Code writes (its serializer is JSON.stringify: no duplicate keys, no
+# ``\\u``-escaped ASCII, the entry's own ``"message"`` key comes before
+# any nested one). Three documented classes of line Claude Code never
+# writes are skipped where the old code parsed them:
+#   1. a user line whose FIRST ``"message"`` key is a nested object laid
+#      out like a tool result while the entry itself is a prompt;
+#   2. duplicate keys (the first ``"message"`` a tool result, the last,
+#      which ``json.loads`` keeps, a prompt);
+#   3. a line that is no prompt candidate and carries none of the marker
+#      words but made the old parse raise something other than
+#      JSONDecodeError (nesting ~10,000 deep, an integer over 4,300
+#      digits, a truthy non-dict ``"message"`` in the sticky scan). The
+#      old code denied those only through that accident.
+# Anything else is parsed, so it behaves (and raises) exactly as before.
+
+# First byte ``bytes.strip()`` would keep: ``\S`` on a bytes pattern is
+# exactly its whitespace set (space, \t, \n, \r, \x0b, \x0c).
+_FIRST_NON_SPACE = re.compile(rb"\S")
+# A ``\u``-escaped printable ASCII character: the only way a JSON writer
+# can spell a key or value (``"typ\u0065"``, ``\u0061ipager``) without
+# its literal bytes, which every other rule below looks for.
+_ASCII_ESCAPE = re.compile(rb"\\u00[2-7][0-9a-fA-F]")
+# A key ``type`` with value ``user``. Text inside a JSON string has its
+# quotes escaped (``\"``), so user-controlled text cannot form this run.
+_USER_TYPE = re.compile(rb'"type"\s*:\s*"user"')
+# A tool-result carrier, matched at the line's FIRST ``"message"``: a user
+# message whose content's first block is a tool_result (Claude Code may
+# write ``tool_use_id`` before ``type``). A genuine prompt (string
+# content, text or image blocks) never matches.
+_TOOL_RESULT_LAYOUT = re.compile(
+    rb'"message"\s*:\s*\{\s*"role"\s*:\s*"user"\s*,\s*"content"\s*:\s*\[\s*\{\s*'
+    rb'(?:"tool_use_id"\s*:\s*"[^"\\]*"\s*,\s*)?"type"\s*:\s*"tool_result"'
+)
+# The words of _BLOCK_MARKER. ``_tool_result_text`` joins a tool result's
+# pieces with a space, so ``"aipager"`` + ``"safety policy"`` carries the
+# marker without its contiguous bytes; each word, though, is copied
+# verbatim from a JSON string in the line (or hidden by an ASCII escape,
+# which _ASCII_ESCAPE catches).
+_MARKER_WORDS = (b"safety", b"policy", b"aipager")
+# Unrolled for _needs_parse (a generator per line costs more than the
+# check itself on a long turn), rarest-looking word first.
+_MARKER_WORD_1, _MARKER_WORD_2, _MARKER_WORD_3 = (
+    _MARKER_WORDS[1], _MARKER_WORDS[0], _MARKER_WORDS[2])
+
+
+def _needs_parse(raw: bytes, sticky: bool) -> bool:
+    """True when ``raw`` could change the scan's answer, so it must go
+    through the old per-line logic; False only when skipping it provably
+    cannot (see the block comment above for the documented exceptions).
+
+    - Blank (only ``bytes.strip()`` whitespace): the old code stripped
+      and skipped it. Not ``raw.strip()``: that copies a 40 MB line.
+    - First non-space byte not ``{``: garbage, non-object JSON, or a line
+      led by whitespace only ``str.strip`` knows (NBSP, ``\\x1c``). The
+      old code parsed it and skipped a decode error or raised on a
+      non-dict; parsing keeps that outcome exactly.
+    - An ASCII ``\\u`` escape: a key or value could be hidden from every
+      byte rule, so parse.
+    - A ``"type":"user"`` pair that is not a tool-result layout at the
+      first ``"message"``: a prompt candidate (or a line the old helpers
+      raise on). Without the pair (and without escapes) no object in the
+      line is a user entry, so the origin scan ignores it and the sticky
+      scan ignores it unless it holds the marker. With the layout, the
+      entry is a tool result: never a prompt nor a turn boundary.
+    - Sticky scan only: all three marker words present. Without one of
+      them ``_BLOCK_MARKER in _tool_result_text(entry)`` is False, since
+      every letter of that text comes verbatim from the line.
+    """
+    if raw[:1] != b"{":  # the usual case skips the regex
+        first = _FIRST_NON_SPACE.search(raw)
+        if first is None:
+            return False
+        if raw[first.start()] != 0x7B:  # "{"
+            return True
+    if b"\\u00" in raw and _ASCII_ESCAPE.search(raw):
+        return True
+    if (sticky and _MARKER_WORD_1 in raw and _MARKER_WORD_2 in raw
+            and _MARKER_WORD_3 in raw):
+        return True
+    if b'"user"' in raw and _USER_TYPE.search(raw):
+        at = raw.find(b'"message"')
+        if at == -1 or not _TOOL_RESULT_LAYOUT.match(raw, at):
+            return True
+    return False
 
 
 def _tool_result_text(entry: dict) -> str:
@@ -169,8 +292,10 @@ def _origin_from_transcript(path: str | None) -> str:
     if not path:
         return "telegram"
     try:
-        for line in _iter_lines_reversed(path):
-            line = line.strip()
+        for raw in _iter_raw_lines_reversed(path):
+            if not _needs_parse(raw, sticky=False):
+                continue
+            line = raw.decode("utf-8", "replace").strip()
             if not line:
                 continue
             try:
@@ -220,8 +345,10 @@ def _turn_already_blocked(path: str | None) -> bool:
     if not path:
         return False
     try:
-        for line in _iter_lines_reversed(path):
-            line = line.strip()
+        for raw in _iter_raw_lines_reversed(path):
+            if not _needs_parse(raw, sticky=True):
+                continue
+            line = raw.decode("utf-8", "replace").strip()
             if not line:
                 continue
             try:
@@ -334,6 +461,19 @@ def fail_closed(data: dict) -> dict | None:
             "reason": _FAIL_CLOSED_REASON}
 
 
+def _readable_snapshot(session) -> dict | None:
+    """The session's snapshot when it can be read and is a dict, else
+    None. Never raises: it only decides whether the owner short-circuit
+    applies, and every failure must leave the old path to fail exactly as
+    it did. Looks ``read_snapshot`` up in this module at call time, so a
+    test's patch of ``enforce.read_snapshot`` applies here too."""
+    try:
+        snap = read_snapshot(session)
+    except Exception:
+        return None
+    return snap if isinstance(snap, dict) else None
+
+
 def decide(data: dict) -> dict | None:
     """Return a block descriptor `{tool, reason}` if the PreToolUse call
     must be denied, else None (allow). Pure aside from file reads. Any
@@ -349,6 +489,17 @@ def decide(data: dict) -> dict | None:
 def _decide(data: dict) -> dict | None:
     tool_name = data.get("tool_name", "")
     tool_input = data.get("tool_input", {}) or {}
+
+    # Owner short-circuit: an owner's turn is allowed whatever the origin,
+    # so read no transcript at all. The old sequence below allows it in
+    # every branch too (terminal; telegram with the bypass; a scan error,
+    # through fail_closed). Anything short of a readable dict granting
+    # the bypass falls through to that sequence unchanged, its own
+    # snapshot read and exceptions included.
+    session = data.get("session", "")
+    early = _readable_snapshot(session)
+    if early is not None and early.get("bypass_safety"):
+        return None
 
     if _origin_from_transcript(data.get("transcript_path")) == "terminal":
         return None  # terminal users are unrestricted
