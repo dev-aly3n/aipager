@@ -147,11 +147,14 @@ def _iter_lines_reversed(
 #      out like a tool result while the entry itself is a prompt;
 #   2. duplicate keys (the first ``"message"`` a tool result, the last,
 #      which ``json.loads`` keeps, a prompt);
-#   3. a line that is no prompt candidate and carries none of the marker
-#      words but made the old parse raise something other than
-#      JSONDecodeError (nesting ~10,000 deep, an integer over 4,300
-#      digits, a truthy non-dict ``"message"`` in the sticky scan). The
-#      old code denied those only through that accident.
+#   3. a line that is no prompt candidate but made the old parse raise
+#      something other than JSONDecodeError (nesting ~10,000 deep, an
+#      integer over 4,300 digits, a truthy non-dict ``"message"`` in the
+#      sticky scan). The skip is per scan: the origin scan skips such a
+#      line whatever words it holds; the sticky scan skips it only when
+#      one of the marker words is missing. The old code denied those
+#      only through that accident, so on a terminal turn such a line
+#      holding all three words now allows where the old code denied.
 # Anything else is parsed, so it behaves (and raises) exactly as before.
 
 # First byte ``bytes.strip()`` would keep: ``\S`` on a bytes pattern is
