@@ -172,14 +172,22 @@ _TOOL_RESULT_LAYOUT = re.compile(
     rb'"message"\s*:\s*\{\s*"role"\s*:\s*"user"\s*,\s*"content"\s*:\s*\[\s*\{\s*'
     rb'(?:"tool_use_id"\s*:\s*"[^"\\]*"\s*,\s*)?"type"\s*:\s*"tool_result"'
 )
-# The words of _BLOCK_MARKER. ``_tool_result_text`` joins a tool result's
-# pieces with a space, so ``"aipager"`` + ``"safety policy"`` carries the
-# marker without its contiguous bytes; each word, though, is copied
-# verbatim from a JSON string in the line (or hidden by an ASCII escape,
-# which _ASCII_ESCAPE catches).
-_MARKER_WORDS = (b"safety", b"policy", b"aipager")
+# The words of _BLOCK_MARKER, as bytes that must appear in the line.
+# ``_tool_result_text`` joins a tool result's pieces with a space, so
+# ``"aipager"`` + ``"safety policy"`` carries the marker without its
+# contiguous bytes. It also applies ``str()`` to a list or non-str piece,
+# i.e. Python ``repr``, which spells a non-printable character as an
+# escape (U+009A becomes ``\x9a``). An escape starts with a backslash and
+# only its trailing hex digits (0-9, a-f) can join the literal text after
+# it, so a word whose FIRST letter is a hex digit can be completed by an
+# escape the raw line never spells: ``\x9a`` + ``ipager`` reads
+# "aipager". That is why the third word is ``ipager``. "safety" and
+# "policy" start with non-hex letters, so every letter of them is literal
+# in the line (or hidden by an ASCII escape, which _ASCII_ESCAPE catches).
+_MARKER_WORDS = (b"safety", b"policy", b"ipager")
 # Unrolled for _needs_parse (a generator per line costs more than the
-# check itself on a long turn), rarest-looking word first.
+# check itself on a long turn), rarest-looking word first:
+# 1 = "policy", 2 = "safety", 3 = "ipager".
 _MARKER_WORD_1, _MARKER_WORD_2, _MARKER_WORD_3 = (
     _MARKER_WORDS[1], _MARKER_WORDS[0], _MARKER_WORDS[2])
 
@@ -204,8 +212,10 @@ def _needs_parse(raw: bytes, sticky: bool) -> bool:
       scan ignores it unless it holds the marker. With the layout, the
       entry is a tool result: never a prompt nor a turn boundary.
     - Sticky scan only: all three marker words present. Without one of
-      them ``_BLOCK_MARKER in _tool_result_text(entry)`` is False, since
-      every letter of that text comes verbatim from the line.
+      them ``_BLOCK_MARKER in _tool_result_text(entry)`` is False: every
+      letter of that text comes verbatim from the line, except a hex
+      digit a ``repr`` escape supplies, which is why the third word is
+      ``ipager`` (see _MARKER_WORDS).
     """
     if raw[:1] != b"{":  # the usual case skips the regex
         first = _FIRST_NON_SPACE.search(raw)
