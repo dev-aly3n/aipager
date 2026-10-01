@@ -360,6 +360,51 @@ def _real_prompt(text):
     }
 
 
+# Characters ``repr`` spells as an escape (non-printable: C0, DEL, C1,
+# soft hyphen, a Zs space, a line separator). Several end in the hex
+# digit "a", so ``str()`` of a list or non-str tool-result piece turns
+# them plus a literal "ipager" into "aipager" (rev-iter1-001).
+NONPRINT = ("\x1a", "\x9a", "\u009A", "\x8a", "\u200a", "\x07", "\x7f",
+            "\x9f", "\xad", "\u2028")
+
+
+def _repr_piece(r):
+    """A tool result whose non-str pieces put a non-printable character in
+    front of a marker word, so ``_tool_result_text`` goes through repr."""
+    c = r.choice(NONPRINT)
+    word = r.choice(("ipager safety policy", "ipager", "safety policy",
+                     "safety " + c + "policy"))
+    content = r.choice((
+        [[c + word]],
+        [[c + "ipager safety policy", 1]],
+        [{"type": "text", "text": [c + word]}],
+        [{"type": "text", "text": {"k": c + word}}, "safety policy"],
+        [c + "ipager", "safety policy"],
+        [{"type": "text", "text": "aipager"}, [c + "safety policy"]],
+    ))
+    return r.choice((_tres(content), _real_tool_result(content)))
+
+
+def _escaped_message_key(r):
+    """A user line where a key or string ending in ``"message`` (written
+    ``\\"message"``) comes before the entry's own ``message`` key
+    (rev-iter1-002)."""
+    tr = _tres("ok")["message"]
+    prompt = {"role": "user", "content": r.choice((TG, "terminal words"))}
+    own = r.choice((prompt, tr, _tres(MARK)["message"]))
+    first = r.choice((
+        {'x"message': tr},
+        {'x"message': prompt},
+        {'"message': tr},
+        {"note": 'he said "message'},
+        {"note": 'say "message": {'},
+    ))
+    obj = {"type": "user", **first, "message": own}
+    if r.random() < 0.3:
+        obj['y"message'] = tr  # one after the own key too
+    return obj
+
+
 GARBAGE = ("not json at all", "{broken", "}", '{"type":"user"', "{}", "{ }",
            '{"type": "user", "message": {"content": "[via Telegram', "\x00\x01")
 NON_OBJECTS = ("[1,2]", '"s"', "3", "null", "true")
@@ -404,6 +449,8 @@ _TEMPLATES = {
                                 _prompt("[via Telegram · @a]\n\x1b[1mbold\x1b[0m"))),
     "metatg": lambda r: _prompt(TG, **r.choice(({"isMeta": True},
                                                 {"isCompactSummary": True}))),
+    "reprpiece": _repr_piece,
+    "escmsgkey": _escaped_message_key,
 }
 # "long" (200 KB) is inserted separately, in a few trials only: the
 # oracle's reader is quadratic on it.
@@ -618,6 +665,39 @@ HAND_CASES = {
     "system_message_with_the_marker": (
         TG_LINE + '\n{"type":"system","message":"aipager safety policy"}\n',
         ("telegram", "RAISE:AttributeError")),
+    # rev-iter1-001: repr of a list or non-str piece spells U+009A as
+    # "\x9a", whose "a" completes a literal "ipager" to the marker.
+    "repr_escape_completes_the_marker_utf8": (
+        TG_LINE + "\n" + json.dumps(_tres([["\u009aipager safety policy"]]),
+                                    ensure_ascii=False) + "\n",
+        ("telegram", True)),
+    "repr_escape_completes_the_marker_uppercase_escape": (
+        TG_LINE + "\n" + json.dumps(_tres([["X"]])).replace(
+            '"X"', '"\\u009Aipager safety policy"') + "\n",
+        ("telegram", True)),
+    # Raw UTF-8: JSON's own lowercase "\u009a" would put the bytes
+    # "aipager" in the line and not tell the two words apart.
+    "repr_escape_in_a_list_text": (
+        TG_LINE + "\n" + json.dumps(_tres([{"type": "text", "text": [
+            "\u009aipager safety policy"]}]), ensure_ascii=False) + "\n",
+        ("telegram", True)),
+    # rev-iter1-002: the first '"message"' run sits inside a key that ends
+    # in an escaped quote; the entry's own message is a Telegram prompt.
+    "escaped_quote_key_before_the_prompt": (
+        TERM_LINE + "\n" + json.dumps({
+            "type": "user", 'x"message': _tres("ok")["message"],
+            "message": {"role": "user", "content": "[via Telegram · @o]\nhi"}})
+        + "\n",
+        ("telegram", False)),
+    # rev-iter1-003: the prompt's own "message" comes first; a nested
+    # tool-result-shaped one later in the line must not hide it (kills
+    # a .search in place of the anchored .match).
+    "nested_tool_result_after_the_prompt": (
+        TERM_LINE + "\n" + json.dumps({
+            "type": "user",
+            "message": {"role": "user", "content": "[via Telegram · @o]\nhi"},
+            "x": {"message": _tres("ok")["message"]}}) + "\n",
+        ("telegram", False)),
 }
 
 
