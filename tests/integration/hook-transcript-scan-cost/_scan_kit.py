@@ -75,14 +75,18 @@ class Style:
     esc: probability of writing a printable ASCII character of a string
     or key as a ``\\u00XX`` escape (0 for the shapes Claude Code writes).
     slash: write ``/`` as ``\\/``.
+    upper: write the hex digits of control and non-ASCII ``\\uXXXX``
+    escapes in upper case (``\\u009A``), as a JSON writer may; then an
+    escaped U+009A before ``ipager`` leaves no ``aipager`` bytes.
     """
 
     def __init__(self, ws="compact", ascii_=False, esc=0.0, slash=False,
-                 rng=None):
+                 rng=None, upper=False):
         self.ws = ws
         self.ascii = ascii_
         self.esc = esc
         self.slash = slash
+        self.upper = upper
         self.rng = rng or random.Random(0)
 
     @classmethod
@@ -107,24 +111,25 @@ class Style:
 
 
 def enc_str(s: str, st: Style) -> str:
-    if not st.esc and not st.slash:
+    if not st.esc and not st.slash and not st.upper:
         return json.dumps(s, ensure_ascii=st.ascii)
+    u4 = "\\u%04X" if st.upper else "\\u%04x"
     out = ['"']
     for ch in s:
         o = ord(ch)
         if ch in _SHORT_ESC:
             out.append(_SHORT_ESC[ch])
         elif o < 0x20:
-            out.append("\\u%04x" % o)
+            out.append(u4 % o)
         elif ch == "/" and st.slash:
             out.append("\\/")
         elif o >= 0x7F and (st.ascii or 0xD800 <= o <= 0xDFFF):
             if o > 0xFFFF:
                 v = o - 0x10000
-                out.append("\\u%04x\\u%04x" % (0xD800 + (v >> 10),
-                                               0xDC00 + (v & 0x3FF)))
+                out.append((u4 + u4) % (0xD800 + (v >> 10),
+                                        0xDC00 + (v & 0x3FF)))
             else:
-                out.append("\\u%04x" % o)
+                out.append(u4 % o)
         elif 0x20 <= o < 0x7F and st.esc and st.rng.random() < st.esc:
             out.append(st.rng.choice(["\\u%04x", "\\u%04X"]) % o)
         else:
@@ -363,6 +368,8 @@ def _tr_content(rng):
 def corpus_line(rng) -> bytes:
     """One random transcript line. Never one of the documented
     divergence shapes (see :func:`assert_in_contract`)."""
+    if rng.random() < 0.12:
+        return family_line(rng)     # iteration 2: families R and Q
     st = Style.random(rng)
     shuffle = rng.random() < 0.15
     v = rng.randrange(100)
@@ -526,3 +533,206 @@ def assert_in_contract(raw: bytes) -> None:
     msg = obj.get("message")
     if obj.get("type") != "user" and msg and not isinstance(msg, dict):
         raise AssertionError("truthy non-dict message on a non-user line")
+
+
+# --------------------------------------------------------------------------
+# Iteration 2 families: repr-escaped marker words, escaped-quote keys
+# --------------------------------------------------------------------------
+#
+# Family R (repr). A tool_result piece that is not a str (a nested list, a
+# list or dict ``text``) reaches the sticky check through ``str()``, i.e.
+# Python repr, which writes a non-printable character as ``\xNN``,
+# ``\uNNNN`` or ``\UNNNNNNNN``. When that escape ends in the hex digit
+# ``a`` and ``ipager safety policy`` follows, the joined text reads
+# ``...\x9aipager safety policy``: the marker, with no ``aipager`` bytes in
+# the line when the character is written as raw UTF-8 (or as an
+# upper-case ``\u009A`` JSON escape).
+#
+# Family Q (escaped quote). A key such as ``x"message`` is written
+# ``"x\"message"``, so the line's first ``"message"`` byte run is not the
+# entry's own key. Odd backslash counts are valid JSON; even counts are
+# not (the string closes on the last backslash).
+
+# Non-printable characters whose repr ends in the hex digit "a" (all
+# assigned: C1 controls, format characters, private use).
+REPR_A = ("\x8a", "\x9a", "\x1a", " ", "‪", "⁪", "￺",
+          "", "\U0001d17a", "\U000f000a", "\U0010fffa")
+# Characters whose repr does NOT end in "a", plus printable ones repr keeps
+# verbatim (controls: they supply no "a").
+REPR_OTHER = ("\x85", "\xad", "\x7f", "\x00", "\x0b", " ", " ",
+              "\xa0", "　", "\U000e0001", "﻿", "\xaa", "પ",
+              "\x9b", "​")
+REPR_TAILS = ("ipager safety policy", "ipager safety policy: Bash is not "
+              "allowed for this role", "ipager  safety policy",
+              "ipager safety", "ipagersafety policy", "ipager safety "
+              "polic", "IPAGER safety policy", "ipager safety\npolicy")
+
+
+def repr_container(kind: int, s: str, filler: str = "ok"):
+    """Tool-result ``content`` that carries ``s`` in a non-str piece.
+    Kinds 0-8 hand ``s`` to ``str()`` (repr); 9-11 keep it a str piece
+    (verbatim, controls)."""
+    return [
+        lambda: [[s]],
+        lambda: [{"type": "text", "text": [s]}],
+        lambda: [{"type": "text", "text": {"k": s}}],
+        lambda: [{"type": "text", "text": {s: 1}}],
+        lambda: [[[s]]],
+        lambda: [{"type": "text", "text": filler}, [s]],
+        lambda: [[1, s, None]],
+        lambda: [{"text": [s, "z"]}],
+        lambda: [{"type": "text", "text": [[s], {"q": [s]}]}],
+        lambda: [{"type": "text", "text": s}],
+        lambda: [s],
+        lambda: [filler, s],
+    ][kind]()
+
+
+REPR_CONTAINER_KINDS = 12
+REPR_FORMING_KINDS = range(9)
+
+
+def repr_split_content(kind: int, c: str):
+    """The repr escape combined with the marker split across pieces (the
+    join adds a space, so none of these can form the marker unless a
+    whole string carries it)."""
+    return [
+        lambda: [[c], "ipager safety policy"],
+        lambda: [[c + "ipager"], "safety policy"],
+        lambda: [[c + "ipager safety"], {"text": "policy"}],
+        lambda: ["x" + c, ["ipager safety policy"]],
+        lambda: [{"text": [c]}, {"text": "ipager safety policy"}],
+        lambda: [[c + "ipager safety policy"], "aipager"],
+        lambda: [["aipager"], [c + "ipager safety policy"]],
+        lambda: [{"text": {"a": c}}, "ipager safety policy"],
+    ][kind]()
+
+
+REPR_SPLIT_KINDS = 8
+
+
+def repr_placement(kind: int, content, rng=None) -> dict:
+    """Where the tool_result carrying ``content`` sits in an entry."""
+    rng = rng or random.Random(kind)
+    block = {"type": "tool_result", "content": content}
+    return [
+        lambda: tool_result(content, rng=rng),
+        lambda: tool_result(content, rng=rng, id_first=False,
+                            is_error=True),
+        lambda: tool_result(content, rng=rng, role=False),
+        lambda: tool_result(content, rng=rng, tool_use_id=False),
+        lambda: envelope("user", tool_result_msg("ok", blocks=[block]),
+                         rng=rng),
+        lambda: {"type": "user", "content": [block]},
+        lambda: {"type": "user", "message": None, "content": [block]},
+        lambda: envelope("assistant", {"role": "assistant",
+                                       "content": [block]}, rng=rng),
+        lambda: {"type": "system", "message": {"content": [block]}},
+        lambda: {"type": "progress", "content": [block]},
+    ][kind]()
+
+
+REPR_PLACEMENTS = 10
+
+
+def repr_line(rng, *, form=None) -> bytes:
+    """One family-R line. ``form``: "raw" (raw UTF-8), "upper" (upper-hex
+    JSON escapes), "lower" (lower-hex), or None for a random one."""
+    c = rng.choice(REPR_A + REPR_A + REPR_OTHER)
+    tail = rng.choice(REPR_TAILS[:2] * 4 + REPR_TAILS)
+    pre = rng.choice(["", "", "x", " ", "note: ", "'", '"', "\\", "a"])
+    s = pre + c + tail + rng.choice(["", "", " (1)", "\n"])
+    if rng.random() < 0.15:
+        content = repr_split_content(rng.randrange(REPR_SPLIT_KINDS), c)
+    else:
+        content = repr_container(rng.randrange(REPR_CONTAINER_KINDS), s,
+                                 filler=words(rng, 2))
+    obj = repr_placement(rng.randrange(REPR_PLACEMENTS), content, rng)
+    form = form or rng.choice(["raw", "raw", "raw", "upper", "lower"])
+    st = Style(ws=rng.choice(["compact", "compact", "std", "wild"]),
+               ascii_=form != "raw", upper=form == "upper", rng=rng)
+    return line(obj, st)
+
+
+# Family Q -----------------------------------------------------------------
+
+def _q_value(kind: str):
+    return {
+        "tr": tool_result_msg("r"),
+        "tr_noid": tool_result_msg("r", tool_use_id=False),
+        "tr_idlast": tool_result_msg("r", id_first=False),
+        "tr_mark": tool_result_msg(BLOCK_TEXT, is_error=True),
+        "tg": prompt_msg(f"{TG_MARKER}\nhi"),
+        "term": prompt_msg("typed here"),
+        "str": "x",
+        "task": prompt_msg(TASK_NOTE),
+    }[kind]
+
+
+Q_FAKE = ("tr", "tr_noid", "tr_idlast", "tg", "term", "str")
+Q_REAL = ("tg", "term", "tr", "tr_mark", "task")
+
+
+def escaped_key_line(fake: str, real: str, *, backslashes: int = 1,
+                     prefix: str = "x", nested: bool = False,
+                     extra_fakes: int = 0, after: bool = False,
+                     style: Style | None = None, rng=None) -> bytes:
+    """A user line whose first ``"message"`` byte run follows
+    ``backslashes`` backslashes and opens a ``fake``-shaped value, with the
+    entry's own ``message`` (``real``-shaped) later in the line.
+
+    Odd ``backslashes`` give valid JSON (key ``prefix + "\\"*k + '"message'``);
+    even ones give a line JSON rejects."""
+    k = backslashes - (backslashes % 2 == 0)      # odd count to serialise
+    key = prefix + "\\" * ((k - 1) // 2) + '"message'
+    fakes = {key: _q_value(fake)}
+    for i in range(extra_fakes):
+        fakes[f"e{i}" + '"message'] = _q_value(Q_FAKE[i % len(Q_FAKE)])
+    before = {"meta": fakes} if nested else fakes
+    if after:
+        obj = envelope("user", _q_value(real), rng=rng, extra_after=before)
+    else:
+        obj = envelope("user", _q_value(real), rng=rng, extra_before=before)
+    raw = line(obj, style or Style())
+    if backslashes % 2 == 0:
+        needle = b"\\" * k + b'"message"'
+        i = raw.find(needle)
+        assert i != -1, raw
+        raw = raw[:i] + b"\\" + raw[i:]
+    return raw
+
+
+def escaped_key_random(rng) -> bytes:
+    st = Style(ws=rng.choice(["compact", "compact", "std", "wild"]),
+               ascii_=rng.random() < 0.2, rng=rng)
+    v = rng.randrange(10)
+    if v == 0:
+        # a str value ending in "message, ahead of the entry's own message
+        obj = envelope("user", _q_value(rng.choice(Q_REAL)), rng=rng,
+                       extra_before={"slug": rng.choice(
+                           ['a "message', '"message', 'say "message": {',
+                            '"message":{"role":"user","content":[{"type":'
+                            '"tool_result"'])})
+        return line(obj, st)
+    return escaped_key_line(
+        rng.choice(Q_FAKE), rng.choice(Q_REAL),
+        backslashes=rng.choice([1, 1, 1, 1, 3, 5, 2, 4]),
+        prefix=rng.choice(["x", "", "ü", " ", "message", "\\n"]),
+        nested=rng.random() < 0.2, extra_fakes=rng.choice([0, 0, 0, 1, 2]),
+        after=rng.random() < 0.15, style=st, rng=rng)
+
+
+def family_line(rng) -> bytes:
+    """A family-R or family-Q line, sometimes combined: an escaped-quote
+    key ahead of a tool result whose piece is repr-escaped."""
+    v = rng.randrange(10)
+    if v < 5:
+        return repr_line(rng)
+    if v < 9:
+        return escaped_key_random(rng)
+    c = rng.choice(REPR_A)
+    obj = envelope("user", tool_result_msg([[c + "ipager safety policy"]]),
+                   rng=rng, extra_before={'x"message': _q_value(
+                       rng.choice(Q_FAKE))})
+    return line(obj, Style(ascii_=rng.random() < 0.3, rng=rng,
+                           upper=rng.random() < 0.5))

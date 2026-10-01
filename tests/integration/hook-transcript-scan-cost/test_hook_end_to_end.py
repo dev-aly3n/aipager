@@ -44,6 +44,13 @@ SESSION = kit.SESSION
 TG = cc(kit.tg_prompt("please look"))
 TERM = cc(kit.term_prompt("typed here"))
 TR_BLOCK = cc(kit.tool_result(kit.BLOCK_TEXT, is_error=True))
+# Iteration 2: a halt whose marker only forms through repr (U+009A as raw
+# UTF-8 in a nested-list piece), and a Telegram prompt behind a key named
+# x"message that holds a tool-result layout.
+TR_REPR_BLOCK = kit.line(kit.tool_result(
+    [["\x9aipager safety policy: Bash is not allowed for this role"]],
+    is_error=True), kit.Style())
+TG_BEHIND_ESCAPED_KEY = kit.escaped_key_line("tr", "tg")
 
 
 def _builtin(name):
@@ -98,6 +105,8 @@ def _transcript(tmp_path, kind):
         "plain": [TERM, TG] + turn,
         "terminal": [TG, TR_BLOCK, TERM] + turn,
         "raising": [TERM, TG] + turn + [b"[1]"],
+        "repr_halted": [TERM, TG, TR_REPR_BLOCK] + turn,
+        "escaped_key_telegram": [TERM, TG_BEHIND_ESCAPED_KEY] + turn,
         "continuation_halted": [TG, TR_BLOCK] + turn[:50] + [cc(kit.envelope(
             "user", kit.prompt_msg(kit.TASK_NOTE)))] + turn[50:],
     }[kind]
@@ -146,6 +155,12 @@ CASES = {
                             lambda p: {"file_path": str(p / "a")}),
     "continuation_keeps_halt": ("user", "continuation_halted", "Read",
                                 lambda p: {"file_path": str(p / "a")}),
+    "repr_halted": ("user", "repr_halted", "Read",
+                    lambda p: {"file_path": str(p / "a")}),
+    "escaped_key_telegram_bash": ("user", "escaped_key_telegram", "Bash",
+                                  lambda p: {"command": "ls"}),
+    "escaped_key_telegram_read": ("user", "escaped_key_telegram", "Read",
+                                  lambda p: {"file_path": str(p / "a")}),
 }
 
 
@@ -171,6 +186,7 @@ ANCHORS = {
     "halted": "aipager safety policy: " + kit.HALT_REASON,
     "continuation_keeps_halt": "aipager safety policy: " + kit.HALT_REASON,
     "raising_fail_closed": "aipager safety policy: " + kit.FAIL_CLOSED_REASON,
+    "repr_halted": "aipager safety policy: " + kit.HALT_REASON,
 }
 
 
@@ -186,7 +202,8 @@ def test_hook_deny_reason_anchor(tmp_path, monkeypatch, capsys, snap_file,
 
 
 @pytest.mark.parametrize("name", ["denied_protected_path", "denied_bash",
-                                  "no_snapshot_floor"])
+                                  "no_snapshot_floor",
+                                  "escaped_key_telegram_bash"])
 def test_hook_policy_deny_anchor(tmp_path, monkeypatch, capsys, snap_file,
                                  project, name):
     role, tx_kind, tool, mk_input = CASES[name]
@@ -228,3 +245,14 @@ def test_hook_owner_turn_reads_no_transcript(tmp_path, monkeypatch, capsys,
     _run_hook(monkeypatch, capsys, tmp_path,
               _payload(tx, project, "Bash", {"command": "ls"}))
     assert opened == []
+
+
+def test_hook_allows_an_in_project_read_behind_an_escaped_key(
+        tmp_path, monkeypatch, capsys, snap_file, project):
+    """Control for the escaped-key case: the Telegram turn is restricted,
+    not halted, so an in-project Read prints nothing."""
+    role, tx_kind, tool, mk_input = CASES["escaped_key_telegram_read"]
+    _role(snap_file, role)
+    tx = _transcript(tmp_path, tx_kind)
+    assert _run_hook(monkeypatch, capsys, tmp_path,
+                     _payload(tx, project, tool, mk_input(project))) == ""

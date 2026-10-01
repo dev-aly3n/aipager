@@ -213,3 +213,74 @@ def test_the_oracle_is_the_166a3f6_file_byte_for_byte():
     body = b"".join(text.splitlines(keepends=True)[3:])
     assert hashlib.sha256(body).hexdigest() == (
         "7e6f2c0041bae192162761ed12185a0f5be7ef2c0880c7166763654a545530b8")
+
+
+# ---- iteration 2: families R (repr escape) and Q (escaped quote) ----------
+
+FAMILY_TRIALS = 2400
+
+
+def _family_case(rng):
+    """[a prompt, the family line, 0-3 ordinary lines], in a random order
+    of the trailing part, so the family line usually decides a verdict."""
+    first = rng.choice([kit.cc(kit.term_prompt("typed")),
+                        kit.cc(kit.tg_prompt("from the phone"))])
+    fam = kit.family_line(rng)
+    tail = [kit.corpus_line(rng) for _ in range(rng.choice([0, 0, 1, 3]))]
+    lines = [first, fam] + tail
+    for ln in lines:
+        kit.assert_in_contract(ln)
+    eol = b"\r\n" if rng.random() < 0.1 else b"\n"
+    data = eol.join(lines) + (eol if rng.random() < 0.8 else b"")
+    return data, fam, [first] + tail, eol
+
+
+def test_family_corpus_scans_equal_166a3f6(tmp_path, monkeypatch, old):
+    """>= 2400 files built around a family-R or family-Q line, compared at
+    every chunk size, with witnesses proving the families reached the two
+    shapes the iteration-2 fixes are about."""
+    rng = random.Random(SEED + 2)
+    path = tmp_path / "t.jsonl"
+    alt = tmp_path / "alt.jsonl"
+    mismatches: list = []
+    compared = 0
+    witness = {"repr_halt_without_aipager": 0, "escaped_key_decides": 0,
+               "escaped_key_multi_backslash": 0}
+    for _ in range(FAMILY_TRIALS):
+        data, fam, rest, eol = _family_case(rng)
+        path.write_bytes(data)
+        alt.write_bytes(eol.join(rest) + eol)
+        o_old = kit.outcome(old._origin_from_transcript, str(path))
+        s_old = kit.outcome(old._turn_already_blocked, str(path))
+        o_alt = kit.outcome(old._origin_from_transcript, str(alt))
+        s_alt = kit.outcome(old._turn_already_blocked, str(alt))
+        if s_old is True and s_alt is not True and b"aipager" not in fam:
+            witness["repr_halt_without_aipager"] += 1
+        at = fam.find(b'"message"')
+        if at > 0 and fam[at - 1:at] == b"\\":
+            if o_old != o_alt:
+                witness["escaped_key_decides"] += 1
+            if fam.count(b"\\\\\"message\"") and o_old == o_alt:
+                witness["escaped_key_multi_backslash"] += 1
+        for chunk in _chunks_for(len(data)):
+            _run_case(monkeypatch, old, path, data, chunk, mismatches)
+            compared += 1
+    print(f"family differential: {FAMILY_TRIALS} files, {compared} "
+          f"file-chunk cases, {len(mismatches)} mismatches, {witness}")
+    assert (mismatches[:5], compared >= 6000,
+            min(witness.values()) >= 25) == ([], True, True), (
+        len(mismatches), compared, witness)
+
+
+def test_main_corpus_carries_the_iteration_2_families():
+    """The general corpus generator now emits both families too."""
+    rng = random.Random(SEED)
+    seen = {"repr": 0, "escaped_key": 0}
+    for _ in range(3000):
+        ln = kit.corpus_line(rng)
+        if b"ipager" in ln and b"aipager" not in ln:
+            seen["repr"] += 1
+        at = ln.find(b'"message"')
+        if at > 0 and ln[at - 1:at] == b"\\":
+            seen["escaped_key"] += 1
+    assert min(seen.values()) >= 30, seen
