@@ -1383,6 +1383,32 @@ def build_full_log(
     return "\n".join(lines)
 
 
+def _card_edit_lock(sess: TrackedSession) -> asyncio.Lock:
+    """The per-session lock every busy-card edit is built and posted
+    under (``AnimationMixin._edit_busy_rich``). A finish that writes the card
+    itself (the merged layout's final, a compaction deadline's last
+    text) takes it too, so an edit queued or in flight before the
+    finish lands before it, and one that gets the lock afterwards
+    finds ``busy_msg_id`` retired and sends nothing. A leaf lock: it
+    is taken inside ``animate_lock`` (the tick), never the other way
+    round, and nothing awaited under it waits on the animator. Not
+    re-entrant: a holder must not call ``_edit_busy_rich``.
+
+    The price is deliberate: a finish may wait behind ONE card edit that
+    already holds the lock, including that ORNAMENT's token reserve
+    (about 2 s per token at a 0.5/s chat rate). The outbound gate's "an
+    answer never waits behind an ornament" holds between calls in the
+    queue, not for an edit already being sent for the same card; letting
+    the answer overtake it is exactly what put a stale "Working" frame
+    over a merged answer (2026-10-02). Do not move a finish out of this
+    lock to win that time back."""
+    lock = getattr(sess, "_stream_edit_lock", None)
+    if lock is None:
+        lock = asyncio.Lock()
+        sess._stream_edit_lock = lock
+    return lock
+
+
 class AnimationMixin:
     """Mixin for TelegramBot — see :mod:`aipager.bot` overview."""
 
@@ -2051,17 +2077,19 @@ class AnimationMixin:
         # 400 "canceled by new edit message request". The waiter re-renders
         # inside the lock, so a burst collapses into the dedupe below instead
         # of racing.
-        lock = getattr(sess, "_stream_edit_lock", None)
-        if lock is None:
-            lock = asyncio.Lock()
-            sess._stream_edit_lock = lock
-
-        async with lock:
+        async with _card_edit_lock(sess):
             # Re-checked under the lock: while this edit waited, a racing
             # finish may have taken the card away (8.32's tool-less path
             # clears busy_msg_id and deletes the card; seen live 2026-09-26
-            # as a TypeError from int(None) on a superseded card's close).
+            # as a TypeError from int(None) on a superseded card's close;
+            # the merged finish retires it under this same lock).
             if not sess.busy_msg_id or sess.busy_msg_id < 0:
+                return None
+            if not final and sess.busy_msg_id == sess.card_settled_msg_id:
+                # The card was rendered finished and its finish has not
+                # retired `busy_msg_id` yet (a final move deleting the old
+                # copy, a superseded card's log attachment): a busy frame
+                # now would put "Working" and a Stop button back on it.
                 return None
             # The tier unit every live counter renders in (8.30), set
             # BEFORE the build so the renderer itself stays pure.
@@ -2166,6 +2194,8 @@ class AnimationMixin:
                         rate_limit_args=_rl_args(
                             kind="skip", priority=PRIORITY_ORNAMENT),
                     )
+                    if final:
+                        sess.card_settled_msg_id = edited_id
                     return True
                 except FloodSkipped:
                     # Same contract as the rich arm above: nothing sent,
@@ -2189,6 +2219,8 @@ class AnimationMixin:
             # The frame state this edit showed: the next STATE change is
             # measured against it (8.30 Q2, `_card_edit_due`).
             sess.card_frame_state = self._card_frame_state(sess)
+            if final:
+                sess.card_settled_msg_id = edited_id
             return True
 
     async def _reanchor_busy_card(
@@ -2373,6 +2405,11 @@ class AnimationMixin:
         sess.stream_dirty = False
         sess.card_skipped_since = 0.0
         sess.card_frame_state = self._card_frame_state(sess)
+        if final:
+            # The finished card's copy: no late busy-card edit may land on
+            # it before the finish retires `busy_msg_id`
+            # (`_edit_busy_rich`).
+            sess.card_settled_msg_id = new_msg_id
         if markup is not None and not sent.get("reply_markup"):
             # Telegram took the card but not its button: the next tick's
             # edit (which always carries it) must not be skipped as
@@ -3125,6 +3162,34 @@ class AnimationMixin:
             sess.animate_task.cancel()
         sess.animate_task = None
         self._stop_typing(sess)
+
+    async def _settle_card_text(self, sess: TrackedSession, text: str, *,
+                                chat_id=None) -> bool:
+        """Write *text* (HTML, no keyboard) as the busy card's last word and
+        retire the card, both under the card-edit lock (:func:`_card_edit_lock`).
+
+        For the close paths that end a card with a plain line instead of a
+        final render ("Stopped", "Finished", a safety block): a busy-card
+        edit queued or in flight before it lands first, and one that gets
+        the lock afterwards finds ``busy_msg_id`` retired and sends
+        nothing. Written outside the lock, such an edit (a tool hook
+        right after the Escapes, a phantom SubagentStop) would land after
+        the line and put "Working" and a live Stop button back on a card
+        nothing settles again.
+
+        Returns False, writing nothing, when there is no live card (the
+        caller sends its own notice instead); True once the card was
+        written to and retired, whatever the edit's outcome. ``chat_id``
+        is passed through to :meth:`_edit_busy_raw` unchanged."""
+        async with _card_edit_lock(sess):
+            msg_id = sess.busy_msg_id
+            if not msg_id or msg_id <= 0:
+                return False
+            try:
+                await self._edit_busy_raw(msg_id, text, chat_id=chat_id)
+            finally:
+                sess.busy_msg_id = None
+            return True
 
     async def _close_superseded_card(self, sess: TrackedSession) -> None:
         """Settle the waiting card a genuinely new prompt is reclaiming.

@@ -56,7 +56,8 @@ from aipager.config import (
 from aipager.state import BG_AGENTS_RETRY_SECONDS, Status, TrackedSession
 from aipager.policy_snapshot import note_driver_id
 from aipager.bot.animation import (
-    FINAL_VERB, _RICH_LIMIT, _exact_anchors_available, _expire_tool_batch,
+    FINAL_VERB, _RICH_LIMIT, _card_edit_lock, _exact_anchors_available,
+    _expire_tool_batch,
     _md_escape, _read_stream_text, _sync_anchors_from_transcript,
     build_full_log,
     build_stream_card_ex,
@@ -277,6 +278,10 @@ class NotifyMixin:
         IS the turn's one and only user-facing message, so it must ping
         normally, unlike a re-anchor that's always followed by a
         separately-notified answer.
+
+        The caller holds the card-edit lock (``_card_edit_lock``) across
+        this and its clean-up, so nothing in here may call
+        ``_edit_busy_rich``.
         """
         try:
             card_md, hid = build_stream_card_ex(sess, FINAL_VERB, final=True)
@@ -1460,13 +1465,10 @@ class NotifyMixin:
             name = html_mod.escape(label)
             text = f"✅ <b>{name}</b> · Finished{suffix}"
             text_alone = f"{_RESULT_GLYPH} <b>{name}</b> · Finished{suffix}"
-            target_msg_id = sess.busy_msg_id
-            if target_msg_id and target_msg_id > 0:
-                await self._edit_busy_raw(
-                    target_msg_id, text, chat_id=resolve_chat_id(sess),
-                )
-                sess.busy_msg_id = None
-            else:
+            # The card's last word, written and retired under the
+            # card-edit lock (`_settle_card_text`).
+            if not await self._settle_card_text(
+                    sess, text, chat_id=resolve_chat_id(sess)):
                 text = text_alone
                 try:
                     await bot.send_message(
@@ -1510,13 +1512,9 @@ class NotifyMixin:
             else:
                 text = (f"⚠️ <b>{html_mod.escape(label)}</b> · Finished "
                         f"(background agent lost{suffix})")
-            target_msg_id = sess.busy_msg_id
-            if target_msg_id and target_msg_id > 0:
-                await self._edit_busy_raw(
-                    target_msg_id, text, chat_id=resolve_chat_id(sess),
-                )
-                sess.busy_msg_id = None
-            else:
+            # Written and retired under the card-edit lock, as above.
+            if not await self._settle_card_text(
+                    sess, text, chat_id=resolve_chat_id(sess)):
                 try:
                     await bot.send_message(
                         resolve_chat_id(sess), text, parse_mode="HTML",
@@ -1660,11 +1658,11 @@ class NotifyMixin:
                 "that starts with \"/\" is read as a slash command - check "
                 "the terminal."
             )
-            if sess.busy_msg_id and sess.busy_msg_id > 0:
-                await self._edit_busy_raw(
-                    sess.busy_msg_id, warn_text, chat_id=resolve_chat_id(sess),
-                )
-            else:
+            # Written and retired under the card-edit lock
+            # (`_settle_card_text`): a merely late hook's card edit must
+            # not land after the warning and put "Working" back.
+            if not await self._settle_card_text(
+                    sess, warn_text, chat_id=resolve_chat_id(sess)):
                 try:
                     await bot.send_message(
                         resolve_chat_id(sess), warn_text, parse_mode="HTML",
@@ -2112,23 +2110,37 @@ class NotifyMixin:
             # either way, only the absence of one.
             elapsed = context.get("elapsed_seconds", 0.0)
             minutes = max(1, int(elapsed / 60))
-            target_msg_id = sess.busy_msg_id
+            # The compaction dots (`_animate_compact`, still ticking at the
+            # deadline) stop first, as at compact_done: a dot frame queued
+            # behind the text below would land after it and leave the card
+            # on "Compacting." for good. A BUSY card is resumed below.
+            self._stop_animation(sess)
             text = (f"⏱️ <b>{html_mod.escape(label)}</b> · Compaction didn't "
                     f"confirm completion after {minutes} min")
-            if target_msg_id and target_msg_id > 0:
-                result = await self._edit_busy_raw(target_msg_id, text, chat_id=resolve_chat_id(sess))
-                if result is None:
+            # Under the card-edit lock: when nothing is resumed, the text
+            # below is this message's last word, and a busy-card edit that
+            # took the lock while it was out would land after it (both are
+            # ORNAMENTs, served in order) and put "Working" back. Taken
+            # here, that edit finds `busy_msg_id` retired and sends nothing.
+            async with _card_edit_lock(sess):
+                # Read under the lock: the edit it waited behind may have
+                # found the card gone.
+                target_msg_id = sess.busy_msg_id
+                if target_msg_id and target_msg_id > 0:
+                    result = await self._edit_busy_raw(target_msg_id, text, chat_id=resolve_chat_id(sess))
+                    if result is None:
+                        sess.busy_msg_id = None
+                sess.pop_compacting()
+                resume = bool(sess.status == Status.BUSY and sess.busy_msg_id)
+                if not resume:
+                    # Nothing legitimate left to resume (the observed bug's
+                    # status=idle case, or any other non-BUSY status) — the
+                    # edited text above is the final state of this message.
                     sess.busy_msg_id = None
-            sess.pop_compacting()
-            if sess.status == Status.BUSY and sess.busy_msg_id:
+            if resume:
                 # A real turn's busy card was live underneath — resume it
                 # exactly as compact_done already does today.
                 self._start_animation(sess)
-            else:
-                # Nothing legitimate left to resume (the observed bug's
-                # status=idle case, or any other non-BUSY status) — the
-                # edited text above is the final state of this message.
-                sess.busy_msg_id = None
             if self.observers:
                 asyncio.create_task(self.observers.broadcast(text))
             return
@@ -2733,46 +2745,64 @@ class NotifyMixin:
                     # Telegram cannot move an existing message's reply
                     # target, so the combined card+answer must be a fresh
                     # SEND under the new target instead of an edit in place.
-                    if merged_send_as_new:
-                        merged_delivered = await self._send_merged_final(
-                            sess, content, send_as_new=True,
-                            reply_to=finish_trigger, agents=agents,
-                        )
-                        if merged_delivered and pre_merge_busy_msg_id and pre_merge_busy_msg_id > 0:
-                            try:
-                                await bot.delete_message(
-                                    chat_id=resolve_chat_id(sess),
-                                    message_id=pre_merge_busy_msg_id,
-                                )
-                            except Exception:
-                                log.debug("[%s] stale merged card delete failed",
-                                          sess.label, exc_info=True)
-                    else:
-                        merged_delivered = await self._send_merged_final(
-                            sess, content, agents=agents)
-                    if not merged_delivered:
-                        # Losing the timeline is acceptable; losing the answer is
-                        # never acceptable — fall back to the replace-style send
-                        # below by clearing the (now presumed-gone-or-stale) card.
-                        # Falling back to "replace" means behaving exactly like
-                        # it: one message opening with the stats result line,
-                        # once the card is gone.
-                        if sess.busy_msg_id and not MUTE.is_muted(resolve_chat_id(sess)):
-                            # Still live — _send_merged_final's own failure
-                            # wasn't a RichMessageGone, so the card needs an
-                            # explicit delete here (a send too: skipped while
-                            # the chat is flood-muted).
-                            try:
-                                await bot.delete_message(
-                                    chat_id=resolve_chat_id(sess),
-                                    message_id=pre_merge_busy_msg_id,
-                                )
-                            except Exception:
-                                pass
-                        # Else _send_merged_final already found the card gone
-                        # (RichMessageGone) and cleared busy_msg_id itself —
-                        # nothing left in the chat either way.
-                    sess.busy_msg_id = None
+                    # Under the card-edit lock, like every busy-card edit
+                    # (`_edit_busy_rich`): the final is ESSENTIAL and the
+                    # outbound gate lets it overtake an ORNAMENT, so a card
+                    # edit already waiting in that lock for a chat token
+                    # (a hook's, the monitor's refresh: the animate task is
+                    # cancelled above, these are not) would otherwise land
+                    # AFTER the answer and replace it with a stale
+                    # "Working" frame (seen live 2026-10-02). Holding it
+                    # makes that edit land first; one that gets the lock
+                    # afterwards finds `busy_msg_id` retired below, still
+                    # under the lock, and sends nothing. Nothing in here
+                    # takes this lock again or waits on the animator.
+                    async with _card_edit_lock(sess):
+                        if not (sess.busy_msg_id and sess.busy_msg_id > 0):
+                            # The edit this waited behind found the card
+                            # gone (`busy_msg_id` 0): nothing to merge
+                            # into, so straight to the replace-style send.
+                            merged_delivered = False
+                        elif merged_send_as_new:
+                            merged_delivered = await self._send_merged_final(
+                                sess, content, send_as_new=True,
+                                reply_to=finish_trigger, agents=agents,
+                            )
+                            if merged_delivered and pre_merge_busy_msg_id and pre_merge_busy_msg_id > 0:
+                                try:
+                                    await bot.delete_message(
+                                        chat_id=resolve_chat_id(sess),
+                                        message_id=pre_merge_busy_msg_id,
+                                    )
+                                except Exception:
+                                    log.debug("[%s] stale merged card delete failed",
+                                              sess.label, exc_info=True)
+                        else:
+                            merged_delivered = await self._send_merged_final(
+                                sess, content, agents=agents)
+                        if not merged_delivered:
+                            # Losing the timeline is acceptable; losing the answer is
+                            # never acceptable — fall back to the replace-style send
+                            # below by clearing the (now presumed-gone-or-stale) card.
+                            # Falling back to "replace" means behaving exactly like
+                            # it: one message opening with the stats result line,
+                            # once the card is gone.
+                            if sess.busy_msg_id and not MUTE.is_muted(resolve_chat_id(sess)):
+                                # Still live — _send_merged_final's own failure
+                                # wasn't a RichMessageGone, so the card needs an
+                                # explicit delete here (a send too: skipped while
+                                # the chat is flood-muted).
+                                try:
+                                    await bot.delete_message(
+                                        chat_id=resolve_chat_id(sess),
+                                        message_id=pre_merge_busy_msg_id,
+                                    )
+                                except Exception:
+                                    pass
+                            # Else _send_merged_final already found the card gone
+                            # (RichMessageGone) and cleared busy_msg_id itself —
+                            # nothing left in the chat either way.
+                        sess.busy_msg_id = None
 
                 # ── Overflow detection ─────────────────────────────────────────
                 # Skipped when the merged edit above already delivered the whole

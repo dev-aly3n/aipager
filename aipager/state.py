@@ -637,6 +637,15 @@ class TrackedSession:
     # a limiter that starts every chat unthrottled must not meet a card
     # that thinks it has been refused for an hour.
     card_skipped_since: float = 0.0
+    # The message id of the last card rendered in its FINISHED form (a
+    # final edit, a final move's copy). Several finish paths retire
+    # `busy_msg_id` only after a further await (the moved card's delete,
+    # the superseded card's log attachment); a busy-card edit that gets
+    # the card-edit lock in that window must not paint a "Working" frame
+    # and a Stop button back over the settled card, so `_edit_busy_rich`
+    # refuses any non-final edit of this id. Transient: message ids are
+    # never reused, and a restart has no edit in flight.
+    card_settled_msg_id: int = 0
     # roadmap 8.29 T3 / ruling 1: set when MINIMAL MODE LIFTS while this
     # session's card is still showing the static "updates paused" line.
     # The next tick then makes ONE non-debounced, ESSENTIAL edit, so the

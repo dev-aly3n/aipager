@@ -939,13 +939,13 @@ class SessionOpsMixin:
             sess.close_turn()  # no card for this turn from here (8.57)
         self._stop_animation(sess)
 
-        # 3. Edit busy message to show "Stopped" (no keyboard)
-        if sess.busy_msg_id and sess.busy_msg_id > 0:
-            await self._edit_busy_raw(
-                sess.busy_msg_id,
-                f"⚠️ <b>{html_mod.escape(sess.label)}</b> · Stopped",
-            )
-        sess.busy_msg_id = None
+        # 3. Edit busy message to show "Stopped" (no keyboard), and retire
+        # it, under the card-edit lock: the Escapes above make Claude fire
+        # tool hooks right now, and a card edit of theirs landing after
+        # this line would put "Working" and a live Stop button back.
+        await self._settle_card_text(
+            sess, f"⚠️ <b>{html_mod.escape(sess.label)}</b> · Stopped")
+        sess.busy_msg_id = None  # also a -1 claim, which the helper skips
 
         # 4. Transition to IDLE directly (skip notify — we handle UI here)
         dropped = len(sess.pending_queue) + len(held)
@@ -1064,10 +1064,10 @@ class SessionOpsMixin:
         notice = (f"🛑 <b>{html_mod.escape(sess.label)}</b> · Blocked by "
                   f"safety policy: {html_mod.escape(reason)} (stopped)")
         try:
-            if sess.busy_msg_id and sess.busy_msg_id > 0:
-                await self._edit_busy_raw(
-                    sess.busy_msg_id, notice, chat_id=resolve_chat_id(sess))
-            elif self._app:
+            # Written and retired under the card-edit lock, as in
+            # `_stop_session_core`.
+            if not await self._settle_card_text(
+                    sess, notice, chat_id=resolve_chat_id(sess)) and self._app:
                 await send_text(self._app.bot,
                     resolve_chat_id(sess), notice, parse_mode="HTML")
         except Exception:
