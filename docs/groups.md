@@ -631,10 +631,16 @@ card).
 
 **A tool blocked by a rule.** A turn stops with "🛑 x1 · Blocked by
 safety policy: Write is in this role's deny_tools (stopped)". If Claude
-Code asks for permission for a tool the session's last Telegram sender
-may not use, the bot answers Deny itself, shows no prompt, and posts
-`⛔ x1 · Edit blocked for @bob (role user)` with the call's summary
-below.
+Code asks for permission for a tool the person whose message started
+the running turn may not use, the bot answers Deny itself, shows no
+prompt, and posts `⛔ x1 · Edit blocked for @bob (role user)` with the
+call's summary below, naming that person. A turn several people's
+messages started is blocked when any one of them may not use the tool,
+and names that one. A turn typed in the terminal is yours and is never
+blocked by a member's rules. When aipager does not know whose turn it
+is (it was already running when the daemon restarted), it uses the
+rules of whoever sent the session's last message, and the group's own
+list when that is not known either.
 
 **Message states.** 👀 on a message means it was sent to the session
 (or is held until it can be); 👍 means Claude took it; 🤷 means it was
@@ -746,7 +752,8 @@ a wall; see
   another group doesn't activate it there: it never answers there. It
   does note who addresses it there (their id, username and name, and
   the group's id and title) in `~/.claude/aipager-pending-users.json`,
-  so `aipager config` can add that group.
+  so `aipager config` can add that group. Only you can read that file,
+  and it keeps the newest 200 people seen in the last 30 days.
 - `read_only` members **can read** prompts, answers and tool inputs.
   They can't act, but they see everything in the group. If some work
   must stay hidden from someone, they don't belong in the group.

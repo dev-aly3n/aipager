@@ -22,6 +22,9 @@ name, and the group's id, title and type) in
 `~/.claude/aipager-pending-users.json`, so `aipager config` can find a
 new group and its people while the daemon runs. Anyone can add the bot
 to a group, so anyone can add a line to that file; it grants nothing.
+The file is readable only by you (mode 0600), is replaced whole on
+every write (never left half written), and keeps at most the newest
+200 people, dropping anyone not seen for 30 days.
 In team mode a per-user allow-list with roles is layered on top, and
 in a group only a message addressed to the bot (a command, a reply to
 it, a mention, or a tap on its keyboard) is acted on, whether or not

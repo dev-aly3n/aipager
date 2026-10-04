@@ -21,7 +21,9 @@ from telegram import (
 from aipager.bot import group_intake, tap_gate
 from aipager.dtach import inject
 
-from aipager.state import Status, TrackedSession
+from aipager.state import (
+    TURN_SENDER_MIXED, TURN_SENDER_TERMINAL, Status, TrackedSession,
+)
 from aipager.team import (
     Role,
     User as TeamUser,
@@ -70,7 +72,9 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-
+def _is_person_id(value) -> bool:
+    """A Telegram user id (a positive int, never a bool)."""
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
 
 class AuthMixin:
@@ -241,31 +245,115 @@ class AuthMixin:
             log.debug("audit_event append failed", exc_info=True)
 
     def _tool_auto_denied(self, sess: TrackedSession, tool_name: str) -> bool:
-        """Scope/policy version of the team-mode ``deny_tools`` auto-deny.
+        """Whether :meth:`_auto_deny_decision` denies ``tool_name``."""
+        return self._auto_deny_decision(sess, tool_name)[0]
 
-        True iff the session's last driver's effective deny set
-        (scope-level ∪ role ∪ per-user) blocks ``tool_name``. Owner/
-        admin roles (``bypass_role_denies``) are exempt. This is only
-        the tool-name auto-deny that team mode already had — the full
-        path/bash/origin safety enforcement is Phase E.
+    def _auto_deny_decision(
+        self, sess: TrackedSession, tool_name: str,
+    ) -> tuple[bool, TeamUser | None]:
+        """Scope mode: whether the permission dialog for ``tool_name`` is
+        answered Deny by the daemon, and whose rules blocked it (named in
+        the notice; ``None`` when no one person can be named).
+
+        Follows the RUNNING turn (``sess.turn_sender_id``), not the
+        session's last Telegram sender (roadmap 8.94a):
+
+        - a terminal turn (TURN_SENDER_TERMINAL, or no known sender while
+          the policy snapshot says the turn was typed in the terminal),
+          with no Telegram message joined to it: the operator's own work,
+          never denied by a Telegram member's rules;
+        - one known Telegram sender: that person's rules in the
+          session's chat;
+        - several (TURN_SENDER_MIXED): denied when ANY known author's
+          rules deny the tool (strictest wins), naming that author;
+        - not known (None: e.g. the turn was already running when the
+          daemon restarted), or a terminal turn a Telegram message
+          joined: fail closed as before this rule existed, with the
+          last Telegram sender's rules when that person is known, else
+          the scope-wide deny list.
+
+        A person's rules: the scope-wide deny list, their role's and
+        their own ``deny_tools``; a role with ``bypass_role_denies``
+        (owner, admin) is never denied. A sender who is no longer a
+        member of the chat gets the scope-wide deny list. Only the
+        tool-name auto-deny: path, Bash and origin rules are the hook's
+        (``dtach/enforce.py``), which also denies a Telegram turn's
+        restricted tools before any dialog appears.
         """
         if self.scopes is None or not tool_name:
-            return False
+            return False, None
         scope = self._scope_for(sess.scope_chat_id)
-        member = self._driver_user(sess)
+        running = sess.turn_sender_id
+        if running == TURN_SENDER_TERMINAL or running is None:
+            # None trusts the snapshot's ``turn_origin``. The hook writes
+            # it from the same merge it reports, so the two agree; only a
+            # failed snapshot write (best-effort) could leave the previous
+            # turn's there, and the hook would then read that same stale
+            # snapshot too.
+            if self._turn_is_pure_terminal(sess):
+                return False, None
+            # Unknown, or a terminal turn someone joined: the last
+            # sender's rules, else the scope-wide list (fail closed).
+            return self._person_denies(
+                scope, self._driver_user(sess), tool_name)
+        if running == TURN_SENDER_MIXED:
+            authors = [a for a in sess.turn_mixed_authors
+                       if _is_person_id(a)]
+            if not authors:
+                return self._person_denies(
+                    scope, self._driver_user(sess), tool_name)
+        elif _is_person_id(running):
+            authors = [running]
+        else:
+            return self._person_denies(
+                scope, self._driver_user(sess), tool_name)
+        chat_id = self._attribution_chat(sess, None)
+        unnamed = False
+        for uid in sorted(set(authors)):
+            member = self._driver_user_by_id(uid, chat_id=chat_id)
+            denied, whose = self._person_denies(scope, member, tool_name)
+            if denied and whose is not None:
+                return True, whose
+            unnamed = unnamed or denied
+        return unnamed, None
+
+    def _turn_is_pure_terminal(self, sess: TrackedSession) -> bool:
+        """True when the running turn was typed in the terminal and no
+        Telegram message has joined it: ``turn_sender_id`` says terminal,
+        or is not known while the policy snapshot the hook wrote for the
+        turn says so (``turn_origin``). A joined turn is enforced by the
+        hook with the joiner's rules (``joined_from_telegram``), so it is
+        not pure terminal here either."""
+        from aipager import policy_snapshot
+        snap = policy_snapshot.read_snapshot(sess.name)
+        snap = snap if isinstance(snap, dict) else {}
+        if snap.get("joined_from_telegram") is True:
+            return False
+        if sess.turn_sender_id == TURN_SENDER_TERMINAL:
+            return True
+        return snap.get("turn_origin") == "terminal"
+
+    def _person_denies(
+        self, scope, member, tool_name: str,
+    ) -> tuple[bool, TeamUser | None]:
+        """One person's tool-name deny in *scope*: ``(denied, member)``
+        when *member*'s rules deny ``tool_name``; for no member (unknown,
+        or no longer in the chat), the scope-wide deny list alone, with no
+        one to name."""
         if member is None:
-            # Unknown driver → apply only the scope-wide deny list.
-            return bool(scope and tool_name in scope.deny_tools)
+            return bool(scope and tool_name in scope.deny_tools), None
         role = self.policy.get_role(member.role)
         if role and role.bypass_role_denies:
-            return False
+            return False, None
         denies: set[str] = set()
         if scope:
             denies |= set(scope.deny_tools)
         if role:
             denies |= set(role.deny_tools)
         denies |= set(getattr(member, "deny_tools", ()))
-        return tool_name in denies
+        if tool_name in denies:
+            return True, member
+        return False, None
 
     def _team_user(self, update: Update):
         """Resolve the Telegram sender to a member/user, or None.
@@ -399,9 +487,8 @@ class AuthMixin:
                     try:
                         await reply_text(msg,
                             "🚫 You're not on this bot's allow-list. "
-                            "Ask an admin to add your Telegram user ID "
-                            f"({tg_user.id}) to ~/.config/aipager/team.yaml, "
-                            "or `aipager config` → Review pending users.",
+                            "Ask the operator to add your Telegram user ID "
+                            f"({tg_user.id}) with `aipager config`.",
                         )
                     except Exception:
                         log.debug("reply to unauthorized user failed", exc_info=True)

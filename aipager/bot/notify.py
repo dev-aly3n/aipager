@@ -3224,23 +3224,25 @@ class NotifyMixin:
             selector_text = context.get("selector_text", "")
             selector_options = context.get("selector_options")
 
-            # Team-mode rule check: auto-deny tools listed in
-            # ``team.yaml`` ``rules.deny_tools`` (unless the session's
-            # last driver is an admin, who bypass rules). Side-steps the
-            # permission prompt entirely — claude sees a Deny via the
-            # same key-injection path the buttons use, the chat sees
-            # a one-line "⛔ Auto-denied" notice, and an audit record
-            # is written.
+            # Rule check: a tool the running turn's rules deny is answered
+            # Deny here, with no prompt shown. Claude sees a Deny through
+            # the same key-injection path the buttons use, the chat gets a
+            # one-line "⛔ x1 · Edit blocked for @bob (role user)" notice
+            # naming whose rules blocked it, and an audit record is written.
             if tool_info:
                 tool_name = tool_info.get("name", "")
                 if self.scopes is not None:
-                    # v2: deny set from scope + role + per-user (owner/
-                    # admin bypass). See AuthMixin._tool_auto_denied.
-                    if self._tool_auto_denied(sess, tool_name):
-                        triggerer = self._driver_user(sess)
-                        await self._auto_deny(sess, tool_info, triggerer)
+                    # Scope mode: the running turn's rules (a terminal turn
+                    # is never denied by a Telegram member's rules; owner
+                    # and admin roles bypass). See
+                    # AuthMixin._auto_deny_decision.
+                    denied, whose = self._auto_deny_decision(sess, tool_name)
+                    if denied:
+                        await self._auto_deny(sess, tool_info, whose)
                         return
                 elif self.team is not None and self.team.rules.deny_tools:
+                    # Legacy team.yaml mode: its ``rules.deny_tools``, for
+                    # the session's last Telegram sender (admins bypass).
                     triggerer = self._driver_user(sess)
                     if self.team.rules.tool_is_denied(tool_name, triggerer):
                         await self._auto_deny(sess, tool_info, triggerer)

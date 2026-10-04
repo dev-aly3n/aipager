@@ -571,8 +571,8 @@ def check_team() -> CheckResult:
     if not any(u.role == Role.ADMIN for u in team.users.values()):
         issues.append("no admin user - no one can bypass rules.deny_tools")
         fixes.append(
-            "promote a user to admin via `aipager config` → "
-            "Change a user's role"
+            "promote a user to admin with `aipager config` → "
+            "Edit a member → Set role"
         )
 
     # 3) Suggest deny_tools if empty.

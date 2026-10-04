@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import tempfile
 import time
 from collections.abc import Sequence
 from datetime import datetime, timezone
@@ -336,8 +337,19 @@ def reset_unauthorized_seen() -> None:
 # identity to disk so the admin doesn't have to scroll the chat or grep
 # logs to add them later. Deduplicated by user_id; the latest record
 # wins (handle / display name may have changed).
+#
+# Anyone can add the bot to a group and so add a line here (roadmap
+# 8.94f): each write keeps only the newest PENDING_USERS_MAX records and
+# drops those not seen for PENDING_USERS_MAX_AGE_SECONDS, and replaces the
+# file atomically (a private temporary file, then ``os.replace``), so a
+# crash or a second writer never leaves it half written.
 
 PENDING_USERS_PATH: Path = Path.home() / ".claude" / "aipager-pending-users.json"
+
+#: The most records the pending-users file keeps (the newest).
+PENDING_USERS_MAX: int = 200
+#: Records last seen longer ago than this are dropped on the next write.
+PENDING_USERS_MAX_AGE_SECONDS: float = 30 * 24 * 3600.0
 
 #: Telegram's shared sender ids (roadmap 8.91e): an anonymous group admin
 #: (GroupAnonymousBot), a message posted as a channel (Channel_Bot) and a
@@ -393,30 +405,89 @@ def record_pending_user(
     if chat_type is not None:
         records[-1]["chat_type"] = chat_type
     try:
-        PENDING_USERS_PATH.parent.mkdir(parents=True, exist_ok=True)
-        PENDING_USERS_PATH.write_text(
-            json.dumps(records, indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
+        _write_pending_users(_prune_pending_users(records))
     except OSError as e:
         log.warning("pending-users persist failed: %s", e)
 
 
+def _pending_seen_at(record: dict) -> datetime | None:
+    """When a pending record was last written (its ``first_seen``, which
+    each new message from that person refreshes), or None when the record
+    has no readable time (a file from an older aipager). A time without a
+    zone is read as UTC."""
+    raw = record.get("first_seen")
+    if not isinstance(raw, str):
+        return None
+    try:
+        when = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return when
+
+
+def _prune_pending_users(records: list) -> list[dict]:
+    """The records a write keeps: only well-formed ones (dicts), none last
+    seen more than PENDING_USERS_MAX_AGE_SECONDS ago, and at most the
+    newest PENDING_USERS_MAX of them (the file reads oldest to newest).
+    A record with no readable time is kept until the cap pushes it out:
+    its age is not known."""
+    now = datetime.now(timezone.utc)
+    kept: list[dict] = []
+    for r in records:
+        if not isinstance(r, dict):
+            continue
+        when = _pending_seen_at(r)
+        if (when is not None
+                and (now - when).total_seconds() > PENDING_USERS_MAX_AGE_SECONDS):
+            continue
+        kept.append(r)
+    return kept[-PENDING_USERS_MAX:]
+
+
+def _write_pending_users(records: list[dict]) -> None:
+    """Replace the pending-users file with *records*, atomically: written
+    to a temporary file of its own in the same folder (created mode 0600
+    by ``tempfile.mkstemp``, unique, so two writers never share one) and
+    moved over the file with ``os.replace``. A crash before the move
+    leaves the old file whole. Raises OSError."""
+    path = PENDING_USERS_PATH
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp",
+                               dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(json.dumps(records, indent=2, ensure_ascii=False))
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def list_pending_users() -> list[dict]:
-    """Return the current pending-users registry. Empty list if the
-    file is absent or malformed."""
+    """Return the current pending-users registry: its records (dicts),
+    oldest to newest. Empty list if the file is absent, unreadable or
+    malformed (not JSON, not UTF-8, not a list); entries that are not
+    records are skipped."""
     if not PENDING_USERS_PATH.exists():
         return []
     try:
         data = json.loads(PENDING_USERS_PATH.read_text(encoding="utf-8"))
-        if not isinstance(data, list):
-            return []
-        # A shared sender id saved before 8.91e is not a person: hidden.
-        return [r for r in data
-                if not (isinstance(r, dict) and is_shared_sender_id(r.get("user_id")))]
-    except (OSError, json.JSONDecodeError) as e:
+    except (OSError, ValueError) as e:
+        # ValueError: bad JSON, and bytes that are not UTF-8.
         log.warning("pending-users read failed: %s", e)
         return []
+    if not isinstance(data, list):
+        return []
+    # A shared sender id saved before 8.91e is not a person: hidden.
+    return [r for r in data
+            if isinstance(r, dict) and not is_shared_sender_id(r.get("user_id"))]
 
 
 def clear_pending_user(user_id: int) -> bool:
@@ -428,11 +499,9 @@ def clear_pending_user(user_id: int) -> bool:
     if len(new) == len(records):
         return False
     try:
+        new = _prune_pending_users(new)
         if new:
-            PENDING_USERS_PATH.write_text(
-                json.dumps(new, indent=2, ensure_ascii=False),
-                encoding="utf-8",
-            )
+            _write_pending_users(new)
         else:
             PENDING_USERS_PATH.unlink(missing_ok=True)
     except OSError as e:
@@ -464,6 +533,8 @@ __all__ = [
     "User",
     "TEAM_CONFIG_PATH",
     "PENDING_USERS_PATH",
+    "PENDING_USERS_MAX",
+    "PENDING_USERS_MAX_AGE_SECONDS",
     "SHARED_SENDER_IDS",
     "archive_team",
     "attribution_label",

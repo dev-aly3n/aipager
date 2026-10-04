@@ -130,7 +130,7 @@ behaviour.
 | `/tmp/claude-policy-<name>.json` | Canonical permission snapshot for the running turn | `aipager-hook` (written at pick-up), read by the `PreToolUse` check |
 | `~/.claude/aipager-sessions.json` | Durable registry state | aipager daemon |
 | `~/.claude/aipager-audit.jsonl` | Allow / Deny / answer log | aipager daemon (append-only) |
-| `~/.claude/aipager-pending-users.json` | People who addressed the bot in a group it does not serve, or who are not members of a group it serves, for `aipager config` to add | aipager daemon (written), `aipager config` (read) |
+| `~/.claude/aipager-pending-users.json` | People who addressed the bot in a group it does not serve, or who are not members of a group it serves, for `aipager config` to add (mode 0600, replaced whole on each write, the newest 200 seen in the last 30 days) | aipager daemon (written), `aipager config` (read) |
 | `~/.claude/settings.json` | Claude Code hook config | written by `aipager config` |
 | `~/.claude/settings.json.bak.*` | Backups before each rewrite | `aipager config` |
 | `~/.config/aipager/aipager.yaml` | Bot token, chats, members + roles, Mini App settings | `aipager config` (mode 600); the daemon moves a group's entry when Telegram upgrades it to a supergroup |
