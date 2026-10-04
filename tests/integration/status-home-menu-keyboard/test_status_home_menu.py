@@ -267,7 +267,7 @@ def test_new_opens_a_name_card_owned_by_the_tapper(bot, tap, monkeypatch):
 
     tap("_:nw:open", user=55)
 
-    card = bot._new_wizard_pending[CHAT]
+    card = bot._new_wizard_pending[(CHAT, 55)]
     assert (card["user_id"], card["msg_id"], card["step"]) == (55, 777, "name")
     assert "New session" in sent.await_args.args[2]
 
@@ -280,7 +280,7 @@ def test_new_is_refused_for_someone_who_may_not_prompt(bot, tap, monkeypatch):
     query = tap("_:nw:open", user=55)
 
     sent.assert_not_awaited()
-    assert CHAT not in getattr(bot, "_new_wizard_pending", {})
+    assert CHAT not in {c for c, _u in getattr(bot, "_new_wizard_pending", {})}
     assert "can't start" in query.answer.await_args.args[0]
 
 

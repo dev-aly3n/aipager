@@ -156,7 +156,9 @@ The cards that wait for an answer say so in a group: the new-session
 card says "Reply to this message with a name", the rename card "Reply
 to this message with the new name", and the Ready card, the reply to
 `/x1`, `/start` and `/help` say to reply to a session's message or
-mention the bot.
+mention the bot. Each person's `/new` card and rename question are
+their own: the card shows whose it is, only that person's reply answers
+it, and two people can start or rename sessions at the same time.
 
 ## Roles
 

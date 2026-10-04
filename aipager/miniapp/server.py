@@ -205,13 +205,15 @@ class MiniAppServer:
         @web.middleware
         async def _close_card_after_action(request, handler):
             # A session action (or create) that went through closes the
-            # caller's open /new Name card in chat: a refused one (403,
+            # caller's open /new Name card and rename question in chat: a refused one (403,
             # 429, a bad body) changes nothing.
             resp = await handler(request)
             target = request.get(_close_card_key())
             if target is not None and getattr(resp, "status", 500) < 400:
-                from aipager.bot import new_flow
+                from aipager.bot import new_flow, session_parity
                 new_flow.close_open_card(self.bot, *target)
+                # Their rename question in chat too (the same rule).
+                session_parity.close_rename(self.bot, *target)
             return resp
 
         app = web.Application(middlewares=[_close_card_after_action])

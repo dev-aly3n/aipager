@@ -48,6 +48,11 @@ def _mk_cb_update(chat_id, user_id):
     return update
 
 
+def _arm_rename(bot, chat_id, user_id, sess):
+    """A rename waiting for *user_id*'s new name, as /rename leaves it."""
+    session_parity._start_rename_capture(bot, chat_id, sess, user_id)
+
+
 def _session(name="claude-dev", label="dev", **kwargs):
     return TrackedSession(name=name, label=label, **kwargs)
 
@@ -107,10 +112,10 @@ def test_rename_new_label_reserved_word_refused(mk_bot, mk_update, run_async):
 def test_rename_pending_lives_on_instance_not_module(mk_bot):
     bot1 = mk_bot()
     bot2 = mk_bot()
-    session_parity._rename_pending_map(bot1)[7] = {
+    session_parity._rename_pending_map(bot1)[(7, 1)] = {
         "session_name": "claude-x", "label": "x",
     }
-    assert session_parity._rename_pending_map(bot2).get(7) is None
+    assert session_parity._rename_pending_map(bot2).get((7, 1)) is None
 
 
 # ---- ⋮ session menu ----------------------------------------------------
@@ -492,7 +497,8 @@ def test_rename_cmd_no_args_one_session_asks_for_the_name(mk_bot, mk_update, run
     assert args.args[0] == "✏️ New name for [<b>dev</b>]? Send it as a message."
     cbs = [b.callback_data for row in args.kwargs["reply_markup"].inline_keyboard for b in row]
     assert _destinations(bot, update.effective_chat.id, cbs) == [(sess.name, "rename-cancel")]
-    pending = session_parity._rename_pending_map(bot)[update.effective_chat.id]
+    pending = session_parity._rename_pending_map(bot)[
+        (update.effective_chat.id, update.effective_user.id)]
     assert pending["session_name"] == sess.name
 
 
@@ -531,8 +537,10 @@ def test_rename_callback_starts_capture(mk_bot, run_async, mk_query):
 
     assert handled is True
     # user_id: who tapped (2026-09-30), so another person's /new leaves it.
-    assert bot._rename_pending[555] == {"session_name": sess.name, "label": "dev",
-                                        "user_id": query.from_user.id}
+    pending = bot._rename_pending[(555, query.from_user.id)]
+    assert {k: pending[k] for k in ("session_name", "label", "user_id", "msg_id")} == {
+        "session_name": sess.name, "label": "dev", "user_id": query.from_user.id,
+        "msg_id": 42}
     query.edit_message_text.assert_awaited_once()
 
 
@@ -547,14 +555,14 @@ def test_rename_callback_denied_for_read_only_does_not_start_capture(mk_bot, run
     handled = run_async(session_parity.handle_callback(bot, update, query, sess.name, "rename"))
 
     assert handled is True
-    assert 555 not in session_parity._rename_pending_map(bot)
+    assert session_parity._rename_pending_map(bot) == {}
 
 
 def test_rename_cancel_clears_pending(mk_bot, run_async, mk_query):
     bot = mk_bot()
     sess = _session(label="dev")
     bot.registry._sessions[sess.name] = sess
-    bot._rename_pending = {555: {"session_name": sess.name, "label": "dev"}}
+    _arm_rename(bot, 555, 12345, sess)
 
     query = mk_query(f"{sess.name}:rename-cancel")
     update = _mk_cb_update(555, 1)
@@ -563,7 +571,7 @@ def test_rename_cancel_clears_pending(mk_bot, run_async, mk_query):
     )
 
     assert handled is True
-    assert 555 not in bot._rename_pending
+    assert bot._rename_pending == {}
 
 
 def test_maybe_handle_text_applies_pending_rename(mk_bot, mk_update, run_async, monkeypatch):
@@ -571,7 +579,7 @@ def test_maybe_handle_text_applies_pending_rename(mk_bot, mk_update, run_async, 
     bot = mk_bot()
     sess = _session(label="dev")
     bot.registry._sessions[sess.name] = sess
-    bot._rename_pending = {-1001: {"session_name": sess.name, "label": "dev"}}
+    _arm_rename(bot, -1001, 12345, sess)
 
     update = mk_update("newname", chat_id=-1001)
     handled = run_async(
@@ -580,7 +588,7 @@ def test_maybe_handle_text_applies_pending_rename(mk_bot, mk_update, run_async, 
 
     assert handled is True
     assert sess.label == "newname"
-    assert -1001 not in bot._rename_pending
+    assert bot._rename_pending == {}
 
 
 def test_maybe_handle_text_returns_false_when_nothing_pending(mk_bot, mk_update, run_async):
@@ -594,7 +602,7 @@ def test_maybe_handle_text_returns_false_when_nothing_pending(mk_bot, mk_update,
 
 def test_maybe_handle_text_fails_closed_if_session_gone(mk_bot, mk_update, run_async):
     bot = mk_bot()
-    bot._rename_pending = {-1001: {"session_name": "claude-vanished", "label": "old"}}
+    _arm_rename(bot, -1001, 12345, _session(name="claude-vanished", label="old"))
 
     update = mk_update("newname", chat_id=-1001)
     handled = run_async(
@@ -604,7 +612,7 @@ def test_maybe_handle_text_fails_closed_if_session_gone(mk_bot, mk_update, run_a
     assert handled is True
     text = update.message.reply_text.await_args.args[0]
     assert "no longer available" in text
-    assert -1001 not in bot._rename_pending  # consumed, not left stale
+    assert bot._rename_pending == {}  # consumed, not left stale
 
 
 def test_maybe_handle_text_denied_for_read_only_member(mk_bot, mk_update, run_async):
@@ -612,7 +620,7 @@ def test_maybe_handle_text_denied_for_read_only_member(mk_bot, mk_update, run_as
     bot = mk_bot(team=team)
     sess = _session(label="dev")
     bot.registry._sessions[sess.name] = sess
-    bot._rename_pending = {-1001: {"session_name": sess.name, "label": "dev"}}
+    _arm_rename(bot, -1001, 999, sess)
 
     update = mk_update("newname", chat_id=-1001, user_id=999)
     handled = run_async(

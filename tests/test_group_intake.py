@@ -469,7 +469,7 @@ def test_mention_plus_new_opens_the_name_card(hbot, mk_update, run_async, monkey
 
 
 def test_a_mentioned_name_answers_the_name_card(hbot, mk_update, run_async, monkeypatch):
-    new_flow._pending_store(hbot)[G] = {
+    new_flow._pending_store(hbot)[(G, ALICE)] = {
         "step": "name", "user_id": ALICE, "msg_id": 7000, "path_options": [],
         "new_folder_parent": None, "last_active": new_flow._now(),
         "skip_perms": True, "can_auto": True, "model": None, "model_label": None,
@@ -790,7 +790,7 @@ def _open_card(bot, step, chat_id=G, **extra):
                "new_folder_parent": "/w", "last_active": new_flow._now(),
                "skip_perms": True, "can_auto": True, "model": None, "model_label": None,
                "cwd": None, **extra}
-    new_flow._pending_store(bot)[chat_id] = pending
+    new_flow._pending_store(bot)[(chat_id, ALICE)] = pending
     return pending
 
 
@@ -855,7 +855,7 @@ def test_a_mentioned_command_closes_the_card_like_the_bare_command(
     hbot._app.bot.edit_message_text = AsyncMock()
     u = _mention_update(mk_update, "@aipagerbot /x1 fix it", "@aipagerbot")
     run_async(new_flow.close_if_moved_on(hbot, u))
-    assert G not in new_flow._pending_store(hbot)
+    assert G not in {c for c, _u in new_flow._pending_store(hbot)}
     run_async(hbot._handle_message(u, MagicMock()))
     assert _injected(hbot) == ("x1", "fix it")
 

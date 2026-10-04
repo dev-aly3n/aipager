@@ -57,11 +57,11 @@ def test_a_tap_from_a_replaced_card_does_not_change_the_new_one(mk_bot, helpers)
     bot = helpers.make_personal_bot(mk_bot)
     _start_wizard(helpers, bot, message_id=9001)
     _start_wizard(helpers, bot, message_id=9002)
-    assert new_flow._pending_store(bot)[CHAT]["skip_perms"] is True
+    assert new_flow._pending_store(bot)[(CHAT, 12345)]["skip_perms"] is True
 
     _, q = _tap(helpers, bot, "_:nw:mode:ask", message_id=9001)
 
-    assert new_flow._pending_store(bot)[CHAT]["skip_perms"] is True
+    assert new_flow._pending_store(bot)[(CHAT, 12345)]["skip_perms"] is True
     assert "replaced" in q.answer.await_args.args[0]
 
 
@@ -73,7 +73,7 @@ def test_a_cancel_from_a_replaced_card_leaves_the_new_one_open(mk_bot, helpers):
 
     _tap(helpers, bot, "_:nw:cancel", message_id=9001)
 
-    assert CHAT in new_flow._pending_store(bot)
+    assert (CHAT, 12345) in new_flow._pending_store(bot)
 
 
 def test_the_new_card_can_still_be_completed(mk_bot, helpers):

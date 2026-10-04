@@ -67,7 +67,7 @@ def server(mk_bot):
     bot._maybe_update_bot_name = AsyncMock()
     sess = registry.get_or_create("claude-dev")
     sess.label, sess.scope_chat_id, sess.status = "dev", CHAT, Status.IDLE
-    bot._new_wizard_pending = {CHAT: {"step": "name", "user_id": OWNER,
+    bot._new_wizard_pending = {(CHAT, OWNER): {"step": "name", "user_id": OWNER,
                                       "msg_id": 900, "last_active": time.monotonic()}}
     return MiniAppServer(bot, registry, port=8769)
 
@@ -85,7 +85,7 @@ def _call(run_async, srv, method, path, user, **kw):
 
 
 def _open(srv):
-    return CHAT in srv.bot._new_wizard_pending
+    return (CHAT, OWNER) in srv.bot._new_wizard_pending
 
 
 def test_an_action_on_a_session_closes_the_card(server, run_async):
@@ -150,3 +150,21 @@ def test_the_close_key_is_a_typed_request_key(server, run_async):
     server.registry.get("claude-dev").queue_prompt("later", 1)
     _call(run_async, server, "POST", "/api/sessions/dev/clearqueue", OWNER)
     assert not _open(server)
+
+
+def test_an_action_on_a_session_closes_the_persons_rename_only(server, run_async):
+    """Roadmap 8.86: the rename question in chat closes by the same rule
+    as the Name card, for the person who acted only."""
+    from aipager.bot import session_parity
+    sess = server.registry.get("claude-dev")
+
+    async def _arm():
+        session_parity._start_rename_capture(server.bot, CHAT, sess, OWNER)
+        session_parity._start_rename_capture(server.bot, CHAT, sess, OTHER)
+    run_async(_arm())
+    sess.queue_prompt("later", 1)
+
+    status = _call(run_async, server, "POST", "/api/sessions/dev/clearqueue", OWNER)
+
+    assert status < 400
+    assert set(server.bot._rename_pending) == {(CHAT, OTHER)}

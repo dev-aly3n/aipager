@@ -637,7 +637,7 @@ def test_the_folder_list_per_role(gbot, run_async, daemon_in_home, project):
         assert (new_flow._short_path(str(home)) in labels) is offers_home
         assert any(b.startswith("Default folder") for b in labels) is offers_home
         assert "➕ New folder" in labels
-        options = bot._new_wizard_pending[GROUP]["path_options"]
+        options = bot._new_wizard_pending[(GROUP, uid)]["path_options"]
         assert (str(home) in options) is offers_home
 
 
@@ -656,7 +656,7 @@ def test_a_user_makes_a_project_folder_under_home_and_starts_there(
     bot = gbot()
     _open(bot, run_async, USER)
     _tap(bot, run_async, USER, "nw:path:new")
-    pending = bot._new_wizard_pending[GROUP]
+    pending = bot._new_wizard_pending[(GROUP, USER)]
     assert pending["step"] == "opt_path_newfolder"
     assert pending["new_folder_parent"] == str(home)
 
@@ -679,7 +679,7 @@ def test_a_user_new_folder_on_the_card_is_never_an_existing_home_folder(
     _tap(bot, run_async, USER, "nw:path:new")
     update = mk_update("Documents", chat_id=GROUP, user_id=USER)
     run_async(new_flow.maybe_handle_text(bot, update, MagicMock(), "Documents"))
-    pending = bot._new_wizard_pending[GROUP]
+    pending = bot._new_wizard_pending[(GROUP, USER)]
     assert pending["cwd"] is None
     assert pending["step"] == "opt_path_newfolder"
     assert "already exists" in _last_edit(bot)[0]

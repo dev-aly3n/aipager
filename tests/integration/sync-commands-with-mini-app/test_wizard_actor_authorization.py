@@ -84,21 +84,21 @@ def test_a_read_only_members_message_cannot_name_someone_elses_session(
     _name_by(helpers, bot, STRANGER)
 
     assert bot.registry.find_by_label("ownedbyalice", CHAT) is None
-    assert CHAT in new_flow._pending_store(bot), "the owner's card was lost"
+    assert (CHAT, OWNER) in new_flow._pending_store(bot), "the owner's card was lost"
 
 
 def test_a_stranger_cannot_flip_someone_elses_wizard_to_auto(mk_bot, helpers):
     """No step may be driven by a bystander."""
     bot = _bot(mk_bot, helpers)
     message_id = _open_wizard(helpers, bot, mode_cb="_:nw:mode:ask")
-    assert new_flow._pending_store(bot)[CHAT]["skip_perms"] is False, (
+    assert new_flow._pending_store(bot)[(CHAT, OWNER)]["skip_perms"] is False, (
         "fixture drift: expected Ask mode")
 
     _run(bot._handle_callback(*helpers.make_callback_update(
         "_:nw:mode:auto", chat_id=CHAT, chat_type="group",
         user_id=STRANGER, message_id=message_id)))
 
-    assert new_flow._pending_store(bot)[CHAT]["skip_perms"] is False, (
+    assert new_flow._pending_store(bot)[(CHAT, OWNER)]["skip_perms"] is False, (
         "a bystander switched another member's card to Auto mode")
 
 
@@ -108,7 +108,7 @@ def test_a_strangers_message_is_not_swallowed_as_wizard_input(mk_bot, helpers):
     cannot name (or create a folder for) somebody else's session."""
     bot = _bot(mk_bot, helpers)
     _open_wizard(helpers, bot)
-    assert new_flow._pending_store(bot)[CHAT]["step"] == "name"
+    assert new_flow._pending_store(bot)[(CHAT, OWNER)]["step"] == "name"
 
     stranger_msg = helpers.make_message_update(
         "hijacked", chat_id=CHAT, chat_type="group", user_id=STRANGER)
@@ -145,7 +145,7 @@ def test_a_bystander_cannot_cancel_someone_elses_wizard(mk_bot, helpers):
         "_:nw:cancel", chat_id=CHAT, chat_type="group",
         user_id=STRANGER, message_id=message_id)))
 
-    assert CHAT in new_flow._pending_store(bot), (
+    assert (CHAT, OWNER) in new_flow._pending_store(bot), (
         "a bystander cancelled another member's card")
 
 
@@ -168,4 +168,4 @@ def test_an_authorized_member_still_cannot_finish_anothers_wizard(
 
     assert claimed is False
     assert bot.registry.find_by_label("ownedbyalice", CHAT) is None
-    assert CHAT in new_flow._pending_store(bot)
+    assert (CHAT, OWNER) in new_flow._pending_store(bot)

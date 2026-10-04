@@ -36,11 +36,14 @@ shape from the old wizard:
                                                 (`_:nw:...`, `rdy_*` on a
                                                 session, `_:set:ns...`).
 
-Pending state lives on ``bot._new_wizard_pending: dict[int, dict]``, keyed
-by chat id: one Name card per chat, a second bare ``/new`` replaces it,
-idle more than ``_WIZARD_TTL_SECONDS`` is gone (checked lazily). Every
-step is authorized against the person acting NOW, and a stranger's text
-is never consumed (see :func:`_actor_id`).
+Pending state lives on ``bot._new_wizard_pending: dict[tuple, dict]``,
+keyed ``(chat_id, user_id)``: one Name card per person in a chat (a
+private chat has one person, so one card), their second bare ``/new``
+replaces only their own, idle more than ``_WIZARD_TTL_SECONDS`` is gone
+(checked lazily). Every step is authorized against the person acting
+NOW, and a stranger's text is never consumed (see :func:`_actor_id`).
+In a group the card names its owner, and another member's reply to it
+is told whose it is instead of being routed (roadmap 8.86).
 
 Callback data (sentinel ``_``, never free text):
 
@@ -88,6 +91,7 @@ from aipager.config import (
 )
 from aipager.miniapp import launch
 from aipager.state import Status
+from aipager.team import attribution_label
 
 if TYPE_CHECKING:
     from telegram import CallbackQuery, Update
@@ -121,9 +125,10 @@ _ACTING_WORDS = frozenset({"stop", "kill"})
 
 # ---- pending-state plumbing ------------------------------------------
 
-def _pending_store(bot: TelegramBot) -> dict[int, dict]:
+def _pending_store(bot: TelegramBot) -> dict[tuple, dict]:
     """Lazily-initialized ``bot._new_wizard_pending`` (an instance
-    attribute, not a module dict, so nothing leaks between bots)."""
+    attribute, not a module dict, so nothing leaks between bots), keyed
+    ``(chat_id, user_id)`` (roadmap 8.86)."""
     store = getattr(bot, "_new_wizard_pending", None)
     if store is None:
         store = {}
@@ -139,6 +144,12 @@ def _is_expired(pending: dict) -> bool:
     return (_now() - pending.get("last_active", 0.0)) > _WIZARD_TTL_SECONDS
 
 
+def _others_cards(store: dict, chat_id: int, user_id: int | None) -> list[dict]:
+    """The open Name cards of everyone else in *chat_id*."""
+    return [p for (chat, owner), p in store.items()
+            if chat == chat_id and owner != user_id]
+
+
 def close_open_card(bot: TelegramBot, chat_id: int | None,
                     user_id: int | None) -> None:
     """The person moved on: they started, switched to or resumed a
@@ -150,10 +161,9 @@ def close_open_card(bot: TelegramBot, chat_id: int | None,
     if chat_id is None or user_id is None:
         return
     store = _pending_store(bot)
-    pending = store.get(chat_id)
-    if pending is None or pending.get("user_id") != user_id:
+    pending = store.pop((chat_id, user_id), None)
+    if pending is None:
         return
-    store.pop(chat_id, None)
     # The pop is what matters; the edit only tells them, so nothing
     # waits on it (held like every other background send).
     from aipager.bot.notify import _BACKGROUND_TASKS  # local: import cycle
@@ -227,12 +237,31 @@ async def close_if_moved_on(
     2026-09-30). Never raises, never stops the update."""
     try:
         if not _leaves_the_card_open(bot, update):
-            # Only the sender's own card, if they have one open here.
-            close_open_card(
-                bot, calling_chat_id(update),
-                getattr(getattr(update, "effective_user", None), "id", None))
+            # Only the sender's own card and rename question, if they have
+            # one open here (roadmap 8.86: the same rule closes both).
+            chat_id = calling_chat_id(update)
+            user_id = getattr(getattr(update, "effective_user", None), "id", None)
+            close_open_card(bot, chat_id, user_id)
+            if not _answers_the_rename(bot, update, chat_id, user_id):
+                from aipager.bot import session_parity  # local: import cycle
+                session_parity.close_rename(bot, chat_id, user_id)
     except Exception:
         log.debug("new_flow: close_if_moved_on failed", exc_info=True)
+
+
+def _answers_the_rename(bot: TelegramBot, update: Update, chat_id, user_id) -> bool:
+    """A tap on the Cancel of the person's OWN rename question: its
+    handler closes it (and says so), so closing it here first would race
+    that edit. A Cancel on someone else's question is another action."""
+    query = getattr(update, "callback_query", None)
+    data = getattr(query, "data", None) if query is not None else None
+    if not (isinstance(data, str) and data.endswith(":rename-cancel")):
+        return False
+    from aipager.bot import session_parity  # local: import cycle
+    own = session_parity._rename_pending_map(bot).get((chat_id, user_id))
+    tapped = getattr(getattr(query, "message", None), "message_id", None)
+    # No rename of theirs: nothing to close either way.
+    return own is not None and own.get("msg_id") == tapped
 
 
 def _not_for_the_card(bot: TelegramBot, update: Update, pending: dict,
@@ -366,9 +395,28 @@ def _settings_line(settings: dict) -> str:
 _GROUP_NAME_ASK = "Reply to this message with a name, and what to do first if you like:"
 
 
+def _owner_label(bot: TelegramBot, chat_id: int, user_id: int | None) -> str:
+    """``@alice``: the card owner as the attribution helper names a
+    member (their label in this chat's scope, else the allow-list); ""
+    for nobody known (personal mode), so the card names no one."""
+    member = None
+    try:
+        if getattr(bot, "scopes", None) is not None:
+            member = bot._member_in_scope(bot._scope_for(chat_id), user_id)
+        elif getattr(bot, "team", None) is not None:
+            member = bot.team.get(user_id)
+    except Exception:
+        log.debug("new_flow: owner lookup failed", exc_info=True)
+    return attribution_label(member) if member is not None else ""
+
+
 def _render_name_card(pending: dict, *, error: str = "",
                       chat_id=None) -> tuple[str, InlineKeyboardMarkup]:
-    lines = ["🆕 <b>New session</b>", ""]
+    header = "🆕 <b>New session</b>"
+    if group_intake.is_group_chat(chat_id) and pending.get("owner_label"):
+        # Whose card it is: in a group several can be open (roadmap 8.86).
+        header += f" ({html_mod.escape(pending['owner_label'])})"
+    lines = [header, ""]
     if error:
         lines += [f"⚠️ {html_mod.escape(error)}", ""]
     lines += [
@@ -555,20 +603,14 @@ async def open_card_from_tap(bot: TelegramBot, update: Update, query: CallbackQu
 
 async def _open_card(bot: TelegramBot, chat_id: int, user_id: int | None, send,
                      *, error: str = "") -> None:
-    """Send the Name card with *send* and make it the chat's open card,
-    owned by *user_id* (a second one replaces the first)."""
+    """Send the Name card with *send* and make it *user_id*'s open card
+    in this chat (their second one replaces their first; anyone else's
+    stays open, roadmap 8.86)."""
     store = _pending_store(bot)
-    # The same person's rename left waiting for its new name would take
-    # the message after this card's name: their newest question wins.
-    # Someone else's rename in the group is theirs.
-    from aipager.bot import session_parity  # local: avoids an import cycle
-    renames = session_parity._rename_pending_map(bot)
-    if renames.get(chat_id, {}).get("user_id") == user_id:
-        renames.pop(chat_id, None)
-    old = store.pop(chat_id, None)
+    old = store.pop((chat_id, user_id), None)
     if old is not None:
-        # A second bare `/new` replaces the first: strip the old card's
-        # keyboard so no tap can land on it.
+        # Their second bare `/new` replaces their first: strip the old
+        # card's keyboard so no tap can land on it.
         await _edit_at(bot, chat_id, old.get("msg_id"),
                        "↩️ Cancelled - started over.")
 
@@ -581,6 +623,8 @@ async def _open_card(bot: TelegramBot, chat_id: int, user_id: int | None, send,
         "last_active": _now(),
         **resolve_new_session_settings(bot, chat_id, user_id),
     }
+    if group_intake.is_group_chat(chat_id):
+        pending["owner_label"] = _owner_label(bot, chat_id, user_id)
     _note_folder_choices(bot, chat_id, pending)
     text, kb = _render_name_card(pending, error=error, chat_id=chat_id)
     sent = await send(text, kb)
@@ -589,7 +633,12 @@ async def _open_card(bot: TelegramBot, chat_id: int, user_id: int | None, send,
         # swallow the next message as its name.
         return
     pending["msg_id"] = sent.message_id
-    store[chat_id] = pending
+    store[(chat_id, user_id)] = pending
+    # The same person's rename left waiting for its new name would take
+    # the message after this card's name: their newest question wins,
+    # and says it closed. Someone else's rename in the group is theirs.
+    from aipager.bot import session_parity  # local: avoids an import cycle
+    session_parity.close_rename(bot, chat_id, user_id)
 
 
 # ---- the one parser ----------------------------------------------------
@@ -636,6 +685,9 @@ async def create_from_text(
     chat_id = calling_chat_id(update)
     actor = _actor_id(update)
     store = _pending_store(bot)
+    # The card this text answered is its owner's (always the actor:
+    # maybe_handle_text only hands over their own).
+    key = (chat_id, pending["user_id"] if pending is not None else actor)
 
     name, first, force_auto, err = parse_request(text)
     if err:
@@ -651,9 +703,11 @@ async def create_from_text(
         return
 
     if pending is None:
-        # Started with `/new x1` while their own Name card was open: that
-        # card must not take their next message too.
+        # Started with `/new x1` while their own Name card or rename was
+        # open: neither may take their next message too.
         close_open_card(bot, chat_id, actor)
+        from aipager.bot import session_parity  # local: import cycle
+        session_parity.close_rename(bot, chat_id, actor)
     settings = pending if pending is not None else resolve_new_session_settings(
         bot, chat_id or 0, actor)
     # Auto is re-checked here, at the moment of creation, against the
@@ -675,7 +729,7 @@ async def create_from_text(
         existing.status != Status.GONE or existing.claude_session_id
     ):
         if pending is not None:
-            store.pop(chat_id, None)
+            store.pop(key, None)
         # The Name card itself becomes the conflict card (one message per
         # flow); `/new x1` gets it as the reply.
         await bot._send_new_conflict_prompt(
@@ -689,7 +743,7 @@ async def create_from_text(
                  f"{'🤖 Auto' if skip_perms else '💬 Ask'}…")
     sent = None
     if pending is not None:
-        store.pop(chat_id, None)
+        store.pop(key, None)
         msg_id = pending.get("msg_id")
         await _edit_at(bot, chat_id, msg_id, launching)
     else:
@@ -710,12 +764,12 @@ async def create_from_text(
         model=settings.get("model") or None,
     )
     if not session_name:
-        if pending is not None and store.get(chat_id) is None:
+        if pending is not None and store.get(key) is None:
             # Retry-able: the Name card comes back with its choices kept,
             # unless a newer card opened while this one was launching.
             pending["msg_id"] = msg_id
             _touch(pending)
-            store[chat_id] = pending
+            store[key] = pending
             await _goto_name(bot, chat_id, pending, error=err)
         else:
             await _show(f"❌ {html_mod.escape(err)}")
@@ -1015,28 +1069,55 @@ async def handle_defaults_callback(
 
 # ---- free-text capture -------------------------------------------------
 
+async def _refuse_reply_to_others_card(
+    bot: TelegramBot, update: Update, store: dict, chat_id: int, actor: int | None,
+) -> bool:
+    """In a group, a reply to another member's open Name card is not
+    theirs to answer and not a prompt either: say whose card it is
+    (roadmap 8.86). True iff it was that. It is not the answer to the
+    replier's own card or rename either, so those close (moved on)."""
+    if not group_intake.is_group_chat(chat_id):
+        return False
+    reply_to = getattr(update.message, "reply_to_message", None)
+    replied = getattr(reply_to, "message_id", None) if reply_to is not None else None
+    if not isinstance(replied, int):
+        return False
+    for card in _others_cards(store, chat_id, actor):
+        if card.get("msg_id") == replied:
+            owner = card.get("owner_label") or _owner_label(bot, chat_id, card.get("user_id"))
+            whose = f"{owner}'s" if owner else "someone else's"
+            close_open_card(bot, chat_id, actor)
+            from aipager.bot import session_parity  # local: import cycle
+            session_parity.close_rename(bot, chat_id, actor)
+            await reply_text(update.message,
+                             f"This card is {whose}. Send /new for your own.")
+            return True
+    return False
+
+
 async def maybe_handle_text(
     bot: TelegramBot, update: Update, ctx: ContextTypes.DEFAULT_TYPE | None, text: str,
 ) -> bool:
-    """True iff this text answered the chat's open Name card (a name, or
-    one of its text steps), from the person who opened it."""
+    """True iff this text answered the sender's own open Name card (a
+    name, or one of its text steps), or, in a group, replied to someone
+    else's (told whose it is, routed nowhere)."""
     chat_id = calling_chat_id(update)
     if chat_id is None:
         return False
     store = _pending_store(bot)
-    pending = store.get(chat_id)
+    actor = _actor_id(update)
+    if await _refuse_reply_to_others_card(bot, update, store, chat_id, actor):
+        return True
+    pending = store.get((chat_id, actor))
     if pending is None or pending["step"] not in _TEXT_CAPTURE_STEPS:
-        return False
-    if _actor_id(update) != pending["user_id"]:
-        # Someone else talking in the same chat: their message is theirs.
         return False
     verdict = _not_for_the_card(bot, update, pending, text)
     if verdict == "close":
-        close_open_card(bot, chat_id, pending["user_id"])
+        close_open_card(bot, chat_id, actor)
     if verdict:
         return False
     if _is_expired(pending):
-        store.pop(chat_id, None)
+        store.pop((chat_id, actor), None)
         await _edit_wizard(bot, chat_id, pending, _EXPIRED_TEXT)
         return True
     _touch(pending)
@@ -1106,29 +1187,34 @@ async def handle_callback(
         return True
 
     store = _pending_store(bot)
-    pending = store.get(chat_id)
-    sub = action.split(":")[1:]  # drop the leading "nw"
-
-    if pending is None:
-        await bot._safe_answer(query, "This card expired.")
-        msg = getattr(query, "message", None)
-        await _edit_at(bot, chat_id, getattr(msg, "message_id", None), _EXPIRED_TEXT)
-        return True
-
     actor = _actor_id(update, query)
-    if actor != pending["user_id"]:
-        # Before the expiry branch and before _touch(): a stranger's tap
-        # must not keep someone else's card alive either.
+    pending = store.get((chat_id, actor))
+    sub = action.split(":")[1:]  # drop the leading "nw"
+    tapped = getattr(getattr(query, "message", None), "message_id", None)
+
+    others = _others_cards(store, chat_id, actor)
+    if isinstance(tapped, int):
+        theirs = any(p.get("msg_id") == tapped for p in others)
+    else:         # no message to tell by: anyone else's card counts
+        theirs = pending is None and bool(others)
+    if theirs:
+        # Someone else's card (roadmap 8.86: one per person). Before the
+        # expiry branch and before _touch(): a stranger's tap must not
+        # keep someone else's card alive either.
         await bot._safe_answer(query, "This isn't your new session.", show_alert=True)
         return True
 
+    if pending is None:
+        await bot._safe_answer(query, "This card expired.")
+        await _edit_at(bot, chat_id, tapped, _EXPIRED_TEXT)
+        return True
+
     if _is_expired(pending):
-        store.pop(chat_id, None)
+        store.pop((chat_id, actor), None)
         await bot._safe_answer(query, "This card expired.")
         await _edit_wizard(bot, chat_id, pending, _EXPIRED_TEXT)
         return True
 
-    tapped = getattr(getattr(query, "message", None), "message_id", None)
     if isinstance(tapped, int) and pending.get("msg_id") not in (None, tapped):
         # A tap from a card a second `/new` replaced (its keyboard is
         # stripped, but a tap can already be in flight): the chat's open
@@ -1139,7 +1225,7 @@ async def handle_callback(
     _touch(pending)
 
     if sub == ["cancel"]:
-        store.pop(chat_id, None)
+        store.pop((chat_id, actor), None)
         await _edit_wizard(bot, chat_id, pending, "↩️ Cancelled.")
         return True
 

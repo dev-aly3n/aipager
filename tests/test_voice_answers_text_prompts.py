@@ -43,7 +43,7 @@ def test_a_voice_message_answers_the_new_wizard(mk_bot, mk_update, run_async):
     bot = mk_bot()
     start = _pending_wizard_at_name_step(bot)
     run_async(new_flow.start_wizard(bot, start, MagicMock()))
-    assert new_flow._pending_store(bot)[555]["step"] == "name"
+    assert new_flow._pending_store(bot)[(555, 12345)]["step"] == "name"
 
     upd = _voice_update(mk_update)
     bot._app.bot.edit_message_text = AsyncMock()
@@ -99,7 +99,7 @@ def test_a_voice_message_answers_a_pending_rename(mk_bot, mk_update,
     # The pending record is a dict, not a bare name — `maybe_handle_text`
     # reads `pending["session_name"]`. Arm it through the module's own
     # accessor so the shape can't drift out from under this test.
-    sp._rename_pending_map(bot)[555] = {"session_name": sess.name}
+    sp._start_rename_capture(bot, 555, sess, 12345)
 
     upd = _voice_update(mk_update)
     bot._app.bot.edit_message_text = AsyncMock()

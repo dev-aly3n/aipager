@@ -121,7 +121,7 @@ def test_bare_new_sends_the_name_card_with_auto_by_default(wbot, mk_update, run_
     assert "Send a name" in text and "x1 fix the failing tests" in text
     assert "🤖 Auto" in text
     assert _buttons(kb) == ["💬 Ask instead", "🧠 Model", "📁 Folder", "✖️ Cancel"]
-    pending = bot._new_wizard_pending[CHAT]
+    pending = bot._new_wizard_pending[(CHAT, OWNER)]
     assert (pending["step"], pending["msg_id"], pending["user_id"],
             pending["skip_perms"]) == ("name", 900, OWNER, True)
 
@@ -141,7 +141,7 @@ def test_the_chats_default_ask_is_honoured(wbot, mk_update, run_async):
     bot = wbot()
     update = _open_card(bot, mk_update, run_async)
 
-    assert bot._new_wizard_pending[CHAT]["skip_perms"] is False
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["skip_perms"] is False
     kb = update.message.reply_text.await_args.kwargs["reply_markup"]
     assert "🤖 Auto instead" in _buttons(kb)
 
@@ -157,7 +157,7 @@ def test_second_new_replaces_first_cleanly(wbot, mk_update, run_async):
     assert kwargs["message_id"] == 900
     assert "started over" in kwargs["text"].lower()
     assert kwargs["reply_markup"] is None
-    assert bot._new_wizard_pending[CHAT]["msg_id"] == 901
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["msg_id"] == 901
 
 
 def test_start_wizard_unauthorized_sends_nothing(wbot, mk_update, run_async):
@@ -168,7 +168,7 @@ def test_start_wizard_unauthorized_sends_nothing(wbot, mk_update, run_async):
 
     run_async(new_flow.start_wizard(bot, update, MagicMock()))
 
-    assert CHAT not in getattr(bot, "_new_wizard_pending", {})
+    assert CHAT not in {c for c, _u in getattr(bot, "_new_wizard_pending", {})}
 
 
 def test_a_muted_chat_seeds_no_card(wbot, mk_update, run_async):
@@ -179,7 +179,7 @@ def test_a_muted_chat_seeds_no_card(wbot, mk_update, run_async):
 
     run_async(new_flow.start_wizard(bot, update, MagicMock()))
 
-    assert CHAT not in getattr(bot, "_new_wizard_pending", {})
+    assert CHAT not in {c for c, _u in getattr(bot, "_new_wizard_pending", {})}
 
 
 # ---- the name, answered ------------------------------------------------
@@ -194,7 +194,7 @@ def test_a_valid_name_creates_the_session_at_once(wbot, mk_update, run_async):
     assert handled is True
     assert bot.created == [{"label": "dev", "scope": CHAT, "skip_perms": True,
                             "cwd": None, "model": None, "driver": OWNER}]
-    assert CHAT not in bot._new_wizard_pending
+    assert CHAT not in {c for c, _u in bot._new_wizard_pending}
     ready = _last_edit(bot)
     assert ready["message_id"] == 900           # the Name card became it
     assert "✅ <b>dev</b> is ready" in ready["text"]
@@ -222,7 +222,7 @@ def test_an_invalid_name_re_renders_the_card_with_the_reason(wbot, mk_update, ru
     run_async(new_flow.maybe_handle_text(bot, update, MagicMock(), "b@d"))
 
     assert bot.created == []
-    pending = bot._new_wizard_pending[CHAT]
+    pending = bot._new_wizard_pending[(CHAT, OWNER)]
     assert pending["step"] == "name"
     kwargs = _last_edit(bot)
     assert kwargs["message_id"] == 900
@@ -254,7 +254,7 @@ def test_a_live_name_gets_the_conflict_card(wbot, mk_update, run_async):
     kw = bot._send_new_conflict_prompt.await_args.kwargs
     assert (kw["existing"].name, kw["prompt"], kw["skip_perms"]) == (
         "claude-jim", "do it", True)
-    assert CHAT not in bot._new_wizard_pending
+    assert CHAT not in {c for c, _u in bot._new_wizard_pending}
     # The Name card itself becomes the conflict card: one message.
     assert kw["edit_msg_id"] == 900
 
@@ -297,7 +297,7 @@ def test_a_strangers_text_is_not_taken_as_the_name(wbot, mk_update, run_async):
 
     assert handled is False
     assert bot.created == []
-    assert CHAT in bot._new_wizard_pending
+    assert (CHAT, OWNER) in bot._new_wizard_pending
 
 
 def test_text_with_no_open_card_is_not_taken(wbot, mk_update, run_async):
@@ -320,11 +320,11 @@ def test_a_name_typed_while_a_picker_is_open_still_creates(wbot, mk_update, run_
 def test_a_failed_launch_brings_the_card_back_with_its_choices(wbot, mk_update, run_async):
     bot = wbot(launch_error="dtach unavailable")
     _open_card(bot, mk_update, run_async)
-    bot._new_wizard_pending[CHAT]["skip_perms"] = False
+    bot._new_wizard_pending[(CHAT, OWNER)]["skip_perms"] = False
 
     run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "dev"), MagicMock(), "dev"))
 
-    pending = bot._new_wizard_pending.get(CHAT)
+    pending = bot._new_wizard_pending.get((CHAT, OWNER))
     assert pending is not None, "the Name card must come back"
     assert (pending["step"], pending["skip_perms"], pending["msg_id"]) == (
         "name", False, 900)
@@ -340,13 +340,13 @@ def test_a_failed_launch_leaves_a_newer_card_alone(wbot, mk_update, run_async):
              "last_active": new_flow._now()}
 
     async def _fail(label, **kw):
-        bot._new_wizard_pending[CHAT] = newer
+        bot._new_wizard_pending[(CHAT, OWNER)] = newer
         return "", "dtach unavailable"
     bot.create_session = _fail
 
     run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "dev"), MagicMock(), "dev"))
 
-    assert bot._new_wizard_pending[CHAT] is newer
+    assert bot._new_wizard_pending[(CHAT, OWNER)] is newer
 
 
 def test_auto_is_refused_at_creation_for_a_non_admin(wbot, mk_update, run_async):
@@ -354,7 +354,7 @@ def test_auto_is_refused_at_creation_for_a_non_admin(wbot, mk_update, run_async)
     re-checks the person creating and gives Ask, saying why."""
     bot = wbot(admin=False)
     _open_card(bot, mk_update, run_async)
-    bot._new_wizard_pending[CHAT]["skip_perms"] = True
+    bot._new_wizard_pending[(CHAT, OWNER)]["skip_perms"] = True
 
     run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "dev"), MagicMock(), "dev"))
 
@@ -370,11 +370,11 @@ def test_the_mode_toggle_switches_to_ask_and_back(wbot, mk_update, run_async, mk
     update, query = mk_cb()
 
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:mode:ask"))
-    assert bot._new_wizard_pending[CHAT]["skip_perms"] is False
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["skip_perms"] is False
     assert "💬 Ask" in _last_edit(bot)["text"]
 
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:mode:auto"))
-    assert bot._new_wizard_pending[CHAT]["skip_perms"] is True
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["skip_perms"] is True
 
 
 def test_the_mode_toggle_refuses_auto_for_a_non_admin(wbot, mk_update, run_async, mk_cb):
@@ -384,7 +384,7 @@ def test_the_mode_toggle_refuses_auto_for_a_non_admin(wbot, mk_update, run_async
 
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:mode:auto"))
 
-    assert bot._new_wizard_pending[CHAT]["skip_perms"] is False
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["skip_perms"] is False
     assert query.answer.await_args.kwargs.get("show_alert") is True
 
 
@@ -398,7 +398,7 @@ def test_picking_a_model_returns_to_the_name_card(wbot, mk_update, run_async, mk
     assert _buttons(kb)[:len(MODEL_CHOICES)] == [lbl for lbl, _ in MODEL_CHOICES]
 
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:model:0"))
-    pending = bot._new_wizard_pending[CHAT]
+    pending = bot._new_wizard_pending[(CHAT, OWNER)]
     assert pending["step"] == "name"
     assert pending["model_label"] == MODEL_CHOICES[0][0]
     assert MODEL_CHOICES[0][0] in _last_edit(bot)["text"]
@@ -411,7 +411,7 @@ def test_default_model_clears_the_choice(wbot, mk_update, run_async, mk_cb):
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:model:0"))
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:model:default"))
 
-    assert bot._new_wizard_pending[CHAT]["model"] is None
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["model"] is None
 
 
 def test_an_out_of_range_model_reopens_the_list(wbot, mk_update, run_async, mk_cb):
@@ -421,7 +421,7 @@ def test_an_out_of_range_model_reopens_the_list(wbot, mk_update, run_async, mk_c
 
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:model:99"))
 
-    assert bot._new_wizard_pending[CHAT]["step"] == "opt_model"
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["step"] == "opt_model"
     assert "no longer offered" in query.answer.await_args.args[0]
 
 
@@ -430,12 +430,12 @@ def test_a_custom_model_is_typed_then_used(wbot, mk_update, run_async, mk_cb):
     _open_card(bot, mk_update, run_async)
     update, query = mk_cb()
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:model:custom"))
-    assert bot._new_wizard_pending[CHAT]["step"] == "opt_model_custom"
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["step"] == "opt_model_custom"
 
     run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "claude-opus-5"),
                                          MagicMock(), "claude-opus-5"))
 
-    pending = bot._new_wizard_pending[CHAT]
+    pending = bot._new_wizard_pending[(CHAT, OWNER)]
     assert (pending["step"], pending["model"]) == ("name", "claude-opus-5")
     assert bot.created == []                   # a model, not a name
 
@@ -449,7 +449,7 @@ def test_an_invalid_custom_model_asks_again(wbot, mk_update, run_async, mk_cb):
     run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "bad model!"),
                                          MagicMock(), "bad model!"))
 
-    assert bot._new_wizard_pending[CHAT]["step"] == "opt_model_custom"
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["step"] == "opt_model_custom"
 
 
 def test_picking_a_folder_sets_it(wbot, mk_update, run_async, mk_cb, tmp_path, monkeypatch):
@@ -461,7 +461,7 @@ def test_picking_a_folder_sets_it(wbot, mk_update, run_async, mk_cb, tmp_path, m
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:path"))
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:path:0"))
 
-    assert bot._new_wizard_pending[CHAT]["cwd"] == str(tmp_path)
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["cwd"] == str(tmp_path)
     run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "dev"), MagicMock(), "dev"))
     assert bot.created[0]["cwd"] == str(tmp_path)
 
@@ -476,7 +476,7 @@ def test_a_new_folder_is_created_and_used(wbot, mk_update, run_async, mk_cb, tmp
     run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "proj"), MagicMock(), "proj"))
 
     assert (tmp_path / "proj").is_dir()
-    assert bot._new_wizard_pending[CHAT]["cwd"] == str(tmp_path / "proj")
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["cwd"] == str(tmp_path / "proj")
 
 
 def test_new_folder_with_no_roots_toasts(wbot, mk_update, run_async, mk_cb, monkeypatch):
@@ -487,7 +487,7 @@ def test_new_folder_with_no_roots_toasts(wbot, mk_update, run_async, mk_cb, monk
 
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:path:new"))
 
-    assert bot._new_wizard_pending[CHAT]["step"] == "name"
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["step"] == "name"
     assert query.answer.await_args.kwargs.get("show_alert") is True
 
 
@@ -505,7 +505,7 @@ def test_an_invalid_new_folder_name_asks_again_and_creates_nothing(
 
     run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "../x"), MagicMock(), "../x"))
 
-    assert bot._new_wizard_pending[CHAT]["step"] == "opt_path_newfolder"
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["step"] == "opt_path_newfolder"
     assert bot.created == []
     assert list(root.iterdir()) == [] and not (tmp_path / "x").exists()
     assert "📁" in _last_edit(bot)["text"]
@@ -523,7 +523,7 @@ def test_an_out_of_range_folder_reopens_a_fresh_list(
     roots.append(str(tmp_path / "b"))
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:path:5"))
 
-    pending = bot._new_wizard_pending[CHAT]
+    pending = bot._new_wizard_pending[(CHAT, OWNER)]
     assert pending["cwd"] is None
     assert pending["step"] == "opt_path"
     assert "no longer available" in query.answer.await_args.args[0]
@@ -546,7 +546,7 @@ def test_a_folder_index_resolves_against_the_list_that_was_shown(
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:opt:path"))
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:path:0"))
 
-    assert bot._new_wizard_pending[CHAT]["cwd"] == str(tmp_path / "new")
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["cwd"] == str(tmp_path / "new")
 
 
 def test_short_path_keeps_the_end_of_a_long_path():
@@ -563,7 +563,7 @@ def test_cancel_clears_the_card(wbot, mk_update, run_async, mk_cb):
 
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:cancel"))
 
-    assert CHAT not in bot._new_wizard_pending
+    assert CHAT not in {c for c, _u in bot._new_wizard_pending}
     assert "Cancelled" in _last_edit(bot)["text"]
 
 
@@ -574,7 +574,7 @@ def test_a_strangers_tap_is_refused(wbot, mk_update, run_async, mk_cb):
 
     run_async(new_flow.handle_callback(bot, update, query, "_", "nw:mode:ask"))
 
-    assert bot._new_wizard_pending[CHAT]["skip_perms"] is True
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["skip_perms"] is True
     assert query.answer.await_args.kwargs.get("show_alert") is True
 
 
@@ -589,14 +589,14 @@ def test_a_tap_with_no_open_card_says_expired(wbot, mk_cb, run_async):
 def test_the_card_expires_after_its_ttl(wbot, mk_update, run_async, monkeypatch):
     bot = wbot()
     _open_card(bot, mk_update, run_async)
-    bot._new_wizard_pending[CHAT]["last_active"] -= new_flow._WIZARD_TTL_SECONDS + 1
+    bot._new_wizard_pending[(CHAT, OWNER)]["last_active"] -= new_flow._WIZARD_TTL_SECONDS + 1
 
     handled = run_async(new_flow.maybe_handle_text(bot, _msg(mk_update, "dev"),
                                                    MagicMock(), "dev"))
 
     assert handled is True
     assert bot.created == []
-    assert CHAT not in bot._new_wizard_pending
+    assert CHAT not in {c for c, _u in bot._new_wizard_pending}
     assert "expired" in _last_edit(bot)["text"]
 
 
@@ -633,7 +633,7 @@ def test_direct_argument_with_a_bad_name_opens_the_card_with_the_reason(
     assert bot.created == []
     text = update.message.reply_text.await_args.args[0]
     assert "letters" in text.lower() and "Send a name" in text
-    assert bot._new_wizard_pending[CHAT]["step"] == "name"
+    assert bot._new_wizard_pending[(CHAT, OWNER)]["step"] == "name"
 
 
 # ---- the Ready card and its buttons ----------------------------------------

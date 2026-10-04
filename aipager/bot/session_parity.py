@@ -35,6 +35,7 @@ Design constraints this module is written to (see design.md Alternatives
 
 from __future__ import annotations
 
+import asyncio
 import html as html_mod
 import io
 import logging
@@ -45,7 +46,14 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from aipager.bot import group_intake, settings_menu
-from aipager.bot.transport import calling_chat_id, edit_text, reply_document, reply_text
+from aipager.bot.transport import (
+    MUTED,
+    SKIPPED,
+    calling_chat_id,
+    edit_text,
+    reply_document,
+    reply_text,
+)
 from aipager.preferences import get_preferences, is_valid_value, resolve_preferences
 from aipager.state import PREFERENCE_OVERRIDE_FIELDS, Status, TrackedSession
 
@@ -173,13 +181,13 @@ def _resolve_pref_index(
     return bot.registry.get(names[idx])
 
 
-def _rename_pending_map(bot: "TelegramBot") -> dict[int, dict]:
-    """``bot._rename_pending`` — literal attribute name from
-    entrypoints.md's session-scoped callback table (``{name}:rename``'s
-    "Meaning" column). Keyed by chat id, same shape as the pre-existing
-    ``_new_conflict_pending`` / ``_perms_pending`` dicts this mirrors —
-    lazily created here rather than in ``core.py.__init__`` for the same
-    leak-across-tests reason as ``_pref_index_map``."""
+def _rename_pending_map(bot: "TelegramBot") -> dict[tuple, dict]:
+    """``bot._rename_pending``: the renames waiting for their new name,
+    keyed ``(chat_id, user_id)`` so each person's question is their own
+    (roadmap 8.86): in a group, another member's message is never taken
+    as it, and their own rename never replaces it. Lazily created here
+    rather than in ``core.py.__init__`` for the same leak-across-tests
+    reason as ``_pref_index_map``."""
     pending = getattr(bot, "_rename_pending", None)
     if pending is None:
         pending = {}
@@ -187,10 +195,14 @@ def _rename_pending_map(bot: "TelegramBot") -> dict[int, dict]:
     return pending
 
 
+_RENAME_EXPIRED_TEXT = "⏱ This rename expired. Send /rename again."
+_RENAME_CLOSED_TEXT = "✖️ Rename closed, you moved on. Send /rename to try again."
+
+
 def _start_rename(bot: "TelegramBot", chat_id, sess: TrackedSession,
-                  user_id) -> tuple[str, InlineKeyboardMarkup]:
+                  user_id, msg_id: int | None = None) -> tuple[str, InlineKeyboardMarkup]:
     """Wait for the new name, and say so."""
-    _start_rename_capture(bot, chat_id, sess, user_id)
+    _start_rename_capture(bot, chat_id, sess, user_id, msg_id)
     ask = ("Reply to this message with the new name." if group_intake.is_group_chat(chat_id)
            else "Send it as a message.")
     text = f"✏️ New name for [<b>{html_mod.escape(sess.label)}</b>]? {ask}"
@@ -201,13 +213,39 @@ def _start_rename(bot: "TelegramBot", chat_id, sess: TrackedSession,
 
 def _start_rename_capture(
     bot: "TelegramBot", chat_id: int, sess: TrackedSession,
-    user_id: int | None = None,
+    user_id: int | None = None, msg_id: int | None = None,
 ) -> None:
-    # Who asked: a /new from someone else must not cancel it
-    # (new_flow.start_wizard).
-    _rename_pending_map(bot)[chat_id] = {
+    """Take *user_id*'s next message in *chat_id* as *sess*'s new name.
+    *msg_id* is the question's own message: a reply to any other one is
+    not the answer. Their own open Name card closes (their newest
+    question wins); nobody else's rename or card is touched."""
+    from aipager.bot import new_flow  # local: import cycle
+    new_flow.close_open_card(bot, chat_id, user_id)
+    _rename_pending_map(bot)[(chat_id, user_id)] = {
         "session_name": sess.name, "label": sess.label, "user_id": user_id,
+        "msg_id": msg_id, "last_active": new_flow._now(),
     }
+
+
+def drop_rename(bot: "TelegramBot", chat_id, user_id) -> dict | None:
+    """Forget *user_id*'s rename in *chat_id*, silently. Returns it."""
+    return _rename_pending_map(bot).pop((chat_id, user_id), None)
+
+
+def close_rename(bot: "TelegramBot", chat_id, user_id, text: str = _RENAME_CLOSED_TEXT) -> None:
+    """The person moved on (the same rule as their Name card,
+    ``new_flow.close_if_moved_on``): their rename stops waiting, and its
+    question says so. Someone else's rename is theirs, and stays."""
+    if chat_id is None:
+        return
+    pending = drop_rename(bot, chat_id, user_id)
+    if pending is None or pending.get("msg_id") is None:
+        return
+    from aipager.bot import new_flow  # local: import cycle
+    from aipager.bot.notify import _BACKGROUND_TASKS  # local: import cycle
+    task = asyncio.create_task(new_flow._edit_at(bot, chat_id, pending["msg_id"], text))
+    _BACKGROUND_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_TASKS.discard)
 
 
 # ---- small pure helpers ---------------------------------------------------
@@ -493,7 +531,16 @@ async def handle_rename_cmd(
         # The one it can mean: straight to its name prompt (4.4).
         user_id = update.effective_user.id if update.effective_user else None
         text, kb = _start_rename(bot, chat_id, sessions[0], user_id)
-        await reply_text(update.message, text, reply_markup=kb, parse_mode="HTML")
+        sent = await reply_text(update.message, text, reply_markup=kb, parse_mode="HTML")
+        pending = _rename_pending_map(bot).get((chat_id, user_id))
+        sent_id = getattr(sent, "message_id", None)
+        if pending is not None:
+            if sent is MUTED or sent is SKIPPED or sent is None:
+                # The question never went out: nothing may take the next
+                # message as its answer (the Name card's rule).
+                drop_rename(bot, chat_id, user_id)
+            elif isinstance(sent_id, int):
+                pending["msg_id"] = sent_id
         return
     await reply_text(update.message, "Which session to rename?",
                      reply_markup=session_picker(bot, chat_id, sessions, "rename",
@@ -885,17 +932,33 @@ async def _handle_spref_callback(
 async def maybe_handle_text(
     bot: "TelegramBot", update: Update, ctx: ContextTypes.DEFAULT_TYPE, text: str,
 ) -> bool:
-    """``True`` iff this text was consumed as a pending rename's new
-    name. Called from ``_handle_message`` before every other branch —
-    while a rename is pending in this chat, any text sent is treated as
-    the candidate new name (Cancel is always one tap away via
-    ``{name}:rename-cancel``)."""
+    """``True`` iff this text was consumed as the sender's own pending
+    rename's new name. Called from ``_handle_message`` before every other
+    branch. Only the person who asked answers (roadmap 8.86): anyone
+    else's message routes as if no rename were pending. A message of
+    theirs that is not the answer (a reply to another message, ``stop``,
+    a template) closes the rename and routes as usual, the same rule as
+    the Name card's; an expired one is dropped and the message routes."""
     chat_id = calling_chat_id(update)
     if chat_id is None:
         return False
-    pending = _rename_pending_map(bot).pop(chat_id, None)
+    user_id = update.effective_user.id if update.effective_user else None
+    renames = _rename_pending_map(bot)
+    pending = renames.get((chat_id, user_id))
     if pending is None:
         return False
+
+    from aipager.bot import new_flow  # local: import cycle
+    if new_flow._is_expired(pending):
+        close_rename(bot, chat_id, user_id, _RENAME_EXPIRED_TEXT)
+        return False
+    verdict = new_flow._not_for_the_card(
+        bot, update, {"step": "rename", "msg_id": pending.get("msg_id")}, text)
+    if verdict == "close":
+        close_rename(bot, chat_id, user_id)
+    if verdict:
+        return False
+    renames.pop((chat_id, user_id), None)
 
     sess = bot.registry.get(pending["session_name"])
     if sess is None:
@@ -904,7 +967,6 @@ async def maybe_handle_text(
         )
         return True
 
-    user_id = update.effective_user.id if update.effective_user else None
     if not bot._can_prompt_user(user_id, chat_id):
         await reply_text(update.message, "🚫 You can't rename this session.")
         return True
@@ -1261,12 +1323,33 @@ async def handle_callback(
         if not bot._can_prompt_user(user_id, chat_id):
             await bot._safe_answer(query, "You can't rename this session.")
             return True
-        text, kb = _start_rename(bot, chat_id, sess, user_id)
+        msg_id = getattr(getattr(query, "message", None), "message_id", None)
+        text, kb = _start_rename(bot, chat_id, sess, user_id,
+                                 msg_id if isinstance(msg_id, int) else None)
         await _edit(query, text, kb)
         return True
 
     if action == "rename-cancel":
-        _rename_pending_map(bot).pop(chat_id, None)
+        renames = _rename_pending_map(bot)
+        tapped = getattr(getattr(query, "message", None), "message_id", None)
+        tapped = tapped if isinstance(tapped, int) else None
+
+        def _is_this_question(p: dict) -> bool:
+            # The tapped message when both are known, else its session.
+            if tapped is not None and p.get("msg_id") is not None:
+                return p["msg_id"] == tapped
+            return p.get("session_name") == sess.name
+
+        own = renames.get((chat_id, user_id))
+        own_here = own is not None and _is_this_question(own)
+        if not own_here and any(
+                key[0] == chat_id and key[1] != user_id and _is_this_question(p)
+                for key, p in renames.items()):
+            # Someone else's question (roadmap 8.86): theirs to cancel.
+            await bot._safe_answer(query, "This isn't your rename.", show_alert=True)
+            return True
+        if own_here:
+            renames.pop((chat_id, user_id), None)
         await _edit(query, "Rename cancelled.", None)
         return True
 

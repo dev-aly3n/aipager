@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from aipager.bot import group_intake, new_flow
+from aipager.bot import group_intake, new_flow, session_parity
 from aipager.state import SessionRegistry, Status, TrackedSession
 
 CHAT = 555
@@ -110,7 +110,7 @@ def chat(mk_bot, mk_update, run_async, monkeypatch):
 
     def tap(data, *, user=OWNER):
         # From the open card's own message, as a real tap on it would be.
-        card = (getattr(bot, "_new_wizard_pending", {}).get(CHAT) or {}).get("msg_id")
+        card = (getattr(bot, "_new_wizard_pending", {}).get((CHAT, OWNER)) or {}).get("msg_id")
         query = MagicMock(data=data)
         query.answer = AsyncMock()
         query.from_user = MagicMock(id=user)
@@ -143,7 +143,7 @@ def _live(bot, label):
 
 
 def _open(bot):
-    return CHAT in bot._new_wizard_pending
+    return (CHAT, OWNER) in bot._new_wizard_pending
 
 
 # ---- the registration this all depends on ------------------------------------
@@ -326,7 +326,7 @@ def test_an_update_with_no_message_or_button_keeps_the_card(chat, run_async):
 def test_the_closed_card_says_so(mk_bot, run_async):
     bot = mk_bot(SessionRegistry())
     bot._app.bot.edit_message_text = AsyncMock()
-    bot._new_wizard_pending = {CHAT: {"user_id": OWNER, "msg_id": 900, "step": "name"}}
+    bot._new_wizard_pending = {(CHAT, OWNER): {"user_id": OWNER, "msg_id": 900, "step": "name"}}
 
     async def _go():
         new_flow.close_open_card(bot, CHAT, OWNER)
@@ -372,7 +372,7 @@ def test_a_card_opened_during_its_own_launch_stays(chat, monkeypatch):
              "last_active": new_flow._now()}
 
     async def _launch(*a, **kw):
-        chat._new_wizard_pending[CHAT] = newer
+        chat._new_wizard_pending[(CHAT, OWNER)] = newer
         return True, ""
     monkeypatch.setattr("aipager.dtach.inject.launch_session",
                         AsyncMock(side_effect=_launch))
@@ -380,31 +380,28 @@ def test_a_card_opened_during_its_own_launch_stays(chat, monkeypatch):
     chat.send("x1")
 
     assert _labels(chat) == ["x1"]
-    assert chat._new_wizard_pending.get(CHAT) is newer
+    assert chat._new_wizard_pending.get((CHAT, OWNER)) is newer
 
 
 def test_a_new_card_ends_the_same_persons_waiting_rename(chat):
     """Their newest question wins: a rename left waiting would otherwise
     take the message after the card's name."""
     sess = _live(chat, "x1")
-    chat._rename_pending = {CHAT: {"session_name": sess.name, "label": "x1",
-                                   "user_id": OWNER}}
+    session_parity._start_rename_capture(chat, CHAT, sess, OWNER)
     chat.send("/new")
 
-    assert CHAT not in chat._rename_pending
+    assert chat._rename_pending == {}
 
 
 def test_a_new_card_leaves_someone_elses_rename(chat):
     sess = _live(chat, "x1")
-    chat._rename_pending = {CHAT: {"session_name": sess.name, "label": "x1",
-                                   "user_id": OTHER}}
+    session_parity._start_rename_capture(chat, CHAT, sess, OTHER)
     chat.send("/new")
 
-    assert chat._rename_pending.get(CHAT, {}).get("user_id") == OTHER
+    assert chat._rename_pending[(CHAT, OTHER)]["user_id"] == OTHER
 
 
 def test_a_rename_remembers_who_asked(chat, run_async, mk_update):
-    from aipager.bot import session_parity
 
     sess = _live(chat, "x1")
     query = MagicMock()
@@ -418,7 +415,7 @@ def test_a_rename_remembers_who_asked(chat, run_async, mk_update):
 
     run_async(session_parity.handle_callback(chat, update, query, sess.name, "rename"))
 
-    assert chat._rename_pending.get(CHAT, {}).get("user_id") == OWNER
+    assert chat._rename_pending[(CHAT, OWNER)]["user_id"] == OWNER
 
 
 # ---- plain texts: the card's own rules ------------------------------------------
@@ -521,7 +518,7 @@ def test_a_quote_from_another_chat_goes_to_the_session_and_closes_the_card(chat)
 
 def test_a_reply_to_the_card_itself_is_the_name(chat):
     chat.send("/new")
-    card = chat._new_wizard_pending[CHAT]["msg_id"]
+    card = chat._new_wizard_pending[(CHAT, OWNER)]["msg_id"]
     chat.send("x1", reply_to=card)
 
     assert _labels(chat) == ["x1"]
@@ -529,11 +526,11 @@ def test_a_reply_to_the_card_itself_is_the_name(chat):
 
 def test_the_word_new_opens_a_fresh_card(chat):
     chat.send("/new")
-    first = chat._new_wizard_pending[CHAT]["msg_id"]
+    first = chat._new_wizard_pending[(CHAT, OWNER)]["msg_id"]
     chat.send("new")
 
     assert _labels(chat) == []
-    assert chat._new_wizard_pending[CHAT]["msg_id"] != first
+    assert chat._new_wizard_pending[(CHAT, OWNER)]["msg_id"] != first
 
 
 def test_after_looking_around_the_name_still_works(chat):
@@ -558,11 +555,11 @@ def test_a_model_label_is_still_a_custom_model(chat, run_async):
     update = chat.tap("_:nw:model:custom")
     run_async(new_flow.handle_callback(
         chat, update, update.callback_query, "_", "nw:model:custom"))
-    assert chat._new_wizard_pending[CHAT]["step"] == "opt_model_custom"
+    assert chat._new_wizard_pending[(CHAT, OWNER)]["step"] == "opt_model_custom"
 
     chat.send(MODEL_CHOICES[0][0])
 
-    pending = chat._new_wizard_pending[CHAT]
+    pending = chat._new_wizard_pending[(CHAT, OWNER)]
     assert pending["model"] and pending["step"] == "name"
     assert pending["model_label"] == MODEL_CHOICES[0][0]
 
@@ -582,7 +579,7 @@ def test_a_keyboard_tap_at_the_new_folder_step_is_not_a_folder(chat, run_async, 
     run_async(new_flow.handle_callback(
         chat, update, update.callback_query, "_", "nw:path:new"))
 
-    assert chat._new_wizard_pending[CHAT]["step"] == "opt_path_newfolder"
+    assert chat._new_wizard_pending[(CHAT, OWNER)]["step"] == "opt_path_newfolder"
     chat.send("stop")
 
     chat._handle_stop_cmd.assert_awaited_once()

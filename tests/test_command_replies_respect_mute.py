@@ -350,12 +350,12 @@ def test_new_wizard_start_makes_no_send_and_seeds_no_wizard_while_muted(
     muted = _command(mk_update, "/new", MUTED_CHAT, user_id=111)
     run_async(new_flow.start_wizard(bot, muted, MagicMock()))
     muted.message.reply_text.assert_not_awaited()
-    assert MUTED_CHAT not in getattr(bot, "_new_wizard_pending", {})
+    assert MUTED_CHAT not in {c for c, _u in getattr(bot, "_new_wizard_pending", {})}
 
     other = _command(mk_update, "/new", OTHER_CHAT, user_id=111)
     run_async(new_flow.start_wizard(bot, other, MagicMock()))
     other.message.reply_text.assert_awaited_once()
-    assert bot._new_wizard_pending[OTHER_CHAT]["msg_id"] == 900
+    assert bot._new_wizard_pending[(OTHER_CHAT, 111)]["msg_id"] == 900
 
 
 def test_new_wizard_name_step_makes_no_edit_while_muted_and_another_chat_still_does(
@@ -368,7 +368,7 @@ def test_new_wizard_name_step_makes_no_edit_while_muted_and_another_chat_still_d
     other = _command(mk_update, "/new", OTHER_CHAT, user_id=222)
     run_async(new_flow.start_wizard(bot, muted, MagicMock()))
     run_async(new_flow.start_wizard(bot, other, MagicMock()))
-    assert set(bot._new_wizard_pending) == {MUTED_CHAT, OTHER_CHAT}
+    assert set(bot._new_wizard_pending) == {(MUTED_CHAT, 111), (OTHER_CHAT, 222)}
 
     MUTE.mute(MUTED_CHAT, BAN)
     assert run_async(new_flow.maybe_handle_text(bot, muted, MagicMock(), "alpha")) is True
