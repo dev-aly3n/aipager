@@ -653,6 +653,9 @@ class CallbackDispatchMixin:
             _looked, outcome = await self._stop_the_turn_shown(
                 update, query, session_name, int(action[5:]), again="send /stop again")
             if outcome is not None and outcome.ok:
+                # The picker is now the result: nobody's card (8.94j).
+                card_owner.release(self, calling_chat_id(update),
+                                   getattr(query.message, "message_id", None))
                 try:
                     await edit_text(query, _stopped_line(outcome), parse_mode="HTML")
                 except Exception:

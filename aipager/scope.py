@@ -629,13 +629,18 @@ def migrate_scope_chat_id(old: int, new: int, path: Path | None = None) -> None:
     ``old -> new`` under ``chat_migrations``.
 
     SURGICAL: only that scope's ``chat_id`` line changes and the record is
-    appended, so every other byte of the document (comments, key order,
-    the other scopes, the token) stays as it was. When the text cannot be
-    edited that way (the id is written twice, or ``chat_migrations``
-    already exists in a shape the append cannot extend), it falls back to
+    added (a new ``chat_migrations`` block at the end, or one line in the
+    block an earlier upgrade wrote), so every other byte of the document
+    (comments, key order, the other scopes, the token) stays as it was.
+    Only when the text cannot be edited line by line does it fall back to
     the read-modify-write of :func:`dump_miniapp`, which keeps every key
-    and value. Either way the result is re-parsed and checked before it
-    is written; atomic, mode 0600.
+    and value but not the comments: a shape the wizard and this function
+    never write (a flow-style scope list, a ``chat_migrations`` mapping
+    spread over several flow lines or written twice, the id on two
+    lines). A line edit there cannot be checked to have changed exactly
+    the one value, and a wrong edit would move the wrong chat; the
+    rewrite is exact. Either way the result is re-parsed and checked
+    before it is written; atomic, mode 0600.
 
     Raises :class:`ScopeConfigError` when the file is missing or
     unreadable, when *old* is not a group scope, or when *new* already is
@@ -675,8 +680,9 @@ def migrate_scope_chat_id(old: int, new: int, path: Path | None = None) -> None:
         if ok:
             _atomic_write_text(body, path)
             return
-    log.info("aipager.yaml: rewriting the whole document to move scope %s "
-             "to %s (the line could not be edited in place)", old, new)
+    log.warning("aipager.yaml: rewrote the whole document to move scope %s "
+                "to %s (the lines could not be edited in place); its "
+                "comments were not kept", old, new)
     _atomic_write_yaml(expected, path)
 
 
@@ -695,14 +701,71 @@ def _surgical_migration_text(text: str, old: int, new: int,
     m = matches[0]
     out = text[:m.start("id")] + str(new) + text[m.end("id"):]
     if _CHAT_MIGRATIONS_KEY in raw:
-        # Extending an existing block in place would mean parsing its
-        # layout; the rewrite fallback is exact instead. (An append would
-        # repeat the key and lose the earlier record, which the caller's
-        # check would also refuse.)
-        return None
+        # A second upgrade (another group, after an earlier one wrote the
+        # block): one line into that block, so the comments stay.
+        return _add_migration_line(out, old, new, raw[_CHAT_MIGRATIONS_KEY])
     if not out.endswith("\n"):
         out += "\n"
     return out + f"{_CHAT_MIGRATIONS_KEY}:\n  {old}: {new}\n"
+
+
+# The top-level ``chat_migrations:`` key line: its value on the same line
+# (empty for a block mapping), then an optional comment.
+_MIGRATIONS_KEY_RE = re.compile(
+    rf"^{_CHAT_MIGRATIONS_KEY}:(?P<value>[^#\n]*?)[ \t]*(?P<tail>#[^\n]*)?$",
+    re.MULTILINE)
+
+
+def _add_migration_line(text: str, old: int, new: int, current) -> str | None:
+    """*text* with ``old: new`` added to its existing ``chat_migrations``
+    mapping, edited in place, or ``None`` when its layout is not one of
+    the line shapes handled here: a block mapping (what this module
+    writes), an empty value (``chat_migrations:`` / ``~`` / ``null``), or
+    a one-line flow mapping (``{-1: -2}``). The caller re-parses the
+    result and refuses anything that is not exactly the expected
+    document."""
+    if isinstance(current, dict) and old in current:
+        return None     # a key written twice would be the wrong record
+    keys = list(_MIGRATIONS_KEY_RE.finditer(text))
+    if len(keys) != 1:
+        return None
+    k = keys[0]
+    value = k.group("value").strip()
+    entry = f"{old}: {new}"
+    if value.startswith("{") and value.endswith("}"):
+        inner = value[1:-1].strip()
+        flow = "{" + (f"{inner}, {entry}" if inner else entry) + "}"
+        start = k.start("value")
+        return text[:start] + " " + flow + text[k.end("value"):]
+    if value not in ("", "~", "null", "Null", "NULL"):
+        return None
+    # The block's lines: everything after the key line that is indented,
+    # blank, or a comment, up to the next top-level line.
+    lines = text[k.end():].split("\n")
+    pos = k.end()       # just before the key line's newline
+    last_entry_end = None
+    indent = None
+    offset = pos
+    for i, line in enumerate(lines):
+        if i == 0:
+            offset += len(line)         # the rest of the key line ("")
+            continue
+        offset += 1                     # the newline before this line
+        stripped = line.strip()
+        if stripped and not line[:1].isspace() and not stripped.startswith("#"):
+            break                       # the next top-level key
+        if stripped and not stripped.startswith("#"):
+            if indent is None:
+                indent = line[:len(line) - len(line.lstrip())]
+            last_entry_end = offset + len(line)
+        offset += len(line)
+    if last_entry_end is None:
+        if value:
+            # ``chat_migrations: ~``: the value becomes the block.
+            return (text[:k.start("value")] + text[k.end("value"):k.end()]
+                    + f"\n  {entry}" + text[k.end():])
+        last_entry_end, indent = k.end(), "  "
+    return text[:last_entry_end] + f"\n{indent}{entry}" + text[last_entry_end:]
 
 
 def _atomic_write_text(body: str, path: Path) -> None:

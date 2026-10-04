@@ -2104,6 +2104,43 @@ def _load_pinned_msg_ids(data: dict) -> dict[int, int]:
     return out
 
 
+#: Whose card each group message is (``bot.card_owner``): the kinds of
+#: card a record may name, and the newest records kept (also on disk).
+CARD_OWNER_KINDS = frozenset({
+    "end", "restart", "delete", "mode", "ask",
+    "stop", "rename", "diff", "resume",
+})
+MAX_CARD_OWNERS = 4096
+
+
+def _load_card_owners(raw: object) -> dict[tuple[int, int], dict]:
+    """The persisted card owners (roadmap 8.94h), oldest first, at most
+    :data:`MAX_CARD_OWNERS` of the newest. State saved before they were
+    persisted has none. A malformed record is dropped, and so is one in a
+    private chat (nothing is ever recorded there: a DM's cards answer
+    everyone, as they always have)."""
+    out: dict[tuple[int, int], dict] = {}
+    if not isinstance(raw, list):
+        return out
+    for rec in raw:
+        if not isinstance(rec, dict):
+            continue
+        chat, msg, user = rec.get("chat_id"), rec.get("msg_id"), rec.get("user_id")
+        label, kind = rec.get("label"), rec.get("kind")
+        command, picker = rec.get("command"), rec.get("picker")
+        if not (_is_group_chat(chat) and type(msg) is int and msg > 0
+                and _is_user_id(user) and isinstance(label, str)
+                and kind in CARD_OWNER_KINDS and isinstance(command, str)
+                and isinstance(picker, bool)):
+            continue
+        out.pop((chat, msg), None)
+        out[(chat, msg)] = {"user_id": user, "label": label, "kind": kind,
+                            "command": command, "picker": picker}
+    for key in list(out)[:-MAX_CARD_OWNERS]:
+        del out[key]
+    return out
+
+
 def _clean_line_deletes(raw: object) -> list[list[int]]:
     """The owed "send now" line deletes, as ``[chat_id, message_id]``
     pairs of non-zero ints with a positive message id. Anything else (a
@@ -2170,6 +2207,11 @@ class SessionRegistry:
         # /kill that removes the session entry, never leaves a live button
         # behind: startup deletes whatever is still here.
         self.queued_line_deletes: list[list[int]] = []
+        # Whose card each group message is (bot/card_owner.py, roadmap
+        # 8.91c): (chat_id, message_id) -> record, oldest first, at most
+        # MAX_CARD_OWNERS. Persisted (roadmap 8.94h), so a restart does
+        # not open a member's confirm card to everyone in the group.
+        self.card_owners: dict[tuple[int, int], dict] = {}
 
     def get(self, name: str) -> TrackedSession | None:
         return self._sessions.get(name)
@@ -2752,6 +2794,11 @@ class SessionRegistry:
         if len(kept) != len(self.queued_line_deletes):
             self.queued_line_deletes[:] = kept
             changed = True
+        # Whose card each message was: those messages are in the old chat
+        # (roadmap 8.94h).
+        for key in [k for k in self.card_owners if k[0] == old]:
+            del self.card_owners[key]
+            changed = True
         if changed:
             self._dirty = True
         return moved
@@ -2862,6 +2909,9 @@ class SessionRegistry:
             "msg_map": {f"{cid}:{mid}": v for (cid, mid), v in msg_map.items()},
             "sessions": sessions,
             "queued_line_deletes": _clean_line_deletes(self.queued_line_deletes),
+            "card_owners": [
+                {"chat_id": c, "msg_id": m, **rec}
+                for (c, m), rec in list(self.card_owners.items())[-MAX_CARD_OWNERS:]],
         }
 
         state_file = Path(SESSION_STATE_FILE)
@@ -2898,6 +2948,7 @@ class SessionRegistry:
         self.pinned_msg_ids = _load_pinned_msg_ids(data)
         self.queued_line_deletes = _clean_line_deletes(
             data.get("queued_line_deletes"))
+        self.card_owners = _load_card_owners(data.get("card_owners"))
 
         # Resolve the default scope once (for backfilling legacy sessions).
         _default = _default_scope()

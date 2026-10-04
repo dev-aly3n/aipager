@@ -602,10 +602,14 @@ async def handle_rename_cmd(
             elif isinstance(sent_id, int):
                 pending["msg_id"] = sent_id
         return
-    await reply_text(update.message, "Which session to rename?",
-                     reply_markup=session_picker(bot, chat_id, sessions, "rename",
-                                                 glyph="✏️ ",
-                                                 user_id=calling_user_id(update)))
+    sent = await reply_text(update.message, "Which session to rename?",
+                            reply_markup=session_picker(bot, chat_id, sessions, "rename",
+                                                        glyph="✏️ ",
+                                                        user_id=calling_user_id(update)))
+    # In a group, the asker's alone (8.94j), like /kill's.
+    card_owner.claim_sent(bot, chat_id, sent, calling_user_id(update),
+                          kind="rename", command="/rename", picker=True,
+                          who=update.effective_user)
 
 
 # ---- delete --------------------------------------------------------------
@@ -797,10 +801,16 @@ async def handle_diff_cmd(
                 return
             sess = bare_pick(bot, chat_id, user_id, live)
             if sess is None:
-                await reply_text(update.message, "Which session's diff?",
-                                 reply_markup=session_picker(
-                                     bot, chat_id, live, "diff", glyph="📝 ",
-                                     user_id=user_id if shared_group(bot, chat_id) else None))
+                sent = await reply_text(update.message, "Which session's diff?",
+                                        reply_markup=session_picker(
+                                            bot, chat_id, live, "diff", glyph="📝 ",
+                                            user_id=user_id if shared_group(bot, chat_id)
+                                            else None))
+                # In a group, the asker's alone (8.94j); it stays theirs
+                # after a tap (the diff is replied under it).
+                card_owner.claim_sent(bot, chat_id, sent, user_id,
+                                      kind="diff", command="/diff", picker=True,
+                                      who=update.effective_user)
                 return
     else:
         label = parts[1].strip().lstrip("/")
@@ -1376,6 +1386,10 @@ async def handle_callback(
                 sess, sess.skip_perms and bot._is_admin_user(user_id, chat_id),
                 chat_id=chat_id),
         )
+        # In a group, its mode buttons are the resumer's alone (8.94j).
+        card_owner.claim(bot, chat_id, _tapped_id(query), user_id,
+                         kind="resume", command="",
+                         who=getattr(query, "from_user", None))
         return True
 
     if action in ("resume-ask", "resume-auto", "resume-cancel"):
@@ -1384,6 +1398,7 @@ async def handle_callback(
             return True
         bot._resume_mode_pending.pop(sess.name, None)
         if action == "resume-cancel":
+            card_owner.release(bot, chat_id, _tapped_id(query))
             await _edit(query, "↩️ Cancelled.", None)
             return True
 
@@ -1401,6 +1416,9 @@ async def handle_callback(
             update=update, query=query, sess=sess,
             skip_perms_override=(action == "resume-auto"),
         )
+        # Only now: until the card shows the result, its buttons stay the
+        # resumer's (as the restart confirm's do, 8.91c).
+        card_owner.release(bot, chat_id, _tapped_id(query))
         return True
 
     if action == "restart":
@@ -1460,6 +1478,9 @@ async def handle_callback(
         text, kb = _start_rename(bot, chat_id, sess, user_id,
                                  msg_id if isinstance(msg_id, int) else None)
         await _edit(query, text, kb)
+        # A /rename picker is now the name question, which answers only
+        # its asker by its own record (rename-cancel, 8.86).
+        card_owner.release(bot, chat_id, _tapped_id(query))
         return True
 
     if action == "rename-cancel":

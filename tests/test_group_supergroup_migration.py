@@ -813,8 +813,10 @@ def test_the_yaml_edit_is_surgical(tmp_path):
     assert os.stat(_cfg()).st_mode & 0o777 == 0o600
 
 
-def test_an_existing_record_falls_back_to_a_full_rewrite(tmp_path):
+def test_an_existing_record_is_extended_and_every_key_kept(tmp_path):
     # default_mode: a leftover key older wizards wrote (roadmap 8.89).
+    # (Delivery 21 made this edit surgical: the bytes are pinned in
+    # tests/test_group_migration_leftovers.py.)
     _write_config([_dm(), _group(), _group(chat_id=OTHER, label="o")],
                   extra="chat_migrations:\n  -1003: -1004\ndefault_mode: ask\n")
     raw_before = scope_mod._raw_yaml(_cfg())

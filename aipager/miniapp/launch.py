@@ -80,6 +80,22 @@ def remember_created(scope_chat_id: int, path: str) -> None:
         del paths[:-_MAX_CREATED]
 
 
+def move_created(old_chat_id: int, new_chat_id: int) -> None:
+    """Telegram upgraded the group *old_chat_id* to a supergroup with a
+    new id (roadmap 8.87): the folders created for it are the new chat's
+    now (the new chat's own come last, as the newest), still at most
+    _MAX_CREATED."""
+    moved = _created.pop(old_chat_id, None)
+    if not moved:
+        return
+    paths = list(moved)
+    for path in _created.get(new_chat_id, ()):
+        if path in paths:
+            paths.remove(path)
+        paths.append(path)
+    _created[new_chat_id] = paths[-_MAX_CREATED:]
+
+
 def launch_folder_refusal(cwd: str | None, confined: bool) -> str:
     """Why *cwd* (empty: the daemon's own directory) may not be a
     confined person's session folder, or ``""``."""

@@ -234,15 +234,17 @@ def _apply_team_change_hint() -> None:
     problem = _config_problem()
     if problem is not None:
         # The daemon would refuse this reload and keep its previous
-        # config: never claim the change is live.
+        # config: never claim the change is live. With no daemon running
+        # there is no previous config to keep: say only what is wrong.
         console.print()
         console.print(
             f"[warn]⚠[/warn]  [warn]Not applied: {problem}[/warn]"
         )
-        console.print(
-            "    [muted]The daemon keeps its previous config until this "
-            "is fixed.[/muted]"
-        )
+        if _detect_daemon_running() is not None:
+            console.print(
+                "    [muted]The daemon keeps its previous config until this "
+                "is fixed.[/muted]"
+            )
         return
     if _signal_reload():
         console.print()

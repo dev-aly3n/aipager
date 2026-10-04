@@ -18,9 +18,10 @@ to the new id, once:
   lands in the new chat even after a state loss;
 - in memory: the scope, the message chat gate and the command menus, the
   sessions stamped with the old id, the chat's targets, its
-  ``preferences.json`` entry; what only made sense in the old chat
-  (the pinned bar's message, held answers, flood state, keyboard levels) is
-  dropped, and the new chat starts fresh;
+  ``preferences.json`` entry, the folders the Mini App created for it;
+  what only made sense in the old chat (whose card each message was,
+  the pinned bar's message, held answers, flood state, keyboard levels)
+  is dropped, and the new chat starts fresh;
 - one WARNING in the log and one line in the new chat.
 
 A turn running during the move keeps going and its answer reaches the new
@@ -90,6 +91,48 @@ async def _run_handler(handler, old, new) -> None:
         await handler(old, new)
     except Exception:
         log.warning("Could not follow chat %s to %s", old, new, exc_info=True)
+
+
+# What Telegram answers for a chat the bot cannot reach: deleted, the bot
+# removed or banned (``Forbidden``), or a basic group upgraded to a
+# supergroup without saying where (``ChatMigrated`` is the reported case).
+_UNREACHABLE_TEXTS = ("chat not found", "group chat was upgraded")
+
+
+def is_unreachable_chat_error(exc) -> bool:
+    """Whether *exc* (from a Bot API call into one chat) means the bot
+    cannot reach that chat at all, rather than a passing failure."""
+    from telegram.error import BadRequest, ChatMigrated, Forbidden
+    if isinstance(exc, ChatMigrated):
+        return False        # followed, not unreachable
+    if isinstance(exc, Forbidden):
+        return True
+    if isinstance(exc, BadRequest):
+        text = str(getattr(exc, "message", "") or exc).lower()
+        return any(t in text for t in _UNREACHABLE_TEXTS)
+    return False
+
+
+def warn_unreachable_group(bot, scope, exc) -> None:
+    """ONE warning per group scope per daemon run that the bot could not
+    reach (roadmap 8.94g): from the start-time lookup, or from setting the
+    group's command menu (a group added by a live reload is never looked
+    up). It names the scope and what to check. Nothing is sent and
+    nothing retries; the group's own traffic (a message in it, a
+    session's card) follows an upgrade if Telegram reports one later."""
+    warned = bot.__dict__.setdefault("_unreachable_warned", set())
+    if scope.chat_id in warned:
+        return
+    warned.add(scope.chat_id)
+    log.warning(
+        "Group scope %r (chat %s) could not be reached: %s. The "
+        "group was deleted, the bot was removed from it, or Telegram "
+        "upgraded it to a supergroup while the daemon was down and did not "
+        "say to which id. Check that the bot is still in that group; if it "
+        "was upgraded, the old id %s no longer works: set the scope's new "
+        "chat id with `aipager config`.",
+        scope.label, scope.chat_id, getattr(exc, "message", None) or exc,
+        scope.chat_id)
 
 
 def ids_from_message(msg) -> tuple[int, int] | None:
@@ -169,6 +212,7 @@ async def migrate_chat(bot: TelegramBot, old, new) -> bool:
     _refresh_gate(bot)
     moved = bot.registry.migrate_chat(old_id, new_id)
     _move_preferences(old_id, new_id)
+    _move_created_folders(old_id, new_id)
     _drop_old_chat_state(bot, old_id)
     try:
         bot.registry.save()
@@ -226,6 +270,17 @@ def _move_preferences(old_id: int, new_id: int) -> None:
         preferences.move_chat(old_id, new_id)
     except Exception:
         log.warning("Could not move the chat's preferences", exc_info=True)
+
+
+def _move_created_folders(old_id: int, new_id: int) -> None:
+    """The Mini App's folders created for the group stay launch folders
+    in the new chat (in memory, :mod:`aipager.miniapp.launch`)."""
+    try:
+        from aipager.miniapp import launch
+        launch.move_created(old_id, new_id)
+    except Exception:
+        log.warning("Could not move the chat's created folders",
+                    exc_info=True)
 
 
 def _drop_old_chat_state(bot, old_id: int) -> None:

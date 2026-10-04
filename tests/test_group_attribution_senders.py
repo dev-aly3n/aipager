@@ -474,7 +474,7 @@ def test_the_requester_cancels_their_own_kill_card(gbot, run_async, mk_update):
 
 def test_a_kill_card_in_a_dm_records_nobody(gbot, run_async, mk_update):
     card = _kill_card(gbot, run_async, mk_update, ALICE, text="/kill d1", chat=DM)
-    assert not getattr(gbot, "_card_owners", None)
+    assert not gbot.registry.card_owners
     gbot._kill_session_core = AsyncMock(return_value=SimpleNamespace(result="killed"))
     gbot._render_status_list = MagicMock(return_value=("LIST", None))
     turn = _sess(gbot, D1).turn_key
@@ -631,9 +631,9 @@ def test_a_mode_card_switch_draws_a_confirm_owned_by_the_tapper(gbot, run_async)
 
 def test_card_owner_records_nothing_in_a_dm_and_refuses_nothing_there(gbot):
     card_owner.claim(gbot, DM, 5, ALICE, kind="end", command="/kill d1")
-    assert not getattr(gbot, "_card_owners", None)
-    gbot._card_owners = {(DM, 5): {"user_id": ALICE, "label": "@alice", "kind": "end",
-                                   "command": "/kill d1", "picker": False}}
+    assert not gbot.registry.card_owners
+    gbot.registry.card_owners[(DM, 5)] = {"user_id": ALICE, "label": "@alice", "kind": "end",
+                                          "command": "/kill d1", "picker": False}
     assert card_owner.refusal(gbot, DM, 5, 999, D1, "kill-cancel") is None
 
 
@@ -653,7 +653,7 @@ def test_card_owner_keeps_a_bounded_number_of_records(gbot, monkeypatch):
     monkeypatch.setattr(card_owner, "MAX_RECORDS", 3)
     for mid in range(5):
         card_owner.claim(gbot, G, mid, ALICE, kind="end", command="/kill x1")
-    assert list(gbot._card_owners) == [(G, 2), (G, 3), (G, 4)]
+    assert list(gbot.registry.card_owners) == [(G, 2), (G, 3), (G, 4)]
 
 
 # =============================================================================
@@ -1187,7 +1187,7 @@ def test_personal_mode_group_is_unchanged(mk_bot, run_async, mk_update):
     u = _msg(mk_update, "/kill x1", BOB)
     _track_sent(u)
     run_async(bot._handle_kill_cmd(u, MagicMock()))
-    assert not getattr(bot, "_card_owners", None)
+    assert not bot.registry.card_owners
     assert bot._actor_label(BOB, G, SimpleNamespace(username="bob")) == ""
 
 

@@ -36,7 +36,7 @@ from telegram.error import BadRequest, ChatMigrated, Forbidden, RetryAfter
 from aipager.dtach import inject
 
 from aipager.bot import (
-    chat_migration, group_intake, new_flow, session_parity, update_flow,
+    card_owner, chat_migration, group_intake, new_flow, session_parity, update_flow,
 )
 from aipager.bot.flood import MUTE, FloodMuted, _key as _chat_key
 from aipager.bot import flood_state
@@ -205,6 +205,8 @@ class LifecycleMixin:
 
         if reloaded:
             await self._follow_scope_reload(old_scopes, old_policy)
+            # A removed group's cards are nobody's any more (8.94h).
+            card_owner.prune(self)
 
         from aipager.team import (
             TEAM_CONFIG_PATH, TeamConfigError, load_team,
@@ -220,6 +222,7 @@ class LifecycleMixin:
 
         old = self.team
         self.team = new_team
+        card_owner.prune(self)
 
         if old is None and new_team is None:
             log.info("Team reload: no change (still personal mode)")
@@ -581,9 +584,15 @@ class LifecycleMixin:
                 await self._app.bot.get_chat(scope.chat_id)
             except ChatMigrated as e:
                 chat_migration.note_chat_migrated(scope.chat_id, e.new_chat_id)
-            except Exception:
-                log.info("Could not look up group %s at start", scope.chat_id,
-                         exc_info=True)
+            except Exception as e:
+                if chat_migration.is_unreachable_chat_error(e):
+                    # Deleted, the bot removed, or an upgrade Telegram did
+                    # not report (8.94g): one WARNING, never a retry or a
+                    # message.
+                    chat_migration.warn_unreachable_group(self, scope, e)
+                else:
+                    log.info("Could not look up group %s at start",
+                             scope.chat_id, exc_info=True)
 
     async def stop(self) -> None:
         chat_migration.set_handler(None)
@@ -1166,9 +1175,16 @@ class LifecycleMixin:
                 chat_migration.note_chat_migrated(scope.chat_id, e.new_chat_id)
                 if prev is None:
                     self._registered_scope_labels[scope.chat_id] = labels
-            except Exception:
-                # E.g. a group the bot isn't a member of — log + skip.
-                log.warning("Failed to set bot commands for scope %s",
-                            scope.chat_id, exc_info=True)
+            except Exception as e:
+                # E.g. a group the bot isn't a member of: log + skip. A
+                # group it cannot reach at all gets ONE warning per run,
+                # shared with the start-time lookup (8.94g); this path also
+                # covers a group added by a live reload, never looked up.
+                if (group_intake.is_group_chat(scope.chat_id)
+                        and chat_migration.is_unreachable_chat_error(e)):
+                    chat_migration.warn_unreachable_group(self, scope, e)
+                else:
+                    log.warning("Failed to set bot commands for scope %s",
+                                scope.chat_id, exc_info=True)
                 if prev is None:
                     self._registered_scope_labels[scope.chat_id] = labels

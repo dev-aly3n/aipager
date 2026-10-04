@@ -151,3 +151,7 @@ class TelegramBot(
         # bot's live scopes/policy, which reload_team swaps in place.
         from aipager.state import set_live_scope_source
         set_live_scope_source(self)
+        # Whose card each group message was, as the registry saved it
+        # (roadmap 8.94h): none for a chat that is no longer a group scope.
+        from aipager.bot import card_owner
+        card_owner.prune(self)

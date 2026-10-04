@@ -861,10 +861,14 @@ class CommandHandlersMixin:
         sess = (working[0] if len(parts) > 1 else
                 session_parity.bare_pick(self, chat_id, calling_user_id(update), working))
         if sess is None:
-            await reply_text(update.message, "Which one to stop?",
-                             reply_markup=session_parity.session_picker(
-                                 self, chat_id, working, "pstop", glyph="⏹ ",
-                                 keyed=True, user_id=calling_user_id(update)))
+            sent = await reply_text(update.message, "Which one to stop?",
+                                    reply_markup=session_parity.session_picker(
+                                        self, chat_id, working, "pstop", glyph="⏹ ",
+                                        keyed=True, user_id=calling_user_id(update)))
+            # In a group, the asker's alone (8.94j), like /kill's.
+            card_owner.claim_sent(self, chat_id, sent, calling_user_id(update),
+                                  kind="stop", command="/stop", picker=True,
+                                  who=update.effective_user)
             return
         outcome = await self._stop_session(sess, update=update)
         if not outcome.ok:

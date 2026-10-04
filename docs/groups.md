@@ -244,6 +244,15 @@ of its own, nothing moves and the log says so; remove one of the two
 with `aipager config`. "Test bot reachability" in `aipager config`
 shows the new id when it meets an upgraded group.
 
+At every start aipager looks each group up once. If Telegram answers
+that the group cannot be found or the bot may not use it (the group was
+deleted, the bot was removed, or the group was upgraded while the
+daemon was stopped and Telegram did not say to which id), the daemon log
+has one warning naming the scope: check that the bot is still in the
+group, and if it was upgraded, set the scope's new chat id with
+`aipager config` (the old id no longer works). aipager posts nothing
+and does not keep trying.
+
 ### Forum topics are not supported
 
 Use one ordinary group (no topics) per team. In a group with topics
@@ -585,15 +594,19 @@ asked for them: confirm cards and the `/new` cards, below.)
 - **Changing a group's `/settings` needs an admin.** Anyone can look.
 - **A confirm card belongs to whoever asked for it.** In a group, the
   End (`/kill`, ⋮ End session), Restart, Delete and mode-switch confirm
-  cards, and the session pickers `/kill`, `/restart`, `/delete` and
-  `/mode` show, answer only the person who sent the command or tapped
-  the button that drew them. Anyone else's tap, Cancel included, gets
-  "This is @alice's card. Send /kill x2 for your own." (with that
-  card's command) and changes nothing. The `/mode` card itself (which
-  mode a session is in) is everyone's: a switch tapped on it draws a
-  confirm that belongs to the tapper. The `/new` cards answer only the
-  person who sent `/new`. A card's owner is remembered until it is used
-  or cancelled, and not across a daemon restart.
+  cards, the session pickers `/kill`, `/restart`, `/delete`, `/mode`,
+  `/stop`, `/rename` and `/diff` show, and the "Resume x1 as:" card a
+  Resume tap draws (its Ask and Auto buttons) answer only the person who
+  sent the command or tapped the button that drew them. Anyone else's
+  tap, Cancel included, gets "This is @alice's card. Send /kill x2 for
+  your own." (with that card's command) and changes nothing. The `/mode`
+  card itself (which mode a session is in) is everyone's: a switch
+  tapped on it draws a confirm that belongs to the tapper. The `/new`
+  cards answer only the person who sent `/new`. A card's owner is
+  remembered until it is used or cancelled, also across a daemon
+  restart (the newest 4096 cards). The `/new` name card and the
+  `/rename` name question are the exception: they expire after 10
+  minutes anyway, so after a restart send the command again.
 - **A button only works in its own session's chat.** One tapped
   anywhere else answers "This button belongs to another chat." and does
   nothing, and Resume always resumes the session the button names,
