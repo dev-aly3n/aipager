@@ -596,22 +596,6 @@ def test_edit_busy_raw_skips_a_muted_chat_and_returns_false_never_none(
     bot._app.bot.edit_message_text.assert_awaited_once()
 
 
-def test_edit_busy_raw_resolves_the_global_chat_id_when_the_caller_passes_none(
-    mk_bot, run_async, clock, monkeypatch,
-):
-    """Every ``_edit_busy_raw`` in callbacks.py passes no ``chat_id``, so
-    the mute has to resolve through animation.py's own import-time copy
-    of CHAT_ID (empty on a runner with no .env — pin it, as the dashboard
-    test does)."""
-    monkeypatch.setattr("aipager.bot.animation.CHAT_ID", str(MUTED_CHAT))
-    bot = mk_bot()
-    bot._app.bot.edit_message_text = AsyncMock()
-    MUTE.mute(MUTED_CHAT, BAN)
-
-    assert run_async(bot._edit_busy_raw(42, "t")) is False
-    bot._app.bot.edit_message_text.assert_not_awaited()
-
-
 def test_permission_answer_tap_makes_no_card_edit_while_muted_and_another_chat_does(
     mk_bot, run_async, clock, monkeypatch,
 ):
@@ -623,12 +607,13 @@ def test_permission_answer_tap_makes_no_card_edit_while_muted_and_another_chat_d
     MUTE.mute(MUTED_CHAT, BAN)
 
     for chat, expected in ((MUTED_CHAT, 0), (OTHER_CHAT, 1)):
-        monkeypatch.setattr("aipager.bot.animation.CHAT_ID", str(chat))
         bot = mk_bot()
         bot._app.bot.edit_message_text = AsyncMock()
         bot._start_animation = MagicMock()
         sess = TrackedSession(name="claude-dev", label="dev",
                               status=Status.INTERACTIVE)
+        # The card's edit goes to the session's own chat (8.81).
+        sess.scope_chat_id = chat
         sess.busy_msg_id = 4242
         sess.pending_permission = {"tool_summary": "Bash: x",
                                    "tool_info": {"name": "Bash"}}
@@ -656,11 +641,11 @@ def test_stop_makes_no_card_edit_while_muted_and_another_chat_still_does(
     MUTE.mute(MUTED_CHAT, BAN)
 
     for chat, expected in ((MUTED_CHAT, 0), (OTHER_CHAT, 1)):
-        monkeypatch.setattr("aipager.bot.animation.CHAT_ID", str(chat))
         bot = mk_bot()
         bot._app.bot.edit_message_text = AsyncMock()
         bot._stop_animation = MagicMock()
         sess = TrackedSession(name="claude-jim", label="jim", status=Status.BUSY)
+        sess.scope_chat_id = chat     # "Stopped" lands in the session's chat
         sess.busy_msg_id = 4242
         bot.registry._sessions["claude-jim"] = sess
         run_async(bot._stop_session(sess))

@@ -39,9 +39,6 @@ from aipager.bot.settings_menu import (
     render_settings_root,
     render_settings_section,
 )
-from aipager.config import (
-    CHAT_ID,
-)
 from aipager.state import Status
 from aipager.team import (
     attribution_label,
@@ -701,14 +698,17 @@ class CallbackDispatchMixin:
             author = sess.last_prompt_driver_user_id
             was_busy = sess.status is Status.BUSY
             ok = await self._inject_prompt(
-                sess, prompt, msg_id=sess.trigger_msg_id, chat_id=CHAT_ID,
+                sess, prompt, msg_id=sess.trigger_msg_id,
+                chat_id=calling_chat_id(update),
                 driver_user_id=tapper if tapper == author else None)
             if ok:
                 await self._safe_answer(query, f"Retrying [{sess.label}]")
-                # Delete the error message — busy animation replaces it
+                # Delete the error message — busy animation replaces it.
+                # In the chat the tapped message lives in: the same id in
+                # another chat is someone else's message.
                 try:
                     await self._app.bot.delete_message(
-                        chat_id=CHAT_ID,
+                        chat_id=_message_chat_id(query.message),
                         message_id=query.message.message_id,
                     )
                 except Exception:
@@ -731,9 +731,10 @@ class CallbackDispatchMixin:
             ok = await self._inject_prompt(sess, "/compact")
             if ok:
                 await self._safe_answer(query, f"Compacting [{sess.label}]")
+                # The tapped message, in its own chat (see Retry).
                 try:
                     await self._app.bot.delete_message(
-                        chat_id=CHAT_ID,
+                        chat_id=_message_chat_id(query.message),
                         message_id=query.message.message_id,
                     )
                 except Exception:
@@ -886,7 +887,7 @@ class CallbackDispatchMixin:
                     except Exception:
                         log.debug("[%s] mode message edit failed", label, exc_info=True)
                 fallback[:] = [await send_text(self._app.bot,
-                    chat_id=chat or CHAT_ID, text=text, **kw,
+                    chat_id=chat or resolve_chat_id(sess), text=text, **kw,
                 )]
 
             # Confirmed (Ask→Auto on an idle session) or Stop & switch (a
@@ -921,9 +922,15 @@ class CallbackDispatchMixin:
                 try:
                     await edit_text(query, text, **kw)
                 except Exception:
-                    await send_text(self._app.bot,
-                        chat_id=CHAT_ID, text=text, **kw,
-                    )
+                    # The picker's own chat, else the session's; never
+                    # the install's default chat (a group, on a DM+group
+                    # install).
+                    reply_chat = calling_chat_id(update) or (
+                        resolve_chat_id(sess) if sess is not None else None)
+                    if reply_chat:
+                        await send_text(self._app.bot,
+                            chat_id=reply_chat, text=text, **kw,
+                        )
 
             await self._do_resume(
                 label=label, reply_fn=_reply,
@@ -1060,9 +1067,14 @@ class CallbackDispatchMixin:
                     try:
                         await edit_text(query, text, **kw)
                     except Exception:
-                        await send_text(self._app.bot,
-                            chat_id=CHAT_ID, text=text, **kw,
-                        )
+                        # The tapped card's chat, else the session's;
+                        # with neither (an unstamped session on an
+                        # install with no default chat) nothing is sent.
+                        reply_chat = calling_chat_id(update) or resolve_chat_id(sess)
+                        if reply_chat:
+                            await send_text(self._app.bot,
+                                chat_id=reply_chat, text=text, **kw,
+                            )
 
                 # Exactly the session this card is about: a label lookup
                 # could find another chat's session of the same name.
@@ -1296,7 +1308,9 @@ class CallbackDispatchMixin:
                     sess, perm["options"],
                     multi_select=True, selected=selected)
                 text = self._build_busy_text(sess.label, "Waiting", sess)
-                await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
+                await self._edit_busy_raw(
+                    sess.busy_msg_id, text, reply_markup=keyboard,
+                    chat_id=resolve_chat_id(sess))
                 log.info("[%s] Multi-select toggle: opt%d (%s), selected=%s",
                          sess.label, option_index, toggled, selected)
             else:
@@ -1352,7 +1366,7 @@ class CallbackDispatchMixin:
                 by_attr = f" by {attribution_label(actor)}" if actor else ""
                 try:
                     await send_text(self._app.bot,
-                        CHAT_ID,
+                        resolve_chat_id(sess),
                         f"✓ <b>{html_mod.escape(sess.label)}</b> · "
                         f"Answered{html_mod.escape(by_attr)} · "
                         f"{html_mod.escape(question_text[:80])} → "
@@ -1388,7 +1402,9 @@ class CallbackDispatchMixin:
                         sess, next_options,
                         multi_select=next_multi)
                     text = self._build_busy_text(sess.label, "Waiting", sess)
-                    await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
+                    await self._edit_busy_raw(
+                        sess.busy_msg_id, text, reply_markup=keyboard,
+                        chat_id=resolve_chat_id(sess))
                     log.info("[%s] Multi-select submit, advanced to Q%d/%d",
                              sess.label, next_idx + 1, len(questions))
                 else:
@@ -1400,7 +1416,9 @@ class CallbackDispatchMixin:
                     self.registry.transition(session_name, Status.BUSY)
                     keyboard = self._build_stop_keyboard(sess)
                     text = self._build_busy_text(sess.label, "Working", sess)
-                    await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
+                    await self._edit_busy_raw(
+                        sess.busy_msg_id, text, reply_markup=keyboard,
+                        chat_id=resolve_chat_id(sess))
                     self._start_animation(sess)
                     log.info("[%s] Multi-select submit complete", sess.label)
             else:
@@ -1608,7 +1626,7 @@ class CallbackDispatchMixin:
                 by_attr = f" by {attribution_label(actor)}" if actor else ""
                 try:
                     await send_text(self._app.bot,
-                        CHAT_ID,
+                        resolve_chat_id(sess),
                         f"{audit_icon} <b>{html_mod.escape(sess.label)}</b> · "
                         f"{verb}{html_mod.escape(by_attr)} · "
                         f"{html_mod.escape(audit_detail)}",
@@ -1650,7 +1668,9 @@ class CallbackDispatchMixin:
                         sess, next_options,
                         multi_select=next_multi)
                     text = self._build_busy_text(sess.label, "Waiting", sess)
-                    await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
+                    await self._edit_busy_raw(
+                        sess.busy_msg_id, text, reply_markup=keyboard,
+                        chat_id=resolve_chat_id(sess))
                     log.info("[%s] Multi-question: advanced to Q%d/%d",
                              sess.label, next_idx + 1, len(questions))
                 else:
@@ -1669,7 +1689,9 @@ class CallbackDispatchMixin:
                     self.registry.transition(session_name, Status.BUSY)
                     keyboard = self._build_stop_keyboard(sess)
                     text = self._build_busy_text(sess.label, "Working", sess)
-                    await self._edit_busy_raw(sess.busy_msg_id, text, reply_markup=keyboard)
+                    await self._edit_busy_raw(
+                        sess.busy_msg_id, text, reply_markup=keyboard,
+                        chat_id=resolve_chat_id(sess))
                     self._start_animation(sess)
                     log.info("[%s] Inline permission: %s (via=%s)",
                              sess.label, verb, via or "n/a")

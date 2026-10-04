@@ -28,6 +28,9 @@ from telegram.error import BadRequest, Forbidden, RetryAfter, TelegramError
 
 from aipager.config import (
     APP_BUTTON,
+    # Only the pinned bar reads CHAT_ID (`_pinned_chats`, `_pinned_chat_of`):
+    # a legacy personal install's one chat, and resolve_chat_id's fallback
+    # for an unstamped session. No session send, edit or delete uses it.
     CHAT_ID,
     PINNED_MIN_EDIT_GAP,
     PINNED_RECREATE_MIN_INTERVAL,
@@ -55,6 +58,7 @@ from aipager.bot.transport import (  # noqa: F401
     SKIPPED,
     _message_chat_id,
     edit_text_at,
+    resolve_chat_id,
     send_text,
     ACTION_VERBS,
     TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES,
@@ -271,7 +275,7 @@ class DashboardMixin:
                 f"{footer}"
             )
             await send_text(self._app.bot,
-                CHAT_ID, text, parse_mode="HTML",
+                resolve_chat_id(sess), text, parse_mode="HTML",
                 reply_to_message_id=(sess.busy_msg_id
                                      if sess.busy_msg_id and sess.busy_msg_id > 0
                                      else None),
@@ -309,6 +313,7 @@ class DashboardMixin:
             return [s.chat_id for s in self.scopes]
         if self.team is not None:
             return []
+        # Legacy personal install only (no scopes, no team): its one chat.
         try:
             return [int(CHAT_ID)]
         except (TypeError, ValueError):
@@ -320,6 +325,8 @@ class DashboardMixin:
         rule, without its warning for an unresolvable id (asked every tick)."""
         if sess.scope_chat_id:
             return sess.scope_chat_id
+        # The same fallback as resolve_chat_id for an unstamped session;
+        # the two must agree, so this changes only when that one does.
         try:
             return int(CHAT_ID)
         except (TypeError, ValueError):

@@ -231,13 +231,13 @@ def test_build_busy_text_with_inline_permission_tool(mk_bot):
 def test_edit_busy_raw_no_app(mk_bot, run_async):
     bot = mk_bot()
     bot._app = None
-    assert run_async(bot._edit_busy_raw(42, "text")) is False
+    assert run_async(bot._edit_busy_raw(42, "text", chat_id=111)) is False
 
 
 def test_edit_busy_raw_success(mk_bot, run_async):
     bot = mk_bot()
     bot._app.bot.edit_message_text = AsyncMock()
-    assert run_async(bot._edit_busy_raw(42, "text")) is True
+    assert run_async(bot._edit_busy_raw(42, "text", chat_id=111)) is True
 
 
 def test_edit_busy_raw_not_modified_returns_true(mk_bot, run_async):
@@ -245,7 +245,7 @@ def test_edit_busy_raw_not_modified_returns_true(mk_bot, run_async):
     bot._app.bot.edit_message_text = AsyncMock(
         side_effect=RuntimeError("Bad Request: message is not modified"),
     )
-    assert run_async(bot._edit_busy_raw(42, "text")) is True
+    assert run_async(bot._edit_busy_raw(42, "text", chat_id=111)) is True
 
 
 def test_edit_busy_raw_message_not_found_returns_none(mk_bot, run_async):
@@ -253,7 +253,7 @@ def test_edit_busy_raw_message_not_found_returns_none(mk_bot, run_async):
     bot._app.bot.edit_message_text = AsyncMock(
         side_effect=RuntimeError("Bad Request: message to edit not found"),
     )
-    assert run_async(bot._edit_busy_raw(42, "text")) is None
+    assert run_async(bot._edit_busy_raw(42, "text", chat_id=111)) is None
 
 
 def test_edit_busy_raw_transient_returns_false(mk_bot, run_async):
@@ -261,7 +261,27 @@ def test_edit_busy_raw_transient_returns_false(mk_bot, run_async):
     bot._app.bot.edit_message_text = AsyncMock(
         side_effect=RuntimeError("Rate limit"),
     )
-    assert run_async(bot._edit_busy_raw(42, "text")) is False
+    assert run_async(bot._edit_busy_raw(42, "text", chat_id=111)) is False
+
+
+def test_edit_busy_raw_success_edits_in_the_chat_it_was_given(mk_bot, run_async):
+    bot = mk_bot()
+    bot._app.bot.edit_message_text = AsyncMock()
+    assert run_async(bot._edit_busy_raw(42, "text", chat_id=111)) is True
+    assert bot._app.bot.edit_message_text.await_args.kwargs["chat_id"] == 111
+
+
+def test_edit_busy_raw_has_no_default_chat(mk_bot, run_async):
+    """Roadmap 8.81: ``chat_id`` is a required keyword. A default (the
+    install's CHAT_ID, a group's id on a DM+group install) aimed DM card
+    edits at the group; a caller that forgets the chat must fail loudly."""
+    import inspect
+    bot = mk_bot()
+    param = inspect.signature(bot._edit_busy_raw).parameters["chat_id"]
+    assert param.kind is inspect.Parameter.KEYWORD_ONLY
+    assert param.default is inspect.Parameter.empty
+    with pytest.raises(TypeError):
+        run_async(bot._edit_busy_raw(42, "text"))
 
 
 # ===== _start_animation / _stop_animation ===============================

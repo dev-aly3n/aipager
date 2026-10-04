@@ -1067,7 +1067,7 @@ class SessionOpsMixin:
             # Written and retired under the card-edit lock, as in
             # `_stop_session_core`.
             if not await self._settle_card_text(
-                    sess, notice, chat_id=resolve_chat_id(sess)) and self._app:
+                    sess, notice) and self._app:
                 await send_text(self._app.bot,
                     resolve_chat_id(sess), notice, parse_mode="HTML")
         except Exception:

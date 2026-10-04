@@ -1468,7 +1468,7 @@ class NotifyMixin:
             # The card's last word, written and retired under the
             # card-edit lock (`_settle_card_text`).
             if not await self._settle_card_text(
-                    sess, text, chat_id=resolve_chat_id(sess)):
+                    sess, text):
                 text = text_alone
                 try:
                     await bot.send_message(
@@ -1514,7 +1514,7 @@ class NotifyMixin:
                         f"(background agent lost{suffix})")
             # Written and retired under the card-edit lock, as above.
             if not await self._settle_card_text(
-                    sess, text, chat_id=resolve_chat_id(sess)):
+                    sess, text):
                 try:
                     await bot.send_message(
                         resolve_chat_id(sess), text, parse_mode="HTML",
@@ -1662,7 +1662,7 @@ class NotifyMixin:
             # (`_settle_card_text`): a merely late hook's card edit must
             # not land after the warning and put "Working" back.
             if not await self._settle_card_text(
-                    sess, warn_text, chat_id=resolve_chat_id(sess)):
+                    sess, warn_text):
                 try:
                     await bot.send_message(
                         resolve_chat_id(sess), warn_text, parse_mode="HTML",

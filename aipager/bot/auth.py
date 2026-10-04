@@ -20,9 +20,6 @@ from telegram import (
 
 from aipager.dtach import inject
 
-from aipager.config import (
-    CHAT_ID,
-)
 from aipager.state import Status, TrackedSession
 from aipager.team import (
     Role,
@@ -39,6 +36,7 @@ from aipager.team import (
 from aipager.bot.transport import (  # noqa: F401
     reply_text,
     send_text,
+    resolve_chat_id,
     ACTION_VERBS,
     TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES,
     TELEGRAM_MAX_DOC_BYTES,
@@ -244,6 +242,9 @@ class AuthMixin:
         user" (personal mode's usual, deliberately permissive, trust
         model everywhere else).
         """
+        # The one CHAT_ID read left in this module, and not session
+        # traffic: personal mode's operator IS its one DM chat's peer.
+        # Read at call time so it tracks runtime config.
         from aipager.config import CHAT_ID as _current_chat_id
         if not isinstance(user_id, int):
             return False
@@ -453,7 +454,7 @@ class AuthMixin:
         )
         try:
             await send_text(self._app.bot,
-                CHAT_ID,
+                resolve_chat_id(sess),
                 f"⛔ <b>{html_mod.escape(sess.label)}</b> · "
                 f"Auto-denied · {html_mod.escape(tool_name)} · "
                 f"per rules.deny_tools{html_mod.escape(by_attr)}\n"

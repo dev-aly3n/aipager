@@ -25,7 +25,7 @@ from aipager import bg_shells, flood_policy, preferences
 from aipager.config import (
     BUSY_EDIT_INTERVAL, CARD_CADENCE_FLOOR_GROUP, CARD_CADENCE_FLOOR_PRIVATE,
     CARD_RETRY_WAKE, CARD_STATE_BYPASS_MIN_GAP,
-    CARD_STARVATION_BLOCK_TIMEOUT, CHAT_ID, COMPACT_ANIMATE_INTERVAL_SECONDS,
+    CARD_STARVATION_BLOCK_TIMEOUT, COMPACT_ANIMATE_INTERVAL_SECONDS,
     COMPACT_ANIMATE_MAX_TICKS, FLOOD_WARNED_CEILING, FLOOD_WARNING_HOURS,
     SELF_WOKEN_CARD_DELAY, SPINNER_VERBS,
     STREAM_EDIT_INTERVAL, TELEGRAM_MAX_RETRY_AFTER,
@@ -1966,15 +1966,17 @@ class AnimationMixin:
         return text
 
     async def _edit_busy_raw(self, msg_id: int, text: str,
-                             reply_markup=None, chat_id=None, *,
+                             reply_markup=None, *, chat_id,
                              kind: str = "blocking",
                              priority: str = PRIORITY_ORNAMENT) -> bool | None:
         """Edit busy message with pre-built text.
 
-        ``chat_id`` is the chat the busy message lives in; defaults to
-        the global ``CHAT_ID`` for callers that don't route per scope.
-        Sess-aware callers in the notify path pass
-        ``chat_id=resolve_chat_id(sess)``.
+        ``chat_id`` is the chat the busy message lives in, and is
+        required: every caller passes ``chat_id=resolve_chat_id(sess)``.
+        There is no default on purpose (roadmap 8.81): the old fallback to
+        the install's ``CHAT_ID``, which is a group's id on a DM+group
+        install, aimed a DM card's edits at the group and left the DM card
+        frozen.
 
         ``kind="skip"`` makes the edit skippable by the per-chat budget
         (roadmap 8.21): it returns False without touching Telegram when the
@@ -1992,7 +1994,7 @@ class AnimationMixin:
         # None — the mute is transient, while None means "message gone"
         # and makes every caller that inspects the result drop
         # ``busy_msg_id`` and lose the card for good.
-        if MUTE.is_muted(chat_id or CHAT_ID):
+        if MUTE.is_muted(chat_id):
             return False
         # ORNAMENT (8.26 R3) BY DEFAULT: a card edit is a card edit.
         # `kind` says "may this be refused when the budget is momentarily
@@ -2010,7 +2012,7 @@ class AnimationMixin:
         extra = {"rate_limit_args": _rl_args(kind=kind, priority=priority)}
         try:
             await self._app.bot.edit_message_text(
-                text, chat_id=chat_id or CHAT_ID, message_id=msg_id,
+                text, chat_id=chat_id, message_id=msg_id,
                 parse_mode="HTML", reply_markup=reply_markup, **extra,
             )
             return True
@@ -3163,8 +3165,7 @@ class AnimationMixin:
         sess.animate_task = None
         self._stop_typing(sess)
 
-    async def _settle_card_text(self, sess: TrackedSession, text: str, *,
-                                chat_id=None) -> bool:
+    async def _settle_card_text(self, sess: TrackedSession, text: str) -> bool:
         """Write *text* (HTML, no keyboard) as the busy card's last word and
         retire the card, both under the card-edit lock (:func:`_card_edit_lock`).
 
@@ -3179,14 +3180,15 @@ class AnimationMixin:
 
         Returns False, writing nothing, when there is no live card (the
         caller sends its own notice instead); True once the card was
-        written to and retired, whatever the edit's outcome. ``chat_id``
-        is passed through to :meth:`_edit_busy_raw` unchanged."""
+        written to and retired, whatever the edit's outcome. The edit goes
+        to the session's own chat (:func:`resolve_chat_id`), never to a
+        caller-chosen one: the card lives where the session lives."""
         async with _card_edit_lock(sess):
             msg_id = sess.busy_msg_id
             if not msg_id or msg_id <= 0:
                 return False
             try:
-                await self._edit_busy_raw(msg_id, text, chat_id=chat_id)
+                await self._edit_busy_raw(msg_id, text, chat_id=resolve_chat_id(sess))
             finally:
                 sess.busy_msg_id = None
             return True
