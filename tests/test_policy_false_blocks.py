@@ -292,6 +292,24 @@ def _snap():
     return ps.read_snapshot(SESSION)
 
 
+def _fresh_floor(snap) -> bool:
+    """The floor, written for a turn the hook started with no Telegram
+    message behind it: the floor plus the turn's origin (roadmap 8.77)."""
+    rest = dict(snap)
+    return rest.pop("turn_origin") == "terminal" and rest == ps.FLOOR_SNAPSHOT
+
+
+def _same_rules(snap, expected) -> bool:
+    """Same safety rules, order of the lists aside."""
+    return all(
+        (sorted(snap.get(k) or []) == sorted(expected.get(k) or []))
+        if isinstance(expected.get(k), list)
+        else snap.get(k) == expected.get(k)
+        for k in ("bypass_safety", "confine_writes", "deny_tools",
+                  "allow_tools", "deny_paths_no_access",
+                  "deny_paths_no_write", "deny_bash_patterns"))
+
+
 def test_repro_owner_turn_keeps_bypass_after_a_queued_terminal_message(tmp_path):
     """The operator's own incident (2026-09-26 12:00:48 → 12:01:45),
     replayed: the owner's Telegram prompt is picked up (bypass), then a
@@ -342,7 +360,9 @@ def test_unattributed_telegram_text_still_falls_to_the_floor(tmp_path):
     notify_hook._match_and_promote(SESSION, owner_prompt)
     stranger = "[via Telegram · @someone]\nread the config"
     notify_hook._match_and_promote(SESSION, stranger)
-    assert _snap() == ps.FLOOR_SNAPSHOT
+    # Mid-turn (roadmap 8.77) the floor is merged with the owner's running
+    # turn: the floor's rules, plus the turn's provenance.
+    assert _same_rules(_snap(), ps.FLOOR_SNAPSHOT)
     assert _decide(tmp_path, stranger, PRIVILEGED) is not None
 
 
@@ -428,13 +448,13 @@ def test_a_no_note_event_never_widens_a_restricted_turn(tmp_path):
 def test_no_prior_snapshot_and_no_note_is_still_the_floor(tmp_path):
     """Nothing to keep: the floor, exactly as before."""
     notify_hook._match_and_promote(SESSION, "typed in the terminal")
-    assert _snap() == ps.FLOOR_SNAPSHOT
+    assert _fresh_floor(_snap())
 
 
 def test_corrupt_prior_snapshot_is_not_kept(tmp_path):
     ps.snapshot_path(SESSION).write_text("[1, 2]")
     notify_hook._match_and_promote(SESSION, "typed in the terminal")
-    assert _snap() == ps.FLOOR_SNAPSHOT
+    assert _fresh_floor(_snap())
 
 
 @pytest.mark.parametrize("bad", [
@@ -448,7 +468,7 @@ def test_malformed_prior_snapshot_is_not_kept(tmp_path, bad):
     owner = {**ps.resolve_snapshot(OWNER, None, None), **bad}
     ps.snapshot_path(SESSION).write_text(json.dumps(owner))
     notify_hook._match_and_promote(SESSION, "typed in the terminal")
-    assert _snap() == ps.FLOOR_SNAPSHOT
+    assert _fresh_floor(_snap())
 
 
 def test_kept_snapshot_always_carries_the_built_in_floor(tmp_path):

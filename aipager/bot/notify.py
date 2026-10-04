@@ -54,7 +54,7 @@ from aipager.config import (
     STREAM_EDIT_INTERVAL,
 )
 from aipager.state import BG_AGENTS_RETRY_SECONDS, Status, TrackedSession
-from aipager.policy_snapshot import note_driver_id
+from aipager.policy_snapshot import clear_turn_open, mark_turn_open, note_driver_id
 from aipager.bot.animation import (
     FINAL_VERB, _RICH_LIMIT, _card_edit_lock, _exact_anchors_available,
     _expire_tool_batch,
@@ -219,6 +219,10 @@ def _plain_text_chunks(body_content: str) -> list[str]:
     if not chunks:
         chunks = [body_content[:4096]]
     return chunks
+
+
+#: :meth:`NotifyMixin._end_job_turn`'s answer when the job is still open.
+_JOB_STILL_OPEN = object()
 
 
 class NotifyMixin:
@@ -667,6 +671,9 @@ class NotifyMixin:
         self.registry.mark_dirty()
         self.registry.transition(sess.name, Status.BUSY,
                                  preserve_job_state=in_job)
+        # Claude Code fires no hook for this turn: its sender is the popped
+        # message's author (roadmap 8.77), None when not known.
+        sess.turn_sender_id = nxt.get("driver_user_id")
         if not in_job:
             # A new turn whose card state (and card) waits for this finish:
             # its own hooks are held until then (roadmap 8.62). Inside the
@@ -1121,6 +1128,11 @@ class NotifyMixin:
         stranded until the job's eventual real end.
         """
         sess.job_interim_seen = True
+        # The hook closed the turn at this Stop, but the job goes on: its
+        # agent's tool calls and its continuation run under the job's
+        # rules, so a message sent meanwhile must still only narrow them
+        # (roadmap 8.77). Before the drain below, which may send one.
+        mark_turn_open(sess.name)
         raw_md = context.get("raw_md", "")
         # Only what THIS interim turn produced — never sess.summary, which
         # is the previous answer (see the idle branch's content selection).
@@ -1152,6 +1164,35 @@ class NotifyMixin:
             self._release_finish_gate(sess, gate)
         await self._drain_next_queued(sess)
 
+    def _end_job_turn(self, sess: TrackedSession):
+        """A background job closed with no Stop of its own (its grace ran
+        out, or its agent went silent): its turn is over (roadmap 8.77).
+        Called before the closing branch awaits anything, so a turn that
+        starts meanwhile keeps its own turn state: the hook's turn-open
+        file (``_handle_job_interim`` reopened it) is cleared here, at
+        once. Returns the job's sender for :meth:`_drain_after_job`, or
+        :data:`_JOB_STILL_OPEN` when the job is not closed after all."""
+        if sess.job_background_open():
+            return _JOB_STILL_OPEN
+        clear_turn_open(sess.name)
+        job_sender, sess.turn_sender_id = sess.turn_sender_id, None
+        return job_sender
+
+    async def _drain_after_job(self, sess: TrackedSession, job_sender) -> None:
+        """Send the message the turn-sender hold kept back behind the job
+        that just closed (:meth:`_end_job_turn`), as its own turn, as the
+        job's real end would have. Only that message: other held messages
+        keep waiting for the next real turn end, as before (a "lost" agent
+        may still be alive). Nothing is sent once another turn has started
+        while the job's closing notice went out."""
+        if (job_sender is _JOB_STILL_OPEN or job_sender is None
+                or sess.status is not Status.IDLE or not sess.pending_queue):
+            return
+        head = sess.pending_queue[0][4]
+        if head is None or not self._sender_differs_from(sess, job_sender, head):
+            return
+        await self._drain_next_queued(sess)
+
     async def _drain_next_queued(self, sess: TrackedSession) -> None:
         """Pop and inject the next queued prompt, one at a time.
 
@@ -1164,6 +1205,12 @@ class NotifyMixin:
         when the queue is empty.
         """
         if not sess.pending_queue:
+            return
+        if self._turn_sender_differs(sess, sess.pending_queue[0][4]):
+            # Roadmap 8.77 (D-H): the finish path has just started a turn
+            # for a message Claude had queued, and it is someone else's.
+            # Sent now, this one would join that turn; it stays held and
+            # drains at that turn's end, as its own turn.
             return
         (
             queued_text, queued_trigger, _queued_at,
@@ -1472,6 +1519,7 @@ class NotifyMixin:
             # grace window ("close the background-job endgame" requirement
             # 2's fallback) — close the job honestly: the interim answer
             # stands as the result.
+            job_sender = self._end_job_turn(sess)
             sess.close_turn()  # no card for this turn from here (8.57)
             self._stop_animation(sess)
             elapsed_str = ""
@@ -1509,6 +1557,7 @@ class NotifyMixin:
             self.registry.mark_dirty()
             if self.observers:
                 asyncio.create_task(self.observers.broadcast(text))
+            await self._drain_after_job(sess, job_sender)
             return
 
         if event == "job_agents_lost":
@@ -1518,9 +1567,12 @@ class NotifyMixin:
             # wait forever. Produces the terminal "background agent lost"
             # card rather than a normal Finished: nothing new happened,
             # the agent just disappeared without ever reporting back, so
-            # there is no answer to deliver. Deliberately does not drain
-            # the pending queue (design.md Risks) — a message queued
-            # during the wait drains on the next real idle-transition.
+            # there is no answer to deliver. The job's turn is over, so the
+            # message the turn-sender hold kept behind it drains now
+            # (``_drain_after_job``, roadmap 8.77); anything else held
+            # drains on the next real idle-transition, as before (design.md
+            # Risks: a "lost" agent may still be alive).
+            job_sender = self._end_job_turn(sess)
             sess.close_turn()  # no card for this turn from here (8.57)
             self._stop_animation(sess)
             elapsed_str = ""
@@ -1552,6 +1604,7 @@ class NotifyMixin:
             self.registry.mark_dirty()
             if self.observers:
                 asyncio.create_task(self.observers.broadcast(text))
+            await self._drain_after_job(sess, job_sender)
             return
 
         if event == "tool_use":
@@ -2322,6 +2375,12 @@ class NotifyMixin:
                     job_interim = False
                 else:
                     job_interim = sess.job_background_open()
+                if not job_interim and sess.status is Status.IDLE:
+                    # The turn, or the job, is over: the IDLE transition
+                    # kept its sender while the job still looked open
+                    # (roadmap 8.77). A popped turn (BUSY) or one that
+                    # started during the awaits above keeps its own.
+                    sess.turn_sender_id = None
                 if job_interim:
                     # A background agent this job launched is still running (or
                     # the continuation grace window is open) — this

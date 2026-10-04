@@ -147,7 +147,9 @@ def _note_wire(note: dict) -> dict:
     }
 
 
-def _match_and_promote(session: str, prompt_text: str) -> tuple[list[dict], list[dict]]:
+def _match_and_promote(
+    session: str, prompt_text: str, *, report: dict | None = None,
+) -> tuple[list[dict], list[dict]]:
     """Consume the longest PREFIX run of outstanding notes matching
     ``prompt_text``, always leaving the canonical policy snapshot
     correctly overwritten before returning.
@@ -186,42 +188,119 @@ def _match_and_promote(session: str, prompt_text: str) -> tuple[list[dict], list
       and never labelled terminal origin (that would be
       ``enforce.decide()`` returning ``None``, which this never does).
 
+    While a turn is already running (the session's turn-open file,
+    roadmap 8.77) the prompt is a message joining it, and whichever answer
+    the rules above give is merged, strictest wins, with the running
+    turn's snapshot (``policy_snapshot.snapshot_for_prompt``). The
+    turn-open file is written here, after the snapshot, whatever happens.
+
     Returns ``(consumed, expired)`` — the notes matched (in order) and
     any notes dropped for exceeding the pick-up TTL as a side effect of
-    listing, for the caller's daemon-side reactions/notice.
+    listing, for the caller's daemon-side reactions/notice. A ``report``
+    dict is filled with what the daemon needs to know about the turn
+    (roadmap 8.77): ``fresh`` (this prompt started a turn: none was
+    open), ``origin`` (the turn's origin as written) and ``authors`` (the
+    consumed notes' authors, ``None`` where unknown).
     """
     from aipager.policy_snapshot import (
         delete_notes,
         list_outstanding_notes,
+        mark_turn_open,
         match_notes_for_prompt,
+        note_driver_id,
         snapshot_for_prompt,
+        turn_is_open,
         write_merged_snapshot,
     )
 
-    expired: list[dict] = []
-    outstanding = list_outstanding_notes(session, expired_out=expired)
+    turn_open = turn_is_open(session)
+    if report is not None:
+        # Known before anything can fail: the caller's failure path needs
+        # it (``snapshot_after_failure``).
+        report["fresh"] = not turn_open
+    try:
+        expired: list[dict] = []
+        outstanding = list_outstanding_notes(session, expired_out=expired)
 
-    # Reuse ONLY the pure matcher — never `consume_notes_matching`, which
-    # calls `list_outstanding_notes` itself. Doing that here would call it
-    # TWICE per pick-up (once inside `consume_notes_matching`, once for
-    # the `expired_out=expired` collection just above), and
-    # `list_outstanding_notes` TTL-prunes as a side effect: the first
-    # call would silently swallow the truly-expired notes before the
-    # `expired_out` collection above ever sees them, under-reporting
-    # `expired` on the datagram (double-prune trap — see
-    # `policy_snapshot.consume_notes_matching`'s own docstring).
-    # The prefix run, plus the note that sent a slash command when a
-    # lingering note ahead of it stopped the run (roadmap 8.74).
-    consumed = match_notes_for_prompt(outstanding, prompt_text)
+        # Reuse ONLY the pure matcher — never `consume_notes_matching`,
+        # which calls `list_outstanding_notes` itself. Doing that here
+        # would call it TWICE per pick-up (once inside
+        # `consume_notes_matching`, once for the `expired_out=expired`
+        # collection just above), and `list_outstanding_notes` TTL-prunes
+        # as a side effect: the first call would silently swallow the
+        # truly-expired notes before the `expired_out` collection above
+        # ever sees them, under-reporting `expired` on the datagram
+        # (double-prune trap — see `policy_snapshot.consume_notes_matching`'s
+        # own docstring). The prefix run, plus the note that sent a slash
+        # command when a lingering note ahead of it stopped the run
+        # (roadmap 8.74).
+        consumed = match_notes_for_prompt(outstanding, prompt_text)
 
-    if consumed:
-        delete_notes(session, consumed)
-    # Matched → the consumed notes' merge; unmatched → keep the running
-    # turn's snapshot unless the prompt carries unattributed Telegram text
-    # (roadmap 8.49); else the all-outstanding fallback, or the floor.
-    merged = snapshot_for_prompt(session, prompt_text, outstanding, consumed)
-    write_merged_snapshot(session, merged)
+        if consumed:
+            delete_notes(session, consumed)
+        # Matched → the consumed notes' merge; unmatched → keep the running
+        # turn's snapshot unless the prompt carries unattributed Telegram
+        # text (roadmap 8.49); else the all-outstanding fallback, or the
+        # floor. A turn already running is never widened (8.77).
+        merged = snapshot_for_prompt(session, prompt_text, outstanding,
+                                     consumed, turn_open=turn_open)
+        write_merged_snapshot(session, merged)
+    finally:
+        # After the snapshot: this prompt's own pick-up must see the turn
+        # as it was before it. Marked even when the pick-up failed (the
+        # caller then writes the floor).
+        mark_turn_open(session)
+    if report is not None:
+        report.update({
+            "fresh": not turn_open,
+            "origin": merged.get("turn_origin"),
+            "authors": [note_driver_id(n) for n in consumed],
+        })
     return consumed, expired
+
+
+#: SessionStart sources that begin a new conversation in the process. Not
+#: ``compact``: an auto-compact can run in the middle of a turn, and
+#: clearing the turn state there would let a message joining the rest of
+#: that turn widen it (roadmap 8.77).
+_NEW_CONVERSATION_SOURCES = ("startup", "resume", "clear")
+
+
+def _end_turn(session: str, data: dict) -> None:
+    """Clear the session's turn-open file at a turn end (roadmap 8.77).
+
+    - Stop / StopFailure: the turn is over, unless the transcript shows a
+      message Claude Code still holds in its queue. That message becomes
+      the next turn at once, with no UserPromptSubmit (measured
+      2026-09-05), and it already joined the turn's snapshot when it was
+      queued, so the turn is still open as far as the snapshot goes.
+      Missing that evidence is the old behaviour (a fresh turn at the next
+      prompt); the daemon's hold covers a different sender there.
+    - SessionStart for a new conversation (not a compact).
+
+    Never raises: a missed clear only makes the next fresh turn stricter.
+    """
+    if not session:
+        return
+    try:
+        from aipager.policy_snapshot import clear_turn_open, turn_is_open
+
+        if not turn_is_open(session):
+            return  # nothing to clear: skip the transcript read
+        if data.get("hook_event_name") == "SessionStart":
+            if data.get("source") not in _NEW_CONVERSATION_SOURCES:
+                return
+        else:
+            path = data.get("transcript_path")
+            if isinstance(path, str) and path:
+                from aipager.transcript import read_still_queued
+                if read_still_queued(path):
+                    return
+        clear_turn_open(session)
+    except MemoryError:
+        raise
+    except Exception as e:
+        _debug(f"turn-open clear error (kept): {e}")
 
 
 def _answer_model_switch(session: str, data: dict) -> None:
@@ -466,8 +545,16 @@ def _run(session: str, cap_slot: list) -> None:
             # consumes notes meant for a real prompt, exactly as the
             # style/reply-context branch below already skips for the same
             # reason.
+            turn: dict = {}
             try:
-                consumed, expired = _match_and_promote(submit_session, prompt_text)
+                consumed, expired = _match_and_promote(
+                    submit_session, prompt_text, report=turn)
+                if turn:
+                    # Who runs the turn this prompt started, for the
+                    # daemon's hold of a different sender's message
+                    # (roadmap 8.77, D-H). Rides the forwarded event
+                    # below; identity only.
+                    data["aipager_turn"] = turn
                 if consumed or expired:
                     _udp({
                         "hook_event_name": "queue_pickup",
@@ -486,11 +573,30 @@ def _run(session: str, cap_slot: list) -> None:
                        f"floor): {e}")
                 try:
                     from aipager.policy_snapshot import (
-                        merge_snapshots, write_merged_snapshot,
+                        snapshot_after_failure, write_merged_snapshot,
                     )
-                    write_merged_snapshot(submit_session, merge_snapshots([]))
+                    # A running turn keeps its own stricter rules too
+                    # (roadmap 8.77). Unknown whether one runs: assume so.
+                    write_merged_snapshot(submit_session, snapshot_after_failure(
+                        submit_session, prompt_text,
+                        turn_open=turn.get("fresh") is not True))
                 except Exception:
                     pass
+        elif submit_session:
+            # A continuation wakes the job's turn back up (roadmap 8.77):
+            # it is open again, and its snapshot stays as it is.
+            try:
+                from aipager.policy_snapshot import mark_turn_open
+                mark_turn_open(submit_session)
+            except MemoryError:
+                raise
+            except Exception as e:
+                _debug(f"turn-open mark error: {e}")
+        _udp(data)
+    elif hook_event_name in ("Stop", "StopFailure", "SessionStart"):
+        # Before the event reaches the daemon: its turn end may send the
+        # next message at once, and that one starts a turn of its own.
+        _end_turn(data.get("session", ""), data)
         _udp(data)
     else:
         _udp(data)

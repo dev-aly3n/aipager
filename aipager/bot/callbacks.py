@@ -662,6 +662,28 @@ class CallbackDispatchMixin:
             if not await inject.is_alive(session_name):
                 await self._safe_answer(query, f"Session '{session_name}' not alive")
                 return
+            if (not sess.dialog_is_open()
+                    and not mixed_sender_note_outstanding(sess, update)
+                    and self._turn_sender_differs(
+                        sess, driver_id_from_update(update))):
+                # Roadmap 8.77 (D-H): another person's turn is running.
+                # Re-injected now, the prompt would join that turn under its
+                # rules; refused like the open-prompt case below, the card
+                # keeps its button for a tap once the turn ends.
+                await self._safe_answer(
+                    query, "Another person's turn is running - retry when "
+                    "it ends")
+                try:
+                    await edit_message(query.message,
+                        f"{original_text}\n\n⏸ Not retried - another "
+                        "person's turn is running. Tap Retry again when it "
+                        "ends.",
+                        reply_markup=query.message.reply_markup,
+                    )
+                except Exception:
+                    log.debug("[%s] could not annotate the retry card",
+                              sess.label, exc_info=True)
+                return
             if sess.dialog_is_open() or mixed_sender_note_outstanding(sess, update):
                 # Retry buttons outlive the error they were attached to, so
                 # this one can be tapped long after the session has moved on

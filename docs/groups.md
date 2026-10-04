@@ -220,10 +220,16 @@ happens to interrupt:
   `/new x1 /review the diff` gets "That command needs an admin." and a
   🤷, and nothing reaches Claude. Owners and admins send any.
 - Messages from different users are never merged into one turn:
-  while one user's message is still waiting to be picked up, another
-  user's message is held until it clears. If a mixed turn happens
-  anyway, it runs under the *most restrictive* combination of the
-  contributors — privileges never widen.
+  while one user's message is still waiting to be picked up, or while
+  another person's turn is running, a message is held until that clears
+  and then runs as its own turn with its sender's rules. A turn typed in
+  the terminal counts as the owner's: only an owner's message (or, in a
+  DM, its own member's) joins it. A turn whose background agent is still
+  working counts as running until the agent is done.
+  If a mixed turn happens anyway, it runs under the *most restrictive*
+  combination of the contributors: privileges never widen, and the
+  rest of a running turn keeps the strictest rules of everyone who
+  joined it.
 - Buttons that act on a running turn (Stop, Kill, Restart, Replace,
   perms-switch) refuse when tapped from a card belonging to an
   earlier task — `That task already finished - …` — so a stale tap in a

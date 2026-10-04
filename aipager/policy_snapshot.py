@@ -19,7 +19,6 @@ import time
 from pathlib import Path
 
 from aipager import safety
-from aipager.state import MIXED_SENDER_HOLD_WINDOW_SECONDS, QUEUE_MAX_AGE_SECONDS
 
 log = logging.getLogger(__name__)
 
@@ -67,6 +66,71 @@ def notes_dir(session_name: str) -> Path:
     name to redirect writes to ``tmp_path`` rather than real ``/tmp``.
     """
     return Path(f"/tmp/claude-notes-{session_name}")
+
+
+# ---------------------------------------------------------------------------
+# Hook-side turn state (roadmap 8.77, design F3).
+#
+# Claude Code fires ``UserPromptSubmit`` when it QUEUES a message sent while
+# a turn runs, not when that message runs. The hook therefore cannot tell
+# "a new turn starts" from "a message joins the running turn" by the event
+# alone. This file says a turn is open: written at every UserPromptSubmit
+# (``<task-notification>`` wake-ups included), removed at Stop, at
+# SessionStart, and by the daemon when it stops, kills, restarts or launches
+# the session (an interrupt may fire no Stop). While it is present a pick-up
+# can only narrow the running turn (``snapshot_for_prompt``).
+#
+# Fail closed: a clear that never happens only makes the NEXT fresh turn
+# merge with the previous turn's rules, i.e. stricter for one turn (its own
+# Stop clears it), never wider. It lives in the notes dir, under the
+# protected ``/tmp/claude-notes-*`` floor path, so a restricted turn cannot
+# remove it itself.
+# ---------------------------------------------------------------------------
+
+#: The turn-open file's name inside :func:`notes_dir`. Not a note: every
+#: note reader only looks at ``.json`` files.
+TURN_OPEN_FILE = "turn-open"
+
+
+def turn_open_path(session_name: str) -> Path:
+    return notes_dir(session_name) / TURN_OPEN_FILE
+
+
+def mark_turn_open(session_name: str) -> None:
+    """Record that a turn is running in *session_name* (best-effort)."""
+    d = notes_dir(session_name)
+    path = d / TURN_OPEN_FILE
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+        try:
+            os.chmod(d, 0o700)
+        except OSError:
+            pass
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(repr(time.time()), encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError:
+        log.debug("could not mark turn open %s", path, exc_info=True)
+
+
+def clear_turn_open(session_name: str) -> None:
+    """Record that no turn is running in *session_name* (best-effort)."""
+    try:
+        turn_open_path(session_name).unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def turn_is_open(session_name: str) -> bool:
+    """True while a turn is running (the turn-open file exists). An error
+    other than "not there" reads as open: the stricter answer."""
+    try:
+        os.stat(turn_open_path(session_name))
+    except (FileNotFoundError, NotADirectoryError):
+        return False
+    except OSError:
+        return True
+    return True
 
 
 # A non-empty ``allow_tools`` is a whitelist; an EMPTY one means "no
@@ -325,6 +389,10 @@ def list_outstanding_notes(
     and not meaningful to callers beyond passing the dict back in.
     ``now`` is injectable for tests; real ``time.time()`` otherwise.
     """
+    # Imported here, not at module level: every hook event imports this
+    # module, and aipager.state pulls in the config, scope and yaml modules.
+    from aipager.state import QUEUE_MAX_AGE_SECONDS
+
     now = now if now is not None else time.time()
     cutoff = now - QUEUE_MAX_AGE_SECONDS
     d = notes_dir(session_name)
@@ -652,7 +720,8 @@ def clear_notes_dir(session_name: str) -> int:
     Called by Stop, ``/clearqueue`` (and the Mini App's equivalent
     route), and session GONE/kill cleanup — so nothing lingers to
     restrict an unrelated future turn for the rest of its TTL. Returns
-    the number of note files actually removed.
+    the number of note files actually removed. The turn-open file is not
+    a note and stays (:func:`clear_turn_open` removes it).
     """
     d = notes_dir(session_name)
     try:
@@ -661,6 +730,11 @@ def clear_notes_dir(session_name: str) -> int:
         return 0
     removed = 0
     for p in entries:
+        if p.name == TURN_OPEN_FILE:
+            # Not a note: clearing the queue mid-turn must not make the
+            # running turn look over (roadmap 8.77). Session teardown
+            # clears it with clear_turn_open.
+            continue
         try:
             p.unlink()
             removed += 1
@@ -692,6 +766,8 @@ def outstanding_sender_keys(
     window in practice (see the constant's own comment). ``now`` is
     injectable for tests, exactly like :func:`list_outstanding_notes`.
     """
+    from aipager.state import MIXED_SENDER_HOLD_WINDOW_SECONDS
+
     now = now if now is not None else time.time()
     cutoff_age = MIXED_SENDER_HOLD_WINDOW_SECONDS if max_age is None else max_age
     out: set[tuple[int, int]] = set()
@@ -874,21 +950,44 @@ def snapshot_for_unattributed_prompt(
     bodies = current.get("note_bodies") or []
     if not isinstance(bodies, list):
         return None
-    for f in _LIST_FIELDS:
-        v = current.get(f)
-        if v is not None and not (
-            isinstance(v, list) and all(isinstance(x, str) for x in v)
-        ):
-            return None
     bodies = [b for b in bodies if isinstance(b, str) and b]
     rest = prompt_text or ""
     for body in bodies:
         rest = rest.replace(body, "")
     if _has_telegram_marker(rest):
         return None
+    carried = carried_snapshot(current)
+    if carried is None:
+        return None
+    merged = merge_snapshots([carried, *outstanding])
+    merged["note_bodies"] = bodies
+    merged["scope_mode"] = current.get("scope_mode") is True
+    return merged
+
+
+def carried_snapshot(current) -> dict | None:
+    """*current* (the snapshot a running turn is held to) as a note
+    :func:`merge_snapshots` can merge, or ``None`` when it is missing or
+    not a well-formed snapshot.
+
+    The built-in floor lists are re-applied (a hand-edited snapshot
+    missing its deny lists is not carried without them), the bypass is
+    kept only if *current* had it, writes stay confined unless *current*
+    explicitly was not, and it is the oldest contributor
+    (``queued_at = -inf``), so it never supplies ``style_text`` or
+    ``reply_context``. Shared by :func:`snapshot_for_unattributed_prompt`
+    (roadmap 8.49) and the running-turn merge in :func:`snapshot_for_prompt`
+    (roadmap 8.77). Pure.
+    """
+    if not isinstance(current, dict):
+        return None
+    for f in _LIST_FIELDS:
+        v = current.get(f)
+        if v is not None and not (
+            isinstance(v, list) and all(isinstance(x, str) for x in v)
+        ):
+            return None
     carried = {f: list(current.get(f) or []) for f in _LIST_FIELDS}
-    # The built-in floor always applies on top: a hand-edited snapshot
-    # missing its deny lists must not be carried forward without them.
     for f in ("deny_paths_no_access", "deny_paths_no_write",
               "deny_bash_patterns"):
         carried[f] = sorted(set(carried[f]) | set(FLOOR_SNAPSHOT[f]))
@@ -897,10 +996,7 @@ def snapshot_for_unattributed_prompt(
     carried["queued_at"] = float("-inf")  # oldest: never supplies style/reply
     carried["style_text"] = ""
     carried["reply_context"] = ""
-    merged = merge_snapshots([carried, *outstanding])
-    merged["note_bodies"] = bodies
-    merged["scope_mode"] = current.get("scope_mode") is True
-    return merged
+    return carried
 
 
 #: How many earlier Telegram slash-command bodies a snapshot keeps
@@ -938,10 +1034,13 @@ def _carried_command_bodies(current, fresh: list[str]) -> list[str]:
 
 def snapshot_for_prompt(
     session_name: str, prompt_text: str,
-    outstanding: list[dict], consumed: list[dict],
+    outstanding: list[dict], consumed: list[dict], *,
+    turn_open: bool = False,
 ) -> dict:
     """The canonical snapshot a ``UserPromptSubmit`` writes
     (``notify_hook._match_and_promote``).
+
+    A fresh turn (``turn_open`` False):
 
     - Notes matched (``consumed``): their merge, exactly as before — this
       is how a different, less-privileged sender's message lowers the turn.
@@ -950,21 +1049,66 @@ def snapshot_for_prompt(
       current snapshot when the prompt adds no unattributed Telegram text.
     - Otherwise: the old answer — every outstanding note's merge, or
       :data:`FLOOR_SNAPSHOT` when none is waiting.
+
+    It also records the turn's origin (``turn_origin``, see
+    :func:`_fresh_turn_origin`).
+
+    While a turn is running (``turn_open``, roadmap 8.77) the prompt is a
+    message joining it: Claude Code fires this hook when it queues the
+    message, and the running turn goes on under whatever is written here.
+    So the answer above is merged, strictest wins, with the running turn's
+    own snapshot (:func:`_join_running_turn`): a message from someone with
+    more rights never widens it.
     """
+    current = read_snapshot(session_name)
+    answer = _fresh_turn_snapshot(current, prompt_text, outstanding, consumed)
+    if turn_open:
+        return _join_running_turn(current, answer, consumed, prompt_text)
+    answer["turn_origin"] = _fresh_turn_origin(prompt_text, consumed, answer)
+    return answer
+
+
+def snapshot_after_failure(
+    session_name: str, prompt_text: str, *, turn_open: bool,
+) -> dict:
+    """What the UserPromptSubmit hook writes when its pick-up failed.
+
+    A fresh turn: :data:`FLOOR_SNAPSHOT`, as before. A running turn
+    (roadmap 8.77): the floor joined to the running turn as any other
+    answer is (:func:`_join_running_turn`), so the turn keeps its own
+    rules where they are stricter (a ``read_only`` turn's ``allow_tools``)
+    and Telegram text joining a terminal turn is still enforced. If even
+    that fails: the floor, read as a Telegram turn.
+    """
+    floor = dict(FLOOR_SNAPSHOT)
+    if not turn_open:
+        return floor
+    try:
+        return _join_running_turn(read_snapshot(session_name), floor, [],
+                                  prompt_text)
+    except Exception:
+        log.debug("running-turn floor failed", exc_info=True)
+        floor["joined_from_telegram"] = True
+        return floor
+
+
+def _fresh_turn_snapshot(
+    current, prompt_text: str, outstanding: list[dict], consumed: list[dict],
+) -> dict:
+    """:func:`snapshot_for_prompt`'s answer for a prompt that starts a turn
+    (the behaviour before roadmap 8.77, unchanged)."""
     if consumed:
         merged = merge_snapshots(consumed)
         bodies = [
             n["body"] for n in consumed
             if isinstance(n.get("body"), str) and n["body"]
         ]
-        current = read_snapshot(session_name)
         carried = _carried_command_bodies(current, bodies)
         merged["note_bodies"] = bodies + carried
         # Any scope-mode contributor makes the bodies count at the hook
         # (roadmap 8.74): stricter, never looser.
         merged["scope_mode"] = any(n.get("scope_mode") is True for n in consumed)
         return merged
-    current = read_snapshot(session_name)
     kept = snapshot_for_unattributed_prompt(current, outstanding, prompt_text)
     if kept is not None:
         # The kept snapshot keeps its bodies whole, the carried commands
@@ -985,6 +1129,91 @@ def snapshot_for_prompt(
         merged["scope_mode"] = current.get("scope_mode") is True
     return merged
 
+
+def _fresh_turn_origin(prompt_text: str, consumed: list[dict], snap) -> str:
+    """``"terminal"`` when a turn starts from a prompt no Telegram message
+    accounts for, else ``"telegram"`` (roadmap 8.77).
+
+    Telegram when a note was consumed, when the prompt carries the
+    Telegram marker on any line, or, in scope mode, when it is a slash
+    command (or a whole body) that *snap*'s ``note_bodies`` name: *snap*
+    is the snapshot being written, so this is the evidence
+    ``enforce._command_from_telegram`` will read. Only a
+    terminal turn's own snapshot is left out of a later join
+    (:func:`_join_running_turn`), and the turn really is the operator's
+    then: the hook runs a terminal prompt with no rules. Every doubt
+    reads as Telegram, which keeps the snapshot in a join (stricter).
+    """
+    if consumed or _has_telegram_marker(prompt_text or ""):
+        return "telegram"
+    if isinstance(snap, dict) and snap.get("scope_mode") is True:
+        bodies = snap.get("note_bodies")
+        if isinstance(bodies, list):
+            whole = (prompt_text or "").strip()
+            name = _first_token(prompt_text)
+            for body in bodies:
+                if not isinstance(body, str) or not body.strip():
+                    continue
+                if body.strip() == whole or (
+                        name.startswith("/") and _first_token(body) == name):
+                    return "telegram"
+    return "terminal"
+
+
+def _join_running_turn(
+    current, answer: dict, consumed: list[dict], prompt_text: str,
+) -> dict:
+    """The snapshot after a message joins the running turn (roadmap 8.77):
+    the strictest of the turn's own snapshot (*current*, carried as
+    :func:`carried_snapshot` carries it) and *answer* (what the message
+    alone would have written).
+
+    - A turn that started in the terminal and nothing from Telegram has
+      joined yet (``turn_origin == "terminal"``) has no rules of its own
+      (the hook allows a terminal prompt everything), so *answer* alone
+      is its snapshot: the joining message's rules.
+    - Any other turn: *current* is carried. Missing or malformed, the
+      floor is carried instead (fail closed).
+    - ``note_bodies`` accumulate (*answer*'s first, then *current*'s),
+      ``scope_mode`` is set if either had it, and ``turn_origin`` stays the
+      running turn's.
+    - ``joined_from_telegram`` is set once a Telegram message (a consumed
+      scope-mode note, or text carrying the marker) joins, and kept until
+      the next fresh turn: a message absorbed into a running turn is not
+      a prompt of its own in the transcript, so ``enforce`` would keep
+      reading a terminal turn as terminal and run the message's text with
+      no rules. The flag makes it read the turn as Telegram.
+    """
+    cur = current if isinstance(current, dict) else {}
+    pure_terminal = (cur.get("turn_origin") == "terminal"
+                     and cur.get("joined_from_telegram") is not True)
+    if pure_terminal:
+        merged = dict(answer)
+    else:
+        base = carried_snapshot(current)
+        if base is None:
+            base = dict(FLOOR_SNAPSHOT)
+            base["queued_at"] = float("-inf")
+            base["style_text"] = ""
+            base["reply_context"] = ""
+        merged = merge_snapshots([base, answer])
+    bodies = [b for b in (answer.get("note_bodies") or [])
+              if isinstance(b, str) and b]
+    old = cur.get("note_bodies")
+    if isinstance(old, list):
+        bodies += [b for b in old
+                   if isinstance(b, str) and b and b not in bodies]
+    merged["note_bodies"] = bodies
+    merged["scope_mode"] = (answer.get("scope_mode") is True
+                            or cur.get("scope_mode") is True)
+    origin = cur.get("turn_origin")
+    merged["turn_origin"] = origin if origin in ("terminal", "telegram") \
+        else "telegram"
+    merged["joined_from_telegram"] = (
+        cur.get("joined_from_telegram") is True
+        or any(n.get("scope_mode") is True for n in consumed)
+        or _has_telegram_marker(prompt_text or ""))
+    return merged
 
 
 def clear_snapshot(session_name: str) -> None:
@@ -1047,3 +1276,8 @@ def clear_session_files(session_name: str) -> None:
     clear_snapshot(session_name)
     clear_reply_context_file(session_name)
     clear_notes_dir(session_name)
+    clear_turn_open(session_name)
+    try:
+        notes_dir(session_name).rmdir()
+    except OSError:
+        pass

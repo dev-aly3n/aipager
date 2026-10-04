@@ -37,7 +37,7 @@ from aipager.bot.callbacks import (
     _PERMS_RESTART_QUIET,
     _stopped_line,
 )
-from aipager.state import Status, TrackedSession
+from aipager.state import TURN_SENDER_TERMINAL, Status, TrackedSession
 from aipager.transcript import last_assistant_preview as _read_preview
 from aipager.transcript import read_still_queued
 
@@ -437,6 +437,14 @@ def _external_quote_context(fragment: str) -> str:
     )
 
 
+def _clear_turn_open(session_name: str) -> None:
+    """The daemon's half of the hook's turn state (roadmap 8.77): a
+    session it stops, kills, relaunches or launches has no turn running.
+    Best-effort (``policy_snapshot.clear_turn_open`` never raises)."""
+    from aipager.policy_snapshot import clear_turn_open
+    clear_turn_open(session_name)
+
+
 def held_by_claude(sess: TrackedSession, candidates: list[dict]) -> list[dict]:
     """The *candidates* (outstanding notes, queued targets) that Claude
     Code's transcript shows it still holding in its queue: each needs an
@@ -583,6 +591,74 @@ class SessionOpsMixin:
                 if member is not None else None)
         return not (role is not None
                     and getattr(role, "bypass_role_denies", False) is True)
+
+    def _turn_sender_differs(self, sess, sender_id: int | None) -> bool:
+        """True when a message from *sender_id* must wait for the turn
+        running in *sess* to end, because that turn is someone else's
+        (roadmap 8.77, D-H).
+
+        Joined to the running turn, the message would run under that
+        turn's rules merged with its own (the hook never lets it widen the
+        turn), not as its own turn with its own rights. Held, it drains
+        when the turn ends and runs as the sender.
+
+        - Scope mode only, and only while a turn whose sender is known
+          (``turn_sender_id``) runs: the session is BUSY, or a background
+          agent of its job still runs after an interim Stop (the job is
+          the turn: its agent and its continuation run under its rules).
+        - A terminal turn is the operator's: only a sender whose role has
+          ``bypass_safety`` (an owner) joins it, or the member of the
+          session's own DM (a DM is one person's; an install migrated from
+          personal mode made that person an ``admin``); anyone else waits.
+        - Otherwise anyone but the turn's own sender waits, so a turn
+          several people started (TURN_SENDER_MIXED) holds everyone.
+        - An unknown sender (``None``) is not held: its note carries the
+          floor's rules, which can only narrow the turn it joins.
+
+        A one-person install never holds: every turn is that person's or
+        the terminal's, and that person joins a terminal turn in their DM.
+
+        Set only once the hook reports the turn (``hook_receiver``). Until
+        then the turn's note is still outstanding, and the mixed-sender
+        hold (``transport.mixed_sender_note_outstanding``) holds a
+        different sender: the hook deletes the note and reports the turn in
+        the same few milliseconds.
+        """
+        if sess.status is not Status.BUSY and not sess.job_background_open():
+            return False
+        running = sess.turn_sender_id
+        held = self._sender_differs_from(sess, running, sender_id)
+        if held:
+            log.info("[%s] Turn-sender hold: turn=%s sender=%s",
+                     sess.name, running, sender_id)
+        return held
+
+    def _sender_differs_from(self, sess, running, sender_id) -> bool:
+        """:meth:`_turn_sender_differs`'s rule without the "a turn is
+        running" gate: whether *sender_id*'s message may not join a turn
+        whose sender is *running*."""
+        if self.scopes is None or sender_id is None or running is None:
+            return False
+        if running == TURN_SENDER_TERMINAL:
+            return not (self._sender_is_owner(sender_id)
+                        or self._sender_owns_dm(sess, sender_id))
+        return running != sender_id
+
+    def _sender_is_owner(self, sender_id: int) -> bool:
+        member = self._driver_user_by_id(sender_id)
+        role = (self.policy.get_role(member.role)
+                if member is not None else None)
+        return role is not None and getattr(role, "bypass_safety", False) is True
+
+    def _sender_owns_dm(self, sess, sender_id: int) -> bool:
+        """True when *sess* belongs to a DM scope *sender_id* is a member
+        of: that person's own DM. A session not stamped with its chat yet
+        belongs to the home chat, as for its messages
+        (``transport.resolve_chat_id_int``)."""
+        from aipager.bot.transport import resolve_chat_id_int
+        scope = self._scope_for(resolve_chat_id_int(sess))
+        return (scope is not None and scope.kind == "dm"
+                and self._member_in_scope(scope, sender_id) is not None)
 
     async def _refuse_admin_command(self, update, text: str) -> bool:
         """Reply ``That command needs an admin.`` with a 🤷 and return True
@@ -913,6 +989,10 @@ class SessionOpsMixin:
         short_name = session_name.removeprefix("claude-")
 
         sys_extra = self._session_system_prompt(scope_chat_id, label)
+        # A new process has no turn running (roadmap 8.77): a turn-open
+        # file left by an earlier one under this name must not make its
+        # first prompt join that turn's rules.
+        _clear_turn_open(session_name)
         ok, err = await inject.launch_session(
             short_name, skip_perms=skip_perms, cwd=cwd or None,
             system_prompt_extra=sys_extra, model=model or None,
@@ -1037,6 +1117,10 @@ class SessionOpsMixin:
             sess, reactions.held_entries(sess.pending_queue) + held)
         sess.pending_queue.clear()
         clear_notes_dir(sess.name)
+        # An interrupt may fire no Stop hook: the turn is over here
+        # (roadmap 8.77), and nobody's message waits for it any more.
+        _clear_turn_open(sess.name)
+        sess.turn_sender_id = None
         sess.pending_permission = None
         sess.status = Status.IDLE
         # Genuinely end the job (design.md "model Claude Code
@@ -1165,6 +1249,9 @@ class SessionOpsMixin:
         sess.pending_queue.clear()
         sess.pending_permission = None
         sess.status = Status.IDLE
+        # Interrupted like /stop: the turn is over (roadmap 8.77).
+        _clear_turn_open(sess.name)
+        sess.turn_sender_id = None
         sess.trigger_msg_id = None
         sess.busy_card_trigger = None
         self._discard_queued_targets(sess)
@@ -1234,6 +1321,11 @@ class SessionOpsMixin:
         if not killed and killed_sid:
             # It is still running (or was never there): nothing to hide.
             killed_sessions.pop(killed_sid, None)
+        if killed:
+            # Its turn died with it (roadmap 8.77). The registry removal
+            # below clears the session's files too; this does not wait
+            # for it.
+            _clear_turn_open(session_name)
         if killed and sess is not None:
             # Held messages, notes and Claude's own queue all die with the
             # session: none of them will be taken (R3).
@@ -1312,6 +1404,7 @@ class SessionOpsMixin:
         # an orphan while the operator was told "Resumed" (roadmap 8.12
         # follow-up). Released in the `finally` on every path.
         sess.resuming_until = time.monotonic() + RESUME_GUARD_SECONDS
+        _clear_turn_open(session_name)  # no turn runs in it (8.77)
         try:
             ok, err = await inject.launch_session(
                 short_name, resume_id=resume_id, cwd=cwd,
@@ -1648,6 +1741,9 @@ class SessionOpsMixin:
 
         short_name = session_name.removeprefix("claude-")
         sys_extra = self._session_system_prompt(sess.scope_chat_id, label)
+        # The killed or interrupted turn is over (an interrupt may fire no
+        # Stop), and the relaunched process starts with none (roadmap 8.77).
+        _clear_turn_open(session_name)
         ok, err = await inject.launch_session(
             short_name, skip_perms=target_skip_perms,
             resume_id=resume_id or None, cwd=cwd, is_relaunch=True,
@@ -1672,6 +1768,9 @@ class SessionOpsMixin:
         # review rev-iter1-002).
         self._discard_queued_targets(sess)
         self.registry.transition(session_name, Status.IDLE)
+        # Nobody's turn survives the relaunch (roadmap 8.77), not even a
+        # job whose agents the old process took with it.
+        sess.turn_sender_id = None
         self.registry.mark_dirty()
 
         log.info("[%s] kill+relaunch done (skip_perms=%s, interrupt_first=%s)",

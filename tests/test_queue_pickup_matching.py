@@ -164,6 +164,8 @@ def test_empty_directory_merges_to_the_floor():
     assert consumed == []
     assert expired == []
     snap = ps.read_snapshot(SESSION)
+    # The floor, and the turn's origin (roadmap 8.77): no note, no marker.
+    assert snap.pop("turn_origin") == "terminal"
     assert snap == ps.FLOOR_SNAPSHOT
 
 

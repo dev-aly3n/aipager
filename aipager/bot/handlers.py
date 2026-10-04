@@ -254,8 +254,10 @@ class CommandHandlersMixin:
 
     async def _hold_for_open_dialog(self, update: Update, sess, text: str,
                                     reply_context: str = "") -> bool:
-        """Queue `text` instead of injecting it while a dialog is open, OR
-        while a different Telegram user's note is still outstanding.
+        """Queue `text` instead of injecting it while a dialog is open,
+        while a different Telegram user's note is still outstanding, OR
+        while a different person's turn is running (roadmap 8.77,
+        :meth:`_turn_sender_differs`).
 
         The single gate every inbound prompt path consults. Returns True
         when the message was held, in which case the caller must return
@@ -290,6 +292,11 @@ class CommandHandlersMixin:
             held_reason = "prompt open"
         elif mixed_sender_note_outstanding(sess, update):
             held_reason = "different sender outstanding"
+        elif self._turn_sender_differs(sess, driver_id_from_update(update)):
+            # Roadmap 8.77 (D-H): someone else's turn is running. Joined to
+            # it, this message would run under that turn's rules; held, it
+            # drains at the turn's end and runs as its sender.
+            held_reason = "another sender's turn running"
 
         if not held_reason:
             return False

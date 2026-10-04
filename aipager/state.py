@@ -74,6 +74,35 @@ QUEUE_MAX_AGE_SECONDS: float = 86400.0  # 24h
 # remaining far short of the 24h that let that incident block a whole
 # day's messages.
 MIXED_SENDER_HOLD_WINDOW_SECONDS: float = 1800.0  # 30 min
+
+#: ``TrackedSession.turn_sender_id`` for a turn typed in the terminal.
+TURN_SENDER_TERMINAL = "terminal"
+#: ``TrackedSession.turn_sender_id`` for a turn several people's messages
+#: started together.
+TURN_SENDER_MIXED = "mixed"
+
+
+def turn_sender_from_report(turn: dict) -> int | str | None:
+    """``TrackedSession.turn_sender_id`` for the turn the hook reported on
+    a UserPromptSubmit (the ``aipager_turn`` that
+    ``notify_hook._match_and_promote`` reports):
+    TURN_SENDER_TERMINAL for a terminal turn, the one author of the
+    Telegram messages that started it, TURN_SENDER_MIXED for several, and
+    None when no author is known (nothing is held then)."""
+    if not isinstance(turn, dict):
+        return None
+    if turn.get("origin") == "terminal":
+        return TURN_SENDER_TERMINAL
+    authors = turn.get("authors")
+    known = {a for a in authors if isinstance(a, int) and not isinstance(
+        a, bool) and a > 0} if isinstance(authors, list) else set()
+    if not known:
+        return None
+    if len(known) > 1:
+        return TURN_SENDER_MIXED
+    return next(iter(known))
+
+
 # `tool_history` is trimmed to the most recent N entries on each append.
 TOOL_HISTORY_CAP: int = 200
 
@@ -358,6 +387,18 @@ class TrackedSession:
     # otherwise the prompt is someone else's text and Retry must not lend
     # it the tapper's rights; it then runs on the floor. None = unknown.
     last_prompt_driver_user_id: int | None = None
+    # Who the running turn belongs to (roadmap 8.77, D-H), for the hold of
+    # a different person's message while it runs (``_turn_sender_differs``
+    # in bot/session_ops.py): a Telegram user id, TURN_SENDER_TERMINAL (typed
+    # in the terminal: the operator's), TURN_SENDER_MIXED (several people's
+    # messages started it), or None (not known: nothing is held for it).
+    # Set from the hook's report on the UserPromptSubmit that started the
+    # turn (hook_receiver) and when a message Claude Code queued becomes
+    # the next turn; cleared when the session goes IDLE (unless a
+    # background job is still open: a prompt then joins the job's turn,
+    # as the hook sees it too) or GONE, and by /stop and a safety halt.
+    # Transient, never persisted: a restart has no turn.
+    turn_sender_id: int | str | None = None
     # Inline permission context (tool_info, question, etc.) — set when permission
     # is displayed inside the busy message instead of as a separate message
     pending_permission: dict | None = None
@@ -2185,6 +2226,13 @@ class SessionRegistry:
         if Status.GONE in (sess.status, new_status):
             sess.turn_key = next(_TURN_KEYS)
 
+        if new_status == Status.GONE or (
+                new_status == Status.IDLE and not sess.job_background_open()):
+            # No turn runs: nobody's message waits for one (roadmap 8.77).
+            # An interim Stop (a background agent of the job still runs)
+            # keeps it: the job is the turn, and its agent and its later
+            # continuation run under the job's rules.
+            sess.turn_sender_id = None
         # Debounce: suppress rapid re-IDLE (e.g. user sends quick command,
         # Claude responds in <1s, triggers another idle notification)
         if new_status == Status.IDLE:

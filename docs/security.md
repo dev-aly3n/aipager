@@ -147,6 +147,12 @@ reads them. Two properties are load-bearing:
   this, but fails safe if it happens anyway), the turn runs under the
   *most restrictive* combination — an owner's message can never lend
   its privileges to someone else's.
+- **A running turn never widens.** A message from a different person
+  waits until the running turn ends, then runs as its own turn with its
+  sender's rules. If one joins a running turn anyway, the turn keeps the
+  strictest rules of everyone in it; a Telegram message that joins a
+  turn you typed in the terminal holds the rest of that turn to its
+  sender's rules (an owner's changes nothing).
 - **Unknown means restricted.** A prompt that cannot be attributed
   runs under the built-in floor — no bypass, all deny rules active —
   never as an unrestricted terminal prompt. Prompts you type directly

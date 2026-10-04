@@ -37,6 +37,7 @@ from aipager.state import (
     TURN_STATE_HOLD_SECONDS,
     SessionRegistry,
     Status,
+    turn_sender_from_report,
 )
 from aipager.transcript import (
     _strip_leaked_tool_xml,
@@ -791,6 +792,12 @@ class HookReceiver:
                     tag_sess.last_prompt_origin = "telegram"
                 elif prompt:
                     tag_sess.last_prompt_origin = "terminal"
+                turn = msg.get("aipager_turn")
+                if isinstance(turn, dict) and turn.get("fresh") is True:
+                    # This prompt started the turn (the hook found none
+                    # running): record whose it is (roadmap 8.77, D-H). A
+                    # message queued behind a running turn changes nothing.
+                    tag_sess.turn_sender_id = turn_sender_from_report(turn)
             if transitioned:
                 await self.notify_fn(transitioned, "user_prompt_submit", {})
 

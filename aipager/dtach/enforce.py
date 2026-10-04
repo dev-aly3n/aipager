@@ -583,8 +583,13 @@ def _decide(data: dict) -> dict | None:
     bodies = (early.get("note_bodies")
               if early is not None and early.get("scope_mode") is True
               else None)
-    if _origin_from_transcript(data.get("transcript_path"),
-                               bodies or ()) == "terminal":
+    # A Telegram message joined this turn (roadmap 8.77). Absorbed into a
+    # running turn, it is no prompt of its own in the transcript, so a
+    # turn typed in the terminal would still read as terminal and run the
+    # message's text with no rules. Telegram until the next fresh turn.
+    joined = early is not None and early.get("joined_from_telegram") is True
+    if not joined and _origin_from_transcript(
+            data.get("transcript_path"), bodies or ()) == "terminal":
         return None  # terminal users are unrestricted
 
     session = data.get("session", "")
