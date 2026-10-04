@@ -280,16 +280,18 @@ def write_merged_snapshot(session_name: str, snap: dict) -> None:
     """Atomic-write an already-computed snapshot dict (best-effort).
 
     Used by the ``UserPromptSubmit`` hook to persist the output of
-    :func:`merge_snapshots` — the sole writer of the canonical
-    ``/tmp/claude-policy-<session>.json`` now that ``_inject_prompt``
-    writes a per-message note instead of touching it directly (design.md
-    "Chosen approach"). Shares :func:`write_snapshot`'s atomic-replace +
-    0600 pattern; kept separate so :func:`write_snapshot`'s own
-    role/scope/member-based signature stays unchanged.
+    :func:`merge_snapshots`, and by the daemon's live reload to narrow a
+    running turn (:func:`narrow_snapshot`, roadmap 8.80): two processes
+    write the canonical ``/tmp/claude-policy-<session>.json``, so the
+    temporary file is per process (two writers sharing one temp name
+    could interleave or lose a write). Shares :func:`write_snapshot`'s
+    atomic-replace + 0600 pattern; kept separate so
+    :func:`write_snapshot`'s own role/scope/member-based signature stays
+    unchanged.
     """
     path = snapshot_path(session_name)
     try:
-        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp = path.with_suffix(f"{path.suffix}.{os.getpid()}.tmp")
         tmp.write_text(json.dumps(snap), encoding="utf-8")
         try:
             os.chmod(tmp, 0o600)
@@ -1233,6 +1235,91 @@ def _join_running_turn(
         or any(n.get("scope_mode") is True for n in consumed)
         or _has_telegram_marker(prompt_text or ""))
     return merged
+
+
+# ---- Live reload (roadmap 8.80) --------------------------------------------
+
+#: The fields a snapshot's rules are made of: what :func:`merge_snapshots`
+#: reasons about and the hook enforces. Everything else is provenance.
+SAFETY_FIELDS = ("bypass_safety", "confine_writes", *_LIST_FIELDS)
+
+#: What a narrowed snapshot keeps of the one it replaces: everything that
+#: is not a rule (the turn's origin and bodies, the style and reply text).
+_KEPT_ON_NARROW = ("origin", "style_text", "reply_context", "note_bodies",
+                   "scope_mode", "turn_origin", "joined_from_telegram")
+
+
+def safety_rules(snap) -> dict:
+    """The rules part of a snapshot or note (:data:`SAFETY_FIELDS`), in a
+    form two of them can be compared by (lists sorted, flags as bools).
+    Pure."""
+    snap = snap if isinstance(snap, dict) else {}
+    out: dict = {
+        "bypass_safety": snap.get("bypass_safety") is True,
+        "confine_writes": snap.get("confine_writes") is not False,
+    }
+    for f in _LIST_FIELDS:
+        v = snap.get(f)
+        out[f] = sorted(x for x in v if isinstance(x, str)) \
+            if isinstance(v, list) else []
+    return out
+
+
+def narrowed_snapshot(current, rules: list[dict]) -> dict:
+    """*current* (a running turn's snapshot) held to the strictest of
+    itself and every one of *rules* (each a :func:`resolve_snapshot`-shaped
+    dict, or :data:`FLOOR_SNAPSHOT`). Never wider than *current* on any
+    axis: *current* is carried as :func:`carried_snapshot` carries it (the
+    floor when it is missing or malformed) and :func:`merge_snapshots`
+    never widens. Everything that is not a rule is kept from *current*.
+    Pure."""
+    base = carried_snapshot(current)
+    if base is None:
+        base = dict(FLOOR_SNAPSHOT)
+        base["queued_at"] = float("-inf")
+    parts = [base]
+    for r in rules:
+        part = dict(r)
+        part["queued_at"] = float("-inf")
+        parts.append(part)
+    merged = merge_snapshots(parts)
+    if isinstance(current, dict):
+        for k in _KEPT_ON_NARROW:
+            if k in current:
+                merged[k] = current[k]
+    return merged
+
+
+def narrow_snapshot(session_name: str, rules: list[dict]) -> bool:
+    """Narrow *session_name*'s canonical snapshot with *rules*
+    (:func:`narrowed_snapshot`) and write it. Returns True only when a
+    narrower snapshot is on disk afterwards (read back). A session with no
+    readable snapshot is left alone: the hook already holds such a turn
+    to the floor (``enforce.decide``).
+
+    The hook may write the same file at the same moment (a message
+    joining the turn): whichever write lands last wins. The hook's join
+    reads the snapshot first, so it keeps this narrowing unless it read
+    before this write. The read-back makes such a loss visible: one more
+    try, then a WARNING. A window of a few milliseconds remains between
+    the hook's read and its write."""
+    for attempt in range(2):
+        current = read_snapshot(session_name)
+        if not isinstance(current, dict):
+            return False
+        new = narrowed_snapshot(current, rules)
+        if safety_rules(new) == safety_rules(current):
+            # Nothing to narrow; on the retry, the snapshot on disk now
+            # carries the narrowing (the hook's write kept it).
+            return attempt > 0
+        write_merged_snapshot(session_name, new)
+        on_disk = read_snapshot(session_name)
+        if isinstance(on_disk, dict) and safety_rules(
+                narrowed_snapshot(on_disk, rules)) == safety_rules(on_disk):
+            return True
+    log.warning("could not narrow the policy snapshot of %s: it changed "
+                "or could not be written", session_name)
+    return False
 
 
 def clear_snapshot(session_name: str) -> None:

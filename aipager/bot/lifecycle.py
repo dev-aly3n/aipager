@@ -154,29 +154,55 @@ class LifecycleMixin:
     """Mixin for TelegramBot — see :mod:`aipager.bot` overview."""
 
     async def reload_team(self) -> None:
-        """Re-read ``team.yaml`` and swap ``self.team`` live.
+        """Re-read ``aipager.yaml`` / ``policy.yaml`` (and legacy
+        ``team.yaml``) and swap them in live.
 
-        Triggered by the daemon's SIGUSR1 handler when the wizard
-        finishes a team-config edit. On parse error, log a WARN and
-        keep the previous team in memory — the admin can't lock
-        themselves out by hand-editing a typo. Returning to personal
-        mode (``team.yaml`` absent / archived) is a valid result:
-        ``self.team`` becomes ``None`` and all handlers fall back to
-        the personal-mode path.
+        Triggered by the daemon's SIGUSR1 handler: ``aipager config`` sends
+        it after every scope or member edit, and an operator may send it by
+        hand. On a parse error, keep the previous config in memory (a typo
+        cannot lock anyone out, or let anyone in).
+
+        A daemon in scope mode NEVER falls back to personal mode on reload
+        (roadmap 8.80): with ``aipager.yaml`` missing, personal mode would
+        authorize everyone as an admin. The previous scopes and policy are
+        kept and a WARNING says why; restoring the file and signalling
+        again applies it. Personal mode is left only by a restart.
+
+        After a successful scope reload, everything built from the scopes
+        at start follows (the message chat gate, the per-chat command
+        menus, the Mini App buttons) and so does the work in flight
+        (:mod:`aipager.bot.live_reload`: a removed or demoted member's held
+        messages are dropped, and their running turn is narrowed).
+
+        Legacy ``team.yaml``: returning to personal mode (file absent /
+        archived) is still a valid result there, as before.
         """
-        # Reload v2 scopes/policy too (authoritative when present). A
-        # broken hand-edit keeps the previous in-memory config so the
-        # operator can't lock themselves out with a typo.
+        old_scopes, old_policy = self.scopes, self.policy
+        reloaded = False
         try:
             from aipager.policy import PolicyError, load_policy
             from aipager.scope import ScopeConfigError, load_scopes
             _v2 = load_scopes()
-            self.scopes = _v2[0] if _v2 else None
-            self.policy = load_policy()
-            log.info("Scope reload: %s scope(s)",
-                     len(self.scopes) if self.scopes else 0)
+            new_policy = load_policy()
+            if _v2 is None and old_scopes is not None:
+                log.warning(
+                    "Scope reload: aipager.yaml is missing - keeping the "
+                    "previous %d scope(s) and policy (a reload never "
+                    "switches a scope-mode daemon to personal mode). "
+                    "Restore the file and signal again.", len(old_scopes))
+            else:
+                # Both or neither: a policy that fails to load must not
+                # leave new scopes running under the old policy.
+                self.scopes = _v2[0] if _v2 else None
+                self.policy = new_policy
+                reloaded = self.scopes is not None
+                log.info("Scope reload: %s scope(s)",
+                         len(self.scopes) if self.scopes else 0)
         except (ScopeConfigError, PolicyError) as e:
-            log.warning("Scope/policy reload failed — keeping previous: %s", e)
+            log.warning("Scope/policy reload failed - keeping previous: %s", e)
+
+        if reloaded:
+            await self._follow_scope_reload(old_scopes, old_policy)
 
         from aipager.team import (
             TEAM_CONFIG_PATH, TeamConfigError, load_team,
@@ -213,6 +239,79 @@ class LifecycleMixin:
                 list(old.rules.deny_tools),
                 list(new_team.rules.deny_tools),
             )
+
+    async def _follow_scope_reload(self, old_scopes, old_policy) -> None:
+        """What a successful scope reload must reach (roadmap 8.80). Each
+        step is best-effort: one failing never stops the next."""
+        from aipager.bot import live_reload
+
+        added: set[int] = set()
+        removed: set[int] = set()
+        gate = getattr(self, "_message_chat_gate", None)
+        if gate is not None:
+            try:
+                added, removed = live_reload.refresh_chat_gate(
+                    gate, self.scopes)
+                if added or removed:
+                    log.info("Message chat gate: added %s, removed %s",
+                             sorted(added) or "none",
+                             sorted(removed) or "none")
+            except Exception:
+                log.warning("Could not update the message chat gate",
+                            exc_info=True)
+        try:
+            await self._refresh_scope_menus(old_scopes)
+        except Exception:
+            log.warning("Could not refresh the command menus", exc_info=True)
+        if old_scopes is not None:
+            # From personal mode there is nothing to compare with: every
+            # held message and turn was the operator's.
+            await live_reload.reach_work_in_flight(self, old_scopes,
+                                                   old_policy)
+
+    async def _refresh_scope_menus(self, old_scopes) -> None:
+        """The per-chat command menus and Mini App buttons after a scope
+        reload: a new scope gets its menu (and, for a DM, the Mini App
+        button), a removed one loses both."""
+        if not self._app:
+            return
+        from telegram import MenuButtonCommands, MenuButtonWebApp, WebAppInfo
+
+        new_ids = {s.chat_id for s in self.scopes}
+        gone = [s for s in (old_scopes or ()) if s.chat_id not in new_ids]
+        old_ids = {s.chat_id for s in (old_scopes or ())}
+        fresh_dms = [s.chat_id for s in self.scopes
+                     if s.chat_id not in old_ids and s.kind == "dm"
+                     and s.chat_id > 0]
+        for scope in gone:
+            self._registered_scope_labels.pop(scope.chat_id, None)
+            try:
+                await self._app.bot.delete_my_commands(
+                    scope=BotCommandScopeChat(chat_id=scope.chat_id))
+            except Exception:
+                log.info("Could not clear the command menu of removed chat "
+                         "%s", scope.chat_id, exc_info=True)
+            if scope.kind == "dm" and scope.chat_id > 0 and self._miniapp_url:
+                try:
+                    await self._app.bot.set_chat_menu_button(
+                        chat_id=scope.chat_id,
+                        menu_button=MenuButtonCommands())
+                except Exception:
+                    log.info("Could not clear the Mini App button of "
+                             "removed chat %s", scope.chat_id, exc_info=True)
+        # A new scope has no registered labels yet, so this sets its menu.
+        await self._update_bot_commands()
+        if self._miniapp_url:
+            for chat_id in fresh_dms:
+                try:
+                    await self._app.bot.set_chat_menu_button(
+                        chat_id=chat_id,
+                        menu_button=MenuButtonWebApp(
+                            text=APP_BUTTON,
+                            web_app=WebAppInfo(url=self._miniapp_url)))
+                except Exception:
+                    log.info("Could not set the Mini App button for new "
+                             "chat %s", chat_id, exc_info=True)
 
     async def _on_telegram_error(self, update: object, context) -> None:
         """Log Telegram-side failures at one line, never as a traceback.
@@ -388,6 +487,9 @@ class LifecycleMixin:
             chat_gate = filters.Chat({s.chat_id for s in self.scopes})
         else:
             chat_gate = filters.Chat(int(CHAT_ID))
+        # Kept so a live reload can follow the scopes (roadmap 8.80): the
+        # handlers below hold this very object.
+        self._message_chat_gate = chat_gate
         # Media handler: photos and documents → save file, inject prompt
         self._app.add_handler(MessageHandler(
             (filters.PHOTO | filters.Document.ALL) & chat_gate,

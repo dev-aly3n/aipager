@@ -188,16 +188,20 @@ def test_edit_flow_view_policy_then_exit(cfg, monkeypatch):
     assert calls == ["viewed"]
 
 
-def test_edit_flow_add_dm_triggers_restart_hint(cfg, monkeypatch):
+def test_edit_flow_add_dm_reloads_live(cfg, monkeypatch):
+    """A new scope is applied by a live reload (roadmap 8.80), not a
+    restart."""
     monkeypatch.setattr(edit_menu, "_show_current_config", lambda: None)
     monkeypatch.setattr(edit_menu, "_bot_username", lambda t: "bot")
     monkeypatch.setattr(edit_menu, "add_dm_scope", lambda t, b: True)
     hints = []
     monkeypatch.setattr(edit_menu, "_restart_hint",
                         lambda: hints.append("restart"))
+    monkeypatch.setattr(edit_menu, "_apply_team_change_hint",
+                        lambda: hints.append("live"))
     _stub_ask(monkeypatch, ["add_dm", "exit"])
     edit_menu._edit_flow()
-    assert hints == ["restart"]
+    assert hints == ["live"]
 
 
 def test_menu_choices_malformed_is_limited():

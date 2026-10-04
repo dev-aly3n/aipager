@@ -642,6 +642,32 @@ def _isolate_flood_mute(_isolate_home_paths, tmp_path, monkeypatch):
     flood_state.clear()
 
 
+class _NoSignalOs:
+    """``os`` for the wizard's daemon_io in tests: everything real except
+    ``kill``, which no test may send to a real process. A test that wants
+    to see the signal patches ``daemon_io.os.kill`` itself."""
+
+    def __getattr__(self, name):
+        return getattr(os, name)
+
+    @staticmethod
+    def kill(pid, sig):
+        raise AssertionError(
+            f"a test tried to send signal {sig} to real pid {pid}")
+
+
+@pytest.fixture(autouse=True)
+def _wizard_never_signals_the_daemon(tmp_path, monkeypatch):
+    """``aipager config`` now sends the running daemon a live reload
+    (SIGUSR1, roadmap 8.80) after scope edits. In tests its daemon probe
+    finds no socket (so no pgrep, no systemctl, no PID), and ``os.kill``
+    refuses outright: SIGUSR1's default action terminates a process."""
+    from aipager.wizard import daemon_io
+    monkeypatch.setattr(daemon_io, "_socket_path",
+                        lambda: str(tmp_path / "no-daemon.sock"))
+    monkeypatch.setattr(daemon_io, "os", _NoSignalOs())
+
+
 def _control_socket_path() -> Path:
     """Resolve the daemon's control socket once, for the whole session.
 

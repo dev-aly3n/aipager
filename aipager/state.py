@@ -94,14 +94,27 @@ def turn_sender_from_report(turn: dict) -> int | str | None:
         return None
     if turn.get("origin") == "terminal":
         return TURN_SENDER_TERMINAL
-    authors = turn.get("authors")
-    known = {a for a in authors if isinstance(a, int) and not isinstance(
-        a, bool) and a > 0} if isinstance(authors, list) else set()
+    known = set(turn_authors_from_report(turn))
     if not known:
         return None
     if len(known) > 1:
         return TURN_SENDER_MIXED
     return next(iter(known))
+
+
+def turn_authors_from_report(turn: dict) -> tuple[int, ...]:
+    """The known Telegram authors of the messages that started the turn
+    the hook reported (``aipager_turn["authors"]``), sorted; empty for a
+    terminal turn or when none is known. Kept beside a TURN_SENDER_MIXED
+    ``turn_sender_id`` (``TrackedSession.turn_mixed_authors``) so a live
+    reload can tell whose turn it is (roadmap 8.80)."""
+    if not isinstance(turn, dict) or turn.get("origin") == "terminal":
+        return ()
+    authors = turn.get("authors")
+    if not isinstance(authors, list):
+        return ()
+    return tuple(sorted({a for a in authors if isinstance(a, int)
+                         and not isinstance(a, bool) and a > 0}))
 
 
 # `tool_history` is trimmed to the most recent N entries on each append.
@@ -437,6 +450,11 @@ class TrackedSession:
     # as the hook sees it too) or GONE, and by /stop and a safety halt.
     # Transient, never persisted: a restart has no turn.
     turn_sender_id: int | str | None = None
+    # The authors of a TURN_SENDER_MIXED turn (roadmap 8.80), set with
+    # ``turn_sender_id`` from the same hook report and read only while it
+    # says MIXED, so a live reload can narrow the turn for a removed or
+    # demoted one of them. Transient, never persisted.
+    turn_mixed_authors: tuple[int, ...] = ()
     # Inline permission context (tool_info, question, etc.) — set when permission
     # is displayed inside the busy message instead of as a separate message
     pending_permission: dict | None = None

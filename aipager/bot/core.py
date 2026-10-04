@@ -63,6 +63,9 @@ class TelegramBot(
         # Multi-scope: per-chat command-list state (chat_id → last labels set)
         # so we only re-register a scope's `/menu` when its labels change.
         self._registered_scope_labels: dict[int, set[str]] = {}
+        # The message handlers' chat gate (``filters.Chat``), set by
+        # ``start`` and updated in place by a live reload (roadmap 8.80).
+        self._message_chat_gate = None
         self._keyboard_level: str = "main"  # "main", "templates", "commands", "models"
         # The Mini App's public URL for this daemon run. "" = no Mini
         # App, which is what the keyboard checks before offering its

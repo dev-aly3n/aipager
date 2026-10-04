@@ -359,8 +359,19 @@ def test_detect_daemon_running_with_pgrep_finds_pid(monkeypatch):
     import subprocess as _subprocess
     class _R:
         returncode = 0
-        stdout = "54321\n67890\n"
-    monkeypatch.setattr(_subprocess, "run", lambda *a, **k: _R())
+        stdout = "67890\n54321\n"
+
+    class _NoService:
+        returncode = 0
+        stdout = "0\n"            # systemd: the service is not running
+    monkeypatch.setattr(_subprocess, "run", lambda argv, **k: (
+        _NoService() if argv[0] == "systemctl" else _R()))
+    # Only the match whose argv is the daemon's counts (roadmap 8.80:
+    # the wizard signals this PID, and SIGUSR1 kills anything else).
+    monkeypatch.setattr(daemon_io, "_read_cmdline", lambda pid: {
+        54321: ["/home/u/.local/bin/aipager", "start"],
+        67890: ["bash", "-c", "aipager start"],
+    }.get(pid))
     assert daemon_io._detect_daemon_running() == 54321
 
 

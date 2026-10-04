@@ -53,25 +53,60 @@ their Telegram username as the label.
 
 ### Live reload
 
-The wizard signals the running daemon via **SIGUSR1** after every
-config change, so add-user / remove-user / change-role / edit-rules
-/ switch-mode apply **without** a daemon restart. The reload covers
-`aipager.yaml`, `policy.yaml`, and legacy `team.yaml` alike.
+After every scope or member change (add or remove a group or DM,
+add or remove a member, set a role, edit `deny_tools`, rename a
+scope), `aipager config` sends the running daemon a live reload
+(**SIGUSR1**) and says "Scopes reloaded live". The reload re-reads
+`aipager.yaml` and `policy.yaml` (and a legacy `team.yaml`). If the
+wizard cannot find the daemon, it tells you to restart it instead.
 
-Restart is still required when changes affect the **bot token** or
-the **chat id** the bot polls. The wizard distinguishes between
-hot-reloadable and restart-needed changes and prints the appropriate
-hint.
+What a reload applies at once:
 
-To trigger a reload manually (e.g. after a hand-edit):
+- who may use the bot in each chat, and with which role and rules;
+- a new group or DM starts receiving messages and gets its `/` menu;
+  a removed one stops (its sessions keep running until you end them);
+- a held message (one waiting for a prompt to be answered or for
+  someone else's turn to end) from a person who may no longer send
+  in that chat is dropped: it gets a 🤷 and the bot replies
+  "Dropped: @bob is no longer allowed to send here.";
+- a running turn of a person who was removed or lost rights keeps
+  only the strictest of its old rules and the new ones (the
+  restricted floor for a removed person) for the rest of the turn.
+  A turn typed in the terminal is not changed, unless a Telegram
+  message joined it: aipager does not record whose, so such a turn
+  is narrowed when any owner (or, in a DM, its member) loses rights.
+  A turn that was already running when the daemon restarted (still
+  working, or waiting on a question or permission) is narrowed for
+  everyone in its chat, and any owner, who lost rights. A promotion
+  never widens a running turn: the new rights apply from that
+  person's next turn.
+
+Restart is still required for the **bot token** and the **default
+mode** (`aipager config` says so after those).
+
+To trigger a reload manually (e.g. after a hand-edit), signal the
+daemon process only. Under the background service:
 
 ```sh
-kill -USR1 $(pgrep -f 'aipager start')
+pid=$(systemctl --user show -p MainPID --value aipager.service)
+[ "${pid:-0}" -gt 0 ] && kill -USR1 "$pid"
 ```
 
-If a config file is malformed at reload time, the daemon logs a
-WARN and keeps the previous in-memory config — so you can't lock
-yourself out by typo'ing a hand-edit.
+(The check matters: when the service is not running, `MainPID` is
+`0`, and `kill -USR1 0` would signal your own shell's processes.)
+
+For a daemon you started yourself with `aipager start`, send
+`kill -USR1 <pid>` to that process. Do not signal every match of
+`pgrep -f 'aipager start'` (a shell or container that runs aipager
+matches too, and SIGUSR1 stops a process that does not handle it),
+and do not use `systemctl --user kill` without `--kill-whom=main`
+(the service's sessions share its group and would be stopped).
+
+If `aipager.yaml` or `policy.yaml` is malformed at reload time, or
+`aipager.yaml` is missing, the daemon logs a warning and keeps the
+previous config in memory. A typo or a file moved aside can neither
+lock you out nor let anyone in: a reload never switches a daemon
+that has scopes back to personal mode (only a restart does).
 
 Also, on `@BotFather`, leave **privacy mode ON** (the default).
 That way the bot only sees messages that mention it or reply to
@@ -327,17 +362,23 @@ post-hoc reconstruct what each user did.
 
 ## Revoking a user
 
-1. Run `aipager config` → Remove a user (or hand-edit
-   `aipager.yaml` and delete their member entry).
-2. The wizard reloads the daemon live (SIGUSR1) — no restart needed.
-   After a hand-edit, send the signal yourself:
-   ```sh
-   kill -USR1 $(pgrep -f 'aipager start')
-   ```
+1. Run `aipager config` → Edit a member → the chat → them → Remove
+   member (or hand-edit `aipager.yaml` and delete their member
+   entry). To
+   take away their right to prompt but keep them reading, set their
+   role to `read_only` instead.
+2. The wizard reloads the daemon live (SIGUSR1), no restart needed.
+   After a hand-edit, send the signal yourself (see
+   [Live reload](#live-reload)). At once, their held messages are dropped (🤷 and a "Dropped" reply)
+   and a turn of theirs that is still running loses their old rights
+   for the rest of the turn.
 3. Optionally also kick them from the Telegram group.
 
-Step 2 is the security-critical one — until the reload lands, the
-previous allow-list is still in memory.
+Step 2 is the security-critical one: until the reload lands, the
+previous allow-list is still in memory. If the wizard says to
+restart the daemon instead, it could not reach it: restart it. If
+it says "Not applied", fix the problem it names: the daemon keeps
+the previous config until then.
 
 ## Related docs
 

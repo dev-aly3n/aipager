@@ -37,6 +37,7 @@ from aipager.state import (
     TURN_STATE_HOLD_SECONDS,
     SessionRegistry,
     Status,
+    turn_authors_from_report,
     turn_sender_from_report,
 )
 from aipager.transcript import (
@@ -798,6 +799,8 @@ class HookReceiver:
                     # running): record whose it is (roadmap 8.77, D-H). A
                     # message queued behind a running turn changes nothing.
                     tag_sess.turn_sender_id = turn_sender_from_report(turn)
+                    tag_sess.turn_mixed_authors = turn_authors_from_report(
+                        turn)
             if transitioned:
                 await self.notify_fn(transitioned, "user_prompt_submit", {})
 

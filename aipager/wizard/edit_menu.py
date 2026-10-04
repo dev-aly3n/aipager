@@ -16,7 +16,7 @@ from aipager.errors import friendly_error, friendly_warn
 from aipager.scope import ScopeConfigError
 from aipager.ui import console, ok, rule, step
 from aipager.wizard._constants import _PROMPT_STYLE
-from aipager.wizard.daemon_io import _restart_hint
+from aipager.wizard.daemon_io import _apply_team_change_hint, _restart_hint
 from aipager.wizard.display import _ask, _show_current_config
 from aipager.wizard.scope_flows import _pick_role, add_dm_scope, add_group_scope
 from aipager.wizard.scope_io import commit_scope, read_config, remove_scope, replace_scopes
@@ -300,13 +300,18 @@ def _edit_flow() -> int:
         except KeyboardInterrupt:
             return 130
 
+        # A live reload (SIGUSR1) applies scope, member, role and
+        # deny_tools edits (roadmap 8.80); the bot token and the default
+        # mode are read at start only, so they still need a restart.
         changed = False
+        needs_restart = False
         try:
             if choice == "exit":
                 return 0
             if choice == "refresh_token":
                 if _refresh_token(scopes):
                     changed = True
+                    needs_restart = True
             elif choice == "reinstall_hooks":
                 _step_settings(step_label="[~]")
                 # Hooks live in ~/.claude/settings.json (read by Claude
@@ -338,6 +343,7 @@ def _edit_flow() -> int:
                 mode = _step_default_mode(step_label="[~]")
                 _commit_default_mode(mode)
                 changed = True
+                needs_restart = True
         except KeyboardInterrupt:
             friendly_warn("Cancelled this action.")
             continue
@@ -349,4 +355,7 @@ def _edit_flow() -> int:
             continue
 
         if changed:
-            _restart_hint()
+            if needs_restart:
+                _restart_hint()
+            else:
+                _apply_team_change_hint()
