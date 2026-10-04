@@ -1451,8 +1451,14 @@ class CommandHandlersMixin:
 
     def _own_text(self, update: Update) -> str:
         """The message's text without this bot's own mentions, stripped:
-        what a command or the text router reads (roadmap 8.84)."""
-        return group_intake.text_without_own_mentions(self, update.message)[0].strip()
+        what a command or the text router reads (roadmap 8.84). In a group
+        a keyboard tap's marker goes too (8.91f): the router hands a
+        tapped `▫️ stop` or `▫️ new` to the same handlers as `/stop` and
+        `/new`, which read their argument from here."""
+        text = group_intake.text_without_own_mentions(self, update.message)[0].strip()
+        if group_intake.is_group_chat(calling_chat_id(update)):
+            text = group_intake.keyboard_tap(text)[0]
+        return text
 
     def _own_caption(self, msg) -> str:
         """A file's caption without this bot's own mentions (stripped only
@@ -1469,6 +1475,16 @@ class CommandHandlersMixin:
         # Code `@word` is a file), "@bot status" is `status` (roadmap 8.84).
         raw, mentioned = group_intake.text_without_own_mentions(self, update.message)
         text = raw.strip()
+        # Roadmap 8.91f: in a group a keyboard button's label carries a
+        # marker, and only a marked label is a tap; the marker goes before
+        # anything reads the text. A typed word is a keyboard word only in
+        # a message addressed to the bot (a command, a reply to it, a
+        # mention: "@bot stop" stops). A private chat is unchanged.
+        keyboard_words = True
+        if group_intake.is_group_chat(calling_chat_id(update)):
+            text, tapped = group_intake.keyboard_tap(text)
+            keyboard_words = tapped or group_intake.explicitly_addressed(
+                self, update.message)
         if not text:
             if mentioned:
                 await self._send_home(update)
@@ -1494,40 +1510,46 @@ class CommandHandlersMixin:
         # Keyboard navigation + button matching — MUST stay above /<label> handlers
         # because some buttons (e.g. "/compact") start with slash.
         kb_chat = calling_chat_id(update)
-        if text == TEMPLATES_BUTTON:
-            await self._send_keyboard(level="templates", chat_id=kb_chat)
+        # `keyboard_words` is False only for a group message that is neither
+        # a marked tap nor addressed to the bot (8.91f). The intake gate
+        # stops such a message first; this keeps a path around the gate
+        # from turning a typed "stop" or "Clear" into a button.
+        if keyboard_words and text == TEMPLATES_BUTTON:
+            await self._send_keyboard(level="templates", chat_id=kb_chat, tap=update)
             return
-        if text == COMMANDS_BUTTON:
-            await self._send_keyboard(level="commands", chat_id=kb_chat)
+        if keyboard_words and text == COMMANDS_BUTTON:
+            await self._send_keyboard(level="commands", chat_id=kb_chat, tap=update)
             return
-        if text == MODELS_BUTTON:
-            await self._send_keyboard(level="models", chat_id=kb_chat)
+        if keyboard_words and text == MODELS_BUTTON:
+            await self._send_keyboard(level="models", chat_id=kb_chat, tap=update)
             return
-        if text == APP_BUTTON:
+        if keyboard_words and text == APP_BUTTON:
             # A `web_app` keyboard button sends no text when tapped, so
             # reaching here means a client too old to know what one is.
             # Fall back to /app's inline button rather than letting the
             # label through as a prompt to Claude.
             await self._handle_app_cmd(update, ctx)
             return
-        if text == BACK_BUTTON:
+        if keyboard_words and text == BACK_BUTTON:
             # Context-aware: go to parent of current level (models→commands, etc.)
-            parent = KEYBOARD_PARENTS.get(self._keyboard_level, "main")
-            await self._send_keyboard(level=parent, chat_id=kb_chat)
+            # The level is this chat's, and in a group this member's (8.91b).
+            parent = KEYBOARD_PARENTS.get(
+                self._keyboard_level_for(kb_chat, calling_user_id(update)), "main")
+            await self._send_keyboard(level=parent, chat_id=kb_chat, tap=update)
             return
 
         # Quick template buttons — inject predefined prompt into active session
-        if text in self._template_map:
+        if keyboard_words and text in self._template_map:
             await self._send_template(update, self._template_map[text], button=text)
             return
 
         # Claude Code slash commands — inject instantly, no BUSY transition
-        if text in self._command_map:
+        if keyboard_words and text in self._command_map:
             await self._send_command(update, self._command_map[text])
             return
 
         # Model choices — instant commands
-        if text in self._model_map:
+        if keyboard_words and text in self._model_map:
             await self._send_command(update, self._model_map[text])
             return
 
@@ -1553,7 +1575,7 @@ class CommandHandlersMixin:
 
         # Bare text matching keyboard buttons (no slash)
         text_lower = text.lower()
-        if " " not in text and not text.startswith("/"):
+        if keyboard_words and " " not in text and not text.startswith("/"):
             if text_lower == "status":
                 await self._handle_status(update, ctx)
                 return

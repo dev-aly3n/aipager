@@ -234,16 +234,17 @@ def test_build_inline_ask_keyboard_multi_select_shows_checkmarks(mk_bot):
 def test_send_keyboard_main_level(mk_bot, run_async):
     bot = mk_bot()
     bot._app.bot.send_message = AsyncMock()
+    bot._keyboard_levels[bot._keyboard_level_key(None)] = "templates"
     run_async(bot._send_keyboard(level="main"))
     bot._app.bot.send_message.assert_awaited_once()
-    assert bot._keyboard_level == "main"
+    assert bot._keyboard_level_for(None) == "main"
 
 
 def test_send_keyboard_templates_level(mk_bot, run_async):
     bot = mk_bot()
     bot._app.bot.send_message = AsyncMock()
     run_async(bot._send_keyboard(level="templates"))
-    assert bot._keyboard_level == "templates"
+    assert bot._keyboard_level_for(None) == "templates"
 
 
 def test_send_keyboard_swallows_send_failure(mk_bot, run_async):

@@ -137,10 +137,13 @@ message that is:
 - a reply to one of the bot's messages;
 - a message that mentions the bot (`@aipagerbot fix the tests`);
 - a tap on the keyboard the bot puts in the group (a session's name,
-  status, stop, new, Templates, Commands and their buttons). Telegram
-  sends a tap as plain text, so typing one of those exact words counts
-  as a tap too: a member who types `stop` stops the working session,
-  as the button would.
+  status, stop, new, Templates, Commands and their buttons). In a group
+  every keyboard button starts with a small square (`▫️ stop`,
+  `▫️ Clear`), and only that marked text counts as a tap. Typing the
+  bare word is ordinary chatter: a member who types `stop`, `Clear`,
+  `Opus` or a session's name in the group changes nothing. To use a
+  keyboard word on purpose without the keyboard, address the bot:
+  `@aipagerbot stop`, or `stop` as a reply to one of its messages.
 
 Anything else (team members talking to each other, a photo or voice
 note that is not a reply to the bot) gets no reaction and no reply.
@@ -194,6 +197,16 @@ answers "x1 has ended. Which session?" with a button per running
 session and, when it can be resumed, "▶️ Resume x1", and sends nothing.
 The pinned bar has no "Messages go to" line in a group.
 
+**The keyboard is per person.** Templates, Commands, Model › and
+« Back change only the keyboard of the person who taps them: the bot
+answers as a reply to that person's tap, and nobody else's keyboard
+moves. « Back goes up from where you are, whatever other members are
+browsing. The main keyboard sent by `/start` is the whole group's, and
+puts everyone back on the main keyboard. After upgrading from a
+version without the marked buttons, a tap on a button of the old
+keyboard may be ignored: send `/start` once to give the group the new
+keyboard. A private chat's keyboard has no marker and works as before.
+
 `/app` opens the Mini App only in a private chat. In a group it is not
 in the `/` menu; typed there, it tells a member whose own chat with
 the bot is set up to "DM the bot and send /app there", and anyone else
@@ -242,7 +255,10 @@ Four built-in roles (see `aipager/safety.py`):
   `~/.docker/config.json`, `~/.kube`, `~/.config/gcloud`, `~/.azure`,
   `~/.password-store`, `~/.pgpass`, `~/.npmrc` and `~/.pypirc`.
 - **read_only** — observers. They see every message and can call
-  `/status`, but their text / voice / file messages are ignored. Same
+  `/status`, but their text / voice / file messages are ignored. The
+  first one in each chat gets one reply saying their role is
+  `read_only`; after that the bot stays silent (no reply, no reaction)
+  until the daemon restarts. Same
   tool and write limits as `user`, in case one of their messages ever
   reaches a session.
 

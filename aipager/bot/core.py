@@ -66,7 +66,14 @@ class TelegramBot(
         # The message handlers' chat gate (``filters.Chat``), set by
         # ``start`` and updated in place by a live reload (roadmap 8.80).
         self._message_chat_gate = None
-        self._keyboard_level: str = "main"  # "main", "templates", "commands", "models"
+        # The keyboard level ("main", "templates", "commands", "models")
+        # each chat last got, and in a group each member (roadmap 8.91b):
+        # see ``KeyboardMixin._keyboard_level_key``. No entry is "main".
+        self._keyboard_levels: dict = {}
+        # (chat, user) pairs a read_only member was already told their
+        # role in, this daemon run (roadmap 8.91a): later refusals are
+        # silent.
+        self._read_only_told: set[tuple] = set()
         # The Mini App's public URL for this daemon run. "" = no Mini
         # App, which is what the keyboard checks before offering its
         # launch button. Written twice at startup, in this order:

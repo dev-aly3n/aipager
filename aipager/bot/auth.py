@@ -35,6 +35,7 @@ from aipager.team import (
 # TelegramBot class body below (and any external consumers like the
 # tests) keeps working without changes.
 from aipager.bot.transport import (  # noqa: F401
+    MUTED,
     reply_text,
     send_text,
     calling_chat_id,
@@ -408,19 +409,39 @@ class AuthMixin:
 
         if member.role == Role.READ_ONLY and not allow_read_only:
             msg = update.effective_message
-            if msg is not None:
+            if msg is not None and not self._read_only_was_told(update):
                 try:
-                    await reply_text(msg,
+                    sent = await reply_text(msg,
                         f"👀 {attribution_label(member)} - your role is "
                         "<i>read_only</i>; you can use <code>/status</code> "
                         "but can't drive sessions.",
                         parse_mode="HTML",
                     )
+                    self._read_only_told_if_sent(update, sent)
                 except Exception:
                     log.debug("reply to read-only user failed", exc_info=True)
             return False
 
         return True
+
+    @staticmethod
+    def _read_only_key(update: Update) -> tuple:
+        user = getattr(update, "effective_user", None)
+        chat = getattr(update, "effective_chat", None)
+        return (getattr(chat, "id", None), getattr(user, "id", None))
+
+    def _read_only_was_told(self, update: Update) -> bool:
+        """Whether this member was already told, this daemon run, that their
+        role keeps them from driving sessions in this chat (roadmap 8.91a):
+        the role is explained once per (chat, user), then refusals are
+        silent, like a non-member's one reply."""
+        return self._read_only_key(update) in self._read_only_told
+
+    def _read_only_told_if_sent(self, update: Update, sent) -> None:
+        """Record the notice as told, unless a flood mute withheld it (then
+        the next refused message tries again)."""
+        if sent is not MUTED:
+            self._read_only_told.add(self._read_only_key(update))
 
     async def _authorize_scoped(
         self, update: Update, *, allow_read_only: bool = False,
@@ -480,14 +501,15 @@ class AuthMixin:
 
         if not self._role_can_prompt(member) and not allow_read_only:
             msg = update.effective_message
-            if msg is not None:
+            if msg is not None and not self._read_only_was_told(update):
                 try:
-                    await reply_text(msg,
+                    sent = await reply_text(msg,
                         f"👀 {attribution_label(member)} - your role is "
                         f"<i>{html_mod.escape(member.role)}</i>; you can use "
                         "<code>/status</code> but can't drive sessions.",
                         parse_mode="HTML",
                     )
+                    self._read_only_told_if_sent(update, sent)
                 except Exception:
                     log.debug("reply to read-only member failed", exc_info=True)
             self._audit_event(update, denied=True, reason="read-only")

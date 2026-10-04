@@ -273,7 +273,7 @@ def test_handle_message_templates_button_switches_level(mk_bot, mk_update, run_a
     from aipager.config import TEMPLATES_BUTTON
     bot = mk_bot()
     bot._send_keyboard = AsyncMock()
-    update = mk_update(TEMPLATES_BUTTON)
+    update = mk_update(TEMPLATES_BUTTON, chat_id=555)  # a DM: groups mark labels
     run_async(bot._handle_message(update, MagicMock()))
     bot._send_keyboard.assert_awaited_once()
     assert bot._send_keyboard.await_args.kwargs.get("level") == "templates"
@@ -283,7 +283,7 @@ def test_handle_message_commands_button_switches_level(mk_bot, mk_update, run_as
     from aipager.config import COMMANDS_BUTTON
     bot = mk_bot()
     bot._send_keyboard = AsyncMock()
-    update = mk_update(COMMANDS_BUTTON)
+    update = mk_update(COMMANDS_BUTTON, chat_id=555)
     run_async(bot._handle_message(update, MagicMock()))
     assert bot._send_keyboard.await_args.kwargs.get("level") == "commands"
 
@@ -291,9 +291,9 @@ def test_handle_message_commands_button_switches_level(mk_bot, mk_update, run_as
 def test_handle_message_back_button_returns_to_parent(mk_bot, mk_update, run_async):
     from aipager.config import BACK_BUTTON
     bot = mk_bot()
-    bot._keyboard_level = "models"
+    bot._keyboard_levels[555] = "models"
     bot._send_keyboard = AsyncMock()
-    update = mk_update(BACK_BUTTON)
+    update = mk_update(BACK_BUTTON, chat_id=555)
     run_async(bot._handle_message(update, MagicMock()))
     # models → commands per KEYBOARD_PARENTS
     assert bot._send_keyboard.await_args.kwargs.get("level") == "commands"
@@ -303,7 +303,7 @@ def test_handle_message_template_button_invokes_template_send(mk_bot, mk_update,
     bot = mk_bot()
     bot._template_map = {"Continue": "Continue"}
     bot._send_template = AsyncMock()
-    update = mk_update("Continue")
+    update = mk_update("Continue", chat_id=555)
     run_async(bot._handle_message(update, MagicMock()))
     bot._send_template.assert_awaited_once()
 
@@ -341,7 +341,7 @@ def test_handle_message_bare_label_switches_session(mk_bot, mk_update, run_async
 def test_handle_message_bare_status_routes_to_status_handler(mk_bot, mk_update, run_async):
     bot = mk_bot()
     bot._handle_status = AsyncMock()
-    update = mk_update("status")
+    update = mk_update("status", chat_id=555)
     run_async(bot._handle_message(update, MagicMock()))
     bot._handle_status.assert_awaited_once()
 
@@ -351,7 +351,7 @@ def test_handle_message_bare_label_text_switches(mk_bot, mk_update, run_async):
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
     bot.registry._sessions["claude-jim"] = sess
     bot._switch_session = AsyncMock()
-    update = mk_update("jim")  # no slash
+    update = mk_update("jim", chat_id=555)  # no slash
     run_async(bot._handle_message(update, MagicMock()))
     bot._switch_session.assert_awaited_once()
 

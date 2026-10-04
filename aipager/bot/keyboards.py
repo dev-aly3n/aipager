@@ -33,9 +33,12 @@ from aipager.config import (
 # now. Re-export the names this module uses internally so the
 # TelegramBot class body below (and any external consumers like the
 # tests) keeps working without changes.
+from aipager.bot import group_intake
 from aipager.bot.flood import _key as _chat_key
 from aipager.bot.transport import (  # noqa: F401
     MUTED,
+    calling_user_id,
+    reply_text,
     send_text,
     ACTION_VERBS,
     TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES,
@@ -74,15 +77,35 @@ class KeyboardMixin:
     """Mixin for TelegramBot — see :mod:`aipager.bot` overview."""
 
     @staticmethod
-    def _build_button_rows(labels: list[str], per_row: int = 3) -> list[list[KeyboardButton]]:
-        """Pack labels into rows of KeyboardButtons."""
+    def _build_button_rows(labels: list[str], per_row: int = 3,
+                           chat_id: int | None = None) -> list[list[KeyboardButton]]:
+        """Pack labels into rows of KeyboardButtons (marked in a group,
+        roadmap 8.91f)."""
         rows = []
         for i in range(0, len(labels), per_row):
-            rows.append([KeyboardButton(lbl) for lbl in labels[i:i + per_row]])
+            rows.append([KeyboardButton(group_intake.mark_label(lbl, chat_id))
+                         for lbl in labels[i:i + per_row]])
         return rows
+
+    def _keyboard_level_key(self, chat_id, user_id: int | None = None):
+        """Where a keyboard level is kept (roadmap 8.91b): per chat, and in
+        a group per member, since a group member's sub-keyboards are
+        their own (selective). The chat key is the flood module's, so
+        ``"123"`` and ``123`` are one chat."""
+        target = chat_id if chat_id is not None else CHAT_ID
+        key = _chat_key(target)
+        if user_id is not None and group_intake.is_group_chat(target):
+            return (key, user_id)
+        return key
+
+    def _keyboard_level_for(self, chat_id, user_id: int | None = None) -> str:
+        """The keyboard this chat (a group: this member) last got."""
+        levels = self._keyboard_levels
+        return levels.get(self._keyboard_level_key(chat_id, user_id), "main")
 
     async def _send_keyboard(
         self, level: str | None = None, chat_id: int | None = None,
+        *, tap=None,
     ) -> None:
         """Send a message with the persistent keyboard.
 
@@ -95,17 +118,20 @@ class KeyboardMixin:
 
         Args:
             level: Which keyboard to show — "main", "templates", "commands",
-                   or "models".  Defaults to current ``_keyboard_level``.
+                   or "models".  Defaults to the level this chat (in a
+                   group with a ``tap``, this member) last got.
             chat_id: Target chat (defaults to the global ``CHAT_ID``). In
                    multi-scope mode the main keyboard's session buttons are
                    filtered to this chat's scope, so it never shows another
                    scope's labels.
+            tap: The update of the member's keyboard tap that asked for
+                   this keyboard. In a group the keyboard is sent as a
+                   reply to that message with ``selective=True``, so only
+                   that member's keyboard changes (roadmap 8.91b). Ignored
+                   in a private chat, whose keyboard is sent as before.
         """
         if not self._app:
             return
-
-        if level is None:
-            level = self._keyboard_level
 
         # Resolved up front because the main keyboard needs to know the
         # chat type before it builds its rows. A positive Telegram chat
@@ -119,18 +145,32 @@ class KeyboardMixin:
             is_private = int(target) > 0
         except (TypeError, ValueError):
             is_private = False
+        # A group member's own keyboard (8.91b): a reply to their tap,
+        # selective, its level kept for them alone. Everything else (a
+        # private chat, the main keyboard aipager sends on its own) is the
+        # chat's shared keyboard, as before.
+        is_group = group_intake.is_group_chat(target)
+        tap_msg = getattr(tap, "message", None) if (tap is not None and is_group) else None
+        tapper = calling_user_id(tap) if tap_msg is not None else None
+        personal = tapper is not None
+        level_key = self._keyboard_level_key(target, tapper)
+        if level is None:
+            level = self._keyboard_levels.get(level_key, "main")
+
+        def button(label: str) -> KeyboardButton:
+            return KeyboardButton(group_intake.mark_label(label, target))
 
         if level == "templates":
-            rows = self._build_button_rows([lbl for lbl, _ in QUICK_TEMPLATES])
-            rows.append([KeyboardButton(BACK_BUTTON)])
+            rows = self._build_button_rows([lbl for lbl, _ in QUICK_TEMPLATES], chat_id=target)
+            rows.append([button(BACK_BUTTON)])
             msg_text = "\U0001f4cb Templates"
         elif level == "commands":
-            rows = self._build_button_rows([lbl for lbl, _ in QUICK_COMMANDS])
-            rows.append([KeyboardButton(MODELS_BUTTON), KeyboardButton(BACK_BUTTON)])
+            rows = self._build_button_rows([lbl for lbl, _ in QUICK_COMMANDS], chat_id=target)
+            rows.append([button(MODELS_BUTTON), button(BACK_BUTTON)])
             msg_text = "\U0001f39b Commands"
         elif level == "models":
-            rows = self._build_button_rows([lbl for lbl, _ in MODEL_CHOICES])
-            rows.append([KeyboardButton(BACK_BUTTON)])
+            rows = self._build_button_rows([lbl for lbl, _ in MODEL_CHOICES], chat_id=target)
+            rows.append([button(BACK_BUTTON)])
             msg_text = "\U0001f916 Model"
         else:
             # Main keyboard: session labels + command/nav rows.
@@ -144,16 +184,16 @@ class KeyboardMixin:
             labels = sorted(label_src)
             rows = []
             if labels:
-                rows = self._build_button_rows(labels)
+                rows = self._build_button_rows(labels, chat_id=target)
             # `new` where `kill` was (4.7, 2026-09-30): the common action
             # up front, not a destructive one beside Stop. Ending a session
             # is in /status → ⋮, and `kill` still works when typed.
-            rows.append([KeyboardButton("status"), KeyboardButton("stop"), KeyboardButton("new")])
+            rows.append([button("status"), button("stop"), button("new")])
             # Rides along on the existing nav row rather than claiming one
             # of its own: three across matches the status/stop/new row
             # above it, and the keyboard is already the busiest surface in
             # the chat.
-            nav = [KeyboardButton(TEMPLATES_BUTTON), KeyboardButton(COMMANDS_BUTTON)]
+            nav = [button(TEMPLATES_BUTTON), button(COMMANDS_BUTTON)]
             if self._miniapp_url and is_private:
                 nav.append(KeyboardButton(
                     APP_BUTTON, web_app=WebAppInfo(url=self._miniapp_url),
@@ -161,14 +201,30 @@ class KeyboardMixin:
             rows.append(nav)
             msg_text = "\u2328\ufe0f"
 
-        prev_level = self._keyboard_level
+        levels = self._keyboard_levels
+        touched = [level_key]
+        if is_group and not personal:
+            # The group's shared keyboard replaces every member's own.
+            chat_key = _chat_key(target)
+            touched += [k for k in levels
+                        if isinstance(k, tuple) and k[0] == chat_key]
+        prev_levels = {k: levels.get(k) for k in touched}
         prev_deferred = self._keyboard_deferred
-        self._keyboard_level = level
+        for key in touched:
+            levels.pop(key, None)
+        levels[level_key] = level
 
-        keyboard = ReplyKeyboardMarkup(
-            rows,
-            resize_keyboard=True,
-        )
+        if personal:
+            keyboard = ReplyKeyboardMarkup(
+                rows,
+                resize_keyboard=True,
+                selective=True,
+            )
+        else:
+            keyboard = ReplyKeyboardMarkup(
+                rows,
+                resize_keyboard=True,
+            )
 
         # Only the MAIN keyboard satisfies the hold. Tapping a stale
         # Templates/Commands/Models button after a restart also lands
@@ -182,17 +238,21 @@ class KeyboardMixin:
         # swallowed below, and a failed attempt should still count as
         # this keyboard having been attempted rather than leaving a hold
         # that fires a second one later.
-        if level == "main":
+        if level == "main" and not personal:
             self._keyboard_deferred = False
             # And whatever a mute owed this chat (8.17c): this send is
             # the one that pays it — or re-owes it, just below.
             self._keyboard_owed.pop(_chat_key(target), None)
 
         try:
-            sent = await send_text(self._app.bot,
-                target, msg_text,
-                reply_markup=keyboard,
-            )
+            if personal:
+                sent = await reply_text(tap_msg, msg_text, reply_markup=keyboard,
+                                        do_quote=True)
+            else:
+                sent = await send_text(self._app.bot,
+                    target, msg_text,
+                    reply_markup=keyboard,
+                )
             if sent is MUTED:
                 # Flood-muted (roadmap 8.17b): nothing was attempted, so
                 # the hold must survive. Clearing before the send is
@@ -201,7 +261,16 @@ class KeyboardMixin:
                 # be re-sent — exactly the "buttonless until some
                 # unrelated later event" bug this feature exists to fix.
                 # Restore both flags so the next trigger sends it once.
-                self._keyboard_level = prev_level
+                # Only what this call wrote and nobody has changed since:
+                # a member's tap handled during the await keeps its level.
+                for key, prev in prev_levels.items():
+                    wrote = level if key == level_key else None
+                    if levels.get(key) != wrote:
+                        continue
+                    if prev is None:
+                        levels.pop(key, None)
+                    else:
+                        levels[key] = prev
                 self._keyboard_deferred = prev_deferred
                 # Restoring the flags is not enough on its own (8.17c):
                 # with no hold armed — a commands refresh, a Back to the
@@ -213,7 +282,7 @@ class KeyboardMixin:
                 # (`flush_owed_keyboards`). A sub-menu is the reply to a
                 # tap made during the ban, withheld like any command
                 # reply, and not worth re-sending hours later.
-                if level == "main":
+                if level == "main" and not personal:
                     self._keyboard_owed[_chat_key(target)] = chat_id
                 return
         except Forbidden as e:

@@ -54,6 +54,8 @@ BOT_ID, BOT_NAME = 4242, "aipagerbot"
 OTHER_BOT_ID = 999
 X1, X2 = "claude-x1__g1001234", "claude-x2__g1001234"
 DATE = datetime(2026, 10, 4, tzinfo=timezone.utc)
+#: A keyboard button's label in a group carries this marker (8.91f).
+MARK = group_intake.KEYBOARD_MARKER
 
 
 # ---- building real Telegram objects -----------------------------------------
@@ -184,10 +186,10 @@ def test_group_chatter_is_stopped(gate_bot, run_async, message):
     pytest.param(lambda: _msg("/x1@AIPAGERBOT fix it"), id="command-for-us-case"),
     pytest.param(lambda: _msg(photo=True, caption="/x1@aipagerbot look"),
                  id="caption-command-for-us"),
-    pytest.param(lambda: _msg("status"), id="keyboard-status"),
-    pytest.param(lambda: _msg("stop"), id="keyboard-stop"),
-    pytest.param(lambda: _msg("new"), id="keyboard-new"),
-    pytest.param(lambda: _msg("x1"), id="keyboard-session-label"),
+    pytest.param(lambda: _msg(MARK + "status"), id="keyboard-status"),
+    pytest.param(lambda: _msg(MARK + "stop"), id="keyboard-stop"),
+    pytest.param(lambda: _msg(MARK + "new"), id="keyboard-new"),
+    pytest.param(lambda: _msg(MARK + "x1"), id="keyboard-session-label"),
 ])
 def test_group_messages_for_the_bot_pass(gate_bot, run_async, message):
     assert _passes(gate_bot, run_async, Update(1, message=message()))
@@ -198,18 +200,18 @@ def test_group_messages_for_the_bot_pass(gate_bot, run_async, message):
     QUICK_TEMPLATES[0][0], QUICK_COMMANDS[0][0],
 ])
 def test_keyboard_buttons_pass(gate_bot, run_async, label):
-    assert _passes(gate_bot, run_async, Update(1, message=_msg(label)))
+    assert _passes(gate_bot, run_async, Update(1, message=_msg(MARK + label)))
 
 
 def test_model_buttons_pass(gate_bot, run_async):
     gate_bot._model_map = {"🧠 Big": "/model big"}
-    assert _passes(gate_bot, run_async, Update(1, message=_msg("🧠 Big")))
+    assert _passes(gate_bot, run_async, Update(1, message=_msg(MARK + "🧠 Big")))
 
 
 def test_an_ended_sessions_label_is_not_a_button(gate_bot, run_async):
     gate_bot.registry._sessions[X2].status = Status.GONE
-    assert not _passes(gate_bot, run_async, Update(1, message=_msg("x2")))
-    assert _passes(gate_bot, run_async, Update(1, message=_msg("x1")))
+    assert not _passes(gate_bot, run_async, Update(1, message=_msg(MARK + "x2")))
+    assert _passes(gate_bot, run_async, Update(1, message=_msg(MARK + "x1")))
 
 
 def test_a_basic_group_is_gated_too(gate_bot, run_async):
@@ -293,7 +295,7 @@ def test_unknown_identity_fails_open_only_for_commands_and_replies_to_a_bot(
     assert ok(Update(1, message=_msg("/x1@somebot hi")))
     assert ok(Update(1, message=_msg("/status")))
     assert ok(Update(1, message=_msg("fix it", reply_from=User(OTHER_BOT_ID, "b", True))))
-    assert ok(Update(1, message=_msg("status")))           # a keyboard tap
+    assert ok(Update(1, message=_msg(MARK + "status")))    # a keyboard tap
     assert not ok(Update(1, message=_msg("fix it", reply_from=User(BOB, "bob", False))))
     assert not ok(Update(1, message=_msg("@aipagerbot hi", entities=[
         _mention("@aipagerbot hi", "@aipagerbot")])))

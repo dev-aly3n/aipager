@@ -23,7 +23,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from aipager.bot import session_parity
+from aipager.bot import group_intake, session_parity
 from aipager.dtach import inject
 from aipager.scope import Member, Scope
 from aipager.state import SessionRegistry, Status, TrackedSession
@@ -294,7 +294,7 @@ def test_bobs_clear_goes_to_bobs_session_and_names_it(gbot, run_async, mk_update
     taps Commands, Clear: x2 is cleared and the reply says so."""
     _send(gbot, run_async, _msg(mk_update, "/x2", BOB, message_id=100))
     gbot.registry.track_message(301, X1, G)
-    up = _msg(mk_update, "Clear", BOB, message_id=302)
+    up = _msg(mk_update, group_intake.KEYBOARD_MARKER + "Clear", BOB, message_id=302)
     _send(gbot, run_async, up)
     assert _injected(gbot) == [("x2", "/clear")]
     assert "🧹 /clear sent to x2" in _replies(up)
@@ -313,14 +313,14 @@ def test_a_member_with_no_target_is_asked_which_session(gbot, run_async, mk_upda
 
 def test_a_keyboard_clear_with_no_target_asks_and_clears_nothing(gbot, run_async, mk_update):
     gbot.registry.track_message(101, X1, G)
-    up = _msg(mk_update, "Clear", BOB)
+    up = _msg(mk_update, group_intake.KEYBOARD_MARKER + "Clear", BOB)
     _send(gbot, run_async, up)
     assert _injected(gbot) == []
     assert _replies(up)[0].startswith("Which session?")
 
 
 def test_a_template_with_no_target_asks(gbot, run_async, mk_update):
-    up = _msg(mk_update, "Continue", BOB)
+    up = _msg(mk_update, group_intake.KEYBOARD_MARKER + "Continue", BOB)
     _send(gbot, run_async, up)
     assert _injected(gbot) == []
     assert _replies(up)[0].startswith("Which session?")
@@ -415,7 +415,7 @@ def test_a_file_with_no_target_asks(gbot, run_async, mk_update, tmp_path):
 def test_a_template_goes_to_the_senders_target_and_names_it(gbot, run_async, mk_update):
     gbot.registry.set_target(X2, G, BOB)
     gbot.registry.track_message(101, X1, G)
-    up = _msg(mk_update, "Continue", BOB)
+    up = _msg(mk_update, group_intake.KEYBOARD_MARKER + "Continue", BOB)
     order = []
     up.message.reply_text = AsyncMock(side_effect=lambda *a, **k: order.append("reply"))
     gbot._card_for_injected = AsyncMock(side_effect=lambda *a, **k: order.append("card"))

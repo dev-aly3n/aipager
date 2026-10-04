@@ -7,7 +7,8 @@ line, photo and voice note into the chat's session. :func:`intake_gate`
 runs before every other handler and lets a group message through only
 when it is addressed to this bot: a command for it, a reply to one of its
 messages, a mention of it, or a tap on a keyboard button aipager put
-there. Private chats are untouched.
+there (its marked label, see :data:`KEYBOARD_MARKER`). Private chats are
+untouched.
 
 The same module strips the bot's own mention from what reaches a session
 ("@aipagerbot fix the tests" is "fix the tests"; ``@word`` is Claude
@@ -70,6 +71,17 @@ _ALBUM_ADMIT_SECONDS = 60.0
 
 _unknown_identity_logged = False
 
+#: Roadmap 8.91f. In a group every reply-keyboard label aipager sends
+#: starts with this marker, and only the marked form counts as a tap: a
+#: member typing "stop" or "Clear" is chatting, not pressing a button.
+#: Nobody types a white small square and a space in front of a word, and
+#: a keyboard button's text comes back exactly as it was sent. Private
+#: chats never see it.
+KEYBOARD_MARKER = "\u25ab\ufe0f "
+#: The same square without its emoji variation selector, accepted too in
+#: case a client drops the selector when it sends the button's text back.
+_MARKER_BARE = "\u25ab "
+
 
 # ---- who this bot is ---------------------------------------------------
 
@@ -100,6 +112,23 @@ def is_group_chat(chat_id) -> bool:
         return int(chat_id) < 0
     except (TypeError, ValueError):
         return False
+
+
+# ---- keyboard labels in groups (roadmap 8.91f) ---------------------------
+
+def mark_label(label: str, chat_id) -> str:
+    """*label* as the keyboard shows it in *chat_id*: marked in a group,
+    unchanged in a private chat."""
+    return KEYBOARD_MARKER + label if is_group_chat(chat_id) else label
+
+
+def keyboard_tap(text: str) -> tuple[str, bool]:
+    """``(label, True)`` when *text* is a marked keyboard label (the
+    marker removed), else ``(text, False)`` unchanged."""
+    for marker in (KEYBOARD_MARKER, _MARKER_BARE):
+        if text.startswith(marker):
+            return text[len(marker):], True
+    return text, False
 
 
 # ---- reading a message ---------------------------------------------------
@@ -278,7 +307,7 @@ def _log_unknown_identity_once() -> None:
                     "only commands and replies to a bot are taken until it is")
 
 
-def _addressed_to_bot(bot: TelegramBot, msg) -> bool:
+def _addressed_to_bot(bot: TelegramBot, msg, *, taps: bool = True) -> bool:
     me = own_username(bot)
     me_id = own_id(bot)
     if not me or me_id is None:
@@ -316,11 +345,21 @@ def _addressed_to_bot(bot: TelegramBot, msg) -> bool:
         if found:
             return True
 
-    # A tap on a keyboard button aipager put on chats.
-    if isinstance(getattr(msg, "text", None), str):
-        if msg.text in _keyboard_labels(bot, msg.chat_id):
+    # A tap on a keyboard button aipager put on this group's keyboards:
+    # only the marked form (8.91f). The same word typed is chatter.
+    if taps and isinstance(getattr(msg, "text", None), str):
+        label, marked = keyboard_tap(msg.text)
+        if marked and label in _keyboard_labels(bot, msg.chat_id):
             return True
     return False
+
+
+def explicitly_addressed(bot: TelegramBot, msg) -> bool:
+    """A group message addressed to this bot by a command, a reply to one
+    of its messages, or a mention of it: anything the gate admits except a
+    keyboard tap. Its words are read as before, including keyboard words
+    ("@bot stop" stops)."""
+    return _addressed_to_bot(bot, msg, taps=False)
 
 
 def _keyboard_labels(bot: TelegramBot, chat_id) -> set[str]:

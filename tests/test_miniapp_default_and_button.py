@@ -265,8 +265,8 @@ def test_back_satisfies_the_hold_only_when_it_lands_on_main(
     b.defer_first_keyboard()
     run_async(b._update_bot_commands())
 
-    b._keyboard_level = from_level
-    parent = KEYBOARD_PARENTS.get(b._keyboard_level, "main")
+    b._keyboard_levels[b._keyboard_level_key(None)] = from_level
+    parent = KEYBOARD_PARENTS.get(b._keyboard_level_for(None), "main")
     assert (parent == "main") is lands_on_main, "fixture disagrees with config"
     run_async(b._send_keyboard(level=parent))       # what « Back does
     sent_by_back = b._app.bot.send_message.await_count

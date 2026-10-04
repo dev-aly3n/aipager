@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from aipager.bot import group_intake
 from aipager.config import APP_BUTTON
 
 
@@ -184,7 +185,9 @@ def test_the_keyboard_omits_the_app_button_in_a_group(mk_bot, run_async):
     kb = b._app.bot.send_message.await_args.kwargs["reply_markup"]
     texts = {btn.text for row in kb.keyboard for btn in row}
     assert APP_BUTTON not in texts
-    assert "status" in texts, "the rest of the keyboard must survive"
+    assert group_intake.mark_label(APP_BUTTON, -1001234567) not in texts
+    assert group_intake.mark_label("status", -1001234567) in texts, (
+        "the rest of the keyboard must survive")
 
 
 def test_the_keyboard_omits_the_app_button_with_no_miniapp(mk_bot, run_async):

@@ -27,7 +27,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from aipager import policy_snapshot as ps
-from aipager.bot import new_flow, reactions
+from aipager.bot import group_intake, new_flow, reactions
 from aipager.bot.transport import NEEDS_ADMIN_REPLY, PROMPT_REFUSED
 from aipager.dtach import enforce, inject
 from aipager.policy import load_policy
@@ -256,7 +256,7 @@ def test_a_keyboard_command_button_is_sent_raw_for_a_user_and_sets_the_driver(
     bot = gbot()
     sess = _session(bot)
     label = next(lbl for lbl, cmd in bot._command_map.items() if cmd == "/init")
-    u = _update(label, user_id=BOB)
+    u = _update(group_intake.KEYBOARD_MARKER + label, user_id=BOB)
 
     run_async(bot._handle_message(u, _ctx()))
 
@@ -269,7 +269,7 @@ def test_a_model_button_is_sent_for_a_user(gbot, typed, run_async):
     bot = gbot()
     _session(bot)
     label, cmd = next(iter(bot._model_map.items()))
-    u = _update(label, user_id=BOB)
+    u = _update(group_intake.KEYBOARD_MARKER + label, user_id=BOB)
     run_async(bot._handle_message(u, _ctx()))
     assert typed == [(SESSION, cmd)]
 
@@ -280,7 +280,7 @@ def test_a_slash_template_is_refused_for_a_user(gbot, typed, run_async):
     bot = gbot()
     sess = _session(bot)
     bot._template_map = {"Review": "/review everything"}
-    u = _update("Review", user_id=BOB)
+    u = _update(group_intake.KEYBOARD_MARKER + "Review", user_id=BOB)
     run_async(bot._handle_message(u, _ctx()))
     assert typed == []
     assert _replies(u) == [NEEDS_ADMIN_REPLY]
@@ -421,7 +421,7 @@ def test_a_template_makes_the_sender_the_driver(gbot, typed, run_async):
     bot = gbot()
     sess = _session(bot, driver=ALY)
     label, prompt = next(iter(bot._template_map.items()))
-    u = _update(label, user_id=BOB)
+    u = _update(group_intake.KEYBOARD_MARKER + label, user_id=BOB)
     run_async(bot._handle_message(u, _ctx()))
     assert typed == [(SESSION, f"[via Telegram · @bob · role:user]\n{prompt}")]
     assert sess.last_driver_user_id == BOB

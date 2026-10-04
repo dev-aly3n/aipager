@@ -663,20 +663,20 @@ def test_a_muted_keyboard_send_keeps_the_hold_and_sends_once_after_the_lift(
     a ban is never re-sent, which is the exact "buttonless until some
     unrelated later event" bug the hold exists to prevent."""
     bot = mk_bot()
-    bot._keyboard_level = "templates"
+    bot._keyboard_levels[bot._keyboard_level_key(MUTED_CHAT)] = "templates"
     bot._keyboard_deferred = True
     MUTE.mute(MUTED_CHAT, BAN)
 
     run_async(bot._send_keyboard(level="main", chat_id=MUTED_CHAT))
     bot._app.bot.send_message.assert_not_awaited()
     assert bot._keyboard_deferred is True
-    assert bot._keyboard_level == "templates"
+    assert bot._keyboard_level_for(MUTED_CHAT) == "templates"
 
     clock(BAN + 1)
     run_async(bot._send_keyboard(level="main", chat_id=MUTED_CHAT))
     bot._app.bot.send_message.assert_awaited_once()
     assert bot._keyboard_deferred is False
-    assert bot._keyboard_level == "main"
+    assert bot._keyboard_level_for(MUTED_CHAT) == "main"
 
 
 # ── the routing contract, as four static sweeps (8.26 R2) ───────────────────
