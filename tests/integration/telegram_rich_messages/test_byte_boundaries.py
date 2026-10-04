@@ -1,7 +1,7 @@
 """Integration: byte-boundary tests for the 32 768 UTF-8 limit.
 
 Success criteria covered:
-  SC9  - content > 32 768 UTF-8 bytes → body truncated + .txt attachment sent
+  SC9  - content > 32 768 UTF-8 bytes → body truncated + .md attachment sent
 
 Boundary analysis:
   - Content of exactly 32 768 UTF-8 bytes: no overflow, no attachment
@@ -65,7 +65,7 @@ def _no_elapsed(sess):
 
 
 def test_sc9_exactly_at_limit_no_attachment(mk_bot, run_async, rich_mock):
-    """A body exactly at its ceiling → within limit → no .txt attachment.
+    """A body exactly at its ceiling → within limit → no .md attachment.
     The ceiling is 32 768 minus the result line the message opens with
     (contract change "session-name-on-every-message")."""
     sess = _no_elapsed(_sess())
@@ -108,7 +108,7 @@ def test_sc9_one_byte_over_the_body_ceiling_triggers_attachment(
 
 
 def test_sc9_one_byte_over_limit_triggers_attachment(mk_bot, run_async, monkeypatch):
-    """32 769 bytes of ASCII → over limit → .txt attachment sent."""
+    """32 769 bytes of ASCII → over limit → .md attachment sent."""
     over_limit = "x" * 32_769
 
     bot = mk_bot()

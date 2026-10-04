@@ -179,12 +179,12 @@ def test_merged_layout_size_fallback_delivers_full_answer_via_replace(
 ):
     """Combined card+answer over the byte ceiling → no edit is attempted at
     all; falls back to the replace-style send. The FULL answer must still
-    reach the user (via the existing .txt-attachment overflow path)."""
+    reach the user (via the existing .md-attachment overflow path)."""
     bot = _wire_bot(mk_bot)
     captured_doc = {}
 
     async def _capture_document(_chat_id, *, document, filename, reply_to_message_id=None):
-        captured_doc["bytes"] = document.read()  # read while the file is still open
+        captured_doc["bytes"] = document.input_file_content
         captured_doc["filename"] = filename
     bot._app.bot.send_document = AsyncMock(side_effect=_capture_document)
 
@@ -198,13 +198,14 @@ def test_merged_layout_size_fallback_delivers_full_answer_via_replace(
     bot._app.bot.delete_message.assert_awaited_once()
     bot._app.bot.send_message.assert_awaited_once()  # header (overflow note)
     assert "sendRichMessage" in [m for m, _p in rich_calls]
-    # The untruncated answer went out inside the full-log .txt
+    # The untruncated answer went out inside the full-log .md
     # (contract change "layered-card-shedding": the attachment is the
     # complete play-by-play, answer included — a superset of the old
     # answer-only file).
     _body_txt = captured_doc["bytes"].decode("utf-8")
-    assert big_answer in _body_txt
-    assert "complete play-by-play" in _body_txt
+    assert _body_txt.startswith(f"# {sess.label} - full log\n")
+    assert _body_txt.endswith("## Final answer\n\n" + big_answer)
+    assert captured_doc["filename"] == f"{sess.label}_full_log.md"
     assert sess.busy_msg_id is None
 
 

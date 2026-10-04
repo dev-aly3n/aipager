@@ -288,8 +288,8 @@ sends nothing and removes the queued lines.
 
 Once a turn ends, the busy message becomes the IDLE response. If
 claude's last message is long enough to spill past Telegram's 4 KB
-limit it's sent as a `.txt` attachment with a `📎 Full response
-attached below ↓` footer. Buttons:
+limit it's sent as a `.md` attachment, which Telegram shows without
+another app, with a `📎 Full response attached below ↓` footer. Buttons:
 
 - **🔄 Retry** — re-send the last prompt to the same session. While
   the chat is [flood-muted](troubleshooting.md#the-bot-went-quiet-flood-control)
@@ -325,7 +325,7 @@ or more tool calls, they fold into their own `▸ N tool calls` tap
 directly beneath its row — never appearing in the parent's timeline or
 its `Bash ×N` tallies. When the agent finishes, its row settles to `✅
 🤖 <type> · N tool calls · <elapsed>` and keeps the same tap. The full
-play-by-play `.txt` attachment above gains an AGENTS section listing
+play-by-play `.md` attachment above gains an Agents section listing
 every agent that ran the turn, its elapsed time, tool count, and the
 tools it called.
 
@@ -368,7 +368,7 @@ still-running (or just-settled) background agent's own row is never
 folded into a tap itself, only its tool calls, and never while it's the
 one thing standing between the timeline and the ceiling. Only if the
 timeline is so large that even every fold together still can't fit does
-content get genuinely dropped from the card — in that case the `.txt`
+content get genuinely dropped from the card — in that case the `.md`
 attachment above carries the complete record.
 
 #### Agents still running when the answer goes out

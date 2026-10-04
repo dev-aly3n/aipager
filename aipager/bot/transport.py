@@ -18,6 +18,8 @@ Sections:
 - Write/Edit diff rendering: ``_truncate_diff``, ``_build_diff_block``.
 - Claude API error pattern matching: ``_ERROR_PATTERNS``,
   ``_RETRY_AFTER_RE``, ``_extract_retry_after``, ``_detect_api_error``.
+- Document uploads: ``document_upload`` (``.md`` files go out as
+  ``text/markdown``).
 - Constants: ``TELEGRAM_MAX_*``, ``_TRUNC_SUFFIX``, ``ACTION_VERBS``,
   ``_PERSONAL_MODE_SENTINEL``.
 
@@ -33,6 +35,7 @@ import logging
 import re
 import time
 
+from telegram import InputFile
 from telegram.error import BadRequest, ChatMigrated, Forbidden, RetryAfter
 
 from aipager.bot.flood import MUTE, FloodMuted
@@ -41,6 +44,25 @@ from aipager.config import TELEGRAM_MAX_RETRY_AFTER
 from aipager.team import Role, User as TeamUser
 
 log = logging.getLogger("aipager.bot.transport")
+
+MARKDOWN_MIME = "text/markdown"
+
+
+def document_upload(data: bytes, filename: str) -> InputFile:
+    """``data`` as a ``send_document`` payload named ``filename``, with a
+    ``.md`` name always sent as ``text/markdown``.
+
+    PTB guesses the upload's MIME type from the file name with Python's
+    ``mimetypes``, whose built-in table has no ``.md`` before Python 3.13;
+    it only knows the type when the host has an ``/etc/mime.types`` that
+    lists it, and otherwise sends ``application/octet-stream``. Telegram
+    keeps the type the sender gives (``Document.mime_type``), so the long
+    answer and full-log files carry it explicitly instead of depending on
+    the host. Any other name keeps PTB's own guess."""
+    upload = InputFile(data, filename=filename)
+    if filename.lower().endswith(".md"):
+        upload.mimetype = MARKDOWN_MIME
+    return upload
 
 
 def calling_chat_id(source) -> int | None:

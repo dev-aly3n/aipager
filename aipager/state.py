@@ -1054,7 +1054,7 @@ class TrackedSession:
     # Whether the most recent card render had to hide anything (collapsed
     # runs, folded sections, or byte truncation) — stashed by
     # _edit_busy_rich from build_stream_card_ex's report and read by the
-    # close path to decide the full-log .txt attachment
+    # close path to decide the full-log .md attachment
     # ("layered-card-shedding" requirement 2). Transient.
     last_card_truncated: bool = False
 

@@ -63,6 +63,7 @@ from aipager.state import Status, TrackedSession
 # tests) keeps working without changes.
 from aipager.bot.transport import (  # noqa: F401
     ACTION_VERBS,
+    document_upload,
     edit_text,
     TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES,
     TELEGRAM_MAX_DOC_BYTES,
@@ -1322,6 +1323,16 @@ def _fmt_duration(seconds: float) -> str:
     return f"{secs}s"
 
 
+def _log_code(text: str) -> str:
+    """A tool summary for the full log: :func:`_mono` (a code span, so a
+    ``*``, ``_``, ``#`` or ``<`` in a command shows as typed and its own
+    backticks get a longer fence) on one line. A line break would let the
+    next line start a heading or a list item and escape the span, so
+    breaks become spaces; an empty summary is a span of one space."""
+    text = text.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+    return _mono(text) if text else "` `"
+
+
 def build_full_log(
     label: str,
     tool_history: list,
@@ -1330,56 +1341,76 @@ def build_full_log(
     *,
     agents: list[dict] | None = None,
 ) -> str:
-    """The complete plain-text play-by-play for the full-log attachment
-    ("layered-card-shedding" requirement 2): every commentary block and
-    every tool row still held in memory, chronological, then the full
-    answer. Pure — operates on snapshots the caller captured BEFORE the
-    close path reset the streaming state.
+    """The complete play-by-play for the full-log attachment, as Markdown
+    so Telegram can show the ``.md`` file itself ("layered-card-shedding"
+    requirement 2): every commentary block and every tool row still held
+    in memory, chronological, then the full answer. Pure — operates on
+    snapshots the caller captured BEFORE the close path reset the
+    streaming state.
 
-    ``agents`` (NEW, trailing keyword — merge-friendly signature change,
-    "agent activity rows on the busy card"): a list of ``{type, elapsed,
-    tool_count, tools}`` dicts in chronological (start) order, every agent
-    seen this turn (active and finished). Appends an AGENTS section after
-    the tool-row list and before FINAL ANSWER; omitted entirely when
-    ``None``/empty, so every existing call site's output is unchanged.
+    Layout: a ``# <label> - full log`` heading and the memory note in
+    italics; each tool row its own list item (``- ✅`` done, ``- ❌``
+    failed, ``- ⏳`` still running) with the summary as inline code, so a
+    command shows literally and consecutive rows never run together into
+    one paragraph; each commentary block a ``>`` blockquote, set off from
+    the list by blank lines; then ``## Agents`` and ``## Final answer``
+    with the answer verbatim.
+
+    ``agents`` (trailing keyword, "agent activity rows on the busy card"):
+    a list of ``{type, elapsed, tool_count, tools}`` dicts in
+    chronological (start) order, every agent seen this turn (active and
+    finished). Adds the ``## Agents`` section after the tool rows and
+    before the final answer; omitted entirely when ``None``/empty.
     """
     by_anchor: dict[int, list[str]] = {}
     for anchor, text in commentary:
         slot = min(max(anchor, 0), len(tool_history))
         by_anchor.setdefault(slot, []).append(text)
     lines: list[str] = [
-        f"{label} - complete play-by-play",
-        f"(memory holds the most recent {len(tool_history)} tool rows; "
-        "older rows of very long turns may already be gone)",
+        f"# {label} - full log",
+        "",
+        f"_Memory holds the most recent {len(tool_history)} tool rows; "
+        "older rows of very long turns may already be gone._",
         "",
     ]
+
+    def _add_quote(text: str) -> None:
+        # Blank lines on both sides: a quote never glues onto the list
+        # item above it, and the next row starts a fresh list item. A lone
+        # CR is a line break to a Markdown viewer, so it is turned into
+        # one here: otherwise the line after it escapes the quote.
+        if lines[-1] != "":
+            lines.append("")
+        lines.append(_quote(text.replace("\r\n", "\n").replace("\r", "\n")))
+        lines.append("")
+
     for i, (summary, done) in enumerate(tool_history):
         for text in by_anchor.pop(i, ()):
-            lines.append("")
-            lines.append(f"> {text}")
-            lines.append("")
-        mark = "x" if done == "failed" else ("v" if done else "…")
-        lines.append(f"[{mark}] {summary}")
+            _add_quote(text)
+        mark = "\u274c" if done == "failed" else ("\u2705" if done else "\u23f3")
+        lines.append(f"- {mark} {_log_code(str(summary))}")
     for slot in sorted(by_anchor):
         for text in by_anchor[slot]:
-            lines.append("")
-            lines.append(f"> {text}")
+            _add_quote(text)
     if agents:
-        lines += ["", "=" * 40, "AGENTS", "=" * 40]
+        if lines[-1] != "":
+            lines.append("")
+        lines += ["## Agents", ""]
         for agent in agents:
             agent_type = agent.get("type", "agent")
             elapsed_str = _fmt_duration(agent.get("elapsed", 0.0))
             tool_count = agent.get("tool_count", 0)
             plural = "" if tool_count == 1 else "s"
-            lines.append("")
             lines.append(
-                f"\U0001f916 {agent_type} ({elapsed_str}, "
+                f"- \U0001f916 {_log_code(str(agent_type))} ({elapsed_str}, "
                 f"{tool_count} tool call{plural})"
             )
             for tool_summary in agent.get("tools", []):
-                lines.append(f"  - {tool_summary}")
+                lines.append(f"  - {_log_code(str(tool_summary))}")
     if answer:
-        lines += ["", "=" * 40, "FINAL ANSWER", "=" * 40, "", answer]
+        if lines[-1] != "":
+            lines.append("")
+        lines += ["## Final answer", "", answer]
     return "\n".join(lines)
 
 
@@ -3254,9 +3285,11 @@ class AnimationMixin:
                     label, old_msg_id, len(content_bytes) / (1024 * 1024),
                 )
                 return
+            filename = f"{label}_full_log.md"
             await self._app.bot.send_document(
-                resolve_chat_id(sess), document=content_bytes,
-                filename=f"{label}_full_log.txt",
+                resolve_chat_id(sess),
+                document=document_upload(content_bytes, filename),
+                filename=filename,
                 reply_to_message_id=old_msg_id,
                 # ORNAMENT (8.26 R3): card housekeeping again — the
                 # superseded card's hidden rows. The turn's own answer and

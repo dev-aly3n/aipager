@@ -30,7 +30,7 @@ def _mock_send_rich_message(monkeypatch):
 
 def test_idle_long_response_sends_file_attachment(mk_bot, run_async):
     """A raw_md body that exceeds 32 768 UTF-8 bytes triggers overflow:
-    the body is truncated to a safe boundary AND a .txt attachment is sent."""
+    the body is truncated to a safe boundary AND a .md attachment is sent."""
     bot = mk_bot()
     sess = _sess()
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=99))

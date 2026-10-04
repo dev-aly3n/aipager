@@ -853,7 +853,7 @@ def test_full_log_snapshot_includes_finished_and_still_active_agents(
     )
     bot = mk_bot()
     sess = _sess(status=Status.IDLE, busy_msg_id=None)
-    sess.last_card_truncated = True  # forces the .txt attachment
+    sess.last_card_truncated = True  # forces the .md attachment
     sess.finished_subagents = [
         {"type": "explore", "started_at": 10.0, "elapsed": 5.0,
          "tool_count": 2, "tools": ["Bash: ls", "Read: /x"]},

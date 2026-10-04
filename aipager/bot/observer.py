@@ -11,10 +11,11 @@ Per-scope observer routing is a documented non-goal.
 
 from __future__ import annotations
 
-import io
 import logging
 
 from telegram import Bot
+
+from aipager.bot.transport import document_upload
 
 log = logging.getLogger(__name__)
 
@@ -70,10 +71,9 @@ class ObserverBroadcaster:
         for bot, chat_id in self._bots:
             try:
                 await bot.send_message(chat_id, text, parse_mode=parse_mode)
-                doc = io.BytesIO(document_bytes)
-                doc.name = filename
-                await bot.send_document(chat_id, document=doc,
-                                        filename=filename)
+                await bot.send_document(
+                    chat_id, document=document_upload(document_bytes, filename),
+                    filename=filename)
             except Exception:
                 log.warning("Observer document send failed (chat_id=%s)",
                             chat_id, exc_info=True)

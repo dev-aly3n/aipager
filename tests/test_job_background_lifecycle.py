@@ -957,7 +957,12 @@ def test_an_overflowing_interim_and_the_final_answer_both_stay_visible(
     assert final == final_answer
     bot._app.bot.send_document.assert_called_once()  # the interim, in full
     doc = bot._app.bot.send_document.await_args
-    assert doc.kwargs["filename"].endswith("_answer.txt")
+    assert doc.kwargs["filename"] == f"{sess.label}_answer.md"
+    upload = doc.kwargs["document"]
+    assert upload.filename == f"{sess.label}_answer.md"
+    assert upload.mimetype == "text/markdown"
+    # The file is the interim answer itself, byte for byte.
+    assert upload.input_file_content == big_interim.encode("utf-8")
 
 
 def _drive_plain_turn(bot, recv, run_async, tp, answer, n_tools=0, commentary=None):
@@ -980,7 +985,10 @@ def _attachment_harness(mk_bot, monkeypatch):
     recv = hr.HookReceiver(bot.registry, bot.notify)
     docs = []
     async def _send_document(chat_id, document=None, filename=None, **kw):
-        docs.append({"filename": filename, "content": document.read().decode()})
+        docs.append({"filename": filename, "content":
+                     document.input_file_content.decode(),
+                     "upload_name": document.filename,
+                     "mimetype": document.mimetype})
         return MagicMock(message_id=9200)
     bot._app.bot.send_document = AsyncMock(side_effect=_send_document)
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=9201))
@@ -1002,7 +1010,7 @@ def test_full_log_attached_when_final_card_hid_rows(
 ):
     """"layered-card-shedding" requirement 2: a final card that had to
     collapse or remove anything ships the complete play-by-play as ONE
-    .txt — commentary, tool rows, and the answer all inside."""
+    .md — commentary, tool rows, and the answer all inside."""
     bot, recv, docs = _attachment_harness(mk_bot, monkeypatch)
     tp = tmp_path / "t.jsonl"
     _write_transcript(tp, with_continuation=False)
@@ -1011,7 +1019,9 @@ def test_full_log_attached_when_final_card_hid_rows(
                       n_tools=400, commentary=commentary)
 
     assert len(docs) == 1
-    assert docs[0]["filename"] == f"{SESSION}_full_log.txt"
+    assert docs[0]["filename"] == f"{SESSION}_full_log.md"
+    assert docs[0]["upload_name"] == f"{SESSION}_full_log.md"
+    assert docs[0]["mimetype"] == "text/markdown"
     body = docs[0]["content"]
     assert "NARRATIVE-BLOCK" in body
     assert "-399" in body          # every tool row, even hidden ones
@@ -1032,8 +1042,8 @@ def test_full_log_preserves_failed_tool_rows(
     mk_bot, run_async, tmp_path, monkeypatch,
 ):
     """Review rev-iter1-003: the play-by-play snapshot is taken BEFORE the
-    close marks every row done, so a failed tool row reads [x] in the
-    file, not [v]."""
+    close marks every row done, so a failed tool row reads ❌ in the
+    file, not ✅."""
     bot, recv, docs = _attachment_harness(mk_bot, monkeypatch)
     tp = tmp_path / "t.jsonl"
     _write_transcript(tp, with_continuation=False)
@@ -1048,7 +1058,8 @@ def test_full_log_preserves_failed_tool_rows(
           last_assistant_message="ans", transcript_path=str(tp))
     assert len(docs) == 1
     body = docs[0]["content"]
-    assert "[x] Bash: THE-FAILING-ONE" in body
+    assert "\n- \u274c `Bash: THE-FAILING-ONE`" in body
+    assert "\u2705 `Bash: THE-FAILING-ONE`" not in body
 
 
 def test_merged_layout_truncated_final_still_attaches_log(

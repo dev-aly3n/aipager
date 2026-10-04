@@ -13,9 +13,7 @@ import asyncio
 import hashlib
 import html as html_mod
 import logging
-import tempfile
 import time
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from telegram import (
@@ -90,6 +88,7 @@ from aipager.bot.transport import (  # noqa: F401
     _send_with_retry,
     _TRUNC_SUFFIX,
     _truncate_diff,
+    document_upload,
     resolve_chat_id,
     resolve_chat_id_int,
     send_text,
@@ -1097,15 +1096,13 @@ class NotifyMixin:
             # The rich send just landed, so the chat is not muted; a text
             # a hook carried is far below Telegram's document limit.
             try:
-                tmp = Path(tempfile.mktemp(suffix=".txt", prefix=f"{label}_"))
-                tmp.write_text(content, encoding="utf-8")
-                with open(tmp, "rb") as f:
-                    await self._app.bot.send_document(
-                        resolve_chat_id(sess), document=f,
-                        filename=f"{label}_answer.txt",
-                        reply_to_message_id=msg_id or None,
-                    )
-                tmp.unlink(missing_ok=True)
+                filename = f"{label}_answer.md"
+                await self._app.bot.send_document(
+                    resolve_chat_id(sess),
+                    document=document_upload(content.encode("utf-8"), filename),
+                    filename=filename,
+                    reply_to_message_id=msg_id or None,
+                )
             except Exception:
                 log.warning("[%s] job interim attachment failed", label,
                             exc_info=True)
@@ -3140,12 +3137,12 @@ class NotifyMixin:
                     self.registry.track_message(msg_id, sess.name, resolve_chat_id_int(sess) or 0)
                 await self._maybe_update_bot_name(sess.name)
 
-                # ── Full-log .txt attachment ("layered-card-shedding") ────────
+                # ── Full-log .md attachment ("layered-card-shedding") ────────
                 # Sent when the FINAL card render had to hide anything (the
                 # renderer reported it via sess.last_card_truncated) OR the
                 # answer body was truncated by the overflow logic above. One
                 # file per close, superseding the old answer-only
-                # response.txt: complete chronological play-by-play plus the
+                # response file: complete chronological play-by-play plus the
                 # full answer, so hidden history is always recoverable.
                 # For layout=card and layout=merged this flag comes from the
                 # FINAL render (stashed by _edit_busy_rich / _send_merged_final
@@ -3177,15 +3174,13 @@ class NotifyMixin:
                                  "flood-muted", label)
                     else:
                         try:
-                            tmp = Path(tempfile.mktemp(suffix=".txt", prefix=f"{label}_"))
-                            tmp.write_text(file_content, encoding="utf-8")
-                            with open(tmp, "rb") as f:
-                                await bot.send_document(
-                                    resolve_chat_id(sess), document=f,
-                                    filename=f"{label}_full_log.txt",
-                                    reply_to_message_id=msg_id or None,
-                                )
-                            tmp.unlink(missing_ok=True)
+                            filename = f"{label}_full_log.md"
+                            await bot.send_document(
+                                resolve_chat_id(sess),
+                                document=document_upload(content_bytes, filename),
+                                filename=filename,
+                                reply_to_message_id=msg_id or None,
+                            )
                         except Forbidden as e:
                             _log_blocked_once(e)
                         except Exception:
@@ -3198,7 +3193,7 @@ class NotifyMixin:
                     if attach_log and file_content:
                         doc_bytes = file_content.encode("utf-8")
                         asyncio.create_task(self.observers.broadcast_document(
-                            obs_text, doc_bytes, f"{label}_response.txt"))
+                            obs_text, doc_bytes, f"{label}_response.md"))
                     else:
                         asyncio.create_task(self.observers.broadcast(obs_text))
 

@@ -27,15 +27,15 @@ def _agent(type_, elapsed, tool_count, tools, started_at=0.0):
 def test_agents_section_lists_each_agents_type_elapsed_and_count():
     agents = [_agent("crawler", 12.0, 3, ["Grep: a", "Grep: b", "Read: c"])]
     log = build_full_log("jim", [], [], "done", agents=agents)
-    assert "AGENTS" in log
-    assert f"{MARK} crawler (12s, 3 tool calls)" in log
+    assert "\n## Agents\n" in log
+    assert f"- {MARK} `crawler` (12s, 3 tool calls)" in log
 
 
 def test_agents_section_lists_every_tool_summary_as_a_bullet():
     agents = [_agent("crawler", 3.0, 2, ["Grep: TODO", "Read: /x.py"])]
     log = build_full_log("jim", [], [], "done", agents=agents)
-    assert "  - Grep: TODO" in log
-    assert "  - Read: /x.py" in log
+    assert "  - `Grep: TODO`" in log
+    assert "  - `Read: /x.py`" in log
 
 
 def test_agents_section_uses_singular_for_one_tool_call():
@@ -57,17 +57,17 @@ def test_agents_section_lists_multiple_agents_each_with_their_own_tools():
         _agent("auditor", 20.0, 2, ["Read: b", "Read: c"]),
     ]
     log = build_full_log("jim", [], [], "done", agents=agents)
-    assert f"{MARK} crawler" in log
-    assert f"{MARK} auditor" in log
-    assert "  - Grep: a" in log
-    assert "  - Read: b" in log
-    assert "  - Read: c" in log
+    assert f"{MARK} `crawler`" in log
+    assert f"{MARK} `auditor`" in log
+    assert "  - `Grep: a`" in log
+    assert "  - `Read: b`" in log
+    assert "  - `Read: c`" in log
 
 
 def test_agents_section_appears_before_final_answer_block():
     agents = [_agent("crawler", 2.0, 1, ["Grep: a"])]
     log = build_full_log("jim", [], [], "the final answer text", agents=agents)
-    assert log.index("AGENTS") < log.index("FINAL ANSWER")
+    assert log.index("## Agents") < log.index("## Final answer")
 
 
 def test_agents_section_lists_agents_in_the_order_given():
@@ -88,17 +88,17 @@ def test_agents_section_lists_agents_in_the_order_given():
 
 def test_agents_section_omitted_when_agents_kwarg_not_passed_at_all():
     log = build_full_log("jim", [("Bash: x", True)], [], "answer")
-    assert "AGENTS" not in log
+    assert "## Agents" not in log
 
 
 def test_agents_section_omitted_when_agents_is_none():
     log = build_full_log("jim", [("Bash: x", True)], [], "answer", agents=None)
-    assert "AGENTS" not in log
+    assert "## Agents" not in log
 
 
 def test_agents_section_omitted_when_agents_is_empty_list():
     log = build_full_log("jim", [("Bash: x", True)], [], "answer", agents=[])
-    assert "AGENTS" not in log
+    assert "## Agents" not in log
 
 
 def test_tool_row_list_is_unaffected_when_no_agents_ran():
@@ -126,7 +126,7 @@ def test_end_to_end_idle_close_threads_finished_and_active_agents_through(
     bot = mk_bot()
     sess = TrackedSession(name="claude-jim", label="jim", status=Status.IDLE)
     sess.busy_msg_id = None
-    sess.last_card_truncated = True  # forces the .txt attachment path
+    sess.last_card_truncated = True  # forces the .md attachment path
     sess.finished_subagents = [
         _agent("crawler", 5.0, 2, ["Grep: a", "Grep: b"], started_at=1.0),
         _agent("auditor", 9.0, 1, ["Read: c"], started_at=2.0),
@@ -152,6 +152,6 @@ def test_end_to_end_idle_close_threads_finished_and_active_agents_through(
 
     types = [a["type"] for a in captured["agents"]]
     assert types == ["crawler", "auditor", "reviewer"]
-    assert "AGENTS" in captured["log_text"]
-    assert f"{MARK} crawler" in captured["log_text"]
-    assert f"{MARK} reviewer" in captured["log_text"]
+    assert "\n## Agents\n" in captured["log_text"]
+    assert f"{MARK} `crawler`" in captured["log_text"]
+    assert f"{MARK} `reviewer`" in captured["log_text"]

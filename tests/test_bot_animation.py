@@ -590,7 +590,7 @@ def test_reclaim_truncated_card_attaches_full_log_under_old_card(
     mk_bot, run_async, monkeypatch,
 ):
     """When the final render had to hide anything, the complete
-    play-by-play goes out as {label}_full_log.txt threaded under the OLD
+    play-by-play goes out as {label}_full_log.md threaded under the OLD
     card (the same last_card_truncated rule as the idle close) — before
     the fresh card, and as the only extra message."""
     bot, sess, seen, original_task, loop = _reclaim_setup(
@@ -606,13 +606,17 @@ def test_reclaim_truncated_card_attaches_full_log_under_old_card(
     assert [c[0] for c in seen] == ["edit", "doc", "send"]
     assert seen[0][5] is True  # the renderer reported truncation
     doc_kw = seen[1][1]
-    assert doc_kw["filename"] == "jim_full_log.txt"
+    assert doc_kw["filename"] == "jim_full_log.md"
     assert doc_kw["reply_to_message_id"] == 99
-    body = doc_kw["document"].decode("utf-8")
-    assert "jim - complete play-by-play" in body
-    assert "[v] Read: /a" in body
-    assert _INTERIM_HUGE.strip() in body  # the full prose, unclipped
-    assert "FINAL ANSWER" not in body  # no composed answer exists
+    assert doc_kw["document"].filename == "jim_full_log.md"
+    assert doc_kw["document"].mimetype == "text/markdown"
+    body = doc_kw["document"].input_file_content.decode("utf-8")
+    assert body.startswith("# jim - full log\n")
+    assert "\n- \u2705 `Read: /a`\n" in body
+    # the full prose, unclipped, quoted line by line
+    assert "\n".join(f"> {ln}"
+                     for ln in _INTERIM_HUGE.strip().split("\n")) in body
+    assert "## Final answer" not in body  # no composed answer exists
     bot._app.bot.send_message.assert_awaited_once()
     assert sess.busy_msg_id == 42
     _teardown(original_task, loop)
@@ -1158,23 +1162,23 @@ def test_build_full_log_agents_section_lists_type_elapsed_count_and_tools():
     log = build_full_log(
         "jim", [("Bash: parent", True)], [], "the answer", agents=agents,
     )
-    assert "AGENTS" in log
-    assert "\U0001f916 explore (7s, 2 tool calls)" in log
-    assert "  - Bash: ls" in log
-    assert "  - Read: /x" in log
-    assert "\U0001f916 review (1m 5s, 1 tool call)" in log
+    assert "\n## Agents\n" in log
+    assert "- \U0001f916 `explore` (7s, 2 tool calls)" in log
+    assert "  - `Bash: ls`" in log
+    assert "  - `Read: /x`" in log
+    assert "- \U0001f916 `review` (1m 5s, 1 tool call)" in log
     assert "1 tool calls" not in log  # singular, not plural
-    assert log.index("AGENTS") < log.index("FINAL ANSWER")
+    assert log.index("## Agents") < log.index("## Final answer")
 
 
 def test_build_full_log_omits_agents_section_when_no_agents_ran():
     log_default = build_full_log("jim", [("Bash: x", True)], [], "answer")
-    assert "AGENTS" not in log_default
+    assert "## Agents" not in log_default
     log_empty = build_full_log(
         "jim", [("Bash: x", True)], [], "answer", agents=[],
     )
-    assert "AGENTS" not in log_empty
+    assert "## Agents" not in log_empty
     log_none = build_full_log(
         "jim", [("Bash: x", True)], [], "answer", agents=None,
     )
-    assert "AGENTS" not in log_none
+    assert "## Agents" not in log_none

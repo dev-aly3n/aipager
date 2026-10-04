@@ -37,14 +37,14 @@ def _wire_bot(mk_bot):
     return bot
 
 
-def test_extremely_long_turn_fires_the_txt_attachment_with_complete_content(
+def test_extremely_long_turn_fires_the_md_attachment_with_complete_content(
     mk_bot, run_async, monkeypatch,
 ):
     bot = _wire_bot(mk_bot)
     captured = {}
 
     async def _capture_document(_chat_id, *, document, filename, reply_to_message_id=None):
-        captured["bytes"] = document.read()
+        captured["bytes"] = document.input_file_content
         captured["filename"] = filename
     bot._app.bot.send_document = AsyncMock(side_effect=_capture_document)
 
@@ -65,10 +65,11 @@ def test_extremely_long_turn_fires_the_txt_attachment_with_complete_content(
     # complete play-by-play attachment.
     assert "step-0 " in log_text
     assert "step-499 " in log_text
-    assert "complete play-by-play" in log_text
+    assert log_text.startswith("# jim - full log\n")
+    assert captured["filename"] == "jim_full_log.md"
 
 
-def test_short_turn_does_not_fire_the_txt_attachment(mk_bot, run_async, monkeypatch):
+def test_short_turn_does_not_fire_the_md_attachment(mk_bot, run_async, monkeypatch):
     bot = _wire_bot(mk_bot)
     monkeypatch.setattr("aipager.bot.rich_message._post", AsyncMock(
         return_value={"ok": True, "result": {"message_id": 999}},

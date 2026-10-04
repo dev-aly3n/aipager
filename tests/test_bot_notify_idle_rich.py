@@ -10,7 +10,7 @@ Covers:
 - Fallback plain-text on RichMessageFallbackRequired (no parse_mode)
 - No fallback on RichMessageBlocked (403)
 - No body call when content is empty
-- Overflow (>32 768 UTF-8 bytes) → truncate + .txt attachment
+- Overflow (>32 768 UTF-8 bytes) → truncate + .md attachment
 - draft_id / stream_offset / stream_text reset on IDLE
 """
 
@@ -246,7 +246,7 @@ def test_no_fallback_on_rich_message_blocked(mk_bot, run_async, monkeypatch):
 # ── overflow ─────────────────────────────────────────────────────────────────
 
 def test_overflow_triggers_file_attachment(mk_bot, run_async, monkeypatch):
-    """Content > 32 768 UTF-8 bytes → body truncated + .txt attachment."""
+    """Content > 32 768 UTF-8 bytes → body truncated + .md attachment."""
     bot = mk_bot()
     sess = _sess()
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=1))

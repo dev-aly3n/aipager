@@ -29,7 +29,7 @@ The format is `token:chat_id` — parsing uses the **last** colon as delimiter (
 
 | Event | Example |
 |-------|---------|
-| Idle summary | "Finished" + response text (+ .txt file for long responses) |
+| Idle summary | "Finished" + response text (+ .md file for long responses) |
 | API error | "Anthropic servers overloaded" (no retry button) |
 | Context warning | "Context at 82% — auto-compact soon" |
 | Compacting | "Compacting" |

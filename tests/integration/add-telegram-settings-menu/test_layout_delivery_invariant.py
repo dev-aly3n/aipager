@@ -210,7 +210,7 @@ def test_merged_mode_size_fallback_still_delivers_full_untruncated_answer(mk_bot
     delivered_whole = any(huge in t for t in texts)
     attached = bot._app.bot.send_document.await_args_list != []
     assert delivered_whole or attached, (
-        "the full answer must be delivered (inline or as a .txt attachment) "
+        "the full answer must be delivered (inline or as a .md attachment) "
         "when merged mode's combined content exceeds the byte ceiling"
     )
 
