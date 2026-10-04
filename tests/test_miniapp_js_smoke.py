@@ -1744,3 +1744,33 @@ def test_the_harness_detects_schema_text_shown_raw(node_bin, tmp_path, real_sche
     assert proc.returncode != 0, f"settings scenario passed with {old!r} broken"
     proc = _drive_form(node_bin, tmp_path, broken, "broken-schema.html", scenario="schema_plain")
     assert proc.returncode != 0, f"form scenario passed with {old!r} broken"
+
+
+# ===== the chat switcher (roadmap 8.73) ====================================
+
+@pytest.mark.parametrize("scenario, expected", [
+    ("chats_one", "ok: one chat -> no switcher, every call names it"),
+    ("chats_two", "ok: two chats -> switcher, switch polls and remembers, settings follow"),
+    ("chats_saved", "ok: a saved chat -> the first poll is already for it"),
+    ("chats_saved_stale", "ok: a stale saved chat -> the default chat"),
+    ("chats_storage_throws", "ok: no storage -> the switcher still works"),
+    ("chats_late", "ok: a late answer for the chat left behind is dropped"),
+    ("chats_late_settings", "ok: late settings for the chat left behind are dropped"),
+    ("chats_late_options", "ok: late new-session options for the chat left behind are dropped"),
+    ("chats_late_updates", "ok: a late update status for the chat left behind is dropped"),
+    ("chats_late_pref_write",
+     "ok: a settings write answered after a switch leaves the new chat alone"),
+    ("chats_late_check", "ok: an update check answered after a switch stays hidden"),
+    ("chats_late_check_both",
+     "ok: an update check answered after a switch leaves the new chat's block ready"),
+    ("chats_late_pref_fail",
+     "ok: a settings write refused after a switch leaves the new chat alone"),
+])
+def test_chat_switcher_scenarios(node_bin, tmp_path, scenario, expected):
+    """Someone in two chats sees a switcher and every request names the
+    chosen chat; someone in one chat sees nothing new."""
+    from aipager.miniapp.static import INDEX_HTML
+
+    proc = _drive_smoke(node_bin, tmp_path, INDEX_HTML, scenario)
+    assert proc.returncode == 0, f"stdout: {proc.stdout}\nstderr: {proc.stderr}"
+    assert expected in proc.stdout, proc.stdout

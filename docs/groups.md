@@ -273,6 +273,14 @@ the bot is set up to "DM the bot and send /app there", and anyone else
 "The Mini App opens from your own chat with the bot. Ask the operator
 to add you."
 
+The Mini App shows one chat at a time. Someone who belongs to more than
+one chat (for example your own DM and a group) gets a row of chat names
+at the top to switch between them; it opens on their own DM, else on
+the first chat that lists them, and remembers the last choice on that
+phone. Everything in it (the sessions, their buttons, the settings and
+the notices it posts) is for the chosen chat, with the role the person
+has in that chat. With one chat nothing extra is shown.
+
 ## Roles
 
 Four built-in roles (see `aipager/safety.py`):

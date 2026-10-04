@@ -93,6 +93,8 @@ HTML_BODY = """\
   <span id="conn-badge" class="conn conn-live" hidden></span>
 </header>
 
+<div id="chat-switch" class="chat-switch" role="group" aria-label="Chat" hidden></div>
+
 <nav class="tabbar" id="tabbar" aria-label="Sections">
   <button type="button" class="tabbar-btn is-active" id="maintab-sessions">Sessions<span id="waiting-badge" class="badge" hidden></span></button>
   <button type="button" class="tabbar-btn" id="maintab-settings">Settings</button>

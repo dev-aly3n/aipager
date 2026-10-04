@@ -43,6 +43,31 @@ APP_JS = r"""
   }
   var initData = tg ? tg.initData : "";
 
+  // ---- which chat (roadmap 8.73) ---------------------------------------
+  // A person in several chats sees one at a time. chosenScope names it to
+  // the server on EVERY call (authHeaders is the only place the page
+  // builds request headers); "" until /api/chats has answered, which the
+  // server reads as its default chat.
+  var chosenScope = "";
+  var SCOPE_KEY = "aipager.chat";
+
+  function authHeaders(json) {
+    var h = { "X-Telegram-Init-Data": initData };
+    if (chosenScope) { h["X-Aipager-Scope"] = chosenScope; }
+    if (json) { h["Content-Type"] = "application/json"; }
+    return h;
+  }
+
+  // The remembered choice is a per-viewer convenience: storage can be
+  // missing or throw (private mode, blocked site data), and then the
+  // page simply starts on the server's default chat.
+  function readSavedScope() {
+    try { return window.localStorage.getItem(SCOPE_KEY) || ""; } catch (e) { return ""; }
+  }
+  function saveScope(scope) {
+    try { window.localStorage.setItem(SCOPE_KEY, scope); } catch (e) { /* no storage */ }
+  }
+
   // Poll only while visible; returning forces one immediate poll.
   var POLL_INTERVAL_MS = 2500;
 
@@ -178,7 +203,7 @@ APP_JS = r"""
   }
 
   function apiFetch(path) {
-    return fetch(path, { headers: { "X-Telegram-Init-Data": initData } })
+    return fetch(path, { headers: authHeaders() })
       .then(function (res) {
         if (res.status === 401 || res.status === 403) {
           var authErr = new Error("auth");
@@ -1052,8 +1077,7 @@ APP_JS = r"""
     if (lastDetailData) { renderModelControl(lastDetailData); }
     fetch("/api/sessions/" + encodeURIComponent(label) + "/model", {
       method: "POST",
-      headers: { "X-Telegram-Init-Data": initData,
-                 "Content-Type": "application/json" },
+      headers: authHeaders(true),
       body: JSON.stringify({ model: model })
     }).then(function (res) {
       return res.json().then(function (d) { return { status: res.status, data: d }; });
@@ -1193,10 +1217,7 @@ APP_JS = r"""
 
     fetch("/api/sessions/" + encodeURIComponent(label) + "/preferences/" + encodeURIComponent(field), {
       method: "PUT",
-      headers: {
-        "X-Telegram-Init-Data": initData,
-        "Content-Type": "application/json"
-      },
+      headers: authHeaders(true),
       body: JSON.stringify({ value: value })
     }).then(function (res) {
       if (res.status === 401 || res.status === 403) {
@@ -1248,7 +1269,7 @@ APP_JS = r"""
     fields.forEach(function (field) {
       fetch("/api/sessions/" + encodeURIComponent(label) + "/preferences/" + encodeURIComponent(field), {
         method: "DELETE",
-        headers: { "X-Telegram-Init-Data": initData }
+        headers: authHeaders()
       }).then(function (res) {
         if (res.status === 401 || res.status === 403) {
           var authErr = new Error("auth");
@@ -1468,7 +1489,7 @@ APP_JS = r"""
   function postSessionAction(label, action, method) {
     var path = "/api/sessions/" + encodeURIComponent(label) +
       (action ? "/" + action : "");
-    var headers = { "X-Telegram-Init-Data": initData };
+    var headers = authHeaders();
     if (method === "POST") { headers["Content-Type"] = "application/json"; }
     return fetch(path, { method: method, headers: headers })
       .then(function (res) {
@@ -1736,10 +1757,7 @@ APP_JS = r"""
   function submitRename(oldLabel, newLabel) {
     fetch("/api/sessions/" + encodeURIComponent(oldLabel) + "/rename", {
       method: "POST",
-      headers: {
-        "X-Telegram-Init-Data": initData,
-        "Content-Type": "application/json"
-      },
+      headers: authHeaders(true),
       body: JSON.stringify({ label: newLabel })
     }).then(function (res) {
       return res.json().then(function (data) {
@@ -2102,6 +2120,8 @@ APP_JS = r"""
       }
     }
     document.getElementById("tabbar").hidden = !spec.topLevel;
+    // The chat switcher is top-level navigation too.
+    document.getElementById("chat-switch").hidden = !spec.topLevel || !chatSwitcherShown();
     if (tg && tg.BackButton) {
       if (spec.topLevel) { tg.BackButton.hide(); } else { tg.BackButton.show(); }
     }
@@ -2142,13 +2162,11 @@ APP_JS = r"""
     saveSeq[field] = seq;
     settingsData.values[field] = value;
     renderSettings();
+    var epoch = chatEpoch;
 
     fetch("/api/preferences/" + encodeURIComponent(field), {
       method: "PUT",
-      headers: {
-        "X-Telegram-Init-Data": initData,
-        "Content-Type": "application/json"
-      },
+      headers: authHeaders(true),
       body: JSON.stringify({ value: value })
     }).then(function (res) {
       if (res.status === 401 || res.status === 403) {
@@ -2159,6 +2177,7 @@ APP_JS = r"""
       if (!res.ok) { throw new Error("HTTP " + res.status); }
       return res.json();
     }).then(function (data) {
+      if (epoch !== chatEpoch) { return; }     // saved in the chat left behind
       if (saveSeq[field] !== seq) { return; }   // superseded - ignore
       settingsData.values = data.values;
       renderSettings();
@@ -2172,6 +2191,7 @@ APP_JS = r"""
         handleFetchError(err);
         return;
       }
+      if (epoch !== chatEpoch) { return; }     // failed in the chat left behind
       if (saveSeq[field] !== seq) { return; }   // superseded - ignore
       settingsData.values[field] = previous;
       renderSettings();
@@ -2184,8 +2204,10 @@ APP_JS = r"""
     if (settingsData) { renderSettings(); } else {
       skeleton(document.getElementById("settings-groups"), 4, "skel-row");
     }
+    var epoch = chatEpoch;
     apiFetch("/api/preferences")
       .then(function (data) {
+        if (epoch !== chatEpoch) { return; }     // for the chat left behind
         settingsData = data;
         renderSettings();
         loadUpdates();
@@ -2208,7 +2230,7 @@ APP_JS = r"""
   // admin" and must hide this block - apiFetch would turn it into the
   // terminal "session expired" state for the whole app.
   function updatesFetch(path, method, body) {
-    var headers = { "X-Telegram-Init-Data": initData };
+    var headers = authHeaders();
     var opts = { method: method || "GET", headers: headers };
     if (body !== undefined) {
       headers["Content-Type"] = "application/json";
@@ -2240,8 +2262,10 @@ APP_JS = r"""
   function loadUpdates() {
     stopUpdatesPoll();
     if (!settingsData || !settingsData.can_update) { hideUpdates(); return; }
+    var epoch = chatEpoch;
     updatesFetch("/api/update")
       .then(function (r) {
+        if (epoch !== chatEpoch) { return; }     // asked in the chat left behind
         if (!r.ok) { return; }
         updatesData = r.data;
         renderUpdates();
@@ -2282,9 +2306,13 @@ APP_JS = r"""
     updatesChecking = true;
     updatesCheck = null;
     renderUpdates();
+    var epoch = chatEpoch;
     updatesFetch("/api/update/check", "POST", {})
       .then(function (r) {
         updatesChecking = false;
+        // Checked in the chat left behind: drop the answer, but take the
+        // "Checking…" state off whatever the new chat's block shows.
+        if (epoch !== chatEpoch) { renderUpdates(); return; }
         if (r.ok && r.data && r.data.check) {
           updatesCheck = r.data.check;
           updatesData = { job: r.data.job || null };
@@ -2395,7 +2423,7 @@ APP_JS = r"""
     if (restartWatch !== w) { return; }
     w.timer = null;
     fetch("/api/update", { method: "GET", cache: "no-store",
-                           headers: { "X-Telegram-Init-Data": initData } })
+                           headers: authHeaders() })
       .then(function (res) {
         if (res.status === 401 || res.status === 403) { return { kind: "refused" }; }
         if (!res.ok) { return { kind: "down" }; }
@@ -2961,8 +2989,10 @@ APP_JS = r"""
       skeleton(document.getElementById("new-model"), 1, "skel-row");
     }
     renderNewForm();
+    var epoch = chatEpoch;
     apiFetch("/api/session-options")
       .then(function (data) {
+        if (epoch !== chatEpoch) { return; }     // for the chat left behind
         newOptions = data;
         // Select the directory a session would use anyway, so New folder
         // always has a parent.
@@ -2985,10 +3015,7 @@ APP_JS = r"""
     btn.disabled = true;
     fetch("/api/directories", {
       method: "POST",
-      headers: {
-        "X-Telegram-Init-Data": initData,
-        "Content-Type": "application/json"
-      },
+      headers: authHeaders(true),
       body: JSON.stringify({ parent: newState.cwd, name: folder })
     }).then(function (res) {
       return res.json().then(function (data) { return { status: res.status, data: data }; });
@@ -3038,10 +3065,7 @@ APP_JS = r"""
 
     fetch("/api/sessions", {
       method: "POST",
-      headers: {
-        "X-Telegram-Init-Data": initData,
-        "Content-Type": "application/json"
-      },
+      headers: authHeaders(true),
       body: JSON.stringify({
         name: name,
         model: chosenModel(),
@@ -3067,10 +3091,7 @@ APP_JS = r"""
           return fetch("/api/sessions/" + encodeURIComponent(label) +
                 "/preferences/" + encodeURIComponent(field), {
             method: "PUT",
-            headers: {
-              "X-Telegram-Init-Data": initData,
-              "Content-Type": "application/json"
-            },
+            headers: authHeaders(true),
             body: JSON.stringify({ value: newState.prefs[field] })
           }).catch(function () { /* session exists; page will show truth */ });
         });
@@ -3216,11 +3237,123 @@ APP_JS = r"""
     if (document.visibilityState === "visible") { tickAges(); }
   }, 15000);
 
+  // ---- chat switcher (roadmap 8.73) ----------------------------------
+  // Shown only to someone in more than one chat; with one chat the page
+  // looks exactly as before. Names only (the chat's label), never ids.
+  var chatList = null;      // [{scope, label}] once /api/chats answered
+  var chatsLoading = false;
+  var chatEpoch = 0;        // bumped on a switch: answers for the old chat are dropped
+  // Someone who picked a chat before: the first poll waits for /api/chats
+  // so the default chat never flashes up first. Nobody else waits (a
+  // one-chat install never stores a choice), so their first poll goes
+  // out at once, as it always did.
+  var waitForChats = !!readSavedScope();
+
+  function loadChats() {
+    if (chatsLoading) { return; }
+    chatsLoading = true;
+    apiFetch("/api/chats").then(function (data) {
+      chatsLoading = false;
+      var list = data && Array.isArray(data.chats) ? data.chats : [];
+      var current = data && typeof data.current === "string" ? data.current : "";
+      var saved = readSavedScope();
+      var pick = current;
+      list.forEach(function (c) { if (c && c.scope === saved) { pick = saved; } });
+      // A remembered chat they have left: forget it, so later loads stop
+      // waiting for the chat list before their first poll.
+      if (saved && pick !== saved) { saveScope(""); }
+      var waited = waitForChats;
+      chatList = list;
+      chosenScope = pick;
+      waitForChats = false;
+      renderChatSwitcher();
+      // A remembered chat that is not the server's default: anything
+      // fetched before this answer was for the default chat.
+      if (pick !== current) {
+        resetChatState();
+        refreshChatView();
+      } else if (waited) {
+        pollTick();
+      }
+    }).catch(function (err) {
+      chatsLoading = false;
+      handleFetchError(err);
+    });
+  }
+
+  function chatSwitcherShown() {
+    return !!(chatList && chatList.length > 1);
+  }
+
+  function renderChatSwitcher() {
+    var host = document.getElementById("chat-switch");
+    if (!chatSwitcherShown()) { host.hidden = true; return; }
+    host.innerHTML = "";
+    chatList.forEach(function (c) {
+      var btn = make("button", "chat-chip" + (c.scope === chosenScope ? " is-active" : ""));
+      btn.type = "button";
+      btn.setAttribute("aria-pressed", c.scope === chosenScope ? "true" : "false");
+      btn.textContent = plain(c.label);
+      btn.addEventListener("click", function () { switchChat(c.scope); });
+      host.appendChild(btn);
+    });
+    var spec = VIEWS[currentView.type];
+    host.hidden = !(spec && spec.topLevel);
+  }
+
+  function switchChat(scope) {
+    if (!scope || scope === chosenScope) { return; }
+    chosenScope = scope;
+    saveScope(scope);
+    haptic("select");
+    resetChatState();
+    renderChatSwitcher();
+    refreshChatView();
+  }
+
+  // Everything the page holds about the chat on screen.
+  function resetChatState() {
+    chatEpoch += 1;
+    lastStatuses = Object.create(null);
+    lastSessionsByLabel = Object.create(null);
+    lastGridData = null;
+    gridSig = null;
+    tileMap = Object.create(null);
+    beaconMap = Object.create(null);
+    shelfMap = Object.create(null);
+    document.getElementById("needs-you-list").innerHTML = "";
+    document.getElementById("sessions-gone").innerHTML = "";
+    document.getElementById("needs-you").hidden = true;
+    document.getElementById("gone-wrap").hidden = true;
+    document.getElementById("waiting-badge").hidden = true;
+    lastDetailData = null;
+    settingsData = null;
+    newOptions = null;
+    newState.cwd = "";
+    hideUpdates();
+  }
+
+  function refreshChatView() {
+    closeOverlay();
+    if (mainTab === "settings") {
+      showView("settings");
+      loadSettings();
+    } else {
+      showView("grid");
+      showGridSkeleton();
+      pollTick();
+    }
+  }
+
   // ---- polling loop -------------------------------------------------
 
   function pollTick() {
     if (authExpired) { return; }
     if (document.visibilityState !== "visible") { return; }
+    if (!chatList) {
+      loadChats();                 // asked again after a failed first try
+      if (waitForChats) { return; }
+    }
     // What a view polls is declared in VIEWS; polls:null (Settings, the
     // new form) polls nothing.
     var spec = VIEWS[currentView.type];
@@ -3229,8 +3362,10 @@ APP_JS = r"""
     if (mode === "detail" && !currentView.label) { return; }
 
     if (mode === "grid") {
+      var epoch = chatEpoch;
       apiFetch("/api/sessions")
         .then(function (data) {
+          if (epoch !== chatEpoch) { return; }   // for the chat left behind
           lastSuccessAt = Date.now();
           consecutiveFailures = 0;
           setConnState("live");

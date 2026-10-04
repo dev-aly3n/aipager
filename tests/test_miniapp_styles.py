@@ -323,7 +323,7 @@ _TAP_TARGETS = (
     ".tabbar-btn", ".chip", ".choice", ".kebab", ".menu-item", ".modal-btn",
     ".gone-toggle", ".sect-toggle", ".pill", ".icon-btn", ".primary",
     ".grp-head", ".shelf-row", ".beacon-body", ".disclosure", ".link-btn",
-    ".updates-again", ".activity",
+    ".updates-again", ".activity", ".chat-chip",
 )
 
 

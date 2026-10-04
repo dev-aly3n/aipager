@@ -746,7 +746,7 @@ class CommandHandlersMixin:
         # _authorize's own membership checks): from here on we're about
         # to disclose the tunnel URL itself via the button below, so
         # require the caller to actually be the operator — same guard,
-        # same reasoning as MiniAppServer._resolve_scope_chat_id (see
+        # same reasoning as MiniAppServer._single_chat (see
         # AuthMixin._is_personal_mode_operator).
         if self.scopes is None and self.team is None:
             tg_user = update.effective_user

@@ -224,7 +224,7 @@ def test_status_scopes_sessions_to_authenticated_users_scope(mk_bot, run_async):
 # treated as "the operator" -- which is exactly the widened blast radius
 # the review flagged: a stranger who gets a signed initData (e.g. via
 # /app, see tests/test_bot_app_command.py's matching guard) would get
-# the operator's dashboard. MiniAppServer._resolve_scope_chat_id must
+# the operator's dashboard. MiniAppServer._single_chat must
 # additionally require user_id == the operator's own CHAT_ID.
 
 def test_status_personal_mode_operator_returns_200(mk_bot, run_async, monkeypatch):
@@ -257,7 +257,7 @@ def test_status_personal_mode_non_operator_returns_403(mk_bot, run_async, monkey
     initData for their OWN Telegram user id must not receive the
     operator's session list just because personal mode has no
     allow-list to check membership against. Fails if the guard in
-    MiniAppServer._resolve_scope_chat_id is removed (verified by hand:
+    MiniAppServer._single_chat is removed (verified by hand:
     removing it makes this assert 403 == 200 and fail)."""
     monkeypatch.setattr("aipager.config.CHAT_ID", "555")
     registry = SessionRegistry()

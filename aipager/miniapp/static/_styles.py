@@ -224,6 +224,34 @@ CSS = """
     background: var(--surface);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 0 0 1px var(--line);
   }
+  /* Chat switcher (roadmap 8.73): only for someone in two or more chats.
+     Scrolls sideways inside itself, never the page. */
+  .chat-switch {
+    display: flex;
+    gap: var(--s2);
+    margin: 0 0 var(--s3);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .chat-chip {
+    flex: 0 0 auto;
+    max-width: 70%;
+    min-height: 44px;
+    padding: 0 var(--s4);
+    border-radius: 22px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink-2);
+    background: var(--track);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .chat-chip.is-active {
+    color: var(--ink);
+    background: var(--surface);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 0 0 1px var(--line);
+  }
   .badge {
     display: inline-flex;
     align-items: center;

@@ -248,7 +248,9 @@ and bootstraps it. Subcommands: `start`, `stop`, `status`, `logs`,
 stop / kill / restart / rename / permission controls, a diff viewer
 for `Write`/`Edit` changes, and settings. It is served by the daemon
 itself and is **on by default**; every request is verified against
-Telegram's `initData` signature. Manage it with
+Telegram's `initData` signature. If you belong to more than one chat
+(your DM and a group), a row of chat names at the top switches between
+them. Manage it with
 `aipager miniapp enable|disable|status`, or point it at your own URL
 instead of the managed tunnel — see
 [docs/security.md](docs/security.md#mini-app-tunnel).

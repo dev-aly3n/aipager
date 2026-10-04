@@ -173,7 +173,8 @@ let POST_STATUS_OVERRIDE = null; // { path, method, status, body }
 let FETCH_REJECT_PATH = null;
 global.fetch = (url, opts) => {
   const method = (opts && opts.method) || "GET";
-  fetchCalls.push({ url, method, body: opts && opts.body });
+  fetchCalls.push({ url, method, body: opts && opts.body,
+                   headers: (opts && opts.headers) || {} });
   const path = url.split("?")[0];
   if (FETCH_REJECT_PATH && path === FETCH_REJECT_PATH) {
     return Promise.reject(new TypeError("Failed to fetch"));
@@ -619,6 +620,95 @@ if (SCENARIO === "answer_403") {
     body: { error: "forbidden" } };
 }
 
+// ===== the chat switcher (roadmap 8.73) =================================
+// Two chats (a group listed first, the viewer's DM the server's default)
+// or one. Each chat has its own grid, chosen by the X-Aipager-Scope header
+// exactly as the server chooses it; no header means the default (the DM).
+const CHAT_DM = "111";
+const CHAT_GROUP = "-100";
+const STORE = {};
+global.__held = [];
+if (SCENARIO.indexOf("chats_") === 0) {
+  if (SCENARIO === "chats_saved") STORE["aipager.chat"] = CHAT_GROUP;
+  if (SCENARIO === "chats_saved_stale") STORE["aipager.chat"] = "-999";
+  global.window.localStorage = SCENARIO === "chats_storage_throws"
+    ? { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); } }
+    : { getItem: (k) => (k in STORE ? STORE[k] : null),
+        setItem: (k, v) => { STORE[k] = String(v); } };
+  FIXTURES["/api/chats"] = SCENARIO === "chats_one"
+    ? { chats: [{ scope: CHAT_DM, label: "owner DM" }], current: CHAT_DM }
+    : { chats: [{ scope: CHAT_GROUP, label: "team" }, { scope: CHAT_DM, label: "owner DM" }],
+        current: CHAT_DM };
+  // GET answers per chat. The DM's owner may update; in the group they may not.
+  const PER_CHAT = {
+    "/api/sessions": { [CHAT_DM]: gridOf([row("mine", "idle")]),
+                       [CHAT_GROUP]: gridOf([row("grp", "busy")]) },
+    "/api/preferences": {
+      [CHAT_DM]: { schema: SCHEMA, can_edit: true, can_update: true,
+                   values: { answer_length: "none" } },
+      [CHAT_GROUP]: { schema: SCHEMA, can_edit: true,
+                      can_update: SCENARIO === "chats_late_check_both",
+                      values: { answer_length: "short" } },
+    },
+    "/api/session-options": {
+      [CHAT_DM]: { models: [], directories: ["/dm"], default_directory: "/dm" },
+      [CHAT_GROUP]: { models: [], directories: ["/grp"], default_directory: "/grp" },
+    },
+    "/api/update": { [CHAT_DM]: { job: { phase: "done" } },
+                     [CHAT_GROUP]: { job: { phase: "done" } } },
+    // Writes, keyed "METHOD path".
+    "PUT /api/preferences/answer_length": {
+      [CHAT_DM]: { values: { answer_length: "medium" }, changed: true },
+      [CHAT_GROUP]: { values: { answer_length: "medium" }, changed: true },
+    },
+    "POST /api/update/check": {
+      [CHAT_DM]: { job: null, check: {
+        lines: ["aipager 0.7.13 (up to date)", "Claude Code 2.1.281 → 2.1.290"],
+        offer: { kind: "claude", label: "Update Claude Code" },
+        summary: null, restart: null, notes: [], source: "pipx, from PyPI" } },
+    },
+  };
+  // chats_late*: the default chat's FIRST answer on one path arrives only
+  // when the driver releases it, after the viewer has switched away.
+  const HOLD = { chats_late: "/api/sessions", chats_late_settings: "/api/preferences",
+                 chats_late_options: "/api/session-options", chats_late_updates: "/api/update",
+                 chats_late_pref_write: "PUT /api/preferences/answer_length",
+                 chats_late_pref_fail: "PUT /api/preferences/answer_length",
+                 chats_late_check: "POST /api/update/check",
+                 chats_late_check_both: "POST /api/update/check" };
+  const stubFetch = global.fetch;
+  global.fetch = (url, opts) => {
+    const method = (opts && opts.method) || "GET";
+    const headers = (opts && opts.headers) || {};
+    const path = url.split("?")[0];
+    if (url === "/api/chats") {
+      // Where the page learned its chats: every request from here on
+      // must name one.
+      return stubFetch(url, opts).then((r) => Object.assign({}, r, {
+        json: () => r.json().then((d) => { global.__chatsAt = fetchCalls.length; return d; }),
+      }));
+    }
+    const key = method === "GET" ? path : method + " " + path;
+    if (!PER_CHAT[key]) {
+      return stubFetch(url, opts);
+    }
+    fetchCalls.push({ url, method, headers, body: opts && opts.body });
+    const chat = headers["X-Aipager-Scope"] || CHAT_DM;
+    const body = PER_CHAT[key][chat];
+    // chats_late_pref_fail: the held settings write is refused (500).
+    const failed = SCENARIO === "chats_late_pref_fail" && method === "PUT";
+    const resp = body && !failed
+      ? { ok: true, status: 200, json: () => Promise.resolve(body) }
+      : failed ? { ok: false, status: 500, json: () => Promise.resolve({}) }
+      : { ok: false, status: 403, json: () => Promise.resolve({ error: "forbidden" }) };
+    if (HOLD[SCENARIO] === key && chat === CHAT_DM && !global.__heldOnce) {
+      global.__heldOnce = true;
+      return new Promise((res) => { global.__held.push(() => res(resp)); });
+    }
+    return Promise.resolve(resp);
+  };
+}
+
 // The page may only ever talk to its own API. The Telegram SDK arrives
 // through the page's <script src>, never through fetch.
 const realExit = process.exit;
@@ -640,8 +730,16 @@ let script = page.match(/<script>([\s\S]*?)<\/script>/g)
 // unwrap the IIFE so the internals are reachable, and export what we drive
 // keep the IIFE (it contains top-level `return`s) but export its internals
 script = script.replace(/\}\)\(\);\s*$/,
-  "\n  global.__api = { openDetail, renderSessionSettings, loadSessionSettings, saveSessionPreference, renderOptionGroup, openGroups, pollTick, loadSettings, loadUpdates, showView, renderGrid, answerPrompt, showGrid };\n})();");
-eval(script);
+  "\n  global.__api = { openDetail, renderSessionSettings, loadSessionSettings, saveSessionPreference, renderOptionGroup, openGroups, pollTick, loadSettings, loadUpdates, showView, renderGrid, answerPrompt, showGrid, switchChat, openNewSession, savePreference, checkUpdates, getSettings: function () { return settingsData; }, getNew: function () { return { options: newOptions, cwd: newState.cwd }; } };\n})();");
+// The no-storage scenario asserts the page LOADS without storage, so a
+// throw while the script runs is that scenario's failure, not a crash.
+try {
+  eval(script);
+} catch (e) {
+  if (SCENARIO !== "chats_storage_throws") { throw e; }
+  console.error("FAIL: the page's script threw without storage: " + e);
+  process.exit(1);
+}
 
 function fail(msg) { console.error("FAIL: " + msg); process.exit(1); }
 
@@ -2383,5 +2481,285 @@ function driveThemeChanged() {
 Object.assign(DRIVERS, {
   detail_waiting_mainbutton: driveDetailWaitingMainButton,
   theme_changed: driveThemeChanged,
+});
+
+// ===== the chat switcher (roadmap 8.73) ================================
+
+function chips() { return byId["chat-switch"].children; }
+function chipNamed(text) {
+  const hit = chips().find(c => c.textContent === text);
+  if (!hit) fail("no chip named " + text + ": " + JSON.stringify(chips().map(c => c.textContent)));
+  return hit;
+}
+function gridCalls() { return fetchCalls.filter(f => f.url === "/api/sessions" && f.method === "GET"); }
+function scopeOf(call) { return call.headers["X-Aipager-Scope"] || ""; }
+// Every request sent after /api/chats answered names the chat on screen.
+function callsAfterChats() {
+  if (global.__chatsAt === undefined) fail("the page never learned its chats");
+  return fetchCalls.slice(global.__chatsAt);
+}
+function liveLabels() { return tiles().map(tileLabel); }
+
+function driveChatsOne() {
+  setTimeoutReal(() => {
+    if (!byId["chat-switch"].hidden) fail("the switcher shows with one chat");
+    if (chips().length) fail("the switcher drew chips for one chat");
+    if (JSON.stringify(liveLabels()) !== '["mine"]') fail("grid: " + JSON.stringify(liveLabels()));
+    api.pollTick();
+    setTimeoutReal(() => {
+      const later = callsAfterChats();
+      if (!later.length) fail("no request after /api/chats");
+      if (later.some(f => scopeOf(f) !== CHAT_DM))
+        fail("a request did not name the one chat: " + JSON.stringify(later.map(scopeOf)));
+      if (Object.keys(STORE).length) fail("a one-chat page stored a choice");
+      console.log("ok: one chat -> no switcher, every call names it");
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
+function driveChatsTwo() {
+  setTimeoutReal(() => {
+    if (byId["chat-switch"].hidden) fail("the switcher is hidden with two chats");
+    if (JSON.stringify(chips().map(c => c.textContent)) !== '["team","owner DM"]')
+      fail("chips: " + JSON.stringify(chips().map(c => c.textContent)));
+    if (!chipNamed("owner DM").className.includes("is-active")) fail("the default chat is not active");
+    if (JSON.stringify(liveLabels()) !== '["mine"]') fail("grid before: " + JSON.stringify(liveLabels()));
+    chipNamed("team").click();
+    setTimeoutReal(() => {
+      if (JSON.stringify(liveLabels()) !== '["grp"]') fail("grid after switch: " + JSON.stringify(liveLabels()));
+      const last = gridCalls()[gridCalls().length - 1];
+      if (scopeOf(last) !== CHAT_GROUP) fail("the switch did not poll the group: " + scopeOf(last));
+      if (STORE["aipager.chat"] !== CHAT_GROUP) fail("the choice was not remembered");
+      if (!chipNamed("team").className.includes("is-active")) fail("the chosen chip is not active");
+      // Sub-pages hide it, the top level brings it back.
+      api.openDetail("grp");
+      if (!byId["chat-switch"].hidden) fail("the switcher shows on a session page");
+      api.showGrid();
+      if (byId["chat-switch"].hidden) fail("the switcher did not come back on the grid");
+      // Settings follow the chosen chat, and switching there stays there.
+      byId["maintab-settings"].click();
+      const prefs = fetchCalls.filter(f => f.url === "/api/preferences");
+      if (!prefs.length || scopeOf(prefs[prefs.length - 1]) !== CHAT_GROUP)
+        fail("settings did not load for the group");
+      chipNamed("owner DM").click();
+      setTimeoutReal(() => {
+        const again = fetchCalls.filter(f => f.url === "/api/preferences");
+        if (scopeOf(again[again.length - 1]) !== CHAT_DM) fail("settings did not reload for the DM");
+        if (byId["view-settings"].hidden) fail("switching left the Settings tab");
+        const unnamed = callsAfterChats().filter(f => !scopeOf(f));
+        if (unnamed.length) fail("requests without a chat: " + JSON.stringify(unnamed.map(f => f.url)));
+        console.log("ok: two chats -> switcher, switch polls and remembers, settings follow");
+        process.exit(0);
+      }, 10);
+    }, 10);
+  }, 10);
+}
+
+function driveChatsSaved() {
+  setTimeoutReal(() => {
+    const calls = gridCalls();
+    if (!calls.length) fail("no grid poll");
+    if (calls.some(f => scopeOf(f) !== CHAT_GROUP))
+      fail("a poll went out for another chat: " + JSON.stringify(calls.map(scopeOf)));
+    if (JSON.stringify(liveLabels()) !== '["grp"]') fail("grid: " + JSON.stringify(liveLabels()));
+    if (!chipNamed("team").className.includes("is-active")) fail("the saved chat is not active");
+    console.log("ok: a saved chat -> the first poll is already for it");
+    process.exit(0);
+  }, 10);
+}
+
+function driveChatsSavedStale() {
+  setTimeoutReal(() => {
+    if (STORE["aipager.chat"] !== "") fail("the stale choice was not forgotten: " + STORE["aipager.chat"]);
+    if (fetchCalls.some(f => scopeOf(f) === "-999")) fail("the page sent a chat it is not in");
+    if (JSON.stringify(liveLabels()) !== '["mine"]') fail("grid: " + JSON.stringify(liveLabels()));
+    if (!chipNamed("owner DM").className.includes("is-active")) fail("the default chat is not active");
+    console.log("ok: a stale saved chat -> the default chat");
+    process.exit(0);
+  }, 10);
+}
+
+function driveChatsStorageThrows() {
+  setTimeoutReal(() => {
+    if (JSON.stringify(liveLabels()) !== '["mine"]') fail("grid: " + JSON.stringify(liveLabels()));
+    try { chipNamed("team").click(); } catch (e) { fail("switching threw without storage: " + e); }
+    setTimeoutReal(() => {
+      if (JSON.stringify(liveLabels()) !== '["grp"]') fail("grid after switch: " + JSON.stringify(liveLabels()));
+      console.log("ok: no storage -> the switcher still works");
+      process.exit(0);
+    }, 10);
+  }, 10);
+}
+
+function driveChatsLate() {
+  setTimeoutReal(() => {
+    if (global.__held.length !== 1) fail("the default chat's first answer was not held");
+    chipNamed("team").click();
+    setTimeoutReal(() => {
+      if (JSON.stringify(liveLabels()) !== '["grp"]') fail("grid after switch: " + JSON.stringify(liveLabels()));
+      global.__held.shift()();          // the old chat's answer lands now
+      setTimeoutReal(() => {
+        if (JSON.stringify(liveLabels()) !== '["grp"]')
+          fail("a late answer for the old chat replaced the grid: " + JSON.stringify(liveLabels()));
+        console.log("ok: a late answer for the chat left behind is dropped");
+        process.exit(0);
+      }, 10);
+    }, 10);
+  }, 10);
+}
+
+function driveChatsLateSettings() {
+  setTimeoutReal(() => {
+    byId["maintab-settings"].click();       // the DM's settings: held
+    if (global.__held.length !== 1) fail("the default chat's settings were not held");
+    chipNamed("team").click();
+    setTimeoutReal(() => {
+      const got = api.getSettings();
+      if (!got || got.values.answer_length !== "short") fail("the group's settings did not load");
+      global.__held.shift()();          // the DM's settings land now
+      setTimeoutReal(() => {
+        if (api.getSettings().values.answer_length !== "short")
+          fail("late settings for the old chat replaced the group's");
+        console.log("ok: late settings for the chat left behind are dropped");
+        process.exit(0);
+      }, 10);
+    }, 10);
+  }, 10);
+}
+
+function driveChatsLateOptions() {
+  // The form's text fields (this shim's elements carry no value by default).
+  ["new-name", "new-model-name", "new-folder-name"].forEach((id) => { byId[id].value = ""; });
+  setTimeoutReal(() => {
+    api.openNewSession();                    // the DM's options: held
+    if (global.__held.length !== 1) fail("the default chat's options were not held");
+    api.showGrid();
+    chipNamed("team").click();
+    setTimeoutReal(() => {
+      global.__held.shift()();          // the DM's options land now
+      setTimeoutReal(() => {
+        const got = api.getNew();
+        if (got.options !== null || got.cwd !== "")
+          fail("late options for the old chat were kept: " + JSON.stringify(got));
+        api.openNewSession();
+        setTimeoutReal(() => {
+          if (api.getNew().cwd !== "/grp") fail("the form did not take the group's folder: " + api.getNew().cwd);
+          console.log("ok: late new-session options for the chat left behind are dropped");
+          process.exit(0);
+        }, 10);
+      }, 10);
+    }, 10);
+  }, 10);
+}
+
+function driveChatsLateUpdates() {
+  setTimeoutReal(() => {
+    byId["maintab-settings"].click();       // DM settings, then its /api/update: held
+    setTimeoutReal(() => {
+      if (global.__held.length !== 1) fail("the default chat's update status was not held");
+      chipNamed("team").click();
+      setTimeoutReal(() => {
+        if (!byId["updates-block"].hidden) fail("the group shows an Updates block");
+        global.__held.shift()();        // the DM's update status lands now
+        setTimeoutReal(() => {
+          if (!byId["updates-block"].hidden)
+            fail("a late update status for the old chat showed the Updates block");
+          console.log("ok: a late update status for the chat left behind is dropped");
+          process.exit(0);
+        }, 10);
+      }, 10);
+    }, 10);
+  }, 10);
+}
+
+function driveChatsLatePrefWrite(failing) {
+  setTimeoutReal(() => {
+    byId["maintab-settings"].click();       // the DM's settings
+    setTimeoutReal(() => {
+      api.savePreference("answer_length", "medium");   // its PUT: held
+      if (global.__held.length !== 1) fail("the DM's settings write was not held");
+      chipNamed("team").click();
+      setTimeoutReal(() => {
+        if (api.getSettings().values.answer_length !== "short") fail("the group's settings did not load");
+        global.__held.shift()();        // the DM's write answers now
+        setTimeoutReal(() => {
+          if (api.getSettings().values.answer_length !== "short")
+            fail("the DM's saved values replaced the group's: " +
+                 JSON.stringify(api.getSettings().values));
+          if (byId["notice"].textContent.indexOf("Saved") >= 0)
+            fail("said Saved. for a write in the chat left behind");
+          if (byId["notice"].textContent.indexOf("Couldn't save") >= 0)
+            fail("reported a failed write in the chat left behind");
+          console.log(failing
+            ? "ok: a settings write refused after a switch leaves the new chat alone"
+            : "ok: a settings write answered after a switch leaves the new chat alone");
+          process.exit(0);
+        }, 10);
+      }, 10);
+    }, 10);
+  }, 10);
+}
+
+// Both chats may update: the new chat's block must not stay on
+// "Checking…" once the old chat's check answers.
+function driveChatsLateCheckBoth() {
+  setTimeoutReal(() => {
+    byId["maintab-settings"].click();
+    setTimeoutReal(() => {
+      api.checkUpdates();               // the DM's check: held
+      if (global.__held.length !== 1) fail("the DM's update check was not held");
+      chipNamed("team").click();
+      setTimeoutReal(() => {
+        global.__held.shift()();        // the DM's check answers now
+        setTimeoutReal(() => {
+          if (byId["updates-block"].hidden) fail("the group's Updates block is hidden");
+          const labels = actionLabels();
+          if (JSON.stringify(labels) !== JSON.stringify(["Check for updates"]))
+            fail("the group's Updates block after the old check: " + JSON.stringify(labels));
+          if (lineTexts().length) fail("the old chat's check was shown: " + JSON.stringify(lineTexts()));
+          console.log("ok: an update check answered after a switch leaves the new chat's block ready");
+          process.exit(0);
+        }, 10);
+      }, 10);
+    }, 10);
+  }, 10);
+}
+
+function driveChatsLateCheck() {
+  setTimeoutReal(() => {
+    byId["maintab-settings"].click();       // the DM's settings: it may update
+    setTimeoutReal(() => {
+      api.checkUpdates();               // its check: held
+      if (global.__held.length !== 1) fail("the DM's update check was not held");
+      chipNamed("team").click();
+      setTimeoutReal(() => {
+        if (!byId["updates-block"].hidden) fail("the group shows an Updates block");
+        global.__held.shift()();        // the DM's check answers now
+        setTimeoutReal(() => {
+          if (!byId["updates-block"].hidden)
+            fail("an update check from the chat left behind showed the Updates block");
+          console.log("ok: an update check answered after a switch stays hidden");
+          process.exit(0);
+        }, 10);
+      }, 10);
+    }, 10);
+  }, 10);
+}
+
+Object.assign(DRIVERS, {
+  chats_late_pref_write: () => driveChatsLatePrefWrite(false),
+  chats_late_pref_fail: () => driveChatsLatePrefWrite(true),
+  chats_late_check: driveChatsLateCheck,
+  chats_late_check_both: driveChatsLateCheckBoth,
+  chats_late_options: driveChatsLateOptions,
+  chats_late_updates: driveChatsLateUpdates,
+  chats_late_settings: driveChatsLateSettings,
+  chats_one: driveChatsOne,
+  chats_two: driveChatsTwo,
+  chats_saved: driveChatsSaved,
+  chats_saved_stale: driveChatsSavedStale,
+  chats_storage_throws: driveChatsStorageThrows,
+  chats_late: driveChatsLate,
 });
 (DRIVERS[SCENARIO] || (() => fail("unknown scenario: " + SCENARIO)))();

@@ -303,7 +303,7 @@ class AuthMixin:
         there is no case where "unresolvable" should mean "allow".
 
         Used by the Mini App's ``/app`` launcher and
-        ``MiniAppServer._resolve_scope_chat_id`` — unlike a DM's
+        ``MiniAppServer._single_chat`` — unlike a DM's
         ``/status`` (Telegram-level friction, no data leaves Telegram),
         a Mini App credential/URL is usable over the raw internet via
         the tunnel once obtained, so those two call sites need to know
@@ -769,7 +769,7 @@ class AuthMixin:
         # Personal mode: no allow-list, so the only "member" is the
         # operator — already gated upstream by
         # AuthMixin._is_personal_mode_operator via
-        # MiniAppServer._resolve_scope_chat_id before any handler with a
+        # MiniAppServer._single_chat before any handler with a
         # session in hand is ever reached.
         return True
 

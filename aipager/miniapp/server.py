@@ -22,6 +22,7 @@ from __future__ import annotations
 import functools
 import logging
 import os
+import re
 import time
 from typing import TYPE_CHECKING
 
@@ -151,6 +152,23 @@ _ANSWER_CHAT_BUSY_BODY = {
 }
 
 
+# The header the page names the chosen chat in, on every API call (roadmap
+# 8.73, D-A). One channel only, so no route can read the chat from
+# somewhere else. Absent or empty: the default chat (_default_chat).
+SCOPE_HEADER = "X-Aipager-Scope"
+
+# A Telegram chat id as the page sends it: an optional minus and up to 19
+# digits, no leading zero, nothing else (no spaces, no "+", no exponent).
+_CHAT_ID_RE = re.compile(r"-?[1-9][0-9]{0,18}")
+
+
+def _parse_chat_id(raw: str) -> int | None:
+    """*raw* as a chat id, or ``None`` when it is not exactly one."""
+    if not isinstance(raw, str) or _CHAT_ID_RE.fullmatch(raw) is None:
+        return None
+    return int(raw)
+
+
 
 @functools.cache
 def _close_card_key():
@@ -224,6 +242,8 @@ class MiniAppServer:
         # bytes, not a secret; same trust level as the page itself.
         app.router.add_get("/telegram-web-app.js", self._handle_webapp_sdk)
         app.router.add_get("/api/status", self._handle_status)
+        # The chats the caller may switch between (roadmap 8.73, D-A).
+        app.router.add_get("/api/chats", self._handle_chats)
         app.router.add_get("/api/sessions", self._handle_sessions)
         # The only route in aipager that can spawn a process. Gated
         # like chat's /new: can_prompt to create at all, plus admin
@@ -395,8 +415,9 @@ class MiniAppServer:
         on failure — callers do ``result = await self._authenticate(...);
         if isinstance(result, web.Response): return result``.
 
-        Not a new authorization system: still calls ``verify_init_data``
-        and ``_resolve_scope_chat_id`` unmodified, just from one place
+        Not a new authorization system: calls ``verify_init_data`` and the
+        membership check (``_may_open``, the chat chosen by the
+        ``X-Aipager-Scope`` header or the default chat) from one place
         instead of once per handler (design.md Decision 5). Every
         rejection path returns the same fixed, generic body per error
         class so a prober can't distinguish "bad signature" from
@@ -459,10 +480,29 @@ class MiniAppServer:
             return web.json_response({"error": "unauthorized"}, status=401)
 
         user_id = user.get("id")
-        scope_chat_id = self._resolve_scope_chat_id(user_id)
-        if scope_chat_id is None:
+        chats = self._member_chats(user_id)
+        if not chats:
             log.info("miniapp: %s rejected (403) — user not a scope member", route_name)
             return web.json_response({"error": "forbidden"}, status=403)
+
+        # Which of the caller's chats this request is about (roadmap 8.73,
+        # D-A). Named by the page in one header on every call; absent or
+        # empty means the default chat. A value that names a chat is
+        # checked for membership and never "corrected" to another chat: a
+        # forged or stale chat is refused, so no request can act on (or
+        # be judged by the role in) a chat the caller did not choose.
+        raw = request.headers.get(SCOPE_HEADER, "")
+        if raw:
+            scope_chat_id = _parse_chat_id(raw)
+            if scope_chat_id is None:
+                log.info("miniapp: %s rejected (400) — malformed chat", route_name)
+                return web.json_response({"error": "bad_request"}, status=400)
+            if not self._may_open(user_id, scope_chat_id):
+                log.info("miniapp: %s rejected (403) — not a member of the chosen chat",
+                         route_name)
+                return web.json_response({"error": "forbidden"}, status=403)
+        else:
+            scope_chat_id = self._default_chat(user_id, chats)
 
         log.debug("miniapp: %s authorized (scope_chat_id=%s)", route_name, scope_chat_id)
         return scope_chat_id, user_id
@@ -474,6 +514,25 @@ class MiniAppServer:
         if isinstance(result, web.Response):
             return result
         return web.json_response(self._build_status_payload(result))
+
+    async def _handle_chats(self, request):
+        """``GET /api/chats``: every chat the caller may open, in
+        aipager.yaml order, with its name for the switcher and which one
+        this request resolved to (the default when it named none). The
+        page sends a chosen chat back as ``X-Aipager-Scope``."""
+        from aiohttp import web
+
+        result = await self._authenticate_user(request, "/api/chats")
+        if isinstance(result, web.Response):
+            return result
+        scope_chat_id, user_id = result
+        return web.json_response({
+            "chats": [
+                {"scope": str(chat_id), "label": self._chat_label(chat_id)}
+                for chat_id in self._member_chats(user_id)
+            ],
+            "current": str(scope_chat_id),
+        })
 
     async def _handle_sessions(self, request):
         from aiohttp import web
@@ -2035,31 +2094,10 @@ class MiniAppServer:
         except Exception:
             log.debug("miniapp: session-deleted mirror failed", exc_info=True)
 
-    def _resolve_scope_chat_id(self, user_id) -> int | None:
-        """Authorization only — never re-derives the allow-list rules.
-
-        A valid HMAC only proves "some Telegram user", never "an
-        authorized one" (design.md threat model item 6). Reuses the
-        bot's own scope/team lookup helpers exactly as every chat
-        handler does, and returns the chat_id whose sessions this user
-        may see — ``None`` means "not a member of any configured scope".
-        """
-        if not isinstance(user_id, int):
-            return None
-        if self.bot.scopes is not None:
-            # The one remaining "first chat that lists this user" lookup
-            # that decides anything (live_reload._who also searches every
-            # chat, for a name only), on purpose: it picks which chat the
-            # Mini App shows, and every
-            # route then checks the user's role in that chat. Roadmap 8.73
-            # replaced it everywhere else (a person's role is the one in
-            # the chat they act in); the Mini App's chat switcher, delivery
-            # 17 of the group-mode fixes, replaces it here.
-            for scope in self.bot.scopes:
-                if self.bot._member_in_scope(scope, user_id) is not None:
-                    return scope.chat_id
-            return None
-
+    def _single_chat(self, user_id) -> int | None:
+        """Personal and legacy (team) mode: the one chat the daemon serves,
+        if *user_id* may see it, else ``None``. Unchanged by the chat
+        switcher: these installs have exactly one chat."""
         from aipager.config import CHAT_ID
         try:
             chat_id = int(CHAT_ID)
@@ -2081,6 +2119,66 @@ class MiniAppServer:
         if not self.bot._is_personal_mode_operator(user_id):
             return None
         return chat_id
+
+    def _may_open(self, user_id, chat_id) -> bool:
+        """Authorization only — never re-derives the allow-list rules.
+
+        Whether *user_id* may see and act in *chat_id* through the Mini
+        App at all (what they may DO there is their role in that chat,
+        checked per route). A valid HMAC only proves "some Telegram
+        user", never "an authorized one" (design.md threat model item 6).
+        Scope mode: a member of that chat's scope (``member_in_chat``, the
+        one lookup chat handlers use). Personal and legacy mode: the one
+        chat, when the user may see it. Callers pass a user id that
+        ``_member_chats`` accepted and a parsed chat id.
+        """
+        if self.bot.scopes is not None:
+            return self.bot.member_in_chat(user_id, chat_id) is not None
+        return chat_id == self._single_chat(user_id)
+
+    def _member_chats(self, user_id) -> list[int]:
+        """Every chat *user_id* may open in the Mini App, in aipager.yaml
+        order (roadmap 8.73, D-A). Empty means "not a member of anything".
+        Personal and legacy mode: at most the one chat."""
+        # A JSON `true` is an int in Python and equals 1: never a user id.
+        if not isinstance(user_id, int) or isinstance(user_id, bool):
+            return []
+        if self.bot.scopes is not None:
+            return [scope.chat_id for scope in self.bot.scopes
+                    if self._may_open(user_id, scope.chat_id)]
+        chat_id = self._single_chat(user_id)
+        return [] if chat_id is None else [chat_id]
+
+    def _default_chat(self, user_id, chats) -> int | None:
+        """The chat a request that names none is about.
+
+        The chat the app was opened from would come first, but Telegram
+        never says: a Mini App opened from an inline ``web_app`` button,
+        a keyboard ``web_app`` button or the chat menu button (the only
+        three ways aipager hands it out, and all three work only in the
+        private chat with the bot) gets no ``start_param``, ``chat_type``
+        or ``chat_instance`` in its initData. Those are sent only for a
+        direct link (``t.me/<bot>/<app>?startapp=``) or the attachment
+        menu, which aipager does not use. So the app is always opened
+        from the user's own DM with the bot, and the default is their DM
+        scope when they have one, else the first chat they belong to.
+        """
+        if not chats:
+            return None
+        # A private chat's id is its peer's user id, so the caller's own DM
+        # is the chat whose id is theirs (a DM scope lists exactly its
+        # owner; personal mode's one chat is the operator's).
+        if user_id in chats:
+            return user_id
+        return chats[0]
+
+    def _chat_label(self, chat_id) -> str:
+        """A chat's name for the switcher: its aipager.yaml label (the
+        wizard names a DM "<person> DM"), never its id."""
+        scope = self.bot._scope_for(chat_id) if self.bot.scopes is not None else None
+        if scope is not None and scope.label:
+            return scope.label
+        return "DM" if chat_id > 0 else "Group"
 
     def _build_status_payload(self, scope_chat_id: int) -> dict:
         from aipager import __version__
