@@ -105,10 +105,11 @@ import os
 import time
 from pathlib import Path
 
-from telegram.error import RetryAfter
+from telegram.error import ChatMigrated, RetryAfter
 from telegram.ext import BaseRateLimiter
 
 from aipager import flood_policy
+from aipager.bot import chat_migration
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.config import (
     CARD_CADENCE_FLOOR_GROUP,
@@ -2145,6 +2146,13 @@ class BudgetRateLimiter(BaseRateLimiter):
             budget.calls += 1
         try:
             return await callback(*args, **kwargs)
+        except ChatMigrated as exc:
+            # Telegram upgraded the group to a supergroup (roadmap 8.87):
+            # every call into the old id fails like this, whatever the
+            # caller. Told here, the one place every Bot API call passes,
+            # so the daemon follows the group; the caller still sees it.
+            chat_migration.note_chat_migrated(chat_id, exc.new_chat_id)
+            raise
         except RetryAfter as exc:
             seconds = _retry_after_seconds(exc)
             if seconds > TELEGRAM_MAX_RETRY_AFTER:
@@ -2498,6 +2506,16 @@ class BudgetRateLimiter(BaseRateLimiter):
         code that looks like a guard is worse than none.)
         """
         self._maybe_write_signal()
+
+    def forget_chat(self, chat_id) -> bool:
+        """Forget one chat's budget, earned rate and ban stamps (roadmap
+        8.87: Telegram upgraded the group, so the old id is no chat any
+        more; the new one starts fresh). Returns whether there was one."""
+        key = self._key(chat_id)
+        if key is None or self._budgets.pop(key, None) is None:
+            return False
+        _mark_state_dirty()
+        return True
 
     def reset(self) -> None:
         """Forget every chat and take the signal file down with them.

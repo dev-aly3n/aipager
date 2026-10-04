@@ -66,6 +66,9 @@ class TelegramBot(
         # The message handlers' chat gate (``filters.Chat``), set by
         # ``start`` and updated in place by a live reload (roadmap 8.80).
         self._message_chat_gate = None
+        # The start-time lookup of each group scope (roadmap 8.87), run in
+        # the background so start() never waits on a group's budget.
+        self._group_probe_task = None
         # The keyboard level ("main", "templates", "commands", "models")
         # each chat last got, and in a group each member (roadmap 8.91b):
         # see ``KeyboardMixin._keyboard_level_key``. No entry is "main".

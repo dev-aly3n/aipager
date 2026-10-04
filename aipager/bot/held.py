@@ -258,8 +258,30 @@ class HeldAnswers:
                 for chat_id, per_chat in self._entries.items()
                 for entry in per_chat.values()]
 
+    def forget_chat(self, chat_id) -> int:
+        """Drop everything held for *chat_id* (roadmap 8.87: Telegram
+        upgraded the group, so the old id is no chat any more). Each
+        dropped answer is a WARNING naming it, like the caps. Returns the
+        number dropped."""
+        dropped = 0
+        for key in [k for k in self._entries if _same_chat(k, chat_id)]:
+            for entry in self._entries.pop(key).values():
+                dropped += 1
+                log.warning(
+                    "held answer for %s in chat %s dropped: Telegram "
+                    "upgraded that group to a supergroup (%d chars). IT IS "
+                    "LOST", entry.label, key, len(entry.rich_text))
+        return dropped
+
     def clear(self) -> None:
         self._entries.clear()
+
+
+def _same_chat(a, b) -> bool:
+    try:
+        return int(a) == int(b)
+    except (TypeError, ValueError):
+        return a == b
 
 
 #: The daemon's one buffer. Cleared per test by a conftest fixture, like

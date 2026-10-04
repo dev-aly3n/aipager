@@ -536,10 +536,13 @@ class SessionOpsMixin:
         (``scope.home_scope``) is not *chat_id*. Personal/legacy mode
         with no suffix and no stamp: never foreign (one chat).
         """
-        from aipager.scope import chat_from_suffix
+        from aipager.state import chat_from_name
         from aipager.bot.transport import home_chat
 
-        own = chat_from_suffix(session_name)
+        # A group Telegram upgraded to a supergroup (roadmap 8.87): a name
+        # still carrying the old id belongs to the new chat, so it is
+        # accepted there and refused everywhere else.
+        own = chat_from_name(session_name)
         if own is not None and own[0] != chat_id:
             return True
         known = self.registry.get(session_name)

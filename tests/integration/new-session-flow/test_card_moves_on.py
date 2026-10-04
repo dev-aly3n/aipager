@@ -188,9 +188,14 @@ def test_the_close_runs_before_every_other_handler(mk_bot, run_async, monkeypatc
     assert isinstance(handler.callback, functools.partial)
     assert handler.callback.func is new_flow.close_if_moved_on
     assert handler.callback.args == (bot,)
+    # Also before it: the supergroup-upgrade notice (group -3, roadmap
+    # 8.87), a service message no person sends, which never stops anything.
+    from aipager.bot import chat_migration
     assert all(g >= 0 for h, g in registered
                if h is not handler
-               and getattr(h.callback, "func", None) is not group_intake.intake_gate)
+               and getattr(h.callback, "func", None) not in (
+                   group_intake.intake_gate,
+                   chat_migration.handle_migrate_message))
 
 
 # ---- anything else the person does closes the card ---------------------------

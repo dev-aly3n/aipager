@@ -330,7 +330,18 @@ def test_the_gate_runs_before_everything(mk_bot, run_async, monkeypatch):
     handler, group = gates[0]
     assert handler.type is Update and handler.callback.args == (bot,)
     assert group == -2
-    assert all(g > -2 for h, g in registered if h is not handler)
+    # The one handler before it: the supergroup-upgrade notice (roadmap
+    # 8.87), a service message the gate would let through anyway; it
+    # takes nothing but that notice and never stops an update.
+    from aipager.bot import chat_migration
+    from telegram.ext import MessageHandler, filters
+    earlier = [(h, g) for h, g in registered
+               if h is not handler and g <= -2]
+    assert len(earlier) == 1
+    mig, mig_group = earlier[0]
+    assert mig_group == -3 and isinstance(mig, MessageHandler)
+    assert mig.callback.func is chat_migration.handle_migrate_message
+    assert mig.filters is filters.StatusUpdate.MIGRATE
 
 
 # ---- reading a message: mention strip ----------------------------------------------

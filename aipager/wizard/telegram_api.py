@@ -85,14 +85,31 @@ def _test_send(token: str, chat_id: int) -> tuple[bool, str]:
         # Same redaction as _http_json: this URL carries the token too.
         try:
             body = json.loads(e.read())
-            return False, redact_token(body.get("description", str(e)))
+            desc = redact_token(body.get("description", str(e)))
         except Exception:
             return False, redact_token(str(e))
+        return False, desc + _migrated_hint(body)
     except (urllib.error.URLError, OSError, json.JSONDecodeError) as e:
         return False, redact_token(str(e))
     if not result.get("ok"):
-        return False, result.get("description", "unknown error")
+        return False, (result.get("description", "unknown error")
+                       + _migrated_hint(result))
     return True, ""
+
+
+def _migrated_hint(body) -> str:
+    """For a group Telegram upgraded to a supergroup (roadmap 8.87): the
+    new id the refusal carries (``parameters.migrate_to_chat_id``), and
+    what happens next. ``""`` for any other refusal."""
+    params = body.get("parameters") if isinstance(body, dict) else None
+    new = params.get("migrate_to_chat_id") if isinstance(params, dict) else None
+    if isinstance(new, bool) or not isinstance(new, int):
+        return ""
+    return (f". Telegram upgraded this group to a supergroup, and its new id "
+            f"is {new}. The aipager daemon moves the scope there by itself "
+            f"when it starts or sees the upgrade, so there is nothing to "
+            f"change here; start the daemon (or restart it), then reopen "
+            f"`aipager config` to test again.")
 
 
 #: Auto-detect saw only anonymous admins or channel posts (8.91e).

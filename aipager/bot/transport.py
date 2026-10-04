@@ -33,7 +33,7 @@ import logging
 import re
 import time
 
-from telegram.error import BadRequest, Forbidden, RetryAfter
+from telegram.error import BadRequest, ChatMigrated, Forbidden, RetryAfter
 
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot.flood_budget import FloodSkipped
@@ -202,13 +202,14 @@ def _same_sender(note_key: tuple[int, int], current_key: tuple[int, int]) -> boo
     scope 0, and without this carve-out every later message from that
     SAME human reads as "a different sender" forever (the queue never
     ages out fast enough — see ``MIXED_SENDER_HOLD_WINDOW_SECONDS``
-    for the backstop that also bounds this). In today's code a
-    session's ``scope_chat_id`` is otherwise constant for the session's
-    whole lifetime (stamped at most once), so the "both stamped but
-    different" branch below is defense-in-depth rather than a path
-    exercised in practice — kept because scope truly could distinguish
-    two sessions sharing a notes dir if that ever changed, and dropping
-    it entirely would remove a real (if currently redundant) signal.
+    for the backstop that also bounds this). Otherwise a session's
+    ``scope_chat_id`` changes only when Telegram upgrades its group to a
+    supergroup (roadmap 8.87): the session is re-stamped with the new id,
+    and a note written before the move names the old one, so an old id
+    the daemon followed to the current one counts as the same chat. The
+    "both stamped but different" branch is otherwise defense-in-depth —
+    kept because scope truly could distinguish two sessions sharing a
+    notes dir, and dropping it would remove a real signal.
     """
     note_scope, note_user = note_key
     cur_scope, cur_user = current_key
@@ -218,7 +219,14 @@ def _same_sender(note_key: tuple[int, int], current_key: tuple[int, int]) -> boo
         return False
     if note_scope == 0 or cur_scope == 0:
         return True
-    return note_scope == cur_scope
+    if note_scope == cur_scope:
+        return True
+    # A group Telegram upgraded to a supergroup (roadmap 8.87): the
+    # session was re-stamped with the new id, notes written before the
+    # move carry the old one. Same chat, same person.
+    from aipager.state import follow_migrated_chat
+    moved = follow_migrated_chat((note_scope, "group"))
+    return moved is not None and moved[0] == cur_scope
 
 
 def mixed_sender_note_outstanding(sess, update) -> bool:
@@ -506,8 +514,22 @@ async def _send_with_retry(bot, *, chat_id, text: str, parse_mode: str | None = 
         except Forbidden as e:
             _log_blocked_once(e)
             raise
+        except ChatMigrated as e:
+            # The group was upgraded to a supergroup (roadmap 8.87): follow
+            # it, and let the caller see this send failed.
+            _note_migrated(chat_id, e)
+            raise
     if last_err:
         raise last_err
+
+
+def _note_migrated(chat_id, exc: ChatMigrated) -> None:
+    """Tell :mod:`chat_migration` a call into *chat_id* found the group
+    upgraded to a supergroup. The rate limiter reports it too (every
+    call passes it); this covers a bot that is not limiter-bound, and the
+    second report of one upgrade is a no-op."""
+    from aipager.bot import chat_migration
+    chat_migration.note_chat_migrated(chat_id, exc.new_chat_id)
 
 
 # ── Plain replies — the flood-mute seam (roadmap 8.17b) ──
@@ -734,6 +756,9 @@ async def edit_text_at(bot, *args, **kwargs):
         return MUTED
     try:
         return await bot.edit_message_text(*args, **kwargs)
+    except ChatMigrated as e:
+        _note_migrated(_chat_id_from_call(args, kwargs, 1), e)
+        raise
     except FloodSkipped:
         return SKIPPED
     except FloodMuted:
@@ -756,6 +781,9 @@ async def send_text(bot, *args, **kwargs):
         return MUTED
     try:
         return await bot.send_message(*args, **kwargs)
+    except ChatMigrated as e:
+        _note_migrated(_chat_id_from_call(args, kwargs, 0), e)
+        raise
     except FloodSkipped:
         return SKIPPED
     except FloodMuted:

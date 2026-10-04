@@ -287,6 +287,16 @@ class FloodMute:
         _mark_state_dirty()
         return False
 
+    def forget(self, chat_id) -> bool:
+        """Drop the chat's mute outright (roadmap 8.87: Telegram upgraded
+        the group and the old id is no chat any more). Returns whether
+        there was one."""
+        if self._entries.pop(_key(chat_id), None) is None:
+            return False
+        self._write_signal()
+        _mark_state_dirty()
+        return True
+
     def remaining(self, chat_id) -> float:
         """Seconds left on the chat's mute; ``0.0`` when not muted."""
         entry = self._entries.get(_key(chat_id))

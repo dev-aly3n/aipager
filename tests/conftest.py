@@ -626,8 +626,13 @@ def _isolate_flood_mute(_isolate_home_paths, tmp_path, monkeypatch):
                         str(tmp_path / "aipager-flood-mute.json"))
     monkeypatch.setattr("aipager.config.FLOOD_BACKOFF_FILE",
                         str(tmp_path / "aipager-flood-backoff.json"))
-    from aipager.bot import flood, flood_state, held, rich_message
+    from aipager.bot import chat_migration, flood, flood_state, held, rich_message
 
+    # The daemon's "follow an upgraded group" hook (roadmap 8.87) is set by
+    # `start()`: a bot started by one test must never be migrated by a
+    # ChatMigrated another test provokes.
+    monkeypatch.setattr(chat_migration, "_handler", None)
+    monkeypatch.setattr(chat_migration, "_tasks", set())
     flood.MUTE.clear()
     # The 8.29 held-answer buffer is module-level daemon state of exactly
     # the same kind: an answer held by one test would be delivered by the

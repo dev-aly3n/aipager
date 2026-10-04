@@ -286,6 +286,21 @@ def set_preference(chat_id: int, field: str, value: object) -> Preferences:
     return get_preferences(chat_id)
 
 
+def move_chat(old: int, new: int) -> bool:
+    """Move chat *old*'s entry (reply style and new-session defaults) to
+    *new* (roadmap 8.87: Telegram upgraded the group to a supergroup and
+    gave it a new id). Nothing moves when *old* has no entry, or when
+    *new* already has one (it is never overwritten). Returns whether it
+    moved. Best-effort write, like every other setter here."""
+    store = _ensure_loaded()
+    old_key, new_key = str(old), str(new)
+    if old_key not in store or new_key in store:
+        return False
+    store[new_key] = store.pop(old_key)
+    _save_raw(store)
+    return True
+
+
 # ---- new-session defaults (/settings → 🆕 New sessions, and /new) -------
 #
 # What a session started from chat gets when the person starting it does

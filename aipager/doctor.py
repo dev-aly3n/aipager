@@ -488,6 +488,25 @@ def check_service_installed() -> CheckResult:
                        detail=[f"unsupported platform: {sys_name}"])
 
 
+def _scope_mode_line() -> str:
+    """On a scope-mode install (``aipager.yaml``, no ``team.yaml``): one
+    line naming the scopes, e.g. ``scope mode: 2 scopes (1 private chat,
+    1 group)``. ``""`` when no scopes are configured (personal mode)."""
+    from aipager.config import SCOPES
+    if not SCOPES:
+        return ""
+    dms = sum(1 for s in SCOPES if s.kind == "dm")
+    groups = len(SCOPES) - dms
+    parts = []
+    if dms:
+        parts.append(f"{dms} private chat" + ("s" if dms != 1 else ""))
+    if groups:
+        parts.append(f"{groups} group" + ("s" if groups != 1 else ""))
+    n = len(SCOPES)
+    return (f"scope mode: {n} scope" + ("s" if n != 1 else "")
+            + f" ({', '.join(parts)}) in aipager.yaml")
+
+
 def check_team() -> CheckResult:
     """Validate team.yaml against the configured CHAT_ID and roster.
 
@@ -506,6 +525,9 @@ def check_team() -> CheckResult:
     from aipager.team import Role, TEAM_CONFIG_PATH, TeamConfigError, load_team
 
     if not TEAM_CONFIG_PATH.exists():
+        scopes_line = _scope_mode_line()
+        if scopes_line:
+            return CheckResult(OK, "team config", detail=[scopes_line])
         return CheckResult(OK, "team config", detail=["personal mode (no team.yaml)"])
 
     try:

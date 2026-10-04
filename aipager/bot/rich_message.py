@@ -191,7 +191,9 @@ async def _post(method: str, payload: dict, *, kind: str = "blocking",
 
     async def _do() -> dict:
         resp = await client.post(_api_url(method), json=payload)
-        return resp.json()
+        data = resp.json()
+        _note_if_migrated(payload, data)
+        return data
 
     limiter = _rate_limiter
     if limiter is None:
@@ -222,6 +224,22 @@ async def _post(method: str, payload: dict, *, kind: str = "blocking",
         # keeps working unchanged. `from None`: the mute is not an error
         # with a cause worth a chained traceback.
         raise RichMessageFloodBanned(exc.retry_after, exc.chat_id) from None
+
+
+def _note_if_migrated(payload: dict, data) -> None:
+    """A refusal naming ``parameters.migrate_to_chat_id``: Telegram upgraded
+    the group to a supergroup (roadmap 8.87). This path parses the raw
+    JSON, so PTB never raises its ``ChatMigrated`` for it; the caller's
+    plain-text fallback goes to the old id and fails too. Report it here
+    so the daemon follows the group."""
+    if not isinstance(data, dict):
+        return
+    params = data.get("parameters")
+    new = params.get("migrate_to_chat_id") if isinstance(params, dict) else None
+    if new is None:
+        return
+    from aipager.bot import chat_migration
+    chat_migration.note_chat_migrated(payload.get("chat_id"), new)
 
 
 def _kind_kwargs(kind: str, priority: str = PRIORITY_ESSENTIAL) -> dict:

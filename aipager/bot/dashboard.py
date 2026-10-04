@@ -23,7 +23,9 @@ from telegram import (
     InlineKeyboardMarkup,
     WebAppInfo,
 )
-from telegram.error import BadRequest, Forbidden, RetryAfter, TelegramError
+from telegram.error import (
+    BadRequest, ChatMigrated, Forbidden, RetryAfter, TelegramError,
+)
 
 
 from aipager.config import (
@@ -36,7 +38,7 @@ from aipager.config import (
     PINNED_MIN_EDIT_GAP,
     PINNED_RECREATE_MIN_INTERVAL,
 )
-from aipager.bot import group_intake, session_parity
+from aipager.bot import chat_migration, group_intake, session_parity
 from aipager.bot.flood import MUTE, FloodMuted
 from aipager.bot.flood_budget import (
     PRIORITY_ESSENTIAL,
@@ -589,6 +591,9 @@ class DashboardMixin:
             # would be refused the same way. No bar here until restart.
             self._pinned_disable(chat, st, f"the bot can't post there ({e})")
             return
+        except ChatMigrated as e:
+            self._pinned_migrated(chat, st, e)
+            return
         except BadRequest as e:
             low = str(e).lower()
             if "not modified" in low:
@@ -650,6 +655,11 @@ class DashboardMixin:
         except Forbidden as e:
             self._pinned_disable(chat, st, f"the bot can't post there ({e})")
             return
+        except ChatMigrated as e:
+            # Permanent for this id, NOT the transient arm below: retried
+            # every 60 s it would fail the same way for the daemon's life.
+            self._pinned_migrated(chat, st, e)
+            return
         except BadRequest as e:
             if "chat not found" in str(e).lower():
                 self._pinned_disable(chat, st, f"the chat is gone ({e})")
@@ -700,6 +710,8 @@ class DashboardMixin:
             # Not a refusal: the budget or a ban. Pin it on the next
             # refresh that gets through.
             st.pin_pending = True
+        except ChatMigrated as e:
+            self._pinned_migrated(chat, st, e)
         except Exception as e:
             if not is_group_chat(chat):
                 log.info("Couldn't pin the status bar in chat %s: %s — "
@@ -716,6 +728,15 @@ class DashboardMixin:
             except Exception:
                 log.warning("Couldn't delete the unpinned status bar in "
                             "group %s", chat, exc_info=True)
+
+    def _pinned_migrated(self, chat: int, st: "PinnedChat",
+                         exc: ChatMigrated) -> None:
+        """Telegram upgraded the group to a supergroup (roadmap 8.87): no
+        bar under the old id again, and the daemon follows the group to
+        the new one, whose bar starts fresh."""
+        self._pinned_disable(
+            chat, st, f"Telegram upgraded the group to {exc.new_chat_id}")
+        chat_migration.note_chat_migrated(chat, exc.new_chat_id)
 
     def _pinned_disable(self, chat: int, st: "PinnedChat", why: str) -> None:
         """No bar in *chat* for the rest of this daemon's life: every call

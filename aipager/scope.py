@@ -45,6 +45,16 @@ _MINIAPP_DEFAULTS: dict = {"enabled": True, "port": 8765, "public_url": ""}
 # preservation list below, or the next `aipager config` silently wipes it.
 _CLAUDE_PATH_KEY = "claude_path"
 
+# Roadmap 8.87: groups Telegram upgraded to a supergroup, ``{old id: new
+# id}``. Written by :func:`migrate_scope_chat_id` (the daemon follows the
+# upgrade by itself) and read by :func:`load_chat_migrations`, so a session
+# whose internal name still carries the old id (``__g<old>``, names are
+# internal and never renamed) is placed in the new chat, even after the
+# session registry was lost. In aipager.yaml rather than the registry for
+# exactly that reason. Same preservation rule as the keys above:
+# dump_scopes() must re-emit it.
+_CHAT_MIGRATIONS_KEY = "chat_migrations"
+
 
 def scope_suffix(chat_id: int, kind: str) -> str:
     """Internal socket/name suffix that disambiguates same-labeled
@@ -496,15 +506,31 @@ def dump_scopes(
     # `aipager config` run — the exact bug this preservation list exists
     # to prevent (see the miniapp precedent above).
     existing_claude_path = _raw_yaml(path).get(_CLAUDE_PATH_KEY)
+    # And the record of groups Telegram upgraded (8.87): without it a
+    # session named after a group's old id lands in the home chat again.
+    existing_migrations = _raw_yaml(path).get(_CHAT_MIGRATIONS_KEY)
     data: dict = {
         "schema_version": SCHEMA_VERSION,
         "bot_token": bot_token,
         "scopes": [],
     }
+    # A group the daemon followed to its supergroup while `aipager config`
+    # held the old id in memory (roadmap 8.87): writing the old id back
+    # would move the scope back to a chat that no longer exists.
+    # load_chat_migrations keeps only group -> group records, so a damaged
+    # record never moves a private chat.
+    moved = load_chat_migrations(path)
+    taken = {s.chat_id for s in scopes}
     for s in scopes:
+        chat_id = s.chat_id
+        new_id = moved.get(chat_id)
+        if new_id is not None and new_id not in taken:
+            log.info("aipager.yaml: group %s was upgraded to %s; writing the "
+                     "new id", chat_id, new_id)
+            chat_id = new_id
         sd: dict = {
             "kind": s.kind,
-            "chat_id": s.chat_id,
+            "chat_id": chat_id,
             "label": s.label,
             "members": [_member_to_dict(m) for m in s.members],
         }
@@ -526,4 +552,161 @@ def dump_scopes(
     if isinstance(existing_claude_path, str) and existing_claude_path.strip():
         data[_CLAUDE_PATH_KEY] = existing_claude_path
 
+    if isinstance(existing_migrations, dict) and existing_migrations:
+        data[_CHAT_MIGRATIONS_KEY] = existing_migrations
+
     _atomic_write_yaml(data, path)
+
+
+# ---- groups Telegram upgraded to a supergroup (roadmap 8.87) ----------------
+
+_migrations_cache: tuple[tuple, dict[int, int]] | None = None
+
+
+def _as_chat_id(value) -> int | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        out = int(value)
+    except (TypeError, ValueError):
+        return None
+    return out or None
+
+
+def load_chat_migrations(path: Path | None = None) -> dict[int, int]:
+    """``{old chat id: new chat id}`` for every group Telegram upgraded to
+    a supergroup and the daemon followed (:func:`migrate_scope_chat_id`).
+    Empty when the file or the key is absent, or unreadable; a malformed
+    entry is skipped. Never raises. Cached on the file's inode, mtime and
+    size, since a session discovered by the socket scan asks for it."""
+    global _migrations_cache
+    path = CONFIG_PATH if path is None else path
+    try:
+        st = path.stat()
+        stamp = (str(path), st.st_ino, st.st_mtime_ns, st.st_size)
+    except OSError:
+        return {}
+    if _migrations_cache is not None and _migrations_cache[0] == stamp:
+        return dict(_migrations_cache[1])
+    block = _raw_yaml(path).get(_CHAT_MIGRATIONS_KEY)
+    out: dict[int, int] = {}
+    if isinstance(block, dict):
+        for k, v in block.items():
+            old, new = _as_chat_id(k), _as_chat_id(v)
+            # Only a group moves, and only to a group: a hand-edited or
+            # damaged record must never move a private chat's sessions.
+            if (old is not None and new is not None and old < 0 and new < 0
+                    and old != new):
+                out[old] = new
+    _migrations_cache = (stamp, out)
+    return dict(out)
+
+
+def follow_chat_migrations(chat_id: int, migrations: dict[int, int]) -> int:
+    """Where *chat_id* lives now: follows ``old -> new`` hops. At most one
+    hop per record, so a hand-edited loop ends (somewhere on the loop)
+    instead of hanging the caller. Pure."""
+    for _ in range(len(migrations)):
+        if chat_id not in migrations:
+            break
+        chat_id = migrations[chat_id]
+    return chat_id
+
+
+_CHAT_ID_LINE_RE = re.compile(
+    r"^(?P<lead>[ \t]*(?:-[ \t]+)?chat_id:[ \t]*)(?P<q>['\"]?)"
+    r"(?P<id>-?\d+)(?P=q)(?P<tail>[ \t]*(?:#.*)?)$",
+    re.MULTILINE)
+
+
+def migrate_scope_chat_id(old: int, new: int, path: Path | None = None) -> None:
+    """Move the group scope *old* to *new* in ``aipager.yaml`` (roadmap
+    8.87: Telegram upgraded the group to a supergroup) and record
+    ``old -> new`` under ``chat_migrations``.
+
+    SURGICAL: only that scope's ``chat_id`` line changes and the record is
+    appended, so every other byte of the document (comments, key order,
+    the other scopes, the token) stays as it was. When the text cannot be
+    edited that way (the id is written twice, or ``chat_migrations``
+    already exists in a shape the append cannot extend), it falls back to
+    the read-modify-write of :func:`dump_miniapp`, which keeps every key
+    and value. Either way the result is re-parsed and checked before it
+    is written; atomic, mode 0600.
+
+    Raises :class:`ScopeConfigError` when the file is missing or
+    unreadable, when *old* is not a group scope, or when *new* already is
+    a scope.
+    """
+    path = CONFIG_PATH if path is None else path
+    try:
+        text = path.read_text(encoding="utf-8")
+        raw = yaml.safe_load(text)
+    except (OSError, yaml.YAMLError) as e:
+        raise ScopeConfigError(f"aipager.yaml is unreadable: {e}") from e
+    if not isinstance(raw, dict) or not isinstance(raw.get("scopes"), list):
+        raise ScopeConfigError("aipager.yaml is missing or has no scopes")
+    scopes = raw["scopes"]
+    ids = [_as_chat_id(s.get("chat_id")) if isinstance(s, dict) else None
+           for s in scopes]
+    if new in ids:
+        raise ScopeConfigError(f"chat {new} is already a scope")
+    hits = [i for i, cid in enumerate(ids) if cid == old]
+    if len(hits) != 1 or str(scopes[hits[0]].get("kind", "")).strip() != "group":
+        raise ScopeConfigError(f"chat {old} is not a group scope")
+
+    expected = dict(raw)
+    expected["scopes"] = [dict(s) if isinstance(s, dict) else s for s in scopes]
+    expected["scopes"][hits[0]]["chat_id"] = new
+    migrations = raw.get(_CHAT_MIGRATIONS_KEY)
+    migrations = dict(migrations) if isinstance(migrations, dict) else {}
+    migrations[old] = new
+    expected[_CHAT_MIGRATIONS_KEY] = migrations
+
+    body = _surgical_migration_text(text, old, new, raw)
+    if body is not None:
+        try:
+            ok = yaml.safe_load(body) == expected
+        except yaml.YAMLError:
+            ok = False
+        if ok:
+            _atomic_write_text(body, path)
+            return
+    log.info("aipager.yaml: rewriting the whole document to move scope %s "
+             "to %s (the line could not be edited in place)", old, new)
+    _atomic_write_yaml(expected, path)
+
+
+def _surgical_migration_text(text: str, old: int, new: int,
+                             raw: dict) -> str | None:
+    """*text* with the one ``chat_id: <old>`` line rewritten to *new* and
+    ``old: new`` added to ``chat_migrations``, or ``None`` when that edit
+    cannot be made safely (the caller then rewrites the document)."""
+    matches = [m for m in _CHAT_ID_LINE_RE.finditer(text)
+               if int(m.group("id")) == old]
+    if not matches:
+        # Not on a line of its own (flow style, say): rewrite instead.
+        return None
+    # A second line with the same id elsewhere: the caller's check of the
+    # parsed result refuses an edit of the wrong one.
+    m = matches[0]
+    out = text[:m.start("id")] + str(new) + text[m.end("id"):]
+    if _CHAT_MIGRATIONS_KEY in raw:
+        # Extending an existing block in place would mean parsing its
+        # layout; the rewrite fallback is exact instead. (An append would
+        # repeat the key and lose the earlier record, which the caller's
+        # check would also refuse.)
+        return None
+    if not out.endswith("\n"):
+        out += "\n"
+    return out + f"{_CHAT_MIGRATIONS_KEY}:\n  {old}: {new}\n"
+
+
+def _atomic_write_text(body: str, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(body, encoding="utf-8")
+    try:
+        os.chmod(tmp, 0o600)
+    except OSError:
+        log.debug("could not chmod %s", tmp, exc_info=True)
+    os.replace(tmp, path)

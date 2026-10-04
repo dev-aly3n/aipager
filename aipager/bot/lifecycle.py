@@ -31,11 +31,13 @@ from telegram.ext import (
     TypeHandler,
     filters,
 )
-from telegram.error import BadRequest, Forbidden, RetryAfter
+from telegram.error import BadRequest, ChatMigrated, Forbidden, RetryAfter
 
 from aipager.dtach import inject
 
-from aipager.bot import group_intake, new_flow, session_parity, update_flow
+from aipager.bot import (
+    chat_migration, group_intake, new_flow, session_parity, update_flow,
+)
 from aipager.bot.flood import MUTE, FloodMuted, _key as _chat_key
 from aipager.bot import flood_state
 from aipager.bot.flood_budget import BudgetRateLimiter, clear_backoff_signal
@@ -269,6 +271,11 @@ class LifecycleMixin:
             await live_reload.reach_work_in_flight(self, old_scopes,
                                                    old_policy)
 
+    async def _migrate_chat(self, old: int, new: int) -> bool:
+        """Follow the group *old* that Telegram upgraded to the supergroup
+        *new* (roadmap 8.87): see :func:`chat_migration.migrate_chat`."""
+        return await chat_migration.migrate_chat(self, old, new)
+
     async def _refresh_scope_menus(self, old_scopes) -> None:
         """The per-chat command menus and Mini App buttons after a scope
         reload: a new scope gets its menu (and, for a DM, the Mini App
@@ -288,6 +295,8 @@ class LifecycleMixin:
             try:
                 await self._app.bot.delete_my_commands(
                     scope=BotCommandScopeChat(chat_id=scope.chat_id))
+            except ChatMigrated as e:
+                chat_migration.note_chat_migrated(scope.chat_id, e.new_chat_id)
             except Exception:
                 log.info("Could not clear the command menu of removed chat "
                          "%s", scope.chat_id, exc_info=True)
@@ -444,6 +453,18 @@ class LifecycleMixin:
         flood_state.load()
 
         # Register handlers
+        # First of all (group -3, never stops the update): a group Telegram
+        # upgraded to a supergroup (roadmap 8.87). Its service message
+        # arrives in the old chat (still a scope) and in the new one (not
+        # one yet, so the message chat gate below would drop it); it has
+        # no sender to authorize, and only a configured group scope moves.
+        self._app.add_handler(MessageHandler(
+            filters.StatusUpdate.MIGRATE,
+            functools.partial(chat_migration.handle_migrate_message, self)),
+            group=-3)
+        # And every Bot API call into the old id fails with ChatMigrated,
+        # which the rate limiter and the transport helpers report here.
+        chat_migration.set_handler(self._migrate_chat)
         # Before anything else (group -2): in a group, only messages
         # addressed to this bot go on (a command for it, a reply to it, a
         # mention, a keyboard tap); everything else stops here. Telegram
@@ -526,8 +547,38 @@ class LifecycleMixin:
         )
         log.info("Telegram bot polling started")
         await self._update_bot_commands()
+        # In the background: start() must never wait on a group's budget
+        # (the hook receiver, recovery and the monitor start after it).
+        if self.scopes and any(s.kind == "group" for s in self.scopes):
+            self._group_probe_task = asyncio.get_running_loop().create_task(
+                self._probe_group_chats())
+
+    async def _probe_group_chats(self) -> None:
+        """Ask Telegram about each group scope once at start (roadmap
+        8.87). Polling drops the updates that arrived while the daemon was
+        down, so a group upgraded to a supergroup meanwhile sent its
+        service message to no one; a group with no session and no pinned
+        bar would then never be posted to, and never followed. A call
+        into the old id answers ``ChatMigrated`` with the new one. Private
+        chats are never asked (they are never upgraded)."""
+        if not self._app or not self.scopes:
+            return
+        for scope in list(self.scopes):
+            if scope.kind != "group":
+                continue
+            try:
+                await self._app.bot.get_chat(scope.chat_id)
+            except ChatMigrated as e:
+                chat_migration.note_chat_migrated(scope.chat_id, e.new_chat_id)
+            except Exception:
+                log.info("Could not look up group %s at start", scope.chat_id,
+                         exc_info=True)
 
     async def stop(self) -> None:
+        chat_migration.set_handler(None)
+        probe = getattr(self, "_group_probe_task", None)
+        if probe is not None and not probe.done():
+            probe.cancel()
         # Cancel every running per-session animation task FIRST and wait
         # for them to settle. Otherwise asyncio.run() at the outer layer
         # force-kills them mid-edit, which can leave orphan tasks logging
@@ -1098,6 +1149,12 @@ class LifecycleMixin:
                 self._registered_scope_labels[scope.chat_id] = labels
                 log.info("Bot commands for %s: status, stop + %s",
                          scope.chat_id, ", ".join(sorted(labels)) or "(none)")
+            except ChatMigrated as e:
+                # The chat is named only inside `scope=`, so the rate
+                # limiter cannot tell which chat moved (roadmap 8.87).
+                chat_migration.note_chat_migrated(scope.chat_id, e.new_chat_id)
+                if prev is None:
+                    self._registered_scope_labels[scope.chat_id] = labels
             except Exception:
                 # E.g. a group the bot isn't a member of — log + skip.
                 log.warning("Failed to set bot commands for scope %s",

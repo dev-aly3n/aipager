@@ -119,6 +119,31 @@ previous config in memory. A typo or a file moved aside can neither
 lock you out nor let anyone in: a reload never switches a daemon
 that has scopes back to personal mode (only a restart does).
 
+### When Telegram upgrades the group
+
+Telegram turns a basic group into a supergroup when you make it public,
+turn on topics, pass 200 members, or change some admin rights, and the
+upgrade gives the group a new chat id. aipager follows it by itself: when
+it sees the upgrade (Telegram's notice in the group, or the first post to
+the old id), it moves the group's scope in `aipager.yaml` to the new id,
+moves the group's sessions, message targets and `/settings` with it, and
+posts one line in the group: "This group was upgraded by Telegram.
+aipager moved with it, nothing to do." The pinned status bar starts again
+in the upgraded group. The daemon log has a warning with both ids.
+
+Session names inside aipager keep the old id (you never see them), and
+`aipager.yaml` keeps a short `chat_migrations` record of the move, so a
+session started before the upgrade still belongs to the upgraded group,
+even after a restart. A session's internal name with the old id
+(`/name__g<old id>`) works in the upgraded group and nowhere else. If
+the daemon was stopped during the upgrade, it notices at its next start.
+A turn that is running at the moment of the upgrade finishes and its
+answer reaches the upgraded group, but its progress card is not shown
+again for the rest of that turn. If the new id is already a scope of its own,
+nothing moves and the log says so; remove one of the two with
+`aipager config`. "Test bot reachability" in `aipager config` shows the
+new id when it meets an upgraded group.
+
 ### Privacy mode, admin rights, and what the bot reads
 
 On `@BotFather`, leave **privacy mode ON** (the default). Telegram then

@@ -28,7 +28,10 @@ from pathlib import Path
 from typing import Any
 
 from aipager import bg_shells as _bg_shells
-from aipager.scope import chat_from_suffix, home_scope, strip_scope_suffix
+from aipager.scope import (
+    chat_from_suffix, follow_chat_migrations, home_scope, load_chat_migrations,
+    strip_scope_suffix,
+)
 from aipager.config import (
     GONE_SESSION_MAX_AGE_DAYS,
     COMPACT_INFLIGHT_MAX_SECONDS,
@@ -238,32 +241,67 @@ def set_live_scope_source(obj) -> None:
     _live_scope_source = weakref.ref(obj) if obj is not None else None
 
 
+def _live_scopes_and_policy():
+    src = _live_scope_source() if _live_scope_source is not None else None
+    if src is not None:
+        return getattr(src, "scopes", None), getattr(src, "policy", None)
+    from aipager import config
+    return getattr(config, "SCOPES", None), getattr(config, "POLICY", None)
+
+
 def home_chat() -> tuple[int, str] | None:
     """``(chat_id, kind)`` of the home chat in scope mode (roadmap 8.82):
     where a session with no chat of its own belongs, by
     :func:`aipager.scope.home_scope` over the live scopes. ``None`` in
     personal/legacy mode (no scopes), where callers keep using
     ``config.CHAT_ID`` exactly as before."""
-    src = _live_scope_source() if _live_scope_source is not None else None
-    if src is not None:
-        scopes = getattr(src, "scopes", None)
-        policy = getattr(src, "policy", None)
-    else:
-        from aipager import config
-        scopes = getattr(config, "SCOPES", None)
-        policy = getattr(config, "POLICY", None)
+    scopes, policy = _live_scopes_and_policy()
     home = home_scope(scopes, policy)
     if home is None:
         return None
     return home.chat_id, home.kind
 
 
+def chat_from_name(name: str) -> tuple[int, str] | None:
+    """The chat a session name's scope suffix names (``__d<n>`` /
+    ``__g<n>``), or ``None`` without one, after following any group
+    Telegram upgraded to a supergroup (roadmap 8.87): a name keeps the
+    old id (names are internal), and ``aipager.yaml``'s
+    ``chat_migrations`` says where that chat lives now. Not followed when
+    the old id is a configured scope again (the operator added it back)."""
+    return follow_migrated_chat(chat_from_suffix(name))
+
+
+def follow_migrated_chat(
+    chat: tuple[int, str] | None,
+) -> tuple[int, str] | None:
+    """*chat* (``(chat_id, kind)``), or where it lives now when Telegram
+    upgraded that group to a supergroup and the daemon followed it
+    (``aipager.yaml``'s ``chat_migrations``, roadmap 8.87). Unchanged when
+    the old id is a configured scope again."""
+    if chat is None:
+        return None
+    try:
+        migrations = load_chat_migrations()
+    except Exception:
+        log.debug("could not read the chat migrations", exc_info=True)
+        return chat
+    if chat[0] not in migrations:
+        return chat
+    scopes, _policy = _live_scopes_and_policy()
+    if any(s.chat_id == chat[0] for s in scopes or ()):
+        return chat
+    new = follow_chat_migrations(chat[0], migrations)
+    return (new, "group") if new != chat[0] else chat
+
+
 def chat_for_new_session(name: str) -> tuple[int, str] | None:
     """The chat a session the daemon has just learned of belongs to:
-    the chat its scope suffix names (``__d<n>`` / ``__g<n>``), else the
+    the chat its scope suffix names (``__d<n>`` / ``__g<n>``, following a
+    group's upgrade to a supergroup: :func:`chat_from_name`), else the
     home chat in scope mode, else ``None`` (personal/legacy mode: left
     unstamped, ``config.CHAT_ID`` resolves it as before)."""
-    return chat_from_suffix(name) or home_chat()
+    return chat_from_name(name) or home_chat()
 
 
 def _default_scope() -> tuple[int, str] | None:
@@ -1835,6 +1873,28 @@ class TrackedSession:
         return [d for d in self.delivered_digests
                 if d not in self.pending_digests]
 
+    def forget_chat_messages(self) -> None:
+        """Forget every message id this session holds in its chat, because
+        the chat is not where they live any more (roadmap 8.87: Telegram
+        upgraded the group to a supergroup, and message ids are per chat).
+        An edit, reply, reaction or delete aimed at one of them in the new
+        chat would reach a different message, or nothing. Kept: the
+        prompts themselves (a held message keeps its text and sender, and
+        loses only its reply pointer); a card claim in flight (``-1``),
+        whose send to the old chat fails on its own."""
+        self.last_msg_id = None
+        self.trigger_msg_id = None
+        self.busy_card_trigger = None
+        self.card_settled_msg_id = 0
+        self.pending_card_deletes = []
+        self.prompt_sent_msg = None
+        busy = self.busy_msg_id
+        if busy is not None and busy > 0:
+            self.busy_msg_id = None
+        self.pending_queue[:] = [
+            (item[0], None, *item[2:]) if len(item) > 1 else item
+            for item in self.pending_queue]
+
     def restore_delivered_digests(self, raw: object) -> None:
         """Refill the ring from a state file's value. Anything that is not
         a list of strings is ignored (an old or hand-edited file), and only
@@ -2645,6 +2705,39 @@ class SessionRegistry:
             except Exception:
                 pass
 
+    def migrate_chat(self, old: int, new: int) -> list[str]:
+        """Telegram upgraded the group *old* to the supergroup *new*
+        (roadmap 8.87): every session stamped with *old* moves to *new*
+        (its internal name keeps the old suffix; names are internal), and
+        so do the chat's message target and its members' own targets. The
+        pinned bar's message id and owed "send now" deletes in *old* are
+        dropped (those messages are not in the new chat). Returns the
+        names re-stamped. Idempotent: a second call finds nothing."""
+        moved: list[str] = []
+        for name, sess in self._sessions.items():
+            if sess.scope_chat_id == old:
+                sess.scope_chat_id, sess.scope_kind = new, "group"
+                sess.forget_chat_messages()
+                moved.append(name)
+        changed = bool(moved)
+        if old in self._targets:
+            self._targets.setdefault(new, self._targets.pop(old))
+            changed = True
+        for (chat, user), entry in list(self._user_targets.items()):
+            if chat == old:
+                del self._user_targets[(chat, user)]
+                self._user_targets.setdefault((new, user), entry)
+                changed = True
+        if self.pinned_msg_ids.pop(old, None) is not None:
+            changed = True
+        kept = [p for p in self.queued_line_deletes if p[0] != old]
+        if len(kept) != len(self.queued_line_deletes):
+            self.queued_line_deletes[:] = kept
+            changed = True
+        if changed:
+            self._dirty = True
+        return moved
+
     def mark_dirty(self) -> None:
         """Flag that state has changed and needs saving."""
         self._dirty = True
@@ -2905,7 +2998,7 @@ class SessionRegistry:
             if sess.scope_chat_id == 0:
                 # The chat its name's suffix names, else the home chat
                 # (never "prefer the group", roadmap 8.82).
-                _own = chat_from_suffix(name) or _default
+                _own = chat_from_name(name) or _default
                 if _own is not None:
                     sess.scope_chat_id, sess.scope_kind = _own
                     backfilled = True
@@ -3025,11 +3118,31 @@ class SessionRegistry:
 
         self._load_targets(data.get("targets"), saved_last_active)
         self._load_user_targets(data.get("user_targets"))
+        self._follow_chat_migrations()
 
         # Age out sessions that ended more than GONE_SESSION_MAX_AGE_DAYS
         # ago (roadmap 8.12) — after msg_map and last_active_session are
         # restored, so their references go with the entries.
         self.expire_gone()
+
+    def _follow_chat_migrations(self) -> None:
+        """At load: state saved before the daemon followed a group's
+        upgrade to a supergroup (roadmap 8.87: the daemon stopped before
+        it saved) still names the old chat. Move it, as
+        :meth:`migrate_chat` does live."""
+        try:
+            migrations = load_chat_migrations()
+        except Exception:
+            log.debug("could not read the chat migrations", exc_info=True)
+            return
+        for old in migrations:
+            moved_to = follow_migrated_chat((old, "group"))
+            if moved_to is None or moved_to[0] == old:
+                continue
+            names = self.migrate_chat(old, moved_to[0])
+            if names:
+                log.info("Chat %s was upgraded to %s: moved %d session(s) "
+                         "saved with the old id", old, moved_to[0], len(names))
 
     def _load_targets(self, raw, saved_last_active: str) -> None:
         """Restore the per-chat targets. State saved before they existed
