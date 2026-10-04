@@ -133,15 +133,16 @@ def test_two_dms_use_the_owners(mk_bot):
 
 
 def test_unstamped_session_resolves_to_home_from_the_live_scopes(mk_bot):
-    """resolve_chat_id and the pinned bar agree, and follow a reload."""
+    """resolve_chat_id follows a reload. The pinned bar shows a session
+    with no chat stamped in no chat (roadmap 8.72)."""
     bot = _scope_bot(mk_bot, [_group(), _dm()])
     s = TrackedSession(name="claude-old", label="old")   # never stamped
     assert resolve_chat_id(s) == DM
-    assert bot._pinned_chat_of(s) == DM
+    assert bot._pinned_chat_of(s) is None
     assert home_chat() == (DM, "dm")
     bot.scopes = [_group()]           # what reload_team does in place
     assert resolve_chat_id(s) == GROUP
-    assert bot._pinned_chat_of(s) == GROUP
+    assert bot._pinned_chat_of(s) is None
 
 
 def test_monitor_socket_scan_stamps_a_discovered_session(mk_bot, monkeypatch, run_async):

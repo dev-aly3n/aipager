@@ -31,9 +31,9 @@ from telegram.error import (
 from aipager.config import (
     APP_BUTTON,
     # Only the pinned bar reads CHAT_ID (`_pinned_chats`, `_pinned_chat_of`):
-    # a legacy personal install's one chat, and resolve_chat_id's fallback
-    # for an unstamped session outside scope mode. No session send, edit or
-    # delete uses it.
+    # a legacy personal install's one chat, where an unstamped session
+    # belongs (resolve_chat_id's fallback outside scope mode). No session
+    # send, edit or delete uses it.
     CHAT_ID,
     PINNED_MIN_EDIT_GAP,
     PINNED_RECREATE_MIN_INTERVAL,
@@ -49,7 +49,7 @@ from aipager.bot.flood_budget import (
 )
 from aipager.bot.rich_message import get_rate_limiter
 from aipager.policy_snapshot import queue_depth_parts
-from aipager.state import Status, TrackedSession
+from aipager.state import Status, TrackedSession, warn_unstamped
 from aipager.transcript import last_assistant_preview as _read_preview
 
 # Pure-function helpers and constants live in aipager.bot.transport
@@ -325,15 +325,17 @@ class DashboardMixin:
 
     @staticmethod
     def _pinned_chat_of(sess: TrackedSession) -> int | None:
-        """The chat a session's notifications go to — `resolve_chat_id`'s
-        rule, without its warning for an unresolvable id (asked every tick)."""
+        """The chat whose bar shows *sess*: its own. A session with no chat
+        stamped is in no chat's bar in scope mode (roadmap 8.72: it
+        belongs to no chat until stamped, a WARNING once), and in the one
+        chat's (CHAT_ID, `resolve_chat_id`'s fallback) in personal/legacy
+        mode. Without resolve_chat_id's warning for an unresolvable id
+        (asked every tick)."""
         if sess.scope_chat_id:
             return sess.scope_chat_id
-        # The same fallback as resolve_chat_id for an unstamped session
-        # (the home chat in scope mode, else CHAT_ID); the two must agree.
-        home = home_chat()
-        if home is not None:
-            return home[0]
+        if home_chat() is not None:
+            warn_unstamped(sess)
+            return None
         try:
             return int(CHAT_ID)
         except (TypeError, ValueError):

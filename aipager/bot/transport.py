@@ -103,19 +103,22 @@ def home_chat() -> tuple[int, str] | None:
 def resolve_chat_id(sess):
     """Destination chat for a session's outbound notifications (Phase B).
 
-    Returns the session's ``scope_chat_id`` (an int) when set. A session
-    not yet stamped (``scope_chat_id == 0``) goes to :func:`home_chat`
-    in scope mode (the owner's DM, from the bot's live scopes, roadmap
-    8.82; never "prefer the group"), else to the global
-    ``config.CHAT_ID`` (a str), which preserves the pre-multi-scope
-    behavior exactly for personal/legacy installs. Read at call time so
-    the value tracks runtime config.
+    Returns the session's ``scope_chat_id`` (an int) when set. In scope
+    mode a session not stamped (``scope_chat_id == 0``, a missed stamp:
+    WARNING once, roadmap 8.72) goes to the chat it would be stamped
+    with, its name's scope suffix, else :func:`home_chat` (the owner's
+    DM, from the bot's live scopes, roadmap 8.82; never "prefer the
+    group"), never "any chat". Personal/legacy mode: the global
+    ``config.CHAT_ID`` (a str), the pre-multi-scope behavior exactly.
+    Read at call time so the value tracks runtime config.
     """
     if sess.scope_chat_id:
         return sess.scope_chat_id
     home = home_chat()
     if home is not None:
-        return home[0]
+        from aipager.state import chat_from_name, warn_unstamped
+        warn_unstamped(sess)
+        return (chat_from_name(sess.name) or home)[0]
     from aipager import config
     return config.CHAT_ID
 

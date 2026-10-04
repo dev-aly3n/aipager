@@ -783,9 +783,9 @@ class CommandHandlersMixin:
         sessions = self.registry.all_sessions(chat_id)
         if not sessions and self.scopes is None:
             # Discovery (adopt raw dtach sockets) is a single-scope
-            # recovery aid only. In multi-scope it would create
-            # unstamped (scope_chat_id=0) sessions that leak into every
-            # scope, so an empty scope just says so (below).
+            # recovery aid only. In multi-scope the monitor's socket scan
+            # already adopts (and stamps) every socket, so an empty scope
+            # just says so (below).
             for name in await inject.list_sessions():
                 self.registry.get_or_create(name)
             sessions = self.registry.all_sessions(chat_id)

@@ -39,7 +39,7 @@ from aipager.bot.settings_menu import (
     render_settings_root,
     render_settings_section,
 )
-from aipager.state import Status
+from aipager.state import Status, session_foreign_to, warn_unstamped
 from aipager.team import (
     attribution_label,
 )
@@ -423,7 +423,7 @@ class CallbackDispatchMixin:
                 getattr(getattr(query, "from_user", None), "id", None), chat):
             await self._safe_answer(query, "You can't stop this session.")
             return False, None
-        if sess.scope_chat_id and chat is not None and sess.scope_chat_id != chat:
+        if session_foreign_to(sess, chat):
             await self._safe_answer(query, "That session isn't running here.")
             return False, None
         if sess.status == Status.GONE:
@@ -504,10 +504,10 @@ class CallbackDispatchMixin:
         Scope mode only; personal mode and legacy team mode are unchanged
         (``_authorize_callback`` already admitted the tapper there).
 
-        1. A tap naming a session that belongs to another chat is refused:
-           a button is only ever acted on in its session's own chat. An
-           unstamped session (``scope_chat_id`` 0) is not refused here
-           (roadmap 8.72).
+        1. A tap naming a session that is not one of the tapped chat's
+           is refused: a button is only ever acted on in its session's
+           own chat. An unstamped session (``scope_chat_id`` 0) is no
+           chat's in scope mode, so it is refused too (roadmap 8.72).
         2. The tapper's role in the TAPPED MESSAGE'S chat must grant the
            capability ``tap_gate.required_capability`` names for the verb.
         """
@@ -516,8 +516,10 @@ class CallbackDispatchMixin:
         chat_id = _message_chat_id(getattr(query, "message", None))
         if session_name not in tap_gate.SENTINEL_NAMESPACES:
             sess = self.registry.get(session_name)
-            if (sess is not None and sess.scope_chat_id
-                    and sess.scope_chat_id != chat_id):
+            # Scope mode here, so a 0 (unstamped) never equals a chat.
+            if sess is not None and sess.scope_chat_id != chat_id:
+                if not sess.scope_chat_id:
+                    warn_unstamped(sess)
                 log.info("tap refused: %s:%s belongs to chat %s, tapped in %s",
                          session_name, action, sess.scope_chat_id, chat_id)
                 await self._safe_answer(query, tap_gate.OTHER_CHAT_TEXT)

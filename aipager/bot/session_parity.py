@@ -56,7 +56,9 @@ from aipager.bot.transport import (
     reply_text,
 )
 from aipager.preferences import get_preferences, is_valid_value, resolve_preferences
-from aipager.state import PREFERENCE_OVERRIDE_FIELDS, Status, TrackedSession
+from aipager.state import (
+    PREFERENCE_OVERRIDE_FIELDS, Status, TrackedSession, session_foreign_to,
+)
 
 log = logging.getLogger(__name__)
 
@@ -1208,7 +1210,7 @@ async def handle_callback(
             await bot._safe_answer(query, "You can't send to this session.")
             return True
         if sess.status == Status.GONE or (
-                sess.scope_chat_id and chat_id is not None and sess.scope_chat_id != chat_id):
+                session_foreign_to(sess, chat_id)):
             await bot._safe_answer(query, "That session isn't running here.")
             return True
         bot.registry.set_target(sess.name, chat_id, user_id)
@@ -1265,7 +1267,7 @@ async def handle_callback(
         if not bot._can_prompt_user(user_id, chat_id):
             await bot._safe_answer(query, "You can't end this session.")
             return True
-        if sess.scope_chat_id and chat_id is not None and sess.scope_chat_id != chat_id:
+        if session_foreign_to(sess, chat_id):
             await bot._safe_answer(query, "That session isn't running here.")
             return True
         if sess.is_resuming():
@@ -1307,7 +1309,7 @@ async def handle_callback(
         return True
 
     if action == "mode_show":
-        if sess.scope_chat_id and chat_id is not None and sess.scope_chat_id != chat_id:
+        if session_foreign_to(sess, chat_id):
             await bot._safe_answer(query, "That session isn't running here.")
             return True
         if sess.status == Status.GONE:
@@ -1328,7 +1330,7 @@ async def handle_callback(
         if not bot._can_prompt_user(user_id, chat_id):
             await bot._safe_answer(query, "You can't change this session.")
             return True
-        if sess.scope_chat_id and chat_id is not None and sess.scope_chat_id != chat_id:
+        if session_foreign_to(sess, chat_id):
             await bot._safe_answer(query, "That session isn't running here.")
             return True
         if sess.status == Status.GONE:
@@ -1436,7 +1438,7 @@ async def handle_callback(
         if not bot._can_prompt_user(user_id, chat_id):
             await bot._safe_answer(query, "You can't restart this session.")
             return True
-        if sess.scope_chat_id and chat_id is not None and sess.scope_chat_id != chat_id:
+        if session_foreign_to(sess, chat_id):
             await bot._safe_answer(query, "That session isn't running here.")
             return True
         if not sess.tap_is_for_this_turn(None, turn=int(action[9:])):

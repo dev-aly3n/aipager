@@ -737,9 +737,12 @@ def test_p2_owner_resume_auto_resumes_exactly_the_tapped_session(
 
 
 def _unstamped_twin_world(bot):
-    """An older UNSTAMPED ended `api` (scope 0 matches every chat in a
-    label lookup, roadmap 8.72) beside the group's own ended `api`."""
-    old = _session(bot, "claude-api", 0, "", status=Status.GONE)
+    """An older ended `api` of the SAME group (another internal name)
+    beside the group's own ended `api`: a lookup by label finds the older
+    twin first. (It used to be an unstamped twin, which matched every
+    chat; since roadmap 8.72 an unstamped session is no chat's.)"""
+    old = _session(bot, "claude-api__g1001_old", GROUP, "group",
+                   status=Status.GONE)
     old.claude_session_id, old.cwd = "old-session-id", "/somewhere/else"
     grp = _session(bot, S, GROUP, "group", status=Status.GONE)
     grp.claude_session_id, grp.cwd = "group-session-id", "/srv/team"
@@ -747,7 +750,7 @@ def _unstamped_twin_world(bot):
 
 
 def test_resume_button_acts_on_the_session_it_names(gbot, run_async, monkeypatch):
-    """By label, the older unstamped twin would be found first."""
+    """By label, the older twin would be found first."""
     bot = gbot()
     fx = _Effects(monkeypatch, bot)
     old, grp = _unstamped_twin_world(bot)
@@ -821,13 +824,16 @@ def test_a_sessions_own_chat_is_not_refused(gbot, reached, run_async, form):
     assert reached == [(S, "stop")]
 
 
-def test_an_unstamped_session_is_not_refused_here(gbot, reached, run_async):
-    """Roadmap 8.72 (a later delivery) decides unstamped sessions."""
+@pytest.mark.parametrize("chat,uid", [(GROUP, BOB), (DM, ALY)])
+def test_an_unstamped_session_is_refused_in_every_chat(
+        gbot, reached, run_async, chat, uid):
+    """Roadmap 8.72: a session with no chat stamped is no chat's."""
     bot = gbot()
     _session(bot, "claude-legacy", 0, "", status=Status.BUSY)
-    u, q = _tap(GROUP, BOB, "claude-legacy:stop")
+    u, q = _tap(chat, uid, "claude-legacy:stop")
     run_async(bot._handle_callback(u, MagicMock()))
-    assert reached == [("claude-legacy", "stop")]
+    assert reached == []
+    assert _answers(q) == [OTHER_CHAT]
 
 
 def test_sentinels_are_not_sessions(gbot, reached, run_async):

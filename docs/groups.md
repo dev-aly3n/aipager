@@ -680,7 +680,10 @@ reconstruct later what each person did.
   there**: its cards, answers, permission prompts, files and notices.
   A message in one chat never goes to a session of another chat, and a
   session's name only works in its own chat: typing another chat's
-  session name answers "Unknown session".
+  session name answers "Unknown session". A session started while
+  aipager ran with no chats set up gets its chat as soon as
+  `aipager config` adds them; until a session has a chat, no chat
+  lists it or can act on it.
 - **Sessions started in the terminal** (`aipager session <name>`)
   belong to the owner's DM: the DM whose member has the `owner` role (a
   role with `bypass_safety`). With several DMs and none of them the

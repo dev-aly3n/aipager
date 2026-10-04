@@ -304,6 +304,45 @@ def chat_for_new_session(name: str) -> tuple[int, str] | None:
     return chat_from_name(name) or home_chat()
 
 
+def session_in_chat(sess, chat_id) -> bool:
+    """Whether *sess* is one of *chat_id*'s sessions (roadmap 8.72): a
+    stamped session belongs to its own chat only. One with no chat
+    stamped (``scope_chat_id`` 0) belongs to NO chat in scope mode:
+    every session is stamped when the daemon learns of it, so this is a
+    missed stamp (a WARNING, once per session), and "any chat" would make
+    it every chat's session and target. In personal/legacy mode, which
+    has one chat, it is that chat's (any chat, as always)."""
+    if sess.scope_chat_id:
+        return sess.scope_chat_id == chat_id
+    if home_chat() is None:
+        return True
+    warn_unstamped(sess)
+    return False
+
+
+def session_foreign_to(sess, chat_id) -> bool:
+    """True when *sess* is not one of *chat_id*'s sessions
+    (:func:`session_in_chat`). ``None`` chat (a legacy unscoped update):
+    never foreign, as before."""
+    return chat_id is not None and not session_in_chat(sess, chat_id)
+
+
+def warn_unstamped(sess) -> None:
+    """Log, once per session, that *sess* was found with no chat stamped
+    in scope mode (roadmap 8.72): some path learned of it without
+    stamping it, and it belongs to no chat until it is."""
+    if getattr(sess, "unstamped_warned", False):
+        return
+    try:
+        sess.unstamped_warned = True
+    except AttributeError:
+        pass
+    log.warning(
+        "[%s] session %s has no chat stamped in scope mode (a missed "
+        "stamp): it belongs to no chat until it is stamped",
+        getattr(sess, "label", ""), getattr(sess, "name", ""))
+
+
 def _default_scope() -> tuple[int, str] | None:
     """Resolve the configured home chat for backfilling legacy sessions.
 
@@ -675,11 +714,16 @@ class TrackedSession:
     override_card_age_decay: bool | None = None
     # Multi-scope (Phase B): which Telegram chat this session belongs to.
     # All outbound notifications for the session route here instead of the
-    # global CHAT_ID. `scope_chat_id == 0` means "not yet stamped" — the
-    # notify resolver falls back to CHAT_ID, and `load()` backfills the
-    # value from the single configured chat. `scope_kind` is "dm"|"group".
+    # global CHAT_ID. `scope_chat_id == 0` means "not stamped": in scope
+    # mode every session is stamped when the daemon learns of it, and an
+    # unstamped one belongs to no chat (`session_in_chat`, roadmap 8.72);
+    # in personal/legacy mode it is the one chat's (CHAT_ID).
+    # `scope_kind` is "dm"|"group".
     scope_chat_id: int = 0
     scope_kind: str = ""
+    # Transient: the "found unstamped in scope mode" WARNING was logged
+    # for this session (`warn_unstamped`, once per session).
+    unstamped_warned: bool = field(default=False, repr=False)
     # Origin of the most recent prompt (Phase D). "telegram" or "terminal".
     # Transient (NOT persisted). Defaults fail-closed to "telegram" so the
     # safety boundary (Phase E) treats unknown/between-turn state as
@@ -2247,7 +2291,39 @@ class SessionRegistry:
             self._sessions[name] = sess
             log.info("Tracking new session: %s [%s]", name, label)
             self._evict_gone_overflow()
+        else:
+            # A known session still unstamped in scope mode (a missed
+            # stamp, roadmap 8.72) is stamped the moment anything (the
+            # monitor's 2 s socket scan, a hook, an adoption) touches it.
+            sess = self._sessions[name]
+            if not sess.scope_chat_id and home_chat() is not None:
+                warn_unstamped(sess)
+                self.stamp_unstamped(name)
         return self._sessions[name]
+
+    def stamp_unstamped(self, only: str | None = None) -> list[str]:
+        """Scope mode: stamp every session with no chat stamped (or just
+        *only*) by the stamping rule, its name's suffix, else the home
+        chat (:func:`chat_for_new_session`, the rule ``get_or_create`` and
+        ``load`` apply). Returns the names stamped. Personal/legacy mode:
+        nothing (there, unstamped means the one chat)."""
+        if home_chat() is None:
+            return []
+        stamped: list[str] = []
+        names = [only] if only is not None else list(self._sessions)
+        for name in names:
+            sess = self._sessions.get(name)
+            if sess is None or sess.scope_chat_id:
+                continue
+            chat = chat_for_new_session(name)
+            if chat is None:
+                continue
+            sess.scope_chat_id, sess.scope_kind = chat
+            stamped.append(name)
+            log.info("[%s] stamped with chat %s", sess.label, chat[0])
+        if stamped:
+            self._dirty = True
+        return stamped
 
     def expire_gone(self, now: float | None = None) -> list[str]:
         """Drop every GONE session whose ``gone_at`` is older than
@@ -2311,10 +2387,12 @@ class SessionRegistry:
 
     @staticmethod
     def _target_chat(sess: TrackedSession | None) -> int:
-        """The chat *sess* is the target of: its own; 0 for a session with
-        no chat stamped, which matches any chat (the rule `all_sessions`
-        and `find_by_label` apply to it too, so the target never disagrees
-        with the label lookups)."""
+        """The slot *sess* is recorded as a target in: its own chat; 0 for
+        a session with no chat stamped. A target is only ever returned for
+        a chat it belongs to (:func:`session_in_chat`, the rule
+        `all_sessions` and `find_by_label` apply too): the 0 slot is the
+        one chat's in personal/legacy mode, and no chat's in scope mode
+        (roadmap 8.72) until the session is stamped."""
         return sess.scope_chat_id if sess is not None and sess.scope_chat_id else 0
 
     def set_target(
@@ -2328,7 +2406,7 @@ class SessionRegistry:
         if not name or not _is_group_chat(chat_id) or not _is_user_id(user_id):
             return
         sess = self._sessions.get(name)
-        if sess is None or self._target_chat(sess) not in (0, chat_id):
+        if sess is None or not session_in_chat(sess, chat_id):
             return
         self._user_targets[(chat_id, user_id)] = (name, self._target_seq)
         self._dirty = True
@@ -2337,8 +2415,9 @@ class SessionRegistry:
         self, chat_id: int | None, user_id: int | None = None,
     ) -> TrackedSession | None:
         """Where an unaddressed message in *chat_id* goes: the newest
-        target made in that chat, or by a session with no chat stamped,
-        that is still one of the chat's sessions (a newer one since
+        target made in that chat (or, in personal/legacy mode, by a
+        session with no chat stamped) that is still one of the chat's
+        sessions (:func:`session_in_chat`) (a newer one since
         stamped into another chat is skipped, not a dead end). Never a
         session that belongs to another chat. ``None`` chat (a legacy
         unscoped update) falls back to the install-wide latest.
@@ -2360,7 +2439,7 @@ class SessionRegistry:
             key=lambda e: e[1], reverse=True)
         for name, _order in entries:
             sess = self._sessions.get(name)
-            if sess is not None and self._target_chat(sess) in (0, chat_id):
+            if sess is not None and session_in_chat(sess, chat_id):
                 return sess
         return None
 
@@ -2369,7 +2448,7 @@ class SessionRegistry:
         if entry is not None:
             sess = self._sessions.get(entry[0])
             if (sess is not None and sess.status != Status.GONE
-                    and self._target_chat(sess) in (0, chat_id)):
+                    and session_in_chat(sess, chat_id)):
                 return sess
         if self.ended_target_for(chat_id, user_id) is not None:
             return None
@@ -2391,7 +2470,7 @@ class SessionRegistry:
         if entry is None:
             return None
         sess = self._sessions.get(entry[0])
-        if sess is not None and sess.label and self._target_chat(sess) in (0, chat_id):
+        if sess is not None and sess.label and session_in_chat(sess, chat_id):
             return sess
         return None
 
@@ -2411,7 +2490,7 @@ class SessionRegistry:
         sess = self._sessions.get(entry[0])
         if (sess is not None and sess.status == Status.GONE and sess.label
                 and not sess.is_resuming()
-                and self._target_chat(sess) in (0, chat_id)):
+                and session_in_chat(sess, chat_id)):
             return sess
         return None
 
@@ -2628,17 +2707,26 @@ class SessionRegistry:
     def get_session_by_msg(self, msg_id: int, chat_id: int) -> TrackedSession | None:
         """Find session that owns a Telegram message, scoped to ``chat_id``.
 
-        A stored chat_id of ``0`` is a wildcard — the same legacy-tolerant
-        convention :meth:`all_sessions` / :meth:`find_by_label` already use
-        for "unstamped" sessions — so it matches any calling ``chat_id``.
-        This matters because bot-message tracking sites resolve their
-        chat id via ``resolve_chat_id_int``, which can legitimately return
-        ``None`` (→ ``0``) on an unconfigured/unstamped install; the
-        wildcard keeps that degenerate case working exactly as before.
+        A stored chat_id of ``0`` is a wildcard for any calling
+        ``chat_id``. This matters because bot-message tracking sites
+        resolve their chat id via ``resolve_chat_id_int``, which can
+        legitimately return ``None`` (→ ``0``) on an unconfigured
+        personal install; the wildcard keeps that degenerate case working
+        exactly as before. In scope mode (where such an entry can only be
+        left over from personal mode) it is honoured only for a session
+        of *chat_id* (:func:`session_in_chat`, roadmap 8.72). An entry
+        under *chat_id* itself is that chat's message whatever the
+        session's stamp: an unstamped session's output goes to the chat
+        it would be stamped with (``resolve_chat_id``), so a reply to it
+        there reaches it, never another chat.
         """
         name = self._msg_map.get((chat_id, msg_id))
         if name is None and chat_id != 0:
             name = self._msg_map.get((0, msg_id))
+            sess = self._sessions.get(name) if name else None
+            if (sess is not None and home_chat() is not None
+                    and not session_in_chat(sess, chat_id)):
+                return None
         if name:
             return self._sessions.get(name)
         return None
@@ -2652,16 +2740,18 @@ class SessionRegistry:
         """All tracked sessions, optionally filtered to a scope.
 
         Multi-scope safe: when ``scope_chat_id`` is given, returns only
-        sessions belonging to that chat. A not-yet-stamped session
-        (``scope_chat_id == 0``) matches any scope — same legacy-tolerant
-        rule as :meth:`find_by_label` / :meth:`live_labels`. ``None``
-        (the default) returns everything, preserving single-scope callers.
+        sessions belonging to that chat (:func:`session_in_chat`, the
+        rule :meth:`find_by_label` / :meth:`live_labels` apply too): an
+        unstamped session (``scope_chat_id == 0``) is no chat's in scope
+        mode (roadmap 8.72) and the one chat's in personal/legacy mode.
+        ``None`` (the default) returns everything, preserving single-scope
+        callers.
         """
         if scope_chat_id is None:
             return dict(self._sessions)
         return {
             name: s for name, s in self._sessions.items()
-            if s.scope_chat_id in (0, scope_chat_id)
+            if session_in_chat(s, scope_chat_id)
         }
 
     def find_by_label(
@@ -2691,9 +2781,8 @@ class SessionRegistry:
         for sess in self._sessions.values():
             if sess.label != label:
                 continue
-            if scope_chat_id is not None and sess.scope_chat_id not in (
-                0, scope_chat_id,
-            ):
+            if (scope_chat_id is not None
+                    and not session_in_chat(sess, scope_chat_id)):
                 continue
             if sess.status == Status.GONE:
                 if include_gone and gone_match is None:
@@ -2708,9 +2797,8 @@ class SessionRegistry:
         for sess in self._sessions.values():
             if sess.status == Status.GONE or not sess.label:
                 continue
-            if scope_chat_id is not None and sess.scope_chat_id not in (
-                0, scope_chat_id,
-            ):
+            if (scope_chat_id is not None
+                    and not session_in_chat(sess, scope_chat_id)):
                 continue
             out.add(sess.label)
         return out

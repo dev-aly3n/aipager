@@ -66,11 +66,11 @@ def test_track_message_moves_only_the_sessions_own_chat():
 
 
 def test_a_session_with_no_chat_stamped_is_everyones_as_before():
-    """The legacy rule `all_sessions` and `find_by_label` apply: scope 0
-    matches any chat. The newest of the chat's own target and such a
-    session wins. (Review-1 002 proposed keying it by CHAT_ID instead; kept
-    as it is so the target never disagrees with the label lookups,
-    roadmap 8.72.)"""
+    """Personal/legacy mode (no scopes, one chat), the rule `all_sessions`
+    and `find_by_label` apply there: scope 0 matches any chat. The newest
+    of the chat's own target and such a session wins. In scope mode an
+    unstamped session is no chat's (roadmap 8.72,
+    tests/test_session_no_any_chat.py)."""
     legacy = _sess("claude-old", "old", 0)
     reg = _registry(_sess(ANA, "ana", ANA_CHAT), legacy)
     reg.last_active_session = ANA

@@ -532,9 +532,11 @@ class SessionOpsMixin:
 
         Foreign when: the name ends in a scope suffix naming another chat;
         or the registry knows it stamped with another chat; or (scope
-        mode) it has no chat of its own and its home chat
-        (``scope.home_scope``) is not *chat_id*. Personal/legacy mode
-        with no suffix and no stamp: never foreign (one chat).
+        mode) it has no chat stamped and the chat it would be stamped
+        with, its home chat (``scope.home_scope``), is not *chat_id*
+        (roadmap 8.72: never "any chat"; adopting it stamps it with that
+        chat). Personal/legacy mode with no suffix and no stamp: never
+        foreign (one chat).
         """
         from aipager.state import chat_from_name
         from aipager.bot.transport import home_chat
@@ -574,10 +576,11 @@ class SessionOpsMixin:
         label while the internal name stays put, so the pre-rename name
         goes on resolving to a live socket indefinitely, and re-labelling
         an already-tracked entry here would silently undo the rename.
-        In scope mode a newly adopted session is stamped with its chat by
-        `get_or_create` (its suffix's, else the home chat), which the
-        check above has just proved is *chat_id*; in personal/legacy
-        mode an unsuffixed name stays unstamped, as before.
+        In scope mode an adopted session is stamped with its chat by
+        `get_or_create` (its suffix's, else the home chat; a known one
+        still unstamped too, roadmap 8.72), which the check above has
+        just proved is *chat_id*; in personal/legacy mode an unsuffixed
+        name stays unstamped, as before.
         """
         if self._typed_name_foreign(session_name, chat_id):
             return None
@@ -883,9 +886,10 @@ class SessionOpsMixin:
                 member = sender
                 role = (self.policy.get_role(member.role)
                         if member is not None else None)
-                # The session's own chat, else the home chat for one not
-                # stamped yet (as for its messages): an unstamped session's
-                # note carries that chat's deny_tools too.
+                # The session's own chat, else (scope mode) the chat it
+                # would be stamped with, as for its messages (roadmap
+                # 8.72): an unstamped session's note carries that chat's
+                # deny_tools too.
                 scope = self._scope_for(resolve_chat_id_int(sess))
             style = prefs_mod.style_text(
                 prefs_mod.resolve_preferences(

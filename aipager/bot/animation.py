@@ -2595,8 +2595,8 @@ class AnimationMixin:
 
         N is counted over ``all_sessions()`` filtered by
         ``resolve_chat_id_int`` — NOT the convenient ``all_sessions(chat)``,
-        which filters on the RAW ``scope_chat_id`` and treats 0 as matching
-        every scope, so every legacy session would be counted into every
+        which in personal/legacy mode treats an unstamped (0) session as
+        every chat's, so every legacy session would be counted into every
         chat (research D9).
 
         The pacing comes from the live limiter, read late on every call

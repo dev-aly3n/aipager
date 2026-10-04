@@ -250,6 +250,18 @@ class LifecycleMixin:
         step is best-effort: one failing never stops the next."""
         from aipager.bot import live_reload
 
+        # A daemon that started in personal mode left its sessions with no
+        # chat stamped; in scope mode such a session is no chat's (roadmap
+        # 8.72), so they are stamped now, by the rule discovery and load
+        # apply (the name's suffix, else the home chat).
+        try:
+            stamped = self.registry.stamp_unstamped()
+            if stamped:
+                log.info("Scope reload: stamped %d session(s) with their "
+                         "chat", len(stamped))
+        except Exception:
+            log.warning("Could not stamp the unstamped sessions",
+                        exc_info=True)
         added: set[int] = set()
         removed: set[int] = set()
         gate = getattr(self, "_message_chat_gate", None)

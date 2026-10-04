@@ -63,7 +63,7 @@ from aipager.bot.transport import (
     send_text,
 )
 from aipager.dtach import inject
-from aipager.state import Status, TrackedSession
+from aipager.state import Status, TrackedSession, session_foreign_to
 
 if TYPE_CHECKING:
     from telegram import Update
@@ -664,7 +664,7 @@ class SendNowMixin:
             # The line stays: someone else in the chat may tap it (D6).
             await self._safe_answer(query, TOAST_CANNOT_PROMPT)
             return
-        if sess.scope_chat_id and chat_id is not None and sess.scope_chat_id != chat_id:
+        if session_foreign_to(sess, chat_id):
             await self._safe_answer(query, TOAST_UNAVAILABLE)
             return
         # The core in its own task (its checks and the chord's start still
