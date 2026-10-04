@@ -48,6 +48,34 @@ DENY_PATHS_NO_ACCESS: tuple[str, ...] = (
 )
 
 # ---------------------------------------------------------------------------
+# Credential files (roadmap 8.79): keys, tokens and passwords other
+# programs keep in the home folder. No access for every role without
+# ``bypass_role_denies`` (the built-in ``user`` and ``read_only`` roles,
+# a custom role ``policy.yaml`` defines, and the floor an unattributed
+# turn runs under); owners and admins keep them. A role default, not part
+# of :data:`DENY_PATHS_NO_ACCESS`, so ``policy.yaml`` can still set a
+# role's ``deny_paths_no_access`` (which replaces this list for it). Every
+# entry is ``~``-anchored: an unanchored pattern would deny every Grep
+# and Glob of a restricted turn (see ``_search_violation``).
+# ---------------------------------------------------------------------------
+CREDENTIAL_PATHS: tuple[str, ...] = (
+    "~/.ssh/**",
+    "~/.gnupg/**",
+    "~/.aws/**",
+    "~/.config/gh/**",
+    "~/.git-credentials",
+    "~/.netrc",
+    "~/.docker/config.json",
+    "~/.kube/**",
+    "~/.config/gcloud/**",
+    "~/.azure/**",
+    "~/.password-store/**",
+    "~/.pgpass",
+    "~/.npmrc",
+    "~/.pypirc",
+)
+
+# ---------------------------------------------------------------------------
 # B2 — no-write paths (READ ok, block WRITE). Empty by default; reserved
 # for operator-declared project paths.
 # ---------------------------------------------------------------------------
@@ -164,6 +192,7 @@ BUILTIN_ROLE_DEFAULTS: dict[str, dict] = {
         "can_prompt": True,
         "can_approve": True,
         "deny_tools": RESTRICTED_DENY_TOOLS,
+        "deny_paths_no_access": CREDENTIAL_PATHS,
     },
     "read_only": {
         "bypass_safety": False,
@@ -171,6 +200,7 @@ BUILTIN_ROLE_DEFAULTS: dict[str, dict] = {
         "can_prompt": False,
         "can_approve": False,
         "deny_tools": RESTRICTED_DENY_TOOLS,
+        "deny_paths_no_access": CREDENTIAL_PATHS,
     },
 }
 
@@ -313,6 +343,24 @@ def _under(path: str, root: str) -> bool:
     return p == r or p.startswith(r if r == "/" else r + "/")
 
 
+def home_folder() -> str:
+    """The OS user's home folder, symlinks resolved."""
+    return _realpath(os.path.expanduser("~"))
+
+
+def is_wide_folder(path: str) -> bool:
+    """True when ``path``, symlinks resolved, is ``/``, the home folder or
+    a folder that holds the home folder (roadmap 8.79). A restricted turn
+    whose session runs there would have the whole home folder as its
+    project: ``~/.bashrc``, ``~/.ssh/authorized_keys`` and
+    ``~/.config/systemd/user`` among its writable files. An unreadable
+    path counts as wide (fail closed)."""
+    if not isinstance(path, str) or not path or "\x00" in path:
+        return True
+    real = _realpath(os.path.abspath(path))
+    return _under(home_folder(), real)
+
+
 def _matches_one(target: str, g: str) -> bool:
     target, g = _fold(target), _fold(g)
     if g.startswith("/"):
@@ -362,9 +410,17 @@ def _glob_problem(glob) -> str | None:
     return None
 
 
+# The deny reason when a restricted turn's session runs in the home folder
+# (or above it), whose folder is then no write or search root (8.79).
+def _wide_cwd_reason(tool_name: str, verb: str) -> str:
+    return (f"{tool_name} denied - this session runs in the home folder "
+            f"(or a folder above it), and this role can only {verb} inside "
+            "a project folder")
+
+
 def _search_violation(
     tool_name: str, tool_input: dict, no_access: tuple[str, ...],
-    cwd: str | None, roots: tuple[str, ...],
+    cwd: str | None, roots: tuple[str, ...], wide_cwd: bool = False,
 ) -> str | None:
     """A confined turn's Grep/Glob, as an allow-list (roadmap 8.52,
     operator decision 2026-09-27). Allowed only when:
@@ -387,6 +443,8 @@ def _search_violation(
     spelled = _norm(root, cwd)
     real = _realpath(spelled)
     if not any(_under(real, _realpath(_norm(r))) for r in roots):
+        if wide_cwd:
+            return _wide_cwd_reason(tool_name, "search")
         return (f"{tool_name} outside the session's folder - a restricted "
                 "turn searches only its project and scratchpad")
     for glob in no_access:
@@ -407,7 +465,8 @@ def _search_violation(
 
 
 def _confinement_violation(tool_name: str, real: str,
-                           write_roots: tuple[str, ...]) -> str | None:
+                           write_roots: tuple[str, ...],
+                           wide_cwd: bool = False) -> str | None:
     """A write that is not inside one of ``write_roots``, or that lands
     on a file which makes Claude Code or git run a command
     (:data:`_NEVER_WRITE_DIRS`, :data:`_NEVER_WRITE_FILES`). ``real`` is
@@ -426,6 +485,8 @@ def _confinement_violation(tool_name: str, real: str,
             return (f"{tool_name} to a file that runs commands "
                     "(.claude/, .git/, .mcp.json)")
         return None
+    if wide_cwd:
+        return _wide_cwd_reason(tool_name, "write")
     return (f"{tool_name} outside the session's folder - a restricted turn "
             "writes only in its project and scratchpad")
 
@@ -437,6 +498,7 @@ def path_violation(
     cwd: str | None = None,
     write_roots: tuple[str, ...] | None = None,
     readable: tuple[str, ...] = (),
+    wide_cwd: bool = False,
 ) -> str | None:
     """Reason string if this tool touches a protected path, else None.
 
@@ -450,6 +512,9 @@ def path_violation(
       checked on its ``path`` only, as before.
     - ``readable``: exact files the Read tool may open even though a
       no-access glob covers them (the session's own reply file).
+    - ``wide_cwd``: the session runs in the home folder or above it, so
+      ``write_roots`` left its folder out (roadmap 8.79); a write or
+      search outside the roots then says so in its deny reason.
     """
     key = _PATH_KEYS.get(tool_name)
     if not key:
@@ -457,7 +522,7 @@ def path_violation(
     tool_input = tool_input or {}
     if tool_name in _SEARCH_TOOLS and write_roots is not None:
         return _search_violation(tool_name, tool_input, no_access, cwd,
-                                 write_roots)
+                                 write_roots, wide_cwd)
     raw = _js_trim(tool_input.get(key))
     if raw is None or raw == "":
         return None
@@ -477,7 +542,8 @@ def path_violation(
             if _matches_targets(targets, glob):
                 return f"{tool_name} write to protected path {glob}"
         if write_roots is not None:
-            return _confinement_violation(tool_name, real, write_roots)
+            return _confinement_violation(tool_name, real, write_roots,
+                                          wide_cwd)
     return None
 
 

@@ -453,7 +453,7 @@ def test_an_invalid_custom_model_asks_again(wbot, mk_update, run_async, mk_cb):
 
 
 def test_picking_a_folder_sets_it(wbot, mk_update, run_async, mk_cb, tmp_path, monkeypatch):
-    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat: [str(tmp_path)])
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat, **_kw: [str(tmp_path)])
     bot = wbot()
     _open_card(bot, mk_update, run_async)
     update, query = mk_cb()
@@ -467,7 +467,7 @@ def test_picking_a_folder_sets_it(wbot, mk_update, run_async, mk_cb, tmp_path, m
 
 
 def test_a_new_folder_is_created_and_used(wbot, mk_update, run_async, mk_cb, tmp_path, monkeypatch):
-    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat: [str(tmp_path)])
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat, **_kw: [str(tmp_path)])
     bot = wbot()
     _open_card(bot, mk_update, run_async)
     update, query = mk_cb()
@@ -480,7 +480,7 @@ def test_a_new_folder_is_created_and_used(wbot, mk_update, run_async, mk_cb, tmp
 
 
 def test_new_folder_with_no_roots_toasts(wbot, mk_update, run_async, mk_cb, monkeypatch):
-    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat: [])
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat, **_kw: [])
     bot = wbot()
     _open_card(bot, mk_update, run_async)
     update, query = mk_cb()
@@ -497,7 +497,7 @@ def test_an_invalid_new_folder_name_asks_again_and_creates_nothing(
     is never taken as a session name."""
     root = tmp_path / "root"
     root.mkdir()
-    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat: [str(root)])
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat, **_kw: [str(root)])
     bot = wbot()
     _open_card(bot, mk_update, run_async)
     update, query = mk_cb()
@@ -514,7 +514,7 @@ def test_an_invalid_new_folder_name_asks_again_and_creates_nothing(
 def test_an_out_of_range_folder_reopens_a_fresh_list(
         wbot, mk_update, run_async, mk_cb, tmp_path, monkeypatch):
     roots = [str(tmp_path / "a")]
-    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat: list(roots))
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat, **_kw: list(roots))
     bot = wbot()
     _open_card(bot, mk_update, run_async)
     update, query = mk_cb()
@@ -535,7 +535,7 @@ def test_a_folder_index_resolves_against_the_list_that_was_shown(
     """Roots change between two openings of the picker: the tap resolves
     against the latest list shown, not the first."""
     roots = [str(tmp_path / "old")]
-    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat: list(roots))
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat, **_kw: list(roots))
     bot = wbot()
     _open_card(bot, mk_update, run_async)
     update, query = mk_cb()
@@ -844,10 +844,10 @@ def test_a_stored_model_is_used_and_a_withdrawn_one_ignored(wbot):
 
 def test_a_stored_folder_that_is_no_longer_allowed_falls_back(wbot, tmp_path, monkeypatch):
     preferences.set_new_session_default(CHAT, "cwd", str(tmp_path))
-    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat: [str(tmp_path)])
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat, **_kw: [str(tmp_path)])
     assert new_flow.resolve_new_session_settings(wbot(), CHAT, OWNER)["cwd"] == str(tmp_path)
 
-    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat: ["/elsewhere"])
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat, **_kw: ["/elsewhere"])
     assert new_flow.resolve_new_session_settings(wbot(), CHAT, OWNER)["cwd"] is None
 
 
@@ -865,7 +865,7 @@ def test_new_session_defaults_validate_and_clear():
 
 
 def test_settings_new_sessions_screen_sets_each_default(wbot, mk_cb, run_async, tmp_path, monkeypatch):
-    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat: [str(tmp_path)])
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat, **_kw: [str(tmp_path)])
     bot = wbot()
     update, query = mk_cb()
 
@@ -890,7 +890,7 @@ def test_a_default_folder_tap_saves_the_folder_that_was_shown(
     resolves against the list it was shown, not a fresh one."""
     a, b, c = (str(tmp_path / x) for x in "abc")
     roots = [a, b]
-    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat: list(roots))
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat, **_kw: list(roots))
     bot = wbot()
     update, query = mk_cb()
     run_async(new_flow.handle_callback(bot, update, query, "_", "set:ns:cwd"))
@@ -904,7 +904,7 @@ def test_a_default_folder_tap_saves_the_folder_that_was_shown(
 def test_a_default_folder_that_is_no_longer_allowed_is_refused(
         wbot, mk_cb, run_async, tmp_path, monkeypatch):
     roots = [str(tmp_path / "a")]
-    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat: list(roots))
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat, **_kw: list(roots))
     bot = wbot()
     update, query = mk_cb()
     run_async(new_flow.handle_callback(bot, update, query, "_", "set:ns:cwd"))

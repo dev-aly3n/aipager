@@ -159,7 +159,12 @@ def _apply_layer(
         raise PolicyError(f"{source}: `roles` must be a mapping")
     for name, spec in roles_raw.items():
         overrides = _coerce_role_overrides(str(name), spec, source)
-        base = roles.get(name) or Role(name=str(name))
+        # A role this file defines from nothing starts with the credential
+        # files denied, like the built-in restricted roles (roadmap 8.79):
+        # a role without bypass_role_denies never reads them unless its
+        # own deny_paths_no_access says otherwise.
+        base = roles.get(name) or Role(
+            name=str(name), deny_paths_no_access=safety.CREDENTIAL_PATHS)
         # Naming a tool in allow_tools is an explicit grant: it lifts that
         # tool from the deny_tools the role inherited (the built-in user
         # role denies Bash — safety.CODE_EXECUTION_TOOLS). Only when this

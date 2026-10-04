@@ -1209,6 +1209,17 @@ class CallbackDispatchMixin:
                                "Send /new again to replace it.",
                         show_alert=True)
                     return
+                # The fresh session's folder must be one its author may
+                # start in (roadmap 8.79), checked before the old one is
+                # killed: create_session would refuse it only afterwards.
+                from aipager.miniapp import launch as launch_rules
+                refusal = launch_rules.launch_folder_refusal(
+                    (pending or {}).get("cwd") or None,
+                    self._is_confined_user(prompt_author,
+                                           sess.scope_chat_id or None))
+                if refusal:
+                    await self._safe_answer(query, refusal, show_alert=True)
+                    return
                 self._new_conflict_pending.pop(session_name, None)
                 # Kill alive socket first, then launch fresh (no resume_id).
                 if sess and sess.status != Status.GONE:

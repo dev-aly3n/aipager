@@ -505,11 +505,25 @@ def _scratch_root(cwd: str | None, session_id) -> str:
     return root
 
 
-def _write_roots(cwd: str | None, session_id) -> tuple[str, ...]:
-    """Where a confined turn may write: the session's cwd (when the
-    payload carries one — none means scratchpad only, fail closed) and
-    its scratchpad."""
-    roots = [cwd] if cwd and os.path.isabs(cwd) else []
+def _cwd_is_wide(cwd: str | None) -> bool:
+    """The session runs in ``/``, the home folder or a folder above it
+    (roadmap 8.79): its folder is then no project a confined turn may
+    write or search in."""
+    return bool(cwd) and os.path.isabs(cwd) and safety.is_wide_folder(cwd)
+
+
+def _write_roots(cwd: str | None, session_id,
+                 wide: bool | None = None) -> tuple[str, ...]:
+    """Where a confined turn may write (and search): the session's cwd
+    (when the payload carries one — none means scratchpad only, fail
+    closed) and its scratchpad. A cwd that is ``/``, the home folder or
+    an ancestor of it is left out (roadmap 8.79): with it, "the project"
+    would be the whole home folder, shell startup files and
+    ``~/.ssh/authorized_keys`` included. The scratchpad stays. ``wide``:
+    :func:`_cwd_is_wide` already worked out by the caller."""
+    if wide is None:
+        wide = _cwd_is_wide(cwd)
+    roots = [cwd] if cwd and os.path.isabs(cwd) and not wide else []
     roots.append(_scratch_root(cwd, session_id))
     return tuple(roots)
 
@@ -624,9 +638,11 @@ def _decide(data: dict) -> dict | None:
     # write only inside the session's folder and scratchpad (roadmap
     # 8.50). The folder is the hook payload's cwd — Claude Code's, never
     # the tool input's. A snapshot that predates the field is confined.
+    confined = snap.get("confine_writes") is not False
+    wide_cwd = confined and _cwd_is_wide(cwd)
     write_roots = (
-        _write_roots(cwd, data.get("session_id"))
-        if snap.get("confine_writes") is not False else None
+        _write_roots(cwd, data.get("session_id"), wide_cwd)
+        if confined else None
     )
     # The one control file a turn may read: its own session's reply
     # context, which the prompt tells Claude to Read (session_ops).
@@ -635,7 +651,8 @@ def _decide(data: dict) -> dict | None:
     reason = (
         safety.path_violation(tool_name, tool_input, no_access, no_write,
                               cwd=cwd, write_roots=write_roots,
-                              readable=readable)
+                              readable=readable,
+                              wide_cwd=wide_cwd)
         or (safety.bash_violation(tool_input.get("command", ""), bash_pats)
             if tool_name == "Bash" else None)
         or safety.tool_violation(tool_name, deny_tools, allow_tools)

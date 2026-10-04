@@ -223,12 +223,24 @@ cover):
   shell startup files, `~/.ssh`, other projects, aipager's `/tmp`
   files. Inside the folder, `.claude/`, `.git/` and `.mcp.json` are
   denied too, because each of them makes Claude Code or git run a
-  command. Symlinks are followed before deciding.
+  command. Symlinks are followed before deciding. A session whose
+  folder is your home folder, `/` or a folder above your home folder
+  has no project folder: there a restricted turn writes only in its
+  scratchpad, and a write anywhere else is denied with "this session
+  runs in the home folder (or a folder above it), and this role can
+  only write inside a project folder". So that restricted members are
+  not stuck there, `/new` and the Mini App do not let them start a
+  session in those folders (the daemon's own folder, the default for a
+  new session, is your home folder under the background service); they
+  can create a new folder inside your home folder and start in that
+  (a new one: not a folder you already have there, and not `bin` or
+  `node_modules`, which other programs load code from).
 - **Searches stay in the project.** A `Grep` or `Glob` is allowed
   only when all of this holds: the folder it searches (its `path`, or
   the session's folder when it has none, symlinks followed) is inside
-  the session's folder or scratchpad; that folder is not a protected
-  path and holds none (a session started in your home folder holds
+  the session's folder (not when that is your home folder, `/` or above
+  your home folder, as for writes) or scratchpad; that folder is not a
+  protected path and holds none (a session started in your home folder holds
   `~/.config/aipager`, so it cannot search from its top); every glob is
   a plain relative pattern — no leading `/`, `~`, `$` or drive letter,
   no `..`, no `#` (a comment to ripgrep) or `!` (a negation), no `\`
@@ -264,7 +276,20 @@ else's message, or of one whose sender aipager does not know, runs on
 the floor, so nobody's text borrows the tapper's rights.
 
 Reads outside the protected paths are allowed: a restricted user can
-read other projects of the OS user. Owners are not held to any of this.
+read other projects of the OS user. Your credential files are protected
+paths for every role without `bypass_role_denies` (the built-in `user`
+and `read_only`, roles you define, and the floor): `~/.ssh`,
+`~/.gnupg`, `~/.aws`, `~/.config/gh`, `~/.git-credentials`, `~/.netrc`,
+`~/.docker/config.json`, `~/.kube`, `~/.config/gcloud`, `~/.azure`,
+`~/.password-store`, `~/.pgpass`, `~/.npmrc` and `~/.pypirc` cannot be
+read, written or searched. They are a role default, so a role's own
+`deny_paths_no_access` in `policy.yaml` replaces them for that role,
+except while a running turn is joined by another message or a prompt
+typed in the terminal: from then until the turn ends, it is held to
+them again (the strictest rules win).
+A credential file somewhere else (a `.env` in a project, a token in
+another folder) is not covered: add it to the role's
+`deny_paths_no_access`. Owners are not held to any of this.
 Admins' writes are not confined, and their `Grep`/`Glob` are checked on
 the folder they start in only — they have Bash, so their rules are
 best-effort anyway (below).
@@ -283,9 +308,9 @@ best-effort anyway (below).
   turn ends, and its later tool calls are judged by whichever prompt
   is newest in the session: a later owner or terminal prompt lifts its
   restrictions.
-- A session started in your home folder confines writes to your home
-  folder: a restricted user there can write your shell startup files.
-  Start restricted users' sessions in a project folder.
+- A restricted member can still start in any project folder their
+  chat already works in (a folder an earlier session used), including
+  one of yours.
 - Inside the project a restricted user can change what you later run
   or read yourself (source, `Makefile`, `package.json` scripts,
   `conftest.py`, a `CLAUDE.md` your own turns load).
@@ -495,7 +520,7 @@ per-project `~/.claude/settings.json` overrides or a container
 | Stranger sends bot a command | Chat ID filter rejects |
 | Stolen bot token | Use `/revoke` in @BotFather, re-config |
 | Compromised claude tool call | Claude's `settings.json` is the gate; aipager respects it |
-| Restricted Telegram user escalates to the owner | No shell, writes and searches confined to the project, protected paths for the file tools, failed checks deny ([team-mode enforcement](#team-mode-enforcement)); best-effort only for a role given Bash, and not covered for the cases under "Known limits" |
+| Restricted Telegram user escalates to the owner | No shell, writes and searches confined to the project (never the home folder), credential files unreadable, protected paths for the file tools, failed checks deny ([team-mode enforcement](#team-mode-enforcement)); best-effort only for a role given Bash, and not covered for the cases under "Known limits" |
 | Audit log tampering | Append-only; out of scope to prevent without a separate signing daemon |
 | Network attacker | No inbound port, not directly reachable |
 | Local privilege escalation | No sudo / setuid; daemon stays in user space |

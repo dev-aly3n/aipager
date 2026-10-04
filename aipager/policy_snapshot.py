@@ -160,9 +160,20 @@ FLOOR_SNAPSHOT: dict = {
     "confine_writes": True,
     "deny_tools": list(safety.RESTRICTED_DENY_TOOLS),
     "allow_tools": [],
-    "deny_paths_no_access": list(safety.DENY_PATHS_NO_ACCESS),
+    # The credential files too (roadmap 8.79), as for the ``user`` role.
+    "deny_paths_no_access": [*safety.DENY_PATHS_NO_ACCESS,
+                             *safety.CREDENTIAL_PATHS],
     "deny_paths_no_write": list(safety.DENY_PATHS_NO_WRITE),
     "deny_bash_patterns": list(safety.DENY_BASH_PATTERNS),
+}
+
+# What every snapshot carries whoever it is for: the built-in path and
+# command floor, without the floor role's own additions (the credential
+# files are a restricted-role default, which an admin's turn never has).
+_BASE_FLOOR_LISTS: dict = {
+    "deny_paths_no_access": safety.DENY_PATHS_NO_ACCESS,
+    "deny_paths_no_write": safety.DENY_PATHS_NO_WRITE,
+    "deny_bash_patterns": safety.DENY_BASH_PATTERNS,
 }
 
 
@@ -200,8 +211,10 @@ def resolve_snapshot(role, scope, member, style_text: str = "",
 
     if role is None:
         # No role: a sender aipager cannot attribute. Held to the floor's
-        # tools, like a turn with no note at all (2026-09-27).
+        # tools, like a turn with no note at all (2026-09-27), and kept off
+        # the credential files like the floor (roadmap 8.79).
         deny_tools |= set(FLOOR_SNAPSHOT["deny_tools"])
+        no_access |= set(FLOOR_SNAPSHOT["deny_paths_no_access"])
     if not bypass_role_denies:
         if scope:
             deny_tools |= set(scope.deny_tools)
@@ -970,8 +983,10 @@ def carried_snapshot(current) -> dict | None:
     :func:`merge_snapshots` can merge, or ``None`` when it is missing or
     not a well-formed snapshot.
 
-    The built-in floor lists are re-applied (a hand-edited snapshot
-    missing its deny lists is not carried without them), the bypass is
+    The built-in path and command floor is re-applied (a hand-edited
+    snapshot missing its deny lists is not carried without them; the
+    credential files only for a confined turn, so an owner's or admin's
+    turn does not gain them), the bypass is
     kept only if *current* had it, writes stay confined unless *current*
     explicitly was not, and it is the oldest contributor
     (``queued_at = -inf``), so it never supplies ``style_text`` or
@@ -988,11 +1003,15 @@ def carried_snapshot(current) -> dict | None:
         ):
             return None
     carried = {f: list(current.get(f) or []) for f in _LIST_FIELDS}
-    for f in ("deny_paths_no_access", "deny_paths_no_write",
-              "deny_bash_patterns"):
-        carried[f] = sorted(set(carried[f]) | set(FLOOR_SNAPSHOT[f]))
     carried["bypass_safety"] = current.get("bypass_safety") is True
     carried["confine_writes"] = current.get("confine_writes") is not False
+    # A confined turn gets the whole floor back, credential files included;
+    # an owner's or admin's only the part every snapshot carries.
+    floor = (FLOOR_SNAPSHOT if carried["confine_writes"]
+             and not carried["bypass_safety"] else _BASE_FLOOR_LISTS)
+    for f in ("deny_paths_no_access", "deny_paths_no_write",
+              "deny_bash_patterns"):
+        carried[f] = sorted(set(carried[f]) | set(floor[f]))
     carried["queued_at"] = float("-inf")  # oldest: never supplies style/reply
     carried["style_text"] = ""
     carried["reply_context"] = ""

@@ -25,8 +25,68 @@ import re
 # set: the name becomes a dtach socket filename and a registry key, and
 # `launch_session` will reject anything these don't allow anyway. A
 # second regex here could only ever disagree with the one that matters.
+from aipager import safety
 from aipager.dtach import inject
 from aipager.dtach.inject import _RESERVED, _VALID_NAME, normalize_session_name
+
+# Roadmap 8.79. A role whose writes are confined to the session's folder
+# (``user``, ``read_only``, anyone without the owner's or an admin's
+# bypass) may not start a session in ``/``, the home folder or a folder
+# above it: there the "project" would be the whole home folder. Those
+# folders stay usable as the place to create a new project folder in.
+NO_PROJECT_FOLDER = ("Pick a project folder: create one with New folder, "
+                     "or ask an admin to start the session.")
+WIDE_FOLDER_REFUSAL = ("Your role can't start a session in the home folder "
+                       "or a folder above it. " + NO_PROJECT_FOLDER)
+# When there is no folder to create one in either (the daemon runs in `/`
+# and the chat has never used a folder).
+NO_FOLDER_AT_ALL = ("There is no project folder to start in yet: ask an "
+                    "admin to start the session.")
+
+# Names a confined person may not create directly inside a wide folder:
+# programs the operator runs load code from them without being asked.
+# Node looks for packages in every node_modules up to the filesystem root,
+# so ~/node_modules is searched by each project under the home folder;
+# ~/bin is on PATH (Debian/Ubuntu ~/.profile) once it exists.
+_NO_NEW_IN_WIDE = frozenset({"node_modules", "bin"})
+
+
+def is_wide_folder(path: str) -> bool:
+    """``/``, the home folder or a folder holding it (see
+    :func:`aipager.safety.is_wide_folder`)."""
+    return safety.is_wide_folder(path)
+
+
+def default_folder_is_wide() -> bool:
+    """True when a session started with no folder (the daemon's own
+    directory, ``inject._PROJECT_DIR``) would run in a wide folder."""
+    return is_wide_folder(getattr(inject, "_PROJECT_DIR", "") or os.sep)
+
+
+# Folders a new-folder request really created, per chat (in memory, at
+# most _MAX_CREATED each). A confined person's new ``~/myproject`` sits in
+# the home folder, which is not one of their launch roots, so without this
+# the Mini App would refuse to start in the folder it just made. Only a
+# folder created here counts, never one that already existed.
+_MAX_CREATED = 64
+_created: dict[int, list[str]] = {}
+
+
+def remember_created(scope_chat_id: int, path: str) -> None:
+    """Record a folder :func:`create_directory` created for this chat."""
+    paths = _created.setdefault(scope_chat_id, [])
+    if path not in paths:
+        paths.append(path)
+        del paths[:-_MAX_CREATED]
+
+
+def launch_folder_refusal(cwd: str | None, confined: bool) -> str:
+    """Why *cwd* (empty: the daemon's own directory) may not be a
+    confined person's session folder, or ``""``."""
+    if not confined:
+        return ""
+    folder = cwd or getattr(inject, "_PROJECT_DIR", "") or os.sep
+    return WIDE_FOLDER_REFUSAL if is_wide_folder(folder) else ""
 
 # A label longer than this is not a real workstream name; it is someone
 # probing for a buffer to overflow or a filename to blow up.
@@ -88,8 +148,15 @@ def validate_session_name(name: object) -> tuple[str, str]:
     return clean, ""
 
 
-def allowed_roots(registry, scope_chat_id: int) -> list[str]:
+def allowed_roots(registry, scope_chat_id: int, *,
+                  confined: bool = False) -> list[str]:
     """Directories a new session may be launched in, for this scope.
+
+    ``confined`` (the caller's turns are confined to the session's folder,
+    roadmap 8.79): ``/``, the home folder and the folders above it are
+    left out. Callers still pass the full list (``confined=False``) as
+    the parents a new folder may be created in, so such a person can make
+    ``~/myproject`` and start there.
 
     Seeded from the working directories sessions in this scope already
     use — the operator has demonstrably run Claude there, so it is not a
@@ -148,10 +215,15 @@ def allowed_roots(registry, scope_chat_id: int) -> list[str]:
         is_fs_root = True
     if project_dir and not is_fs_root:
         add(project_dir)
+    if confined:
+        for path in _created.get(scope_chat_id, ()):
+            add(path)
+        roots = [r for r in roots if not is_wide_folder(r)]
     return roots
 
 
-def validate_cwd(candidate: object, roots: list[str]) -> tuple[str, str]:
+def validate_cwd(candidate: object, roots: list[str], *,
+                 confined: bool = False) -> tuple[str, str]:
     """Return ``(real_path, "")`` or ``("", reason)``.
 
     ``candidate`` may be empty, meaning "the daemon's own directory" —
@@ -163,8 +235,14 @@ def validate_cwd(candidate: object, roots: list[str]) -> tuple[str, str]:
     directory at or beneath one of ``roots``. The comparison is done on
     path components, not string prefixes: a plain ``startswith`` would
     accept ``/home/aly/aipager-evil`` for the root ``/home/aly/aipager``.
+
+    ``confined``: neither the result nor, for an empty candidate, the
+    daemon's own directory may be ``/``, the home folder or a folder above
+    it (roadmap 8.79).
     """
     if candidate is None or candidate == "":
+        if confined and default_folder_is_wide():
+            return "", WIDE_FOLDER_REFUSAL
         return "", ""            # daemon default, same as chat's /new
     if not isinstance(candidate, str):
         return "", "Working directory must be text."
@@ -182,6 +260,8 @@ def validate_cwd(candidate: object, roots: list[str]) -> tuple[str, str]:
         return "", "That directory can't be resolved."
     if not os.path.isdir(real):
         return "", "That path isn't a directory."
+    if confined and is_wide_folder(real):
+        return "", WIDE_FOLDER_REFUSAL
 
     real_parts = real.split(os.sep)
     for root in roots:
@@ -216,7 +296,8 @@ def validate_new_dir_name(name: object) -> tuple[str, str]:
 
 
 def create_directory(
-    parent: object, name: object, roots: list[str],
+    parent: object, name: object, roots: list[str], *,
+    confined: bool = False,
 ) -> tuple[str, bool, str]:
     """Create ``<parent>/<name>``. Returns ``(real_path, existed, error)``.
 
@@ -238,6 +319,12 @@ def create_directory(
     that already exists as a symlink pointing outside, both resolve
     outside the allow-list and are caught only by re-resolving the real
     thing that now exists.
+
+    ``confined`` (roadmap 8.79): ``roots`` are still the full list, so
+    the home folder can be the parent, but the result must not be ``/``,
+    the home folder or a folder above it, and a folder that already
+    exists directly in such a parent is not reused: it is not a project
+    this person made (``~/bin`` is on the operator's PATH).
     """
     real_parent, err = validate_cwd(parent, roots)
     if err:
@@ -252,6 +339,10 @@ def create_directory(
         return "", False, err
 
     target = os.path.join(real_parent, clean)
+    wide_parent = confined and is_wide_folder(real_parent)
+    if wide_parent and clean.lower() in _NO_NEW_IN_WIDE:
+        return "", False, (f"'{clean}' can't be a project folder here: "
+                           "other programs load code from it. Pick another name.")
     existed = False
     try:
         os.mkdir(target)
@@ -259,8 +350,11 @@ def create_directory(
         existed = True
     except OSError:
         return "", False, "Couldn't create that folder."
+    if existed and wide_parent:
+        return "", False, ("A folder with that name already exists there. "
+                           "Pick a new name.")
 
-    real, err = validate_cwd(target, roots)
+    real, err = validate_cwd(target, roots, confined=confined)
     if err:
         return "", False, err
     return real, existed, ""
@@ -310,8 +404,14 @@ __all__ = [
     "MAX_DIR_NAME_LENGTH",
     "MAX_MODEL_LENGTH",
     "MAX_NAME_LENGTH",
+    "NO_FOLDER_AT_ALL",
+    "NO_PROJECT_FOLDER",
+    "WIDE_FOLDER_REFUSAL",
     "allowed_roots",
     "create_directory",
+    "default_folder_is_wide",
+    "is_wide_folder",
+    "launch_folder_refusal",
     "validate_cwd",
     "validate_model",
     "validate_new_dir_name",

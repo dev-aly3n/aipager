@@ -581,6 +581,27 @@ class AuthMixin:
             return self._is_personal_mode_operator(user_id)
         return True
 
+    def _is_confined_user(self, user_id: int | None, chat_id: int | None) -> bool:
+        """True when *user_id*'s turns in *chat_id* are confined to the
+        session's folder (roadmap 8.50/8.79): scope mode, and their role
+        in that chat has neither the owner's ``bypass_safety`` nor an
+        admin's ``bypass_role_denies`` (``resolve_snapshot``'s
+        ``confine_writes``). Someone who is not a member there, or whose
+        role is unknown, counts as confined. Personal and legacy team mode
+        never confine (their Telegram turns are the operator's).
+
+        Used to keep such a person from starting a session in ``/``, the
+        home folder or a folder above it, where "the project" would be the
+        whole home folder."""
+        if self.scopes is None:
+            return False
+        member = self._member_in_scope(self._scope_for(chat_id), user_id)
+        role = (self.policy.get_role(member.role)
+                if member is not None else None)
+        return not (role is not None
+                    and (getattr(role, "bypass_safety", False) is True
+                         or getattr(role, "bypass_role_denies", False) is True))
+
     def _can_prompt_user(self, user_id: int | None, chat_id: int | None) -> bool:
         """The bar for a SESSION-level preference override (PUT/DELETE on
         the Mini App's ``/api/sessions/{label}/preferences/{field}``) —

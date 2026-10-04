@@ -189,7 +189,7 @@ def test_replace_keeps_the_model_folder_and_first_message_picked_on_the_card(
     from aipager.miniapp import launch
 
     folder = str(tmp_path / "proj")
-    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat: [folder])
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat, **_kw: [folder])
     launched = AsyncMock(side_effect=_launch_ok)
     monkeypatch.setattr("aipager.dtach.inject.launch_session", launched)
     bot = _conflict_bot(mk_bot)

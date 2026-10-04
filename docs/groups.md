@@ -85,8 +85,8 @@ Four built-in roles (see `aipager/safety.py`):
 |---|---|---|---|---|---|---|---|
 | `owner` | ✅ | ✅ | ✅ | ✅ | ✅ | anywhere | all |
 | `admin` | ✅ | ✅ | ✅ | ❌ | ✅ (best-effort rules) | anywhere the floor allows | all but Auto and installs |
-| `user` | ✅ | ✅ | ❌ | ❌ | ❌ | the session's folder + scratchpad | all but Auto and installs |
-| `read_only` | ❌ | ❌ | ❌ | ❌ | ❌ | the session's folder + scratchpad | look only |
+| `user` | ✅ | ✅ | ❌ | ❌ | ❌ | the session's project folder + scratchpad (never the home folder) | all but Auto and installs |
+| `read_only` | ❌ | ❌ | ❌ | ❌ | ❌ | the session's project folder + scratchpad (never the home folder) | look only |
 
 - **owner** — full control, including the built-in safety floor.
   There should be exactly one: the person who runs the machine.
@@ -102,8 +102,16 @@ Four built-in roles (see `aipager/safety.py`):
   File writes land only inside the session's folder and its Claude Code
   scratchpad, and never in the folder's `.claude/`, `.git/` or
   `.mcp.json` (each of those runs commands). `Grep`/`Glob` search only
-  inside those folders, with plain relative globs. Reads follow the
-  protected-path rules.
+  inside those folders, with plain relative globs. A session folder that
+  is your home folder, `/` or a folder above your home folder does not
+  count: there a `user` can write and search only in the scratchpad, so
+  `/new` and the Mini App do not offer them those folders to start in
+  (they can still make a new folder inside your home folder with New
+  folder and start there). Reads follow the protected-path rules, and
+  your credential files are never readable: `~/.ssh`, `~/.gnupg`,
+  `~/.aws`, `~/.config/gh`, `~/.git-credentials`, `~/.netrc`,
+  `~/.docker/config.json`, `~/.kube`, `~/.config/gcloud`, `~/.azure`,
+  `~/.password-store`, `~/.pgpass`, `~/.npmrc` and `~/.pypirc`.
 - **read_only** — observers. They see every message and can call
   `/status`, but their text / voice / file messages are ignored. Same
   tool and write limits as `user`, in case one of their messages ever
@@ -169,7 +177,12 @@ with `aipager policy validate`. Supported fields per role:
 - `allow_tools` — if non-empty, an allow-list: everything else is
   denied for that role.
 - `deny_bash_patterns` — patterns matched against `Bash` inputs.
-- `deny_paths_no_access` / `deny_paths_no_write` — path rules. A
+- `deny_paths_no_access` / `deny_paths_no_write` — path rules. For
+  `user`, `read_only` and every role you define without
+  `bypass_role_denies`, `deny_paths_no_access` starts as the credential
+  files listed under **user** above; setting it replaces that list, so
+  copy the ones you want to keep into yours (a running turn that another
+  message joins is held to the list again until it ends). A
   rule with no leading `/` or `~` (`**/.env`) matches anywhere, so
   while one is in place every `Grep`/`Glob` of a restricted role is
   denied (any search could read such a file), which halts that turn.

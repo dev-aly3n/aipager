@@ -538,8 +538,13 @@ class MiniAppServer:
                 status=403,
             )
 
+        # Someone whose turns are confined to the session's folder may not
+        # start in `/`, the home folder or a folder above it (roadmap 8.79).
+        confined = bool(self.bot._is_confined_user(user_id, scope_chat_id))
         cwd, err = validate_cwd(
-            body.get("cwd"), allowed_roots(self.registry, scope_chat_id),
+            body.get("cwd"),
+            allowed_roots(self.registry, scope_chat_id, confined=confined),
+            confined=confined,
         )
         if err:
             return web.json_response({"error": "bad_request", "detail": err}, status=400)
@@ -606,7 +611,11 @@ class MiniAppServer:
         """
         from aiohttp import web
 
-        from aipager.miniapp.launch import allowed_roots, create_directory
+        from aipager.miniapp.launch import (
+            allowed_roots,
+            create_directory,
+            remember_created,
+        )
 
         result = await self._authenticate_user(request, "POST /api/directories")
         if isinstance(result, web.Response):
@@ -629,12 +638,18 @@ class MiniAppServer:
         if not isinstance(body, dict):
             return web.json_response({"error": "bad_request"}, status=400)
 
+        # Any folder this chat works in may be the parent, the home folder
+        # included; a confined caller's new folder must still be a project
+        # folder, and is remembered so they can start in it (roadmap 8.79).
         path, existed, err = create_directory(
             body.get("parent"), body.get("name"),
             allowed_roots(self.registry, scope_chat_id),
+            confined=bool(self.bot._is_confined_user(user_id, scope_chat_id)),
         )
         if err:
             return web.json_response({"error": "bad_request", "detail": err}, status=400)
+        if not existed:
+            remember_created(scope_chat_id, path)
 
         log.info("miniapp: directory ready (existed=%s)", existed)
         if not existed:

@@ -569,7 +569,7 @@ def test_a_keyboard_tap_at_the_new_folder_step_is_not_a_folder(chat, run_async, 
 
     root = tmp_path / "root"
     root.mkdir()
-    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat_id: [str(root)])
+    monkeypatch.setattr(launch, "allowed_roots", lambda reg, chat_id, **_kw: [str(root)])
     chat._handle_stop_cmd = AsyncMock()
     chat.send("/new")
     update = chat.tap("_:nw:path:new")

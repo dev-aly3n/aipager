@@ -1009,6 +1009,16 @@ class SessionOpsMixin:
         from aipager.scope import disambiguated_name
         from aipager.state import Status
 
+        # A person whose turns are confined to the session's folder never
+        # gets ``/``, the home folder or a folder above it as that folder
+        # (roadmap 8.79), whichever surface asked. The hook would still
+        # confine their writes; this says why up front instead.
+        from aipager.miniapp import launch as launch_rules
+        refusal = launch_rules.launch_folder_refusal(
+            cwd, self._is_confined_user(driver_user_id, scope_chat_id))
+        if refusal:
+            return "", refusal
+
         if reuse_name:
             scope_kind = ("group" if scope_chat_id is not None and scope_chat_id < 0
                           else "dm")
