@@ -2030,6 +2030,14 @@ class MiniAppServer:
         if not isinstance(user_id, int):
             return None
         if self.bot.scopes is not None:
+            # The one remaining "first chat that lists this user" lookup
+            # that decides anything (live_reload._who also searches every
+            # chat, for a name only), on purpose: it picks which chat the
+            # Mini App shows, and every
+            # route then checks the user's role in that chat. Roadmap 8.73
+            # replaced it everywhere else (a person's role is the one in
+            # the chat they act in); the Mini App's chat switcher, delivery
+            # 17 of the group-mode fixes, replaces it here.
             for scope in self.bot.scopes:
                 if self.bot._member_in_scope(scope, user_id) is not None:
                     return scope.chat_id

@@ -26,8 +26,8 @@ def _sess(chat=-100, kind="group"):
     return s
 
 
-def _bob(bot):
-    return bot._driver_user_by_id(2)
+def _bob(bot, chat=-100):
+    return bot._driver_user_by_id(2, chat_id=chat)
 
 
 def test_marker_group_includes_role(mk_bot):
@@ -37,7 +37,7 @@ def test_marker_group_includes_role(mk_bot):
 
 def test_marker_dm_omits_role(mk_bot):
     bot = _bot(mk_bot, kind="dm", chat=555)
-    assert (bot._prompt_marker(_sess(chat=555, kind="dm"), _bob(bot))
+    assert (bot._prompt_marker(_sess(chat=555, kind="dm"), _bob(bot, 555))
             == "[via Telegram · @bob]")
 
 

@@ -37,7 +37,9 @@ from aipager.team import (
 from aipager.bot.transport import (  # noqa: F401
     reply_text,
     send_text,
+    calling_chat_id,
     resolve_chat_id,
+    resolve_chat_id_int,
     ACTION_VERBS,
     TELEGRAM_BOT_DOWNLOAD_LIMIT_BYTES,
     TELEGRAM_MAX_DOC_BYTES,
@@ -102,13 +104,16 @@ class AuthMixin:
                 return m
         return None
 
-    def _member_anywhere(self, user_id):
-        """Find a member by id across all scopes (for driver attribution)."""
-        for s in (self.scopes or []):
-            for m in s.members:
-                if m.id == user_id:
-                    return m
-        return None
+    def member_in_chat(self, user_id, chat_id):
+        """The member entry for *user_id* in the scope of *chat_id*, or
+        ``None`` (no such scope, not a member there, or either unknown).
+
+        The only member lookup for authorization and attribution in scope
+        mode (roadmap 8.73, D-A): a person listed in several chats has
+        the role of the chat they act in, never the first chat in
+        ``aipager.yaml`` that lists them (the wizard re-appends an edited
+        scope, so "first" moves with every edit)."""
+        return self._member_in_scope(self._scope_for(chat_id), user_id)
 
     def _role_can_prompt(self, member) -> bool:
         if member is None:
@@ -652,12 +657,17 @@ class AuthMixin:
         ``sess.last_driver_user_id`` and (if first-touch) also
         ``sess.created_by_user_id``. The returned :class:`team.User`
         is used by callers to attribute prompts and audit records.
+        Scope mode: the sender as a member of the update's chat (roadmap
+        8.73); not a member there, nothing changes and ``None``.
         """
         if self.scopes is not None:
             tg_user = update.effective_user
             if tg_user is None:
                 return None
-            member = self._member_anywhere(tg_user.id)
+            # The member in the chat the update came from (roadmap 8.73),
+            # else the session's own chat; neither: nobody.
+            member = self.member_in_chat(
+                tg_user.id, self._attribution_chat(sess, calling_chat_id(update)))
             if member is None:
                 return None
             sess.last_driver_user_id = member.id
@@ -687,16 +697,36 @@ class AuthMixin:
         if self.scopes is not None:
             if sess.last_driver_user_id is None:
                 return None
-            return self._member_anywhere(sess.last_driver_user_id)
+            # In the session's own chat (roadmap 8.73).
+            return self.member_in_chat(sess.last_driver_user_id,
+                                       self._attribution_chat(sess, None))
         if self.team is None or sess.last_driver_user_id is None:
             return None
         return self.team.get(sess.last_driver_user_id)
 
-    def _driver_user_by_id(self, user_id: int | None) -> TeamUser | None:
+    def _attribution_chat(self, sess, chat_id: int | None) -> int | None:
+        """The chat a person's role is read in (roadmap 8.73): *chat_id*,
+        the chat the message, tap or command came from, when known; else
+        the session's own chat (``transport.resolve_chat_id_int``: its
+        stamped chat, else the home chat); else ``None``, so the person
+        resolves to nobody (the floor)."""
+        if chat_id:
+            return chat_id
+        if sess is None:
+            return None
+        return resolve_chat_id_int(sess) or None
+
+    def _driver_user_by_id(self, user_id: int | None, *,
+                           chat_id: int | None) -> TeamUser | None:
         """Resolve an explicit Telegram user id to a ``TeamUser``.
 
         Same lookup as :meth:`_driver_user`, but against a caller-supplied
         id instead of the session's mutable ``last_driver_user_id`` field.
+
+        Scope mode: the member in *chat_id*'s scope (roadmap 8.73), which
+        callers pick with :meth:`_attribution_chat`. ``chat_id=None``
+        resolves to nobody (fail closed). Legacy team and personal mode
+        ignore it.
 
         Permission attribution (``session_ops._inject_prompt``'s
         ``member``/``role`` resolution) must use THIS, not
@@ -712,7 +742,7 @@ class AuthMixin:
         if user_id is None:
             return None
         if self.scopes is not None:
-            return self._member_anywhere(user_id)
+            return self.member_in_chat(user_id, chat_id)
         if self.team is None:
             return None
         return self.team.get(user_id)

@@ -326,7 +326,9 @@ the button does not matter.
 ## Who a message runs as
 
 Enforcement keys off **who sent each message**, not whose turn it
-happens to interrupt:
+happens to interrupt. A person listed in several chats has the role of
+the chat they act in: someone who is `user` in the group and `owner` of
+their own DM sends, taps and runs commands in the group as `user`.
 
 - Every Telegram message carries its sender's identity and rules
   into the session (see

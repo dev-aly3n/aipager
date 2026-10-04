@@ -720,7 +720,8 @@ class CallbackDispatchMixin:
             if (not sess.dialog_is_open()
                     and not mixed_sender_note_outstanding(sess, update)
                     and self._turn_sender_differs(
-                        sess, driver_id_from_update(update))):
+                        sess, driver_id_from_update(update),
+                        chat_id=calling_chat_id(update))):
                 # Roadmap 8.77 (D-H): another person's turn is running.
                 # Re-injected now, the prompt would join that turn under its
                 # rules; refused like the open-prompt case below, the card
@@ -803,7 +804,9 @@ class CallbackDispatchMixin:
                 await self._safe_answer(
                     query,
                     NEEDS_ADMIN_REPLY
-                    if self._command_needs_admin(prompt, tapper)
+                    if self._command_needs_admin(
+                        prompt, tapper, chat_id=self._attribution_chat(
+                            sess, calling_chat_id(update)))
                     else RETRY_OTHERS_COMMAND_REPLY)
             else:
                 await self._safe_answer(query, "Failed to retry")

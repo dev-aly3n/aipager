@@ -300,7 +300,8 @@ class CommandHandlersMixin:
             held_reason = "prompt open"
         elif mixed_sender_note_outstanding(sess, update):
             held_reason = "different sender outstanding"
-        elif self._turn_sender_differs(sess, driver_id_from_update(update)):
+        elif self._turn_sender_differs(sess, driver_id_from_update(update),
+                                       chat_id=calling_chat_id(update)):
             # Roadmap 8.77 (D-H): someone else's turn is running. Joined to
             # it, this message would run under that turn's rules; held, it
             # drains at the turn's end and runs as its sender.

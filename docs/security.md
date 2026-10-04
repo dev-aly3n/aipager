@@ -153,6 +153,10 @@ reads them. Two properties are load-bearing:
   strictest rules of everyone in it; a Telegram message that joins a
   turn you typed in the terminal holds the rest of that turn to its
   sender's rules (an owner's changes nothing).
+- **Your role is the one in the chat you act in.** A person listed in
+  several chats (say `user` in a group and `owner` of their own DM) has
+  the group role for everything they send or tap in the group and the
+  DM role in the DM, whatever order the chats are in `aipager.yaml`.
 - **Unknown means restricted.** A prompt that cannot be attributed
   runs under the built-in floor — no bypass, all deny rules active —
   never as an unrestricted terminal prompt. Prompts you type directly

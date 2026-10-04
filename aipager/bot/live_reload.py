@@ -175,19 +175,22 @@ def _chat_members(scopes, chat_id) -> set[int]:
 
 def _terminal_joiners(old_scopes, old_policy, chat_id) -> set[int]:
     """Who may have joined a terminal turn in *chat_id* under the old
-    config (``session_ops._sender_differs_from``): an owner (a role with
-    ``bypass_safety``) from any scope, or the member of the session's own
-    DM. A terminal turn a Telegram message joined is enforced with that
-    message's rules (``joined_from_telegram``), so a joiner who was
-    removed or demoted must not keep them."""
+    config (``session_ops._sender_differs_from``): a member of the
+    session's chat whose role there has ``bypass_safety`` (an owner in
+    that chat, roadmap 8.73: an owner of another chat is not one here), or
+    the member of the session's own DM. A terminal turn a Telegram message
+    joined is enforced with that message's rules (``joined_from_telegram``),
+    so a joiner who was removed or demoted must not keep them."""
     out: set[int] = set()
-    for scope in old_scopes or ():
-        for m in scope.members:
-            role = old_policy.get_role(m.role)
-            if role is not None and getattr(role, "bypass_safety", False) is True:
-                out.add(m.id)
-            elif scope.chat_id == chat_id and scope.kind == "dm":
-                out.add(m.id)
+    scope = _scope_for(old_scopes, chat_id)
+    if scope is None:
+        return out
+    for m in scope.members:
+        role = old_policy.get_role(m.role)
+        if role is not None and getattr(role, "bypass_safety", False) is True:
+            out.add(m.id)
+        elif scope.kind == "dm":
+            out.add(m.id)
     return out
 
 

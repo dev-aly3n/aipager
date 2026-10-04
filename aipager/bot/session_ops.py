@@ -595,7 +595,8 @@ class SessionOpsMixin:
         return f"[via Telegram · @{member.label}]"
 
     def _command_needs_admin(self, text: str,
-                             driver_user_id: int | None) -> bool:
+                             driver_user_id: int | None, *,
+                             chat_id: int | None) -> bool:
         """True when ``text`` is a slash command its sender may not send
         (roadmap 8.74, D-G).
 
@@ -606,6 +607,10 @@ class SessionOpsMixin:
         (the Commands keyboard, plus ``/compact``, which aipager's own
         Compact button and the Mini App type) and model switches. Owners
         and admins send any. Personal and legacy team mode: never.
+
+        The sender's role is the one in *chat_id* (roadmap 8.73): the chat
+        the command came from, else the session's own chat
+        (``AuthMixin._attribution_chat``); ``None``, nobody (refused).
         """
         if self.scopes is None:
             return False
@@ -619,13 +624,14 @@ class SessionOpsMixin:
             return False
         if _MODEL_SWITCH_COMMAND.fullmatch(stripped):
             return False
-        member = self._driver_user_by_id(driver_user_id)
+        member = self._driver_user_by_id(driver_user_id, chat_id=chat_id)
         role = (self.policy.get_role(member.role)
                 if member is not None else None)
         return not (role is not None
                     and getattr(role, "bypass_role_denies", False) is True)
 
-    def _turn_sender_differs(self, sess, sender_id: int | None) -> bool:
+    def _turn_sender_differs(self, sess, sender_id: int | None, *,
+                             chat_id: int | None = None) -> bool:
         """True when a message from *sender_id* must wait for the turn
         running in *sess* to end, because that turn is someone else's
         (roadmap 8.77, D-H).
@@ -651,6 +657,9 @@ class SessionOpsMixin:
         A one-person install never holds: every turn is that person's or
         the terminal's, and that person joins a terminal turn in their DM.
 
+        Whether the sender is an owner is read in *chat_id*, the chat the
+        message came from, else the session's own chat (roadmap 8.73).
+
         Set only once the hook reports the turn (``hook_receiver``). Until
         then the turn's note is still outstanding, and the mixed-sender
         hold (``transport.mixed_sender_note_outstanding``) holds a
@@ -660,25 +669,32 @@ class SessionOpsMixin:
         if sess.status is not Status.BUSY and not sess.job_background_open():
             return False
         running = sess.turn_sender_id
-        held = self._sender_differs_from(sess, running, sender_id)
+        held = self._sender_differs_from(sess, running, sender_id,
+                                         chat_id=chat_id)
         if held:
             log.info("[%s] Turn-sender hold: turn=%s sender=%s",
                      sess.name, running, sender_id)
         return held
 
-    def _sender_differs_from(self, sess, running, sender_id) -> bool:
+    def _sender_differs_from(self, sess, running, sender_id, *,
+                             chat_id: int | None = None) -> bool:
         """:meth:`_turn_sender_differs`'s rule without the "a turn is
-        running" gate: whether *sender_id*'s message may not join a turn
-        whose sender is *running*."""
+        running" gate: whether *sender_id*'s message (from *chat_id*, else
+        the session's own chat) may not join a turn whose sender is
+        *running*."""
         if self.scopes is None or sender_id is None or running is None:
             return False
         if running == TURN_SENDER_TERMINAL:
-            return not (self._sender_is_owner(sender_id)
+            return not (self._sender_is_owner(
+                            sender_id, chat_id=self._attribution_chat(sess, chat_id))
                         or self._sender_owns_dm(sess, sender_id))
         return running != sender_id
 
-    def _sender_is_owner(self, sender_id: int) -> bool:
-        member = self._driver_user_by_id(sender_id)
+    def _sender_is_owner(self, sender_id: int, *,
+                         chat_id: int | None) -> bool:
+        """True when *sender_id*'s role in *chat_id* has ``bypass_safety``
+        (roadmap 8.73: an owner of another chat is not one here)."""
+        member = self._driver_user_by_id(sender_id, chat_id=chat_id)
         role = (self.policy.get_role(member.role)
                 if member is not None else None)
         return role is not None and getattr(role, "bypass_safety", False) is True
@@ -698,8 +714,12 @@ class SessionOpsMixin:
         when the sender of ``update`` may not send ``text`` (see
         :meth:`_command_needs_admin`). Callers run it before anything
         moves (trigger, hold, tracking), so a refused command leaves no
-        trace; :meth:`_inject_prompt` refuses it again regardless."""
-        if not self._command_needs_admin(text, driver_id_from_update(update)):
+        trace; :meth:`_inject_prompt` refuses it again regardless. The
+        sender's role is the one in the chat the message came from
+        (roadmap 8.73)."""
+        if not self._command_needs_admin(
+                text, driver_id_from_update(update),
+                chat_id=calling_chat_id(update)):
             return False
         await self._reply_needs_admin(update)
         return True
@@ -788,9 +808,14 @@ class SessionOpsMixin:
         unrelated sender's ``bypass_safety`` to it.
         """
         explicit_driver_user_id = driver_user_id
+        # Roadmap 8.73 (D-A): the sender's role is the one in the chat
+        # this message came from, else the session's own chat; with
+        # neither, the sender resolves to nobody (the floor).
+        role_chat_id = self._attribution_chat(sess, chat_id)
         # Roadmap 8.74 (D-G): refused before anything is written or typed,
         # whichever path brought the text here.
-        if self._command_needs_admin(text, explicit_driver_user_id):
+        if self._command_needs_admin(text, explicit_driver_user_id,
+                                     chat_id=role_chat_id):
             log.info("[%s] Refused a slash command from %s: %s",
                      sess.label, explicit_driver_user_id, text[:80])
             return PROMPT_REFUSED
@@ -800,7 +825,8 @@ class SessionOpsMixin:
         # The sender of THIS message, never the session's last driver
         # (roadmap 8.74): it labels the marker, and it becomes the
         # session's driver on every path that reaches here.
-        sender = self._driver_user_by_id(explicit_driver_user_id)
+        sender = self._driver_user_by_id(explicit_driver_user_id,
+                                         chat_id=role_chat_id)
         if sender is not None:
             sess.last_driver_user_id = sender.id
             if sess.created_by_user_id is None:

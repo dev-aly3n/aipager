@@ -77,6 +77,7 @@ def test_same_user_different_scopes(mk_bot, run_async):
 def test_mark_and_resolve_driver(mk_bot):
     bot = _bot(mk_bot)
     sess = TrackedSession(name="claude-x__g100", label="x", status=Status.IDLE)
+    sess.scope_chat_id = -100
     member = bot._mark_driver(sess, _update(-100, 2))
     assert member.label == "bob"
     assert sess.last_driver_user_id == 2

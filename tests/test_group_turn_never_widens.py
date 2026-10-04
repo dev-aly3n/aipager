@@ -1208,20 +1208,12 @@ def test_another_persons_dm_does_not_admit_a_group_member_to_a_group_turn():
     ada_dm = Scope(chat_id=777, kind="dm", label="ada DM",
                    members=(Member(id=ADA, label="ada", role="admin"),))
 
-    class _B(SessionOpsMixin):
+    from aipager.bot.auth import AuthMixin
+
+    class _B(SessionOpsMixin, AuthMixin):
         scopes = [_group_scope(), ada_dm]
         policy = POLICY
         team = None
-
-        def _scope_for(self, chat_id):
-            return next((x for x in self.scopes if x.chat_id == chat_id), None)
-
-        def _member_in_scope(self, scope, uid):
-            return next((m for m in scope.members if m.id == uid), None)
-
-        def _driver_user_by_id(self, uid):
-            return next((m for x in self.scopes for m in x.members
-                         if m.id == uid), None)
 
     sess = TrackedSession(name=S, label="api", status=Status.BUSY)
     sess.scope_chat_id, sess.scope_kind = GROUP, "group"
