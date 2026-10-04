@@ -72,6 +72,9 @@ class _Role:
     def __init__(self, *, bypass_safety=False, can_prompt=True):
         self.bypass_safety = bypass_safety
         self.can_prompt = can_prompt
+        # The tap gate (roadmap 8.75) reads it for answer buttons; like
+        # the built-in roles, only read_only lacks it.
+        self.can_approve = can_prompt
 
 
 class _Policy:

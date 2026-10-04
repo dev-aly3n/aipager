@@ -81,12 +81,12 @@ its messages — not every chat in the group.
 
 Four built-in roles (see `aipager/safety.py`):
 
-| Role | Send prompts | Approve | Bypass deny rules | Bypass the safety floor | Bash | Writes |
-|---|---|---|---|---|---|---|
-| `owner` | ✅ | ✅ | ✅ | ✅ | ✅ | anywhere |
-| `admin` | ✅ | ✅ | ✅ | ❌ | ✅ (best-effort rules) | anywhere the floor allows |
-| `user` | ✅ | ✅ | ❌ | ❌ | ❌ | the session's folder + scratchpad |
-| `read_only` | ❌ | ❌ | ❌ | ❌ | ❌ | the session's folder + scratchpad |
+| Role | Send prompts | Approve | Bypass deny rules | Bypass the safety floor | Bash | Writes | Buttons |
+|---|---|---|---|---|---|---|---|
+| `owner` | ✅ | ✅ | ✅ | ✅ | ✅ | anywhere | all |
+| `admin` | ✅ | ✅ | ✅ | ❌ | ✅ (best-effort rules) | anywhere the floor allows | all but Auto and installs |
+| `user` | ✅ | ✅ | ❌ | ❌ | ❌ | the session's folder + scratchpad | all but Auto and installs |
+| `read_only` | ❌ | ❌ | ❌ | ❌ | ❌ | the session's folder + scratchpad | look only |
 
 - **owner** — full control, including the built-in safety floor.
   There should be exactly one: the person who runs the machine.
@@ -196,6 +196,36 @@ driver's role does not bypass rules:
 - It posts a one-line notice in the chat, e.g.
   `⛔ [jim] · Auto-denied · Write · (triggered by @bob)`.
 - It writes an audit record with `denied: true`.
+
+## Who can tap what
+
+Every button checks the role of the person who taps it, in the chat the
+button is in, at the moment they tap it. Who sent the command that made
+the button does not matter.
+
+- **Looking is open to every member.** `read_only` members can page
+  through `/resume`, open `/status`'s Ended view, a session's ⋮ menu,
+  its mode or its diff, browse `/settings`, and close a menu. They
+  cannot act: any other button (including Cancel on someone's End,
+  Restart or Delete confirm) answers "Your role can't do that here."
+- **Answering Claude needs the role's `can_approve`.** Allow, Allow
+  always, Deny, a question's options, Submit, Continue and the pinned
+  bar's Answer. `read_only` has it off.
+- **Acting on a session needs the role's `can_prompt`.** Stop, Retry,
+  Compact, Send now, End, Restart, Rename, Delete, Resume, the mode
+  switch, Clear all, a session's preferences and the `/new` cards.
+- **Switching to Auto needs the owner** (the same rule as
+  `/mode auto`): Yes, switch and Stop task & switch on a
+  card that switches to Auto, and Resume as Auto.
+- **Installing needs the owner:** the voice extra's Install and
+  Restart buttons, like `/update`'s.
+- Some buttons narrow this further: the `/new` cards answer only the
+  person who sent `/new`, and changing a group's `/settings` needs an
+  admin.
+- A button only works in its own session's chat. One tapped anywhere
+  else answers "This button belongs to another chat." and does nothing,
+  and Resume always resumes the session the button names, never another
+  chat's session with the same name.
 
 ## Who a message runs as
 

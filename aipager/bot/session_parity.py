@@ -1203,9 +1203,14 @@ async def handle_callback(
             await _edit(query, text, kw.pop("reply_markup", None))
 
         # `_do_resume` is the wrapper `/resume`'s own mode buttons call —
-        # not a second resume implementation.
+        # not a second resume implementation. Exactly the session this
+        # button names (roadmap 8.78): by label, another chat's session of
+        # the same name could be resumed and its last response shown here.
+        # Auto needs an admin: the tap gate (tap_gate.py) requires MANAGE
+        # for `resume-auto` before this handler runs.
         await bot._do_resume(
             label=sess.label, reply_fn=_reply,
+            update=update, query=query, sess=sess,
             skip_perms_override=(action == "resume-auto"),
         )
         return True

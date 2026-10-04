@@ -18,6 +18,7 @@ from telegram import (
     Update,
 )
 
+from aipager.bot import tap_gate
 from aipager.dtach import inject
 
 from aipager.state import Status, TrackedSession
@@ -114,6 +115,31 @@ class AuthMixin:
             return False
         role = self.policy.get_role(member.role)
         return bool(role and role.can_prompt)
+
+    def _role_can_approve(self, member) -> bool:
+        if member is None:
+            return False
+        role = self.policy.get_role(member.role)
+        return bool(role and role.can_approve)
+
+    def _member_can(self, member, cap, user_id: int | None,
+                    chat_id: int | None) -> bool:
+        """Scope mode: may *member* (already resolved in *chat_id*, the
+        tapped message's chat) do what *cap* (a ``tap_gate.Cap``) names
+        there? MANAGE and UPDATE re-resolve by ids through the same rules
+        every other surface uses (``_is_admin_user``,
+        ``_is_update_admin``), in the same chat."""
+        if cap is tap_gate.VIEW:
+            return member is not None
+        if cap is tap_gate.APPROVE:
+            return self._role_can_approve(member)
+        if cap is tap_gate.PROMPT:
+            return self._role_can_prompt(member)
+        if cap is tap_gate.MANAGE:
+            return member is not None and self._is_admin_user(user_id, chat_id)
+        if cap is tap_gate.UPDATE:
+            return member is not None and self._is_update_admin(user_id, chat_id)
+        return False
 
     # ---- observability (Phase H) ----------------------------------------
 

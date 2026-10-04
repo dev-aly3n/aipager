@@ -30,7 +30,7 @@ from telegram.ext import (
     ContextTypes,
 )
 
-from aipager.bot import new_flow, session_parity, update_flow
+from aipager.bot import new_flow, session_parity, tap_gate, update_flow
 from aipager.dtach import hook_reply, inject
 
 from aipager import preferences
@@ -482,6 +482,56 @@ class CallbackDispatchMixin:
         # is already on the wire, or the tap would end with none at all.
         await asyncio.shield(_send_empty_answer(query))
 
+    async def _tap_passes_gate(self, query, member, session_name: str,
+                               action: str) -> bool:
+        """The one gate every button tap passes (roadmap 8.75 + 8.78).
+
+        Scope mode only; personal mode and legacy team mode are unchanged
+        (``_authorize_callback`` already admitted the tapper there).
+
+        1. A tap naming a session that belongs to another chat is refused:
+           a button is only ever acted on in its session's own chat. An
+           unstamped session (``scope_chat_id`` 0) is not refused here
+           (roadmap 8.72).
+        2. The tapper's role in the TAPPED MESSAGE'S chat must grant the
+           capability ``tap_gate.required_capability`` names for the verb.
+        """
+        if self.scopes is None:
+            return True
+        chat_id = _message_chat_id(getattr(query, "message", None))
+        if session_name not in tap_gate.SENTINEL_NAMESPACES:
+            sess = self.registry.get(session_name)
+            if (sess is not None and sess.scope_chat_id
+                    and sess.scope_chat_id != chat_id):
+                log.info("tap refused: %s:%s belongs to chat %s, tapped in %s",
+                         session_name, action, sess.scope_chat_id, chat_id)
+                await self._safe_answer(query, tap_gate.OTHER_CHAT_TEXT)
+                return False
+        perms_target_auto = False
+        if action in ("perms_confirm", "perms_stop_switch"):
+            # The card's own record, matched exactly as the perms branch
+            # matches it below; a switch to Auto needs an admin TAPPING it.
+            pending = self._perms_pending.get(session_name)
+            tapped = getattr(getattr(query, "message", None), "message_id", None)
+            perms_target_auto = bool(
+                pending is not None
+                and pending.get("msg_id") in (None, tapped)
+                and pending.get("target_skip_perms"))
+        cap = tap_gate.required_capability(
+            session_name, action, perms_target_auto=perms_target_auto)
+        user_id = getattr(getattr(query, "from_user", None), "id", None)
+        if self._member_can(member, cap, user_id, chat_id):
+            return True
+        log.info("tap refused: user %s in chat %s lacks %s for %s:%s",
+                 user_id, chat_id, cap.value, session_name, action)
+        # An update-level refusal reads as /update's own does: installing
+        # the voice extra or updating both need the update admin.
+        await self._safe_answer(
+            query,
+            update_flow.DENIED_TEXT if cap is tap_gate.UPDATE else tap_gate.REFUSED_TEXT,
+            show_alert=True)
+        return False
+
     async def _dispatch_callback(self, update: Update, query, member,
                                  cb_data: str, original_text: str) -> None:
         """The body of :meth:`_handle_callback`, after authorization."""
@@ -511,6 +561,11 @@ class CallbackDispatchMixin:
             await self._safe_answer(query, "That session is no longer available")
             return
         session_name, action = resolved
+
+        # Roadmap 8.75 + 8.78: one gate for every tap, before any handler
+        # (update_flow, new_flow, session_parity, the branches below).
+        if not await self._tap_passes_gate(query, member, session_name, action):
+            return
 
         # All three return False unless the callback belongs to their own
         # namespace, so every pre-existing callback below is unaffected.
@@ -968,8 +1023,14 @@ class CallbackDispatchMixin:
                             chat_id=reply_chat, text=text, **kw,
                         )
 
+            # The session this button names, never a label lookup that
+            # could land on another chat's session (roadmap 8.78); with no
+            # such session left, the label resolves in THIS chat only.
+            # Auto needs an admin: the tap gate requires MANAGE for
+            # `resume_mode_auto` before this branch runs.
             await self._do_resume(
                 label=label, reply_fn=_reply,
+                update=update, query=query, sess=sess,
                 skip_perms_override=skip_perms_override,
             )
             return
