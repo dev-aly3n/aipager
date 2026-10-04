@@ -2335,6 +2335,24 @@ class SessionRegistry:
                 if s.label and s.status != Status.GONE]
         return live[0] if len(live) == 1 else None
 
+    def own_target(
+        self, chat_id: int | None, user_id: int | None,
+    ) -> TrackedSession | None:
+        """In a group: the session the person made their target by their
+        own action, live or ended, while it is still one of the chat's
+        labelled sessions (roadmap 8.93). Never "the chat's only live
+        session", which may be another member's. Always ``None`` in a
+        private chat."""
+        if not (_is_group_chat(chat_id) and _is_user_id(user_id)):
+            return None
+        entry = self._user_targets.get((chat_id, user_id))
+        if entry is None:
+            return None
+        sess = self._sessions.get(entry[0])
+        if sess is not None and sess.label and self._target_chat(sess) in (0, chat_id):
+            return sess
+        return None
+
     def ended_target_for(
         self, chat_id: int | None, user_id: int | None,
     ) -> TrackedSession | None:

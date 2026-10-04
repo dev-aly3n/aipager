@@ -30,7 +30,7 @@ from telegram.ext import (
     ContextTypes,
 )
 
-from aipager.bot import card_owner, new_flow, session_parity, tap_gate, update_flow
+from aipager.bot import card_owner, held_message, new_flow, session_parity, tap_gate, update_flow
 from aipager.dtach import hook_reply, inject
 
 from aipager import preferences
@@ -881,6 +881,9 @@ class CallbackDispatchMixin:
             # Any session command's picker (4.4).
             card_owner.release(self, calling_chat_id(update),
                                getattr(query.message, "message_id", None))
+            # A "Which session?" card's held message goes with it (8.94i).
+            held_message.drop(self, calling_chat_id(update),
+                              getattr(query.message, "message_id", None))
             try:
                 await edit_text(query, "Cancelled.")
             except Exception:

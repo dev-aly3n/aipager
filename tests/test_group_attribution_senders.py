@@ -983,7 +983,8 @@ def test_own_session_ended_asks_which_with_resume_and_routes_nothing(
     _send(gbot, run_async, u)
     gbot._inject_prompt.assert_not_awaited()
     text, markup = _card(u)
-    assert text == "x2 has ended. Which session?"
+    # 8.94i: Resume sends nothing, and the card says so.
+    assert text == "x2 has ended. Which session?\nAfter ▶️ Resume, send your message again."
     assert _buttons(gbot, G, markup) == [
         ("✍️ x1", X1, "talk"), ("▶️ Resume x2", X2, "resume"), ("✖️ Cancel", "cancel")]
     # The Resume button is the ⋮ menu's own verb: it opens the Ask/Auto step.
@@ -1011,7 +1012,7 @@ def test_own_session_ended_and_nothing_live_still_asks(gbot, run_async, mk_updat
     u = _msg(mk_update, "hi", BOB)
     _send(gbot, run_async, u)
     text, markup = _card(u)
-    assert text == "x2 has ended. Which session?"
+    assert text == "x2 has ended. Which session?\nAfter ▶️ Resume, send your message again."
     assert _buttons(gbot, G, markup) == [("▶️ Resume x2", X2, "resume"),
                                          ("✖️ Cancel", "cancel")]
 
@@ -1204,6 +1205,8 @@ def test_a_legacy_team_member_is_named_by_their_label(mk_bot, mk_update, run_asy
 
 
 def test_bare_restart_with_one_session_is_the_senders_card(gbot, run_async, mk_update):
+    # Delivery 18 (8.93): a bare /restart acts only on the sender's own target.
+    gbot.registry.set_target(X1, G, ALICE)
     _sess(gbot, X2).status = Status.GONE
     u = _msg(mk_update, "/restart", ALICE)
     ids = _track_sent(u)

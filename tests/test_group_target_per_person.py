@@ -711,13 +711,21 @@ def _first_button(update):
 
 
 @pytest.mark.parametrize("command", ["/restart", "/rename", "/kill", "/stop"])
-def test_session_pickers_put_the_senders_target_first(gbot, run_async, mk_update, command):
+def test_bare_session_commands_act_on_the_senders_own_target(
+        gbot, run_async, mk_update, command):
+    """Changed by delivery 18 (roadmap 8.93): the sender's own target is
+    the one a bare command means, so it goes straight to that session's
+    card instead of a picker with it first (the chat's target, x1, is
+    not theirs)."""
+    from types import SimpleNamespace
+
     from aipager.bot import session_parity as sp
     for name in (X1, X2):
         gbot.registry._sessions[name].status = Status.BUSY
     gbot.registry.set_target(X2, G, BOB)
     gbot.registry.track_message(101, X1, G)
     gbot._authorize = AsyncMock(return_value=True)
+    gbot._stop_session = AsyncMock(return_value=SimpleNamespace(ok=True))
     up = _msg(mk_update, command, BOB)
     handler = {
         "/restart": lambda: sp.handle_restart_cmd(gbot, up, MagicMock()),
@@ -726,7 +734,12 @@ def test_session_pickers_put_the_senders_target_first(gbot, run_async, mk_update
         "/stop": lambda: gbot._handle_stop_cmd(up, MagicMock()),
     }[command]
     run_async(handler())
-    assert _first_button(up).endswith("x2") and _first_button(up).startswith("✍️")
+    if command == "/stop":
+        assert gbot._stop_session.await_args.args[0] is gbot.registry._sessions[X2]
+        assert _replies(up) == []
+        return
+    assert "<b>x2</b>" in _replies(up)[-1]
+    assert all(b.text != "✖️ Cancel" for row in _markup(up).inline_keyboard for b in row)
 
 
 def test_a_group_with_no_live_session_never_asks_which(gbot, run_async, mk_update):

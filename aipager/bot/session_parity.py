@@ -45,7 +45,7 @@ from typing import TYPE_CHECKING
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from aipager.bot import card_owner, group_intake, settings_menu
+from aipager.bot import card_owner, group_intake, held_message, settings_menu
 from aipager.bot.transport import (
     MUTED,
     SKIPPED,
@@ -307,9 +307,15 @@ def session_picker(
     so each button carries the turn it was shown for, `<verb><turn_key>`.
 
     ``user_id``: who the picker is for. In a group each member has their
-    own target (roadmap 8.90), so without one nothing is marked."""
-    target = (bot.registry.target_for(chat_id, user_id)
-              if user_id is not None or not group_intake.is_group_chat(chat_id) else None)
+    own target (roadmap 8.90), so without one nothing is marked; and in
+    a shared group only the one they chose, never the chat's only live
+    session, which may be another member's (roadmap 8.93)."""
+    if shared_group(bot, chat_id):
+        target = bot.registry.own_target(chat_id, user_id)
+    else:
+        target = (bot.registry.target_for(chat_id, user_id)
+                  if user_id is not None or not group_intake.is_group_chat(chat_id)
+                  else None)
     ordered = sorted(sessions, key=lambda s: (s is not target, s.label.lower(), s.name))
     rows = [[InlineKeyboardButton(
         f"{'✍️ ' if s is target else glyph}{s.label}",
@@ -318,6 +324,30 @@ def session_picker(
             for s in ordered]
     rows.append([InlineKeyboardButton("✖️ Cancel", callback_data="_:pick:cancel")])
     return InlineKeyboardMarkup(rows)
+
+
+def shared_group(bot: "TelegramBot", chat_id) -> bool:
+    """A group whose sessions may be different people's: a group chat in
+    scope or team mode. In personal mode everyone the chat admits is the
+    operator, so a group there keeps the private chat's rules (as
+    ``card_owner`` does)."""
+    return group_intake.is_group_chat(chat_id) and (
+        getattr(bot, "scopes", None) is not None or getattr(bot, "team", None) is not None)
+
+
+def bare_pick(bot: "TelegramBot", chat_id, user_id, candidates) -> TrackedSession | None:
+    """The session a bare session command acts on without asking, or
+    ``None`` for the picker (4.4).
+
+    A private chat: the one session the command makes sense for, when
+    there is exactly one. A shared group (roadmap 8.93): the person's own
+    target when it is one the command makes sense for, and otherwise
+    always the picker, even with one candidate: that one may be another
+    member's session, and a bare command must never act on it unasked."""
+    if not shared_group(bot, chat_id):
+        return candidates[0] if len(candidates) == 1 else None
+    own = bot.registry.own_target(chat_id, user_id)
+    return own if own is not None and any(s is own for s in candidates) else None
 
 
 def render_end_confirm(
@@ -435,12 +465,14 @@ async def handle_restart_cmd(
         if not sessions:
             await reply_text(update.message, "No live sessions to restart.")
             return
-        if len(sessions) == 1:
-            # The one it can mean: straight to its confirm (4.4).
-            body, kb = _render_restart_confirm(bot, chat_id, sessions[0])
+        pick = bare_pick(bot, chat_id, calling_user_id(update), sessions)
+        if pick is not None:
+            # The one it can mean: straight to its confirm (4.4); in a
+            # group only the person's own target (8.93).
+            body, kb = _render_restart_confirm(bot, chat_id, pick)
             sent = await reply_text(update.message, body, reply_markup=kb, parse_mode="HTML")
             card_owner.claim_sent(bot, chat_id, sent, calling_user_id(update),
-                                  kind="restart", command=f"/restart {sessions[0].label}",
+                                  kind="restart", command=f"/restart {pick.label}",
                                   who=update.effective_user)
             return
         sent = await reply_text(update.message, "Which session to restart?",
@@ -553,10 +585,12 @@ async def handle_rename_cmd(
     if not sessions:
         await reply_text(update.message, "No sessions to rename.")
         return
-    if len(sessions) == 1:
-        # The one it can mean: straight to its name prompt (4.4).
+    pick = bare_pick(bot, chat_id, calling_user_id(update), sessions)
+    if pick is not None:
+        # The one it can mean: straight to its name prompt (4.4); in a
+        # group only the person's own target (8.93).
         user_id = update.effective_user.id if update.effective_user else None
-        text, kb = _start_rename(bot, chat_id, sessions[0], user_id)
+        text, kb = _start_rename(bot, chat_id, pick, user_id)
         sent = await reply_text(update.message, text, reply_markup=kb, parse_mode="HTML")
         pending = _rename_pending_map(bot).get((chat_id, user_id))
         sent_id = getattr(sent, "message_id", None)
@@ -610,17 +644,22 @@ async def handle_delete_cmd(
         if not sessions:
             await reply_text(update.message, "No ended sessions to delete.")
             return
-        if len(sessions) == 1:
-            # The one it can mean: straight to its confirm (4.4).
-            body, kb = _render_delete_confirm(bot, chat_id, sessions[0])
+        pick = bare_pick(bot, chat_id, calling_user_id(update), sessions)
+        if pick is not None:
+            # The one it can mean: straight to its confirm (4.4); in a
+            # group only the person's own target (8.93).
+            body, kb = _render_delete_confirm(bot, chat_id, pick)
             sent = await reply_text(update.message, body, reply_markup=kb, parse_mode="HTML")
             card_owner.claim_sent(bot, chat_id, sent, calling_user_id(update),
-                                  kind="delete", command=f"/delete {sessions[0].label}",
+                                  kind="delete", command=f"/delete {pick.label}",
                                   who=update.effective_user)
             return
         sent = await reply_text(update.message, "Which ended session to remove?",
-                                reply_markup=session_picker(bot, chat_id, sessions, "delete",
-                                                            glyph="🗑️ "))
+                                reply_markup=session_picker(
+                                    bot, chat_id, sessions, "delete", glyph="🗑️ ",
+                                    # A shared group marks the sender's own (8.93).
+                                    user_id=(calling_user_id(update)
+                                             if shared_group(bot, chat_id) else None)))
         card_owner.claim_sent(bot, chat_id, sent, calling_user_id(update),
                               kind="delete", command="/delete", picker=True,
                               who=update.effective_user)
@@ -742,19 +781,27 @@ async def handle_diff_cmd(
     chat_id = calling_chat_id(update)
 
     if len(parts) < 2:
-        sess = bot.registry.target_for(chat_id, calling_user_id(update))
+        user_id = calling_user_id(update)
+        if shared_group(bot, chat_id):
+            # 8.93: the person's own target (an ended one too, as a DM's
+            # ended target is diffed: its folder is still there), else the
+            # picker even for one live session, which may be another's.
+            sess = bot.registry.own_target(chat_id, user_id)
+        else:
+            sess = bot.registry.target_for(chat_id, user_id)
         if sess is None:
             live = [s for s in bot.registry.all_sessions(chat_id).values()
                     if s.label and s.status != Status.GONE]
             if not live:
                 await reply_text(update.message, "No live sessions to diff.")
                 return
-            if len(live) > 1:
+            sess = bare_pick(bot, chat_id, user_id, live)
+            if sess is None:
                 await reply_text(update.message, "Which session's diff?",
-                                 reply_markup=session_picker(bot, chat_id, live, "diff",
-                                                             glyph="📝 "))
+                                 reply_markup=session_picker(
+                                     bot, chat_id, live, "diff", glyph="📝 ",
+                                     user_id=user_id if shared_group(bot, chat_id) else None))
                 return
-            sess = live[0]
     else:
         label = parts[1].strip().lstrip("/")
         sess = bot.registry.find_by_label(label, chat_id, include_gone=True)
@@ -1159,6 +1206,29 @@ async def handle_callback(
         # The pinned bar's target line (it returns at once: its own task).
         await bot._maybe_update_bot_name(sess.name)
         await bot._safe_answer(query, f"✍️ Messages go to {sess.label}")
+        # A "Which session?" card: the message it asked about goes there
+        # too, as if it had been sent there (roadmap 8.94i).
+        held = held_message.take(bot, chat_id, _tapped_id(query), user_id)
+        if held is not None and held.used:
+            return True         # a second tap: the first one sent it
+        # Whatever the card becomes, it is no longer the asker's alone (a
+        # "Which session?" card that held nothing turns into the shared
+        # status list below).
+        card_owner.release(bot, chat_id, _tapped_id(query))
+        if held is not None:
+            label = html_mod.escape(sess.label)
+            if not held_message.is_fresh(held):
+                await _edit(query, held_message.TOO_OLD, None)
+                return True
+            try:
+                went = await held.resend(sess)
+            except Exception:
+                # Used up all the same: the card must not look usable.
+                log.exception("[%s] sending a held message failed", sess.label)
+                went = False
+            # A refusal said why under the message itself.
+            await _edit(query, f"{'Sent' if went else 'Not sent'} to {label}.", None)
+            return True
         text, kb = bot._render_status_list(chat_id, update)
         await _edit(query, text, kb)
         return True

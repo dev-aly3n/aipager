@@ -460,7 +460,9 @@ def test_mention_plus_label_switches(hbot, mk_update, run_async):
 
 
 @pytest.mark.parametrize("word,expected", [
-    ("stop", "Nothing is running."), ("kill", "Which session to end?")])
+    ("stop", "Nothing is running."),
+    # Delivery 18 (8.93): alice's own target, x1, is the one a bare /kill means.
+    ("kill", "⏹ End <b>x1</b>? Claude stops and the session closes.")])
 def test_mention_plus_stop_or_kill_reads_the_bare_word(hbot, mk_update, run_async,
                                                        word, expected):
     """``/stop`` and ``/kill`` read their argument from the message: the

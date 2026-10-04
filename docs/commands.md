@@ -53,6 +53,10 @@ are not in the menu but work when typed; the session actions are also in
   makes sense for: the one your messages go to first, marked `✍️`, then
   the rest by name, and `✖️ Cancel`. Picking one leads to the same card as
   typing its name.
+- In a group, bare, they act only on your own current session, when the
+  command makes sense for it; otherwise they always show the picker, even
+  with one session, since that one may be another member's (see
+  [groups](groups.md#talking-to-a-session-in-a-group)).
 
 `/mode` and `/diff` first look at the session your messages go to.
 

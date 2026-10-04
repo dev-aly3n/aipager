@@ -36,7 +36,7 @@ from telegram.ext import (
 from aipager.dtach import inject
 
 from aipager import statusline_file
-from aipager.bot import card_owner, group_intake, new_flow, reactions, session_parity
+from aipager.bot import card_owner, group_intake, held_message, new_flow, reactions, session_parity
 from aipager.bot.session_ops import (
     await_model_change,
     clear_model_switch_pending,
@@ -94,6 +94,12 @@ if TYPE_CHECKING:
     pass
 
 log = logging.getLogger(__name__)
+
+#: What :meth:`_hold_for_open_dialog` returns when it had to hold a message
+#: but the queue was full, so it was dropped (and the sender told). Truthy,
+#: like "held", for every caller that only asks "stop here?"; the
+#: "Which session?" resend (roadmap 8.94i) tells the two apart.
+HOLD_DROPPED = object()
 
 #: /help's Talk line in a private chat. In a group it is
 #: ``group_intake.group_help_talk_line`` (a plain message does not reach
@@ -275,7 +281,7 @@ class CommandHandlersMixin:
     """Mixin for TelegramBot — see :mod:`aipager.bot` overview."""
 
     async def _hold_for_open_dialog(self, update: Update, sess, text: str,
-                                    reply_context: str = "") -> bool:
+                                    reply_context: str = "") -> object:
         """Queue `text` instead of injecting it while a dialog is open,
         while a different Telegram user's note is still outstanding, OR
         while a different person's turn is running (roadmap 8.77,
@@ -283,7 +289,8 @@ class CommandHandlersMixin:
 
         The single gate every inbound prompt path consults. Returns True
         when the message was held, in which case the caller must return
-        without injecting. Same name, same 8-call-site seam as before
+        without injecting (:data:`HOLD_DROPPED`, also truthy, when it had
+        to be held but the queue was full: it was dropped, the sender told). Same name, same 8-call-site seam as before
         (design.md "queue handoff") — a second hold condition was added
         to the existing gate rather than threading a new one through
         every call site.
@@ -331,7 +338,7 @@ class CommandHandlersMixin:
                 "clear the queue.",
                 parse_mode="HTML",
             )
-            return True
+            return HOLD_DROPPED
         self.registry.mark_dirty()
         await self._react(update, reactions.HANDED_OFF)
         log.info("[%s] Held (%s): %s", sess.label, held_reason, text[:80])
@@ -849,13 +856,16 @@ class CommandHandlersMixin:
         if not working:
             await reply_text(update.message, "Nothing is running.")
             return
-        if len(working) > 1:
+        # A typed name is one candidate, acted on; bare, the P4 rule, and
+        # in a group only the person's own target (8.93).
+        sess = (working[0] if len(parts) > 1 else
+                session_parity.bare_pick(self, chat_id, calling_user_id(update), working))
+        if sess is None:
             await reply_text(update.message, "Which one to stop?",
                              reply_markup=session_parity.session_picker(
                                  self, chat_id, working, "pstop", glyph="⏹ ",
                                  keyed=True, user_id=calling_user_id(update)))
             return
-        sess = working[0]
         outcome = await self._stop_session(sess, update=update)
         if not outcome.ok:
             await reply_text(update.message,
@@ -917,7 +927,9 @@ class CommandHandlersMixin:
             if not alive:
                 await reply_text(update.message, "No sessions to end.")
                 return
-            if len(alive) > 1:
+            # The P4 rule; in a group only the person's own target (8.93).
+            sess = session_parity.bare_pick(self, chat_id, calling_user_id(update), alive)
+            if sess is None:
                 sent = await reply_text(update.message, "Which session to end?",
                                         reply_markup=session_parity.session_picker(
                                             self, chat_id, alive, "end", glyph="⏹ ",
@@ -926,7 +938,6 @@ class CommandHandlersMixin:
                                       kind="end", command="/kill", picker=True,
                                       who=update.effective_user)
                 return
-            sess = alive[0]
         else:
             label = parts[1].strip().lstrip("/")
             sess = self.registry.find_by_label(label, chat_id)
@@ -1129,24 +1140,32 @@ class CommandHandlersMixin:
                     parse_mode="HTML")
                 return
         else:
-            sess = self._target(update)
+            group = session_parity.shared_group(self, chat_id)
+            # In a group only the person's own target, never the chat's
+            # only live session, which may be another member's (8.93).
+            sess = (self.registry.own_target(chat_id, calling_user_id(update)) if group
+                    else self._target(update))
             if sess is None or sess.status == Status.GONE:
                 live = [s for s in self.registry.all_sessions(chat_id).values()
                         if s.label and s.status != Status.GONE]
-                if len(live) > 1:
+                if len(live) > 1 or (group and live):
                     # A mode named still switches in one tap: the picker's
                     # buttons are then the card's own switch (turn-keyed).
+                    # A group's picker marks the person's own target.
+                    picker_for = calling_user_id(update) if group else None
                     if want is None:
                         question = "Which session?"
-                        kb = session_parity.session_picker(self, chat_id, live, "mode_show")
+                        kb = session_parity.session_picker(
+                            self, chat_id, live, "mode_show", user_id=picker_for)
                     elif want == "ask":
                         question = "Which session to switch to 💬 Ask?"
                         kb = session_parity.session_picker(
-                            self, chat_id, live, "modeask", keyed=True)
+                            self, chat_id, live, "modeask", keyed=True, user_id=picker_for)
                     else:
                         question = "Which session to switch to 🤖 Auto?"
                         kb = session_parity.session_picker(
-                            self, chat_id, live, "modeauto", keyed=True)
+                            self, chat_id, live, "modeauto", keyed=True,
+                            user_id=picker_for)
                     sent = await reply_text(update.message, question, reply_markup=kb)
                     card_owner.claim_sent(self, chat_id, sent, calling_user_id(update),
                                           kind="mode", command="/mode", picker=True,
@@ -1401,10 +1420,15 @@ class CommandHandlersMixin:
         self.registry.set_target(
             name, calling_chat_id(update), calling_user_id(update))
 
-    async def _ask_which_session(self, update) -> bool:
+    async def _ask_which_session(self, update, *, resend=None) -> bool:
         """A group member with no target of their own while the chat has
         several live sessions is asked which one, and nothing is sent
-        (roadmap 8.90). True when it asked."""
+        (roadmap 8.90). True when it asked.
+
+        ``resend(sess)``: sends the message that was asked about to the
+        session the person picks (roadmap 8.94i). A tap on one of the
+        card's session buttons then sends it there as well as making it
+        their target; the card is theirs alone (``card_owner``)."""
         chat_id = calling_chat_id(update)
         user_id = calling_user_id(update)
         if user_id is None or not group_intake.is_group_chat(chat_id):
@@ -1418,19 +1442,27 @@ class CommandHandlersMixin:
             # Roadmap 8.91g: their own session has ended. The only live
             # session left may be another member's, so nothing is sent:
             # they pick one, or resume theirs.
-            await reply_text(
-                update.message,
-                f"{ended.label} has ended. Which session?",
+            question = f"{ended.label} has ended. Which session?"
+            if resend is not None and ended.claude_session_id:
+                # Resume brings the session back but sends nothing.
+                question += "\nAfter ▶️ Resume, send your message again."
+            sent = await reply_text(
+                update.message, question,
                 reply_markup=self._ended_target_keyboard(chat_id, live, ended))
-            return True
-        if len(live) < 2:
+        elif len(live) < 2:
             return False
-        await reply_text(
-            update.message,
-            "Which session? Reply to one of its messages, or send "
-            f"/{live[0].label} your message.",
-            reply_markup=session_parity.session_picker(
-                self, chat_id, live, "talk", glyph="✍️ ", user_id=user_id))
+        else:
+            sent = await reply_text(
+                update.message,
+                "Which session? Reply to one of its messages, or send "
+                f"/{live[0].label} your message.",
+                reply_markup=session_parity.session_picker(
+                    self, chat_id, live, "talk", glyph="✍️ ", user_id=user_id))
+        card_owner.claim_sent(self, chat_id, sent, user_id, kind="ask", command="",
+                              picker=True, who=update.effective_user)
+        if resend is not None:
+            held_message.hold(self, chat_id, getattr(sent, "message_id", None),
+                              user_id, resend)
         return True
 
     def _ended_target_keyboard(self, chat_id, live, ended) -> InlineKeyboardMarkup:
@@ -1616,7 +1648,11 @@ class CommandHandlersMixin:
             sess = self._target(update)
 
         if not sess:
-            if await self._ask_which_session(update):
+            bot_id = ctx.bot.id
+
+            async def resend(chosen) -> bool:
+                return await self._send_text_to(update, chosen, text, bot_id=bot_id)
+            if await self._ask_which_session(update, resend=resend):
                 return
             log.warning("Dropped text %r — no session to route to", text[:80])
             await reply_text(update.message,
@@ -1627,7 +1663,15 @@ class CommandHandlersMixin:
 
         if fallback_reason:
             log.info("[%s] %s", sess.label, fallback_reason)
+        await self._send_text_to(update, sess, text, bot_id=ctx.bot.id)
 
+    async def _send_text_to(self, update: Update, sess: TrackedSession, text: str,
+                            *, bot_id) -> bool:
+        """Send a text message to *sess*, the session its routing chose (or
+        the one its sender picked on "Which session?", roadmap 8.94i): its
+        reply context, the sender's identity and rights, and every gate.
+        True when it went there (sent, or held for later)."""
+        chat_id = calling_chat_id(update)
         self._set_target(sess.name, update)  # user is talking to this session now
         asyncio.create_task(self._maybe_update_bot_name(sess.name))
 
@@ -1639,17 +1683,18 @@ class CommandHandlersMixin:
                     callback_data=session_parity.session_cb(
                         self, chat_id or 0, sess, "resume"))]]),
             )
-            return
+            return False
 
         reply_context = self._build_reply_context(
-            update.message, sess, bot_id=ctx.bot.id,
+            update.message, sess, bot_id=bot_id,
             allow_file=sess.status != Status.BUSY,
         )
 
         if await self._refuse_admin_command(update, text):
-            return
-        if await self._hold_for_open_dialog(update, sess, text, reply_context):
-            return
+            return False
+        held = await self._hold_for_open_dialog(update, sess, text, reply_context)
+        if held:
+            return held is not HOLD_DROPPED
 
         # Every inbound message injects immediately now, regardless of
         # Status.BUSY (design.md "queue handoff") — Claude keeps its own
@@ -1676,10 +1721,12 @@ class CommandHandlersMixin:
             self.registry.transition(sess.name, Status.BUSY)
             await self._card_for_injected(sess, was_busy=was_busy)
             log.info("[%s] Sent text: %s", sess.label, text[:80])
-        elif ok is PROMPT_REFUSED:
+            return True
+        if ok is PROMPT_REFUSED:
             await self._reply_needs_admin(update)
         else:
             await reply_text(update.message, f"❌ Failed to send to [{sess.label}]")
+        return False
 
     async def _handle_voice(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle voice messages — transcribe via local Whisper, inject as prompt.
@@ -1799,14 +1846,22 @@ class CommandHandlersMixin:
         if not sess:
             sess = self._target(update)
         if not sess:
-            if await self._ask_which_session(update):
+            async def resend(chosen) -> bool:
+                return await self._send_transcript_to(update, chosen, transcript)
+            if await self._ask_which_session(update, resend=resend):
                 return
             await reply_text(update.message,
                 "⚠️ Voice transcribed but no active session to send it to. "
                 "Pick one with /<label> first."
             )
             return
+        await self._send_transcript_to(update, sess, transcript)
 
+    async def _send_transcript_to(self, update: Update, sess: TrackedSession,
+                                  transcript: str) -> bool:
+        """:meth:`_send_text_to` for a voice message's transcript. True when
+        it went there (sent, or held for later)."""
+        chat_id = calling_chat_id(update)
         self._set_target(sess.name, update)
         asyncio.create_task(self._maybe_update_bot_name(sess.name))
 
@@ -1818,7 +1873,7 @@ class CommandHandlersMixin:
                     callback_data=session_parity.session_cb(
                         self, chat_id or 0, sess, "resume"))]]),
             )
-            return
+            return False
 
         reply_context = self._build_reply_context(
             update.message, sess, bot_id=self._app.bot.id,
@@ -1826,9 +1881,10 @@ class CommandHandlersMixin:
         )
 
         if await self._refuse_admin_command(update, transcript):
-            return
-        if await self._hold_for_open_dialog(update, sess, transcript, reply_context):
-            return
+            return False
+        held = await self._hold_for_open_dialog(update, sess, transcript, reply_context)
+        if held:
+            return held is not HOLD_DROPPED
 
         # Injects immediately regardless of Status.BUSY — see the same
         # comment in _handle_message (design.md "queue handoff"). R1:
@@ -1852,12 +1908,14 @@ class CommandHandlersMixin:
             self.registry.transition(sess.name, Status.BUSY)
             await self._card_for_injected(sess, was_busy=was_busy)
             log.info("[%s] Voice injected: %r", sess.label, transcript[:80])
-        elif ok is PROMPT_REFUSED:
+            return True
+        if ok is PROMPT_REFUSED:
             await self._reply_needs_admin(update)
         else:
             await reply_text(update.message,
                 f"❌ Failed to inject transcript into [{sess.label}]",
             )
+        return False
 
     async def _handle_file(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle photo/document messages — download file and inject prompt.
@@ -1960,14 +2018,27 @@ class CommandHandlersMixin:
         prompt = _file_prompt(caption, paths, all_photos=all_photos)
 
         if not sess:
-            if await self._ask_which_session(update):
+            bot_id = ctx.bot.id
+
+            async def resend(chosen) -> bool:
+                return await self._send_file_prompt_to(
+                    update, chosen, prompt, bot_id=bot_id, log_name=log_name)
+            if await self._ask_which_session(update, resend=resend):
                 return
             await reply_text(msg,
                 "⚠️ I don't know which session this file is for. Pick one with "
                 "/<label> or the keyboard."
             )
             return
+        await self._send_file_prompt_to(update, sess, prompt, bot_id=ctx.bot.id,
+                                        log_name=log_name)
 
+    async def _send_file_prompt_to(self, update: Update, sess: TrackedSession,
+                                   prompt: str, *, bot_id, log_name: str) -> bool:
+        """:meth:`_send_text_to` for an upload's prompt (the files are
+        already saved). True when it went there (sent, or held for later)."""
+        msg = update.message
+        chat_id = calling_chat_id(update)
         self._set_target(sess.name, update)
         asyncio.create_task(self._maybe_update_bot_name(sess.name))
 
@@ -1979,17 +2050,18 @@ class CommandHandlersMixin:
                     callback_data=session_parity.session_cb(
                         self, chat_id or 0, sess, "resume"))]]),
             )
-            return
+            return False
 
         reply_context = self._build_reply_context(
-            msg, sess, bot_id=ctx.bot.id,
+            msg, sess, bot_id=bot_id,
             allow_file=sess.status != Status.BUSY,
         )
 
         if await self._refuse_admin_command(update, prompt):
-            return
-        if await self._hold_for_open_dialog(update, sess, prompt, reply_context):
-            return
+            return False
+        held = await self._hold_for_open_dialog(update, sess, prompt, reply_context)
+        if held:
+            return held is not HOLD_DROPPED
 
         # Injects immediately regardless of Status.BUSY — see the same
         # comment in _handle_message (design.md "queue handoff"). R1:
@@ -2010,10 +2082,12 @@ class CommandHandlersMixin:
             self.registry.transition(sess.name, Status.BUSY)
             await self._card_for_injected(sess, was_busy=was_busy)
             log.info("[%s] File sent: %s", sess.label, log_name)
-        elif ok is PROMPT_REFUSED:
+            return True
+        if ok is PROMPT_REFUSED:
             await self._reply_needs_admin(update)
         else:
             await reply_text(msg, f"❌ Failed to send to [{sess.label}]")
+        return False
 
     # ---- Albums (media groups) --------------------------------------------
 

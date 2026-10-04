@@ -431,10 +431,14 @@ switched to (`/x1`), sent a message to, replied to or started. Another
 member's session answering does not change it, and neither do other
 people's messages. A mention, a voice note, a template or a keyboard
 command goes to your own current session, and a keyboard command or
-template names it in its reply ("🧹 /clear sent to x1"). A bare `/stop`
-stops whichever of the group's sessions is working (and asks "Which one
-to stop?" when several are); a bare `/mode`,
-`/diff`, `/clearqueue` or `/now` acts on your current session.
+template names it in its reply ("🧹 /clear sent to x1"). A bare `/stop`,
+`/mode`, `/kill`, `/restart`, `/rename`, `/delete` or `/diff` acts only on
+your own current session (through its usual confirm), and only when the
+command makes sense for it (working for `/stop`, ended for `/delete`);
+otherwise it always shows the picker, even when one session is left, since
+that one may be someone else's. `/clearqueue` and `/now` act on your
+current session. `/kill x1` and the other commands with a name act on that
+session, as before.
 
 - With no current session of your own and more than one session
   running, the bot asks "Which session? Reply to one of its messages,
@@ -444,6 +448,14 @@ to stop?" when several are); a bare `/mode`,
   one session still running (it may be someone else's): the bot answers
   "x1 has ended. Which session?" with a button per running session and,
   when x1 can be resumed, "▶️ Resume x1", and sends nothing.
+- Tapping a session's button on either question also sends the message
+  it asked about (a text, a voice note's transcript or a file) to that
+  session, as if you had sent it there, and the question changes to
+  "Sent to x2.". Only the person who sent the message can use the
+  buttons, and only for ten minutes: after that the button only makes
+  the session your current one ("That message is too old to send; send
+  it again."). ▶️ Resume brings x1 back but sends nothing: send your
+  message again.
 - The pinned bar has no "Messages go to" line in a group, since that
   differs per person.
 

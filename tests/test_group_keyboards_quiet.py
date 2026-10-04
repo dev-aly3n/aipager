@@ -637,7 +637,8 @@ def test_a_marked_kill_reads_no_argument(kbot, mk_update, run_async):
     marker for a command word."""
     tap = _upd(mk_update, MARK + "kill", ALICE, G, reply_to_bot=True)
     run_async(kbot._handle_kill_cmd(tap, MagicMock()))
-    assert _replies(tap) == ["Which session to end?"]
+    # Delivery 18 (8.93): alice's own target, x1, is the one a bare /kill means.
+    assert _replies(tap) == ["⏹ End <b>x1</b>? Claude stops and the session closes."]
 
 
 def test_own_text_keeps_a_dm_marker(kbot, mk_update):

@@ -3,10 +3,11 @@
 In a group, an inline tap is invisible to the other members, so a confirm
 card anyone could press let bob end the session alice was only looking
 at, and the group saw alice's card say "Ended". Now the End, Restart and
-Delete confirms, the /mode switch confirm, and the session pickers of
-/kill, /restart, /delete and /mode record who asked for them (who sent the
-command, or tapped the button that drew the card) and answer only that
-person. Anyone else's tap, Cancel included, gets a toast naming the card's
+Delete confirms, the /mode switch confirm, the session pickers of
+/kill, /restart, /delete and /mode, and the "Which session?" question
+(roadmap 8.94i: its buttons send the asker's message) record who asked
+for them (who sent the command, or tapped the button that drew the
+card) and answer only that person. Anyone else's tap, Cancel included, gets a toast naming the card's
 owner and the command to send for their own, and nothing happens. The
 `/new` conflict card already worked this way (callbacks ``new_*``).
 
@@ -40,6 +41,8 @@ _GUARDED = {
     "restart": re.compile(r"restartok\d+|restart-cancel"),
     "delete": re.compile(r"delete-confirm|delete-cancel"),
     "mode": re.compile(r"perms_confirm|perms_cancel|perms_stop_switch|perms_wait"),
+    # "Which session?" (8.94i): its talk buttons send the asker's message.
+    "ask": re.compile(r"talk|resume"),
 }
 
 #: The pickers' row verbs (session_parity.session_picker), and its Cancel.
@@ -48,6 +51,7 @@ _PICKER_ROW = {
     "restart": re.compile(r"restart"),
     "delete": re.compile(r"delete"),
     "mode": re.compile(r"mode_show|modeask\d+|modeauto\d+"),
+    "ask": re.compile(r"talk|resume"),
 }
 _PICKER_CANCEL = ("_", "pick:cancel")
 
@@ -67,8 +71,9 @@ def _is_id(value) -> bool:
 def claim(bot: TelegramBot, chat_id, msg_id, user_id, *, kind: str,
           command: str, picker: bool = False, who=None) -> None:
     """Record that the card on *msg_id* in *chat_id* (a group) is
-    *user_id*'s. ``kind``: ``end``, ``restart``, ``delete`` or ``mode``.
-    ``command``: what another member sends for their own (``/kill x2``).
+    *user_id*'s. ``kind``: ``end``, ``restart``, ``delete``, ``mode`` or
+    ``ask`` ("Which session?", roadmap 8.94i). ``command``: what another
+    member sends for their own (``/kill x2``); empty when there is none.
     ``picker``: the card is the command's session picker. ``who``: the
     requester's Telegram user, for their name when they are not a known
     member. Nothing is recorded in a private chat, or without a real
@@ -124,6 +129,8 @@ def refusal(bot: TelegramBot, chat_id, msg_id, user_id,
         covered = bool(_GUARDED[record["kind"]].fullmatch(action))
     if not covered:
         return None
+    if not record["command"]:
+        return f"This is {record['label']}'s card."
     return (f"This is {record['label']}'s card. "
             f"Send {record['command']} for your own.")
 
