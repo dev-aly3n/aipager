@@ -156,7 +156,8 @@ def _edit_member(scope, token: str) -> bool:
 
     if action == "role":
         role = _pick_role(f"New role for @{member.label}:",
-                          default=member.role)
+                          default=member.role,
+                          warn_owner=scope.kind == "group")
         if role == member.role:
             friendly_warn("No change.")
             return False

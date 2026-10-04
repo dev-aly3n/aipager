@@ -160,9 +160,10 @@ def test_kill_mid_group_keeps_draft_and_prior_scopes(env, monkeypatch):
     _stub_captures(monkeypatch, [
         {"id": 11, "label": "ann"}, {"id": 22, "label": "ben"},
     ])
-    # label, "add another?"→True (after ann), then KeyboardInterrupt
-    # (queue exhausted) on the second "add another?" → simulates Ctrl-C.
-    _stub_ask(monkeypatch, ["dev-team", True])
+    # label, "add yourself (the owner DM's member) first?"→False,
+    # "add another?"→True (after ann), then KeyboardInterrupt (queue
+    # exhausted) on the second "add another?" → simulates Ctrl-C.
+    _stub_ask(monkeypatch, ["dev-team", False, True])
     with pytest.raises(KeyboardInterrupt):
         scope_flows.add_group_scope("TOK", "bot")
     # Draft survives with both members; prior DM scope intact.

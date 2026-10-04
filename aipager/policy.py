@@ -53,6 +53,11 @@ class Role:
     allow_paths: tuple[str, ...] = ()
     deny_bash_patterns: tuple[str, ...] = ()
     auto_approve: bool = False
+    # May use the admin features in Telegram and the Mini App: Auto mode,
+    # a group's /settings, /update, voice install. Not members or roles
+    # (only `aipager config` changes those) and not the safety floor
+    # (that is bypass_safety, the owner's alone). Roadmap 8.83.
+    can_manage: bool = False
 
 
 # Fields a role mapping in policy.yaml may set (everything except ``name``).
@@ -61,7 +66,7 @@ _ROLE_FIELDS: frozenset[str] = frozenset(
 )
 _ROLE_BOOL_FIELDS: frozenset[str] = frozenset(
     {"bypass_safety", "bypass_role_denies", "can_prompt", "can_approve",
-     "auto_approve"}
+     "auto_approve", "can_manage"}
 )
 _ROLE_LIST_FIELDS: frozenset[str] = _ROLE_FIELDS - _ROLE_BOOL_FIELDS
 

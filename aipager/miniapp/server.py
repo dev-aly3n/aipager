@@ -1507,11 +1507,14 @@ class MiniAppServer:
             return web.json_response({"error": "too_many_requests"}, status=429)
 
         label = sess.label
-        # No skip_perms_override: the Mini App always resumes with the
-        # session's own persisted skip_perms, matching chat's bare
-        # `/resume <name>` command (design.md Out of scope — the picker's
-        # Ask/Auto override is a chat-callback-only affordance).
-        outcome = await self.bot._do_resume_core(sess, driver_user_id=user_id)
+        # No Ask/Auto choice here: the Mini App resumes in the session's
+        # own saved mode, like chat's bare `/resume <name>`, and like it
+        # brings a session saved in Auto back in Ask for anyone who is
+        # not an admin (roadmap 8.83).
+        override, auto_refused = self.bot._resume_auto_gate(
+            sess, None, user_id, scope_chat_id)
+        outcome = await self.bot._do_resume_core(
+            sess, skip_perms_override=override, driver_user_id=user_id)
         if outcome.reason == "not_gone":
             return web.json_response({
                 "error": "not_gone", "detail": "This session is already running.",
@@ -1527,7 +1530,14 @@ class MiniAppServer:
                 "error": "launch_failed", "detail": outcome.err,
             }, status=400)
 
-        await self._mirror_session_resumed(scope_chat_id, label)
+        await self._mirror_session_resumed(
+            scope_chat_id, label, in_ask=auto_refused)
+        if auto_refused:
+            from aipager.bot.transport import RESUME_AUTO_NEEDS_ADMIN
+            return web.json_response({
+                "status": "resumed", "label": label, "mode": "ask",
+                "detail": f"Resumed {label} in Ask: {RESUME_AUTO_NEEDS_ADMIN}",
+            })
         return web.json_response({"status": "resumed", "label": label})
 
     async def _handle_session_delete(self, request):
@@ -2002,10 +2012,15 @@ class MiniAppServer:
         except Exception:
             log.debug("miniapp: session-killed mirror failed", exc_info=True)
 
-    async def _mirror_session_resumed(self, scope_chat_id, label) -> None:
+    async def _mirror_session_resumed(self, scope_chat_id, label,
+                                      in_ask: bool = False) -> None:
+        text = f"♻️ Resumed [{label}] from the Mini App"
+        if in_ask:
+            from aipager.bot.transport import RESUME_AUTO_NEEDS_ADMIN
+            text += f" in Ask: {RESUME_AUTO_NEEDS_ADMIN}"
         try:
             await self.bot._app.bot.send_message(
-                chat_id=scope_chat_id, text=f"♻️ Resumed [{label}] from the Mini App",
+                chat_id=scope_chat_id, text=text,
             )
         except Exception:
             log.debug("miniapp: session-resumed mirror failed", exc_info=True)

@@ -822,6 +822,8 @@ def _print_safety_policy() -> None:
             flags.append("bypass_safety")
         if role.bypass_role_denies:
             flags.append("bypass_role_denies")
+        if role.can_manage:
+            flags.append("can_manage")
         if not role.can_prompt:
             flags.append("read-only")
         if not role.bypass_safety:

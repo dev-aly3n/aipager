@@ -17,10 +17,12 @@ from aiohttp.test_utils import TestClient, TestServer
 from aipager.miniapp.server import MiniAppServer
 from aipager.scope import Member, Scope
 from aipager.state import SessionRegistry, Status
+from aipager.policy import load_policy
+from pathlib import Path
 
 BOT_TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 
-ADMIN_ID = 555      # bypass_safety + can_prompt
+ADMIN_ID = 555      # can_manage + can_prompt
 MEMBER_ID = 777     # can_prompt, NOT admin
 READONLY_ID = 888   # neither
 OUTSIDER_ID = 999
@@ -52,17 +54,6 @@ def _hdr(user_id):
     return {"X-Telegram-Init-Data": _init_data(user_id)}
 
 
-class _Role:
-    def __init__(self, name):
-        self.bypass_safety = name == "admin"
-        self.can_prompt = name in ("admin", "developer")
-
-
-class _Policy:
-    def get_role(self, name):
-        return _Role(name)
-
-
 @pytest.fixture
 def server(mk_bot, tmp_path, monkeypatch):
     project = tmp_path / "project"
@@ -76,12 +67,12 @@ def server(mk_bot, tmp_path, monkeypatch):
         chat_id=-100, kind="group", label="team",
         members=(
             Member(id=ADMIN_ID, label="ada", role="admin"),
-            Member(id=MEMBER_ID, label="bob", role="developer"),
+            Member(id=MEMBER_ID, label="bob", role="user"),
             Member(id=READONLY_ID, label="cy", role="read_only"),
         ),
     )
     bot = mk_bot(registry, scopes=[scope])
-    bot.policy = _Policy()
+    bot.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     # An existing session establishes the allowed root — the picker is
     # seeded from directories this scope already works in.
     seed = registry.get_or_create("claude-seed__g100")
@@ -190,7 +181,7 @@ def test_readonly_member_cannot_create(server, run_async):
 
 def test_ordinary_member_can_create_without_admin(server, run_async):
     """Creating is the same capability as driving — deliberately NOT
-    gated on bypass_safety."""
+    gated on can_manage."""
     async def _run():
         client = await _client_for(server)
         try:

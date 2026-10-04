@@ -24,6 +24,8 @@ from aiohttp.test_utils import TestClient, TestServer
 from aipager.miniapp.server import MiniAppServer
 from aipager.scope import Member, Scope
 from aipager.state import SessionRegistry, Status
+from aipager.policy import load_policy
+from pathlib import Path
 
 BOT_TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 
@@ -64,26 +66,6 @@ def _hdr(user_id):
     return {"X-Telegram-Init-Data": _init_data(user_id)}
 
 
-class _Role:
-    def __init__(self, *, bypass_safety=False, can_prompt=True):
-        self.bypass_safety = bypass_safety
-        self.can_prompt = can_prompt
-        # The tap gate (roadmap 8.75) reads it for answer buttons; like
-        # the built-in roles, only read_only lacks it.
-        self.can_approve = can_prompt
-
-
-class _Policy:
-    _ROLES = {
-        "admin": _Role(bypass_safety=True, can_prompt=True),
-        "developer": _Role(bypass_safety=False, can_prompt=True),
-        "read_only": _Role(bypass_safety=False, can_prompt=False),
-    }
-
-    def get_role(self, name):
-        return self._ROLES.get(name)
-
-
 @pytest.fixture
 def server(mk_bot):
     registry = SessionRegistry()
@@ -91,7 +73,7 @@ def server(mk_bot):
         chat_id=SCOPE_CHAT_ID, kind="group", label="team",
         members=(
             Member(id=ADMIN_ID, label="ada", role="admin"),
-            Member(id=DEVELOPER_ID, label="bob", role="developer"),
+            Member(id=DEVELOPER_ID, label="bob", role="user"),
             Member(id=READONLY_ID, label="cleo", role="read_only"),
         ),
     )
@@ -100,7 +82,7 @@ def server(mk_bot):
         members=(Member(id=FOREIGN_MEMBER_ID, label="zed", role="admin"),),
     )
     bot = mk_bot(registry, scopes=[scope, foreign_scope])
-    bot.policy = _Policy()
+    bot.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     bot._app.bot.username = "aipager_test_bot"
     # A real-looking sent message, so the resend can record its id.
     bot._app.bot.send_message = AsyncMock(return_value=MagicMock(message_id=4242))

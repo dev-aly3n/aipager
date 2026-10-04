@@ -15,6 +15,8 @@ from aipager import install_source, self_update
 from aipager.bot import update_flow
 from aipager.scope import Member, Scope
 from aipager.state import SessionRegistry
+from aipager.policy import load_policy
+from pathlib import Path
 
 
 # ---- SC-1: the /update handler must not block on slow lookups -----------------
@@ -217,25 +219,14 @@ def test_long_installer_output_keeps_the_tail(world, personal_bot, h, run_async)
 
 # ---- group chats: paths never shown -----------------------------------------
 
-class _Role:
-    def __init__(self, admin):
-        self.bypass_safety = admin
-        self.can_prompt = True
-
-
-class _Policy:
-    def get_role(self, name):
-        return _Role(name == "admin")
-
-
 @pytest.fixture
 def two_scope_bot(mk_bot, h):
     a = Scope(chat_id=-100, kind="group", label="A", members=(
         Member(id=555, label="ada", role="admin"),))
     b = Scope(chat_id=-200, kind="group", label="B", members=(
-        Member(id=555, label="ada", role="developer"),))
+        Member(id=555, label="ada", role="user"),))
     bot = mk_bot(SessionRegistry(), scopes=[a, b])
-    bot.policy = _Policy()
+    bot.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     bot._app.bot.send_message = AsyncMock(
         side_effect=lambda *a, **kw: h.status_message(kw.get("chat_id", -100), 801))
     return bot

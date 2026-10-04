@@ -46,6 +46,7 @@ from aipager.transcript import read_still_queued
 # TelegramBot class body below (and any external consumers like the
 # tests) keeps working without changes.
 from aipager.bot.transport import (  # noqa: F401
+    RESUME_AUTO_NEEDS_ADMIN,
     reply_text,
     edit_text,
     send_text,
@@ -1511,6 +1512,26 @@ class SessionOpsMixin:
                  label, resume_id, cwd or "<daemon>")
         return ResumeOutcome(ok=True, reason="resumed")
 
+    def _resume_auto_gate(
+        self, sess: TrackedSession, skip_perms_override: bool | None,
+        actor: int | None, chat_id: int | None,
+    ) -> tuple[bool | None, bool]:
+        """The mode a resume may bring *sess* back in (roadmap 8.83).
+
+        Returns ``(skip_perms_override, auto_refused)``: when the resume
+        would land in Auto (the override, else the session's saved mode)
+        and *actor* is not an admin in *chat_id*, the override becomes
+        ``False`` (Ask) and ``auto_refused`` is True. Otherwise the
+        override passes through unchanged. Every resume surface (typed
+        ``/resume``, the picker, the ``/new`` conflict card, the Mini App)
+        asks this, so none brings Auto back for someone who could not
+        switch to it."""
+        wants_auto = (skip_perms_override if skip_perms_override is not None
+                      else sess.skip_perms) is True
+        if wants_auto and not self._is_admin_user(actor, chat_id):
+            return False, True
+        return skip_perms_override, False
+
     async def _do_resume(self, *, label: str, reply_fn,
                           update: Update | None = None,
                           query=None,
@@ -1547,6 +1568,16 @@ class SessionOpsMixin:
             if update is not None and update.effective_user is not None
             else None
         )
+        # Auto needs an admin, like every other way into it (roadmap
+        # 8.83): a session saved in Auto, or the Auto button, comes back
+        # in Ask for anyone else, and the reply says so.
+        actor = driver_user_id
+        if actor is None and query is not None:
+            from_user = getattr(query, "from_user", None)
+            actor = getattr(from_user, "id", None)
+        skip_perms_override, auto_refused = self._resume_auto_gate(
+            sess, skip_perms_override, actor,
+            calling_chat_id(update or query))
         # The GONE snapshot, read before the core resumes the session:
         # leaving GONE clears it (state.transition, roadmap 8.34), and it
         # is still the right "where you left off" for the recap below.
@@ -1592,6 +1623,8 @@ class SessionOpsMixin:
             sess.transcript_path, max_chars=500,
         )
         header = f"♻️ Resumed <b>{html_mod.escape(label)}</b>"
+        if auto_refused:
+            header += f" in Ask: {RESUME_AUTO_NEEDS_ADMIN}"
         if preview:
             body = (
                 f"{header}\n\n"

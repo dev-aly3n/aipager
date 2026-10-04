@@ -32,6 +32,8 @@ import hmac
 import json
 import time
 from urllib.parse import urlencode
+from aipager.policy import load_policy
+from pathlib import Path
 
 SCOPE_CHAT = -100
 ADMIN_ID = 555
@@ -61,17 +63,6 @@ def _hdr(user_id=ADMIN_ID):
     return {"X-Telegram-Init-Data": urlencode(fields)}
 
 
-class _Role:
-    def __init__(self, bypass_safety=True, can_prompt=True):
-        self.bypass_safety = bypass_safety
-        self.can_prompt = can_prompt
-
-
-class _Policy:
-    def get_role(self, name):
-        return _Role()
-
-
 @pytest.fixture
 def server(mk_bot, gated_bot, tmp_path, monkeypatch):
     """A ``MiniAppServer`` whose bot is the LIMITER-ROUTED double.
@@ -89,7 +80,7 @@ def server(mk_bot, gated_bot, tmp_path, monkeypatch):
         members=(Member(id=ADMIN_ID, label="ada", role="admin"),),
     )
     bot = mk_bot(registry, scopes=[scope])
-    bot.policy = _Policy()
+    bot.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     bot._app.bot = gated_bot
     gated_bot.username = "aipager_test_bot"
 

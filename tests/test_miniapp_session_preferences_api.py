@@ -7,13 +7,9 @@ mechanic (design §4), the `_can_prompt_user` gate instead of
 `_is_admin_user`, and cross-scope label isolation on a session-scoped
 route.
 
-Test-double note (planner's own warning, design.md Risks): the existing
-`_Policy`/`_Role` stand-ins in `test_miniapp_preferences_api.py` implement
-only `bypass_safety`. `_can_prompt_user` also reads `Role.can_prompt`
-(via `_role_can_prompt`), so the stand-ins here implement both — an
-AttributeError from a half-built double would fail LOUD, not quietly
-pass for the wrong reason, but building it right the first time avoids
-that entirely.
+Roles come from the real built-in policy (``load_policy``, roadmap
+8.83): ``admin`` manages and prompts, ``user`` prompts only, ``read_only``
+neither.
 """
 
 import hashlib
@@ -29,16 +25,18 @@ from aipager import preferences as prefs_mod
 from aipager.miniapp.server import MiniAppServer
 from aipager.scope import Member, Scope
 from aipager.state import SessionRegistry, Status
+from aipager.policy import load_policy
+from pathlib import Path
 
 BOT_TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 
 SCOPE_CHAT_ID = -100
 FOREIGN_SCOPE_CHAT_ID = -200
 
-ADMIN_ID = 555       # bypass_safety AND can_prompt
-DEVELOPER_ID = 777    # can_prompt, NOT bypass_safety — the case this
+ADMIN_ID = 555       # can_manage AND can_prompt
+DEVELOPER_ID = 777    # can_prompt, NOT can_manage — the case this
                        # route's whole design decision exists to allow
-READONLY_ID = 888     # neither bypass_safety NOR can_prompt
+READONLY_ID = 888     # neither can_manage NOR can_prompt
 OUTSIDER_ID = 999     # member of no scope at all
 FOREIGN_MEMBER_ID = 321  # a real member, but of the OTHER scope
 
@@ -69,31 +67,6 @@ def _hdr(user_id):
     return {"X-Telegram-Init-Data": _init_data(user_id)}
 
 
-class _Role:
-    def __init__(self, *, bypass_safety=False, can_prompt=True):
-        self.bypass_safety = bypass_safety
-        self.can_prompt = can_prompt
-
-
-class _Policy:
-    """Minimal stand-in for the real policy, extended (per design.md's
-    own risk note) to implement `can_prompt` alongside `bypass_safety`:
-
-    - "admin"      -> bypass_safety=True,  can_prompt=True
-    - "developer"  -> bypass_safety=False, can_prompt=True
-    - "read_only"  -> bypass_safety=False, can_prompt=False
-    """
-
-    _ROLES = {
-        "admin": _Role(bypass_safety=True, can_prompt=True),
-        "developer": _Role(bypass_safety=False, can_prompt=True),
-        "read_only": _Role(bypass_safety=False, can_prompt=False),
-    }
-
-    def get_role(self, name):
-        return self._ROLES.get(name)
-
-
 @pytest.fixture
 def server(mk_bot):
     registry = SessionRegistry()
@@ -101,7 +74,7 @@ def server(mk_bot):
         chat_id=SCOPE_CHAT_ID, kind="group", label="team",
         members=(
             Member(id=ADMIN_ID, label="ada", role="admin"),
-            Member(id=DEVELOPER_ID, label="bob", role="developer"),
+            Member(id=DEVELOPER_ID, label="bob", role="user"),
             Member(id=READONLY_ID, label="cleo", role="read_only"),
         ),
     )
@@ -110,7 +83,7 @@ def server(mk_bot):
         members=(Member(id=FOREIGN_MEMBER_ID, label="zed", role="admin"),),
     )
     bot = mk_bot(registry, scopes=[scope, foreign_scope])
-    bot.policy = _Policy()
+    bot.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     bot._app.bot.username = "aipager_test_bot"
     return MiniAppServer(bot, registry, port=8766)
 
@@ -450,8 +423,8 @@ def test_readonly_member_gets_200_on_get_with_can_edit_false(server, run_async):
 
 def test_developer_non_admin_can_put_without_bypass_safety(server, run_async):
     """The headline authorization decision (design.md Authorization):
-    a session override is gated by can_prompt, NOT admin/bypass_safety.
-    A developer (can_prompt=True, bypass_safety=False) must succeed here
+    a session override is gated by can_prompt, NOT admin/can_manage.
+    A user (can_prompt=True, can_manage=False) must succeed here
     even though the SAME user is rejected by the scope-wide route."""
     async def _run():
         _mk_session(server, "dev")

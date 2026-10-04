@@ -3,9 +3,8 @@ on ``/api/sessions/{label}/...`` (design.md: "Mini App session menu
 actions"), the five NEW routes beside the four Stop/Kill/Resume/Delete
 routes already covered by ``test_miniapp_session_controls_api.py``.
 
-Mirrors that file's exact fixture pattern (``_Policy``/``_Role``
-stand-ins implementing both ``bypass_safety`` and ``can_prompt``,
-``_init_data``/``_hdr`` HMAC signing, ``ADMIN_ID``/``DEVELOPER_ID``/
+Mirrors that file's exact fixture pattern (the real built-in roles
+from ``load_policy``, ``_init_data``/``_hdr`` HMAC signing, ``ADMIN_ID``/``DEVELOPER_ID``/
 ``READONLY_ID``/``OUTSIDER_ID``/``FOREIGN_MEMBER_ID``, aiohttp
 ``TestClient``/``TestServer``).
 
@@ -41,15 +40,17 @@ from aipager.miniapp.sessions import (
 )
 from aipager.scope import Member, Scope
 from aipager.state import QUEUE_CAP, SessionRegistry, Status
+from aipager.policy import load_policy
+from pathlib import Path
 
 BOT_TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 
 SCOPE_CHAT_ID = -100
 FOREIGN_SCOPE_CHAT_ID = -200
 
-ADMIN_ID = 555         # bypass_safety AND can_prompt
-DEVELOPER_ID = 777     # can_prompt, NOT bypass_safety
-READONLY_ID = 888      # neither bypass_safety NOR can_prompt
+ADMIN_ID = 555         # can_manage AND can_prompt
+DEVELOPER_ID = 777     # can_prompt, NOT can_manage
+READONLY_ID = 888      # neither can_manage NOR can_prompt
 OUTSIDER_ID = 999      # member of no scope at all
 FOREIGN_MEMBER_ID = 321  # a real member, but of the OTHER scope
 
@@ -80,34 +81,6 @@ def _hdr(user_id):
     return {"X-Telegram-Init-Data": _init_data(user_id)}
 
 
-class _Role:
-    def __init__(self, *, bypass_safety=False, can_prompt=True):
-        self.bypass_safety = bypass_safety
-        self.can_prompt = can_prompt
-
-
-class _Policy:
-    """Minimal stand-in for the real policy, implementing BOTH
-    `bypass_safety` and `can_prompt` — `_can_prompt_user` reads
-    `Role.can_prompt` via `_role_can_prompt`, so a stand-in with only
-    `bypass_safety` would AttributeError, not silently pass for the
-    wrong reason.
-
-    - "admin"      -> bypass_safety=True,  can_prompt=True
-    - "developer"  -> bypass_safety=False, can_prompt=True
-    - "read_only"  -> bypass_safety=False, can_prompt=False
-    """
-
-    _ROLES = {
-        "admin": _Role(bypass_safety=True, can_prompt=True),
-        "developer": _Role(bypass_safety=False, can_prompt=True),
-        "read_only": _Role(bypass_safety=False, can_prompt=False),
-    }
-
-    def get_role(self, name):
-        return self._ROLES.get(name)
-
-
 @pytest.fixture
 def server(mk_bot):
     registry = SessionRegistry()
@@ -115,7 +88,7 @@ def server(mk_bot):
         chat_id=SCOPE_CHAT_ID, kind="group", label="team",
         members=(
             Member(id=ADMIN_ID, label="ada", role="admin"),
-            Member(id=DEVELOPER_ID, label="bob", role="developer"),
+            Member(id=DEVELOPER_ID, label="bob", role="user"),
             Member(id=READONLY_ID, label="cleo", role="read_only"),
         ),
     )
@@ -124,7 +97,7 @@ def server(mk_bot):
         members=(Member(id=FOREIGN_MEMBER_ID, label="zed", role="admin"),),
     )
     bot = mk_bot(registry, scopes=[scope, foreign_scope])
-    bot.policy = _Policy()
+    bot.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     bot._app.bot.username = "aipager_test_bot"
     bot._update_bot_commands = AsyncMock()
     bot._maybe_update_bot_name = AsyncMock()

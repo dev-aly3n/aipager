@@ -6,8 +6,7 @@ documented wire contract.
 
 Fixture shape follows tests/test_miniapp_session_preferences_api.py
 (named as this batch's reference by the orchestrator): HMAC-signed
-`initData`, `_Policy`/`_Role` stand-ins implementing both `bypass_safety`
-and `can_prompt` (this route's gate is `_can_prompt_user`, not
+`initData`, the real built-in roles from `load_policy` (this route's gate is `_can_prompt_user`, not
 `_is_admin_user` -- design.md's Authorization section), member ids at
 every relevant permission level, aiohttp `TestClient`/`TestServer`
 against `MiniAppServer._build_app()`.
@@ -34,16 +33,18 @@ from aiohttp.test_utils import TestClient, TestServer
 from aipager.miniapp.server import MiniAppServer
 from aipager.scope import Member, Scope
 from aipager.state import SessionRegistry, Status
+from aipager.policy import load_policy
+from pathlib import Path
 
 BOT_TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 
 SCOPE_CHAT_ID = -100
 FOREIGN_SCOPE_CHAT_ID = -200
 
-ADMIN_ID = 555          # bypass_safety AND can_prompt
-DEVELOPER_ID = 777      # can_prompt, NOT bypass_safety -- proves the
+ADMIN_ID = 555          # can_manage AND can_prompt
+DEVELOPER_ID = 777      # can_prompt, NOT can_manage -- proves the
                          # gate is _can_prompt_user, not _is_admin_user
-READONLY_ID = 888       # neither bypass_safety NOR can_prompt
+READONLY_ID = 888       # neither can_manage NOR can_prompt
 OUTSIDER_ID = 999999    # a member of no scope at all
 FOREIGN_MEMBER_ID = 321  # a real member, but of the OTHER scope
 
@@ -74,29 +75,6 @@ def _hdr(user_id):
     return {"X-Telegram-Init-Data": _init_data(user_id)}
 
 
-class _Role:
-    def __init__(self, *, bypass_safety=False, can_prompt=True):
-        self.bypass_safety = bypass_safety
-        self.can_prompt = can_prompt
-
-
-class _Policy:
-    """Minimal stand-in for the real policy, implementing both
-    `bypass_safety` and `can_prompt` (design.md Risks note, echoed in
-    the reference fixture file): `_can_prompt_user` reads `can_prompt`
-    via `_role_can_prompt`, so a half-built double would AttributeError
-    loudly rather than quietly pass for the wrong reason."""
-
-    _ROLES = {
-        "admin": _Role(bypass_safety=True, can_prompt=True),
-        "developer": _Role(bypass_safety=False, can_prompt=True),
-        "read_only": _Role(bypass_safety=False, can_prompt=False),
-    }
-
-    def get_role(self, name):
-        return self._ROLES.get(name)
-
-
 @pytest.fixture
 def server(mk_bot):
     registry = SessionRegistry()
@@ -104,7 +82,7 @@ def server(mk_bot):
         chat_id=SCOPE_CHAT_ID, kind="group", label="team",
         members=(
             Member(id=ADMIN_ID, label="ada", role="admin"),
-            Member(id=DEVELOPER_ID, label="bob", role="developer"),
+            Member(id=DEVELOPER_ID, label="bob", role="user"),
             Member(id=READONLY_ID, label="cleo", role="read_only"),
         ),
     )
@@ -113,7 +91,7 @@ def server(mk_bot):
         members=(Member(id=FOREIGN_MEMBER_ID, label="zed", role="admin"),),
     )
     bot = mk_bot(registry, scopes=[scope, foreign_scope])
-    bot.policy = _Policy()
+    bot.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     bot._app.bot.username = "aipager_test_bot"
     # Background "refresh bot commands / name" fire-and-forget tasks that
     # a successful Kill/Resume schedules via asyncio.create_task --

@@ -249,8 +249,8 @@ def test_safety_check_lists_what_each_role_can_do(tmp_path, monkeypatch, capsys)
     doctor._print_safety_policy()
     out = " ".join(capsys.readouterr().out.split())
     assert "• user (no code tools, writes confined to the session folder)" in out
-    assert "• owner (bypass_safety, bypass_role_denies)" in out
-    assert ("• admin (bypass_role_denies, runs code ("
+    assert "• owner (bypass_safety, bypass_role_denies, can_manage)" in out
+    assert ("• admin (bypass_role_denies, can_manage, runs code ("
             + ", ".join(safety.CODE_EXECUTION_TOOLS) + "): best-effort rules)") in out
     assert "• lead (runs code (PowerShell," in out
     assert "not a boundary" in out

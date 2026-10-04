@@ -528,7 +528,9 @@ class AuthMixin:
 
         Personal mode: always True (caller is the machine owner).
         Legacy team mode: True iff the sender's role is Role.ADMIN or higher.
-        V2 scope mode: True iff the sender's effective role has bypass_safety.
+        V2 scope mode: True iff the sender's role in this chat has
+        ``can_manage`` (owner and admin; roadmap 8.83). Not
+        ``bypass_safety``, which stays the owner's safety-floor bypass.
         """
         tg_user = update.effective_user
         chat = update.effective_chat
@@ -553,7 +555,7 @@ class AuthMixin:
             if member is None:
                 return False
             role = self.policy.get_role(member.role)
-            return bool(role and role.bypass_safety)
+            return getattr(role, "can_manage", False) is True
 
         if self.team is not None:
             if user_id is None:

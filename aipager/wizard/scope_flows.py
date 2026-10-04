@@ -16,7 +16,7 @@ import questionary
 
 from aipager.errors import friendly_warn
 from aipager.scope import Member, Scope
-from aipager.ui import console, ok, step
+from aipager.ui import console, ok, step, warn
 from aipager.wizard._constants import _PROMPT_STYLE
 from aipager.wizard.display import _ask
 from aipager.wizard.draft import clear_draft, load_draft, save_draft
@@ -24,7 +24,7 @@ from aipager.wizard.scope_io import commit_scope
 
 _ROLE_GLOSS = {
     "owner": "unrestricted; bypasses safety + all deny rules",
-    "admin": "full control; bypasses deny_tools, not the safety floor",
+    "admin": "Auto, settings, updates; not members, roles or the safety floor",
     "user": "prompt + approve; full safety + deny rules apply",
     "read_only": "/status only; no prompting",
 }
@@ -53,10 +53,19 @@ def _role_choices(*, include_owner: bool = True) -> list[questionary.Choice]:
     return choices
 
 
+# Shown above a group's role picker, where owner is offered (roadmap 8.83).
+OWNER_WARNING = ("owner has full control of this machine, including "
+                 "aipager's config, the bot token and Claude's credentials. "
+                 "Give it only to yourself.")
+
+
 def _pick_role(prompt: str, *, default: str = "user",
-               include_owner: bool = True) -> str:
+               include_owner: bool = True,
+               warn_owner: bool = False) -> str:
     choices = _role_choices(include_owner=include_owner)
     values = [c.value for c in choices]
+    if warn_owner and "owner" in values:
+        warn(OWNER_WARNING)
     dflt = default if default in values else values[0]
     return _ask(questionary.select(
         prompt, choices=choices, default=dflt,
@@ -95,6 +104,27 @@ def add_dm_scope(token: str, bot_username: str) -> bool:
     return True
 
 
+def _operator_member() -> Member | None:
+    """The operator: the member of the owner's DM scope (a DM scope whose
+    member's role has ``bypass_safety``), or ``None`` when there is no
+    such scope. Offered as a new group's first member (roadmap 8.83)."""
+    from aipager.wizard.scope_io import read_config
+    try:
+        from aipager.policy import load_policy
+        scopes, _ = read_config()
+        policy = load_policy()
+    except Exception:
+        return None
+    for s in scopes:
+        if s.kind != "dm":
+            continue
+        for m in s.members:
+            role = policy.get_role(m.role)
+            if role is not None and role.bypass_safety is True:
+                return m
+    return None
+
+
 def add_group_scope(token: str, bot_username: str,
                     *, resume: dict | None = None) -> bool:
     """Add a group scope, member by member. Returns True iff committed.
@@ -130,7 +160,26 @@ def add_group_scope(token: str, bot_username: str,
 
     _persist()
 
-    while True:
+    ask_first = True
+    if not resume:
+        # The operator first, as owner (skippable): without someone who
+        # can manage it, nobody in the group could use Auto, /settings
+        # or /update.
+        op = _operator_member()
+        if op is not None and _ask(questionary.confirm(
+            f"Add yourself (@{op.label}, from your own DM) as the first "
+            f"member, with the owner role?",
+            default=True, qmark="?", style=_PROMPT_STYLE,
+        )):
+            members.append({"id": op.id, "label": op.label, "role": "owner"})
+            _persist()
+            ok(f"Added @{op.label} (owner) - 1 member(s) drafted.")
+            ask_first = bool(_ask(questionary.confirm(
+                "Add another member?", default=True,
+                qmark="?", style=_PROMPT_STYLE,
+            )))
+
+    while ask_first:
         idx = len(members) + 1
         captured = _capture_user_identity(
             idx,
@@ -141,7 +190,7 @@ def add_group_scope(token: str, bot_username: str,
         if captured is None:
             break
         role = _pick_role(f"Role for @{captured['label']}:",
-                          default="user", include_owner=False)
+                          default="user", warn_owner=True)
         members.append({**captured, "role": role})
         _persist()
         ok(f"Added @{captured['label']} ({role}) - "

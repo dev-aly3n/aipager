@@ -20,6 +20,8 @@ from aiohttp.test_utils import TestClient, TestServer
 from aipager.miniapp.server import MiniAppServer
 from aipager.scope import Member, Scope
 from aipager.state import Status
+from aipager.policy import load_policy
+from pathlib import Path
 
 BOT_TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 GROUP = -100
@@ -44,23 +46,12 @@ def _hdr(user_id):
     return {"X-Telegram-Init-Data": _init_data(user_id)}
 
 
-class _Role:
-    def __init__(self, admin):
-        self.bypass_safety = admin
-        self.can_prompt = True
-
-
-class _Policy:
-    def get_role(self, name):
-        return _Role(name == "admin")
-
-
 def _scoped(env):
     env.bot.scopes = [Scope(chat_id=GROUP, kind="group", label="team", members=(
         Member(id=ADMIN, label="ada", role="admin"),
-        Member(id=MEMBER, label="bob", role="developer"),
+        Member(id=MEMBER, label="bob", role="user"),
     ))]
-    env.bot.policy = _Policy()
+    env.bot.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     env.chat_id = GROUP
 
 

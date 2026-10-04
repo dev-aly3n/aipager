@@ -170,6 +170,8 @@ RESTRICTED_DENY_TOOLS: tuple[str, ...] = (
 #   bypass_role_denies  — ignore deny_tools / allow_tools (admin-style)
 #   can_prompt          — may drive prompts
 #   can_approve         — may tap permission buttons
+#   can_manage          — may use the admin features (Auto, a group's
+#                         /settings, /update); never members or roles
 # Unspecified list/bool fields fall back to ``policy.Role`` defaults
 # (empty lists, auto_approve=False).
 # ---------------------------------------------------------------------------
@@ -179,18 +181,21 @@ BUILTIN_ROLE_DEFAULTS: dict[str, dict] = {
         "bypass_role_denies": True,
         "can_prompt": True,
         "can_approve": True,
+        "can_manage": True,
     },
     "admin": {
         "bypass_safety": False,
         "bypass_role_denies": True,
         "can_prompt": True,
         "can_approve": True,
+        "can_manage": True,
     },
     "user": {
         "bypass_safety": False,
         "bypass_role_denies": False,
         "can_prompt": True,
         "can_approve": True,
+        "can_manage": False,
         "deny_tools": RESTRICTED_DENY_TOOLS,
         "deny_paths_no_access": CREDENTIAL_PATHS,
     },
@@ -199,6 +204,7 @@ BUILTIN_ROLE_DEFAULTS: dict[str, dict] = {
         "bypass_role_denies": False,
         "can_prompt": False,
         "can_approve": False,
+        "can_manage": False,
         "deny_tools": RESTRICTED_DENY_TOOLS,
         "deny_paths_no_access": CREDENTIAL_PATHS,
     },

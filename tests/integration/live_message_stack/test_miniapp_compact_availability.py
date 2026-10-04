@@ -39,6 +39,8 @@ from aiohttp.test_utils import TestClient, TestServer
 from aipager.miniapp.server import MiniAppServer
 from aipager.scope import Member, Scope
 from aipager.state import SessionRegistry, Status
+from aipager.policy import load_policy
+from pathlib import Path
 
 BOT_TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 SCOPE_CHAT_ID = -100
@@ -69,19 +71,6 @@ def _hdr(user_id):
     return {"X-Telegram-Init-Data": _init_data(user_id)}
 
 
-class _Role:
-    def __init__(self, *, bypass_safety=False, can_prompt=True):
-        self.bypass_safety = bypass_safety
-        self.can_prompt = can_prompt
-
-
-class _Policy:
-    _ROLES = {"admin": _Role(bypass_safety=True, can_prompt=True)}
-
-    def get_role(self, name):
-        return self._ROLES.get(name)
-
-
 @pytest.fixture
 def server(mk_bot):
     registry = SessionRegistry()
@@ -90,7 +79,7 @@ def server(mk_bot):
         members=(Member(id=ADMIN_ID, label="ada", role="admin"),),
     )
     bot = mk_bot(registry, scopes=[scope])
-    bot.policy = _Policy()
+    bot.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     bot._app.bot.username = "aipager_test_bot"
     bot._update_bot_commands = AsyncMock()
     bot._maybe_update_bot_name = AsyncMock()

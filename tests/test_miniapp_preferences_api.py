@@ -18,10 +18,12 @@ from aiohttp.test_utils import TestClient, TestServer
 from aipager.miniapp.server import MiniAppServer
 from aipager.scope import Member, Scope
 from aipager.state import SessionRegistry
+from aipager.policy import load_policy
+from pathlib import Path
 
 BOT_TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
 
-ADMIN_ID = 555      # role with bypass_safety -> may write
+ADMIN_ID = 555      # role with can_manage -> may write
 MEMBER_ID = 777     # ordinary member -> may read, must not write
 OUTSIDER_ID = 999   # in no scope at all
 
@@ -48,19 +50,6 @@ def _init_data(user_id, *, bot_token=BOT_TOKEN, auth_date=None):
     return urlencode(fields)
 
 
-class _Role:
-    def __init__(self, bypass_safety):
-        self.bypass_safety = bypass_safety
-
-
-class _Policy:
-    """Minimal stand-in for the real policy: 'admin' bypasses safety
-    (and so may write settings), every other role does not."""
-
-    def get_role(self, name):
-        return _Role(name == "admin")
-
-
 @pytest.fixture
 def server(mk_bot):
     registry = SessionRegistry()
@@ -68,11 +57,11 @@ def server(mk_bot):
         chat_id=-100, kind="group", label="team",
         members=(
             Member(id=ADMIN_ID, label="ada", role="admin"),
-            Member(id=MEMBER_ID, label="bob", role="developer"),
+            Member(id=MEMBER_ID, label="bob", role="user"),
         ),
     )
     bot = mk_bot(registry, scopes=[scope])
-    bot.policy = _Policy()
+    bot.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     bot._app.bot.username = "aipager_test_bot"
     return MiniAppServer(bot, registry, port=8765)
 

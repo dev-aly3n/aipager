@@ -119,6 +119,9 @@ def resolve_chat_id_int(sess) -> int | None:
 # Roadmap 8.74 (D-G): the reply to a slash command a restricted sender may
 # not send. Plain words, no em dash (UI text).
 NEEDS_ADMIN_REPLY = "That command needs an admin."
+# Roadmap 8.83: a resume that would bring a session back in Auto for
+# someone who is not an admin brings it back in Ask and says why.
+RESUME_AUTO_NEEDS_ADMIN = "Auto needs an admin."
 # Retry of another member's slash command, tapped by someone who could
 # send it themselves: it would run with no sender, which may send none.
 RETRY_OTHERS_COMMAND_REPLY = "Only its sender can retry that command."

@@ -12,31 +12,22 @@ import pytest
 from aipager.bot import update_flow
 from aipager.scope import Member, Scope
 from aipager.state import SessionRegistry, Status
+from aipager.policy import load_policy
+from pathlib import Path
 
 GROUP = -100777
 ADMIN = 555
 MEMBER = 777
 
 
-class _Role:
-    def __init__(self, bypass_safety):
-        self.bypass_safety = bypass_safety
-        self.can_prompt = True
-
-
-class _Policy:
-    def get_role(self, name):
-        return _Role(name == "admin")
-
-
 @pytest.fixture
 def team_bot(mk_bot, h):
     scope = Scope(chat_id=GROUP, kind="group", label="team", members=(
         Member(id=ADMIN, label="ada", role="admin"),
-        Member(id=MEMBER, label="bob", role="developer"),
+        Member(id=MEMBER, label="bob", role="user"),
     ))
     bot = mk_bot(SessionRegistry(), scopes=[scope])
-    bot.policy = _Policy()
+    bot.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     bot._app.bot.send_message = AsyncMock(
         side_effect=lambda *a, **kw: h.status_message(kw.get("chat_id", GROUP), 801))
     bot._app.bot.edit_message_text = AsyncMock()
@@ -85,7 +76,7 @@ def _run_cmd(bot, upd, run_async, h):
 def test_personal_mode_stranger_is_refused(world, personal_bot, mk_update, h, run_async):
     upd, msg = _cmd(mk_update, h, user_id=h.STRANGER, chat_id=h.STRANGER)
     _run_cmd(personal_bot, upd, run_async, h)
-    assert "Only the admin can update aipager" in "\n".join(
+    assert "Only an admin can update aipager" in "\n".join(
         h.texts_of(upd.message, msg, personal_bot._app.bot))
 
 
@@ -99,14 +90,14 @@ def test_personal_mode_stranger_in_operator_dm_chat_is_refused(world, personal_b
     """Boundary: right chat, wrong sender."""
     upd, msg = _cmd(mk_update, h, user_id=h.STRANGER, chat_id=h.DM)
     _run_cmd(personal_bot, upd, run_async, h)
-    assert "Only the admin can update aipager" in "\n".join(
+    assert "Only an admin can update aipager" in "\n".join(
         h.texts_of(upd.message, msg, personal_bot._app.bot))
 
 
 def test_group_non_admin_member_is_refused(world, team_bot, mk_update, h, run_async):
     upd, msg = _cmd(mk_update, h, user_id=MEMBER, chat_id=GROUP)
     _run_cmd(team_bot, upd, run_async, h)
-    assert "Only the admin can update aipager" in "\n".join(
+    assert "Only an admin can update aipager" in "\n".join(
         h.texts_of(upd.message, msg, team_bot._app.bot))
 
 

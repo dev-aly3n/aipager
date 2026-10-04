@@ -1083,8 +1083,10 @@ class CallbackDispatchMixin:
             # message, or replaces the session. Resume and Replace also
             # need the right to prompt here.
             # A card whose author is unknown (0) has nobody to check
-            # against: anyone who may prompt uses it, and Auto is then
-            # refused below (no author is an admin).
+            # against: anyone who may prompt uses it. A new session from
+            # it is then refused Auto below (no author is an admin); a
+            # Resume needs the tapper to be an admin for Auto
+            # (`_resume_auto_gate`, roadmap 8.83).
             tapper = getattr(getattr(query, "from_user", None), "id", None)
             author = (pending or {}).get("user_id")
             if author and tapper != author:

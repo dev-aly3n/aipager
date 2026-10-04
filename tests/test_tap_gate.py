@@ -310,7 +310,7 @@ def gbot(mk_bot):
         elif scopes == "dm":
             scopes = [_dm_scope()]
         bot = mk_bot(scopes=scopes)
-        bot.policy = load_policy()
+        bot.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
         bot._app.bot.id = 999
         bot._app.bot.delete_message = AsyncMock()
         bot._app.bot.edit_message_text = AsyncMock()
@@ -400,10 +400,10 @@ ALLOWED = {
     VIEW: {ALY, ADA, BOB, RO},
     APPROVE: {ALY, ADA, BOB},
     PROMPT: {ALY, ADA, BOB},
-    # `_is_admin_user` / `_is_update_admin`: the owner (bypass_safety);
-    # the admin role joins with roadmap 8.83 (D-B).
-    MANAGE: {ALY},
-    UPDATE: {ALY},
+    # `_is_admin_user` / `_is_update_admin`: roles with can_manage, the
+    # owner and the admin (roadmap 8.83, D-B).
+    MANAGE: {ALY, ADA},
+    UPDATE: {ALY, ADA},
 }
 
 
@@ -449,7 +449,7 @@ def test_a_switch_to_auto_card_needs_an_admin_tapping_it(
                              "label": "api", "turn": 1}
     u, q = _tap(GROUP, uid, f"{S}:{verb}", msg_id=90)
     run_async(bot._handle_callback(u, MagicMock()))
-    assert (reached != []) is (uid == ALY)
+    assert (reached != []) is (uid in (ALY, ADA))
 
 
 @pytest.mark.parametrize("uid", [ALY, ADA, BOB], ids=lambda u: ROLE_OF[u])
@@ -569,7 +569,7 @@ def test_p1_read_only_stop_was_reachable_before(gbot, run_async, monkeypatch):
     bot._stop_session.assert_awaited_once()
 
 
-@pytest.mark.parametrize("uid", [RO, BOB, ADA], ids=lambda u: ROLE_OF[u])
+@pytest.mark.parametrize("uid", [RO, BOB], ids=lambda u: ROLE_OF[u])
 def test_p1_stop_and_switch_to_auto_needs_an_admin(gbot, run_async, monkeypatch, uid):
     bot = gbot()
     fx = _Effects(monkeypatch, bot)
@@ -590,20 +590,21 @@ def test_p1_stop_and_switch_to_auto_needs_an_admin(gbot, run_async, monkeypatch,
     assert fx.nothing()
 
 
-def test_p1_owner_stop_and_switch_to_auto_goes_ahead(gbot, run_async, monkeypatch):
+@pytest.mark.parametrize("uid", [ALY, ADA], ids=lambda u: ROLE_OF[u])
+def test_p1_owner_stop_and_switch_to_auto_goes_ahead(gbot, run_async, monkeypatch, uid):
     bot = gbot()
     _Effects(monkeypatch, bot)
     sess = _session(bot, status=Status.BUSY)
     bot._perms_pending[S] = {"target_skip_perms": True, "msg_id": 90,
                              "label": "api", "turn": sess.turn_key}
     bot._do_perms_switch_via_fn = AsyncMock()
-    u, q = _tap(GROUP, ALY, f"{S}:perms_stop_switch", msg_id=90)
+    u, q = _tap(GROUP, uid, f"{S}:perms_stop_switch", msg_id=90)
     run_async(bot._handle_callback(u, MagicMock()))
     bot._do_perms_switch_via_fn.assert_awaited_once()
     assert bot._do_perms_switch_via_fn.await_args.args[1] is True
 
 
-@pytest.mark.parametrize("uid", [RO, BOB, ADA], ids=lambda u: ROLE_OF[u])
+@pytest.mark.parametrize("uid", [RO, BOB], ids=lambda u: ROLE_OF[u])
 def test_p1_voice_install_and_restart_need_the_update_admin(
         gbot, run_async, monkeypatch, uid):
     bot = gbot()
@@ -615,12 +616,13 @@ def test_p1_voice_install_and_restart_need_the_update_admin(
     assert fx.nothing()
 
 
-def test_p1_owner_voice_install_goes_ahead(gbot, run_async, monkeypatch):
+@pytest.mark.parametrize("uid", [ALY, ADA], ids=lambda u: ROLE_OF[u])
+def test_p1_owner_voice_install_goes_ahead(gbot, run_async, monkeypatch, uid):
     bot = gbot()
     _Effects(monkeypatch, bot)
 
     async def _go():
-        u, q = _tap(GROUP, ALY, "__voice__:install", msg_id=91)
+        u, q = _tap(GROUP, uid, "__voice__:install", msg_id=91)
         await bot._handle_callback(u, MagicMock())
         await asyncio.sleep(0)     # the fire-and-forget task
     run_async(_go())
@@ -677,7 +679,7 @@ def _edited_texts(q):
             for c in q.edit_message_text.await_args_list]
 
 
-@pytest.mark.parametrize("uid", [BOB, ADA, RO], ids=lambda u: ROLE_OF[u])
+@pytest.mark.parametrize("uid", [BOB, RO], ids=lambda u: ROLE_OF[u])
 @pytest.mark.parametrize("form", ["long", "short"])
 def test_p2_resume_auto_needs_an_admin(gbot, run_async, monkeypatch, uid, form):
     bot = gbot()
@@ -720,13 +722,14 @@ def test_p2_user_resume_ask_resumes_the_groups_session_not_the_dm_twin(
     assert not any("PRIVATE" in t for t in _edited_texts(q))
 
 
+@pytest.mark.parametrize("uid", [ALY, ADA], ids=lambda u: ROLE_OF[u])
 def test_p2_owner_resume_auto_resumes_exactly_the_tapped_session(
-        gbot, run_async, monkeypatch):
+        gbot, run_async, monkeypatch, uid):
     bot = gbot()
     fx = _Effects(monkeypatch, bot)
     dm, grp = _p2_world(bot)
     data = session_parity.session_cb(bot, GROUP, grp, "resume-auto")
-    u, q = _tap(GROUP, ALY, data, msg_id=60)
+    u, q = _tap(GROUP, uid, data, msg_id=60)
     run_async(bot._handle_callback(u, MagicMock()))
     assert [n for n, _ in fx.launched] == ["api__g1001"]
     assert fx.launched[0][1].get("skip_perms") is True
@@ -860,7 +863,7 @@ def test_dm_owner_passes_every_tap(gbot, reached, run_async, ns, verb):
 @pytest.mark.parametrize("ns,verb", MATRIX_TAPS, ids=lambda x: str(x))
 def test_personal_mode_passes_every_tap(mk_bot, reached, run_async, ns, verb):
     bot = mk_bot()                       # scopes None, team None
-    bot.policy = load_policy()
+    bot.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     s = bot.registry.get_or_create(S)
     s.scope_chat_id = GROUP              # even a stamped session elsewhere
     u, q = _tap(DM, ALY, f"{ns}:{verb}")
@@ -877,7 +880,7 @@ def test_legacy_team_mode_is_unchanged(mk_bot, reached, run_async):
         3: TeamUser(id=3, label="ro", role=TeamRole.READ_ONLY),
     })
     bot = mk_bot(team=team)
-    bot.policy = load_policy()
+    bot.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     u, q = _tap(GROUP, 3, f"{S}:allow")
     run_async(bot._handle_callback(u, MagicMock()))
     assert reached == [(S, "allow")]
@@ -905,7 +908,7 @@ def _custom_bot(gbot):
 
     from aipager.policy import Role as PolicyRole
 
-    base = load_policy()
+    base = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     roles = dict(base.roles)
     roles["drafter"] = PolicyRole(name="drafter", can_prompt=True, can_approve=False)
     roles["reviewer"] = PolicyRole(name="reviewer", can_prompt=False, can_approve=True)

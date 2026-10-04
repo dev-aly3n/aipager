@@ -29,6 +29,8 @@ from aipager.install_source import InstallSource
 from aipager.miniapp.server import MiniAppServer
 from aipager.scope import Member, Scope
 from aipager.state import Status
+from aipager.policy import load_policy
+from pathlib import Path
 
 GROUP = -100777
 ADMIN, MEMBER, STRANGER = 555, 777, 999999
@@ -43,24 +45,12 @@ def _token(monkeypatch):
 
 # ----- helpers --------------------------------------------------------------------
 
-class _Role:
-    def __init__(self, bypass):
-        self.bypass_safety = bypass
-        self.can_prompt = True
-        self.bypass_role_denies = False
-
-
-class _Policy:
-    def get_role(self, name):
-        return _Role(name == "admin")
-
-
 def _scoped(env):
     env.bot.scopes = [Scope(chat_id=GROUP, kind="group", label="team", members=(
         Member(id=ADMIN, label="ada", role="admin"),
-        Member(id=MEMBER, label="bob", role="developer"),
+        Member(id=MEMBER, label="bob", role="user"),
     ))]
-    env.bot.policy = _Policy()
+    env.bot.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     env.chat_id = GROUP
 
 
@@ -380,7 +370,7 @@ def test_new_buttons_keep_the_admin_gate(data, env, run):
     run(scenario)
     assert env.manager.snapshot() is None
     assert env.calls == [] and env.fetches == []
-    assert "🚫 Only the admin can update aipager." in _toasts(query)
+    assert "🚫 Only an admin can update aipager." in _toasts(query)
 
 
 def test_the_group_admin_can_check_and_sees_no_path(env, run):

@@ -25,6 +25,8 @@ from aiohttp.test_utils import TestClient, TestServer
 from aipager.miniapp.server import MiniAppServer
 from aipager.scope import Member, Scope
 from aipager.state import SessionRegistry, Status
+from aipager.policy import load_policy
+from pathlib import Path
 
 # The directory name holds a hyphen, so it cannot be imported as a package;
 # test modules reach these helpers through this alias instead.
@@ -68,26 +70,6 @@ def hdr(user_id, **kw):
     return {"X-Telegram-Init-Data": init_data(user_id, **kw)}
 
 
-class _Role:
-    def __init__(self, *, bypass_safety=False, can_prompt=True):
-        self.bypass_safety = bypass_safety
-        self.can_prompt = can_prompt
-        # The tap gate (roadmap 8.75) reads it for answer buttons; like
-        # the built-in roles, only read_only lacks it.
-        self.can_approve = can_prompt
-
-
-class _Policy:
-    _ROLES = {
-        "admin": _Role(bypass_safety=True, can_prompt=True),
-        "developer": _Role(bypass_safety=False, can_prompt=True),
-        "read_only": _Role(bypass_safety=False, can_prompt=False),
-    }
-
-    def get_role(self, name):
-        return self._ROLES.get(name)
-
-
 class TelegramRecorder:
     """Stands in for ``telegram.Bot``: every ``send_message`` is recorded
     as ``(chat_id, text, reply_markup, kwargs)`` and answered with a fresh
@@ -128,7 +110,7 @@ def server(mk_bot, tg):
         chat_id=SCOPE_CHAT_ID, kind="group", label="team",
         members=(
             Member(id=ADMIN_ID, label="ada", role="admin"),
-            Member(id=DEVELOPER_ID, label="bob", role="developer"),
+            Member(id=DEVELOPER_ID, label="bob", role="user"),
             Member(id=READONLY_ID, label="cleo", role="read_only"),
         ),
     )
@@ -137,7 +119,7 @@ def server(mk_bot, tg):
         members=(Member(id=FOREIGN_MEMBER_ID, label="zed", role="admin"),),
     )
     bot = mk_bot(registry, scopes=[scope, foreign])
-    bot.policy = _Policy()
+    bot.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     fake = MagicMock()
     fake.username = "aipager_test_bot"
     fake.send_message = tg.send_message

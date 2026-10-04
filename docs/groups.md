@@ -51,6 +51,13 @@ For the group chat ID you can paste it manually, or pick
 — the wizard captures the next message's sender id and suggests
 their Telegram username as the label.
 
+When you add a group, the wizard first offers you (the member of your
+own DM) as the group's first member with the `owner` role; you can
+skip it. For every other member the role list includes `owner`, with a
+warning: an owner has full control of the machine, including aipager's
+config, the bot token and Claude's credentials. Give `admin` to people
+who should use Auto, `/settings` and `/update` in the group.
+
 ### Live reload
 
 After every scope or member change (add or remove a group or DM,
@@ -164,20 +171,26 @@ it, and two people can start or rename sessions at the same time.
 
 Four built-in roles (see `aipager/safety.py`):
 
-| Role | Send prompts | Approve | Bypass deny rules | Bypass the safety floor | Bash | Writes | Buttons |
-|---|---|---|---|---|---|---|---|
-| `owner` | ✅ | ✅ | ✅ | ✅ | ✅ | anywhere | all |
-| `admin` | ✅ | ✅ | ✅ | ❌ | ✅ (best-effort rules) | anywhere the floor allows | all but Auto and installs |
-| `user` | ✅ | ✅ | ❌ | ❌ | ❌ | the session's project folder + scratchpad (never the home folder) | all but Auto and installs |
-| `read_only` | ❌ | ❌ | ❌ | ❌ | ❌ | the session's project folder + scratchpad (never the home folder) | look only |
+| Role | Send prompts | Approve | Manage (Auto, `/settings`, `/update`) | Bypass deny rules | Bypass the safety floor | Bash | Writes | Buttons |
+|---|---|---|---|---|---|---|---|---|
+| `owner` | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | anywhere | all |
+| `admin` | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ (best-effort rules) | anywhere the floor allows | all |
+| `user` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | the session's project folder + scratchpad (never the home folder) | all but Auto and installs |
+| `read_only` | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | the session's project folder + scratchpad (never the home folder) | look only |
 
 - **owner** — full control, including the built-in safety floor.
   There should be exactly one: the person who runs the machine.
-- **admin** — bypasses role deny rules (their Allow tap works on a
-  restricted tool), but the safety floor still applies. An admin keeps
-  Bash, and with a shell the floor's command patterns are best-effort,
-  not a boundary: only make someone an admin if you would give them a
-  shell on the machine.
+- **admin** — can do everything an owner can in Telegram and the Mini
+  App: switch sessions to Auto (new sessions start in Auto for them),
+  change a group's `/settings`, run `/update`, install the voice extra.
+  Two things stay with the owner: changing members and roles (only
+  `aipager config` on the machine does that; nothing in Telegram or the
+  Mini App can), and bypassing the safety floor (aipager's config and
+  bot token, Claude Code's credentials, aipager's control files). An
+  admin also bypasses role deny rules (their Allow tap works on a
+  restricted tool). An admin keeps Bash, and with a shell the floor's
+  command patterns are best-effort, not a boundary: only make someone
+  an admin if you would give them a shell on the machine.
 - **user** — deny rules apply; an Allow tap on a rule-denied tool is
   auto-rejected. No Bash, and no other tool that runs code (PowerShell,
   Monitor, scheduled prompts, workflows — `safety.CODE_EXECUTION_TOOLS`),
@@ -269,6 +282,11 @@ with `aipager policy validate`. Supported fields per role:
   rule with no leading `/` or `~` (`**/.env`) matches anywhere, so
   while one is in place every `Grep`/`Glob` of a restricted role is
   denied (any search could read such a file), which halts that turn.
+- `can_manage` — `true` lets the role use Auto, change a group's
+  `/settings`, run `/update` and install the voice extra (built-in:
+  `owner` and `admin` true, `user` and `read_only` false; a role you
+  define starts false). It never lets anyone change members or roles,
+  and never bypasses the safety floor.
 
 Underneath all roles sits a built-in **safety floor** (protected
 paths and command patterns) that only `owner` bypasses. The protected
@@ -310,10 +328,13 @@ the button does not matter.
 - **Acting on a session needs the role's `can_prompt`.** Stop, Retry,
   Compact, Send now, End, Restart, Rename, Delete, Resume, the mode
   switch, Clear all, a session's preferences and the `/new` cards.
-- **Switching to Auto needs the owner** (the same rule as
-  `/mode auto`): Yes, switch and Stop task & switch on a
-  card that switches to Auto, and Resume as Auto.
-- **Installing needs the owner:** the voice extra's Install and
+- **Switching to Auto needs an admin** (`owner` or `admin`, the same
+  rule as `/mode auto`): Yes, switch and Stop task & switch on a
+  card that switches to Auto, and Resume as Auto. Resuming a session
+  that was in Auto (typed `/resume x1`, the picker, Resume on the
+  `/new` name card, or the Mini App) brings it back in Ask for anyone else, and the
+  reply says so: "Resumed x1 in Ask: Auto needs an admin."
+- **Installing needs an admin:** the voice extra's Install and
   Restart buttons, like `/update`'s.
 - Some buttons narrow this further: the `/new` cards answer only the
   person who sent `/new`, and changing a group's `/settings` needs an

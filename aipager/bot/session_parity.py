@@ -1249,8 +1249,12 @@ async def handle_callback(
         bot._resume_mode_pending[sess.name] = sess.label
         await _edit(
             query, f"Resume <b>{html_mod.escape(sess.label)}</b> as:",
+            # "(default)" marks what a plain resume gives this person: a
+            # session saved in Auto comes back in Ask for a non-admin
+            # (roadmap 8.83).
             bot._build_resume_mode_keyboard(
-                sess, sess.skip_perms, chat_id=chat_id),
+                sess, sess.skip_perms and bot._is_admin_user(user_id, chat_id),
+                chat_id=chat_id),
         )
         return True
 

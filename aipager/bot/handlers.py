@@ -1314,6 +1314,8 @@ class CommandHandlersMixin:
                 f"  bypass_safety: {'yes' if snap['bypass_safety'] else 'no'}",
                 f"  bypass_role_denies: "
                 f"{'yes' if (role and role.bypass_role_denies) else 'no'}",
+                f"  can_manage: "
+                f"{'yes' if getattr(role, 'can_manage', False) is True else 'no'}",
                 f"  effective deny_tools: {html_mod.escape(deny)}",
                 f"  effective allow_tools: {html_mod.escape(allow)}",
             ]

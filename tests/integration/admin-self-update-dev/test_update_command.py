@@ -16,29 +16,19 @@ from aipager import install_source
 from aipager.bot import update_flow
 from aipager.install_source import InstallSource
 from aipager.scope import Member, Scope
+from aipager.policy import load_policy
+from pathlib import Path
 
 GROUP = -100777
 ADMIN, MEMBER, STRANGER = 555, 777, 999999
 
 
-class _Role:
-    def __init__(self, bypass):
-        self.bypass_safety = bypass
-        self.can_prompt = True
-        self.bypass_role_denies = False
-
-
-class _Policy:
-    def get_role(self, name):
-        return _Role(name == "admin")
-
-
 def _scoped(env):
     env.bot.scopes = [Scope(chat_id=GROUP, kind="group", label="team", members=(
         Member(id=ADMIN, label="ada", role="admin"),
-        Member(id=MEMBER, label="bob", role="developer"),
+        Member(id=MEMBER, label="bob", role="user"),
     ))]
-    env.bot.policy = _Policy()
+    env.bot.policy = load_policy(Path("/nonexistent/policy.yaml"), Path("/nonexistent/policy.d"))
     env.chat_id = GROUP
 
 
@@ -90,7 +80,7 @@ def test_update_cmd_refuses_non_admin_member(env, run):
     async def scenario():
         await update_flow.handle_update_cmd(env.bot, update, MagicMock())
     run(scenario)
-    assert any("Only the admin can update aipager" in r for r in _replies(update))
+    assert any("Only an admin can update aipager" in r for r in _replies(update))
     assert env.calls == [] and env.fetches == []
 
 
@@ -100,7 +90,7 @@ def test_update_cmd_refuses_stranger_in_personal_mode(env, run):
     async def scenario():
         await update_flow.handle_update_cmd(env.bot, update, MagicMock())
     run(scenario)
-    assert any("Only the admin can update aipager" in r for r in _replies(update))
+    assert any("Only an admin can update aipager" in r for r in _replies(update))
     assert env.calls == [] and env.fetches == []
 
 
@@ -147,7 +137,7 @@ def test_update_callback_refuses_non_admin(verb, env, run):
     assert env.manager.snapshot() is None
     assert env.calls == []
     texts = [c.args[0] for c in query.answer.await_args_list if c.args]
-    assert "🚫 Only the admin can update aipager." in texts
+    assert "🚫 Only an admin can update aipager." in texts
 
 
 def test_update_callback_refuses_stranger_in_personal_mode(env, run):

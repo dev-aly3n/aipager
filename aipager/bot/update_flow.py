@@ -78,7 +78,7 @@ SHUTDOWN_GRACE_SECONDS = 3.0
 # own registry save and bot stop still run before systemd's SIGKILL.
 SHUTDOWN_DEADLINE_SECONDS = 8.0
 
-DENIED_TEXT = "🚫 Only the admin can update aipager."
+DENIED_TEXT = "🚫 Only an admin can update aipager."
 STALE_TEXT = "That update already finished"
 # The pre-8.43 per-product buttons (``_:up:cc`` / ``ap`` / ``both``) and
 # Mini App routes: they start nothing any more.

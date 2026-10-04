@@ -1501,7 +1501,10 @@ APP_JS = r"""
       }
       // stop / resume / clearqueue / compact / perms / restart
       if (r.status === 200) {
-        showNotice(ACTION_SUCCESS_NOTICE[action] || "Done.", "ok");
+        // A resume that came back in Ask (Auto needs an admin) says so.
+        showNotice((action === "resume" && r.data && r.data.detail)
+          ? plain(r.data.detail)
+          : (ACTION_SUCCESS_NOTICE[action] || "Done."), "ok");
         pollTick();
         return;
       }
