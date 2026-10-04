@@ -50,7 +50,9 @@ offers:
 - **Add a group scope**: a new group, with its members (below).
 - **Add a DM scope**: another person's own DM with the bot. A DM has
   one member; you pick their role (default `user`; pick `owner` only
-  for a one-person install, such as a friend's own container).
+  for a one-person install, such as a friend's own container). For a
+  person who already has a DM set up, the wizard says so and changes
+  nothing: use Edit a member to change their role.
 - **Edit a scope**: for a group, **Add a member**; for any chat,
   Rename, Edit scope deny_tools and Remove this scope (the last chat
   cannot be removed). End a chat's sessions before you remove it: its
@@ -58,7 +60,9 @@ offers:
   Telegram any more (from the machine, `aipager session ls`
   and `aipager session kill <name>` still can).
 - **Edit a member**: Set role, Edit member deny_tools, Remove member
-  (not in a DM, and not a group's last member).
+  (not in a DM, and not a group's last member). For an owner or admin
+  (or a role of yours with `bypass_role_denies`), Edit member
+  deny_tools only says that blocked tools do not apply to that role.
 - Test bot reachability, View policy, Re-install Claude Code hooks and
   Refresh bot token.
 
@@ -137,7 +141,9 @@ or by the wizard on its next run.
 
 After every chat or member change made from the edit menu (add or
 remove a group or DM, add or remove a member, set a role, edit
-`deny_tools`, rename a chat), `aipager config` sends the running daemon a live reload (**SIGUSR1**)
+`deny_tools`, rename a chat), and after a group or person added at the
+end of the first run or an unfinished group you resume (one reload for
+everything you added there), `aipager config` sends the running daemon a live reload (**SIGUSR1**)
 and says "Scopes reloaded live (no daemon restart needed)". The reload
 re-reads `aipager.yaml` and `policy.yaml`. If the config on disk would
 be refused, the wizard says "Not applied" with the reason, and the
@@ -166,10 +172,8 @@ What a reload applies at once:
   apply from that person's next turn.
 
 Only a new **bot token** needs a restart (`aipager config` says so
-after Refresh bot token). A group or person added at the end of the
-first run, or by resuming an unfinished group, is written without a
-reload: if the daemon is already running, restart it or send the reload
-by hand (below).
+after Refresh bot token). When no daemon is running, no reload is
+sent: the next `aipager start` reads the new config.
 
 To reload by hand (for example after editing `policy.yaml`), signal the
 daemon process only. Under the background service:

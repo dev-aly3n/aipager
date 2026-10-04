@@ -165,6 +165,27 @@ def _add_member(scope, token: str) -> bool:
     return True
 
 
+def _bypassed_deny_line(member) -> str | None:
+    """The one line to show instead of editing *member*'s deny_tools when
+    their role bypasses role and member deny lists (``bypass_role_denies``:
+    owner, admin, or a custom role with it), so the edit would do nothing
+    (roadmap 8.94d). ``None`` when the edit applies, or when the policy
+    cannot be read (the edit is then offered as before)."""
+    from aipager import policy as policy_mod
+    try:
+        # Call-time paths, like _view_policy (the defaults bind at import).
+        pol = policy_mod.load_policy(policy_mod.POLICY_PATH,
+                                     policy_mod.POLICY_D_DIR)
+    except Exception:  # noqa: BLE001 — unreadable policy: keep the edit
+        return None
+    role = pol.get_role(member.role)
+    if role is None or not role.bypass_role_denies:
+        return None
+    article = "an" if member.role[:1].lower() in "aeiou" else "a"
+    return (f"@{member.label} is {article} {member.role}: per-member "
+            "blocked tools do not apply to this role.")
+
+
 def _edit_member(scope, token: str) -> bool:
     """Set role / edit per-user deny_tools / remove a member."""
     choices = [
@@ -207,6 +228,10 @@ def _edit_member(scope, token: str) -> bool:
         ok(f"@{member.label}: → {role}")
         return True
     if action == "deny":
+        line = _bypassed_deny_line(member)
+        if line is not None:
+            friendly_warn(line)
+            return False
         new_tools = _toggle_tools(member.deny_tools)
         if new_tools == member.deny_tools:
             friendly_warn("No change.")

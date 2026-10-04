@@ -17,10 +17,11 @@ import questionary
 from aipager.errors import friendly_warn
 from aipager.scope import Member, Scope
 from aipager.ui import console, ok, step, warn
+from aipager.wizard import daemon_io
 from aipager.wizard._constants import _PROMPT_STYLE
 from aipager.wizard.display import _ask
 from aipager.wizard.draft import clear_draft, load_draft, save_draft
-from aipager.wizard.scope_io import add_new_scope, commit_scope, configured_scope_for
+from aipager.wizard.scope_io import add_new_scope, configured_scope_for
 
 _ROLE_GLOSS = {
     "owner": "unrestricted; bypasses safety + all deny rules",
@@ -59,6 +60,26 @@ GROUP_ALREADY_SET_UP = ("This group is already set up. Use Edit a scope → "
                         "Add a member.")
 
 
+#: "Add a DM scope" for a person who already has one (roadmap 8.94c): it
+#: used to replace their DM scope, dropping its role and deny lists.
+DM_ALREADY_SET_UP = ("This person already has a DM set up. Use Edit a "
+                     "member to change their role.")
+
+#: "Add a DM scope" for an id that is a group's chat (Telegram never gives
+#: a person a group's id, but a pasted id is not trusted).
+DM_ID_IS_A_GROUP = ("That id is a group that is already set up, not a "
+                    "person. Nothing was changed.")
+
+
+def _dm_refusal(chat_id: int) -> str | None:
+    """Why a DM scope for *chat_id* must not be added (a scope for that
+    chat is already set up), or ``None``."""
+    existing = configured_scope_for(chat_id)
+    if existing is None:
+        return None
+    return DM_ALREADY_SET_UP if existing.kind == "dm" else DM_ID_IS_A_GROUP
+
+
 # Shown above a group's role picker, where owner is offered (roadmap 8.83).
 OWNER_WARNING = ("owner has full control of this machine, including "
                  "aipager's config, the bot token and Claude's credentials. "
@@ -90,6 +111,10 @@ def add_dm_scope(token: str, bot_username: str) -> bool:
     if captured is None:
         friendly_warn("Cancelled - no DM scope added.")
         return False
+    refusal = _dm_refusal(captured["id"])
+    if refusal is not None:
+        friendly_warn(refusal)
+        return False
     # A DM scope has exactly one member. Single-tenant deployments (one
     # friend per aipager container, they own everything) legitimately
     # need `owner` for that member — otherwise the safety floor blocks
@@ -105,7 +130,11 @@ def add_dm_scope(token: str, bot_username: str) -> bool:
         members=(Member(id=captured["id"], label=captured["label"],
                         role=role),),
     )
-    commit_scope(scope, token)
+    # Never commit_scope here: it replaces a scope with the same chat, and
+    # that would wipe this person's role and deny lists (roadmap 8.94c).
+    if not add_new_scope(scope, token):
+        friendly_warn(_dm_refusal(captured["id"]) or DM_ALREADY_SET_UP)
+        return False
     ok(f"Added DM scope for @{captured['label']} ({role}).")
     return True
 
@@ -242,26 +271,39 @@ def add_group_scope(token: str, bot_username: str,
 
 
 def offer_expansion(token: str, bot_username: str) -> None:
-    """Post-bootstrap additive offer (default = done)."""
-    while True:
-        choice = _ask(questionary.select(
-            "Connected. Add a team group or other people now?",
-            choices=[
-                questionary.Choice("Add a group", value="group"),
-                questionary.Choice("Add a person (DM)", value="dm"),
-                questionary.Choice("I'm done", value="done"),
-            ],
-            default="done", qmark="?", style=_PROMPT_STYLE,
-        ))
-        if choice == "done":
-            return
-        try:
-            if choice == "group":
-                add_group_scope(token, bot_username)
-            else:
-                add_dm_scope(token, bot_username)
-        except KeyboardInterrupt:
-            friendly_warn("Cancelled this action.")
+    """Post-bootstrap additive offer (default = done).
+
+    Whatever was added is applied like an edit-menu change (roadmap
+    8.94b): one live reload (or the restart hint) when the operator
+    leaves, however many scopes were added. Nothing added, nothing sent.
+    """
+    changed = False
+    try:
+        while True:
+            choice = _ask(questionary.select(
+                "Connected. Add a team group or other people now?",
+                choices=[
+                    questionary.Choice("Add a group", value="group"),
+                    questionary.Choice("Add a person (DM)", value="dm"),
+                    questionary.Choice("I'm done", value="done"),
+                ],
+                default="done", qmark="?", style=_PROMPT_STYLE,
+            ))
+            if choice == "done":
+                return
+            try:
+                if choice == "group":
+                    added = add_group_scope(token, bot_username)
+                else:
+                    added = add_dm_scope(token, bot_username)
+                if added:
+                    changed = True
+            except KeyboardInterrupt:
+                friendly_warn("Cancelled this action.")
+    finally:
+        # Also on a Ctrl-C at the menu: what was added is on disk.
+        if changed:
+            daemon_io._apply_team_change_hint()
 
 
 def resume_or_discard_draft(token: str, bot_username: str) -> None:
@@ -285,6 +327,10 @@ def resume_or_discard_draft(token: str, bot_username: str) -> None:
         ok("Discarded the in-progress draft.")
         return
     try:
-        add_group_scope(token, bot_username, resume=draft)
+        added = add_group_scope(token, bot_username, resume=draft)
     except KeyboardInterrupt:
         friendly_warn("Paused again - draft kept.")
+        return
+    if added:
+        # Applied like an edit-menu change (roadmap 8.94b).
+        daemon_io._apply_team_change_hint()
