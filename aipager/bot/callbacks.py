@@ -30,7 +30,7 @@ from telegram.ext import (
     ContextTypes,
 )
 
-from aipager.bot import new_flow, session_parity, tap_gate, update_flow
+from aipager.bot import card_owner, new_flow, session_parity, tap_gate, update_flow
 from aipager.dtach import hook_reply, inject
 
 from aipager import preferences
@@ -110,9 +110,13 @@ def _switch_refused(outcome) -> str:
 
 def _stopped_line(outcome, *, html: bool = True) -> str:
     """`⏹ Stopped x1`, with the queued messages it dropped: what every
-    Stop says (a toast is plain text, a message HTML)."""
+    Stop says (a toast is plain text, a message HTML). In a group, who
+    stopped it (`outcome.by`, roadmap 8.91c): `⏹ Stopped x1 by @bob`."""
     label = html_mod.escape(outcome.label) if html else outcome.label
     line = f"⏹ Stopped <b>{label}</b>" if html else f"⏹ Stopped {label}"
+    by = getattr(outcome, "by", "")
+    if isinstance(by, str) and by:
+        line += f" by {html_mod.escape(by) if html else by}"
     if outcome.dropped:
         line += (f" ({outcome.dropped} queued message"
                  f"{'s' if outcome.dropped > 1 else ''} discarded)")
@@ -234,7 +238,8 @@ class CallbackDispatchMixin:
                                       edit_fn, *,
                                       tapped_msg_id: int | None = None,
                                       turn: int | None = None,
-                                      chat_id=None, announce: bool = True):
+                                      chat_id=None, announce: bool = True,
+                                      by: str = ""):
         """Kill + poll + relaunch with toggled skip_perms, showing each step
         through ``edit_fn`` (an async ``(text, **kw)``: the card being
         edited in place) and ending in the /mode card: the new mode and the
@@ -248,8 +253,9 @@ class CallbackDispatchMixin:
         it decides whether the tap is current. Without one, the tapped
         message id is compared with the busy card's, which an older card
         edited in place would fail. ``announce``: show "Switching…" first
-        (the caller may have already). Returns the outcome, or None when
-        the tap was refused as stale.
+        (the caller may have already). ``by``: who switched it, named
+        above the card in a group (roadmap 8.91c; ``""`` in a DM). Returns
+        the outcome, or None when the tap was refused as stale.
         """
         label = html_mod.escape(sess.label)
         if not (sess.tap_is_for_this_turn(None, turn=turn) if turn is not None
@@ -270,7 +276,8 @@ class CallbackDispatchMixin:
         outcome = await self._perms_switch_core(sess, target_skip_perms)
 
         if outcome.ok:
-            note = ""
+            note = (f"⚙️ Switched to {'🤖 Auto' if target_skip_perms else '💬 Ask'} "
+                    f"by {html_mod.escape(by)}." if by else "")
             log.info("[%s] perms switched to skip_perms=%s", sess.label, target_skip_perms)
         elif outcome.reason == "still_stopping":
             note = f"⚠️ <b>{label}</b> is still stopping - mode not changed."
@@ -385,6 +392,11 @@ class CallbackDispatchMixin:
                 return
 
             text, kb = render_settings_section(chat_id or 0, section)
+            # In a group, who changed it (roadmap 8.91c); a DM is as before.
+            tapper = getattr(query, "from_user", None)
+            by = self._actor_label(getattr(tapper, "id", None), chat_id, tapper)
+            if by:
+                text += f"\n\n<i>Changed by {html_mod.escape(by)}.</i>"
             try:
                 await edit_text(query, text, parse_mode="HTML", reply_markup=kb)
             except Exception:
@@ -420,7 +432,9 @@ class CallbackDispatchMixin:
         if not sess.tap_is_for_this_turn(None, turn=turn):
             await self._safe_answer(query, f"{sess.label} moved on to new work - {again}")
             return True, None
-        outcome = await self._stop_session_core(sess)
+        tapper = getattr(query, "from_user", None)
+        outcome = await self._stop_session_core(sess, by=self._actor_label(
+            getattr(tapper, "id", None), chat, tapper))
         # The count stays visible (tester-iter1-001 of /stop).
         await self._safe_answer(query, _stopped_line(outcome, html=False) if outcome.ok
                                 else f"{sess.label} is not working")
@@ -568,6 +582,17 @@ class CallbackDispatchMixin:
         if not await self._tap_passes_gate(query, member, session_name, action):
             return
 
+        # Roadmap 8.91c (D-D): in a group, a confirm card (and the picker
+        # that leads to one) answers only the person who asked for it.
+        toast = card_owner.refusal(
+            self, calling_chat_id(update),
+            getattr(getattr(query, "message", None), "message_id", None),
+            getattr(getattr(query, "from_user", None), "id", None),
+            session_name, action)
+        if toast is not None:
+            await self._safe_answer(query, toast)
+            return
+
         # All three return False unless the callback belongs to their own
         # namespace, so every pre-existing callback below is unaffected.
         # `_:up:` (self-update) re-checks the admin rule on every tap.
@@ -600,7 +625,7 @@ class CallbackDispatchMixin:
             # caller shares), not here — a Stop button outlives its turn
             # whenever the edit that strips its keyboard fails, and gating
             # per-caller is how the perms and restart paths were missed.
-            outcome = await self._stop_session(sess, query=query)
+            outcome = await self._stop_session(sess, update=update, query=query)
             if not outcome.ok and outcome.reason != "stale":
                 # A stale tap already explained itself at the seam; adding
                 # "is not busy" on top would be both wrong and louder.
@@ -652,6 +677,8 @@ class CallbackDispatchMixin:
             return
 
         if action == "kill-cancel":
+            card_owner.release(self, calling_chat_id(update),
+                               getattr(query.message, "message_id", None))
             try:
                 await edit_text(query,
                     "↩️ Cancelled. Nothing was ended.",
@@ -852,6 +879,8 @@ class CallbackDispatchMixin:
 
         if session_name == "_" and action == "pick:cancel":
             # Any session command's picker (4.4).
+            card_owner.release(self, calling_chat_id(update),
+                               getattr(query.message, "message_id", None))
             try:
                 await edit_text(query, "Cancelled.")
             except Exception:
@@ -931,6 +960,7 @@ class CallbackDispatchMixin:
             if action in ("perms_cancel", "perms_wait"):
                 # Cancel / Not now: the card again, for the mode it is in.
                 _consume()
+                card_owner.release(self, chat, tapped)
                 await _show_card()
                 return
 
@@ -990,9 +1020,14 @@ class CallbackDispatchMixin:
             # edits this card, its buttons going first, so its record is
             # spent. The record's turn decides whether the tap is current.
             _consume()
+            tapper = getattr(query, "from_user", None)
             await self._do_perms_switch_via_fn(
                 sess, target_skip_perms, _edit, tapped_msg_id=tapped,
-                turn=pending.get("turn"), chat_id=chat)
+                turn=pending.get("turn"), chat_id=chat,
+                by=self._actor_label(getattr(tapper, "id", None), chat, tapper))
+            # After the switch: until the card shows its result, any button
+            # still on it is the requester's (8.91c).
+            card_owner.release(self, chat, tapped)
             return
 
         # ---- /resume mode-picker callbacks ----------------------------

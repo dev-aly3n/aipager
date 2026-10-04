@@ -479,7 +479,7 @@ def test_stop_from_status_stops_and_redraws_the_list(bot, tap):
 
     query = tap(_stop_cb(bot, busy))
 
-    bot._stop_session_core.assert_awaited_once_with(busy)
+    bot._stop_session_core.assert_awaited_once_with(busy, by="")
     assert "⏹ Stopped b1" in query.answer.await_args.args[0]
     assert _edited(query)[0].startswith("📊 <b>Sessions (2)</b>")
 

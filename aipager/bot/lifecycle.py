@@ -749,11 +749,14 @@ class LifecycleMixin:
             await self._send_keyboard(level="main")
 
     @staticmethod
-    def _command_list(labels: set[str]) -> list[BotCommand]:
+    def _command_list(labels: set[str], *, group: bool = False) -> list[BotCommand]:
         """The / menu (4.6): one `/label` per live session first (what is
         tapped most), then the frequent commands. The rare ones (kill,
         restart, rename, delete, diff, clearqueue, whoami, update) still
-        work when typed, and live in /status → ⋮ or /help."""
+        work when typed, and live in /status → ⋮ or /help.
+
+        ``group``: a group's menu has no `/app` (roadmap 8.91d): the Mini
+        App opens only from a private chat."""
         commands = []
         for label in sorted(labels):
             command = _label_command(label)
@@ -779,7 +782,7 @@ class LifecycleMixin:
         # Read late (not module-level) so a live `aipager miniapp enable`
         # + restart is reflected without re-importing this module.
         from aipager.config import MINIAPP_ENABLED
-        if MINIAPP_ENABLED:
+        if MINIAPP_ENABLED and not group:
             commands.append(BotCommand("app", "Open the Mini App dashboard"))
         return commands
 
@@ -790,7 +793,9 @@ class LifecycleMixin:
         if not first_run and labels == self._registered_labels:
             return  # no change
         try:
-            await self._app.bot.set_my_commands(self._command_list(labels))
+            from aipager.config import CHAT_ID
+            await self._app.bot.set_my_commands(self._command_list(
+                labels, group=group_intake.is_group_chat(CHAT_ID)))
             self._registered_labels = labels
             log.info("Bot commands updated: status, stop + %s",
                      ", ".join(sorted(labels)) or "(none)")
@@ -1086,7 +1091,8 @@ class LifecycleMixin:
                 continue
             try:
                 await self._app.bot.set_my_commands(
-                    self._command_list(labels),
+                    self._command_list(
+                        labels, group=group_intake.is_group_chat(scope.chat_id)),
                     scope=BotCommandScopeChat(chat_id=scope.chat_id),
                 )
                 self._registered_scope_labels[scope.chat_id] = labels

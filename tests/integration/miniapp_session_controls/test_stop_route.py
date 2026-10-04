@@ -218,3 +218,24 @@ def test_stop_twice_second_call_refuses_coherently(server, run_async, monkeypatc
         finally:
             await client.close()
     run_async(_run())
+
+
+def test_a_mini_app_stop_in_a_group_names_who_stopped_it_on_the_card(
+    server, run_async,
+):
+    """Roadmap 8.91c: the group's busy card says who stopped it, from
+    whichever surface (the chat line still says "from the Mini App")."""
+    from aipager.bot.session_ops import StopOutcome
+
+    async def _run():
+        sess = _mk_session(server, "dev", status=Status.BUSY)
+        server.bot._stop_session_core = AsyncMock(
+            return_value=StopOutcome(ok=True, label="dev", by="@ada"))
+        client = await _client_for(server)
+        try:
+            resp = await client.post("/api/sessions/dev/stop", headers=_hdr(ADMIN_ID))
+            assert resp.status == 200
+            server.bot._stop_session_core.assert_awaited_once_with(sess, by="@ada")
+        finally:
+            await client.close()
+    run_async(_run())

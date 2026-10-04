@@ -76,6 +76,7 @@ from aipager.bot.transport import (  # noqa: F401
     driver_id_from_update,
     NEEDS_ADMIN_REPLY,
     PROMPT_REFUSED,
+    resolve_chat_id_int,
 )
 
 # ``/model <name>``: a model switch, which any member may send (roadmap
@@ -101,6 +102,14 @@ class StopOutcome:
     label: str
     dropped: int = 0
     reason: str = ""     # "stale" when the tap came from an earlier turn
+    by: str = ""         # who stopped it, in a group (roadmap 8.91c)
+
+
+def _stopped_card_text(label: str, by: str = "") -> str:
+    """The busy card after a Stop: `⚠️ x1 · Stopped`, and in a group who
+    stopped it, `⚠️ x1 · Stopped by @bob` (roadmap 8.91c)."""
+    text = f"⚠️ <b>{html_mod.escape(label)}</b> · Stopped"
+    return f"{text} by {html_mod.escape(by)}" if by else text
 
 
 @dataclass
@@ -871,7 +880,10 @@ class SessionOpsMixin:
                 member = sender
                 role = (self.policy.get_role(member.role)
                         if member is not None else None)
-                scope = self._scope_for(sess.scope_chat_id)
+                # The session's own chat, else the home chat for one not
+                # stamped yet (as for its messages): an unstamped session's
+                # note carries that chat's deny_tools too.
+                scope = self._scope_for(resolve_chat_id_int(sess))
             style = prefs_mod.style_text(
                 prefs_mod.resolve_preferences(
                     sess.scope_chat_id or 0, sess.preference_overrides(),
@@ -1118,13 +1130,17 @@ class SessionOpsMixin:
 
     # ── Telegram handlers ──
 
-    async def _stop_session_core(self, sess: TrackedSession) -> StopOutcome:
+    async def _stop_session_core(self, sess: TrackedSession, *,
+                                 by: str = "") -> StopOutcome:
         """Interrupt a busy session: send Escape, clean up state.
 
         The shared seam both chat and the Mini App call — edit behaviour
         here, not in the wrapper. Refuses immediately, with no awaits and
         no side effects, when the session is not actually busy — this
         makes the refusal pytest-testable with zero dtach mocking.
+
+        ``by``: who stopped it (``_actor_label``, plain text; ``""`` in a
+        private chat), shown on the card in a group (roadmap 8.91c).
         """
         if not sess.can_be_stopped():
             # A session waiting on background work (design.md "model
@@ -1179,8 +1195,7 @@ class SessionOpsMixin:
         # it, under the card-edit lock: the Escapes above make Claude fire
         # tool hooks right now, and a card edit of theirs landing after
         # this line would put "Working" and a live Stop button back.
-        await self._settle_card_text(
-            sess, f"⚠️ <b>{html_mod.escape(sess.label)}</b> · Stopped")
+        await self._settle_card_text(sess, _stopped_card_text(sess.label, by))
         sess.busy_msg_id = None  # also a -1 claim, which the helper skips
 
         # 4. Transition to IDLE directly (skip notify — we handle UI here)
@@ -1219,7 +1234,7 @@ class SessionOpsMixin:
         self.registry.mark_dirty()
 
         log.info("[%s] Stopped by user (dropped %d queued)", sess.label, dropped)
-        return StopOutcome(ok=True, label=sess.label, dropped=dropped)
+        return StopOutcome(ok=True, label=sess.label, dropped=dropped, by=by)
 
     async def _stop_session(self, sess: TrackedSession,
                             update: Update | None = None,
@@ -1238,7 +1253,14 @@ class SessionOpsMixin:
             await self._safe_answer(
                 query, "That task already finished - use the current card")
             return StopOutcome(ok=False, label=sess.label, reason="stale")
-        outcome = await self._stop_session_core(sess)
+        # Who stopped it, named in a group (roadmap 8.91c): the tapper or
+        # the command's sender, in the chat the tap or command came from.
+        person = (getattr(query, "from_user", None) if query is not None
+                  else getattr(update, "effective_user", None))
+        by = self._actor_label(
+            getattr(person, "id", None),
+            calling_chat_id(update if update is not None else query), person)
+        outcome = await self._stop_session_core(sess, by=by)
         if not outcome.ok:
             return outcome
 
@@ -1247,10 +1269,8 @@ class SessionOpsMixin:
             await self._safe_answer(query, _stopped_line(outcome, html=False))
             # Also edit the callback query's message if it's the busy message
             try:
-                await edit_text(query,
-                    f"⚠️ <b>{html_mod.escape(sess.label)}</b> · Stopped",
-                    parse_mode="HTML",
-                )
+                await edit_text(query, _stopped_card_text(sess.label, by),
+                                parse_mode="HTML")
             except Exception:
                 pass
         elif update:

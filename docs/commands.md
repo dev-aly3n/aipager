@@ -36,7 +36,7 @@ and on every session change.
 
 The `/` menu shows your sessions first (`/x1 · Talk to x1`), then the
 frequent commands: `new`, `status`, `stop`, `now`, `resume`, `mode`,
-`settings`, `help` (and `app` with the Mini App on). `kill`, `restart`,
+`settings`, `help` (and `app` with the Mini App on, in a private chat only). `kill`, `restart`,
 `rename`, `delete`, `diff`, `clearqueue`, `perms`, `whoami` and `update`
 are not in the menu but work when typed; the session actions are also in
 `/status` → `⋮`.

@@ -49,7 +49,11 @@ For the group chat ID you can paste it manually, or pick
 "Auto-detect" and let the wizard watch for a `/start` in the group
 (add the bot first). The same auto-detect works for member user IDs
 — the wizard captures the next message's sender id and suggests
-their Telegram username as the label.
+their Telegram username as the label. A message from an anonymous
+admin or one posted as a channel does not count: its sender id
+(1087968824, 136817688 or 777000) is shared by everyone who posts
+that way, so the wizard refuses it, typed or detected. Ask the person
+to post as themselves.
 
 When you add a group, the wizard first offers you (the member of your
 own DM) as the group's first member with the `owner` role; you can
@@ -143,6 +147,16 @@ note that is not a reply to the bot) gets no reaction and no reply.
 Edited messages are ignored everywhere: edit a message and nothing
 happens, send it again instead.
 
+**Anonymous admins must post as themselves.** A group admin who has
+"Remain anonymous" on, or a message posted as the group or as a
+channel, does not say who wrote it: Telegram shows the same sender for
+every anonymous admin. aipager cannot give such a message anyone's
+role, so it answers "Post as yourself to use the bot." (once per chat
+until the daemon restarts) and does nothing else. It is never listed
+as a pending user, and the wizard refuses that shared id. Turn
+"Remain anonymous" off for yourself in the group's admin settings, or
+post from your own account.
+
 ### Talking to a session in a group
 
 Reply to one of a session's messages (its answer, its card) and your
@@ -174,7 +188,17 @@ messages, so a mention, a template or a keyboard Clear goes to your
 session, and the reply names it ("🧹 /clear sent to x1"). With no current
 session of your own and more than one session running, the bot asks
 "Which session?" and sends nothing; with only one running, it goes
-there. The pinned bar has no "Messages go to" line in a group.
+there. If your own current session has ended, a message is not sent
+to the one session still running (it may be someone else's): the bot
+answers "x1 has ended. Which session?" with a button per running
+session and, when it can be resumed, "▶️ Resume x1", and sends nothing.
+The pinned bar has no "Messages go to" line in a group.
+
+`/app` opens the Mini App only in a private chat. In a group it is not
+in the `/` menu; typed there, it tells a member whose own chat with
+the bot is set up to "DM the bot and send /app there", and anyone else
+"The Mini App opens from your own chat with the bot. Ask the operator
+to add you."
 
 ## Roles
 
@@ -348,6 +372,16 @@ the button does not matter.
 - Some buttons narrow this further: the `/new` cards answer only the
   person who sent `/new`, and changing a group's `/settings` needs an
   admin.
+- **A confirm card belongs to whoever asked for it.** In a group, the
+  End (`/kill`, ⋮ End session), Restart, Delete and mode-switch confirm
+  cards, and the session pickers `/kill`, `/restart`, `/delete` and
+  `/mode` show, answer only the person who sent the command or tapped
+  the button that drew them. Anyone else's tap, Cancel included, gets
+  "This is @alice's card. Send /kill x2 for your own." (with that
+  card's command) and changes nothing. The `/mode` card itself (which
+  mode a session is in) is everyone's: a switch tapped on it draws a
+  confirm that belongs to the tapper. A card's owner is remembered
+  until it is used or cancelled, and not across a daemon restart.
 - A button only works in its own session's chat. One tapped anywhere
   else answers "This button belongs to another chat." and does nothing,
   and Resume always resumes the session the button names, never another
@@ -405,6 +439,24 @@ their own DM sends, taps and runs commands in the group as `user`.
 
 So even if you weren't watching live, scrolling back tells you
 exactly who decided what.
+
+**Who changed a session.** A tap on a button is seen only by the person
+who taps it, so in a group every result that changes a session names
+who did it:
+
+```
+⚠️ x1 · Stopped by @bob
+⏹ Ended x2 by @bob
+🔄 [x1] restarted by @alice.
+🗑️ Deleted [x3] by @carol.
+⚙️ Switched to 🤖 Auto by @alice.
+🔁 Model switched to Opus by @bob.
+Changed by @alice.          (under /settings)
+```
+
+A private chat has one person, so its lines are unchanged. A change
+made in the Mini App is posted in the chat as "... from the Mini App"
+(a Stop from it also names who on the session's card).
 
 **Message states.** 👀 on a message means it was sent to the
 session; 👍 means Claude took it; 🤷 means it was dropped before

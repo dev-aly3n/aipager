@@ -18,7 +18,7 @@ from telegram import (
     Update,
 )
 
-from aipager.bot import tap_gate
+from aipager.bot import group_intake, tap_gate
 from aipager.dtach import inject
 
 from aipager.state import Status, TrackedSession
@@ -114,6 +114,43 @@ class AuthMixin:
         ``aipager.yaml`` that lists them (the wizard re-appends an edited
         scope, so "first" moves with every edit)."""
         return self._member_in_scope(self._scope_for(chat_id), user_id)
+
+    def _actor_label(self, user_id, chat_id, tg_user=None) -> str:
+        """Who did it, for a result line in a GROUP (roadmap 8.91c): their
+        ``@label`` in that chat (``attribution_label``), else their
+        Telegram username, else ``@unknown``. ``""`` in a private chat,
+        where there is only one person: DM result lines stay as they are,
+        and in personal mode, where everyone the chat admits is the
+        operator. Plain text; HTML callers escape it."""
+        if self.scopes is None and self.team is None:
+            return ""
+        if not group_intake.is_group_chat(chat_id):
+            return ""
+        member = None
+        if isinstance(user_id, int) and not isinstance(user_id, bool):
+            if self.scopes is not None:
+                member = self.member_in_chat(user_id, chat_id)
+            elif self.team is not None:
+                member = self.team.get(user_id)
+        if member is not None:
+            return attribution_label(member)
+        handle = getattr(tg_user, "username", None)
+        if isinstance(handle, str) and handle:
+            return f"@{handle}"
+        return attribution_label(None)
+
+    def _has_dm_scope(self, user_id) -> bool:
+        """Scope mode: whether *user_id* has their own private chat with the
+        bot configured (a DM scope whose chat is theirs and lists them), so
+        a DM to the bot would be answered. Personal and legacy mode: True
+        (the bot's DM is not gated by scopes there)."""
+        if self.scopes is None:
+            return True
+        if not isinstance(user_id, int) or isinstance(user_id, bool) or user_id <= 0:
+            return False
+        scope = self._scope_for(user_id)
+        return (scope is not None and scope.kind == "dm"
+                and self._member_in_scope(scope, user_id) is not None)
 
     def _role_can_prompt(self, member) -> bool:
         if member is None:
@@ -297,7 +334,20 @@ class AuthMixin:
         On rejection, sends a one-shot polite reply explaining why,
         then silently ignores subsequent messages from that user
         until daemon restart.
+
+        Scope and team mode: a message with no person behind it (an
+        anonymous group admin, a post as a channel:
+        ``group_intake.is_anonymous_sender``) is refused silently and never
+        recorded as a pending user; the intake gate has already told the
+        chat to post as yourself (roadmap 8.91e). Personal mode is
+        unchanged: everyone its chat admits is the operator.
         """
+        if ((self.scopes is not None or self.team is not None)
+                and group_intake.is_anonymous_sender(
+                    getattr(update, "effective_message", None))):
+            log.info("refused a message with no person behind it in chat %s",
+                     getattr(getattr(update, "effective_chat", None), "id", None))
+            return False
         if self.scopes is not None:
             return await self._authorize_scoped(
                 update, allow_read_only=allow_read_only)

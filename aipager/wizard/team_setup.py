@@ -6,6 +6,7 @@ from __future__ import annotations
 import questionary
 
 from aipager.errors import friendly_warn
+from aipager.team import is_shared_sender_id
 from aipager.ui import console, err_console, hint, ok
 from aipager.wizard._constants import (
     _PROMPT_STYLE,
@@ -19,6 +20,14 @@ from aipager.wizard.telegram_api import (
     _fetch_id_from_updates,
     _http_json,
 )
+
+
+#: Roadmap 8.91e: what the wizard says to a shared sender id
+#: (``team.SHARED_SENDER_IDS``), typed or auto-detected.
+SHARED_SENDER_REFUSAL = (
+    "That id belongs to Telegram's anonymous admin or channel sender, which "
+    "every anonymous admin and channel post shares. Ask the person to post "
+    "as themselves, then try again.")
 
 
 def _fetch_chat_id(token: str) -> tuple[int | None, str | None, str | None]:
@@ -196,9 +205,10 @@ def _capture_user_identity(
                 default=True, qmark="?", style=_PROMPT_STYLE,
             ))
             with _spin("Watching for a new user…"):
-                uid, who, _adv = _fetch_id_from_updates(token, want="user")
+                uid, who, adv = _fetch_id_from_updates(token, want="user")
             if uid is None:
                 err_console.print(
+                    f"  [err]{adv}[/err]" if adv else
                     "  [err]No recent message detected - try again or "
                     "switch to manual.[/err]"
                 )
@@ -217,6 +227,9 @@ def _capture_user_identity(
                     method = "manual"
                     break
                 return None
+            if is_shared_sender_id(uid):
+                err_console.print(f"  [err]{SHARED_SENDER_REFUSAL}[/err]")
+                continue
             if uid in existing_ids:
                 err_console.print(
                     f"  [err]User {uid} ({who or 'no handle'}) is already "
@@ -326,6 +339,9 @@ def _capture_user_identity(
             if not suggested_label:
                 suggested_label = f"user{uid}"
 
+        if is_shared_sender_id(uid):
+            friendly_warn(SHARED_SENDER_REFUSAL)
+            continue
         if uid in existing_ids:
             friendly_warn(f"User id {uid} is already on the allow-list.")
             continue

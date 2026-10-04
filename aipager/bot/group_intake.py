@@ -191,6 +191,66 @@ def _mention(bot: TelegramBot) -> str:
     return f"@{html_mod.escape(me)}" if me else "the bot"
 
 
+# ---- anonymous senders (roadmap 8.91e) -------------------------------------
+
+#: The one reply a message from an anonymous admin, a channel, or a linked
+#: channel's forward gets, once per chat per daemon run.
+POST_AS_YOURSELF_TEXT = "Post as yourself to use the bot."
+
+
+def is_anonymous_sender(msg) -> bool:
+    """A message that does not say which person wrote it: it carries a
+    ``sender_chat`` (an anonymous group admin, a post as a channel or as the
+    group, a linked channel's automatic forward), or its ``from`` is one of
+    Telegram's shared sender ids (``team.SHARED_SENDER_IDS``). Only a real
+    int chat id counts as a ``sender_chat``."""
+    from aipager.team import is_shared_sender_id
+    sender_chat_id = getattr(getattr(msg, "sender_chat", None), "id", None)
+    if isinstance(sender_chat_id, int) and not isinstance(sender_chat_id, bool):
+        return True
+    return is_shared_sender_id(getattr(getattr(msg, "from_user", None), "id", None))
+
+
+def _has_members(bot: TelegramBot) -> bool:
+    """Scope or legacy team mode: the bot knows who each person is. In
+    personal mode everyone the chat admits is the operator, so an
+    anonymous admin there is treated as before (8.91e)."""
+    return (getattr(bot, "scopes", None) is not None
+            or getattr(bot, "team", None) is not None)
+
+
+def _is_configured_chat(bot: TelegramBot, chat_id) -> bool:
+    """A chat this install serves: a scope's chat, or (legacy team mode)
+    the configured ``CHAT_ID``."""
+    if getattr(bot, "scopes", None) is not None:
+        return bot._scope_for(chat_id) is not None
+    from aipager import config
+    try:
+        return int(config.CHAT_ID) == chat_id
+    except (TypeError, ValueError):
+        return False
+
+
+async def _answer_anonymous_sender(bot: TelegramBot, msg) -> None:
+    """Tell an anonymous sender, once per chat per daemon run and only in a
+    configured chat, to post as themselves. Nothing else happens: no
+    pending user is recorded, nothing is routed."""
+    chat_id = getattr(msg, "chat_id", None)
+    if not _is_configured_chat(bot, chat_id):
+        return
+    told = getattr(bot, "_anonymous_senders_told", None)
+    if told is None:
+        told = set()
+        bot._anonymous_senders_told = told
+    if chat_id in told:
+        return
+    told.add(chat_id)
+    log.info("group intake: an anonymous or channel message in chat %s; "
+             "asked to post as yourself (once per chat)", chat_id)
+    from aipager.bot.transport import reply_text
+    await reply_text(msg, POST_AS_YOURSELF_TEXT)
+
+
 # ---- the gate --------------------------------------------------------------
 
 def _album_store(bot: TelegramBot) -> dict:
@@ -286,6 +346,9 @@ async def intake_gate(
       :func:`_addressed_to_bot`); anything else stops here, with no
       reaction and no reply.
     - Private chats, callback queries and service messages pass.
+    - Scope and team mode: an admitted group message with no person behind it (an anonymous
+      admin, a channel post: :func:`is_anonymous_sender`) is answered
+      "post as yourself" once per chat per run, and stops here.
 
     Raises ``ApplicationHandlerStop`` to stop an update; never anything
     else (a failure while deciding stops a group message, never lets it
@@ -308,12 +371,19 @@ async def intake_gate(
                 albums.pop(key, None)
         album_key = ((msg.chat_id, msg.media_group_id)
                      if getattr(msg, "media_group_id", None) else None)
-        if _addressed_to_bot(bot, msg):
-            if album_key is not None:
-                albums[album_key] = now
+        admitted = _addressed_to_bot(bot, msg)
+        if admitted and album_key is not None:
+            albums[album_key] = now
+        admitted = admitted or (album_key is not None and album_key in albums)
+        if admitted and _has_members(bot) and is_anonymous_sender(msg):
+            # Roadmap 8.91e: an anonymous admin or a channel post has no
+            # person to authorize. One "post as yourself", then silence.
+            await _answer_anonymous_sender(bot, msg)
+            raise ApplicationHandlerStop
+        if admitted:
             return
-        if album_key is not None and album_key in albums:
-            return
+    except ApplicationHandlerStop:
+        raise
     except Exception:
         log.warning("group intake: could not judge a group message; ignoring it",
                     exc_info=True)

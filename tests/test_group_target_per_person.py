@@ -173,18 +173,16 @@ def test_no_target_and_one_live_session_is_that_session(reg):
     assert _label(reg.target_for(G, ALICE)) == "x2"
 
 
-def test_an_ended_own_target_falls_back_to_the_only_live_session(reg):
+def test_an_ended_own_target_never_falls_back_to_the_only_live_session(reg):
+    """Roadmap 8.91g: the one session left may be another member's, so a
+    person whose own target ended has none (they are asked which, see
+    test_group_attribution_senders); one who never picked keeps the
+    fallback."""
     reg.set_target(X1, G, ALICE)
-    reg._sessions[X1].status = Status.GONE
-    assert _label(reg.target_for(G, ALICE)) == "x2"
-    reg._sessions[X1].status = Status.IDLE
-    reg._sessions[X1].label = "x1"
-    reg.set_target(X1, G, ALICE)
-    x3 = TrackedSession(name="claude-x3__g1001234", label="x3", status=Status.IDLE)
-    x3.scope_chat_id = G
-    reg._sessions[x3.name] = x3
     reg._sessions[X1].status = Status.GONE
     assert reg.target_for(G, ALICE) is None
+    assert reg.ended_target_for(G, ALICE) is reg._sessions[X1]
+    assert _label(reg.target_for(G, BOB)) == "x2"
 
 
 def test_another_chats_session_is_never_a_members_target(reg):

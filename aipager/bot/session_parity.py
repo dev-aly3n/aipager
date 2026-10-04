@@ -45,7 +45,7 @@ from typing import TYPE_CHECKING
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
-from aipager.bot import group_intake, settings_menu
+from aipager.bot import card_owner, group_intake, settings_menu
 from aipager.bot.transport import (
     MUTED,
     SKIPPED,
@@ -276,6 +276,12 @@ def _value_for_token(section: str, token: str):
     return None
 
 
+def _tapped_id(query) -> int | None:
+    """The id of the message a tap was on, when it is a real one."""
+    msg_id = getattr(getattr(query, "message", None), "message_id", None)
+    return msg_id if isinstance(msg_id, int) and not isinstance(msg_id, bool) else None
+
+
 async def _edit(query, text: str, kb: InlineKeyboardMarkup | None) -> None:
     """Edit the tapped message in place. Swallows "message not modified"
     / "message to edit not found" the same way every other callback
@@ -432,12 +438,18 @@ async def handle_restart_cmd(
         if len(sessions) == 1:
             # The one it can mean: straight to its confirm (4.4).
             body, kb = _render_restart_confirm(bot, chat_id, sessions[0])
-            await reply_text(update.message, body, reply_markup=kb, parse_mode="HTML")
+            sent = await reply_text(update.message, body, reply_markup=kb, parse_mode="HTML")
+            card_owner.claim_sent(bot, chat_id, sent, calling_user_id(update),
+                                  kind="restart", command=f"/restart {sessions[0].label}",
+                                  who=update.effective_user)
             return
-        await reply_text(update.message, "Which session to restart?",
-                         reply_markup=session_picker(bot, chat_id, sessions, "restart",
-                                                     glyph="🔄 ",
-                                                     user_id=calling_user_id(update)))
+        sent = await reply_text(update.message, "Which session to restart?",
+                                reply_markup=session_picker(bot, chat_id, sessions, "restart",
+                                                            glyph="🔄 ",
+                                                            user_id=calling_user_id(update)))
+        card_owner.claim_sent(bot, chat_id, sent, calling_user_id(update),
+                              kind="restart", command="/restart", picker=True,
+                              who=update.effective_user)
         return
 
     label = parts[1].strip().lstrip("/")
@@ -449,11 +461,19 @@ async def handle_restart_cmd(
         )
         return
     body, kb = _render_restart_confirm(bot, chat_id, sess)
-    await reply_text(update.message, body, reply_markup=kb, parse_mode="HTML")
+    sent = await reply_text(update.message, body, reply_markup=kb, parse_mode="HTML")
+    card_owner.claim_sent(bot, chat_id, sent, calling_user_id(update),
+                          kind="restart", command=f"/restart {sess.label}",
+                          who=update.effective_user)
 
 
-def _restart_outcome_text(outcome) -> str:
+def _restart_outcome_text(outcome, by: str = "") -> str:
+    """The Restart confirm's result. ``by``: who restarted it, in a group
+    (roadmap 8.91c): `🔄 [x1] restarted by @bob.`"""
     if outcome.ok:
+        if by:
+            return (f"🔄 [<b>{html_mod.escape(outcome.label)}</b>] restarted "
+                    f"by {html_mod.escape(by)}.")
         return f"🔄 [<b>{html_mod.escape(outcome.label)}</b>] restarted."
     template = _RESTART_REASON_TEXT.get(outcome.reason, "Restart failed for [{label}].")
     return template.format(
@@ -593,11 +613,17 @@ async def handle_delete_cmd(
         if len(sessions) == 1:
             # The one it can mean: straight to its confirm (4.4).
             body, kb = _render_delete_confirm(bot, chat_id, sessions[0])
-            await reply_text(update.message, body, reply_markup=kb, parse_mode="HTML")
+            sent = await reply_text(update.message, body, reply_markup=kb, parse_mode="HTML")
+            card_owner.claim_sent(bot, chat_id, sent, calling_user_id(update),
+                                  kind="delete", command=f"/delete {sessions[0].label}",
+                                  who=update.effective_user)
             return
-        await reply_text(update.message, "Which ended session to remove?",
-                         reply_markup=session_picker(bot, chat_id, sessions, "delete",
-                                                     glyph="🗑️ "))
+        sent = await reply_text(update.message, "Which ended session to remove?",
+                                reply_markup=session_picker(bot, chat_id, sessions, "delete",
+                                                            glyph="🗑️ "))
+        card_owner.claim_sent(bot, chat_id, sent, calling_user_id(update),
+                              kind="delete", command="/delete", picker=True,
+                              who=update.effective_user)
         return
 
     label = parts[1].strip().lstrip("/")
@@ -616,7 +642,10 @@ async def handle_delete_cmd(
         )
         return
     body, kb = _render_delete_confirm(bot, chat_id, sess)
-    await reply_text(update.message, body, reply_markup=kb, parse_mode="HTML")
+    sent = await reply_text(update.message, body, reply_markup=kb, parse_mode="HTML")
+    card_owner.claim_sent(bot, chat_id, sent, calling_user_id(update),
+                          kind="delete", command=f"/delete {sess.label}",
+                          who=update.effective_user)
 
 
 # ---- diff ------------------------------------------------------------
@@ -1141,10 +1170,15 @@ async def handle_callback(
         if sess.status == Status.GONE:
             text, kb = _render_session_menu(bot, chat_id, sess)
             await _edit(query, text, kb)
+            # A /kill picker it may have been is now the menu, everyone's.
+            card_owner.release(bot, chat_id, _tapped_id(query))
             await bot._safe_answer(query, "That session has already ended.")
             return True
         text, kb = render_end_confirm(bot, chat_id, sess)
         await _edit(query, text, kb)
+        card_owner.claim(bot, chat_id, _tapped_id(query), user_id,
+                         kind="end", command=f"/kill {sess.label}",
+                         who=getattr(query, "from_user", None))
         return True
 
     if action.startswith("endok") and action[5:].isdigit():
@@ -1171,16 +1205,22 @@ async def handle_callback(
             return True
         else:
             outcome = await bot._kill_session_core(sess.name, sess.label)
+            # In a group, who ended it (roadmap 8.91c); "" in a DM.
+            by = bot._actor_label(user_id, chat_id, getattr(query, "from_user", None))
             await bot._safe_answer(query, {
-                "killed": f"⏹ Ended {sess.label}",
+                "killed": f"⏹ Ended {sess.label}" + (f" by {by}" if by else ""),
                 "resuming": f"{sess.label} is being resumed - try again in a moment",
                 "still_running": f"{sess.label} did not stop - try again",
             }.get(outcome.result, f"{sess.label} was not found"))
             if outcome.result == "killed":
+                card_owner.release(bot, chat_id, _tapped_id(query))
                 # What remains, under what happened: the ended session has
                 # left the list, so the list alone would not say.
                 text, kb = bot._render_status_list(chat_id, update)
-                await _edit(query, f"⏹ Ended <b>{html_mod.escape(sess.label)}</b>\n\n{text}", kb)
+                ended = f"⏹ Ended <b>{html_mod.escape(sess.label)}</b>"
+                if by:
+                    ended += f" by {html_mod.escape(by)}"
+                await _edit(query, f"{ended}\n\n{text}", kb)
                 return True
         text, kb = bot._render_status_list(chat_id, update)
         await _edit(query, text, kb)
@@ -1195,6 +1235,9 @@ async def handle_callback(
             return True
         text, kb = bot._render_mode_card(chat_id, sess)
         await _edit(query, text, kb)
+        # A /mode picker's row: the mode card is everyone's (a switch from
+        # it draws a confirm that is the tapper's).
+        card_owner.release(bot, chat_id, _tapped_id(query))
         return True
 
     if action.startswith("modeask") or action.startswith("modeauto"):
@@ -1230,7 +1273,7 @@ async def handle_callback(
         # (operator, 2026-10-01): no second message to leave it stale.
         await bot._perms_flow(sess, target, query.message,
                               may_auto=bot._is_admin_user(user_id, chat_id),
-                              chat_id=chat_id, query=query)
+                              chat_id=chat_id, query=query, requester=user_id)
         return True
 
     if action == "menu-close":
@@ -1296,6 +1339,9 @@ async def handle_callback(
             return True
         text, kb = _render_restart_confirm(bot, chat_id, sess)
         await _edit(query, text, kb)
+        card_owner.claim(bot, chat_id, _tapped_id(query), user_id,
+                         kind="restart", command=f"/restart {sess.label}",
+                         who=getattr(query, "from_user", None))
         return True
 
     if action.startswith("restartok") and action[9:].isdigit():
@@ -1315,7 +1361,12 @@ async def handle_callback(
             return True
         await bot._safe_answer(query, f"Restarting {sess.label}...")
         outcome = await bot._restart_session_core(sess)
-        await _edit(query, _restart_outcome_text(outcome), None)
+        await _edit(query, _restart_outcome_text(
+            outcome, bot._actor_label(user_id, chat_id, getattr(query, "from_user", None))),
+            None)
+        # Only now: the card keeps its buttons for the whole restart, and
+        # until it shows the result they stay the requester's (8.91c).
+        card_owner.release(bot, chat_id, _tapped_id(query))
         return True
 
     if action == "restart-confirm":
@@ -1325,6 +1376,7 @@ async def handle_callback(
         return True
 
     if action == "restart-cancel":
+        card_owner.release(bot, chat_id, _tapped_id(query))
         await _edit(
             query, f"Restart cancelled for [<b>{html_mod.escape(sess.label)}</b>].", None,
         )
@@ -1380,6 +1432,9 @@ async def handle_callback(
             return True
         text, kb = _render_delete_confirm(bot, chat_id, sess)
         await _edit(query, text, kb)
+        card_owner.claim(bot, chat_id, _tapped_id(query), user_id,
+                         kind="delete", command=f"/delete {sess.label}",
+                         who=getattr(query, "from_user", None))
         return True
 
     if action == "delete-confirm":
@@ -1398,14 +1453,18 @@ async def handle_callback(
             await bot._safe_answer(query, _RESUMING_REFUSAL)
             return True
         label = sess.label
+        card_owner.release(bot, chat_id, _tapped_id(query))
         # registry.remove() does NOT call mark_dirty() itself — must be
         # called explicitly, same footgun server.py:1233-1238 flags.
         bot.registry.remove(sess.name)
         bot.registry.mark_dirty()
-        await _edit(query, f"🗑️ Deleted [<b>{html_mod.escape(label)}</b>].", None)
+        by = bot._actor_label(user_id, chat_id, getattr(query, "from_user", None))
+        await _edit(query, f"🗑️ Deleted [<b>{html_mod.escape(label)}</b>]"
+                    + (f" by {html_mod.escape(by)}" if by else "") + ".", None)
         return True
 
     if action == "delete-cancel":
+        card_owner.release(bot, chat_id, _tapped_id(query))
         await _edit(
             query, f"Delete cancelled for [<b>{html_mod.escape(sess.label)}</b>].", None,
         )

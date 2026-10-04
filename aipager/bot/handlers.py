@@ -36,7 +36,7 @@ from telegram.ext import (
 from aipager.dtach import inject
 
 from aipager import statusline_file
-from aipager.bot import group_intake, new_flow, reactions, session_parity
+from aipager.bot import card_owner, group_intake, new_flow, reactions, session_parity
 from aipager.bot.session_ops import (
     await_model_change,
     clear_model_switch_pending,
@@ -130,6 +130,13 @@ _MODEL_CONFIRM_TASKS: set[asyncio.Task] = set()
 # A photo/document download is a getFile call plus a GET of the bytes; on
 # a slow or lossy link either can time out. Bounded retries, on the
 # transient network classes only (see _download_with_retry).
+#: /app in a group (roadmap 8.91d): to someone whose own chat with the bot
+#: is configured, and to anyone else (that DM would refuse them).
+APP_IN_GROUP_TEXT = ("📱 The Mini App only works in a private chat - DM the bot "
+                     "and send /app there.")
+APP_NO_DM_TEXT = ("The Mini App opens from your own chat with the bot. "
+                  "Ask the operator to add you.")
+
 _DOWNLOAD_ATTEMPTS = 3
 # Seconds slept after the n-th failed attempt (index n-1) before the next
 # one. With three attempts only the first two entries are ever slept; the
@@ -691,8 +698,8 @@ class CommandHandlersMixin:
         chat = update.effective_chat
         if chat is None or chat.id <= 0:
             await reply_text(update.message,
-                "📱 The Mini App only works in a private chat - DM the bot "
-                "and send /app there."
+                APP_IN_GROUP_TEXT if self._has_dm_scope(calling_user_id(update))
+                else APP_NO_DM_TEXT,
             )
             return
 
@@ -911,10 +918,13 @@ class CommandHandlersMixin:
                 await reply_text(update.message, "No sessions to end.")
                 return
             if len(alive) > 1:
-                await reply_text(update.message, "Which session to end?",
-                                 reply_markup=session_parity.session_picker(
-                                     self, chat_id, alive, "end", glyph="⏹ ",
-                                     user_id=calling_user_id(update)))
+                sent = await reply_text(update.message, "Which session to end?",
+                                        reply_markup=session_parity.session_picker(
+                                            self, chat_id, alive, "end", glyph="⏹ ",
+                                            user_id=calling_user_id(update)))
+                card_owner.claim_sent(self, chat_id, sent, calling_user_id(update),
+                                      kind="end", command="/kill", picker=True,
+                                      who=update.effective_user)
                 return
             sess = alive[0]
         else:
@@ -926,7 +936,10 @@ class CommandHandlersMixin:
                     parse_mode="HTML")
                 return
         text, kb = session_parity.render_end_confirm(self, chat_id, sess)
-        await reply_text(update.message, text, reply_markup=kb, parse_mode="HTML")
+        sent = await reply_text(update.message, text, reply_markup=kb, parse_mode="HTML")
+        card_owner.claim_sent(self, chat_id, sent, calling_user_id(update),
+                              kind="end", command=f"/kill {sess.label}",
+                              who=update.effective_user)
 
     async def _handle_new_cmd(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         """Handle /new [name [first message...]]: start a Claude Code session.
@@ -1134,7 +1147,10 @@ class CommandHandlersMixin:
                         question = "Which session to switch to 🤖 Auto?"
                         kb = session_parity.session_picker(
                             self, chat_id, live, "modeauto", keyed=True)
-                    await reply_text(update.message, question, reply_markup=kb)
+                    sent = await reply_text(update.message, question, reply_markup=kb)
+                    card_owner.claim_sent(self, chat_id, sent, calling_user_id(update),
+                                          kind="mode", command="/mode", picker=True,
+                                          who=update.effective_user)
                     return
                 sess = live[0] if live else None
         if sess is None or sess.status == Status.GONE:
@@ -1151,7 +1167,8 @@ class CommandHandlersMixin:
                 f"{'🤖 Auto' if target else '💬 Ask'}.", parse_mode="HTML")
             return
         await self._perms_flow(sess, target, update.message,
-                               may_auto=self._is_admin(update), chat_id=chat_id)
+                               may_auto=self._is_admin(update), chat_id=chat_id,
+                               requester=calling_user_id(update))
 
     # The old name: the same command since 2026-09-30.
     _handle_perms_cmd = _handle_mode_cmd
@@ -1183,7 +1200,7 @@ class CommandHandlersMixin:
 
     async def _perms_flow(self, sess: TrackedSession, target_skip_perms: bool,
                           message, *, may_auto: bool, chat_id=None,
-                          query=None) -> None:
+                          query=None, requester: int | None = None) -> None:
         """Switch *sess* to Auto (``target_skip_perms``) or Ask: Ask→Auto
         asks to confirm; Auto→Ask switches at once; a working session
         offers Stop & switch. Every way ends in the /mode card.
@@ -1194,7 +1211,9 @@ class CommandHandlersMixin:
         pointing the wrong way); a refusal is a toast and the card stays.
         Without it (the typed command) the flow replies once to *message*
         and edits that reply. ``chat_id``: the chat the card is in, for its
-        buttons."""
+        buttons. ``requester``: who asked (the tapper or the sender); in a
+        group the confirm is theirs alone and the result names them
+        (roadmap 8.91c)."""
         label = html_mod.escape(sess.label)
         shown: list = []        # the typed path's one reply, once sent
 
@@ -1250,7 +1269,18 @@ class CommandHandlersMixin:
 
         if query is not None:
             await self._safe_answer(query)
+            # The tapped message (a /mode picker's row, or the card's own
+            # switch) becomes this flow's: no earlier owner holds it.
+            card_owner.release(self, chat_id,
+                               getattr(getattr(query, "message", None), "message_id", None))
         mode = "🤖 Auto" if target_skip_perms else "💬 Ask"
+        tg_user = (getattr(query, "from_user", None) if query is not None
+                   else getattr(message, "from_user", None))
+
+        def own(card_id) -> None:
+            """The confirm on *card_id* is the requester's (8.91c)."""
+            card_owner.claim(self, chat_id, card_id, requester,
+                             kind="mode", command=f"/mode {sess.label}", who=tg_user)
 
         if sess.status == Status.BUSY:
             # BUSY flow: show Stop & switch / Not now keyboard.
@@ -1270,6 +1300,7 @@ class CommandHandlersMixin:
                 # decides (callbacks perms_stop_switch).
                 "turn": sess.turn_key,
             }
+            own(card_id)
             return
 
         # IDLE flow.
@@ -1288,6 +1319,7 @@ class CommandHandlersMixin:
                 "label": sess.label,
                 "turn": sess.turn_key,
             }
+            own(card_id)
         else:
             # Auto→Ask: execute immediately, no confirmation needed.
             await show(f"⚙️ Switching <b>{label}</b> to 💬 Ask mode…")
@@ -1295,8 +1327,9 @@ class CommandHandlersMixin:
             async def _edit(text, **kw):
                 await show(text, kw.get("reply_markup"))
 
-            await self._do_perms_switch_via_fn(sess, False, _edit, chat_id=chat_id,
-                                               announce=False)
+            await self._do_perms_switch_via_fn(
+                sess, False, _edit, chat_id=chat_id, announce=False,
+                by=self._actor_label(requester, chat_id, tg_user))
 
     async def _handle_whoami(self, update: Update,
                              ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1380,6 +1413,16 @@ class CommandHandlersMixin:
             (s for s in self.registry.all_sessions(chat_id).values()
              if s.label and s.status != Status.GONE),
             key=lambda s: (s.label.lower(), s.name))
+        ended = self.registry.ended_target_for(chat_id, user_id)
+        if ended is not None:
+            # Roadmap 8.91g: their own session has ended. The only live
+            # session left may be another member's, so nothing is sent:
+            # they pick one, or resume theirs.
+            await reply_text(
+                update.message,
+                f"{ended.label} has ended. Which session?",
+                reply_markup=self._ended_target_keyboard(chat_id, live, ended))
+            return True
         if len(live) < 2:
             return False
         await reply_text(
@@ -1389,6 +1432,22 @@ class CommandHandlersMixin:
             reply_markup=session_parity.session_picker(
                 self, chat_id, live, "talk", glyph="✍️ ", user_id=user_id))
         return True
+
+    def _ended_target_keyboard(self, chat_id, live, ended) -> InlineKeyboardMarkup:
+        """The talk buttons for the chat's live sessions, then ▶️ Resume
+        for the person's ended one when it can be resumed (the ⋮ menu's
+        own `resume` verb and its gates), then Cancel."""
+        rows = [[InlineKeyboardButton(
+            f"✍️ {s.label}",
+            callback_data=session_parity.session_cb(self, chat_id or 0, s, "talk"))]
+            for s in live]
+        if ended.claude_session_id:
+            rows.append([InlineKeyboardButton(
+                f"▶️ Resume {ended.label}",
+                callback_data=session_parity.session_cb(
+                    self, chat_id or 0, ended, "resume"))])
+        rows.append([InlineKeyboardButton("✖️ Cancel", callback_data="_:pick:cancel")])
+        return InlineKeyboardMarkup(rows)
 
     def _own_text(self, update: Update) -> str:
         """The message's text without this bot's own mentions, stripped:

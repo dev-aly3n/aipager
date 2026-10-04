@@ -339,6 +339,20 @@ def reset_unauthorized_seen() -> None:
 
 PENDING_USERS_PATH: Path = Path.home() / ".claude" / "aipager-pending-users.json"
 
+#: Telegram's shared sender ids (roadmap 8.91e): an anonymous group admin
+#: (GroupAnonymousBot), a message posted as a channel (Channel_Bot) and a
+#: linked channel's automatic forward (Telegram's service account). Every
+#: such message carries one of these as its ``from``, whoever wrote it, so
+#: allow-listing one would admit every anonymous admin of every group. They
+#: are never recorded as pending and the wizard refuses them.
+SHARED_SENDER_IDS: frozenset[int] = frozenset({1087968824, 136817688, 777000})
+
+
+def is_shared_sender_id(user_id) -> bool:
+    """True for one of :data:`SHARED_SENDER_IDS` (an int, never a bool)."""
+    return (isinstance(user_id, int) and not isinstance(user_id, bool)
+            and user_id in SHARED_SENDER_IDS)
+
 
 def record_pending_user(
     user_id: int,
@@ -351,8 +365,11 @@ def record_pending_user(
     entries for the same ``user_id``.
 
     Best-effort: write failures are logged and swallowed so a full
-    disk can't break the daemon's auth path.
+    disk can't break the daemon's auth path. A shared sender id
+    (:data:`SHARED_SENDER_IDS`) is never recorded: it is not a person.
     """
+    if is_shared_sender_id(user_id):
+        return
     try:
         records = list_pending_users()
     except Exception:
@@ -382,7 +399,11 @@ def list_pending_users() -> list[dict]:
         return []
     try:
         data = json.loads(PENDING_USERS_PATH.read_text(encoding="utf-8"))
-        return data if isinstance(data, list) else []
+        if not isinstance(data, list):
+            return []
+        # A shared sender id saved before 8.91e is not a person: hidden.
+        return [r for r in data
+                if not (isinstance(r, dict) and is_shared_sender_id(r.get("user_id")))]
     except (OSError, json.JSONDecodeError) as e:
         log.warning("pending-users read failed: %s", e)
         return []
@@ -433,10 +454,12 @@ __all__ = [
     "User",
     "TEAM_CONFIG_PATH",
     "PENDING_USERS_PATH",
+    "SHARED_SENDER_IDS",
     "archive_team",
     "attribution_label",
     "clear_pending_user",
     "dump_team",
+    "is_shared_sender_id",
     "list_pending_users",
     "load_team",
     "record_pending_user",

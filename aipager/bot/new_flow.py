@@ -793,9 +793,11 @@ async def create_from_text(
 def render_ready(
     bot: TelegramBot, update: Update | None, sess: TrackedSession, *,
     model_label: str | None = None, first_message: bool = False, note: str = "",
+    changed: str = "",
 ) -> tuple[str, InlineKeyboardMarkup]:
     """Where every way of starting a session ends: what it got, and what
-    to do next."""
+    to do next. ``changed`` (plain text): what a tap on the card just
+    changed and who did it, shown in a group (roadmap 8.91c)."""
     from aipager.bot import session_parity  # local: avoids an import cycle
     label = html_mod.escape(sess.label)
     mode = "🤖 Auto" if sess.skip_perms else "💬 Ask"
@@ -813,6 +815,8 @@ def render_ready(
         f"{mode} · 🧠 {html_mod.escape(model)} · 📁 <code>"
         f"{html_mod.escape(_short_path(folder))}</code>",
     ]
+    if changed:
+        lines.append(f"🔁 {html_mod.escape(changed)}")
     if note:
         lines.append(f"⚠️ {html_mod.escape(note)}")
     lines.append("")
@@ -863,9 +867,12 @@ async def _handle_ready_callback(
         await bot._safe_answer(query, "You can't change this session.", show_alert=True)
         return
 
-    async def _rerender(note: str = "") -> None:
-        text, kb = render_ready(bot, update, sess, note=note)
+    async def _rerender(note: str = "", changed: str = "") -> None:
+        text, kb = render_ready(bot, update, sess, note=note, changed=changed)
         await _edit_at(bot, chat_id, msg_id, text, kb)
+
+    # Who tapped, named on what the tap changed in a group (8.91c).
+    by = bot._actor_label(actor, chat_id, getattr(query, "from_user", None))
 
     if action in ("rdy_ask", "rdy_auto"):
         target = action == "rdy_auto"
@@ -897,7 +904,8 @@ async def _handle_ready_callback(
             await _rerender(note="Couldn't switch mode"
                             + (f": {outcome.err}" if getattr(outcome, "err", "") else "."))
             return
-        await _rerender()
+        await _rerender(changed=(f"Switched to {'🤖 Auto' if target else '💬 Ask'} by {by}."
+                                 if by else ""))
         return
 
     if action == "rdy_model":
@@ -928,7 +936,8 @@ async def _handle_ready_callback(
             await _rerender()
             return
         await bot._safe_answer(query, f"Switching to {label}")
-        text, kb = render_ready(bot, update, sess, model_label=label)
+        text, kb = render_ready(bot, update, sess, model_label=label,
+                                changed=f"Model switched to {label} by {by}." if by else "")
         await _edit_at(bot, chat_id, msg_id, text, kb)
         return
 
@@ -1018,8 +1027,10 @@ async def handle_defaults_callback(
     scope = chat_id or 0
     viewer = _actor_id(update, query)
 
-    async def _show(view: str = "") -> None:
+    async def _show(view: str = "", by: str = "") -> None:
         text, kb = render_new_session_defaults(bot, scope, view=view, viewer=viewer)
+        if by:
+            text += f"\n\n<i>Changed by {html_mod.escape(by)}.</i>"
         await _edit_at(bot, scope, getattr(getattr(query, "message", None),
                                            "message_id", None), text, kb)
 
@@ -1064,7 +1075,8 @@ async def handle_defaults_callback(
     except ValueError:
         await bot._safe_answer(query, "Invalid value")
         return
-    await _show()
+    # In a group, who changed it (roadmap 8.91c); a DM is as before.
+    await _show(by=bot._actor_label(viewer, chat_id, getattr(query, "from_user", None)))
 
 
 # ---- free-text capture -------------------------------------------------

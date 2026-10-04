@@ -2242,9 +2242,12 @@ class SessionRegistry:
         unscoped update) falls back to the install-wide latest.
 
         In a group with *user_id* (roadmap 8.90): that person's own
-        target while it is a live session of the chat, else the chat's
-        only live session, else ``None`` (ask which). Session output never
-        moves it, so it is never another member's latest conversation."""
+        target while it is a live session of the chat; ``None`` when it
+        has ended (roadmap 8.91g: the only live session left may be
+        someone else's, see :meth:`ended_target_for`); for a person who
+        has no target, the chat's only live session; else ``None`` (ask
+        which). Session output never moves it, so it is never another
+        member's latest conversation."""
         if user_id is not None and _is_group_chat(chat_id) and _is_user_id(user_id):
             return self._person_target(chat_id, user_id)
         if chat_id is None:
@@ -2266,9 +2269,31 @@ class SessionRegistry:
             if (sess is not None and sess.status != Status.GONE
                     and self._target_chat(sess) in (0, chat_id)):
                 return sess
+        if self.ended_target_for(chat_id, user_id) is not None:
+            return None
         live = [s for s in self.all_sessions(chat_id).values()
                 if s.label and s.status != Status.GONE]
         return live[0] if len(live) == 1 else None
+
+    def ended_target_for(
+        self, chat_id: int | None, user_id: int | None,
+    ) -> TrackedSession | None:
+        """In a group: the person's own target when it is one of the
+        chat's sessions that has ended (roadmap 8.91g), else ``None``.
+        Their message must then not fall to "the only live session",
+        which may be another member's: they are asked which one, with a
+        Resume button for theirs. Always ``None`` in a private chat."""
+        if not (_is_group_chat(chat_id) and _is_user_id(user_id)):
+            return None
+        entry = self._user_targets.get((chat_id, user_id))
+        if entry is None:
+            return None
+        sess = self._sessions.get(entry[0])
+        if (sess is not None and sess.status == Status.GONE and sess.label
+                and not sess.is_resuming()
+                and self._target_chat(sess) in (0, chat_id)):
+            return sess
+        return None
 
     def _forget_target(self, name: str) -> None:
         for chat, (target, _order) in list(self._targets.items()):

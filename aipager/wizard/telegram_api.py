@@ -8,6 +8,7 @@ import urllib.parse
 import urllib.request
 
 from aipager.errors import redact_token
+from aipager.team import is_shared_sender_id
 from aipager.ui import err_console
 from aipager.wizard._constants import (
     _TOKEN_RE,
@@ -94,6 +95,12 @@ def _test_send(token: str, chat_id: int) -> tuple[bool, str]:
     return True, ""
 
 
+#: Auto-detect saw only anonymous admins or channel posts (8.91e).
+ANONYMOUS_SENDER_ADVISORY = (
+    "Only messages sent anonymously or as a channel were seen; they do not "
+    "say who sent them. Ask the person to post as themselves, then try again.")
+
+
 def _fetch_id_from_updates(
     token: str, *, want: str,
 ) -> tuple[int | None, str | None, str | None]:
@@ -116,6 +123,7 @@ def _fetch_id_from_updates(
         return None, None, None
 
     saw_other: list[str] = []
+    saw_anonymous = False
     for u in body.get("result", []):
         msg = u.get("message") or u.get("edited_message") or {}
         chat = msg.get("chat") or {}
@@ -137,10 +145,17 @@ def _fetch_id_from_updates(
             saw_other.append(ctype or "?")
         elif want == "user":
             uid = sender.get("id")
+            if msg.get("sender_chat") or is_shared_sender_id(uid):
+                # An anonymous admin or a channel post: its `from` is an id
+                # every such message shares, never the person (8.91e).
+                saw_anonymous = True
+                continue
             if uid is not None:
                 who = sender.get("username") or sender.get("first_name", "")
                 return int(uid), who, None
 
+    if want == "user" and saw_anonymous:
+        return None, None, ANONYMOUS_SENDER_ADVISORY
     if saw_other:
         if want == "dm":
             advisory = (

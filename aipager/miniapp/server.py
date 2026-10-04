@@ -1355,7 +1355,9 @@ class MiniAppServer:
             log.info("miniapp: session stop rejected (429) — rate limited")
             return web.json_response({"error": "too_many_requests"}, status=429)
 
-        outcome = await self.bot._stop_session_core(sess)
+        # In a group the busy card names who stopped it (roadmap 8.91c).
+        outcome = await self.bot._stop_session_core(
+            sess, by=self.bot._actor_label(user_id, scope_chat_id))
         if not outcome.ok:
             return web.json_response({
                 "error": "not_busy",

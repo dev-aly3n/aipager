@@ -131,7 +131,7 @@ def test_stop_stops_the_one_working_session_even_when_it_is_not_the_target(bot, 
 
     text, _kb = cmd("/stop")
 
-    bot._stop_session_core.assert_awaited_once_with(busy)
+    bot._stop_session_core.assert_awaited_once_with(busy, by="")
     assert text == "⏹ Stopped <b>b1</b>"
 
 
@@ -141,7 +141,7 @@ def test_stop_counts_a_session_that_needs_you_as_working(bot, cmd):
 
     cmd("/stop")
 
-    bot._stop_session_core.assert_awaited_once_with(wait)
+    bot._stop_session_core.assert_awaited_once_with(wait, by="")
 
 
 def test_stop_with_nothing_working_says_so(bot, cmd):
@@ -194,7 +194,7 @@ def test_stop_by_name(bot, cmd):
 
     text, _kb = cmd("/stop b1")
 
-    bot._stop_session_core.assert_awaited_once_with(b1)
+    bot._stop_session_core.assert_awaited_once_with(b1, by="")
     assert text == "⏹ Stopped <b>b1</b> (2 queued messages discarded)"
 
 
@@ -215,7 +215,7 @@ def test_the_stop_picker_stops_and_becomes_the_result(bot, cmd, tap):
 
     query = tap(_cb(bot, kb, "⏹ b1"))
 
-    bot._stop_session_core.assert_awaited_once_with(b1)
+    bot._stop_session_core.assert_awaited_once_with(b1, by="")
     assert _toast(query) == "⏹ Stopped b1 (1 queued message discarded)"
     assert _edited(query) == ("⏹ Stopped <b>b1</b> (1 queued message discarded)", None)
 
@@ -228,7 +228,7 @@ def test_the_stop_picker_leaves_the_picker_when_nothing_was_stopped(bot, cmd, ta
 
     query = tap(_cb(bot, kb, "⏹ b1"))
 
-    bot._stop_session_core.assert_awaited_once_with(b1)
+    bot._stop_session_core.assert_awaited_once_with(b1, by="")
     assert _toast(query) == "b1 is not working"
     query.edit_message_text.assert_not_awaited()
 
@@ -259,7 +259,7 @@ def test_the_stop_picker_survives_a_card_move_in_the_same_turn(bot, cmd, tap):
 
     tap(_cb(bot, kb, "⏹ b1"))
 
-    bot._stop_session_core.assert_awaited_once_with(b1)
+    bot._stop_session_core.assert_awaited_once_with(b1, by="")
 
 
 def test_the_stop_picker_refuses_a_re_created_session(bot, cmd, tap):
@@ -869,11 +869,11 @@ def test_stop_counts_a_job_still_running_a_background_agent(bot, cmd):
     bot._stop_session_core = AsyncMock(return_value=_stopped(job))
 
     cmd("/stop")
-    bot._stop_session_core.assert_awaited_once_with(job)
+    bot._stop_session_core.assert_awaited_once_with(job, by="")
 
     bot._stop_session_core.reset_mock()
     assert cmd("/stop j1")[0] == "⏹ Stopped <b>j1</b>"
-    bot._stop_session_core.assert_awaited_once_with(job)
+    bot._stop_session_core.assert_awaited_once_with(job, by="")
 
 
 def test_status_offers_stop_for_a_job_still_running_a_background_agent(bot, mk_update, run_async):
