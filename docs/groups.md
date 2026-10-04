@@ -301,6 +301,14 @@ post-hoc reconstruct what each user did.
   act, but they see everything. If you need to hide some
   conversations from an observer, that observer doesn't belong in
   the group.
+- Every session belongs to one chat, and everything about it goes
+  there. A session started in the terminal (`aipager session <name>`)
+  belongs to the owner's DM on an install with a DM and a group, never
+  to the group. The owner's DM is the DM whose member has the `owner`
+  role (a role with `bypass_safety`); with several DMs and none of them
+  the owner's, it is the first DM listed. A session's name only works
+  in its own chat: typing another chat's session name answers "Unknown
+  session".
 - `aipager.yaml` and `policy.yaml` are mode 0600 (owner-only).
 - The audit log is owner-only (`~/.claude/aipager-audit.jsonl`).
 

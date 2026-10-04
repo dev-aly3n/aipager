@@ -293,9 +293,9 @@ def test_the_seam_skips_an_already_tracked_session(mk_bot):
     bot = mk_bot()
     _renamed(bot)
 
-    adopted = bot._adopt_by_typed_name(INTERNAL, TYPED)
+    adopted = bot._adopt_by_typed_name(INTERNAL, TYPED, None)
     assert adopted.label == RENAMED, "must not relabel a tracked session"
 
     bot.registry.remove(INTERNAL)
-    fresh = bot._adopt_by_typed_name(INTERNAL, TYPED)
+    fresh = bot._adopt_by_typed_name(INTERNAL, TYPED, None)
     assert fresh.label == TYPED, "must label a session it just adopted"

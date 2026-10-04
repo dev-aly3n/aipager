@@ -404,14 +404,17 @@ def test_bobs_direct_send_is_labelled_bob_and_makes_him_the_driver(
 def test_direct_send_to_an_untracked_live_session_makes_the_sender_driver(
         gbot, typed, run_async):
     """``_direct_send``'s second branch: a live session the registry did
-    not know, adopted by the typed name."""
+    not know, adopted by the typed name. Named for this group: an
+    unsuffixed name is the owner DM's (roadmap 8.82/8.76), not the
+    group's to adopt."""
     bot = gbot()
-    u = _update("/fresh hello", user_id=ADA)
-    run_async(bot._direct_send(u, "fresh", "hello"))
-    sess = bot.registry.get("claude-fresh")
+    u = _update("/fresh__g1001 hello", user_id=ADA)
+    run_async(bot._direct_send(u, "fresh__g1001", "hello"))
+    sess = bot.registry.get("claude-fresh__g1001")
     assert sess.last_driver_user_id == ADA
-    # Unstamped: not a group session, so the DM form of the marker.
-    assert typed == [("claude-fresh", "[via Telegram · @ada]\nhello")]
+    # Stamped with the group at adoption: the group form of the marker.
+    assert typed == [("claude-fresh__g1001",
+                      "[via Telegram · @ada · role:admin]\nhello")]
 
 
 def test_a_template_makes_the_sender_the_driver(gbot, typed, run_async):
@@ -651,10 +654,10 @@ def test_a_users_slash_command_to_an_untracked_live_session_adopts_nothing(
     """``_direct_send``'s second branch refuses before adopting the
     typed name, so a refused command leaves no registry entry behind."""
     bot = gbot()
-    u = _update("/fresh /deliver x", user_id=BOB)
-    run_async(bot._direct_send(u, "fresh", "/deliver x"))
+    u = _update("/fresh__g1001 /deliver x", user_id=BOB)
+    run_async(bot._direct_send(u, "fresh__g1001", "/deliver x"))
     assert typed == []
-    assert bot.registry.get("claude-fresh") is None
+    assert bot.registry.get("claude-fresh__g1001") is None
     assert _replies(u) == [NEEDS_ADMIN_REPLY]
 
 

@@ -104,6 +104,19 @@ def _isolate_wizard_config(tmp_path, monkeypatch):
     """
     monkeypatch.setattr("aipager.scope.CONFIG_PATH",
                         tmp_path / "aipager.yaml")
+    # `load_scopes(path=CONFIG_PATH)` binds its default at definition time,
+    # so the redirect above does not reach a bare `load_scopes()` (what
+    # TelegramBot() and reload_team call): it would read the operator's
+    # real aipager.yaml, and a bot built in a test would then stamp new
+    # sessions with the real DM on the dev box only (roadmap 8.82).
+    import aipager.scope as _scope_mod
+    _real_load_scopes = _scope_mod.load_scopes
+
+    def _load_scopes(path=None):
+        return _real_load_scopes(path if path is not None
+                                 else _scope_mod.CONFIG_PATH)
+
+    monkeypatch.setattr(_scope_mod, "load_scopes", _load_scopes)
     monkeypatch.setattr("aipager.policy.POLICY_PATH",
                         tmp_path / "policy.yaml")
 
@@ -125,6 +138,15 @@ def _pin_single_chat_config(monkeypatch):
     own later ``monkeypatch`` (a later patch wins).
     """
     monkeypatch.setattr("aipager.config.CHAT_ID", "256113222")
+    # The home chat of an unstamped session (roadmap 8.82) reads the
+    # import-time scopes when no bot is live: on the developer's box that
+    # is the real aipager.yaml, on CI nothing. Pin both to "no scopes" so
+    # sessions stamp alike everywhere, and forget the previous test's bot
+    # (a test opts into scope mode through its bot's ``scopes``; a bot
+    # built here reads the tmp aipager.yaml, see _isolate_wizard_config).
+    monkeypatch.setattr("aipager.config.SCOPES", None)
+    from aipager import state as _state
+    monkeypatch.setattr(_state, "_live_scope_source", None)
 
 
 @pytest.fixture(autouse=True)

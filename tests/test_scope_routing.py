@@ -171,12 +171,27 @@ def test_chat_id_derives_from_a_single_scope(restore_config, monkeypatch, tmp_pa
     assert isinstance(reloaded.CHAT_ID, str), "callers do int(CHAT_ID)"
 
 
-def test_chat_id_prefers_the_group_when_several_scopes(restore_config, monkeypatch, tmp_path):
-    """Matches state._default_scope()'s rule so there is one definition of
-    "the default chat", not two that can drift apart."""
+def test_chat_id_is_the_owners_dm_when_several_scopes(restore_config, monkeypatch, tmp_path):
+    """The home chat (scope.home_scope, roadmap 8.82), the same rule as
+    state._default_scope(): the owner's DM, never "prefer the group",
+    whichever is listed first."""
     reloaded, _mod = _reload_config_with(
-        monkeypatch, tmp_path, _yaml((111, "dm"), (-100222, "group")))
-    assert reloaded.CHAT_ID == "-100222", "should prefer the group scope"
+        monkeypatch, tmp_path, _yaml((-100222, "group"), (111, "dm")))
+    assert reloaded.CHAT_ID == "111", "should be the owner's DM, not the group"
+
+
+def test_chat_id_is_the_owners_dm_not_another_members(restore_config, monkeypatch, tmp_path):
+    """Roadmap 8.82: with a group, a member's DM and the owner's DM, the
+    home chat is the owner's DM even though it is listed last."""
+    reloaded, _mod = _reload_config_with(monkeypatch, tmp_path, (
+        "schema_version: 2\nbot_token: 123:abc\nscopes:\n"
+        "  - {chat_id: -100222, kind: group, label: team,"
+        " members: [{id: 1, label: o, role: owner}, {id: 3, label: b, role: user}]}\n"
+        "  - {chat_id: 333, kind: dm, label: bob,"
+        " members: [{id: 3, label: b, role: user}]}\n"
+        "  - {chat_id: 111, kind: dm, label: me,"
+        " members: [{id: 1, label: o, role: owner}]}\n"))
+    assert reloaded.CHAT_ID == "111"
 
 
 def test_explicit_chat_id_is_not_overridden(restore_config, monkeypatch, tmp_path):

@@ -2107,7 +2107,10 @@ class CommandHandlersMixin:
             return sess
         session_name = f"claude-{label}"
         if await inject.is_alive(session_name):
-            return self._adopt_by_typed_name(session_name, label)
+            sess = self._adopt_by_typed_name(
+                session_name, label, calling_chat_id(update))
+            if sess is not None:
+                return sess
         await reply_text(update.message, f"⚠️ Unknown session: {label}")
         return None
 
@@ -2155,10 +2158,18 @@ class CommandHandlersMixin:
 
         # Not found in registry — try session discovery
         session_name = f"claude-{target_label}"
-        if await inject.is_alive(session_name):
+        # Another chat's session is unknown here (roadmap 8.76), checked
+        # before anything else so the reply does not even confirm it runs.
+        if (await inject.is_alive(session_name)
+                and not self._typed_name_foreign(
+                    session_name, calling_chat_id(update))):
             if await self._refuse_admin_command(update, prompt_text):
                 return
-            new_sess = self._adopt_by_typed_name(session_name, target_label)
+            new_sess = self._adopt_by_typed_name(
+                session_name, target_label, calling_chat_id(update))
+            if new_sess is None:
+                await reply_text(update.message, f"⚠️ Unknown session: {target_label}")
+                return
             self.registry.last_active_session = session_name
             if await self._hold_for_open_dialog(update, new_sess, prompt_text):
                 return

@@ -511,10 +511,43 @@ class SessionOpsMixin:
             sess.last_prompt = text
             sess.last_prompt_driver_user_id = driver_user_id
 
-    def _adopt_by_typed_name(self, session_name: str,
-                             target_label: str) -> TrackedSession:
+    def _typed_name_foreign(self, session_name: str, chat_id: int | None) -> bool:
+        """True when the internal name rebuilt from a typed ``/<label>``
+        (``claude-<label>``) belongs to a chat other than *chat_id*
+        (roadmap 8.76). Internal names carry the owning chat's id
+        (``__d<user id>`` / ``__g<group id>``) and ids are not secret, so
+        without this a group member could type ``/api__d555 ...`` and
+        drive the operator's private DM session.
+
+        Foreign when: the name ends in a scope suffix naming another chat;
+        or the registry knows it stamped with another chat; or (scope
+        mode) it has no chat of its own and its home chat
+        (``scope.home_scope``) is not *chat_id*. Personal/legacy mode
+        with no suffix and no stamp: never foreign (one chat).
+        """
+        from aipager.scope import chat_from_suffix
+        from aipager.bot.transport import home_chat
+
+        own = chat_from_suffix(session_name)
+        if own is not None and own[0] != chat_id:
+            return True
+        known = self.registry.get(session_name)
+        if known is not None and known.scope_chat_id:
+            return known.scope_chat_id != chat_id
+        if own is not None:
+            return False
+        if self.scopes is None:
+            return False
+        home = home_chat()
+        return home is None or home[0] != chat_id
+
+    def _adopt_by_typed_name(self, session_name: str, target_label: str,
+                             chat_id: int | None) -> TrackedSession | None:
         """Adopt the session `session_name`, which was rebuilt from what
-        the operator typed.
+        the operator typed in *chat_id*, or ``None`` when that name
+        belongs to another chat (:meth:`_typed_name_foreign`, roadmap
+        8.76): the caller then answers its "Unknown session" reply and
+        touches nothing.
 
         `/<label>` falls back to reconstructing `claude-{label}` and
         adopting whatever is alive under it. A session adopted that way
@@ -527,13 +560,13 @@ class SessionOpsMixin:
         label while the internal name stays put, so the pre-rename name
         goes on resolving to a live socket indefinitely, and re-labelling
         an already-tracked entry here would silently undo the rename.
-
-        `known` is not scope-aware, because `registry.get` keys on the
-        internal name alone. In a multi-scope install an unscoped legacy
-        name reached through this fallback is therefore not filtered by
-        scope — unchanged by this method, which reproduces exactly what
-        the direct `get_or_create` call here did before.
+        In scope mode a newly adopted session is stamped with its chat by
+        `get_or_create` (its suffix's, else the home chat), which the
+        check above has just proved is *chat_id*; in personal/legacy
+        mode an unsuffixed name stays unstamped, as before.
         """
+        if self._typed_name_foreign(session_name, chat_id):
+            return None
         known = self.registry.get(session_name) is not None
         sess = self.registry.get_or_create(session_name)
         if not known:
@@ -1636,8 +1669,11 @@ class SessionOpsMixin:
 
         # Try auto-discover
         session_name = f"claude-{target_label}"
+        sess = None
         if await inject.is_alive(session_name):
-            sess = self._adopt_by_typed_name(session_name, target_label)
+            sess = self._adopt_by_typed_name(
+                session_name, target_label, calling_chat_id(update))
+        if sess is not None:
             self.registry.last_active_session = session_name
             self.registry.mark_dirty()
             asyncio.create_task(self._maybe_update_bot_name(session_name))

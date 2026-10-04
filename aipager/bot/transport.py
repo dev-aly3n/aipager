@@ -58,17 +58,32 @@ def calling_chat_id(source) -> int | None:
     return chat
 
 
+def home_chat() -> tuple[int, str] | None:
+    """``(chat_id, kind)`` of the home chat (``scope.home_scope`` over the
+    bot's LIVE scopes and policy, so a SIGUSR1 reload is honoured), or
+    ``None`` in personal/legacy mode. See :func:`aipager.state.home_chat`."""
+    from aipager.state import home_chat as _home_chat
+    return _home_chat()
+
+
 def resolve_chat_id(sess):
     """Destination chat for a session's outbound notifications (Phase B).
 
-    Returns the session's ``scope_chat_id`` (an int) when set, else the
-    global ``config.CHAT_ID`` (a str). The str fallback preserves the
-    pre-multi-scope behavior exactly for single-scope installs and for
-    sessions not yet stamped (``scope_chat_id == 0``). Read at call time
-    so the value tracks runtime config.
+    Returns the session's ``scope_chat_id`` (an int) when set. A session
+    not yet stamped (``scope_chat_id == 0``) goes to :func:`home_chat`
+    in scope mode (the owner's DM, from the bot's live scopes, roadmap
+    8.82; never "prefer the group"), else to the global
+    ``config.CHAT_ID`` (a str), which preserves the pre-multi-scope
+    behavior exactly for personal/legacy installs. Read at call time so
+    the value tracks runtime config.
     """
+    if sess.scope_chat_id:
+        return sess.scope_chat_id
+    home = home_chat()
+    if home is not None:
+        return home[0]
     from aipager import config
-    return sess.scope_chat_id or config.CHAT_ID
+    return config.CHAT_ID
 
 
 def resolve_chat_id_int(sess) -> int | None:

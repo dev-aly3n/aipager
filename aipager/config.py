@@ -101,17 +101,14 @@ if _v2 and _v2[1]:
 if SCOPES and not CHAT_ID:
     # v2 has no single chat id — scopes carry them — but plenty of code
     # predates scopes and still reads CHAT_ID: `aipager status` and
-    # `doctor` gate on it, and `resolve_chat_id` uses it for a session
-    # with no stamped scope. Once config.env was retired those callers saw
+    # `doctor` gate on it. Once config.env was retired those callers saw
     # an empty string and reported a working install as unconfigured.
-    # Same rule as state._default_scope(), deliberately not a second
-    # definition of "the default chat": a lone scope wins outright,
-    # otherwise the group does.
-    _default_scope_obj = next(
-        (s for s in SCOPES if s.kind == "group"), SCOPES[0],
-    )
-    CHAT_ID = str(_default_scope_obj.chat_id)
-    del _default_scope_obj
+    # The home chat (scope.home_scope, roadmap 8.82): the owner's DM, never
+    # "prefer the group"; the same rule as state._default_scope().
+    from aipager.scope import home_scope as _home_scope
+    _home = _home_scope(SCOPES, POLICY)
+    CHAT_ID = str(_home.chat_id)
+    del _home, _home_scope
 del _load_scopes, _load_policy, _v2, _ScopeConfigError, _PolicyError
 
 from aipager.scope import load_default_mode as _load_dm  # noqa: E402

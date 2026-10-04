@@ -75,6 +75,55 @@ def strip_scope_suffix(name: str) -> str:
     return _SCOPE_SUFFIX_RE.sub("", name)
 
 
+def chat_from_suffix(name: str) -> tuple[int, str] | None:
+    """The chat a scope suffix names, or ``None`` for a name without one.
+
+    The inverse of :func:`scope_suffix` on a whole session name:
+    ``"claude-api__d555"`` → ``(555, "dm")``; ``"claude-x__g1001"`` →
+    ``(-1001, "group")`` (the ``g`` prefix encodes the group id's sign).
+    Same anchored pattern as :func:`strip_scope_suffix`, so
+    ``"my__thing"`` and ``"my__dabc"`` have no suffix.
+    """
+    m = _SCOPE_SUFFIX_RE.search(name)
+    if m is None:
+        return None
+    tag = m.group(0)[2:]
+    n = int(tag[1:])
+    if n == 0:
+        # No chat has id 0 (0 means "unstamped" in the registry).
+        return None
+    if tag[0] == "g":
+        return -n, "group"
+    return n, "dm"
+
+
+def home_scope(scopes, policy) -> Scope | None:
+    """The chat a session with no chat of its own belongs to (roadmap 8.82).
+
+    In order: the first DM scope (yaml order) with a member whose role has
+    ``bypass_safety`` (the owner's own DM); else the first DM scope; else
+    the first scope. ``None`` for no scopes. A lone scope is therefore
+    always its own home (it is the first DM or the first scope). Never
+    "prefer the group": a session started in the terminal is the owner's
+    private work, and a group is shared with other people. *policy* may be
+    ``None`` (no role can then qualify). Pure.
+    """
+    if not scopes:
+        return None
+    if policy is not None:
+        for s in scopes:
+            if s.kind != "dm":
+                continue
+            for m in s.members:
+                role = policy.get_role(m.role)
+                if role is not None and role.bypass_safety:
+                    return s
+    for s in scopes:
+        if s.kind == "dm":
+            return s
+    return scopes[0]
+
+
 def disambiguated_name(label: str, chat_id: int, kind: str) -> str:
     """Internal session name for a NEW scoped session:
     ``claude-<label>__<suffix>``. The user only ever sees ``label``;

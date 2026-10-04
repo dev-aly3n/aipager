@@ -30,7 +30,8 @@ from aipager.config import (
     APP_BUTTON,
     # Only the pinned bar reads CHAT_ID (`_pinned_chats`, `_pinned_chat_of`):
     # a legacy personal install's one chat, and resolve_chat_id's fallback
-    # for an unstamped session. No session send, edit or delete uses it.
+    # for an unstamped session outside scope mode. No session send, edit or
+    # delete uses it.
     CHAT_ID,
     PINNED_MIN_EDIT_GAP,
     PINNED_RECREATE_MIN_INTERVAL,
@@ -58,6 +59,7 @@ from aipager.bot.transport import (  # noqa: F401
     SKIPPED,
     _message_chat_id,
     edit_text_at,
+    home_chat,
     resolve_chat_id,
     send_text,
     ACTION_VERBS,
@@ -325,8 +327,11 @@ class DashboardMixin:
         rule, without its warning for an unresolvable id (asked every tick)."""
         if sess.scope_chat_id:
             return sess.scope_chat_id
-        # The same fallback as resolve_chat_id for an unstamped session;
-        # the two must agree, so this changes only when that one does.
+        # The same fallback as resolve_chat_id for an unstamped session
+        # (the home chat in scope mode, else CHAT_ID); the two must agree.
+        home = home_chat()
+        if home is not None:
+            return home[0]
         try:
             return int(CHAT_ID)
         except (TypeError, ValueError):

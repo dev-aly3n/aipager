@@ -159,7 +159,9 @@ or tmux pane and the session keeps running.
 The result: Claude Code runs as if you typed in a terminal, but
 that terminal can come and go without disturbing the running session.
 The daemon discovers sessions by scanning `/tmp/claude-dtach-*.sock`
-on each 2 s monitor tick.
+on each 2 s monitor tick. A discovered session belongs to the chat its
+name was made for, and one started in the terminal belongs to the
+owner's DM on an install with a DM and a group.
 
 ## See also
 

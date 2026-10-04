@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import time
+import weakref
 from collections import deque
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -27,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from aipager import bg_shells as _bg_shells
-from aipager.scope import strip_scope_suffix
+from aipager.scope import chat_from_suffix, home_scope, strip_scope_suffix
 from aipager.config import (
     GONE_SESSION_MAX_AGE_DAYS,
     COMPACT_INFLIGHT_MAX_SECONDS,
@@ -209,28 +210,65 @@ _MAX_REMEMBERED_LABELS: int = 50
 REMEMBERED_LABEL_TTL_SECONDS: float = 60.0
 
 
+# The object whose ``scopes`` / ``policy`` are the daemon's LIVE config
+# (the TelegramBot, which a SIGUSR1 reload updates in place). Held weakly
+# so a test's throwaway bot is never kept alive by it. ``None`` before a
+# bot exists (the CLI, the registry's load at daemon start): config's
+# import-time SCOPES / POLICY are used then.
+_live_scope_source: weakref.ref | None = None
+
+
+def set_live_scope_source(obj) -> None:
+    """Register *obj* (``.scopes``, ``.policy``) as the live scope config,
+    or clear it with ``None``."""
+    global _live_scope_source
+    _live_scope_source = weakref.ref(obj) if obj is not None else None
+
+
+def home_chat() -> tuple[int, str] | None:
+    """``(chat_id, kind)`` of the home chat in scope mode (roadmap 8.82):
+    where a session with no chat of its own belongs, by
+    :func:`aipager.scope.home_scope` over the live scopes. ``None`` in
+    personal/legacy mode (no scopes), where callers keep using
+    ``config.CHAT_ID`` exactly as before."""
+    src = _live_scope_source() if _live_scope_source is not None else None
+    if src is not None:
+        scopes = getattr(src, "scopes", None)
+        policy = getattr(src, "policy", None)
+    else:
+        from aipager import config
+        scopes = getattr(config, "SCOPES", None)
+        policy = getattr(config, "POLICY", None)
+    home = home_scope(scopes, policy)
+    if home is None:
+        return None
+    return home.chat_id, home.kind
+
+
+def chat_for_new_session(name: str) -> tuple[int, str] | None:
+    """The chat a session the daemon has just learned of belongs to:
+    the chat its scope suffix names (``__d<n>`` / ``__g<n>``), else the
+    home chat in scope mode, else ``None`` (personal/legacy mode: left
+    unstamped, ``config.CHAT_ID`` resolves it as before)."""
+    return chat_from_suffix(name) or home_chat()
+
+
 def _default_scope() -> tuple[int, str] | None:
-    """Resolve the single configured chat for backfilling legacy sessions.
+    """Resolve the configured home chat for backfilling legacy sessions.
 
     Returns ``(chat_id, kind)`` or ``None`` when nothing is configured
     (e.g. unit tests with no env). Read at call time so tests can
     monkeypatch ``config``.
 
-    - One v2 scope configured → its ``(chat_id, kind)``.
-    - Multiple → the group scope (the §7 "prefer group" rule; only
-      reachable once multi-scope auth lands).
+    - Scope mode → :func:`home_chat` (the owner's DM, never "prefer the
+      group", roadmap 8.82; a lone scope wins outright).
     - Else fall back to ``CHAT_ID`` (kind inferred from its sign).
     """
     from aipager import config
 
-    scopes = getattr(config, "SCOPES", None)
-    if scopes:
-        if len(scopes) == 1:
-            return scopes[0].chat_id, scopes[0].kind
-        for s in scopes:
-            if s.kind == "group":
-                return s.chat_id, "group"
-        return scopes[0].chat_id, scopes[0].kind
+    home = home_chat()
+    if home is not None:
+        return home
 
     raw = getattr(config, "CHAT_ID", "") or ""
     try:
@@ -2059,7 +2097,15 @@ class SessionRegistry:
             self._prune_remembered_labels()
             remembered = self._remembered_labels.pop(name, None)
             label = (remembered[0] if remembered else None) or _derive_label(name)
-            self._sessions[name] = TrackedSession(name=name, label=label)
+            sess = TrackedSession(name=name, label=label)
+            # Every session belongs to one chat from the moment the daemon
+            # learns of it (roadmap 8.82/8.72): a terminal `claude-x` found
+            # by the socket scan or a hook would otherwise resolve to a
+            # fallback chat, and match every chat's lookups.
+            chat = chat_for_new_session(name)
+            if chat is not None:
+                sess.scope_chat_id, sess.scope_kind = chat
+            self._sessions[name] = sess
             log.info("Tracking new session: %s [%s]", name, label)
             self._evict_gone_overflow()
         return self._sessions[name]
@@ -2752,9 +2798,13 @@ class SessionRegistry:
                 sess.answer_delivered_wall = 0.0
             # Multi-scope backfill: stamp legacy sessions (scope_chat_id == 0)
             # with the single configured chat so notify routing is explicit.
-            if sess.scope_chat_id == 0 and _default is not None:
-                sess.scope_chat_id, sess.scope_kind = _default
-                backfilled = True
+            if sess.scope_chat_id == 0:
+                # The chat its name's suffix names, else the home chat
+                # (never "prefer the group", roadmap 8.82).
+                _own = chat_from_suffix(name) or _default
+                if _own is not None:
+                    sess.scope_chat_id, sess.scope_kind = _own
+                    backfilled = True
             # pending_queue: accept old 2-tuples, 3-tuples, 4-tuples, and
             # new 5-tuples (text, msg_id, queued_at, reply_context,
             # driver_user_id). Drop entries older than the TTL so a
